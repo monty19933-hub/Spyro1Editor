@@ -105,7 +105,8 @@ internal sealed class NativeId65NormalBodyLayout
         ReadOnlySpan<byte> model, ReadOnlySpan<byte> scene, IReadOnlyList<byte[]> auxiliary)
     {
         ArgumentNullException.ThrowIfNull(auxiliary);
-        if (upload.Length != 0xDE000 || data.Length is not (0x8C8 or 0xA38) || model.Length != 0xF800 ||
+        NativeId65NormalDataLayout.RequireBoundedUsedLength(data.Length);
+        if (upload.Length != 0xDE000 || model.Length != 0xF800 ||
             scene.Length is not (0x2800 or 0x3000) || auxiliary.Count != 4)
             throw new InvalidDataException("Normal body requires the bounded fixed fresh profile and all four auxiliary allocations.");
         NativeId65FreshSceneLayout.DecodeCanonical(scene);

@@ -74,12 +74,14 @@ public sealed class NativeId65FreshDiscPlan
         BinaryPrimitives.WriteInt32LittleEndian(_wadDirectory.AsSpan(80 * 8 + 4), _body.Length);
         PatchRoot("WAD.WAD", 37, _geometry.FinalWadByteLength);
         PatchRoot("SCUS_942.28", _geometry.FinalExecutableLba, 0x66000);
+        string acceptedBodyProfile = body.DataUsedByteLength == 0x8C8 ? AcceptedBodyResourceProfile
+            : "fresh-untextured-G3-two-triangle-variable-cell-tree-v2";
         PlanSha256 = NativeId65FreshExecutablePlan.Hash(JsonSerializer.SerializeToUtf8Bytes(new
         {
             ProfileId,
             Original = NativeId65FreshDiscSource.OriginalSha256,
             BodyProfile = NativeId65NormalBodyPlan.ProfileId,
-            AcceptedBodyResourceProfile,
+            AcceptedBodyResourceProfile = acceptedBodyProfile,
             BodyPlanSha256,
             BodySha256 = NativeId65FreshExecutablePlan.Hash(_body),
             OverlaySha256 = NativeId65FreshExecutablePlan.Hash(_overlay),
@@ -166,10 +168,12 @@ public sealed class NativeId65FreshDiscPlan
             issuedBody.RequiredInitializerRuntimeAddress != 0x8005A898 || issuedBody.RequiredOverlayRuntimeAddress != 0x8007AA38 ||
             !issuedBody.RequiresInitializerBeforeOverlay || !issuedBody.RequiresOverlayRead || issuedBody.CheckpointOrForeignStateSupported ||
             issuedBody.NoOpCallbacksAuthorized || issuedBody.OverlaySkipModeSupported ||
-            issuedBody.CopyBufferAddress != 0x80089ECC || issuedBody.ModelRuntimeAddress != 0x8008A794 ||
-            issuedBody.SceneRuntimeAddress != 0x80099F94 || issuedBody.ResidentPeteAddress != 0x801C5BB8 ||
+            issuedBody.CopyBufferAddress != 0x80089ECC ||
+            issuedBody.ModelRuntimeAddress != 0x80089ECCu + (uint)issuedBody.DataUsedByteLength ||
+            issuedBody.SceneRuntimeAddress != issuedBody.ModelRuntimeAddress + 0xF800u || issuedBody.ResidentPeteAddress != 0x801C5BB8 ||
             issuedBody.NormalReservedLowerAddress != 0x80187BB0 ||
             issuedBody.KnownSceneEndAddress != issuedBody.SceneRuntimeAddress + issuedBody.Descriptors[3].ByteLength ||
+            issuedBody.KnownSceneEndAddress > issuedBody.NormalReservedLowerAddress ||
             !issuedBody.ModelRoots.SequenceEqual(new[]
             {
                 new NativeId65NormalBodyRoot(0, 0xDF800, 0, 0xCC30, 0xCC30, null),
@@ -196,10 +200,13 @@ public sealed class NativeId65FreshDiscPlan
     // CD sector/body length while changing its live used-end and model anchor.
     // This local discriminator plus exact shape is deliberately untextured only;
     // a future body instance revision must remain an explicit issuer guard.
+    // Canonical untextured tree lengths move the live anchors but not the CD
+    // allocation. The actual private upstream validates the complete grammar.
     internal static void RequireCurrentUntexturedShape(int dataUsed, int dataSector,
         int upload, int model, int scene)
     {
-        if (dataUsed != 0x8C8 || dataSector != 0x1000 || upload != 0xDE000 || model != 0xF800 ||
+        NativeId65NormalDataLayout.RequireBoundedUsedLength(dataUsed);
+        if (dataSector != 0x1000 || upload != 0xDE000 || model != 0xF800 ||
             scene is not (0x2800 or 0x3000))
             throw new InvalidDataException("Fresh-disc authority is restricted to the exact current untextured resource profile.");
     }

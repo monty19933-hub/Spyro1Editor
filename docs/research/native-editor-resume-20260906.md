@@ -1,5 +1,17 @@
 # Resume after the September 6 usage pause
 
+**Newest code:** variable-tree fresh compilation fixed and regression-tested,
+default Release122/0, actual source583188, native loader5945/22. Fixed starter,
+edited and textured body identities remain exact; ordinary/generic publication
+was not enabled. See `native-fresh-variable-data-layout.md`.
+
+**Newest live session:** edited-fresh R01 is ACTIVE at
+`_local/native-fresh-edited-runtime-20260906-r01.WRBwJW/`, PID92969, emulator
+shell32085, observer25118. Use its journal, exact ecc8f61c…5aed16 CUE and fresh
+backups; it is independent of the CLOSED Wizard R03. Root alone owns controls.
+The generic saved-document Plan and a transaction reuse audit are next separate
+work; do not confuse these with the fixed candidate now being tested.
+
 **Current runtime state:** R03 is CLOSED, original settings restored and all
 nine protected identities unchanged. The exact one-Wizard case passed native
 charge defeat/+10, ordinary exit/portal re-entry, and second defeat with no

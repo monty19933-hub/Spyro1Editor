@@ -26,8 +26,9 @@ internal static class FreshDiscCases
         NativeId65FreshDiscPlan.RequireCurrentUntexturedShape(0x8C8, 0x1000, 0xDE000, 0xF800, 0x3000);
         check(NativeId65FreshDiscPlan.AcceptedBodyResourceProfile == "fresh-untextured-G3-two-triangle-data-8C8-v1",
             "disc issuer has an explicit narrow resource discriminator, not a total-size approval");
-        reject(() => NativeId65FreshDiscPlan.RequireCurrentUntexturedShape(0xA38, 0x1000, 0xDE000, 0xF800, 0x3000),
-            "future textured used end refuses despite identical data-sector and total body lengths");
+        NativeId65FreshDiscPlan.RequireCurrentUntexturedShape(0xA38, 0x1000, 0xDE000, 0xF800, 0x3000);
+        check(typeof(NativeId65FreshDiscPlan).GetConstructors().Length == 0,
+            "neutral A38 geometry grants no source plan; actual textured instances remain separately refused");
         foreach (var shape in new[]
         {
             (0x8C8, 0x800, 0xDE000, 0xF800, 0x3000),

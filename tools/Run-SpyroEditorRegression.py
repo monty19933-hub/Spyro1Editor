@@ -95,6 +95,8 @@ CASE_ARGUMENTS = {
 ADDITIONAL_CORE_CASES = (
     ("Id65AuthoringMobyDependencyBundleCompilerSmoke", "NATIVE_ROUTE_SURFACE_SMOKE_OK",
      ["--source-free-route-surfaces"]),
+    ("NativeId65FreshDocumentSmoke", "NATIVE_ID65_VARIABLE_DATA_FREE_OK",
+     ["--variable-data-free"]),
 )
 SOURCE_QA_CASES = (
     # This read-only mode checks both preserved V2 and V3 native closure goldens;
@@ -317,7 +319,10 @@ def main():
         if not build_results.get(project, False):
             print(f"SKIP {project.stem}: build failed", flush=True)
             continue
-        suffix = "-route-surfaces" if arguments == ["--source-free-route-surfaces"] else ""
+        suffix = {
+            ("--source-free-route-surfaces",): "-route-surfaces",
+            ("--variable-data-free",): "-variable-data",
+        }.get(tuple(arguments), "")
         execute("run-" + project.stem + suffix,
                 ["dotnet", "run", "--project", str(project), "--configuration",
                  options.configuration, "--no-build", "--no-restore"] +

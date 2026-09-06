@@ -18,6 +18,10 @@ TOOLS = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("spyro_regression_runner", TOOLS / "Run-SpyroEditorRegression.py")
 RUNNER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(RUNNER)
+# Route-only fake commands deliberately emit only route markers. Keep that
+# fixture boundary explicit when other mandatory additional modes are added.
+ROUTE_ADDITIONAL_CASES = tuple(case for case in RUNNER.ADDITIONAL_CORE_CASES
+                               if case[0] == "Id65AuthoringMobyDependencyBundleCompilerSmoke")
 
 
 def process_is_running(pid):
@@ -78,6 +82,67 @@ class OwnedCommandTests(unittest.TestCase):
 
 
 class RunnerOptionsTests(unittest.TestCase):
+    def test_variable_data_is_additional_default_sourcefree_mode_without_source_authority(self):
+        name = "NativeId65FreshDocumentSmoke"
+        marker, flag = "NATIVE_ID65_VARIABLE_DATA_FREE_OK", "--variable-data-free"
+        self.assertEqual([(name, "NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK")],
+                         [row for row in RUNNER.CORE_CASES if row[0] == name])
+        self.assertEqual([(name, marker, [flag])],
+                         [row for row in RUNNER.ADDITIONAL_CORE_CASES if row[0] == name])
+        self.assertNotIn(name, RUNNER.CASE_ARGUMENTS, "Original no-argument document grammar remains a distinct test")
+        self.assertFalse(any(row[0] == name for row in RUNNER.SOURCE_QA_CASES))
+        self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        with mock.patch.object(sys, "argv", [str(SPEC.origin), "--list"]), \
+                mock.patch.object(RUNNER, "run_owned_command", side_effect=AssertionError("list executed a command")), \
+                mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("default source read")), \
+                mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("default CUE read")), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(0, RUNNER.main())
+        lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor." + name + "/" in line]
+        self.assertEqual(2, len(lines))
+        self.assertTrue(any(flag + " | " + marker in line for line in lines))
+        self.assertFalse(any("--variable-data-source" in line or "--variable-data-red" in line for line in lines))
+
+    def test_variable_data_marker_and_result_suffix_preserve_old_mode_and_single_build(self):
+        name, old_marker = "NativeId65FreshDocumentSmoke", "NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK"
+        marker, flag = "NATIVE_ID65_VARIABLE_DATA_FREE_OK", "--variable-data-free"
+        for emit_marker in (False, True):
+            calls = []
+
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                if command[:2] == ["dotnet", "run"]:
+                    kwargs["stdout"].write(marker if flag in command and emit_marker else old_marker)
+                return subprocess.CompletedProcess(command, 0)
+
+            with self.subTest(emit_marker=emit_marker), tempfile.TemporaryDirectory(prefix="spyro-variable-data-runner-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", ((name, old_marker),)), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ((name, marker, [flag]),)), \
+                        mock.patch.object(RUNNER, "SOURCE_QA_CASES", ()), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("default source read")), \
+                        mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("default CUE read")), \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin)]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0 if emit_marker else 1, RUNNER.main())
+                summary = json.loads((Path(output) / "summary.json").read_text())
+            builds = [command for command in calls if command[:2] == ["dotnet", "build"]]
+            self.assertEqual(2, len(builds), "Shared document project builds once, plus App")
+            runs = [command for command in calls if command[:2] == ["dotnet", "run"]]
+            self.assertEqual(2, len(runs))
+            self.assertNotIn("--", runs[0])
+            self.assertEqual([flag], runs[1][runs[1].index("--") + 1:])
+            self.assertTrue(all("--no-build" in command and "--no-restore" in command for command in runs))
+            self.assertEqual(["run-Spyro.Editor." + name, "run-Spyro.Editor." + name + "-variable-data"],
+                             [row["name"] for row in summary[-2:]])
+            self.assertEqual(len(summary), len({row["name"] for row in summary}))
+            self.assertEqual(len(summary), len({row["log"] for row in summary}))
+            self.assertTrue(summary[-2]["passed"])
+            self.assertEqual(emit_marker, summary[-1]["passed"], "Old marker cannot stand in for variable-data regression")
+            self.assertFalse(any(command[0] == "env" for command in calls))
+
     def test_fresh_ui_uses_only_the_isolated_headless_mode_and_its_own_marker(self):
         name, marker, flag = "UiSmoke", "FRESH_NATIVE_DOCUMENT_UI_OK", "--fresh-native-document-only"
         self.assertEqual([(name, marker)], [c for c in RUNNER.CORE_CASES if c[0] == name])
@@ -656,6 +721,7 @@ class RunnerOptionsTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory(prefix="spyro-runner-route-modes-") as output:
             with mock.patch.object(RUNNER, "CORE_CASES", ((name, "NATIVE_SCENE_PROPERTIES_LINKER_SMOKE_OK"),)), \
+                    mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ROUTE_ADDITIONAL_CASES), \
                     mock.patch.object(RUNNER, "SOURCE_QA_CASES", ((name, "NATIVE_GREEN_WIZARD_ROUTE_SOURCE_SMOKE_OK", ["--source-backed-route-surfaces"]),)), \
                     mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
                     mock.patch.object(RUNNER, "configured_source_image", return_value="/selected original.bin") as source, \
@@ -787,6 +853,7 @@ class RunnerOptionsTests(unittest.TestCase):
                     return subprocess.CompletedProcess(command, 0)
 
                 with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ROUTE_ADDITIONAL_CASES), \
                         mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
                         mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("source read")) as source, \
                         mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("cue read")) as cue, \
@@ -812,6 +879,7 @@ class RunnerOptionsTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory(prefix="spyro-runner-route-marker-") as output:
             with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ROUTE_ADDITIONAL_CASES), \
                     mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
                     mock.patch.object(RUNNER, "configured_source_image") as source, \
                     mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
@@ -831,6 +899,7 @@ class RunnerOptionsTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory(prefix="spyro-runner-route-source-failure-") as output:
             with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ROUTE_ADDITIONAL_CASES), \
                     mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
                     mock.patch.object(RUNNER, "configured_source_image", side_effect=FileNotFoundError("missing selection")), \
                     mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
@@ -889,6 +958,7 @@ class RunnerOptionsTests(unittest.TestCase):
 
             with self.subTest(expires_in=expires_in), tempfile.TemporaryDirectory(prefix="spyro-runner-route-deadline-") as output:
                 with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ROUTE_ADDITIONAL_CASES), \
                         mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
                         mock.patch.object(RUNNER, "configured_source_image", side_effect=fake_source), \
                         mock.patch.object(RUNNER.time, "monotonic", side_effect=lambda: clock[0]), \

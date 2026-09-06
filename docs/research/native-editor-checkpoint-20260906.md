@@ -1,5 +1,20 @@
 # Native editor checkpoint — 2026-09-06
 
+## Current code checkpoint: variable collision-tree compilation
+
+Actual current fresh-document compilation now derives the data used end from
+its complete canonical component chain instead of assuming starter length8C8.
+All96 supported lengths retain fixed CD allocations and derived live addresses;
+actual textured profiles remain refused. Existing outputs and both fixed
+publishers remain unchanged. Root default Release122/0, source583188 and corrected
+native loader5945/22 pass; see `native-fresh-variable-data-layout.md`.
+
+The next edited-fresh runtime session is ACTIVE under
+`_local/native-fresh-edited-runtime-20260906-r01.WRBwJW/`; its journal owns the
+fresh backups and cleanup. PID92969 opens the exact ecc8f61c…5aed16 BIN, with
+loopback-only2345 observer. Preparation/cold boot is not edited-floor acceptance.
+R03 Wizard below is a separately closed session, not this new one.
+
 ## Current runtime checkpoint: R03 closed with reward/re-entry evidence
 
 The unchanged one-Wizard candidate now has actual normal charge defeat/+10,

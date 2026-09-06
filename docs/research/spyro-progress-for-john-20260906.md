@@ -1,5 +1,11 @@
 # Spyro editor — what is working now
 
+The fresh-level compiler now handles valid floor positions that previously
+failed because of a fixed collision-data length assumption. Existing test ROMs
+remain byte-identical, and the default Release gate now passes122 steps. The
+edited fresh-floor ROM is entering its own separate gameplay test; ordinary
+export from a saved fresh document is the next editor integration step.
+
 Newest progress: the imported Dark Hollow Wizard has now been defeated by a
 normal charge and its native yellow gem raised the counter from13 to23. Normal
 exit/portal re-entry also worked, retaining23 and marking the reward collected;

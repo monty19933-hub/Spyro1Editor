@@ -4,6 +4,16 @@ using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Music;
 using Spyro.Editor.Core.Primitives;
 
+if (args.Length == 1 && args[0] == "--variable-data-free")
+{
+    VariableDataLayoutCases.SourceFree();
+    return;
+}
+if (args.Length == 2 && args[0] is "--variable-data-red" or "--variable-data-source")
+{
+    await VariableDataLayoutCases.RequireOriginCompilation(args[1]);
+    return;
+}
 if (args.Length != 0)
     throw new ArgumentException("Usage: NativeId65FreshDocumentSmoke (source-free only)");
 

@@ -41,6 +41,12 @@ internal sealed class NativeId65NormalResourceRevision
         _data = texture?.CopyDataComponents() ?? fresh.CopyDataComponents();
         _model = texture?.CopyModelPayload() ?? fresh.CopyModelPayload();
         _scene = texture?.CopyScene() ?? fresh.CopyScene();
+        // Derive the live used end from the complete actual chain, not the
+        // starter's cell sum. Keep the separately issued texture profile fixed;
+        // valid untextured maximum-cell data also has lengthA38.
+        DataUsedByteLength = texture == null
+            ? NativeId65NormalDataLayout.DecodeUntextured(_data).UsedByteLength
+            : 0xA38;
         if (_upload.Length != 0xDE000 || _data.Length != DataUsedByteLength || _model.Length != 0xF800 ||
             _scene.Length is not (0x2800 or 0x3000) ||
             NativeId65NormalResourceSource.Hash(_upload) != UploadSha256 ||
@@ -87,7 +93,7 @@ internal sealed class NativeId65NormalResourceRevision
     internal IReadOnlyList<NativeId65EngineEvidence> Evidence { get; }
     internal IReadOnlyList<NativeId65SurfaceConsumerEvidence> TextureEvidence { get; }
     internal IReadOnlyList<string> SourceHandles { get; }
-    internal int DataUsedByteLength => ResourceProfile == NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles ? 0x8C8 : 0xA38;
+    internal int DataUsedByteLength { get; }
     internal byte[] CopyUploadPayload() => _upload.ToArray();
     internal byte[] CopyDataComponents() => _data.ToArray();
     internal byte[] CopyModelPayload() => _model.ToArray();
