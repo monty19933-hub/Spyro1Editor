@@ -138,6 +138,7 @@ internal sealed class NativeLevelSoundLayout
             Range(cursor, prefix, end); cursor += prefix;
             cursor += Component(data, cursor, end);
         }
+        ParticleOffset = cursor;
         cursor += Component(data, cursor, end); // particle component
         SoundOffset = cursor; int soundLength = Component(data, cursor, end);
         Sound = NativeSoundBankCodec.Decode(data.Slice(cursor, soundLength), data.Slice(BankOffset, VramLength - 0x80000));
@@ -148,6 +149,7 @@ internal sealed class NativeLevelSoundLayout
     internal int DataOffset { get; }
     internal int DataLength { get; }
     internal int SoundOffset { get; }
+    internal int ParticleOffset { get; }
     internal int SoundEnd => SoundOffset + Sound.ComponentByteLength;
     internal NativeSoundBank Sound { get; }
     private static int Component(ReadOnlySpan<byte> data, int offset, int end)

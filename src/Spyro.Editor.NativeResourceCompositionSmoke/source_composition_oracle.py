@@ -144,6 +144,23 @@ with open(sys.argv[1], "rb") as image:
         final = header+b"".join(blocks)
         assert len(final)-len(base) == 0x13000
         print(f"NATIVE_RESOURCE_COMPOSITION_ORACLE scene={with_scene} sha256={sha(final)} growth=13000 modelGrowth=8000")
+        # Optional descriptor7 stage: replay from its independent native record
+        # and prior five-tile allocation, not from a Core-produced afterimage.
+        record = donor[0x173518:0x173524]
+        assert record.hex() == "0700080020e02d753fff3800"
+        pixel, clut = tiles[-1][4:6]
+        x, y = pixel % 1024+1024, pixel//1024
+        for at in (4, 8):
+            record[at] += x % 128*2-32; record[at+1] += y % 256-224
+        p16(record, 6, (clut % 1024+1024)//32 | (clut//1024 << 6))
+        p16(record, 10, (u16(record, 10) & ~31) | x//128 | (16 if y >= 256 else 0))
+        first = u32(final, 8); limit = first+u32(final, 12)
+        at = 0x128F7C+first-u32(base, 8); insert = at+0x8C
+        assert u32(final, at) == 0x8C and u32(final, at+4) == 11 and not any(final[limit-12:limit])
+        with_particle = final[:insert]+record+final[insert:limit-12]+final[limit:]
+        p32(with_particle, at, 0x98); p32(with_particle, at+4, 12)
+        assert len(with_particle) == len(final) and with_particle[u32(final, 0x10):] == final[u32(final, 0x10):]
+        print(f"NATIVE_PARTICLE_COMPOSITION_ORACLE scene={with_scene} sha256={sha(with_particle)} record={record.hex()} outputsWritten=0")
     image.seek(0)
     assert hashlib.file_digest(image, "sha256").hexdigest() == SOURCE
     print("NATIVE_RESOURCE_COMPOSITION_ORACLE_OK sourceUnchanged=true outputsWritten=0")

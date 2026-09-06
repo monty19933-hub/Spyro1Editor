@@ -136,10 +136,13 @@ Markers are `NATIVE_RESOURCE_COMPOSITION_SOURCE_FREE_OK`,
 
 ## Remaining native gates
 
-The particle7 descriptor is retained as a detached pending payload; it is not
-installed into a native particle table. Wizard/lightning behavior, callback
+The default API retains particle7 as a detached pending payload. A later opt-in
+`CompileWithParticleAsync` stage now installs its source-issued descriptor record;
+see [the separate descriptor contract](native-particle-descriptor-append-contract.md).
+It does not install particle behavior. Wizard/lightning behavior, callback
 dispatch, particle07/41 spawn/tick/renderer consumers, electric-selector consumer
 ownership, valid destination placement, stack/transient RAM, native gameplay,
 audio, persistence and safe publication remain separate obligations. All complete
 closure, behavior-installed, particle-installed, placement, runtime-fit, peak-fit
-and publication flags stay false. No candidate or normal export path is added.
+and publication flags stay false on the default API; the opt-in stage changes only
+the descriptor-installed flag. No candidate or normal export path is added.

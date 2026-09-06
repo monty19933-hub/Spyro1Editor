@@ -23,9 +23,12 @@ public sealed class NativeDarkHollowWizardResourcePlan
         byte[] executable, byte[] peteHeader, byte[] peteCopy, NativeMobyModelRegistrationSource targetModels,
         NativeMobyModelRegistrationSource donorModels, NativeMobyModelLoaderCertificate loader,
         NativePlayerAnimationMergePlan player, NativeModelSoundMergePlan sound, NativeDarkHollowWizardTexturePlan texture,
-        NativeDarkHollowWizardScenePlan? scene, Func<NativeByteExtent, byte[]> read, bool reverse)
+        NativeDarkHollowWizardScenePlan? scene, Func<NativeByteExtent, byte[]> read, bool reverse,
+        NativeDarkHollowWizardParticlePlan? particle)
     {
         SourceDataSha256 = targetLevel.SourceDataSha256; DonorDataSha256 = Hash(donor); IncludesSceneAppend = scene != null;
+        ParticleDescriptorInstalled = particle != null;
+        particle?.RequireOriginalAndTexture(target, texture);
         var donorRoot = donorModels.Registrations.Single(r => r.ActorId == 0x26);
         long boltEnd = donorRoot.Slot + 1 < donorModels.Registrations.Count ? donorModels.Registrations[donorRoot.Slot + 1].RootDataOffset : donorModels.ModelEnd;
         var boltSource = new NativeByteExtent(donorModels.Original, donorRoot.RootDataOffset, boltEnd - donorRoot.RootDataOffset);
@@ -51,6 +54,7 @@ public sealed class NativeDarkHollowWizardResourcePlan
         List<NativeSkyRelocationPayload> payloads = sound.CopyInsertionPayloads().Select(p => p with { PatchIndex = 20 + p.PatchIndex }).ToList();
         NativeSkyRelocationPayload animation = player.CopyInsertionPayload() ?? throw new InvalidDataException("Combined Wizard profile requires actual animation8 insertion.");
         payloads.Add(animation with { PatchIndex = 10 });
+        if (particle != null) payloads.Add(particle.CopyOriginalAddressPayload(50));
         byte[] appended = bolt.Concat(wizard).ToArray();
         payloads.Add(new(30, 37, targetLevel.DataWadOffset + targetModels.ModelEnd, targetLevel.DataWadEntry,
             targetModels.ModelLength, 0, appended, 2, false));
@@ -60,6 +64,7 @@ public sealed class NativeDarkHollowWizardResourcePlan
             payloads.Add(scene.CopyOriginalAddressPayload(40));
         }
         List<NativeResourceOriginalBytePatch> patches = [];
+        if (particle != null) patches.AddRange(particle.CopyOriginalFieldPatches());
         foreach (var field in sound.CopyNonHeaderMutations())
             patches.Add(new("sound." + field.Id, field.DataOffset, Scalar(field.Before, field.ByteLength), Scalar(field.After, field.ByteLength)));
         foreach (var patch in texture.Patches.Where(p => p.Owner == "target-vram"))
@@ -95,6 +100,14 @@ public sealed class NativeDarkHollowWizardResourcePlan
         if (actualSound.ComponentSha256 != expectedSound.ComponentSha256 || actualSound.BankSha256 != expectedSound.BankSha256 ||
             !_final.AsSpan(0x800, 0x80000).SequenceEqual(texture.CopyTexturePatchedTargetLevel().AsSpan(0x800, 0x80000)))
             throw new InvalidDataException("Combined sound/SPU/VRAM resources differ from their independent producer readbacks.");
+        if (particle != null)
+        {
+            int particleAt = checked((int)_layout.MapOriginalRange(particle.OriginalComponentDataOffset, 4).Offset);
+            byte[] expected = particle.CopyFinalComponent();
+            if (!_final.AsSpan(particleAt, expected.Length).SequenceEqual(expected) ||
+                NativeParticleDescriptorCodec.Decode(_final.AsSpan(particleAt, expected.Length)).Count != particle.FinalCount)
+                throw new InvalidDataException("Combined particle component differs from its source-owned descriptor append.");
+        }
         int finalScene = Integer(_final, 0x18);
         if (Integer(_final, 0x1C) != targetLevel.SceneByteLength || !_final.AsSpan(finalScene, targetLevel.SceneByteLength)
             .SequenceEqual(scene?.CopyScene() ?? target.AsSpan(targetLevel.SceneDataOffset, targetLevel.SceneByteLength).ToArray()))
@@ -135,7 +148,7 @@ public sealed class NativeDarkHollowWizardResourcePlan
     public NativeLevelRuntimeMemoryReport RuntimeMemory { get; }
     public bool CompleteNativeClosureProven => false;
     public bool BehaviorInstalled => false;
-    public bool ParticleDescriptorInstalled => false;
+    public bool ParticleDescriptorInstalled { get; }
     public bool PlacementApproved => false;
     public bool PeakTransientFitProven => false;
     public bool RuntimeFitProven => false;
@@ -148,12 +161,21 @@ public sealed class NativeDarkHollowWizardResourcePlan
         NativePlayerAnimationMergePlan player, NativeModelSoundMergePlan sound, NativeDarkHollowWizardTexturePlan texture,
         NativeDarkHollowWizardScenePlan? scene = null, CancellationToken token = default) =>
         CompileCoreAsync(originalImagePath, inventory, player, sound, texture, scene, false, token);
+    public static Task<NativeDarkHollowWizardResourcePlan> CompileWithParticleAsync(string path, NativeMobySourceInventory inventory,
+        NativePlayerAnimationMergePlan player, NativeModelSoundMergePlan sound, NativeDarkHollowWizardTexturePlan texture,
+        NativeDarkHollowWizardParticlePlan particle, NativeDarkHollowWizardScenePlan? scene = null, CancellationToken token = default) =>
+        CompileCoreAsync(path, inventory, player, sound, texture, scene, false, token,
+            particle ?? throw new ArgumentNullException(nameof(particle)));
+    internal static Task<NativeDarkHollowWizardResourcePlan> CompileWithParticleReversedForSmokeAsync(string path, NativeMobySourceInventory inventory,
+        NativePlayerAnimationMergePlan player, NativeModelSoundMergePlan sound, NativeDarkHollowWizardTexturePlan texture,
+        NativeDarkHollowWizardParticlePlan particle, NativeDarkHollowWizardScenePlan? scene = null) =>
+        CompileCoreAsync(path, inventory, player, sound, texture, scene, true, default, particle);
     internal static Task<NativeDarkHollowWizardResourcePlan> CompileReversedForSmokeAsync(string path, NativeMobySourceInventory inventory,
         NativePlayerAnimationMergePlan player, NativeModelSoundMergePlan sound, NativeDarkHollowWizardTexturePlan texture,
         NativeDarkHollowWizardScenePlan? scene = null) => CompileCoreAsync(path, inventory, player, sound, texture, scene, true, default);
     private static async Task<NativeDarkHollowWizardResourcePlan> CompileCoreAsync(string path, NativeMobySourceInventory inventory,
         NativePlayerAnimationMergePlan player, NativeModelSoundMergePlan sound, NativeDarkHollowWizardTexturePlan texture,
-        NativeDarkHollowWizardScenePlan? scene, bool reverse, CancellationToken token)
+        NativeDarkHollowWizardScenePlan? scene, bool reverse, CancellationToken token, NativeDarkHollowWizardParticlePlan? particle = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path); ArgumentNullException.ThrowIfNull(inventory);
         ArgumentNullException.ThrowIfNull(player); ArgumentNullException.ThrowIfNull(sound); ArgumentNullException.ThrowIfNull(texture);
@@ -167,6 +189,7 @@ public sealed class NativeDarkHollowWizardResourcePlan
             !sound.GlobalBindings.Any(b => b.GlobalSelector == 0x1F && b.MappingChanged) ||
             texture.SourceImageSha256 != inventory.SourceImageSha256 || texture.SourceDataSha256 != targetLevel.SourceDataSha256 ||
             texture.DonorDataSha256 != donorLevel.SourceDataSha256 ||
+            (particle != null && (particle.SourceImageSha256 != inventory.SourceImageSha256 || particle.SourceDataSha256 != targetLevel.SourceDataSha256 || particle.DonorDataSha256 != donorLevel.SourceDataSha256)) ||
             (scene != null && (scene.SourceImageSha256 != inventory.SourceImageSha256 || scene.SourceDataSha256 != targetLevel.SourceDataSha256 || scene.DonorDataSha256 != donorLevel.SourceDataSha256)))
             throw new InvalidDataException("Combined resource stages do not share the exact source-issued Dark/Wizard profile and requested dependencies.");
         path = Path.GetFullPath(path);
@@ -193,7 +216,7 @@ public sealed class NativeDarkHollowWizardResourcePlan
         var targetModels = NativeMobyModelRegistrationSource.CaptureInventory(targetLevel, targetDomain, Read);
         var donorModels = NativeMobyModelRegistrationSource.CaptureInventory(donorLevel, donorDomain, Read);
         var result = new NativeDarkHollowWizardResourcePlan(targetLevel, target, donor, executable, peteHeader, peteCopy,
-            targetModels, donorModels, loader, player, sound, texture, scene, Read, reverse);
+            targetModels, donorModels, loader, player, sound, texture, scene, Read, reverse, particle);
         await RequireOriginalAsync(image, token);
         return result;
     }

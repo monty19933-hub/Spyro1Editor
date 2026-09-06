@@ -32,6 +32,7 @@ Check(Word(final, 0x14) == 0x1000, "combined model exact400 bytes rounds to800 o
 Check(Word(final, 0x50) == 0x2800 && Word(final, 0x54) == 0x2910, "root0 start and old generic root use distinct insertion relationships");
 Check(new NativeLevelResourceCompositionLayout(source, 0, 0, payloads.Reverse().ToArray(), [], Read).CopyFinalBytes().AsSpan().SequenceEqual(final), "stage enumeration does not choose final bytes");
 NativeResourceCompositionCases.Run(source, original, payloads, Read, Check, Reject);
+NativeParticleDescriptorCases.Run(Check, Reject);
 Console.WriteLine($"NATIVE_RESOURCE_COMPOSITION_SOURCE_FREE_OK checks={checks} refused={refusals} publication=false runtime=false");
 if (args.Length == 2 && args[0] == "--source")
 {
