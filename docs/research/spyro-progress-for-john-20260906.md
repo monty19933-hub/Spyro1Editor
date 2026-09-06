@@ -6,7 +6,7 @@ ROM, saved edits, old candidates and original memory card are being preserved.
 
 ## What you can already explore in the editor
 
-- **Native Moby Library:** browse the original game's variants across all35
+- **Native Moby Library:** browse the original game's variants across all 35
   retail levels, search by name/class/level, and distinguish placed objects from
   registered resources. It is wired into the retail Objects panel and the
   Blank-Level Lab. An item is only addable where an existing approved placement
@@ -29,7 +29,7 @@ that an older installed app has automatically acquired every source change.
 
 | Exact research case | Observed working | Still not established |
 | --- | --- | --- |
-| Imported key and locked chest in Town Square | Key pickup, native opening/effects, six rewards worth exactly10 gems, correct reward bits and normal exit/portal re-entry; recorded source-matched sound cues | Arbitrary duplicates, every level, partial-reward/death/card-persistence combinations |
+| Imported key and locked chest in Town Square | Key pickup, native opening/effects, six rewards worth exactly 10 gems, correct reward bits and normal exit/portal re-entry; recorded source-matched sound cues | Arbitrary duplicates, every level, partial-reward/death/card-persistence combinations |
 | Wizard Peak Wizard imported into Dark Hollow | Normal portal entry, visible Wizard and lightning, native electric damage/animation, ordinary player death and level reload | Wizard defeat/+10 reward, post-defeat re-entry, multiple simultaneous imported Wizards, full audio/presentation and peak-resource acceptance |
 | Native Free Flight in Toasty | Ascent/descent, both turn directions, flap, flight exit, collision, death/respawn, normal exit/portal reload and controlled landing | Every level/state; finished editor checkbox and end-to-end disabled-output workflow |
 
@@ -43,7 +43,7 @@ See the detailed [key/chest report](native-closure-runtime-20260905.md),
 
 ## New engineering work behind the editor
 
-- **Persistent object identity:** preserves the original4,877 placements and
+- **Persistent object identity:** preserves the original 4,877 placements and
   native save-bit indices; authored additions receive stable append-only
   identities, including across save/reopen. Removed identities are reserved.
 - **Fresh level body:** fresh floor, collision, spawn and scene lists without
@@ -54,15 +54,21 @@ See the detailed [key/chest report](native-closure-runtime-20260905.md),
   Hollow and Gnasty's World can be allocated into the fresh resource set while
   preserving complete palettes, descriptors, pixels and protected storage.
   The old scene/model goldens stay unchanged. The new materials now pass through
-  the shared native body builder with157 focused checks; old plan identities
+  the shared native body builder with 157 focused checks; old plan identities
   remain exact. This new path is backend-only and not yet a textured disc export.
 - **Fresh disc composition:** reserved level entries, relocated executable,
-  bounded `LAB` title,46 built-in music selections, ISO records and raw CD
+  bounded `LAB` title, 46 built-in music selections, ISO records and raw CD
   error-correction bytes now have an exact read-only builder/verifier. Three
   whole-image results match an independent implementation; both body sizes
-  reconstruct the complete original exactly. Focused tests passed2,182
-  source-free and566,016 total exact-source checks. No new BIN has been
-  published or booted from this stage yet.
+  reconstruct the complete original exactly. Focused tests passed 2,182
+  source-free and 566,016 total exact-source checks. An exact fresh-level BIN
+  has now been published and independently reopened, with 20 publication and
+  corruption checks passing. It has not been booted yet.
+- **Fresh-level gameplay diagnostics:** a dedicated, read-only observer now
+  checks the new level's actual initialized resource layout. Its 15 tests and
+  five original-game source checks pass; the existing Wizard observer's 14
+  tests remain green. It is ready to support testing, but this does not mean
+  the new level has been played yet. See the [observer notes](native-fresh-id65-observer.md).
 
 ## Next steps
 
@@ -83,12 +89,13 @@ install.** The current editor remains usable, and the new foundations are
 substantially further along. Source tests, actual gameplay and a shipped UI are
 tracked separately so the eventual editor reflects what has really passed.
 
-Latest integrated verification:109 default Release steps passed with zero
-failures, including rebuilding App, plus47 Python tests. The full fresh-disc
-source checks passed again after the textured-body changes. This did not install
-or launch a new editor, and is separate from the earlier full290-step gate.
+Latest integrated verification: 111 default Release steps passed with zero
+failures, including rebuilding App. All 68 Python tests completed successfully
+(one original-ROM-only case is explicitly skipped there and passed separately).
+The full fresh-disc source checks also passed after the textured-body changes. This did not install
+or launch a new editor, and is separate from the earlier full 290-step gate.
 
 Usage instruction for this work session: continue while budget permits, begin
-safe closeout before roughly5% remaining, save commits and a precise continuation
+safe closeout before roughly 5% remaining, save commits and a precise continuation
 note, then wait for John to reset usage and explicitly resume. Do not redeem a
 reset credit or auto-resume while paused.

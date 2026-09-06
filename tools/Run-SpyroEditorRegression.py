@@ -42,6 +42,7 @@ CORE_CASES = (
     ("NativeId65TexturedBodySmoke", "NATIVE_ID65_TEXTURED_BODY_FREE_OK"),
     ("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC_SMOKE_OK"),
     ("NativeId65FreshDiscStreamSmoke", "NATIVE_ID65_FRESH_DISC_STREAM_SMOKE_OK"),
+    ("NativeId65FreshDiscResearchSmoke", "NATIVE_ID65_FRESH_DISC_RESEARCH_SMOKE_OK"),
     ("NativeWizardPlacementSmoke", "NATIVE_WIZARD_PLACEMENT_SMOKE_OK"),
     ("NativeWizardResearchSmoke", "NATIVE_WIZARD_RESEARCH_SOURCE_FREE_OK"),
     ("NativeResourceCompositionSmoke", "NATIVE_RESOURCE_COMPOSITION_SOURCE_FREE_OK"),
@@ -113,6 +114,8 @@ SOURCE_QA_CASES = (
     ("NativeId65TexturedBodySmoke", "NATIVE_ID65_TEXTURED_BODY_SOURCE_OK", ["--source"]),
     ("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC_SOURCE_OK", []),
     ("NativeId65FreshDiscStreamSmoke", "NATIVE_ID65_FRESH_DISC_STREAM_SOURCE_OK", []),
+    # Capture checks only; never stage faults, exercise publication or verify outputs here.
+    ("NativeId65FreshDiscResearchSmoke", "NATIVE_ID65_FRESH_DISC_RESEARCH_SOURCE_OK", ["--source"]),
     ("NativeWizardPlacementSmoke", "NATIVE_WIZARD_PLACEMENT_SOURCE_OK", []),
     # Capture/readback only; never stage, publish or open an emulator here.
     ("NativeWizardResearchSmoke", "NATIVE_WIZARD_RESEARCH_SOURCE_OK", []),
@@ -124,7 +127,7 @@ SOURCE_QA_CASES = (
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
 SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke"})
-SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke"})
+SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke"})
 
 
 def configured_source_image():

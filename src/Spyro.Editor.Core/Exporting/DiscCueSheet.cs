@@ -82,6 +82,22 @@ public static class DiscCueSheet
     private static ParsedCue Read(string cuePath)
     {
         string[] lines = File.ReadAllLines(cuePath, TextEncoding);
+        return Parse(cuePath, lines);
+    }
+
+    internal static bool ReferencesDataImageSnapshot(ReadOnlySpan<byte> boundedCueBytes, string cuePath, string imagePath)
+    {
+        if (boundedCueBytes.Length is < 1 or > 65536)
+            throw new InvalidDataException("CUE snapshot exceeds its bounded owner.");
+        using var input = new MemoryStream(boundedCueBytes.ToArray(), writable: false);
+        using var reader = new StreamReader(input, TextEncoding, detectEncodingFromByteOrderMarks: true);
+        List<string> lines = [];
+        while (reader.ReadLine() is string line) lines.Add(line);
+        return Parse(cuePath, lines.ToArray()).Files.Any(file => file.DataModes.Count > 0 && PathsEqual(file.Path, imagePath));
+    }
+
+    private static ParsedCue Parse(string cuePath, string[] lines)
+    {
         List<CueFile> files = [];
         CueFile? current = null;
         CueTrack? currentTrack = null;
