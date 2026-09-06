@@ -9,6 +9,7 @@ bool verifyMode = args.Length == 4 && args[0] == "--verify";
 if (args.Length != 0 && !sourceMode && !stagingMode && !publicationMode && !verifyMode)
     throw new ArgumentException("Usage: NativeId65FreshDiscResearchSmoke [--source BIN CUE | --stage-faults BIN CUE absent-workspace | --exercise-publication BIN CUE absent-workspace | --verify BIN CUE existing-candidate-directory]");
 
+await PublicationApiTimingCases.Run();
 int checks = ResearchCases.SourceFree() + await FactoryCases.SourceFree() + await CompilationCases.SourceFree();
 if (sourceMode || stagingMode || publicationMode || verifyMode)
 {

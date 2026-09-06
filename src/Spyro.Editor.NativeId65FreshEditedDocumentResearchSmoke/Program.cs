@@ -12,6 +12,7 @@ bool stagingMode = args.Length == 4 && args[0] == "--stage-faults";
 if (args.Length != 0 && !sourceMode && !stagingMode)
     throw new ArgumentException("Usage: NativeId65FreshEditedDocumentResearchSmoke [--source BIN CUE | --stage-faults BIN CUE absent-workspace | --publish-reviewed BIN CUE absent-output-directory | --verify-reviewed BIN CUE existing-output-directory]");
 
+await PublicationApiTimingCases.Run();
 await EditedCases.SourceFree();
 if (sourceMode)
 {
