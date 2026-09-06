@@ -430,10 +430,13 @@ public static class TownSquareNativeLockedChestCandidateExporter
     }
 
     private static byte[] BuildHandlerPayload(FileStream retail, DiscLayout layout)
+        => BuildHandlerPayload((offset,length)=>ReadWad(retail,layout,offset,length));
+
+    internal static byte[] BuildHandlerPayload(Func<long,int,byte[]> read)
     {
-        byte[] setup = ReadWad(retail, layout, LockedSetupWadOffset, LockedSetupLength);
-        byte[] state = ReadWad(retail, layout, LockedStateWadOffset, LockedStateLength);
-        byte[] reward = ReadWad(retail, layout, RewardHandlerWadOffset, RewardHandlerSourceLength);
+        byte[] setup = read(LockedSetupWadOffset, LockedSetupLength);
+        byte[] state = read(LockedStateWadOffset, LockedStateLength);
+        byte[] reward = read(RewardHandlerWadOffset, RewardHandlerSourceLength);
         GuardSha256(setup, ExpectedLockedSetupSha256, "Peace Keepers Locked Chest setup");
         GuardSha256(state, ExpectedLockedStateSha256, "Peace Keepers Locked Chest state/open path");
         GuardSha256(reward, ExpectedRewardHandlerSourceSha256, "Peace Keepers class 0x000D reward handler");
@@ -490,8 +493,11 @@ public static class TownSquareNativeLockedChestCandidateExporter
     }
 
     private static byte[] BuildFinalOverlay(FileStream retail, DiscLayout layout, byte[] handlerPayload)
+        => BuildFinalOverlay(ReadWad(retail,layout,TownSquareOverlayEntryOffset,OriginalOverlaySize),handlerPayload);
+
+    internal static byte[] BuildFinalOverlay(byte[] original, byte[] handlerPayload)
     {
-        byte[] original = ReadWad(retail, layout, TownSquareOverlayEntryOffset, OriginalOverlaySize);
+        GuardSha256(original,ExpectedRetailOverlaySha256,"native closure Town Square overlay");
         byte[] expanded = new byte[ExpandedOverlaySize];
         original.CopyTo(expanded, 0);
         Array.Clear(expanded, OverlayPayloadOffset, expanded.Length - OverlayPayloadOffset);
@@ -510,13 +516,16 @@ public static class TownSquareNativeLockedChestCandidateExporter
         FileStream retail,
         DiscLayout layout,
         List<TownSquareNativeLockedChestTextureRegionPlan> regionPlans)
+        => BuildFinalDataEntry((offset,length)=>ReadWad(retail,layout,offset,length),regionPlans);
+
+    internal static (byte[] Entry, byte[] RebasedPackage, int RebasedFaces) BuildFinalDataEntry(
+        Func<long,int,byte[]> read,
+        List<TownSquareNativeLockedChestTextureRegionPlan> regionPlans)
     {
-        byte[] original = ReadWad(retail, layout, TownSquareDataEntryOffset, OriginalDataEntrySize);
+        byte[] original = read(TownSquareDataEntryOffset, OriginalDataEntrySize);
         GuardUInt32(original, 0x1D0000 + SourceCountRelativeOffset, SourceCountBefore, "retail Town Square source count");
 
-        byte[] donorPackage = ReadWad(
-            retail,
-            layout,
+        byte[] donorPackage = read(
             PeaceKeepersDataEntryOffset + PeaceKeepersLockedChestPackageOffset,
             LockedChestPackageLength);
         GuardSha256(donorPackage, ExpectedLockedChestPackageSha256, "Peace Keepers actor 0x00AE package");
@@ -550,13 +559,13 @@ public static class TownSquareNativeLockedChestCandidateExporter
         WriteUInt32(expanded, 0xE4, AppendedLockedChestPackageOffset);
         WriteUInt16(expanded, 0x19A, 0x00AE);
 
-        ImportSourceRowsAndProps(retail, layout, expanded);
-        ImportPrivateTextures(retail, layout, expanded, regionPlans);
+        ImportSourceRowsAndProps(read, expanded);
+        ImportPrivateTextures(read, expanded, regionPlans);
         rebasedPackage.CopyTo(expanded, AppendedLockedChestPackageOffset);
         return (expanded, rebasedPackage, rebasedFaces);
     }
 
-    private static void ImportSourceRowsAndProps(FileStream retail, DiscLayout layout, byte[] expanded)
+    private static void ImportSourceRowsAndProps(Func<long,int,byte[]> read, byte[] expanded)
     {
         int sourceCountOffset = ExpandedSceneOffset + SourceCountRelativeOffset;
         int sourceTableOffset = ExpandedSceneOffset + SourceTableRelativeOffset;
@@ -567,15 +576,15 @@ public static class TownSquareNativeLockedChestCandidateExporter
         GuardBlank(expanded.AsSpan(sourceTableOffset + (KeyTrueIndex * RecordStride),
             (SourceCountAfter - SourceCountBefore) * RecordStride).ToArray(), "Town Square T107-T113 source rows");
 
-        byte[] keyRow = ReadPeaceSourceRow(retail, layout, 78, ExpectedKeyRowSha256, "Peace Keepers T78 Key");
-        byte[] chestRow = ReadPeaceSourceRow(retail, layout, 79, ExpectedLockedChestRowSha256, "Peace Keepers T79 Locked Chest");
+        byte[] keyRow = ReadPeaceSourceRow(read, 78, ExpectedKeyRowSha256, "Peace Keepers T78 Key");
+        byte[] chestRow = ReadPeaceSourceRow(read, 79, ExpectedLockedChestRowSha256, "Peace Keepers T79 Locked Chest");
         PatchSourceRow(keyRow, KeyPropsRelativeOffset, KeyRawX, KeyRawY, KeyRawZ);
         PatchSourceRow(chestRow, LockedChestPropsRelativeOffset, LockedChestRawX, LockedChestRawY, LockedChestRawZ);
         keyRow.CopyTo(expanded, sourceTableOffset + (KeyTrueIndex * RecordStride));
         chestRow.CopyTo(expanded, sourceTableOffset + (LockedChestTrueIndex * RecordStride));
 
-        byte[] keyProps = ReadPeaceProps(retail, layout, 0xEA94, 4);
-        byte[] chestProps = ReadPeaceProps(retail, layout, 0xEA98, 0x18);
+        byte[] keyProps = ReadPeaceProps(read, 0xEA94, 4);
+        byte[] chestProps = ReadPeaceProps(read, 0xEA98, 0x18);
         GuardBlank(keyProps, "Peace Keepers Key props");
         GuardUInt32(chestProps, 0, 78, "Peace Keepers Locked Chest owner");
         WriteUInt32(chestProps, 0, KeyTrueIndex);
@@ -584,7 +593,7 @@ public static class TownSquareNativeLockedChestCandidateExporter
 
         foreach (RewardMarkerPlacement marker in RewardMarkers)
         {
-            byte[] row = ReadPeaceSourceRow(retail, layout, marker.DonorTrueIndex, marker.DonorRowSha256,
+            byte[] row = ReadPeaceSourceRow(read, marker.DonorTrueIndex, marker.DonorRowSha256,
                 $"Peace Keepers T{marker.DonorTrueIndex} reward marker");
             int x = LockedChestRawX + marker.DeltaX;
             int y = LockedChestRawY + marker.DeltaY;
@@ -601,7 +610,7 @@ public static class TownSquareNativeLockedChestCandidateExporter
                 122 => 0xF03C,
                 _ => throw new InvalidDataException("Unexpected reward marker donor.")
             };
-            byte[] props = ReadPeaceProps(retail, layout, donorPropsPointer, 0x28);
+            byte[] props = ReadPeaceProps(read, donorPropsPointer, 0x28);
             GuardUInt32(props, 0, 79, $"Peace Keepers T{marker.DonorTrueIndex} reward owner");
             WriteUInt32(props, 0, LockedChestTrueIndex);
             WriteInt32(props, 4, x);
@@ -625,14 +634,11 @@ public static class TownSquareNativeLockedChestCandidateExporter
     }
 
     private static void ImportPrivateTextures(
-        FileStream retail,
-        DiscLayout layout,
+        Func<long,int,byte[]> read,
         byte[] expanded,
         List<TownSquareNativeLockedChestTextureRegionPlan> regionPlans)
     {
-        byte[] donorTexturePages = ReadWad(
-            retail,
-            layout,
+        byte[] donorTexturePages = read(
             PeaceKeepersDataEntryOffset + TexturePagesSubfileOffset,
             AddressableTexturePageBytes);
         foreach (TextureRegion region in TextureRegions)
@@ -664,6 +670,13 @@ public static class TownSquareNativeLockedChestCandidateExporter
     {
         DiscFileRecord executable = DiscImage.FindRootFileRecord(retail, layout, IsExecutableName);
         byte[] bytes = DiscImage.ReadFileBytes(retail, layout, executable.Lba, 0, executable.Size);
+        return BuildFinalExecutable(bytes,enableFastEntry);
+    }
+
+    internal static byte[] BuildFinalExecutable(byte[] original, bool enableFastEntry)
+    {
+        GuardSha256(original,ExpectedExecutableSha256,"native closure executable");
+        byte[] bytes=original.ToArray();
         GuardWord(bytes, CopyBufferHiFileOffset, 0x3C028009, "retail Town Square copy-buffer HI16");
         GuardWord(bytes, CopyBufferLoFileOffset, 0x24429ECC, "retail Town Square copy-buffer LO16");
         (uint high, uint low) = EncodeAddiuAddressPair(2, RelocatedCopyBufferAddress);
@@ -839,19 +852,17 @@ public static class TownSquareNativeLockedChestCandidateExporter
         return "Verified exact-USA retail preimages; one 0x2800-byte WAD growth (0x1000 overlay + 0x1800 actor/model); SCUS relocation 53875->53880; exact native Peace Keepers 0x00AE Locked Chest plus missing 0x000D reward handler closure and private delete/sound thunks; Town Square-resident 0x00AD/debris dependencies; T107-T113 source rows/props/fixups; four ownership-proven private texture/CLUT regions; treasure 200->210; optional guarded fast entry; untouched unrelated WAD entries; and byte-identical final readback. Runtime evidence is still required before editor promotion.";
     }
 
-    private static byte[] ReadPeaceSourceRow(FileStream retail, DiscLayout layout, int trueIndex, string sha256, string label)
+    private static byte[] ReadPeaceSourceRow(Func<long,int,byte[]> read, int trueIndex, string sha256, string label)
     {
-        byte[] row = ReadWad(
-            retail,
-            layout,
+        byte[] row = read(
             PeaceKeepersDataEntryOffset + PeaceKeepersSourceTableRelativeOffset + (trueIndex * RecordStride),
             RecordStride);
         GuardSha256(row, sha256, label);
         return row;
     }
 
-    private static byte[] ReadPeaceProps(FileStream retail, DiscLayout layout, int pointer, int length) =>
-        ReadWad(retail, layout, PeaceKeepersDataEntryOffset + PeaceKeepersSceneOffset + pointer, length);
+    private static byte[] ReadPeaceProps(Func<long,int,byte[]> read, int pointer, int length) =>
+        read(PeaceKeepersDataEntryOffset + PeaceKeepersSceneOffset + pointer, length);
 
     private static void PatchSourceRow(byte[] row, int propsPointer, int x, int y, int z)
     {
@@ -869,7 +880,7 @@ public static class TownSquareNativeLockedChestCandidateExporter
         value.CopyTo(target, offset);
     }
 
-    private static int RebaseLockedChestDescriptors(byte[] package)
+    internal static int RebaseLockedChestDescriptors(byte[] package)
     {
         int animationCount = ReadInt32(package, 0);
         if (animationCount <= 0 || animationCount > 1024)
@@ -983,7 +994,7 @@ public static class TownSquareNativeLockedChestCandidateExporter
         ? value
         : throw new InvalidDataException($"Rebased Locked Chest UV {value} is outside 0..255.");
 
-    private static int[] BuildTileOffsets(ushort tpage, int u, int v)
+    internal static int[] BuildTileOffsets(ushort tpage, int u, int v)
     {
         if (((tpage >> 7) & 3) != 0 || u < 0 || v < 0 || u + 31 > 255 || v + 31 > 255)
             throw new InvalidDataException("Locked Chest texture plan must use a 32x32 4-bpp in-page tile.");
@@ -1003,7 +1014,7 @@ public static class TownSquareNativeLockedChestCandidateExporter
         return offsets;
     }
 
-    private static int[] BuildPaletteOffsets(ushort clut)
+    internal static int[] BuildPaletteOffsets(ushort clut)
     {
         int xWord = (clut & 0x3F) * 16;
         int y = (clut >> 6) & 0x1FF;
