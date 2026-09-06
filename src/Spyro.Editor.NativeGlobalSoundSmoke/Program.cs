@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using Spyro.Editor.Core.Analysis;
 using Spyro.Editor.Core.Exporting;
+using Spyro.Editor.Core.Levels;
 
 int checks = 0, refusals = 0;
 void Check(bool value, string label)
@@ -56,6 +57,48 @@ Check(!NativeSoundBankCodec.Decode(pitch, Bank()).Descriptors[0].IsSupportedOneS
 byte[] donorComponent = Component(0, 0x20), donorBank = Bank(); donorComponent[4 + 0x1F] = 1; donorComponent[4 + 0x20] = 1; donorBank[0x22] = 0x42;
 var donor = NativeSoundBankCodec.Decode(donorComponent, donorBank);
 byte[] level = Level(Component(0));
+var hostileGlobals = new NativeSoundAdversarialList<NativeGlobalSoundRequest>(new(0), 1, 258, 257);
+Reject(() => NativeGlobalSoundMergeLayout.Snapshot(hostileGlobals), "global materialization stops at max+1 despite contradictory Count");
+Check(hostileGlobals.ItemsRead == 257, "global bounded enumeration visits only max+1");
+var hostileSlots = new NativeSoundAdversarialList<int>(0, 1, 18, 17);
+Reject(() => NativeModelSoundPackageSource.SnapshotSlots(hostileSlots), "slot materialization stops at max+1 despite contradictory Count");
+Check(hostileSlots.ItemsRead == 17, "model slot bounded enumeration visits only max+1");
+var hostileResources = new NativeSoundAdversarialList<int>(0, 1, 258, 257);
+Reject(() => new NativeGlobalSoundMergeLayout(level, donor, [], hostileResources), "local resource materialization is bounded");
+Check(hostileResources.ItemsRead == 257, "local resource bounded enumeration visits only max+1");
+Reject(() => NativeModelSoundPackageSource.SnapshotSlots(new NativeSoundAdversarialList<int>(0, 2, 1, 3)), "short contradictory slot enumeration");
+Reject(() => NativeGlobalSoundMergeLayout.Snapshot(new NativeSoundAdversarialList<NativeGlobalSoundRequest>(new(0), -1, 0, 0)), "negative declared request count");
+var localOnly = new NativeGlobalSoundMergeLayout(level, donor, [], [1, 0]);
+Check(localOnly.AppendedSampleBytes == 0x20 && localOnly.AppendedDescriptorCount == 1, "local-only descriptor allocation without dummy global request");
+Check(new NativeLevelSoundLayout(localOnly.CopyFinalBytes()).Sound.Map.SequenceEqual(new NativeLevelSoundLayout(level).Sound.Map), "local-only import changes no global map byte");
+Check(localOnly.DescriptorAllocations.Single(a => a.SourceDescriptorIndex == 0).TargetDescriptorIndex == 0 &&
+    localOnly.DescriptorAllocations.Single(a => a.SourceDescriptorIndex == 1).TargetDescriptorIndex == 1, "local descriptor references preserve occupied target indices");
+Check(new NativeGlobalSoundMergeLayout(level, donor, [], [0, 1]).FinalSha256 == localOnly.FinalSha256, "local allocation sorted by donor descriptor, not enumeration");
+foreach (int[] request in new[] { new[] { -1 }, new[] { 2 }, new[] { 1, 1 }, Array.Empty<int>() })
+    Reject(() => new NativeGlobalSoundMergeLayout(level, donor, [], request), "invalid local descriptor request");
+foreach (int[] slots in new[] { new[] { -1 }, new[] { 16 }, new[] { 0, 0 }, Array.Empty<int>() })
+    Reject(() => NativeModelSoundPackageSource.SnapshotSlots(slots), "invalid model-local slot identity");
+byte[] packageFixture = Enumerable.Repeat((byte)0xCC, 128).ToArray(); packageFixture[4] = 49; packageFixture[5] = 50;
+NativeModelSoundSlotBinding[] slotBindings = [new(0, 4, 49, 81), new(1, 5, 50, 82)];
+byte[] retargeted = NativeModelSoundPackageSource.ApplyBindings(packageFixture, slotBindings);
+Check(retargeted[4] == 81 && retargeted[5] == 82 && packageFixture[4] == 49 && retargeted.AsSpan(6).SequenceEqual(packageFixture.AsSpan(6)), "slot-only changes preserve all other package bytes and input");
+Reject(() => NativeModelSoundPackageSource.ApplyBindings(retargeted, slotBindings), "stale package slot preimage");
+Reject(() => NativeModelSoundPackageSource.ApplyBindings(packageFixture, [new(0, 5, 49, 81)]), "slot field identity mismatch");
+Reject(() => NativeModelSoundPackageSource.ApplyBindings(packageFixture, [slotBindings[0], slotBindings[0]]), "duplicate package field ownership");
+Reject(() => NativeModelSoundPackageSource.ApplyBindings(packageFixture, [new(0, 4, 49, 255)]), "profile FF output cannot alias a resource");
+Reject(() => NativeModelSoundPackageSource.ApplyBindings(new byte[4], slotBindings), "truncated package slot owner");
+byte[] duplicateComponent = Component(0x20, 0x20);
+var duplicateDonor = NativeSoundBankCodec.Decode(duplicateComponent, donorBank);
+var duplicatedLocal = new NativeGlobalSoundMergeLayout(level, duplicateDonor, [], [0, 1]);
+Check(duplicatedLocal.AppendedDescriptorCount == 1 && duplicatedLocal.DescriptorAllocations.All(a => a.TargetDescriptorIndex == 1), "distinct local slots share exact descriptor/sample resources");
+duplicateComponent[0x127] = 0x10; // second descriptor pitch high byte
+var differingPitch = new NativeGlobalSoundMergeLayout(level, NativeSoundBankCodec.Decode(duplicateComponent, donorBank), [], [1, 0]);
+Check(differingPitch.AppendedSampleBytes == 0x20 && differingPitch.AppendedDescriptorCount == 2, "equal local sample with different pitch keeps separate descriptors");
+var opaqueLocal = new NativeGlobalSoundMergeLayout(Level(Component(0), 0x800, loopBank), loop, [], [0]);
+Check(opaqueLocal.AppendedSampleBytes == 0 && opaqueLocal.AppendedDescriptorCount == 0, "exact resident opaque local descriptor reuse is not import");
+Reject(() => new NativeGlobalSoundMergeLayout(level, loop, [], [0]), "new local loop import remains unsupported");
+Reject(() => new NativeGlobalSoundMergeLayout(Level(Component(0), 0x7E800), donor, [], [1]), "local bank rounded upload overflow");
+Reject(() => new NativeGlobalSoundMergeLayout(Level(Component(Enumerable.Repeat(0, 256).ToArray())), donor, [], [1]), "local descriptor overflow atomic refusal");
 var explicitRequest = new NativeGlobalSoundRequest(0x1F, NativeGlobalSoundMappingPolicy.ExplicitRebindUnresolvedConsumers);
 Reject(() => new NativeGlobalSoundMergeLayout(level, donor, [new(0x1F)]), "descriptor zero is owned, not absent");
 var merge = new NativeGlobalSoundMergeLayout(level, donor, [explicitRequest]);
@@ -199,6 +242,7 @@ if (args.Length == 2 && args[0] == "--source")
     await RejectAsync(() => source.CompileMergeAsync(args[1], 33, 65, [new(0x1F)]), "ID65 has no independent source ownership");
     await RejectAsync(() => source.CompileMergeAsync(args[1], 99, 14, [new(0x1F)]), "unknown donor");
     await RejectAsync(() => NativeGlobalSoundSource.CaptureAsync(Path.Combine(AppContext.BaseDirectory, "Spyro.Editor.NativeGlobalSoundSmoke.dll")), "wrong source actual length");
+    await NativeModelSoundCases.RunAsync(source, playerSource, args[1], Check, Reject, RejectAsync, Compose);
     Console.WriteLine($"NATIVE_GLOBAL_SOUND_SOURCE_OK checks={checks} refused={refusals} levels=35 descriptors=2457 runtime=false publication=false");
 }
 else if (args.Length != 0) throw new InvalidDataException("Usage: no arguments, or --source <unchanged original BIN>.");

@@ -155,17 +155,86 @@ all35 actual source streams remain covered by the existing player gate. Future
 editor-owned empty streams need a producer-owned start-boundary rule. This work
 does not relax the shared relocation schema or claim empty-stream merge support.
 
+## Source-issued model-local descriptor allocation
+
+`CompileModelSlotMergeAsync` is now a detached source-backed producer. It accepts
+an already source-issued `NativeMobySourceInventory`, binds its donor data owner
+to the captured sound owner's full hash/length/WAD entry, and reuses the existing
+registration parser with one canonical original address-space object. It never
+accepts caller package offsets, descriptor indices or declared hashes as source
+authority. The actual BIN is reopened and checked before and after compilation.
+
+The first package schema is deliberately bounded to source Wizard33 class11B.
+Slots0/1/2 contain local descriptor indices49/50/51. They are **not global map
+keys**. The exact package profile rejects class0, unsupported families, duplicate
+or out-of-range slots, FF-unbound source slots and changed complete source bytes.
+The native model-slot consumer at EXE28D1C lengthA0 is bound by SHA
+`af902cc21e59f2794bc459d6cfaf528f36c28b73f39fc4221c1fe6d384331e91`;
+the signed-frame-slot and queued-playback consumer at EXE42AC0 length204 by
+`2a3dcb9fa1ba59e0d2e740bcbd912b18155266fee95cf2c2e2f580cfeef72324`.
+The bounded frame audit observes49/50 queued from animation1/2 frame0; descriptor51
+is conservatively retained because the complete native package declares it.
+
+Source-backed regression first rejected a useful owner mismatch: the logical
+model payload at WAD3106518 is35AC bytes (SHA24df9ae279f32ba10a8e3bd25880d6989991b9225acf45755e6aaf985d66f529),
+but registration root5→root6 owns35B4 bytes, including eight zero padding bytes
+(SHA070a57069c8747ada4caacc0394b93e9a970e5ba7ff21159584abdc7a0fd4faf).
+Both identities are bound. The package selector plan preserves that complete
+owner; a nonzero padding mutation is refused even if the logical payload is exact.
+
+The neutral allocator is shared with the unchanged global API. Local-only imports
+need no dummy global request and preserve all256 map bytes. A combined transaction
+sorts resources by donor descriptor index, while the v1 global-only adapter keeps
+its previous ordering and all six byte/plan goldens. Existing exact descriptors
+can be reused at their original indices, including opaque resources; importing
+new loop/unknown semantics remains refused. An FF model output is refused by this
+specific unbound-slot profile, not by a claimed 255-entry hardware table limit.
+
+The new adapter permits an explicit unresolved global rebind only for Wizard33
+electric1F→Dark12. All other requested globals must require exact equivalence.
+Native death selector26 reuses Dark descriptor22 with its actual sample and opaque
+parameters unchanged. This restriction does not claim every indirect native
+consumer is closed; all global bindings retain `ConsumerOwnershipResolved=false`.
+
+Dark's local49/50/51 samples have lengths5430/20D0/1080. Combined with electric40,
+the four samples totalA2C0. Preserving the full old70800 bank allocates donor
+40/49/50/51 at offsets70800/72540/77970/79A40 and target indices80/81/82/83;
+the final rounded bank is7B000. Map1F becomes80, package+4/+5/+6 become81/82/83.
+All80 old descriptor bytes, old bank/padding, and all255 other map bytes remain
+exact. The independent raw-sector oracle emits no files and supplies new goldens:
+
+| Detached stage | Whole-level SHA-256 |
+| --- | --- |
+| Local49/50/51 only | 53d5746a7c08ed65e0f827ed89a51c7a0dd97cb76c4c5c1ead51aa84a32ec0f8 |
+| Electric40 plus local49/50/51 | 9cd7dfd29bcf194a1a4b2d1a80c94f466dbbbed736159d9fd140bf113bb8fe0e |
+| All four plus player animation8 | d0d83a7fb45204fba26f8248f3f6a3bae20c0de22b7596d98db6f5d6cbff0b90 |
+
+The last stage grows three subfiles byF000 total through original-address payloads
+and field edits, preserving every original target model and scene byte. It does
+not register or place a Wizard. `CopyTextureComposedPackage` separately accepts
+the source-issued Dark texture plan, verifies its exact donor/destination ownership
+and every declared package patch, and changes only the three sound slot bytes.
+All texture-rebased bytes and the eight owner-padding bytes survive. Its full
+35B4-byte package hash is
+`e3cd4d67f39eb9375a8d17b4c2830050f33b5523c3421e7eba828af9f6eabe6e`.
+That remains a detached package, not a final registered actor or ROM afterimage.
+
+The executed local RED had a clean Debug build followed by the deliberate local
+allocator stub failure. The subsequent bounded-materialization RED used finite
+adversarial lists which advertise Count1 and throw if enumeration reaches max+2;
+the old unbounded snapshot hit that tripwire. Global requests, local descriptor
+requests and model slots now read at most max+1 elements and require an exact,
+nonnegative count match. Short contradictory enumerations are also refused.
+
+Final targeted local GREEN: Debug zero warnings/errors,
+121 source-free checks/56 refusals;16520 source-backed checks/74 refusals,
+including the nonzero owner-padding negative. All six prior byte goldens and
+the three previous global plan hashes are unchanged. Independent read-only
+review found no material issue; runtime playback remains untested here.
+
 ## Remaining closure work
 
-Dark Hollow also lacks Wizard model-local sound descriptors49/50/51. Those are
-package sound-slot indices consumed by the model-local resolver, not global map
-selectors. Their respective sample lengths are0x5430,0x20D0,0x1080. Combined with
-electric1F, the four samples total0xA2C0; preserving Dark's entire0x70800 bank then
-rounding yields0x7B000, within the upload domain. This is read-only capacity
-evidence, not an implemented local-slot importer or permission to rebind globals.
-
-Still required: model-local descriptor installation/remaps; complete selected
-global consumer ownership; unusual/looping sample semantics where needed;
+Still required: complete selected global consumer ownership; unusual/looping sample semantics where needed;
 trusted simultaneous composition with animation/model/scene producers; transient
 CD/scratch/RAM and SPU voice/reverb lifetime; native runtime audio acceptance.
 `RuntimeFitProven`, `RuntimePlaybackProven`, `CompleteConsumerOwnershipProven`,

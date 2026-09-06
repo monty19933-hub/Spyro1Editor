@@ -15,6 +15,7 @@ public sealed record NativeSoundSamplePlacement(int BankRelativeOffset, int Byte
 public sealed record NativeSoundProtectedExtent(string Id, int OriginalDataOffset, int FinalDataOffset, int ByteLength, string Sha256);
 public sealed record NativeSoundFieldChange(string Id, int OriginalDataOffset, int FinalDataOffset, int ByteLength, uint Before, uint After);
 internal sealed record NativeSoundOriginalFieldMutation(string Id, int DataOffset, int ByteLength, uint Before, uint After);
+internal sealed record NativeSoundDescriptorAllocation(int SourceDescriptorIndex, int TargetDescriptorIndex, string SampleSha256);
 
 /// <summary>
 /// Retail-derived whole-level bytes, not a patch over an already edited level.
@@ -73,23 +74,49 @@ internal sealed class NativeGlobalSoundMergeLayout
     internal IReadOnlyList<NativeSoundSamplePlacement> Samples { get; }
     internal IReadOnlyList<NativeSoundProtectedExtent> Preservations { get; }
     internal IReadOnlyList<NativeSoundFieldChange> FieldChanges { get; }
+    internal IReadOnlyList<NativeSoundDescriptorAllocation> DescriptorAllocations { get; } = Array.Empty<NativeSoundDescriptorAllocation>();
 
-    internal static NativeGlobalSoundRequest[] Snapshot(IReadOnlyList<NativeGlobalSoundRequest> requests)
+    internal NativeGlobalSoundMergeLayout(ReadOnlySpan<byte> targetData, NativeSoundBank donor,
+        IReadOnlyList<NativeGlobalSoundRequest> requests, IReadOnlyList<int> localDescriptorRequests,
+        int dataWadEntry = 0, long dataWadOffset = 0)
+        : this(targetData, donor, requests, localDescriptorRequests, true, dataWadEntry, dataWadOffset) { }
+
+    internal static NativeGlobalSoundRequest[] Snapshot(IReadOnlyList<NativeGlobalSoundRequest> requests, bool allowEmpty = false)
     {
-        ArgumentNullException.ThrowIfNull(requests);
-        if (requests.Count is 0 or > 256) throw new InvalidDataException("A sound merge needs 1..256 distinct global selectors.");
-        NativeGlobalSoundRequest[] copy = requests.ToArray();
+        NativeGlobalSoundRequest[] copy = BoundedSnapshot(requests, allowEmpty ? 0 : 1, 256, "global sound selector");
         if (copy.Any(r => r is null || r.GlobalSelector is < 0 or > 255 || !Enum.IsDefined(r.MappingPolicy)) ||
             copy.Select(r => r.GlobalSelector).Distinct().Count() != copy.Length)
             throw new InvalidDataException("Sound requests require distinct selectors 0..255 and explicit known mapping policies.");
         return copy.OrderBy(r => r.GlobalSelector).ToArray();
     }
 
+    internal static T[] BoundedSnapshot<T>(IReadOnlyList<T> requests, int minimum, int maximum, string label)
+    {
+        ArgumentNullException.ThrowIfNull(requests);
+        int declared = requests.Count;
+        if (declared < minimum || declared > maximum)
+            throw new InvalidDataException($"Native {label} request count is outside {minimum}..{maximum}.");
+        // IReadOnlyList can be user-defined: Count is not an allocation budget
+        // for its enumerator. Read at most max+1, then require exact consistency.
+        T[] copy = requests.Take(maximum + 1).ToArray();
+        if (copy.Length != declared || copy.Length > maximum)
+            throw new InvalidDataException($"Native {label} request enumeration contradicts its bounded count.");
+        return copy;
+    }
+
     internal NativeGlobalSoundMergeLayout(ReadOnlySpan<byte> targetData, NativeSoundBank donor,
         IReadOnlyList<NativeGlobalSoundRequest> requests, int dataWadEntry = 0, long dataWadOffset = 0)
+        : this(targetData, donor, requests, [], false, dataWadEntry, dataWadOffset) { }
+
+    private NativeGlobalSoundMergeLayout(ReadOnlySpan<byte> targetData, NativeSoundBank donor,
+        IReadOnlyList<NativeGlobalSoundRequest> requests, IReadOnlyList<int> localDescriptorRequests,
+        bool localMode, int dataWadEntry, long dataWadOffset)
     {
         ArgumentNullException.ThrowIfNull(donor);
-        var snapshot = Snapshot(requests); Requests = Array.AsReadOnly(snapshot);
+        int[] locals = BoundedSnapshot(localDescriptorRequests, 0, 256, "local sound descriptor");
+        if (locals.Any(i => i < 0 || i >= donor.Descriptors.Count) || locals.Distinct().Count() != locals.Length)
+            throw new InvalidDataException("Local sound resources require distinct, owned donor descriptor indices.");
+        var snapshot = Snapshot(requests, localMode && locals.Length > 0); Requests = Array.AsReadOnly(snapshot);
         if (targetData.Length < 0x2800 || targetData.Length > 0x800000 || dataWadEntry < 0 || dataWadOffset < 0 || dataWadOffset > long.MaxValue - 0x1000000)
             throw new InvalidDataException("Sound level WAD ownership is outside its bounded domain.");
         byte[] original = targetData.ToArray(); var target = new NativeLevelSoundLayout(original);
@@ -98,17 +125,44 @@ internal sealed class NativeGlobalSoundMergeLayout
             .Select(s => (s.BankOffset, s.CopyBytes())).ToList();
         List<byte> appendedBank = []; List<NativeSoundSamplePlacement> samples = [];
         List<NativeGlobalSoundBinding> bindings = [];
+        Dictionary<int, int> allocated = [];
+        // Validate global ownership before allocating anything. Equivalent mapped
+        // resources retain their original target index, including opaque resources.
         foreach (var request in snapshot)
         {
             NativeSoundDescriptor incoming = donor.Descriptors[donor.Map[request.GlobalSelector]];
             int oldIndex = target.Sound.Map[request.GlobalSelector];
             NativeSoundDescriptor mapped = target.Sound.Descriptors[oldIndex];
             if (Equivalent(mapped, incoming))
-            {
-                bindings.Add(new(request.GlobalSelector, oldIndex, oldIndex, false, false, incoming.Sample.Sha256)); continue;
-            }
+                continue;
             if (request.MappingPolicy != NativeGlobalSoundMappingPolicy.ExplicitRebindUnresolvedConsumers)
                 throw new InvalidDataException($"Global selector {request.GlobalSelector:X2} already owns a different native resource (descriptor {oldIndex}); explicit rebind with unresolved consumer ownership is required.");
+        }
+        // Preserve the v1 global-only ordering/goldens. A local-resource transaction
+        // has one explicit source-descriptor ordering across both reference kinds.
+        var neededGlobals = snapshot.Where(r => !Equivalent(target.Sound.Descriptors[target.Sound.Map[r.GlobalSelector]], donor.Descriptors[donor.Map[r.GlobalSelector]]))
+            .Select(r => (int)donor.Map[r.GlobalSelector]);
+        int[] resources = (localMode ? neededGlobals.Concat(locals).Distinct().Order() : neededGlobals.Distinct()).ToArray();
+        foreach (int index in resources) allocated.Add(index, Allocate(donor.Descriptors[index], localMode));
+        foreach (var request in snapshot)
+        {
+            NativeSoundDescriptor incoming = donor.Descriptors[donor.Map[request.GlobalSelector]];
+            int oldIndex = target.Sound.Map[request.GlobalSelector];
+            int finalIndex = Equivalent(target.Sound.Descriptors[oldIndex], incoming) ? oldIndex : allocated[incoming.Index];
+            bindings.Add(new(request.GlobalSelector, oldIndex, finalIndex, oldIndex != finalIndex, false, incoming.Sample.Sha256));
+        }
+        DescriptorAllocations = Array.AsReadOnly(locals.Order().Select(index =>
+            new NativeSoundDescriptorAllocation(index, allocated[index], donor.Descriptors[index].Sample.Sha256)).ToArray());
+
+        int Allocate(NativeSoundDescriptor incoming, bool allowExactOpaqueReuse)
+        {
+            // Local references may select an already-resident exact opaque resource.
+            // This grants no new loop/unknown-parameter import semantics.
+            if (allowExactOpaqueReuse)
+            {
+                int equivalent = target.Sound.Descriptors.Where(d => Equivalent(d, incoming)).Select(d => d.Index).DefaultIfEmpty(-1).Min();
+                if (equivalent >= 0) return equivalent;
+            }
             if (!incoming.IsSupportedOneShot)
                 throw new InvalidDataException("Import of looping/unknown sound descriptor or ADPCM semantics requires a separate native profile.");
             byte[] sampleBytes = incoming.Sample.CopyBytes(), descriptor = incoming.CopyDescriptor();
@@ -130,7 +184,7 @@ internal sealed class NativeGlobalSoundMergeLayout
                 if (descriptors.Count == 256) throw new InvalidDataException("Native sound descriptor byte-index capacity is exhausted.");
                 finalIndex = descriptors.Count; descriptors.Add(descriptor);
             }
-            bindings.Add(new(request.GlobalSelector, oldIndex, finalIndex, oldIndex != finalIndex, false, incoming.Sample.Sha256));
+            return finalIndex;
         }
         AppendedSampleBytes = appendedBank.Count; AppendedDescriptorCount = descriptors.Count - target.Sound.Descriptors.Count;
         byte[] appendedDescriptors = descriptors.Skip(target.Sound.Descriptors.Count).SelectMany(d => d).ToArray();
@@ -183,6 +237,9 @@ internal sealed class NativeGlobalSoundMergeLayout
             if (finalLayout.Sound.Map[binding.GlobalSelector] != binding.FinalDescriptor ||
                 !Equivalent(finalLayout.Sound.Descriptors[binding.FinalDescriptor], donor.Descriptors[donor.Map[binding.GlobalSelector]]))
                 throw new InvalidDataException("Sound merge failed exact mapped-resource readback.");
+        foreach (var allocation in DescriptorAllocations)
+            if (!Equivalent(finalLayout.Sound.Descriptors[allocation.TargetDescriptorIndex], donor.Descriptors[allocation.SourceDescriptorIndex]))
+                throw new InvalidDataException("Sound merge failed exact local descriptor-resource readback.");
         OriginalLength = original.Length; OriginalSha256 = NativeSoundBankCodec.Hash(original); FinalSha256 = NativeSoundBankCodec.Hash(_final);
         Bindings = bindings.AsReadOnly(); Samples = samples.AsReadOnly(); Preservations = protectedExtents.AsReadOnly(); FieldChanges = fields.OrderBy(f => f.OriginalDataOffset).ToList().AsReadOnly();
 

@@ -27,7 +27,7 @@ public sealed class NativeGlobalSoundSourceLevel
 }
 
 /// <summary>Issues detached sound plans only from the unchanged clean-USA image, never caller-declared hashes.</summary>
-public sealed class NativeGlobalSoundSource
+public sealed partial class NativeGlobalSoundSource
 {
     public const string OriginalImageSha256 = NativeMobySourceInventory.OriginalImageSha256;
     public const long OriginalImageByteLength = NativeMobySourceInventory.OriginalImageByteLength;

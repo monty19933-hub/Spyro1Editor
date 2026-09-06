@@ -128,4 +128,67 @@ with open(sys.argv[1], "rb") as image:
         print(f"SOUND_PLAYER_COMPOSITION_ORACLE level={target_id} finalSha256={sha(combined)}")
     image.seek(0)
     assert hashlib.file_digest(image, "sha256").hexdigest() == EXPECTED_SOURCE
+    # Independent local/global allocation, using actual donor descriptor owners.
+    # No C# layout code, afterimage or reported offset is consumed here.
+    for ids in ((49, 50, 51), (40, 49, 50, 51)):
+        original = level(12)
+        sound = sound_offset(original)
+        bank_length = word(original, 4) - 0x80000
+        count = word(original, sound + 0x104)
+        new_bank, new_descriptors = bytearray(), bytearray()
+        for descriptor_id in ids:
+            desc = donor[donor_sound + 0x108 + descriptor_id * 20:][:20]
+            start = word(donor, 0) + 0x80000 + word(desc, 0)
+            end = start
+            while True:
+                end += 16
+                if donor[end - 15] & 1:
+                    break
+            put(desc, 0, bank_length + len(new_bank))
+            new_bank += donor[start:end]
+            new_descriptors += desc
+        bank_growth = (len(new_bank) + 0x7FF) // 0x800 * 0x800
+        header, blocks, shift = original[:0x800], [], 0
+        for index in range(10):
+            offset, length = struct.unpack_from("<II", original, index * 8)
+            if not length:
+                continue
+            block = original[offset:offset + length]
+            put(header, index * 8, offset + shift)
+            if index == 0:
+                block += new_bank + bytes(bank_growth - len(new_bank))
+                put(header, 4, length + bank_growth)
+                shift += bank_growth
+            elif index == 1:
+                local_sound = sound - offset
+                insertion = local_sound + word(original, sound)
+                block = block[:insertion] + new_descriptors + block[insertion:] + bytes(0x800 - len(new_descriptors))
+                put(block, local_sound, word(original, sound) + len(new_descriptors))
+                put(block, local_sound + 0x104, count + len(ids))
+                if 40 in ids:
+                    block[local_sound + 4 + 0x1F] = count
+                put(header, 12, length + 0x800)
+                shift += 0x800
+            blocks.append(block)
+        for i in range(64):
+            root = word(original, 0x50 + i * 4)
+            if root:
+                put(header, 0x50 + i * 4, root + shift)
+        final = header + b"".join(blocks)
+        print(f"MODEL_SOUND_ORACLE ids={ids} finalSha256={sha(final)} bank={bank_length+bank_growth:X}")
+        if 40 in ids:
+            insertion = word(final, 0x54) - 4
+            assert word(final, insertion) == 0xFFFFFFFF
+            model_end = word(final, 0x10) + word(final, 0x14)
+            combined = final[:insertion] + animation + final[insertion:model_end] + bytes(0x4000-len(animation)) + final[model_end:]
+            put(combined, 0x14, word(final, 0x14) + 0x4000)
+            for i in range(3, 10):
+                if word(final, i * 8):
+                    put(combined, i * 8, word(final, i * 8) + 0x4000)
+            for i in range(1, 64):
+                if word(final, 0x50 + i * 4):
+                    put(combined, 0x50 + i * 4, word(final, 0x50 + i * 4) + len(animation))
+            print(f"MODEL_SOUND_PLAYER_ORACLE finalSha256={sha(combined)} growth={len(combined)-len(original):X}")
+    image.seek(0)
+    assert hashlib.file_digest(image, "sha256").hexdigest() == EXPECTED_SOURCE
     print("NATIVE_GLOBAL_SOUND_INDEPENDENT_ORACLE_OK targets=3 sourceUnchanged=true outputsWritten=0")
