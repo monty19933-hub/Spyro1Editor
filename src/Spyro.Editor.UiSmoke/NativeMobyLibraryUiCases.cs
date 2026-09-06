@@ -79,9 +79,33 @@ internal static class NativeMobyLibraryUiCases
             Check(add.GetLogicalDescendants().OfType<Button>().Any(b => b.Name == "ObjectGalleryButton"), "existing Add workflow retained");
             add.Close(false); Pump();
             NoMutation(window, before, files);
+            AssertInvalidSourceRefused(window, before, files);
             Console.WriteLine("NATIVE_MOBY_LIBRARY_UI_OK: 4877 exact variants, search/source/resources, special/unsupported/stale refusal, approved-template handoff and no-write/cancel checks passed.");
         }
         finally { window.Close(); Pump(); }
+    }
+
+    private static void AssertInvalidSourceRefused(MainWindow window, EditorShellSessionSnapshot before, Dictionary<string, string> files)
+    {
+        // Exercise the actual async capture failure, not a synthetic error hook.
+        var sourceBox = (TextBox)typeof(MainWindow).GetField("_discImagePathBox",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(window)!;
+        string? originalText = sourceBox.Text;
+        string invalid = Path.Combine(before.Workspace.RootPath, "native-library-invalid-source.bin");
+        File.WriteAllBytes(invalid, new byte[64]);
+        try
+        {
+            sourceBox.Text = invalid;
+            Click(Find<Button>(window, "RetailNativeMobyLibraryButton"));
+            Window library = Library(window);
+            Wait(() => Find<TextBlock>(library, "NativeMobyLibrarySummary").Text?.Contains("Native library unavailable", StringComparison.Ordinal) == true,
+                "invalid source is a recoverable dialog error");
+            Check(Items(Find<ListBox>(library, "NativeMobyLibraryList")).Length == 0 &&
+                !Find<Button>(library, "NativeMobyLibraryUseTemplate").IsEnabled, "invalid source cannot lend catalogue authority");
+            Click(Find<Button>(library, "NativeMobyLibraryCancel"));
+        }
+        finally { sourceBox.Text = originalText; File.Delete(invalid); }
+        NoMutation(window, before, files);
     }
 
     internal static void AssertBlankLibrary(MainWindow window, string outputDirectory)

@@ -39,7 +39,7 @@ capture runs off the UI thread, with no on-disk cache or document migration.
   selection refusal.
 - Headless `UiSmoke --native-moby-library-only`: complete retail inventory,
   source/class filtering, empty search, resource separation, unsupported and
-  stale-scene refusal, exact approved-template handoff/cancel and unchanged
+  stale-scene and invalid-source refusal, exact approved-template handoff/cancel and unchanged
   scene/navigation/persistence.
 - The existing `--id65-blank-lab-ui-only` route exercises the same library in
   an actually loaded lab, preserving the canonical-document guard suite.
@@ -49,3 +49,8 @@ capture runs off the UI thread, with no on-disk cache or document migration.
 Headless screenshots are retained under `_local/ui-overhaul/` as
 `native-moby-library-retail.png` and `native-moby-library-blank.png`.
 No new universal import or gameplay acceptance is claimed by this UI.
+
+An executed negative UI test initially exposed an unhandled async event error
+on a wrong source BIN. The dialog now catches `InvalidDataException` explicitly
+(it is not an `IOException` subtype), explains the rejection and remains safely
+closable without altering scene or saved files.

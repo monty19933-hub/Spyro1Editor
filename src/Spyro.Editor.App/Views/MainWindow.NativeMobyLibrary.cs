@@ -172,7 +172,7 @@ public sealed partial class MainWindow
                 }
             }
         }
-        catch (Exception error) when (error is IOException or ArgumentException or UnauthorizedAccessException)
+        catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException)
         {
             if (!closed) details.Text = summary.Text = $"Native library unavailable: {error.Message}\nUse the original USA source BIN/CUE. No scene or saved file was changed.";
         }
