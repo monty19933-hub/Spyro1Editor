@@ -60,10 +60,19 @@ internal static class WizardAppendSourceCases
 
         var inventory = NativeMobySourceInventory.Capture(image, catalog);
         var trueDonor = inventory.Levels.Single(l => l.LevelId == 33).Rows.Single(r => r.TrueIndex == 6);
+        byte[] originalExe = ReadLogical(image, 53875, 0, 0x66000);
+        check(Hash(originalExe) == "a533d75cab8afaae6107ec35a02a9a5fe979a92c7c955f9cf1ee50f693a1b998" &&
+              Word(originalExe, 0x6002C) == 0x80010168 && Word(originalExe, 0x60030) == 0x8001015C &&
+              originalExe.AsSpan(0x968, 12).SequenceEqual("WIZARD PEAK\0"u8) &&
+              originalExe.AsSpan(0x95C, 9).SequenceEqual("BLOWHARD\0"u8),
+            "Original native title slots15/16 distinguish Wizard Peak33 from Blowhard34; display labels cannot replace source identity.");
+        check(inventory.Levels.Single(l => l.LevelId == 33) is { DataWadEntry: 40, LevelKey: "wizardpeak", DisplayName: "Wizard Peak" } &&
+              inventory.Levels.Single(l => l.LevelId == 34) is { DataWadEntry: 42, LevelKey: "blowhard", DisplayName: "Blowhard" },
+            "Captured catalog naming agrees with the exact original native titles and WAD owners.");
         check(second.Families.All(f => f.RoleId == "wizard" && f.DonorLevelId == 33 && f.DonorTrueIndex == 6 &&
                     f.SourceVariantId == trueDonor.SourceVariantId) &&
               second.ProposedOwners.Entries.All(e => e.RoleId == "wizard" && e.SourceVariantId == trueDonor.SourceVariantId),
-            "Native scene must bind exact actual Blowhard33/T6, not the ledger smoke's distinct WizardPeak34/T6.");
+            "Native scene must bind exact actual Wizard Peak33/T6, not the ledger smoke's distinct Blowhard34/T6.");
         byte[] before = second.CopyOriginalScene(), after = second.CopyScene();
         byte[] donorData = ReadWad(image, 0x2F6B000, 0x28A000);
         check(Hash(donorData) == "9973493f865b5e86bc17b32c5af9e3d7596e25615618c007ed28e0379161f2d8",
@@ -177,14 +186,16 @@ internal static class WizardAppendSourceCases
         return result;
     }
 
-    private static byte[] ReadWad(string path, int offset, int length)
+    private static byte[] ReadWad(string path, int offset, int length) => ReadLogical(path, 37, offset, length);
+
+    private static byte[] ReadLogical(string path, int baseLba, int offset, int length)
     {
         using var image = File.OpenRead(path);
         byte[] bytes = new byte[length];
         for (int at = 0; at < length;)
         {
             int n = Math.Min(length - at, 2048 - offset % 2048);
-            image.Position = (37L + offset / 2048) * 2352 + 24 + offset % 2048;
+            image.Position = ((long)baseLba + offset / 2048) * 2352 + 24 + offset % 2048;
             image.ReadExactly(bytes.AsSpan(at, n));
             at += n; offset += n;
         }

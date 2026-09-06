@@ -15,7 +15,7 @@ Logs `10-wizard-scene-green-build.log`, `11-wizard-scene-source-free.log` and
 `12-wizard-scene-source.log` are retained in the same evidence directory.
 
 Public intent is only a stable family ID. The new source-issued sibling chooses
-the actual Blowhard33/T6 Wizard row, complete private properties and native
+the actual Wizard Peak33/T6 Wizard row, complete private properties and native
 fixups. Tests require temporal z128 -> serialize/reopen -> a129 while retaining
 z128, order-independent active requests, exact active-family bijection, no
 retired-row emission, source/role/schema rebinding and atomic failure. Every
@@ -54,3 +54,13 @@ runner suite then passed **25** tests, including missing free/source-marker
 refusals, no default source access and exact opted-in arguments. Logs13/14 are
 retained beside the native scene logs. Root/peer source reviews are clear;
 Release/full-gate checkpointing remains root-owned.
+
+Later native naming cross-check corrected the reversed donor names in this
+stage's diagnostics and notes: ID33/WAD40 is Wizard Peak; ID34/WAD42 is Blowhard.
+The numeric donor, all source/scene/plan identities and existing payload goldens
+are unchanged. Two added assertions bind the original EXE's title pointers and
+strings to the corresponding source-catalog owners. Focused Release validation
+passed52 source checks (20 refusals), plus the unchanged4 source-free checks.
+The dependency-inclusive build passed5.71s with zero warnings/errors; it also
+compiled the then-new fresh-disc Core files, but did not run their test suite.
+Logs: `_local/research/native-moby-owner-ledger-20260906/native-donor-label-{build,source}.log`.

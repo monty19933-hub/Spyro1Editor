@@ -10,20 +10,20 @@ candidate publication is implemented by this stage.
 
 `NativeDarkHollowWizardAppendSource.Capture(originalBin, catalog)` reuses the
 authoritative all35-level inventory/native slot/owner issuer, then independently
-captures the exact Dark/Blowhard/EXE owners with whole-image SHA/length/position
+captures the exact Dark/Wizard Peak/EXE owners with whole-image SHA/length/position
 verification before and after. The catalog is checked, never trusted to issue
 offsets or a native source certificate. There are no public source/plan metadata
 constructors; `NativeDarkHollowWizardAppendInstance` contains only `FamilyId`.
 
 The fixed source profile is Dark12, native save slot2, original128 rows, and
-the actual **Blowhard33/T6** class11B donor. The separate ledger kernel smoke's
-valid WizardPeak34/T6 example is not substituted. Whole source data hashes and
+the actual **Wizard Peak33/T6** class11B donor. The separate ledger kernel smoke's
+valid Blowhard34/T6 example is not substituted. Whole source data hashes and
 the actual source row variant are bound in addition to these exact owners:
 
 | Owner | Native source extent | SHA-256 |
 | --- | --- | --- |
 | Dark scene | WAD1095000, length11800 | `c48c344d3809f1ea5761e968ce6f18b02d5c7bbb82fcec4a7fd453343dbb84f8` |
-| Blowhard row6 | scene6388, length58 | `59401eafeab453fd9d26f14eedca58390653dc5f4fcc3d2560f7b3e8fc7afa82` |
+| Wizard Peak row6 | scene6388, length58 | `59401eafeab453fd9d26f14eedca58390653dc5f4fcc3d2560f7b3e8fc7afa82` |
 | Complete private properties | sceneC350, length50 | `5b3d762f6117ea30e959a21bf2778f3442b03eba93125c9a0e0a642cc58d345b` |
 
 The native donor fixup table FC3C/count191 must contain exactly one field in
@@ -33,6 +33,15 @@ The only output changes within each imported pair are the row properties pointer
 and private self pointer to its own +28. Row/route coordinates and every other
 donor byte remain unchanged. Several identical donor coordinates overlap;
 this is deliberately **not** an authored multi-enemy placement plan.
+
+Naming correction: the initial append-stage diagnostics and notes accidentally
+reversed Wizard Peak and Blowhard. The original EXE title table at file6002C
+(slot15) points to80010168, `WIZARD PEAK`; file60030 (slot16) points to8001015C,
+`BLOWHARD`. The source catalog agrees: ID33/WAD40 and ID34/WAD42 respectively.
+The actual importer always selected ID33/T6/WAD40 and its exact hashes above;
+no source choice, identity, serialized plan or candidate bytes were changed by
+correcting these human-readable labels. The append source regression now checks
+both native strings/pointers and corresponding catalog owners.
 
 `SourceSchemaSha256` binds the code-owned logical source/schema; it is not an
 authenticated previous export receipt. Shared graph reads bind the existing

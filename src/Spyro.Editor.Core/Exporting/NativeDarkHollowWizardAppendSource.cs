@@ -11,7 +11,7 @@ namespace Spyro.Editor.Core.Exporting;
 public sealed record NativeDarkHollowWizardAppendInstance(string FamilyId);
 
 /// <summary>
-/// Source-issued one-role Blowhard33/T6 private-scene schema for Dark12. Every
+/// Source-issued one-role Wizard Peak33/T6 private-scene schema for Dark12. Every
 /// compile uses a complete active ledger, fresh canonical final domains and the
 /// existing native splice/graph validator. This is not a behavior, placement,
 /// authenticated export-history, App transaction or publication producer.
@@ -36,7 +36,7 @@ public sealed class NativeDarkHollowWizardAppendSource
         Require(dark, DarkHash); Require(donorData, DonorHash); Require(executable, ExeHash);
         if (Word(dark, 0x18) != 0x194000 || Word(dark, 0x1C) != SceneLength ||
             Word(donorData, 0x18) != 0x1CE800 || Word(donorData, 0x1C) != SceneLength)
-            throw new InvalidDataException("Exact Dark/Blowhard native scene descriptor owners changed.");
+            throw new InvalidDataException("Exact Dark/Wizard Peak native scene descriptor owners changed.");
         byte[] originalScene = dark.AsSpan(0x194000, SceneLength).ToArray();
         byte[] donorScene = donorData.AsSpan(0x1CE800, SceneLength).ToArray();
         Require(originalScene, "c48c344d3809f1ea5761e968ce6f18b02d5c7bbb82fcec4a7fd453343dbb84f8");
@@ -52,7 +52,7 @@ public sealed class NativeDarkHollowWizardAppendSource
         _family = ownerSource.BindFamily([new("wizard", 33, 6)]);
         var role = _family.Roles.Single();
         if (role.NativeClass != 0x11B)
-            throw new InvalidDataException("Source-selected Blowhard33/T6 is not the certified native Wizard row.");
+            throw new InvalidDataException("Source-selected Wizard Peak33/T6 is not the certified native Wizard row.");
         _original = new(NativeAddressKind.Scene, "dark-scene:" + Hash(originalScene), NativeAddressRevision.Original, SceneLength);
         _donor = new(NativeAddressKind.Scene, "wizard-scene:" + Hash(donorScene), NativeAddressRevision.Original, SceneLength);
         _executable = new(NativeAddressKind.ExecutableFile, "retail-exe:" + ExeHash, NativeAddressRevision.Original, executable.Length);
@@ -151,7 +151,7 @@ public sealed class NativeDarkHollowWizardAppendSource
         byte[] header = DiscImage.ReadFileBytes(image, layout, 37, 0, 0x800);
         if (Word(header, 14 * 8) != 0xF01000 || Word(header, 14 * 8 + 4) != 0x28D800 ||
             Word(header, 40 * 8) != 0x2F6B000 || Word(header, 40 * 8 + 4) != 0x28A000)
-            throw new InvalidDataException("Native Dark/Blowhard original WAD data ownership changed.");
+            throw new InvalidDataException("Native Dark/Wizard Peak original WAD data ownership changed.");
         var source = new NativeDarkHollowWizardAppendSource(owners,
             DiscImage.ReadFileBytes(image, layout, 37, 0xF01000, 0x28D800),
             DiscImage.ReadFileBytes(image, layout, 37, 0x2F6B000, 0x28A000),
@@ -165,7 +165,7 @@ public sealed class NativeDarkHollowWizardAppendSource
         var role = _family.Roles.Single();
         if (owners.Entries.Any(e => e.PolicyId != _family.PolicyId || e.Role != role) ||
             owners.Entries.Select(e => e.FamilyId).Distinct(StringComparer.Ordinal).Count() != owners.Entries.Count)
-            throw new InvalidDataException("Source identity grouping is not the exact one-role Blowhard33/T6 Wizard private schema.");
+            throw new InvalidDataException("Source identity grouping is not the exact one-role Wizard Peak33/T6 Wizard private schema.");
     }
     private NativeMobyDependencyRead R(NativeAddressSpace space, int offset, int length) =>
         new("native", new(space, offset, length), Hash(Read(new(space, offset, length))));
