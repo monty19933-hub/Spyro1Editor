@@ -249,6 +249,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeId65CompanionAssetSmoke": ("NATIVE_ID65_COMPANION_ASSET_SOURCE_FREE_OK", "NATIVE_ID65_COMPANION_ASSET_SOURCE_OK", []),
             "NativeId65AuthoredSurfaceSmoke": ("NATIVE_ID65_AUTHORED_SURFACE_SMOKE_OK", "NATIVE_ID65_AUTHORED_SURFACE_SOURCE_OK", []),
             "NativeId65NormalResourceSmoke": ("NATIVE_ID65_NORMAL_RESOURCE_SMOKE_OK", "NATIVE_ID65_NORMAL_RESOURCE_SOURCE_OK", []),
+            "NativeId65NormalBodySmoke": ("NATIVE_ID65_NORMAL_BODY_SMOKE_OK", "NATIVE_ID65_NORMAL_BODY_SOURCE_OK", []),
             "NativeWizardPlacementSmoke": ("NATIVE_WIZARD_PLACEMENT_SMOKE_OK", "NATIVE_WIZARD_PLACEMENT_SOURCE_OK", []),
         }
         for name, (free_marker, source_marker, arguments) in expected.items():
@@ -259,6 +260,45 @@ class RunnerOptionsTests(unittest.TestCase):
                 self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
                 self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
                 self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+
+    def test_native_id65_body_default_and_positional_source_only(self):
+        name = "NativeId65NormalBodySmoke"
+        free = "NATIVE_ID65_NORMAL_BODY_SMOKE_OK"
+        source_marker = "NATIVE_ID65_NORMAL_BODY_SOURCE_OK"
+        self.assertEqual(free, dict(RUNNER.CORE_CASES).get(name))
+        self.assertEqual([(name, source_marker, [])],
+                         [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
+        for opted_in in (False, True):
+            calls = []
+
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                kwargs["stdout"].write("Offline QA passed.\n" + free + "\n" + source_marker + "\n")
+                return subprocess.CompletedProcess(command, 0)
+
+            with self.subTest(opted_in=opted_in), tempfile.TemporaryDirectory(prefix="spyro-runner-body-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", ((name, free),)), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "SOURCE_QA_CASES", ((name, source_marker, []),)), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", return_value="/selected original.bin") as source, \
+                        mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("body has no CUE owner")) as cue, \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin), *(["--with-source-qa"] if opted_in else [])]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0, RUNNER.main())
+                    self.assertEqual(int(opted_in), source.call_count)
+                    cue.assert_not_called()
+                summary = json.loads((Path(output) / "summary.json").read_text())
+            runs = [command for command in calls if command[:2] == ["dotnet", "run"]]
+            self.assertEqual(1 + int(opted_in), len(runs))
+            self.assertNotIn("--", runs[0])
+            if opted_in:
+                self.assertEqual(["/selected original.bin"], runs[1][runs[1].index("--") + 1:])
+                self.assertEqual("source-" + name, summary[-1]["name"])
+            self.assertEqual(2, sum(command[:2] == ["dotnet", "build"] for command in calls))
+            self.assertTrue(all("--no-build" in command and "--no-restore" in command for command in runs))
+            self.assertTrue(all(row["passed"] for row in summary))
 
     def test_native_id65_engine_profile_is_read_only_in_both_modes(self):
         name = "NativeId65EngineProfileSmoke"
@@ -482,6 +522,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeId65CompanionAssetSmoke": ["/selected original.bin"],
             "NativeId65AuthoredSurfaceSmoke": ["/selected original.bin"],
             "NativeId65NormalResourceSmoke": ["/selected original.bin"],
+            "NativeId65NormalBodySmoke": ["/selected original.bin"],
             "NativeId65StaticTerrainTextureSmoke": ["--source", "/selected original.bin"],
             "NativeWizardPlacementSmoke": ["/selected original.bin"],
             "NativeResourceCompositionSmoke": ["--source", "/selected original.bin"],
