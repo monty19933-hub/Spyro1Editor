@@ -189,10 +189,32 @@ try
 }
 finally{File.Delete(sentinel);Directory.Delete(occupied);}
 Check(physicalSource.SequenceEqual(Enumerable.Range(0,3).SelectMany(FixtureSector)),"Physical streaming readback mutated its read-only source.");
+Reject(()=>NativeTownSquareLockedChestClosureCompiler.Capture("missing-original.bin",(NativeTownSquareClosureRecipe)99),"Unknown native closure recipe");
+Reject(()=>NativeTownSquareLockedChestClosurePublisher.VerifyPublished("missing-original.bin","missing-original.cue","missing-output",(NativeTownSquareClosureRecipe)99),"Unknown native closure recipe");
+Reject(()=>NativeTownSquareLockedChestClosurePublisher.Publish("missing-original.bin","missing-original.cue","missing-output",recipe:(NativeTownSquareClosureRecipe)99),"Unknown native closure recipe");
+NativeTownSquarePlacementVector va=new(-512,-512,0),vb=new(-512,512,0),vc=new(512,512,0),vd=new(512,-512,0);
+NativeTownSquarePlacementTriangle floorA=new(0,va,vb,vc,0x3F,0),floorB=new(1,va,vc,vd,0xFF,0);
+Check(NativeTownSquareClosurePlacement.ValidateFlatPatch([floorA,floorB],0,0,0).SequenceEqual(new[]{0,1}),"Exact dry floor partition was refused.");
+Reject(()=>NativeTownSquareClosurePlacement.ValidateFlatPatch([floorA],0,0,0),"fully cover");
+Reject(()=>NativeTownSquareClosurePlacement.ValidateFlatPatch([floorA,floorB,floorA with { Index=2 }],0,0,0),"overlaps");
+Reject(()=>NativeTownSquareClosurePlacement.ValidateFlatPatch([floorA with { Flag=1 },floorB],0,0,0),"hazardous");
+Reject(()=>NativeTownSquareClosurePlacement.ValidateFlatPatch([floorA with { ZFlags=0x4000 },floorB],0,0,0),"hazardous");
+Reject(()=>NativeTownSquareClosurePlacement.ValidateFlatPatch([floorA,floorB,new(2,new(0,-256,0),new(0,256,0),new(0,256,512),0xFF,0)],0,0,0),"clear column");
+Reject(()=>NativeTownSquareClosurePlacement.RequireCenterSeparation(0),"center-separation");
+Reject(()=>NativeTownSquareClosurePlacement.RequireCenterSeparation(3072),"center-separation");
+Reject(()=>NativeTownSquareClosurePlacement.RequireCenterSeparation(double.NaN),"center-separation");
+NativeTownSquareClosurePlacement.RequireCenterSeparation(3073);checks++;
+Reject(()=>NativeTownSquareClosurePlacement.Decode(new byte[80],0),"payload shape");
+Check(NativeTownSquareClosurePlacement.Decode(NativeTownSquareClosurePlacement.Encode(NativeTownSquareClosurePlacement.Locations(NativeTownSquareClosureRecipe.SpatiallySeparatedV3)),1)==new NativeTownSquarePlacementPoint(121680,102288,8192),"Closed V3 coherent translation changed.");
 if(args.Length>0)
 {
-    string nativeSource=args[0] is "--publish" or "--faults" or "--verify"?args[1]:args[0];
+    bool spatial=args[0].EndsWith("-v3",StringComparison.Ordinal);
+    string mode=spatial?args[0][..^3]:args[0];
+    string nativeSource=mode is "--publish" or "--faults" or "--verify" or "--source"?args[1]:args[0];
+    NativeTownSquareClosureRecipe recipe=spatial?NativeTownSquareClosureRecipe.SpatiallySeparatedV3:NativeTownSquareClosureRecipe.PropertiesAndSoundV2;
     var native=NativeTownSquareLockedChestClosureCompiler.Capture(nativeSource);
+    Check(native.Graph.Fingerprint=="d484fc13504ac0afc0b7a63e81dd4a6a3a3a7672dd7959654b02fd6103a3edcc","Default V2 graph regression golden changed.");
+    Check(Hash(native.Data)=="e442a02d3aa899dca0d5ddac4392f4b602aabb7ac6dc5dd1e4616c00fab6908d","Default V2 data regression golden changed.");
     Check(native.Graph.Nodes.Count>100,"Source-bound graph did not enumerate native imports.");
     Check(native.Data[0x1D0004]==0x36,"Local model sound descriptor was not remapped to equivalent resident sample.");
     Check(System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(native.Data.AsSpan(0x1D1800+0x4E38))==0x11B8,"Genuine properties component did not grow.");
@@ -215,37 +237,74 @@ if(args.Length>0)
             Check(to>=0x4E3C&&to<0x5FF0,"Final fixup target escaped genuine properties ownership.");
         }
     }
+    if(spatial)
+    {
+        var baseline=native;
+        using(var retail=File.OpenRead(nativeSource))
+        {
+            byte[] nativeData=DiscImage.ReadFileBytes(retail,baseline.Layout,37,0x119E000,0x2E2000);
+            byte[] executable=DiscImage.ReadFileBytes(retail,baseline.Layout,53875,0,0x66000);
+            Reject(()=>NativeTownSquareClosurePlacement.CaptureCertificate(nativeData,executable,NativeTownSquareClosureRecipe.PropertiesAndSoundV2),"center-separation");
+        }
+        native=NativeTownSquareLockedChestClosureCompiler.Capture(nativeSource,recipe);
+        Check(native.Placement!=null&&native.Placement.NativeNeighbors.Count==107&&native.Placement.Patches.Count==8,"V3 native placement certificate is incomplete.");
+        Check(native.Graph.Nodes.Count==baseline.Graph.Nodes.Count+1&&native.Graph.Installs.Count==baseline.Graph.Installs.Count&&native.Graph.References.Count==baseline.Graph.References.Count,"V3 unexpectedly changed shared native dependency shape.");
+        Check(native.Overlay.SequenceEqual(baseline.Overlay)&&native.Executable.SequenceEqual(baseline.Executable),"V3 changed shared behavior or executable bytes.");
+        Check(native.Graph.CopyPayload("placement.site").SequenceEqual(NativeTownSquareClosurePlacement.Encode(native.Placement!.Locations)),"Graph does not drive source-validated placement payload.");
+        HashSet<int> allowed=[];int property=0x5F0C;
+        int[] propertyLengths=[4,0x18,0x28,0x28,0x28,0x28,0x28];
+        for(int i=0;i<7;i++)
+        {
+            var point=native.Placement.Locations[i];int row=0x1D1800+0x170+(107+i)*0x58;
+            foreach(int offset in Enumerable.Range(row+12,12))allowed.Add(offset);
+            Check(System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(native.Data.AsSpan(row+12))==point.X&&
+                System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(native.Data.AsSpan(row+16))==point.Y&&
+                System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(native.Data.AsSpan(row+20))==point.Z,"V3 family row was not coherently translated.");
+            if(i>=2)
+            {
+                foreach(int offset in Enumerable.Range(0x1D1800+property+4,12))allowed.Add(offset);
+                Check(native.Data.AsSpan(row+12,12).SequenceEqual(native.Data.AsSpan(0x1D1800+property+4,12)),"Reward private local XYZ diverged from its translated native row.");
+            }
+            property+=propertyLengths[i];
+        }
+        Check(Enumerable.Range(0,native.Data.Length).All(i=>native.Data[i]==baseline.Data[i]||allowed.Contains(i)),"V3 changed bytes outside the seven row/five reward-props coordinate extents.");
+        Check(native.Data.AsSpan(0x1D1800+0x170,107*0x58).SequenceEqual(baseline.Data.AsSpan(0x1D1800+0x170,107*0x58)),"V3 changed original native actor ownership.");
+        Check(native.Data.AsSpan(0x1D1800+0x4E3C,0x10D0).SequenceEqual(baseline.Data.AsSpan(0x1D1800+0x4E3C,0x10D0)),"V3 changed original native properties.");
+        Check(native.Placement.NativeNeighbors.All(n=>n.NearestCenterDistance>3072)&&native.Placement.Patches.All(p=>p.Bindings.Count>0&&p.Bindings.All(b=>(b.Flag&63)==63)),"V3 static spacing/dry native lookup proof failed.");
+        Console.WriteLine("NATIVE_TOWNSQUARE_V3_OCCUPIED_SITE_REFUSED_AND_COORDINATE_ONLY_SOURCE_OK");
+    }
     Console.WriteLine($"NATIVE_TOWNSQUARE_CLOSURE_SOURCE_OK: graph {native.Graph.Fingerprint}; nodes {native.Graph.Nodes.Count}; installs {native.Graph.Installs.Count}; references {native.Graph.References.Count}; data {Hash(native.Data)}; overlay {Hash(native.Overlay)}; exe {Hash(native.Executable)}");
-    if(args[0]=="--publish")
+    if(mode=="--publish")
     {
         if(args.Length!=4)throw new ArgumentException("--publish <original.bin> <original.cue> <new-output-directory>");
-        var published=NativeTownSquareLockedChestClosurePublisher.Publish(nativeSource,args[2],args[3]);
+        var published=NativeTownSquareLockedChestClosurePublisher.Publish(nativeSource,args[2],args[3],recipe:recipe);
         Console.WriteLine("NATIVE_TOWNSQUARE_CLOSURE_PUBLISHED: "+System.Text.Json.JsonSerializer.Serialize(published));
     }
-    if(args[0]=="--faults")
+    if(mode=="--faults")
     {
         if(args.Length!=4)throw new ArgumentException("--faults <original.bin> <original.cue> <new-output-root>");
         foreach(var fault in new[]{NativeTownSquareClosureFault.AfterCopy,NativeTownSquareClosureFault.AfterWrite,NativeTownSquareClosureFault.BeforePublish})
         {
             string destination=Path.Combine(args[3],fault.ToString());
             bool failed=false;
-            try{NativeTownSquareLockedChestClosurePublisher.Publish(nativeSource,args[2],destination,fault);}
+            try{NativeTownSquareLockedChestClosurePublisher.Publish(nativeSource,args[2],destination,fault,recipe);}
             catch(IOException e) when(e.Message.Contains("Deliberate native closure publication fault",StringComparison.Ordinal)){failed=true;}
             Check(failed,"Native publication fault was not reached.");
             Check(Directory.Exists(destination)&&!Directory.EnumerateFileSystemEntries(destination).Any(),"Failed publication retained a bootable or partial artifact.");
         }
         Console.WriteLine("NATIVE_TOWNSQUARE_CLOSURE_FAULTS_OK: 3 publication stages roll back before new-only publication.");
     }
-    if(args[0]=="--verify")
+    if(mode=="--verify")
     {
         if(args.Length!=4)throw new ArgumentException("--verify <original.bin> <original.cue> <published-output-directory>");
-        var verified=NativeTownSquareLockedChestClosurePublisher.VerifyPublished(nativeSource,args[2],args[3]);
+        var verified=NativeTownSquareLockedChestClosurePublisher.VerifyPublished(nativeSource,args[2],args[3],recipe);
         bool refused=false;
-        try{NativeTownSquareLockedChestClosurePublisher.Publish(nativeSource,args[2],args[3]);}
+        try{NativeTownSquareLockedChestClosurePublisher.Publish(nativeSource,args[2],args[3],recipe:recipe);}
         catch(IOException e) when(e.Message.Contains("existing or partial",StringComparison.Ordinal)){refused=true;}
         Check(refused,"An immutable published candidate was accepted as overwrite output.");
-        Check(verified.ImageSha256=="d94d90b51c15b82328b6dbeb67474e563ddefc7d7f6c81bd4b61c526c58083fe"&&verified.ChangedRawSectors==44671,
+        Check(spatial||verified.ImageSha256=="d94d90b51c15b82328b6dbeb67474e563ddefc7d7f6c81bd4b61c526c58083fe"&&verified.ChangedRawSectors==44671,
             "Native v2 physical regression golden changed.");
+        Check(spatial||Hash(File.ReadAllBytes(verified.Receipt))=="85f6806d7debdc08ce3d150a57265d3530ab8f37aa1adaa9f7dc6abb6405d46c","Native V2 receipt byte oracle changed.");
         Console.WriteLine("NATIVE_TOWNSQUARE_CLOSURE_RETAINED_OK: "+System.Text.Json.JsonSerializer.Serialize(verified));
     }
 }

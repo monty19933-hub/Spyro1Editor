@@ -189,6 +189,76 @@ correct sound/effects/debris, all reward gems, death/reload and repeat-entry
 gating, nearby actors/collision/camera and normal exit. Neither structural
 verification nor the old Artisans runtime result satisfies those new gates.
 
+The exact native reward composition is **six gems: four green and two red,
+worth ten total**, not five green gems. Chest T108 itself emits one class `0x54`
+green gem. The five class `0x0D` controllers T109–T113 have source reward-selector
+bytes `+0x53` equal to `54,53,54,53,54` (hex), emitting three additional green
+gems and two red gems. Their donor rows preserve those bytes exactly. Native
+emitter `0x8003ABC0` uses `source[0x53] & 0x7F` as the spawned class; its second
+argument is a motion mode, not a gem count. The collected-gem native code at
+`0x8003BA64..0x8003BAB8` awards class `0x53` one unit and class `0x54` two units.
+Thus the existing 200→210 treasure target is correct. The five controllers are
+not themselves the entire six-gem reward family. See
+[native pickup and reward conditions](research/native-town-square-key-pickup-conditions.md).
+
+## Experimental spatially separated V3
+
+Runtime preparation exposed an exact V2 placement conflict: preserved native T27
+class `0xC3` and imported T108 class `0xAE` both occupy
+`(132198,111032,11264)`. V2 remains immutable and reproducible, but interaction at
+that occupied site is confounded. No native actor was deleted or moved to hide it.
+
+The explicit code-owned `SpatiallySeparatedV3` recipe selects profile
+`native-closure.peace-ae.townsquare.experimental-spatial-separation.v3`.
+The default `Capture`, publisher and verifier APIs still select V2, including its
+original graph fingerprint and byte-exact retained receipt. Unknown recipe enum
+values fail closed; a receipt cannot authorize selecting a new recipe.
+
+V3 translates all seven imported rows and the five reward-property XYZ records
+by `(-10518,-8744,-3072)`. Key T107 is `(119632,102288,8192)` and chest T108 is
+`(121680,102288,8192)`. The new `placement.site` graph node reads the validated
+native data/EXE, certifies the fixed site and produces the coordinates consumed
+by every translated row/property builder. All 107 original native rows and their
+property storage remain byte-identical; ownership, pointers, model, texture,
+sound remap, behavior overlay and EXE remain unchanged from V2.
+
+The placement gate proves complete native dry-floor support for authored test
+squares, native collision-index reachability, and no terrain intersection in
+their tested columns. Actual EXE flag decoding proves every support triangle
+selects no special surface. It additionally applies an explicit experimental
+policy: more than 3072 raw horizontal units from every original native actor
+center, without exempting other heights. This is **center separation, not a mesh
+or physics envelope proof**. The authored 512-halfwidth test squares do not claim
+that every imported model fits inside them; renderer clipping radii are not used
+as world-space physics bounds. Moving actors, actual visual separation and the
+complete native interaction loop still require gameplay. See
+[native spatial evidence](research/native-town-square-spatial-site-evidence.md).
+
+V3 regression results: 386 source-bound checks, 392 checks through three deliberate
+publication faults, and 389 checks replaying the retained published candidate.
+The unchanged V2 replay passes 368 checks. Whole-data V3-versus-V2 comparison
+permits differences only in the exact seven row-XYZ and five reward-property-XYZ
+extents; overlay and EXE compare byte-identical. The occupied V2 site deliberately
+fails the new placement certificate. The new graph has 277 nodes, 159 installs
+and 8 resolved references; no extra resource installation is implied by the
+placement node.
+
+The immutable V3 directory is
+`_local/research/native-moby-closure-20260905/town-square-native-closure-v3-r01/`.
+
+- BIN SHA256: `15df0ee1edba6cb48fe1d34df5a5f51a7d6f289de387c499ca0ff04e99b443bf`.
+- CUE SHA256: `3b44912bd798c9968197012f045c4663e9450412cf5257ba87aa25405a9ffbbf`.
+- Receipt SHA256: `a466629272cc2c0ff385d52cab29452ef7056d700bf038d4181e1e977d527c2c`.
+- Graph SHA256: `52c68e8595a21ef8807abb6090dfb02d84a8643af114346c3c7c962247c45d6d`.
+- Logical data SHA256: `880c487599e8382447cd7b5c2d1799abec4eafd5af26351f37a22f66ed8ec9b0`.
+
+Use `--source-v3`, `--publish-v3`, `--faults-v3` and `--verify-v3` on the same smoke
+entry point for explicit V3 operations. Normal Create BIN remains disabled for
+this research recipe. Its original native landing is unchanged. An optional
+spawn-only helper was compiled but not executed; source only is retained in
+`_local/research/native-moby-closure-20260905/v3-placement-source-evidence/unused-spawn-helper-source/`.
+The independent read-only geometry/mesh probes are retained alongside it.
+
 ## Portability complexity roadmap
 
 These are engineering classes and required proofs, not authorization derived

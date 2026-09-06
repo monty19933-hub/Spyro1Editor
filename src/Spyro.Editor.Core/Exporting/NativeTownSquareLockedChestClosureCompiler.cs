@@ -19,8 +19,10 @@ internal static class NativeTownSquareLockedChestClosureCompiler
     private const string TownOverlayHash = "9bc923cc8d27703537b81b01f51fde351e58aabee87d38a8afc630f1031878a5";
     private const string ExeHash = "a533d75cab8afaae6107ec35a02a9a5fe979a92c7c955f9cf1ee50f693a1b998";
 
-    internal static NativeTownSquareLockedChestClosure Capture(string sourcePath)
+    internal static NativeTownSquareLockedChestClosure Capture(string sourcePath,
+        NativeTownSquareClosureRecipe recipe=NativeTownSquareClosureRecipe.PropertiesAndSoundV2)
     {
+        _=NativeTownSquareClosurePlacement.ProfileFor(recipe);
         sourcePath = Path.GetFullPath(sourcePath);
         using FileStream source = new(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         if (source.Length != 661547040 || Hash(SHA256.HashData(source), alreadyDigest: true) != SourceSha256)
@@ -49,12 +51,14 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         if (!textureOwnership.AllConsumerClosureComplete || !textureOwnership.ProvablyPrivatePixelAndClutSpace ||
             textureOwnership.TexturePagesWadOffset != TownDataWad + 0x800)
             throw new InvalidDataException("Native destination texture ownership is incomplete.");
-        return Compile(sourcePath, layout, data, peace, overlay, donorOverlay, executable, header, textureOwnership);
+        return Compile(sourcePath, layout, data, peace, overlay, donorOverlay, executable, header, textureOwnership,recipe);
     }
 
     private static NativeTownSquareLockedChestClosure Compile(string sourcePath, DiscLayout layout, byte[] data, byte[] peace,
-        byte[] overlay, byte[] donorOverlay, byte[] executable, byte[] header, NativeTexturePageOwnershipReport textureOwnership)
+        byte[] overlay, byte[] donorOverlay, byte[] executable, byte[] header, NativeTexturePageOwnershipReport textureOwnership,
+        NativeTownSquareClosureRecipe recipe)
     {
+        string profile=NativeTownSquareClosurePlacement.ProfileFor(recipe);
         // Native component grammar: Moby rows, properties, pod, collision, then fixups.
         byte[] scene = data.AsSpan(OriginalScene, 0x8800).ToArray();
         RequireWord(data, 16, 0x173000); RequireWord(data, 20, 0x5D000); RequireWord(data, 24, OriginalScene);
@@ -87,10 +91,10 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         NativeAddressSpace overlayOriginal = new(NativeAddressKind.LevelData,"town-overlay:"+TownOverlayHash,NativeAddressRevision.Original,overlay.Length);
         NativeAddressSpace donorOverlayOriginal = new(NativeAddressKind.LevelData,"peace-overlay:"+Hash(donorOverlay),NativeAddressRevision.Original,donorOverlay.Length);
         NativeAddressSpace exeOriginal = new(NativeAddressKind.ExecutableFile,ExeHash,NativeAddressRevision.Original,executable.Length);
-        NativeAddressSpace dataFinal = new(NativeAddressKind.LevelData,Profile+":data",NativeAddressRevision.Final,0x2E3800);
-        NativeAddressSpace sceneFinal = new(NativeAddressKind.Scene,Profile+":scene",NativeAddressRevision.Final,0x8800);
-        NativeAddressSpace overlayFinal = new(NativeAddressKind.LevelData,Profile+":overlay",NativeAddressRevision.Final,0x10800);
-        NativeAddressSpace exeFinal = new(NativeAddressKind.ExecutableFile,Profile+":exe",NativeAddressRevision.Final,executable.Length);
+        NativeAddressSpace dataFinal = new(NativeAddressKind.LevelData,profile+":data",NativeAddressRevision.Final,0x2E3800);
+        NativeAddressSpace sceneFinal = new(NativeAddressKind.Scene,profile+":scene",NativeAddressRevision.Final,0x8800);
+        NativeAddressSpace overlayFinal = new(NativeAddressKind.LevelData,profile+":overlay",NativeAddressRevision.Final,0x10800);
+        NativeAddressSpace exeFinal = new(NativeAddressKind.ExecutableFile,profile+":exe",NativeAddressRevision.Final,executable.Length);
         Dictionary<NativeAddressSpace,byte[]> originals = new(){[dataOriginal]=data,[peaceOriginal]=peace,[sceneOriginal]=scene,
             [overlayOriginal]=overlay,[donorOverlayOriginal]=donorOverlay,[exeOriginal]=executable};
         List<NativeMobyDependencyNode> nodes=[];
@@ -112,6 +116,10 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         void Resident(string id,NativeMobyDependencyKind kind,NativeAddressSpace from,int offset,int length,NativeAddressSpace to,int finalOffset,
             bool global=false,string[]? deps=null)=>nodes.Add(new(id,kind,global?NativeMobyDependencyResolution.GlobalShared:NativeMobyDependencyResolution.DestinationResident,
                 NativeMobyDependencySharing.Immutable,SourceSha256,deps??[],[Read(from,offset,length)],Preserved:[new("native",0,new(to,finalOffset,length))]));
+
+        if(recipe==NativeTownSquareClosureRecipe.SpatiallySeparatedV3)
+            Add("placement.site",NativeMobyDependencyKind.ObjectIndex,[],[Read(dataOriginal,0,data.Length,"data"),Read(exeOriginal,0,executable.Length,"executable")],
+                c=>NativeTownSquareClosurePlacement.BuildPayload(c.Read("data"),c.Read("executable")));
 
         // Sound domains are deliberately separate: mapped global IDs 0/0x37, versus the model's
         // local descriptor byte 0x2F. Compare both playback metadata and uploaded ADPCM ownership.
@@ -229,8 +237,9 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         int donorFixupCount=checked((int)U32(peace,0x1C2800+0x11234));
         if(donorFixupCount<1||0x11238+donorFixupCount*4>0x11800)throw new InvalidDataException("Donor native fixup envelope changed.");
         int[] donorFields=Enumerable.Range(0,donorFixupCount).Select(i=>checked((int)U32(peace,0x1C2800+0x11238+i*4))).ToArray();
-        (int X,int Y,int Z)[] locations=[(130150,111032,11264),(132198,111032,11264),(131788,112261,11776),
-            (132198,112261,11776),(131583,111237,11776),(131788,111647,11776),(132402,111851,11776)];
+        NativeTownSquarePlacementPoint[] locations=NativeTownSquareClosurePlacement.Locations(recipe);
+        NativeTownSquarePlacementPoint Location(NativeMobyDependencyBuildContext c,int instance)=>recipe==NativeTownSquareClosureRecipe.PropertiesAndSoundV2
+            ?locations[instance]:NativeTownSquareClosurePlacement.Decode(c.DependencyPayload("placement.site"),instance);
         int propCursor=PropertiesEnd;
         for(int i=0;i<7;i++)
         {
@@ -242,13 +251,13 @@ internal static class NativeTownSquareLockedChestClosureCompiler
                 throw new InvalidDataException("Native donor private properties fixup schema changed.");
             // These native key/chest/reward blocks have no registered internal pointers.
             // Their integer owner fields are true-instance indices, not scene addresses.
-            Add(props,NativeMobyDependencyKind.InstanceProperties,[],[Read(peaceOriginal,0x1C2800+propOffsets[i],length)],c=>{
+            Add(props,NativeMobyDependencyKind.InstanceProperties,recipe==NativeTownSquareClosureRecipe.SpatiallySeparatedV3?["placement.site"]:[],[Read(peaceOriginal,0x1C2800+propOffsets[i],length)],c=>{
                 byte[] b=c.Read("native");if(instance==0){if(b.Any(x=>x!=0))throw new InvalidDataException("Key initial props changed.");}
                 else {RequireWord(b,0,instance==1?78u:79u);Put(b,0,instance==1?107u:108u);}
-                if(instance>=2){Put(b,4,(uint)locations[instance].X);Put(b,8,(uint)locations[instance].Y);Put(b,12,(uint)locations[instance].Z);}return b;
+                if(instance>=2){var location=Location(c,instance);Put(b,4,(uint)location.X);Put(b,8,(uint)location.Y);Put(b,12,(uint)location.Z);}return b;
             },sceneFinal,propertyOffset,length,owner);
-            Add(row,NativeMobyDependencyKind.ObjectIndex,[props],[Read(peaceOriginal,0x1CAA60+sourceIndices[i]*0x58,0x58)],c=>{
-                byte[] b=c.Read("native");Put(b,0x0C,(uint)locations[instance].X);Put(b,0x10,(uint)locations[instance].Y);Put(b,0x14,(uint)locations[instance].Z);return b;
+            Add(row,NativeMobyDependencyKind.ObjectIndex,recipe==NativeTownSquareClosureRecipe.SpatiallySeparatedV3?[props,"placement.site"]:[props],[Read(peaceOriginal,0x1CAA60+sourceIndices[i]*0x58,0x58)],c=>{
+                var location=Location(c,instance);byte[] b=c.Read("native");Put(b,0x0C,(uint)location.X);Put(b,0x10,(uint)location.Y);Put(b,0x14,(uint)location.Z);return b;
             },sceneFinal,0x170+index*0x58,0x58,owner,[new("properties",0,props,0,4,(uint)propOffsets[i])]);
             Aggregate(owner,NativeMobyDependencyKind.Instance,instance==0?[row,props,"key.rootless-rendering"]:
                 instance==1?[row,props,"actor.registration","actor.class","behavior.bundle","instance.107"]:[row,props,"behavior.bundle","instance.108"]);
@@ -314,7 +323,10 @@ internal static class NativeTownSquareLockedChestClosureCompiler
                 throw new InvalidDataException($"Graph-native data diverged outside corrected properties/sound at 0x{i:X}.");
         if(!scene.AsSpan(PropertiesEnd,OriginalFixup-PropertiesEnd).SequenceEqual(finalScene.AsSpan(PropertiesEnd+PropertiesGrowth,OriginalFixup-PropertiesEnd)))
             throw new InvalidDataException("Properties growth altered native pod/collision components.");
-        return new(sourcePath,layout,header,graph,finalData,finalOverlay,finalExe,Hash(legacy.Entry));
+        var placement=recipe==NativeTownSquareClosureRecipe.SpatiallySeparatedV3?NativeTownSquareClosurePlacement.CaptureCertificate(data,executable,recipe):null;
+        if(placement!=null&&!graph.CopyPayload("placement.site").SequenceEqual(NativeTownSquareClosurePlacement.Encode(placement.Locations)))
+            throw new InvalidDataException("Graph-driven placement does not match independently recaptured native site certificate.");
+        return new(sourcePath,layout,header,graph,finalData,finalOverlay,finalExe,Hash(legacy.Entry),recipe,placement);
     }
     internal static string Hash(ReadOnlySpan<byte> bytes,bool alreadyDigest=false)=>Convert.ToHexStringLower(alreadyDigest?bytes:SHA256.HashData(bytes));
     private static uint U32(byte[] bytes,int offset)=>BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(offset,4));
@@ -326,4 +338,5 @@ internal static class NativeTownSquareLockedChestClosureCompiler
 }
 
 internal sealed record NativeTownSquareLockedChestClosure(string SourcePath,DiscLayout Layout,byte[] OriginalWadHeader,
-    NativeMobyDependencyClosurePlan Graph,byte[] Data,byte[] Overlay,byte[] Executable,string LegacyDataSha256);
+    NativeMobyDependencyClosurePlan Graph,byte[] Data,byte[] Overlay,byte[] Executable,string LegacyDataSha256,
+    NativeTownSquareClosureRecipe Recipe,NativeTownSquarePlacementCertificate? Placement);

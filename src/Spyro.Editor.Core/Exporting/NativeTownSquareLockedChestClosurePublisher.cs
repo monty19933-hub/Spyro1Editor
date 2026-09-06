@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Spyro.Editor.Core.Persistence;
 
 namespace Spyro.Editor.Core.Exporting;
@@ -13,10 +14,13 @@ internal enum NativeTownSquareClosureFault { None, AfterCopy, AfterWrite, Before
 internal static class NativeTownSquareLockedChestClosurePublisher
 {
     private const string BinName="town-square-native-closure-v2.bin", CueName="town-square-native-closure-v2.cue", ReceiptName="native-closure.receipt.json";
-    internal static NativeTownSquareLockedChestPublication VerifyPublished(string sourcePath,string sourceCue,string outputDirectory)
+    internal static NativeTownSquareLockedChestPublication VerifyPublished(string sourcePath,string sourceCue,string outputDirectory,
+        NativeTownSquareClosureRecipe recipe=NativeTownSquareClosureRecipe.PropertiesAndSoundV2)
     {
+        _=NativeTownSquareClosurePlacement.ProfileFor(recipe);
+        var (BinName,CueName)=ArtifactNames(recipe);
         if(!DiscCueSheet.ReferencesDataImage(sourceCue,sourcePath))throw new InvalidDataException("Native closure requires a real source-bound CUE.");
-        NativeTownSquareLockedChestClosure closure=NativeTownSquareLockedChestClosureCompiler.Capture(sourcePath);
+        NativeTownSquareLockedChestClosure closure=NativeTownSquareLockedChestClosureCompiler.Capture(sourcePath,recipe);
         outputDirectory=Path.GetFullPath(outputDirectory);
         if(!Directory.Exists(outputDirectory)||!Directory.EnumerateFiles(outputDirectory).Select(Path.GetFileName).Order(StringComparer.Ordinal)
             .SequenceEqual(new[]{BinName,CueName,ReceiptName}.Order(StringComparer.Ordinal))||Directory.EnumerateDirectories(outputDirectory).Any())
@@ -31,15 +35,18 @@ internal static class NativeTownSquareLockedChestClosurePublisher
         return new(outputDirectory,Path.Combine(outputDirectory,BinName),Path.Combine(outputDirectory,CueName),Path.Combine(outputDirectory,ReceiptName),verified.Hash,closure.Graph.Fingerprint,verified.Changed);
     }
     internal static NativeTownSquareLockedChestPublication Publish(string sourcePath,string sourceCue,string outputDirectory,
-        NativeTownSquareClosureFault fault=NativeTownSquareClosureFault.None)
+        NativeTownSquareClosureFault fault=NativeTownSquareClosureFault.None,
+        NativeTownSquareClosureRecipe recipe=NativeTownSquareClosureRecipe.PropertiesAndSoundV2)
     {
+        _=NativeTownSquareClosurePlacement.ProfileFor(recipe);
+        var (BinName,CueName)=ArtifactNames(recipe);
         if(!Enum.IsDefined(fault))throw new InvalidDataException("Unknown native closure publication fault.");
         outputDirectory=Path.GetFullPath(outputDirectory);
         PersistencePathSafety.EnsureTreesDoNotOverlap(sourcePath,outputDirectory,"Native closure output must not overlap its source.");
         PersistencePathSafety.EnsureTreesDoNotOverlap(sourceCue,outputDirectory,"Native closure output must not overlap its source CUE.");
         if(File.Exists(outputDirectory)||Directory.Exists(outputDirectory)&&Directory.EnumerateFileSystemEntries(outputDirectory).Any())
             throw new IOException("Native closure refuses to replace an existing or partial candidate.");
-        NativeTownSquareLockedChestClosure closure=NativeTownSquareLockedChestClosureCompiler.Capture(sourcePath);
+        NativeTownSquareLockedChestClosure closure=NativeTownSquareLockedChestClosureCompiler.Capture(sourcePath,recipe);
         byte[] cue=DiscCueSheet.TextEncoding.GetBytes(DiscCueSheet.BuildForImage(sourceCue,sourcePath,BinName));
         if(!DiscCueSheet.ReferencesDataImage(sourceCue,sourcePath))throw new InvalidDataException("Native closure requires a real source-bound CUE.");
         if(Directory.Exists(outputDirectory)&&Directory.EnumerateFileSystemEntries(outputDirectory).Any())
@@ -62,7 +69,7 @@ internal static class NativeTownSquareLockedChestClosurePublisher
             }
             Inject(NativeTownSquareClosureFault.AfterWrite);
             var verified=physical.Verify(source,image,closure);
-            var fresh=NativeTownSquareLockedChestClosureCompiler.Capture(sourcePath);
+            var fresh=NativeTownSquareLockedChestClosureCompiler.Capture(sourcePath,recipe);
             if(fresh.Graph.Fingerprint!=closure.Graph.Fingerprint||!DiscCueSheet.ReferencesDataImage(sourceCue,sourcePath)||
                 !DiscCueSheet.TextEncoding.GetBytes(DiscCueSheet.BuildForImage(sourceCue,sourcePath,BinName)).SequenceEqual(cue))
                 throw new InvalidDataException("Native closure source or CUE changed before publication.");
@@ -93,7 +100,8 @@ internal static class NativeTownSquareLockedChestClosurePublisher
 
     private static byte[] BuildReceipt(NativeTownSquareLockedChestClosure closure,(string Hash,int Changed) verified)
     {
-        return JsonSerializer.SerializeToUtf8Bytes(new {
+        // Preserve V2 byte serialization exactly: retained receipts remain an independent oracle.
+        byte[] legacy=JsonSerializer.SerializeToUtf8Bytes(new {
                 profile=NativeTownSquareLockedChestClosureCompiler.Profile,sourceImageSha256=NativeTownSquareLockedChestClosureCompiler.SourceSha256,
                 sourceImagePath=Path.GetFullPath(closure.SourcePath),graph=closure.Graph,outputImageSha256=verified.Hash,changedRawSectors=verified.Changed,
                 finalDataSha256=Hash(closure.Data),finalOverlaySha256=Hash(closure.Overlay),finalExecutableSha256=Hash(closure.Executable),
@@ -111,7 +119,27 @@ internal static class NativeTownSquareLockedChestClosurePublisher
                     "nearby native enemies, camera, collision and exit continue to work"},
                 runtimeProven=false,normalCreateBinEnabled=false,appIntegrated=false,exceptionRollbackPublication=true,crashAtomicPublication=false
             },new JsonSerializerOptions{WriteIndented=true});
+        if(closure.Recipe==NativeTownSquareClosureRecipe.PropertiesAndSoundV2)return legacy;
+        if(closure.Recipe!=NativeTownSquareClosureRecipe.SpatiallySeparatedV3||closure.Placement==null)
+            throw new InvalidDataException("Native V3 receipt is missing its source-bound placement certificate.");
+        JsonObject receipt=JsonNode.Parse(legacy)!.AsObject();
+        receipt["profile"]=NativeTownSquareClosurePlacement.ProfileFor(closure.Recipe);
+        var key=closure.Placement.Locations[0];var chest=closure.Placement.Locations[1];
+        receipt["keyXyz"]=JsonSerializer.SerializeToNode(new[]{key.X,key.Y,key.Z});
+        receipt["chestXyz"]=JsonSerializer.SerializeToNode(new[]{chest.X,chest.Y,chest.Z});
+        receipt["experimentalSpatialSeparation"]=true;
+        receipt["nativePhysicsOrMeshBoundsProven"]=false;
+        receipt["all107OriginalRowsAndPropertiesPreserved"]=true;
+        receipt["placementCertificate"]=JsonSerializer.SerializeToNode(closure.Placement);
+        return JsonSerializer.SerializeToUtf8Bytes(receipt,new JsonSerializerOptions{WriteIndented=true});
     }
+
+    private static (string BinName,string CueName) ArtifactNames(NativeTownSquareClosureRecipe recipe)=>recipe switch
+    {
+        NativeTownSquareClosureRecipe.PropertiesAndSoundV2=>(BinName,CueName),
+        NativeTownSquareClosureRecipe.SpatiallySeparatedV3=>("town-square-native-closure-v3.bin","town-square-native-closure-v3.cue"),
+        _=>throw new InvalidDataException("Unknown native closure recipe.")
+    };
 
     private sealed class PhysicalPlan
     {
