@@ -81,6 +81,7 @@ internal static class NativeWizardOverlayCases
         reject(()=>NativeDarkHollowWizardOverlayPlan.Compile(source,missingDescriptor,particle),"particle");
         check(plan.CopyOverlay()[0]!=bad[0]||plan.CopyOverlay()[0xB000]!=bad[0xB000],"Returned overlay is not detached.");
         Console.WriteLine($"NATIVE_DARK_WIZARD_OWNED_OVERLAY_SOURCE_OK overlay={plan.OverlaySha256} exe={plan.ExecutableSha256} copy={plan.FinalCopyBufferAddress:X8} gap={plan.RuntimeMemory.NormalReservedBufferGapBytes:X} runtime/publication=false");
+        NativeWizardDeathRewardCases.Source(image,plan,check,reject);
     }
     private static (uint Pc,uint[] Registers) Execute(byte[] code,uint start,uint actorClass)
     {

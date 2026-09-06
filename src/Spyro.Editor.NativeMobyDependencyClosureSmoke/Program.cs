@@ -212,6 +212,7 @@ NativeMobySceneAppendCases.Run(Check,Reject);
 NativeMipsBehaviorFragmentCases.Run(Check,Reject);
 NativeWizardSpawn26Cases.Run(Check,Reject);
 NativeWizardOverlayCases.Run(Check,Reject);
+NativeWizardDeathRewardCases.Run(Check,Reject);
 Reject(()=>NativeTownSquareClosurePlacement.Decode(new byte[80],0),"payload shape");
 Check(NativeTownSquareClosurePlacement.Decode(NativeTownSquareClosurePlacement.Encode(NativeTownSquareClosurePlacement.Locations(NativeTownSquareClosureRecipe.SpatiallySeparatedV3)),1)==new NativeTownSquarePlacementPoint(121680,102288,8192),"Closed V3 coherent translation changed.");
 if(args.Length>0)
