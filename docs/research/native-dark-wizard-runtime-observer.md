@@ -12,6 +12,8 @@ All addresses below are main-RAM addresses, with little-endian fields. Individua
 | --- | --- |
 | `8007596C`, `800757D8`, `8007582C` | Level ID, game state, lives. |
 | `80078A58` | Three signed32-bit player XYZ values. |
+| `80078A66` | Unsigned facing byte,256 units/turn; not camera direction. |
+| `80076E20`, `80078B24` | Signed16-bit camera-control angle and unsigned32-bit desired movement bearing. Navigation observations only. |
 | `80078AD0`, `80078AD4`, `80078AD8` | Player state, substate, state timer words. |
 | `80078A71` | Player animation ID **byte**, not a32-bit word. |
 | `80075828`, `80075890`, `800756E8` | Placed rows=`8013AE1C`, dynamic rows=`8013DA74`, Moby arena end=`8014021C`. Row128 is `8013DA1C`, expected class11B. |
@@ -38,6 +40,38 @@ Read-only source extraction verified the original EXE SHA `a533d75cab8afaae6107e
 - Moby loader80013F24+AC, SHA `6338caf975b0fa524052abe3e2b439292791273aac359dc5e6d78b90d0a37e33`; allocator/deletion800524C4+1E4, SHA `768e4181d81333e0e27bbe6419e8d94114096a9bd8e8556314af5f0e628327ff`, establish the row/property globals and cursor semantics.
 - Electric branch80040FB8+118, SHA `2c44899e9910a984a20a0d2ef03620d896df05f6cf9738c4c06f50dd59ca5c74`: low damage bit20 leads to map1F playback and state7. The intact bolt's20020 includes that bit. Shared selector rebinding still has the bounded consumer limitations documented by the resource plan.
 - Collision save prologue8004AE38+80, SHA `e4305e32bc0ce6b66d71d5452e6d262de05486cc9e796dcf170a16f5c2d5fbbf`, places saved SP at80077DFC. Particle renderer80058070+70, SHA `b04980d58c31a81ec8d35699e36d0e53bd77b1ac993e86c021adba6a1c12c08e`, includes exhaustion store580A8 and primitive cursor store580B4.
+
+## Source-bound navigation observations
+
+The additional navigation fields do not control the game. The source digital
+input path adds the signed camera halfword to its direction-table value, masks
+to12 bits, then stores the desired bearing. Bearing0x000 is+X,0x400 is+Y,0x800 is-X and
+0xC00 is-Y. Up/Right/Down/Left add0x000/0xC00/0x800/0x400 respectively. Camera direction
+can change during a held input, so a sampled value is not a promised route.
+Actual facing is the separate byte described in
+`native-town-square-key-pickup-conditions.md`.
+
+Exact navigation fixtures freshly matched both the original EXE at LBA53875
+and this candidate's shifted EXE at LBA53916, with both full BIN hashes checked
+before/after:
+
+- PC8003D4BC / file2DCBC / length0x34, SHA
+  `d7774168e1a050f09bbf3f06effbaa916c0f95686ec34991ccf3143e369aa5d1`:
+  signed LH at80076E20, table/add, jump and AND-FFF delay slot.
+- PC8003D50C / file2DD0C / length8, SHA
+  `438bf2e51ba07bfc2d44cf02c84a6645b3228b7c14f7ae7bb2f30f25b9fe8987`:
+  resulting word store to80078B24.
+- PC8006C5D0 / file5CDD0 / length0x20, SHA
+  `9520ce65b9e72a77a5f9335e3e76a1d1a0caf97a58ee1942663a68a6be100556`:
+  digital direction lookup table. Exact literals are retained in the tests.
+
+The three new tests first failed on the absent fields; all13 observer tests
+then passed. They check exact source instruction literals, field widths and
+adjacent poison bytes without a socket connection or runtime-pass promotion.
+The running observer was separately restarted while the emulator was paused,
+after reidentifying PID49030 and its exact open candidate. Readback evidence is
+under `_local/native-wizard-runtime-20260906-r01.rSQXSb/` in
+`observer-navigation-source-readback.json`; gameplay observations are separate.
 
 ## Minimal normal-entry observation sequence
 

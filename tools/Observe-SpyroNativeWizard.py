@@ -31,6 +31,12 @@ EXPECTED_ARENA = {"moby_base": 0x8013AE1C, "dynamic_base": 0x8013DA74,
 FIELDS = {
     "level": (0x8007596C, "<I"), "game_state": (0x800757D8, "<I"),
     "lives": (0x8007582C, "<I"), "player_xyz": (0x80078A58, "<iii"),
+    # Native facing byte; not the camera angle or a movement command.
+    "player_heading_u8": (0x80078A66, "<B"),
+    # EXE8003D4BC..4F0 adds this signed halfword to the pad-table bearing,
+    # masks to12 bits, then stores the desired bearing at8003D50C..514.
+    "camera_control_angle_s16": (0x80076E20, "<h"),
+    "player_desired_bearing_u32": (0x80078B24, "<I"),
     "player_state": (0x80078AD0, "<I"), "player_substate": (0x80078AD4, "<I"),
     "player_state_timer": (0x80078AD8, "<I"),
     # EXE8003CC30..4C loads state, indexes8006C470, and stores this byte.

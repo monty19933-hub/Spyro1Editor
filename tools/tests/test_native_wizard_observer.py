@@ -102,6 +102,16 @@ class ObserverTests(unittest.TestCase):
         self.assertIn((animation_address, 1), reader.reads)
         self.assertFalse(sample["runtime_pass"])
 
+    def test_player_heading_is_one_unsigned_byte_not_camera_direction(self):
+        self.assertEqual((0x80078A66, "<B"), OBSERVER.FIELDS["player_heading_u8"])
+        for heading in [0, 64, 128, 192, 255]:
+            reader = memory_fixture(10)
+            reader.map(0x80078A65, bytes([0xA5, heading, 0x5A]))
+            sample = OBSERVER.capture(reader, "heading-navigation-only")
+            self.assertEqual(heading, sample["player_heading_u8"])
+            self.assertIn((0x80078A66, 1), reader.reads)
+            self.assertFalse(sample["runtime_pass"])
+
     def test_primitive_slack_requires_ordered_main_ram_pointers(self):
         self.assertEqual((0xC00, None), OBSERVER.primitive_slack(0x80190000, 0x80191000))
         self.assertEqual((-0x400, None), OBSERVER.primitive_slack(0x80191000, 0x80191000))
@@ -113,6 +123,35 @@ class ObserverTests(unittest.TestCase):
                 slack, reason = OBSERVER.primitive_slack(cursor, limit)
                 self.assertIsNone(slack)
                 self.assertTrue(reason)
+
+    def test_camera_control_binding_matches_source_instruction_fixture(self):
+        window = bytes.fromhex("0400628c0780033c206e6384c31202001e0042300780013c21082200d0c522840880013c248b22ac2110430043f50008ff0f4230")
+        self.assertEqual("d7774168e1a050f09bbf3f06effbaa916c0f95686ec34991ccf3143e369aa5d1", hashlib.sha256(window).hexdigest())
+        words = struct.unpack("<13I", window)
+        self.assertEqual((0x3C038007, 0x84636E20), words[1:3])  # LUI / signed LH.
+        self.assertEqual((0x00431021, 0x0800F543, 0x30420FFF), words[10:13])
+        self.assertEqual((0x80076E20, "<h"), OBSERVER.FIELDS["camera_control_angle_s16"])
+        store = bytes.fromhex("0880013c248b22ac")
+        self.assertEqual("438bf2e51ba07bfc2d44cf02c84a6645b3228b7c14f7ae7bb2f30f25b9fe8987", hashlib.sha256(store).hexdigest())
+        high, low = struct.unpack("<2I", store)
+        signed_low = struct.unpack("<h", struct.pack("<H", low & 0xFFFF))[0]
+        self.assertEqual((((high & 0xFFFF) << 16) + signed_low, "<I"), OBSERVER.FIELDS["player_desired_bearing_u32"])
+        table = bytes.fromhex("00000000000c000e00080000000a000c00040002000000000006000400080000")
+        self.assertEqual("9520ce65b9e72a77a5f9335e3e76a1d1a0caf97a58ee1942663a68a6be100556", hashlib.sha256(table).hexdigest())
+        for pad, offset in [(0x1000, 0), (0x2000, 0xC00), (0x4000, 0x800), (0x8000, 0x400)]:
+            self.assertEqual(offset, struct.unpack_from("<H", table, (pad >> 11) & 0x1E)[0])
+
+    def test_navigation_fields_preserve_signed_widths_without_runtime_promotion(self):
+        for camera in [-32768, -1, 0, 4095, 32767]:
+            reader = memory_fixture(10)
+            reader.map(0x80076E1F, b"\xa5" + struct.pack("<h", camera) + b"\x5a")
+            reader.map(0x80078B24, struct.pack("<I", 0xABC))
+            sample = OBSERVER.capture(reader, "navigation-only")
+            self.assertEqual(camera, sample["camera_control_angle_s16"])
+            self.assertEqual(0xABC, sample["player_desired_bearing_u32"])
+            self.assertIn((0x80076E20, 2), reader.reads)
+            self.assertIn((0x80078B24, 4), reader.reads)
+            self.assertFalse(sample["runtime_pass"])
 
     def test_dynamic_negative_status_is_not_an_active_actor(self):
         rows = []
