@@ -104,9 +104,30 @@ Independent peer review read both complete production files, all three cases
 files and the tracked oracle with no material issue found. Reviewed production
 hashes were Plan `70f7aa57…3a6f4` and Publisher `7c9966c9…912a2`; this was a
 read-only review, not another runtime or successful-publication exercise.
-No edited candidate has been successfully published or run in an emulator by
-this batch. The later reviewed CLI addition is prepared but has not yet been
-built or invoked; its review/argument checks are a separate pending gate.
+At checkpoint `4d6de96`, the separately approved reviewed CLI publication and a
+second-process verification both exited zero on 2026-09-06. The exact destination
+was checked absent (including a symlink check) before publication:
+`_local/research/native-id65-fresh-edited-document-20260906-r01/candidate-r01`.
+It contains only the 661,547,040-byte BIN, 107-byte CUE and 4,027-byte receipt,
+with no stage, lease or recovery residue. Both processes freshly compiled the
+actual immutable recipe, checked all three full owners, recompiled independently
+and verified again, and required the original BIN/CUE before/after SHA and actual
+EOF to remain unchanged. No emulator/settings/card or earlier-candidate operation
+was performed. These are successful research artifacts, not native gameplay proof.
+
+| Owner | Complete SHA-256 |
+| --- | --- |
+| BIN | ecc8f61cc16bf86a2f5117b327c49aede18f5c1e6a602c0e67f2ba58565aed16 |
+| CUE | 1fcb9bade2f3c9c59b6e6d7b57bd8a2bd0773534d151374d62fcb2ce442e663c |
+| Receipt | 3b545c4dd0e2102586e9f520dec96fda3ea8e84a088003d5b7a7a5ef701373d7 |
+| Source-bound plan | fba3e61a3f93b9dff27d9a5304eb746b7c2ef9aa95a71cfeda6adaee62b571c2 |
+
+Full invocation results are retained in the evidence directory as
+`edited-document-reviewed-publication.log` and
+`edited-document-reviewed-verification.log`. The local handoff is
+`_local/research/native-id65-fresh-edited-document-20260906-r01/reviewed-publication-handoff.md`.
+Do not repeat publication into the occupied candidate directory; use the separate
+read-only reviewed verification mode.
 
 Positive postcommit-cancellation evidence remains pending. Both reviewed CLI
 actions report `postcommitCancellationExercised=false` and use no cancellation

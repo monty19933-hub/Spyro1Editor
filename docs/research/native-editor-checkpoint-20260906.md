@@ -22,17 +22,27 @@ source281804, and unchanged legacy candidate Verify333. The final edited CLI
 then built clean in0.53 seconds, free24 plus43 separate argument checks.
 Independent raw oracles and precommit fault exercises were reviewed separately:
 legacy14 plus two/transaction53, and edited43. Deliberate tiny recovery fixtures
-remain preserved. Prepared explicit publication/verification CLI modes have not
-yet successfully published a candidate at this checkpoint. Postcommit
+remain preserved. After commit4d6de96 both exact new candidates were successfully
+published new-only and independently verified in separate processes. Complete
+BIN/CUE/receipt hashes, fresh actual plan recapture, unchanged originals and no
+recovery residue passed. Paths and full evidence are in each smoke README.
+Postcommit
 cancellation execution, ordinary editor publication and native acceptance of
 both new profiles remain separate gates. Evidence and commands are in the two
 new smoke READMEs and the R03 session directory below.
 
 R03 remains ACTIVE. The unchanged one-Wizard ROM has now shown normal charge
 defeat, a native class56 yellow gem and HUD13→23 at recording14:20–14:25.
-Normal exit/re-entry is in progress, not yet accepted. This input used50-percent
+Normal exit and original-portal re-entry then completed, retaining HUD23 and
+reloading row128 with selectorFF rather than56. Second defeat/drop behavior is
+still being tested. This input used50-percent
 wall-clock pacing with native CPU unchanged; full audio and peak-resource
 acceptance remain open. Preserve/close/restore the live session as documented.
+
+New allocator/reuse source evidence passes462/12 expected refusals, with root
+and independent peer review. It demonstrates real89-slot recycling and also
+the unsafe overlapping90th call plus the following-component lookahead owner.
+See `native-wizard-allocator-reuse.md`; this does not close native peak demand.
 
 ## Latest resumed checkpoint: fresh-document UI and two-Wizard composition
 

@@ -61,8 +61,9 @@ source copies have path-bound Plan/receipt identities verified by recapture.
 Argument tests perform no source/output I/O and leave the existing free9/source275
 counts and source-only path unchanged. Root's default Release gate passed121/0,
 including the21 argument checks; its explicit source run passed275 and retained
-legacy verification passed333. Successful publication remains unexecuted pending
-the separately scoped new-only publication step.
+legacy verification passed333. After checkpoint `4d6de96`, the separately
+authorized new-only publication and standalone verification both passed, as
+recorded below.
 
 ## Independent byte controls
 
@@ -112,10 +113,33 @@ are under `two-candidate-raw-oracle-r01.cOLxG3/`; the tracked oracle SHA is
 `d5132569ef8cd9cce55aaee2d8c8a197281f1ae3a2fd5a870e7135448f9d94f8`.
 The prior229 resource oracle and all old defaults remain unchanged.
 
+## Reviewed publication and standalone readback
+
+After confirming the target was absent, explicit `--publish-reviewed` exited0
+for `_local/research/dark-wizard-native-closure-20260906/two-candidate-r01`.
+A separate `--verify-reviewed` process also exited0. Both freshly recaptured
+the actual source-issued plan and verified the entire image and exact CUE/receipt.
+The set contains only the three expected files; no recovery/staging residue.
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `dark-hollow-native-two-wizards-r01.bin` | 661547040 | `612e68e1a8642d42f2417fd6153368c9549094ac391a3835c9cf6dfee7808cba` |
+| `dark-hollow-native-two-wizards-r01.cue` | 97 | `d54624ebee82a0362ca3c3c65e771bcba681c37f392e0a29a2c5adc34ea1c7e6` |
+| `native-two-wizards.receipt.json` | 46201 | `ac0f7e2c49a1207b036444b386a3443376c2f29417958a0922a98df39ae59f75` |
+
+Exact retained-path Plan:
+`efed20f6d745d33190bec4b6d2cd038c4916bcda70d5b170c180f5e8de92eae1`.
+An additional read-only raw probe confirms all41 prepared sectors plus old/new
+WAD/EXE boundary EOF/EOR bits, complete source BIN/CUE hashes, and all three
+old one-Wizard artifacts unchanged. Publication logs, standalone verification,
+raw probe/JSON and exact commands are retained under the same research root as
+`two-candidate-r01-*`; see `two-candidate-r01-publication-handoff.md`.
+
 ## Explicit limits
 
-No successful two-Wizard candidate publication or native runtime test has run
-at this stage. Both deaths/rewards, independent collection/checkpoint/re-entry,
+The exact two-Wizard research set has been published and independently reopened;
+no two-Wizard native runtime test has run at this stage. Both deaths/rewards,
+independent collection/checkpoint/re-entry,
 simultaneous native effects/audio, global/GTE/stack and transient resource use
 remain gameplay gates. Postcollection native RNG/companion behavior is retained;
 absence of another deterministic treasure does not mean no possible drop.

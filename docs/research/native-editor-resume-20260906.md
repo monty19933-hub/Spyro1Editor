@@ -3,14 +3,15 @@
 **Newest continuation:** the two-Wizard shared physical publisher and a separate
 fixed edited-fresh-document publisher are implemented and independently checked.
 Default Release121/0, Python75/one source skip, two-source275, edited-source281804
-and exact old-candidate333 pass. Explicit new-only publication/verification CLIs
-are prepared and built, but their first successful candidates are still pending.
+and exact old-candidate333 pass. Explicit new-only publication and separate-
+process verification then passed for both new candidates from commit4d6de96.
 See both new research smoke READMEs for exact commands and hashes. The installed
 editor is unchanged; the Fresh Level window still has no edited-ROM action.
 
 R03 is still ACTIVE, now with observed one-Wizard native charge defeat and
-class56 yellow reward, HUD13→23 at recording14:20–14:25. Exit/re-entry is the
-next runtime gate. Test pacing is50 percent, CPU1:1. The session journal owns
+class56 yellow reward, HUD13→23 at recording14:20–14:25. Normal exit/re-entry
+passed and row128 reloaded selectorFF at15:03; second defeat/drop remains open.
+The speed UI was restored to100, CPU1:1. The session journal owns
 cleanup instructions; earlier closed-session notes below do not close R03.
 
 **Current status after John's manual reset:** resumed from `725d71d`.
