@@ -27,6 +27,7 @@ CORE_CASES = (
     ("NativeMobyDependencyFactsSmoke", "NATIVE_MOBY_DEPENDENCY_FACTS_SMOKE_OK"),
     ("NativeMobyDependencyClosureSmoke", "NATIVE_MOBY_DEPENDENCY_CLOSURE_SMOKE_OK"),
     ("NativeMobyInventorySmoke", "NATIVE_MOBY_INVENTORY_SMOKE_OK"),
+    ("NativeMobyPersistentOwnerSmoke", "NATIVE_MOBY_PERSISTENT_OWNER_SOURCE_FREE_OK"),
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_FREE_OK"),
     ("NativeGlobalSoundSmoke", "NATIVE_GLOBAL_SOUND_SOURCE_FREE_OK"),
     ("NativeId65EngineProfileSmoke", "NATIVE_ID65_ENGINE_PROFILE_SOURCE_FREE_OK"),
@@ -83,6 +84,7 @@ SOURCE_QA_CASES = (
      ["--source-backed-route-surfaces"]),
     ("NativeMobyInventorySmoke", "NATIVE_MOBY_INVENTORY_SOURCE_SMOKE_OK",
      ["--source"]),
+    ("NativeMobyPersistentOwnerSmoke", "NATIVE_MOBY_PERSISTENT_OWNER_SOURCE_OK", ["--source"]),
     ("NativeGreenWizardMoverSmoke", "NATIVE_GREEN_WIZARD_MOVER_SOURCE_SMOKE_OK", []),
     ("NativeLevelSlotOwnershipSmoke", "NATIVE_LEVEL_SLOT_OWNERSHIP_SOURCE_OK", ["--source"]),
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_OK", ["--source"]),
@@ -101,7 +103,7 @@ SOURCE_QA_CASES = (
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
-SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke"})
+SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke"})
 SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke"})
 
 
