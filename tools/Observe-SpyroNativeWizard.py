@@ -28,6 +28,11 @@ PROFILE = "native-dark-wizard-authored-dry-corridor-placement-research-v1"
 EXPECTED_DATA_SHA256 = "6ed74dbce04d6712e0d9ac12cfd05ae6ac334e0ec39fb7420f2105076132e537"
 EXPECTED_ARENA = {"moby_base": 0x8013AE1C, "dynamic_base": 0x8013DA74,
                   "arena_end": 0x8014021C, "dynamic_capacity": 90}
+# Fixed candidate scene rows begin at scene+8C38; the appended private owner is
+# scene+EED4. This relocated pointer is a necessary scan gate, not complete
+# loader-state or candidate identity proof. Exact raw death/reload rows can
+# retain class11B while holding EED4 and stale, otherwise matching arena globals.
+EXPECTED_WIZARD_PROPERTIES = EXPECTED_ARENA["moby_base"] - 0x8C38 + 0xEED4
 FIELDS = {
     "level": (0x8007596C, "<I"), "game_state": (0x800757D8, "<I"),
     "lives": (0x8007582C, "<I"), "player_xyz": (0x80078A58, "<iii"),
@@ -143,6 +148,8 @@ def capture(client, label):
         actor_address = result["moby_base"] + 128 * 88
         result["wizard128"] = decode_moby(client.read(actor_address, 88), 128, actor_address)
         if result["wizard128"]["class_id"] != 0x11B: raise ValueError("Appended row128 is not the source-bound Wizard.")
+        if result["wizard128"]["properties"] != EXPECTED_WIZARD_PROPERTIES:
+            raise ValueError("Wizard properties are unrelocated or outside the exact issued owner; loader phase or layout is unresolved.")
         # Both upward rows and downward property allocation share this arena.
         # The source-issued90-row extent ends BEFORE all90 property slots. A
         # reused property cursor is not the lowest live-property address, and

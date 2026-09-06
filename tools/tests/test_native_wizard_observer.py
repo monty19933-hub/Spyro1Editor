@@ -205,6 +205,7 @@ class ObserverTests(unittest.TestCase):
     def test_exact_empty_pool_snapshot_is_bounded_and_never_a_pass(self):
         reader = memory_fixture(12)
         row = bytearray(88); struct.pack_into("<H", row, 0x36, 0x11B)
+        struct.pack_into("<I", row, 0, 0x801410B8)
         reader.map(0x8013DA1C, row)
         terminal = bytearray(88); terminal[0x48] = 0xFF
         reader.map(0x8013DA74, terminal)
@@ -219,6 +220,29 @@ class ObserverTests(unittest.TestCase):
         self.assertTrue(all(length <= 1024 for _, length in reader.reads))
         self.assertEqual(1, sum(address == 0x801C5BB8 and length == 4 for address, length in reader.reads))
         self.assertFalse(any(address >= 0x8013DA74 + 88 and address < 0x8014021C for address, _ in reader.reads))
+
+    def test_raw_reload_row_cannot_lend_stale_arena_globals_live_scan_authority(self):
+        # Actual R01 death sample retained exact arena globals and class11B,
+        # but row128 still held scene-relative EED4; ninety zero rows were
+        # not initialized live actors. Other wrong pointers also refuse,
+        # without guessing whether the cause is reload or corruption.
+        for properties in [0, 0xEED4, 0x801410BC, 0x80200000]:
+            with self.subTest(properties=hex(properties)):
+                reader = memory_fixture(12)
+                row = bytearray(88)
+                struct.pack_into("<I", row, 0, properties)
+                struct.pack_into("<H", row, 0x36, 0x11B)
+                reader.map(0x8013DA1C, row)
+                reader.map(0x8013DA74, bytes(90 * 88))
+                reader.map(0x801C3BB8, bytes(0x2004))
+                sample = OBSERVER.capture(reader, "raw-reload-or-unknown-layout")
+                self.assertNotIn("dynamic_rows", sample.keys())
+                self.assertNotIn("particles", sample.keys())
+                self.assertIn("properties", sample["actor_scan_refused"])
+                self.assertIn("Pause in UI", sample["attention"])
+                self.assertFalse(sample["runtime_pass"])
+                self.assertEqual(len(OBSERVER.FIELDS) + 1, len(reader.reads))
+                self.assertEqual(properties, sample["wizard128"]["properties"])
 
 
 if __name__ == "__main__": unittest.main()
