@@ -121,6 +121,20 @@ public sealed class NativeLevelRuntimeMemoryReport
             CopyBufferBinding+"; preserved by source-bound player merge "+plan.PlanSha256);
     }
 
+    public NativeLevelRuntimeMemoryReport AnalyzeResourceComposition(NativeDarkHollowWizardResourcePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if(!NativeSourceCertified||AnalyzedDataSha256!=SourceDataSha256||plan.TargetLevelId!=LevelId||
+            plan.SourceImageSha256!=NativeMobySourceInventory.OriginalImageSha256||plan.SourceDataSha256!=SourceDataSha256)
+            throw new InvalidDataException("Resource composition does not own this original native RAM report source.");
+        byte[] data=plan.CopyFinalLevelData();
+        if(data.Length!=plan.FinalDataByteLength||Hash(data)!=plan.FinalDataSha256)
+            throw new InvalidDataException("Resource composition final source binding changed.");
+        plan.RequireFinal(data);
+        return new(LevelId,data,CopyBufferAddress,NormalReservedBufferStart,SourceDataSha256,true,
+            CopyBufferBinding+"; unchanged EXE with source-issued resource composition "+plan.FinalDataSha256);
+    }
+
     internal static NativeLevelRuntimeMemoryReport AnalyzeTownClosure(NativeTownSquareLockedChestClosure closure)
     {
         // This read-only adapter recognizes the two existing immutable receipts;
