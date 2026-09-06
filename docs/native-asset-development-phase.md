@@ -5,6 +5,13 @@ that audit or treat the remaining import refusals as the final feature.
 Source ROMs, existing candidates, installed applications, and DuckStation user
 settings remain separate preservation and runtime acceptance boundaries.
 
+The subsequent whole-game portability expansion is tracked in
+[the native portability expansion plan](native-portability-expansion-plan.md).
+It preserves the exact R03 candidate while adding game-wide source discovery,
+reusable native family instantiation, verified mover arithmetic and explicit
+multi-level identity ownership. Its new tests and scope are separate from the
+historical checkpoints below.
+
 ## Ordered implementation
 
 1. Generalize native mutable properties with source-bound private ownership,

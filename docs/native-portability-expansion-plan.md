@@ -94,5 +94,7 @@ dotnet run --project src/Spyro.Editor.NativeMobyInventorySmoke -- \
 
 Initial regression-first build failed with the new inventory types absent;
 implementation then passed 50 source-free checks and 17 source-backed checks.
+Independent review added three public-capture catalog refusal cases; the final
+focused Debug inventory run passed 53 source-free and 17 source-backed checks.
 Integrated/final phase verification must be recorded separately after all
 parallel changes have been reviewed and frozen.

@@ -243,6 +243,43 @@ class RunnerOptionsTests(unittest.TestCase):
         self.assertTrue(all(r["passed"] for r in summary))
         self.assertEqual("source-" + name, summary[-1]["name"])
 
+    def test_native_source_checks_use_read_only_modes_and_distinct_logs(self):
+        cases = tuple(c for c in RUNNER.SOURCE_QA_CASES if c[0].startswith("Native"))
+        expected = {
+            "NativeMobyDependencyClosureSmoke": ["--source-v3", "/selected original.bin"],
+            "NativeMobyInventorySmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
+            "NativeGreenWizardMoverSmoke": ["/selected original.bin"],
+            "NativeLevelSlotOwnershipSmoke": ["--source", "/selected original.bin"],
+        }
+        self.assertEqual(set(expected), {c[0] for c in cases})
+        calls = []
+
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            kwargs["stdout"].write("Offline QA passed.\n" + "\n".join(marker for _, marker, _ in cases))
+            return subprocess.CompletedProcess(command, 0)
+
+        with tempfile.TemporaryDirectory(prefix="spyro-runner-native-source-modes-") as output:
+            with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "SOURCE_QA_CASES", cases), \
+                    mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                    mock.patch.object(RUNNER, "configured_source_image", return_value="/selected original.bin") as source, \
+                    mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                    mock.patch.object(sys, "argv", [str(SPEC.origin), "--with-source-qa"]), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, RUNNER.main())
+                self.assertEqual(len(cases), source.call_count)
+            summary = json.loads((Path(output) / "summary.json").read_text())
+        runs = [c for c in calls if c[:2] == ["dotnet", "run"]]
+        self.assertEqual(len(cases), len(runs))
+        for command in runs:
+            name = Path(command[command.index("--project") + 1]).stem.removeprefix("Spyro.Editor.")
+            self.assertEqual(expected[name], command[command.index("--") + 1:])
+            self.assertNotIn("--publish", command)
+            self.assertNotIn("--faults", command)
+        self.assertEqual(len(summary), len({r["name"] for r in summary}))
+
     def test_default_and_list_never_resolve_source_for_route_modes(self):
         for arguments in ([], ["--list"], ["--list", "--with-source-qa"]):
             with self.subTest(arguments=arguments), tempfile.TemporaryDirectory(prefix="spyro-runner-route-default-") as output:

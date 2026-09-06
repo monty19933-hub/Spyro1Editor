@@ -27,6 +27,8 @@ CORE_CASES = (
     ("NativeMobyDependencyFactsSmoke", "NATIVE_MOBY_DEPENDENCY_FACTS_SMOKE_OK"),
     ("NativeMobyDependencyClosureSmoke", "NATIVE_MOBY_DEPENDENCY_CLOSURE_SMOKE_OK"),
     ("NativeMobyInventorySmoke", "NATIVE_MOBY_INVENTORY_SMOKE_OK"),
+    ("NativeGreenWizardMoverSmoke", "NATIVE_GREEN_WIZARD_MOVER_SMOKE_OK"),
+    ("NativeLevelSlotOwnershipSmoke", "NATIVE_LEVEL_SLOT_OWNERSHIP_SMOKE_OK"),
     ("NativeCollisionIndexSmoke", "NATIVE_COLLISION_INDEX_SMOKE_OK"),
     ("NativeRelocationMapSmoke", "NATIVE_RELOCATION_MAP_SMOKE_OK"),
     ("WadGrowthGapSmoke", "WAD_GROWTH_GAP_SMOKE_OK"),
@@ -61,10 +63,16 @@ ADDITIONAL_CORE_CASES = (
      ["--source-free-route-surfaces"]),
 )
 SOURCE_QA_CASES = (
+    # This read-only mode checks both preserved V2 and V3 native closure goldens;
+    # publication/fault modes must never be substituted here.
+    ("NativeMobyDependencyClosureSmoke", "NATIVE_TOWNSQUARE_V3_OCCUPIED_SITE_REFUSED_AND_COORDINATE_ONLY_SOURCE_OK",
+     ["--source-v3"]),
     ("Id65AuthoringMobyDependencyBundleCompilerSmoke", "NATIVE_GREEN_WIZARD_ROUTE_SOURCE_SMOKE_OK",
      ["--source-backed-route-surfaces"]),
     ("NativeMobyInventorySmoke", "NATIVE_MOBY_INVENTORY_SOURCE_SMOKE_OK",
      ["--source"]),
+    ("NativeGreenWizardMoverSmoke", "NATIVE_GREEN_WIZARD_MOVER_SOURCE_SMOKE_OK", []),
+    ("NativeLevelSlotOwnershipSmoke", "NATIVE_LEVEL_SLOT_OWNERSHIP_SOURCE_OK", ["--source"]),
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.

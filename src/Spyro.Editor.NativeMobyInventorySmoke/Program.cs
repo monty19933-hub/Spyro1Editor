@@ -84,6 +84,16 @@ ExpectInvalid(() => NativeMobySourceInventory.DecodeLevel(Fixture(), wrongCatalo
 wrongCatalog = Definition() with { SourceTableWadOffset = "-1" };
 ExpectInvalid(() => NativeMobySourceInventory.DecodeLevel(Fixture(), wrongCatalog, 0x10000));
 ExpectInvalid(() => Parse(new byte[32]));
+// Catalog rejection precedes opening any image; these cases remain source-free.
+var catalogRows = Enumerable.Range(0, 35).Select(i => Definition() with
+{
+    Key = "fixture" + i, LevelId = (i / 6 + 1) * 10 + i % 6, SourceWadEntry = 10 + i * 2
+}).ToArray();
+ExpectInvalid(() => NativeMobySourceInventory.Capture("unused-no-image-needed.bin", new LevelCatalog(catalogRows.Take(34))));
+ExpectInvalid(() => NativeMobySourceInventory.Capture("unused-no-image-needed.bin", new LevelCatalog(
+    catalogRows.Select((l, i) => i == 0 ? l with { SourceWadEntry = 12 } : l))));
+ExpectInvalid(() => NativeMobySourceInventory.Capture("unused-no-image-needed.bin", new LevelCatalog(
+    catalogRows.Select((l, i) => i == 0 ? l with { LevelId = 16 } : l))));
 Check(!level.NativeImportApproved, "inventory is discovery, never a writer certificate");
 Console.WriteLine($"NATIVE_MOBY_INVENTORY_SMOKE_OK checks={checks}");
 
