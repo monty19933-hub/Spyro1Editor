@@ -89,3 +89,6 @@ assert(overlaySha==='10f82ee1028a9ad4fa9045d948a88e76545847031b954ac08ad0e74e6e9
 assert(exeSha==='14aa937f198740373b37312eb3054cad46dd1ae05f1920c145d6bc1fde9a8635','independent executable exact oracle');
 console.log(JSON.stringify({sourceImageSha:'fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37',overlaySha,exeSha,copyBuffer:copy.toString(16),overlayLength:end,blocks:blocks.map(o=>({...o,pc:o.pc.toString(16),sha:sha(result.subarray(o.offset,o.offset+o.length))})),runtime:false,publication:false},null,2));
 fs.closeSync(fd);
+// Source-only composition by the separate research oracle. The default CLI
+// output and all existing golden bytes remain unchanged; no payload is written.
+export {result as overlayBytes,finalExe as executableBytes};
