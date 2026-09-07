@@ -1,6 +1,7 @@
 # Spyro editor — what is working now
 
-Updated September 6, 2026. Development is continuing after John's reset.
+Updated September 7, 2026. Development is continuing with a safe pause planned
+by5% remaining usage.
 This is a progress report, not a V6 release. Your preserved editor, original
 game and original memory card have not been replaced.
 
@@ -106,8 +107,9 @@ relocation gap, not the whole collision or lifetime problem.
 The new detached fresh-Wizard scene also matches independent native-source
 checks. It preserves space for32 dynamic allocations plus the allocator's extra
 write; the test catches the earlier layout corrupting another object's private
-state. This is source-tested scene construction, not yet a playable fresh-Wizard
-ROM. The separate sound-loading stage now also passes source tests, preserving
+state. This scene is now included in the independently verified research ROM;
+its gameplay has not yet been accepted. The separate sound-loading stage also
+passes source tests, preserving
 the exact native transfer bytes. The three repeat-reward models and their
 textures are now implemented in a separate resource package, with independent
 checks of the actual compiled output. Save handling and playable end-to-end
@@ -149,8 +151,9 @@ remain separate work.
 
 ## Verification and next milestone
 
-Latest full default Release gate:144 steps, zero failures. The Python suite
-passed115 tests with four explicit-source skips;55 runner tests passed. The
+Latest post-publication Release gate:146 selected checks, zero failures; the
+preceding all-project build/regression gate passed313 checks. The phase1 Python
+suite passed138 tests with five explicit-source skips;56 runner tests passed. The
 independent native scene check passed23 checks/four expected refusals and
 sound-loading proof404 checks/ten expected refusals. New actual compiled fallback
 resource reads passed34 checks/28 expected refusals; the separate original-source
@@ -158,8 +161,12 @@ resource check passed3018/four. Save-row source evidence passed164/20.
 These counts are engineering checks, not hundreds of gameplay runs.
 
 Actual two-Wizard recording:22 minutes39 seconds,81303 video frames, full strict
-decode passed. DuckStation, capture and the read-only observer are closed.
+decode passed. That DuckStation, capture and read-only observer session is closed.
 All nine protected hashes passed after exact original settings restoration.
+
+A separate fresh-Wizard test session is now cold-boot paused with fresh settings
+backups and a private memory-card copy. Gameplay is pending the read-only
+diagnostic review; this does not change the R03 app or its saved document.
 
 Next: finish the isolated app edit/save/close-reopen check,
 complete fresh-Wizard reward/audio/resource contracts, then integrate and playtest that exact

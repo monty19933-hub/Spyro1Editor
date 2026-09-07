@@ -20,8 +20,11 @@ The separate actual-Executable-bound physical disc plan now passes source,
 legacy and full default gates. The closed source-bound research materializer
 now also passes API/free/source, three old-kind suites and the all-project
 Release gate. Real stage/postcommit tests and a separate clean candidate have now
-passed, including independent new-process readback. Fresh-Wizard gameplay and
-new observer activation remain pending; no new emulator session has started.
+passed, including independent new-process readback. Fresh-Wizard gameplay
+remains pending. The fixed-candidate observer passed source/peer/file/OS review
+and Root activation;164 Python/seven skips and13 explicit tests/no skips pass.
+A new exact-candidate DuckStation
+session is currently cold-boot paused; see the active obligations below.
 
 John authorized autonomous development, useful parallel agents, sensible
 commits and DuckStation gameplay with temporary settings. Continue until the
@@ -30,9 +33,19 @@ checkpoint near5% usage remaining. Do not redeem a reset credit. Do not replace
 the preserved editor silently, modify original game/save owners, bypass OS
 permissions, or call a usage pause completion. Serialize the shared .NET slot.
 
-## Closed runtime milestones
+## Active runtime obligations — September 7
 
-All owned DuckStation/observer/capture sessions are CLOSED. Fresh global/game
+DuckStation PID38592, exec session93336, is paused at cold boot of the sole clean
+fresh-Wizard candidate. Native capture is active but has no gameplay frames yet;
+no observer connection or gameplay input has occurred. Exact fresh INI backups,
+private card, nine-owner hashes and restoration instructions are recorded in
+`_local/native-fresh-wizard-p1-runtime-20260907-r01.aaM1NY/RUNTIME-SESSION.md`.
+Close capture/observer/emulator and restore those fresh originals before pausing
+at5% remaining. Never copy the private card back. R03 remains open and unchanged.
+
+## Earlier closed runtime milestones
+
+Earlier owned DuckStation/observer/capture sessions are CLOSED. Fresh global/game
 INI originals were restored byte-for-byte and all nine protected identities
 passed for the latest two-Wizard session. Never reconnect departed PIDs or
 observer IDs. A future test requires new fresh backups and independently bound

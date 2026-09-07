@@ -1,22 +1,27 @@
 #!/usr/bin/env python3
-"""Phase1: fixed fresh A/P1/N32 diagnostic readers and neutral OS parsers.
+"""Fixed fresh A/P1/N32 diagnostic readers and closed external-session gates.
 
-LIVE CONNECTION IS DISABLED pending independently reviewed published CUE,
-receipt, path and DuckStation executable pins. No opt-in or caller hash enables
-it. Memory/OS matches are sequential observations, never gameplay, peak, audio,
-save/card or image-authentication certificates. Existing observers are unchanged.
+Root-reviewed phase2 permits only the fixed published candidate and independently
+identified local DuckStation session. Published artifact and executable pins are
+fixed here; no caller hash changes the connection profile. Memory/OS matches are
+sequential observations, never gameplay, peak, audio, save/card or image-
+authentication certificates. Existing observers are unchanged.
 """
 from __future__ import annotations
 
 import argparse
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 import importlib.util
+import hashlib
+import json
 import os
 from pathlib import Path
 import re
 import selectors
+import socket
+import stat
 import struct
 import subprocess
 import sys
@@ -210,6 +215,8 @@ class SessionObservation:
     executable:str
     image:FileIdentity
     bin_fd:int
+    auxiliary_cache:tuple|None=None
+    auxiliary_cache_size:int|None=field(default=None,compare=False)
     @property
     def candidate_authenticated(self):return False
 
@@ -241,7 +248,7 @@ def parse_lsof(raw):
         if not line.endswith('\x00'):raise ValueError('Missing field terminator.')
         fields={}
         for item in line[:-1].split('\x00'):
-            if len(item)<2 or item[0] not in 'pcftaiDnsPT' or item[0] in fields:raise ValueError('Unknown/empty/duplicate lsof field.')
+            if (len(item)<2 and item!='n') or item[0] not in 'pcftaiDnsPT' or item[0] in fields:raise ValueError('Unknown/empty/duplicate lsof field.')
             fields[item[0]]=item[1:]
         if 'p' in fields:
             if set(fields)-{'p','c'} or not re.fullmatch('[1-9][0-9]{0,9}',fields['p']):raise ValueError('Invalid process record.')
@@ -251,6 +258,10 @@ def parse_lsof(raw):
         else:
             if pid is None or 'f' not in fields or not re.fullmatch('[0-9]{1,6}',fields['f']):raise ValueError('Unowned/invalid descriptor record.')
             if int(fields['f'])>4096:raise ValueError('Descriptor exceeds bounded snapshot policy.')
+            if fields.get('t')=='NPOLICY':
+                if set(fields)!={'f','a','t','n'} or fields['a']!=' ' or fields['n']!='':
+                    raise ValueError('Only the exact recorded empty-name NPOLICY grammar is supported.')
+            elif fields.get('n')=='':raise ValueError('Empty names are not general descriptor permission.')
             records.append(dict(fields,p=str(pid)))
     if not records:raise ValueError('No complete descriptor records.')
     if len({(r['p'],r['f']) for r in records})!=len(records):raise ValueError('Duplicate descriptor owner.')
@@ -260,8 +271,8 @@ def parse_lsof(raw):
 def _run(argv):
     """Read-only bounded child query; no shell, input, retry or control action.
 
-    Not called by the phase1 CLI. Tests inject a runner; activation remains a
-    separate review. Combined stdout/stderr must be a complete successful record.
+    Tests inject a runner; live CLI activation remains a separate review.
+    Combined stdout/stderr must be a complete successful record.
     """
     if type(argv) is not tuple or any(type(a) is not str for a in argv):raise ValueError('Unapproved process query.')
     ps=(len(argv)==9 and argv[:2]==('/bin/ps','-p') and re.fullmatch('[1-9][0-9]{0,9}',argv[2]) and
@@ -269,7 +280,9 @@ def _run(argv):
     files=(len(argv)==9 and argv[:4]==('/usr/sbin/lsof','-nP','-a','-p') and re.fullmatch('[1-9][0-9]{0,9}',argv[4]) and
            argv[5:]==('-d','0-4096','-F0pcftaiDnsPT','-Ts'))
     listener=argv==('/usr/sbin/lsof','-nP','-iTCP:2345','-sTCP:LISTEN','-F0pcftaiDnsPT','-Ts')
-    if not (ps or files or listener):raise ValueError('Only three exact read-only ownership queries are accepted.')
+    additional=(len(argv)==9 and argv[:4]==('/usr/sbin/lsof','-nP','-a','-p') and re.fullmatch('[1-9][0-9]{0,9}',argv[4]) and
+        argv[5:] in (('-d','txt','-F0pcftaiDnsPT','-Ts'),('-iTCP:2345','-sTCP:ESTABLISHED','-F0pcftaiDnsPT','-Ts')))
+    if not (ps or files or listener or additional):raise ValueError('Only five exact read-only ownership queries are accepted.')
     deadline=time.monotonic()+2
     try:
         p=subprocess.Popen(argv,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
@@ -298,8 +311,8 @@ def _run(argv):
 def inspect_session(pid,uid,executable,image,*,runner=_run):
     """Neutral independently observed fields; no hash/file or activation authority.
 
-    Actual artifact/executable hashing and before/after connection orchestration
-    remain DISABLED pending code-owned reviewed pins. Caller labels cannot enable.
+    The closed file/session layer supplies actual file identity independently;
+    this neutral parser alone grants no connection or artifact authority.
     """
     if type(image) is not FileIdentity or type(image.path) is not str or not image.path.startswith('/') or '\x00' in image.path or \
        any(type(x) is not int or x<=0 for x in (image.device,image.inode,image.size)) or \
@@ -311,7 +324,19 @@ def inspect_session(pid,uid,executable,image,*,runner=_run):
     start=parse_process(runner(('/bin/ps','-p',str(pid),'-o','lstart=','-o','uid=','-o','comm=')),pid,uid,executable)
     files=parse_lsof(runner(('/usr/sbin/lsof','-nP','-a','-p',str(pid),'-d','0-4096','-F0pcftaiDnsPT','-Ts')))
     if any(int(r['p'])!=pid for r in files):raise ValueError('File snapshot belongs to another PID.')
-    images=[r for r in files if r.get('n','').lower().endswith(('.bin','.cue','.iso','.chd'))]
+    caches=[r for r in files if r.get('n')==SHADER_CACHE_PATH]
+    if len(caches)>1:raise ValueError('Ambiguous fixed shader-cache auxiliary owner.')
+    cache_identity=None;cache_size=None
+    if caches:
+        r=caches[0]
+        try:
+            if not re.fullmatch('[0-9]+',r['s']):raise ValueError('Invalid mutable cache size.')
+            device,inode,cache_size=int(r['D'],16),int(r['i']),int(r['s'])
+        except (KeyError,ValueError) as e:raise ValueError('Incomplete fixed cache metadata.') from e
+        if (r.get('t'),r.get('a'),device,inode)!=('REG','u',0x1000011,1242218):
+            raise ValueError('The extra BIN is not the one reviewed auxiliary shader-cache owner.')
+        cache_identity=(int(r['f']),device,inode,SHADER_CACHE_PATH)
+    images=[r for r in files if r.get('n','').lower().endswith(('.bin','.cue','.iso','.chd')) and r not in caches]
     bins=[r for r in images if r.get('n')==image.path]
     if len(bins)!=1 or any(r.get('n') not in (image.path,image.path[:-4]+'.cue') for r in images):raise ValueError('Missing/ambiguous or additional open image.')
     b=bins[0]
@@ -323,7 +348,7 @@ def inspect_session(pid,uid,executable,image,*,runner=_run):
     r=listeners[0]
     if (r['p'],r.get('t'),r.get('P'),r.get('n'),r.get('T'))!=(str(pid),'IPv4','TCP','127.0.0.1:2345','ST=LISTEN'):
         raise ValueError('Listener is not this process and exact loopback endpoint.')
-    return SessionObservation(pid,uid,start,executable,image,int(b['f']))
+    return SessionObservation(pid,uid,start,executable,image,int(b['f']),cache_identity,cache_size)
 
 
 def require_same_session(before,after):
@@ -340,6 +365,358 @@ def require_connected_owner(raw,session,local,remote):
         raise ValueError('Established server socket does not belong to the identified process/tuple.')
 
 
+# Root activation after peer review, actual six-file gate and real OS prechecks.
+# Evidence: fresh-p1-observer-phase2-r01.mBNeUE/08-root-* and09-root-*.
+PHASE2_READY=True
+CANDIDATE_DIRECTORY='/Users/john/Documents/Codex/2026-07-13/i-needed-to-make-a-new/spyro1editor-v3-release/_local/research/dark-wizard-native-closure-20260906/fresh-wizard-publication-validation-r01.0eF4Tz/candidate-r01'
+ORIGINAL_STEM='/Users/john/Documents/Codex/2026-04-24/could-you-create-a-level-editor/Spyro the Dragon (USA)'
+EMULATOR_PATH='/Applications/DuckStation.app/Contents/MacOS/DuckStation'
+SHADER_CACHE_PATH='/Users/john/Library/Application Support/DuckStation/cache/vulkan_shaders.bin'
+
+
+@dataclass(frozen=True)
+class FilePin:
+    """Neutral byte expectation; only the closed live factory selects pins."""
+    path:str
+    size:int
+    sha256:str
+
+
+_FILE_PINS=(
+    ('original_bin',FilePin(ORIGINAL_STEM+'.bin',661547040,'fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37')),
+    ('original_cue',FilePin(ORIGINAL_STEM+'.cue',88,'05142502c75d3a0b6374003a8fe41893d6faf0ad55863ff0b62a265a1b152766')),
+    ('candidate_bin',FilePin(CANDIDATE_DIRECTORY+'/'+CANDIDATE_BASENAME+'.bin',661547040,EXPECTED_IMAGE_SHA256)),
+    ('candidate_cue',FilePin(CANDIDATE_DIRECTORY+'/'+CANDIDATE_BASENAME+'.cue',98,'78c40516cbfe54286b839453d8ccf5786ac685d23a69623e6e51d82106238a6e')),
+    ('receipt',FilePin(CANDIDATE_DIRECTORY+'/'+CANDIDATE_BASENAME+'.receipt.json',4877,'af41aa8b0af10504c626f76cbaa2446e2207486551ce6ba8766794261a63b63e')),
+    ('emulator',FilePin(EMULATOR_PATH,22731840,'34c62fd34b2a18670007c9383cea0b0222b2ab241f643bdbc5d1620a298ac870')),
+)
+_STAT_FIELDS=('st_dev','st_ino','st_mode','st_size','st_mtime_ns','st_ctime_ns')
+_HELPER_PINS={'Observe-SpyroNativeWizard.py':'7a07ccdbc1288f65c8f8627d9623c3eb8b6cddb97b5b36e06ebe84d9a7d80516',
+              'Watch-SpyroId65RuntimeState.py':'eac3953a0ff7ff8acdefbe43cf987f296d44091ad51619efd225690ba1dc0677'}
+
+
+def _stat_tuple(value):return tuple(getattr(value,k) for k in _STAT_FIELDS)
+
+
+def _parents(path):
+    result=[]
+    for p in Path(path).parents:
+        if len(result)>=64:raise ValueError('Fixed file ancestor depth exceeds bound.')
+        s=os.lstat(p)
+        if not stat.S_ISDIR(s.st_mode):raise ValueError('Linked or non-directory file ancestor.')
+        result.append((str(p),s.st_dev,s.st_ino,s.st_mode))
+    return tuple(result)
+
+
+class _VerifiedFile:
+    def __init__(self,pin,fd,before,parents):
+        self.pin,self.fd,self.before,self.parents=pin,fd,_stat_tuple(before),parents
+        self.identity=FileIdentity(pin.path,before.st_dev,before.st_ino,before.st_size)
+
+    def check(self,full=False):
+        if self.fd is None:raise ValueError('Verified owner is closed.')
+        try:
+            if _stat_tuple(os.fstat(self.fd))!=self.before or _stat_tuple(os.lstat(self.pin.path))!=self.before or _parents(self.pin.path)!=self.parents:
+                raise ValueError('Held descriptor/path/ancestor identity changed.')
+            if full:
+                if os.lseek(self.fd,0,os.SEEK_SET)!=0:raise ValueError('Owner failed seek-to-zero.')
+                remaining=self.pin.size;digest=hashlib.sha256()
+                while remaining:
+                    n=min(1048576,remaining);b=os.read(self.fd,n)
+                    if type(b) is not bytes or not 0<len(b)<=n:raise ValueError('Owner returned partial EOF or overreported bytes.')
+                    digest.update(b);remaining-=len(b)
+                if os.lseek(self.fd,0,os.SEEK_CUR)!=self.pin.size or os.read(self.fd,1)!=b'' or os.lseek(self.fd,0,os.SEEK_CUR)!=self.pin.size:
+                    raise ValueError('Owner true EOF/position changed.')
+                if digest.hexdigest()!=self.pin.sha256:raise ValueError('Complete pinned file hash changed.')
+                if _stat_tuple(os.fstat(self.fd))!=self.before or _stat_tuple(os.lstat(self.pin.path))!=self.before or _parents(self.pin.path)!=self.parents:
+                    raise ValueError('File metadata changed during complete hash.')
+        except OSError as e:raise ValueError('Read-only owner verification failed.') from e
+
+    def close(self):
+        if self.fd is not None:
+            fd,self.fd=self.fd,None
+            os.close(fd)
+
+    def report(self):
+        return dict(path=self.pin.path,length=self.pin.size,sha256=self.pin.sha256,
+                    device=self.identity.device,inode=self.identity.inode,
+                    initial_metadata=dict(zip(_STAT_FIELDS,self.before)),hash_is_complete=True)
+
+
+def _raise_failures(errors):
+    if len(errors)==1:raise errors[0]
+    if errors:raise BaseExceptionGroup('Observation and final owner checks failed; all causes retained.',errors)
+
+
+def _finalize_files(owners,primary=None):
+    """Every full final check, then every close; never mask a prior failure."""
+    errors=[] if primary is None else [primary]
+    owners=tuple(owners)
+    for owner in owners:
+        try:owner.check(full=True)
+        except BaseException as e:errors.append(e)
+    for owner in owners:
+        try:owner.close()
+        except BaseException as e:errors.append(e)
+    _raise_failures(errors)
+
+
+def _open_verified_file(pin):
+    if type(pin) is not FilePin or type(pin.path) is not str or not os.path.isabs(pin.path) or os.path.normpath(pin.path)!=pin.path or \
+       any(c in pin.path for c in '\r\n\x00') or type(pin.size) is not int or not 0<pin.size<=661547040 or \
+       type(pin.sha256) is not str or not re.fullmatch('[0-9a-f]{64}',pin.sha256):
+        raise ValueError('Invalid neutral fixed-file pin shape.')
+    if any(not hasattr(os,key) for key in ('O_NOFOLLOW','O_CLOEXEC','O_NONBLOCK')):raise ValueError('Required no-follow/nonblocking capabilities unavailable.')
+    fd=None
+    try:
+        parents=_parents(pin.path);before=os.lstat(pin.path)
+        if not stat.S_ISREG(before.st_mode) or before.st_size!=pin.size:raise ValueError('Pinned owner is not an exact regular file.')
+        fd=os.open(pin.path,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC|os.O_NONBLOCK)
+        if _stat_tuple(os.fstat(fd))!=_stat_tuple(before):raise ValueError('Owner changed across read-only open.')
+        owner=_VerifiedFile(pin,fd,before,parents);owner.check(full=True)
+        return owner
+    except BaseException as e:
+        primary=ValueError('Read-only fixed owner unavailable.') if isinstance(e,OSError) else e
+        if primary is not e:primary.__cause__=e
+        errors=[primary]
+        if fd is not None:
+            try:os.close(fd)
+            except BaseException as close_error:errors.append(close_error)
+        _raise_failures(errors)
+
+
+def _read_at(owner,offset,length):
+    owner.check()
+    if os.lseek(owner.fd,offset,os.SEEK_SET)!=offset:raise ValueError('Bounded file seek failed.')
+    result=bytearray()
+    while len(result)<length:
+        n=length-len(result);b=os.read(owner.fd,n)
+        if type(b) is not bytes or not 0<len(b)<=n:raise ValueError('Bounded file read escaped exact owner.')
+        result.extend(b)
+    if os.lseek(owner.fd,0,os.SEEK_CUR)!=offset+length:raise ValueError('Bounded owner position changed.')
+    owner.check()
+    return bytes(result)
+
+
+def _require_tree():
+    _parents(CANDIDATE_DIRECTORY+'/'+CANDIDATE_BASENAME+'.bin')
+    expected={Path(pin.path).name for role,pin in _FILE_PINS if role in ('candidate_bin','candidate_cue','receipt')}
+    with os.scandir(CANDIDATE_DIRECTORY) as entries:
+        found=[]
+        for entry in entries:
+            if len(found)>=3 or not entry.is_file(follow_symlinks=False):raise ValueError('Unexpected candidate artifact owner.')
+            found.append(entry.name)
+    if set(found)!=expected or len(found)!=3:raise ValueError('Candidate is not the exact three-owner set.')
+
+
+def _check_files(owners):
+    _require_tree()
+    for owner in owners.values():owner.check(full=owner.pin.size<=65536)
+
+
+def _unique_json(pairs):
+    result={}
+    for key,value in pairs:
+        if key in result:raise ValueError('Duplicate receipt key.')
+        result[key]=value
+    return result
+
+
+def _open_profile_files():
+    owners={}
+    try:
+        _require_tree()
+        for role,pin in _FILE_PINS:owners[role]=_open_verified_file(pin)
+        cue=f'FILE "{CANDIDATE_BASENAME}.bin" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n'.encode()
+        if _read_at(owners['candidate_cue'],0,98)!=cue:raise ValueError('Code-owned CUE bytes changed.')
+        receipt=json.loads(_read_at(owners['receipt'],0,4877).decode('utf-8','strict'),object_pairs_hook=_unique_json,
+                           parse_constant=lambda _:(_ for _ in ()).throw(ValueError('Nonfinite receipt value.')))
+        required={'schema':1,'profile':'native-id65-fresh-wizard-primary-p1-n32-research-r01',
+            'planSha256':'3278bedaf4d24a564bfc6b3fc4554a959bf520bc51608bd53b73c8a112a1ac8b',
+            'sourceImagePath':ORIGINAL_STEM+'.bin','sourceCuePath':ORIGINAL_STEM+'.cue',
+            'sourceImageSha256':_FILE_PINS[0][1].sha256,'sourceCueSha256':_FILE_PINS[1][1].sha256,
+            'imageSha256':EXPECTED_IMAGE_SHA256,'imageByteLength':661547040,'changedRawSectors':1290,
+            'cueSha256':_FILE_PINS[3][1].sha256,'executableLba':54958,'executableEndExclusive':55162,
+            'canonicalDocumentSha256':'59ab0b1bfb8bb62a51d34d7d7b3ab0387c51ad9e5abf24769558ed88b8e73614'}
+        for key,value in required.items():
+            if type(receipt.get(key)) is not type(value) or receipt[key]!=value:raise ValueError('Wrong pinned receipt description: '+key)
+        for key in ('projectSaveBindingClaimed','runtimeVerified','normalCreateBinApproved','persistentOwnerIssued',
+                    'cardOrHistoryCompatibilityProven','wholePickupOrDeathProven','globalAudioCompatibilityProven',
+                    'peakRuntimeMemoryProven','hardwareTransfersProven','completeIncomingEdgeClosureProven',
+                    'completeNativeDependencyClosureProven','checkpointOrForeignStateSupported'):
+            if receipt.get(key) is not False:raise ValueError('Receipt limitations changed.')
+        for role,lba,expected in (('original_bin',53875,'a533d75cab8afaae6107ec35a02a9a5fe979a92c7c955f9cf1ee50f693a1b998'),
+                                  ('candidate_bin',54958,'a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc')):
+            digest=hashlib.sha256()
+            for index in range(204):digest.update(_read_at(owners[role],(lba+index)*2352,2352)[24:2072])
+            if digest.hexdigest()!=expected:raise ValueError('Complete logical game EXE readback differs.')
+        _check_files(owners)
+        return owners
+    except BaseException as e:_finalize_files(owners.values(),e)
+
+
+def _source_snapshot():
+    result={}
+    for name in (Path(__file__).name,*_HELPER_PINS):
+        path=Path(__file__).with_name(name);before=path.stat()
+        with path.open('rb') as source:
+            b=source.read(65537)
+            if len(b)>65536 or len(b)!=before.st_size or source.read(1)!=b'' or source.tell()!=len(b):
+                raise ValueError('Observer/helper source exceeds bounded complete owner.')
+            if _stat_tuple(os.fstat(source.fileno()))!=_stat_tuple(before) or _stat_tuple(path.stat())!=_stat_tuple(before):
+                raise ValueError('Observer/helper source changed during read.')
+        result[name]=hashlib.sha256(b).hexdigest()
+        if name in _HELPER_PINS and result[name]!=_HELPER_PINS[name]:raise ValueError('Reviewed m-only helper source changed.')
+    return result
+
+
+def _finish_profile(owners,primary,source_before):
+    errors=[]
+    try:_finalize_files(owners.values(),primary)
+    except BaseException as e:errors.append(e)
+    if owners:
+        try:_require_tree()
+        except BaseException as e:errors.append(e)
+    if source_before is not None:
+        try:
+            if _source_snapshot()!=source_before:raise ValueError('Observer source changed during observation.')
+        except BaseException as e:errors.append(e)
+    _raise_failures(errors)
+
+
+def verify_actual_files():
+    """Explicit read-only gate; no PID query/socket and no caller pins."""
+    owners={};before=None;primary=None;result=None
+    try:
+        before=_source_snapshot();owners=_open_profile_files()
+        result=dict(owners={name:owner.report() for name,owner in owners.items()},source_hashes=before,
+                    final_full_checks_passed=True,candidate_authenticated=False,runtime_pass=False)
+    except BaseException as e:primary=e
+    _finish_profile(owners,primary,before)
+    return result
+
+
+def require_text_owner(raw,pid,expected):
+    """Separate mapped-text grammar. Other REG mappings are not authenticated."""
+    if type(pid) is not int or not 0<pid<=0x7FFFFFFF or type(expected) is not FileIdentity or \
+       type(expected.path) is not str or not expected.path.startswith('/') or any(c in expected.path for c in '\r\n\x00') or \
+       any(type(v) is not int or v<=0 for v in (expected.device,expected.inode,expected.size)):raise ValueError('Invalid neutral text-owner shape.')
+    text=_text(raw)
+    if not text.endswith('\x00\n'):raise ValueError('Incomplete mapped-text output.')
+    records=[];seen_header=False;seen=set()
+    for line in text.splitlines():
+        if not line.endswith('\x00'):raise ValueError('Incomplete mapped-text fields.')
+        values={}
+        for item in line[:-1].split('\x00'):
+            if len(item)<2 or item[0] not in 'pcfatDisn' or item[0] in values:raise ValueError('Unknown/empty/duplicate text field.')
+            values[item[0]]=item[1:]
+        if 'p' in values:
+            if seen_header or set(values)-{'p','c'} or values['p']!=str(pid):raise ValueError('Wrong/repeated text process header.')
+            seen_header=True;continue
+        if not seen_header or set(values)-{'f','a','t','D','i','s','n'} or not {'f','t','D','i','s','n'}<=set(values) or \
+           values['f']!='txt' or values['t']!='REG' or not values['n'].startswith('/') or \
+           not re.fullmatch('[0-9]+',values['i']) or not re.fullmatch('[0-9]+',values['s']):
+            raise ValueError('Incomplete/nonregular mapped-text record.')
+        try:identity=(int(values['D'],16),int(values['i']),int(values['s']),values['n'])
+        except ValueError as e:raise ValueError('Invalid mapped-text device.') from e
+        if identity[0]<=0 or identity[1]<=0 or identity[2]<0 or identity in seen:raise ValueError('Duplicate/invalid mapped-text owner.')
+        seen.add(identity);records.append(identity)
+    wanted=(expected.device,expected.inode,expected.size,expected.path)
+    if len([r for r in records if r[3]==expected.path])!=1 or wanted not in records:raise ValueError('Actual mapped executable owner differs.')
+    return expected,len(records)-1
+
+
+@dataclass(frozen=True)
+class _BoundSession:
+    process:SessionObservation
+    executable:FileIdentity
+    listener_fd:int
+    server_fd:int|None
+    local:tuple|None
+    remote:tuple|None
+    other_text_count:int=field(compare=False)
+
+
+def _external_check(pid,owners,connection=None):
+    outputs=[]
+    def query(argv):
+        b=_run(argv);outputs.append(b);return b
+    exe=owners['emulator'].identity
+    observed=inspect_session(pid,os.getuid(),exe.path,owners['candidate_bin'].identity,runner=query)
+    listener_fd=int(parse_lsof(outputs[2])[0]['f'])
+    _,other=require_text_owner(_run(('/usr/sbin/lsof','-nP','-a','-p',str(pid),'-d','txt','-F0pcftaiDnsPT','-Ts')),pid,exe)
+    local=remote=server_fd=None
+    if connection is not None:
+        local,remote=connection.getsockname(),connection.getpeername()
+        raw=_run(('/usr/sbin/lsof','-nP','-a','-p',str(pid),'-iTCP:2345','-sTCP:ESTABLISHED','-F0pcftaiDnsPT','-Ts'))
+        require_connected_owner(raw,observed,local,remote);server_fd=int(parse_lsof(raw)[0]['f'])
+    return _BoundSession(observed,exe,listener_fd,server_fd,local,remote,other)
+
+
+def _same_bound(before,after):
+    if type(before) is not _BoundSession or type(after) is not _BoundSession:raise ValueError('Missing closed external observation.')
+    require_same_session(before.process,after.process)
+    if (before.executable,before.listener_fd)!=(after.executable,after.listener_fd) or \
+       (before.server_fd is not None and (before.server_fd,before.local,before.remote)!=(after.server_fd,after.local,after.remote)):
+        raise ValueError('Mapped executable/listener/established identity changed.')
+
+
+def _command(source):
+    b=source.readline(513)
+    if b==b'' or b==b'q\n':return None
+    if type(b) is not bytes or len(b)>512 or not b.endswith(b'\n') or any(c<32 and c!=10 for c in b) or b.count(b'\n')!=1:
+        raise ValueError('Manual input must be one bounded control-free line.')
+    try:s=b[:-1].decode('utf-8','strict')
+    except UnicodeError as e:raise ValueError('Manual input must be strict UTF8.') from e
+    if s=='p':return ''
+    if not s.startswith('p ') or len(s[2:])>120:raise ValueError('Only p [label] or q is accepted.')
+    return s[2:]
+
+
+def _run_session(pid,cue,input_stream,emit):
+    if not PHASE2_READY:raise ValueError('Phase2 live activation is still disabled.')
+    if type(pid) is not int or not 0<pid<=0x7FFFFFFF or cue!=CANDIDATE_DIRECTORY+'/'+CANDIDATE_BASENAME+'.cue':
+        raise ValueError('Only the exact reviewed PID nomination and fixed CUE path are accepted.')
+    owners={};connection=None;primary=None;source_before=None
+    try:
+        source_before=_source_snapshot();owners=_open_profile_files()
+        baseline=_external_check(pid,owners)
+        _check_files(owners);again=_external_check(pid,owners);_same_bound(baseline,again)
+        connection=socket.create_connection(('127.0.0.1',2345),timeout=2);connection.settimeout(2)
+        _check_files(owners);bound=_external_check(pid,owners,connection);_same_bound(again,bound)
+        client=ReadOnlyClient(connection);probe=client.read(0x8007596C,4)
+        _check_files(owners);after=_external_check(pid,owners,connection);_same_bound(bound,after);baseline=after
+        emit(dict(kind='connected',source_hashes=source_before,owners={n:o.report() for n,o in owners.items()},
+                  external_binding=asdict(baseline),probe_raw=probe.hex(),candidate_authenticated=False,runtime_pass=False,
+                  auxiliary_cache_contents_authenticated=False,process_identity_limitation=PROCESS_IDENTITY_LIMITATION))
+        ordinal=0
+        while True:
+            label=_command(input_stream)
+            if label is None:break
+            _check_files(owners);before=_external_check(pid,owners,connection);_same_bound(baseline,before)
+            sample=capture(client,label)
+            _check_files(owners);after=_external_check(pid,owners,connection);_same_bound(before,after);baseline=after
+            sample.update(kind='sample',ordinal=ordinal,external_session_binding_checked=True,external_binding=asdict(after),
+                          candidate_authenticated=False,runtime_pass=False,ui_result_approved=False,normal_export_approved=False,
+                          auxiliary_cache_contents_authenticated=False)
+            emit(sample);ordinal+=1
+        _check_files(owners);_same_bound(baseline,_external_check(pid,owners,connection))
+    except BaseException as e:primary=e
+    if connection is not None:
+        try:connection.close()
+        except BaseException as e:
+            primary=e if primary is None else BaseExceptionGroup('Observation and socket close failed.',[primary,e])
+    _finish_profile(owners,primary,source_before)
+    emit(dict(kind='session_closed',final_full_checks_passed=True,candidate_authenticated=False,runtime_pass=False))
+    return 0
+
+
+def _failure_record(error):
+    result=dict(type=type(error).__name__,message=str(error))
+    if isinstance(error,BaseExceptionGroup):result['causes']=[_failure_record(e) for e in error.exceptions]
+    return result
+
+
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__,allow_abbrev=False)
     parser.add_argument('--pid',type=int);parser.add_argument('--candidate-cue')
@@ -347,10 +724,17 @@ def main(argv=None):
     args=list(sys.argv[1:] if argv is None else argv)
     for flag in ('--pid','--candidate-cue','--connect-identified-test-session'):
         if sum(a==flag or a.startswith(flag+'=') for a in args)>1:parser.error('Repeated option refused.')
-    parser.parse_args(args)
-    # Deliberately unconditional. No executable/companion pins have been issued
-    # to this observer; do not turn parser fixtures or matching RAM into authority.
-    parser.error('LIVE CONNECTION DISABLED: actual published companions/path and DuckStation executable pins await independent review.')
+    selected=parser.parse_args(args)
+    if not PHASE2_READY:parser.error('LIVE CONNECTION DISABLED: phase2 final source/file/actual OS fixture review is pending.')
+    if not selected.connect_identified_test_session or selected.pid is None or selected.candidate_cue is None:
+        parser.error('Explicit exact session nomination and connection consent are required.')
+    print('Connecting can pause DuckStation. Resume/pause only via UI; p <label> samples, q closes. No automatic reconnect.',file=sys.stderr,flush=True)
+    try:return _run_session(selected.pid,selected.candidate_cue,sys.stdin.buffer,lambda event:print(json.dumps(event),flush=True))
+    except BaseException as error:
+        print(json.dumps(dict(kind='session_failed',error=_failure_record(error),final_full_checks_passed=False,
+                              candidate_authenticated=False,runtime_pass=False)),flush=True)
+        print('No automatic recovery. If connection occurred, disconnect does not resume DuckStation.',file=sys.stderr,flush=True)
+        return 130 if isinstance(error,KeyboardInterrupt) else 2
 
 
-if __name__=='__main__':main()
+if __name__=='__main__':raise SystemExit(main())

@@ -1,11 +1,16 @@
 """P1 observer tests first. Fake memory/process/socket only; no live connection."""
 import importlib.util
+import dataclasses
+import hashlib
 import io
+import os
 from pathlib import Path
 import socket
+import stat
 import struct
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -221,10 +226,10 @@ class ExternalTests(unittest.TestCase):
                   self.file.replace(b'f19',b'f-1'),self.file.replace(b'\0\n',b'\n',1)):
             with self.subTest(b=b[:40]),self.assertRaises(ValueError):O.parse_lsof(b)
 
-    def test_phase1_live_cli_always_refused_without_any_io(self):
+    def test_disabled_live_cli_refused_without_any_io(self):
         for args in ([],['--pid','321','--candidate-cue','/x.cue','--connect-identified-test-session'],
                      ['--pid','-1'],['--pid','321','--pid','321'],['--candidate-cue','--connect-identified-test-session'],['--host','127.0.0.1']):
-            with self.subTest(args=args),patch.object(socket,'create_connection',side_effect=AssertionError('socket')), \
+            with self.subTest(args=args),patch.object(O,'PHASE2_READY',False),patch.object(socket,'create_connection',side_effect=AssertionError('socket')), \
                  patch.object(subprocess,'Popen',side_effect=AssertionError('process')),patch.object(Path,'open',side_effect=AssertionError('files')), \
                  patch('sys.stderr',new=io.StringIO()),self.assertRaises(SystemExit):O.main(args)
 
@@ -295,6 +300,275 @@ class TransportTests(unittest.TestCase):
             s=self.Socket(response)
             with self.assertRaises(O.wizard.rsp.RspProtocolError):O.ReadOnlyClient(s).read(0x8007596C,4)
             self.assertTrue(all(b in (b'+',b'-') or b.startswith(b'$m') for b in s.sent))
+
+
+class Phase2TextOwnerTests(unittest.TestCase):
+    """Neutral NUL fixtures, not a real process/mapped executable observation."""
+    def setUp(self):
+        self.pid=321
+        self.expected=O.FileIdentity('/private/fixture/Test.app/Contents/MacOS/Test',0x100000A,123,17)
+        self.header=[('p',self.pid),('c','Test')]
+        self.executable=[('f','txt'),('t','REG'),('D','0x100000a'),('i',123),('s',17),('n',self.expected.path)]
+        self.library=[('f','txt'),('t','REG'),('D','0x100000a'),('i',456),('s',23),('n','/private/fixture/libExample.dylib')]
+
+    def test_exact_executable_not_first_mapping_and_other_library_count(self):
+        for records,count in (([self.executable],0),([self.library,self.executable],1),([self.executable,self.library],1)):
+            with self.subTest(count=count,first=records[0][-1]):
+                result=O.require_text_owner(fields([self.header,*records]),self.pid,self.expected)
+                self.assertIsInstance(result,tuple)
+                self.assertEqual(2,len(result));self.assertIs(result[0],self.expected);self.assertEqual(count,result[1])
+        with self.assertRaises(dataclasses.FrozenInstanceError):self.expected.inode=999
+        with self.assertRaises(ValueError):O.parse_lsof(fields([self.header,self.executable]))
+
+    def test_missing_duplicate_wrong_and_incomplete_executable_owners_refuse(self):
+        raw=fields([self.header,self.executable])
+        for before,after in ((b'p321',b'p322'),(b'tREG',b'tDIR'),(b'D0x100000a',b'D0x100000b'),
+                             (b'i123',b'i124'),(b's17',b's18'),(b'ftxt',b'f19'),
+                             (self.expected.path.encode(),(self.expected.path+' (deleted)').encode())):
+            with self.subTest(before=before),self.assertRaises(ValueError):
+                O.require_text_owner(raw.replace(before,after),self.pid,self.expected)
+        for records in ([self.library],[self.executable,self.executable],
+                        [self.executable,[(k,124 if k=='i' else v) for k,v in self.executable]]):
+            with self.subTest(records=records),self.assertRaises(ValueError):
+                O.require_text_owner(fields([self.header,*records]),self.pid,self.expected)
+        for key in ('f','t','D','i','s','n'):
+            with self.subTest(missing=key),self.assertRaises(ValueError):
+                O.require_text_owner(fields([self.header,[(k,v) for k,v in self.executable if k!=key]]),self.pid,self.expected)
+        for incomplete_library in ([('f','txt'),('n','/private/fixture/unknown')],
+                                   [(k,'DIR' if k=='t' else v) for k,v in self.library]):
+            with self.assertRaises(ValueError):
+                O.require_text_owner(fields([self.header,self.executable,incomplete_library]),self.pid,self.expected)
+
+    def test_bounded_complete_txt_grammar_and_neutral_shape_refuse(self):
+        raw=fields([self.header,self.executable])
+        for bad in (b'',b'x'*65537,raw[:-1],raw[:-2],b'\xff\0\n',fields([self.executable]),
+                    raw.replace(b'tREG\0',b'tREG\0tREG\0'),raw+fields([self.header,self.library]),
+                    raw.replace(b's17',b's-1'),raw.replace(b'i123',b'iUNKNOWN'),raw.replace(b'D0x100000a',b'D?')):
+            with self.subTest(raw=bad[:50]),self.assertRaises(ValueError):O.require_text_owner(bad,self.pid,self.expected)
+        for pid in (True,0,-1,'321'):
+            with self.subTest(pid=pid),self.assertRaises(ValueError):O.require_text_owner(raw,pid,self.expected)
+        for expected in (None,O.FileIdentity('relative',1,1,1),O.FileIdentity(self.expected.path,True,123,17),
+                         O.FileIdentity(self.expected.path,0x100000A,123,0)):
+            with self.subTest(expected=expected),self.assertRaises(ValueError):O.require_text_owner(raw,self.pid,expected)
+
+
+class Phase2FileTests(unittest.TestCase):
+    """Only tiny owned temporary files. Never originals, candidates or executables."""
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory(prefix='p1-neutral-files-')
+        self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name).resolve()  # macOS /var alias is not part of this fixture.
+        self.path=self.root/'owner.data';self.data=b'exact tiny neutral owner\x00\x01\xff'
+        self.path.write_bytes(self.data)
+        self.pin=O.FilePin(str(self.path),len(self.data),hashlib.sha256(self.data).hexdigest())
+
+    def test_immutable_pin_correct_full_identity_and_idempotent_close(self):
+        with self.assertRaises(dataclasses.FrozenInstanceError):self.pin.size=1
+        real_open=os.open;calls=[]
+        def record(path,flags,*args,**kwargs):
+            calls.append((path,flags));return real_open(path,flags,*args,**kwargs)
+        with patch.object(O.os,'open',side_effect=record):owner=O._open_verified_file(self.pin)
+        try:
+            current=self.path.stat()
+            self.assertEqual(O.FileIdentity(str(self.path),current.st_dev,current.st_ino,len(self.data)),owner.identity)
+            leaves=[flags for path,flags in calls if Path(os.fsdecode(path)).name==self.path.name]
+            self.assertEqual(1,len(leaves))
+            flags=leaves[0]
+            self.assertEqual(os.O_RDONLY,flags&os.O_ACCMODE)
+            for flag in (os.O_NOFOLLOW,os.O_CLOEXEC,os.O_NONBLOCK):self.assertEqual(flag,flags&flag)
+            with patch.object(O.os,'read',side_effect=AssertionError('Metadata-only check must not hash')):owner.check()
+            owner.check(full=True)
+            self.assertEqual(self.data,self.path.read_bytes())
+        finally:owner.close()
+        owner.close()
+        with self.assertRaises(ValueError):owner.check()
+
+    def test_bad_pin_shape_before_open_and_wrong_whole_hash_or_size(self):
+        for path,size,sha in ((None,len(self.data),'0'*64),('relative',len(self.data),'0'*64),
+                              (str(self.path),True,'0'*64),(str(self.path),-1,'0'*64),
+                              (str(self.path),0,'0'*64),(str(self.path),len(self.data),'x'*64),
+                              (str(self.path),len(self.data),'0'*63)):
+            with self.subTest(path=path,size=size,sha=sha),patch.object(O.os,'open',side_effect=AssertionError('Invalid shape before open')):
+                with self.assertRaises(ValueError):O._open_verified_file(O.FilePin(path,size,sha))
+        for size,sha in ((len(self.data)-1,self.pin.sha256),(len(self.data)+1,self.pin.sha256),
+                         (1<<60,self.pin.sha256),(len(self.data),'0'*64)):
+            with self.subTest(size=size,sha=sha),self.assertRaises(ValueError):
+                O._open_verified_file(O.FilePin(str(self.path),size,sha))
+        with self.assertRaises(ValueError):
+            O._open_verified_file(O.FilePin(str(self.root/'absent'),len(self.data),self.pin.sha256))
+
+    def test_symlink_ancestors_leaf_directory_fifo_and_missing_capability_refuse(self):
+        leaf=self.root/'leaf-link';leaf.symlink_to(self.path)
+        folder=self.root/'real';folder.mkdir();(folder/'owner').write_bytes(self.data)
+        alias=self.root/'linked-folder';alias.symlink_to(folder,target_is_directory=True)
+        for path in (leaf,alias/'owner',folder):
+            with self.subTest(path=path),patch.object(O.os,'read',side_effect=AssertionError('No nonregular/linked reads')):
+                with self.assertRaises(ValueError):O._open_verified_file(O.FilePin(str(path),len(self.data),self.pin.sha256))
+        fifo=self.root/'pipe';os.mkfifo(fifo)
+        real_open=os.open
+        def safe_open(path,flags,*args,**kwargs):
+            if Path(os.fsdecode(path)).name==fifo.name:
+                self.assertTrue(flags&os.O_NONBLOCK,'A missing guard must not hang this FIFO test.')
+            return real_open(path,flags,*args,**kwargs)
+        with patch.object(O.os,'open',side_effect=safe_open),self.assertRaises(ValueError):
+            O._open_verified_file(O.FilePin(str(fifo),len(self.data),self.pin.sha256))
+        for capability in ('O_NOFOLLOW','O_CLOEXEC','O_NONBLOCK'):
+            with self.subTest(capability=capability),patch.dict(O.os.__dict__),patch.object(O.os,'open',side_effect=AssertionError('No weaker open fallback')):
+                del O.os.__dict__[capability]
+                with self.assertRaises(ValueError):O._open_verified_file(self.pin)
+
+    def test_bounded_partial_reads_are_valid_but_short_and_false_eof_refuse_without_fd_leaks(self):
+        real_read=os.read
+        with patch.object(O.os,'read',side_effect=lambda fd,n:real_read(fd,min(n,3))):
+            owner=O._open_verified_file(self.pin)
+            owner.close()
+        for fault in ('short','extra'):
+            opened=[];real_open=os.open
+            def tracked_open(*args,**kwargs):
+                fd=real_open(*args,**kwargs);opened.append(fd);return fd
+            def read(fd,n):
+                if fault=='short':return b''
+                data=real_read(fd,n)
+                return data if data else b'X'
+            with self.subTest(fault=fault),patch.object(O.os,'open',side_effect=tracked_open),patch.object(O.os,'read',side_effect=read):
+                with self.assertRaises(ValueError):O._open_verified_file(self.pin)
+            self.assertTrue(opened)
+            for fd in opened:
+                with self.assertRaises(OSError):os.fstat(fd)
+
+    def test_final_position_and_metadata_drift_during_initial_hash_refuse(self):
+        real_seek=os.lseek;perturbed=[]
+        def seek(fd,offset,whence):
+            result=real_seek(fd,offset,whence)
+            if whence==os.SEEK_CUR:perturbed.append(fd);return result+1
+            return result
+        with patch.object(O.os,'lseek',side_effect=seek),self.assertRaises(ValueError):O._open_verified_file(self.pin)
+        self.assertTrue(perturbed)
+        real_read=os.read;changed=[];before=self.path.stat()
+        def read(fd,n):
+            data=real_read(fd,n)
+            if data and not changed:
+                changed.append(True);os.utime(self.path,ns=(before.st_atime_ns,before.st_mtime_ns+2_000_000_000))
+            return data
+        with patch.object(O.os,'read',side_effect=read),self.assertRaises(ValueError):O._open_verified_file(self.pin)
+        self.assertEqual([True],changed)
+
+    def test_all_held_descriptor_metadata_fields_and_path_replacement_refuse(self):
+        real_stat=os.fstat
+        class ChangedStat:
+            def __init__(self,original,key,value):self.original,self.key,self.value=original,key,value
+            def __getattr__(self,name):return self.value if name==self.key else getattr(self.original,name)
+        for field in ('st_dev','st_ino','st_mode','st_size','st_mtime_ns','st_ctime_ns'):
+            owner=O._open_verified_file(self.pin)
+            try:
+                def fstat(fd):
+                    result=real_stat(fd);value=getattr(result,field)
+                    return ChangedStat(result,field,value^stat.S_IXUSR if field=='st_mode' else value+1)
+                with self.subTest(field=field),patch.object(O.os,'fstat',side_effect=fstat),self.assertRaises(ValueError):owner.check()
+            finally:owner.close()
+        owner=O._open_verified_file(self.pin)
+        try:
+            self.path.unlink();self.path.write_bytes(self.data)
+            with self.assertRaises(ValueError):owner.check()
+        finally:owner.close()
+
+    def test_same_length_mutation_and_extension_refuse_recheck(self):
+        for replacement in (bytes([self.data[0]^1])+self.data[1:],self.data+b'x'):
+            self.path.write_bytes(self.data);owner=O._open_verified_file(self.pin)
+            try:
+                self.path.write_bytes(replacement)
+                with self.assertRaises(ValueError):owner.check(full=True)
+            finally:owner.close()
+
+
+class Phase2FinalizationTests(unittest.TestCase):
+    """Fake owners preserve failure identity; these are not real session closes."""
+    class Owner:
+        def __init__(self,name,events,check_error=None,close_error=None):
+            self.name,self.events,self.check_error,self.close_error=name,events,check_error,close_error
+        def check(self,full=False):
+            if full is not True:raise AssertionError('Finalizer must request complete hashes.')
+            self.events.append(('check',self.name))
+            if self.check_error is not None:raise self.check_error
+        def close(self):
+            self.events.append(('close',self.name))
+            if self.close_error is not None:raise self.close_error
+
+    def test_no_failure_and_single_original_failure_are_not_wrapped(self):
+        self.assertIsNone(O._finalize_files([]))
+        for failure_at in (None,'primary','check','close'):
+            with self.subTest(failure_at=failure_at):
+                events=[];failure=ValueError('exact original failure')
+                owners=[self.Owner('a',events,failure if failure_at=='check' else None,failure if failure_at=='close' else None),self.Owner('b',events)]
+                if failure_at is None:self.assertIsNone(O._finalize_files(owners))
+                else:
+                    with self.assertRaises(ValueError) as caught:O._finalize_files(owners,failure if failure_at=='primary' else None)
+                    self.assertIs(failure,caught.exception)
+                self.assertEqual([('check','a'),('check','b'),('close','a'),('close','b')],events)
+        interrupt=KeyboardInterrupt('original interrupt')
+        with self.assertRaises(KeyboardInterrupt) as caught:O._finalize_files([],interrupt)
+        self.assertIs(interrupt,caught.exception)
+
+    def test_every_full_check_then_every_close_preserves_all_baseexceptions_in_order(self):
+        primary=KeyboardInterrupt('primary');a=ValueError('hash a');b=OSError('hash b');c=RuntimeError('close a');d=SystemExit(7)
+        events=[];owners=[self.Owner('a',events,a,c),self.Owner('b',events,b,d),self.Owner('c',events)]
+        with self.assertRaises(BaseExceptionGroup) as caught:O._finalize_files(owners,primary)
+        self.assertEqual(5,len(caught.exception.exceptions))
+        self.assertTrue(all(actual is expected for actual,expected in zip(caught.exception.exceptions,(primary,a,b,c,d))))
+        self.assertEqual([('check','a'),('check','b'),('check','c'),('close','a'),('close','b'),('close','c')],events)
+
+    def test_existing_primary_group_is_retained_not_flattened_or_discarded(self):
+        first=ValueError('one');second=OSError('two');primary=ExceptionGroup('original group',[first,second]);final=RuntimeError('final')
+        events=[]
+        with self.assertRaises(BaseExceptionGroup) as caught:O._finalize_files([self.Owner('a',events,final)],primary)
+        self.assertEqual(2,len(caught.exception.exceptions));self.assertIs(primary,caught.exception.exceptions[0]);self.assertIs(final,caught.exception.exceptions[1])
+        self.assertEqual([('check','a'),('close','a')],events)
+
+
+class Phase2QueryTests(unittest.TestCase):
+    TXT=('/usr/sbin/lsof','-nP','-a','-p','321','-d','txt','-F0pcftaiDnsPT','-Ts')
+    ESTABLISHED=('/usr/sbin/lsof','-nP','-a','-p','321','-iTCP:2345','-sTCP:ESTABLISHED','-F0pcftaiDnsPT','-Ts')
+
+    def test_only_two_exact_additional_ownership_queries_reach_fake_process(self):
+        class Pipe:
+            closed=False
+            def fileno(self):return 9
+            def close(self):self.closed=True
+        class Process:
+            def __init__(self,code):self.stdout=Pipe();self.code=code;self.done=False
+            def wait(self,timeout):self.done=True;return self.code
+            def poll(self):return self.code if self.done else None
+            def kill(self):self.done=True
+        class Selector:
+            def __init__(self,ready):self.ready=ready
+            def __enter__(self):return self
+            def __exit__(self,*args):pass
+            def register(self,*args):pass
+            def select(self,timeout):return [object()] if self.ready else []
+        for argv in (self.TXT,self.ESTABLISHED):
+            for chunks,code,ready,valid in (([b'ok',b''],0,True,True),([b'error',b''],1,True,False),
+                                           ([b'x'*4096]*16+[b'x'],0,True,False),([],0,False,False)):
+                process=Process(code)
+                with self.subTest(argv=argv,code=code,ready=ready),patch.object(subprocess,'Popen',return_value=process) as popen, \
+                     patch.object(O.selectors,'DefaultSelector',return_value=Selector(ready)),patch.object(O.os,'read',side_effect=chunks), \
+                     patch.object(O.time,'monotonic',return_value=0):
+                    if valid:self.assertEqual(b'ok',O._run(argv))
+                    else:
+                        with self.assertRaises(ValueError):O._run(argv)
+                    self.assertEqual(argv,popen.call_args.args[0]);self.assertFalse(popen.call_args.kwargs['shell'])
+                    self.assertEqual(subprocess.DEVNULL,popen.call_args.kwargs['stdin']);self.assertEqual('C',popen.call_args.kwargs['env']['LC_ALL'])
+                    self.assertTrue(process.done);self.assertTrue(process.stdout.closed)
+
+    def test_mutated_query_pid_port_flags_and_extra_arguments_refuse_before_process(self):
+        bad=[list(self.TXT),self.TXT+('extra',),self.ESTABLISHED+('extra',),self.TXT[:-1],self.ESTABLISHED[:-1]]
+        for pid in ('0','-1','321;anything','321 '):
+            bad.extend(tuple(pid if i==4 else value for i,value in enumerate(argv)) for argv in (self.TXT,self.ESTABLISHED))
+        bad.extend((tuple('txt-other' if x=='txt' else x for x in self.TXT),
+                    tuple('-iTCP:2346' if x=='-iTCP:2345' else x for x in self.ESTABLISHED),
+                    tuple('-sTCP:LISTEN' if x=='-sTCP:ESTABLISHED' else x for x in self.ESTABLISHED),
+                    tuple('-Fpcn' if x=='-F0pcftaiDnsPT' else x for x in self.TXT)))
+        for argv in bad:
+            with self.subTest(argv=argv),patch.object(subprocess,'Popen',side_effect=AssertionError('No real/unapproved process query')),self.assertRaises(ValueError):O._run(argv)
 
 
 if __name__=='__main__':unittest.main()

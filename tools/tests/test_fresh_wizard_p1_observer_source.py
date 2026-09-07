@@ -1,23 +1,28 @@
-"""Explicit original-only P1 gates. No default ROM, process, socket or .NET I/O.
+"""Explicit source/file P1 gates. No default ROM, process, socket or .NET I/O.
 
-Uses the frozen original-source combined-body/Host oracles, not a generated
-candidate or Core DLL. Source mode has strict full original pre/finally/EOF.
+Native source mode uses frozen original-source combined-body/Host oracles, not a
+candidate or Core DLL, with full original pre/finally/EOF checks. Separate
+explicit modes read the reviewed actual files or recorded OS fixtures only.
 """
 import argparse
 import contextlib
 import hashlib
 import importlib.util
 import io
+import inspect
 import json
 import os
 from pathlib import Path
 import struct
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.dont_write_bytecode=True
 ROOT=Path(__file__).resolve().parents[2]
 SOURCE=None
+ACTUAL_FILES=False
+OS_FIXTURES=False
 IMAGE_SHA='fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37'
 BODY='_local/research/dark-wizard-native-closure-20260906/fresh-combined-body-r01.4Uhwza/source_combined_body.py'
 BODY_SHA='a7d2c10729b6a88d564297929f59d8cba456a4906d01a101be9a29ffb21d28bd'
@@ -29,7 +34,172 @@ def load(path,name):
     return m
 
 
+class SessionTests(unittest.TestCase):
+    def setUp(self):self.O=load('tools/Observe-SpyroFreshWizardP1.py','p1_session_fakes')
+
+    def run_fake(self,*,changed=None,probe_error=None,final_failures=False,tree_error=None,commands=b'p test\nq\n'):
+        O=self.O;trace=[];events=[];files={}
+        class Owner:
+            def __init__(self,name):self.name=name
+            def check(self,full=False):
+                trace.append(('check',self.name,full))
+                if full and final_failures and self.name in ('original_bin','receipt'):raise OSError(self.name+' final failure')
+            def close(self):
+                trace.append(('close',self.name))
+                if final_failures and self.name=='emulator':raise OSError('emulator close failure')
+            def report(self):return dict(sha256='synthetic-metadata-not-an-artifact',length=1)
+        for name in ('original_bin','original_cue','candidate_bin','candidate_cue','receipt','emulator'):files[name]=Owner(name)
+        class Connection:
+            def settimeout(self,n):trace.append(('timeout',n))
+            def close(self):trace.append(('socket-close',))
+        connection=Connection()
+        class Client:
+            def __init__(self,c):self.connection=c
+            def read(self,at,n):
+                trace.append(('m',at,n))
+                if probe_error:raise probe_error
+                return bytes(4) # Initial transport probe need not report level65.
+        image=O.FileIdentity(O.CANDIDATE_DIRECTORY+'/'+O.CANDIDATE_BASENAME+'.bin',1,2,661547040)
+        exe=O.FileIdentity('/fixture/DuckStation',1,3,123)
+        process=O.SessionObservation(321,501,'Mon Sep  7 01:02:03 2026',exe.path,image,19)
+        counter=0
+        def external(pid,owners,connection=None):
+            nonlocal counter
+            counter+=1;trace.append(('external',counter,connection is not None))
+            current=process if counter!=changed else O.SessionObservation(321,501,'Mon Sep  7 01:02:04 2026',exe.path,image,19)
+            return O._BoundSession(current,exe,7,8 if connection else None,
+                                   ('127.0.0.1',50000) if connection else None,
+                                   ('127.0.0.1',2345) if connection else None,0)
+        def emit(event):trace.append(('emit',event['kind']));events.append(event)
+        def capture(client,label):
+            trace.append(('payload',));return dict(payload_valid=True,secret='buffered',candidate_authenticated=False,
+                external_session_binding_checked=False,runtime_pass=False,ui_result_approved=False,normal_export_approved=False)
+        error=None
+        with patch.object(O,'PHASE2_READY',True),patch.object(O,'_open_profile_files',side_effect=lambda:files), \
+             patch.object(O,'_check_files',side_effect=lambda owners:trace.append(('file-barrier',))), \
+             patch.object(O,'_require_tree',side_effect=(tree_error if tree_error else lambda:trace.append(('final-tree',)))), \
+             patch.object(O,'_external_check',side_effect=external),patch.object(O.socket,'create_connection',side_effect=lambda *a,**k:(trace.append(('connect',)) or connection)), \
+             patch.object(O,'ReadOnlyClient',Client),patch.object(O,'capture',side_effect=capture):
+            try:O._run_session(321,O.CANDIDATE_DIRECTORY+'/'+O.CANDIDATE_BASENAME+'.cue',io.BytesIO(commands),emit)
+            except BaseException as e:error=e
+        self.assertEqual(6,len([t for t in trace if t[0]=='check' and t[2]]))
+        self.assertEqual(6,len([t for t in trace if t[0]=='close']))
+        return trace,events,error
+
+    def test_readiness_gate_is_inside_session_before_any_io(self):
+        with patch.object(self.O,'PHASE2_READY',False), \
+             patch.object(self.O,'_open_profile_files',side_effect=AssertionError('No file IO')),self.assertRaises(ValueError):
+            self.O._run_session(321,'/not-approved.cue',io.BytesIO(),lambda e:self.fail('No emitted success'))
+
+    def test_fake_production_orchestration_buffers_until_external_postcheck(self):
+        trace,events,error=self.run_fake();self.assertIsNone(error)
+        self.assertEqual([( 'm',0x8007596C,4)],[t for t in trace if t[0]=='m'])
+        self.assertLess(trace.index(('external',3,True)),trace.index(('m',0x8007596C,4)))
+        self.assertLess(trace.index(('external',4,True)),trace.index(('emit','connected')))
+        self.assertLess(trace.index(('external',6,True)),trace.index(('emit','sample')))
+        sample=next(e for e in events if e['kind']=='sample')
+        self.assertTrue(sample['external_session_binding_checked']);self.assertFalse(sample['candidate_authenticated'])
+        self.assertFalse(sample['runtime_pass']);self.assertFalse(sample['ui_result_approved']);self.assertFalse(sample['normal_export_approved'])
+        self.assertEqual(('emit','session_closed'),trace[-1]);self.assertIn(('socket-close',),trace)
+
+    def test_identity_changes_refuse_at_each_boundary_without_sample_or_retry(self):
+        for changed,connects,reads,payloads in ((2,0,0,0),(3,1,0,0),(4,1,1,0),(6,1,1,1)):
+            with self.subTest(changed=changed):
+                trace,events,error=self.run_fake(changed=changed)
+                self.assertIsInstance(error,ValueError)
+                self.assertEqual(connects,len([t for t in trace if t[0]=='connect']))
+                self.assertEqual(reads,len([t for t in trace if t[0]=='m']))
+                self.assertEqual(payloads,len([t for t in trace if t[0]=='payload']))
+                self.assertFalse(any(e['kind'] in ('sample','session_closed') for e in events))
+                self.assertFalse(any('secret' in e for e in events))
+
+    def test_primary_and_all_final_file_failures_survive(self):
+        original=OSError('original transport failure')
+        trace,events,error=self.run_fake(probe_error=original,final_failures=True)
+        def flatten(e):return sum((flatten(x) for x in e.exceptions),[]) if isinstance(e,BaseExceptionGroup) else [e]
+        failures=flatten(error);self.assertIs(original,failures[0]);self.assertEqual(4,len(failures))
+        self.assertFalse(any(e['kind']=='session_closed' for e in events));self.assertIn(('socket-close',),trace)
+
+    def test_final_unknown_candidate_owner_refuses_after_all_six_checks_and_closes(self):
+        failure=ValueError('Unknown final artifact owner')
+        trace,events,error=self.run_fake(tree_error=failure)
+        self.assertIs(error,failure);self.assertFalse(any(e['kind']=='session_closed' for e in events))
+
+    def test_bounded_manual_input_no_interpolation_or_auto_sample(self):
+        for command in (b'p '+b'x'*513+b'\n',b'c\n',b'p \x00\n',b'p \xff\n',b'p x\r\n'):
+            with self.subTest(command=command[:20]):
+                trace,events,error=self.run_fake(commands=command);self.assertIsInstance(error,ValueError)
+                self.assertNotIn(('payload',),trace);self.assertFalse(any(e['kind']=='sample' for e in events))
+
+
+class RecordedGrammarTests(unittest.TestCase):
+    def setUp(self):self.O=load('tools/Observe-SpyroFreshWizardP1.py','p1_recorded_grammar')
+    @staticmethod
+    def fields(records):return b''.join(b'\0'.join(k.encode()+str(v).encode() for k,v in row)+b'\0\n' for row in records)
+
+    def test_exact_npolicy_empty_name_does_not_permit_other_empty_records(self):
+        header=[('p',321),('c','DuckStation')];row=[('f',17),('a',' '),('t','NPOLICY'),('n','')]
+        self.assertEqual('',self.O.parse_lsof(self.fields([header,row]))[0]['n'])
+        for bad in ([('f',17),('a','u'),('t','NPOLICY'),('n','')],
+                    [('f',17),('a',' '),('t','REG'),('n','')],row+[('D','0x1000011')],
+                    [('f',17),('a',' '),('t','NPOLICY')],row+[('n','')]):
+            with self.subTest(bad=bad),self.assertRaises(ValueError):self.O.parse_lsof(self.fields([header,bad]))
+
+    def test_exact_shader_auxiliary_owner_not_general_extra_bin_permission(self):
+        O=self.O;exe='/Applications/DuckStation.app/Contents/MacOS/DuckStation'
+        image=O.FileIdentity('/private/test/'+O.CANDIDATE_BASENAME+'.bin',0x1000011,123,661547040)
+        head=[('p',321),('c','DuckStation')]
+        image_row=[('f',18),('a','r'),('t','REG'),('D','0x1000011'),('i',123),('s',image.size),('n',image.path)]
+        cache=[('f',33),('a','u'),('t','REG'),('D','0x1000011'),('i',1242218),('s',101882),
+               ('n','/Users/john/Library/Application Support/DuckStation/cache/vulkan_shaders.bin')]
+        def inspect(row):
+            replies=iter([b'Mon Sep  7 01:07:43 2026 501 '+exe.encode()+b'\n',self.fields([head,image_row,row]),
+                self.fields([head,[('f',34),('a','u'),('t','IPv4'),('P','TCP'),('n','127.0.0.1:2345'),('T','ST=LISTEN')]])])
+            return O.inspect_session(321,501,exe,image,runner=lambda _:next(replies))
+        first=inspect(cache);self.assertIsNotNone(first.auxiliary_cache)
+        with self.assertRaises(ValueError):O.require_same_session(first,inspect([(k,35 if k=='f' else v) for k,v in cache]))
+        for key,value in (('a','r'),('a','w'),('t','DIR'),('D','0x1000012'),('i',1242219),('s',-1),
+                          ('n','/other/vulkan_shaders.bin'),('n',cache[-1][1]+'.other.bin')):
+            with self.subTest(key=key,value=value),self.assertRaises(ValueError):inspect([(k,value if k==key else v) for k,v in cache])
+        for key in ('D','i','s'):
+            with self.subTest(missing=key),self.assertRaises(ValueError):inspect([(k,v) for k,v in cache if k!=key])
+        for size in (0,101883):
+            self.assertIsNotNone(inspect([(k,size if k=='s' else v) for k,v in cache]).auxiliary_cache)
+
+
 class SourceGates(unittest.TestCase):
+    def test_root_reviewed_recorded_os_fixtures_not_live_process(self):
+        if not OS_FIXTURES:self.skipTest('Explicit --os-fixtures required; recorded files only, never live queries.')
+        O=load('tools/Observe-SpyroFreshWizardP1.py','p1_recorded_os_only')
+        folder=ROOT/'_local/native-fresh-wizard-p1-runtime-20260907-r01.aaM1NY'
+        pins={'process-before.txt':'fbe7be12748b4beb8cf0b015135fb9a5374d0ca1625a19e638c6c7fed86d4128',
+              'files-before.raw':'c1ea1857570361644277a68066c83b6d802945c7fe98ba3251382d01e4fc149c',
+              'listener-before.raw':'50e1ac29691de90a3e3bf4845a57b25a4413c1bdc8afc9e3570c358c5873931a',
+              'text-before.raw':'6e2ccda34523781914867ba72085e0e16f3889b85fc1f1e10e428b7b474f3f6c'}
+        raw={name:(folder/('os-'+name)).read_bytes() for name in pins}
+        for name,digest in pins.items():self.assertEqual(digest,hashlib.sha256(raw[name]).hexdigest())
+        image=O.FileIdentity(str(ROOT/'_local/research/dark-wizard-native-closure-20260906/fresh-wizard-publication-validation-r01.0eF4Tz/candidate-r01/native-id65-fresh-wizard-p1-n32-r01.bin'),0x1000011,44198621,661547040)
+        executable=O.FileIdentity('/Applications/DuckStation.app/Contents/MacOS/DuckStation',0x1000011,41889985,22731840)
+        replies=iter(raw[name] for name in ('process-before.txt','files-before.raw','listener-before.raw'))
+        observed=O.inspect_session(38592,501,executable.path,image,runner=lambda _:next(replies))
+        self.assertEqual(18,observed.bin_fd);self.assertFalse(observed.candidate_authenticated)
+        self.assertEqual((executable,87),O.require_text_owner(raw['text-before.raw'],38592,executable))
+
+    def test_actual_file_gate_has_no_caller_profile_or_hash_authority(self):
+        O=load('tools/Observe-SpyroFreshWizardP1.py','p1_closed_file_gate_shape')
+        self.assertEqual((),tuple(inspect.signature(O.verify_actual_files).parameters))
+        self.assertIs(type(O.PHASE2_READY),bool)
+
+    def test_reviewed_actual_six_file_gate(self):
+        if not ACTUAL_FILES:self.skipTest('Explicit --actual-files required; no default candidate/executable reads.')
+        O=load('tools/Observe-SpyroFreshWizardP1.py','p1_actual_file_gate')
+        result=O.verify_actual_files()
+        self.assertEqual(6,len(result['owners']));self.assertTrue(result['final_full_checks_passed'])
+        self.assertFalse(result['runtime_pass']);self.assertFalse(result['candidate_authenticated'])
+        self.assertEqual('af41aa8b0af10504c626f76cbaa2446e2207486551ce6ba8766794261a63b63e',
+                         result['owners']['receipt']['sha256'])
+        print('FRESH_WIZARD_P1_ACTUAL_FILES_OK '+json.dumps(result,sort_keys=True),flush=True)
+
     def test_owner_arithmetic_does_not_certify_runtime(self):
         self.assertEqual(0x800A62B8-0x800A5460,32*0x70+0x58)
         self.assertEqual(0x800A5F60,0x800A5460+32*88)
@@ -179,5 +349,6 @@ class SourceGates(unittest.TestCase):
 
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--source');args,rest=parser.parse_known_args()
-    SOURCE=args.source;unittest.main(argv=[sys.argv[0],*rest])
+    parser=argparse.ArgumentParser();parser.add_argument('--source');parser.add_argument('--actual-files',action='store_true');parser.add_argument('--os-fixtures',action='store_true')
+    args,rest=parser.parse_known_args();SOURCE=args.source;ACTUAL_FILES=args.actual_files;OS_FIXTURES=args.os_fixtures
+    unittest.main(argv=[sys.argv[0],*rest])

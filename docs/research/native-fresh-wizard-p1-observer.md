@@ -1,11 +1,40 @@
-# Fresh A/P1/N32 observer — phase1 only
+# Fresh A/P1/N32 observer — reviewed fixed-candidate phase2
 
 The new `tools/Observe-SpyroFreshWizardP1.py` has a fixed read-only diagnostic
-layout and neutral process/socket parsers. Its CLI unconditionally refuses live
-connection, including explicit opt-in. No published CUE/receipt/path or current
-DuckStation executable has been installed as authority. Expected image hashes,
-matching RAM and caller-provided OS identities are annotations, not approval.
+layout and independently bracketed local process/socket checks. Root activated
+the fixed-candidate session path after full source/peer review, the actual six-
+file gate, recorded real macOS grammar and two fresh live preconnection checks.
+Only the independently published candidate-r01 CUE and pinned DuckStation are
+accepted; caller hashes cannot select a profile. Matching RAM/OS observations
+remain diagnostic evidence, not image authentication or gameplay approval.
 Old N16/Dark observers remain unchanged and refuse the new anchors.
+
+## Phase2 evidence and controls
+
+Evidence directory:
+`_local/research/dark-wizard-native-closure-20260906/fresh-p1-observer-phase2-r01.mBNeUE/`.
+Root replay after activation:164 Python tests/seven explicit-mode skips;
+13 tests with actual original, all six fixed files and recorded OS modes pass
+without skips. Actual preconnection checks ran no socket and all final hashes
+passed. Observer source SHA256:
+`960acc17ac6215fd874bacccbe9092c2bc4832e3dfa4d9fdffc580e9cf9443db`.
+
+Original BIN/CUE, candidate BIN/CUE/receipt and executable stay held read-only;
+complete initial/final hashes, true EOF and descriptor/path metadata are checked.
+Every final check and close is attempted; primary and cleanup failures survive.
+Companions and metadata are rechecked around connection and each manual sample.
+PID/start/UID, mapped executable, read-open BIN, unique listener and actual server
+connection tuple are checked before the first m-only transport probe. Samples
+are buffered until their external postcheck; no reconnect or execution packets.
+The code requires explicit PID, exact CUE and connection consent. Use p [label]
+for a bounded manual sample and q to close; connection may pause the emulator.
+
+Actual macOS fixtures exposed and preserve two regressions: an exact unnamed
+NPOLICY descriptor and DuckStation's one fixed writable shader-cache BIN. Only
+the reviewed descriptor grammar/path/device/inode/access are exempted; cache
+size is mutable metadata and its contents are not authenticated. Other images
+still refuse. Other mapped libraries are counted, not certified. Sequential
+checks do not exclude hostile races or prove whole-session file immutability.
 
 ## Source and regression evidence
 
@@ -49,7 +78,7 @@ PID/start/open-file identity and server connection tuple checks are separate.
 Second-level ps start timestamps do not exclude same-second PID reuse or hostile
 races. Neutral observations always report authentication false.
 
-Activation requires a separately reviewed change binding actual newly published
-and independently verified companions, exact paths and current executable,
-with before/after session checks. No active emulator session or gameplay pass
-follows from this checkpoint.
+The earlier phase1 unconditionally disabled CLI remains covered by explicitly
+patched disabled-branch no-I/O tests. Phase2 activation adds no new RAM layout,
+Moby family, game modification or runtime acceptance. Consult the current
+engineering handoff and runtime journal for active-session restoration duties.
