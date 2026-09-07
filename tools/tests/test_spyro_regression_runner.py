@@ -93,6 +93,8 @@ class SourcePythonOracleTests(unittest.TestCase):
          "FRESH_P1_SCENE_NATIVE_SLICES_OK"),
         ("fresh-wizard-staging", "src/Spyro.Editor.NativeId65FreshWizardStagingSmoke/source_fresh_wizard_staging_oracle.py",
          "FRESH_WIZARD_STAGING_RAW_ORACLE_OK"),
+        ("fresh-wizard-fallback-resources", "src/Spyro.Editor.NativeId65FreshWizardFallbackResourceSmoke/source_fallback_resource_oracle.py",
+         "SOURCE_TOWN_FALLBACK_ASSETS_OK"),
     )
 
     def test_exact_source_only_python_registry(self):
@@ -123,13 +125,17 @@ class SourcePythonOracleTests(unittest.TestCase):
     def test_source_python_commands_markers_failures_and_shared_deadline(self):
         self.assertEqual(self.EXPECTED, RUNNER.SOURCE_PYTHON_CASES)
         scenarios = {
-            "success": (0, 5), "missing-first-marker": (1, 1), "missing-second-marker": (1, 2),
-            "missing-third-marker": (1, 3), "third-nonzero": (1, 3), "expired-after-second": (1, 2),
-            "missing-fourth-marker": (1, 4), "fourth-nonzero": (1, 4), "expired-after-third": (1, 3),
-            "missing-fifth-marker": (1, 5), "fifth-nonzero": (1, 5), "expired-after-fourth": (1, 4),
-            "first-nonzero": (1, 1), "source-resolution": (1, 0), "offline-failure": (1, 0),
-            "upstream-source-failure": (1, 0), "expired-after-offline": (1, 0), "expired-after-first": (1, 1),
+            "success": (0, len(self.EXPECTED)), "source-resolution": (1, 0), "offline-failure": (1, 0),
+            "upstream-source-failure": (1, 0), "expired-after-offline": (1, 0),
         }
+        # Every source oracle gets the same failure/marker/deadline controls.
+        # Extending the registry must not silently omit a later case or require
+        # another hand-written ordinal branch in the fake process.
+        for index in range(len(self.EXPECTED)):
+            scenarios[f"missing-marker-{index}"] = (1, index + 1)
+            scenarios[f"nonzero-{index}"] = (1, index + 1)
+            if index + 1 < len(self.EXPECTED):
+                scenarios[f"expired-after-{index}"] = (1, index + 1)
         for scenario, (status, script_count) in scenarios.items():
             calls, clock = [], [100.0]
             def fake_run(command, **kwargs):
@@ -142,15 +148,11 @@ class SourcePythonOracleTests(unittest.TestCase):
                     return subprocess.CompletedProcess(command, 1)
                 if command[1:2] == ["-B"]:
                     index = next(i for i, (_, relative, _) in enumerate(self.EXPECTED) if command[2] == str(RUNNER.ROOT / relative))
-                    if not (scenario == "missing-first-marker" and index == 0 or scenario == "missing-second-marker" and index == 1 or
-                            scenario == "missing-third-marker" and index == 2 or scenario == "missing-fourth-marker" and index == 3 or
-                            scenario == "missing-fifth-marker" and index == 4):
+                    if scenario != f"missing-marker-{index}":
                         kwargs["stdout"].write(self.EXPECTED[index][2] + "\n")
-                    if (scenario == "expired-after-first" and index == 0 or scenario == "expired-after-second" and index == 1 or
-                            scenario == "expired-after-third" and index == 2 or scenario == "expired-after-fourth" and index == 3):
+                    if scenario == f"expired-after-{index}":
                         clock[0] += 6
-                    if (scenario == "first-nonzero" and index == 0 or scenario == "third-nonzero" and index == 2 or
-                            scenario == "fourth-nonzero" and index == 3 or scenario == "fifth-nonzero" and index == 4):
+                    if scenario == f"nonzero-{index}":
                         return subprocess.CompletedProcess(command, 7)
                 return subprocess.CompletedProcess(command, 0)
             with self.subTest(scenario=scenario), tempfile.TemporaryDirectory(prefix="spyro-source-python-opt-in-") as output:
@@ -471,6 +473,9 @@ class RunnerOptionsTests(unittest.TestCase):
 
     def test_fresh_wizard_staging_modes_keep_source_optional_and_never_publish(self):
         self.assert_texture_modes("NativeId65FreshWizardStagingSmoke", "FRESH_WIZARD_STAGING")
+
+    def test_fresh_wizard_fallback_resources_require_selected_bin_and_distinct_markers(self):
+        self.assert_texture_modes("NativeId65FreshWizardFallbackResourceSmoke", "FRESH_WIZARD_FALLBACK_RESOURCE")
 
     def test_saved_document_publisher_modes_never_activate_output(self):
         self.assert_texture_modes("NativeId65FreshDocumentPublicationSmoke", "NATIVE_ID65_FRESH_DOCUMENT_PUBLICATION",
@@ -919,6 +924,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeId65FreshWizardResourceSmoke": ["--source", "/selected original.bin"],
             "NativeId65FreshWizardSceneSmoke": ["--source", "/selected original.bin"],
             "NativeId65FreshWizardStagingSmoke": ["--source", "/selected original.bin"],
+            "NativeId65FreshWizardFallbackResourceSmoke": ["--source", "/selected original.bin"],
             "NativeGreenWizardMoverSmoke": ["/selected original.bin"],
             "NativeLevelSlotOwnershipSmoke": ["--source", "/selected original.bin"],
             "NativePlayerAnimationSmoke": ["--source", "/selected original.bin"],

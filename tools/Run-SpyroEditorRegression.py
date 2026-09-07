@@ -35,6 +35,7 @@ CORE_CASES = (
     ("NativeId65FreshWizardResourceSmoke", "FRESH_WIZARD_RESOURCE_FREE_OK"),
     ("NativeId65FreshWizardSceneSmoke", "FRESH_WIZARD_SCENE_FREE_OK"),
     ("NativeId65FreshWizardStagingSmoke", "FRESH_WIZARD_STAGING_FREE_OK"),
+    ("NativeId65FreshWizardFallbackResourceSmoke", "FRESH_WIZARD_FALLBACK_RESOURCE_FREE_OK"),
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_FREE_OK"),
     ("NativeGlobalSoundSmoke", "NATIVE_GLOBAL_SOUND_SOURCE_FREE_OK"),
     ("NativeId65EngineProfileSmoke", "NATIVE_ID65_ENGINE_PROFILE_SOURCE_FREE_OK"),
@@ -121,6 +122,7 @@ SOURCE_QA_CASES = (
     ("NativeId65FreshWizardResourceSmoke", "FRESH_WIZARD_RESOURCE_SOURCE_OK", ["--source"]),
     ("NativeId65FreshWizardSceneSmoke", "FRESH_WIZARD_SCENE_SOURCE_OK", ["--source"]),
     ("NativeId65FreshWizardStagingSmoke", "FRESH_WIZARD_STAGING_SOURCE_OK", ["--source"]),
+    ("NativeId65FreshWizardFallbackResourceSmoke", "FRESH_WIZARD_FALLBACK_RESOURCE_SOURCE_OK", ["--source"]),
     ("NativeGreenWizardMoverSmoke", "NATIVE_GREEN_WIZARD_MOVER_SOURCE_SMOKE_OK", []),
     ("NativeLevelSlotOwnershipSmoke", "NATIVE_LEVEL_SLOT_OWNERSHIP_SOURCE_OK", ["--source"]),
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_OK", ["--source"]),
@@ -167,6 +169,8 @@ SOURCE_PYTHON_CASES = (
      "FRESH_P1_SCENE_NATIVE_SLICES_OK"),
     ("fresh-wizard-staging", "src/Spyro.Editor.NativeId65FreshWizardStagingSmoke/source_fresh_wizard_staging_oracle.py",
      "FRESH_WIZARD_STAGING_RAW_ORACLE_OK"),
+    ("fresh-wizard-fallback-resources", "src/Spyro.Editor.NativeId65FreshWizardFallbackResourceSmoke/source_fallback_resource_oracle.py",
+     "SOURCE_TOWN_FALLBACK_ASSETS_OK"),
 )
 
 

@@ -81,10 +81,18 @@ checks. It preserves space for32 dynamic allocations plus the allocator's extra
 write; the test catches the earlier layout corrupting another object's private
 state. This is source-tested scene construction, not yet a playable fresh-Wizard
 ROM. The separate sound-loading stage now also passes source tests, preserving
-the exact native transfer bytes. The three repeat-reward models are the next
-implementation, alongside save handling and complete body integration. See
+the exact native transfer bytes. The three repeat-reward models and their
+textures are now implemented in a separate resource package, with independent
+checks of the actual compiled output. Save handling and complete body integration
+remain unfinished. See [fallback resources](native-fresh-wizard-fallback-resources.md),
 [scene progress](native-fresh-wizard-p1-scene.md) and
 [sound-loading progress](native-fresh-wizard-upload-staging.md).
+
+We also verified that ID65 has its own progress-save row; it need not overwrite
+another level's progress. Different fresh projects would still share that row,
+so old-save compatibility needs explicit handling. The linked Town/Wizard host
+layout now passes independent dispatch/relocation tests and is being implemented
+against those reference bytes. Neither result is yet a playable fresh-Wizard ROM.
 
 Arbitrary Moby mixtures, all textures in all levels, native fresh-level enemy
 imports, normal portals to new levels, save/reboot coverage and full audio/
@@ -94,10 +102,12 @@ remain separate work.
 
 ## Verification and next milestone
 
-Latest full default Release gate:134 steps, zero failures. The Python suite
-passed110 tests with four explicit-source skips;50 runner tests passed. The
+Latest full default Release gate:136 steps, zero failures. The Python suite
+passed111 tests with four explicit-source skips;51 runner tests passed. The
 independent native scene check passed23 checks/four expected refusals and
-sound-loading proof404 checks/ten expected refusals.
+sound-loading proof404 checks/ten expected refusals. New actual compiled fallback
+resource reads passed34 checks/28 expected refusals; the separate original-source
+resource check passed3018/four. Save-row source evidence passed164/20.
 These counts are engineering checks, not hundreds of gameplay runs.
 
 Actual two-Wizard recording:22 minutes39 seconds,81303 video frames, full strict

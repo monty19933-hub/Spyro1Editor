@@ -13,6 +13,8 @@ Branch: `research/id65-v3-environment-header-evidence-20260824`.
 Confirm actual Git status and latest commit before edits. Audio regressions
 were checkpointed at eb78f3f, collider-lifetime at6eae8d4. The later detached
 P1/N32 scene adds a separate Core type; App and old P0/export APIs are unchanged.
+Separate upload staging and fallback resources are now implemented too; the
+new linked Town Host issuer is the next regression-first source slice.
 
 John authorized autonomous development, useful parallel agents, sensible
 commits and DuckStation gameplay with temporary settings. Continue until the
@@ -97,9 +99,23 @@ BIN SHA256
   peer replay/naive failure reproduced. No actual allocation is issued and
   incoming-edge closure is not complete. Read
   `native-fresh-wizard-resident-copy-selector.md`.
-- Latest full default .NET gate: Release134 steps/zero failures including the
-  new source-free scene and staging modes. Whole Python110 tests/four explicit-source skips;
-  runner50. New source-only native scene/staging regressions are separately GREEN.
+- Actual fallback resource revision adds complete Town0E/0F/10 and1120 texture
+  bytes plus8 retained aliases, preserving the full old17800 models/data/bank.
+  C# neutral540/536 and source527211/2213 are GREEN (mostly per-byte checks),
+  independent raw3018/4 and actual-issued native34/28 are root-replayed exactly.
+  Read `native-fresh-wizard-fallback-resources.md`.
+- Actual original ID65/index35 reward/save suffix proof passes164/20, including
+  native checksum and signed treasure restore. Root repeated the frozen output.
+  No Dark-slot remap is needed; numeric actors, pickup lifetime and document/save
+  history remain open. Read `native-fresh-wizard-id65-reward-slot.md`.
+- Private combined Town overlay passes1455/30 at real padded end8008BA38,
+  including actual incoming13/65 selection, six distinct adapters and full
+  source inverse. Root read/replayed it; no production Host/body issued yet.
+  Read `native-fresh-wizard-linked-town-host.md`.
+- Latest full default .NET gate: Release136 steps/zero failures including the
+  new source-free fallback mode. Whole Python111 tests/four explicit-source skips;
+  runner51. Source-only native scene/staging/fallback checks are separately GREEN.
+  Full report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-wfjyhpf5/summary.json`.
   These are engineering gates, not gameplay acceptance.
 
 ## Current package gate and next practical work
@@ -138,12 +154,12 @@ Next outcomes:
    bounded exclusive reward-selector audit still requires Town classes0E/0F/10;
    simple0E is a distinct model grammar. Complete their assets and callback
    closure rather than assuming only the yellow-gem path can occur.
-3. Implement a new actual-resource-bound fallback revision adding0E/0F/10 and
-   their exact texture owners without changing old Resource/Scene/Staging APIs.
-   Original-bank research staging and the detached P1 scene are complete; future
+3. Implement the closed actual-P1-scene/actual-fallback-bound Town Host issuer
+   against the frozen independent11000 overlay and98 initializer goldens. The
+   fallback revision, research staging and detached P1 scene are complete; future
    composition must derive transfer bytes from its actual revised upload.
-   Integrate distinct Town-host role entries and the real appended-overlay
-   allocation/copy selector, then body/scene/reward layout once blocking ownership
+   Keep existing LAB/music/ID65 table owners separate from the new conditional
+   initializer bytes, then body/scene/reward layout once blocking ownership
    contracts are resolved. No body or candidate follows automatically. Preserve
    fixed P0/N16 goldens and public export scope, then playtest the exact new image.
 4. Extend tested texture/material and Moby families through the editor with
