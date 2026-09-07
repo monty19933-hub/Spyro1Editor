@@ -20,7 +20,7 @@ the changed source/tests; old helper hashes, candidate guards, socket protocol
 and false runtime/UI/export approval flags remain unchanged. No debugger
 execution commands or memory writes were added.
 
-Frozen source SHA256:
+Health-only checkpoint source SHA256:
 `49db5b17e1ae8c2e6053131c4626be29eca2e412d5103855f60cfd02ba6c5e13`.
 RED/GREEN/source receipts and Root replays:
 `_local/research/dark-wizard-native-closure-20260906/fresh-p1-health-motion-r01.WhHw44/`.
@@ -30,3 +30,29 @@ session is closed/restored. A later controlled run must bind a fresh actual
 process and keep native connection/disconnection pause effects explicit.
 Native Frame Step is a separately source-reviewed UI option, not yet exercised;
 it does not authorize debugger stepping or assume one frame equals one game tick.
+
+## Later exact HTTP-cache classification
+
+After the closed R02 failure, the observer gained a second independent auxiliary
+cache identity. Only the exact `cache/http_cache.bin` path, REG/u,
+device0x1000011/inode691426 and valid nonnegative size are recognized. The
+existing shader identity is unchanged. Both caches' presence, descriptor,
+device, inode and path remain fixed across a session; sizes are descriptive and
+contents unauthenticated. Every other extra image and invalid owner still refuses.
+Opening a cache midway through an established session still refuses: prepare
+settings before connecting, then establish a fresh actual binding. No auto-retry.
+
+The [pinned native settings constructor](https://github.com/stenzek/duckstation/blob/fe2306b1f/src/duckstation-qt/advancedsettingswidget.cpp#L121)
+checks cache size, and the [native HTTP cache](https://github.com/stenzek/duckstation/blob/fe2306b1f/src/util/http_cache.cpp#L85)
+opens its object archive lazily. This supports the observed file classification,
+not authentication of its contents or the exact process call history.
+
+Tests-first reproduced the actual2088-byte recorded-file refusal before the
+patch. Neighbor/duplicate/extra-image and independent session-drift tests pass;
+postcheck drift discards the buffered payload and still accounts for all six
+held owners. Root whole Python179/nine explicit skips and original+actual-file+
+recorded-OS26/no skips pass. Root and independent peer fully reviewed the delta.
+Current source SHA256:
+`5e16c941f3deefce1625b09b89b35af4aaee3b3b008fbd33d56f1aaa0a75f870`.
+Exact evidence: `fresh-p1-http-cache-owner-r01.tBfaL7/` under the same research
+parent. No new live acceptance follows from these source/parser checks.

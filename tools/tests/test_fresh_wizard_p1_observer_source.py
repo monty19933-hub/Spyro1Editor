@@ -180,7 +180,7 @@ class QueryDiagnosticTests(unittest.TestCase):
 class SessionTests(unittest.TestCase):
     def setUp(self):self.O=load('tools/Observe-SpyroFreshWizardP1.py','p1_session_fakes')
 
-    def run_fake(self,*,changed=None,probe_error=None,final_failures=False,tree_error=None,commands=b'p test\nq\n'):
+    def run_fake(self,*,changed=None,probe_error=None,final_failures=False,tree_error=None,http_changed=False,commands=b'p test\nq\n'):
         O=self.O;trace=[];events=[];files={}
         class Owner:
             def __init__(self,name):self.name=name
@@ -204,12 +204,16 @@ class SessionTests(unittest.TestCase):
                 return bytes(4) # Initial transport probe need not report level65.
         image=O.FileIdentity(O.CANDIDATE_DIRECTORY+'/'+O.CANDIDATE_BASENAME+'.bin',1,2,661547040)
         exe=O.FileIdentity('/fixture/DuckStation',1,3,123)
-        process=O.SessionObservation(321,501,'Mon Sep  7 01:02:03 2026',exe.path,image,19)
+        http={} if not http_changed else dict(auxiliary_http_cache=(5,0x1000011,691426,'/Users/john/Library/Application Support/DuckStation/cache/http_cache.bin'),auxiliary_http_cache_size=0)
+        process=O.SessionObservation(321,501,'Mon Sep  7 01:02:03 2026',exe.path,image,19,**http)
         counter=0
         def external(pid,owners,connection=None):
             nonlocal counter
             counter+=1;trace.append(('external',counter,connection is not None))
             current=process if counter!=changed else O.SessionObservation(321,501,'Mon Sep  7 01:02:04 2026',exe.path,image,19)
+            if http_changed and counter==6:
+                current=O.SessionObservation(321,501,process.start_time,exe.path,image,19,
+                    auxiliary_http_cache=(6,*process.auxiliary_http_cache[1:]),auxiliary_http_cache_size=0)
             return O._BoundSession(current,exe,7,8 if connection else None,
                                    ('127.0.0.1',50000) if connection else None,
                                    ('127.0.0.1',2345) if connection else None,0)
@@ -263,6 +267,19 @@ class SessionTests(unittest.TestCase):
         failures=flatten(error);self.assertIs(original,failures[0]);self.assertEqual(4,len(failures))
         self.assertFalse(any(e['kind']=='session_closed' for e in events));self.assertIn(('socket-close',),trace)
 
+    def test_http_owner_postcheck_change_discards_payload_and_finishes_all_owners(self):
+        trace,events,error=self.run_fake(http_changed=True)
+        self.assertIsInstance(error,ValueError);self.assertEqual(1,trace.count(('payload',)))
+        self.assertEqual(1,trace.count(('connect',)));self.assertIn(('socket-close',),trace)
+        self.assertFalse(any(e['kind'] in ('sample','session_closed') or 'secret' in e for e in events))
+        connected=next(e for e in events if e['kind']=='connected')
+        self.assertEqual(5,connected['external_binding']['process']['auxiliary_http_cache'][0])
+        self.assertFalse(connected['auxiliary_cache_contents_authenticated'])
+        _,failed_events,combined=self.run_fake(http_changed=True,final_failures=True)
+        def flatten(e):return sum((flatten(x) for x in e.exceptions),[]) if isinstance(e,BaseExceptionGroup) else [e]
+        failures=flatten(combined);self.assertIsInstance(failures[0],ValueError);self.assertEqual(4,len(failures))
+        self.assertFalse(any(e['kind'] in ('sample','session_closed') for e in failed_events))
+
     def test_final_unknown_candidate_owner_refuses_after_all_six_checks_and_closes(self):
         failure=ValueError('Unknown final artifact owner')
         trace,events,error=self.run_fake(tree_error=failure)
@@ -310,7 +327,90 @@ class RecordedGrammarTests(unittest.TestCase):
             self.assertIsNotNone(inspect([(k,size if k=='s' else v) for k,v in cache]).auxiliary_cache)
 
 
+class HttpCacheTests(unittest.TestCase):
+    PATH='/Users/john/Library/Application Support/DuckStation/cache/http_cache.bin'
+
+    def setUp(self):
+        self.O=load('tools/Observe-SpyroFreshWizardP1.py','p1_http_cache_fakes')
+        self.exe='/Applications/DuckStation.app/Contents/MacOS/DuckStation'
+        self.image=self.O.FileIdentity('/private/test/'+self.O.CANDIDATE_BASENAME+'.bin',0x1000011,123,661547040)
+        self.head=[('p',321),('c','DuckStation')]
+        self.image_row=[('f',18),('a','r'),('t','REG'),('D','0x1000011'),('i',123),('s',661547040),('n',self.image.path)]
+        self.shader=[('f',33),('a','u'),('t','REG'),('D','0x1000011'),('i',1242218),('s',101882),('n',self.O.SHADER_CACHE_PATH)]
+        self.http=[('f',5),('a','u'),('t','REG'),('D','0x1000011'),('i',691426),('s',0),('n',self.PATH)]
+
+    def inspect(self,rows):
+        f=RecordedGrammarTests.fields
+        replies=iter([b'Mon Sep  7 01:02:03 2026 501 '+self.exe.encode()+b'\n',f([self.head,self.image_row,*rows]),
+            f([self.head,[('f',34),('t','IPv4'),('P','TCP'),('n','127.0.0.1:2345'),('T','ST=LISTEN')]])])
+        return self.O.inspect_session(321,501,self.exe,self.image,runner=lambda _:next(replies))
+
+    @staticmethod
+    def changed(row,key,value):return [(k,value if k==key else v) for k,v in row]
+
+    def test_both_exact_caches_keep_independent_identities_and_existing_shader_fields(self):
+        O=self.O;before=self.inspect([self.shader]);both=self.inspect([self.http,self.shader])
+        self.assertEqual((33,0x1000011,1242218,O.SHADER_CACHE_PATH),both.auxiliary_cache)
+        self.assertEqual(before.auxiliary_cache,both.auxiliary_cache);self.assertEqual(101882,both.auxiliary_cache_size)
+        self.assertEqual((5,0x1000011,691426,self.PATH),both.auxiliary_http_cache)
+        self.assertEqual(0,both.auxiliary_http_cache_size);self.assertFalse(both.candidate_authenticated)
+        for key,value in vars(before).items():
+            if key not in ('auxiliary_http_cache','auxiliary_http_cache_size'):self.assertEqual(value,vars(both)[key],key)
+        self.assertIsNone(before.auxiliary_http_cache);self.assertIsNone(before.auxiliary_http_cache_size)
+        neither=self.inspect([]);self.assertIsNone(neither.auxiliary_cache);self.assertIsNone(neither.auxiliary_http_cache)
+        O.require_same_session(both,self.inspect([self.shader,self.http]))
+
+    def test_only_exact_http_owner_is_excluded_from_additional_images(self):
+        for key,value in (('f',18),('a','r'),('a','w'),('t','DIR'),('D','0x1000012'),('i',691427),
+                          ('s',-1),('s','x'),('s','+0'),('s','0.0'),('n','/other/http_cache.bin'),
+                          ('n',self.PATH.replace('http_cache','HTTP_CACHE')),('n',self.PATH+'.other.bin'),
+                          ('n',self.PATH[:-4]+'.cue'),('n',self.PATH[:-4]+'.iso'),('n',self.PATH[:-4]+'.chd')):
+            with self.subTest(key=key,value=value),self.assertRaises(ValueError):
+                self.inspect([self.shader,self.changed(self.http,key,value)])
+        for key in ('a','t','D','i','s'):
+            with self.subTest(missing=key),self.assertRaises(ValueError):self.inspect([self.shader,[(k,v) for k,v in self.http if k!=key]])
+        for extra in (self.http,self.changed(self.http,'f',6),self.changed(self.changed(self.http,'f',6),'n','/other/another.bin')):
+            with self.subTest(extra=extra),self.assertRaises(ValueError):self.inspect([self.shader,self.http,extra])
+        for old,new in (('a','u'),('i',124),('s',661547039),('n','/other/candidate.bin')):
+            with self.subTest(candidate=old),self.assertRaises(ValueError):
+                saved=self.image_row;self.image_row=self.changed(saved,old,new)
+                try:self.inspect([self.shader,self.http])
+                finally:self.image_row=saved
+
+    def test_each_cache_presence_fd_and_identity_are_stable_but_sizes_are_descriptive(self):
+        O=self.O;both=self.inspect([self.shader,self.http])
+        for rows in ([],[self.shader],[self.http],[self.changed(self.shader,'f',32),self.http],
+                     [self.shader,self.changed(self.http,'f',6)]):
+            with self.subTest(rows=rows),self.assertRaises(ValueError):O.require_same_session(both,self.inspect(rows))
+        for row in (self.shader,self.http):
+            for key,value in (('D','0x1000012'),('i',999),('n','/other/extra.bin')):
+                rows=[self.changed(x,key,value) if x is row else x for x in (self.shader,self.http)]
+                with self.subTest(row=row[-1],key=key),self.assertRaises(ValueError):self.inspect(rows)
+        for size in (0,1,999999):
+            changed=self.inspect([self.changed(self.shader,'s',size),self.changed(self.http,'s',size)])
+            O.require_same_session(both,changed);self.assertEqual(size,changed.auxiliary_http_cache_size)
+
+
 class SourceGates(unittest.TestCase):
+    def test_recorded_http_numeric_fixture_with_synthetic_process_listener_only(self):
+        if not OS_FIXTURES:self.skipTest('Explicit --os-fixtures required; no default recorded/cache/process reads.')
+        path=ROOT/'_local/native-fresh-wizard-p1-runtime-20260907-r02.luV04T/after-settings-numeric-fds.bin'
+        raw=path.read_bytes();self.assertEqual(2088,len(raw))
+        self.assertEqual('f9f5a48bcfb8581023c64b0c9d0ad7820e78c45fbf3cd9f9f2a283208e319bf0',hashlib.sha256(raw).hexdigest())
+        O=load('tools/Observe-SpyroFreshWizardP1.py','p1_recorded_http_only')
+        image=O.FileIdentity(O.CANDIDATE_DIRECTORY+'/'+O.CANDIDATE_BASENAME+'.bin',0x1000011,44198621,661547040)
+        exe='/Applications/DuckStation.app/Contents/MacOS/DuckStation'
+        # Only the numeric FD bytes above are actual recorded evidence. These
+        # ps/listener replies are synthetic parser inputs, not a live identity.
+        replies=iter([b'Mon Sep  7 01:02:03 2026 501 '+exe.encode()+b'\n',raw,
+            RecordedGrammarTests.fields([[('p',42862),('c','DuckStation')],[('f',34),('t','IPv4'),('P','TCP'),('n','127.0.0.1:2345'),('T','ST=LISTEN')]])])
+        observed=O.inspect_session(42862,501,exe,image,runner=lambda _:next(replies))
+        self.assertEqual(18,observed.bin_fd);self.assertFalse(observed.candidate_authenticated)
+        self.assertEqual((5,0x1000011,691426,HttpCacheTests.PATH),observed.auxiliary_http_cache)
+        self.assertEqual(0,observed.auxiliary_http_cache_size)
+        self.assertEqual((33,0x1000011,1242218,O.SHADER_CACHE_PATH),observed.auxiliary_cache)
+        self.assertEqual(101882,observed.auxiliary_cache_size)
+
     def test_original_health_motion_operands_and_complete_vector_copy(self):
         if SOURCE is None:self.skipTest('Explicit --source required; no default original reads.')
         path=ROOT/'src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_audio_audit.py'

@@ -62,6 +62,10 @@ The later report-only health/motion extension is reviewed and replayed:
 whole Python174/eight explicit skips, original+actual files+recorded OS21/no
 skips, runner58. All seven new owners are reread; no new value/approval gates.
 Read `native-fresh-wizard-health-motion-observer.md`. These are not live results.
+The later exact HTTP-cache classification also passes Root/peer review:
+whole Python179/nine skips and original+actual files+recorded OS26/no skips.
+Both caches remain independently session-bound. Configure Settings BEFORE a new
+observer connection; legitimate cache presence changes still end a session.
 
 ## Earlier closed runtime milestones
 

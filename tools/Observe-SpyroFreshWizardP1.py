@@ -225,6 +225,8 @@ class SessionObservation:
     bin_fd:int
     auxiliary_cache:tuple|None=None
     auxiliary_cache_size:int|None=field(default=None,compare=False)
+    auxiliary_http_cache:tuple|None=None
+    auxiliary_http_cache_size:int|None=field(default=None,compare=False)
     @property
     def candidate_authenticated(self):return False
 
@@ -348,7 +350,19 @@ def inspect_session(pid,uid,executable,image,*,runner=_run):
         if (r.get('t'),r.get('a'),device,inode)!=('REG','u',0x1000011,1242218):
             raise ValueError('The extra BIN is not the one reviewed auxiliary shader-cache owner.')
         cache_identity=(int(r['f']),device,inode,SHADER_CACHE_PATH)
-    images=[r for r in files if r.get('n','').lower().endswith(('.bin','.cue','.iso','.chd')) and r not in caches]
+    http_caches=[r for r in files if r.get('n')==HTTP_CACHE_PATH]
+    if len(http_caches)>1:raise ValueError('Ambiguous fixed HTTP-cache auxiliary owner.')
+    http_identity=None;http_size=None
+    if http_caches:
+        r=http_caches[0]
+        try:
+            if not re.fullmatch('[0-9]+',r['s']):raise ValueError('Invalid mutable HTTP-cache size.')
+            device,inode,http_size=int(r['D'],16),int(r['i']),int(r['s'])
+        except (KeyError,ValueError) as e:raise ValueError('Incomplete fixed HTTP-cache metadata.') from e
+        if (r.get('t'),r.get('a'),device,inode)!=('REG','u',0x1000011,691426):
+            raise ValueError('The extra BIN is not the one reviewed auxiliary HTTP-cache owner.')
+        http_identity=(int(r['f']),device,inode,HTTP_CACHE_PATH)
+    images=[r for r in files if r.get('n','').lower().endswith(('.bin','.cue','.iso','.chd')) and r not in caches and r not in http_caches]
     bins=[r for r in images if r.get('n')==image.path]
     if len(bins)!=1 or any(r.get('n') not in (image.path,image.path[:-4]+'.cue') for r in images):raise ValueError('Missing/ambiguous or additional open image.')
     b=bins[0]
@@ -360,7 +374,7 @@ def inspect_session(pid,uid,executable,image,*,runner=_run):
     r=listeners[0]
     if (r['p'],r.get('t'),r.get('P'),r.get('n'),r.get('T'))!=(str(pid),'IPv4','TCP','127.0.0.1:2345','ST=LISTEN'):
         raise ValueError('Listener is not this process and exact loopback endpoint.')
-    return SessionObservation(pid,uid,start,executable,image,int(b['f']),cache_identity,cache_size)
+    return SessionObservation(pid,uid,start,executable,image,int(b['f']),cache_identity,cache_size,http_identity,http_size)
 
 
 def require_same_session(before,after):
@@ -384,6 +398,8 @@ CANDIDATE_DIRECTORY='/Users/john/Documents/Codex/2026-07-13/i-needed-to-make-a-n
 ORIGINAL_STEM='/Users/john/Documents/Codex/2026-04-24/could-you-create-a-level-editor/Spyro the Dragon (USA)'
 EMULATOR_PATH='/Applications/DuckStation.app/Contents/MacOS/DuckStation'
 SHADER_CACHE_PATH='/Users/john/Library/Application Support/DuckStation/cache/vulkan_shaders.bin'
+# Exact separately reviewed mutable cache metadata, never contents authority.
+HTTP_CACHE_PATH='/Users/john/Library/Application Support/DuckStation/cache/http_cache.bin'
 
 
 @dataclass(frozen=True)
