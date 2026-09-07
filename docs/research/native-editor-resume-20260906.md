@@ -10,8 +10,9 @@ Repository:
 `/Users/john/Documents/Codex/2026-07-13/i-needed-to-make-a-new/spyro1editor-v3-release`
 
 Branch: `research/id65-v3-environment-header-evidence-20260824`.
-Confirm actual Git status and latest commit before edits. Most recent code
-checkpoint is eb78f3f; subsequent documentation may have a newer commit.
+Confirm actual Git status and latest commit before edits. Audio regressions
+were checkpointed at eb78f3f; the later collider-lifetime source regression is
+also complete. Neither changes App/Core from0c18573.
 
 John authorized autonomous development, useful parallel agents, sensible
 commits and DuckStation gameplay with temporary settings. Continue until the
@@ -69,6 +70,11 @@ BIN SHA256
 - Permanent source-owned deferred-damage/audio regressions at eb78f3f:
   Python108 tests/four explicit-source skips, runner48, actual scalar370 checks/
   17 refusals. Read `native-fresh-wizard-audio-boundary.md`.
+- The permanent collider-lifetime source regression adds39 checks/3 ownership
+  refusals and213 completed native PCs. Source-adjacent lookahead, stale row
+  fields and bolt-return boundaries are independently reviewed/replayed; no
+  target-body or epoch proof follows. Python108/4 and runner48 remain GREEN.
+  Read `native-fresh-wizard-collider-lifetime.md`.
 - Latest full default .NET gate before source-only eb78f3f: Release130 steps/
   zero failures at0c18573. R02 App/Core publish also passed. Do not label this a
   newer full-suite rerun or confuse build checks with gameplay acceptance.
@@ -98,8 +104,8 @@ Next outcomes:
 2. Establish a source-owned fresh-Wizard damage/audio identity preserving Town's
    occupied global1F mapping. Native caller masks/trigger rewrites erase the
    proposed high marker; do not infer uniqueness from four static zero tables.
-   Peer review also found a final-command delay-slot read beyond the source
-   Wizard package. Bind the actual adjacent/target-padding owner in a regression.
+   The source-adjacent final-command lookahead regression now passes; binding
+   an actual issued destination-padding/read owner remains separate work.
 3. Integrate actual typed Town-host callbacks, scene/reward and resource/body
    layout only after the blocking ownership contracts are resolved. Preserve
    fixed P0/N16 goldens and the old public export scope. Then build and playtest

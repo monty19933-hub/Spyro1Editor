@@ -75,8 +75,9 @@ in memory; it does not read C# outputs or candidate files.
 | Complete model owner | 17800 | 782c4500b3152f6051b45b8a0a56f6c99c4f703c753948f656318ccfa8618cda |
 
 Actual root order is0@0,78@10A4C,26@1361C,11B@13B80. Old root0 records and
-terminator, full class78 allocation2BD0, complete Wizard35B4 including original
-padding8, and separately generated model padding6CC remain distinctly owned.
+terminator, full class78 allocation2BD0, complete Wizard35B4 including its final
+8 collider bytes (vertex index0 and incoming flag word0), and separately generated
+model padding6CC remain distinctly owned. Those source collider bytes are not padding.
 The last native registration extent is3C80, not a claim that source35B4 grew.
 
 The new strict data grammar is particle8C/count11 then sound720/count78, ending

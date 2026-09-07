@@ -157,6 +157,8 @@ SOURCE_PYTHON_CASES = (
      "FRESH_WIZARD_GLOBAL1F_SOURCE_AUDIT_OK"),
     ("fresh-wizard-deferred-damage", "src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_deferred_damage_oracle.py",
      "FRESH_WIZARD_DEFERRED_DAMAGE_ORACLE_OK"),
+    ("fresh-wizard-collider-lifetime", "src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_collider_lifetime_oracle.py",
+     "NATIVE_COLLIDER_LIFETIME_SLICES_OK"),
 )
 
 

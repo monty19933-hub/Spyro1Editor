@@ -50,3 +50,23 @@ private audit/scalar metadata byte-for-byte; only scalar import/root paths chang
 They do not establish collision-descriptor ownership, a unique Wizard marker,
 whole-frame behavior, audio/GTE execution or fresh runtime compatibility.
 See [the exact boundary and source evidence](../../docs/research/native-fresh-wizard-audio-boundary.md).
+
+## Collider lifetime source slices
+
+`source_fresh_wizard_collider_lifetime_oracle.py original.bin` is the third
+source-only Python runner case. It executes39 checks with3 expected ownership
+refusals across213 completed native PCs, using unchanged pinned scalar/raw
+helpers. Promotion changes only the repository root depth; the complete result
+is byte-identical to the privately reviewed source metadata.
+
+Actual runner RED had3 missing-third-registry failures; GREEN passed all48
+runner tests, including third-marker/nonzero/shared-deadline controls and
+default/list absence. Whole Python discovery ran108 tests successfully with4
+explicit-source skips. No .NET, App, candidate or emulator run was part of this
+promotion. Logs are in the private lifetime folder's `promotion-r01.rSkiK4/`.
+
+The native final-command delay reads beyond the Wizard source package into the
+next original class11D owner. Separate grid/free/allocator slices demonstrate
+stale pointer fields; explicit helper-return/GTE-boundary witnesses do not prove
+an actual collision, complete lifetime, destination body ownership or audio
+attribution. See [the exact source and ownership boundary](../../docs/research/native-fresh-wizard-collider-lifetime.md).
