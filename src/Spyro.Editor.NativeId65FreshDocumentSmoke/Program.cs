@@ -156,6 +156,7 @@ Reject(() => NativeId65FreshDocumentCodec.Parse(atCap.Concat(new byte[] { 32 }).
 
 checks += StoreCases.Run();
 PublicationReadLeaseCases.Run();
+LegacyStorageCompatibilityCases.Run();
 Console.WriteLine($"NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK checks={checks}");
 
 NativeId65FreshDocumentIntent Make(int x = 8448, int y = 8448, int z = 8704, int width = 1024, int depth = 1024,

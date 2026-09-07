@@ -41,8 +41,17 @@ These are engineering checks, not hundreds of gameplay runs.
 
 ## Next boundary
 
-Before storage extraction, characterize the legacy Store's observable API and
-lease/save timing. Then extract one closed internal storage engine while keeping
+Legacy storage characterization is now complete:38 additional real-file checks
+pin the exact public/nested API, filename/stage/lease namespaces, null/cancel
+precedence, actual publication callback ordering, empty writer versus32-byte
+read lease, timestamp-preserving canonical no-op, raw-whitespace canonicalization
+and same-byte regular replacement. An unrelated aggregate-path sentinel remains
+untouched. Root replayed the clean Release build and all old83/59 plus new38
+checks; independent peer review is clear. Core remains unchanged. Evidence:
+`fresh-store-characterization-r01.9jdmN4/` under the same private research parent.
+This is a baseline against existing behavior, not a missing-API RED.
+
+Next extract one closed internal storage engine while keeping
 the old typed facade and publication read-lease contract unchanged. A later new
 aggregate Store will use a separate path and explicit legacy-floor fork; the fork
 must use new-only publication so a late-created destination cannot be replaced.
