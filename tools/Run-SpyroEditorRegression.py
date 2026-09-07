@@ -31,6 +31,7 @@ CORE_CASES = (
     ("NativeWizardAppendSmoke", "NATIVE_WIZARD_APPEND_SOURCE_FREE_OK"),
     ("NativeWizardAppendPlacementSmoke", "NATIVE_WIZARD_APPEND_PLACEMENT_FREE_OK"),
     ("NativeWizardCompositionSmoke", "NATIVE_WIZARD_COMPOSITION_FREE_OK"),
+    ("NativeWizardFamilyAssetSmoke", "NATIVE_WIZARD_FAMILY_ASSET_FREE_OK"),
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_FREE_OK"),
     ("NativeGlobalSoundSmoke", "NATIVE_GLOBAL_SOUND_SOURCE_FREE_OK"),
     ("NativeId65EngineProfileSmoke", "NATIVE_ID65_ENGINE_PROFILE_SOURCE_FREE_OK"),
@@ -47,6 +48,7 @@ CORE_CASES = (
     ("NativeId65FreshDiscStreamSmoke", "NATIVE_ID65_FRESH_DISC_STREAM_SMOKE_OK"),
     ("NativeId65FreshDiscResearchSmoke", "NATIVE_ID65_FRESH_DISC_RESEARCH_SMOKE_OK"),
     ("NativeId65FreshEditedDocumentResearchSmoke", "NATIVE_ID65_FRESH_EDITED_DOCUMENT_RESEARCH_SMOKE_OK"),
+    ("NativeId65FreshDocumentResearchSmoke", "NATIVE_ID65_FRESH_DOCUMENT_RESEARCH_SMOKE_OK"),
     ("NativeWizardPlacementSmoke", "NATIVE_WIZARD_PLACEMENT_SMOKE_OK"),
     ("NativeWizardResearchSmoke", "NATIVE_WIZARD_RESEARCH_SOURCE_FREE_OK"),
     ("NativeTwoWizardResearchSmoke", "NATIVE_TWO_WIZARD_RESEARCH_FREE_OK"),
@@ -111,6 +113,7 @@ SOURCE_QA_CASES = (
     ("NativeWizardAppendSmoke", "NATIVE_WIZARD_APPEND_SOURCE_OK", ["--source"]),
     ("NativeWizardAppendPlacementSmoke", "NATIVE_WIZARD_APPEND_PLACEMENT_SOURCE_OK", ["--source"]),
     ("NativeWizardCompositionSmoke", "NATIVE_WIZARD_COMPOSITION_SOURCE_OK", ["--source"]),
+    ("NativeWizardFamilyAssetSmoke", "NATIVE_WIZARD_FAMILY_ASSET_SOURCE_OK", ["--source"]),
     ("NativeGreenWizardMoverSmoke", "NATIVE_GREEN_WIZARD_MOVER_SOURCE_SMOKE_OK", []),
     ("NativeLevelSlotOwnershipSmoke", "NATIVE_LEVEL_SLOT_OWNERSHIP_SOURCE_OK", ["--source"]),
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_OK", ["--source"]),
@@ -128,6 +131,7 @@ SOURCE_QA_CASES = (
     # Capture checks only; never stage faults, exercise publication or verify outputs here.
     ("NativeId65FreshDiscResearchSmoke", "NATIVE_ID65_FRESH_DISC_RESEARCH_SOURCE_OK", ["--source"]),
     ("NativeId65FreshEditedDocumentResearchSmoke", "NATIVE_ID65_FRESH_EDITED_DOCUMENT_RESEARCH_SOURCE_OK", ["--source"]),
+    ("NativeId65FreshDocumentResearchSmoke", "NATIVE_ID65_FRESH_DOCUMENT_RESEARCH_SOURCE_OK", ["--source"]),
     ("NativeWizardPlacementSmoke", "NATIVE_WIZARD_PLACEMENT_SOURCE_OK", []),
     # Capture/readback only; never stage, publish or open an emulator here.
     ("NativeWizardResearchSmoke", "NATIVE_WIZARD_RESEARCH_SOURCE_OK", []),
@@ -141,7 +145,7 @@ SOURCE_QA_CASES = (
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
 SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
-SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeTwoWizardResearchSmoke"})
+SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeTwoWizardResearchSmoke"})
 
 
 def configured_source_image():

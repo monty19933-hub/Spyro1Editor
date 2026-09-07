@@ -345,6 +345,13 @@ class RunnerOptionsTests(unittest.TestCase):
         self.assert_texture_modes("NativeId65FreshEditedDocumentResearchSmoke", "NATIVE_ID65_FRESH_EDITED_DOCUMENT_RESEARCH",
                                   ("--source",), "SMOKE", needs_cue=True)
 
+    def test_saved_document_plan_modes_never_activate_publication(self):
+        self.assert_texture_modes("NativeId65FreshDocumentResearchSmoke", "NATIVE_ID65_FRESH_DOCUMENT_RESEARCH",
+                                  ("--source",), "SMOKE", needs_cue=True)
+
+    def test_detached_wizard_asset_modes_bind_only_selected_source(self):
+        self.assert_texture_modes("NativeWizardFamilyAssetSmoke", "NATIVE_WIZARD_FAMILY_ASSET")
+
     def assert_texture_modes(self, name, marker_prefix, source_flags=("--source",), free_kind="FREE", needs_cue=False):
         free_marker = marker_prefix + "_" + free_kind + "_OK"
         source_marker = marker_prefix + "_SOURCE_OK"
@@ -587,8 +594,8 @@ class RunnerOptionsTests(unittest.TestCase):
             self.assertEqual(free_marker, dict(RUNNER.CORE_CASES).get(name))
             self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
             self.assertEqual([(name, source_marker, arguments)], [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
-        self.assertEqual(frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeTwoWizardResearchSmoke"}), RUNNER.SOURCE_QA_CUE_CASES)
-        for name in RUNNER.SOURCE_QA_CUE_CASES - {"NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke"}:
+        self.assertEqual(frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeTwoWizardResearchSmoke"}), RUNNER.SOURCE_QA_CUE_CASES)
+        for name in RUNNER.SOURCE_QA_CUE_CASES - {"NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke"}:
             self.assertIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
 
     def test_flight_preferences_are_sourcefree_and_never_a_rom_writer(self):
@@ -784,6 +791,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeWizardAppendSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeWizardAppendPlacementSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeWizardCompositionSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
+            "NativeWizardFamilyAssetSmoke": ["--source", "/selected original.bin"],
             "NativeGreenWizardMoverSmoke": ["/selected original.bin"],
             "NativeLevelSlotOwnershipSmoke": ["--source", "/selected original.bin"],
             "NativePlayerAnimationSmoke": ["--source", "/selected original.bin"],
@@ -801,6 +809,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeId65FreshDiscStreamSmoke": ["/selected original.bin"],
             "NativeId65FreshDiscResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],
             "NativeId65FreshEditedDocumentResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],
+            "NativeId65FreshDocumentResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],
             "NativeWizardPlacementSmoke": ["/selected original.bin"],
             "NativeResourceCompositionSmoke": ["--source", "/selected original.bin"],
             "NativeFreeFlightResearchSmoke": ["/selected original.bin", "/selected original.cue", str(RUNNER.ROOT)],

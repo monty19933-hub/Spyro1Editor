@@ -1,5 +1,20 @@
 # Native editor checkpoint — 2026-09-06
 
+## Latest: saved-version guard and detached Wizard assets
+
+The constructor-closed saved Snapshot/Plan context and internal cooperating-
+writer lease pass actual RED/GREEN and unchanged source regressions. Detached
+Wizard assets pass553 source checks/54 refusals and match the independent full
+78452-byte block. Root combined Release126/0 and Python103/4 explicit-source
+skips pass; see `native-fresh-saved-guard-and-wizard-assets.md`. Generic
+publication/UI and target resource installation are next; installed app unchanged.
+
+Two-Wizard R01 is ACTIVE, not closed: exact candidate612e68e1…08cba cold-booted
+through the copied card's Stone Hill save and native Exit Level into Artisans.
+No Wizard encounter is accepted yet. Journal and mandatory cleanup:
+`_local/native-two-wizard-runtime-20260906-r01.ygpgLm/RUNTIME-SESSION.md`.
+Older statements that all emulator sessions are closed are historical only.
+
 ## Current state: edited LAB native actions, generic source-bound plan
 
 Commit956ea87 adds a read-only plan accepting actual sealed fresh-document

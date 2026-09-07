@@ -72,6 +72,85 @@ public static class NativeId65FreshDocumentStore
         NativeId65FreshDocumentIntent intent, Action<string> checkpoint, CancellationToken cancellationToken = default) =>
         SaveCore(expected, intent, cancellationToken, checkpoint);
 
+    // A final publication guard shares the existing cooperating-writer namespace.
+    // It does not change Save's policy or grant artifact publication authority.
+    internal static ReadLease AcquireReadLease(NativeId65FreshDocumentSnapshot expected,
+        CancellationToken cancellationToken = default) => ReadLease.Acquire(expected, cancellationToken);
+
+    internal sealed class ReadLease : IDisposable
+    {
+        private readonly FileStream _stream;
+        private readonly byte[] _ownerToken;
+        private readonly string _root;
+        private int _released;
+
+        private ReadLease(string root, string path, FileStream stream, byte[] ownerToken)
+        {
+            _root = root;
+            LeasePath = path;
+            _stream = stream;
+            _ownerToken = ownerToken;
+        }
+
+        internal string LeasePath { get; }
+        // Nonempty means release did not remove a positively identified owner.
+        // Missing-path cases retain the existing project root as the inspection
+        // location; this is evidence accounting, not an inode/race certificate.
+        internal string RetainedEvidencePath { get; private set; } = "";
+
+        internal static ReadLease Acquire(NativeId65FreshDocumentSnapshot expected, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            ArgumentNullException.ThrowIfNull(expected);
+            EditorProjectLayout project = Resolve(new(expected.RootPath, expected.ProjectId));
+            string path = System.IO.Path.Combine(project.RootPath, LeaseName);
+            RefuseLinkOrDirectory(path);
+            byte[] owner = RandomNumberGenerator.GetBytes(32);
+            // CreateNew failure never supplies ownership of a foreign lock.
+            FileStream stream = new(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            var lease = new ReadLease(project.RootPath, path, stream, owner);
+            try
+            {
+                stream.Write(owner);
+                stream.Flush(flushToDisk: true);
+                RequireCurrent(expected, token); // Recheck only after excluding cooperating saves.
+                token.ThrowIfCancellationRequested();
+                return lease;
+            }
+            catch (Exception error)
+            {
+                lease.Dispose();
+                if (lease.RetainedEvidencePath.Length != 0)
+                    throw new IOException("Saved-document guard failed and its lease could not be safely released. Preserve evidence at " +
+                        lease.RetainedEvidencePath, error);
+                throw;
+            }
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _released, 1) != 0) return;
+            // No caller token: release must still account for ownership after a
+            // cancellation or a completed artifact commit. Unknown replacements
+            // are retained, never followed, recursively removed or retried.
+            try
+            {
+                _stream.Dispose();
+                byte[] actual = ReadFile(LeasePath, _ownerToken.Length, CancellationToken.None);
+                if (!actual.AsSpan().SequenceEqual(_ownerToken) || !TryDeleteOwnedFile(LeasePath))
+                    RetainedEvidencePath = LeasePath;
+            }
+            catch (Exception error) when (error is FileNotFoundException or DirectoryNotFoundException)
+            {
+                RetainedEvidencePath = _root;
+            }
+            catch (Exception error) when (error is InvalidDataException or IOException or UnauthorizedAccessException)
+            {
+                RetainedEvidencePath = LeasePath;
+            }
+        }
+    }
+
     private static NativeId65FreshDocumentSnapshot SaveCore(NativeId65FreshDocumentSnapshot expected,
         NativeId65FreshDocumentIntent intent, CancellationToken cancellationToken, Action<string>? checkpoint)
     {

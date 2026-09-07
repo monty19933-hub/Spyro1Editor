@@ -1,5 +1,17 @@
 # Resume after the September 6 usage pause
 
+**Latest continuation supersedes older status:** saved-version context/lease and
+detached Wizard assets pass root combined Release126/0 and Python103/4 source
+skips. Read `native-fresh-saved-guard-and-wizard-assets.md`. Generic publisher/UI
+and independent target-resource oracle are next; coordinate serialized .NET.
+Installed editor remains unchanged.
+
+**Two-Wizard R01 is ACTIVE.** Its exact candidate cold-booted via normal menus
+to Artisans; no Wizard encounter is accepted yet. Its journal owns process,
+observer, capture and mandatory fresh-settings restoration:
+`_local/native-two-wizard-runtime-20260906-r01.ygpgLm/RUNTIME-SESSION.md`.
+All earlier all-sessions-CLOSED claims below refer to earlier checkpoints.
+
 **Start with current state:** commit956ea87 adds generic read-only fresh-document
 research Plan (free35/source2339), plus two89-case publisher timing baselines.
 It does not yet add a generic publisher or UI export. Fresh-only publication
