@@ -30,20 +30,22 @@ See the [edited LAB report](native-fresh-edited-r01-runtime-observations.md).
 
 ## Is there a new app to open?
 
-There is a separately compiled private test package, but its ordinary Mac
-launch is not ready yet. Build, signature and actual PNG compression checks
-passed; macOS then denied its launcher access before the editor window opened.
-The launcher is being corrected in a new isolated package with a proper native
-Mac executable and the same private-project safeguards. No permission bypass
-or installed-editor replacement is being used.
+There is a separately compiled R03 test app with the corrected native Mac
+launcher. Build, signature, actual PNG compression and preservation checks
+passed. Its normal launch reached a macOS Documents-folder permission prompt;
+the editor window has not yet been verified. If you approve, click Allow for
+"Spyro Fresh Document Test r03" on the Mac. I cannot operate that protected
+system prompt, and no Full Disk Access or permission bypass is being used.
 
-The retained R02 package/evidence is here:
+The new private app is here:
 
-`/Users/john/Documents/Codex/2026-07-13/i-needed-to-make-a-new/spyro1editor-v3-release/_local/research/fresh-document-mac-test-r02/`
+`/Users/john/Documents/Codex/2026-07-13/i-needed-to-make-a-new/spyro1editor-v3-release/_local/research/fresh-document-mac-test-r03/Spyro Fresh Document Test r03.app`
 
 This is not the finished unrestricted blank-level editor or a V6 release.
 Actual launch, Fresh Level interaction and normal close/reopen are separate
 acceptance checks before handing over the next app.
+The app is built from checkpoint6eae8d4; later source-only Wizard scene work is
+not silently being rebuilt into it. See [R03 package status](native-fresh-document-mac-r03.md).
 
 ## What remains usable in the preserved editor
 
@@ -70,10 +72,16 @@ existing sound mapping is already occupied, and the tempting damage marker is
 erased by native processing. Regression tests now preserve these facts so an
 apparently convenient fix cannot silently break other gameplay.
 
-Another review caught a real extra collision read in a branch delay slot.
-The original read belongs to the next registered model, not the Wizard's own
-package. Its target equivalent needs explicit ownership coverage before broader
-resource relocation can be trusted.
+The extra collision read found during review now passes against the actual
+issued resource, including its generated padding. That closes one precise
+relocation gap, not the whole collision or lifetime problem.
+
+The new detached fresh-Wizard scene also matches independent native-source
+checks. It preserves space for32 dynamic allocations plus the allocator's extra
+write; the test catches the earlier layout corrupting another object's private
+state. This is source-tested scene construction, not yet a playable fresh-Wizard
+ROM. Repeat-reward models, callbacks, sound loading and complete body integration
+are the next work. See [scene progress](native-fresh-wizard-p1-scene.md).
 
 Arbitrary Moby mixtures, all textures in all levels, native fresh-level enemy
 imports, normal portals to new levels, save/reboot coverage and full audio/
@@ -83,17 +91,17 @@ remain separate work.
 
 ## Verification and next milestone
 
-Latest full default Release gate:130 steps, zero failures. Subsequent source-
-regression checkpoint eb78f3f passed108 Python tests with four explicit-source
-skips,48 runner tests and370 native scalar checks/17 expected refusals. These
-counts are engineering checks, not hundreds of gameplay runs.
+Latest full default Release gate:132 steps, zero failures. The Python suite
+passed109 tests with four explicit-source skips;49 runner tests passed. The
+new independent native scene check passed23 checks/four expected refusals.
+These counts are engineering checks, not hundreds of gameplay runs.
 
 Actual two-Wizard recording:22 minutes39 seconds,81303 video frames, full strict
 decode passed. DuckStation, capture and the read-only observer are closed.
 All nine protected hashes passed after exact original settings restoration.
 
-Next: finish the isolated app launch/close-reopen check, complete the source-owned
-fresh-Wizard audio/collision contracts, then integrate and playtest that exact
+Next: finish the isolated app launch/close-reopen check after macOS consent,
+complete fresh-Wizard reward/audio/resource contracts, then integrate and playtest that exact
 enemy in the fresh scene. Continue expanding tested families/materials through
 the editor without calling inventory coverage universal compatibility.
 

@@ -89,6 +89,8 @@ class SourcePythonOracleTests(unittest.TestCase):
          "FRESH_WIZARD_DEFERRED_DAMAGE_ORACLE_OK"),
         ("fresh-wizard-collider-lifetime", "src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_collider_lifetime_oracle.py",
          "NATIVE_COLLIDER_LIFETIME_SLICES_OK"),
+        ("fresh-wizard-p1-scene", "src/Spyro.Editor.NativeId65FreshWizardSceneSmoke/source_p1_scene_oracle.py",
+         "FRESH_P1_SCENE_NATIVE_SLICES_OK"),
     )
 
     def test_exact_source_only_python_registry(self):
@@ -119,8 +121,9 @@ class SourcePythonOracleTests(unittest.TestCase):
     def test_source_python_commands_markers_failures_and_shared_deadline(self):
         self.assertEqual(self.EXPECTED, RUNNER.SOURCE_PYTHON_CASES)
         scenarios = {
-            "success": (0, 3), "missing-first-marker": (1, 1), "missing-second-marker": (1, 2),
+            "success": (0, 4), "missing-first-marker": (1, 1), "missing-second-marker": (1, 2),
             "missing-third-marker": (1, 3), "third-nonzero": (1, 3), "expired-after-second": (1, 2),
+            "missing-fourth-marker": (1, 4), "fourth-nonzero": (1, 4), "expired-after-third": (1, 3),
             "first-nonzero": (1, 1), "source-resolution": (1, 0), "offline-failure": (1, 0),
             "upstream-source-failure": (1, 0), "expired-after-offline": (1, 0), "expired-after-first": (1, 1),
         }
@@ -137,11 +140,13 @@ class SourcePythonOracleTests(unittest.TestCase):
                 if command[1:2] == ["-B"]:
                     index = next(i for i, (_, relative, _) in enumerate(self.EXPECTED) if command[2] == str(RUNNER.ROOT / relative))
                     if not (scenario == "missing-first-marker" and index == 0 or scenario == "missing-second-marker" and index == 1 or
-                            scenario == "missing-third-marker" and index == 2):
+                            scenario == "missing-third-marker" and index == 2 or scenario == "missing-fourth-marker" and index == 3):
                         kwargs["stdout"].write(self.EXPECTED[index][2] + "\n")
-                    if scenario == "expired-after-first" and index == 0 or scenario == "expired-after-second" and index == 1:
+                    if (scenario == "expired-after-first" and index == 0 or scenario == "expired-after-second" and index == 1 or
+                            scenario == "expired-after-third" and index == 2):
                         clock[0] += 6
-                    if scenario == "first-nonzero" and index == 0 or scenario == "third-nonzero" and index == 2:
+                    if (scenario == "first-nonzero" and index == 0 or scenario == "third-nonzero" and index == 2 or
+                            scenario == "fourth-nonzero" and index == 3):
                         return subprocess.CompletedProcess(command, 7)
                 return subprocess.CompletedProcess(command, 0)
             with self.subTest(scenario=scenario), tempfile.TemporaryDirectory(prefix="spyro-source-python-opt-in-") as output:
@@ -456,6 +461,9 @@ class RunnerOptionsTests(unittest.TestCase):
 
     def test_fresh_wizard_resource_modes_bind_only_selected_bin_and_never_output(self):
         self.assert_texture_modes("NativeId65FreshWizardResourceSmoke", "FRESH_WIZARD_RESOURCE")
+
+    def test_fresh_wizard_scene_modes_keep_source_optional_and_require_distinct_markers(self):
+        self.assert_texture_modes("NativeId65FreshWizardSceneSmoke", "FRESH_WIZARD_SCENE")
 
     def test_saved_document_publisher_modes_never_activate_output(self):
         self.assert_texture_modes("NativeId65FreshDocumentPublicationSmoke", "NATIVE_ID65_FRESH_DOCUMENT_PUBLICATION",
@@ -902,6 +910,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeWizardCompositionSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeWizardFamilyAssetSmoke": ["--source", "/selected original.bin"],
             "NativeId65FreshWizardResourceSmoke": ["--source", "/selected original.bin"],
+            "NativeId65FreshWizardSceneSmoke": ["--source", "/selected original.bin"],
             "NativeGreenWizardMoverSmoke": ["/selected original.bin"],
             "NativeLevelSlotOwnershipSmoke": ["--source", "/selected original.bin"],
             "NativePlayerAnimationSmoke": ["--source", "/selected original.bin"],

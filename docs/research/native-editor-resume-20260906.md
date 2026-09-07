@@ -11,8 +11,8 @@ Repository:
 
 Branch: `research/id65-v3-environment-header-evidence-20260824`.
 Confirm actual Git status and latest commit before edits. Audio regressions
-were checkpointed at eb78f3f; the later collider-lifetime source regression is
-also complete. Neither changes App/Core from0c18573.
+were checkpointed at eb78f3f, collider-lifetime at6eae8d4. The later detached
+P1/N32 scene adds a separate Core type; App and old P0/export APIs are unchanged.
 
 John authorized autonomous development, useful parallel agents, sensible
 commits and DuckStation gameplay with temporary settings. Continue until the
@@ -65,8 +65,12 @@ BIN SHA256
   checks; separate saved-context verification and real postcommit19 passed.
   Read `native-fresh-saved-document-publication.md`.
 - Typed detached fresh-Wizard resources match independent full buffers:
-  source5627/60. Read `native-fresh-wizard-typed-resources.md`. No actual fresh
-  Wizard body, scene, behavior integration or emulator acceptance follows.
+  source5627/60. Read `native-fresh-wizard-typed-resources.md`. A separate new
+  P1/N32 scene now preserves actual issued ancestry and the complete allocator
+  reserve; C# output matches the independently reconstructed original-source
+  golden. Actual native slices pass23 checks/four refusals. No actual fresh
+  Wizard body, behavior integration or emulator acceptance follows. Read
+  `native-fresh-wizard-p1-scene.md`.
 - Permanent source-owned deferred-damage/audio regressions at eb78f3f:
   Python108 tests/four explicit-source skips, runner48, actual scalar370 checks/
   17 refusals. Read `native-fresh-wizard-audio-boundary.md`.
@@ -75,41 +79,58 @@ BIN SHA256
   fields and bolt-return boundaries are independently reviewed/replayed; no
   target-body or epoch proof follows. Python108/4 and runner48 remain GREEN.
   Read `native-fresh-wizard-collider-lifetime.md`.
-- Latest full default .NET gate before source-only eb78f3f: Release130 steps/
-  zero failures at0c18573. R02 App/Core publish also passed. Do not label this a
-  newer full-suite rerun or confuse build checks with gameplay acceptance.
+- Actual issued resource output now passes the destination final-collider
+  delayed read at800A18FC:52 checks/50 refusals, including source and owner
+  mutations. This closes that exact generated model-padding ownership gap,
+  not GTE, lifetime or complete gameplay. Read
+  `native-fresh-wizard-issued-collider-read.md`.
+- Latest full default .NET gate: Release132 steps/zero failures including the
+  new source-free scene mode. Whole Python109 tests/four explicit-source skips;
+  runner49. New source-only native scene regression is separately GREEN.
+  These are engineering gates, not gameplay acceptance.
 
 ## Current package gate and next practical work
 
-A separate private R02 Mac app was compiled, signed and passed actual packaged
-PNG round-trip and full protection inventories. The preserved installed editor
-was not replaced. Normal GUI launch failed before bootstrap: OS denied reading
-the fixed private launch-owner under Documents; no fresh manifest was created.
-R02's shell-script main is being replaced only in a NEW private package with a
-proper native main and the same guarded private paths. Use normal macOS consent,
-not alternate-parent launch, permission removal or Full Disk Access escalation.
+A separate private R03 Mac app now has a real native main. It is compiled from
+6eae8d4 (predates the new P1 scene), signed, and passes actual packaged PNG and
+complete protection inventories. The preserved installed editor was not replaced.
+Its normal launch reached a genuine Documents-folder permission prompt for the
+R03 identity, confirmed by the native TCC log; helperPID16530 was waiting before
+App bootstrap at the last observation. UserNotificationCenter control was
+explicitly denied by tooling. John was asked asynchronously to click Allow if
+he approves; no response has arrived yet. Do not retry-launch or bypass the
+protected prompt through another tool/parent/settings. No Full Disk Access is
+needed. Read `native-fresh-document-mac-r03.md` for exact evidence and paths.
 
 R02 evidence:
 `_local/research/fresh-document-mac-test-r02/evidence/`.
 Driver/handoffs:
 `_local/research/fresh-document-real-ui-r01.DsKiPF/mac-test-driver/`.
+R03 package: `_local/research/fresh-document-mac-test-r03/Spyro Fresh Document Test r03.app`.
+R03 driver: `_local/research/fresh-document-real-ui-r01.DsKiPF/mac-test-driver-r03/`.
 Retain R01/R02 failed/pre-GUI states and exact signed owners; no in-place rebuild.
 
 Next outcomes:
 
-1. Complete native-main package regression/review, build a new isolated app,
-   then actually launch, open Fresh Level, verify the edited2048-floor document,
-   close/reopen and check private Store and protected originals. A package
-   binary check is not this GUI gate.
+1. After John approves the actual R03 permission prompt, attach normally, open
+   Fresh Level, verify the edited2048-floor document, close/reopen and check
+   private Store and protected originals. Package regression/review and binary
+   checks are complete but do not prove this GUI gate. Follow the separate
+   post-GUI preservation design; the pre-GUI verifier deliberately requires
+   manifest absence and cannot be reused as a post-bootstrap checker.
 2. Establish a source-owned fresh-Wizard damage/audio identity preserving Town's
    occupied global1F mapping. Native caller masks/trigger rewrites erase the
    proposed high marker; do not infer uniqueness from four static zero tables.
-   The source-adjacent final-command lookahead regression now passes; binding
-   an actual issued destination-padding/read owner remains separate work.
-3. Integrate actual typed Town-host callbacks, scene/reward and resource/body
-   layout only after the blocking ownership contracts are resolved. Preserve
-   fixed P0/N16 goldens and the old public export scope. Then build and playtest
-   the exact fresh-Wizard candidate separately.
+   The actual issued destination-padding/read ownership gap now passes. The
+   bounded exclusive reward-selector audit still requires Town classes0E/0F/10;
+   simple0E is a distinct model grammar. Complete their assets and callback
+   closure rather than assuming only the yellow-gem path can occur.
+3. Implement separate actual-resource-bound research upload staging, then
+   integrate actual typed Town-host callbacks, scene/reward and resource/body
+   layout only after blocking ownership contracts are resolved. The detached
+   scene is complete; no body or candidate follows automatically. Preserve fixed
+   P0/N16 goldens and the old public export scope. Then build and playtest the
+   exact fresh-Wizard candidate separately.
 4. Extend tested texture/material and Moby families through the editor with
    explicit dependency coverage and regression gates. General native texture
    portability, arbitrary object mixtures, new normal portal routes and V6

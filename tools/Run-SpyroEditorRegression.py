@@ -33,6 +33,7 @@ CORE_CASES = (
     ("NativeWizardCompositionSmoke", "NATIVE_WIZARD_COMPOSITION_FREE_OK"),
     ("NativeWizardFamilyAssetSmoke", "NATIVE_WIZARD_FAMILY_ASSET_FREE_OK"),
     ("NativeId65FreshWizardResourceSmoke", "FRESH_WIZARD_RESOURCE_FREE_OK"),
+    ("NativeId65FreshWizardSceneSmoke", "FRESH_WIZARD_SCENE_FREE_OK"),
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_FREE_OK"),
     ("NativeGlobalSoundSmoke", "NATIVE_GLOBAL_SOUND_SOURCE_FREE_OK"),
     ("NativeId65EngineProfileSmoke", "NATIVE_ID65_ENGINE_PROFILE_SOURCE_FREE_OK"),
@@ -117,6 +118,7 @@ SOURCE_QA_CASES = (
     ("NativeWizardCompositionSmoke", "NATIVE_WIZARD_COMPOSITION_SOURCE_OK", ["--source"]),
     ("NativeWizardFamilyAssetSmoke", "NATIVE_WIZARD_FAMILY_ASSET_SOURCE_OK", ["--source"]),
     ("NativeId65FreshWizardResourceSmoke", "FRESH_WIZARD_RESOURCE_SOURCE_OK", ["--source"]),
+    ("NativeId65FreshWizardSceneSmoke", "FRESH_WIZARD_SCENE_SOURCE_OK", ["--source"]),
     ("NativeGreenWizardMoverSmoke", "NATIVE_GREEN_WIZARD_MOVER_SOURCE_SMOKE_OK", []),
     ("NativeLevelSlotOwnershipSmoke", "NATIVE_LEVEL_SLOT_OWNERSHIP_SOURCE_OK", ["--source"]),
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_OK", ["--source"]),
@@ -159,6 +161,8 @@ SOURCE_PYTHON_CASES = (
      "FRESH_WIZARD_DEFERRED_DAMAGE_ORACLE_OK"),
     ("fresh-wizard-collider-lifetime", "src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_collider_lifetime_oracle.py",
      "NATIVE_COLLIDER_LIFETIME_SLICES_OK"),
+    ("fresh-wizard-p1-scene", "src/Spyro.Editor.NativeId65FreshWizardSceneSmoke/source_p1_scene_oracle.py",
+     "FRESH_P1_SCENE_NATIVE_SLICES_OK"),
 )
 
 
