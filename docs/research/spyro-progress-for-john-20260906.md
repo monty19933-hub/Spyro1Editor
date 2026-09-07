@@ -164,8 +164,8 @@ code, not yet new controls in R03; saving/migration and native compilation remai
 separate work. See [aggregate checkpoint](native-fresh-level-aggregate.md).
 
 Latest all-project Release build/regression gate:315 steps, zero failures,
-including the new aggregate's308 checks/214 expected refusals. The previous Python
-suite passed168 tests with seven explicit-mode skips;56 runner tests passed. The
+including the new aggregate's308 checks/214 expected refusals. The current Python
+suite passed174 tests with eight explicit-mode skips;58 runner tests passed. The
 independent native scene check passed23 checks/four expected refusals and
 sound-loading proof404 checks/ten expected refusals. New actual compiled fallback
 resource reads passed34 checks/28 expected refusals; the separate original-source

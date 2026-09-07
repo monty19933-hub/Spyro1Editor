@@ -64,11 +64,19 @@ CURSORS={"dynamic_count":(0x800756A4,"<I"),"properties_cursor":(0x80075930,"<I")
          "next_free_particle":(0x80075738,"<I")}
 RENDERER={"primitive_cursor":(0x800757B0,"<I"),"primitive_limit":(0x80075780,"<I"),
           "ordering_table":(0x80075820,"<I"),"renderer_exhaustion_flag":(0x800758B0,"<I")}
+# Fixed raw diagnostic words only: no range thresholds, motion units or damage
+# attribution. State6 alone and one cleared accumulator do not identify cause.
+HEALTH_MOTION_FIELDS={
+    "player_health_s32":(0x80078BBC,"<i"),"player_damage_accumulator_u32":(0x80078A84,"<I"),
+    "player_motion_78b4c_s32x3":(0x80078B4C,"<iii"),"player_motion_78b64_s32x3":(0x80078B64,"<iii"),
+    "player_motion_78ba4_s32":(0x80078BA4,"<i"),"player_state_input_78af4_s32":(0x80078AF4,"<i"),
+    "player_state_input_78b08_s32":(0x80078B08,"<i"),
+}
 REPORT_FIELDS={name:wizard.FIELDS[name] for name in (
     "lives","player_xyz","player_heading_u8","camera_control_angle_s16","player_desired_bearing_u32",
-    "player_state","player_substate","player_state_timer","player_animation_id","last_collision_saved_sp_not_peak")}|RENDERER
+    "player_state","player_substate","player_state_timer","player_animation_id","last_collision_saved_sp_not_peak")}|RENDERER|HEALTH_MOTION_FIELDS
 FIELDS={name:(at,"<I") for name,(at,_) in GATES.items()}|CURSORS|REPORT_FIELDS
-REREAD=tuple(GATES)+tuple(CURSORS)+tuple(RENDERER)
+REREAD=tuple(GATES)+tuple(CURSORS)+tuple(RENDERER)+tuple(HEALTH_MOTION_FIELDS)
 
 
 def _words(values):return struct.pack("<"+"I"*len(values),*values)
@@ -171,7 +179,7 @@ def capture(client,label):
                 samples.append(dict(slot=i,selector=b[0],kind=b[1],age=b[2],visibility=b[3],raw_hex=b.hex()))
         pete=client.read(PETE,4);witnesses.append((PETE,pete))
         after=_fields(client,REREAD)
-        if any(after[n]!=values[n] for n in REREAD):raise ValueError("Gate/cursor/renderer changed during sequential reads.")
+        if any(after[n]!=values[n] for n in REREAD):raise ValueError("Gate/cursor/renderer/diagnostic changed during sequential reads.")
         for at,b in witnesses:
             if client.read(at,len(b))!=b:raise ValueError(f"Code/placed/private/companion/terminal witness changed at{at:08X}")
         slack,reason=primitive_slack(values['primitive_cursor'],values['primitive_limit'])

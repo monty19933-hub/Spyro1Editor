@@ -46,6 +46,11 @@ Read `native-fresh-wizard-p1-r01-runtime-observations.md` before further runtime
 work. R03 remains open and unchanged. Every future run needs fresh backups and
 actual process/file binding; never reconnect departed IDs.
 
+The later report-only health/motion extension is reviewed and replayed:
+whole Python174/eight explicit skips, original+actual files+recorded OS21/no
+skips, runner58. All seven new owners are reread; no new value/approval gates.
+Read `native-fresh-wizard-health-motion-observer.md`. These are not live results.
+
 ## Earlier closed runtime milestones
 
 Earlier owned DuckStation/observer/capture sessions are CLOSED. Fresh global/game

@@ -34,6 +34,59 @@ def load(path,name):
     return m
 
 
+class HealthMotionTests(unittest.TestCase):
+    EXPECTED={
+        'player_health_s32':(0x80078BBC,'<i'),
+        'player_damage_accumulator_u32':(0x80078A84,'<I'),
+        'player_motion_78b4c_s32x3':(0x80078B4C,'<iii'),
+        'player_motion_78b64_s32x3':(0x80078B64,'<iii'),
+        'player_motion_78ba4_s32':(0x80078BA4,'<i'),
+        'player_state_input_78af4_s32':(0x80078AF4,'<i'),
+        'player_state_input_78b08_s32':(0x80078B08,'<i'),
+    }
+
+    def setUp(self):
+        self.neutral=load('tools/tests/test_fresh_wizard_p1_observer.py','p1_health_neutral_fixture')
+        self.O=self.neutral.O
+
+    def test_exact_seven_report_owners_and_rereads_not_baseline_thresholds(self):
+        O=self.O;self.assertEqual(self.EXPECTED,O.HEALTH_MOTION_FIELDS)
+        self.assertEqual(44,sum(struct.calcsize(fmt) for _,fmt in O.HEALTH_MOTION_FIELDS.values()))
+        for name,descriptor in self.EXPECTED.items():
+            self.assertEqual(descriptor,O.REPORT_FIELDS[name]);self.assertEqual(descriptor,O.FIELDS[name])
+            self.assertEqual(1,O.REREAD.count(name));self.assertNotIn(name,O.GATES)
+
+    def test_signed_extremes_high_flags_and_vectors_report_without_diagnosis(self):
+        O=self.O;baseline=O.capture(self.neutral.fixture(),'same label');m=self.neutral.fixture()
+        values={'player_health_s32':-1,'player_damage_accumulator_u32':0x80020020,
+                'player_motion_78b4c_s32x3':[-2147483648,-1,2147483647],
+                'player_motion_78b64_s32x3':[2147483647,0,-2147483648],
+                'player_motion_78ba4_s32':-192,'player_state_input_78af4_s32':-2147483648,
+                'player_state_input_78b08_s32':2147483647}
+        for name,value in values.items():
+            at,fmt=self.EXPECTED[name];m.blob(at,struct.pack(fmt,*(value if isinstance(value,list) else [value])))
+        result=O.capture(m,'same label');self.assertTrue(result['payload_valid'])
+        for name,value in values.items():
+            self.assertEqual(value,result[name]);at,fmt=self.EXPECTED[name]
+            self.assertEqual(2,m.reads.count((at,struct.calcsize(fmt))))
+        for key,value in baseline.items():
+            if key not in self.EXPECTED and key!='utc':self.assertEqual(value,result[key],key)
+        for key in ('candidate_authenticated','external_session_binding_checked','runtime_pass','ui_result_approved','normal_export_approved'):
+            self.assertFalse(result[key])
+
+    def test_each_report_owner_drift_or_partial_read_refuses_payload(self):
+        for name,(at,fmt) in self.EXPECTED.items():
+            with self.subTest(name=name,kind='reread drift'):
+                m=self.neutral.fixture();m.flip[at]=1;result=self.O.capture(m,'drift')
+                self.assertFalse(result['payload_valid']);self.assertFalse(result['gate_reread_consistent'])
+                self.assertNotIn('dynamic_rows',result);self.assertNotIn('particles',result)
+            with self.subTest(name=name,kind='partial owner'):
+                m=self.neutral.fixture();read=m.read
+                m.read=lambda address,n:read(address,n)[:-1] if address==at else read(address,n)
+                result=self.O.capture(m,'short')
+                self.assertFalse(result['payload_valid']);self.assertNotIn('dynamic_rows',result)
+
+
 class ConnectionWarningTests(unittest.TestCase):
     def run_main_fake(self,fail=False):
         O=load('tools/Observe-SpyroFreshWizardP1.py','p1_connection_warning_fakes')
@@ -258,6 +311,68 @@ class RecordedGrammarTests(unittest.TestCase):
 
 
 class SourceGates(unittest.TestCase):
+    def test_original_health_motion_operands_and_complete_vector_copy(self):
+        if SOURCE is None:self.skipTest('Explicit --source required; no default original reads.')
+        path=ROOT/'src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_audio_audit.py'
+        digest='7fe4e4e65d1552420bb48778a274e25afdf65005d55e8590125d2f84db23f532'
+        self.assertEqual(digest,hashlib.sha256(path.read_bytes()).hexdigest())
+        raw=load(str(path),'p1_health_source_reader');O=load('tools/Observe-SpyroFreshWizardP1.py','p1_health_source_fields')
+        with open(SOURCE,'rb') as image:
+            initial=os.fstat(image.fileno())
+            def identity():
+                raw.identity(image)
+                for state in (os.fstat(image.fileno()),os.stat(SOURCE)):
+                    self.assertEqual((initial.st_dev,initial.st_ino,661547040,initial.st_mtime_ns,initial.st_ctime_ns),
+                                     (state.st_dev,state.st_ino,state.st_size,state.st_mtime_ns,state.st_ctime_ns))
+            identity()
+            try:
+                offset,length,base,exe_sha=raw.SOURCES['exe'];exe=raw.logical(image,offset,length)
+                self.assertEqual(exe_sha,hashlib.sha256(exe).hexdigest())
+                pins=((0x800427BC,0xB4,'33edd323404e3bdb4e79ed42222ce965b4eb162366aa2c3ecc53a7ab1d7c6ffd'),
+                      (0x800416AC,0x70,'c8378f043a7c3e803d4fe09b3fbf6fee83f511c65b92cb2b34f252862d46c6a2'),
+                      (0x8003EE9C,0x50,'0c24e672f1bb410708d70088bda3f7c1b2dc14585b88e6a370788728617af821'),
+                      (0x8003F8D4,0x18,'17853e6852a3ec63f795961bc1715ea3f84585bcd46ba9c2a6c7a1552f745933'),
+                      (0x80017700,0x28,'7c1af3c5556925409e78330cd5a9bfa66cdf2a0ef040af9aa3f7d8a062aca56e'))
+                for at,n,sha in pins:self.assertEqual(sha,hashlib.sha256(exe[at-base:at-base+n]).hexdigest())
+                def words(at,expected):
+                    actual=struct.unpack_from('<'+'I'*len(expected),exe,at-base)
+                    self.assertEqual(tuple(expected),actual,hex(at));return actual
+                def absolute(hi,low):
+                    self.assertEqual(15,hi>>26)
+                    return (((hi&65535)<<16)+((low&32767)-(low&32768)))&0xFFFFFFFF
+                # Actual LW plus signed BGEZ/SLTI consumers; delay words retained.
+                health=words(0x800427EC,[0x3C028008,0x8C428BBC,0,0x04410357,0])
+                damage=words(0x800427BC,[0x3C028008,0x8C428A84,0,0x30420020])
+                state_a=words(0x800416D8,[0x3C028008,0x8C428AF4,0,0x28420004])
+                state_b=words(0x800416F0,[0x3C028008,0x8C428B08,0,0x28420017])
+                for seq in (health,damage,state_a,state_b):self.assertEqual((35,2,2),(seq[1]>>26,seq[1]>>21&31,seq[1]>>16&31))
+                # Actual call arguments are based on substate78AD4, not a seeded
+                # guessed motion pointer. The JAL delay clears substate.
+                args=words(0x8003EE9C,[0x3C028008,0x24428AD4,0x24440078,0x24450090,0x0C005DC0,0xAC400000])
+                vector_base=absolute(args[0],args[1]);dest=vector_base+(args[2]&65535);source=vector_base+(args[3]&65535)
+                self.assertEqual(0x80017700,((0x8003EEB4)&0xF0000000)|((args[4]&0x3FFFFFF)<<2))
+                copy=words(0x80017700,[0x8CA10000,0x8CA20004,0x8CA30008,0xAC810000,0xAC820004,0x03E00008,0xAC830008])
+                self.assertEqual([(35,5,i+1,i*4) for i in range(3)],[(w>>26,w>>21&31,w>>16&31,w&65535) for w in copy[:3]])
+                self.assertEqual([(43,4,i+1,i*4) for i in range(3)],[(w>>26,w>>21&31,w>>16&31,w&65535) for w in (copy[3],copy[4],copy[6])])
+                # State6 selected negative initialization reaches the actual SW.
+                branch=words(0x8003EEC0,[0x14400284,0x2402FF40])
+                self.assertEqual(0x8003F8D4,0x8003EEC4+((branch[0]&65535)<<2))
+                self.assertEqual(-192,(branch[1]&32767)-(branch[1]&32768))
+                scalar=words(0x8003F8D4,[0x3C018008,0xAC228BA4])
+                expected={'player_health_s32':(absolute(*health[:2]),'<i'),
+                    'player_damage_accumulator_u32':(absolute(*damage[:2]),'<I'),
+                    'player_motion_78b4c_s32x3':(dest,'<iii'),'player_motion_78b64_s32x3':(source,'<iii'),
+                    'player_motion_78ba4_s32':(absolute(*scalar),'<i'),
+                    'player_state_input_78af4_s32':(absolute(*state_a[:2]),'<i'),
+                    'player_state_input_78b08_s32':(absolute(*state_b[:2]),'<i')}
+                self.assertEqual(expected,O.HEALTH_MOTION_FIELDS)
+                for name,(at,fmt) in expected.items():
+                    self.assertEqual((at,fmt),O.FIELDS[name]);self.assertIn(name,O.REREAD)
+                # Instruction/operand proof only: no GTE/audio/state helper is
+                # executed or assigned a fabricated outcome in this test.
+            finally:
+                identity();self.assertEqual(digest,hashlib.sha256(path.read_bytes()).hexdigest())
+
     def test_root_reviewed_recorded_os_fixtures_not_live_process(self):
         if not OS_FIXTURES:self.skipTest('Explicit --os-fixtures required; recorded files only, never live queries.')
         O=load('tools/Observe-SpyroFreshWizardP1.py','p1_recorded_os_only')
