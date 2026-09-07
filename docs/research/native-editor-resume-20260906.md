@@ -17,7 +17,9 @@ Separate upload staging, fallback resources and the linked Town Host issuer
 and combined Body/Executable are now implemented. Actual-issued Body consumption
 and the independent full physical reference are now root-replayed and reviewed.
 The separate actual-Executable-bound physical disc plan now passes source,
-legacy and full default gates. No Wizard candidate is materialized.
+legacy and full default gates. The closed source-bound research materializer
+now also passes API/free/source, three old-kind suites and the all-project
+Release gate. No Wizard candidate is materialized yet.
 
 John authorized autonomous development, useful parallel agents, sensible
 commits and DuckStation gameplay with temporary settings. Continue until the
@@ -167,10 +169,19 @@ BIN SHA256
   cover the three primary calls. The proposed primary-only skip policy cannot
   protect reward/digit/Sparx requests; it remains unapproved and unimplemented.
   Read `native-fresh-wizard-capacity-admission.md`.
-- Latest full default .NET gate: Release144 steps/zero failures including the
-  new source-free Disc mode. Whole Python115 tests/four explicit-source
-  skips; runner55. Source-only native scene/staging/fallback checks are separate.
-  Full report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-oa3mfni6/summary.json`.
+- New actual-Disc-bound research Candidate/Publisher: API9/free151/source165
+  checks/20 refusals pass twice. Per-LBA authenticated whole writer sink matches
+  c4a7…5b5a6/1290; old three publication suites preserve their exact images.
+  No physical output mode is activated yet; actual staging, postcommit and
+  separate-process verification remain next. Read
+  `native-fresh-wizard-research-materializer.md`.
+- Latest all-project/default .NET gate: Release313 checks/zero failures with
+  `--build-all`, including the new materializer and prepared uninvoked physical
+  test files. The prior144-step selected gate remains historical evidence.
+  Whole Python138 tests/five explicit-source skips; runner56. This includes the
+  separately reviewed, live-disabled new P1 observer tests; root source replay2
+  is also green. Source-only native scene/staging/fallback checks are separate.
+  Full report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-v7l_r91u/summary.json`.
   These are engineering gates, not gameplay acceptance.
 
 ## Current package gate and next practical work
@@ -218,7 +229,9 @@ Next outcomes:
    closure rather than assuming only the yellow-gem path can occur.
 3. Actual issued Body consumption, independent full raw afterimage/inverse
    review and the new actual-Executable-bound physical Disc gates are complete.
-   Implement the next closed actual-Disc research materializer tests-first.
+   The closed actual-Disc research materializer is implemented tests-first;
+   activate its separately reviewed explicit-output test CLI next, then run
+   actual staging/postcommit and clean publication/independent verification.
    Its new gap is through55162,37 sectors beyond old55125. Root's reviewed
    private design is in fresh-wizard-disc-issuer-plan-r01.UKwumc.
    Reuse the unchanged private full-LBA source validator and raw-sector codec,

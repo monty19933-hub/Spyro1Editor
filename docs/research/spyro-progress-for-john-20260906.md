@@ -126,9 +126,12 @@ resource ownership and allocation layout. See
 now also passes its tests: it preserves LAB/music and gives the placed Wizard's
 level a ten-gem treasure target. The new disc builder now also matches the
 independent whole-ROM reference and reverses exactly to the original. A guarded
-test-file exporter is next; these results are not yet a published/playtested
-fresh-Wizard ROM. See [executable checkpoint](native-fresh-wizard-detached-executable.md)
-and [disc checkpoint](native-fresh-wizard-detached-disc.md).
+test-file exporter now passes its source tests and the all-project Release
+regression run. Real file publication/recovery tests are next; these results
+are not yet a published/playtested fresh-Wizard ROM. See
+[materializer checkpoint](native-fresh-wizard-research-materializer.md),
+[executable checkpoint](native-fresh-wizard-detached-executable.md) and
+[disc checkpoint](native-fresh-wizard-detached-disc.md).
 
 Reward testing uncovered two more native dependencies: a ten-gem pickup creates
 two number objects, whose expiry can create twenty particles. The real spawn
