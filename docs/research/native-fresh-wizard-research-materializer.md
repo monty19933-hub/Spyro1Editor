@@ -38,7 +38,8 @@ prospective4877-byte receipt:
 `af41aa8b0af10504c626f76cbaa2446e2207486551ce6ba8766794261a63b63e`;
 CUE:
 `78c40516cbfe54286b839453d8ccf5786ac685d23a69623e6e51d82106238a6e`.
-Prospective companions are not published or read-back evidence.
+These same companions now match the actual clean publication and independent
+readback below; the earlier in-memory prediction was not itself that evidence.
 
 ## Executed and pending gates
 
@@ -60,11 +61,53 @@ Edited/saved full ecc8…ed16 image and1253-sector count are unchanged. Exact lo
 frozen hashes and counts are in
 `_local/research/dark-wizard-native-closure-20260906/fresh-wizard-materializer-implementation-r01.yz0yeE/HANDOFF.md`.
 
-Staging and nine actual postcommit cases are prepared but currently uninvoked;
-default/source modes never dispatch them. Physical stage flush/reopen,
-corruption/cleanup, actual success, separate-process Verify and postcommit
-failure preservation remain pending. A separate reviewed explicit-output CLI
-is under review. No physical candidate or emulator session is claimed here.
+## Real publication and independent verification
+
+Root's explicit four-mode CLI is separately reviewed and tested. Default/source
+never dispatch physical output; reviewed modes require an exact absolute target,
+unlinked existing parent chain and physical/lexical source separation. A pure
+20-combination failure matrix (96 checks) preserves the same primary and final
+exceptions, including both original BIN/CUE checks. A failed final check must
+not mask already-committed/rollback recovery evidence. CLI argument checks43/48
+pass; the initial missing-CLI RED is retained.
+
+Actual physical evidence directory:
+`_local/research/dark-wizard-native-closure-20260906/fresh-wizard-publication-validation-r01.0eF4Tz/`.
+
+- Staging-r01 exposed a test-only buffering assumption: logical FileStream length
+  was2352 but visible disk length0 before flush. The corrected test logs that
+  distinction; full flushed-stage readback was not relaxed. Failed evidence stays.
+- Staging-r02 passes54 checks: actual complete stage reopen, raw/header/parity/
+  extra-gap/untouched-sector and companion corruption, cancellation, private CUE/
+  alias replacement, occupied/link/overlap/duplicate and foreign-owner controls.
+  Every call forces precommit refusal. No successful publication follows from
+  this staging suite. An existing transaction-lock fixture tests occupied output,
+  not late lock contention.
+- Postcommit-r01 passes nine actual publication cases and20865 assertions (mostly
+  full corrupt-image block/EOF checks). AfterCommit token cancellation returns
+  verified success. Cleanup OCE, rollback-type callback, unknown or reused stage
+  basenames, regular-file stage replacement and corrupt final BIN correctly
+  return typed committed failures. Exact foreign owners and32-byte leases remain.
+  The ninth BIN is deliberately corrupt and is never repaired or used for play.
+  CLI exception-tree tests consume actual caught committed failures, not fake
+  publication objects. Lease replacement is explicitly unexercised.
+- Separate clean candidate-r01 was published through the normal new public
+  publisher, then a new process recaptured the actual full source chain and
+  independently verified all three files. Both result records have1290 changed
+  sectors, c4a7…5b5a6 and no retained recovery. All whole original checks pass.
+
+Clean research CUE, not any fault-test child:
+`_local/research/dark-wizard-native-closure-20260906/fresh-wizard-publication-validation-r01.0eF4Tz/candidate-r01/native-id65-fresh-wizard-p1-n32-r01.cue`.
+Logs01–06 and `ROOT-AUTHORITY.md` retain chronology and exact scope. Source/free
+tests were rerun after CLI integration: API9/free151/source165/20 remain exact.
+This is actual file publication/readback, not a saved-project binding, GUI
+export, native gameplay or emulator acceptance. No new emulator session started.
+
+After all CLI/physical-test changes, the selected Release/default regression
+gate passes146 checks/zero failures. This is the same selected-project scope as
+the earlier144 gate, plus the new project/build; the broader all-project gate
+was313. Final report:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-lgxwoqbx/summary.json`.
 
 Trusted ancestors/cooperating writers are assumed, not crash atomicity or
 hostile filesystem races. Audio identity, full object lifetimes, aggregate

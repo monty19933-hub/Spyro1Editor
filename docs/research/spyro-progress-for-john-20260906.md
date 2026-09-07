@@ -127,8 +127,9 @@ now also passes its tests: it preserves LAB/music and gives the placed Wizard's
 level a ten-gem treasure target. The new disc builder now also matches the
 independent whole-ROM reference and reverses exactly to the original. A guarded
 test-file exporter now passes its source tests and the all-project Release
-regression run. Real file publication/recovery tests are next; these results
-are not yet a published/playtested fresh-Wizard ROM. See
+regression run. Real file publication/recovery tests also passed, and a separate
+clean fresh-Wizard ROM has been published and independently verified. It has
+not yet been played in DuckStation or integrated into R03. See
 [materializer checkpoint](native-fresh-wizard-research-materializer.md),
 [executable checkpoint](native-fresh-wizard-detached-executable.md) and
 [disc checkpoint](native-fresh-wizard-detached-disc.md).

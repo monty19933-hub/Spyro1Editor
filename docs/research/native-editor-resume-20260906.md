@@ -19,7 +19,9 @@ and the independent full physical reference are now root-replayed and reviewed.
 The separate actual-Executable-bound physical disc plan now passes source,
 legacy and full default gates. The closed source-bound research materializer
 now also passes API/free/source, three old-kind suites and the all-project
-Release gate. No Wizard candidate is materialized yet.
+Release gate. Real stage/postcommit tests and a separate clean candidate have now
+passed, including independent new-process readback. Fresh-Wizard gameplay and
+new observer activation remain pending; no new emulator session has started.
 
 John authorized autonomous development, useful parallel agents, sensible
 commits and DuckStation gameplay with temporary settings. Continue until the
@@ -172,8 +174,10 @@ BIN SHA256
 - New actual-Disc-bound research Candidate/Publisher: API9/free151/source165
   checks/20 refusals pass twice. Per-LBA authenticated whole writer sink matches
   c4a7…5b5a6/1290; old three publication suites preserve their exact images.
-  No physical output mode is activated yet; actual staging, postcommit and
-  separate-process verification remain next. Read
+  Explicit CLI guards43/48 and pure failure96 also pass. Real staging54 and nine
+  postcommit cases20865 (mostly block assertions) pass; separate clean publication
+  and new-process source recapture/readback match c4a7…5b5a6/1290. Failure evidence
+  is retained separately. No app/normal export/runtime approval follows. Read
   `native-fresh-wizard-research-materializer.md`.
 - Latest all-project/default .NET gate: Release313 checks/zero failures with
   `--build-all`, including the new materializer and prepared uninvoked physical
@@ -182,6 +186,8 @@ BIN SHA256
   separately reviewed, live-disabled new P1 observer tests; root source replay2
   is also green. Source-only native scene/staging/fallback checks are separate.
   Full report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-v7l_r91u/summary.json`.
+  After physical CLI integration, final selected Release/default146/zero failures
+  also passes; report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-lgxwoqbx/summary.json`.
   These are engineering gates, not gameplay acceptance.
 
 ## Current package gate and next practical work
@@ -229,17 +235,21 @@ Next outcomes:
    closure rather than assuming only the yellow-gem path can occur.
 3. Actual issued Body consumption, independent full raw afterimage/inverse
    review and the new actual-Executable-bound physical Disc gates are complete.
-   The closed actual-Disc research materializer is implemented tests-first;
-   activate its separately reviewed explicit-output test CLI next, then run
-   actual staging/postcommit and clean publication/independent verification.
+   The closed actual-Disc research materializer and explicit-output test CLI are
+   implemented; actual staging/postcommit and clean publication/independent
+   verification now pass. Clean CUE is in
+   `fresh-wizard-publication-validation-r01.0eF4Tz/candidate-r01`, not its fault
+   children. Finish the separately reviewed phase2 observer binding next before
+   connecting to a new controlled DuckStation session. The phase1 CLI remains
+   disabled while those changes are under implementation and root review.
    Its new gap is through55162,37 sectors beyond old55125. Root's reviewed
    private design is in fresh-wizard-disc-issuer-plan-r01.UKwumc.
    Reuse the unchanged private full-LBA source validator and raw-sector codec,
    but run the full new geometry/ISO/gap checks; do not reuse old gap authority.
    Existing LAB/music/ID65 table owners and fixed P0/N16 outputs stay unchanged.
-   Static target10 is not persistent/card/history policy. No candidate follows
-   automatically; separately materialize and playtest an exact checked private
-   image with all unresolved audio/capacity/runtime limitations explicit. The
+   Static target10 is not persistent/card/history policy. Physical publication
+   is now complete; playtest only the exact independently checked private image
+   with all unresolved audio/capacity/runtime limitations explicit. The
    reviewed next-stage proposal is in fresh-wizard-materializer-plan-r01.8dwAYa;
    old N16/Dark observers must reject the new P1/N32 layout, not be repurposed
    with stale anchors. Source-bound new observer or explicit visual-only scope

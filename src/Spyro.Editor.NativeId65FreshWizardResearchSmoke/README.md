@@ -56,19 +56,42 @@ source23/postcommit-sourceguards15. Edited/saved physical ecc8…ed16/1253 and
 saved prospective receipt cc0184…4af1/4256bytes are unchanged. All build logs have
 zero warnings/errors. Exact commands/logs/hashes are in the evidence HANDOFF.
 
-`StagingCases.cs` is prepared but not dispatched or executed in this checkpoint
-work. Every call forces precommit failure, including occupied/link/overlap/lock
-cases; a missing guard must not silently publish. Actual staged complete
-readback, corruption/cancellation, partial cleanup, foreign residue and duplicate
-writer cases require separately reviewed exact output-directory authority.
+## Explicit physical modes
 
-Actual successful new-only Publish, separate-process Verify and postcommit
-exercises remain unexecuted here. Those must prove late cancellation returns
-verified success, while postcommit callback/cleanup/readback failures produce
-the actual typed committed outcome and retained evidence. In particular,
-subsequent stage owners using known output basenames, regular-file stage
-replacement and an after-commit rollback-exception callback must be preserved.
-Static review is not execution of these paths.
+Only the following four exact modes accept BIN CUE and an absolute final path:
+
+```text
+--stage-reviewed ORIGINAL.bin ORIGINAL.cue ABSENT-workspace
+--postcommit-reviewed ORIGINAL.bin ORIGINAL.cue ABSENT-workspace
+--publish-reviewed ORIGINAL.bin ORIGINAL.cue ABSENT-output
+--verify-reviewed ORIGINAL.bin ORIGINAL.cue EXISTING-output
+```
+
+They are never called by defaults, source mode or the regression runner. Parents
+must already exist and be unlinked; originals cannot overlap outputs. The
+postcommit test creates and retains nine full BIN/CUE/receipt sets (~5.95GB),
+including a deliberately corrupted ninth BIN; do not use fault children for play.
+No existing output is overwritten, repaired or automatically adopted.
+
+Root's actual staging54 and nine postcommit20865 checks now pass. The initial
+first-sector test RED incorrectly equated logical buffered length with disk
+length; the corrected test observes0 disk/2352 logical without claiming flush.
+Complete later flush/reopen was not weakened. All stage controls force precommit
+failure. Postcommit controls include late token cancellation success and typed
+failure/preservation of OCE, rollback-type callback, unknown/reused names, stage
+file replacement and corrupt final BIN. Most20865 assertions are full-image
+block/EOF checks, not independent scenarios. Lease replacement is unexercised.
+
+Separate clean public Publish and a new-process Verify with fresh actual chain
+recapture both pass; original full BIN/CUE remain exact. Pure failure orchestration
+96 checks and CLI argument43/48 checks prevent final-original exceptions masking
+primary failure/recovery evidence. No false committed object is manufactured.
+
+Actual logs and retained targets:
+`_local/research/dark-wizard-native-closure-20260906/fresh-wizard-publication-validation-r01.0eF4Tz/`.
+Only `candidate-r01` is the clean primary. Read
+`docs/research/native-fresh-wizard-research-materializer.md` for exact hashes and
+scope. Publication is not gameplay or GUI/saved-document integration.
 
 The three older fresh binding kinds keep their historical serializers, tokens,
 failure timing and cleanup behavior. The stricter postcommit any-stage-owner

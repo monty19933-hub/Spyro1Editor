@@ -30,7 +30,15 @@ internal static class StagingCases
                 {
                     if(point!=fault)return;reached=true;
                     if(point==NativeId65FreshWizardResearchFault.AfterFirstSector)
-                        Check(new FileInfo(image).Length==2352,"Exactly one physical pair exists at first checkpoint.");
+                    {
+                        // The production stream has checked logical2352-byte
+                        // Length/Position; its buffer need not be flushed yet.
+                        // Complete flush/reopen is tested at BeforePublication.
+                        long visible=new FileInfo(image).Length;
+                        Check(File.Exists(image)&&new FileInfo(image).LinkTarget==null&&visible is 0 or 2352,
+                            "First logical pair has a new staged file; buffered disk length is not durability proof.");
+                        Console.WriteLine($"FRESH_WIZARD_FIRST_PAIR_FILE_OBSERVATION visibleBytes={visible} logicalPairBytes=2352 flushClaimed=false");
+                    }
                     if(point!=NativeId65FreshWizardResearchFault.BeforePublication)return;
                     var verified=NativeId65FreshWizardResearchCandidatePublisher.VerifyAsync(plan,Path.GetDirectoryName(image)!).GetAwaiter().GetResult();
                     Check(verified.ImageSha256==plan.ExpectedImageSha256&&verified.ChangedRawSectors==1290&&!verified.RuntimeVerified&&!verified.NormalCreateBinApproved,

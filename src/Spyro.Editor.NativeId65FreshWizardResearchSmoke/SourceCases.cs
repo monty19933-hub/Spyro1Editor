@@ -152,7 +152,7 @@ internal static class SourceCases
         Check(!Directory.Exists(root),"Tiny source fixture cleanup complete.");
     }
     private static void Check(bool value,string message){if(!value)throw new InvalidDataException(message);checks++;}
-    private static void Reject(Action action){try{action();}catch(Exception error)when(error is InvalidDataException or ArgumentNullException){refusals++;return;}throw new Exception("Expected source-bound refusal.");}
+    private static void Reject(Action action){try{action();}catch(InvalidDataException){refusals++;return;}throw new Exception("Expected source-bound refusal.");}
     private static async Task Refuse<T>(Func<Task> action,string contains="")where T:Exception
     {try{await action();}catch(T error)when(error.Message.Contains(contains,StringComparison.OrdinalIgnoreCase)){refusals++;return;}throw new Exception("Expected "+typeof(T).Name+" containing "+contains);}
     private static string Hash(byte[] bytes)=>Convert.ToHexStringLower(SHA256.HashData(bytes));

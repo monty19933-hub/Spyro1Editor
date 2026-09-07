@@ -155,6 +155,10 @@ internal static class PostcommitCases
                     Check(completed==null&&committedFailure!=null&&beforeCleanup==(kind is Scenario.RollbackCallback or Scenario.CorruptImage?0:1),
                         "Actual postcommit error yields only the typed committed failure, never canceled/partial/success result.");
                     var failure=committedFailure!;
+                    Check(ReviewedPublicationCases.ContainsCommittedFailure(failure)&&
+                        ReviewedPublicationCases.ContainsCommittedFailure(new AggregateException(new IOException("separate final-check witness"),new IOException("outer witness",failure)))&&
+                        !ReviewedPublicationCases.ContainsCommittedFailure(new AggregateException(new IOException("uncommitted witness"))),
+                        "CLI discovers only the actual committed failure, including when later verification errors preserve it in an exception tree.");
                     Check(failure.OutputDirectory==output&&failure.ImagePath==image&&failure.CuePath==Path.Combine(output,binding.CueName)&&
                         failure.ReceiptPath==Path.Combine(output,binding.ReceiptName)&&failure.PlanSha256==plan.PlanSha256&&
                         failure.RetainedStageDirectory==stage&&failure.RetainedOutputLeasePath==lease&&failure.RetainedRecoveryDirectory=="",
