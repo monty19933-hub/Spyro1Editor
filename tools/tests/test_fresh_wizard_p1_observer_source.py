@@ -34,6 +34,96 @@ def load(path,name):
     return m
 
 
+class ConnectionWarningTests(unittest.TestCase):
+    def run_main_fake(self,fail=False):
+        O=load('tools/Observe-SpyroFreshWizardP1.py','p1_connection_warning_fakes')
+        err=io.StringIO();out=io.StringIO();seen=[]
+        class Input:buffer=io.BytesIO(b'q\n')
+        def run(pid,cue,source,emit):
+            seen.append(err.getvalue())
+            self.assertEqual(321,pid);self.assertEqual(O.CANDIDATE_DIRECTORY+'/'+O.CANDIDATE_BASENAME+'.cue',cue)
+            self.assertIs(Input.buffer,source)
+            if fail:raise ValueError('synthetic closed-session failure')
+            return 0 # CLI plumbing only; no fabricated connected or verified event.
+        with patch.object(O,'PHASE2_READY',True),patch.object(O,'_run_session',side_effect=run) as session, \
+             patch.object(O.sys,'stdin',Input()),contextlib.redirect_stderr(err),contextlib.redirect_stdout(out):
+            result=O.main(['--pid','321','--candidate-cue',O.CANDIDATE_DIRECTORY+'/'+O.CANDIDATE_BASENAME+'.cue',
+                           '--connect-identified-test-session'])
+        self.assertEqual(1,session.call_count)
+        return result,seen,err.getvalue(),out.getvalue()
+
+    def test_pause_and_conditional_resume_warning_precedes_any_session_work(self):
+        result,seen,err,out=self.run_main_fake()
+        self.assertEqual(0,result);self.assertEqual('',out);self.assertEqual([err],seen)
+        self.assertIn('Connecting can pause DuckStation.',seen[0])
+        self.assertIn('Disconnecting can resume DuckStation if it was running when the first client was accepted.',seen[0])
+        self.assertIn('Verify pause state in the emulator UI after closing',seen[0])
+        self.assertIn('p <label> samples, q closes.',seen[0]);self.assertIn('No automatic reconnect.',seen[0])
+
+    def test_failure_warns_of_conditional_resume_without_claiming_verified_closure(self):
+        result,seen,err,out=self.run_main_fake(fail=True)
+        self.assertEqual(2,result);self.assertEqual(1,len(seen))
+        event=json.loads(out);self.assertEqual('session_failed',event['kind'])
+        for key in ('final_full_checks_passed','candidate_authenticated','runtime_pass'):self.assertFalse(event[key])
+        failure_warning=err[len(seen[0]):]
+        self.assertIn('No automatic recovery.',failure_warning)
+        self.assertIn('Disconnecting can resume DuckStation if it was running when the first client was accepted',failure_warning)
+        self.assertIn('verify pause state in the emulator UI.',failure_warning)
+        self.assertNotIn('disconnect does not resume',err)
+
+
+class QueryDiagnosticTests(unittest.TestCase):
+    QUERIES=(('process',('/bin/ps','-p','321','-o','lstart=','-o','uid=','-o','comm=')),
+        ('numeric-fds',('/usr/sbin/lsof','-nP','-a','-p','321','-d','0-4096','-F0pcftaiDnsPT','-Ts')),
+        ('listener',('/usr/sbin/lsof','-nP','-iTCP:2345','-sTCP:LISTEN','-F0pcftaiDnsPT','-Ts')),
+        ('text-owner',('/usr/sbin/lsof','-nP','-a','-p','321','-d','txt','-F0pcftaiDnsPT','-Ts')),
+        ('established-socket',('/usr/sbin/lsof','-nP','-a','-p','321','-iTCP:2345','-sTCP:ESTABLISHED','-F0pcftaiDnsPT','-Ts')))
+
+    def run_failure(self,argv,*,code=7,ready=True,chunks=None,spawn_error=False):
+        O=load('tools/Observe-SpyroFreshWizardP1.py','p1_query_diagnostic_fakes')
+        class Pipe:
+            closed=False
+            def fileno(self):return 9
+            def close(self):self.closed=True
+        class Process:
+            def __init__(self):self.stdout=Pipe();self.done=False;self.kills=0;self.timeouts=[]
+            def wait(self,timeout):self.timeouts.append(timeout);self.done=True;return code
+            def poll(self):return code if self.done else None
+            def kill(self):self.kills+=1;self.done=True
+        class Selector:
+            def __enter__(self):return self
+            def __exit__(self,*args):pass
+            def register(self,*args):pass
+            def select(self,timeout):return [object()] if ready else []
+        process=Process()
+        with patch.object(O.subprocess,'Popen',side_effect=OSError('PRIVATE_OS_OUTPUT') if spawn_error else None,return_value=process) as popen, \
+             patch.object(O.selectors,'DefaultSelector',return_value=Selector()), \
+             patch.object(O.os,'read',side_effect=chunks if chunks is not None else [b'PRIVATE_OS_OUTPUT',b'']) as read, \
+             patch.object(O.time,'monotonic',return_value=0),self.assertRaises(ValueError) as caught:
+            O._run(argv)
+        self.assertEqual(1,popen.call_count);self.assertEqual(argv,popen.call_args.args[0])
+        self.assertFalse(popen.call_args.kwargs['shell']);self.assertEqual(O.subprocess.DEVNULL,popen.call_args.kwargs['stdin'])
+        self.assertNotIn('PRIVATE_OS_OUTPUT',str(caught.exception))
+        if not spawn_error:
+            self.assertTrue(process.stdout.closed);self.assertTrue(process.done)
+            self.assertTrue(all(0<t<=2 for t in process.timeouts))
+            self.assertTrue(all(0<c.args[1]<=4096 for c in read.call_args_list))
+        return str(caught.exception)
+
+    def test_all_five_failed_query_roles_report_exact_exit_without_os_output(self):
+        for role,argv in self.QUERIES:
+            for code in (1,7,-9):
+                with self.subTest(role=role,code=code):
+                    self.assertEqual(f'OS query [{role}] failed (exit code {code}).',self.run_failure(argv,code=code))
+
+    def test_query_unavailable_timeout_and_output_bound_retain_role(self):
+        for role,argv in self.QUERIES:
+            for options,reason in (({'spawn_error':True},'unavailable'),({'ready':False},'timed out'),
+                                   ({'chunks':[b'x'*4096]*16+[b'x']},'exceeded output bound')):
+                with self.subTest(role=role,reason=reason):
+                    self.assertEqual(f'OS query [{role}] {reason}.',self.run_failure(argv,**options))
+
+
 class SessionTests(unittest.TestCase):
     def setUp(self):self.O=load('tools/Observe-SpyroFreshWizardP1.py','p1_session_fakes')
 

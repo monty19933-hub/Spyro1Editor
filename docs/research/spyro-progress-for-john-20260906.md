@@ -92,6 +92,12 @@ Models alone are not enough. Enemy behavior, effects, sound, collision,
 animation, private state, shared state and resource limits must remain correct
 together in the destination level.
 
+The first fresh-Wizard ROM now loads the Wizard, Sparx and a projectile in LAB.
+It also exposed a playability problem: Spyro leaves the small floor almost
+immediately and falls after entry/respawn. Defeat/reward testing did not pass;
+the exact cause is still being investigated. This research build is not in R03.
+See [first fresh-Wizard playtest](native-fresh-wizard-p1-r01-runtime-observations.md).
+
 The current fresh-Wizard resource work matches independently checked texture,
 sound, model and particle buffers, and its combined body now has a source-tested
 builder. Full native behavior integration is not finished. One concrete blocker
@@ -131,7 +137,8 @@ independent whole-ROM reference and reverses exactly to the original. A guarded
 test-file exporter now passes its source tests and the all-project Release
 regression run. Real file publication/recovery tests also passed, and a separate
 clean fresh-Wizard ROM has been published and independently verified. It has
-not yet been played in DuckStation or integrated into R03. See
+now been played in DuckStation with the failed playable-entry result above;
+it is not integrated into R03. See
 [materializer checkpoint](native-fresh-wizard-research-materializer.md),
 [executable checkpoint](native-fresh-wizard-detached-executable.md) and
 [disc checkpoint](native-fresh-wizard-detached-disc.md).
@@ -152,8 +159,8 @@ remain separate work.
 ## Verification and next milestone
 
 Latest post-publication Release gate:146 selected checks, zero failures; the
-preceding all-project build/regression gate passed313 checks. The phase1 Python
-suite passed138 tests with five explicit-source skips;56 runner tests passed. The
+preceding all-project build/regression gate passed313 checks. The current Python
+suite passed168 tests with seven explicit-mode skips;56 runner tests passed. The
 independent native scene check passed23 checks/four expected refusals and
 sound-loading proof404 checks/ten expected refusals. New actual compiled fallback
 resource reads passed34 checks/28 expected refusals; the separate original-source
@@ -164,9 +171,9 @@ Actual two-Wizard recording:22 minutes39 seconds,81303 video frames, full strict
 decode passed. That DuckStation, capture and read-only observer session is closed.
 All nine protected hashes passed after exact original settings restoration.
 
-A separate fresh-Wizard test session is now cold-boot paused with fresh settings
-backups and a private memory-card copy. Gameplay is pending the read-only
-diagnostic review; this does not change the R03 app or its saved document.
+The separate fresh-Wizard test session is now closed. Its original settings were
+restored and all nine protected hashes passed. This does not change the R03 app
+or its saved document; the original memory card was never replaced.
 
 Next: finish the isolated app edit/save/close-reopen check,
 complete fresh-Wizard reward/audio/resource contracts, then integrate and playtest that exact

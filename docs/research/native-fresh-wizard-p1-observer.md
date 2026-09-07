@@ -28,6 +28,12 @@ connection tuple are checked before the first m-only transport probe. Samples
 are buffered until their external postcheck; no reconnect or execution packets.
 The code requires explicit PID, exact CUE and connection consent. Use p [label]
 for a bounded manual sample and q to close; connection may pause the emulator.
+Disconnect can also resume it when first accepted while running: the exact
+advertised native source and actual session03 both show that side effect.
+Verify emulator pause through the UI after closing. Corrected warning tests and
+specific query-role/exit diagnostics now pass; Root whole Python168/seven skips.
+No guard or timeout was relaxed. See the
+[closed native test](native-fresh-wizard-p1-r01-runtime-observations.md).
 
 Actual macOS fixtures exposed and preserve two regressions: an exact unnamed
 NPOLICY descriptor and DuckStation's one fixed writable shader-cache BIN. Only

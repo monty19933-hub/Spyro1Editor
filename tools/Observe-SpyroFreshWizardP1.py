@@ -283,26 +283,30 @@ def _run(argv):
     additional=(len(argv)==9 and argv[:4]==('/usr/sbin/lsof','-nP','-a','-p') and re.fullmatch('[1-9][0-9]{0,9}',argv[4]) and
         argv[5:] in (('-d','txt','-F0pcftaiDnsPT','-Ts'),('-iTCP:2345','-sTCP:ESTABLISHED','-F0pcftaiDnsPT','-Ts')))
     if not (ps or files or listener or additional):raise ValueError('Only five exact read-only ownership queries are accepted.')
+    role='process' if ps else 'numeric-fds' if files else 'listener' if listener else 'text-owner' if argv[5]=='-d' else 'established-socket'
+    prefix=f'OS query [{role}]'
     deadline=time.monotonic()+2
     try:
         p=subprocess.Popen(argv,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
                            env=dict(os.environ,LC_ALL='C'),shell=False)
-    except OSError as e:raise ValueError('OS ownership query unavailable.') from e
+    except OSError as e:raise ValueError(f'{prefix} unavailable.') from e
     try:
         output=bytearray()
         with selectors.DefaultSelector() as selector:
             selector.register(p.stdout,selectors.EVENT_READ)
             while True:
                 remaining=deadline-time.monotonic()
-                if remaining<=0 or not selector.select(remaining):raise ValueError('OS query timed out.')
+                if remaining<=0 or not selector.select(remaining):raise ValueError(f'{prefix} timed out.')
                 b=os.read(p.stdout.fileno(),min(4096,65537-len(output)))
                 if not b:break
                 output.extend(b)
-                if len(output)>65536:raise ValueError('OS query exceeded output bound.')
+                if len(output)>65536:raise ValueError(f'{prefix} exceeded output bound.')
         remaining=deadline-time.monotonic()
-        if remaining<=0 or p.wait(timeout=remaining)!=0:raise ValueError('OS query failed.')
+        if remaining<=0:raise ValueError(f'{prefix} timed out.')
+        code=p.wait(timeout=remaining)
+        if code!=0:raise ValueError(f'{prefix} failed (exit code {code}).')
         return bytes(output)
-    except (OSError,subprocess.SubprocessError) as e:raise ValueError('OS ownership query unavailable.') from e
+    except (OSError,subprocess.SubprocessError) as e:raise ValueError(f'{prefix} unavailable.') from e
     finally:
         if p.poll() is None:p.kill();p.wait(timeout=2)
         p.stdout.close()
@@ -728,12 +732,12 @@ def main(argv=None):
     if not PHASE2_READY:parser.error('LIVE CONNECTION DISABLED: phase2 final source/file/actual OS fixture review is pending.')
     if not selected.connect_identified_test_session or selected.pid is None or selected.candidate_cue is None:
         parser.error('Explicit exact session nomination and connection consent are required.')
-    print('Connecting can pause DuckStation. Resume/pause only via UI; p <label> samples, q closes. No automatic reconnect.',file=sys.stderr,flush=True)
+    print('Connecting can pause DuckStation. Disconnecting can resume DuckStation if it was running when the first client was accepted. Verify pause state in the emulator UI after closing; p <label> samples, q closes. No automatic reconnect.',file=sys.stderr,flush=True)
     try:return _run_session(selected.pid,selected.candidate_cue,sys.stdin.buffer,lambda event:print(json.dumps(event),flush=True))
     except BaseException as error:
         print(json.dumps(dict(kind='session_failed',error=_failure_record(error),final_full_checks_passed=False,
                               candidate_authenticated=False,runtime_pass=False)),flush=True)
-        print('No automatic recovery. If connection occurred, disconnect does not resume DuckStation.',file=sys.stderr,flush=True)
+        print('No automatic recovery. Disconnecting can resume DuckStation if it was running when the first client was accepted; verify pause state in the emulator UI.',file=sys.stderr,flush=True)
         return 130 if isinstance(error,KeyboardInterrupt) else 2
 
 

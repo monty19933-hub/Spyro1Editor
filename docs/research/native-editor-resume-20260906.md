@@ -20,11 +20,11 @@ The separate actual-Executable-bound physical disc plan now passes source,
 legacy and full default gates. The closed source-bound research materializer
 now also passes API/free/source, three old-kind suites and the all-project
 Release gate. Real stage/postcommit tests and a separate clean candidate have now
-passed, including independent new-process readback. Fresh-Wizard gameplay
-remains pending. The fixed-candidate observer passed source/peer/file/OS review
-and Root activation;164 Python/seven skips and13 explicit tests/no skips pass.
-A new exact-candidate DuckStation
-session is currently cold-boot paused; see the active obligations below.
+passed, including independent new-process readback. The fixed-candidate observer
+passed source/peer/file/OS review and Root activation. The actual fresh-Wizard
+run passed native initialization but failed playable-entry testing: Spyro moved
+outside the small floor and fell4→3 lives. Cause remains open, not presumed to
+be electric damage or a collision defect. Runtime is fully closed/restored.
 
 John authorized autonomous development, useful parallel agents, sensible
 commits and DuckStation gameplay with temporary settings. Continue until the
@@ -33,15 +33,18 @@ checkpoint near5% usage remaining. Do not redeem a reset credit. Do not replace
 the preserved editor silently, modify original game/save owners, bypass OS
 permissions, or call a usage pause completion. Serialize the shared .NET slot.
 
-## Active runtime obligations — September 7
+## Latest closed runtime — September 7
 
-DuckStation PID38592, exec session93336, is paused at cold boot of the sole clean
-fresh-Wizard candidate. Native capture is active but has no gameplay frames yet;
-no observer connection or gameplay input has occurred. Exact fresh INI backups,
-private card, nine-owner hashes and restoration instructions are recorded in
+DuckStation PID38592/exec93336 and observer03/exec13827 are CLOSED, both exit0.
+Capture95.179seconds/full strict decode passed. The observer completed all held
+final file/source checks; native auto-resume on disconnect was then visibly
+handled at the in-game inventory. Both fresh original INIs were restored exactly,
+and all nine protected hashes passed. Private card was never copied back.
+Exact evidence is recorded in
 `_local/native-fresh-wizard-p1-runtime-20260907-r01.aaM1NY/RUNTIME-SESSION.md`.
-Close capture/observer/emulator and restore those fresh originals before pausing
-at5% remaining. Never copy the private card back. R03 remains open and unchanged.
+Read `native-fresh-wizard-p1-r01-runtime-observations.md` before further runtime
+work. R03 remains open and unchanged. Every future run needs fresh backups and
+actual process/file binding; never reconnect departed IDs.
 
 ## Earlier closed runtime milestones
 
