@@ -51,9 +51,22 @@ checks; independent peer review is clear. Core remains unchanged. Evidence:
 `fresh-store-characterization-r01.9jdmN4/` under the same private research parent.
 This is a baseline against existing behavior, not a missing-API RED.
 
-Next extract one closed internal storage engine while keeping
-the old typed facade and publication read-lease contract unchanged. A later new
-aggregate Store will use a separate path and explicit legacy-floor fork; the fork
+The extraction-only checkpoint is now implemented: one internal helper owns the
+existing storage mechanics while the old typed facade, Snapshot and nested
+publication read lease remain intact. Independent actual-file comparison finds
+the moved class identical after only the approved name/visibility/constant
+substitutions. Root and peer fully reviewed both files. The38 compatibility
+assertions are unchanged; only their obsolete reporting suffix was removed.
+
+Root all-project Release315/zero failures passed again:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-st2mbq1y/summary.json`.
+Root also replayed the actual original-ROM-backed research suite2339 checks,
+including the separate saved-context42 and complete original BIN/CUE preservation.
+No image output was published. Evidence: `fresh-store-extraction-r01.o7LeqT/`.
+This checkpoint has only the legacy storage profile; the second typed adapter
+is the next bounded implementation, not already a usable aggregate Save command.
+
+A later new aggregate Store will use a separate path and explicit legacy-floor fork; the fork
 must use new-only publication so a late-created destination cannot be replaced.
-No Store extraction, aggregate Save/UI, auto-migration, new enemy control or
-native compilation is implemented in this checkpoint. R03 remains unchanged.
+No aggregate Save/UI, auto-migration, new enemy control or native compilation
+is implemented in this checkpoint. R03 remains unchanged.

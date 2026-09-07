@@ -296,8 +296,11 @@ Next outcomes:
    research test already passed; that is not yet a finished editor checkbox
    or universal-level acceptance. Preserve normal movement when disabled.
 6. Legacy Store compatibility characterization is complete (38 new checks).
-   The extraction-only shared helper is implemented and focused/peer-reviewed;
-   Root all-project gate is pending. Keep one aggregate Store, not one per object family; preserve the old
+   The extraction-only shared helper is implemented and Root/peer-reviewed;
+   Root all-project Release315/0 and actual original research2339/saved-context42
+   passed with original BIN/CUE unchanged. Next is typed aggregate Capture/Save
+   through the same closed engine, with no fork/UI/publication added yet.
+   Keep one aggregate Store, not one per object family; preserve the old
    Snapshot/read-lease/publication contract. A later explicit legacy fork must
    protect both snapshots and use PublishNew. The detailed reviewed proposal is
    `fresh-level-aggregate-r01.L7u8AO/NEXT-STORE-ARCHITECTURE.md` under the private

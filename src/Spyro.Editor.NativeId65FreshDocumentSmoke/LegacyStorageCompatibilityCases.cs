@@ -112,7 +112,7 @@ internal static class LegacyStorageCompatibilityCases
                 new[] { DocumentName, "native-fresh-level.json", "spyro-project.json" }.Order()), "only exact fixture inputs/documents remain");
         }
         finally { Directory.Delete(temporary, recursive: true); }
-        Console.WriteLine($"NATIVE_ID65_LEGACY_STORAGE_COMPATIBILITY_OK checks={_checks} extraction=false");
+        Console.WriteLine($"NATIVE_ID65_LEGACY_STORAGE_COMPATIBILITY_OK checks={_checks}");
     }
 
     private static void Shape()
