@@ -35,6 +35,18 @@ permissions, or call a usage pause completion. Serialize the shared .NET slot.
 
 ## Latest closed runtime — September 7
 
+R02 is now also CLOSED/RESTORED: DuckStation42862/exec24718 exited0, observer01/
+exec18275 stopped exit2 on an unclassified HTTP cache after native Settings was
+opened. Its failed record remains failed. Root handled native disconnect resume,
+quit with resume-save unchecked, restored both fresh original INIs, and all nine
+protected hashes passed. No media capture or original-card replacement occurred.
+F6 frame stepping is now verified against native timer/position changes, but
+earliest entry was missed and cause remains open. Read
+`native-fresh-wizard-p1-r02-frame-step.md`; exact journal is
+`_local/native-fresh-wizard-p1-runtime-20260907-r02.luV04T/RUNTIME-SESSION.md`.
+No emulator/observer/capture is active. R03 remains open and unchanged.
+
+Earlier R01:
 DuckStation PID38592/exec93336 and observer03/exec13827 are CLOSED, both exit0.
 Capture95.179seconds/full strict decode passed. The observer completed all held
 final file/source checks; native auto-resume on disconnect was then visibly
@@ -279,8 +291,9 @@ Next outcomes:
    enable/disable and disabled-output regression. Its exact Toasty native
    research test already passed; that is not yet a finished editor checkbox
    or universal-level acceptance. Preserve normal movement when disabled.
-6. Complete legacy Store compatibility characterization before extracting shared
-   storage. Keep one aggregate Store, not one per object family; preserve the old
+6. Legacy Store compatibility characterization is complete (38 new checks).
+   The extraction-only shared helper is implemented and focused/peer-reviewed;
+   Root all-project gate is pending. Keep one aggregate Store, not one per object family; preserve the old
    Snapshot/read-lease/publication contract. A later explicit legacy fork must
    protect both snapshots and use PublishNew. The detailed reviewed proposal is
    `fresh-level-aggregate-r01.L7u8AO/NEXT-STORE-ARCHITECTURE.md` under the private

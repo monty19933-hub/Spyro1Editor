@@ -180,6 +180,12 @@ The separate fresh-Wizard test session is now closed. Its original settings were
 restored and all nine protected hashes passed. This does not change the R03 app
 or its saved document; the original memory card was never replaced.
 
+A second diagnostic session also closed with originals restored. It verified
+native frame stepping and the new health/movement readouts, but did not yet
+capture the cause of the entry problem. Opening DuckStation settings exposed a
+strict-reader cache-file classification issue; that failed record is preserved.
+See [frame-step diagnostic](native-fresh-wizard-p1-r02-frame-step.md).
+
 Next: finish the isolated app edit/save/close-reopen check,
 complete fresh-Wizard reward/audio/resource contracts, then integrate and playtest that exact
 enemy in the fresh scene. Continue expanding tested families/materials through
