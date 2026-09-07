@@ -1,206 +1,102 @@
 # Spyro editor — what is working now
 
-The edited fresh-level ROM now works through a separate native gameplay test:
-LAB entry with the edited floor/colors/checkpoint/heading, controlled walking,
-flame, jump-and-land and normal respawn. It then remained stable through about
-34 seconds of normal-speed idle. Original settings, ROM and memory card are
-restored and verified unchanged. See [the edited LAB report](native-fresh-edited-r01-runtime-observations.md).
+Updated September 6, 2026. Development is continuing after John's reset.
+This is a progress report, not a V6 release. Your preserved editor, original
+game and original memory card have not been replaced.
 
-The next editor step is exporting a saved fresh document. Its new read-only
-image plan passes2,339 source checks across four complete image readbacks,
-geometry/color/spawn changes and all46 selectable music values. The shared
-export code and saved-version UI safeguards are in progress; there is not yet
-a new installed editor or a generic fresh-document export button.
+## The biggest new results
 
-The fresh-level compiler now handles valid floor positions that previously
-failed because of a fixed collision-data length assumption. Existing test ROMs
-remain byte-identical, and the default Release gate now passes122 steps. The
-edited fresh-floor ROM's bounded native test is separate from ordinary export
-from a saved fresh document.
+**Two imported Wizards now work through a complete bounded gameplay sequence.**
+Each cast and produced its own native reward. Defeating the already-collected
+nearer Wizard again did not award another ten gems, and leaving/re-entering
+through the original portal preserved both collected states. The first reward
+changed the HUD from9 to19. The final32 includes three original red gems;
+separate native reward-owner evidence identifies the second Wizard's yellow.
+See the [two-Wizard report](native-two-wizard-r01-runtime-observations.md).
 
-Newest progress: the imported Dark Hollow Wizard has now been defeated by a
-normal charge and its native yellow gem raised the counter from13 to23. Normal
-exit/portal re-entry also worked, retaining23 and marking the reward collected;
-a second charge defeat also kept treasure at23 instead of awarding another10.
-Every reload/save case is not certified; the exact new evidence is in
-[the R03 report](native-dark-wizard-r03-reward-reentry.md).
-The separate two-Wizard and edited fresh-floor exporters also pass complete
-source/image checks, with a121-step/zero-failure default Release gate. Their
-new research ROMs were created and independently reopened successfully; the
-two-Wizard native test remains next. The original
-one-Wizard ROM and fresh starter remain unchanged. These exporters are not yet
-ordinary editor buttons, and the installed editor has not been replaced.
+**The Fresh Level document can now export its saved edits.**
+The separate window has floor/spawn/color/music controls, a schematic preview,
+undo/redo, protected save/reopen and a guarded Create research candidate action.
+An actual editor UI test used the production export worker to create a complete
+edited BIN/CUE/receipt, then a separate process verified that output against the
+saved document. See [saved-document publication](native-fresh-saved-document-publication.md).
 
-Latest resumed work: a separate **Fresh Level…** document window now has
-floor/spawn/color/music controls, a schematic preview, undo/redo and protected
-save/reopen. It has passed65 headless UI checks and a separate retail-shell
-integration check. It is not installed yet and does not publish edited ROMs.
-Two independently placed Wizards now compose through the native resource and
-reward chain, sharing class resources while retaining separate native identities.
-Their physical test ROM is published; gameplay acceptance is next. R03 is closed,
-and original settings, ROM, memory card and candidate hashes are restored/unchanged.
+**An edited fresh floor has already been played in DuckStation.**
+The separate exact test ROM loaded without Town Square's terrain or placed
+scene and supported controlled walking, flame, jump/landing, native fall/
+respawn and normal-speed idle. The generic UI-produced image matches that
+edited BIN, but its own new output companions were not separately launched.
+See the [edited LAB report](native-fresh-edited-r01-runtime-observations.md).
 
-Updated September 6, 2026. This is a progress report, not a new release. The
-installed editor has not been replaced by today's backend work. The original
-ROM, saved edits, old candidates and original memory card are being preserved.
+## Is there a new app to open?
 
-## What you can already explore in the editor
+There is a separately compiled private test package, but its ordinary Mac
+launch is not ready yet. Build, signature and actual PNG compression checks
+passed; macOS then denied its launcher access before the editor window opened.
+The launcher is being corrected in a new isolated package with a proper native
+Mac executable and the same private-project safeguards. No permission bypass
+or installed-editor replacement is being used.
 
-- **Native Moby Library:** browse the original game's variants across all 35
-  retail levels, search by name/class/level, and distinguish placed objects from
-  registered resources. It is wired into the retail Objects panel and the
-  Blank-Level Lab. An item is only addable where an existing approved placement
-  template matches; being visible in the library does not yet make every item
-  interchangeable.
-- **Existing-level editing:** the established object, terrain and guarded
-  Create BIN workflows remain. Cross-level native terrain art/behavior choices
-  already exist where complete destination/source ownership checks pass.
-  Unsupported animated/runtime-controlled transfers and the old custom-PNG
-  painting path remain blocked.
-- **Blank-Level Lab:** canonical saved documents, explicit migrations, the
-  limited two-tile and None/Grass/Red Gem choices, plus the separately guarded
-  Blank Slate schema-6 candidate workflow. These are real existing tools, but
-  they are not yet unrestricted terrain/Moby authoring or arbitrary new levels.
+The retained R02 package/evidence is here:
 
-These UI statements were checked against current source. They do not claim
-that an older installed app has automatically acquired every source change.
+`/Users/john/Documents/Codex/2026-07-13/i-needed-to-make-a-new/spyro1editor-v3-release/_local/research/fresh-document-mac-test-r02/`
 
-## What has actually worked in DuckStation
+This is not the finished unrestricted blank-level editor or a V6 release.
+Actual launch, Fresh Level interaction and normal close/reopen are separate
+acceptance checks before handing over the next app.
 
-| Exact research case | Observed working | Still not established |
-| --- | --- | --- |
-| Imported key and locked chest in Town Square | Key pickup, native opening/effects, six rewards worth exactly 10 gems, correct reward bits and normal exit/portal re-entry; recorded source-matched sound cues | Arbitrary duplicates, every level, partial-reward/death/card-persistence combinations |
-| Wizard Peak Wizard imported into Dark Hollow | Normal portal entry, visible Wizard/lightning, electric damage, ordinary player death/reload, charge defeat and +10 reward, normal exit/re-entry, second defeat retaining the collected treasure total | Partial-collection death/card persistence, multiple simultaneous imported Wizards, full audio/presentation and peak-resource acceptance |
-| Native Free Flight in Toasty | Ascent/descent, both turn directions, flap, flight exit, collision, death/respawn, normal exit/portal reload and controlled landing | Every level/state; finished editor checkbox and end-to-end disabled-output workflow |
-| Fresh native LAB, without Town Square's terrain or placed scene | Native selector entry, LAB inventory title, visible Spyro and Sparx on the isolated floor, companion particles, a controlled short walk and normal-speed idle | Ordinary portals, jump/flame/death/card persistence, imported actors or exported textures in this fresh scene, complete audio/resource testing and editable UI integration |
-| Edited fresh LAB landing, changed floor/colors/spawn/heading and track2 recipe | Separate native LAB entry, edited checkpoint and heading, bounded walking, visible flame, stationary jump/landing, native fall death/respawn and about34 seconds normal-speed idle | Ordinary portal entry, card persistence, music/effect listening acceptance, arbitrary geometry/textures/foreign actors and generic saved-document UI export |
+## What remains usable in the preserved editor
 
-These results belong to their exact retained candidates, not every possible
-object/level combination. Gameplay permission is already granted. Future tests
-will use DuckStation with isolated test saves/settings and cleanup afterward.
+- Native Moby Library: original variants across all35 retail levels, searchable
+  by name/class/source. Visibility does not imply that every destination is
+  approved; existing placement templates still govern adding objects.
+- Established level/object/terrain editing and guarded Create BIN workflows.
+  Cross-level native terrain choices remain limited to verified combinations.
+- Existing Blank-Level Lab workflows and saved schemas. Their meaning has not
+  been silently changed by the new Fresh Level document implementation.
 
-See the detailed [key/chest report](native-closure-runtime-20260905.md),
-[Wizard report](native-dark-wizard-r01-runtime-observations.md), and
-[Free Flight report](native-free-flight-r02-runtime-observations.md), and
-[fresh LAB report](native-fresh-lab-r02-runtime-observations.md). The newer
-[edited LAB report](native-fresh-edited-r01-runtime-observations.md) records its
-own exact candidate, unsuccessful input attempts and closed-session evidence.
+An older installed app does not acquire new source changes automatically.
 
-The LAB test recording and a short preview are saved in
-`_local/native-fresh-id65-runtime-20260906-r01.LbsgK0/`. The first normal-speed
-walk overshot the deliberately tiny floor; that attempt is not marked as a
-successful center walk. After native re-entry, slower input pacing allowed
-bounded movement, followed by roughly 50 seconds of normal-speed idle.
-DuckStation is now closed and your original settings, ROM and memory card
-have been verified unchanged.
+## What still stands between this and universal importing
 
-## New engineering work behind the editor
+Models alone are not enough. Enemy behavior, effects, sound, collision,
+animation, private state, shared state and resource limits must remain correct
+together in the destination level.
 
-- **Persistent object identity:** preserves the original 4,877 placements and
-  native save-bit indices; authored additions receive stable append-only
-  identities, including across save/reopen. Removed identities are reserved.
-- **Fresh level body:** fresh floor, collision, spawn and scene lists without
-  Town Square's terrain or placed scene. Required player/companion resources,
-  native engine code and complete auxiliary allocations are still retained
-  explicitly; this is not a claim that all retail dependencies are removed.
-- **Cross-level texture allocation:** two genuine source materials from Dark
-  Hollow and Gnasty's World can be allocated into the fresh resource set while
-  preserving complete palettes, descriptors, pixels and protected storage.
-  The old scene/model goldens stay unchanged. The new materials now pass through
-  the shared native body builder with 157 focused checks; old plan identities
-  remain exact. This new path is backend-only and not yet a textured disc export.
-- **Fresh disc composition:** reserved level entries, relocated executable,
-  bounded `LAB` title, 46 built-in music selections, ISO records and raw CD
-  error-correction bytes now have an exact read-only builder/verifier. Three
-  whole-image results match an independent implementation; both body sizes
-  reconstruct the complete original exactly. Focused tests passed 2,182
-  source-free and 566,016 total exact-source checks. An exact fresh-level BIN
-  has now been published and independently reopened, with 20 publication and
-  corruption checks passing. This exact candidate has now reached LAB and
-  passed the limited entry/idle/controlled-walk observations described above.
-- **Shared starter integration:** the exact tested starter recipe now lives in
-  production code with cancellation and unchanged verification guards, rather
-  than only inside a test program. This is a building block for the editor,
-  not yet a new UI action or export of your edited Lab document.
-- **Editable fresh-document foundation:** a separate, immutable document format
-  now holds floor dimensions/position, spawn, display colors and all 46 supported
-  music choices. Its strict canonical parser passes 160 checks. The document
-  now drives native compilation: two edited examples changed the actual floor,
-  collision, spawn, colors and/or music bytes. The original starter remains
-  byte-exact. Existing Lab saves keep their original meaning. Project-bound
-  save/reopen now works with stale-write protection and 83 additional checks.
-  Viewport controls and publication of edited documents are still pending;
-  these new examples have not yet been gameplay-tested.
-- **Fresh-level gameplay diagnostics:** a dedicated, read-only observer now
-  checks the new level's actual initialized resource layout. Its 17 tests and
-  five original-game source checks pass; the existing Wizard observer's 14
-  tests remain green. It supported the actual LAB session; the observed
-  off-floor movement now has a regression-tested scope warning. Matching
-  sampled resource addresses still does not certify every gameplay state.
-  See the [observer notes](native-fresh-id65-observer.md).
+The current fresh-Wizard resource work matches independently checked texture,
+sound, model and particle buffers, but native behavior/body integration is not
+finished. One concrete blocker is the shared electric-damage sound: Town's
+existing sound mapping is already occupied, and the tempting damage marker is
+erased by native processing. Regression tests now preserve these facts so an
+apparently convenient fix cannot silently break other gameplay.
 
-## Next steps
+Another review caught a real extra collision read in a branch delay slot.
+The original read belongs to the next registered model, not the Wizard's own
+package. Its target equivalent needs explicit ownership coverage before broader
+resource relocation can be trusted.
 
-1. Complete Wizard combat/reward/re-entry. Make the remaining native
-   initialization and reward integration count-aware before building and
-   testing the complete multiple-instance candidate; scene allocation alone
-   is not enough. Then expand the supported dependency/destination combinations.
-2. Build a practical fresh-level editing workflow around the now-connected
-   document and native compiler: connect save/reopen to viewport editing and preview,
-   then separately guarded edited-candidate output and DuckStation tests.
-   Preserve existing saved Lab documents and the exact tested starter.
-3. Carry the tested cross-level texture/body work through disc output and UI,
-   retaining complete texture/resource ownership checks. Expand native gameplay
-   action/transition coverage as each new combination becomes available.
+Arbitrary Moby mixtures, all textures in all levels, native fresh-level enemy
+imports, normal portals to new levels, save/reboot coverage and full audio/
+capacity testing are still open. The optional Free Flight research case worked
+in Toasty; the finished persisted editor checkbox and disabled-output workflow
+remain separate work.
 
-Unsupported combinations must remain visible rather than silently claiming
-universal compatibility. The detailed [resume checklist](native-editor-resume-20260906.md)
-records what to do next without repeating the completed investigation.
+## Verification and next milestone
 
-**There is not yet a new unrestricted, fully editable blank-level editor to
-install.** The current editor remains usable, and the new foundations are
-substantially further along. Source tests, actual gameplay and a shipped UI are
-tracked separately so the eventual editor reflects what has really passed.
+Latest full default Release gate:130 steps, zero failures. Subsequent source-
+regression checkpoint eb78f3f passed108 Python tests with four explicit-source
+skips,48 runner tests and370 native scalar checks/17 expected refusals. These
+counts are engineering checks, not hundreds of gameplay runs.
 
-Latest integrated verification: 113 default Release steps passed with zero
-failures, including rebuilding App. All 71 Python tests completed successfully
-(one original-ROM-only case is explicitly skipped there and passed separately).
-The final document compiler's 182 source-inclusive checks passed again in the
-lead engineer's independent run. The full fresh-disc source checks also passed
-after the earlier textured-body changes. This did not install or launch a new
-editor, and is separate from the earlier full 290-step gate.
+Actual two-Wizard recording:22 minutes39 seconds,81303 video frames, full strict
+decode passed. DuckStation, capture and the read-only observer are closed.
+All nine protected hashes passed after exact original settings restoration.
 
-Work is paused at this tested checkpoint with approximately 8% account usage
-remaining, leaving a little extra reserve before the requested 5% limit. The
-editor goal is not complete. The next steps and exact evidence are saved in the
-resume checklist. No reset credit has been consumed; wait for John to explicitly
-resume rather than restarting automatically.
+Next: finish the isolated app launch/close-reopen check, complete the source-owned
+fresh-Wizard audio/collision contracts, then integrate and playtest that exact
+enemy in the fresh scene. Continue expanding tested families/materials through
+the editor without calling inventory coverage universal compatibility.
 
-## Resumed development
-
-John explicitly resumed development later on September 6 and reconfirmed the
-goal of Mobys available across levels. The pause above is historical. Work has
-resumed from clean `f514085`; John will handle his usage reset personally.
-Project-bound fresh-document save/reopen is now implemented and reviewed. The
-final gate again passed 113 steps with no failures; the focused document suite
-now has 243 checks. This did not install a new editor.
-
-For multiple Wizards, new independent native-byte checks cover two separate
-reward/save identities, collection in either order and checkpoint reloads.
-The remaining resource/initialization/reward composition is not implemented yet;
-no two-Wizard candidate or new gameplay pass is claimed. The exact source oracle
-has 1,148 assertions, including 929 source-word consistency checks, not 1,148
-independent gameplay tests.
-
-The new isolated Wizard session cold-booted the unchanged candidate and loaded
-the copied Stone Hill save. It was closed at the usage reserve before reaching
-the imported Wizard. Capture finalized, observer and emulator exited, and the
-original INIs/ROM/card/candidate were rechecked unchanged. The test video's
-intended combat filename is not evidence of completed combat.
-
-Usage reached about 5% during closeout. This tested checkpoint is paused for
-the user's manual reset and explicit resume; the overall editor goal is open.
-
-The [V6 readiness assessment](v6-readiness-20260906.md) explains the distinction
-between a useful V6 beta and universal importing. The latter is not yet a final
-polish step or a defensible percentage/date estimate.
+The [current engineering handoff](native-editor-resume-20260906.md) records exact
+next steps. The [V6 readiness assessment](v6-readiness-20260906.md) explains why
+universal importing is not yet a defensible percentage or release date.

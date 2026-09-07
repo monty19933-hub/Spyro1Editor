@@ -1,5 +1,22 @@
 # Native editor checkpoint — 2026-09-06
 
+## Current: two independent native rewards and closed session
+
+The exact two-Wizard case passed independent reward collection, no duplicate10
+from the already-collected nearer Wizard, and normal portal re-entry with both
+collected selectors. See `native-two-wizard-r01-runtime-observations.md` for the
+actual9-to19 baseline, mixed final32 tally, native parent128 witness, navigation
+failure and pacing limits. Capture/observer/emulator are CLOSED, recording strict
+decode passed and all nine protected identities match after restoration.
+Earlier ACTIVE notes below are historical only.
+
+Commit eb78f3f adds actual source-owned deferred-damage/audio regressions,
+Python108/4 skips, runner48 and native scalar370/17; no Core/App change from
+0c18573. The separate R02 mac package passed publish/signature/PNG checks but
+not GUI launch: normal LaunchServices reports operation-not-permitted reading
+its fixed private launch-owner in Documents. Preserved apps are untouched;
+normal permission/launcher diagnosis is pending, with no bypass or V6 claim.
+
 ## Newest: real UI publication, actual postcommit outcomes, typed resources
 
 The real Fresh Level form/default worker now creates the expected edited BIN
