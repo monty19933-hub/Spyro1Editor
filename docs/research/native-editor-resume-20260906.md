@@ -1,5 +1,19 @@
 # Resume after the September 6 usage pause
 
+**Latest actual checkpoint:** real fresh UI publication4393 +separate process
+Verify +real postcommit19 pass; thirteen protected hashes unchanged. Typed fresh
+Wizard resources pass source5627/60 with old body/disc preservation. Root
+Release130/0 and Python105/4 skips pass. Read
+`native-fresh-saved-document-publication.md` and
+`native-fresh-wizard-typed-resources.md`. Preserved installed app unchanged.
+Next work is isolated test-app packaging and deferred global1F audio ownership,
+then actual Town behavior/body/scene integration; no universal portability claim.
+
+**Still ACTIVE Two-Wizard R01:** first+10 and partial-collection native re-entry
+passed; later original-water navigation overshoot5→4 respawn retained independent
+selectors/bit2. Retrying at50-percent wall-clock pacing, native CPU1:1 unchanged.
+Journal below owns capture/observer/emulator closure and nine-hash restoration.
+
 **Newest checkpoint:** generic saved-document publisher and Fresh Level research
 action now pass root Release128/0 and Python104/4 skips; read
 `native-fresh-saved-document-publication.md`. No successful generic UI output
@@ -7,9 +21,10 @@ yet; real production-worker and postcommit gates are next. Installed app has
 not been replaced. Independent fresh Wizard resources are committed at c25a8dc
 (542/44 source oracle); typed resources/body integration remain separate.
 
-**ACTIVE Two-Wizard R01:** row129 native defeat/+10 (HUD39→49), durable bit2,
-row128 still uncollected. Normal return to Artisans retained bit2; testing
-partial-collection re-entry next. Journal below owns mandatory fresh-settings
+**ACTIVE Two-Wizard R01:** row129 native defeat/+10 (HUD9→19), durable bit2,
+row128 still uncollected. Partial-collection normal re-entry passed with
+row129 selectorFF/row128 selector56 and HUD19. Full-resolution captures corrected
+the earlier39→49 preview-digit misreading. Journal below owns mandatory fresh-settings
 restoration. Older no-encounter statements are historical.
 
 **Latest continuation supersedes older status:** saved-version context/lease and

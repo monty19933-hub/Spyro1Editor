@@ -231,6 +231,7 @@ public sealed class NativeId65FreshSceneBundle
     }
 
     public const string ProfileId = "native-id65-fresh-scene-presentation-assets-clean-usa-v1";
+    internal NativeId65NormalResourceChain ResourceChainAncestor => _chain;
     public string SourceImageSha256 => _chain.SourceImageSha256;
     public NativeId65FreshSceneLayout SceneLayout { get; }
     public NativeId65SceneHeaderTextureOwners HeaderTextures { get; }

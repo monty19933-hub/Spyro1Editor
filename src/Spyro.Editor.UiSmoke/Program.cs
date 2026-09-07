@@ -23,6 +23,21 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+// Explicit actual-production UI exercise must never enter the legacy fixture.
+// It is not run by neutral/default/source modes and needs a reviewed absent target.
+if (NativeFreshDocumentRealPublicationUiCases.Handles(args))
+{
+    var invocation = NativeFreshDocumentRealPublicationUiCases.Parse(args);
+    if (invocation.ArgumentsOnly) NativeFreshDocumentRealPublicationUiCases.ArgumentCases();
+    else
+    {
+        NativeFreshDocumentRealPublicationUiCases.Preflight(invocation);
+        string isolated = CreateIsolatedWorkspace(invocation.Workspace, includeSourceDiscSetting: false);
+        NativeFreshDocumentRealPublicationUiCases.Exercise(invocation, isolated);
+    }
+    return 0;
+}
+
 // Neutral fresh-document UI needs no editor cache, catalog, source disc or
 // legacy workspace setup. Keep this dispatch before any workspace discovery.
 if (args.Contains("--fresh-native-document-only", StringComparer.OrdinalIgnoreCase))

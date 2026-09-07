@@ -82,6 +82,18 @@ internal static class NativeId65FreshResearchPublicationEngine
         return await PublishCoreAsync(plan, directory, NativeId65FreshResearchFault.None, null, token, fault, checkpoint);
     }
 
+    internal static async Task<NativeId65FreshDiscResearchPublication> PublishDocumentPostcommitForSmokeAsync(
+        NativeId65FreshResearchPublicationBinding plan, string directory,
+        Action<NativeId65FreshDocumentPostcommitPoint, string> checkpoint, CancellationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if (plan.SavedContext == null)
+            throw new InvalidDataException("Postcommit exercise requires an actual saved-document binding.");
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        return await PublishCoreAsync(plan, directory, NativeId65FreshResearchFault.None, null, token,
+            postcommitCheckpoint: checkpoint);
+    }
+
     internal static async Task<NativeId65FreshDiscResearchPublication> VerifyAsync(NativeId65FreshResearchPublicationBinding plan,
         string outputDirectory, CancellationToken token = default)
     {
@@ -99,12 +111,15 @@ internal static class NativeId65FreshResearchPublicationEngine
         string outputDirectory, NativeId65FreshResearchFault fault,
         Action<NativeId65FreshResearchFault, string>? checkpoint, CancellationToken token,
         NativeId65FreshDocumentResearchFault documentFault = NativeId65FreshDocumentResearchFault.None,
-        Action<NativeId65FreshDocumentResearchFault, string>? documentCheckpoint = null)
+        Action<NativeId65FreshDocumentResearchFault, string>? documentCheckpoint = null,
+        Action<NativeId65FreshDocumentPostcommitPoint, string>? postcommitCheckpoint = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         if (!Enum.IsDefined(fault)) throw new InvalidDataException($"Unknown {plan.Label} research fault.");
         if (!Enum.IsDefined(documentFault) || (documentFault != NativeId65FreshDocumentResearchFault.None && plan.SavedContext == null))
             throw new InvalidDataException("Unknown saved-document precommit fault or binding.");
+        if (postcommitCheckpoint != null && plan.SavedContext == null)
+            throw new InvalidDataException("Postcommit exercise cannot bind a fixed publisher.");
         token.ThrowIfCancellationRequested();
         string root = Resolve(plan, outputDirectory);
         RequireEmpty(plan, root); // Complete sets may only be separately verified.
@@ -172,6 +187,10 @@ internal static class NativeId65FreshResearchPublicationEngine
             preserve = !string.IsNullOrEmpty(publication.RetainedRecoveryDirectory);
             if (projectLeaseEvidence.Length != 0)
                 throw new IOException("Committed saved-document guard retained ownership evidence at " + projectLeaseEvidence);
+            // PublishNew actually returned, and the Store guard was released.
+            // Callback cancellation must not change the generic final token.
+            postcommitCheckpoint?.Invoke(NativeId65FreshDocumentPostcommitPoint.AfterCommit,
+                Path.Combine(root, plan.ImageName));
             // Own lease/empty stage and typed retained recovery can exist here.
             // Separate Verify permits only the exact three-artifact set.
             // Preserve the old starter policy exactly. The exact edited profile
@@ -204,6 +223,8 @@ internal static class NativeId65FreshResearchPublicationEngine
             {
                 try
                 {
+                    if (plan.SavedContext != null && published && completed != null)
+                        postcommitCheckpoint?.Invoke(NativeId65FreshDocumentPostcommitPoint.BeforeStageCleanup, stage);
                     RequireNoLink(plan, stage);
                     foreach (string name in plan.OutputNames)
                     {
@@ -227,6 +248,11 @@ internal static class NativeId65FreshResearchPublicationEngine
                 { preserve = true; if (plan.SavedContext != null && published) documentCommittedFailure ??= error; }
                 catch (UnauthorizedAccessException error)
                 { preserve = true; if (plan.SavedContext != null && published) documentCommittedFailure ??= error; }
+                // Only the explicit internal positive test route can inject a
+                // non-IO callback error here. Account it as known committed,
+                // rather than letting it bypass lease cleanup as cancellation.
+                catch (Exception error) when (postcommitCheckpoint != null && plan.SavedContext != null && published)
+                { preserve = true; documentCommittedFailure ??= error; }
             }
             if (plan.SavedContext == null) lease.Dispose();
             else

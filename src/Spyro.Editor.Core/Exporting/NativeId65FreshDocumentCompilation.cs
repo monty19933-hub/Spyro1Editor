@@ -13,20 +13,23 @@ namespace Spyro.Editor.Core.Exporting;
 public sealed class NativeId65FreshDocumentCompilation
 {
     private readonly byte[] _canonical;
+    private readonly NativeId65FreshSceneBundle _freshResources;
 
     private NativeId65FreshDocumentCompilation(NativeId65FreshDocumentIntent intent,
-        byte[] canonical, NativeId65FreshDiscPlan disc)
+        byte[] canonical, NativeId65FreshDiscPlan disc, NativeId65FreshSceneBundle freshResources)
     {
         Intent = intent;
         _canonical = canonical;
         CanonicalSha256 = Convert.ToHexStringLower(SHA256.HashData(canonical));
         DiscPlan = disc;
+        _freshResources = freshResources;
     }
 
     public NativeId65FreshDocumentIntent Intent { get; }
     public string CanonicalSha256 { get; }
     public NativeId65FreshDiscPlan DiscPlan { get; }
     public byte[] CopyCanonicalDocument() => _canonical.ToArray();
+    internal NativeId65FreshSceneBundle FreshResourceAncestor => _freshResources;
 
     public static async Task<NativeId65FreshDocumentCompilation> CaptureAsync(string originalBin,
         NativeId65FreshDocumentIntent intent, CancellationToken token = default)
@@ -52,6 +55,6 @@ public sealed class NativeId65FreshDocumentCompilation
         var body = await NativeId65NormalBodyPlan.CaptureAsync(image, scene, staging, token);
         var disc = await NativeId65FreshDiscPlan.CaptureAsync(image, body, intent.MusicTrackId, token);
         token.ThrowIfCancellationRequested();
-        return new(intent, canonical, disc);
+        return new(intent, canonical, disc, scene);
     }
 }

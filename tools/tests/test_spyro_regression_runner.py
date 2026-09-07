@@ -352,6 +352,9 @@ class RunnerOptionsTests(unittest.TestCase):
     def test_detached_wizard_asset_modes_bind_only_selected_source(self):
         self.assert_texture_modes("NativeWizardFamilyAssetSmoke", "NATIVE_WIZARD_FAMILY_ASSET")
 
+    def test_fresh_wizard_resource_modes_bind_only_selected_bin_and_never_output(self):
+        self.assert_texture_modes("NativeId65FreshWizardResourceSmoke", "FRESH_WIZARD_RESOURCE")
+
     def test_saved_document_publisher_modes_never_activate_output(self):
         self.assert_texture_modes("NativeId65FreshDocumentPublicationSmoke", "NATIVE_ID65_FRESH_DOCUMENT_PUBLICATION",
                                   ("--source",), "SMOKE", needs_cue=True)
@@ -796,6 +799,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeWizardAppendPlacementSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeWizardCompositionSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeWizardFamilyAssetSmoke": ["--source", "/selected original.bin"],
+            "NativeId65FreshWizardResourceSmoke": ["--source", "/selected original.bin"],
             "NativeGreenWizardMoverSmoke": ["/selected original.bin"],
             "NativeLevelSlotOwnershipSmoke": ["--source", "/selected original.bin"],
             "NativePlayerAnimationSmoke": ["--source", "/selected original.bin"],

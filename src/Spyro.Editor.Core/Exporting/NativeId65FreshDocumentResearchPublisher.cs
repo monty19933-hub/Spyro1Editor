@@ -41,6 +41,10 @@ public sealed class NativeId65FreshDocumentResearchCommittedException : IOExcept
 // Separate domain: old fixed-profile fault enums/invalid values are unchanged.
 internal enum NativeId65FreshDocumentResearchFault { None, AfterFirstSector, AfterImageWrite, BeforePublication, AfterSavedGuard }
 
+// Separate positive test domain. Neither existing fault enum gains a value or
+// a way to disable its mandatory forced-precommit refusal.
+internal enum NativeId65FreshDocumentPostcommitPoint { AfterCommit, BeforeStageCleanup }
+
 /// <summary>Explicit new-only research publication of an actual saved document.
 /// The final Store guard excludes cooperating saves across commit. Source and
 /// artifact readback finish noncancellably after commit; subsequent project
@@ -63,6 +67,14 @@ public static class NativeId65FreshDocumentResearchPublisher
         NativeId65FreshSavedDocumentExportContext context, string outputDirectory, CancellationToken token = default) =>
         await NativeId65FreshResearchPublicationEngine.VerifyAsync(
             NativeId65FreshResearchPublicationBinding.FromSaved(context), outputDirectory, token);
+
+    // No public or default smoke route supplies this hook. It observes only a
+    // real commit of an actual saved context; it cannot issue authority/results.
+    internal static async Task<NativeId65FreshDiscResearchPublication> PublishPostcommitForSmokeAsync(
+        NativeId65FreshSavedDocumentExportContext context, string directory,
+        Action<NativeId65FreshDocumentPostcommitPoint, string> checkpoint, CancellationToken token = default) =>
+        await NativeId65FreshResearchPublicationEngine.PublishDocumentPostcommitForSmokeAsync(
+            NativeId65FreshResearchPublicationBinding.FromSaved(context), directory, checkpoint, token);
 
     internal static Task<NativeId65FreshDiscResearchPublication> PublishForSmokeAsync(
         NativeId65FreshSavedDocumentExportContext context, string directory, NativeId65FreshDocumentResearchFault fault,

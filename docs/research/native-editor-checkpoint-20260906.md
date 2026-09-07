@@ -1,5 +1,22 @@
 # Native editor checkpoint — 2026-09-06
 
+## Newest: real UI publication, actual postcommit outcomes, typed resources
+
+The real Fresh Level form/default worker now creates the expected edited BIN
+(4393 checks), independently verified in a separate actual saved-project process.
+Real postcommit cancellation-success and retained cleanup-failure tests pass19;
+all13 protected identities remain exact. See
+`native-fresh-saved-document-publication.md`. Typed A/N16 Wizard resources match
+the independent full buffers (source5627/60), without issuing a new body or
+runtime approval; see `native-fresh-wizard-typed-resources.md`.
+Root combined Release130/0 and Python105/4 skips pass. Installed editor unchanged.
+
+Two-Wizard R01 remains ACTIVE with independent first reward9→19 and normal
+partial-collection re-entry accepted. A later navigation overshoot into original
+water caused native death5→4/normal checkpoint respawn; both independent reward
+selectors and durable bit2 remained correct. Root is retrying with50-percent
+wall-clock pacing (native CPU1:1 unchanged). Session journal owns cleanup.
+
 ## Latest: saved-document publisher and editor action
 
 Actual saved-version generic publication and the Fresh Level research action
@@ -13,10 +30,12 @@ The independent fresh Wizard resource oracle is committed at c25a8dc:
 542 checks/44 refusals, repeated by root and peer. This does not install Wizard
 behavior into the fresh level; see `native-fresh-wizard-resource-oracle.md`.
 
-Two-Wizard R01 remains ACTIVE. Native charge defeated row129, HUD39→49 and
+Two-Wizard R01 remains ACTIVE. Native charge defeated row129, HUD9→19 and
 durable reward bit2 were observed; row128 remained alive/uncollected. Normal
-exit reached Artisans with bit2 retained. Partial-collection re-entry and the
-other reward are being tested. The session journal below owns cleanup.
+exit reached Artisans with bit2 retained. Partial-collection re-entry passed:
+row129 selectorFF, row128 selector56, durable2, HUD19. Full-resolution captures
+corrected an earlier preview-digit misreading39→49; the +10 result is unchanged.
+The other reward is being tested. The session journal below owns cleanup.
 
 ## Latest: saved-version guard and detached Wizard assets
 

@@ -1,5 +1,42 @@
 # Saved fresh-document research publication
 
+## Actual UI and postcommit checkpoint
+
+The real headless editor toolbar/form Apply/Save/default production worker now
+passes4393 checks and produces the independently expected edited whole BIN.
+Only the output picker is substituted; real release bootstrap, project, source
+selection and saved context are used. A separate process independently captures
+the actual saved version and verifies the full image/CUE/receipt again. Root
+inspected the final rendered success window. This is not a new installed app.
+
+The new positive postcommit tests execute two actual transactions: late caller
+cancellation still returns verified success; an actual unknown stage owner
+after final verification causes the typed committed failure. All three artifacts
+are preserved with that stage and its32-byte output lease. Public clean-set
+Verify refuses this recovery set; direct complete source-image and companion
+checks pass. Neither a fake committed flag nor a fake Publication is used.
+All19 outcome checks and thirteen protected before/after hashes pass. Existing
+fixed publisher timing and both retained candidate Verify controls pass.
+
+Root combined Release130/0 and Python105/4 explicit-source skips pass.
+The real UI output, project and successful frame are retained under
+`_local/research/fresh-document-real-ui-r01.DsKiPF/run/`; exact commands and
+all hashes are in `SOURCE-HANDOFF.md` in its parent. The separate positive
+exercise/recovery owners are under
+`_local/research/fresh-document-postcommit-r01.Tvtw16/exercise-r01/`.
+Preserve these sets; do not republish over them or erase the recovery evidence.
+
+Whole BIN SHA256:
+`ecc8f61cc16bf86a2f5117b327c49aede18f5c1e6a602c0e67f2ba58565aed16`.
+Actual generic Plan:
+`046febda9b44fd8c4fb2bf2a4cc0ecffecb8202a3f37b9f4871b892916ac6f8d`.
+The prior fixed edited image has the same BIN bytes, but a different Plan and
+companion names/receipt. Its earlier native gameplay evidence is separate from
+this real UI operation; these gates did not launch this new CUE in DuckStation.
+
+The following sections preserve the earlier implementation checkpoint;
+their not-yet-executed positive-test statements are superseded above.
+
 The Fresh Native Level window now has a separate `Create research candidate…`
 action. It requires an applied, saved document and compiles that actual saved
 version, not an implicit starter. This is source implementation, not a replaced
