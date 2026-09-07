@@ -158,8 +158,13 @@ remain separate work.
 
 ## Verification and next milestone
 
-Latest post-publication Release gate:146 selected checks, zero failures; the
-preceding all-project build/regression gate passed313 checks. The current Python
+The new level-document foundation now supports an ordered object list with
+stable editor IDs. Its first object type is a Wizard route. This is tested Core
+code, not yet new controls in R03; saving/migration and native compilation remain
+separate work. See [aggregate checkpoint](native-fresh-level-aggregate.md).
+
+Latest all-project Release build/regression gate:315 steps, zero failures,
+including the new aggregate's308 checks/214 expected refusals. The previous Python
 suite passed168 tests with seven explicit-mode skips;56 runner tests passed. The
 independent native scene check passed23 checks/four expected refusals and
 sound-loading proof404 checks/ten expected refusals. New actual compiled fallback

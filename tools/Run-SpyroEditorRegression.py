@@ -47,6 +47,7 @@ CORE_CASES = (
     ("NativeId65CompanionAssetSmoke", "NATIVE_ID65_COMPANION_ASSET_SOURCE_FREE_OK"),
     ("NativeId65AuthoredSurfaceSmoke", "NATIVE_ID65_AUTHORED_SURFACE_SMOKE_OK"),
     ("NativeId65FreshDocumentSmoke", "NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK"),
+    ("NativeFreshLevelDocumentSmoke", "NATIVE_FRESH_LEVEL_DOCUMENT_SMOKE_OK"),
     ("UiSmoke", "FRESH_NATIVE_DOCUMENT_UI_OK"),
     ("NativeId65NormalResourceSmoke", "NATIVE_ID65_NORMAL_RESOURCE_SMOKE_OK"),
     ("NativeId65NormalBodySmoke", "NATIVE_ID65_NORMAL_BODY_SMOKE_OK"),

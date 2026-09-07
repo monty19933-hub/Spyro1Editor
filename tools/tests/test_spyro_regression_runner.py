@@ -290,6 +290,57 @@ class RunnerOptionsTests(unittest.TestCase):
             self.assertEqual(emit_marker, summary[-1]["passed"])
             self.assertFalse(any(c[0] == "env" for c in calls))
 
+    def test_fresh_level_aggregate_is_one_mandatory_no_argument_neutral_case(self):
+        name, marker = "NativeFreshLevelDocumentSmoke", "NATIVE_FRESH_LEVEL_DOCUMENT_SMOKE_OK"
+        self.assertEqual([(name, marker)], [c for c in RUNNER.CORE_CASES if c[0] == name])
+        self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
+        self.assertFalse(any(c[0] == name for c in RUNNER.ADDITIONAL_CORE_CASES))
+        self.assertFalse(any(c[0] == name for c in RUNNER.SOURCE_QA_CASES))
+        self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        with mock.patch.object(sys, "argv", [str(SPEC.origin), "--list"]), \
+                mock.patch.object(RUNNER, "run_owned_command", side_effect=AssertionError("list command")), \
+                mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("source read")), \
+                mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("CUE read")), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(0, RUNNER.main())
+        lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor." + name + "/" in line]
+        self.assertEqual(1, len(lines))
+        self.assertTrue(lines[0].endswith(" | " + marker))
+        self.assertNotIn("--", lines[0])
+
+    def test_fresh_level_aggregate_requires_own_marker_and_successful_exit_without_source(self):
+        name, marker = "NativeFreshLevelDocumentSmoke", "NATIVE_FRESH_LEVEL_DOCUMENT_SMOKE_OK"
+        registered = tuple(c for c in RUNNER.CORE_CASES if c[0] == name)
+        self.assertEqual(((name, marker),), registered)
+        for emitted, status, expected in ((marker, 0, True), ("NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK", 0, False), (marker, 7, False)):
+            calls = []
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                is_run = command[:2] == ["dotnet", "run"]
+                if is_run: kwargs["stdout"].write(emitted)
+                return subprocess.CompletedProcess(command, status if is_run else 0)
+            with self.subTest(emitted=emitted, status=status), tempfile.TemporaryDirectory(prefix="spyro-level-aggregate-runner-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", registered), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "SOURCE_QA_CASES", ()), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("aggregate source read")), \
+                        mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("aggregate CUE read")), \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin)]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0 if expected else 1, RUNNER.main())
+                summary = json.loads((Path(output) / "summary.json").read_text())
+            self.assertEqual(2, len([c for c in calls if c[:2] == ["dotnet", "build"]]), "mandatory project plus App")
+            runs = [c for c in calls if c[:2] == ["dotnet", "run"]]
+            self.assertEqual(1, len(runs))
+            self.assertNotIn("--", runs[0], "no source/output/compiler/publisher arguments")
+            self.assertIn("--no-build", runs[0]); self.assertIn("--no-restore", runs[0])
+            self.assertEqual("run-Spyro.Editor." + name, summary[-1]["name"])
+            self.assertEqual(expected, summary[-1]["passed"])
+            self.assertFalse(any(c[0] == "env" for c in calls))
+
     def test_fresh_document_is_sourcefree_only_and_requires_its_own_marker(self):
         name = "NativeId65FreshDocumentSmoke"
         marker = "NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK"

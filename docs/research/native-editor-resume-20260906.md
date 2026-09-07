@@ -81,6 +81,11 @@ BIN SHA256
 
 - Native inventory, append-only authored identities and existing level editing.
   The4,877-object/35-level inventory is not universal runtime portability.
+- New neutral whole-level aggregate and strict codec preserve the old floor
+  intent and stable ordered placement IDs, with the first closed Wizard-route
+  variant. Focused308 checks/214 refusals and Root all-project Release315/zero
+  failures pass; production/tests independently reviewed. No aggregate Store,
+  UI, compiler or migration exists yet. Read `native-fresh-level-aggregate.md`.
 - Distinct immutable fresh intent, canonical codec, preview/undo, project-bound
   Store save/reopen, stale-write protection and shared native compilation.
   Legacy Lab schemas keep their meaning; no old Lab file is reinterpreted.
@@ -249,27 +254,18 @@ Next outcomes:
    bounded exclusive reward-selector audit still requires Town classes0E/0F/10;
    simple0E is a distinct model grammar. Complete their assets and callback
    closure rather than assuming only the yellow-gem path can occur.
-3. Actual issued Body consumption, independent full raw afterimage/inverse
-   review and the new actual-Executable-bound physical Disc gates are complete.
-   The closed actual-Disc research materializer and explicit-output test CLI are
-   implemented; actual staging/postcommit and clean publication/independent
-   verification now pass. Clean CUE is in
-   `fresh-wizard-publication-validation-r01.0eF4Tz/candidate-r01`, not its fault
-   children. Finish the separately reviewed phase2 observer binding next before
-   connecting to a new controlled DuckStation session. The phase1 CLI remains
-   disabled while those changes are under implementation and root review.
-   Its new gap is through55162,37 sectors beyond old55125. Root's reviewed
-   private design is in fresh-wizard-disc-issuer-plan-r01.UKwumc.
-   Reuse the unchanged private full-LBA source validator and raw-sector codec,
-   but run the full new geometry/ISO/gap checks; do not reuse old gap authority.
-   Existing LAB/music/ID65 table owners and fixed P0/N16 outputs stay unchanged.
-   Static target10 is not persistent/card/history policy. Physical publication
-   is now complete; playtest only the exact independently checked private image
-   with all unresolved audio/capacity/runtime limitations explicit. The
-   reviewed next-stage proposal is in fresh-wizard-materializer-plan-r01.8dwAYa;
-   old N16/Dark observers must reject the new P1/N32 layout, not be repurposed
-   with stale anchors. Source-bound new observer or explicit visual-only scope
-   is needed before the first fresh-Wizard diagnostic.
+3. Physical publication, the activated fixed-candidate observer and first native
+   P1/N32 entry are complete. Playable entry failed; the session is closed and
+   restored. Clean CUE is in
+   `fresh-wizard-publication-validation-r01.0eF4Tz/candidate-r01`, never its fault
+   children. Investigate earliest health/motion transitions before changing the
+   candidate. State6 can follow either ordinary movement or earlier damage;
+   late observations do not distinguish them. Review any new report-only fields
+   against original source and re-read them within each accepted sample.
+   A new run needs fresh backups/process binding and native UI pause handling;
+   observer disconnect can auto-resume if native state was running at accept.
+   Never widen old N16/Dark observers or issue debugger execution/RAM writes.
+   Static target10 remains separate from persistent/card/history acceptance.
 4. Extend tested texture/material and Moby families through the editor with
    explicit dependency coverage and regression gates. General native texture
    portability, arbitrary object mixtures, new normal portal routes and V6
@@ -278,6 +274,12 @@ Next outcomes:
    enable/disable and disabled-output regression. Its exact Toasty native
    research test already passed; that is not yet a finished editor checkbox
    or universal-level acceptance. Preserve normal movement when disabled.
+6. Complete legacy Store compatibility characterization before extracting shared
+   storage. Keep one aggregate Store, not one per object family; preserve the old
+   Snapshot/read-lease/publication contract. A later explicit legacy fork must
+   protect both snapshots and use PublishNew. The detailed reviewed proposal is
+   `fresh-level-aggregate-r01.L7u8AO/NEXT-STORE-ARCHITECTURE.md` under the private
+   dark-wizard research directory. No automatic migration or UI work yet.
 
 Keep source, full-image readback, actual UI, native gameplay, audio listening,
 save/reboot and public-release acceptance separate. Coordinate agent findings
