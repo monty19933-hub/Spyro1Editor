@@ -1,18 +1,22 @@
 using Spyro.Editor.Core.Persistence;
+using Spyro.Editor.Core.Editing;
+using System.Security.Cryptography;
 
 namespace Spyro.Editor.Core.Exporting;
 
 internal enum NativeId65FreshResearchFault { None, AfterFirstSector, AfterImageWrite, BeforePublication }
 
-// Only actual sealed, source-issued fixed plans can bind the workflow. No
+// Only actual sealed source plans or saved contexts can bind the workflow. No
 // caller-supplied filenames, hashes, callbacks, profile labels or serializers.
 internal sealed class NativeId65FreshResearchPublicationBinding
 {
     private readonly NativeId65FreshDiscResearchCandidatePlan? _starter;
     private readonly NativeId65FreshEditedDocumentResearchPlan? _edited;
+    private readonly NativeId65FreshSavedDocumentExportContext? _saved;
 
     private NativeId65FreshResearchPublicationBinding(NativeId65FreshDiscResearchCandidatePlan plan) => _starter = plan;
     private NativeId65FreshResearchPublicationBinding(NativeId65FreshEditedDocumentResearchPlan plan) => _edited = plan;
+    private NativeId65FreshResearchPublicationBinding(NativeId65FreshSavedDocumentExportContext context) => _saved = context;
 
     internal static NativeId65FreshResearchPublicationBinding FromStarter(NativeId65FreshDiscResearchCandidatePlan plan)
     {
@@ -26,26 +30,34 @@ internal sealed class NativeId65FreshResearchPublicationBinding
         return new(plan);
     }
 
-    internal string SourceImagePath => _starter != null ? _starter.SourceImagePath : _edited!.SourceImagePath;
-    internal string SourceCuePath => _starter != null ? _starter.SourceCuePath : _edited!.SourceCuePath;
-    internal string PlanSha256 => _starter != null ? _starter.PlanSha256 : _edited!.PlanSha256;
-    internal string Label => _starter != null ? "Fresh LAB" : "Edited fresh LAB";
-    internal string ImageName => _starter != null ? NativeId65FreshDiscResearchCandidatePlan.ImageName : NativeId65FreshEditedDocumentResearchPlan.ImageName;
-    internal string CueName => _starter != null ? NativeId65FreshDiscResearchCandidatePlan.CueName : NativeId65FreshEditedDocumentResearchPlan.CueName;
-    internal string ReceiptName => _starter != null ? NativeId65FreshDiscResearchCandidatePlan.ReceiptName : NativeId65FreshEditedDocumentResearchPlan.ReceiptName;
-    internal string[] OutputNames => _starter != null ? NativeId65FreshDiscResearchCandidatePlan.OutputNames : NativeId65FreshEditedDocumentResearchPlan.OutputNames;
-    internal string LeaseName => _starter != null ? ".native-id65-fresh.writer.lock" : ".native-id65-fresh-edited.writer.lock";
-    internal string StagePrefix => _starter != null ? ".native-id65-fresh-stage-" : ".native-id65-fresh-edited-stage-";
+    internal static NativeId65FreshResearchPublicationBinding FromSaved(NativeId65FreshSavedDocumentExportContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return new(context);
+    }
+
+    internal NativeId65FreshSavedDocumentExportContext? SavedContext => _saved;
+    internal string SourceImagePath => _saved != null ? _saved.Plan.SourceImagePath : _starter != null ? _starter.SourceImagePath : _edited!.SourceImagePath;
+    internal string SourceCuePath => _saved != null ? _saved.Plan.SourceCuePath : _starter != null ? _starter.SourceCuePath : _edited!.SourceCuePath;
+    internal string PlanSha256 => _saved != null ? _saved.Plan.PlanSha256 : _starter != null ? _starter.PlanSha256 : _edited!.PlanSha256;
+    internal string Label => _saved != null ? "Saved fresh LAB" : _starter != null ? "Fresh LAB" : "Edited fresh LAB";
+    internal string ImageName => _saved != null ? NativeId65FreshDocumentResearchPlan.ImageName : _starter != null ? NativeId65FreshDiscResearchCandidatePlan.ImageName : NativeId65FreshEditedDocumentResearchPlan.ImageName;
+    internal string CueName => _saved != null ? NativeId65FreshDocumentResearchPublisher.CueName : _starter != null ? NativeId65FreshDiscResearchCandidatePlan.CueName : NativeId65FreshEditedDocumentResearchPlan.CueName;
+    internal string ReceiptName => _saved != null ? NativeId65FreshDocumentResearchPublisher.ReceiptName : _starter != null ? NativeId65FreshDiscResearchCandidatePlan.ReceiptName : NativeId65FreshEditedDocumentResearchPlan.ReceiptName;
+    internal string[] OutputNames => _saved != null ? [ImageName, ReceiptName, CueName] : _starter != null ? NativeId65FreshDiscResearchCandidatePlan.OutputNames : NativeId65FreshEditedDocumentResearchPlan.OutputNames;
+    internal string LeaseName => _saved != null ? ".native-id65-fresh-document-research.writer.lock" : _starter != null ? ".native-id65-fresh.writer.lock" : ".native-id65-fresh-edited.writer.lock";
+    internal string StagePrefix => _saved != null ? ".native-id65-fresh-document-research-stage-" : _starter != null ? ".native-id65-fresh-stage-" : ".native-id65-fresh-edited-stage-";
 
     // This historical distinction belongs to the closed plan kind, not a caller flag.
     internal CancellationToken PostCommitToken(CancellationToken supplied) => _starter != null ? supplied : CancellationToken.None;
-    internal Task RequireFreshAsync(CancellationToken token) => _starter != null ? _starter.RequireFreshAsync(token) : _edited!.RequireFreshAsync(token);
-    internal byte[] CopyCueBytes() => _starter != null ? _starter.CopyCueBytes() : _edited!.CopyCueBytes();
-    internal byte[] BuildReceipt(NativeId65FreshDiscVerification verified) => _starter != null ? _starter.BuildReceipt(verified) : _edited!.BuildReceipt(verified);
-    internal NativeId65FreshDiscVerification VerifyImage(string path, CancellationToken token) => _starter != null ? _starter.VerifyImage(path, token) : _edited!.VerifyImage(path, token);
+    internal Task RequireFreshAsync(CancellationToken token) => _saved != null ? _saved.Plan.RequireFreshAsync(token) : _starter != null ? _starter.RequireFreshAsync(token) : _edited!.RequireFreshAsync(token);
+    internal byte[] CopyCueBytes() => _saved != null ? _saved.Plan.CopyCueBytes() : _starter != null ? _starter.CopyCueBytes() : _edited!.CopyCueBytes();
+    internal byte[] BuildReceipt(NativeId65FreshDiscVerification verified) => _saved != null ? NativeId65FreshDocumentResearchPublisher.BuildReceipt(_saved, verified) : _starter != null ? _starter.BuildReceipt(verified) : _edited!.BuildReceipt(verified);
+    internal NativeId65FreshDiscVerification VerifyImage(string path, CancellationToken token) => _saved != null ? _saved.Plan.VerifyImage(path, token) : _starter != null ? _starter.VerifyImage(path, token) : _edited!.VerifyImage(path, token);
     internal void WriteNewImage(string path, CancellationToken token, Action firstSector)
     {
-        if (_starter != null) _starter.WriteNewImage(path, token, firstSector);
+        if (_saved != null) _saved.Plan.WriteNewImage(path, token, firstSector);
+        else if (_starter != null) _starter.WriteNewImage(path, token, firstSector);
         else _edited!.WriteNewImage(path, token, firstSector);
     }
 }
@@ -60,6 +72,15 @@ internal static class NativeId65FreshResearchPublicationEngine
         NativeId65FreshResearchFault fault,
         Action<NativeId65FreshResearchFault, string>? checkpoint, CancellationToken token) =>
         PublishCoreAsync(plan, directory, fault, checkpoint, token);
+
+    internal static async Task<NativeId65FreshDiscResearchPublication> PublishDocumentForSmokeAsync(
+        NativeId65FreshResearchPublicationBinding plan, string directory, NativeId65FreshDocumentResearchFault fault,
+        Action<NativeId65FreshDocumentResearchFault, string>? checkpoint, CancellationToken token)
+    {
+        if (fault == NativeId65FreshDocumentResearchFault.None)
+            throw new InvalidDataException("A saved-document staging exercise must force a precommit fault.");
+        return await PublishCoreAsync(plan, directory, NativeId65FreshResearchFault.None, null, token, fault, checkpoint);
+    }
 
     internal static async Task<NativeId65FreshDiscResearchPublication> VerifyAsync(NativeId65FreshResearchPublicationBinding plan,
         string outputDirectory, CancellationToken token = default)
@@ -76,10 +97,14 @@ internal static class NativeId65FreshResearchPublicationEngine
 
     private static async Task<NativeId65FreshDiscResearchPublication> PublishCoreAsync(NativeId65FreshResearchPublicationBinding plan,
         string outputDirectory, NativeId65FreshResearchFault fault,
-        Action<NativeId65FreshResearchFault, string>? checkpoint, CancellationToken token)
+        Action<NativeId65FreshResearchFault, string>? checkpoint, CancellationToken token,
+        NativeId65FreshDocumentResearchFault documentFault = NativeId65FreshDocumentResearchFault.None,
+        Action<NativeId65FreshDocumentResearchFault, string>? documentCheckpoint = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         if (!Enum.IsDefined(fault)) throw new InvalidDataException($"Unknown {plan.Label} research fault.");
+        if (!Enum.IsDefined(documentFault) || (documentFault != NativeId65FreshDocumentResearchFault.None && plan.SavedContext == null))
+            throw new InvalidDataException("Unknown saved-document precommit fault or binding.");
         token.ThrowIfCancellationRequested();
         string root = Resolve(plan, outputDirectory);
         RequireEmpty(plan, root); // Complete sets may only be separately verified.
@@ -92,8 +117,12 @@ internal static class NativeId65FreshResearchPublicationEngine
         string stage = Path.Combine(root, plan.StagePrefix + Guid.NewGuid().ToString("N"));
         bool preserve = false, published = false;
         NativeId65FreshDiscResearchPublication? completed = null;
+        Exception? documentCommittedFailure = null;
+        string transactionRecovery = "", projectLeaseEvidence = "";
+        byte[]? documentLeaseOwner = plan.SavedContext == null ? null : RandomNumberGenerator.GetBytes(32);
         try
         {
+            if (documentLeaseOwner != null) { lease.Write(documentLeaseOwner); lease.Flush(flushToDisk: true); }
             RequireOnly(plan, root, [leasePath]);
             Directory.CreateDirectory(stage);
             string image = Path.Combine(stage, plan.ImageName);
@@ -108,6 +137,7 @@ internal static class NativeId65FreshResearchPublicationEngine
             // Callback BEFORE final guards; forced exception AFTER guards.
             // A missing freshness guard still cannot let fault tests publish.
             checkpoint?.Invoke(NativeId65FreshResearchFault.BeforePublication, image);
+            documentCheckpoint?.Invoke(NativeId65FreshDocumentResearchFault.BeforePublication, image);
             token.ThrowIfCancellationRequested();
             await plan.RequireFreshAsync(token);
             if (VerifySet(plan, stage, token) != verified)
@@ -118,11 +148,30 @@ internal static class NativeId65FreshResearchPublicationEngine
             if (fault == NativeId65FreshResearchFault.BeforePublication)
                 throw new IOException($"Deliberate {plan.Label} publication fault: BeforePublication");
 
-            var publication = ExportArtifactTransaction.PublishNew(root,
-                plan.OutputNames.Select(name => new ExportArtifactReplacement(
-                    Path.Combine(root, name), Path.Combine(stage, name))).ToArray(), token);
-            published = true;
+            ExportArtifactPublicationResult publication;
+            NativeId65FreshDocumentStore.ReadLease? savedGuard = null;
+            try
+            {
+                // LAST saved-state check, after full source/staging/root guards.
+                // No awaits or image work while excluding cooperating saves.
+                savedGuard = plan.SavedContext?.AcquireFinalPrecommitGuard(token);
+                DocumentCheckpoint(NativeId65FreshDocumentResearchFault.AfterSavedGuard, image);
+                if (documentFault == NativeId65FreshDocumentResearchFault.BeforePublication)
+                    throw new IOException("Deliberate saved-document publication fault: BeforePublication");
+                publication = ExportArtifactTransaction.PublishNew(root,
+                    plan.OutputNames.Select(name => new ExportArtifactReplacement(
+                        Path.Combine(root, name), Path.Combine(stage, name))).ToArray(), token);
+                published = true;
+                transactionRecovery = publication.RetainedRecoveryDirectory;
+            }
+            finally
+            {
+                savedGuard?.Dispose();
+                projectLeaseEvidence = savedGuard?.RetainedEvidencePath ?? "";
+            }
             preserve = !string.IsNullOrEmpty(publication.RetainedRecoveryDirectory);
+            if (projectLeaseEvidence.Length != 0)
+                throw new IOException("Committed saved-document guard retained ownership evidence at " + projectLeaseEvidence);
             // Own lease/empty stage and typed retained recovery can exist here.
             // Separate Verify permits only the exact three-artifact set.
             // Preserve the old starter policy exactly. The exact edited profile
@@ -146,7 +195,8 @@ internal static class NativeId65FreshResearchPublicationEngine
         catch (Exception error) when (published)
         {
             preserve = true;
-            throw new IOException($"{plan.Label} artifacts were published but final verification failed; preserve " + root, error);
+            if (plan.SavedContext != null) documentCommittedFailure = error;
+            else throw new IOException($"{plan.Label} artifacts were published but final verification failed; preserve " + root, error);
         }
         finally
         {
@@ -163,28 +213,62 @@ internal static class NativeId65FreshResearchPublicationEngine
                     if (Directory.Exists(stage))
                     {
                         if (!Directory.EnumerateFileSystemEntries(stage).Any()) Directory.Delete(stage);
-                        else preserve = true; // Unknown owners remain with our lease for explicit recovery.
+                        else
+                        {
+                            preserve = true; // Unknown owners remain with our lease for explicit recovery.
+                            if (plan.SavedContext != null && published)
+                                documentCommittedFailure ??= new IOException("Saved-document stage retains an unknown owner after commit.");
+                        }
                     }
                 }
-                catch (IOException) { preserve = true; }
-                catch (InvalidDataException) { preserve = true; }
-                catch (UnauthorizedAccessException) { preserve = true; }
+                catch (IOException error)
+                { preserve = true; if (plan.SavedContext != null && published) documentCommittedFailure ??= error; }
+                catch (InvalidDataException error)
+                { preserve = true; if (plan.SavedContext != null && published) documentCommittedFailure ??= error; }
+                catch (UnauthorizedAccessException error)
+                { preserve = true; if (plan.SavedContext != null && published) documentCommittedFailure ??= error; }
             }
-            lease.Dispose();
+            if (plan.SavedContext == null) lease.Dispose();
+            else
+            {
+                try { lease.Dispose(); }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                { preserve = true; if (published) documentCommittedFailure ??= error; }
+            }
             if (!preserve)
             {
-                try { if (File.Exists(leasePath)) File.Delete(leasePath); }
-                catch (IOException) { }
-                catch (UnauthorizedAccessException) { }
+                try
+                {
+                    if (documentLeaseOwner != null)
+                    {
+                        RequireNoLink(plan, leasePath);
+                        RequireCompanionFile(leasePath, documentLeaseOwner, CancellationToken.None);
+                    }
+                    if (File.Exists(leasePath)) File.Delete(leasePath);
+                }
+                catch (IOException error)
+                { if (plan.SavedContext != null && published) documentCommittedFailure ??= error; }
+                catch (UnauthorizedAccessException error)
+                { if (plan.SavedContext != null && published) documentCommittedFailure ??= error; }
+                catch (InvalidDataException error) when (plan.SavedContext != null)
+                { if (published) documentCommittedFailure ??= error; }
             }
         }
+        // Only this actual known-commit branch creates the typed failure, after
+        // all project/output lease, stage and transaction accounting completed.
+        if (plan.SavedContext != null && published && documentCommittedFailure != null)
+            throw new NativeId65FreshDocumentResearchCommittedException(root, plan.PlanSha256,
+                ExistingEvidence(transactionRecovery), ExistingEvidence(stage), ExistingEvidence(leasePath),
+                projectLeaseEvidence, documentCommittedFailure);
         // Cleanup warnings must remain discoverable, even if our own stage or
         // lease (rather than the transaction recovery journal) was retained.
         return completed! with
         {
             RetainedRecoveryDirectory = !string.IsNullOrEmpty(completed!.RetainedRecoveryDirectory)
                 ? completed.RetainedRecoveryDirectory
-                : Directory.Exists(stage) ? stage : File.Exists(leasePath) ? root : ""
+                : plan.SavedContext != null
+                    ? ExistingEvidence(stage).Length != 0 ? stage : ExistingEvidence(leasePath).Length != 0 ? root : ""
+                    : Directory.Exists(stage) ? stage : File.Exists(leasePath) ? root : ""
         };
 
         void Checkpoint(NativeId65FreshResearchFault point, string image)
@@ -192,7 +276,24 @@ internal static class NativeId65FreshResearchPublicationEngine
             checkpoint?.Invoke(point, image);
             token.ThrowIfCancellationRequested();
             if (fault == point) throw new IOException($"Deliberate {plan.Label} publication fault: " + point);
+            if (point == NativeId65FreshResearchFault.AfterFirstSector) DocumentCheckpoint(NativeId65FreshDocumentResearchFault.AfterFirstSector, image);
+            if (point == NativeId65FreshResearchFault.AfterImageWrite) DocumentCheckpoint(NativeId65FreshDocumentResearchFault.AfterImageWrite, image);
         }
+
+        void DocumentCheckpoint(NativeId65FreshDocumentResearchFault point, string image)
+        {
+            if (plan.SavedContext == null) return;
+            documentCheckpoint?.Invoke(point, image);
+            token.ThrowIfCancellationRequested();
+            if (documentFault == point) throw new IOException("Deliberate saved-document publication fault: " + point);
+        }
+    }
+
+    private static string ExistingEvidence(string path)
+    {
+        if (path.Length == 0) return "";
+        try { return File.Exists(path) || Directory.Exists(path) || new FileInfo(path).LinkTarget != null ? path : ""; }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return path; }
     }
 
     private static NativeId65FreshDiscVerification VerifySet(NativeId65FreshResearchPublicationBinding plan,
@@ -244,6 +345,12 @@ internal static class NativeId65FreshResearchPublicationEngine
         string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
         PersistencePathSafety.EnsureTreesDoNotOverlap(plan.SourceImagePath, root, $"{plan.Label} output overlaps source BIN.");
         PersistencePathSafety.EnsureTreesDoNotOverlap(plan.SourceCuePath, root, $"{plan.Label} output overlaps source CUE.");
+        if (plan.SavedContext is { } saved)
+        {
+            PersistencePathSafety.EnsureTreesDoNotOverlap(saved.Snapshot.Path, root, "Saved fresh LAB output overlaps its captured document.");
+            string manifest = new EditorProjectLayout(saved.Snapshot.RootPath, saved.Snapshot.ProjectId).ManifestPath;
+            PersistencePathSafety.EnsureTreesDoNotOverlap(manifest, root, "Saved fresh LAB output overlaps its captured manifest.");
+        }
         RequireNoLink(plan, root);
         if (File.Exists(root)) throw new InvalidDataException($"{plan.Label} output directory is a file.");
         return root;

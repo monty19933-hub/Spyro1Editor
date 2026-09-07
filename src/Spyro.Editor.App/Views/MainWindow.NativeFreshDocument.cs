@@ -31,7 +31,8 @@ public sealed partial class MainWindow
         {
             bool Current() => IsNativeFreshDocumentProjectCurrent(captured.Project,
                 ReleaseProjectBootstrap.Current?.Project, _workspace.RootPath);
-            var dialog = new NativeFreshDocumentWindow(captured.Project, Current);
+            var dialog = new NativeFreshDocumentWindow(captured.Project, Current,
+                CaptureFreshDocumentResearchSourcePaths, () => BeginFreshDocumentResearch(captured.Project));
             await dialog.ShowDialog(this);
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)

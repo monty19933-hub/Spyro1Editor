@@ -13,7 +13,8 @@ namespace Spyro.Editor.Core.Exporting;
 /// document. The complete compilation, not caller hashes or an equal upload,
 /// supplies native byte authority. Derived image hashes are not independent
 /// recipe certificates, project-save binding, runtime or publication approval.
-/// This plan has no artifact writer, receipt or publisher.
+/// Internal streaming adapters serve only the saved-context publication engine;
+/// this plan exposes no public artifact writer, receipt or publisher.
 /// </summary>
 public sealed class NativeId65FreshDocumentResearchPlan
 {
@@ -128,12 +129,14 @@ public sealed class NativeId65FreshDocumentResearchPlan
     }
 
     private static NativeId65FreshDiscVerification Measure(NativeId65FreshDiscPlan disc,
-        Stream source, CancellationToken token)
+        Stream source, CancellationToken token, Stream? output = null, Action? firstSector = null)
     {
         token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(source);
         if (!source.CanRead || !source.CanSeek || source.Position != 0 || source.Length != NativeId65FreshDiscSource.ImageByteLength)
             throw new InvalidDataException("Fresh-document expected image requires a complete readable original at offset zero.");
+        if (output != null && (!output.CanWrite || !output.CanSeek || output.Position != 0 || output.Length != 0))
+            throw new InvalidDataException("Fresh-document streaming requires a new empty writable owner.");
         using var originalHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using var expectedHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         byte[] before = new byte[2352];
@@ -148,12 +151,42 @@ public sealed class NativeId65FreshDocumentResearchPlan
             originalHash.AppendData(before);
             expectedHash.AppendData(after);
             if (!before.AsSpan().SequenceEqual(after)) changed++;
+            if (output != null)
+            {
+                output.Write(after);
+                if (lba == 0) firstSector?.Invoke();
+            }
         }
         NativeId65FreshDiscSource.RequireActualEof(source, token);
         if (Convert.ToHexStringLower(originalHash.GetHashAndReset()) != NativeId65FreshDiscSource.OriginalSha256)
             throw new InvalidDataException("Fresh-document expected image lost its complete original source binding.");
+        if (output != null && (output.Position != NativeId65FreshDiscSource.ImageByteLength || output.Length != output.Position))
+            throw new InvalidDataException("Fresh-document streamed output length or position changed.");
         token.ThrowIfCancellationRequested();
         return new(Convert.ToHexStringLower(expectedHash.GetHashAndReset()), changed);
+    }
+
+    // The SAME per-sector authenticated measurement loop now supplies the
+    // engine's new-only staged file. No duplicate physical relocation grammar.
+    internal void WriteNewImage(string path, CancellationToken token, Action firstSector)
+    {
+        token.ThrowIfCancellationRequested();
+        RequireCueFresh(token);
+        using FileStream source = new(SourceImagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using FileStream output = new(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        RequireExpected(Measure(_disc, source, token, output, firstSector));
+        output.Flush(flushToDisk: true);
+        token.ThrowIfCancellationRequested();
+        RequireCueFresh(token);
+    }
+
+    internal NativeId65FreshDiscVerification VerifyImage(string path, CancellationToken token)
+    {
+        using FileStream source = new(SourceImagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using FileStream output = new(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        try { return VerifyImage(source, output, token); }
+        catch (InvalidDataException error)
+        { throw new InvalidDataException("Saved fresh document physical readback failed: " + error.Message, error); }
     }
 
     internal NativeId65FreshDiscVerification VerifyImage(Stream source, Stream candidate, CancellationToken token)

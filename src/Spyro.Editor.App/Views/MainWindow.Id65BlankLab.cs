@@ -6432,7 +6432,7 @@ public sealed partial class MainWindow
     private bool HasConflictingId65BlankLabManualOperationState(
         bool allowActiveLevelSelection = false,
         bool allowActiveTerrainPersistence = false) =>
-        _buildingPortableCache ||
+        _freshNativeResearchBusy || _buildingPortableCache ||
         _projectDataImportBusy ||
         _workspaceTransitionBusy ||
         _regularEditorPersistenceBusy ||
@@ -6451,6 +6451,7 @@ public sealed partial class MainWindow
         string action,
         WorkspaceTransitionOperation? owningWorkspaceTransition = null)
     {
+        if (TryBlockFreshDocumentResearchMutation(action)) return true;
         if (_workspaceTransitionBusy &&
             (owningWorkspaceTransition == null ||
              !IsCurrentWorkspaceTransition(
@@ -7092,6 +7093,7 @@ public sealed partial class MainWindow
 
     private bool TryBlockEditorMutationDuringId65BlankLabManualOperation(string action)
     {
+        if (TryBlockFreshDocumentResearchMutation(action)) return true;
         if (_workspaceTransitionBusy)
         {
             _statusText.Text =
@@ -7113,9 +7115,12 @@ public sealed partial class MainWindow
         Mobys: _currentMobys,
         LevelLoadRequestId: _levelLoadRequestId,
         Id65OperationGeneration: _id65BlankLabManualOperationGeneration,
-        WorkspaceTransitionGeneration: _workspaceTransitionGeneration);
+        WorkspaceTransitionGeneration: _workspaceTransitionGeneration,
+        FreshResearchGeneration: _freshNativeResearchGeneration);
 
     private bool IsCurrentEditorMutationSceneIdentity(EditorMutationSceneIdentity captured) =>
+        !_freshNativeResearchBusy &&
+        captured.FreshResearchGeneration == _freshNativeResearchGeneration &&
         !_id65BlankLabBusy &&
         _id65BlankLabManualOperation == null &&
         !_workspaceTransitionBusy &&
@@ -7165,13 +7170,16 @@ public sealed partial class MainWindow
         ProjectDataImportGeneration: _projectDataImportGeneration,
         RegularPersistenceGeneration: _regularEditorPersistenceGeneration,
         BuildSafetyGeneration: _buildSafetyGeneration,
-        WorkspaceTransitionGeneration: _workspaceTransitionGeneration);
+        WorkspaceTransitionGeneration: _workspaceTransitionGeneration,
+        FreshResearchGeneration: _freshNativeResearchGeneration);
 
     private bool IsCurrentSourceDiscOperationIdentity(
         SourceDiscOperationIdentity captured,
         bool requireSceneIdentity = true,
         bool allowPortableCacheBuild = false,
         bool allowProjectDataImport = false) =>
+        !_freshNativeResearchBusy &&
+        captured.FreshResearchGeneration == _freshNativeResearchGeneration &&
         !_id65BlankLabBusy &&
         _id65BlankLabManualOperation == null &&
         !_workspaceTransitionBusy &&
@@ -12463,7 +12471,8 @@ public sealed partial class MainWindow
         List<Moby> Mobys,
         int LevelLoadRequestId,
         int Id65OperationGeneration,
-        int WorkspaceTransitionGeneration);
+        int WorkspaceTransitionGeneration,
+        int FreshResearchGeneration);
 
     private sealed record ObjectDialogSceneIdentity(
         EditorMutationSceneIdentity Scene,
@@ -12485,7 +12494,8 @@ public sealed partial class MainWindow
         int ProjectDataImportGeneration,
         int RegularPersistenceGeneration,
         int BuildSafetyGeneration,
-        int WorkspaceTransitionGeneration);
+        int WorkspaceTransitionGeneration,
+        int FreshResearchGeneration);
 
     private sealed record Id65BlankLabAuthoredLayerSnapshot(
         bool DirectoryExisted,

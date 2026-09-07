@@ -553,6 +553,13 @@ public sealed partial class MainWindow : Window
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
+        if (_freshNativeResearchBusy)
+        {
+            e.Cancel = true;
+            base.OnClosing(e);
+            _statusText.Text = "Finishing the captured fresh research export before the editor can close.";
+            return;
+        }
         if (_workspaceTransitionBusy)
         {
             e.Cancel = true;
@@ -1962,6 +1969,11 @@ public sealed partial class MainWindow : Window
         LevelDefinition? level,
         Id65BlankLabManualOperation? existingId65Operation = null)
     {
+        if (TryBlockFreshDocumentResearchMutation("changing levels"))
+        {
+            SyncLevelPickers(_currentLevel);
+            return;
+        }
         if (_syncingLevelSelection || _handlingLevelSelection)
             return;
         if (_levelSelectionAsyncInFlight > 0)
@@ -2364,7 +2376,7 @@ public sealed partial class MainWindow : Window
 
     private void RefreshLevelSelectionAvailability()
     {
-        bool enabled = !_buildingPortableCache &&
+        bool enabled = !_freshNativeResearchBusy && !_buildingPortableCache &&
             !_projectDataImportBusy &&
             !_workspaceTransitionBusy &&
             !_regularEditorPersistenceBusy &&
@@ -2426,7 +2438,7 @@ public sealed partial class MainWindow : Window
         string name,
         out WorkspaceTransitionOperation? operation)
     {
-        if (_workspaceTransitionBusy || _workspaceTransitionOperation != null ||
+        if (_freshNativeResearchBusy || _workspaceTransitionBusy || _workspaceTransitionOperation != null ||
             _id65BlankLabBusy || _regularEditorPersistenceBusy ||
             _buildSafetyBusy || _buildingPortableCache ||
             _projectDataImportBusy || _loadingLevel ||
@@ -2561,6 +2573,7 @@ public sealed partial class MainWindow : Window
 
     private async Task OpenWorkspaceAsync()
     {
+        if (TryBlockFreshDocumentResearchMutation("opening another workspace")) return;
         if (_workspaceTransitionBusy || _id65BlankLabBusy ||
             _regularEditorPersistenceBusy || _buildSafetyBusy ||
             _levelSelectionAsyncInFlight > 0)
@@ -3921,6 +3934,11 @@ public sealed partial class MainWindow : Window
         out RegularEditorPersistenceOperation? operation,
         WorkspaceTransitionOperation? owningWorkspaceTransition = null)
     {
+        if (TryBlockFreshDocumentResearchMutation(name))
+        {
+            operation = null;
+            return false;
+        }
         if (_workspaceTransitionBusy &&
             (owningWorkspaceTransition == null ||
              !IsCurrentWorkspaceTransition(owningWorkspaceTransition)))
@@ -10460,7 +10478,7 @@ public sealed partial class MainWindow : Window
         bool editorPersistenceOperationActive =
             _regularEditorPersistenceBusy || _buildSafetyBusy;
         bool editorMutationOperationActive =
-            _workspaceTransitionBusy ||
+            _freshNativeResearchBusy || _workspaceTransitionBusy ||
             manualId65OperationActive ||
             editorPersistenceOperationActive;
         bool sourceCommandEnabled = !editorMutationOperationActive &&

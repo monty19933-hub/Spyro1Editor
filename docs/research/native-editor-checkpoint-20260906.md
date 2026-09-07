@@ -1,5 +1,23 @@
 # Native editor checkpoint — 2026-09-06
 
+## Latest: saved-document publisher and editor action
+
+Actual saved-version generic publication and the Fresh Level research action
+are implemented with shared physical output, final Store guard and busy-owner
+protection. Root default Release128/0, Python104/4 explicit-source skips and
+focused source/UI/precommit gates pass. See
+`native-fresh-saved-document-publication.md`. Successful real UI publication and
+actual postcommit exercises are next; installed editor remains unchanged.
+
+The independent fresh Wizard resource oracle is committed at c25a8dc:
+542 checks/44 refusals, repeated by root and peer. This does not install Wizard
+behavior into the fresh level; see `native-fresh-wizard-resource-oracle.md`.
+
+Two-Wizard R01 remains ACTIVE. Native charge defeated row129, HUD39→49 and
+durable reward bit2 were observed; row128 remained alive/uncollected. Normal
+exit reached Artisans with bit2 retained. Partial-collection re-entry and the
+other reward are being tested. The session journal below owns cleanup.
+
 ## Latest: saved-version guard and detached Wizard assets
 
 The constructor-closed saved Snapshot/Plan context and internal cooperating-

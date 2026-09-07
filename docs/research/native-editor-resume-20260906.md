@@ -1,5 +1,17 @@
 # Resume after the September 6 usage pause
 
+**Newest checkpoint:** generic saved-document publisher and Fresh Level research
+action now pass root Release128/0 and Python104/4 skips; read
+`native-fresh-saved-document-publication.md`. No successful generic UI output
+yet; real production-worker and postcommit gates are next. Installed app has
+not been replaced. Independent fresh Wizard resources are committed at c25a8dc
+(542/44 source oracle); typed resources/body integration remain separate.
+
+**ACTIVE Two-Wizard R01:** row129 native defeat/+10 (HUD39→49), durable bit2,
+row128 still uncollected. Normal return to Artisans retained bit2; testing
+partial-collection re-entry next. Journal below owns mandatory fresh-settings
+restoration. Older no-encounter statements are historical.
+
 **Latest continuation supersedes older status:** saved-version context/lease and
 detached Wizard assets pass root combined Release126/0 and Python103/4 source
 skips. Read `native-fresh-saved-guard-and-wizard-assets.md`. Generic publisher/UI

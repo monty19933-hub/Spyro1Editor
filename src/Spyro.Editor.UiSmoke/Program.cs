@@ -32,6 +32,7 @@ if (args.Contains("--fresh-native-document-only", StringComparer.OrdinalIgnoreCa
     HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
     string freshArtifacts = Directory.CreateTempSubdirectory("spyro-fresh-document-ui-artifacts-").FullName;
     NativeFreshDocumentUiCases.Run(freshArtifacts);
+    NativeFreshDocumentResearchUiCases.Run();
     Console.WriteLine($"FRESH_NATIVE_DOCUMENT_UI_ARTIFACTS path={freshArtifacts}");
     return 0;
 }
@@ -326,6 +327,8 @@ void RunFreshNativeShellOnly()
         fresh.Close();
         FlushUi();
         AssertWorkspaceSessionContinuity(before, window.CaptureEditorShellSessionSnapshotForTesting(), "discarding separate fresh document");
+        WaitForUiTask(NativeFreshDocumentResearchUiCases.RunMainWindowAsync(window),
+            "checking saved fresh research owner and pending source-picker guards");
         var after = CaptureTerrainProjectInputHashes(workspace, before.CurrentLevel.Key);
         if (!inputs.SequenceEqual(after)) throw new InvalidDataException("Separate fresh preview mutated retail/old-Lab/source inputs.");
         SaveFrame(window, "fresh-native-toolbar-retail-1320.png");

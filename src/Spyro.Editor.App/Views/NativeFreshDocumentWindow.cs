@@ -15,7 +15,7 @@ namespace Spyro.Editor.App.Views;
 internal enum FreshDocumentDecision { Cancel, Discard, Save }
 
 /// <summary>Separate neutral authoring UI. Never inserts a fabricated retail scene into MainWindow.</summary>
-internal sealed class NativeFreshDocumentWindow : Window
+internal sealed partial class NativeFreshDocumentWindow : Window
 {
     private readonly EditorProjectLayout _project;
     private readonly Func<bool> _isCurrentProject;
@@ -39,12 +39,15 @@ internal sealed class NativeFreshDocumentWindow : Window
     private bool _allowClose;
     private string _appliedFields = "";
 
-    internal NativeFreshDocumentWindow(EditorProjectLayout project, Func<bool> isCurrentProject)
+    internal NativeFreshDocumentWindow(EditorProjectLayout project, Func<bool> isCurrentProject,
+        Func<(string Image, string Cue)>? researchSourcePaths = null, Func<IDisposable>? beginResearch = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(isCurrentProject);
         _project = project;
         _isCurrentProject = isCurrentProject;
+        _researchSourcePaths = researchSourcePaths;
+        _beginResearch = beginResearch;
         RequireCurrentProject();
         _snapshot = NativeId65FreshDocumentStore.Capture(project);
         CurrentIntent = _snapshot.Intent;
@@ -80,10 +83,11 @@ internal sealed class NativeFreshDocumentWindow : Window
                 new TextBlock
                 {
                     Name = "FreshDocumentCapability",
-                    Text = "Fresh floor and spawn — not the Town-bound Blank-Level Lab. Normal Create BIN is unavailable for this document. No BIN, CUE or runtime approval is produced here.",
+                    Text = "Fresh floor and spawn — not the Town-bound Blank-Level Lab. Normal Create BIN is unavailable for this document. The separate research action compiles the actual applied, saved document to a new BIN/CUE; it does not certify gameplay.",
                     TextWrapping = TextWrapping.Wrap, FontSize = 12, MaxWidth = 1050
                 },
-                actions
+                actions,
+                BuildResearchActions()
             }
         };
         var previewPanel = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto"), RowSpacing = 10 };
@@ -107,7 +111,7 @@ internal sealed class NativeFreshDocumentWindow : Window
         _fieldsPanel.Children.Add(_spawnHeight);
         _fieldsPanel.Children.Add(Section("Display colors", "Opaque RGB hex, #RRGGBB. The schematic uses these authored colors directly."));
         _fieldsPanel.Children.Add(Row(Field("FreshFloorColor", "Floor"), Field("FreshSkyColor", "Sky")));
-        _fieldsPanel.Children.Add(Section("Music", "Select an existing native track; this window does not play or export audio."));
+        _fieldsPanel.Children.Add(Section("Music", "Select an existing native track. Research compilation uses this selection; the schematic has no audio preview."));
         _fieldsPanel.Children.Add(_music);
         _fieldsPanel.Children.Add(_apply);
         _music.SelectionChanged += (_, _) => FieldsChanged();
@@ -131,10 +135,10 @@ internal sealed class NativeFreshDocumentWindow : Window
         KeyDown += (_, e) =>
         {
             KeyModifiers command = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
-            if (e.Key == Key.S && e.KeyModifiers == command && !_decisionBusy)
+            if (e.Key == Key.S && e.KeyModifiers == command)
             {
-                SaveDocument();
                 e.Handled = true;
+                if (!_decisionBusy && !_researchBusy) SaveDocument();
             }
         };
     }
@@ -147,7 +151,7 @@ internal sealed class NativeFreshDocumentWindow : Window
 
     private void NewStarter()
     {
-        if (CurrentIntent != null || _snapshot.Exists || _decisionBusy) return;
+        if (CurrentIntent != null || _snapshot.Exists || _decisionBusy || _researchBusy) return;
         Push(_undo, CurrentIntent);
         _redo.Clear();
         CurrentIntent = NativeId65FreshDocumentIntent.Create(8448, 8448, 8704, 1024, 1024, 8960, 8960, 64,
@@ -158,7 +162,7 @@ internal sealed class NativeFreshDocumentWindow : Window
 
     private bool ApplyFields()
     {
-        if (CurrentIntent == null) return false;
+        if (CurrentIntent == null || _researchBusy) return false;
         try
         {
             var candidate = NativeId65FreshDocumentIntent.Create(Number("FreshFloorX"), Number("FreshFloorY"), Number("FreshFloorZ"),
@@ -184,7 +188,7 @@ internal sealed class NativeFreshDocumentWindow : Window
 
     private bool SaveDocument()
     {
-        if (CurrentIntent == null) return false;
+        if (CurrentIntent == null || _researchBusy) return false;
         try
         {
             RequireCurrentProject();
@@ -214,7 +218,7 @@ internal sealed class NativeFreshDocumentWindow : Window
 
     private async Task ReopenAsync()
     {
-        if (_decisionBusy) return;
+        if (_decisionBusy || _researchBusy) return;
         try
         {
             RequireCurrentProject();
@@ -237,6 +241,12 @@ internal sealed class NativeFreshDocumentWindow : Window
 
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
+        if (_researchBusy)
+        {
+            e.Cancel = true;
+            _status.Text = "Wait for research export to finish before closing. Cancel operation requests cancellation; committed files are always retained.";
+            return;
+        }
         if (_allowClose || !HasUnsavedChanges) return;
         e.Cancel = true;
         if (_decisionBusy) return;
@@ -293,6 +303,7 @@ internal sealed class NativeFreshDocumentWindow : Window
 
     private void Undo()
     {
+        if (_researchBusy) return;
         if (HasUnappliedFields)
         {
             WriteFields();
@@ -308,6 +319,7 @@ internal sealed class NativeFreshDocumentWindow : Window
 
     private void Redo()
     {
+        if (_researchBusy) return;
         if (HasUnappliedFields || _redo.Count == 0) return;
         Push(_undo, CurrentIntent);
         CurrentIntent = Pop(_redo);
@@ -339,17 +351,20 @@ internal sealed class NativeFreshDocumentWindow : Window
     {
         if (_refreshing) return;
         RefreshChrome();
-        if (HasUnappliedFields) _status.Text = "Unapplied fields — the schematic still shows the last applied intent. Apply or Save validates the complete form.";
+        if (HasUnappliedFields && !_researchBusy) _status.Text = "Unapplied fields — the schematic still shows the last applied intent. Apply or Save validates the complete form.";
     }
 
     private void RefreshChrome()
     {
-        _new.IsEnabled = !_decisionBusy && CurrentIntent == null && !_snapshot.Exists;
-        _fieldsPanel.IsEnabled = !_decisionBusy && CurrentIntent != null;
-        _save.IsEnabled = !_decisionBusy && CurrentIntent != null;
-        _reopen.IsEnabled = !_decisionBusy;
-        _undoButton.IsEnabled = !_decisionBusy && (HasUnappliedFields || _undo.Count > 0);
-        _redoButton.IsEnabled = !_decisionBusy && !HasUnappliedFields && _redo.Count > 0;
+        bool editable = !_decisionBusy && !_researchBusy;
+        _new.IsEnabled = editable && CurrentIntent == null && !_snapshot.Exists;
+        _fieldsPanel.IsEnabled = editable && CurrentIntent != null;
+        _apply.IsEnabled = editable && CurrentIntent != null;
+        _save.IsEnabled = editable && CurrentIntent != null;
+        _reopen.IsEnabled = editable;
+        _undoButton.IsEnabled = editable && (HasUnappliedFields || _undo.Count > 0);
+        _redoButton.IsEnabled = editable && !HasUnappliedFields && _redo.Count > 0;
+        RefreshResearchChrome();
         _state.Text = HasUnappliedFields ? "Unapplied fields · preview unchanged" : HasUnsavedChanges ? "Unsaved document" :
             CurrentIntent == null ? "No fresh document" : "Saved document";
         Title = "Fresh Native Level Document" + (HasUnsavedChanges ? " *" : "");

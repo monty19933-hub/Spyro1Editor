@@ -415,7 +415,7 @@ public sealed partial class MainWindow
     }
 
     private bool UpdateActionsBlockedByEditorPersistence() =>
-        _workspaceTransitionBusy ||
+        _freshNativeResearchBusy || _workspaceTransitionBusy ||
         _id65BlankLabBusy && _id65BlankLabManualOperation != null ||
         _regularEditorPersistenceBusy ||
         _buildSafetyBusy;
