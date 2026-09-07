@@ -159,12 +159,16 @@ remain separate work.
 ## Verification and next milestone
 
 The new level-document foundation now supports an ordered object list with
-stable editor IDs. Its first object type is a Wizard route. This is tested Core
-code, not yet new controls in R03; saving/migration and native compilation remain
-separate work. See [aggregate checkpoint](native-fresh-level-aggregate.md).
+stable editor IDs. Its first object type is a Wizard route. The new whole-level
+Store now also saves and reopens that object list and floor settings separately
+from existing floor-only files. This is tested Core code, not new controls in R03;
+explicit migration/fork and native compilation remain separate work. See
+[aggregate checkpoint](native-fresh-level-aggregate.md).
 
 Latest all-project Release build/regression gate:315 steps, zero failures,
-including the new aggregate's308 checks/214 expected refusals. The current Python
+including the new aggregate's308 checks/214 expected refusals and112 additional
+real-file storage checks. Original-ROM-backed fresh research2339 and separate
+saved-context42 also passed, preserving the complete original BIN/CUE. The current Python
 suite passed179 tests with nine explicit-mode skips;58 runner tests passed. The
 independent native scene check passed23 checks/four expected refusals and
 sound-loading proof404 checks/ten expected refusals. New actual compiled fallback

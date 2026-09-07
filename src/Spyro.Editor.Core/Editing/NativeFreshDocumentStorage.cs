@@ -8,45 +8,168 @@ using Spyro.Editor.Core.Persistence;
 namespace Spyro.Editor.Core.Editing;
 
 /// <summary>
-/// Internal storage mechanics, currently closed to the existing legacy floor
-/// profile. Fixed paths, typed intent/codec and raw snapshot semantics are owned
-/// here; no caller-supplied serializer, validator or publication policy exists.
-/// A future aggregate adapter requires its own reviewed closed profile change.
+/// One storage lifecycle for two closed authoring profiles. Fixed paths, typed
+/// codecs and raw versions are owned here, never supplied by callers. Neither
+/// profile grants native compilation, fork or artifact publication authority.
 /// </summary>
 internal static class NativeFreshDocumentStorage
 {
-    private const string FileName = NativeId65FreshDocumentStore.FileName;
     private const int MaximumManifestBytes = 65536;
-    private const int MaximumDocumentBytes = 16384;
-    private const string LeaseName = ".native-id65-fresh-document.writer.lock";
+
+    internal enum StorageProfile { LegacyFloorV1, LevelAggregateV1 }
+
+    internal sealed class StorageDescriptor
+    {
+        private StorageDescriptor(string fileName, int maximumBytes, string leaseName, string stagePrefix)
+        { FileName = fileName; MaximumBytes = maximumBytes; LeaseName = leaseName; StagePrefix = stagePrefix; }
+        internal string FileName { get; }
+        internal int MaximumBytes { get; }
+        internal string LeaseName { get; }
+        internal string StagePrefix { get; }
+        private static readonly StorageDescriptor Legacy = new(NativeId65FreshDocumentStore.FileName, 16384,
+            ".native-id65-fresh-document.writer.lock", ".native-id65-fresh-document-");
+        private static readonly StorageDescriptor Aggregate = new(NativeFreshLevelDocumentStore.FileName, 65536,
+            ".native-fresh-level.writer.lock", ".native-fresh-level-");
+        internal static StorageDescriptor For(StorageProfile profile) => profile switch
+        {
+            StorageProfile.LegacyFloorV1 => Legacy,
+            StorageProfile.LevelAggregateV1 => Aggregate,
+            _ => throw new InvalidDataException("Unknown fresh document storage profile.")
+        };
+    }
+
+    // A sealed typed union: no object, caller-selected codec or constructible mixed arm.
+    internal sealed class StoragePayload
+    {
+        private StoragePayload(NativeId65FreshDocumentIntent intent)
+        { Profile = StorageProfile.LegacyFloorV1; LegacyIntent = intent; }
+        private StoragePayload(NativeFreshLevelDocumentIntent intent)
+        { Profile = StorageProfile.LevelAggregateV1; AggregateIntent = intent; }
+        internal StorageProfile Profile { get; }
+        internal NativeId65FreshDocumentIntent? LegacyIntent { get; }
+        internal NativeFreshLevelDocumentIntent? AggregateIntent { get; }
+        internal static StoragePayload Legacy(NativeId65FreshDocumentIntent intent)
+        { ArgumentNullException.ThrowIfNull(intent); return new(intent); }
+        internal static StoragePayload Aggregate(NativeFreshLevelDocumentIntent intent)
+        { ArgumentNullException.ThrowIfNull(intent); return new(intent); }
+        internal static StoragePayload Parse(StorageProfile profile, byte[] bytes) => profile switch
+        {
+            StorageProfile.LegacyFloorV1 => Legacy(NativeId65FreshDocumentCodec.Parse(bytes)),
+            StorageProfile.LevelAggregateV1 => Aggregate(NativeFreshLevelDocumentCodec.Parse(bytes)),
+            _ => throw new InvalidDataException("Unknown fresh document storage profile.")
+        };
+        internal byte[] SerializeCanonical() => Profile switch
+        {
+            StorageProfile.LegacyFloorV1 => NativeId65FreshDocumentCodec.SerializeCanonical(LegacyIntent!),
+            StorageProfile.LevelAggregateV1 => NativeFreshLevelDocumentCodec.SerializeCanonical(AggregateIntent!),
+            _ => throw new InvalidDataException("Unknown fresh document storage profile.")
+        };
+    }
+
+    // Produced only from actual typed snapshots or an actual bounded capture.
+    internal sealed class StorageObservation
+    {
+        private StorageObservation(StorageProfile profile, string root, string projectId, string manifestHash,
+            string? contentHash, StoragePayload? payload, string recovery = "")
+        {
+            _ = StorageDescriptor.For(profile);
+            if ((contentHash == null) != (payload == null) || (payload != null && payload.Profile != profile))
+                throw new InvalidDataException("Fresh document observation has an incompatible payload.");
+            Profile = profile; RootPath = root; ProjectId = projectId; ManifestSha256 = manifestHash;
+            ContentSha256 = contentHash; Payload = payload; RetainedRecoveryDirectory = recovery;
+        }
+        internal StorageProfile Profile { get; }
+        internal string RootPath { get; }
+        internal string ProjectId { get; }
+        internal string ManifestSha256 { get; }
+        internal string? ContentSha256 { get; }
+        internal StoragePayload? Payload { get; }
+        internal string RetainedRecoveryDirectory { get; }
+        internal string Path => System.IO.Path.Combine(RootPath, StorageDescriptor.For(Profile).FileName);
+        internal static StorageObservation FromLegacy(NativeId65FreshDocumentSnapshot snapshot)
+        {
+            ArgumentNullException.ThrowIfNull(snapshot);
+            return new(StorageProfile.LegacyFloorV1, snapshot.RootPath, snapshot.ProjectId, snapshot.ManifestSha256,
+                snapshot.ContentSha256, snapshot.Intent == null ? null : StoragePayload.Legacy(snapshot.Intent), snapshot.RetainedRecoveryDirectory);
+        }
+        internal static StorageObservation FromAggregate(NativeFreshLevelDocumentSnapshot snapshot)
+        { ArgumentNullException.ThrowIfNull(snapshot); return snapshot.Observation; }
+        internal void RequireProfile(StorageProfile expected)
+        {
+            _ = StorageDescriptor.For(expected);
+            if (Profile != expected) throw new InvalidDataException("Fresh document observation belongs to another storage profile.");
+        }
+        internal NativeId65FreshDocumentSnapshot ToLegacy()
+        {
+            RequireProfile(StorageProfile.LegacyFloorV1);
+            return new(RootPath, ProjectId, ManifestSha256, ContentSha256, Payload?.LegacyIntent, RetainedRecoveryDirectory);
+        }
+        internal NativeFreshLevelDocumentSnapshot ToAggregate()
+        { RequireProfile(StorageProfile.LevelAggregateV1); return new(this); }
+        internal StorageObservation WithRecovery(string recovery) =>
+            new(Profile, RootPath, ProjectId, ManifestSha256, ContentSha256, Payload, recovery);
+
+        internal static StorageObservation Capture(StorageProfile profile, EditorProjectLayout project, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            StorageDescriptor descriptor = StorageDescriptor.For(profile);
+            EditorProjectLayout bound = Resolve(project, descriptor);
+            byte[] manifest = ReadFile(bound.ManifestPath, MaximumManifestBytes, token);
+            RequireManifest(manifest, bound.ProjectId);
+            string documentPath = System.IO.Path.Combine(bound.RootPath, descriptor.FileName);
+            byte[]? bytes;
+            try { bytes = ReadFile(documentPath, descriptor.MaximumBytes, token); }
+            catch (FileNotFoundException) { bytes = null; }
+            StoragePayload? payload = bytes == null ? null : StoragePayload.Parse(profile, bytes);
+            // Do not combine a document with a manifest which changed during capture.
+            if (!ReadFile(bound.ManifestPath, MaximumManifestBytes, token).AsSpan().SequenceEqual(manifest))
+                throw new InvalidDataException("The project manifest changed during document capture. Reopen the project.");
+            Resolve(bound, descriptor);
+            token.ThrowIfCancellationRequested();
+            return new(profile, bound.RootPath, bound.ProjectId, Hash(manifest), bytes == null ? null : Hash(bytes), payload);
+        }
+    }
+
+    internal static void RequireCompatible(StorageObservation observation, StoragePayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(observation);
+        ArgumentNullException.ThrowIfNull(payload);
+        observation.RequireProfile(payload.Profile);
+    }
 
     internal static NativeId65FreshDocumentSnapshot CaptureLegacy(EditorProjectLayout project,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        EditorProjectLayout bound = Resolve(project);
-        byte[] manifest = ReadFile(bound.ManifestPath, MaximumManifestBytes, cancellationToken);
-        RequireManifest(manifest, bound.ProjectId);
-        string documentPath = System.IO.Path.Combine(bound.RootPath, FileName);
-        byte[]? bytes;
-        try { bytes = ReadFile(documentPath, MaximumDocumentBytes, cancellationToken); }
-        catch (FileNotFoundException) { bytes = null; }
-        NativeId65FreshDocumentIntent? intent = bytes == null ? null : NativeId65FreshDocumentCodec.Parse(bytes);
-        // Do not combine a document with a manifest which changed during capture.
-        if (!ReadFile(bound.ManifestPath, MaximumManifestBytes, cancellationToken).AsSpan().SequenceEqual(manifest))
-            throw new InvalidDataException("The project manifest changed during document capture. Reopen the project.");
-        Resolve(bound);
-        cancellationToken.ThrowIfCancellationRequested();
-        return new(bound.RootPath, bound.ProjectId, Hash(manifest), bytes == null ? null : Hash(bytes), intent);
-    }
+        CancellationToken cancellationToken = default) =>
+        StorageObservation.Capture(StorageProfile.LegacyFloorV1, project, cancellationToken).ToLegacy();
+
+    internal static NativeFreshLevelDocumentSnapshot CaptureAggregate(EditorProjectLayout project,
+        CancellationToken cancellationToken = default) =>
+        StorageObservation.Capture(StorageProfile.LevelAggregateV1, project, cancellationToken).ToAggregate();
 
     internal static NativeId65FreshDocumentSnapshot SaveLegacy(NativeId65FreshDocumentSnapshot expected,
         NativeId65FreshDocumentIntent intent, CancellationToken cancellationToken = default) =>
-        SaveCore(expected, intent, cancellationToken, null);
+        SaveLegacyCore(expected, intent, cancellationToken, null);
 
     internal static NativeId65FreshDocumentSnapshot SaveLegacyForSmoke(NativeId65FreshDocumentSnapshot expected,
         NativeId65FreshDocumentIntent intent, Action<string> checkpoint, CancellationToken cancellationToken = default) =>
-        SaveCore(expected, intent, cancellationToken, checkpoint);
+        SaveLegacyCore(expected, intent, cancellationToken, checkpoint);
+
+    private static NativeId65FreshDocumentSnapshot SaveLegacyCore(NativeId65FreshDocumentSnapshot expected,
+        NativeId65FreshDocumentIntent intent, CancellationToken token, Action<string>? checkpoint)
+    {
+        ArgumentNullException.ThrowIfNull(expected);
+        ArgumentNullException.ThrowIfNull(intent);
+        token.ThrowIfCancellationRequested();
+        return SaveCore(StorageObservation.FromLegacy(expected), StoragePayload.Legacy(intent), token, checkpoint).ToLegacy();
+    }
+
+    internal static NativeFreshLevelDocumentSnapshot SaveAggregate(NativeFreshLevelDocumentSnapshot expected,
+        NativeFreshLevelDocumentIntent intent, CancellationToken token, Action<string>? checkpoint = null)
+    {
+        ArgumentNullException.ThrowIfNull(expected);
+        ArgumentNullException.ThrowIfNull(intent);
+        token.ThrowIfCancellationRequested();
+        return SaveCore(StorageObservation.FromAggregate(expected), StoragePayload.Aggregate(intent), token, checkpoint).ToAggregate();
+    }
 
     // A final publication guard shares the existing cooperating-writer namespace.
     // It does not change Save's policy or grant artifact publication authority.
@@ -78,8 +201,10 @@ internal static class NativeFreshDocumentStorage
         {
             token.ThrowIfCancellationRequested();
             ArgumentNullException.ThrowIfNull(expected);
-            EditorProjectLayout project = Resolve(new(expected.RootPath, expected.ProjectId));
-            string path = System.IO.Path.Combine(project.RootPath, LeaseName);
+            StorageObservation observation = StorageObservation.FromLegacy(expected);
+            StorageDescriptor descriptor = StorageDescriptor.For(observation.Profile);
+            EditorProjectLayout project = Resolve(new(expected.RootPath, expected.ProjectId), descriptor);
+            string path = System.IO.Path.Combine(project.RootPath, descriptor.LeaseName);
             RefuseLinkOrDirectory(path);
             byte[] owner = RandomNumberGenerator.GetBytes(32);
             // CreateNew failure never supplies ownership of a foreign lock.
@@ -89,7 +214,7 @@ internal static class NativeFreshDocumentStorage
             {
                 stream.Write(owner);
                 stream.Flush(flushToDisk: true);
-                RequireCurrent(expected, token); // Recheck only after excluding cooperating saves.
+                RequireCurrent(observation, token); // Recheck only after excluding cooperating saves.
                 token.ThrowIfCancellationRequested();
                 return lease;
             }
@@ -127,14 +252,14 @@ internal static class NativeFreshDocumentStorage
         }
     }
 
-    private static NativeId65FreshDocumentSnapshot SaveCore(NativeId65FreshDocumentSnapshot expected,
-        NativeId65FreshDocumentIntent intent, CancellationToken cancellationToken, Action<string>? checkpoint)
+    private static StorageObservation SaveCore(StorageObservation expected,
+        StoragePayload payload, CancellationToken cancellationToken, Action<string>? checkpoint)
     {
-        ArgumentNullException.ThrowIfNull(expected);
-        ArgumentNullException.ThrowIfNull(intent);
+        RequireCompatible(expected, payload); // Closed arm agreement is required before any IO.
         cancellationToken.ThrowIfCancellationRequested();
-        EditorProjectLayout project = Resolve(new(expected.RootPath, expected.ProjectId));
-        string leasePath = System.IO.Path.Combine(project.RootPath, LeaseName);
+        StorageDescriptor descriptor = StorageDescriptor.For(expected.Profile);
+        EditorProjectLayout project = Resolve(new(expected.RootPath, expected.ProjectId), descriptor);
+        string leasePath = System.IO.Path.Combine(project.RootPath, descriptor.LeaseName);
         RefuseLinkOrDirectory(leasePath);
         // A foreign lease is never deleted or treated as an automatically stale lock.
         using FileStream lease = new(leasePath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
@@ -143,11 +268,11 @@ internal static class NativeFreshDocumentStorage
         bool committed = false;
         bool retain = false;
         Exception? failure = null;
-        NativeId65FreshDocumentSnapshot? saved = null;
+        StorageObservation? saved = null;
         try
         {
-            NativeId65FreshDocumentSnapshot current = RequireCurrent(expected, cancellationToken);
-            byte[] prepared = NativeId65FreshDocumentCodec.SerializeCanonical(intent);
+            StorageObservation current = RequireCurrent(expected, cancellationToken);
+            byte[] prepared = payload.SerializeCanonical();
             string preparedHash = Hash(prepared);
             if (preparedHash == current.ContentSha256)
             {
@@ -156,16 +281,16 @@ internal static class NativeFreshDocumentStorage
             }
             else
             {
-                stage = System.IO.Path.Combine(project.RootPath, $".native-id65-fresh-document-{Guid.NewGuid():N}.tmp");
+                stage = System.IO.Path.Combine(project.RootPath, $"{descriptor.StagePrefix}{Guid.NewGuid():N}.tmp");
                 using (FileStream output = new(stage, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
                     output.Write(prepared);
                     output.Flush(flushToDisk: true);
                 }
-                RequireStage(stage, prepared, cancellationToken);
+                RequireStage(stage, prepared, descriptor, cancellationToken);
                 checkpoint?.Invoke("staged");
                 RequireCurrent(expected, cancellationToken);
-                RequireStage(stage, prepared, cancellationToken);
+                RequireStage(stage, prepared, descriptor, cancellationToken);
                 ExportArtifactPublicationResult publication = ExportArtifactTransaction.Publish(project.RootPath,
                     [new(expected.Path, stage)], cancellationToken);
                 committed = true;
@@ -174,7 +299,7 @@ internal static class NativeFreshDocumentStorage
                 checkpoint?.Invoke("published");
                 // Publish's commit is noncancellable. Once it succeeds, finish real
                 // close/reopen verification even if the caller cancels just now.
-                saved = CaptureLegacy(project, CancellationToken.None);
+                saved = StorageObservation.Capture(expected.Profile, project, CancellationToken.None);
                 if (saved.ManifestSha256 != expected.ManifestSha256 || saved.ContentSha256 != preparedHash)
                     throw new InvalidDataException("The saved document or project manifest differs at final readback.");
             }
@@ -219,25 +344,25 @@ internal static class NativeFreshDocumentStorage
                     "Document save failed and cleanup did not complete. ") + $"Preserve recovery files in {recovery}", failure);
             ExceptionDispatchInfo.Capture(failure).Throw();
         }
-        return new(saved!.RootPath, saved.ProjectId, saved.ManifestSha256, saved.ContentSha256, saved.Intent, recovery);
+        return saved!.WithRecovery(recovery);
     }
 
-    private static NativeId65FreshDocumentSnapshot RequireCurrent(NativeId65FreshDocumentSnapshot expected,
+    private static StorageObservation RequireCurrent(StorageObservation expected,
         CancellationToken cancellationToken)
     {
-        var current = CaptureLegacy(new(expected.RootPath, expected.ProjectId), cancellationToken);
+        var current = StorageObservation.Capture(expected.Profile, new(expected.RootPath, expected.ProjectId), cancellationToken);
         if (current.ManifestSha256 != expected.ManifestSha256 || current.ContentSha256 != expected.ContentSha256)
             throw new InvalidDataException("The document or project manifest changed since capture. Reopen before saving.");
         return current;
     }
 
-    private static void RequireStage(string stage, byte[] prepared, CancellationToken cancellationToken)
+    private static void RequireStage(string stage, byte[] prepared, StorageDescriptor descriptor, CancellationToken cancellationToken)
     {
-        if (!ReadFile(stage, MaximumDocumentBytes, cancellationToken).AsSpan().SequenceEqual(prepared))
+        if (!ReadFile(stage, descriptor.MaximumBytes, cancellationToken).AsSpan().SequenceEqual(prepared))
             throw new InvalidDataException("Fresh document staging readback differs from the canonical intent.");
     }
 
-    private static EditorProjectLayout Resolve(EditorProjectLayout project)
+    private static EditorProjectLayout Resolve(EditorProjectLayout project, StorageDescriptor descriptor)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrWhiteSpace(project.RootPath);
@@ -248,7 +373,7 @@ internal static class NativeFreshDocumentStorage
         if (!Directory.Exists(root) || new DirectoryInfo(root).LinkTarget != null)
             throw new InvalidDataException("Fresh documents require an existing, unlinked project directory.");
         var bound = new EditorProjectLayout(root, project.ProjectId);
-        foreach (string path in new[] { bound.ManifestPath, System.IO.Path.Combine(root, FileName) })
+        foreach (string path in new[] { bound.ManifestPath, System.IO.Path.Combine(root, descriptor.FileName) })
         {
             RefuseLinkOrDirectory(path);
             PersistencePathSafety.EnsureWritePathWithinRoot(root, path);

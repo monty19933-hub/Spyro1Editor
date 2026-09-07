@@ -63,10 +63,37 @@ Root all-project Release315/zero failures passed again:
 Root also replayed the actual original-ROM-backed research suite2339 checks,
 including the separate saved-context42 and complete original BIN/CUE preservation.
 No image output was published. Evidence: `fresh-store-extraction-r01.o7LeqT/`.
-This checkpoint has only the legacy storage profile; the second typed adapter
-is the next bounded implementation, not already a usable aggregate Save command.
+That extraction checkpoint had only the legacy storage profile; it established
+the behavior preserved by the next adapter below.
 
-A later new aggregate Store will use a separate path and explicit legacy-floor fork; the fork
+## Whole-level Capture/Save adapter
+
+The new `NativeFreshLevelDocumentStore` now captures and saves the whole aggregate
+at `native-fresh-level.json`. Its immutable snapshot binds the raw manifest and
+document versions. One shared lifecycle selects only two closed typed profiles;
+the new profile owns a separate writer lease and stage namespace. Legacy files,
+their narrower byte bound, API, read lease and saved export context stay unchanged.
+There is no caller-selected path/codec registry or new native export authority.
+
+Actual public missing-API RED preceded implementation. Final focused storage112
+checks passed alongside unchanged neutral308/214, legacy83/59/38/243 and saved
+context/publication source-free gates. Root and independent peer fully read the
+production and final tests. Root's full all-project Release gate passed315 steps
+with zero failures:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-y99c4t1g/summary.json`.
+Evidence: `aggregate-store-r01.VBe0I6/` under the same private research parent.
+Root then replayed the actual original-ROM-backed research gate2339 checks,
+including saved-context42, all editable-field/music cases and complete original
+BIN/CUE preservation. It exited0 with `outputWritten=false`; no candidate was
+published by this gate. Exact log: `10-root-source-saved-context.log`.
+
+Tests exercise actual128-ID/order/non-grid-Z readback, changed base and empty
+placement lists, malformed other-profile isolation, raw conflict/no-op semantics,
+real staged cancellation and committed readback failure with retained evidence.
+Trusted ancestors/cooperating writers remain the scope; no hostile-race or crash
+atomicity claim is added. The aggregate is still not connected to R03 controls.
+
+A later explicit legacy-floor fork
 must use new-only publication so a late-created destination cannot be replaced.
-No aggregate Save/UI, auto-migration, new enemy control or native compilation
-is implemented in this checkpoint. R03 remains unchanged.
+No fork, auto-migration, aggregate UI, new enemy control or native compilation
+is implemented here. R03 remains unchanged.
