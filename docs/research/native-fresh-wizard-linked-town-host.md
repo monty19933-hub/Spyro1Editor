@@ -1,8 +1,9 @@
-# Combined Town host: independent linked-source checkpoint
+# Combined Town host: independent source and compiled issuer checkpoint
 
 A private source-only linker now constructs the concrete appended Town overlay
-in memory. This is the independent reference for a forthcoming closed Host
-issuer, not an installed native body, whole behavior proof or candidate.
+in memory. A closed actual-P1/actual-fallback-bound Host issuer now matches that
+reference. Neither result is an installed native body, whole behavior proof or
+candidate.
 
 It preserves Town's completeF800 prefix except24 declared patch bytes, appends
 16 contiguous owners, ends at11000 padded bytes and derives copy anchor8008BA38.
@@ -53,8 +54,43 @@ and has synthetic detector controls. It is not complete computed/indirect CFG
 analysis or proof about unscanned auxiliary modules. Exact metadata is
 `_local/research/dark-wizard-native-closure-20260906/town-resident-copy-selector-r01.XzDUh7/05-whole-overlay-syntax.json`.
 
-Next: regression-first actual-scene/actual-fallback-bound Host source and plan.
-Preserve old APIs and explicitly reorder the private captured particle package
-to match this packing; equal total lengths do not imply equal address maps.
+## Actual compiled issuer
+
+`NativeId65FreshWizardResearchHostSource` and `...HostPlan` are separate new
+Core types. Their public factory accepts original BIN plus actual scene and
+fallback instances sharing the same issued R0. Foreign equal-byte ancestry
+refuses before source I/O. Alternate source-valid scene height retains its
+actual plan/document identity. There is no public arbitrary recipe or output
+publisher, and old Core/codec APIs were not modified.
+
+Production captures original fragments with the existing MIPS codec, explicitly
+reorders the private particle package, specializes the exact class26 branch,
+then checks all materialized owners and full source inverses. It emits only
+in-memory overlay and same-size initializer bytes. The original ID65 table
+substitution remains prerequisite metadata, not a duplicate final EXE patch.
+
+Focused evidence is in
+`_local/research/dark-wizard-native-closure-20260906/fresh-town-host-issuer-r01.52wpUv/`.
+Actual missing-API RED:19 missing new API errors, no unrelated access failure.
+First production compile exposed one checked uint/int conversion, retained in
+02; no source expectation or golden was changed. Release build then passed
+with zero warnings/errors. Source-free179/173 and source65713/731 cumulative
+checks/refusals plus23 shared hostile-stream controls passed. These are mostly
+byte/metadata controls, not thousands of gameplay cases.
+
+The complete overlay/initializer hashes above are preserved. Primary plan SHA:
+`e418fdb5162690463ebfe2dbe68ba849320925a7fba383fff4c02e5965f15728`.
+All five separately rebuilt legacy source gates passed: P1 Scene12473, R0
+Staging319, Fallback527211, NormalResource15423, DarkPlacement84. The existing
+Dark full overlay10f82e…c7083 and EXE14aa…a8635 remain unchanged.
+
+Root fully read the source, plan and cases; independent production review also
+found no material defect. The source/free modes now have permanent runner
+registration tests: the two actual missing-registry failures are retained in
+08-root-runner-red.log. Actual-issued native consumption is a separate follow-up
+to managed golden matching and the earlier raw replay.
+
+Next: independently checked combined body/staging composition. Equal total
+lengths or hashes alone do not imply matching address maps or source ancestry.
 Body/header composition, audio compatibility, reward/history, complete callback
 lifetime, dynamic/stack peak, hardware/runtime and publication remain unapproved.

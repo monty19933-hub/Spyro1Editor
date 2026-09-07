@@ -91,8 +91,17 @@ remain unfinished. See [fallback resources](native-fresh-wizard-fallback-resourc
 We also verified that ID65 has its own progress-save row; it need not overwrite
 another level's progress. Different fresh projects would still share that row,
 so old-save compatibility needs explicit handling. The linked Town/Wizard host
-layout now passes independent dispatch/relocation tests and is being implemented
-against those reference bytes. Neither result is yet a playable fresh-Wizard ROM.
+layout now has a compiled builder matching the independent dispatch/relocation
+tests. The combined level's native loader also passes its address and allocation
+checks; that combined layout is now being implemented. These are not yet a
+playable fresh-Wizard ROM.
+
+Reward testing uncovered two more native dependencies: a ten-gem pickup creates
+two number objects, whose expiry can create twenty particles. The real spawn
+and selected deletion paths now pass source tests. Capacity and complete
+lifetimes still need checking; the original game does not safely refuse every
+object allocation when a pool is full. See
+[reward dependencies](native-fresh-wizard-number-and-electric-frontier.md).
 
 Arbitrary Moby mixtures, all textures in all levels, native fresh-level enemy
 imports, normal portals to new levels, save/reboot coverage and full audio/
@@ -102,8 +111,8 @@ remain separate work.
 
 ## Verification and next milestone
 
-Latest full default Release gate:136 steps, zero failures. The Python suite
-passed111 tests with four explicit-source skips;51 runner tests passed. The
+Latest full default Release gate:138 steps, zero failures. The Python suite
+passed112 tests with four explicit-source skips;52 runner tests passed. The
 independent native scene check passed23 checks/four expected refusals and
 sound-loading proof404 checks/ten expected refusals. New actual compiled fallback
 resource reads passed34 checks/28 expected refusals; the separate original-source

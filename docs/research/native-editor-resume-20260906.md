@@ -13,8 +13,9 @@ Branch: `research/id65-v3-environment-header-evidence-20260824`.
 Confirm actual Git status and latest commit before edits. Audio regressions
 were checkpointed at eb78f3f, collider-lifetime at6eae8d4. The later detached
 P1/N32 scene adds a separate Core type; App and old P0/export APIs are unchanged.
-Separate upload staging and fallback resources are now implemented too; the
-new linked Town Host issuer is the next regression-first source slice.
+Separate upload staging, fallback resources and the linked Town Host issuer
+are now implemented. Combined body composition is the next regression-first
+source slice, against an independently replayed full raw body.
 
 John authorized autonomous development, useful parallel agents, sensible
 commits and DuckStation gameplay with temporary settings. Continue until the
@@ -106,16 +107,33 @@ BIN SHA256
   Read `native-fresh-wizard-fallback-resources.md`.
 - Actual original ID65/index35 reward/save suffix proof passes164/20, including
   native checksum and signed treasure restore. Root repeated the frozen output.
-  No Dark-slot remap is needed; numeric actors, pickup lifetime and document/save
+  No Dark-slot remap is needed; complete pickup lifetime and document/save
   history remain open. Read `native-fresh-wizard-id65-reward-slot.md`.
 - Private combined Town overlay passes1455/30 at real padded end8008BA38,
   including actual incoming13/65 selection, six distinct adapters and full
-  source inverse. Root read/replayed it; no production Host/body issued yet.
+  source inverse. The new source-bound Core Host now matches that reference:
+  focused free179/source65713 plus shared23; five rebuilt legacy source modes
+  remain GREEN. Root full review and independent production review are clear.
+  Actual-issued native Host consumption is a separate follow-up; no Body yet.
   Read `native-fresh-wizard-linked-town-host.md`.
-- Latest full default .NET gate: Release136 steps/zero failures including the
-  new source-free fallback mode. Whole Python111 tests/four explicit-source skips;
-  runner51. Source-only native scene/staging/fallback checks are separately GREEN.
-  Full report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-wfjyhpf5/summary.json`.
+- Native ten-gem creation now executes the actual two-number104/105 spawn
+  chain and selected expiry producing20 particles47:319/39. Complete typed
+  electric-owner inventory plus bounded native initial-grid/terrain/cache
+  checks:243/56. Root read/replayed both exactly. No mutable-state/global1F
+  exclusivity or aggregate peak follows. Read
+  `native-fresh-wizard-number-and-electric-frontier.md`.
+- Full original-source body reference now composes20C800 bytes with body SHA
+  33e54ff9e15608ada3f6d430c54fbabc21a8263e059c050b391db22cc541bc00.
+  Root and peer replay567/4 with real header copy, native used8FC endpoint,
+  model8008C334/scene800A5334 and32 allocations at actual combined addresses.
+  Revised transfer9282…39883 is NOT old R0 staging; derive from same fallback.
+  Evidence: `_local/research/dark-wizard-native-closure-20260906/fresh-combined-body-r01.4Uhwza/`.
+  Explicit completed-CD-write and post-placed-init witnesses are not hardware
+  or full incoming execution. The old200000 body budget must not be widened.
+- Latest full default .NET gate: Release138 steps/zero failures including the
+  new source-free Host mode. Whole Python112 tests/four explicit-source skips;
+  runner52. Source-only native scene/staging/fallback checks are separately GREEN.
+  Full report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-yvp5ef3n/summary.json`.
   These are engineering gates, not gameplay acceptance.
 
 ## Current package gate and next practical work
@@ -154,10 +172,11 @@ Next outcomes:
    bounded exclusive reward-selector audit still requires Town classes0E/0F/10;
    simple0E is a distinct model grammar. Complete their assets and callback
    closure rather than assuming only the yellow-gem path can occur.
-3. Implement the closed actual-P1-scene/actual-fallback-bound Town Host issuer
-   against the frozen independent11000 overlay and98 initializer goldens. The
-   fallback revision, research staging and detached P1 scene are complete; future
-   composition must derive transfer bytes from its actual revised upload.
+3. Implement the closed actual-Host-bound combined Body issuer against the
+   independent20C800 body/header/native phase reference, preserving actual
+   Host/Scene/Fallback ancestry and internally deriving transfer bytes from the
+   SAME revised upload. Do not accept old R0 staging or widen old Body APIs.
+   The fallback revision, detached P1 scene and Town Host are complete.
    Keep existing LAB/music/ID65 table owners separate from the new conditional
    initializer bytes, then body/scene/reward layout once blocking ownership
    contracts are resolved. No body or candidate follows automatically. Preserve

@@ -477,6 +477,9 @@ class RunnerOptionsTests(unittest.TestCase):
     def test_fresh_wizard_fallback_resources_require_selected_bin_and_distinct_markers(self):
         self.assert_texture_modes("NativeId65FreshWizardFallbackResourceSmoke", "FRESH_WIZARD_FALLBACK_RESOURCE")
 
+    def test_fresh_wizard_host_modes_require_same_selected_bin_without_publication(self):
+        self.assert_texture_modes("NativeId65FreshWizardHostSmoke", "FRESH_WIZARD_HOST")
+
     def test_saved_document_publisher_modes_never_activate_output(self):
         self.assert_texture_modes("NativeId65FreshDocumentPublicationSmoke", "NATIVE_ID65_FRESH_DOCUMENT_PUBLICATION",
                                   ("--source",), "SMOKE", needs_cue=True)
@@ -925,6 +928,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeId65FreshWizardSceneSmoke": ["--source", "/selected original.bin"],
             "NativeId65FreshWizardStagingSmoke": ["--source", "/selected original.bin"],
             "NativeId65FreshWizardFallbackResourceSmoke": ["--source", "/selected original.bin"],
+            "NativeId65FreshWizardHostSmoke": ["--source", "/selected original.bin"],
             "NativeGreenWizardMoverSmoke": ["/selected original.bin"],
             "NativeLevelSlotOwnershipSmoke": ["--source", "/selected original.bin"],
             "NativePlayerAnimationSmoke": ["--source", "/selected original.bin"],
