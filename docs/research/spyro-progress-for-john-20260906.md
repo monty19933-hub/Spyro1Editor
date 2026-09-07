@@ -80,8 +80,11 @@ The new detached fresh-Wizard scene also matches independent native-source
 checks. It preserves space for32 dynamic allocations plus the allocator's extra
 write; the test catches the earlier layout corrupting another object's private
 state. This is source-tested scene construction, not yet a playable fresh-Wizard
-ROM. Repeat-reward models, callbacks, sound loading and complete body integration
-are the next work. See [scene progress](native-fresh-wizard-p1-scene.md).
+ROM. The separate sound-loading stage now also passes source tests, preserving
+the exact native transfer bytes. The three repeat-reward models are the next
+implementation, alongside save handling and complete body integration. See
+[scene progress](native-fresh-wizard-p1-scene.md) and
+[sound-loading progress](native-fresh-wizard-upload-staging.md).
 
 Arbitrary Moby mixtures, all textures in all levels, native fresh-level enemy
 imports, normal portals to new levels, save/reboot coverage and full audio/
@@ -91,9 +94,10 @@ remain separate work.
 
 ## Verification and next milestone
 
-Latest full default Release gate:132 steps, zero failures. The Python suite
-passed109 tests with four explicit-source skips;49 runner tests passed. The
-new independent native scene check passed23 checks/four expected refusals.
+Latest full default Release gate:134 steps, zero failures. The Python suite
+passed110 tests with four explicit-source skips;50 runner tests passed. The
+independent native scene check passed23 checks/four expected refusals and
+sound-loading proof404 checks/ten expected refusals.
 These counts are engineering checks, not hundreds of gameplay runs.
 
 Actual two-Wizard recording:22 minutes39 seconds,81303 video frames, full strict

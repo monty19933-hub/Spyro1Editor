@@ -84,9 +84,22 @@ BIN SHA256
   mutations. This closes that exact generated model-padding ownership gap,
   not GTE, lifetime or complete gameplay. Read
   `native-fresh-wizard-issued-collider-read.md`.
-- Latest full default .NET gate: Release132 steps/zero failures including the
-  new source-free scene mode. Whole Python109 tests/four explicit-source skips;
-  runner49. New source-only native scene regression is separately GREEN.
+- Separate actual-resource-bound Wizard upload staging now passes focused
+  source319/283 cumulative and independent native/raw404/10. It retains the
+  actual65800 bank plus19800 SAME-resource VRAM residue and preserves old
+  staging semantics. Read `native-fresh-wizard-upload-staging.md`.
+- Private repeat-reward source investigations agree on0E/0F/10 assets, exact
+  simple-model relocation/lookahead, retained audio/particles and outstanding
+  save/lifetime obligations. Root independently replayed3018/4 asset and617/36
+  callback checks. Read `native-fresh-wizard-repeat-reward-dependencies.md`.
+- Private same-size resident copy-selector feasibility preserves native incoming
+  Town13 and selects synthetic larger anchors only for65:4706/2, independent
+  peer replay/naive failure reproduced. No actual allocation is issued and
+  incoming-edge closure is not complete. Read
+  `native-fresh-wizard-resident-copy-selector.md`.
+- Latest full default .NET gate: Release134 steps/zero failures including the
+  new source-free scene and staging modes. Whole Python110 tests/four explicit-source skips;
+  runner50. New source-only native scene/staging regressions are separately GREEN.
   These are engineering gates, not gameplay acceptance.
 
 ## Current package gate and next practical work
@@ -125,12 +138,14 @@ Next outcomes:
    bounded exclusive reward-selector audit still requires Town classes0E/0F/10;
    simple0E is a distinct model grammar. Complete their assets and callback
    closure rather than assuming only the yellow-gem path can occur.
-3. Implement separate actual-resource-bound research upload staging, then
-   integrate actual typed Town-host callbacks, scene/reward and resource/body
-   layout only after blocking ownership contracts are resolved. The detached
-   scene is complete; no body or candidate follows automatically. Preserve fixed
-   P0/N16 goldens and the old public export scope. Then build and playtest the
-   exact fresh-Wizard candidate separately.
+3. Implement a new actual-resource-bound fallback revision adding0E/0F/10 and
+   their exact texture owners without changing old Resource/Scene/Staging APIs.
+   Original-bank research staging and the detached P1 scene are complete; future
+   composition must derive transfer bytes from its actual revised upload.
+   Integrate distinct Town-host role entries and the real appended-overlay
+   allocation/copy selector, then body/scene/reward layout once blocking ownership
+   contracts are resolved. No body or candidate follows automatically. Preserve
+   fixed P0/N16 goldens and public export scope, then playtest the exact new image.
 4. Extend tested texture/material and Moby families through the editor with
    explicit dependency coverage and regression gates. General native texture
    portability, arbitrary object mixtures, new normal portal routes and V6
