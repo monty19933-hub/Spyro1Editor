@@ -94,9 +94,13 @@ together in the destination level.
 
 The first fresh-Wizard ROM now loads the Wizard, Sparx and a projectile in LAB.
 It also exposed a playability problem: Spyro leaves the small floor almost
-immediately and falls after entry/respawn. Defeat/reward testing did not pass;
-the exact cause is still being investigated. This research build is not in R03.
+immediately and falls after entry/respawn. Defeat/reward testing did not pass.
+The latest frame-step test strongly points to overlap between the saved spawn
+and the Wizard's collision shape, pushing Spyro into unwanted movement without
+damage. The clearance fix and corrected playtest are still pending. This research build is not in R03.
 See [first fresh-Wizard playtest](native-fresh-wizard-p1-r01-runtime-observations.md).
+See [early-entry diagnosis](native-fresh-wizard-p1-r03-entry-displacement.md)
+for the stronger current evidence and its limits.
 
 The current fresh-Wizard resource work matches independently checked texture,
 sound, model and particle buffers, and its combined body now has a source-tested
@@ -189,6 +193,11 @@ native frame stepping and the new health/movement readouts, but did not yet
 capture the cause of the entry problem. Opening DuckStation settings exposed a
 strict-reader cache-file classification issue; that failed record is preserved.
 See [frame-step diagnostic](native-fresh-wizard-p1-r02-frame-step.md).
+
+The third diagnostic also closed safely, with both original settings restored
+and all nine protected hashes passing. It captured the early displacement and
+collision-shape match described above. No emulator or observer remains running;
+the separate R03 editor remains open and unchanged.
 
 Next: finish the isolated app edit/save/close-reopen check,
 complete fresh-Wizard reward/audio/resource contracts, then integrate and playtest that exact

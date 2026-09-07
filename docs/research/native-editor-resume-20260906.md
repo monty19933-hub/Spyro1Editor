@@ -23,8 +23,10 @@ Release gate. Real stage/postcommit tests and a separate clean candidate have no
 passed, including independent new-process readback. The fixed-candidate observer
 passed source/peer/file/OS review and Root activation. The actual fresh-Wizard
 run passed native initialization but failed playable-entry testing: Spyro moved
-outside the small floor and fell4→3 lives. Cause remains open, not presumed to
-be electric damage or a collision defect. Runtime is fully closed/restored.
+outside the small floor and fell4→3 lives. The later R03 frame-step run strongly
+matches initial sphere overlap/non-damaging push-out, with displacement-derived
+motion captured on the first observed normal update. A corrected clearance
+contract and counterfactual gameplay test remain pending. Runtime is closed/restored.
 
 John authorized autonomous development, useful parallel agents, sensible
 commits and DuckStation gameplay with temporary settings. Continue until the
@@ -35,7 +37,20 @@ permissions, or call a usage pause completion. Serialize the shared .NET slot.
 
 ## Latest closed runtime — September 7
 
-R02 is now also CLOSED/RESTORED: DuckStation42862/exec24718 exited0, observer01/
+R03 runtime is CLOSED/RESTORED: DuckStation45593/exec14240 and observer02/exec21415
+both exited0; all final observer checks and all nine protected hashes passed.
+Both original INIs restored byte-for-byte; no media capture or card copy-back.
+Initial failed paused connection61928/exit2 remains separately failed. At10%,
+native selector reload and22 individual F6 requests captured sample32 loading1/
+timer310 →33 normal0/state6/timer0/full health3. Actual Wizard identity matrix/
+current anim0/frame0 matches the initial sphere. Player is displaced219/6/145
+from spawn, both vectors exactly32 times that displacement, ending just outside
+combined radius756. This supports non-damaging push-out, not a direct in-helper
+trace or corrected gameplay pass. Read `native-fresh-wizard-p1-r03-entry-displacement.md`.
+Exact journal: `_local/native-fresh-wizard-p1-runtime-20260907-r03.mvWT2n/RUNTIME-SESSION.md`.
+No emulator/observer/capture/build is active. The unrelated R03 editor16530 remains open.
+
+Earlier R02 is CLOSED/RESTORED: DuckStation42862/exec24718 exited0, observer01/
 exec18275 stopped exit2 on an unclassified HTTP cache after native Settings was
 opened. Its failed record remains failed. Root handled native disconnect resume,
 quit with resume-save unchecked, restored both fresh original INIs, and all nine
@@ -105,8 +120,11 @@ BIN SHA256
 - New neutral whole-level aggregate and strict codec preserve the old floor
   intent and stable ordered placement IDs, with the first closed Wizard-route
   variant. Focused308 checks/214 refusals and Root all-project Release315/zero
-  failures pass; production/tests independently reviewed. No aggregate Store,
-  UI, compiler or migration exists yet. Read `native-fresh-level-aggregate.md`.
+  failures pass; production/tests independently reviewed. Whole-level Capture/
+  Save is now committed at3b26ce7 with112 actual-file checks, shared closed
+  profiles and separate leases. Root315/0 and actual source2339/context42 passed
+  again, preserving original BIN/CUE. No aggregate UI, compiler or migration
+  exists yet. Read `native-fresh-level-aggregate.md`.
 - Distinct immutable fresh intent, canonical codec, preview/undo, project-bound
   Store save/reopen, stale-write protection and shared native compilation.
   Legacy Lab schemas keep their meaning; no old Lab file is reinterpreted.
@@ -279,9 +297,12 @@ Next outcomes:
    P1/N32 entry are complete. Playable entry failed; the session is closed and
    restored. Clean CUE is in
    `fresh-wizard-publication-validation-r01.0eF4Tz/candidate-r01`, never its fault
-   children. Investigate earliest health/motion transitions before changing the
-   candidate. State6 can follow either ordinary movement or earlier damage;
-   late observations do not distinguish them. Review any new report-only fields
+   children. R03 now captures the early transition and source-matched spawn
+   overlap/push-out. Preserve this unsafe research witness; add a source-derived
+   clearance contract separately from neutral endpoint geometry before issuing
+   a corrected candidate. Do not disable the enemy, shrink its sphere or clear
+   player motion to hide the conflict. Whole-animation/route and corrected
+   idle/defeat/reward/re-entry proof remain separate. Review any new read-only fields
    against original source and re-read them within each accepted sample.
    A new run needs fresh backups/process binding and native UI pause handling;
    observer disconnect can auto-resume if native state was running at accept.
@@ -295,16 +316,18 @@ Next outcomes:
    enable/disable and disabled-output regression. Its exact Toasty native
    research test already passed; that is not yet a finished editor checkbox
    or universal-level acceptance. Preserve normal movement when disabled.
-6. Legacy Store compatibility characterization is complete (38 new checks).
-   The extraction-only shared helper is implemented and Root/peer-reviewed;
-   Root all-project Release315/0 and actual original research2339/saved-context42
-   passed with original BIN/CUE unchanged. Next is typed aggregate Capture/Save
-   through the same closed engine, with no fork/UI/publication added yet.
+6. Legacy Store compatibility characterization and whole-level Capture/Save are
+   complete, Root/peer-reviewed and checkpointed at3b26ce7. Root all-project
+   Release315/0 and actual original research2339/saved-context42 passed with
+   original BIN/CUE unchanged; new storage112 and legacy83/59/38 remain green.
+   No fork/UI/native publication is added yet.
    Keep one aggregate Store, not one per object family; preserve the old
    Snapshot/read-lease/publication contract. A later explicit legacy fork must
-   protect both snapshots and use PublishNew. The detailed reviewed proposal is
-   `fresh-level-aggregate-r01.L7u8AO/NEXT-STORE-ARCHITECTURE.md` under the private
-   dark-wizard research directory. No automatic migration or UI work yet.
+   protect both snapshots and use PublishNew. The new detailed design is
+   `aggregate-store-r01.VBe0I6/NEXT-EXPLICIT-FORK.md` under the private research
+   directory. Root read it; implementation/typed committed-exception contract
+   still need an explicit engineering review and tests-first release. No automatic
+   migration or UI work yet.
 
 Keep source, full-image readback, actual UI, native gameplay, audio listening,
 save/reboot and public-release acceptance separate. Coordinate agent findings
