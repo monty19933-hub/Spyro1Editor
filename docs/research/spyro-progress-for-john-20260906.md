@@ -30,34 +30,60 @@ See the [edited LAB report](native-fresh-edited-r01-runtime-observations.md).
 
 ## Is there a new app to open?
 
-There is a separately compiled R03 test app with the corrected native Mac
-launcher. Build, signature, actual PNG compression and preservation checks
-passed. Its normal launch reached a macOS Documents-folder permission prompt;
-the editor window has not yet been verified. If you approve, click Allow for
-"Spyro Fresh Document Test r03" on the Mac. I cannot operate that protected
-system prompt, and no Full Disk Access or permission bypass is being used.
+Yes: the separate R03 test app is already running. I verified its actual main
+window and opened Fresh Level… without changing the saved document. Its earlier
+permission-wait note is now out of date; no protected permission prompt was
+operated by me. Build/signature/packaged PNG and pre-startup preservation checks
+passed; full edit/save/close/reopen remains a hands-on acceptance check.
 
 The new private app is here:
 
 `/Users/john/Documents/Codex/2026-07-13/i-needed-to-make-a-new/spyro1editor-v3-release/_local/research/fresh-document-mac-test-r03/Spyro Fresh Document Test r03.app`
 
 This is not the finished unrestricted blank-level editor or a V6 release.
-Actual launch, Fresh Level interaction and normal close/reopen are separate
-acceptance checks before handing over the next app.
+Main/Fresh window opening is now verified; interaction and normal close/reopen
+remain separate acceptance checks.
 The app is built from checkpoint6eae8d4; later source-only Wizard scene work is
 not silently being rebuilt into it. See [R03 package status](native-fresh-document-mac-r03.md).
 
 ## What remains usable in the preserved editor
 
-- Native Moby Library: original variants across all35 retail levels, searchable
-  by name/class/source. Visibility does not imply that every destination is
-  approved; existing placement templates still govern adding objects.
-- Established level/object/terrain editing and guarded Create BIN workflows.
-  Cross-level native terrain choices remain limited to verified combinations.
-- Existing Blank-Level Lab workflows and saved schemas. Their meaning has not
-  been silently changed by the new Fresh Level document implementation.
+- The preserved V5/schema6 research package retains its established level,
+  object, terrain, name/music and guarded Create BIN workflows, plus the older
+  separate ID65 Lab. Its research launcher is not unrestricted import approval.
+- The older local fallback app is a different build. Neither preserved App
+  contains the newer Native Moby Library or Fresh document UI types/labels.
+  My earlier report incorrectly placed Native Moby Library in this section;
+  the actual package audit corrected that distinction.
 
 An older installed app does not acquire new source changes automatically.
+
+## What you can actively test in R03 now
+
+1. In the open Fresh Native Level Document, start with the existing saved
+   2048×2048 floor, heading96 and Stone Hill Track02. New starter is disabled
+   because that saved document already exists.
+2. Change heading to128 or a floor/sky color, then click Apply to preview.
+   Try Undo and Redo. The preview is schematic, not a gameplay viewport.
+3. Click Save document, then Reopen saved and check your applied values.
+   Close/reopen the document to test persistence. Do not expect typed-but-not-
+   applied values to be the saved/exported document.
+4. Try another music choice. This selects a native track for the research
+   output; the schematic does not play an audio preview.
+5. For a validation test, put spawnX8192 on the current floor boundary and
+   click Apply: it should refuse without replacing the valid preview. Restore
+   an interior value such as9216 before continuing.
+
+Close the document to return to Objects → Browse Native Library… for searchable
+native inventory. Library visibility is not approval to place every Moby into
+every level. The fresh-floor document currently has no placed Mobys or texture
+painting, and it does not include the newer source-only Wizard integration.
+
+Create research candidate… is a separate saved-document action that makes a
+new BIN/CUE; it is not the main Create BIN button or universal gameplay
+approval. Its production worker/readback were tested separately. Use a new
+output location, preserve your original ROM and report what actually happens
+in DuckStation; R03 GUI publication itself has not yet been exercised.
 
 ## What still stands between this and universal importing
 
@@ -84,8 +110,8 @@ state. This is source-tested scene construction, not yet a playable fresh-Wizard
 ROM. The separate sound-loading stage now also passes source tests, preserving
 the exact native transfer bytes. The three repeat-reward models and their
 textures are now implemented in a separate resource package, with independent
-checks of the actual compiled output. Save handling and executable/disc integration
-remain unfinished. See [fallback resources](native-fresh-wizard-fallback-resources.md),
+checks of the actual compiled output. Save handling and playable end-to-end
+integration remain unfinished. See [fallback resources](native-fresh-wizard-fallback-resources.md),
 [scene progress](native-fresh-wizard-p1-scene.md) and
 [sound-loading progress](native-fresh-wizard-upload-staging.md).
 
@@ -98,9 +124,11 @@ combined body builder now also matches independently checked loader addresses,
 resource ownership and allocation layout. See
 [body checkpoint](native-fresh-wizard-detached-body.md). The executable builder
 now also passes its tests: it preserves LAB/music and gives the placed Wizard's
-level a ten-gem treasure target. Disc assembly is next; these results are not
-yet a playable fresh-Wizard ROM. See
-[executable checkpoint](native-fresh-wizard-detached-executable.md).
+level a ten-gem treasure target. The new disc builder now also matches the
+independent whole-ROM reference and reverses exactly to the original. A guarded
+test-file exporter is next; these results are not yet a published/playtested
+fresh-Wizard ROM. See [executable checkpoint](native-fresh-wizard-detached-executable.md)
+and [disc checkpoint](native-fresh-wizard-detached-disc.md).
 
 Reward testing uncovered two more native dependencies: a ten-gem pickup creates
 two number objects, whose expiry can create twenty particles. The real spawn
@@ -117,8 +145,8 @@ remain separate work.
 
 ## Verification and next milestone
 
-Latest full default Release gate:142 steps, zero failures. The Python suite
-passed114 tests with four explicit-source skips;54 runner tests passed. The
+Latest full default Release gate:144 steps, zero failures. The Python suite
+passed115 tests with four explicit-source skips;55 runner tests passed. The
 independent native scene check passed23 checks/four expected refusals and
 sound-loading proof404 checks/ten expected refusals. New actual compiled fallback
 resource reads passed34 checks/28 expected refusals; the separate original-source
@@ -129,7 +157,7 @@ Actual two-Wizard recording:22 minutes39 seconds,81303 video frames, full strict
 decode passed. DuckStation, capture and the read-only observer are closed.
 All nine protected hashes passed after exact original settings restoration.
 
-Next: finish the isolated app launch/close-reopen check after macOS consent,
+Next: finish the isolated app edit/save/close-reopen check,
 complete fresh-Wizard reward/audio/resource contracts, then integrate and playtest that exact
 enemy in the fresh scene. Continue expanding tested families/materials through
 the editor without calling inventory coverage universal compatibility.

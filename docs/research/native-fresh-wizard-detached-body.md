@@ -48,8 +48,29 @@ Root and independent peer reviewed the complete new implementation. The
 unchanged original-source native body reference passed567/4 in independent
 replays, including actual header copy, used8FC parsing, seven-root registration
 and32 native allocations. Completed-write and post-placed-initializer entry
-are explicit separate witnesses. Actual-issued Body consumption is the next
-separate gate; matching managed goldens alone does not establish it.
+are explicit separate witnesses.
+
+Actual-issued Body consumption now passes a separate private gate:398
+composition/provenance checks/112 refusals, then the unchanged567/4 native
+report. The3,937,499-byte actual public-capture fixture stays below4MiB and
+pins its private Core/producer assemblies and complete source ancestry.
+Positive instruction-machine inputs receive actual body components, whole
+header/body, Host overlay and same-fallback transfer, not reconstructed equal
+buffers. Wrong-owner and native padded-sector REDs are retained; malformed
+metadata/types/bytes and the independently reconstructed old R0 transfer
+refuse. The initializer is authenticated here; the separate Host gate exercises
+selected native initializer/dispatch boundaries, not complete placed
+initialization. Full auxiliary consumers are not executed either.
+
+Root fully read and independently replayed the final gate, and a separate peer
+review was clear. Evidence:
+`_local/research/dark-wizard-native-closure-20260906/issued-body-gate-r01.jR6IST/`.
+Final reader SHA:
+`00e0e3ba7ef2b1af752d7772fff31ae95e57817d9d122e0ea6888bc01c382a5c`.
+07/08/root09 report SHA:
+`8f13dd0e5a6dfc68eb233aea8a21d6dfcf02749757c97c1bf5caa431486fd676`.
+The wrapper labels actual issued inputs explicitly; the inner historical
+source-only report remains byte-identical rather than relabeled.
 
 Root runner registration was tests-first (two actual missing-registry failures).
 Whole Python113 tests passed with four explicit-source skips; runner53.

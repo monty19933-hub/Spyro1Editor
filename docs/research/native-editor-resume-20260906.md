@@ -14,8 +14,10 @@ Confirm actual Git status and latest commit before edits. Audio regressions
 were checkpointed at eb78f3f, collider-lifetime at6eae8d4. The later detached
 P1/N32 scene adds a separate Core type; App and old P0/export APIs are unchanged.
 Separate upload staging, fallback resources and the linked Town Host issuer
-and combined Body/Executable are now implemented. A separately source-bound
-physical disc plan is next; actual-issued Body consumption is a separate gate.
+and combined Body/Executable are now implemented. Actual-issued Body consumption
+and the independent full physical reference are now root-replayed and reviewed.
+The separate actual-Executable-bound physical disc plan now passes source,
+legacy and full default gates. No Wizard candidate is materialized.
 
 John authorized autonomous development, useful parallel agents, sensible
 commits and DuckStation gameplay with temporary settings. Continue until the
@@ -135,36 +137,58 @@ BIN SHA256
   goldens, with exact reference ancestry and complete structured owners.
   Focused source9914/9826 plus shared23 passes; five legacy source gates remain
   GREEN. Actual source testing caught and fixed only the new class78 metadata
-  (2BD0, not old2930). Actual-issued native Body consumption is separate work.
+  (2BD0, not old2930). Actual-issued native Body consumption now passes398
+  composition controls/112 refusals plus the unchanged567/4 native result;
+  root and independent peer reviewed it and root repeated the final exact report.
+  Completed CD writes and post-placed-init entry remain explicit witnesses,
+  not a complete initializer, hardware transfer or auxiliary-consumer proof.
   Read `native-fresh-wizard-detached-body.md`.
 - Actual Body-bound executable now composes the unchanged LAB/music/bootstrap
   with actual Host initializer and static slot35 target10. Focused973/716,
   API5/shared23, all138 prior/new complete hashes across46 tracks and three
   legacy source gates pass. This does not issue persistent/card/history policy
   or a public track override. Read `native-fresh-wizard-detached-executable.md`.
+- The independently reconstructed full physical reference passes532/43, with
+  all281270 actual inverse results returning the original hash,1290 changed
+  sectors and all37 additional gap sectors authenticated. Root replay is exact.
+  Expected BIN hash is c4a70f826b1a9a3d4ad8e36512be354b6205d27ea2c7a314776a51067f35b5a6;
+  no such BIN was written by this read-only reference. Read
+  `native-fresh-wizard-physical-disc-reference.md`.
+- The actual-Executable-bound physical Disc issuer now matches that complete
+  independent raw result and executes the full physical inverse. Focused source
+  passes844011 checks/269 refusals (mostly per-sector assertions), API6/shared23.
+  Eleven transient metadata mutations discriminate index-before-parser; six
+  capture cancellation phases and both-stream real readback/EOF guards pass.
+  Actual alternate Body ancestry remains distinct despite equal EXE bytes.
+  Three rebuilt legacy source modes preserve all old full hashes. Root and peer
+  full review are clear. Read `native-fresh-wizard-detached-disc.md`.
 - Native capacity106/7 and primary-admission prototype220/30 cases were fully
   read and independently repeated by root. The existing impact guard does not
   cover the three primary calls. The proposed primary-only skip policy cannot
   protect reward/digit/Sparx requests; it remains unapproved and unimplemented.
   Read `native-fresh-wizard-capacity-admission.md`.
-- Latest full default .NET gate: Release142 steps/zero failures including the
-  new source-free Executable mode. Whole Python114 tests/four explicit-source
-  skips; runner54. Source-only native scene/staging/fallback checks are separate.
-  Full report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-8wf3qtdy/summary.json`.
+- Latest full default .NET gate: Release144 steps/zero failures including the
+  new source-free Disc mode. Whole Python115 tests/four explicit-source
+  skips; runner55. Source-only native scene/staging/fallback checks are separate.
+  Full report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-oa3mfni6/summary.json`.
   These are engineering gates, not gameplay acceptance.
 
 ## Current package gate and next practical work
 
-A separate private R03 Mac app now has a real native main. It is compiled from
-6eae8d4 (predates the new P1 scene), signed, and passes actual packaged PNG and
-complete protection inventories. The preserved installed editor was not replaced.
-Its normal launch reached a genuine Documents-folder permission prompt for the
-R03 identity, confirmed by the native TCC log; helperPID16530 was waiting before
-App bootstrap at the last observation. UserNotificationCenter control was
-explicitly denied by tooling. John was asked asynchronously to click Allow if
-he approves; no response has arrived yet. Do not retry-launch or bypass the
-protected prompt through another tool/parent/settings. No Full Disk Access is
-needed. Read `native-fresh-document-mac-r03.md` for exact evidence and paths.
+A separate private R03 Mac app is running and its real Fresh Level window was
+visibly verified and opened for John on September6. It is compiled from6eae8d4
+(predates the new P1 scene), signed, and passes actual packaged PNG and pre-GUI
+protection inventories. The preserved installed editor was not replaced.
+The earlier genuine Documents permission prompt is historical, not the current
+blocker: current bootstrap/session files, process16530 and the observed native
+UI establish successful startup. Root attached the already-running app and only
+clicked Fresh Level; no field, Apply, Save, permission or security setting was
+changed. Do not infer who resolved the earlier prompt. Leave this now-user-facing
+document alone; do not close it or restore its seed over John's possible edits.
+The saved2048×2048 floor, heading96, colors, Stone Hill track02 and0 placed Mobys
+were shown. Actual edit/Apply/Undo/Save/reopen acceptance remains open, and no new
+Wizard integration is packaged. Read `native-fresh-document-mac-r03.md` and
+`spyro-progress-for-john-20260906.md` for exact controls, evidence and paths.
 
 R02 evidence:
 `_local/research/fresh-document-mac-test-r02/evidence/`.
@@ -176,10 +200,13 @@ Retain R01/R02 failed/pre-GUI states and exact signed owners; no in-place rebuil
 
 Next outcomes:
 
-1. After John approves the actual R03 permission prompt, attach normally, open
-   Fresh Level, verify the edited2048-floor document, close/reopen and check
-   private Store and protected originals. Package regression/review and binary
-   checks are complete but do not prove this GUI gate. Follow the separate
+1. John can actively test the open R03 Fresh Level document: edit heading/colors,
+   Apply, Undo/Redo, Save document and Reopen saved. Music has no preview audio;
+   Create research candidate is separate from the main Create BIN. Root verified
+   the current visible saved2048-floor state but did not perform these edits.
+   Finish edit/save/reopen and protected-original checks when this does not
+   interfere with John's live work. Package binary checks do not prove that gate.
+   Follow the separate
    post-GUI preservation design; the pre-GUI verifier deliberately requires
    manifest absence and cannot be reused as a post-bootstrap checker.
 2. Establish a source-owned fresh-Wizard damage/audio identity preserving Town's
@@ -189,17 +216,21 @@ Next outcomes:
    bounded exclusive reward-selector audit still requires Town classes0E/0F/10;
    simple0E is a distinct model grammar. Complete their assets and callback
    closure rather than assuming only the yellow-gem path can occur.
-3. Independently consume actual issued Body bytes in the bounded native loader
-   proof, then implement a separate actual-Executable-bound physical disc plan.
-   Its new gap must be validated through55162,37 sectors beyond old55125; the
-   complete expected raw afterimage and inverse must be independently reviewed
-   first. Root's private design is in fresh-wizard-disc-issuer-plan-r01.UKwumc.
+3. Actual issued Body consumption, independent full raw afterimage/inverse
+   review and the new actual-Executable-bound physical Disc gates are complete.
+   Implement the next closed actual-Disc research materializer tests-first.
+   Its new gap is through55162,37 sectors beyond old55125. Root's reviewed
+   private design is in fresh-wizard-disc-issuer-plan-r01.UKwumc.
    Reuse the unchanged private full-LBA source validator and raw-sector codec,
    but run the full new geometry/ISO/gap checks; do not reuse old gap authority.
    Existing LAB/music/ID65 table owners and fixed P0/N16 outputs stay unchanged.
    Static target10 is not persistent/card/history policy. No candidate follows
    automatically; separately materialize and playtest an exact checked private
-   image with all unresolved audio/capacity/runtime limitations explicit.
+   image with all unresolved audio/capacity/runtime limitations explicit. The
+   reviewed next-stage proposal is in fresh-wizard-materializer-plan-r01.8dwAYa;
+   old N16/Dark observers must reject the new P1/N32 layout, not be repurposed
+   with stale anchors. Source-bound new observer or explicit visual-only scope
+   is needed before the first fresh-Wizard diagnostic.
 4. Extend tested texture/material and Moby families through the editor with
    explicit dependency coverage and regression gates. General native texture
    portability, arbitrary object mixtures, new normal portal routes and V6

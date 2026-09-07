@@ -34,7 +34,22 @@ represented as complete: the actual driver-owned publish, compiler, dependency,
 signature and inventory logs are retained in full under R03 `evidence/`.
 Read `R03-PACKAGE-HANDOFF.md` for exact measured hashes and owner counts.
 
-## Actual GUI boundary: user consent pending
+## Actual GUI boundary: main and saved document now visible
+
+The earlier pending state below is superseded by a later read-only refresh.
+Root found the same PID16530 running the actual R03 editor binary and its
+private session log recording bootstrap/main initialization20:59:42–43 and
+Stone Hill loading20:59:44. Normal CUA inventory/attachment then showed the
+actual main editor with Fresh Level… and Browse Native Library… controls.
+Root opened Fresh Level… and observed the saved2048-floor document, heading96,
+colors#488478/#2C4264 and Track02. No document field, save, candidate or setting
+was changed. The window was left open for John's hands-on testing.
+
+Evidence: `evidence/ROOT-GUI-OPEN-20260906.md`. This proves actual main/Fresh
+window opening, not edit/undo/save/close/reopen, publication or full post-startup
+preservation. Do not automatically close or restore the now user-facing document.
+
+### Retained initial permission history
 
 Normal CUA/LaunchServices launch reached the native main and guarded helper,
 but had not started the editor's project bootstrap. The initial UI request
@@ -50,8 +65,9 @@ or alternate-parent GUI launch was used.
 
 Read `evidence/ROOT-GUI-GATE-PENDING.md` and the actual
 `root-documents-consent-r01.log`. A running helper or a permission prompt is
-not editor acceptance. Fresh Level open/edit/save/reopen, clean close, and the
-post-bootstrap protection inventory remain pending that normal user action.
+not editor acceptance. The later main/Fresh window observation above does not
+identify who handled the permission prompt. Edit/save/reopen, clean close and
+the complete post-bootstrap protection inventory remain pending checks.
 `POST-GUI-PRESERVATION-DESIGN.md` specifies the expected real bootstrap owners
 and explicitly rejects missing private diagnostics or unexplained changes.
 

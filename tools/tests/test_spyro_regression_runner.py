@@ -486,6 +486,9 @@ class RunnerOptionsTests(unittest.TestCase):
     def test_fresh_wizard_executable_modes_remain_detached_without_candidate_output(self):
         self.assert_texture_modes("NativeId65FreshWizardExecutableSmoke", "FRESH_WIZARD_EXECUTABLE")
 
+    def test_fresh_wizard_disc_modes_only_read_selected_source_without_publication(self):
+        self.assert_texture_modes("NativeId65FreshWizardDiscSmoke", "FRESH_WIZARD_DISC")
+
     def test_saved_document_publisher_modes_never_activate_output(self):
         self.assert_texture_modes("NativeId65FreshDocumentPublicationSmoke", "NATIVE_ID65_FRESH_DOCUMENT_PUBLICATION",
                                   ("--source",), "SMOKE", needs_cue=True)
@@ -937,6 +940,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeId65FreshWizardHostSmoke": ["--source", "/selected original.bin"],
             "NativeId65FreshWizardBodySmoke": ["--source", "/selected original.bin"],
             "NativeId65FreshWizardExecutableSmoke": ["--source", "/selected original.bin"],
+            "NativeId65FreshWizardDiscSmoke": ["--source", "/selected original.bin"],
             "NativeGreenWizardMoverSmoke": ["/selected original.bin"],
             "NativeLevelSlotOwnershipSmoke": ["--source", "/selected original.bin"],
             "NativePlayerAnimationSmoke": ["--source", "/selected original.bin"],

@@ -67,7 +67,10 @@ public fixed-A ancestry, whose actual intent selects19.
 
 Rebuilt legacy source gates also passed: FreshDisc566016 with all three old
 raw afterimages unchanged; Host65713/731 and Body9914/9826, each with shared23.
-Root fully reviewed both new production files and all fixtures. Runner
+Root and an independent production peer fully reviewed both new production
+files and all fixtures; no material issue was found. The peer also repeated
+all138 literal comparisons (physical reference folder's EXECUTABLE-PEER-REVIEW).
+Runner
 registration was tests-first, retaining two missing-registry failures before
 the minimal registration. Whole Python114 tests passed with four explicit-source
 skips; runner54. Full default Release142 steps passed with zero failures:
@@ -77,8 +80,10 @@ skips; runner54. Full default Release142 steps passed with zero failures:
 
 No disc/candidate was written and the preserved editor was not rebuilt.
 The new11000 Host plus20C800 body needs37 more original gap sectors than the
-old disc certificate. Its own source-bound physical plan and final raw readback
-must precede any exact private test image. See the separate Body checkpoint.
+old disc certificate. The independent raw physical reference now passes532/43
+with full expected image/inverse and root replay; read
+`native-fresh-wizard-physical-disc-reference.md`. Its own actual-source-bound
+physical plan and final raw readback must precede an exact private test image.
 
 Installed dispatch, global transition state12, complete incoming/callback/
 pointer/effect graph, global1F audio, aggregate actor/particle/stack capacity,
