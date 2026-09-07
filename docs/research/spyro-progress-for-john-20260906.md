@@ -66,8 +66,9 @@ animation, private state, shared state and resource limits must remain correct
 together in the destination level.
 
 The current fresh-Wizard resource work matches independently checked texture,
-sound, model and particle buffers, but native behavior/body integration is not
-finished. One concrete blocker is the shared electric-damage sound: Town's
+sound, model and particle buffers, and its combined body now has a source-tested
+builder. Full native behavior integration is not finished. One concrete blocker
+is the shared electric-damage sound: Town's
 existing sound mapping is already occupied, and the tempting damage marker is
 erased by native processing. Regression tests now preserve these facts so an
 apparently convenient fix cannot silently break other gameplay.
@@ -83,7 +84,7 @@ state. This is source-tested scene construction, not yet a playable fresh-Wizard
 ROM. The separate sound-loading stage now also passes source tests, preserving
 the exact native transfer bytes. The three repeat-reward models and their
 textures are now implemented in a separate resource package, with independent
-checks of the actual compiled output. Save handling and complete body integration
+checks of the actual compiled output. Save handling and executable/disc integration
 remain unfinished. See [fallback resources](native-fresh-wizard-fallback-resources.md),
 [scene progress](native-fresh-wizard-p1-scene.md) and
 [sound-loading progress](native-fresh-wizard-upload-staging.md).
@@ -92,9 +93,11 @@ We also verified that ID65 has its own progress-save row; it need not overwrite
 another level's progress. Different fresh projects would still share that row,
 so old-save compatibility needs explicit handling. The linked Town/Wizard host
 layout now has a compiled builder matching the independent dispatch/relocation
-tests. The combined level's native loader also passes its address and allocation
-checks; that combined layout is now being implemented. These are not yet a
-playable fresh-Wizard ROM.
+tests, including a separate test consuming its actual compiled code. The
+combined body builder now also matches independently checked loader addresses,
+resource ownership and allocation layout. See
+[body checkpoint](native-fresh-wizard-detached-body.md). The executable and disc
+pieces are next; these results are not yet a playable fresh-Wizard ROM.
 
 Reward testing uncovered two more native dependencies: a ten-gem pickup creates
 two number objects, whose expiry can create twenty particles. The real spawn
@@ -111,8 +114,8 @@ remain separate work.
 
 ## Verification and next milestone
 
-Latest full default Release gate:138 steps, zero failures. The Python suite
-passed112 tests with four explicit-source skips;52 runner tests passed. The
+Latest full default Release gate:140 steps, zero failures. The Python suite
+passed113 tests with four explicit-source skips;53 runner tests passed. The
 independent native scene check passed23 checks/four expected refusals and
 sound-loading proof404 checks/ten expected refusals. New actual compiled fallback
 resource reads passed34 checks/28 expected refusals; the separate original-source

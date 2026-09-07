@@ -87,10 +87,22 @@ Dark full overlay10f82e…c7083 and EXE14aa…a8635 remain unchanged.
 Root fully read the source, plan and cases; independent production review also
 found no material defect. The source/free modes now have permanent runner
 registration tests: the two actual missing-registry failures are retained in
-08-root-runner-red.log. Actual-issued native consumption is a separate follow-up
-to managed golden matching and the earlier raw replay.
+08-root-runner-red.log.
 
-Next: independently checked combined body/staging composition. Equal total
+A separate actual-issued Host gate now passes14 checks/26 provenance refusals
+and the unchanged1455/30 native report. Root repeated it exactly and a second
+agent fully reviewed producer and consumer. Its bounded fixture authenticates
+the actual public capture chain, private producer/Core assemblies, complete
+metadata and exact emitted code. Positive native instruction buffers use the
+actual overlay/initializer, not merely a reconstructed equal buffer. Actual P1
+row bytes enter an explicitly synthetic list; post-visibility dispatch is a
+separate witness, not full placed initialization or whole Wizard behavior.
+Evidence: `_local/research/dark-wizard-native-closure-20260906/issued-town-host-gate-r01.4gLqRE/`.
+Final05/06/root07 report SHA:
+`71cdbe5e2668cdea899be2967f4d8fdf173f2a9f258841c35e83b6134912adde`.
+
+The separate compiled Body is now checkpointed; read
+`native-fresh-wizard-detached-body.md`. Equal total
 lengths or hashes alone do not imply matching address maps or source ancestry.
 Body/header composition, audio compatibility, reward/history, complete callback
 lifetime, dynamic/stack peak, hardware/runtime and publication remain unapproved.

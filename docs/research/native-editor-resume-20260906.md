@@ -14,8 +14,8 @@ Confirm actual Git status and latest commit before edits. Audio regressions
 were checkpointed at eb78f3f, collider-lifetime at6eae8d4. The later detached
 P1/N32 scene adds a separate Core type; App and old P0/export APIs are unchanged.
 Separate upload staging, fallback resources and the linked Town Host issuer
-are now implemented. Combined body composition is the next regression-first
-source slice, against an independently replayed full raw body.
+and combined Body are now implemented. Combined executable composition is the
+next regression-first slice; actual-issued Body consumption is a separate gate.
 
 John authorized autonomous development, useful parallel agents, sensible
 commits and DuckStation gameplay with temporary settings. Continue until the
@@ -114,7 +114,8 @@ BIN SHA256
   source inverse. The new source-bound Core Host now matches that reference:
   focused free179/source65713 plus shared23; five rebuilt legacy source modes
   remain GREEN. Root full review and independent production review are clear.
-  Actual-issued native Host consumption is a separate follow-up; no Body yet.
+  Actual-issued native Host consumption now passes14/26 provenance controls and
+  the unchanged1455/30 native report, independently replayed and peer-reviewed.
   Read `native-fresh-wizard-linked-town-host.md`.
 - Native ten-gem creation now executes the actual two-number104/105 spawn
   chain and selected expiry producing20 particles47:319/39. Complete typed
@@ -130,10 +131,16 @@ BIN SHA256
   Evidence: `_local/research/dark-wizard-native-closure-20260906/fresh-combined-body-r01.4Uhwza/`.
   Explicit completed-CD-write and post-placed-init witnesses are not hardware
   or full incoming execution. The old200000 body budget must not be widened.
-- Latest full default .NET gate: Release138 steps/zero failures including the
-  new source-free Host mode. Whole Python112 tests/four explicit-source skips;
-  runner52. Source-only native scene/staging/fallback checks are separately GREEN.
-  Full report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-yvp5ef3n/summary.json`.
+- Actual Host-bound Body now matches all independent body/header/transfer
+  goldens, with exact reference ancestry and complete structured owners.
+  Focused source9914/9826 plus shared23 passes; five legacy source gates remain
+  GREEN. Actual source testing caught and fixed only the new class78 metadata
+  (2BD0, not old2930). Actual-issued native Body consumption is separate work.
+  Read `native-fresh-wizard-detached-body.md`.
+- Latest full default .NET gate: Release140 steps/zero failures including the
+  new source-free Body mode. Whole Python113 tests/four explicit-source skips;
+  runner53. Source-only native scene/staging/fallback checks are separately GREEN.
+  Full report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-r6vatvpb/summary.json`.
   These are engineering gates, not gameplay acceptance.
 
 ## Current package gate and next practical work
@@ -172,15 +179,15 @@ Next outcomes:
    bounded exclusive reward-selector audit still requires Town classes0E/0F/10;
    simple0E is a distinct model grammar. Complete their assets and callback
    closure rather than assuming only the yellow-gem path can occur.
-3. Implement the closed actual-Host-bound combined Body issuer against the
-   independent20C800 body/header/native phase reference, preserving actual
-   Host/Scene/Fallback ancestry and internally deriving transfer bytes from the
-   SAME revised upload. Do not accept old R0 staging or widen old Body APIs.
-   The fallback revision, detached P1 scene and Town Host are complete.
-   Keep existing LAB/music/ID65 table owners separate from the new conditional
-   initializer bytes, then body/scene/reward layout once blocking ownership
-   contracts are resolved. No body or candidate follows automatically. Preserve
-   fixed P0/N16 goldens and public export scope, then playtest the exact new image.
+3. Implement the separate actual-Body-bound combined executable and independently
+   consume actual issued Body bytes in the bounded native loader proof. Keep
+   existing LAB/music/ID65 table owners separate from conditional initializer
+   bytes. Raw executable reference827/50 and peer6902 preserve all46 selectable
+   tracks and identify a ten-gem static target correction; this is not persistent
+   owner/history policy. Independently validate the larger physical disc gap
+   before any new disc issuer. Do not accept old R0 staging, widen old Body APIs,
+   change fixed P0/N16 goldens or expand public export scope. No candidate follows
+   automatically; playtest only an exact independently checked new image.
 4. Extend tested texture/material and Moby families through the editor with
    explicit dependency coverage and regression gates. General native texture
    portability, arbitrary object mixtures, new normal portal routes and V6
