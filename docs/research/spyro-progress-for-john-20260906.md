@@ -96,8 +96,11 @@ layout now has a compiled builder matching the independent dispatch/relocation
 tests, including a separate test consuming its actual compiled code. The
 combined body builder now also matches independently checked loader addresses,
 resource ownership and allocation layout. See
-[body checkpoint](native-fresh-wizard-detached-body.md). The executable and disc
-pieces are next; these results are not yet a playable fresh-Wizard ROM.
+[body checkpoint](native-fresh-wizard-detached-body.md). The executable builder
+now also passes its tests: it preserves LAB/music and gives the placed Wizard's
+level a ten-gem treasure target. Disc assembly is next; these results are not
+yet a playable fresh-Wizard ROM. See
+[executable checkpoint](native-fresh-wizard-detached-executable.md).
 
 Reward testing uncovered two more native dependencies: a ten-gem pickup creates
 two number objects, whose expiry can create twenty particles. The real spawn
@@ -114,8 +117,8 @@ remain separate work.
 
 ## Verification and next milestone
 
-Latest full default Release gate:140 steps, zero failures. The Python suite
-passed113 tests with four explicit-source skips;53 runner tests passed. The
+Latest full default Release gate:142 steps, zero failures. The Python suite
+passed114 tests with four explicit-source skips;54 runner tests passed. The
 independent native scene check passed23 checks/four expected refusals and
 sound-loading proof404 checks/ten expected refusals. New actual compiled fallback
 resource reads passed34 checks/28 expected refusals; the separate original-source

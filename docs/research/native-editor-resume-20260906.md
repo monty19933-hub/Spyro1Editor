@@ -14,8 +14,8 @@ Confirm actual Git status and latest commit before edits. Audio regressions
 were checkpointed at eb78f3f, collider-lifetime at6eae8d4. The later detached
 P1/N32 scene adds a separate Core type; App and old P0/export APIs are unchanged.
 Separate upload staging, fallback resources and the linked Town Host issuer
-and combined Body are now implemented. Combined executable composition is the
-next regression-first slice; actual-issued Body consumption is a separate gate.
+and combined Body/Executable are now implemented. A separately source-bound
+physical disc plan is next; actual-issued Body consumption is a separate gate.
 
 John authorized autonomous development, useful parallel agents, sensible
 commits and DuckStation gameplay with temporary settings. Continue until the
@@ -137,10 +137,20 @@ BIN SHA256
   GREEN. Actual source testing caught and fixed only the new class78 metadata
   (2BD0, not old2930). Actual-issued native Body consumption is separate work.
   Read `native-fresh-wizard-detached-body.md`.
-- Latest full default .NET gate: Release140 steps/zero failures including the
-  new source-free Body mode. Whole Python113 tests/four explicit-source skips;
-  runner53. Source-only native scene/staging/fallback checks are separately GREEN.
-  Full report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-r6vatvpb/summary.json`.
+- Actual Body-bound executable now composes the unchanged LAB/music/bootstrap
+  with actual Host initializer and static slot35 target10. Focused973/716,
+  API5/shared23, all138 prior/new complete hashes across46 tracks and three
+  legacy source gates pass. This does not issue persistent/card/history policy
+  or a public track override. Read `native-fresh-wizard-detached-executable.md`.
+- Native capacity106/7 and primary-admission prototype220/30 cases were fully
+  read and independently repeated by root. The existing impact guard does not
+  cover the three primary calls. The proposed primary-only skip policy cannot
+  protect reward/digit/Sparx requests; it remains unapproved and unimplemented.
+  Read `native-fresh-wizard-capacity-admission.md`.
+- Latest full default .NET gate: Release142 steps/zero failures including the
+  new source-free Executable mode. Whole Python114 tests/four explicit-source
+  skips; runner54. Source-only native scene/staging/fallback checks are separate.
+  Full report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-8wf3qtdy/summary.json`.
   These are engineering gates, not gameplay acceptance.
 
 ## Current package gate and next practical work
@@ -179,15 +189,17 @@ Next outcomes:
    bounded exclusive reward-selector audit still requires Town classes0E/0F/10;
    simple0E is a distinct model grammar. Complete their assets and callback
    closure rather than assuming only the yellow-gem path can occur.
-3. Implement the separate actual-Body-bound combined executable and independently
-   consume actual issued Body bytes in the bounded native loader proof. Keep
-   existing LAB/music/ID65 table owners separate from conditional initializer
-   bytes. Raw executable reference827/50 and peer6902 preserve all46 selectable
-   tracks and identify a ten-gem static target correction; this is not persistent
-   owner/history policy. Independently validate the larger physical disc gap
-   before any new disc issuer. Do not accept old R0 staging, widen old Body APIs,
-   change fixed P0/N16 goldens or expand public export scope. No candidate follows
-   automatically; playtest only an exact independently checked new image.
+3. Independently consume actual issued Body bytes in the bounded native loader
+   proof, then implement a separate actual-Executable-bound physical disc plan.
+   Its new gap must be validated through55162,37 sectors beyond old55125; the
+   complete expected raw afterimage and inverse must be independently reviewed
+   first. Root's private design is in fresh-wizard-disc-issuer-plan-r01.UKwumc.
+   Reuse the unchanged private full-LBA source validator and raw-sector codec,
+   but run the full new geometry/ISO/gap checks; do not reuse old gap authority.
+   Existing LAB/music/ID65 table owners and fixed P0/N16 outputs stay unchanged.
+   Static target10 is not persistent/card/history policy. No candidate follows
+   automatically; separately materialize and playtest an exact checked private
+   image with all unresolved audio/capacity/runtime limitations explicit.
 4. Extend tested texture/material and Moby families through the editor with
    explicit dependency coverage and regression gates. General native texture
    portability, arbitrary object mixtures, new normal portal routes and V6
