@@ -1,7 +1,7 @@
 # Spyro editor — what is working now
 
-Updated September 7, 2026. Development is continuing with a safe pause planned
-by5% remaining usage.
+Updated September 7, 2026. Development is safely checkpointed for a usage pause;
+6% remained at closeout, preserving the requested5% reserve. No reset was redeemed.
 This is a progress report, not a V6 release. Your preserved editor, original
 game and original memory card have not been replaced.
 
@@ -173,7 +173,7 @@ Latest all-project Release build/regression gate:315 steps, zero failures,
 including the new aggregate's308 checks/214 expected refusals and112 additional
 real-file storage checks. Original-ROM-backed fresh research2339 and separate
 saved-context42 also passed, preserving the complete original BIN/CUE. The current Python
-suite passed179 tests with nine explicit-mode skips;58 runner tests passed. The
+suite passed183 tests with eleven explicit-mode skips;58 runner tests passed. The
 independent native scene check passed23 checks/four expected refusals and
 sound-loading proof404 checks/ten expected refusals. New actual compiled fallback
 resource reads passed34 checks/28 expected refusals; the separate original-source
@@ -198,6 +198,9 @@ The third diagnostic also closed safely, with both original settings restored
 and all nine protected hashes passing. It captured the early displacement and
 collision-shape match described above. No emulator or observer remains running;
 the separate R03 editor remains open and unchanged.
+The exact source/issued-image overlap and closed36-sample record now have permanent
+regression tests. They preserve the evidence; the production spawn-clearance
+guard and corrected candidate are still the next implementation, not a finished fix.
 
 Next: finish the isolated app edit/save/close-reopen check,
 complete fresh-Wizard reward/audio/resource contracts, then integrate and playtest that exact

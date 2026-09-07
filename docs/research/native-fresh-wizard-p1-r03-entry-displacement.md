@@ -82,6 +82,29 @@ Read-only source notes under `_local/research/dark-wizard-native-closure-2026090
 Neither inspector writes a ROM or executes native collision code. These source
 facts must not be promoted into universal Moby collision or clearance support.
 
+## Permanent regression witness
+
+`tools/tests/test_fresh_wizard_spawn_clearance_source.py` now preserves this
+unsafe case. Root and independent peer fully reviewed its290 lines, including
+the native input/output coordinate operands, signed scale, zero-damage response
+and confirmed identity/current-pose restriction. Source mode reads the full
+original and issued images; recorded mode separately binds the exact closed
+36-sample log. Default discovery performs no ROM or recorded-fixture reads.
+
+Root replay: whole Python183 tests with11 explicit-mode skips; the new source/
+issued and recorded runs each pass3 tests with the other mode skipped. Existing
+source/actual-files/recorded-OS observer26 tests also pass with no skips. Final
+new test SHA5583bc07323ec6053ce9ba31e47a49e59182617a2e8f984ad2929bcf59eb3402.
+Exact commands and honest test-helper/CLI REDs are retained in
+`fresh-spawn-clearance-test-r01.wKvFgT/HANDOFF.md` under the private research parent.
+These tests guard the evidence and its limits; the production compiler does not
+yet reject unsafe spawn geometry. No new placement or game image was written.
+
+The later offline sample33–35 decoder also reproduced exactly under Root review:
+`fresh-p1-entry-sample33-r01.Bumy6o/NOTE.md`. Actual postquery displacement-to-
+motion and state6 source windows were independently replayed. Reference position
+and divisor were not sampled, so the measured32× relation is not a helper trace.
+
 ## Session closure and preservation
 
 DuckStation45593/exec14240 exited0; observer02/exec21415 exited0. The initial

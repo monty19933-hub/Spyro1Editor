@@ -4,6 +4,11 @@ This page describes the current state, not an appended list of contradictory
 historical ACTIVE statuses. Earlier chronology remains in Git and
 `native-editor-checkpoint-20260906.md`; individual reports own exact evidence.
 
+Safe usage closeout September7:6% remaining when new work stopped, protecting
+John's5% reserve. No reset redeemed and no goal-completion claim. All .NET/Python
+checks and owned emulator/observer processes are closed; agents are freezing only
+their completed evidence/design. Confirm actual latest Git status before resuming.
+
 ## Repository and authority
 
 Repository:
@@ -81,6 +86,10 @@ The later exact HTTP-cache classification also passes Root/peer review:
 whole Python179/nine skips and original+actual files+recorded OS26/no skips.
 Both caches remain independently session-bound. Configure Settings BEFORE a new
 observer connection; legitimate cache presence changes still end a session.
+The later permanent spawn witness passes Root/peer review and Root replay:
+whole Python183/eleven explicit skips, exact source+issued and recorded modes each
+3pass/1skip, and unchanged old source/files/OS26/no skips. No compiler guard is
+implied by this new test. See `native-fresh-wizard-p1-r03-entry-displacement.md`.
 
 ## Earlier closed runtime milestones
 
@@ -325,9 +334,12 @@ Next outcomes:
    Snapshot/read-lease/publication contract. A later explicit legacy fork must
    protect both snapshots and use PublishNew. The new detailed design is
    `aggregate-store-r01.VBe0I6/NEXT-EXPLICIT-FORK.md` under the private research
-   directory. Root read it; implementation/typed committed-exception contract
-   still need an explicit engineering review and tests-first release. No automatic
-   migration or UI work yet.
+   directory. Root and peer found an additional publication-uncertain boundary:
+   ExportArtifactTransaction can rename, then throw in lock Dispose before returning.
+   An invoked but unreturned PublishNew cannot be called either committed or aborted
+   from bytes alone. The refined design must preserve evidence in that distinct arm,
+   while leaving old Save/transaction behavior untouched. Fork implementation and
+   test seams remain unreleased; no automatic migration or UI work yet.
 
 Keep source, full-image readback, actual UI, native gameplay, audio listening,
 save/reboot and public-release acceptance separate. Coordinate agent findings
