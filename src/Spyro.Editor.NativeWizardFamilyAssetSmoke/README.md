@@ -31,3 +31,22 @@ The block retains source encodings. It is not a relocated VRAM/SPU namespace,
 registered model subfile, installed scene, callback, fresh compilation, body or
 disc. Future target binding must use actual issued ancestry and declared fields;
 there is no generic portability/runtime approval.
+
+## Deferred electric-audio source regressions
+
+`source_fresh_wizard_audio_audit.py original.bin` retains the occupied Town1F
+namespace and exact source consumer inventory. Its sibling
+`source_fresh_wizard_deferred_damage_oracle.py original.bin` executes bounded
+native trigger/damage/flag/reset paths on the unchanged reviewed scalar runner:
+370 checks /17 refusals /268 distinct native instruction PCs. Source identity
+and actual EOF are checked before/finally; both emit metadata only.
+
+These two Python scripts are registered only after successful opt-in source QA,
+with the selected original BIN and the shared source deadline; no source read
+or invocation is added to the default gate. Runner tests had actual missing
+registry RED, then48 tests GREEN. Promoted source results match the preserved
+private audit/scalar metadata byte-for-byte; only scalar import/root paths changed.
+
+They do not establish collision-descriptor ownership, a unique Wizard marker,
+whole-frame behavior, audio/GTE execution or fresh runtime compatibility.
+See [the exact boundary and source evidence](../../docs/research/native-fresh-wizard-audio-boundary.md).

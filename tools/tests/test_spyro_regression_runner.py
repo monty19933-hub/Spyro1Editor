@@ -81,7 +81,102 @@ class OwnedCommandTests(unittest.TestCase):
                 self.assertFalse(process_is_running(child_pid), "Timed-out child survived")
 
 
+class SourcePythonOracleTests(unittest.TestCase):
+    EXPECTED = (
+        ("fresh-wizard-audio-audit", "src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_audio_audit.py",
+         "FRESH_WIZARD_GLOBAL1F_SOURCE_AUDIT_OK"),
+        ("fresh-wizard-deferred-damage", "src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_deferred_damage_oracle.py",
+         "FRESH_WIZARD_DEFERRED_DAMAGE_ORACLE_OK"),
+    )
+
+    def test_exact_source_only_python_registry(self):
+        self.assertEqual(self.EXPECTED, RUNNER.SOURCE_PYTHON_CASES)
+        self.assertFalse(any(name in dict(RUNNER.CORE_CASES) for name, _, _ in self.EXPECTED))
+
+    def test_python_oracles_are_absent_from_default_and_list_runs(self):
+        self.assertEqual(self.EXPECTED, RUNNER.SOURCE_PYTHON_CASES)
+        for arguments in ([], ["--list"], ["--list", "--with-source-qa"]):
+            calls = []
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                return subprocess.CompletedProcess(command, 0)
+            with self.subTest(arguments=arguments), tempfile.TemporaryDirectory(prefix="spyro-source-python-default-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "SOURCE_QA_CASES", ()), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("default source read")), \
+                        mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("unowned CUE read")), \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin), *arguments]), \
+                        contextlib.redirect_stdout(io.StringIO()) as shown:
+                    self.assertEqual(0, RUNNER.main())
+                self.assertFalse(any(command[1:2] == ["-B"] for command in calls))
+                self.assertFalse(any(marker in shown.getvalue() for _, _, marker in self.EXPECTED))
+
+    def test_source_python_commands_markers_failures_and_shared_deadline(self):
+        self.assertEqual(self.EXPECTED, RUNNER.SOURCE_PYTHON_CASES)
+        scenarios = {
+            "success": (0, 2), "missing-first-marker": (1, 1), "missing-second-marker": (1, 2),
+            "first-nonzero": (1, 1), "source-resolution": (1, 0), "offline-failure": (1, 0),
+            "upstream-source-failure": (1, 0), "expired-after-offline": (1, 0), "expired-after-first": (1, 1),
+        }
+        for scenario, (status, script_count) in scenarios.items():
+            calls, clock = [], [100.0]
+            def fake_run(command, **kwargs):
+                calls.append((command, kwargs["timeout"]))
+                if command[0] == "env":
+                    kwargs["stdout"].write("Offline QA passed.\n")
+                    if scenario == "expired-after-offline": clock[0] += 6
+                    if scenario == "offline-failure": return subprocess.CompletedProcess(command, 1)
+                if command[:2] == ["dotnet", "run"]:
+                    return subprocess.CompletedProcess(command, 1)
+                if command[1:2] == ["-B"]:
+                    index = next(i for i, (_, relative, _) in enumerate(self.EXPECTED) if command[2] == str(RUNNER.ROOT / relative))
+                    if not (scenario == "missing-first-marker" and index == 0 or scenario == "missing-second-marker" and index == 1):
+                        kwargs["stdout"].write(self.EXPECTED[index][2] + "\n")
+                    if scenario == "expired-after-first": clock[0] += 6
+                    if scenario == "first-nonzero": return subprocess.CompletedProcess(command, 7)
+                return subprocess.CompletedProcess(command, 0)
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory(prefix="spyro-source-python-opt-in-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "SOURCE_QA_CASES", (("SourceGuard", "UNREACHED", []),) if scenario == "upstream-source-failure" else ()), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", return_value="/selected original.bin",
+                                          side_effect=FileNotFoundError("missing selected original") if scenario == "source-resolution" else None), \
+                        mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("unowned CUE read")), \
+                        mock.patch.object(RUNNER.time, "monotonic", side_effect=lambda: clock[0]), \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin), "--with-source-qa", "--source-qa-timeout", "5"]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(status, RUNNER.main())
+                summary = json.loads((Path(output) / "summary.json").read_text())
+            scripts = [(command, timeout) for command, timeout in calls if command[1:2] == ["-B"]]
+            self.assertEqual(script_count, len(scripts))
+            for index, (command, timeout) in enumerate(scripts):
+                self.assertEqual([sys.executable, "-B", str(RUNNER.ROOT / self.EXPECTED[index][1]), "/selected original.bin"], command)
+                self.assertGreater(timeout, 0)
+                self.assertLessEqual(timeout, 5)
+            self.assertEqual(len(summary), len({row["name"] for row in summary}))
+            if scenario == "success":
+                self.assertTrue(all(row["passed"] for row in summary))
+                self.assertEqual(["source-" + name for name, _, _ in self.EXPECTED], [row["name"] for row in summary[-2:]])
+            else:
+                self.assertFalse(summary[-1]["passed"])
+                if scenario.startswith("missing-"): self.assertEqual("missing success marker", summary[-1]["detail"])
+                if scenario.startswith("expired-"): self.assertIn("no command was started", summary[-1]["detail"])
+                if scenario == "source-resolution": self.assertIsNone(summary[-1]["command"])
+
+
 class RunnerOptionsTests(unittest.TestCase):
+    def setUp(self):
+        # Existing project-only fake commands/markers intentionally isolate
+        # that registry. SourcePythonOracleTests covers the real new registry.
+        patcher = mock.patch.object(RUNNER, "SOURCE_PYTHON_CASES", ())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_variable_data_is_additional_default_sourcefree_mode_without_source_authority(self):
         name = "NativeId65FreshDocumentSmoke"
         marker, flag = "NATIVE_ID65_VARIABLE_DATA_FREE_OK", "--variable-data-free"

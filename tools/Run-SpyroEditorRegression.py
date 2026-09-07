@@ -150,6 +150,14 @@ SOURCE_QA_CASES = (
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
 SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
 SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke"})
+# These raw-source checks have no project/build or default invocation. Each
+# accepts only the selected original BIN and shares the source-suite deadline.
+SOURCE_PYTHON_CASES = (
+    ("fresh-wizard-audio-audit", "src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_audio_audit.py",
+     "FRESH_WIZARD_GLOBAL1F_SOURCE_AUDIT_OK"),
+    ("fresh-wizard-deferred-damage", "src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_deferred_damage_oracle.py",
+     "FRESH_WIZARD_DEFERRED_DAMAGE_ORACLE_OK"),
+)
 
 
 def configured_source_image():
@@ -355,6 +363,13 @@ def main():
                             *([str(ROOT)] if name in SOURCE_QA_WORKSPACE_CASES else [])], marker,
                         timeout=options.source_qa_timeout, deadline=source_deadline):
                     break
+            if all(result["passed"] for result in results):
+                for name, relative_path, marker in SOURCE_PYTHON_CASES:
+                    if not execute("source-" + name,
+                            lambda relative_path=relative_path: [sys.executable, "-B",
+                                str(ROOT / relative_path), configured_source_image()], marker,
+                            timeout=options.source_qa_timeout, deadline=source_deadline):
+                        break
     failed = sum(not result["passed"] for result in results)
     print(f"{len(results)} checks; {failed} failed. Report: {output / 'summary.json'}", flush=True)
     return 1 if failed else 0
