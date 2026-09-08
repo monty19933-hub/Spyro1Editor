@@ -230,6 +230,13 @@ internal static class NativeId65FreshResearchPublicationEngine
                 await attempt.CaptureAsync(() => plan.RequireFreshAsync(CancellationToken.None));
             }
             bool published = attempt.State == NativeFreshResearchPublicationState.Committed;
+            if (plan.TexturedPlan != null && published)
+            {
+                // Artifact failure must not suppress the new role's independent,
+                // uncancellable final BIN/CUE observations or evidence retention.
+                await attempt.CaptureAsync(() => plan.RequireFreshAsync(CancellationToken.None));
+                if (attempt.Failure != null) preserve = true;
+            }
             if (!preserve)
             {
                 try
@@ -240,13 +247,17 @@ internal static class NativeId65FreshResearchPublicationEngine
                         wizardPostcommitCheckpoint?.Invoke(NativeId65FreshWizardPostcommitPoint.BeforeStageCleanup, stage);
                     RequireNoLink(plan, stage);
                     // PublishNew moved all three owned files. ANY subsequently
-                    // present Wizard stage entry is a new owner, even a reused
+                    // present Wizard/textured stage entry is a new owner, even a reused
                     // output basename; never delete it as an old partial file.
-                    if (plan.WizardPlan != null && published && File.Exists(stage))
-                        throw new IOException("Fresh Wizard committed stage was replaced by a file; preserve it.");
-                    if (plan.WizardPlan != null && published && Directory.Exists(stage) &&
+                    if (plan.PreserveAnyPostcommitStageOwner && published && File.Exists(stage))
+                        throw new IOException(plan.TexturedPlan != null
+                            ? "Fresh textured committed stage was replaced by a file; preserve it."
+                            : "Fresh Wizard committed stage was replaced by a file; preserve it.");
+                    if (plan.PreserveAnyPostcommitStageOwner && published && Directory.Exists(stage) &&
                         Directory.EnumerateFileSystemEntries(stage).Any())
-                        throw new IOException("Fresh Wizard committed stage contains a subsequent owner; preserve it.");
+                        throw new IOException(plan.TexturedPlan != null
+                            ? "Fresh textured committed stage contains a subsequent owner; preserve it."
+                            : "Fresh Wizard committed stage contains a subsequent owner; preserve it.");
                     foreach (string name in plan.OutputNames)
                     {
                         string path = Path.Combine(stage, name);
@@ -261,7 +272,9 @@ internal static class NativeId65FreshResearchPublicationEngine
                             if (plan.TracksCommittedFailure && published)
                                 attempt.RecordFailure(new IOException(plan.WizardPlan != null
                                     ? "Fresh Wizard stage retains an unknown owner after commit."
-                                    : "Saved-document stage retains an unknown owner after commit."));
+                                    : plan.TexturedPlan != null
+                                        ? "Fresh textured stage retains an unknown owner after commit."
+                                        : "Saved-document stage retains an unknown owner after commit."));
                         }
                     }
                 }
@@ -312,6 +325,9 @@ internal static class NativeId65FreshResearchPublicationEngine
                 failure);
         if (failure != null)
         {
+            if (plan.TexturedPlan != null && attempt.State == NativeFreshResearchPublicationState.Committed)
+                throw new NativeId65FreshTexturedResearchCommittedException(root, plan.TexturedPlan,
+                    ExistingEvidence(transactionRecovery), ExistingEvidence(stage), ExistingEvidence(leasePath), failure);
             if (attempt.State == NativeFreshResearchPublicationState.Committed)
                 throw new IOException($"{plan.Label} artifacts were published but final verification failed; preserve " + root, failure);
             // Existing UI catches IOException, not a bare AggregateException.

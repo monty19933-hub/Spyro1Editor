@@ -41,6 +41,7 @@ internal static class SourceCases
             new(80,128,112), new(128,96,64), 19);
         var a = await NativeId65FreshDocumentCompilation.CaptureAsync(bin, aIntent);
         await LineageCases.Source(bin, a);
+        await CandidateSourceCases.Run(bin, cue, a);
         var editedIntent = NativeId65FreshDocumentIntent.Create(8192, 8192, 8704, 2048, 2048, 9216, 9216, 96,
             new(72,132,120), new(44,66,100), 2);
         var editedCompilation = await NativeId65FreshDocumentCompilation.CaptureAsync(bin, editedIntent);

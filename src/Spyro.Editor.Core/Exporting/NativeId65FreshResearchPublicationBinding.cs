@@ -31,6 +31,14 @@ internal sealed class NativeId65FreshResearchPublicationBinding
         return new(new WizardRole(plan));
     }
 
+    internal static NativeId65FreshResearchPublicationBinding FromTextured(NativeId65FreshTexturedResearchCandidatePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        return new(new TexturedRole(plan));
+    }
+
+    internal NativeId65FreshTexturedResearchCandidatePlan? TexturedPlan => _role.TexturedPlan;
+    internal bool PreserveAnyPostcommitStageOwner => WizardPlan != null || TexturedPlan != null;
     internal NativeId65FreshWizardResearchCandidatePlan? WizardPlan => _role.WizardPlan;
     internal bool TracksCommittedFailure => _role.TracksCommittedFailure;
     internal NativeId65FreshSavedDocumentExportContext? SavedContext => _role.SavedContext;
@@ -56,6 +64,7 @@ internal sealed class NativeId65FreshResearchPublicationBinding
     // externally implementable source authority or caller-selected policy.
     private abstract class Role
     {
+        internal abstract NativeId65FreshTexturedResearchCandidatePlan? TexturedPlan { get; }
         internal abstract NativeId65FreshWizardResearchCandidatePlan? WizardPlan { get; }
         internal abstract bool TracksCommittedFailure { get; }
         internal abstract NativeId65FreshSavedDocumentExportContext? SavedContext { get; }
@@ -82,6 +91,7 @@ internal sealed class NativeId65FreshResearchPublicationBinding
         private readonly NativeId65FreshDiscResearchCandidatePlan _plan;
         internal StarterRole(NativeId65FreshDiscResearchCandidatePlan plan) => _plan = plan;
 
+        internal override NativeId65FreshTexturedResearchCandidatePlan? TexturedPlan => null;
         internal override NativeId65FreshWizardResearchCandidatePlan? WizardPlan => null;
         internal override bool TracksCommittedFailure => false;
         internal override NativeId65FreshSavedDocumentExportContext? SavedContext => null;
@@ -108,6 +118,7 @@ internal sealed class NativeId65FreshResearchPublicationBinding
         private readonly NativeId65FreshEditedDocumentResearchPlan _plan;
         internal EditedRole(NativeId65FreshEditedDocumentResearchPlan plan) => _plan = plan;
 
+        internal override NativeId65FreshTexturedResearchCandidatePlan? TexturedPlan => null;
         internal override NativeId65FreshWizardResearchCandidatePlan? WizardPlan => null;
         internal override bool TracksCommittedFailure => false;
         internal override NativeId65FreshSavedDocumentExportContext? SavedContext => null;
@@ -134,6 +145,7 @@ internal sealed class NativeId65FreshResearchPublicationBinding
         private readonly NativeId65FreshSavedDocumentExportContext _context;
         internal SavedRole(NativeId65FreshSavedDocumentExportContext context) => _context = context;
 
+        internal override NativeId65FreshTexturedResearchCandidatePlan? TexturedPlan => null;
         internal override NativeId65FreshWizardResearchCandidatePlan? WizardPlan => null;
         internal override bool TracksCommittedFailure => true;
         internal override NativeId65FreshSavedDocumentExportContext? SavedContext => _context;
@@ -160,6 +172,7 @@ internal sealed class NativeId65FreshResearchPublicationBinding
         private readonly NativeId65FreshWizardResearchCandidatePlan _plan;
         internal WizardRole(NativeId65FreshWizardResearchCandidatePlan plan) => _plan = plan;
 
+        internal override NativeId65FreshTexturedResearchCandidatePlan? TexturedPlan => null;
         internal override NativeId65FreshWizardResearchCandidatePlan? WizardPlan => _plan;
         internal override bool TracksCommittedFailure => true;
         internal override NativeId65FreshSavedDocumentExportContext? SavedContext => null;
@@ -173,6 +186,33 @@ internal sealed class NativeId65FreshResearchPublicationBinding
         internal override string[] OutputNames => _plan.BoundOutputNames;
         internal override string LeaseName => ".native-id65-fresh-wizard.writer.lock";
         internal override string StagePrefix => ".native-id65-fresh-wizard-stage-";
+        internal override CancellationToken PostCommitToken(CancellationToken supplied) => CancellationToken.None;
+        internal override Task RequireFreshAsync(CancellationToken token) => _plan.RequireFreshAsync(token);
+        internal override byte[] CopyCueBytes() => _plan.CopyCueBytes();
+        internal override byte[] BuildReceipt(NativeId65FreshDiscVerification verified) => _plan.BuildReceipt(verified);
+        internal override NativeId65FreshDiscVerification VerifyImage(string path, CancellationToken token) => _plan.VerifyImage(path, token);
+        internal override void WriteNewImage(string path, CancellationToken token, Action firstSector) => _plan.WriteNewImage(path, token, firstSector);
+    }
+
+    private sealed class TexturedRole : Role
+    {
+        private readonly NativeId65FreshTexturedResearchCandidatePlan _plan;
+        internal TexturedRole(NativeId65FreshTexturedResearchCandidatePlan plan) => _plan = plan;
+
+        internal override NativeId65FreshTexturedResearchCandidatePlan? TexturedPlan => _plan;
+        internal override NativeId65FreshWizardResearchCandidatePlan? WizardPlan => null;
+        internal override bool TracksCommittedFailure => true;
+        internal override NativeId65FreshSavedDocumentExportContext? SavedContext => null;
+        internal override string SourceImagePath => _plan.SourceImagePath;
+        internal override string SourceCuePath => _plan.SourceCuePath;
+        internal override string PlanSha256 => _plan.PlanSha256;
+        internal override string Label => "Fresh textured LAB";
+        internal override string ImageName => NativeId65FreshTexturedResearchCandidatePlan.ImageName;
+        internal override string CueName => NativeId65FreshTexturedResearchCandidatePlan.CueName;
+        internal override string ReceiptName => NativeId65FreshTexturedResearchCandidatePlan.ReceiptName;
+        internal override string[] OutputNames => NativeId65FreshTexturedResearchCandidatePlan.OutputNames;
+        internal override string LeaseName => ".native-id65-fresh-textured.writer.lock";
+        internal override string StagePrefix => ".native-id65-fresh-textured-stage-";
         internal override CancellationToken PostCommitToken(CancellationToken supplied) => CancellationToken.None;
         internal override Task RequireFreshAsync(CancellationToken token) => _plan.RequireFreshAsync(token);
         internal override byte[] CopyCueBytes() => _plan.CopyCueBytes();

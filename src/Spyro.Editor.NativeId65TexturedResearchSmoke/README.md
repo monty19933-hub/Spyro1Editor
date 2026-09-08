@@ -1,6 +1,6 @@
-# Textured research prerequisites, not a publisher
+# Exact fixed-a textured research candidate checks
 
-This isolated project characterizes the two internal actual-Texture lineage references and preserves the baseline across the completed four-role binding and exact generic-document measurement-loop extraction. The internal facade retains four closed private roles over actual issued owners; no fifth role or publication policy is added. No textured Candidate/Publisher is implemented; there is no physical-output mode.
+This isolated project preserves the two actual-Texture lineage references and the four existing publication roles, and tests a separate fifth role for one exact fixed-a/P0/N16/two-static-material/track19 candidate. The new candidate and thin publisher use the existing sector writer and transaction. This smoke project has no physical-output mode.
 
 ```sh
 dotnet build src/Spyro.Editor.NativeId65TexturedResearchSmoke/Spyro.Editor.NativeId65TexturedResearchSmoke.csproj -c Release
@@ -8,7 +8,7 @@ dotnet src/Spyro.Editor.NativeId65TexturedResearchSmoke/bin/Release/net10.0/Spyr
 dotnet src/Spyro.Editor.NativeId65TexturedResearchSmoke/bin/Release/net10.0/Spyro.Editor.NativeId65TexturedResearchSmoke.dll --source /absolute/original.bin /absolute/original.cue
 ```
 
-Default `TexturedResearchProbe=Baseline` is buildable without a future candidate and reads no ROM, CUE, project or recorded fixture. `TexturedResearchProbe=CandidateApi` is a separately explicit missing-future-API compilation probe, intentionally not a default or regression-runner selection. Unknown selectors and CLI combinations refuse.
+Default `TexturedResearchProbe=Baseline` reads no ROM, CUE, project or recorded fixture. `TexturedResearchProbe=CandidateApi` is a separately explicit compilation probe, not a default or regression-runner selection. The retained initial missing-API RED predates the implementation. Unknown selectors and CLI combinations refuse.
 
 The small test-only reflection helper reads internal properties and invokes existing methods on actual publicly issued plans; it never fabricates private constructors or writes internal state. Actual untextured Body/revision ancestors are null. Texture Body instances retain their exact Texture, including when the existing body/staging equivalence contract accepts a separately issued equal revision. Existing hash/byte contracts and stricter Disc/Texture instance guards remain distinct.
 
@@ -16,6 +16,12 @@ The four binding kinds are tested with genuine starter, edited, saved-context an
 
 Measure controls invoke the retained private shim through reflection; it forwards to the exact moved internal helper, not a copied test loop. A separate check invokes that helper directly with the actual edited Disc. A hashing output Stream owns no file. Source mutation/EOF/length/position, first-write checkpoint timing, partial reads, sink failures, cancellation and full independently known edited-image equality are control evidence, not transaction or native execution. Both original BIN/CUE owners receive independent full SHA/length/actual-EOF final checks and close after any primary error. Source mode requires the exact known original CUE bytes.
 
-The extraction gates passed default34, explicit source208, and a bounded source/token inverse150. The existing generic source2339/saved-context42 and all four existing wrapper source/free/timing gates also passed. The engine transaction body and moved Measure body remain exact; this is compatibility evidence, not a new native capability.
+The prior extraction checkpoint passed default34, explicit source208, a source/token inverse150, generic source2339/saved-context42 and all four existing wrapper source/free/timing gates. Step4 retains those old mappings and serializers, adding only new-arm source accounting and stage/typed-error policy. Its separate exact inverse check removes the listed fifth-arm deltas to recover the entire prior Binding/Engine; the shared Measure/transaction and old serializers remain unchanged.
 
-The fixed-a research candidate, publication/verification CLI, actual native texture testing, HQ/close behavior and saved material authoring are separate future gates. Nothing here grants those capabilities.
+The new fixed-a gate requires actual Disc/Body/Texture/Fresh/ordered source ancestry, including the fixed factory discriminator, not byte-equivalent selected bindings or a same-sized untextured body. It matches the preproduction original-only oracle's full `998a4793…611a3` image and 1253 changed sectors. The source tests measure and verify virtual/hash-sink output only. New prospective companions retain false runtime, normal-export, full-dependency, HQ, peak-memory, project-save and material-document claims.
+
+Step4 focused gates passed: inclusive Release build with zero warnings/errors, default55, explicit original BIN+CUE source325 (including all five legacy recipe rows), and exact inverse30. Actual exclusive-CUE partial acquisition and malformed-CUE finalization passed on their first source run; the tests-only missing-API RED remains retained. These results do not exercise the new role's physical publication or postcommit outcomes.
+
+New source accounting independently observes held and current named BIN/CUE owners, preserving the primary plus every final/close failure. Tiny actual exclusive-CUE and malformed-CUE fixtures exercise partial acquisition and finalization; pure error-fold controls are labelled simulations. Logical path/link checks do not prove inode identity against hostile equal-byte replacement. Final source checks use None even after failure or cancellation; cancellation during this accounting is best-effort, not prompt-cancellation proof. A missing/invalid output passed to read-only Verify may still trigger final SOURCE reads.
+
+Physical publication, typed postcommit/Unconfirmed execution for this new role, native texture testing, HQ/close behavior and saved-material-to-candidate binding remain separate gates. No runtime or general texture-portability approval is claimed.

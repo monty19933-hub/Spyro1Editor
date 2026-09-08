@@ -46,6 +46,9 @@ internal static class BindingCases
         {
             object b = Call(null, Type("NativeId65FreshResearchPublicationBinding"), row.Factory, row.Owner)!;
             ExtractionCases.ActualOwner(b, row.Owner);
+            Check(Get<object?>(b, "TexturedPlan") == null &&
+                Get<bool>(b, "PreserveAnyPostcommitStageOwner") == (row.Factory == "FromWizard"),
+                "All old roles remain non-textured; exact old Wizard-only stage policy.");
             foreach (string name in new[] { "SourceImagePath", "SourceCuePath", "PlanSha256" })
                 Check(Get<string>(b, name) == Get<string>(row.Plan, name), "Binding forwards actual " + name + ": " + row.Factory);
             Check(Get<string>(b, "Label") == row.Label && Get<string>(b, "LeaseName") == row.Lease &&

@@ -4,6 +4,8 @@ if (args.Length != 0 && (args.Length != 3 || args[0] != "--source" ||
 LineageCases.Free();
 BindingCases.Free();
 ExtractionCases.Free();
+await CandidateApiCases.Free();
+CandidateSourceFailureCases.Free();
 Console.WriteLine($"NATIVE_ID65_TEXTURED_RESEARCH_BASELINE_FREE_OK checks={Inspection.Checks} sourceIo=0 outputWrites=0");
 if (args.Length != 0)
 {
