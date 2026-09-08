@@ -97,3 +97,32 @@ equal-byte replacement; it is not a hostile-filesystem ownership protocol.
 Root's all-project Release/default gate then passed325 steps with zero failures,
 including both new UI modes and the textured-research baseline:
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-32b5q8qm/summary.json`.
+
+## Shared publication machinery — extraction only
+
+The former four-way optional-owner binding has been replaced by a single
+private role with exactly four sealed adapters over the actual starter, edited,
+saved-context and Wizard owners. The public-facing wrappers, null/cancellation
+timing, names/order/receipts and all old policies remain unchanged. No fifth
+textured role exists yet. The complete engine transaction algorithm is unchanged.
+
+The generic document's authenticated sector Measure body moved exactly to
+internal `NativeId65FreshDiscStreaming`; its original private method remains a
+one-line forwarding shim. There is no copied ECC/EDC writer or new sector policy.
+Starter, edited and Wizard streaming implementations remain untouched.
+
+Tests-first missing-Role RED preceded implementation. Free34/source208 pass,
+including actual retained owners for all five old recipes. A bounded inverse
+checker150 verifies exact engine/moved method bytes and every old binding mapping;
+Root and an independent peer replayed it. This lexical check is not a compiler
+or runtime proof. Separate actual source tests preserve generic2339/saved42,
+all14 fields/all46 music selections, and all four old wrapper source/timing gates.
+Original BIN/CUE final identities remain exact; no physical candidate is emitted.
+
+Root fully read production/tests and independently replayed default34. Combined
+all-project Release/default325 passed with zero failures alongside the neutral
+saved-aggregate guard:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-458465r0/summary.json`.
+Evidence: `_local/research/fresh-publication-mechanical-step3-r01.8uinZS/HANDOFF.md`.
+A guarded fixed-a textured publisher and native appearance test remain next;
+this compatibility refactor does not itself add a new game-editing capability.

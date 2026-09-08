@@ -64,6 +64,7 @@ internal static class SourceCases
             var context = NativeId65FreshSavedDocumentExportContext.Capture(snapshot, generic);
             await BindingCases.Source(starter, edited, context, wizard, separated);
             MeasureCases.Source(bin, editedCompilation.DiscPlan, generic.ExpectedImageSha256);
+            ExtractionCases.Source(bin, editedCompilation.DiscPlan, generic.ExpectedImageSha256);
             Check(ReferenceEquals(context.Snapshot, snapshot) && ReferenceEquals(context.Plan, generic), "Test keeps actual saved and source-issued objects.");
         }
         catch (Exception e) { errors.Add(e); }

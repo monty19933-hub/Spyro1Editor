@@ -15,6 +15,7 @@
     <Compile Include="Program.cs" /><Compile Include="Inspection.cs" />
     <Compile Include="LineageCases.cs" /><Compile Include="BindingCases.cs" />
     <Compile Include="MeasureCases.cs" /><Compile Include="SourceCases.cs" />
+    <Compile Include="ExtractionCases.cs" />
   </ItemGroup>
   <Target Name="RequireTexturedResearchProbe" BeforeTargets="BeforeBuild"
           Condition="'$(TexturedResearchProbe)' != 'Baseline' and '$(TexturedResearchProbe)' != 'CandidateApi'">

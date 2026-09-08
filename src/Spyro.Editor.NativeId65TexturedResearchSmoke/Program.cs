@@ -3,6 +3,7 @@ if (args.Length != 0 && (args.Length != 3 || args[0] != "--source" ||
     throw new ArgumentException("Use no arguments, or exactly --source ORIGINAL.bin ORIGINAL.cue. No output mode.");
 LineageCases.Free();
 BindingCases.Free();
+ExtractionCases.Free();
 Console.WriteLine($"NATIVE_ID65_TEXTURED_RESEARCH_BASELINE_FREE_OK checks={Inspection.Checks} sourceIo=0 outputWrites=0");
 if (args.Length != 0)
 {

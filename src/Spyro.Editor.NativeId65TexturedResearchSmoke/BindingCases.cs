@@ -45,6 +45,7 @@ internal static class BindingCases
         foreach (var row in cases)
         {
             object b = Call(null, Type("NativeId65FreshResearchPublicationBinding"), row.Factory, row.Owner)!;
+            ExtractionCases.ActualOwner(b, row.Owner);
             foreach (string name in new[] { "SourceImagePath", "SourceCuePath", "PlanSha256" })
                 Check(Get<string>(b, name) == Get<string>(row.Plan, name), "Binding forwards actual " + name + ": " + row.Factory);
             Check(Get<string>(b, "Label") == row.Label && Get<string>(b, "LeaseName") == row.Lease &&
