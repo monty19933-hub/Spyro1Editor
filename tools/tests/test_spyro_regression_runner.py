@@ -195,6 +195,59 @@ class RunnerOptionsTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def test_aggregate_session_is_a_separate_sourcefree_ui_mode(self):
+        name = "UiSmoke"
+        marker, flag = "FRESH_LEVEL_DOCUMENT_SESSION_OK", "--fresh-native-level-session-only"
+        self.assertEqual([(name, marker, [flag])],
+                         [case for case in RUNNER.ADDITIONAL_CORE_CASES if case[0] == name])
+        self.assertEqual(["--fresh-native-document-only"], RUNNER.CASE_ARGUMENTS[name])
+        self.assertFalse(any(case[0] == name for case in RUNNER.SOURCE_QA_CASES))
+        with mock.patch.object(sys, "argv", [str(SPEC.origin), "--list"]), \
+                mock.patch.object(RUNNER, "run_owned_command", side_effect=AssertionError("list ran command")), \
+                mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("source read")), \
+                mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("CUE read")), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(0, RUNNER.main())
+        lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
+        self.assertEqual(2, len(lines))
+        self.assertTrue(any(flag + " | " + marker in line for line in lines))
+
+    def test_aggregate_session_marker_and_result_name_do_not_alias_legacy_ui(self):
+        name, old_marker = "UiSmoke", "FRESH_NATIVE_DOCUMENT_UI_OK"
+        marker, flag = "FRESH_LEVEL_DOCUMENT_SESSION_OK", "--fresh-native-level-session-only"
+        for emit_marker in (False, True):
+            calls = []
+
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                if command[:2] == ["dotnet", "run"]:
+                    kwargs["stdout"].write(marker if flag in command and emit_marker else old_marker)
+                return subprocess.CompletedProcess(command, 0)
+
+            with self.subTest(emit_marker=emit_marker), tempfile.TemporaryDirectory(prefix="spyro-session-runner-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", ((name, old_marker),)), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ((name, marker, [flag]),)), \
+                        mock.patch.object(RUNNER, "SOURCE_QA_CASES", ()), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("source read")), \
+                        mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("CUE read")), \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin)]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0 if emit_marker else 1, RUNNER.main())
+                summary = json.loads((Path(output) / "summary.json").read_text())
+            self.assertEqual(2, sum(command[:2] == ["dotnet", "build"] for command in calls), "App and shared UiSmoke each build once")
+            runs = [command for command in calls if command[:2] == ["dotnet", "run"]]
+            self.assertEqual([["--fresh-native-document-only"], [flag]],
+                             [command[command.index("--") + 1:] for command in runs])
+            self.assertTrue(all("--no-build" in command and "--no-restore" in command for command in runs))
+            self.assertEqual(["run-Spyro.Editor.UiSmoke", "run-Spyro.Editor.UiSmoke-fresh-level-session"],
+                             [row["name"] for row in summary[-2:]])
+            self.assertEqual(len(summary), len({row["name"] for row in summary}))
+            self.assertEqual(len(summary), len({row["log"] for row in summary}))
+            self.assertTrue(summary[-2]["passed"])
+            self.assertEqual(emit_marker, summary[-1]["passed"])
+
     def test_variable_data_is_additional_default_sourcefree_mode_without_source_authority(self):
         name = "NativeId65FreshDocumentSmoke"
         marker, flag = "NATIVE_ID65_VARIABLE_DATA_FREE_OK", "--variable-data-free"

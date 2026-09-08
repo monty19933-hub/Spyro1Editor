@@ -112,6 +112,8 @@ ADDITIONAL_CORE_CASES = (
      ["--source-free-route-surfaces"]),
     ("NativeId65FreshDocumentSmoke", "NATIVE_ID65_VARIABLE_DATA_FREE_OK",
      ["--variable-data-free"]),
+    ("UiSmoke", "FRESH_LEVEL_DOCUMENT_SESSION_OK",
+     ["--fresh-native-level-session-only"]),
 )
 SOURCE_QA_CASES = (
     # This read-only mode checks both preserved V2 and V3 native closure goldens;
@@ -367,6 +369,7 @@ def main():
         suffix = {
             ("--source-free-route-surfaces",): "-route-surfaces",
             ("--variable-data-free",): "-variable-data",
+            ("--fresh-native-level-session-only",): "-fresh-level-session",
         }.get(tuple(arguments), "")
         execute("run-" + project.stem + suffix,
                 ["dotnet", "run", "--project", str(project), "--configuration",

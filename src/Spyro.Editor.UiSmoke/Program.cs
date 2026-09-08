@@ -23,6 +23,14 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+// Pure aggregate session/actual tiny Store fixtures, before workspace discovery.
+if (args.Contains("--fresh-native-level-session-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --fresh-native-level-session-only");
+    NativeFreshLevelDocumentSessionCases.Run();
+    return 0;
+}
+
 // Explicit actual-production UI exercise must never enter the legacy fixture.
 // It is not run by neutral/default/source modes and needs a reviewed absent target.
 if (NativeFreshDocumentRealPublicationUiCases.Handles(args))

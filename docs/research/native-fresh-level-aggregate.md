@@ -93,7 +93,38 @@ real staged cancellation and committed readback failure with retained evidence.
 Trusted ancestors/cooperating writers remain the scope; no hostile-race or crash
 atomicity claim is added. The aggregate is still not connected to R03 controls.
 
-A later explicit legacy-floor fork
-must use new-only publication so a late-created destination cannot be replaced.
-No fork, auto-migration, aggregate UI, new enemy control or native compilation
-is implemented here. R03 remains unchanged.
+At this adapter checkpoint, explicit Fork/UI/native compilation were not yet
+implemented. Later commitffcf176 adds actual new-only legacy-floor Fork;
+ab582c2 adds the separate source-bound authored Wizard recipe. Neither silently
+migrates files or changes the preserved R03 app.
+
+## App document session — September 8
+
+`NativeFreshLevelDocumentSession` now owns the applied whole aggregate, selection
+by stable editor ID and100-entry undo/redo history over the actual Store snapshot.
+Only explicit Add generates an ID. Route changes preserve every unrelated row
+and the complete floor intent; canonical no-ops preserve identity and redo.
+Neutral multi-placement drafts and non-grid heights are not silently snapped,
+converted to a preset or reduced to the first placement.
+
+Save installs only the Store's actual successful returned Snapshot while retaining
+the applied CurrentIntent. Its independently parsed Snapshot.Intent can have
+equal canonical bytes without being the same object; later native export must
+compile the actual captured Snapshot.Intent. Reopen installs nothing on failure.
+Fork requires a pristine absent session and propagates actual typed uncertainty
+without adopting observed destination bytes or cleaning retained evidence.
+
+Missing-class RED preceded implementation. Final actual-file tests pass138 checks
+from an empty cwd; unchanged old headless UI65 and researchUI333 also pass. Tests
+cover128 stable ordered IDs, exact Z8909 preservation, selection/history, raw CAS,
+malformed manifest/document, cancellation and genuine foreign-lock Fork failure.
+Root and an independent peer fully reviewed production and tests. This is not yet
+window integration or a new app package.
+
+The dedicated `UiSmoke --fresh-native-level-session-only` dispatch runs before
+workspace discovery and without Avalonia startup, source I/O or export. It is now
+a mandatory additional default regression, preserving the old UI mode. Two real
+runner RED failures preceded registration; all62 runner tests pass afterward,
+including unique result names and refusal to substitute the old UI success marker.
+Detailed frozen evidence: `aggregate-session-r01.oGDkMe/` under the private
+`dark-wizard-native-closure-20260906` research parent.
