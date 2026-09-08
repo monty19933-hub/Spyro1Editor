@@ -65,8 +65,9 @@ In R03, open **Fresh Level…** to test:
 2. Try Undo/Redo, then Save document and Reopen saved. Save validates and applies
    the complete form before writing; invalid text is retained without replacing
    the valid preview.
-3. Close/reopen the window to check persistence. The existing saved floor is
-   2048×2048 with heading96 and Stone Hill Track02.
+3. Close/reopen the window to check persistence. The current R03 saved file is
+   2048×2048 with heading96 and Track18. Its original retained seed used Track02;
+   the current edited file is preserved, not reset to that seed.
 4. Check validation: on that existing floor, spawnX8192 lies on its boundary and
    should be refused by Apply without replacing the valid document.
 5. Browse Objects → Browse Native Library… for searchable native inventory.
