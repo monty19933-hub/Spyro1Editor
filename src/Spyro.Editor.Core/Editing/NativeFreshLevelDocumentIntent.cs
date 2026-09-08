@@ -4,21 +4,39 @@ namespace Spyro.Editor.Core.Editing;
 
 /// <summary>
 /// Neutral authoring aggregate: one unchanged immutable floor intent and an
-/// ordered closed placement list. Counts and editor IDs are document ownership,
+/// ordered closed placement list, with an explicit schema2 floor-material pair.
+/// Counts and editor IDs are document ownership,
 /// never native capacity, save bits, source authority or publication approval.
 /// </summary>
 public sealed class NativeFreshLevelDocumentIntent
 {
     public const int MaximumPlacements = 128;
     private NativeFreshLevelDocumentIntent(NativeId65FreshDocumentIntent @base,
-        IReadOnlyList<NativeFreshPlacementIntent> placements)
-    { Base = @base; Placements = placements; }
+        IReadOnlyList<NativeFreshPlacementIntent> placements, NativeFreshFloorMaterialsIntent? materials)
+    { Base = @base; Placements = placements; FloorMaterials = materials; }
 
     public NativeId65FreshDocumentIntent Base { get; }
     public IReadOnlyList<NativeFreshPlacementIntent> Placements { get; }
+    public int SchemaVersion => FloorMaterials == null ? 1 : 2;
+    public NativeFreshFloorMaterialsIntent? FloorMaterials { get; }
 
+    /// <summary>Original schema1 factory; never infers or upgrades material intent.</summary>
     public static NativeFreshLevelDocumentIntent Create(NativeId65FreshDocumentIntent @base,
-        IEnumerable<NativeFreshPlacementIntent> placements)
+        IEnumerable<NativeFreshPlacementIntent> placements) => CreateContent(@base, placements, null);
+
+    /// <summary>Validate/copy all content while retaining this document's version and material choices.</summary>
+    public NativeFreshLevelDocumentIntent WithContent(NativeId65FreshDocumentIntent @base,
+        IEnumerable<NativeFreshPlacementIntent> placements) => CreateContent(@base, placements, FloorMaterials);
+
+    /// <summary>Explicit schema2 edit. Clearing both slots to base color does not downgrade.</summary>
+    public NativeFreshLevelDocumentIntent WithFloorMaterials(NativeFreshFloorMaterialsIntent materials)
+    {
+        ArgumentNullException.ThrowIfNull(materials);
+        return new(Base, Placements, materials);
+    }
+
+    private static NativeFreshLevelDocumentIntent CreateContent(NativeId65FreshDocumentIntent @base,
+        IEnumerable<NativeFreshPlacementIntent> placements, NativeFreshFloorMaterialsIntent? materials)
     {
         ArgumentNullException.ThrowIfNull(@base); ArgumentNullException.ThrowIfNull(placements);
         var copy = new List<NativeFreshPlacementIntent>();
@@ -40,7 +58,7 @@ public sealed class NativeFreshLevelDocumentIntent
                 throw new InvalidDataException("Both authored route endpoints must be strictly inside the base rectangle; no body or corridor clearance is implied.");
             copy.Add(wizard);
         }
-        return new(@base, copy.AsReadOnly());
+        return new(@base, copy.AsReadOnly(), materials);
     }
 }
 

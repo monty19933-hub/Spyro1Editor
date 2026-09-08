@@ -18,6 +18,26 @@ internal sealed class NativeFreshDocumentPreview : Control
     }
     internal NativeFreshLevelDocumentIntent? AggregateIntent { get; private set; }
     internal string? SelectedEditorId { get; private set; }
+    internal string MaterialPreviewNotice => AggregateIntent?.SchemaVersion == 2
+        ? "Selected materials are not rendered in this schematic." : "";
+    internal double SchematicCaptionTop => Bounds.Height - (MaterialPreviewNotice.Length == 0 ? 34 : 56);
+    internal Rect? FloorSchematicBounds
+    {
+        get
+        {
+            if (Intent is not { } intent) return null;
+            var projection = CreateProjection(intent);
+            Point[] corners =
+            [
+                projection.Project(intent.FloorX, intent.FloorY, intent.FloorZ),
+                projection.Project(intent.FloorX + intent.FloorWidth, intent.FloorY, intent.FloorZ),
+                projection.Project(intent.FloorX, intent.FloorY + intent.FloorDepth, intent.FloorZ),
+                projection.Project(intent.FloorX + intent.FloorWidth, intent.FloorY + intent.FloorDepth, intent.FloorZ)
+            ];
+            double x = corners.Min(p => p.X), y = corners.Min(p => p.Y);
+            return new Rect(x, y, corners.Max(p => p.X) - x, corners.Max(p => p.Y) - y);
+        }
+    }
 
     internal void SetAggregate(NativeFreshLevelDocumentIntent? aggregate, string? selectedEditorId)
     {
@@ -46,15 +66,8 @@ internal sealed class NativeFreshDocumentPreview : Control
         // Same A,B,C / B,D,C topology as the bounded native surface producer.
         // Positions here are a neutral projection of intent, not a source-issued payload.
         double w = intent.FloorWidth, d = intent.FloorDepth;
-        double scale = Math.Max(0.01, Math.Min((bounds.Width - 80) / ((w + d) * 0.866),
-            (bounds.Height - 150) / ((w + d) * 0.5 + NativeId65FreshDocumentIntent.SpawnHeightAboveFloor * 0.75)));
-        Point Project(double x, double y, double z)
-        {
-            double dx = x - intent.FloorX - w / 2;
-            double dy = y - intent.FloorY - d / 2;
-            return new Point(bounds.Width / 2 + (dx - dy) * 0.866 * scale,
-                bounds.Height / 2 + 80 + (dx + dy) * 0.5 * scale - (z - intent.FloorZ) * 0.75 * scale);
-        }
+        var projection = CreateProjection(intent);
+        Point Project(double x, double y, double z) => projection.Project(x, y, z);
         Point a = Project(intent.FloorX, intent.FloorY, intent.FloorZ);
         Point b = Project(intent.FloorX + w, intent.FloorY, intent.FloorZ);
         Point c = Project(intent.FloorX, intent.FloorY + d, intent.FloorZ);
@@ -99,10 +112,39 @@ internal sealed class NativeFreshDocumentPreview : Control
         Text(context, $"{intent.FloorWidth} × {intent.FloorDepth}  ·  floor Z {intent.FloorZ}", new Point(16, 12), Brushes.White, 17);
         Text(context, $"Origin {intent.FloorX}, {intent.FloorY}  ·  spawn {intent.SpawnX}, {intent.SpawnY}, {intent.SpawnZ}",
             new Point(16, 40), Brushes.White, 12);
-        context.FillRectangle(new SolidColorBrush(Color.FromArgb(210, 18, 30, 45)), new Rect(0, bounds.Height - 34, bounds.Width, 34));
+        bool hasMaterialNotice = MaterialPreviewNotice.Length != 0;
+        double captionHeight = hasMaterialNotice ? 56 : 34;
+        context.FillRectangle(new SolidColorBrush(Color.FromArgb(210, 18, 30, 45)),
+            new Rect(0, SchematicCaptionTop, bounds.Width, captionHeight));
         string placementCaption = AggregateIntent == null ? "0 placed Mobys" : $"{AggregateIntent.Placements.Count} authored routes (XY only)";
         Text(context, $"Heading {intent.Heading}/255 (schematic)  ·  music track {intent.MusicTrackId:00}  ·  {placementCaption}",
-            new Point(16, bounds.Height - 26), Brushes.White, 12);
+            new Point(16, bounds.Height - captionHeight + 8), Brushes.White, 12);
+        if (hasMaterialNotice)
+            Text(context, MaterialPreviewNotice, new Point(16, bounds.Height - 26), Brushes.White, 12);
+    }
+
+    private SchematicProjection CreateProjection(NativeId65FreshDocumentIntent intent)
+    {
+        bool materialNotice = MaterialPreviewNotice.Length != 0;
+        double w = intent.FloorWidth, d = intent.FloorDepth;
+        // Reserve the extra schema2 caption space without changing schema1 pixels.
+        double padding = materialNotice ? 172 : 150;
+        double centerOffset = materialNotice ? 40 : 80;
+        double scale = Math.Max(0.01, Math.Min((Bounds.Width - 80) / ((w + d) * 0.866),
+            (Bounds.Height - padding) / ((w + d) * 0.5 + NativeId65FreshDocumentIntent.SpawnHeightAboveFloor * 0.75)));
+        return new(intent, scale, Bounds.Width / 2, Bounds.Height / 2 + centerOffset);
+    }
+
+    private readonly record struct SchematicProjection(NativeId65FreshDocumentIntent Intent, double Scale,
+        double CenterX, double CenterY)
+    {
+        internal Point Project(double x, double y, double z)
+        {
+            double dx = x - Intent.FloorX - Intent.FloorWidth / 2.0;
+            double dy = y - Intent.FloorY - Intent.FloorDepth / 2.0;
+            return new Point(CenterX + (dx - dy) * 0.866 * Scale,
+                CenterY + (dx + dy) * 0.5 * Scale - (z - Intent.FloorZ) * 0.75 * Scale);
+        }
     }
 
     private static void Polygon(DrawingContext context, Point[] points, IBrush fill, Pen? pen)

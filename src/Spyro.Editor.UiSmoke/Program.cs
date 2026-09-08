@@ -29,6 +29,7 @@ if (args.Contains("--fresh-native-level-ui-only", StringComparer.Ordinal))
     if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --fresh-native-level-ui-only");
     HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
     string aggregateArtifacts = Directory.CreateTempSubdirectory("spyro-fresh-level-ui-artifacts-").FullName;
+    NativeFreshLevelMaterialUiCases.Run(aggregateArtifacts);
     NativeFreshLevelDocumentUiCases.Run(aggregateArtifacts);
     Console.WriteLine($"FRESH_NATIVE_LEVEL_UI_ARTIFACTS path={aggregateArtifacts}");
     return 0;

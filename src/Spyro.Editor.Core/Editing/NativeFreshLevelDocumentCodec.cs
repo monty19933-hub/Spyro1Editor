@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace Spyro.Editor.Core.Editing;
 
 /// <summary>
-/// Strict neutral whole-level schema1. No filesystem, migration, native payload,
+/// Strict neutral whole-level schema1/schema2. No filesystem, implicit migration, native payload,
 /// compiler or publisher API. The embedded floor uses the unchanged v1 codec;
 /// its legacy format and its independent16KiB parser bound remain intact.
 /// </summary>
@@ -25,9 +25,18 @@ public static class NativeFreshLevelDocumentCodec
             _ = StrictUtf8.GetCharCount(utf8);
             using var json = JsonDocument.Parse(utf8.ToArray(), new JsonDocumentOptions
             { AllowTrailingCommas = false, CommentHandling = JsonCommentHandling.Disallow, MaxDepth = 10 });
-            var root = Object(json.RootElement, "kind", "schema", "base", "placements");
-            if (String(root["kind"]) != Kind || Integer(root["schema"]) != 1)
-                throw new InvalidDataException("Not the supported distinct fresh-level kind/schema1.");
+            JsonElement rootElement = json.RootElement;
+            if (rootElement.ValueKind != JsonValueKind.Object || !rootElement.TryGetProperty("schema", out var schema))
+                throw new InvalidDataException("Fresh level requires an explicit schema.");
+            int version = Integer(schema);
+            var root = version switch
+            {
+                1 => Object(rootElement, "kind", "schema", "base", "placements"),
+                2 => Object(rootElement, "kind", "schema", "base", "placements", "floorMaterials"),
+                _ => throw new InvalidDataException("Not a supported distinct fresh-level schema.")
+            };
+            if (String(root["kind"]) != Kind)
+                throw new InvalidDataException("Not the supported distinct fresh-level kind.");
             JsonElement rows = root["placements"];
             if (rows.ValueKind != JsonValueKind.Array || rows.GetArrayLength() > NativeFreshLevelDocumentIntent.MaximumPlacements)
                 throw new InvalidDataException("Fresh level placements require an array with at most128 authoring rows.");
@@ -43,7 +52,8 @@ public static class NativeFreshLevelDocumentCodec
                 placements.Add(NativeFreshWizardRouteIntent.Create(String(placement["id"]),
                     Integer(origin["x"]), Integer(origin["y"]), Integer(origin["z"]), Integer(end["x"]), Integer(end["y"])));
             }
-            return NativeFreshLevelDocumentIntent.Create(@base, placements);
+            var intent = NativeFreshLevelDocumentIntent.Create(@base, placements);
+            return version == 1 ? intent : intent.WithFloorMaterials(ParseMaterials(root["floorMaterials"]));
         }
         catch (DecoderFallbackException error)
         { throw new InvalidDataException("Fresh level contains invalid UTF8.", error); }
@@ -57,7 +67,7 @@ public static class NativeFreshLevelDocumentCodec
         using var memory = new MemoryStream();
         using (var json = new Utf8JsonWriter(memory))
         {
-            json.WriteStartObject(); json.WriteString("kind", Kind); json.WriteNumber("schema", 1);
+            json.WriteStartObject(); json.WriteString("kind", Kind); json.WriteNumber("schema", intent.SchemaVersion);
             json.WritePropertyName("base");
             json.WriteRawValue(NativeId65FreshDocumentCodec.SerializeCanonical(intent.Base));
             json.WriteStartArray("placements");
@@ -72,11 +82,66 @@ public static class NativeFreshLevelDocumentCodec
                 json.WriteNumber("x", wizard.EndX); json.WriteNumber("y", wizard.EndY);
                 json.WriteEndObject(); json.WriteEndObject();
             }
-            json.WriteEndArray(); json.WriteEndObject();
+            json.WriteEndArray();
+            if (intent.FloorMaterials is { } materials)
+            {
+                json.WriteStartObject("floorMaterials");
+                json.WriteString("layout", "rectangle-two-triangles-v1");
+                json.WritePropertyName("triangle0"); WriteMaterial(json, materials.Triangle0);
+                json.WritePropertyName("triangle1"); WriteMaterial(json, materials.Triangle1);
+                json.WriteEndObject();
+            }
+            json.WriteEndObject();
         }
         if (memory.Length > MaximumByteLength)
             throw new InvalidDataException("Canonical fresh level exceeds the independent authoring byte budget.");
         return memory.ToArray();
+    }
+
+    private static NativeFreshFloorMaterialsIntent ParseMaterials(JsonElement value)
+    {
+        var fields = Object(value, "layout", "triangle0", "triangle1");
+        if (String(fields["layout"]) != "rectangle-two-triangles-v1")
+            throw new InvalidDataException("Unsupported floor-material topology.");
+        return NativeFreshFloorMaterialsIntent.Create(ParseMaterial(fields["triangle0"]), ParseMaterial(fields["triangle1"]));
+    }
+
+    private static NativeFreshFloorMaterialIntent ParseMaterial(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty("tag", out var tag))
+            throw new InvalidDataException("Floor material requires an explicit closed tag.");
+        switch (String(tag))
+        {
+            case "base-floor-color":
+                _ = Object(value, "tag");
+                return NativeFreshFloorMaterialIntent.BaseFloorColor();
+            case "retail-terrain-record":
+                var fields = Object(value, "tag", "sourceVariant", "sourceWadEntry", "textureId");
+                return NativeFreshFloorMaterialIntent.RetailTerrain(String(fields["sourceVariant"]),
+                    Integer(fields["sourceWadEntry"]), Integer(fields["textureId"]));
+            default:
+                throw new InvalidDataException("Unsupported floor-material tag; no payload is discarded.");
+        }
+    }
+
+    private static void WriteMaterial(Utf8JsonWriter json, NativeFreshFloorMaterialIntent material)
+    {
+        json.WriteStartObject();
+        switch (material)
+        {
+            case NativeFreshBaseFloorColorMaterialIntent:
+                json.WriteString("tag", "base-floor-color");
+                break;
+            case NativeFreshRetailTerrainMaterialIntent terrain:
+                json.WriteString("tag", "retail-terrain-record");
+                json.WriteString("sourceVariant", terrain.SourceVariant);
+                json.WriteNumber("sourceWadEntry", terrain.SourceWadEntry);
+                json.WriteNumber("textureId", terrain.TextureId);
+                break;
+            default:
+                throw new InvalidDataException("Unsupported floor-material variant.");
+        }
+        json.WriteEndObject();
     }
 
     private static Dictionary<string, JsonElement> Object(JsonElement value, params string[] fields)

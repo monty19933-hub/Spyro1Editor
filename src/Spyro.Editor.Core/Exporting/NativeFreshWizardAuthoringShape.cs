@@ -65,6 +65,8 @@ internal static class NativeFreshWizardAuthoringShape
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(compilation);
+        if (document.SchemaVersion != 1 || document.FloorMaterials != null)
+            throw new InvalidDataException("This research scene currently requires schema 1 without floor material intent.");
         if (!ReferenceEquals(document.Base, compilation.Intent) || document.Placements.Count != 1 ||
             document.Placements[0] is not NativeFreshWizardRouteIntent wizard)
             throw new InvalidDataException("This research scene requires the actual compiled Base and exactly one authored Wizard route.");

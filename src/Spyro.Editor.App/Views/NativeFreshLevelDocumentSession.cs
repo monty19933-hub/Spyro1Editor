@@ -55,7 +55,7 @@ internal sealed class NativeFreshLevelDocumentSession
         var added = NativeFreshWizardRouteIntent.Create(Guid.NewGuid().ToString("N"),
             originX, originY, originZ, endX, endY);
         // Validate count and whole-floor containment before changing session state.
-        var next = NativeFreshLevelDocumentIntent.Create(current.Base, current.Placements.Append(added));
+        var next = current.WithContent(current.Base, current.Placements.Append(added));
         Apply(next);
         SelectedEditorId = added.EditorId;
         return added;
@@ -66,7 +66,7 @@ internal sealed class NativeFreshLevelDocumentSession
         NativeFreshLevelDocumentIntent current = RequireDocument();
         RequirePlacement(current, editorId);
         var replacement = NativeFreshWizardRouteIntent.Create(editorId, originX, originY, originZ, endX, endY);
-        var next = NativeFreshLevelDocumentIntent.Create(current.Base,
+        var next = current.WithContent(current.Base,
             current.Placements.Select(placement => placement.EditorId == editorId ? replacement : placement));
         Apply(next);
     }
@@ -75,7 +75,7 @@ internal sealed class NativeFreshLevelDocumentSession
     {
         NativeFreshLevelDocumentIntent current = RequireDocument();
         RequirePlacement(current, editorId);
-        var next = NativeFreshLevelDocumentIntent.Create(current.Base,
+        var next = current.WithContent(current.Base,
             current.Placements.Where(placement => placement.EditorId != editorId));
         Apply(next);
     }

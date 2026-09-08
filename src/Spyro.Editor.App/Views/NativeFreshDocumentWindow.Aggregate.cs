@@ -18,6 +18,16 @@ internal sealed partial class NativeFreshDocumentWindow
         SelectedItem = LegacyModeLabel, MinWidth = 200
     };
     private readonly TextBlock _activeFile = new() { Name = "FreshDocumentActiveFile", TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _schemaVersion = new() { Name = "FreshLevelSchemaVersion", IsVisible = false };
+    private readonly TextBlock _materialSummary = new()
+    {
+        Name = "FreshLevelMaterialSummary", TextWrapping = TextWrapping.Wrap, FontSize = 12, IsVisible = false
+    };
+    private readonly TextBlock _materialPreviewNotice = new()
+    {
+        Name = "FreshLevelMaterialPreviewNotice", TextWrapping = TextWrapping.Wrap, FontSize = 12,
+        FontWeight = FontWeight.SemiBold, IsVisible = false
+    };
     private readonly StackPanel _aggregateFields = new() { Spacing = 8, IsVisible = false };
     private readonly ListBox _placements = new() { Name = "FreshLevelPlacements", Height = 145 };
     private readonly TextBlock _placementSummary = new() { Name = "FreshLevelPlacementSummary", TextWrapping = TextWrapping.Wrap };
@@ -54,7 +64,7 @@ internal sealed partial class NativeFreshDocumentWindow
             Children =
             {
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { _documentMode, _forkLegacy } },
-                _activeFile
+                _activeFile, _schemaVersion, _materialSummary, _materialPreviewNotice
             }
         };
     }
@@ -239,7 +249,7 @@ internal sealed partial class NativeFreshDocumentWindow
                 }
                 // Validate the selected Base/route pair and every untouched route
                 // together before the Session sees any mutation.
-                _aggregateSession.Apply(NativeFreshLevelDocumentIntent.Create(floor, rows));
+                _aggregateSession.Apply(CurrentAggregateIntent.WithContent(floor, rows));
             }
             WriteFields();
             _status.Text = "Applied the entire aggregate to the authored schematic. Save writes the exact applied values; aggregate export remains unavailable.";
@@ -349,7 +359,7 @@ internal sealed partial class NativeFreshDocumentWindow
         int target = index + direction;
         if (target < 0 || target >= rows.Length) return;
         (rows[index], rows[target]) = (rows[target], rows[index]);
-        _aggregateSession.Apply(NativeFreshLevelDocumentIntent.Create(CurrentAggregateIntent.Base, rows));
+        _aggregateSession.Apply(CurrentAggregateIntent.WithContent(CurrentAggregateIntent.Base, rows));
         WriteFields();
         _status.Text = "Changed authored order without changing editor IDs. Save to persist.";
     }
@@ -397,6 +407,14 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private void RefreshAggregateChrome(bool editable)
     {
+        var current = CurrentAggregateIntent;
+        _schemaVersion.IsVisible = _materialSummary.IsVisible = current != null;
+        _schemaVersion.Text = current == null ? "" : $"Aggregate schema {current.SchemaVersion}";
+        _materialSummary.Text = current?.FloorMaterials is { } materials
+            ? $"Triangle 0: {MaterialSummary(materials.Triangle0)}\nTriangle 1: {MaterialSummary(materials.Triangle1)}"
+            : "Materials: implicit base floor color (schema 1).";
+        _materialPreviewNotice.Text = Preview.MaterialPreviewNotice;
+        _materialPreviewNotice.IsVisible = current?.SchemaVersion == 2;
         _capability.Text = _aggregateMode
             ? "Whole-level authoring document — floor, spawn and ordered placements. Normal Create BIN is unavailable. Aggregate research export is unavailable until the actual saved revision has a final publication guard. The schematic does not certify gameplay."
             : LegacyCapabilityText;
@@ -422,6 +440,14 @@ internal sealed partial class NativeFreshDocumentWindow
         _moveWizardDown.IsEnabled = _removeWizard.IsEnabled && index >= 0 && index + 1 < CurrentAggregateIntent!.Placements.Count;
         _placementSummary.Text = $"{CurrentAggregateIntent?.Placements.Count ?? 0} authored placements · maximum {NativeFreshLevelDocumentIntent.MaximumPlacements}. Aggregate export unavailable.";
     }
+
+    private static string MaterialSummary(NativeFreshFloorMaterialIntent material) => material switch
+    {
+        NativeFreshRetailTerrainMaterialIntent terrain =>
+            $"retail terrain record · {terrain.SourceVariant} · WAD {terrain.SourceWadEntry} · texture {terrain.TextureId}",
+        { Tag: "base-floor-color" } => "base floor color",
+        _ => throw new InvalidDataException("Unsupported floor material intent.")
+    };
 
     private int RouteNumber(string name) => int.TryParse(_routeFields[name].Text,
         System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int value)

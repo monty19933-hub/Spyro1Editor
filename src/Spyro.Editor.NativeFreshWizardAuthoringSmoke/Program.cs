@@ -16,6 +16,7 @@ await Refuse<ArgumentNullException>(() => NativeId65FreshWizardResearchResourceP
 await Refuse<ArgumentNullException>(() => NativeId65FreshWizardResearchScenePlan.CaptureAuthoredAsync("must-not-open", null!, null!, null!, null!));
 await SeparatedCandidateCases.Free(Check);
 await SeparatedPublicationArgumentCases.Run(Check);
+SavedWizardBindingCases.Free(Check);
 Console.WriteLine($"FRESH_WIZARD_AUTHORING_FREE_OK checks={checks}");
 if (args.Length == 0) return;
 string bin = Path.GetFullPath(args[1]), cue = Path.GetFullPath(args[2]);
@@ -46,6 +47,7 @@ try
     await Refuse<InvalidDataException>(() => NativeId65FreshWizardResearchResourcePlan.CaptureAsync("must-not-open", cb, family));
     var route = NativeFreshWizardRouteIntent.Create("11111111111111111111111111111111", 9984, 9984, 8704, 9472, 9984);
     var document = NativeFreshLevelDocumentIntent.Create(b, [route]);
+    await MaterialSchemaAuthoringCases.Source(document, cb, family, newResource, Check);
     var scene = await NativeId65FreshWizardResearchScenePlan.CaptureAuthoredAsync(bin, document, cb, family, newResource);
     Check(scene.Placement == new NativeWizardPlacementIntent(9984, 9984, 8704, 9472, 9984), "Native row and route retain exact authored coordinates.");
     Check(scene.CopyCanonicalDocument().SequenceEqual(cb.CopyCanonicalDocument()), "Native scene retains actual wider floor intent.");
@@ -73,6 +75,7 @@ try
     var exe = await NativeId65FreshWizardResearchExecutablePlan.CaptureAsync(bin, body);
     var disc = await NativeId65FreshWizardResearchDiscPlan.CaptureAsync(bin, exe);
     var candidate = await SeparatedCandidateCases.Source(bin,cue,disc,clearance,Check);
+    await SavedWizardBindingCases.Source(bin,cue,family,ca,oldResource,candidate,Check);
     Check(body.ModelRuntimeAddress == 0x8008C334 && body.SceneRuntimeAddress == 0x800A5334 &&
           body.KnownSceneEndAddress == 0x800A8334, "Authored surface does not silently relocate live resources.");
     Check(disc.CopyBody().AsSpan(0xE6000, 0x8FC).SequenceEqual(newData) &&

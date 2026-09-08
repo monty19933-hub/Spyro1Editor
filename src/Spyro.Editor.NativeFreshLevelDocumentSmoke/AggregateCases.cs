@@ -21,7 +21,7 @@ internal static class AggregateCases
             typeof(NativeFreshPlacementIntent).GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
                 .All(c => !c.IsFamily && !c.IsFamilyOrAssembly), "union cannot be externally subclassed");
         Check(typeof(NativeFreshLevelDocumentIntent).GetProperties().Select(p => p.Name).Order()
-            .SequenceEqual(new[] { "Base", "Placements" }), "aggregate owns only neutral base and ordered placements");
+            .SequenceEqual(new[] { "Base", "FloorMaterials", "Placements", "SchemaVersion" }), "aggregate owns only versioned neutral content");
         Check(typeof(NativeFreshWizardRouteIntent).GetProperties().Select(p => p.Name).Order()
             .SequenceEqual(new[] { "EditorId", "EndX", "EndY", "OriginX", "OriginY", "OriginZ", "Tag" }),
             "variant contains no native/save/pool/payload/approval fields");
