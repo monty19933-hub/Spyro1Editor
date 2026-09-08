@@ -128,7 +128,14 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         var inspectorContent = new StackPanel { Spacing = 12, Children = { _fieldsPanel, BuildMaterialInspectionFields() } };
         var inspector = new ScrollViewer { Content = inspectorContent, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
         var body = new Grid { ColumnDefinitions = new ColumnDefinitions("*,380"), ColumnSpacing = 20 };
-        body.Children.Add(previewPanel);
+        // Long aggregate/status text can leave less than the schematic's
+        // minimum height. Scroll the whole left panel instead of allowing its
+        // minimum-sized preview to overlap the caption or footer.
+        body.Children.Add(new ScrollViewer
+        {
+            Content = previewPanel, VerticalContentAlignment = VerticalAlignment.Stretch,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
+        });
         Grid.SetColumn(inspector, 1);
         body.Children.Add(inspector);
         var footer = new StackPanel { Spacing = 4, Children = { _state, _status } };

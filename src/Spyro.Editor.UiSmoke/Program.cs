@@ -64,6 +64,7 @@ if (args.Contains("--fresh-native-level-ui-only", StringComparer.Ordinal))
     NativeFreshLevelMaterialUiCases.Run(aggregateArtifacts);
     NativeFreshLevelDocumentUiCases.Run(aggregateArtifacts);
     NativeFreshReadOnlySelectionCases.Run(aggregateArtifacts);
+    NativeFreshPreviewLayoutCases.Run(aggregateArtifacts);
     Console.WriteLine($"FRESH_NATIVE_LEVEL_UI_ARTIFACTS path={aggregateArtifacts}");
     return 0;
 }
