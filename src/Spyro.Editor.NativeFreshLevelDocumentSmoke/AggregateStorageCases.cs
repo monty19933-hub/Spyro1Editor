@@ -31,7 +31,7 @@ internal static class AggregateStorageCases
             Check(typeof(NativeFreshLevelDocumentSnapshot).GetProperties().Select(p => p.Name).Order().SequenceEqual(
                 new[] { "ContentSha256", "Exists", "Intent", "ManifestSha256", "Path", "ProjectId", "RetainedRecoveryDirectory", "RootPath" }), "exact observation surface without native flags");
             Check(typeof(NativeFreshLevelDocumentStore).GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
-                .Select(m => m.Name).Order().SequenceEqual(new[] { "Capture", "Save" }), "Capture/Save only: no fork or generic writer");
+                .Select(m => m.Name).Order().SequenceEqual(new[] { "Capture", "ForkLegacyFloor", "Save" }), "only typed Capture/Save/explicit Fork, no generic writer");
             using (var canceled = new CancellationTokenSource())
             {
                 canceled.Cancel();

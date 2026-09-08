@@ -21,9 +21,20 @@ missing, duplicate and escaped fields; UTF8/UTF16/type/overflow/depth; exact64Ki
 and unchanged nested16KiB limits. Storage coverage includes both fixed profiles,
 raw compare-and-save, no-op and foreign-owner preservation, actual128-placement
 reopen, cancellation and known-commit readback failure. It exercises the shared
-document transaction, not ROM publication. No migration, UI, source image,
-native compiler or runtime action is added by this test project.
+document transaction, not ROM publication. No automatic migration, UI, source
+image, native compiler or runtime action is added by this test project.
+
+The explicit `ForkLegacyFloor` operation now creates an absent aggregate from
+the actual saved legacy floor snapshot without overwriting that floor. Its
+248 additional checks cover both compare-and-save guards, raw snapshot changes,
+failed stage ownership, source/destination final readbacks, cancellation and
+independent cleanup failures. A transaction invocation that does not return is
+reported as publication-unconfirmed, never inferred to have aborted from the
+bytes on disk. The tests do not claim filesystem crash atomicity or reproduce
+an operating-system dispose failure after the last rename. Legacy save and
+publication-context gates are rerun separately.
 
 Run `dotnet run --project src/Spyro.Editor.NativeFreshLevelDocumentSmoke -c Release`.
 Expected marker: `NATIVE_FRESH_LEVEL_DOCUMENT_SMOKE_OK`.
 The separate storage marker is `NATIVE_FRESH_LEVEL_DOCUMENT_STORAGE_OK`.
+The explicit fork marker is `NATIVE_FRESH_LEVEL_DOCUMENT_FORK_OK`.
