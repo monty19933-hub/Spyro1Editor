@@ -1,11 +1,20 @@
 # Spyro editor — what is working now
 
-Updated September 7, 2026. Development is safely checkpointed for a usage pause;
-6% remained at closeout, preserving the requested5% reserve. No reset was redeemed.
+Updated September 8, 2026. Development has resumed from the preserved checkpoint.
+The requested pause at 5% remaining still applies. No reset was redeemed by the agent.
 This is a progress report, not a V6 release. Your preserved editor, original
 game and original memory card have not been replaced.
 
 ## The biggest new results
+
+**Current work, not yet packaged into the app:** explicit conversion of a saved
+floor into the new placed-object document now passes its save/recovery tests.
+The fresh-level texture backend can bind two individually selected static
+textures from the original game, with legacy output checks preserved. The
+larger blank-floor/Wizard composition matches an independent byte calculation;
+initial-spawn clearance also passes. Corrected candidate publication and its
+DuckStation playtest are the next gates. These are backend results, not new UI features or
+universal Moby/texture portability approval.
 
 **Two imported Wizards now work through a complete bounded gameplay sequence.**
 Each cast and produced its own native reward. Defeating the already-collected
@@ -31,8 +40,9 @@ See the [edited LAB report](native-fresh-edited-r01-runtime-observations.md).
 
 ## Is there a new app to open?
 
-Yes: the separate R03 test app is already running. I verified its actual main
-window and opened Fresh Level… without changing the saved document. Its earlier
+Yes: the separate R03 test app is preserved, but it is **not currently running**
+as of the September 8 process and app inventory checks. Its actual main window
+and Fresh Level… were verified in the earlier session without changing the saved document. Its earlier
 permission-wait note is now out of date; no protected permission prompt was
 operated by me. Build/signature/packaged PNG and pre-startup preservation checks
 passed; full edit/save/close/reopen remains a hands-on acceptance check.
@@ -61,7 +71,7 @@ An older installed app does not acquire new source changes automatically.
 
 ## What you can actively test in R03 now
 
-1. In the open Fresh Native Level Document, start with the existing saved
+1. Open the preserved R03 app and Fresh Level…; start with the existing saved
    2048×2048 floor, heading96 and Stone Hill Track02. New starter is disabled
    because that saved document already exists.
 2. Change heading to128 or a floor/sky color, then click Apply to preview.
@@ -97,7 +107,9 @@ It also exposed a playability problem: Spyro leaves the small floor almost
 immediately and falls after entry/respawn. Defeat/reward testing did not pass.
 The latest frame-step test strongly points to overlap between the saved spawn
 and the Wizard's collision shape, pushing Spyro into unwanted movement without
-damage. The clearance fix and corrected playtest are still pending. This research build is not in R03.
+damage. The new source-bound initial-clearance check now passes for a larger
+floor with a separated Wizard, but its corrected playtest is still pending.
+This research build is not in R03.
 See [first fresh-Wizard playtest](native-fresh-wizard-p1-r01-runtime-observations.md).
 See [early-entry diagnosis](native-fresh-wizard-p1-r03-entry-displacement.md)
 for the stronger current evidence and its limits.

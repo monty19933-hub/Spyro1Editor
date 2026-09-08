@@ -4,10 +4,25 @@ This page describes the current state, not an appended list of contradictory
 historical ACTIVE statuses. Earlier chronology remains in Git and
 `native-editor-checkpoint-20260906.md`; individual reports own exact evidence.
 
-Safe usage closeout September7:6% remaining when new work stopped, protecting
-John's5% reserve. No reset redeemed and no goal-completion claim. All .NET/Python
-checks and owned emulator/observer processes are closed; agents are freezing only
-their completed evidence/design. Confirm actual latest Git status before resuming.
+Resumed September8 from clean773f52f at John's request, preserving the same5%
+remaining reserve. Fresh usage was12% used (88% remaining), not12% remaining;
+no reset was redeemed. The fresh all-project baseline passed315/0 in
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-_14gux67/summary.json`.
+Fresh process inspection found no editor, DuckStation or observer running:
+historical PIDs below are not live-session authority. The preserved R03 app has
+not been rebuilt or relaunched. Three new backend checkpoints are committed:
+`ffcf176` explicit legacy-floor fork (248 new checks plus legacy gates),
+`ab582c2` authored same-layout Wizard composition and source-owned initial
+clearance (authored35, clearance126 plus23 shared source checks), and `5c8a11f`
+selected native two-slot materials (7,579 free plus132,825 source checks).
+Old P1 source/receipt/CUE goldens and the historical unsafe spawn witnesses are
+preserved. Full Python discovery passes185 tests with11 explicit-source skips.
+The all-project gate has not yet been rerun after these commits.
+
+Current next work is the separately named separated-Wizard candidate, preserved
+publication-unconfirmed outcomes, and a separately pinned read-only observer.
+No corrected BIN or corrected gameplay result exists yet. See
+`native-fresh-authored-wizard-initial-clearance.md` for the exact source boundary.
 
 ## Repository and authority
 
@@ -30,8 +45,9 @@ passed source/peer/file/OS review and Root activation. The actual fresh-Wizard
 run passed native initialization but failed playable-entry testing: Spyro moved
 outside the small floor and fell4→3 lives. The later R03 frame-step run strongly
 matches initial sphere overlap/non-damaging push-out, with displacement-derived
-motion captured on the first observed normal update. A corrected clearance
-contract and counterfactual gameplay test remain pending. Runtime is closed/restored.
+motion captured on the first observed normal update. The corrected source-bound
+initial-clearance contract now passes; counterfactual gameplay remains pending.
+Runtime is closed/restored.
 
 John authorized autonomous development, useful parallel agents, sensible
 commits and DuckStation gameplay with temporary settings. Continue until the
@@ -53,7 +69,8 @@ from spawn, both vectors exactly32 times that displacement, ending just outside
 combined radius756. This supports non-damaging push-out, not a direct in-helper
 trace or corrected gameplay pass. Read `native-fresh-wizard-p1-r03-entry-displacement.md`.
 Exact journal: `_local/native-fresh-wizard-p1-runtime-20260907-r03.mvWT2n/RUNTIME-SESSION.md`.
-No emulator/observer/capture/build is active. The unrelated R03 editor16530 remains open.
+At that closeout no emulator/observer/capture/build was active. The unrelated
+R03 editor16530 was open then; September8 process inspection confirms it exited.
 
 Earlier R02 is CLOSED/RESTORED: DuckStation42862/exec24718 exited0, observer01/
 exec18275 stopped exit2 on an unclassified HTTP cache after native Settings was
@@ -64,7 +81,8 @@ F6 frame stepping is now verified against native timer/position changes, but
 earliest entry was missed and cause remains open. Read
 `native-fresh-wizard-p1-r02-frame-step.md`; exact journal is
 `_local/native-fresh-wizard-p1-runtime-20260907-r02.luV04T/RUNTIME-SESSION.md`.
-No emulator/observer/capture is active. R03 remains open and unchanged.
+That emulator/observer/capture session is closed. R03 was open then and is now
+closed; its preserved bundle is unchanged.
 
 Earlier R01:
 DuckStation PID38592/exec93336 and observer03/exec13827 are CLOSED, both exit0.
@@ -75,7 +93,7 @@ and all nine protected hashes passed. Private card was never copied back.
 Exact evidence is recorded in
 `_local/native-fresh-wizard-p1-runtime-20260907-r01.aaM1NY/RUNTIME-SESSION.md`.
 Read `native-fresh-wizard-p1-r01-runtime-observations.md` before further runtime
-work. R03 remains open and unchanged. Every future run needs fresh backups and
+work. The R03 bundle remains unchanged, but is no longer running. Every future run needs fresh backups and
 actual process/file binding; never reconnect departed IDs.
 
 The later report-only health/motion extension is reviewed and replayed:

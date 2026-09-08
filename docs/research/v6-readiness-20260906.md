@@ -1,5 +1,32 @@
 # V6 readiness: broad editing versus universal native importing
 
+## September 8 continuation
+
+The assessment below is historical. Current state and user testing instructions
+are maintained in `spyro-progress-for-john-20260906.md`; exact continuation is
+in `native-editor-resume-20260906.md`. Since this original assessment, saved-floor
+UI/export and an edited-floor DuckStation walk were established, as was a bounded
+two-Wizard reward/re-entry sequence. None establishes universal importing.
+
+The latest backend checkpoints add explicit preserved legacy-to-aggregate
+conversion, source-bound initial spawn clearance, authored same-layout Wizard
+composition and two selected static texture sources. They are not yet in R03.
+The next work order is:
+
+1. Publish and play the corrected, separated Wizard on the larger fresh floor;
+   preserve uncertain publication outcomes and observe native behavior directly.
+2. Integrate the aggregate document/placed-route workflow into the editor with
+   saved-version export binding, undo/redo and actual edit/save/export/play tests.
+3. Carry selected static materials through a separately validated textured Disc
+   path, test near/far rendering in game, then expose persisted material controls.
+4. Expand imported dependency families and destination conditions through the
+   shared allocation/linking machinery; cover private state, emitted children,
+   sound, collision, rewards and re-entry instead of enabling untested rows.
+5. Package a separately identified preview once its actual user workflow works;
+   keep remaining incompatible families/material semantics visible to the user.
+
+## Original September 6 assessment
+
 Source assessment on September 6, 2026, starting from clean `f514085`.
 This is a development assessment, not a release announcement or a new runtime
 certificate. Independent Moby and texture reviews were reconciled with the
