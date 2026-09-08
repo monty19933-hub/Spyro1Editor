@@ -42,7 +42,7 @@ public sealed class NativeInitialSpawnClearanceFinding
 /// Required initial-pose assessment for future authored compilation admission.
 /// The current source-owned Wizard factory deliberately covers exactly one
 /// aggregate placement and its actual issued scene. It does not compile that
-/// aggregate, alter legacy P1, or certify the first query, route, floor footprint,
+/// aggregate, alter legacy P1, or by capture alone certify the first query, route, floor footprint,
 /// mutable collision roster, gameplay, capacity or publication.
 /// </summary>
 public sealed class NativeFreshInitialSpawnClearancePlan
@@ -95,6 +95,15 @@ public sealed class NativeFreshInitialSpawnClearancePlan
         RequireAncestry(document,scene,scene.CompilationAncestor,scene.FamilyAncestor,scene.ResourceAncestor);
         NativeInitialSpawnClearanceMath.RequireInitialSeparation(Finding);
     }
+    // Additional conservative admission, not a change to Capture or its identity.
+    // Derive from this actual captured pair; callers cannot supply a collider,
+    // center/radius, flags or a previously manufactured footprint finding.
+    internal NativeInitialFloorFootprintFinding RequireInitialFloorFootprint(
+        NativeFreshLevelDocumentIntent document,NativeId65FreshWizardResearchScenePlan scene)
+    {
+        RequireInitialSeparation(document,scene);
+        return NativeInitialSpawnClearanceMath.RequireInitialFloorFootprint(Finding,document.Base);
+    }
     public static async Task<NativeFreshInitialSpawnClearancePlan> CaptureWizardAsync(string originalBin,
         NativeFreshLevelDocumentIntent document,NativeId65FreshWizardResearchScenePlan scene,CancellationToken token=default)
     {
@@ -111,9 +120,60 @@ public sealed class NativeFreshInitialSpawnClearancePlan
     }
 }
 
+/// <summary>Wide signed XY distances to the four edges; negative means outside.</summary>
+internal readonly record struct NativeInitialFloorMargins
+{
+    internal NativeInitialFloorMargins(BigInteger left,BigInteger right,BigInteger top,BigInteger bottom)
+    {Left=left;Right=right;Top=top;Bottom=bottom;}
+    internal BigInteger Left{get;}
+    internal BigInteger Right{get;}
+    internal BigInteger Top{get;}
+    internal BigInteger Bottom{get;}
+    internal bool StrictlyContains(int radius)=>Left>radius&&Right>radius&&Top>radius&&Bottom>radius;
+}
+
+/// <summary>Immutable policy result only, never a separately issuable source certificate.</summary>
+internal sealed class NativeInitialFloorFootprintFinding
+{
+    internal NativeInitialFloorFootprintFinding(NativeInitialFloorMargins wizard,NativeInitialFloorMargins player)
+    {WizardMargins=wizard;PlayerMargins=player;}
+    internal string PolicyId=>"strict-initial-XY-disks-v1";
+    internal NativeInitialFloorMargins WizardMargins{get;}
+    internal NativeInitialFloorMargins PlayerMargins{get;}
+}
+
 /// <summary>Exact reusable scalar geometry only: caller values do not issue source/pose authority.</summary>
 internal static class NativeInitialSpawnClearanceMath
 {
+    internal static NativeInitialFloorMargins InitialFloorMargins(NativeId65FreshDocumentIntent floor,NativeSpawnClearancePoint point)
+    {
+        ArgumentNullException.ThrowIfNull(floor);
+        BigInteger left=floor.FloorX,top=floor.FloorY;
+        return new((BigInteger)point.X-left,left+floor.FloorWidth-point.X,
+            (BigInteger)point.Y-top,top+floor.FloorDepth-point.Y);
+    }
+    internal static NativeInitialFloorFootprintFinding RequireInitialFloorFootprint(
+        NativeInitialSpawnClearanceFinding finding,NativeId65FreshDocumentIntent floor)
+    {
+        ArgumentNullException.ThrowIfNull(finding);ArgumentNullException.ThrowIfNull(floor);
+        RequireInitialSeparation(finding);
+        if(finding.UnknownReason!=NativeInitialSpawnUnknownReason.None||finding.Centre is not {} centre||
+            finding.ColliderRadius is not {} radius||radius<0||finding.ResponsePermitted!=true||finding.IncomingDamageFlags is null)
+            throw new InvalidDataException("Known initial footprint requires an owned active sphere and supported positional response.");
+        if(finding.Spawn!=new NativeSpawnClearancePoint(floor.SpawnX,floor.SpawnY,floor.SpawnZ))
+            throw new InvalidDataException("Initial footprint finding belongs to a different actual floor spawn.");
+        // Source status is already computed from these exact values. Rechecking
+        // also prevents inconsistent neutral test values from granting admission.
+        if(Classify(centre,radius,finding.Spawn,finding.PlayerRadius)!=NativeInitialSpawnClearanceStatus.InitialSeparation)
+            throw new InvalidDataException("Initial footprint requires strictly separated active spheres.");
+        var wizard=InitialFloorMargins(floor,centre);var player=InitialFloorMargins(floor,finding.Spawn);
+        // Incoming damage flags are intentionally NOT a solidity switch. The
+        // source-owned radii remain active even when that word is exactly zero.
+        // Only XY disks are contained here, not a future route or full 3D sphere.
+        if(!wizard.StrictlyContains(radius)||!player.StrictlyContains(finding.PlayerRadius))
+            throw new InvalidDataException($"Initial floor footprint refused for editor placement {finding.EditorId}: both active XY disks require strict interior margins.");
+        return new(wizard,player);
+    }
     internal static void RequireInitialSeparation(NativeInitialSpawnClearanceFinding finding)
     {
         if(finding.Status!=NativeInitialSpawnClearanceStatus.InitialSeparation)

@@ -99,6 +99,7 @@ try
     Check(otherLayout.FreshResourceAncestor.CopyDataComponents().Length!=0x8C8,"A genuine valid fresh compilation has a different copy-layout size.");
     await Refuse<InvalidDataException>(()=>NativeId65FreshWizardResearchResourcePlan.CaptureAuthoredAsync("must-not-open",otherLayout,family));
     Check(!disc.RuntimeVerified && !disc.PublicationApproved && !disc.NormalCreateBinEnabled, "Detached composition is not runtime/publication authority.");
+    await IssuedMatrixCases.Source(bin,Check);
     Console.WriteLine($"FRESH_WIZARD_AUTHORING_SOURCE_OK checks={checks} body={Hash(disc.CopyBody())} scene={Hash(scene.CopyScene())} data={Hash(newData)} disc={disc.PlanSha256} outputWritten=false");
 }
 finally

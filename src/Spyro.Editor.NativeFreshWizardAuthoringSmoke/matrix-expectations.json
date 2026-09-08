@@ -1,0 +1,5164 @@
+{
+  "schema": 1,
+  "expectationSourceReportSha256": "9e65d9b8305c16081d865cfc285aeb80b782e1d1b58dbca2d98f65ce3a38851e",
+  "expectationSourceOracleSha256": "c094e48e9de88b5979370080e9f86a12c5543de14c01e19fbf34f0925086d8b1",
+  "sourceImageSha256": "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37",
+  "actualCSharpIssuerCompared": false,
+  "publicationOrRuntimeApproved": false,
+  "cases": [
+    {
+      "name": "historical-A-P1",
+      "recipe": {
+        "depth": 1024,
+        "end_x": 9216,
+        "end_y": 8960,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 8704,
+        "origin_y": 8960,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 1024
+      },
+      "assessment": {
+        "admitted": false,
+        "centre": [
+          8548,
+          8950,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 243828,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          512,
+          512,
+          512
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "overlap",
+        "wizardMargins": [
+          100,
+          924,
+          502,
+          522
+        ]
+      },
+      "surfaceSha256": "ee82c4d3bb2589eb821028337499d062762c47d3f6af2267f6b0fabee8df58b9",
+      "dataSha256": "bea93c58d6d568c7c6162816ddad1afff32a51886f9412a0809b22887e0b83d4",
+      "sceneSha256": "b7bd222702ff9b5d6ea40c623159f4aa22b3425ef9368059167d1ccab930266b",
+      "bodySha256": "33e54ff9e15608ada3f6d430c54fbabc21a8263e059c050b391db22cc541bc00",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "c4a70f826b1a9a3d4ad8e36512be354b6205d27ea2c7a314776a51067f35b5a6",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": []
+    },
+    {
+      "name": "separated-B",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "e57fedebb59ffc9020de00562baccbc5a6e09bffd5f24f665d34d5f03163cbdb",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "single-floor_x",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8432,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          528,
+          1520,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1396,
+          652,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "880ed2905201b5560bc7be32b2af579f04a177f43192fbebfc4f16b63e896921",
+      "dataSha256": "7071e9ec0dded4b745f01718e172af57cd57915b7e935c3408e85be3a7acdefc",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "4d6deb6fa2ebe06c083ff7d8e5c7ac7e7b70dc9c393a9ac34d440821f1b9e7fa",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "e1c17c7504fcce9795afbdd42a34fb3988a2de62004f58f2cc6087934f2600f5",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "single-floor_y",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8432,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          528,
+          1520
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1542,
+          506
+        ]
+      },
+      "surfaceSha256": "49c298d1b06ec2e573aba48ae0fc2105a1a1a1d5f7061b27244690278dfcbe31",
+      "dataSha256": "cdbe96b01808d9eb4c18ab2fd62717fa9ee8c53d73ab69a457b393502d3b0d24",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "2dfa42fbdd443c3310566a16ee3638ba5c0d5583acb1b3909fdd28fd182a3f56",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "cdf4d699e3f8cd0c9c8b33e11eaf52f320aa32d1548e189b7a3e2a075d60791d",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "single-floor_z",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8688,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1847156,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9200
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "bd2ecc853bbac91d9206e922797e2fec0697a6f8e34bc244db1bd6e4ca887779",
+      "dataSha256": "8b897d43d86346216f62be5ed9e7f750cf33c1450aed2e0b52ca4979ee9c299b",
+      "sceneSha256": "60199bc10c75e52831526f8bb66f7d61b772343ed0ad37bdd8300ea42a206290",
+      "bodySha256": "25551e6ae35db5223826fd9baccfc0076b781d2937e472afd8d5295df3a68871",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "14037cce8efdcee0112a2ed19a355fdfd7ef342db96791da331a8232d19ddde0",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "single-width",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2032
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1520,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          652,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "4360b06b548ab57815a1eb5ea775ebbbc0e2f36041215aaf3e05179fdb4e43fe",
+      "dataSha256": "b7a9e7ddd11361c7997a20ea3101123fb65c27cb23fbda1cdd100fb5da0114c5",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "c9afc917e2019e8748fb430cfe98ec2523aecd48e66874e53e124aa2203db1e2",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "4c10f1343b8194e1079408f44045229dd32032cc854014386be662eb71fae224",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "single-depth",
+      "recipe": {
+        "depth": 2032,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1520
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          506
+        ]
+      },
+      "surfaceSha256": "b37c914c9dff1a925dfdbc7a7ccce4ee6f654c0e2d44b61f67b8d2f3ba5a69a0",
+      "dataSha256": "991a4eeb3451049460ac4ef1e792e8f5e2f1e9abeeecadc4d699f9db112560e3",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "2cbfabfc0b3f22ac0f5f9101baebb099dd571430ae61c717812dc81d3c96b691",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "a0ab8b0451b981fbad4ea1f8f03d4ad0399becec98c406a1a72c83370753e06d",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "single-spawn_x",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8961,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1853869,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          513,
+          1535,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8961,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "703f60d5bb995cc9dff70a4bc2ae5e256596d5ef74dd1e94a56c882a0c739d74",
+      "bodySha256": "5621afb8e9ebffded24f931a696aa9eb30c7ac191a458bf3a4b127264af98996",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "1f464fd768e7634e2ad3e89b661d9bfd2487fa6a01cafb3be93f53b3d4a4b1ce",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "single-spawn_y",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8963,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1849529,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          515,
+          1533
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8963,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "f28f6c45344e61ee3b795a1dfde9b4b5cf6395ee22114e8bb294726732909507",
+      "bodySha256": "cc0c757e7284019862091cc9cb79b11eb46f2018cfea8a972978da3e802e94f9",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "ce41d4184ce7651af733ee766312d58dfb9523b0b6abb400fa220d02f6d97b43",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "single-heading",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 255,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "5cd8b9ce05da75f6a4e80378df1fac2c2b6f9c43403b278b296d808d672122fb",
+      "bodySha256": "f01a6c3a9c066601f387ae1523591e1148d675649533ae2a3da32da11f9e808d",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "d4a79b4cb3459655471227c73a4c707945dd533a7574ecac48226f4eee146a02",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "single-floor_rgb",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 1193046,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "1945377c63666c5dfb8f3b6f8abb57c079590bae3fd88912cf656cb6f5ad1d98",
+      "dataSha256": "14f5b847af34fbced66b453453ea67b5e9cf8b485a21d68955e1728a8ad85fa0",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "ecdc4a778f103fb63be5a1eccb1647cab66d2c43a68ab5be52626b5deecd0c67",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "ee6e7bcd700807e54112a618312a25496f518d2f870237c3dd3feac0e1cdda2e",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "single-sky_rgb",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 11259375,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "cbaaa9e261b5bf4be05bf8f924f0330219d801406c346908235d33cfdcbe69b3",
+      "dataSha256": "3bc328f33352b184cd49ae3fba21f9eaaed661b6f91c6c6ae43e67e7a4b420f8",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "d1874de89ebd0f40fb0331ed046ae46886df85f57781953eaca221c50e030deb",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "43dd87333b81e27a43ef1abb0f3b48a0da2c991a80dd840bf0fd9c52c03725a4",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "single-origin_x",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9968,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9812,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1828084,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1364,
+          684,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "ec4cb76ab33c9929aa7eb4b053d761740469198aa384c07ec12d62c9b1d7392d",
+      "bodySha256": "dcdf0293b778395624c4f950decda247e1c828fa624f34c8315b5ec1e35bbf53",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "9cff1780efd7af6371d755871fe8da6deeef87149e1862729d65c0eb51e79a5f",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "single-origin_y",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9968,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9958,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1823412,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1510,
+          538
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "4fe1a26620d56175d6ffcaee58274a5543f0181313744cd753f171d145a5b1ea",
+      "bodySha256": "8f934aabb6929c673db1dd08176075c8fae3c93a119adc0a1c9bbf8478317a0c",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "1e3efdc7e805889ac83e5207d931c985c35bd955325d5154462a7a81c3be15e9",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "single-origin_z",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8909,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          9149
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1786109,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "55ed0ca02e6357e08c74c3226bb15a8e5b08da9bfb7d747f13ab921461519601",
+      "bodySha256": "d3327b8f726081ab0a318e333fbc58f66319a24d6ff95cb15be0682d288a27b9",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "922aa4b8a5c844a4533f3aa3ed06417bc50ec48bcccef399732f33c835776d71",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "single-end_x",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9456,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "e07d65876343f6ff1c746eb5735a6e98f8f419cedaccc3bc61fe8f03e28ff0f8",
+      "bodySha256": "95deaf2a1e62fd645cd9c2a4aee1930348f8850f5ac859ee23219edbf47f49dd",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "25f8f5a6cf8ac605be18c2ca0a390a09cf1bdb563776667765d3a948e06f0d9f",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "single-end_y",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9968,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "a54bf0ff94850d4e3ea84b2c618e0e3feb0ba91ce21fc6b1ed46ce4b5127c164",
+      "bodySha256": "770cb3f0d8427953b5db546e3a5dfa539e0d976eb2ce12008f0ef0980a27fdea",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "d15d3e7b71b8513747cd1670ba491bc37f00606450db441aad2c7f8162beec21",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "music-0",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 0,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "07ee36028bf681696d90cec6bc0082a696df666c0b4955c1297748637e15429f",
+      "imageAfterimageSha256": "1d0d2e74f12c1900c4bf6d6acdf07511450da1710f7e68f6cd1eb8b2724f40a8",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-1",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 1,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "dee850b7611371cbbee18e51c67a99382695e05f0f3d120162790a1f26861531",
+      "imageAfterimageSha256": "781cb22f354f7c8e8a285b66bacbc76cccffd0b5c39cb296cd33e85527dbd7b0",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-2",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 2,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "fbf1e2f07e36b208dc900abbdf526d88a3030470a5dfbcf8db800f1ea4f2d642",
+      "imageAfterimageSha256": "de1d9b4dcc7c530f1ba67093a28edfee5f38190bef43685f9570ffcecf8fdf97",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-3",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 3,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "538ab45585c1270002e11573d8a8f1f379548fe16021e8bf72fc742759e1321d",
+      "imageAfterimageSha256": "a1bbef003ea4b0d58cc34e4a0f5203c0cc9cb82f8dda3b4b42d0fcc01617a5c3",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-4",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 4,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "50843b23dd28a6e9da29152daed4b22a1866acc2e9043e0e77da74238312dc60",
+      "imageAfterimageSha256": "6e53fe1a3b2dd397925ba509575b08dcc213d1116216cebbdd458dce50aead8c",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-5",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 5,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "f9005429163da84e6f94cba6eaad48bff9976efb242728328d5bc44da20c98d0",
+      "imageAfterimageSha256": "4dfb0d5bbbc74f1d774ea5139cd9972e572e897ba211c58da48be6d9d6f58478",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-6",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 6,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "042be01f2360f652bf83bd5ae6ddcdacf0198228e87ee684428a00a6b379b117",
+      "imageAfterimageSha256": "181b3a467716a8ef22c9d0b7b6cf5232152ca145c7bca1b021f966328c757027",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-7",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 7,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "0fccc9d9f5ee4a365d6cb35d543732f529236ec089077798b96baf9cfdaf6fef",
+      "imageAfterimageSha256": "59e0034ff3c367ba9c962b8aea8009c4fc75705a10c4f2ff83ff879454392870",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-8",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 8,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "3ef98c3eb14119133f704ad5da3b6797ca9a9729f719ee14e0566b3c71518f4e",
+      "imageAfterimageSha256": "45e0030e85b55e021813fa2bf66c395189e83db4c323e9720b6e6767090181d4",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-9",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 9,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "961ad2ebb4474883fa747180764fdf398836125bde06ab5dc9ce95307738c62a",
+      "imageAfterimageSha256": "db0210f5f5a91cd5530e2fe05c706f9199c52fcceb9a191c374db2863d80a8eb",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-10",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 10,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "01a855af1e204edfa11bab49c76cc8cbd4b900eae88a4026db42e0be023d769d",
+      "imageAfterimageSha256": "e7a28c73745cdec53a4d1b06276e804e832931dc6aca51490dcf66297214be4b",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-11",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 11,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "c461d8993a204f61417028ce8f9e03253531f50c0457b8fd4bdbad462de21161",
+      "imageAfterimageSha256": "7b043f36cba05dc929f757fdb079ed1525ed6b2d590631ea7116607a2aafd8ed",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-12",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 12,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "8f76f436b3bcec41c07f1480b9d14d43cd2b26d11df12a1dbeaee98e81f3a942",
+      "imageAfterimageSha256": "7a979d01263e6b6dd01a2184b2789a2afef862681ed28cf3ad502bcbae550893",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-13",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 13,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a29b1e691b78b6c86b278788d3f2a9e3e079f0e4e96e476b5fed465408cb546b",
+      "imageAfterimageSha256": "8afdb90b920f40abac61ae8d74bba0f7fa294128bf391667a92cce3bd07e36e0",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-14",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 14,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a5e26d94196ec902bb38515372a7f42b6ef8a7e1b3018cc6910c6ed8a8f0beda",
+      "imageAfterimageSha256": "864050cc9d9af71917c01db76cd6f14fe15f180451bdf2e4cf3b5e97b65bab55",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-15",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 15,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "d6412f03b24303e9657189332d61aa6e0f7a436a342799c459704c7cf78c3e60",
+      "imageAfterimageSha256": "17e657d6d305ac689472ab922c0bf9fb6867b5bf37ec607af1f935ebffb36a38",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-16",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 16,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "1a3e9426ea1715a79582f3371d47412245675318a3182ec1d8abb1e0be2e4b46",
+      "imageAfterimageSha256": "99872a72f4cb9a68c7435dcc06c325607ffacd4504d4bc39fbb212a2179acddf",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-17",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 17,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "0ff16b2fe7483b99f01452b15287349bcb238f0ed7a4648285da459b57ee46bf",
+      "imageAfterimageSha256": "9e9e565055ba83f656210e2a9aea0452c1c70bba78e1210c32bfe8ed41c41324",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-18",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 18,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "18246671612e1b671926b87262d500004fc7f68d464f48f632afeca894ee987c",
+      "imageAfterimageSha256": "e20b61dc9d9e9ca43817898b8ad94db05881d54c73daed518a953c401bfa026a",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-19",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "e57fedebb59ffc9020de00562baccbc5a6e09bffd5f24f665d34d5f03163cbdb",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "music-20",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 20,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "374c0020900c55c641cd4e35380377f5986f313dbb81cc652b24997f0889744b",
+      "imageAfterimageSha256": "5b7a74607dcadea2aff2faf1528f826b199e340697b2f69e4e5ac38fe07f2991",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-21",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 21,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "25a92b9f0b033cfa3394d895a873d74257a4ebbaf211764dad88cf718fbaff9d",
+      "imageAfterimageSha256": "38e7c7643547d3b8107ba9b2651ae1bedfb861dd852618913985ca605b45642c",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-22",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 22,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "f9d6447620498fa50a8f20617b10ee476dc246c6710887a6a781fdbb194b5c70",
+      "imageAfterimageSha256": "857a66b1c41ce7adfc1e60ec1bd66715cecf14ff2c4810debe695092b25e6488",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-23",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 23,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a2bf0fbf649e473ca9f62a33810c3785e1acd0acbeac825c416ada5edec2addc",
+      "imageAfterimageSha256": "82003901d9b7d4f9fdcfc02b64f71d67090965c6d463868403509c3c1497bab0",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-24",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 24,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "64cd1942b2d3f825e3dcf65d940447b11120d92c362eb1a7635232723adca758",
+      "imageAfterimageSha256": "34704dd545123a2420b410d32d3c6be68fc0ab53f2363a3007a0a41b53c7ea97",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-25",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 25,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "7f844a64ee3506ed05ee81c8660d39ac605770c62094702f1c9cbfc2a4a283ba",
+      "imageAfterimageSha256": "9565c1fe03fe8ce413ef3a0d157589826e42ab89cae2b4aae1ddd36b3896fe5c",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-26",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 26,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0bb2a6de471e91bbcf4342e4497eece78703ba7596fb85ce971f3e9e672da31",
+      "imageAfterimageSha256": "2935d3e540e73d4026e6e83d6ad6f778065b454b264eeaf1bb2f0d5e590f3389",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-27",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 27,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "b5053a010e562217f83c834a2e797941f8b7d9c10c00ba31daa9e2d8ad9d4353",
+      "imageAfterimageSha256": "4ac4549f7be8593029e01fc0fc9c95ebbfcbb61b54ab49997ce4e42406208a23",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-28",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 28,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "f4127a13489a60b7cb312971859e702d8ef603d01e502ff5f52ffbf1087a19e6",
+      "imageAfterimageSha256": "d47d2cf36ad25059911fac398c7845cd5792b45903c3077fdeb8142cab13a495",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-29",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 29,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "894d07d520117de7fc56f2c0ce3e4d87534ed719c9866af9a9026bd3ce940cfe",
+      "imageAfterimageSha256": "bece6a53152dc0f039b50681831e9d091ea85609566ec0b6f83a436de9ae13d9",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-31",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 31,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "e65ae6ff268d3f137cd777f3f0a1082fb93fb431d0f9ec60195536e0fd45f1fc",
+      "imageAfterimageSha256": "99aa54f56de7f6f0a498d727110da2c9b662f4c4effc00aef4923f6c2b35b4a4",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-32",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 32,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "6799d31e4e432f554b98c6e105943889ca523c7db00be48a1ea8fc80c10229a5",
+      "imageAfterimageSha256": "305133e77199b4e4aabaee5e55b18e94813dd7f073f1517f0973b064c36c9099",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-33",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 33,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "54e4295f6eb500892d4390f7388dd1bb46c9eefe2c6dc79839271a44b2cda43e",
+      "imageAfterimageSha256": "12707ee649ebc5906ff1955d4d10e57ca608612129d80d3ec1cb4cb28a02ca5a",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-34",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 34,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "52c28b24cc86a199f94eb6f0323f994f1dae458dbcf1056b9bed65dd7b27b0b8",
+      "imageAfterimageSha256": "7b3a133457b60998f54a78612e224613ec1a429f6861c6ae8b3466b980f6b1ad",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-36",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 36,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "c3f21884c5d53c6d8c434c26cb302a178e217a5e1065bf8d9f733bb95c0af1b0",
+      "imageAfterimageSha256": "e268bb5400ac4851a5dc1c4daa5c277f8251fa46821c98a47095e314402024e5",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-37",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 37,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "8c385feaadcc96d36de36218db6a54bbb480c3f278ec02a9b1af83080d1a5f63",
+      "imageAfterimageSha256": "5c2f39a917dc1ae0aae6184c45b45fd561e45e127e1fbf04dc80d68b7ace309d",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-38",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 38,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "d264c5955c5a935b6c7a2c8a79399398e1097c33e99a7f1399b1d046c53fc5a4",
+      "imageAfterimageSha256": "77cda64d12ac0f0885b8a774acc5d44b3fdc1d6aee2e96967eb5e7a4bdee7837",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-39",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 39,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "49be0df1a826eb4e22ac0ce741f63a2ae6a0f691bec7afa628e52448bfccd356",
+      "imageAfterimageSha256": "86bb0357d6e1afcc692343b96f74717b698db42b753545c63c056a50c0dad3f5",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-40",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 40,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "74e0583578ba5230ae604acb9a959ea8fe63cdd9060e49ea4a54f34f2d7305bd",
+      "imageAfterimageSha256": "6bc1c1c3da7e3dbd69b96500ed36aae8893b1c8f0ad0e95c018c1f85d9128723",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-41",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 41,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "cc1a81ff770bdcf72c7ed0c1699bf922e6060db7623c2cc489eafbdc7c7c6109",
+      "imageAfterimageSha256": "a0de144a4a5d36d9810bbb06f8d929a953d5d379181f1f9039c4ce5a14c2b58f",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-42",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 42,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "01f266252eb969296e4a31eba46b29ea7f5567e9b2b0fca2edcdcb9497d41b39",
+      "imageAfterimageSha256": "eecd86f56ba712ee022239fade31be2826e2bd685b3cc3b2ed8b784a4ba6ecb5",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-43",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 43,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "c49764c5156997ace46a36382266a04410e8400fb7641aa63e3c6c106a3078e5",
+      "imageAfterimageSha256": "584972a7cc901b35fbbce9382e944b73675eb495adfe6d09b6b533b19b2596cf",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-44",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 44,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "aeb8ccb2cfe63b946d45e50bd4d157cc07aa1f4db98ff13ae221312c795c2a42",
+      "imageAfterimageSha256": "770146b77ea62250a6a2d5cb6c79a5e26731095a017c78196440ac734b130a56",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-45",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 45,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "ef2e8ac81d60094752293bfe31f7b20f2b787e7e69dd4fc8dbd427063b5d8756",
+      "imageAfterimageSha256": "ece3af4961b59bce8e27323ed95c6e626fab71b1f0b93a82a730bc7b9229bbdd",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-46",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 46,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "3e8017ced239670de4ef6b0c8e6f562732118da8079dfb9001e1ac8bc0801037",
+      "imageAfterimageSha256": "2927f2d0505a4b66dcdc2dc5c161eb16a479555c5c4b518196c5b5c25a44f8ca",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "music-47",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 47,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343",
+      "bodySha256": "503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "83668688cd352a5d805f36f1413b9b04ead8271d76c984bc940dc84d2e07a3f8",
+      "imageAfterimageSha256": "e7641de41d23880fb71ff707c334796a78ef875407a8a90a29467a7471964b47",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    },
+    {
+      "name": "initial-player-edge-touch",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8804,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": false,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 2150756,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          356,
+          1692,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8804,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "b3929b481e612b63f88d09e944cd8eb3d142f23cf001413e79ce489a9f831d06",
+      "bodySha256": "55da5639e118e53f266a2cbf51db0c688fe9a93f0db33b8c48e94b23ba0f587b",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "65a3cd48c48ae14ee425db0510779c3a4d5e9d255e739c22e81f41e5b3c21914",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "initial-player-edge-outside",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8803,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": false,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 2152805,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          355,
+          1693,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8803,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "cbf2d53ceed1f3ed5a0fae0887049aace86bc573e13286baa81c15983cd8080b",
+      "bodySha256": "2080d3673746c2a699d012c7c4b50363b78cf56140a070682689281ce7c1018e",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "851dfcd5825930a3642d9f21a6364bd946bdd1364457b63fd8702b79bd060886",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "initial-player-edge-plus1",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8805,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 2148709,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          357,
+          1691,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8805,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "81ce6515c93cdc80fec587e7a6b8a85dadafe8e2650a75d8b3b7563bebbd8d6f",
+      "bodySha256": "c42763e499c769e83b0d319530f433b1f6dc989523dba1324a9ff9dc82ff22ff",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "9dcd5ac215e4424b73cd5705d1166dc7b59035bc6219d74eefce57ce09099cb3",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "initial-wizard-edge-outside",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 8992,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": false,
+        "centre": [
+          8836,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1117556,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          388,
+          1660,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "3a14a4aee6c4df281937db6ed75b72832a77e3617e8f88ca8b37df23ec138955",
+      "bodySha256": "faa5c9295df53602e5e7531a24c85e32f5b963c9c3c0d0d70f8d0d5341929efe",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "780d81346283fee64a5cbc64939e624ce4197945338dc8560113839a956ca2fc",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "initial-separated-but-overlap",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9456,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9472,
+        "origin_y": 9472,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": false,
+        "centre": [
+          9316,
+          9462,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 452724,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "overlap",
+        "wizardMargins": [
+          868,
+          1180,
+          1014,
+          1034
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "e334643699febf3dfa50d151cd892b4f213053c506e5e209a3372e2611510d74",
+      "bodySha256": "2128a3c2d1570a1ac5efb48c5c85ef9e3cb5a98845a10214ef26e02308f03a60",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "8915a1790d8a67e30e638e964d659f251d64d165866236677e3e3080344c15e4",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "route-end-near-spawn-not-path-proof",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 8976,
+        "end_y": 8960,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 8704,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          8944
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9a99d1507a5c8e4a0d1ceffba385dd93c7fa526acce65f2c18c0a49a2b065383",
+      "dataSha256": "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b",
+      "sceneSha256": "5702f5a60a5709252cbb8352e61221530206e120f63165e77f2254eaa53325db",
+      "bodySha256": "e667ffcef3cd1a5a10c44638c4a0f5191548f0372fee74c53fdcb2d7e96b1ba9",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "aa44deba533f8a90a97014b93b9b2a90b38b0d94b6d181e213b72ef3d1985e7a",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "other-cell-sum6",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 5376,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 4352,
+        "floor_y": 8448,
+        "floor_z": 12800,
+        "heading": 64,
+        "origin_x": 5888,
+        "origin_y": 9984,
+        "origin_z": 12800,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 4864,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          5732,
+          9974,
+          13040
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          4864,
+          8960,
+          13312
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "9f5da5850e5a2c443f8d7f545c1bca96b1597ded4057b03af3a6b7615ff1efc3",
+      "dataSha256": "155281e2ee2c91bd08a6e3cb34344d7fc5e4cb5fd3234a58425103ff14456fa6",
+      "sceneSha256": "f2f3a92f0b3c94a845eb643399958c97312e9953a88341257eafa4a77fc97d1f",
+      "bodySha256": "debaa4920b2abc5a07e284fbb0c8304dc177e1f60b5c5071b4c5adf82f0d8ba6",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "f838368ab3fed0eadc33dff39e82967da96cf3a209a63e3abc1c4d859404c1d7",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "other-cell-sum5",
+      "recipe": {
+        "depth": 2048,
+        "end_x": 9472,
+        "end_y": 9984,
+        "floor_rgb": 7372880,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 4096,
+        "heading": 64,
+        "origin_x": 9984,
+        "origin_y": 9984,
+        "origin_z": 4096,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 4219008,
+        "spawn_x": 8960,
+        "spawn_y": 8960,
+        "track": 19,
+        "width": 2048
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9828,
+          9974,
+          4336
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1855604,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          512,
+          1536,
+          512,
+          1536
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8960,
+          8960,
+          4608
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1380,
+          668,
+          1526,
+          522
+        ]
+      },
+      "surfaceSha256": "f469c78e2b7afa48beaedd09e688a7a4ffca1623cef0a88b1fb5b3a2502fc065",
+      "dataSha256": "9e4b21dd73a1f79c9d15c45833c232a2f941d688d48243104931cfdcc15d4af1",
+      "sceneSha256": "2a3cf670d419824dbc081d53d4632f1fea455f234a9b53e81cb8779182c1fd49",
+      "bodySha256": "9df505d537dd25ab0df13d100763a1f3395b7ca306ee30ede3e1dad4ede6b709",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc",
+      "imageAfterimageSha256": "154b96e0e6d37c25c9631096d3fa95e058fa51346dd5795c1ea3bb3bb5dd9951",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422
+      ]
+    },
+    {
+      "name": "combined-content",
+      "recipe": {
+        "depth": 2032,
+        "end_x": 9440,
+        "end_y": 9952,
+        "floor_rgb": 0,
+        "floor_x": 8448,
+        "floor_y": 8448,
+        "floor_z": 8704,
+        "heading": 0,
+        "origin_x": 9952,
+        "origin_y": 9968,
+        "origin_z": 8909,
+        "placed_count": 1,
+        "schema": 1,
+        "sky_rgb": 16777215,
+        "spawn_x": 8977,
+        "spawn_y": 8945,
+        "track": 47,
+        "width": 2016
+      },
+      "assessment": {
+        "admitted": true,
+        "centre": [
+          9796,
+          9958,
+          9149
+        ],
+        "colliderRadius": 400,
+        "combinedRadiusSquared": 571536,
+        "distanceSquared": 1701419,
+        "footprintPolicy": "strict-XY-disks-only",
+        "incomingDamageFlags": 0,
+        "initialOnly": true,
+        "playerMargins": [
+          529,
+          1487,
+          497,
+          1535
+        ],
+        "playerRadius": 356,
+        "positionalResponseEnabled": true,
+        "routeSafetyProven": false,
+        "spawn": [
+          8977,
+          8945,
+          9216
+        ],
+        "status": "initial-separation",
+        "wizardMargins": [
+          1348,
+          668,
+          1510,
+          522
+        ]
+      },
+      "surfaceSha256": "eb26fe3e55b754ad68893e0afe2fdfa712cd685e52e6b9515c0304de1e762d34",
+      "dataSha256": "4bda822ce48c5262c7249a5dacce4961830a37a87d06285807697f0e028b8e05",
+      "sceneSha256": "d54447e18de65f43d58228454ab6949dccfda48037d5e3ebff7a947e98cf4514",
+      "bodySha256": "268fba91e01d414143ad5097898eef64f42159ea28b352896c32f13e4b32f39d",
+      "headerSha256": "fe3757b0f68a8b7003d4a9e4660bc9e2b643fbadc6f1e71123bca29e26ec2ca8",
+      "executableSha256": "83668688cd352a5d805f36f1413b9b04ead8271d76c984bc940dc84d2e07a3f8",
+      "imageAfterimageSha256": "51c2f0e73ddaf709183986df340c6a30b28d15ed2aba47211caeb4d1a80121ea",
+      "originalChangedRawSectors": 1290,
+      "historicalP1DeltaSectors": [
+        54369,
+        54421,
+        54422,
+        55149
+      ]
+    }
+  ]
+}

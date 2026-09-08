@@ -4,4 +4,5 @@
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="matrix-expectations.json" LogicalName="WizardMatrixExpectations" /></ItemGroup>
 </Project>
