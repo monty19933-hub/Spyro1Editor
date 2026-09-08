@@ -1,224 +1,99 @@
 # Spyro editor — what is working now
 
-Updated September 8, 2026. Development has resumed from the preserved checkpoint.
-The requested pause at 5% remaining still applies. No reset was redeemed by the agent.
-This is a progress report, not a V6 release. Your preserved editor, original
-game and original memory card have not been replaced.
+Updated September 8, 2026 after the corrected fresh-Wizard DuckStation test.
+Development continues with the requested pause near 5% usage **remaining**.
+This is a development checkpoint, not a V6 release. Original game/save files and
+the preserved R03 editor have not been replaced.
 
-## The biggest new results
+## New result: a blank level with a working enemy appeared in game
 
-**Current work, not yet packaged into the app:** explicit conversion of a saved
-floor into the new placed-object document now passes its save/recovery tests.
-The fresh-level texture backend can bind two individually selected static
-textures from the original game, with legacy output checks preserved. The
-larger blank-floor/Wizard composition matches an independent byte calculation;
-initial-spawn clearance also passes. Corrected candidate publication and its
-DuckStation playtest are the next gates. These are backend results, not new UI features or
-universal Moby/texture portability approval.
+The corrected, separately published test ROM loaded the authored teal floor,
+brown sky, Spyro, Sparx and the imported Wizard. Spyro descended vertically and
+landed at the saved spawn without the earlier sideways launch. The Wizard then
+attacked; health decreased from 3 to 2 to 1 while Spyro remained on the floor.
 
-**Two imported Wizards now work through a complete bounded gameplay sequence.**
-Each cast and produced its own native reward. Defeating the already-collected
-nearer Wizard again did not award another ten gems, and leaving/re-entering
-through the original portal preserved both collected states. The first reward
-changed the HUD from9 to19. The final32 includes three original red gems;
-separate native reward-owner evidence identifies the second Wizard's yellow.
-See the [two-Wizard report](native-two-wizard-r01-runtime-observations.md).
+Testing stopped when Sparx disappeared and the strict observer refused its
+now-null pointer. Original native source supports removing Sparx at nonpositive
+health. The refused sample stays refused; a separately tested diagnostic change
+is required before observing that state again. This is not evidence of a crash,
+player death, successful re-entry or full gameplay completion.
 
-**The Fresh Level document can now export its saved edits.**
-The separate window has floor/spawn/color/music controls, a schematic preview,
-undo/redo, protected save/reopen and a guarded Create research candidate action.
-An actual editor UI test used the production export worker to create a complete
-edited BIN/CUE/receipt, then a separate process verified that output against the
-saved document. See [saved-document publication](native-fresh-saved-document-publication.md).
+This run used controlled 10% emulation speed. The earliest observed normal
+update was timer2, not the first native update. Enemy defeat/reward, normal-speed
+gameplay, death/return, sound and resource limits remain separate checks.
+See [publication and closed runtime evidence](native-fresh-separated-wizard-publication.md).
 
-**An edited fresh floor has already been played in DuckStation.**
-The separate exact test ROM loaded without Town Square's terrain or placed
-scene and supported controlled walking, flame, jump/landing, native fall/
-respawn and normal-speed idle. The generic UI-produced image matches that
-edited BIN, but its own new output companions were not separately launched.
-See the [edited LAB report](native-fresh-edited-r01-runtime-observations.md).
+Both DuckStation settings files were restored exactly after quitting. Original
+BIN, CUE and memory card, the three candidate files and emulator executable
+matched their pre-test hashes. No original card was replaced.
 
-## Is there a new app to open?
+## Other working foundations, not yet packaged into R03
 
-Yes: the separate R03 test app is preserved, but it is **not currently running**
-as of the September 8 process and app inventory checks. Its actual main window
-and Fresh Level… were verified in the earlier session without changing the saved document. Its earlier
-permission-wait note is now out of date; no protected permission prompt was
-operated by me. Build/signature/packaged PNG and pre-startup preservation checks
-passed; full edit/save/close/reopen remains a hands-on acceptance check.
+- A separate whole-level document preserves floor settings and an ordered object
+  list with stable IDs. Its first supported placement type is a Wizard route.
+- Explicitly forking a saved floor into that document preserves the legacy file;
+  the two documents do not silently synchronize.
+- The new App-side document session passes actual save/reopen, raw-file conflict,
+  selection and whole-document undo/redo tests, including 128 stored placements.
+  That storage capacity is **not** a native-game allocation guarantee.
+- The fresh-level texture backend can source two individually selected static
+  materials from the original game. Textured disc composition and its tests are
+  under development; texture painting and mixed texture/Wizard export are not
+  yet available in the window.
+- Two Wizards imported into an existing level previously passed a bounded
+  gameplay sequence: attacks, separate rewards, repeat defeat without a
+  duplicate reward, and ordinary portal re-entry preserving collected states.
+  See [that separate runtime report](native-two-wizard-r01-runtime-observations.md).
 
-The new private app is here:
+## Which editor can I test now?
+
+The preserved private R03 app is here:
 
 `/Users/john/Documents/Codex/2026-07-13/i-needed-to-make-a-new/spyro1editor-v3-release/_local/research/fresh-document-mac-test-r03/Spyro Fresh Document Test r03.app`
 
-This is not the finished unrestricted blank-level editor or a V6 release.
-Main/Fresh window opening is now verified; interaction and normal close/reopen
-remain separate acceptance checks.
-The app is built from checkpoint6eae8d4; later source-only Wizard scene work is
-not silently being rebuilt into it. See [R03 package status](native-fresh-document-mac-r03.md).
+It is currently closed and remains built from checkpoint6eae8d4. Later backend
+changes were not silently rebuilt into it. See [R03 package status](native-fresh-document-mac-r03.md).
 
-## What remains usable in the preserved editor
+In R03, open **Fresh Level…** to test:
 
-- The preserved V5/schema6 research package retains its established level,
-  object, terrain, name/music and guarded Create BIN workflows, plus the older
-  separate ID65 Lab. Its research launcher is not unrestricted import approval.
-- The older local fallback app is a different build. Neither preserved App
-  contains the newer Native Moby Library or Fresh document UI types/labels.
-  My earlier report incorrectly placed Native Moby Library in this section;
-  the actual package audit corrected that distinction.
+1. Change floor/spawn coordinates, heading, floor/sky colors or music selection,
+   then click Apply. The preview is schematic, not a gameplay renderer.
+2. Try Undo/Redo, then Save document and Reopen saved. Only applied values are
+   saved; typed-but-unapplied fields are not the document.
+3. Close/reopen the window to check persistence. The existing saved floor is
+   2048×2048 with heading96 and Stone Hill Track02.
+4. Check validation: on that existing floor, spawnX8192 lies on its boundary and
+   should be refused by Apply without replacing the valid document.
+5. Browse Objects → Browse Native Library… for searchable native inventory.
+   Inventory visibility does not mean every object is safely importable.
 
-An older installed app does not acquire new source changes automatically.
+Create research candidate… is a separate saved-document export, not the main
+Create BIN button. Its production worker and independent readback were tested;
+R03 GUI publication still needs its own hands-on acceptance. Always use a new
+output location and preserve the original game.
 
-## What you can actively test in R03 now
+R03 has no placed-Moby controls or texture painting in the fresh document, and
+music selection has no audio preview. An edited floor from this pipeline has
+already been played with walking, flame, jump/landing, fall/respawn and normal
+speed idle; see [edited-floor gameplay](native-fresh-edited-r01-runtime-observations.md).
+The corrected Wizard ROM above is a separate research candidate, not an R03
+feature.
 
-1. Open the preserved R03 app and Fresh Level…; start with the existing saved
-   2048×2048 floor, heading96 and Stone Hill Track02. New starter is disabled
-   because that saved document already exists.
-2. Change heading to128 or a floor/sky color, then click Apply to preview.
-   Try Undo and Redo. The preview is schematic, not a gameplay viewport.
-3. Click Save document, then Reopen saved and check your applied values.
-   Close/reopen the document to test persistence. Do not expect typed-but-not-
-   applied values to be the saved/exported document.
-4. Try another music choice. This selects a native track for the research
-   output; the schematic does not play an audio preview.
-5. For a validation test, put spawnX8192 on the current floor boundary and
-   click Apply: it should refuse without replacing the valid preview. Restore
-   an interior value such as9216 before continuing.
+## Remaining work toward V6
 
-Close the document to return to Objects → Browse Native Library… for searchable
-native inventory. Library visibility is not approval to place every Moby into
-every level. The fresh-floor document currently has no placed Mobys or texture
-painting, and it does not include the newer source-only Wizard integration.
+The immediate parallel tracks are placement controls in the existing Fresh
+window, the textured-disc path, and the next fresh-Wizard lifecycle playtest.
+Saved aggregate export also needs a final project/document lease, so a valid
+draft cannot be exported against a different saved revision.
 
-Create research candidate… is a separate saved-document action that makes a
-new BIN/CUE; it is not the main Create BIN button or universal gameplay
-approval. Its production worker/readback were tested separately. Use a new
-output location, preserve your original ROM and report what actually happens
-in DuckStation; R03 GUI publication itself has not yet been exercised.
+Universal importing still requires each object's behavior, effects, sound,
+collision, animation, private/shared state and resource needs to remain correct
+in each destination. A model catalog alone cannot provide that. Multiple
+editable new-level slots, normal portal integration, save/reboot compatibility,
+animated textures and arbitrary object/material mixtures remain open.
 
-## What still stands between this and universal importing
-
-Models alone are not enough. Enemy behavior, effects, sound, collision,
-animation, private state, shared state and resource limits must remain correct
-together in the destination level.
-
-The first fresh-Wizard ROM now loads the Wizard, Sparx and a projectile in LAB.
-It also exposed a playability problem: Spyro leaves the small floor almost
-immediately and falls after entry/respawn. Defeat/reward testing did not pass.
-The latest frame-step test strongly points to overlap between the saved spawn
-and the Wizard's collision shape, pushing Spyro into unwanted movement without
-damage. The new source-bound initial-clearance check now passes for a larger
-floor with a separated Wizard, but its corrected playtest is still pending.
-This research build is not in R03.
-See [first fresh-Wizard playtest](native-fresh-wizard-p1-r01-runtime-observations.md).
-See [early-entry diagnosis](native-fresh-wizard-p1-r03-entry-displacement.md)
-for the stronger current evidence and its limits.
-
-The current fresh-Wizard resource work matches independently checked texture,
-sound, model and particle buffers, and its combined body now has a source-tested
-builder. Full native behavior integration is not finished. One concrete blocker
-is the shared electric-damage sound: Town's
-existing sound mapping is already occupied, and the tempting damage marker is
-erased by native processing. Regression tests now preserve these facts so an
-apparently convenient fix cannot silently break other gameplay.
-
-The extra collision read found during review now passes against the actual
-issued resource, including its generated padding. That closes one precise
-relocation gap, not the whole collision or lifetime problem.
-
-The new detached fresh-Wizard scene also matches independent native-source
-checks. It preserves space for32 dynamic allocations plus the allocator's extra
-write; the test catches the earlier layout corrupting another object's private
-state. This scene is now included in the independently verified research ROM;
-its gameplay has not yet been accepted. The separate sound-loading stage also
-passes source tests, preserving
-the exact native transfer bytes. The three repeat-reward models and their
-textures are now implemented in a separate resource package, with independent
-checks of the actual compiled output. Save handling and playable end-to-end
-integration remain unfinished. See [fallback resources](native-fresh-wizard-fallback-resources.md),
-[scene progress](native-fresh-wizard-p1-scene.md) and
-[sound-loading progress](native-fresh-wizard-upload-staging.md).
-
-We also verified that ID65 has its own progress-save row; it need not overwrite
-another level's progress. Different fresh projects would still share that row,
-so old-save compatibility needs explicit handling. The linked Town/Wizard host
-layout now has a compiled builder matching the independent dispatch/relocation
-tests, including a separate test consuming its actual compiled code. The
-combined body builder now also matches independently checked loader addresses,
-resource ownership and allocation layout. See
-[body checkpoint](native-fresh-wizard-detached-body.md). The executable builder
-now also passes its tests: it preserves LAB/music and gives the placed Wizard's
-level a ten-gem treasure target. The new disc builder now also matches the
-independent whole-ROM reference and reverses exactly to the original. A guarded
-test-file exporter now passes its source tests and the all-project Release
-regression run. Real file publication/recovery tests also passed, and a separate
-clean fresh-Wizard ROM has been published and independently verified. It has
-now been played in DuckStation with the failed playable-entry result above;
-it is not integrated into R03. See
-[materializer checkpoint](native-fresh-wizard-research-materializer.md),
-[executable checkpoint](native-fresh-wizard-detached-executable.md) and
-[disc checkpoint](native-fresh-wizard-detached-disc.md).
-
-Reward testing uncovered two more native dependencies: a ten-gem pickup creates
-two number objects, whose expiry can create twenty particles. The real spawn
-and selected deletion paths now pass source tests. Capacity and complete
-lifetimes still need checking; the original game does not safely refuse every
-object allocation when a pool is full. See
-[reward dependencies](native-fresh-wizard-number-and-electric-frontier.md).
-
-Arbitrary Moby mixtures, all textures in all levels, native fresh-level enemy
-imports, normal portals to new levels, save/reboot coverage and full audio/
-capacity testing are still open. The optional Free Flight research case worked
-in Toasty; the finished persisted editor checkbox and disabled-output workflow
-remain separate work.
-
-## Verification and next milestone
-
-The new level-document foundation now supports an ordered object list with
-stable editor IDs. Its first object type is a Wizard route. The new whole-level
-Store now also saves and reopens that object list and floor settings separately
-from existing floor-only files. This is tested Core code, not new controls in R03;
-explicit migration/fork and native compilation remain separate work. See
-[aggregate checkpoint](native-fresh-level-aggregate.md).
-
-Latest all-project Release build/regression gate:315 steps, zero failures,
-including the new aggregate's308 checks/214 expected refusals and112 additional
-real-file storage checks. Original-ROM-backed fresh research2339 and separate
-saved-context42 also passed, preserving the complete original BIN/CUE. The current Python
-suite passed183 tests with eleven explicit-mode skips;58 runner tests passed. The
-independent native scene check passed23 checks/four expected refusals and
-sound-loading proof404 checks/ten expected refusals. New actual compiled fallback
-resource reads passed34 checks/28 expected refusals; the separate original-source
-resource check passed3018/four. Save-row source evidence passed164/20.
-These counts are engineering checks, not hundreds of gameplay runs.
-
-Actual two-Wizard recording:22 minutes39 seconds,81303 video frames, full strict
-decode passed. That DuckStation, capture and read-only observer session is closed.
-All nine protected hashes passed after exact original settings restoration.
-
-The separate fresh-Wizard test session is now closed. Its original settings were
-restored and all nine protected hashes passed. This does not change the R03 app
-or its saved document; the original memory card was never replaced.
-
-A second diagnostic session also closed with originals restored. It verified
-native frame stepping and the new health/movement readouts, but did not yet
-capture the cause of the entry problem. Opening DuckStation settings exposed a
-strict-reader cache-file classification issue; that failed record is preserved.
-See [frame-step diagnostic](native-fresh-wizard-p1-r02-frame-step.md).
-
-The third diagnostic also closed safely, with both original settings restored
-and all nine protected hashes passing. It captured the early displacement and
-collision-shape match described above. No emulator or observer remains running;
-the separate R03 editor remains open and unchanged.
-The exact source/issued-image overlap and closed36-sample record now have permanent
-regression tests. They preserve the evidence; the production spawn-clearance
-guard and corrected candidate are still the next implementation, not a finished fix.
-
-Next: finish the isolated app edit/save/close-reopen check,
-complete fresh-Wizard reward/audio/resource contracts, then integrate and playtest that exact
-enemy in the fresh scene. Continue expanding tested families/materials through
-the editor without calling inventory coverage universal compatibility.
-
-The [current engineering handoff](native-editor-resume-20260906.md) records exact
-next steps. The [V6 readiness assessment](v6-readiness-20260906.md) explains why
-universal importing is not yet a defensible percentage or release date.
+Latest completed all-project Release gate: **319 checks, zero failures**, before
+the current session/textured-disc changes. These are engineering checks, not
+319 gameplay runs. The [engineering handoff](native-editor-resume-20260906.md)
+and [V6 readiness assessment](v6-readiness-20260906.md) retain the detailed
+boundaries and next steps.

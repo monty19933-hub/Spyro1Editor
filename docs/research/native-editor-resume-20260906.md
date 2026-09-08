@@ -16,13 +16,18 @@ not been rebuilt or relaunched. Three new backend checkpoints are committed:
 clearance (authored35, clearance126 plus23 shared source checks), and `5c8a11f`
 selected native two-slot materials (7,579 free plus132,825 source checks).
 Old P1 source/receipt/CUE goldens and the historical unsafe spawn witnesses are
-preserved. Full Python discovery passes185 tests with11 explicit-source skips.
-The all-project gate has not yet been rerun after these commits.
+preserved. The later full all-project gate passed319/0 at
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-js1c6xt1/summary.json`.
+Commitsfa66f24/97e48eb add corrected publication, actual transaction uncertainty
+handling and a separately bound read-only observer. Python discovery passed204
+tests/12 explicit skips before current session/texture/absence work.
 
-Current next work is the separately named separated-Wizard candidate, preserved
-publication-unconfirmed outcomes, and a separately pinned read-only observer.
-No corrected BIN or corrected gameplay result exists yet. See
-`native-fresh-authored-wizard-initial-clearance.md` for the exact source boundary.
+The corrected candidate WAS published, independently verified and played; see
+the September8 runtime section below and `native-fresh-separated-wizard-publication.md`.
+Current next work: a fresh null-Sparx diagnostic branch, App aggregate placement
+integration and source-tested textured Disc composition. Neutral App session
+tests pass138 actual-file checks; integration is not yet in the window or R03.
+The old source contracts and historical failed records remain preserved.
 
 ## Repository and authority
 
@@ -46,7 +51,8 @@ run passed native initialization but failed playable-entry testing: Spyro moved
 outside the small floor and fell4→3 lives. The later R03 frame-step run strongly
 matches initial sphere overlap/non-damaging push-out, with displacement-derived
 motion captured on the first observed normal update. The corrected source-bound
-initial-clearance contract now passes; counterfactual gameplay remains pending.
+initial-clearance contract now passes; corrected gameplay has now observed
+vertical descent/stable landing and Wizard attacks, as bounded below.
 Runtime is closed/restored.
 
 John authorized autonomous development, useful parallel agents, sensible
@@ -56,7 +62,36 @@ checkpoint near5% usage remaining. Do not redeem a reset credit. Do not replace
 the preserved editor silently, modify original game/save owners, bypass OS
 permissions, or call a usage pause completion. Serialize the shared .NET slot.
 
-## Latest closed runtime — September 7
+## Latest closed runtime — September 8, corrected separated Wizard
+
+Exact candidate is the clean `04-separated-candidate` child of
+`_local/research/dark-wizard-native-closure-20260906/separated-publication-gates-20260908-r01.PsfP2X/`.
+BIN basename `native-id65-fresh-wizard-separated-p1-n32-r01`, SHA
+`e57fedebb59ffc9020de00562baccbc5a6e09bffd5f24f665d34d5f03163cbdb`.
+The sibling real fault-test outputs use OLD UNSAFE P1 and are NEVER gameplay
+candidates; retained locks/stages are recovery evidence, not cleanup targets.
+
+Runtime journal:
+`_local/native-fresh-wizard-separated-runtime-20260908-r01.V9FBOP/RUNTIME-SESSION.md`.
+Duck24150/exec15281 and observer01/exec61586 are CLOSED, both exit0. Both fresh
+original INIs restored exactly; all nine protected pre/post hashes byte-identical.
+No resume state, video, original-card copy-back or R03 app rebuild. Do not reuse
+those departed IDs; every new session needs fresh settings backups/file/OS binds.
+
+At10% speed, first observed normal update timer2 had XYZ8960/8960/9207,
+health3/lives4 and both vectors0/0/-288. Timer16 settled at8960/8960/9064,
+both vectors zero. Subsequent20s intervals held that position while health2/1
+and visible Wizard attacks were observed. Native screenshot after landing:
+`screenshots/Spyro the Dragon 2026-09-08-09-25-14.png` in the runtime folder.
+Health0/handle0 on sample11 was refused before code/payload/final RAM barriers;
+it remains refused, not a player-death or engine-crash verdict. Original native
+Sparx source supports disappearance at nonpositive health, but the exact live
+branch was not traced. The next separately tested diagnostic must acquire fresh
+absence observations; it must never upgrade this historical refusal.
+Timer0, enemy defeat/reward, death/return, full-speed behavior, audio and peak
+resource guarantees remain untested for this candidate.
+
+## Earlier closed runtime — September 7
 
 R03 runtime is CLOSED/RESTORED: DuckStation45593/exec14240 and observer02/exec21415
 both exited0; all final observer checks and all nine protected hashes passed.
@@ -132,7 +167,7 @@ actual process/open image; equal RAM fields alone cannot authenticate it.
 - Earlier starter fresh floor and exact key/chest milestones remain narrower
   than unrestricted importing or ordinary new-level portal integration.
 
-Newest runtime evidence:
+Earlier two-Wizard runtime evidence (not the latest fresh-level run):
 `_local/native-two-wizard-runtime-20260906-r01.ygpgLm/`.
 Its journal owns the exact closed session and all preserved artifacts.
 The two-Wizard candidate is in
@@ -150,8 +185,10 @@ BIN SHA256
   failures pass; production/tests independently reviewed. Whole-level Capture/
   Save is now committed at3b26ce7 with112 actual-file checks, shared closed
   profiles and separate leases. Root315/0 and actual source2339/context42 passed
-  again, preserving original BIN/CUE. No aggregate UI, compiler or migration
-  exists yet. Read `native-fresh-level-aggregate.md`.
+  again, preserving original BIN/CUE. Explicit Fork is now committed atffcf176;
+  authored separated native compilation isab582c2. App integration and actual
+  saved-aggregate publication context remain in progress. Read
+  `native-fresh-level-aggregate.md`.
 - Distinct immutable fresh intent, canonical codec, preview/undo, project-bound
   Store save/reopen, stale-write protection and shared native compilation.
   Legacy Lab schemas keep their meaning; no old Lab file is reinterpreted.
@@ -266,7 +303,7 @@ BIN SHA256
   and new-process source recapture/readback match c4a7…5b5a6/1290. Failure evidence
   is retained separately. No app/normal export/runtime approval follows. Read
   `native-fresh-wizard-research-materializer.md`.
-- Latest all-project/default .NET gate: Release313 checks/zero failures with
+- Earlier materializer all-project/default .NET gate: Release313 checks/zero failures with
   `--build-all`, including the new materializer and prepared uninvoked physical
   test files. The prior144-step selected gate remains historical evidence.
   Whole Python138 tests/five explicit-source skips; runner56. This includes the
@@ -279,86 +316,68 @@ BIN SHA256
 
 ## Current package gate and next practical work
 
-A separate private R03 Mac app is running and its real Fresh Level window was
-visibly verified and opened for John on September6. It is compiled from6eae8d4
-(predates the new P1 scene), signed, and passes actual packaged PNG and pre-GUI
-protection inventories. The preserved installed editor was not replaced.
-The earlier genuine Documents permission prompt is historical, not the current
-blocker: current bootstrap/session files, process16530 and the observed native
-UI establish successful startup. Root attached the already-running app and only
-clicked Fresh Level; no field, Apply, Save, permission or security setting was
-changed. Do not infer who resolved the earlier prompt. Leave this now-user-facing
-document alone; do not close it or restore its seed over John's possible edits.
-The saved2048×2048 floor, heading96, colors, Stone Hill track02 and0 placed Mobys
-were shown. Actual edit/Apply/Undo/Save/reopen acceptance remains open, and no new
-Wizard integration is packaged. Read `native-fresh-document-mac-r03.md` and
-`spyro-progress-for-john-20260906.md` for exact controls, evidence and paths.
+The private R03 Mac app is CLOSED and preserved, compiled from6eae8d4. Its real
+main/Fresh window opening was previously verified. Full hands-on edit/save/
+close/reopen remains open; source and headless tests are not native GUI acceptance.
+No new aggregate or Wizard integration has been silently packaged into it.
 
-R02 evidence:
-`_local/research/fresh-document-mac-test-r02/evidence/`.
-Driver/handoffs:
-`_local/research/fresh-document-real-ui-r01.DsKiPF/mac-test-driver/`.
-R03 package: `_local/research/fresh-document-mac-test-r03/Spyro Fresh Document Test r03.app`.
-R03 driver: `_local/research/fresh-document-real-ui-r01.DsKiPF/mac-test-driver-r03/`.
-Retain R01/R02 failed/pre-GUI states and exact signed owners; no in-place rebuild.
+R03 package:
+`_local/research/fresh-document-mac-test-r03/Spyro Fresh Document Test r03.app`.
+R03 driver:
+`_local/research/fresh-document-real-ui-r01.DsKiPF/mac-test-driver-r03/`.
+Keep the signed bundle and its saved project unchanged. A later integrated test
+app needs a separately named package and isolated project, not an in-place R03
+rebuild. See `native-fresh-document-mac-r03.md` and
+`spyro-progress-for-john-20260906.md`.
 
-Next outcomes:
+Next outcomes, in parallel where ownership permits:
 
-1. John can actively test the open R03 Fresh Level document: edit heading/colors,
-   Apply, Undo/Redo, Save document and Reopen saved. Music has no preview audio;
-   Create research candidate is separate from the main Create BIN. Root verified
-   the current visible saved2048-floor state but did not perform these edits.
-   Finish edit/save/reopen and protected-original checks when this does not
-   interfere with John's live work. Package binary checks do not prove that gate.
-   Follow the separate
-   post-GUI preservation design; the pre-GUI verifier deliberately requires
-   manifest absence and cannot be reused as a post-bootstrap checker.
-2. Establish a source-owned fresh-Wizard damage/audio identity preserving Town's
-   occupied global1F mapping. Native caller masks/trigger rewrites erase the
-   proposed high marker; do not infer uniqueness from four static zero tables.
-   The actual issued destination-padding/read ownership gap now passes. The
-   bounded exclusive reward-selector audit still requires Town classes0E/0F/10;
-   simple0E is a distinct model grammar. Complete their assets and callback
-   closure rather than assuming only the yellow-gem path can occur.
-3. Physical publication, the activated fixed-candidate observer and first native
-   P1/N32 entry are complete. Playable entry failed; the session is closed and
-   restored. Clean CUE is in
-   `fresh-wizard-publication-validation-r01.0eF4Tz/candidate-r01`, never its fault
-   children. R03 now captures the early transition and source-matched spawn
-   overlap/push-out. Preserve this unsafe research witness; add a source-derived
-   clearance contract separately from neutral endpoint geometry before issuing
-   a corrected candidate. Do not disable the enemy, shrink its sphere or clear
-   player motion to hide the conflict. Whole-animation/route and corrected
-   idle/defeat/reward/re-entry proof remain separate. Review any new read-only fields
-   against original source and re-read them within each accepted sample.
-   A new run needs fresh backups/process binding and native UI pause handling;
-   observer disconnect can auto-resume if native state was running at accept.
-   Never widen old N16/Dark observers or issue debugger execution/RAM writes.
-   Static target10 remains separate from persistent/card/history acceptance.
-4. Extend tested texture/material and Moby families through the editor with
-   explicit dependency coverage and regression gates. General native texture
-   portability, arbitrary object mixtures, new normal portal routes and V6
-   release readiness remain unfinished.
-5. Finish the optional, default-off Free Flight editor workflow with persisted
-   enable/disable and disabled-output regression. Its exact Toasty native
-   research test already passed; that is not yet a finished editor checkbox
-   or universal-level acceptance. Preserve normal movement when disabled.
-6. Legacy Store compatibility characterization and whole-level Capture/Save are
-   complete, Root/peer-reviewed and checkpointed at3b26ce7. Root all-project
-   Release315/0 and actual original research2339/saved-context42 passed with
-   original BIN/CUE unchanged; new storage112 and legacy83/59/38 remain green.
-   No fork/UI/native publication is added yet.
-   Keep one aggregate Store, not one per object family; preserve the old
-   Snapshot/read-lease/publication contract. A later explicit legacy fork must
-   protect both snapshots and use PublishNew. The new detailed design is
-   `aggregate-store-r01.VBe0I6/NEXT-EXPLICIT-FORK.md` under the private research
-   directory. Root and peer found an additional publication-uncertain boundary:
-   ExportArtifactTransaction can rename, then throw in lock Dispose before returning.
-   An invoked but unreturned PublishNew cannot be called either committed or aborted
-   from bytes alone. The refined design must preserve evidence in that distinct arm,
-   while leaving old Save/transaction behavior untouched. Fork implementation and
-   test seams remain unreleased; no automatic migration or UI work yet.
+1. Finish the new absent-Sparx observer arm with genuine RED/GREEN tests, full
+   Root/peer review and explicit original-source branch ownership. Never change
+   the three old pinned observers or reinterpret sample11. Then use a fresh
+   DuckStation session for the corrected candidate's death/return and reward
+   checks. Use actual native UI input, fresh INI/card copies and exact candidate/
+   process/cache binding; no debugger execution or RAM writes. Capture early
+   entry by stepping before the transition rather than assuming a loading timer
+   from a different recipe. Disconnect may auto-resume; verify native pause.
+2. Integrate the approved whole-level App session into the existing Fresh
+   window: explicit legacy/aggregate mode, explicit saved-floor Fork, ordered
+   placement list, stable selection and Wizard route fields/preview. Neutral
+   multi-placement drafts must remain fully editable and stored; native export
+   must still refuse unsupported shapes instead of using the first row, a
+   hidden preset or the old floor-only fallback. Preserve raw unapplied fields,
+   dirty prompts, active-project/busy checks and existing legacy behavior.
+3. Add actual saved-aggregate publication context and a final Store read lease
+   held through PublishNew. Compile the actual captured Snapshot.Intent; its
+   independently parsed object is not reference-identical to CurrentIntent after
+   Save. Context must bind full aggregate canonical bytes AND raw manifest/
+   document revision and actual project identity. Detached candidates remain
+   explicitly detached; do not relabel their projectSaveBindingClaimed=false.
+   Existing typed Unconfirmed and known-commit retention rules remain mandatory.
+4. Finish the bounded textured Disc issuer/source tests. Use the actual typed
+   DirectLq body discriminator plus shape, not A38 used length alone (untextured
+   data can share that length). Preserve old Disc JSON/goldens and staging/
+   material ancestry. Then progress guarded candidate publication, editable
+   persisted material slots and a separate real textured-level playtest.
+   Complete static texture records do not yet prove HQ/near rendering, animated
+   materials or arbitrary simultaneous Wizard/resource composition.
+5. Expand Moby family/dependency support and destination capacity coverage.
+   Generic inventory is not placement authority. Preserve source-derived
+   callbacks, private state, animation/collision lookahead, shared audio and
+   reward/particle lifetimes. The unresolved electric-damage global1F owner
+   cannot be solved by an erased marker or by overwriting Town's existing map.
+   Track new normal portal routes and distinct level/save slots separately.
+6. Keep the optional default-off Free Flight UI workflow lower priority than
+   the requested Moby/material/fresh-level path. Its exact Toasty research
+   gameplay passed; persisted checkbox, disable restoration and other levels
+   remain separate work.
+
+Completed persistence checkpoints are3b26ce7 (aggregate Store) andffcf176
+(explicit Fork), not pending migration. Actual transaction uncertainty was
+subsequently preserved infa66f24. A real foreign lock exercised the invoked/
+unreturned outcome; post-rename Dispose failure itself was not reproduced.
+Retained failure artifacts are not proof of success or automatic cleanup targets.
 
 Keep source, full-image readback, actual UI, native gameplay, audio listening,
-save/reboot and public-release acceptance separate. Coordinate agent findings
-and concrete implementation rather than accumulating disconnected audits.
+save/reboot and public-release acceptance separate. Coordinate concrete
+implementation instead of accumulating disconnected audits.

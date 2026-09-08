@@ -3,7 +3,7 @@
 The wider authored floor/Wizard recipe has now been physically published and
 verified in a separate process through a freshly recaptured source chain.
 This is a detached research candidate, not a saved-document/UI export or a
-native gameplay certification. Runtime testing is the next independent gate.
+general native gameplay certification. The limited runtime test below is closed.
 
 ## Actual publication
 
@@ -63,3 +63,30 @@ errors. Byte equality never substitutes for a transaction acknowledgement.
 No normal Create BIN enablement, general Moby portability, textures, durable
 ownership, card/portal compatibility, global audio or peak-memory approval follows.
 The preserved R03 editor app has not been replaced by this source checkpoint.
+
+## Closed DuckStation R01
+
+`_local/native-fresh-wizard-separated-runtime-20260908-r01.V9FBOP/`
+contains the complete journal, native screenshot and read-only observer log.
+Actual cold boot/private-card load/selector entered level65. The first observed
+normal sample was timer2, not timer0: Spyro kept XY8960/8960 while descending,
+then settled at Z9064/state0 with zero motion and full health. This does not
+reproduce the earlier non-damaging XY launch. The Wizard was visible and real
+bolt rows were observed. Subsequent hands-off attacks reduced health3→2→1→0
+without leaving the floor. Those are sampled/visible observations, not a trace
+of an unseen first collision query or every attack contact.
+
+At health0 the existing neutral observer refused a null Sparx handle before
+reading actor payloads. The game remained paused; Root closed the run rather
+than weakening a live guard. Lives were still4: player death and automatic
+return were not tested. A source-checked absent-companion diagnostic is needed
+before continuing that lifecycle test. No game crash is established by the
+observer's missing coverage.
+
+Observer01 closed successfully with all full final checks, complete JSONL SHA
+`00fe5641fb891d8f6c76c296d692720396cee139c51336b730442c2ef9525372`.
+DuckStation exited0; both actual after-test INIs were retained and fresh
+original settings restored byte-for-byte. All nine protected whole-file hashes
+match before/after, including the user's original save card. No process or
+restore remains active. No normal-speed, enemy defeat/reward, death/reentry,
+audio, portal/card-history or peak-memory acceptance follows.
