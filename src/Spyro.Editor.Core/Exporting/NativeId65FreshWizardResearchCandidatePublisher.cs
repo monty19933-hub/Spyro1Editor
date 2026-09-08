@@ -3,12 +3,12 @@ namespace Spyro.Editor.Core.Exporting;
 /// <summary>PublishNew actually returned, but final verification or accounted cleanup failed. Paths are retained evidence, not verified success.</summary>
 public sealed class NativeId65FreshWizardResearchCommittedException:IOException
 {
-    internal NativeId65FreshWizardResearchCommittedException(string root,string plan,string recovery,string stage,string lease,Exception inner)
+    internal NativeId65FreshWizardResearchCommittedException(string root,NativeId65FreshWizardResearchCandidatePlan plan,string recovery,string stage,string lease,Exception inner)
         :base("Fresh Wizard artifacts were committed but final verification or cleanup did not complete. Preserve "+root,inner)
     {
-        OutputDirectory=root;ImagePath=Path.Combine(root,NativeId65FreshWizardResearchCandidatePlan.ImageName);
-        CuePath=Path.Combine(root,NativeId65FreshWizardResearchCandidatePlan.CueName);ReceiptPath=Path.Combine(root,NativeId65FreshWizardResearchCandidatePlan.ReceiptName);
-        PlanSha256=plan;RetainedRecoveryDirectory=recovery;RetainedStageDirectory=stage;RetainedOutputLeasePath=lease;
+        OutputDirectory=root;ImagePath=Path.Combine(root,plan.BoundImageName);
+        CuePath=Path.Combine(root,plan.BoundCueName);ReceiptPath=Path.Combine(root,plan.BoundReceiptName);
+        PlanSha256=plan.PlanSha256;RetainedRecoveryDirectory=recovery;RetainedStageDirectory=stage;RetainedOutputLeasePath=lease;
     }
     public string OutputDirectory{get;}
     public string ImagePath{get;}
@@ -44,5 +44,9 @@ public static class NativeId65FreshWizardResearchCandidatePublisher
     internal static async Task<NativeId65FreshDiscResearchPublication> PublishPostcommitForSmokeAsync(NativeId65FreshWizardResearchCandidatePlan plan,
         string outputDirectory,Action<NativeId65FreshWizardPostcommitPoint,string> checkpoint,CancellationToken token=default)
         =>await NativeId65FreshResearchPublicationEngine.PublishWizardPostcommitForSmokeAsync(
+            NativeId65FreshResearchPublicationBinding.FromWizard(plan),outputDirectory,checkpoint,token);
+    internal static async Task<NativeId65FreshDiscResearchPublication> PublishUnconfirmedForSmokeAsync(NativeId65FreshWizardResearchCandidatePlan plan,
+        string outputDirectory,Action<string> checkpoint,CancellationToken token=default)
+        =>await NativeId65FreshResearchPublicationEngine.PublishWizardUnconfirmedForSmokeAsync(
             NativeId65FreshResearchPublicationBinding.FromWizard(plan),outputDirectory,checkpoint,token);
 }

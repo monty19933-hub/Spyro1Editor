@@ -2,12 +2,13 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Spyro.Editor.Core.Editing;
 
 [assembly: InternalsVisibleTo("Spyro.Editor.NativeId65FreshWizardResearchSmoke")]
 
 namespace Spyro.Editor.Core.Exporting;
 
-/// <summary>Exact primary A/P1/N32 research recipe bound to one actual Disc object; not native/runtime or normal exporter authority.</summary>
+/// <summary>Two separately issued exact P1/N32 research recipes; not native/runtime or normal exporter authority.</summary>
 public sealed class NativeId65FreshWizardResearchCandidatePlan
 {
     public const string ProfileId="native-id65-fresh-wizard-primary-p1-n32-research-r01";
@@ -16,25 +17,50 @@ public sealed class NativeId65FreshWizardResearchCandidatePlan
     internal const string ReceiptName="native-id65-fresh-wizard-p1-n32-r01.receipt.json";
     internal static string[] OutputNames=>[ImageName,ReceiptName,CueName];
     private const string ImageHash="c4a70f826b1a9a3d4ad8e36512be354b6205d27ea2c7a314776a51067f35b5a6";
+    private const string SeparatedProfile="native-id65-fresh-wizard-separated-p1-n32-research-r01";
+    private const string SeparatedName="native-id65-fresh-wizard-separated-p1-n32-r01";
+    private const string SeparatedImageHash="e57fedebb59ffc9020de00562baccbc5a6e09bffd5f24f665d34d5f03163cbdb";
     private const string CanonicalJson="""{"kind":"spyro-native-fresh-intent","schema":1,"floor":{"x":8448,"y":8448,"z":8704,"width":1024,"depth":1024},"spawn":{"x":8960,"y":8960,"heading":64},"display":{"floorRgb":[80,128,112],"skyRgb":[128,96,64]},"musicTrackId":19}""";
+    private const string SeparatedCanonicalJson="""{"kind":"spyro-native-fresh-intent","schema":1,"floor":{"x":8448,"y":8448,"z":8704,"width":2048,"depth":2048},"spawn":{"x":8960,"y":8960,"heading":64},"display":{"floorRgb":[80,128,112],"skyRgb":[128,96,64]},"musicTrackId":19}""";
     private readonly NativeId65FreshWizardResearchDiscPlan _disc;
+    private readonly NativeFreshInitialSpawnClearancePlan? _clearance;
+    private readonly byte[]? _aggregateCanonical;
     private readonly byte[] _sourceCue,_outputCue,_canonical;
     private readonly string _imageIdentity,_cueIdentity;
     private NativeId65FreshWizardResearchCandidatePlan(string image,string cue,NativeId65FreshWizardResearchDiscPlan disc,
-        byte[] sourceCue,string imageIdentity,string cueIdentity)
+        byte[] sourceCue,string imageIdentity,string cueIdentity,NativeFreshInitialSpawnClearancePlan? clearance=null)
     {
         SourceImagePath=image;SourceCuePath=cue;_disc=disc;_sourceCue=sourceCue;_imageIdentity=imageIdentity;_cueIdentity=cueIdentity;
+        _clearance=clearance;
         _canonical=disc.ExecutableAncestor.BodyAncestor.HostAncestor.SceneAncestor.CompilationAncestor.CopyCanonicalDocument();
-        _outputCue=DiscCueSheet.TextEncoding.GetBytes($"FILE \"{ImageName}\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n");
+        _outputCue=DiscCueSheet.TextEncoding.GetBytes($"FILE \"{BoundImageName}\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n");
         SourceCueSha256=Hash(sourceCue);
+        if(clearance is null)
         PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{ProfileId,SourceImagePath,SourceCuePath,SourceCueSha256,imageIdentity,cueIdentity,
             DiscPlanSha256,ExecutablePlanSha256,BodyPlanSha256,HostPlanSha256,ScenePlanSha256,FallbackPlanSha256,CanonicalDocumentSha256,
             expectedImage=ImageHash,changedSectors=1290}));
-        _=BuildReceipt(new(ImageHash,1290)); // Bound prospective companion, not a claim that any image was written/read back.
+        else
+        {
+            _aggregateCanonical=NativeFreshLevelDocumentCodec.SerializeCanonical(disc.ExecutableAncestor.BodyAncestor.HostAncestor.SceneAncestor.AuthoringDocumentAncestor!);
+            PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{ProfileId=BindingProfileId,SourceImagePath,SourceCuePath,SourceCueSha256,imageIdentity,cueIdentity,
+                DiscPlanSha256,ExecutablePlanSha256,BodyPlanSha256,HostPlanSha256,ScenePlanSha256,FallbackPlanSha256,CanonicalDocumentSha256,
+                clearancePlanSha256=clearance.PlanSha256,aggregateCanonicalDocumentJson=Encoding.UTF8.GetString(_aggregateCanonical),
+                aggregateCanonicalDocumentSha256=Hash(_aggregateCanonical),expectedImage=ExpectedImageSha256,changedSectors=1290,
+                projectSaveBindingClaimed=false,runtimeVerified=false}));
+        }
+        _=BuildReceipt(new(ExpectedImageSha256,1290)); // Bound prospective companion, not a claim that any image was written/read back.
     }
     internal NativeId65FreshWizardResearchDiscPlan DiscAncestor=>_disc;
+    internal string BoundImageName=>_clearance is null?ImageName:SeparatedName+".bin";
+    internal string BoundCueName=>_clearance is null?CueName:SeparatedName+".cue";
+    internal string BoundReceiptName=>_clearance is null?ReceiptName:SeparatedName+".receipt.json";
+    internal string[] BoundOutputNames=>[BoundImageName,BoundReceiptName,BoundCueName];
     internal void RequireAncestry(NativeId65FreshWizardResearchDiscPlan disc)
-    {if(!ReferenceEquals(disc,_disc))throw new InvalidDataException("Candidate belongs to another actual Disc, even if all bytes/hashes match.");RequireDisc(disc);}
+    {
+        if(!ReferenceEquals(disc,_disc))throw new InvalidDataException("Candidate belongs to another actual Disc, even if all bytes/hashes match.");
+        if(_clearance is null)RequireDisc(disc);else RequireSeparatedDisc(disc,_clearance);
+    }
+    public string BindingProfileId=>_clearance is null?ProfileId:SeparatedProfile;
     public string SourceImagePath{get;}
     public string SourceCuePath{get;}
     public string SourceCueSha256{get;}
@@ -46,7 +72,7 @@ public sealed class NativeId65FreshWizardResearchCandidatePlan
     public string ScenePlanSha256=>_disc.ExecutableAncestor.BodyAncestor.HostAncestor.ScenePlanSha256;
     public string FallbackPlanSha256=>_disc.ExecutableAncestor.BodyAncestor.HostAncestor.FallbackResourcePlanSha256;
     public string CanonicalDocumentSha256=>_disc.CanonicalDocumentSha256;
-    public string ExpectedImageSha256=>ImageHash;
+    public string ExpectedImageSha256=>_clearance is null?ImageHash:SeparatedImageHash;
     public long ExpectedImageByteLength=>NativeId65FreshDiscSource.ImageByteLength;
     public int ExpectedChangedRawSectors=>1290;
     public bool SourceCertified=>true;
@@ -65,6 +91,37 @@ public sealed class NativeId65FreshWizardResearchCandidatePlan
         byte[] bytes=ReadCueFile(cue,token);ValidateSourceCue(bytes,cue,image);
         var plan=new NativeId65FreshWizardResearchCandidatePlan(image,cue,disc,bytes,imageIdentity,cueIdentity);
         await plan.RequireFreshAsync(token);token.ThrowIfCancellationRequested();return plan;
+    }
+    public static async Task<NativeId65FreshWizardResearchCandidatePlan> CaptureSeparatedAsync(string originalBin,string sourceCue,
+        NativeId65FreshWizardResearchDiscPlan disc,NativeFreshInitialSpawnClearancePlan clearance,CancellationToken token=default)
+    {
+        token.ThrowIfCancellationRequested();ArgumentNullException.ThrowIfNull(disc);ArgumentNullException.ThrowIfNull(clearance);
+        RequireSeparatedDisc(disc,clearance);
+        ArgumentException.ThrowIfNullOrWhiteSpace(originalBin);ArgumentException.ThrowIfNullOrWhiteSpace(sourceCue);
+        string image=Path.GetFullPath(originalBin),cue=Path.GetFullPath(sourceCue),imageIdentity=PathIdentity(image),cueIdentity=PathIdentity(cue);
+        byte[] bytes=ReadCueFile(cue,token);ValidateSourceCue(bytes,cue,image);
+        var plan=new NativeId65FreshWizardResearchCandidatePlan(image,cue,disc,bytes,imageIdentity,cueIdentity,clearance);
+        await plan.RequireFreshAsync(token);token.ThrowIfCancellationRequested();return plan;
+    }
+    private static void RequireSeparatedDisc(NativeId65FreshWizardResearchDiscPlan disc,NativeFreshInitialSpawnClearancePlan clearance)
+    {
+        disc.RequireAncestry(disc.ExecutableAncestor);
+        var exe=disc.ExecutableAncestor;var scene=exe.BodyAncestor.HostAncestor.SceneAncestor;
+        var document=scene.AuthoringDocumentAncestor??throw new InvalidDataException("Separated candidate requires an actual authored document/scene.");
+        clearance.RequireInitialSeparation(document,scene);
+        byte[] aggregate=NativeFreshLevelDocumentCodec.SerializeCanonical(document);
+        if(!aggregate.AsSpan().SequenceEqual(clearance.CopyCanonicalDocument())||Hash(aggregate)!=clearance.CanonicalDocumentSha256||
+            !scene.CompilationAncestor.CopyCanonicalDocument().AsSpan().SequenceEqual(Encoding.UTF8.GetBytes(SeparatedCanonicalJson))||
+            scene.Placement!=new NativeWizardPlacementIntent(9984,9984,8704,9472,9984)||exe.SelectedBuiltInTrack!=19||
+            exe.Census.StaticTreasureTarget!=10||exe.Census.TargetSlot!=35||disc.FinalExecutableLba!=54958||disc.FinalExecutableEndExclusive!=55162||
+            disc.FinalWadByteLength!=0x6B44800||disc.ChangedSectorOwnerCount!=1290||
+            disc.PlanSha256!="20393f8a891412b7a36f341b895e344953b9fd43b107bb0a69b67a9dbba29c7c"||
+            Hash(disc.CopyBody())!="503916389b85b655f5e1db5728e01fc2ea95daa7d3b635a3df7f5f4cc6452d29"||
+            Hash(disc.CopyOverlay())!="ad6d952cbf70ab8b1eab53f7637ffd0235271b7b20696956c9406f36f714fa7e"||
+            Hash(disc.CopyExecutable())!="a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc"||
+            Hash(disc.CopyWadDirectory())!="4a862b5fa39739d5a6041b8de75aa8801824aed35afe0283f9ad572810580e82"||
+            Hash(disc.CopyIsoRootDirectory())!="2769092a104860606518faf9cc8188c27257236b471d11153ac714ebba6ee5ee")
+            throw new InvalidDataException("Wizard separated candidate requires the actual exact B/P1/N32/track19/target10 recipe and initial clearance.");
     }
     internal static void RequireDisc(NativeId65FreshWizardResearchDiscPlan disc)
     {
@@ -87,7 +144,7 @@ public sealed class NativeId65FreshWizardResearchCandidatePlan
     internal byte[] BuildReceipt(NativeId65FreshDiscVerification verified)
     {
         RequireVerification(verified);var exe=_disc.ExecutableAncestor;var body=exe.BodyAncestor;var host=body.HostAncestor;
-        byte[] bytes=JsonSerializer.SerializeToUtf8Bytes(new{schema=1,profile=ProfileId,planSha256=PlanSha256,
+        byte[] bytes=JsonSerializer.SerializeToUtf8Bytes(new{schema=1,profile=BindingProfileId,planSha256=PlanSha256,
             sourceImageSha256=NativeId65FreshDiscSource.OriginalSha256,sourceCueSha256=SourceCueSha256,sourceImagePath=SourceImagePath,sourceCuePath=SourceCuePath,
             discPlanSha256=DiscPlanSha256,executablePlanSha256=ExecutablePlanSha256,bodyPlanSha256=BodyPlanSha256,hostPlanSha256=HostPlanSha256,
             scenePlanSha256=ScenePlanSha256,fallbackPlanSha256=FallbackPlanSha256,
@@ -102,6 +159,21 @@ public sealed class NativeId65FreshWizardResearchCandidatePlan
             peakRuntimeMemoryProven=false,hardwareTransfersProven=false,completeIncomingEdgeClosureProven=false,completeNativeDependencyClosureProven=false,
             checkpointOrForeignStateSupported=false,discPlanLimitations=_disc.PendingOwners,
             candidatePublicationScope="Exact new-only research BIN/CUE/receipt; detached ancestor limitations are not runtime certification."},new JsonSerializerOptions{WriteIndented=true});
+        if(_clearance is not null)
+        {
+            // The legacy byte serialization above is unchanged. Only the new
+            // recipe appends distinct aggregate/assessment owners; Base keeps
+            // its existing meaning and no saved-project authority is inferred.
+            using var original=JsonDocument.Parse(bytes);using var output=new MemoryStream();
+            using(var writer=new Utf8JsonWriter(output,new JsonWriterOptions{Indented=true}))
+            {
+                writer.WriteStartObject();foreach(var property in original.RootElement.EnumerateObject())property.WriteTo(writer);
+                writer.WriteString("clearancePlanSha256",_clearance.PlanSha256);
+                writer.WriteString("aggregateCanonicalDocumentJson",Encoding.UTF8.GetString(_aggregateCanonical!));
+                writer.WriteString("aggregateCanonicalDocumentSha256",Hash(_aggregateCanonical!));writer.WriteEndObject();
+            }
+            bytes=output.ToArray();
+        }
         if(bytes.Length is <1 or >65536)throw new InvalidDataException("Wizard receipt exceeds the exact bounded companion owner.");
         return bytes;
     }
@@ -160,8 +232,13 @@ public sealed class NativeId65FreshWizardResearchCandidatePlan
         using var output=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
         var result=_disc.VerifyImage(source,output,token);RequireVerification(result);return result;
     }
-    private static void RequireVerification(NativeId65FreshDiscVerification verified)
-    {ArgumentNullException.ThrowIfNull(verified);if(verified.OutputSha256!=ImageHash||verified.ChangedSectors!=1290)throw new InvalidDataException("Wizard readback must match the independent primary full image and1290 changed sectors.");}
+    private void RequireVerification(NativeId65FreshDiscVerification verified)
+    {
+        ArgumentNullException.ThrowIfNull(verified);
+        if(verified.OutputSha256!=ExpectedImageSha256||verified.ChangedSectors!=1290)
+            throw new InvalidDataException(_clearance is null?"Wizard readback must match the independent primary full image and1290 changed sectors.":
+                "Wizard readback must match the independent separated full image and1290 changed sectors.");
+    }
     internal static void ValidateSourceCue(ReadOnlySpan<byte> bytes,string cue,string image)
     {
         try{_=NativeId65FreshDiscResearchCandidatePlan.CompileCueForSmoke(bytes,cue,image);}

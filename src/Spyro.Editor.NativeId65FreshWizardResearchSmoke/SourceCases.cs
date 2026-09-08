@@ -93,6 +93,7 @@ internal static class SourceCases
             // Real old issuance: null is NOT a wrong-kind certificate.
             var starter=await NativeId65FreshDiscResearchCandidatePlan.CaptureAsync(bin,cue,compilation.DiscPlan);
             var oldBinding=NativeId65FreshResearchPublicationBinding.FromStarter(starter);
+            await UnconfirmedPublicationCases.SourceApiAsync(plan,oldBinding);
             await Refuse<InvalidDataException>(()=>NativeId65FreshResearchPublicationEngine.PublishWizardPostcommitForSmokeAsync(oldBinding,"must-not-create",(_,_)=>{},default),"actual fresh Wizard");
             Check(oldBinding.WizardPlan==null&&!oldBinding.TracksCommittedFailure&&oldBinding.CopyCueBytes().SequenceEqual(starter.CopyCueBytes()),
                 "Genuine old binding keeps its original bytes and kind.");

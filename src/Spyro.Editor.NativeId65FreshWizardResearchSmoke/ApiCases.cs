@@ -8,7 +8,9 @@ internal static class ApiCases
         Type p=typeof(NativeId65FreshWizardResearchCandidatePlan),e=typeof(NativeId65FreshWizardResearchCommittedException);
         Require(p.IsSealed&&p.GetConstructors().Length==0&&p.GetProperties().All(x=>x.SetMethod?.IsPublic!=true),"Closed immutable source issuer.");
         var factory=p.GetMethods(BindingFlags.Public|BindingFlags.Static|BindingFlags.DeclaredOnly);
-        Require(factory.Length==1&&factory[0].Name=="CaptureAsync"&&factory[0].GetParameters().Select(x=>x.ParameterType).SequenceEqual(new[]{typeof(string),typeof(string),typeof(NativeId65FreshWizardResearchDiscPlan),typeof(CancellationToken)}),"Only actual Disc and original BIN/CUE/token.");
+        Require(factory.Length==2&&factory.Single(x=>x.Name=="CaptureAsync").GetParameters().Select(x=>x.ParameterType).SequenceEqual(new[]{typeof(string),typeof(string),typeof(NativeId65FreshWizardResearchDiscPlan),typeof(CancellationToken)})&&
+            factory.Single(x=>x.Name=="CaptureSeparatedAsync").GetParameters().Select(x=>x.ParameterType).SequenceEqual(new[]{typeof(string),typeof(string),typeof(NativeId65FreshWizardResearchDiscPlan),typeof(NativeFreshInitialSpawnClearancePlan),typeof(CancellationToken)}),
+            "Exactly old actual Disc factory and separate actual Disc/clearance factory; no caller hash/profile/approval.");
         Require(e.IsSealed&&e.GetConstructors().Length==0&&typeof(IOException).IsAssignableFrom(e)&&e.GetProperties(BindingFlags.Public|BindingFlags.Instance|BindingFlags.DeclaredOnly).All(x=>x.SetMethod?.IsPublic!=true),"Known-commit failure cannot be publicly manufactured or edited.");
         using var cancel=new CancellationTokenSource();cancel.Cancel();
         await Refuse<OperationCanceledException>(()=>NativeId65FreshWizardResearchCandidatePlan.CaptureAsync("must-not-open.bin","must-not-open.cue",null!,cancel.Token));

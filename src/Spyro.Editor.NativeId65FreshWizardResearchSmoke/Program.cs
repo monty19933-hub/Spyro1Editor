@@ -1,3 +1,4 @@
+if(UnconfirmedPublicationCases.IsMode(args)){await UnconfirmedPublicationCases.RunAsync(args);return;}
 if(ReviewedPublicationCases.IsReviewedMode(args)){await ReviewedPublicationCases.RunAsync(args);return;}
 if(PublicationBoundaryModes.IsMode(args)){await PublicationBoundaryModes.RunAsync(args);return;}
 if(args.Length!=0&&(args.Length!=3||args[0]!="--source"))
@@ -7,4 +8,6 @@ await FreeCases.Run();
 ReviewedPublicationCases.RunArgumentTests();
 PublicationBoundaryModes.RunArgumentTests();
 await PublicationFailureCases.Run();
+await PublicationAttemptCases.Run();
+await UnconfirmedPublicationCases.RunFreeAsync();
 if(args.Length==3)await SourceCases.Run(args[1],args[2]);

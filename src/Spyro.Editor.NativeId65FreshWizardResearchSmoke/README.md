@@ -58,13 +58,14 @@ zero warnings/errors. Exact commands/logs/hashes are in the evidence HANDOFF.
 
 ## Explicit physical modes
 
-Only the following four exact modes accept BIN CUE and an absolute final path:
+The following reviewed modes accept BIN CUE and an absolute final path:
 
 ```text
 --stage-reviewed ORIGINAL.bin ORIGINAL.cue ABSENT-workspace
 --postcommit-reviewed ORIGINAL.bin ORIGINAL.cue ABSENT-workspace
 --publish-reviewed ORIGINAL.bin ORIGINAL.cue ABSENT-output
 --verify-reviewed ORIGINAL.bin ORIGINAL.cue EXISTING-output
+--unconfirmed-reviewed ORIGINAL.bin ORIGINAL.cue ABSENT-workspace
 ```
 
 They are never called by defaults, source mode or the regression runner. Parents
@@ -72,6 +73,22 @@ must already exist and be unlinked; originals cannot overlap outputs. The
 postcommit test creates and retains nine full BIN/CUE/receipt sets (~5.95GB),
 including a deliberately corrupted ninth BIN; do not use fault children for play.
 No existing output is overwritten, repaired or automatically adopted.
+
+The uncertainty mode stages the old fixed-P1 image solely as a failure fixture.
+After the final engine guards, a narrow internal callback installs an actual
+foreign transaction lock and an unknown stage sentinel. The unchanged real
+transaction refuses the lock; the engine reports Unconfirmed, retains the whole
+stage and output lease, and closes its handle. The test checks every retained
+owner and independently recaptures the actual source chain. Matching staged
+bytes never establish a successful publication. This exercise does not
+reproduce a post-rename Dispose failure and must never be loaded for gameplay.
+
+All four fresh publisher bindings now account the real transaction boundary:
+not invoked, explicit incomplete rollback, unconfirmed invocation, or returned
+commit. Primary, final-source and close failures remain ordered and visible.
+An uncertain invocation preserves its stage/lease rather than inferring an
+abort from the files present. The existing pre-call fault routes remain forced
+failures, separate from this actual transaction-call exercise.
 
 Root's actual staging54 and nine postcommit20865 checks now pass. The initial
 first-sector test RED incorrectly equated logical buffered length with disk

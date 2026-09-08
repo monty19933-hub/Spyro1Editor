@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
 
+if (SeparatedPublicationCases.IsReviewedMode(args)) { await SeparatedPublicationCases.RunAsync(args); return; }
 if (args.Length != 0 && (args.Length != 3 || args[0] != "--source"))
     throw new ArgumentException("Usage: NativeFreshWizardAuthoringSmoke [--source original.bin original.cue]");
 int checks = 0;
@@ -13,6 +14,8 @@ using (var cancelled = new CancellationTokenSource())
 }
 await Refuse<ArgumentNullException>(() => NativeId65FreshWizardResearchResourcePlan.CaptureAuthoredAsync("must-not-open", null!, null!));
 await Refuse<ArgumentNullException>(() => NativeId65FreshWizardResearchScenePlan.CaptureAuthoredAsync("must-not-open", null!, null!, null!, null!));
+await SeparatedCandidateCases.Free(Check);
+await SeparatedPublicationArgumentCases.Run(Check);
 Console.WriteLine($"FRESH_WIZARD_AUTHORING_FREE_OK checks={checks}");
 if (args.Length == 0) return;
 string bin = Path.GetFullPath(args[1]), cue = Path.GetFullPath(args[2]);
@@ -69,6 +72,7 @@ try
     var body = await NativeId65FreshWizardResearchBodyPlan.CaptureAsync(bin, host);
     var exe = await NativeId65FreshWizardResearchExecutablePlan.CaptureAsync(bin, body);
     var disc = await NativeId65FreshWizardResearchDiscPlan.CaptureAsync(bin, exe);
+    var candidate = await SeparatedCandidateCases.Source(bin,cue,disc,clearance,Check);
     Check(body.ModelRuntimeAddress == 0x8008C334 && body.SceneRuntimeAddress == 0x800A5334 &&
           body.KnownSceneEndAddress == 0x800A8334, "Authored surface does not silently relocate live resources.");
     Check(disc.CopyBody().AsSpan(0xE6000, 0x8FC).SequenceEqual(newData) &&

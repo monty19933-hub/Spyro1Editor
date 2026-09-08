@@ -1,6 +1,7 @@
 using Spyro.Editor.Core.Persistence;
 using Spyro.Editor.Core.Editing;
 using System.Security.Cryptography;
+using System.Runtime.ExceptionServices;
 
 namespace Spyro.Editor.Core.Exporting;
 
@@ -51,10 +52,10 @@ internal sealed class NativeId65FreshResearchPublicationBinding
     internal string SourceCuePath => _wizard != null ? _wizard.SourceCuePath : _saved != null ? _saved.Plan.SourceCuePath : _starter != null ? _starter.SourceCuePath : _edited!.SourceCuePath;
     internal string PlanSha256 => _wizard != null ? _wizard.PlanSha256 : _saved != null ? _saved.Plan.PlanSha256 : _starter != null ? _starter.PlanSha256 : _edited!.PlanSha256;
     internal string Label => _wizard != null ? "Fresh Wizard" : _saved != null ? "Saved fresh LAB" : _starter != null ? "Fresh LAB" : "Edited fresh LAB";
-    internal string ImageName => _wizard != null ? NativeId65FreshWizardResearchCandidatePlan.ImageName : _saved != null ? NativeId65FreshDocumentResearchPlan.ImageName : _starter != null ? NativeId65FreshDiscResearchCandidatePlan.ImageName : NativeId65FreshEditedDocumentResearchPlan.ImageName;
-    internal string CueName => _wizard != null ? NativeId65FreshWizardResearchCandidatePlan.CueName : _saved != null ? NativeId65FreshDocumentResearchPublisher.CueName : _starter != null ? NativeId65FreshDiscResearchCandidatePlan.CueName : NativeId65FreshEditedDocumentResearchPlan.CueName;
-    internal string ReceiptName => _wizard != null ? NativeId65FreshWizardResearchCandidatePlan.ReceiptName : _saved != null ? NativeId65FreshDocumentResearchPublisher.ReceiptName : _starter != null ? NativeId65FreshDiscResearchCandidatePlan.ReceiptName : NativeId65FreshEditedDocumentResearchPlan.ReceiptName;
-    internal string[] OutputNames => _wizard != null ? NativeId65FreshWizardResearchCandidatePlan.OutputNames : _saved != null ? [ImageName, ReceiptName, CueName] : _starter != null ? NativeId65FreshDiscResearchCandidatePlan.OutputNames : NativeId65FreshEditedDocumentResearchPlan.OutputNames;
+    internal string ImageName => _wizard != null ? _wizard.BoundImageName : _saved != null ? NativeId65FreshDocumentResearchPlan.ImageName : _starter != null ? NativeId65FreshDiscResearchCandidatePlan.ImageName : NativeId65FreshEditedDocumentResearchPlan.ImageName;
+    internal string CueName => _wizard != null ? _wizard.BoundCueName : _saved != null ? NativeId65FreshDocumentResearchPublisher.CueName : _starter != null ? NativeId65FreshDiscResearchCandidatePlan.CueName : NativeId65FreshEditedDocumentResearchPlan.CueName;
+    internal string ReceiptName => _wizard != null ? _wizard.BoundReceiptName : _saved != null ? NativeId65FreshDocumentResearchPublisher.ReceiptName : _starter != null ? NativeId65FreshDiscResearchCandidatePlan.ReceiptName : NativeId65FreshEditedDocumentResearchPlan.ReceiptName;
+    internal string[] OutputNames => _wizard != null ? _wizard.BoundOutputNames : _saved != null ? [ImageName, ReceiptName, CueName] : _starter != null ? NativeId65FreshDiscResearchCandidatePlan.OutputNames : NativeId65FreshEditedDocumentResearchPlan.OutputNames;
     internal string LeaseName => _wizard != null ? ".native-id65-fresh-wizard.writer.lock" : _saved != null ? ".native-id65-fresh-document-research.writer.lock" : _starter != null ? ".native-id65-fresh.writer.lock" : ".native-id65-fresh-edited.writer.lock";
     internal string StagePrefix => _wizard != null ? ".native-id65-fresh-wizard-stage-" : _saved != null ? ".native-id65-fresh-document-research-stage-" : _starter != null ? ".native-id65-fresh-stage-" : ".native-id65-fresh-edited-stage-";
 
@@ -130,13 +131,29 @@ internal static class NativeId65FreshResearchPublicationEngine
             wizardPostcommitCheckpoint: checkpoint);
     }
 
+    // Distinct from the old always-forced precommit routes. This instrumented
+    // exercise must install a real blocking transaction lock, then lets the
+    // unchanged PublishNew make the actual call and determine its own failure.
+    internal static async Task<NativeId65FreshDiscResearchPublication> PublishWizardUnconfirmedForSmokeAsync(
+        NativeId65FreshResearchPublicationBinding plan, string directory,
+        Action<string> checkpoint, CancellationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if (plan.WizardPlan == null)
+            throw new InvalidDataException("Unconfirmed exercise requires an actual fresh Wizard binding.");
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        return await PublishCoreAsync(plan, directory, NativeId65FreshResearchFault.None, null, token,
+            wizardUnconfirmedCheckpoint: checkpoint);
+    }
+
     private static async Task<NativeId65FreshDiscResearchPublication> PublishCoreAsync(NativeId65FreshResearchPublicationBinding plan,
         string outputDirectory, NativeId65FreshResearchFault fault,
         Action<NativeId65FreshResearchFault, string>? checkpoint, CancellationToken token,
         NativeId65FreshDocumentResearchFault documentFault = NativeId65FreshDocumentResearchFault.None,
         Action<NativeId65FreshDocumentResearchFault, string>? documentCheckpoint = null,
         Action<NativeId65FreshDocumentPostcommitPoint, string>? postcommitCheckpoint = null,
-        Action<NativeId65FreshWizardPostcommitPoint, string>? wizardPostcommitCheckpoint = null)
+        Action<NativeId65FreshWizardPostcommitPoint, string>? wizardPostcommitCheckpoint = null,
+        Action<string>? wizardUnconfirmedCheckpoint = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         if (!Enum.IsDefined(fault)) throw new InvalidDataException($"Unknown {plan.Label} research fault.");
@@ -146,6 +163,8 @@ internal static class NativeId65FreshResearchPublicationEngine
             throw new InvalidDataException("Postcommit exercise cannot bind a fixed publisher.");
         if (wizardPostcommitCheckpoint != null && plan.WizardPlan == null)
             throw new InvalidDataException("Wizard postcommit exercise cannot bind another publisher kind.");
+        if (wizardUnconfirmedCheckpoint != null && plan.WizardPlan == null)
+            throw new InvalidDataException("Wizard unconfirmed exercise cannot bind another publisher kind.");
         token.ThrowIfCancellationRequested();
         string root = Resolve(plan, outputDirectory);
         RequireEmpty(plan, root); // Complete sets may only be separately verified.
@@ -154,13 +173,15 @@ internal static class NativeId65FreshResearchPublicationEngine
         RequireNoLink(plan, root);
         string leasePath = Path.Combine(root, plan.LeaseName);
         RequireNoLink(plan, leasePath);
-        using FileStream lease = new(leasePath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         string stage = Path.Combine(root, plan.StagePrefix + Guid.NewGuid().ToString("N"));
-        bool preserve = false, published = false;
+        bool preserve = false;
         NativeId65FreshDiscResearchPublication? completed = null;
-        Exception? documentCommittedFailure = null;
+        var attempt = new NativeFreshResearchPublicationAttempt();
         string transactionRecovery = "", projectLeaseEvidence = "";
         byte[]? documentLeaseOwner = !plan.TracksCommittedFailure ? null : RandomNumberGenerator.GetBytes(32);
+        // One explicit terminal Dispose inside accounting, never a second using
+        // disposal outside the reported outcome. All setup above owns no handle.
+        FileStream lease = new(leasePath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         try
         {
             if (documentLeaseOwner != null) { lease.Write(documentLeaseOwner); lease.Flush(flushToDisk: true); }
@@ -189,8 +210,9 @@ internal static class NativeId65FreshResearchPublicationEngine
             if (fault == NativeId65FreshResearchFault.BeforePublication)
                 throw new IOException($"Deliberate {plan.Label} publication fault: BeforePublication");
 
-            ExportArtifactPublicationResult publication;
+            ExportArtifactPublicationResult? publication = null;
             NativeId65FreshDocumentStore.ReadLease? savedGuard = null;
+            Exception? callFailure = null, guardFailure = null;
             try
             {
                 // LAST saved-state check, after full source/staging/root guards.
@@ -199,20 +221,39 @@ internal static class NativeId65FreshResearchPublicationEngine
                 DocumentCheckpoint(NativeId65FreshDocumentResearchFault.AfterSavedGuard, image);
                 if (documentFault == NativeId65FreshDocumentResearchFault.BeforePublication)
                     throw new IOException("Deliberate saved-document publication fault: BeforePublication");
-                publication = ExportArtifactTransaction.PublishNew(root,
+                if (wizardUnconfirmedCheckpoint != null)
+                {
+                    string blockingLock = Path.Combine(root, ".export-publication.lock");
+                    wizardUnconfirmedCheckpoint(blockingLock);
+                    RequireNoLink(plan, blockingLock);
+                    if (!File.Exists(blockingLock) || Directory.Exists(blockingLock))
+                        throw new InvalidDataException("Unconfirmed exercise must install a real non-linked transaction lock before invocation.");
+                }
+                publication = attempt.Invoke(root,
                     plan.OutputNames.Select(name => new ExportArtifactReplacement(
                         Path.Combine(root, name), Path.Combine(stage, name))).ToArray(), token);
-                published = true;
                 transactionRecovery = publication.RetainedRecoveryDirectory;
             }
+            catch (Exception error) { callFailure = error; }
             finally
             {
-                savedGuard?.Dispose();
+                try { savedGuard?.Dispose(); }
+                catch (Exception error) { guardFailure = error; }
                 projectLeaseEvidence = savedGuard?.RetainedEvidencePath ?? "";
             }
-            preserve = !string.IsNullOrEmpty(publication.RetainedRecoveryDirectory);
-            if (projectLeaseEvidence.Length != 0)
-                throw new IOException("Committed saved-document guard retained ownership evidence at " + projectLeaseEvidence);
+            if (callFailure != null) attempt.RecordFailure(callFailure);
+            if (guardFailure != null) attempt.RecordFailure(guardFailure);
+            if (projectLeaseEvidence.Length != 0 && guardFailure == null &&
+                attempt.State != NativeFreshResearchPublicationState.NotInvoked)
+                attempt.RecordFailure(new IOException("Saved-document guard retained ownership evidence at " + projectLeaseEvidence));
+            preserve = attempt.State is NativeFreshResearchPublicationState.Unconfirmed or NativeFreshResearchPublicationState.RollbackIncomplete ||
+                transactionRecovery.Length != 0 || guardFailure != null || projectLeaseEvidence.Length != 0 ||
+                callFailure is ExportArtifactRollbackException ||
+                (attempt.State == NativeFreshResearchPublicationState.Committed && attempt.Failure != null);
+            if (attempt.Failure == null)
+            {
+            if (attempt.State != NativeFreshResearchPublicationState.Committed || publication == null)
+                throw new InvalidDataException("Fresh publication has no actual returned transaction result.");
             // PublishNew actually returned, and the Store guard was released.
             // Callback cancellation must not change the generic final token.
             postcommitCheckpoint?.Invoke(NativeId65FreshDocumentPostcommitPoint.AfterCommit,
@@ -237,16 +278,24 @@ internal static class NativeId65FreshResearchPublicationEngine
             }
             RequireOnly(plan, root, allowed.ToArray());
             completed = Result(plan, root, final, publication.RetainedRecoveryDirectory);
+            }
         }
-        catch (ExportArtifactRollbackException) when (!published || plan.WizardPlan == null) { preserve = true; throw; }
-        catch (Exception error) when (published)
+        catch (Exception error)
         {
-            preserve = true;
-            if (plan.TracksCommittedFailure) documentCommittedFailure = error;
-            else throw new IOException($"{plan.Label} artifacts were published but final verification failed; preserve " + root, error);
+            attempt.RecordFailure(error);
+            if (attempt.State != NativeFreshResearchPublicationState.NotInvoked || error is ExportArtifactRollbackException)
+                preserve = true;
         }
         finally
         {
+            if (attempt.State == NativeFreshResearchPublicationState.Unconfirmed)
+            {
+                preserve = true;
+                // An independent source observation cannot supply a missing
+                // transaction acknowledgement or suppress its primary failure.
+                await attempt.CaptureAsync(() => plan.RequireFreshAsync(CancellationToken.None));
+            }
+            bool published = attempt.State == NativeFreshResearchPublicationState.Committed;
             if (!preserve)
             {
                 try
@@ -276,33 +325,23 @@ internal static class NativeId65FreshResearchPublicationEngine
                         {
                             preserve = true; // Unknown owners remain with our lease for explicit recovery.
                             if (plan.TracksCommittedFailure && published)
-                                documentCommittedFailure ??= new IOException(plan.WizardPlan != null
+                                attempt.RecordFailure(new IOException(plan.WizardPlan != null
                                     ? "Fresh Wizard stage retains an unknown owner after commit."
-                                    : "Saved-document stage retains an unknown owner after commit.");
+                                    : "Saved-document stage retains an unknown owner after commit."));
                         }
                     }
                 }
-                catch (IOException error)
-                { preserve = true; if (plan.TracksCommittedFailure && published) documentCommittedFailure ??= error; }
-                catch (InvalidDataException error)
-                { preserve = true; if (plan.TracksCommittedFailure && published) documentCommittedFailure ??= error; }
-                catch (UnauthorizedAccessException error)
-                { preserve = true; if (plan.TracksCommittedFailure && published) documentCommittedFailure ??= error; }
-                // Only the explicit internal positive test route can inject a
-                // non-IO callback error here. Account it as known committed,
-                // rather than letting it bypass lease cleanup as cancellation.
-                catch (Exception error) when (published &&
-                    ((postcommitCheckpoint != null && plan.SavedContext != null) ||
-                     (wizardPostcommitCheckpoint != null && plan.WizardPlan != null)))
-                { preserve = true; documentCommittedFailure ??= error; }
+                catch (Exception error)
+                {
+                    preserve = true;
+                    // Preserve historical fixed-profile IO cleanup warnings.
+                    // Other failures must not bypass output-handle accounting.
+                    if (!published || plan.TracksCommittedFailure ||
+                        error is not (IOException or InvalidDataException or UnauthorizedAccessException))
+                        attempt.RecordFailure(error);
+                }
             }
-            if (!plan.TracksCommittedFailure) lease.Dispose();
-            else
-            {
-                try { lease.Dispose(); }
-                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-                { preserve = true; if (published) documentCommittedFailure ??= error; }
-            }
+            if (!attempt.Capture(lease.Dispose)) preserve = true;
             if (!preserve)
             {
                 try
@@ -314,24 +353,39 @@ internal static class NativeId65FreshResearchPublicationEngine
                     }
                     if (File.Exists(leasePath)) File.Delete(leasePath);
                 }
-                catch (IOException error)
-                { if (plan.TracksCommittedFailure && published) documentCommittedFailure ??= error; }
-                catch (UnauthorizedAccessException error)
-                { if (plan.TracksCommittedFailure && published) documentCommittedFailure ??= error; }
-                catch (InvalidDataException error) when (plan.TracksCommittedFailure)
-                { if (published) documentCommittedFailure ??= error; }
+                catch (Exception error)
+                {
+                    preserve = true;
+                    if (!published || plan.TracksCommittedFailure ||
+                        error is not (IOException or UnauthorizedAccessException))
+                        attempt.RecordFailure(error);
+                }
             }
         }
+        Exception? failure = attempt.Failure;
+        if (attempt.State == NativeFreshResearchPublicationState.Unconfirmed)
+            throw new NativeId65FreshResearchPublicationUnconfirmedException(plan, root, stage, leasePath,
+                projectLeaseEvidence, failure!);
         // Only this actual known-commit branch creates the typed failure, after
         // all project/output lease, stage and transaction accounting completed.
-        if (plan.SavedContext != null && published && documentCommittedFailure != null)
+        if (plan.SavedContext != null && attempt.State == NativeFreshResearchPublicationState.Committed && failure != null)
             throw new NativeId65FreshDocumentResearchCommittedException(root, plan.PlanSha256,
                 ExistingEvidence(transactionRecovery), ExistingEvidence(stage), ExistingEvidence(leasePath),
-                projectLeaseEvidence, documentCommittedFailure);
-        if (plan.WizardPlan != null && published && documentCommittedFailure != null)
-            throw new NativeId65FreshWizardResearchCommittedException(root, plan.PlanSha256,
+                projectLeaseEvidence, failure);
+        if (plan.WizardPlan != null && attempt.State == NativeFreshResearchPublicationState.Committed && failure != null)
+            throw new NativeId65FreshWizardResearchCommittedException(root, plan.WizardPlan,
                 ExistingEvidence(transactionRecovery), ExistingEvidence(stage), ExistingEvidence(leasePath),
-                documentCommittedFailure);
+                failure);
+        if (failure != null)
+        {
+            if (attempt.State == NativeFreshResearchPublicationState.Committed)
+                throw new IOException($"{plan.Label} artifacts were published but final verification failed; preserve " + root, failure);
+            // Existing UI catches IOException, not a bare AggregateException.
+            // Keep every original object and order beneath that catchable outer.
+            if (failure is AggregateException)
+                throw new IOException(plan.Label + " publication failed with additional accounting errors; preserve " + root, failure);
+            ExceptionDispatchInfo.Capture(failure).Throw();
+        }
         // Cleanup warnings must remain discoverable, even if our own stage or
         // lease (rather than the transaction recovery journal) was retained.
         return completed! with
