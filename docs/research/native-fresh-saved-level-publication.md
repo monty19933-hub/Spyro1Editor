@@ -85,3 +85,38 @@ particular, the tiny transaction test does not reach the native Engine branch
 for actual commit plus failed aggregate guard release. Later exact evidence
 must close that gate before the App action is enabled. See the current handoff
 for subsequent checkpoint status, without reclassifying these source checks.
+
+## Explicit physical-test seam, before native output
+
+The reviewed internal new-role-only seam now permits real fault exercises.
+Its exact transaction-lock preparation is after final source/stage checks but
+before acquiring the saved guard; no hook sits between guard acquisition and
+the real transaction call. The actual returned publication/recovery is retained
+before the after-return observer. Both final-artifact paths use one concrete
+readback followed by independently attempted notification, preserving both
+errors if needed. All five older roles remain unchanged.
+
+New tests first failed with15 genuinely missing API/enum references. Inclusive
+build then passed0 warnings/errors; default157/76 and explicit source219/97
+passed, including the real new-CLI tiny-input failure path with five ordered
+errors and exclusive unchanged-file reopen. All five prior defaults and
+textured source663 passed with exact previous mappings/plan/receipt/CUE values.
+Root independently replayed73 actual promoted-source inverse checks, recovering
+the complete previous Engine and normal Publisher. The sole removed terminal
+blank is recorded explicitly; the frozen reviewed draft was not rewritten.
+The CLI usage text was corrected and rebuilt/default-tested separately.
+
+Private gates: `_local/research/saved-level-physical-run-r01.eBn8by/`.
+Three actual Store-created tiny projects for clean, stale and guard-release
+testing are retained in
+`_local/research/saved-level-native-publication-gates-20260908-r01.ViLjhm/`.
+Their complete aggregate/canonical SHA is
+`6366044aaaf989403ef3372d518b180855f28ec9bb236fc734f747b6d53290cb`.
+Each initially contained only the610-byte aggregate and145-byte manifest.
+At this source checkpoint the eight explicit native modes have not run; these
+fixture and source results are not physical publication or gameplay evidence.
+
+The subsequent combined all-project Release/default gate passed331/zero failures;
+Root session91392 CLOSED0, report `spyro-regression-o2zgovh9/summary.json` under
+the macOS temporary root. This includes the physical seam and separate App
+inspection worker, not execution of any native publication mode.

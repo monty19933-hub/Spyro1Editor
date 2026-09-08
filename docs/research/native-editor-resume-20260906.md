@@ -34,15 +34,16 @@ physical publication and native tests are now complete as bounded below.
 None of these changes is silently in R03.
 The old source contracts and historical failed records remain preserved.
 
-Latest full all-project Release/default gate:330/zero failures, including the
-saved whole-level Candidate, actual-source preview wrapper, raw picker and
+Latest full all-project Release/default gate:331/zero failures, including the
+saved whole-level Candidate and physical-test seam, bounded App inspection worker,
+actual-source preview wrapper, raw picker and
 initial footprint, while preserving the five prior publication roles.
 Exact summary:
-`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-ne_jn4ap/summary.json`.
-Root77331 CLOSED0. Final picker100 includes unknown kinds and reverse invalid-Base
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-o2zgovh9/summary.json`.
+Root91392 CLOSED0. Final picker100 includes unknown kinds and reverse invalid-Base
 atomicity; Root viewed both regenerated1120x800 PNGs in
-`spyro-material-picker-ui-KYgopu` under the same temporary parent. Runner70 and
-all Python225/13 explicit skips pass. No live
+`spyro-material-picker-ui-KYgopu` under the same temporary parent. Runner71 and
+all Python226/13 explicit skips pass. No live
 editor/DuckStation/launch helper was found on the fresh post-gate process check.
 Root separately replayed source-backed textured baseline193/complete original
 final checks, all66 runner tests, and UI219/legacy65/research333/session138.
@@ -89,13 +90,18 @@ default83/20 pass, with all five complete-image goldens and all original/CUE
 finals. All five older publishers passed inclusive builds/default/source gates
 with their previous image/receipt/CUE/plan goldens unchanged. The exact new
 saved-selected heading128/music20 recipe matches2533ee96...b75b70/1253 sectors.
-Physical failure gates, Publish/new-process Verify and gameplay remain pending.
+The physical seam now passes default157/76, source219/97, actual promoted-source
+inverse73 and previous textured source663. Three actual Store projects are ready
+in saved-level-native-publication-gates-20260908-r01.ViLjhm. Eight explicit native
+failure/clean publication modes, new-process Verify and gameplay remain pending.
 See `native-fresh-saved-level-publication.md` for the actual source evidence.
 The new source-preview wrapper separately matches64 original-only RGBA literals;
 actual source268/total673, free405 and prior UI gates pass. After the330 gate,
 H's test-only first-invalid LQ cache-index correction passed build/free406;
-the source comparison and immutable literal were unchanged. Its explicit App
-inspection worker and UI are not yet implemented. See
+the source comparison and immutable literal were unchanged. Its bounded App
+inspection worker now passes free35, malformed CLI13 and actual source51,
+including real mid-read/late cancellation and complete original final checks.
+It has not yet been wired to the Window. See native-fresh-material-inspection-worker.md and
 `native-fresh-material-source-preview.md`. The exhaustive72-row Wizard matrix
 now has a strict separate opt-in CLI so its17-minute run does not consume the
 ordinary source suite's shared deadline. New dispatch default164, malformed CLI9

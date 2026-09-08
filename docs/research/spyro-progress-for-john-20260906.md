@@ -133,12 +133,14 @@ in each destination. A model catalog alone cannot provide that. Multiple
 editable new-level slots, normal portal integration, save/reboot compatibility,
 animated textures and arbitrary object/material mixtures remain open.
 
-Latest completed all-project Release gate: **330 checks, zero failures**, including
-the saved-level Candidate, source-preview decoder, raw picker, initial footprint
+Latest completed all-project Release gate: **331 checks, zero failures**, including
+the saved-level Candidate and export-failure test controls, background texture
+inspection worker, source-preview decoder, raw picker, initial footprint
 and prior texture publication/failure-recovery controls. Fixed-recipe exporter
 checkpoint: f8b382c. These latest source
 changes are not in the preserved R03/R04 apps.
 These are engineering
-checks, not330 gameplay runs. The [engineering handoff](native-editor-resume-20260906.md)
+checks, not331 gameplay runs. Texture inspection has passed actual source-file
+and cancellation tests but is not yet connected to the window. The [engineering handoff](native-editor-resume-20260906.md)
 and [V6 readiness assessment](v6-readiness-20260906.md) retain the detailed
 boundaries and next steps.

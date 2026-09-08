@@ -11,16 +11,17 @@ two-Wizard reward/re-entry sequence. None establishes universal importing.
 The latest checkpoints add explicit preserved legacy-to-aggregate conversion,
 source-bound initial spawn/footprint checks, authored same-layout Wizard
 composition, saved two-material compilation and a raw material picker. The
-latest combined all-project Release/default gate is330/zero failures. These
+latest combined all-project Release/default gate is331/zero failures. These
 source changes are not silently rebuilt into the preserved R03/R04 packages.
 The next work order is:
 
 1. Finish the actual saved whole-level publication path and physical failure
    gates, then the App edit/save/export/play workflow. The internal first arm
-   passes source138/default83; aggregate export stays disabled in the window.
+   and its physical-test seam pass source219/default157; aggregate export stays disabled in the window.
    The source picker passes100 checks, prior placement/history UI219 remains
    green, and saved-material compilation matches five full-image references.
-2. Connect actual source-texture thumbnails (decoder64 source rows passed), then package a separately identified
+2. Connect actual source-texture thumbnails (decoder64 source rows and bounded
+   worker51 actual-source checks passed), then package a separately identified
    usable preview. Preserve both slots, drafts and source-job ownership through
    cancellation/close; a thumbnail must not imply destination compatibility.
 3. Extend the current gameplay evidence: the corrected fresh Wizard passed

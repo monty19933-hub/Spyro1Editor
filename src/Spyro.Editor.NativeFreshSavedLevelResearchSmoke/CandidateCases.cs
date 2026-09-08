@@ -81,6 +81,7 @@ internal static class CandidateCases
             var candidate = await NativeFreshSavedLevelResearchCandidatePlan.CaptureAsync(bin, cue, saved);
             Console.WriteLine($"SAVED_LEVEL_CASE_CAPTURE case={label} elapsedMs={elapsed.ElapsedMilliseconds} image={candidate.ExpectedImageSha256} prospectiveOnly=true");
             candidate.RequireAncestry(saved, candidate.MaterialCompilation);
+            if (label == "fixed-a") await SavedLevelPhysicalApiCases.Source(bin, cue, candidate);
             Check(ReferenceEquals(candidate.MaterialCompilation.Saved, saved) &&
                 ReferenceEquals(candidate.MaterialCompilation.Document, saved.Document), "Actual Snapshot object, not equal parsed adoption.");
             Check(candidate.ExpectedImageSha256 == expected && candidate.ExpectedChangedRawSectors == 1253,

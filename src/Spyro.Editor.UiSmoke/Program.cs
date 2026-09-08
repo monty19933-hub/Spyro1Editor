@@ -23,6 +23,13 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+// Explicit bounded App worker controls, before any Window/workspace/source setup.
+if (NativeFreshMaterialInspectionWorkerCases.Handles(args))
+{
+    await NativeFreshMaterialInspectionWorkerCases.Run(args);
+    return 0;
+}
+
 // Strict raw-only material picker route, before workspace discovery.
 if (args.Contains("--fresh-material-picker-only", StringComparer.Ordinal))
 {

@@ -12,6 +12,8 @@
     <Compile Include="Program.cs" /><Compile Include="CandidateCases.cs" />
     <Compile Include="SourceOwnerCases.cs" /><Compile Include="LeaseOutcomeCases.cs" />
     <Compile Include="ActualAttemptCases.cs" />
+    <Compile Include="SavedLevelPublicationCases.cs" /><Compile Include="SavedLevelFaultCases.cs" />
+    <Compile Include="SavedLevelPhysicalApiCases.cs" /><Compile Include="SavedLevelPublicationArgumentCases.cs" />
     <Compile Include="../Spyro.Editor.NativeFreshSavedMaterialSmoke/Cases.cs" Link="Cases.cs" />
   </ItemGroup>
   <Target Name="RequireSavedLevelProbe" BeforeTargets="BeforeBuild"

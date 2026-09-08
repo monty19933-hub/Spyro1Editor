@@ -105,19 +105,38 @@ internal static class NativeId65FreshResearchPublicationEngine
             texturedUnconfirmedCheckpoint: checkpoint);
     }
 
-    // Called only by PublishAsync's actual SavedLevelPlan arm. The original
+    internal static async Task<NativeId65FreshDiscResearchPublication> PublishSavedLevelForSmokeAsync(
+        NativeId65FreshResearchPublicationBinding binding, string directory,
+        NativeId65FreshResearchFault fault, Action<NativeId65FreshResearchFault, string>? checkpoint,
+        Action<string>? prepareTransactionLock,
+        Action<NativeFreshSavedLevelResearchPoint, string>? observation, CancellationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        if (binding.SavedLevelPlan == null)
+            throw new InvalidDataException("Saved-level exercise requires an actual saved-level binding.");
+        if (fault is not (NativeId65FreshResearchFault.None or NativeId65FreshResearchFault.AfterFirstSector or
+            NativeId65FreshResearchFault.AfterImageWrite or NativeId65FreshResearchFault.BeforePublication) ||
+            (fault == NativeId65FreshResearchFault.None && prepareTransactionLock == null && observation == null))
+            throw new InvalidDataException("Saved-level exercise requires a known forced fault or actual observation.");
+        return await PublishSavedLevelAsync(binding, directory, fault, checkpoint, token,
+            prepareTransactionLock, observation);
+    }
+
+    // Called only by the actual SavedLevelPlan arm and its closed smoke entry. The original
     // PublishCore preflight stays in one place, and old five entry paths bypass
     // this wrapper entirely. No caller-supplied serializer/IO/state authority.
     private static async Task<NativeId65FreshDiscResearchPublication> PublishSavedLevelAsync(
         NativeId65FreshResearchPublicationBinding binding, string directory,
         NativeId65FreshResearchFault fault, Action<NativeId65FreshResearchFault, string>? checkpoint,
-        CancellationToken token)
+        CancellationToken token, Action<string>? prepareTransactionLock = null,
+        Action<NativeFreshSavedLevelResearchPoint, string>? observation = null)
     {
         var plan = binding.SavedLevelPlan!;
         token.ThrowIfCancellationRequested();
         NativeId65FreshDiscResearchPublication? result = null;
         Exception? primary = null, finalFailure = null;
-        try { result = await PublishCoreAsync(binding, directory, fault, checkpoint, token); }
+        try { result = await PublishCoreAsync(binding, directory, fault, checkpoint, token,
+            savedLevelLockPreparation: prepareTransactionLock, savedLevelObservation: observation); }
         catch (Exception error) { primary = error; }
         // Independently finalizes all held/current sources and actual saved raw
         // version, even when preflight/artifact/guard/cleanup failed. No IO retry.
@@ -158,10 +177,11 @@ internal static class NativeId65FreshResearchPublicationEngine
     }
 
     private sealed record SavedLevelCall(ExportArtifactPublicationResult? Publication,
-        Exception? Failure, string ProjectLeaseEvidence, bool UnresolvedGuard);
+        string TransactionRecovery, Exception? Failure, string ProjectLeaseEvidence, bool UnresolvedGuard);
 
     private static SavedLevelCall InvokeSavedLevel(NativeId65FreshResearchPublicationBinding binding,
-        string root, string stage, NativeFreshResearchPublicationAttempt attempt, CancellationToken token)
+        string root, string stage, NativeFreshResearchPublicationAttempt attempt, CancellationToken token,
+        Action<NativeFreshSavedLevelResearchPoint, string>? observation)
     {
         var plan = binding.SavedLevelPlan!;
         var replacements = binding.OutputNames.Select(name => new ExportArtifactReplacement(
@@ -171,11 +191,14 @@ internal static class NativeId65FreshResearchPublicationEngine
                 NativeFreshDocumentStorage.StorageProfile.LevelAggregateV1).LeaseName);
         NativeFreshLevelDocumentStore.ReadLease? guard = null;
         ExportArtifactPublicationResult? publication = null; Exception? failure = null;
+        string recovery = "";
         try
         {
             guard = plan.Saved.AcquireFinalReadGuard(token);
             // No awaits, source readback, callback or injected success here.
             publication = attempt.Invoke(root, replacements, token);
+            recovery = publication.RetainedRecoveryDirectory; // Actual return retained BEFORE test action.
+            observation?.Invoke(NativeFreshSavedLevelResearchPoint.AfterReturnBeforeGuardComplete, root);
         }
         catch (Exception error) { failure = error; }
         if (guard == null)
@@ -183,13 +206,13 @@ internal static class NativeId65FreshResearchPublicationEngine
             // Acquire already finalized any internal partially acquired owner.
             // No returned owner: preserve conservatively, do not inspect errors
             // to invent ownership or attempt a second Complete.
-            return new(publication, failure, inspection, true);
+            return new(publication, recovery, failure, inspection, true);
         }
         failure = CompleteSavedLevelGuard(guard, failure); // REPLACES primary, never appends it.
         bool unresolved = guard.TerminalFailure != null || guard.RetainedEvidencePath.Length != 0;
         string evidence = guard.RetainedEvidencePath.Length != 0 ? guard.RetainedEvidencePath :
             unresolved ? guard.LeasePath : "";
-        return new(publication, failure, evidence, unresolved);
+        return new(publication, recovery, failure, evidence, unresolved);
     }
 
     private static async Task<NativeId65FreshDiscResearchPublication> PublishCoreAsync(NativeId65FreshResearchPublicationBinding plan,
@@ -201,7 +224,9 @@ internal static class NativeId65FreshResearchPublicationEngine
         Action<NativeId65FreshWizardPostcommitPoint, string>? wizardPostcommitCheckpoint = null,
         Action<string>? wizardUnconfirmedCheckpoint = null,
         Action<NativeId65FreshTexturedPostcommitPoint, string>? texturedPostcommitCheckpoint = null,
-        Action<string>? texturedUnconfirmedCheckpoint = null)
+        Action<string>? texturedUnconfirmedCheckpoint = null,
+        Action<string>? savedLevelLockPreparation = null,
+        Action<NativeFreshSavedLevelResearchPoint, string>? savedLevelObservation = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         if (!Enum.IsDefined(fault)) throw new InvalidDataException($"Unknown {plan.Label} research fault.");
@@ -215,6 +240,8 @@ internal static class NativeId65FreshResearchPublicationEngine
             throw new InvalidDataException("Wizard unconfirmed exercise cannot bind another publisher kind.");
         if ((texturedPostcommitCheckpoint != null || texturedUnconfirmedCheckpoint != null) && plan.TexturedPlan == null)
             throw new InvalidDataException("Textured exercise cannot bind another publisher kind.");
+        if ((savedLevelLockPreparation != null || savedLevelObservation != null) && plan.SavedLevelPlan == null)
+            throw new InvalidDataException("Saved-level exercise cannot bind another publisher kind.");
         token.ThrowIfCancellationRequested();
         string root = Resolve(plan, outputDirectory);
         RequireEmpty(plan, root); // Complete sets may only be separately verified.
@@ -269,12 +296,24 @@ internal static class NativeId65FreshResearchPublicationEngine
             bool aggregateGuardUnresolved = false;
             if (plan.SavedLevelPlan != null)
             {
-                var savedCall = InvokeSavedLevel(plan, root, stage, attempt, token);
+                if (savedLevelLockPreparation != null)
+                {
+                    // Root/stage/source checks have finished. No returned saved
+                    // guard exists yet; any prepared evidence stays on failure.
+                    preserve = true;
+                    string blockingLock = Path.Combine(root, ".export-publication.lock");
+                    savedLevelLockPreparation(blockingLock);
+                    RequireNoLink(plan, blockingLock);
+                    RequireCompanionFile(blockingLock,
+                        System.Text.Encoding.ASCII.GetBytes("saved-level-unconfirmed-r01-lock"), CancellationToken.None);
+                    RequireOnly(plan, root, [leasePath, stage, blockingLock]);
+                }
+                var savedCall = InvokeSavedLevel(plan, root, stage, attempt, token, savedLevelObservation);
                 publication = savedCall.Publication;
                 callFailure = savedCall.Failure;
                 projectLeaseEvidence = savedCall.ProjectLeaseEvidence;
                 aggregateGuardUnresolved = savedCall.UnresolvedGuard;
-                if (publication != null) transactionRecovery = publication.RetainedRecoveryDirectory;
+                if (publication != null) transactionRecovery = savedCall.TransactionRecovery;
             }
             else
             {
@@ -342,8 +381,11 @@ internal static class NativeId65FreshResearchPublicationEngine
             // completes final readback/freshness noncancellably after commit.
             CancellationToken finalToken = plan.PostCommitToken(token);
             if (plan.SavedLevelPlan != null) aggregateFinalArtifactAttempted = true;
-            var final = VerifySet(plan, root, finalToken, requireOnlyArtifacts: false);
-            if (final != verified) throw new InvalidDataException($"{plan.Label} final output differs from verified staging.");
+            var final = plan.SavedLevelPlan != null
+                ? VerifySavedLevelFinalArtifact(plan, root, verified, savedLevelObservation)
+                : VerifySet(plan, root, finalToken, requireOnlyArtifacts: false);
+            if (plan.SavedLevelPlan == null && final != verified)
+                throw new InvalidDataException($"{plan.Label} final output differs from verified staging.");
             await plan.RequireFreshAsync(finalToken);
             List<string> allowed = plan.OutputNames
                 .Select(name => Path.Combine(root, name)).Concat([leasePath, stage]).ToList();
@@ -382,9 +424,7 @@ internal static class NativeId65FreshResearchPublicationEngine
                 aggregateFinalArtifactAttempted = true;
                 attempt.Capture(() =>
                 {
-                    var final = VerifySet(plan, root, CancellationToken.None, requireOnlyArtifacts: false);
-                    if (aggregateStaged == null || final != aggregateStaged)
-                        throw new InvalidDataException("Saved-level final output differs from its actual staged verification.");
+                    _ = VerifySavedLevelFinalArtifact(plan, root, aggregateStaged, savedLevelObservation);
                 });
                 if (attempt.Failure != null) preserve = true;
             }
@@ -533,6 +573,37 @@ internal static class NativeId65FreshResearchPublicationEngine
             token.ThrowIfCancellationRequested();
             if (documentFault == point) throw new IOException("Deliberate saved-document publication fault: " + point);
         }
+    }
+
+    // Concrete actual readback only; no injectable verifier or supplied result.
+    private static NativeId65FreshDiscVerification VerifySavedLevelFinalArtifact(
+        NativeId65FreshResearchPublicationBinding plan, string root,
+        NativeId65FreshDiscVerification? staged,
+        Action<NativeFreshSavedLevelResearchPoint, string>? observation)
+    {
+        NativeId65FreshDiscVerification? result = null; Exception? readback = null, notification = null;
+        try
+        {
+            result = VerifySet(plan, root, CancellationToken.None, requireOnlyArtifacts: false);
+            if (staged == null || result != staged)
+                throw new InvalidDataException("Saved-level final output differs from its actual staged verification.");
+        }
+        catch (Exception error) { readback = error; }
+        // Do not use a throwing finally: both original errors must survive.
+        try { observation?.Invoke(NativeFreshSavedLevelResearchPoint.AfterFinalArtifactAttempt, root); }
+        catch (Exception error) { notification = error; }
+        ThrowSavedLevelArtifactFailures(readback, notification);
+        return result!;
+    }
+
+    // Pure error fold only. It cannot supply a verifier, result or transaction state.
+    internal static void ThrowSavedLevelArtifactFailures(Exception? readback, Exception? notification)
+    {
+        if (readback != null && notification != null)
+            throw new IOException("Saved-level final artifact and notification both failed.",
+                new AggregateException(readback, notification));
+        if (readback != null) ExceptionDispatchInfo.Capture(readback).Throw();
+        if (notification != null) ExceptionDispatchInfo.Capture(notification).Throw();
     }
 
     private static string ExistingEvidence(string path)

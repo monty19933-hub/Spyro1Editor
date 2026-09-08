@@ -9,6 +9,16 @@ internal static class NativeFreshSavedLevelResearchCandidatePublisher
             NativeId65FreshResearchPublicationBinding.FromSavedLevel(plan), directory,
             NativeId65FreshResearchFault.None, null, token);
 
+    // Internal, explicit physical smoke only. Normal Publish never supplies actions.
+    internal static async Task<NativeId65FreshDiscResearchPublication> PublishForSmokeAsync(
+        NativeFreshSavedLevelResearchCandidatePlan plan, string directory,
+        NativeId65FreshResearchFault fault, Action<NativeId65FreshResearchFault, string>? checkpoint,
+        Action<string>? prepareTransactionLock,
+        Action<NativeFreshSavedLevelResearchPoint, string>? observation, CancellationToken token = default) =>
+        await NativeId65FreshResearchPublicationEngine.PublishSavedLevelForSmokeAsync(
+            NativeId65FreshResearchPublicationBinding.FromSavedLevel(plan), directory,
+            fault, checkpoint, prepareTransactionLock, observation, token);
+
     internal static async Task<NativeId65FreshDiscResearchPublication> VerifyAsync(
         NativeFreshSavedLevelResearchCandidatePlan plan, string directory, CancellationToken token = default)
     {
@@ -54,3 +64,6 @@ internal sealed class NativeFreshSavedLevelResearchCommittedException : IOExcept
     // For failed acquisition, this is inspection-only: no returned owner exists.
     internal string RetainedProjectLeasePath { get; }
 }
+
+// The Engine is the sole producer of these actual temporal observation points.
+internal enum NativeFreshSavedLevelResearchPoint { AfterReturnBeforeGuardComplete, AfterFinalArtifactAttempt }
