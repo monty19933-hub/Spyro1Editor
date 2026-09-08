@@ -57,6 +57,7 @@ CORE_CASES = (
     ("NativeId65FreshTerrainTextureSmoke", "NATIVE_ID65_FRESH_TERRAIN_TEXTURE_FREE_OK"),
     ("NativeId65TexturedBodySmoke", "NATIVE_ID65_TEXTURED_BODY_FREE_OK"),
     ("NativeId65TexturedDiscSmoke", "NATIVE_ID65_TEXTURED_DISC_FREE_OK"),
+    ("NativeId65TexturedResearchSmoke", "NATIVE_ID65_TEXTURED_RESEARCH_BASELINE_FREE_OK"),
     ("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC_SMOKE_OK"),
     ("NativeId65FreshDiscStreamSmoke", "NATIVE_ID65_FRESH_DISC_STREAM_SMOKE_OK"),
     ("NativeId65FreshDiscResearchSmoke", "NATIVE_ID65_FRESH_DISC_RESEARCH_SMOKE_OK"),
@@ -115,6 +116,8 @@ ADDITIONAL_CORE_CASES = (
      ["--variable-data-free"]),
     ("UiSmoke", "FRESH_LEVEL_DOCUMENT_SESSION_OK",
      ["--fresh-native-level-session-only"]),
+    ("UiSmoke", "FRESH_NATIVE_LEVEL_UI_OK",
+     ["--fresh-native-level-ui-only"]),
 )
 SOURCE_QA_CASES = (
     # This read-only mode checks both preserved V2 and V3 native closure goldens;
@@ -154,6 +157,7 @@ SOURCE_QA_CASES = (
     ("NativeId65FreshTerrainTextureSmoke", "NATIVE_ID65_FRESH_TERRAIN_TEXTURE_SOURCE_OK", ["--source"]),
     ("NativeId65TexturedBodySmoke", "NATIVE_ID65_TEXTURED_BODY_SOURCE_OK", ["--source"]),
     ("NativeId65TexturedDiscSmoke", "NATIVE_ID65_TEXTURED_DISC_SOURCE_OK", ["--source"]),
+    ("NativeId65TexturedResearchSmoke", "NATIVE_ID65_TEXTURED_RESEARCH_BASELINE_SOURCE_OK", ["--source"]),
     ("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC_SOURCE_OK", []),
     ("NativeId65FreshDiscStreamSmoke", "NATIVE_ID65_FRESH_DISC_STREAM_SOURCE_OK", []),
     # Capture checks only; never stage faults, exercise publication or verify outputs here.
@@ -174,7 +178,7 @@ SOURCE_QA_CASES = (
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
 SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
-SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke"})
+SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke"})
 # These raw-source checks have no project/build or default invocation. Each
 # accepts only the selected original BIN and shares the source-suite deadline.
 SOURCE_PYTHON_CASES = (
@@ -374,6 +378,7 @@ def main():
             ("--source-free-route-surfaces",): "-route-surfaces",
             ("--variable-data-free",): "-variable-data",
             ("--fresh-native-level-session-only",): "-fresh-level-session",
+            ("--fresh-native-level-ui-only",): "-fresh-level-ui",
         }.get(tuple(arguments), "")
         execute("run-" + project.stem + suffix,
                 ["dotnet", "run", "--project", str(project), "--configuration",

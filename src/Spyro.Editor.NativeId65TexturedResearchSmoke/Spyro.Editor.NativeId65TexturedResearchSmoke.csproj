@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TexturedResearchProbe Condition="'$(TexturedResearchProbe)' == ''">Baseline</TexturedResearchProbe>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" /></ItemGroup>
+  <ItemGroup Condition="'$(TexturedResearchProbe)' == 'CandidateApi'">
+    <Compile Include="CandidateApiProbe.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TexturedResearchProbe)' == 'Baseline'">
+    <Compile Include="Program.cs" /><Compile Include="Inspection.cs" />
+    <Compile Include="LineageCases.cs" /><Compile Include="BindingCases.cs" />
+    <Compile Include="MeasureCases.cs" /><Compile Include="SourceCases.cs" />
+  </ItemGroup>
+  <Target Name="RequireTexturedResearchProbe" BeforeTargets="BeforeBuild"
+          Condition="'$(TexturedResearchProbe)' != 'Baseline' and '$(TexturedResearchProbe)' != 'CandidateApi'">
+    <Error Text="TexturedResearchProbe must be Baseline or explicit CandidateApi." />
+  </Target>
+</Project>

@@ -98,8 +98,8 @@ in each destination. A model catalog alone cannot provide that. Multiple
 editable new-level slots, normal portal integration, save/reboot compatibility,
 animated textures and arbitrary object/material mixtures remain open.
 
-Latest completed all-project Release gate: **319 checks, zero failures**, before
-the current session/textured-disc changes. These are engineering checks, not
-319 gameplay runs. The [engineering handoff](native-editor-resume-20260906.md)
+Latest completed all-project Release gate: **325 checks, zero failures**, including
+the new placement UI and textured-research baseline. These are engineering
+checks, not325 gameplay runs. The [engineering handoff](native-editor-resume-20260906.md)
 and [V6 readiness assessment](v6-readiness-20260906.md) retain the detailed
 boundaries and next steps.

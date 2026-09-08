@@ -185,6 +185,7 @@ public sealed class NativeId65NormalBodyPlan
         source.RequireIssuedInputs(fresh, staging, upload, data, model, scene);
         _layout = NativeId65NormalBodyLayout.Compile(upload, data, model, scene, source.CopyAuxiliaryAllocations());
         _overlay = source.CopyOverlay();
+        TextureAncestor = fresh.TextureAncestor;
         ResourceProfile = fresh.ResourceProfile;
         UpstreamPlanSha256 = fresh.PlanSha256;
         StagingPlanSha256 = staging.PlanSha256;
@@ -255,6 +256,7 @@ public sealed class NativeId65NormalBodyPlan
             }));
     }
 
+    internal NativeId65FreshTerrainTexturePlan? TextureAncestor { get; }
     public const string ProfileId = "native-id65-fresh-normal-body-retained-Town-aux-clean-usa-v1";
     public NativeId65NormalResourceProfile ResourceProfile { get; }
     public string SourceImageSha256 => NativeId65EngineProfileContract.OriginalImageSha256;

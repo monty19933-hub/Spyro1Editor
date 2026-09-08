@@ -32,6 +32,18 @@ Source-tested textured Disc composition is committed446e84d; guarded candidate
 publication remains a later gate. None of these changes is silently in R03.
 The old source contracts and historical failed records remain preserved.
 
+Latest full all-project Release/default gate:325/zero failures, including new
+aggregate UI219 and textured-research baseline25. Exact summary:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-32b5q8qm/summary.json`.
+Root separately replayed source-backed textured baseline193/complete original
+final checks, all66 runner tests, and UI219/legacy65/research333/session138.
+Four internal lineage-retention lines and old binding/Measure characterization
+are independently peer-reviewed; actual new texture publication remains absent.
+Current next work is a separately packaged aggregate-window preview and then
+the exact extraction-only shared streaming/closed binding step. A minor test
+comment/README clarification after325 states tiny cleanup is name/link/byte
+bound, not inode/hostile-race authentication; no behavior changed.
+
 ## Repository and authority
 
 Repository:

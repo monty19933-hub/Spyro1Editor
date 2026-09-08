@@ -52,3 +52,48 @@ arbitrary allocations and mixed texture/Wizard composition are not approved.
 There is no material persistence, window control, saved-document compiler bridge,
 new research publisher or normal Create BIN path from this change. A separately
 guarded candidate and a real textured-level DuckStation test are next.
+
+## Publication prerequisites — September 8
+
+The issued resource revision and Body now retain their actual nullable Texture
+ancestor through two internal readonly getters: four production lines, with no
+serialization, validation, allocator or writer change. Untextured ancestors stay
+null. Existing Body/staging hash-equivalent pairing remains accepted; retaining
+which actual Texture issued a Body does not retroactively change that contract.
+
+A new isolated textured-research baseline precedes larger publication changes.
+It characterizes all four current binding kinds and both Wizard recipes, exact
+names/order/token/error policies, five Plan/CUE goldens and four deterministic
+complete receipts. Saved-context receipts use actual temporary Store snapshots;
+their fresh project roots make full hashes run-specific, so actual serializer
+bytes and saved fields are checked instead of a fabricated universal golden.
+These historical receipt fixtures intentionally require the exact reviewed
+original source paths. No fixture constructs private source plans.
+
+The same baseline invokes the actual existing generic Measure implementation
+through a small test-only reflection helper, testing stream shape, partial reads,
+source authentication, EOF/length/position, cancellation, first-sector callback
+ordering and sink failures. Hash-only full output matches the independent edited
+image; no BIN/receipt/CUE is published. Original BIN and CUE are independently
+fully rechecked and closed even after a primary test failure.
+
+Missing-lineage RED preceded the four lines. Release1.31s/zero warnings/errors,
+free25 and source193 were replayed by Root after full source/test review. The
+existing texture140404/body157/texturedDisc312 checks also passed, preserving six
+full images. The default/source runner registration has separate required
+markers and BIN+CUE-only opt-in arguments; Root replayed all66 runner tests.
+The nondefault CandidateApi probe is intentionally still missing and is never
+selected by the default build or regression runner.
+
+Evidence: `_local/research/textured-research-baseline-r01.k2n9IH/FINAL-HANDOFF.md`
+and Root `16-root-source-replay.log`; runner RED/GREEN is in
+`_local/research/textured-research-runner-r01.gL4y8V/`.
+Shared streaming/binding extraction, a new fixed-a publisher, physical output,
+native textured rendering and material persistence remain later gates.
+
+Independent peer review is clear. The tiny Store test fixture's cleanup checks
+exact names, regular/nonlinked paths and bytes, not inode identity against an
+equal-byte replacement; it is not a hostile-filesystem ownership protocol.
+Root's all-project Release/default gate then passed325 steps with zero failures,
+including both new UI modes and the textured-research baseline:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-32b5q8qm/summary.json`.

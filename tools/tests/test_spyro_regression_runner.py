@@ -201,7 +201,7 @@ class RunnerOptionsTests(unittest.TestCase):
         name = "UiSmoke"
         marker, flag = "FRESH_LEVEL_DOCUMENT_SESSION_OK", "--fresh-native-level-session-only"
         self.assertEqual([(name, marker, [flag])],
-                         [case for case in RUNNER.ADDITIONAL_CORE_CASES if case[0] == name])
+                         [case for case in RUNNER.ADDITIONAL_CORE_CASES if case[0] == name and case[2] == [flag]])
         self.assertEqual(["--fresh-native-document-only"], RUNNER.CASE_ARGUMENTS[name])
         self.assertFalse(any(case[0] == name for case in RUNNER.SOURCE_QA_CASES))
         with mock.patch.object(sys, "argv", [str(SPEC.origin), "--list"]), \
@@ -211,8 +211,66 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
-        self.assertEqual(2, len(lines))
+        self.assertEqual(3, len(lines))
         self.assertTrue(any(flag + " | " + marker in line for line in lines))
+
+    def test_aggregate_ui_is_an_additional_isolated_mode_not_a_source_or_default_alias(self):
+        name = "UiSmoke"
+        expected = [(name, "FRESH_LEVEL_DOCUMENT_SESSION_OK", ["--fresh-native-level-session-only"]),
+                    (name, "FRESH_NATIVE_LEVEL_UI_OK", ["--fresh-native-level-ui-only"])]
+        self.assertEqual(expected, [case for case in RUNNER.ADDITIONAL_CORE_CASES if case[0] == name])
+        self.assertEqual(["--fresh-native-document-only"], RUNNER.CASE_ARGUMENTS[name])
+        self.assertFalse(any(case[0] == name for case in RUNNER.SOURCE_QA_CASES))
+        with mock.patch.object(sys, "argv", [str(SPEC.origin), "--list"]), \
+                mock.patch.object(RUNNER, "run_owned_command", side_effect=AssertionError("list ran command")), \
+                mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("source read")), \
+                mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("CUE read")), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(0, RUNNER.main())
+        lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
+        self.assertEqual(3, len(lines))
+        for _, marker, arguments in expected:
+            self.assertTrue(any(arguments[0] + " | " + marker in line for line in lines))
+
+    def test_aggregate_ui_marker_log_and_result_are_distinct_from_both_prior_ui_modes(self):
+        name, old_marker = "UiSmoke", "FRESH_NATIVE_DOCUMENT_UI_OK"
+        session_marker, session_flag = "FRESH_LEVEL_DOCUMENT_SESSION_OK", "--fresh-native-level-session-only"
+        marker, flag = "FRESH_NATIVE_LEVEL_UI_OK", "--fresh-native-level-ui-only"
+        for emit_marker in (False, True):
+            calls = []
+
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                if command[:2] == ["dotnet", "run"]:
+                    emitted = marker if flag in command and emit_marker else session_marker if flag in command or session_flag in command else old_marker
+                    kwargs["stdout"].write(emitted)
+                return subprocess.CompletedProcess(command, 0)
+
+            with self.subTest(emit_marker=emit_marker), tempfile.TemporaryDirectory(prefix="spyro-aggregate-ui-runner-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", ((name, old_marker),)), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ((name, session_marker, [session_flag]), (name, marker, [flag]))), \
+                        mock.patch.object(RUNNER, "SOURCE_QA_CASES", ()), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("source read")), \
+                        mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("CUE read")), \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin)]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0 if emit_marker else 1, RUNNER.main())
+                summary = json.loads((Path(output) / "summary.json").read_text())
+            self.assertEqual(2, sum(command[:2] == ["dotnet", "build"] for command in calls), "App and UiSmoke build once each")
+            runs = [command for command in calls if command[:2] == ["dotnet", "run"]]
+            self.assertEqual([["--fresh-native-document-only"], [session_flag], [flag]],
+                             [command[command.index("--") + 1:] for command in runs])
+            self.assertTrue(all("--no-build" in command and "--no-restore" in command for command in runs))
+            self.assertEqual(["run-Spyro.Editor.UiSmoke", "run-Spyro.Editor.UiSmoke-fresh-level-session", "run-Spyro.Editor.UiSmoke-fresh-level-ui"],
+                             [row["name"] for row in summary[-3:]])
+            self.assertEqual(len(summary), len({row["name"] for row in summary}))
+            self.assertEqual(len(summary), len({row["log"] for row in summary}))
+            self.assertTrue(all(row["passed"] for row in summary[:-1]))
+            self.assertEqual(emit_marker, summary[-1]["passed"])
+            if not emit_marker:
+                self.assertEqual("missing success marker", summary[-1]["detail"])
 
     def test_aggregate_session_marker_and_result_name_do_not_alias_legacy_ui(self):
         name, old_marker = "UiSmoke", "FRESH_NATIVE_DOCUMENT_UI_OK"
@@ -551,6 +609,14 @@ class RunnerOptionsTests(unittest.TestCase):
     def test_textured_disc_modes_are_read_only_with_separate_source_and_default_markers(self):
         self.assert_texture_modes("NativeId65TexturedDiscSmoke", "NATIVE_ID65_TEXTURED_DISC")
 
+    def test_textured_research_baseline_requires_bin_cue_and_never_selects_candidate_probe(self):
+        name = "NativeId65TexturedResearchSmoke"
+        self.assert_texture_modes(name, "NATIVE_ID65_TEXTURED_RESEARCH_BASELINE", needs_cue=True)
+        self.assertFalse(any(c[0] == name for c in RUNNER.ADDITIONAL_CORE_CASES))
+        project = RUNNER.ROOT / ("src/Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
+        self.assertIn('<TexturedResearchProbe Condition="\'$(TexturedResearchProbe)\' == \'\'">Baseline</TexturedResearchProbe>',
+                      project.read_text())
+
     def test_fresh_disc_modes_require_their_own_markers_and_only_the_selected_image(self):
         self.assert_texture_modes("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC", (), "SMOKE")
 
@@ -670,6 +736,9 @@ class RunnerOptionsTests(unittest.TestCase):
                 self.assertIn("--no-build", command)
                 self.assertIn("--no-restore", command)
                 self.assertFalse(any(flag in command for flag in ("--publish", "--verify", "--faults", "--exercise-staging", "--stage-faults", "--exercise-publication")))
+            for command in calls:
+                self.assertFalse(any("CandidateApi" in token or "TexturedResearchProbe" in token for token in command),
+                                 "Default builds/runs and explicit source QA must not select a future compile probe.")
             self.assertEqual(len(summary), len({row["name"] for row in summary}))
 
     def test_wizard_append_modes_are_readonly_and_require_their_exact_markers(self):
@@ -853,8 +922,8 @@ class RunnerOptionsTests(unittest.TestCase):
             self.assertEqual(free_marker, dict(RUNNER.CORE_CASES).get(name))
             self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
             self.assertEqual([(name, source_marker, arguments)], [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
-        self.assertEqual(frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke"}), RUNNER.SOURCE_QA_CUE_CASES)
-        for name in RUNNER.SOURCE_QA_CUE_CASES - {"NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke"}:
+        self.assertEqual(frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke"}), RUNNER.SOURCE_QA_CUE_CASES)
+        for name in RUNNER.SOURCE_QA_CUE_CASES - {"NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke"}:
             self.assertIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
 
     def test_flight_preferences_are_sourcefree_and_never_a_rom_writer(self):
@@ -1076,6 +1145,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeId65FreshTerrainTextureSmoke": ["--source", "/selected original.bin"],
             "NativeId65TexturedBodySmoke": ["--source", "/selected original.bin"],
             "NativeId65TexturedDiscSmoke": ["--source", "/selected original.bin"],
+            "NativeId65TexturedResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],
             "NativeId65FreshDiscSmoke": ["/selected original.bin"],
             "NativeId65FreshDiscStreamSmoke": ["/selected original.bin"],
             "NativeId65FreshDiscResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],

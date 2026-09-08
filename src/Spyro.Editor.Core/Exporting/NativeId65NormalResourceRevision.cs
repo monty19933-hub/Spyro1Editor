@@ -29,6 +29,7 @@ internal sealed class NativeId65NormalResourceRevision
                 texture.ModelSha256 != fresh.ModelSha256)))
             throw new InvalidDataException("Normal resource revision lost its actual original-issued fresh ancestor or fixed texture profile.");
 
+        TextureAncestor = texture;
         ResourceProfile = texture == null ? NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles
             : NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials;
         PlanSha256 = texture?.PlanSha256 ?? fresh.PlanSha256;
@@ -82,6 +83,7 @@ internal sealed class NativeId65NormalResourceRevision
         return new(texture.FreshAncestor, texture);
     }
 
+    internal NativeId65FreshTerrainTexturePlan? TextureAncestor { get; }
     internal NativeId65NormalResourceProfile ResourceProfile { get; }
     internal string SourceImageSha256 => NativeId65EngineProfileContract.OriginalImageSha256;
     internal string PlanSha256 { get; }
