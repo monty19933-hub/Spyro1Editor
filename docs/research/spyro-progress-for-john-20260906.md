@@ -1,6 +1,6 @@
 # Spyro editor — what is working now
 
-Updated September 8, 2026 after saved-selected textured gameplay and fresh-Wizard reward testing.
+Updated September 8, 2026 after saved-selected gameplay, source thumbnails and native dropdown regression testing.
 Development continues with the requested pause near 5% usage **remaining**.
 This is a development checkpoint, not a V6 release. Original game/save files and
 the preserved R03 editor have not been replaced.
@@ -54,7 +54,7 @@ matched their pre-test hashes. No original card was replaced.
   appeared, and movement, edge fall/respawn, jump/landing and flame effects were
   observed at normal speed. See the [textured-floor test](native-fresh-textured-runtime-r01.md).
 - The whole-level document now preserves two material selections through edits,
-  undo/redo and save/reopen. It labels selections honestly as unrendered; a
+  undo/redo and save/reopen. It labels the schematic honestly as unrendered; a
   material picker now passes100 headless checks, including both ordered slots
   and whole-form edit/save protection. Actual saved-material compilation
   passes five complete-image goldens, including ordered donors and edited
@@ -64,8 +64,11 @@ matched their pre-test hashes. No original card was replaced.
   the saved14/T1+70/T1, heading128/music20 document passed normal-speed native
   entry, jump/landing, flame, movement and fall/respawn. See the
   [saved-material gameplay report](native-fresh-saved-material-runtime-r01.md).
-  The preview's window integration and saved-level export UI are next. These controls
-  are in source, not yet in the preserved R04 package. See the
+  The window now shows explicit source thumbnails, with75 actual-source UI checks
+  passing alongside cancellation/stale-result and bitmap-cleanup tests. The same
+  saved-level publisher is now available through a guarded public API; connecting
+  the export button is next. These controls are in source, not yet in R04. See the
+  [source-thumbnail window](native-fresh-material-inspection-window.md) and
   [material-picker checkpoint](native-fresh-saved-material-picker.md).
 - Two Wizards imported into an existing level previously passed a bounded
   gameplay sequence: attacks, separate rewards, repeat defeat without a
@@ -76,10 +79,12 @@ matched their pre-test hashes. No original card was replaced.
 
 The newer, separate **R04 whole-level test editor** has now been built from
 checkpoint60f6d6f. Package/signature, source preservation and packaged PNG checks
-pass. Its earlier normal launch reached macOS Documents permission; the launch
-helper was still waiting on the latest process check; native edit/save/reopen
-acceptance remains pending. It was left untouched.
-No permission bypass was used. See the
+pass. Its normal launch has now reached the actual main/Fresh windows. A native
+accessibility write to a read-only dropdown exposed a crash; keyboard Down/Return
+selection worked after recovery. The focused source fix passes96 checks but is
+not installed into preserved R04. Native edit/save/reopen acceptance remains
+pending; use ordinary menu/keyboard selection, not an accessibility text write.
+No permission bypass was used. See the [dropdown regression](native-fresh-readonly-selection.md) and
 [R04 app location and test checklist](native-fresh-level-mac-r04.md).
 
 R04 adds **Level aggregate → Fork saved legacy floor** and Wizard-route
@@ -122,8 +127,9 @@ feature.
 
 ## Remaining work toward V6
 
-The immediate parallel tracks are saved whole-level publication, actual source
-texture previews, and native validation/packaging of the placement window.
+The immediate parallel tracks are the saved whole-level export button, mixed
+Wizard/material composition, and a separately identified preview package with
+source thumbnails and the Mac dropdown safeguard.
 The authored Wizard source matrix completed72 recipes across46 music selections;
 that is complete-image/initial-footprint evidence, not72 gameplay tests. See the
 [issued-matrix report](native-fresh-wizard-issued-matrix.md).
@@ -141,14 +147,14 @@ in each destination. A model catalog alone cannot provide that. Multiple
 editable new-level slots, normal portal integration, save/reboot compatibility,
 animated textures and arbitrary object/material mixtures remain open.
 
-Latest completed all-project Release gate: **331 checks, zero failures**, including
-the saved-level Candidate and export-failure test controls, background texture
-inspection worker, source-preview decoder, raw picker, initial footprint
+Latest completed all-project Release gate: **334 checks, zero failures**, including
+the public saved-level API, source-thumbnail window, Mac dropdown regression,
+shared GPU allocation, background inspection worker, raw picker, initial footprint
 and prior texture publication/failure-recovery controls. Fixed-recipe exporter
 checkpoint: f8b382c. These latest source
 changes are not in the preserved R03/R04 apps.
 These are engineering
-checks, not331 gameplay runs. Texture inspection has passed actual source-file
-and cancellation tests but is not yet connected to the window. The [engineering handoff](native-editor-resume-20260906.md)
+checks, not334 gameplay runs. Texture inspection is now connected to the window
+and separately passes actual-source and cancellation tests. The [engineering handoff](native-editor-resume-20260906.md)
 and [V6 readiness assessment](v6-readiness-20260906.md) retain the detailed
 boundaries and next steps.

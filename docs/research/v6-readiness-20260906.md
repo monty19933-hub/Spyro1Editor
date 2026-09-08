@@ -11,20 +11,22 @@ two-Wizard reward/re-entry sequence. None establishes universal importing.
 The latest checkpoints add explicit preserved legacy-to-aggregate conversion,
 source-bound initial spawn/footprint checks, authored same-layout Wizard
 composition, saved two-material compilation and a raw material picker. The
-latest combined all-project Release/default gate is331/zero failures. These
+latest combined all-project Release/default gate is334/zero failures. These
 source changes are not silently rebuilt into the preserved R03/R04 packages.
 The next work order is:
 
 1. Connect the saved whole-level publication path to the App edit/save/export
    workflow; its physical failure, clean publication, independent readback and
    bounded normal-speed gameplay gates have passed. The internal first arm
-   and its physical-test seam pass source219/default157; aggregate export stays disabled in the window.
+   and its physical-test seam pass source222/default157; the narrow public App
+   boundary passes source136/default56. Aggregate export stays disabled in the window.
    The source picker passes100 checks, prior placement/history UI219 remains
    green, and saved-material compilation matches five full-image references.
-2. Connect actual source-texture thumbnails (decoder64 source rows and bounded
-   worker51 actual-source checks passed), then package a separately identified
-   usable preview. Preserve both slots, drafts and source-job ownership through
-   cancellation/close; a thumbnail must not imply destination compatibility.
+2. Actual source-texture thumbnails are now connected: window source75 and
+   free argument15/control68/lifecycle80 pass. The scoped Mac dropdown safeguard
+   separately passes96 checks after reproducing the actual R04 crash. Package a
+   separately identified usable preview after saved-export integration. Preserve
+   both slots, drafts and source ownership; a thumbnail is not compatibility.
 3. Extend the current gameplay evidence: the corrected fresh Wizard passed
    normal-speed defeat, yellow gem pickup and repeat defeat without another
    gem. The separate fixed two-material floor passed normal-speed movement,
@@ -36,7 +38,9 @@ The next work order is:
    shared allocation/linking machinery; cover private state, emitted children,
    sound, collision, rewards and re-entry instead of enabling untested rows.
    Three independent mixed Wizard/material expectations now fit without
-   weakening ownership; actual C# comparison and mixed gameplay remain pending.
+   weakening ownership. Shared GPU mechanics are extracted with exact old-owner
+   inverse and original source goldens preserved; actual mixed C# comparison
+   and mixed gameplay remain pending.
 5. Package a separately identified preview once its actual user workflow works;
    keep remaining incompatible families/material semantics visible to the user.
 

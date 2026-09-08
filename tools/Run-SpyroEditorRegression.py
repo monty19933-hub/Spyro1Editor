@@ -60,6 +60,7 @@ CORE_CASES = (
     ("NativeId65TexturedResearchSmoke", "NATIVE_ID65_TEXTURED_RESEARCH_BASELINE_FREE_OK"),
     ("NativeFreshSavedMaterialSmoke", "NATIVE_FRESH_SAVED_MATERIAL_FREE_OK"),
     ("NativeFreshSavedLevelResearchSmoke", "NATIVE_FRESH_SAVED_LEVEL_RESEARCH_FREE_OK"),
+    ("NativeFreshSavedLevelPublicSmoke", "SAVED_LEVEL_PUBLIC_FREE_OK"),
     ("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC_SMOKE_OK"),
     ("NativeId65FreshDiscStreamSmoke", "NATIVE_ID65_FRESH_DISC_STREAM_SMOKE_OK"),
     ("NativeId65FreshDiscResearchSmoke", "NATIVE_ID65_FRESH_DISC_RESEARCH_SMOKE_OK"),
@@ -124,6 +125,8 @@ ADDITIONAL_CORE_CASES = (
      ["--fresh-material-picker-only"]),
     ("UiSmoke", "FRESH_MATERIAL_INSPECTION_WORKER_FREE_OK",
      ["--fresh-material-inspection-worker-only"]),
+    ("UiSmoke", "FRESH_MATERIAL_INSPECTION_UI_OK",
+     ["--fresh-material-inspection-only"]),
 )
 SOURCE_QA_CASES = (
     # This read-only mode checks both preserved V2 and V3 native closure goldens;
@@ -162,12 +165,15 @@ SOURCE_QA_CASES = (
     ("NativeId65StaticTerrainTextureSmoke", "NATIVE_ID65_STATIC_TERRAIN_TEXTURE_SOURCE_OK", ["--source"]),
     # Explicit read-only App worker; no Window, cache, project or publication.
     ("UiSmoke", "FRESH_MATERIAL_INSPECTION_WORKER_SOURCE_OK", ["--fresh-material-inspection-worker-source"]),
+    # Explicit headless UI uses retained tiny projects, never a native window or output.
+    ("UiSmoke", "FRESH_MATERIAL_INSPECTION_SOURCE_UI_OK", ["--fresh-material-inspection-source"]),
     ("NativeId65FreshTerrainTextureSmoke", "NATIVE_ID65_FRESH_TERRAIN_TEXTURE_SOURCE_OK", ["--source"]),
     ("NativeId65TexturedBodySmoke", "NATIVE_ID65_TEXTURED_BODY_SOURCE_OK", ["--source"]),
     ("NativeId65TexturedDiscSmoke", "NATIVE_ID65_TEXTURED_DISC_SOURCE_OK", ["--source"]),
     ("NativeId65TexturedResearchSmoke", "NATIVE_ID65_TEXTURED_RESEARCH_BASELINE_SOURCE_OK", ["--source"]),
     ("NativeFreshSavedMaterialSmoke", "NATIVE_FRESH_SAVED_MATERIAL_SOURCE_OK", ["--source"]),
     ("NativeFreshSavedLevelResearchSmoke", "NATIVE_FRESH_SAVED_LEVEL_RESEARCH_SOURCE_OK", ["--source"]),
+    ("NativeFreshSavedLevelPublicSmoke", "SAVED_LEVEL_PUBLIC_SOURCE_OK", ["--source"]),
     ("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC_SOURCE_OK", []),
     ("NativeId65FreshDiscStreamSmoke", "NATIVE_ID65_FRESH_DISC_STREAM_SOURCE_OK", []),
     # Capture checks only; never stage faults, exercise publication or verify outputs here.
@@ -188,7 +194,7 @@ SOURCE_QA_CASES = (
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
 SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
-SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke", "NativeFreshSavedLevelResearchSmoke", "UiSmoke"})
+SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke", "NativeFreshSavedLevelResearchSmoke", "NativeFreshSavedLevelPublicSmoke", "UiSmoke"})
 # These raw-source checks have no project/build or default invocation. Each
 # accepts only the selected original BIN and shares the source-suite deadline.
 SOURCE_PYTHON_CASES = (
@@ -391,6 +397,7 @@ def main():
             ("--fresh-native-level-ui-only",): "-fresh-level-ui",
             ("--fresh-material-picker-only",): "-fresh-material-picker",
             ("--fresh-material-inspection-worker-only",): "-fresh-material-inspection-worker",
+            ("--fresh-material-inspection-only",): "-fresh-material-inspection",
         }.get(tuple(arguments), "")
         execute("run-" + project.stem + suffix,
                 ["dotnet", "run", "--project", str(project), "--configuration",
@@ -406,7 +413,10 @@ def main():
         if offline_passed:
             for name, marker, arguments in SOURCE_QA_CASES:
                 project = ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
-                suffix = "-route-surfaces" if arguments == ["--source-backed-route-surfaces"] else ""
+                suffix = {
+                    ("--source-backed-route-surfaces",): "-route-surfaces",
+                    ("--fresh-material-inspection-source",): "-fresh-material-inspection",
+                }.get(tuple(arguments), "")
                 if not execute("source-" + name + suffix,
                         lambda project=project, arguments=arguments, name=name: [
                             "dotnet", "run", "--project", str(project), "--configuration",

@@ -28,25 +28,28 @@ Current work has passed the fresh null-Sparx diagnostic and one cold-entry/
 damage/death/respawn cycle; see the latest R02 report below. App aggregate window
 integration passes219 headless checks (plus session138/oldUI65/researchUI333),
 with Root/peer review and replay clear. A separate R04 package is now built;
-see `native-fresh-level-mac-r04.md` for its actual pending native permission gate.
+see `native-fresh-level-mac-r04.md` for actual native opening and later dropdown crash/recovery evidence.
 Source-tested textured Disc composition is committed446e84d; later fixed-a
 physical publication and native tests are now complete as bounded below.
 None of these changes is silently in R03.
 The old source contracts and historical failed records remain preserved.
 
-Latest full all-project Release/default gate:331/zero failures, including the
-saved whole-level Candidate and physical-test seam, bounded App inspection worker,
-actual-source preview wrapper, raw picker and
-initial footprint, while preserving the five prior publication roles.
+Latest full all-project Release/default gate:334/zero failures, including the
+nonfriend saved-level API, actual window inspection controls, readonly96-check
+regression, shared GPU mechanics and all earlier default gates.
 Exact summary:
-`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-o2zgovh9/summary.json`.
-Root91392 CLOSED0; checkpoint7b22a9a. Final picker100 includes unknown kinds and reverse invalid-Base
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-e8hn4gvm/summary.json`.
+Root12027 CLOSED0. The previous331 gate was91392/checkpoint7b22a9a.
+Final picker100 includes unknown kinds and reverse invalid-Base
 atomicity; Root viewed both regenerated1120x800 PNGs in
 `spyro-material-picker-ui-KYgopu` under the same temporary parent. Runner71 and
-all Python226/13 explicit skips pass. The broad earlier helper-absence check
-missed the wrapper process: fresh15:33 ps found R04 LaunchFreshDocumentTest.zsh
-PID36028 still waiting, and CUA inventories it as running. It was left untouched;
-native editor permission/usability is not accepted. DuckStation is now CLOSED
+all Python226/13 explicit skips passed at that earlier gate. Latest standalone
+runner73 and Python discovery228/13 explicit skips pass. R04 later started at15:35,
+with actual main/Fresh windows observed16:00. A read-only accessibility SetValue
+crashed PID36028; native recovery started67619. Root verified exact legacy seed,
+absent aggregate and unchanged App/Core, then used Down/Return successfully and
+closed only the Fresh window. Main R04 remains open, not patched. Native
+edit/save/reopen acceptance remains pending. DuckStation is now CLOSED
 after the saved-selected test described below; no observer is active.
 Root separately replayed source-backed textured baseline193/complete original
 final checks, all66 runner tests, and UI219/legacy65/research333/session138.
@@ -110,7 +113,11 @@ H's test-only first-invalid LQ cache-index correction passed build/free406;
 the source comparison and immutable literal were unchanged. Its bounded App
 inspection worker now passes free35, malformed CLI13 and actual source51,
 including real mid-read/late cancellation and complete original final checks.
-It has not yet been wired to the Window. See native-fresh-material-inspection-worker.md and
+It is now wired to the Window: argument15/control68/lifecycle80 and actual-source75
+pass, including raw ABA, genuine foreign results, cleanup and protected files.
+Root replayed75 after the readonly dropdown safeguard passed96+old48/219, and
+viewed the actual source-thumbnail PNG. See native-fresh-material-inspection-window.md,
+native-fresh-readonly-selection.md, native-fresh-material-inspection-worker.md and
 `native-fresh-material-source-preview.md`. The exhaustive72-row Wizard matrix
 now has a strict separate opt-in CLI so its17-minute run does not consume the
 ordinary source suite's shared deadline. New dispatch default164, malformed CLI9
@@ -122,8 +129,15 @@ byte-identical to H82243, complete receipt e04c7a6c...0df31. Three corrected-B/T
 pairs fit while preserving complete GPU65800:7F000 sound-transfer residue;
 floor-first allocation actually conflicts atGPU+0x10. Expected full images and
 all1290 changed-sector hashes are retained, not actual C# or runtime issuance.
-See native-fresh-mixed-resource-expectations.md. Next private GPU-only mechanics
-extraction must preserve the old DE000 adapter exactly before mixed-chain work.
+See native-fresh-mixed-resource-expectations.md. The GPU-only mechanics extraction
+now preserves the whole old DE000 adapter by exact inverse; default7627 and actual
+terrain132825/body139/disc312/saved-material220 source checks passed with old goldens.
+Root replayed the promoted inverse. Mixed component drafts remain private. See
+native-fresh-shared-gpu-allocation.md. The same saved Candidate/public publisher
+now passes nonfriend default56/source136, nine exact negative compile controls,
+and internal saved default157/source222 with all five full images unchanged.
+Its narrow public API retains real Snapshot ownership and private constructors;
+App button integration remains next. See native-fresh-saved-public-api.md.
 A separate corrected-Wizard R04 native session now passed normal100% flame
 defeat, yellow-gem pickup LAB10/10,total58→68, edge fall/respawn, second defeat
 with purple repeat-kill orb and unchanged final10/10,total68. PID50221/exec48620

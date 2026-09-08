@@ -12,7 +12,7 @@ internal sealed partial class NativeFreshDocumentWindow
 {
     private const string LegacyModeLabel = "Legacy floor (v1)";
     private const string AggregateModeLabel = "Level aggregate";
-    private readonly ComboBox _documentMode = new()
+    private readonly ComboBox _documentMode = new ReadOnlySelectionComboBox()
     {
         Name = "FreshDocumentMode", ItemsSource = new[] { LegacyModeLabel, AggregateModeLabel },
         SelectedItem = LegacyModeLabel, MinWidth = 200
@@ -50,7 +50,7 @@ internal sealed partial class NativeFreshDocumentWindow
     internal NativeFreshLevelDocumentIntent? CurrentAggregateIntent =>
         _aggregateMode ? _aggregateSession?.CurrentIntent : null;
 
-    private bool AggregateCommandsBlocked => _decisionBusy || _researchBusy || _modeSwitchBusy || _forkBusy;
+    private bool AggregateCommandsBlocked => _decisionBusy || _researchBusy || _materialInspectionBusy || _modeSwitchBusy || _forkBusy;
     private bool AggregateHasUnappliedFields => _addingWizard || CurrentAggregateIntent != null &&
         (FieldSignature() != _appliedFields || RouteFieldSignature() != _appliedRouteFields ||
             MaterialFieldSignature() != _appliedMaterialFields);
@@ -223,7 +223,7 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private bool ApplyAggregateFields(bool forSave = false)
     {
-        if (!_aggregateMode || CurrentAggregateIntent == null || _researchBusy || _forkBusy ||
+        if (!_aggregateMode || CurrentAggregateIntent == null || _researchBusy || _materialInspectionBusy || _forkBusy ||
             !forSave && AggregateCommandsBlocked) return false;
         try
         {
@@ -269,7 +269,7 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private bool SaveAggregateDocument()
     {
-        if (CurrentAggregateIntent == null || _researchBusy || _forkBusy) return false;
+        if (CurrentAggregateIntent == null || _researchBusy || _materialInspectionBusy || _forkBusy) return false;
         try
         {
             RequireCurrentProject();

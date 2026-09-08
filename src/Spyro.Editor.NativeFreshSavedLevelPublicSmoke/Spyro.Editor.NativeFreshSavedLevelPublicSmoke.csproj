@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Spyro.Editor.NativeFreshSavedLevelPublicSmoke</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="PublicCases.cs" />
+    <Compile Include="SourcePair.cs" />
+    <Compile Include="SourcePairCases.cs" />
+    <ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -11,7 +11,7 @@ namespace Spyro.Editor.Core.Exporting;
 
 // First closed saved whole-level arm only. No schema1/Wizard
 // branch, public caller serializer, fixture-hash allowlist or persistent-save proof.
-internal sealed class NativeFreshSavedLevelResearchCandidatePlan
+public sealed class NativeFreshSavedLevelResearchCandidatePlan
 {
     internal const string ProfileId = "native-fresh-saved-level-research-r01";
     internal const string Variant = "schema2-two-retail-materials-p0-n16";
@@ -91,14 +91,24 @@ internal sealed class NativeFreshSavedLevelResearchCandidatePlan
 
     internal NativeFreshSavedLevelDocumentReadContext Saved { get; }
     internal NativeFreshSavedMaterialCompilation MaterialCompilation { get; }
-    internal string SourceImagePath { get; }
-    internal string SourceCuePath { get; }
-    internal string SourceCueSha256 { get; }
-    internal string PlanSha256 { get; }
-    internal string ExpectedImageSha256 => _expected.OutputSha256;
-    internal int ExpectedChangedRawSectors => _expected.ChangedSectors;
-    internal long ExpectedImageByteLength => NativeId65FreshDiscSource.ImageByteLength;
-    internal bool RuntimeVerified => false;
+    public NativeFreshLevelDocumentSnapshot SavedSnapshot => Saved.Snapshot;
+    public string SourceImagePath { get; }
+    public string SourceCuePath { get; }
+    public string SourceCueSha256 { get; }
+    public string PlanSha256 { get; }
+    public string ExpectedImageSha256 => _expected.OutputSha256;
+    public int ExpectedChangedRawSectors => _expected.ChangedSectors;
+    public long ExpectedImageByteLength => NativeId65FreshDiscSource.ImageByteLength;
+    public bool RuntimeVerified => false;
+
+    /// <summary>Capture the actual saved schema2 material-only revision; no runtime or normal-export approval.</summary>
+    public static async Task<NativeFreshSavedLevelResearchCandidatePlan> CaptureSavedAsync(string originalBin,
+        string sourceCue, NativeFreshLevelDocumentSnapshot savedSnapshot, CancellationToken token = default)
+    {
+        token.ThrowIfCancellationRequested();
+        var saved = NativeFreshSavedLevelDocumentReadContext.Capture(savedSnapshot, token);
+        return await CaptureAsync(originalBin, sourceCue, saved, token);
+    }
 
     internal static async Task<NativeFreshSavedLevelResearchCandidatePlan> CaptureAsync(string originalBin,
         string sourceCue, NativeFreshSavedLevelDocumentReadContext saved, CancellationToken token = default)

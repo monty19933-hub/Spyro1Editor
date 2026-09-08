@@ -1,9 +1,9 @@
 namespace Spyro.Editor.Core.Exporting;
 
-// New internal arm only. No UI/public snapshot-adoption facade in this tranche.
-internal static class NativeFreshSavedLevelResearchCandidatePublisher
+// One actual saved material-only arm; no receipt adoption or caller writer authority.
+public static class NativeFreshSavedLevelResearchCandidatePublisher
 {
-    internal static async Task<NativeId65FreshDiscResearchPublication> PublishAsync(
+    public static async Task<NativeId65FreshDiscResearchPublication> PublishAsync(
         NativeFreshSavedLevelResearchCandidatePlan plan, string directory, CancellationToken token = default) =>
         await NativeId65FreshResearchPublicationEngine.PublishAsync(
             NativeId65FreshResearchPublicationBinding.FromSavedLevel(plan), directory,
@@ -19,7 +19,7 @@ internal static class NativeFreshSavedLevelResearchCandidatePublisher
             NativeId65FreshResearchPublicationBinding.FromSavedLevel(plan), directory,
             fault, checkpoint, prepareTransactionLock, observation, token);
 
-    internal static async Task<NativeId65FreshDiscResearchPublication> VerifyAsync(
+    public static async Task<NativeId65FreshDiscResearchPublication> VerifyAsync(
         NativeFreshSavedLevelResearchCandidatePlan plan, string directory, CancellationToken token = default)
     {
         var binding = NativeId65FreshResearchPublicationBinding.FromSavedLevel(plan);
@@ -38,7 +38,7 @@ internal static class NativeFreshSavedLevelResearchCandidatePublisher
 
 // Constructed only after an actual returned PublishNew/result or by retaining
 // that existing typed outcome while folding a later independent source error.
-internal sealed class NativeFreshSavedLevelResearchCommittedException : IOException
+public sealed class NativeFreshSavedLevelResearchCommittedException : IOException
 {
     internal NativeFreshSavedLevelResearchCommittedException(string root,
         NativeFreshSavedLevelResearchCandidatePlan plan, string recovery, string stage,
@@ -53,16 +53,16 @@ internal sealed class NativeFreshSavedLevelResearchCommittedException : IOExcept
         RetainedStageDirectory = stage; RetainedOutputLeasePath = outputLease;
         RetainedProjectLeasePath = projectLease;
     }
-    internal string OutputDirectory { get; }
-    internal string ImagePath { get; }
-    internal string CuePath { get; }
-    internal string ReceiptPath { get; }
-    internal string PlanSha256 { get; }
-    internal string RetainedRecoveryDirectory { get; }
-    internal string RetainedStageDirectory { get; }
-    internal string RetainedOutputLeasePath { get; }
+    public string OutputDirectory { get; }
+    public string ImagePath { get; }
+    public string CuePath { get; }
+    public string ReceiptPath { get; }
+    public string PlanSha256 { get; }
+    public string RetainedRecoveryDirectory { get; }
+    public string RetainedStageDirectory { get; }
+    public string RetainedOutputLeasePath { get; }
     // For failed acquisition, this is inspection-only: no returned owner exists.
-    internal string RetainedProjectLeasePath { get; }
+    public string RetainedProjectLeasePath { get; }
 }
 
 // The Engine is the sole producer of these actual temporal observation points.

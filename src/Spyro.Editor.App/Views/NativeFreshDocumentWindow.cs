@@ -33,7 +33,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         Name = "FreshDocumentCapability", Text = LegacyCapabilityText,
         TextWrapping = TextWrapping.Wrap, FontSize = 12, MaxWidth = 1050
     };
-    private readonly ComboBox _music = new() { Name = "FreshDocumentMusic", ItemsSource = MusicTrackCatalog.SelectableTracks, HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly ComboBox _music = new ReadOnlySelectionComboBox() { Name = "FreshDocumentMusic", ItemsSource = MusicTrackCatalog.SelectableTracks, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly Button _new;
     private readonly Button _apply;
     private readonly Button _undoButton;
@@ -125,7 +125,8 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         _fieldsPanel.Children.Add(BuildMaterialFields());
         _fieldsPanel.Children.Add(_apply);
         _music.SelectionChanged += (_, _) => FieldsChanged();
-        var inspector = new ScrollViewer { Content = _fieldsPanel, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+        var inspectorContent = new StackPanel { Spacing = 12, Children = { _fieldsPanel, BuildMaterialInspectionFields() } };
+        var inspector = new ScrollViewer { Content = inspectorContent, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
         var body = new Grid { ColumnDefinitions = new ColumnDefinitions("*,380"), ColumnSpacing = 20 };
         body.Children.Add(previewPanel);
         Grid.SetColumn(inspector, 1);
@@ -148,7 +149,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
             if (e.Key == Key.S && e.KeyModifiers == command)
             {
                 e.Handled = true;
-                if (!_decisionBusy && !_researchBusy) SaveDocument();
+                if (!_decisionBusy && !_researchBusy && !_materialInspectionBusy) SaveDocument();
             }
         };
     }
@@ -163,7 +164,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
 
     private void NewStarter()
     {
-        if (_aggregateMode || _modeSwitchBusy || CurrentIntent != null || _snapshot.Exists || _decisionBusy || _researchBusy) return;
+        if (_aggregateMode || _modeSwitchBusy || CurrentIntent != null || _snapshot.Exists || _decisionBusy || _researchBusy || _materialInspectionBusy) return;
         Push(_undo, CurrentIntent);
         _redo.Clear();
         CurrentIntent = NativeId65FreshDocumentIntent.Create(8448, 8448, 8704, 1024, 1024, 8960, 8960, 64,
@@ -175,7 +176,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
     private bool ApplyFields()
     {
         if (_aggregateMode) return ApplyAggregateFields();
-        if (CurrentIntent == null || _researchBusy) return false;
+        if (CurrentIntent == null || _researchBusy || _materialInspectionBusy) return false;
         try
         {
             var candidate = NativeId65FreshDocumentIntent.Create(Number("FreshFloorX"), Number("FreshFloorY"), Number("FreshFloorZ"),
@@ -202,7 +203,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
     private bool SaveDocument()
     {
         if (_aggregateMode) return SaveAggregateDocument();
-        if (CurrentIntent == null || _researchBusy) return false;
+        if (CurrentIntent == null || _researchBusy || _materialInspectionBusy) return false;
         try
         {
             RequireCurrentProject();
@@ -234,7 +235,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
     {
         if (_aggregateMode) { await ReopenAggregateAsync(); return; }
         if (_modeSwitchBusy) return;
-        if (_decisionBusy || _researchBusy) return;
+        if (_decisionBusy || _researchBusy || _materialInspectionBusy) return;
         try
         {
             RequireCurrentProject();
@@ -257,6 +258,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
 
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
+        if (DeferMaterialInspectionClose(e)) return;
         if (_modeSwitchBusy || _forkBusy)
         {
             e.Cancel = true;
@@ -326,7 +328,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
     {
         if (_aggregateMode) { UndoAggregate(); return; }
         if (_modeSwitchBusy) return;
-        if (_researchBusy) return;
+        if (_researchBusy || _materialInspectionBusy) return;
         if (HasUnappliedFields)
         {
             WriteFields();
@@ -344,7 +346,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
     {
         if (_aggregateMode) { RedoAggregate(); return; }
         if (_modeSwitchBusy) return;
-        if (_researchBusy) return;
+        if (_researchBusy || _materialInspectionBusy) return;
         if (HasUnappliedFields || _redo.Count == 0) return;
         Push(_undo, CurrentIntent);
         CurrentIntent = Pop(_redo);
@@ -354,6 +356,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
 
     private void WriteFields()
     {
+        InvalidateMaterialInspection();
         _refreshing = true;
         try
         {
@@ -378,13 +381,14 @@ internal sealed partial class NativeFreshDocumentWindow : Window
     private void FieldsChanged()
     {
         if (_refreshing) return;
+        InvalidateMaterialInspection();
         RefreshChrome();
-        if (HasUnappliedFields && !_researchBusy) _status.Text = "Unapplied fields — the schematic still shows the last applied intent. Apply or Save validates the complete form.";
+        if (HasUnappliedFields && !_researchBusy && !_materialInspectionBusy) _status.Text = "Unapplied fields — the schematic still shows the last applied intent. Apply or Save validates the complete form.";
     }
 
     private void RefreshChrome()
     {
-        bool editable = !_decisionBusy && !_researchBusy && !_modeSwitchBusy && !_forkBusy;
+        bool editable = !_decisionBusy && !_researchBusy && !_materialInspectionBusy && !_modeSwitchBusy && !_forkBusy;
         bool hasDocument = _aggregateMode ? CurrentAggregateIntent != null : CurrentIntent != null;
         _new.IsEnabled = editable && !_aggregateMode && CurrentIntent == null && !_snapshot.Exists;
         _fieldsPanel.IsEnabled = editable && hasDocument;
@@ -395,6 +399,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         _redoButton.IsEnabled = editable && !HasUnappliedFields && (_aggregateMode ? _aggregateSession?.CanRedo == true : _redo.Count > 0);
         RefreshAggregateChrome(editable);
         RefreshResearchChrome();
+        RefreshMaterialInspectionChrome();
         _state.Text = HasUnappliedFields ? "Unapplied fields · preview unchanged" : HasUnsavedChanges ? "Unsaved document" :
             !hasDocument ? "No fresh document" : "Saved document";
         Title = "Fresh Native Level Document" + (HasUnsavedChanges ? " *" : "");

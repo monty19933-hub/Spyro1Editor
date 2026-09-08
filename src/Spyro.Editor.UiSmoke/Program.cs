@@ -23,6 +23,22 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+// Explicit headless inspection UI modes; worker-only dispatch remains independent.
+if (NativeFreshMaterialInspectionUiArguments.Handles(args))
+{
+    bool inspectionSource = NativeFreshMaterialInspectionUiArguments.RequireSource(args);
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    if (inspectionSource) NativeFreshMaterialInspectionSourceUiCases.Run(args[1], args[2]);
+    else
+    {
+        NativeFreshMaterialInspectionUiArguments.Run();
+        NativeFreshMaterialInspectionControlsCases.Run();
+        NativeFreshMaterialInspectionLifecycleCases.Run();
+        Console.WriteLine("FRESH_MATERIAL_INSPECTION_UI_OK sourceOpened=false publication=false");
+    }
+    return 0;
+}
+
 // Explicit bounded App worker controls, before any Window/workspace/source setup.
 if (NativeFreshMaterialInspectionWorkerCases.Handles(args))
 {
@@ -47,6 +63,7 @@ if (args.Contains("--fresh-native-level-ui-only", StringComparer.Ordinal))
     string aggregateArtifacts = Directory.CreateTempSubdirectory("spyro-fresh-level-ui-artifacts-").FullName;
     NativeFreshLevelMaterialUiCases.Run(aggregateArtifacts);
     NativeFreshLevelDocumentUiCases.Run(aggregateArtifacts);
+    NativeFreshReadOnlySelectionCases.Run(aggregateArtifacts);
     Console.WriteLine($"FRESH_NATIVE_LEVEL_UI_ARTIFACTS path={aggregateArtifacts}");
     return 0;
 }

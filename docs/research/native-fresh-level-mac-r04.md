@@ -11,7 +11,7 @@ Private project: the same parent plus `state/aggregate-ui-project`.
 Driver/tests: `_local/research/fresh-document-real-ui-r01.DsKiPF/mac-test-driver-r04/`.
 Complete build and validation evidence: the app parent plus `evidence/`.
 
-## Verified package, pending native editing
+## Verified package; native opening observed, editing gate remains open
 
 Root reviewed the complete driver, templates and failure tests; independent
 peer review was clear. Root replayed 40 Python cases and all 18 actual native
@@ -47,8 +47,26 @@ fresh verification. The permission history is retained in
 A later broad process-name check incorrectly reported the helper absent. A
 fresh September8 15:33 full command inventory finds the same waiting wrapper
 PID36028, and CUA lists R04 as running. It was left untouched; no actual editor
-usability or permission acceptance follows from a live wrapper. Native editing
-acceptance is still pending; no package was rebuilt or permission bypassed.
+usability or permission acceptance follows from a live wrapper. No package was
+rebuilt or permission bypassed.
+
+The actual session log subsequently records startup at15:35:50. Root observed
+the real Stone Hill window at15:59 and opened Fresh Level at16:00:02. Its seeded
+legacy floor, heading96 and Track02 were present. A direct macOS accessibility
+value write to the mode dropdown then triggered an actual16:00:45 SIGABRT in
+PID36028: `ComboBoxAutomationPeer.IValueProvider.SetValue` throws through the
+native bridge. The tool subsequently attached to newly launched R04 PID67619;
+this is not a clean shutdown or successful aggregate edit. OS and managed logs
+are retained in `_local/research/readonly-selection-native-regression-r01.YlGG5M/`.
+
+After restart, ordinary dropdown keyboard Down/Return selected Level aggregate
+normally and showed its correct absent-document/Fork state. Root closed only
+the Fresh Level window without Save/Apply/Fork, leaving the existing main editor
+open. Legacy SHA remains the exact seed `b3f10d40...16e4cf1`; the aggregate file
+remains absent/nonlink and both packaged App/Core DLL hashes remain unchanged.
+No route creation/save/reopen or aggregate native export is accepted by this
+read-only check. A narrow accessibility regression/repair is being developed
+in source; it will not silently modify this preserved bundle.
 
 ## What to test once the window opens
 

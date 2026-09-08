@@ -29,13 +29,13 @@ internal sealed partial class NativeFreshDocumentWindow
         internal MaterialSlotEditor(int index)
         {
             string prefix = $"FreshMaterial{index}";
-            Kind = new ComboBox
+            Kind = new ReadOnlySelectionComboBox
             {
                 Name = prefix + "Kind", ItemsSource = new[] { BaseColorMaterialLabel, RetailMaterialLabel },
                 SelectedItem = BaseColorMaterialLabel, HorizontalAlignment = HorizontalAlignment.Stretch
             };
             SourceVariant = new TextBox { Name = prefix + "SourceVariant", MaxLength = 96, MinHeight = 32 };
-            SourceLevel = new ComboBox
+            SourceLevel = new ReadOnlySelectionComboBox
             {
                 Name = prefix + "SourceLevel", ItemsSource = Enumerable.Range(0, 35).Select(i => 10 + 2 * i).ToArray(),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -76,7 +76,7 @@ internal sealed partial class NativeFreshDocumentWindow
         _materialFields.Children.Add(new TextBlock
         {
             Name = "FreshMaterialAuthoringNotice",
-            Text = "Material descriptors are authoring intent. Source inspection and aggregate export are unavailable here.",
+            Text = "Material descriptors are authoring intent. Inspect sources explicitly for separate source thumbnails; aggregate export remains unavailable.",
             TextWrapping = TextWrapping.Wrap, FontSize = 11, Foreground = Brushes.DimGray
         });
         return _materialFields;
@@ -177,4 +177,3 @@ internal sealed partial class NativeFreshDocumentWindow
         }
     }
 }
-

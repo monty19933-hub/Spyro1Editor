@@ -12,10 +12,13 @@ internal static class CandidateCases
     internal static async Task Free()
     {
         Type type = typeof(NativeFreshSavedLevelResearchCandidatePlan);
-        Check(type.IsSealed && !type.IsPublic && type.GetConstructors().Length == 0,
-            "One closed internal Candidate with no public constructors.");
-        Check(type.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly).Length == 0,
-            "No caller native/hash/serializer authority API.");
+        Check(type.IsSealed && type.IsPublic && type.GetConstructors().Length == 0,
+            "One closed public Candidate with no public constructors.");
+        var publicFactories = type.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+        Check(publicFactories.Length == 1 && publicFactories[0].Name == "CaptureSavedAsync" &&
+            publicFactories[0].GetParameters().Select(p => p.ParameterType).SequenceEqual(new[] {
+                typeof(string), typeof(string), typeof(NativeFreshLevelDocumentSnapshot), typeof(CancellationToken) }),
+            "Exact one actual-Snapshot factory; no caller native/hash/serializer authority API.");
         Check(type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
             .All(p => p.SetMethod == null), "Candidate state is immutable.");
         using var canceled = new CancellationTokenSource(); canceled.Cancel();
@@ -88,6 +91,19 @@ internal static class CandidateCases
                 "Existing independently source-derived golden; not a production fixture allowlist.");
             var measured = new NativeId65FreshDiscVerification(expected, 1253);
             byte[] receipt = candidate.BuildReceipt(measured), canonical = candidate.CopyCanonicalDocument();
+            if (label == "heading-music")
+            {
+                var exposed = await NativeFreshSavedLevelResearchCandidatePlan.CaptureSavedAsync(bin, cue, saved.Snapshot);
+                Check(ReferenceEquals(exposed.SavedSnapshot, saved.Snapshot) &&
+                    ReferenceEquals(exposed.Saved.Snapshot, saved.Snapshot) &&
+                    ReferenceEquals(exposed.MaterialCompilation.Saved, exposed.Saved) &&
+                    ReferenceEquals(exposed.MaterialCompilation.Document, saved.Document),
+                    "Public factory retains exact caller Snapshot and actual internal chain, not recheck adoption.");
+                Check(!ReferenceEquals(exposed.Saved, saved) && exposed.PlanSha256 == candidate.PlanSha256 &&
+                    exposed.BuildReceipt(measured).SequenceEqual(receipt) && exposed.CopyCueBytes().SequenceEqual(candidate.CopyCueBytes()),
+                    "Visibility/factory addition leaves actual internal Plan/receipt/CUE bytes exact.");
+                await Throws<InvalidDataException>(() => { candidate.RequireAncestry(exposed.Saved, candidate.MaterialCompilation); return Task.CompletedTask; });
+            }
             Check(receipt.Length is > 0 and <= 65536, "Complete bounded companion before any Engine use.");
             using var parsed = JsonDocument.Parse(receipt);
             var root = parsed.RootElement;

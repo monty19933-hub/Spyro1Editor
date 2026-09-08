@@ -8,6 +8,7 @@ internal static class Program
         if (args.Length != 0 && (args.Length != 2 || args[0] != "--source"))
             throw new ArgumentException("Usage: NativeId65FreshTerrainTextureSmoke [--source original.bin]");
         AllocationCases.Run();
+        GpuExtractionCases.Run();
         await SelectedBindingCases.Free();
         Console.WriteLine($"NATIVE_ID65_FRESH_TERRAIN_TEXTURE_FREE_OK checks={_checks}");
         if (args.Length == 2)
