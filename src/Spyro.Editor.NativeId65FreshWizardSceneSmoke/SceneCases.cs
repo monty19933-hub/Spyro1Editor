@@ -20,10 +20,14 @@ internal static class SceneCases
         Type t = typeof(NativeId65FreshWizardResearchScenePlan);
         Check(t.IsSealed && t.GetConstructors().Length == 0 && t.GetProperties().All(p=>p.SetMethod == null), "Closed immutable result.");
         var factories = t.GetMethods(BindingFlags.Public|BindingFlags.Static|BindingFlags.DeclaredOnly);
-        Check(factories.Length==1 && factories[0].Name=="CaptureAsync" && factories[0].GetParameters().Select(p=>p.ParameterType).SequenceEqual(new[]{
+        Check(factories.Length==2 && factories.Select(m=>m.Name).Order().SequenceEqual(new[]{"CaptureAsync","CaptureAuthoredAsync"}) &&
+            factories.Single(m=>m.Name=="CaptureAsync").GetParameters().Select(p=>p.ParameterType).SequenceEqual(new[]{
             typeof(string),typeof(NativeId65FreshDocumentCompilation),typeof(NativeWizardFamilyAssetPlan),
-            typeof(NativeId65FreshWizardResearchResourcePlan),typeof(NativeWizardPlacementIntent),typeof(CancellationToken)}),
-            "Only actual three-way issued ancestry and geometric intent; no hash/bytes/approval factory.");
+            typeof(NativeId65FreshWizardResearchResourcePlan),typeof(NativeWizardPlacementIntent),typeof(CancellationToken)}) &&
+            factories.Single(m=>m.Name=="CaptureAuthoredAsync").GetParameters().Select(p=>p.ParameterType).SequenceEqual(new[]{
+            typeof(string),typeof(NativeFreshLevelDocumentIntent),typeof(NativeId65FreshDocumentCompilation),typeof(NativeWizardFamilyAssetPlan),
+            typeof(NativeId65FreshWizardResearchResourcePlan),typeof(CancellationToken)}),
+            "Named legacy and actual-aggregate producers require issued ancestry; no hash/bytes/approval factory.");
         Check(!t.GetMethods(BindingFlags.Public|BindingFlags.Instance|BindingFlags.DeclaredOnly).Any(m=>
             new[]{"Publish","Write","CompileBody","CompileOverlay"}.Any(s=>m.Name.StartsWith(s,StringComparison.Ordinal))), "No body/overlay/output writer.");
         using(var canceled=new CancellationTokenSource())

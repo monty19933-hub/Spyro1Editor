@@ -12,18 +12,25 @@ namespace Spyro.Editor.Core.Exporting;
 internal sealed class NativeId65FreshWizardResearchResourceSource
 {
     private NativeId65FreshWizardResearchResourceSource(NativeId65FreshDocumentCompilation compilation,
-        NativeWizardFamilyAssetPlan family, NativeWizardFamilyAssetSource donorSource, NativeId65NormalResourceSource normal)
+        NativeWizardFamilyAssetPlan family, NativeWizardFamilyAssetSource donorSource, NativeId65NormalResourceSource normal,
+        NativeFreshWizardResourceProfile profile)
     {
-        Compilation = compilation; Family = family;
+        NativeFreshWizardAuthoringShape.RequireCompilation(compilation, profile);
+        Compilation = compilation; Family = family; Profile = profile;
         Fresh = compilation.FreshResourceAncestor;
         var chain = Fresh.ResourceChainAncestor;
         Upload = Fresh.CopyUploadPayload(); Data = chain.CopyDataComponents(); Models = chain.CopyModelPayload();
         Geometry = normal.CopyPlayerPackage().AsSpan(0xAA8,0x32374).ToArray();
         RequireHash(Upload,0xDE000,"b769a9a298285aa402956fdbd5721132736388c6f3f1dc1bfcd7e15a9afeb66d");
-        RequireHash(Data,0x8C8,"821d25d4c012aa180d369f755d82a780dbcf244b4e53c6c4bcf349da533dce65");
+        if(profile==NativeFreshWizardResourceProfile.FixedA)
+            RequireHash(Data,0x8C8,"821d25d4c012aa180d369f755d82a780dbcf244b4e53c6c4bcf349da533dce65");
+        else NativeFreshWizardAuthoringShape.RequireSurfaceComplement(Data,0x8C8,"821d25d4c012aa180d369f755d82a780dbcf244b4e53c6c4bcf349da533dce65");
         RequireHash(Models,0xF800,"88c78343c283256de6ce8d3151b43fa72ba4d96b046d869bd0a7209cbff4c23d");
-        RequireHash(Fresh.CopyScene(),0x3000,"4a6e7b5c6c53199b8a7aa6ae0d24ac9bce32634aa259d5f49535282080641433");
-        RequireHash(compilation.DiscPlan.CopyBody(),0x1FB800,"b4abbdd09f794510d9b9341d7c7111ddd0b9068411bab30e70e7477b4f8c096c");
+        if(profile==NativeFreshWizardResourceProfile.FixedA)
+        {
+            RequireHash(Fresh.CopyScene(),0x3000,"4a6e7b5c6c53199b8a7aa6ae0d24ac9bce32634aa259d5f49535282080641433");
+            RequireHash(compilation.DiscPlan.CopyBody(),0x1FB800,"b4abbdd09f794510d9b9341d7c7111ddd0b9068411bab30e70e7477b4f8c096c");
+        }
         if(Fresh.SceneLayout.NativeNominalCapacity!=16 || chain.SourceImageSha256!=NativeMobySourceInventory.OriginalImageSha256 ||
             !chain.Resources.Surface.CopySourceExecutable().AsSpan().SequenceEqual(normal.CopyExecutable()) ||
             family.SourceVariantId!=donorSource.Row.SourceVariantId || family.SharedGeometrySha256!=Hash(Geometry))
@@ -99,6 +106,7 @@ internal sealed class NativeId65FreshWizardResearchResourceSource
     }
 
     internal NativeId65FreshDocumentCompilation Compilation{get;}
+    internal NativeFreshWizardResourceProfile Profile{get;}
     internal NativeWizardFamilyAssetPlan Family{get;}
     internal NativeId65FreshSceneBundle Fresh{get;}
     internal byte[] Upload{get;}
@@ -109,12 +117,13 @@ internal sealed class NativeId65FreshWizardResearchResourceSource
     internal Dictionary<string,byte[]> Assets{get;}
     internal NativeSoundBank TownSound{get;}
     internal static async Task<NativeId65FreshWizardResearchResourceSource> CaptureAsync(string path,
-        NativeId65FreshDocumentCompilation compilation,NativeWizardFamilyAssetPlan family,CancellationToken token)
+        NativeId65FreshDocumentCompilation compilation,NativeWizardFamilyAssetPlan family,CancellationToken token,
+        NativeFreshWizardResourceProfile profile=NativeFreshWizardResourceProfile.FixedA)
     {
         var donor=await NativeWizardFamilyAssetSource.CaptureAsync(path,token);
         var normal=await NativeId65NormalResourceSource.CaptureAsync(path,token);
         token.ThrowIfCancellationRequested();
-        return new(compilation,family,donor,normal);
+        return new(compilation,family,donor,normal,profile);
     }
 
     internal static void RequireFixedIntent(NativeId65FreshDocumentIntent i)

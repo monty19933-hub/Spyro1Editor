@@ -19,7 +19,9 @@ public sealed class NativeId65FreshWizardResearchBodyPlan
         NativeId65FreshWizardResearchBodySource.RequireHost(host);
         byte[] upload=fallback.CopyUploadPayload(),data=fallback.CopyDataComponents(),models=fallback.CopyModelPayload(),sceneBytes=scene.CopyScene();
         fallback.RequireExactOutputs(upload,data,models);scene.RequireExactScene(sceneBytes);
-        _layout=NativeId65FreshWizardBodyLayout.Compile(upload,data,models,sceneBytes,source.CopyAuxiliaryAllocations());
+        _layout=scene.ResourceAncestor.ResourceProfile==NativeFreshWizardResourceProfile.FixedA
+            ?NativeId65FreshWizardBodyLayout.Compile(upload,data,models,sceneBytes,source.CopyAuxiliaryAllocations())
+            :NativeId65FreshWizardBodyLayout.CompileAuthored(host,source.CopyAuxiliaryAllocations());
         if(!_layout.ModelRoots.Select(r=>(r.ClassId,r.ModelRelativeOffset,r.PayloadByteLength,r.RegistrationAllocationByteLength))
             .SequenceEqual(fallback.ModelRoots.Select(r=>((ushort?)r.ClassId,r.Offset,r.ByteLength,r.RegistrationExtentByteLength))))
             throw new InvalidDataException("Body root grammar no longer equals its actual fallback roots.");

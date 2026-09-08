@@ -34,11 +34,13 @@ internal sealed class NativeId65FreshWizardResearchFallbackResourceSource
     {
         Resource=resource;
         resource.RequireAncestry(resource.CompilationAncestor,resource.FamilyAncestor);
-        NativeId65FreshWizardResearchResourceSource.RequireFixedIntent(resource.CompilationAncestor.Intent);
+        resource.RequireCompilationProfile();
         Upload=resource.CopyUploadPayload();Data=resource.CopyDataComponents();Models=resource.CopyModelPayload();
         resource.RequireExactOutputs(Upload,Data,Models);
         Require(Upload,0xE5800,"d74c2571ed857865b2b989af3001117f44e0915f9c6d59927e30a49d90a79402");
-        Require(Data,0x8FC,"bea93c58d6d568c7c6162816ddad1afff32a51886f9412a0809b22887e0b83d4");
+        if(resource.ResourceProfile==NativeFreshWizardResourceProfile.FixedA)
+            Require(Data,0x8FC,"bea93c58d6d568c7c6162816ddad1afff32a51886f9412a0809b22887e0b83d4");
+        else NativeFreshWizardAuthoringShape.RequireSurfaceComplement(Data,0x8FC,"bea93c58d6d568c7c6162816ddad1afff32a51886f9412a0809b22887e0b83d4");
         Require(Models,0x17800,"782c4500b3152f6051b45b8a0a56f6c99c4f703c753948f656318ccfa8618cda");
         NativeId65FreshWizardResearchResourceSource.RequireInstalledGrammar(Data,Models);
         if(!resource.ModelRoots.SequenceEqual(new[]{new NativeFreshWizardModelRoot(0,0,0x10A4C,0x10A4C),

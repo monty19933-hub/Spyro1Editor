@@ -30,7 +30,7 @@ internal sealed class NativeId65FreshWizardResearchHostSource
     {
         scene.RequireAncestry(scene.CompilationAncestor,scene.FamilyAncestor,scene.ResourceAncestor);
         fallback.RequireAncestry(scene.ResourceAncestor);
-        NativeId65FreshWizardResearchResourceSource.RequireFixedIntent(scene.CompilationAncestor.Intent);
+        scene.ResourceAncestor.RequireCompilationProfile();
         scene.RequireExactScene(scene.CopyScene());
         fallback.RequireExactOutputs(fallback.CopyUploadPayload(),fallback.CopyDataComponents(),fallback.CopyModelPayload());
         if(scene.PlacedCount!=1||scene.NativeNominalCapacity!=32||scene.SourceImageSha256!=fallback.SourceImageSha256||

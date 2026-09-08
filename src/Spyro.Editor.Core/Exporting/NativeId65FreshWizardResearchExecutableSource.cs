@@ -36,7 +36,7 @@ internal sealed class NativeId65FreshWizardResearchExecutableSource
     {
         ArgumentNullException.ThrowIfNull(body);body.RequireAncestry(body.HostAncestor);
         body.RequireExactOutputs(body.CopyLevelData(),body.CopyOverlay(),body.CopyInitializerPatch(),body.CopyTransferSourceImage());
-        NativeId65FreshWizardResearchResourceSource.RequireFixedIntent(body.HostAncestor.SceneAncestor.CompilationAncestor.Intent);
+        body.HostAncestor.SceneAncestor.ResourceAncestor.RequireCompilationProfile();
     }
     internal static NativeId65FreshWizardResearchExecutableSource Capture(FileStream image,NativeId65FreshWizardResearchBodyPlan body,CancellationToken token)
     {

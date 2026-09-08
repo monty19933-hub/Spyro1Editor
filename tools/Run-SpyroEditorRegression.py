@@ -41,6 +41,8 @@ CORE_CASES = (
     ("NativeId65FreshWizardExecutableSmoke", "FRESH_WIZARD_EXECUTABLE_FREE_OK"),
     ("NativeId65FreshWizardDiscSmoke", "FRESH_WIZARD_DISC_FREE_OK"),
     ("NativeId65FreshWizardResearchSmoke", "FRESH_WIZARD_RESEARCH_FREE_OK"),
+    ("NativeFreshInitialSpawnClearanceSmoke", "INITIAL_SPAWN_CLEARANCE_FREE_OK"),
+    ("NativeFreshWizardAuthoringSmoke", "FRESH_WIZARD_AUTHORING_FREE_OK"),
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_FREE_OK"),
     ("NativeGlobalSoundSmoke", "NATIVE_GLOBAL_SOUND_SOURCE_FREE_OK"),
     ("NativeId65EngineProfileSmoke", "NATIVE_ID65_ENGINE_PROFILE_SOURCE_FREE_OK"),
@@ -134,6 +136,8 @@ SOURCE_QA_CASES = (
     ("NativeId65FreshWizardExecutableSmoke", "FRESH_WIZARD_EXECUTABLE_SOURCE_OK", ["--source"]),
     ("NativeId65FreshWizardDiscSmoke", "FRESH_WIZARD_DISC_SOURCE_OK", ["--source"]),
     ("NativeId65FreshWizardResearchSmoke", "FRESH_WIZARD_RESEARCH_SOURCE_OK", ["--source"]),
+    ("NativeFreshInitialSpawnClearanceSmoke", "INITIAL_SPAWN_CLEARANCE_SOURCE_OK", ["--source"]),
+    ("NativeFreshWizardAuthoringSmoke", "FRESH_WIZARD_AUTHORING_SOURCE_OK", ["--source"]),
     ("NativeGreenWizardMoverSmoke", "NATIVE_GREEN_WIZARD_MOVER_SOURCE_SMOKE_OK", []),
     ("NativeLevelSlotOwnershipSmoke", "NATIVE_LEVEL_SLOT_OWNERSHIP_SOURCE_OK", ["--source"]),
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_OK", ["--source"]),
@@ -166,7 +170,7 @@ SOURCE_QA_CASES = (
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
 SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
-SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke"})
+SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke"})
 # These raw-source checks have no project/build or default invocation. Each
 # accepts only the selected original BIN and shares the source-suite deadline.
 SOURCE_PYTHON_CASES = (

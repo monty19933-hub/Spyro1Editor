@@ -221,7 +221,7 @@ public sealed class NativeId65FreshWizardResearchResourcePlan
             "scene P0/N16 unchanged: actor/private/fixups, capacity/peak, save/reward not issued",
             "GTE/renderer/transient/SPU hardware/listening/native gameplay and publication unverified"});
         UploadSha256=Hash(_upload);DataSha256=Hash(_data);ModelSha256=Hash(_models);
-        PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new {Profile="fresh-A16-wizard33-T6-research-resources-v1",SourceImageSha256,
+        PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new {Profile=BindingProfileId,SourceImageSha256,
             CanonicalDocumentSha256,FamilyPlanSha256=family.PlanSha256,FreshPlanSha256=source.Fresh.PlanSha256,
             UploadSha256,DataSha256,ModelSha256,Owners,ModelRoots,TexturePlacements,SoundBindings,PendingOwners,
             Patches=Patches.Select(p=>new{p.SourceOwnerId,p.SourceOffset,p.Domain,p.Offset,p.ByteLength,Before=Hash(p.CopyBefore()),After=Hash(p.CopyAfter())})}));
@@ -247,9 +247,13 @@ public sealed class NativeId65FreshWizardResearchResourcePlan
 
     internal NativeId65FreshDocumentCompilation CompilationAncestor=>_source.Compilation;
     internal NativeWizardFamilyAssetPlan FamilyAncestor=>_source.Family;
+    internal NativeFreshWizardResourceProfile ResourceProfile=>_source.Profile;
+    internal void RequireCompilationProfile()=>NativeFreshWizardAuthoringShape.RequireCompilation(CompilationAncestor,ResourceProfile);
     internal void RequireAncestry(NativeId65FreshDocumentCompilation compilation,NativeWizardFamilyAssetPlan family)
     {if(!ReferenceEquals(compilation,CompilationAncestor)||!ReferenceEquals(family,FamilyAncestor))throw new InvalidDataException("Resource result belongs to another actual issued pair.");}
     public string SourceImageSha256=>NativeMobySourceInventory.OriginalImageSha256;
+    public string BindingProfileId=>ResourceProfile==NativeFreshWizardResourceProfile.FixedA
+        ?"fresh-A16-wizard33-T6-research-resources-v1":NativeFreshWizardAuthoringShape.ProfileId;
     public string CanonicalDocumentSha256=>_source.Compilation.CanonicalSha256;
     public string UploadSha256{get;}
     public string DataSha256{get;}
@@ -272,9 +276,18 @@ public sealed class NativeId65FreshWizardResearchResourcePlan
     {if(!upload.SequenceEqual(_upload)||!data.SequenceEqual(_data)||!models.SequenceEqual(_models))throw new InvalidDataException("Complete resource owner/patch/padding changed.");}
     public static async Task<NativeId65FreshWizardResearchResourcePlan> CaptureAsync(string originalBin,
         NativeId65FreshDocumentCompilation compilation,NativeWizardFamilyAssetPlan family,CancellationToken token=default)
+        =>await CaptureCoreAsync(originalBin,compilation,family,NativeFreshWizardResourceProfile.FixedA,token);
+
+    /// <summary>Actual authored untextured surface in the same fixed native layout; not clearance or publication authority.</summary>
+    public static async Task<NativeId65FreshWizardResearchResourcePlan> CaptureAuthoredAsync(string originalBin,
+        NativeId65FreshDocumentCompilation compilation,NativeWizardFamilyAssetPlan family,CancellationToken token=default)
+        =>await CaptureCoreAsync(originalBin,compilation,family,NativeFreshWizardResourceProfile.AuthoredSameLayout,token);
+
+    private static async Task<NativeId65FreshWizardResearchResourcePlan> CaptureCoreAsync(string originalBin,
+        NativeId65FreshDocumentCompilation compilation,NativeWizardFamilyAssetPlan family,NativeFreshWizardResourceProfile profile,CancellationToken token)
     {
         token.ThrowIfCancellationRequested();ArgumentNullException.ThrowIfNull(compilation);ArgumentNullException.ThrowIfNull(family);
-        NativeId65FreshWizardResearchResourceSource.RequireFixedIntent(compilation.Intent);
+        NativeFreshWizardAuthoringShape.RequireCompilation(compilation,profile);
         if(!compilation.CopyCanonicalDocument().AsSpan().SequenceEqual(NativeId65FreshDocumentCodec.SerializeCanonical(compilation.Intent)))
             throw new InvalidDataException("Actual canonical compilation bytes changed.");
         ArgumentException.ThrowIfNullOrWhiteSpace(originalBin);string path=Path.GetFullPath(originalBin);
@@ -282,7 +295,7 @@ public sealed class NativeId65FreshWizardResearchResourcePlan
         await NativeId65FreshWizardResearchResourceSource.RequireSnapshotIdentityAsync(image,NativeMobySourceInventory.OriginalImageByteLength,NativeMobySourceInventory.OriginalImageSha256,token);
         try
         {
-            var source=await NativeId65FreshWizardResearchResourceSource.CaptureAsync(path,compilation,family,token);
+            var source=await NativeId65FreshWizardResearchResourceSource.CaptureAsync(path,compilation,family,token,profile);
             var result=new NativeId65FreshWizardResearchResourcePlan(source);token.ThrowIfCancellationRequested();return result;
         }
         finally

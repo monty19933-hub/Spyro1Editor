@@ -58,13 +58,16 @@ internal sealed class NativeId65FreshWizardBodyLayout
         (0,0,0x10A4C,0x10A4C),(0x78,0x10A4C,0x2BD0,0x2BD0),(0x26,0x1361C,0x564,0x564),
         (0x11B,0x13B80,0x35B4,0x3C80),(0xE,0x17800,0x7EC,0x7EC),(0xF,0x17FEC,0x78C,0x78C),(0x10,0x18778,0x330,0x888)];
     private readonly byte[] _body;
-    private NativeId65FreshWizardBodyLayout(byte[] upload,byte[] data,byte[] model,byte[] scene,byte[][] auxiliary)
+    private readonly NativeFreshWizardResourceProfile _profile;
+    private NativeId65FreshWizardBodyLayout(byte[] upload,byte[] data,byte[] model,byte[] scene,byte[][] auxiliary,
+        NativeFreshWizardResourceProfile profile)
     {
+        _profile=profile;
         _body=new byte[0x20C800];MakeHeader().CopyTo(_body,0);Descriptors=DecodeHeader(_body.AsSpan(0,0x800));
         byte[] padded=new byte[0x1000];data.CopyTo(padded,0);
         byte[][] parts=[upload,padded,model,scene,..auxiliary];
         for(int i=0;i<parts.Length;i++)parts[i].CopyTo(_body,Descriptors[i].Offset);
-        ValidateStructure(_body);
+        ValidateStructureCore(_body,_profile);
         ModelRoots=Array.AsReadOnly(Roots.Select((r,i)=>new NativeId65NormalBodyRoot(i,0xE7000+r.At,r.At,r.Payload,r.Allocation,r.Class)).ToArray());
         var owners=new List<NativeId65NormalBodyOwner>();
         Add("header",0,0x800,"generated-native-fields-and-zero-complement");
@@ -92,9 +95,25 @@ internal sealed class NativeId65FreshWizardBodyLayout
     internal IReadOnlyList<NativeId65AuxiliaryBodyOwner> AuxiliaryOwners{get;}
     internal byte[] CopyLevelData()=>_body.ToArray();
     internal void RequireExactLevelData(ReadOnlySpan<byte> body)
-    {ValidateStructure(body);if(!body.SequenceEqual(_body))throw new InvalidDataException("Body source owner/complement changed.");}
+    {ValidateStructureCore(body,_profile);if(!body.SequenceEqual(_body))throw new InvalidDataException("Body source owner/complement changed.");}
     internal static NativeId65FreshWizardBodyLayout Compile(ReadOnlySpan<byte> upload,ReadOnlySpan<byte> data,
         ReadOnlySpan<byte> models,ReadOnlySpan<byte> scene,IReadOnlyList<byte[]> auxiliary)
+        =>CompileCore(upload,data,models,scene,auxiliary,NativeFreshWizardResourceProfile.FixedA);
+
+    internal static NativeId65FreshWizardBodyLayout CompileAuthored(NativeId65FreshWizardResearchHostPlan host,
+        IReadOnlyList<byte[]> auxiliary)
+    {
+        NativeId65FreshWizardResearchBodySource.RequireHost(host);
+        if(host.SceneAncestor.ResourceAncestor.ResourceProfile!=NativeFreshWizardResourceProfile.AuthoredSameLayout)
+            throw new InvalidDataException("Authored body entry requires its actual authored-profile Host.");
+        var fallback=host.FallbackAncestor;var scene=host.SceneAncestor;
+        byte[] upload=fallback.CopyUploadPayload(),data=fallback.CopyDataComponents(),models=fallback.CopyModelPayload(),sceneBytes=scene.CopyScene();
+        fallback.RequireExactOutputs(upload,data,models);scene.RequireExactScene(sceneBytes);
+        return CompileCore(upload,data,models,sceneBytes,auxiliary,NativeFreshWizardResourceProfile.AuthoredSameLayout);
+    }
+
+    private static NativeId65FreshWizardBodyLayout CompileCore(ReadOnlySpan<byte> upload,ReadOnlySpan<byte> data,
+        ReadOnlySpan<byte> models,ReadOnlySpan<byte> scene,IReadOnlyList<byte[]> auxiliary,NativeFreshWizardResourceProfile profile)
     {
         ArgumentNullException.ThrowIfNull(auxiliary);
         // Bound all actual enumeration and lengths before clones/output work.
@@ -104,8 +123,8 @@ internal sealed class NativeId65FreshWizardBodyLayout
         if(snapshot.Length!=4||snapshot.Where((a,i)=>a is null||a.Length!=PartLengths[i+4]).Any())
             throw new InvalidDataException("Actual bounded auxiliary count/length changed.");
         foreach(var bytes in snapshot)_=DecodeAuxiliaryOwners(bytes);
-        RequireResourceParts(upload,data,models);RequireSceneStructure(scene);
-        return new(upload.ToArray(),data.ToArray(),models.ToArray(),scene.ToArray(),snapshot.Select(b=>b.ToArray()).ToArray());
+        RequireResourceParts(upload,data,models,profile);RequireSceneStructure(scene);
+        return new(upload.ToArray(),data.ToArray(),models.ToArray(),scene.ToArray(),snapshot.Select(b=>b.ToArray()).ToArray(),profile);
     }
     internal static IReadOnlyList<NativeId65NormalBodyDescriptor> DecodeHeader(ReadOnlySpan<byte> header)
     {
@@ -128,20 +147,30 @@ internal sealed class NativeId65FreshWizardBodyLayout
         return descriptors.AsReadOnly();
     }
     internal static void ValidateStructure(ReadOnlySpan<byte> body)
+        =>ValidateStructureCore(body,NativeFreshWizardResourceProfile.FixedA);
+    private static void ValidateStructureCore(ReadOnlySpan<byte> body,NativeFreshWizardResourceProfile profile)
     {
         if(body.Length!=0x20C800)throw new InvalidDataException("Separate closed body length must be20C800, not old200000.");
         var descriptors=DecodeHeader(body[..0x800]);
         if(body.Slice(0xE68FC,0x704).ContainsAnyExcept((byte)0))throw new InvalidDataException("Discarded data CD padding changed.");
-        RequireResourceParts(body.Slice(0x800,0xE5800),body.Slice(0xE6000,0x8FC),body.Slice(0xE7000,0x19000));
+        RequireResourceParts(body.Slice(0x800,0xE5800),body.Slice(0xE6000,0x8FC),body.Slice(0xE7000,0x19000),profile);
         RequireSceneStructure(body.Slice(0x100000,0x3000));
         foreach(var d in descriptors.Where(d=>d.RetainedAuxiliary))_=DecodeAuxiliaryOwners(body.Slice(d.Offset,d.ByteLength));
     }
-    private static void RequireResourceParts(ReadOnlySpan<byte> upload,ReadOnlySpan<byte> data,ReadOnlySpan<byte> models)
+    private static void RequireResourceParts(ReadOnlySpan<byte> upload,ReadOnlySpan<byte> data,ReadOnlySpan<byte> models,
+        NativeFreshWizardResourceProfile profile)
     {
         if(Hash(upload)!="8c4438fc13eca3b3bd40e9c056094c308fb272aded227577fb812ec9b16d96dc"||
-            Hash(data)!="bea93c58d6d568c7c6162816ddad1afff32a51886f9412a0809b22887e0b83d4"||
             Hash(models)!="84d00dbbce264bc08c61abfe2579fe3d7a7464ba2df6b189834664da10b82c84")
             throw new InvalidDataException("Neutral fixed-resource bytes changed; hashes never issue ancestry.");
+        if(profile==NativeFreshWizardResourceProfile.FixedA)
+        {
+            if(Hash(data)!="bea93c58d6d568c7c6162816ddad1afff32a51886f9412a0809b22887e0b83d4")
+                throw new InvalidDataException("Neutral fixed-resource data changed; authored geometry needs its actual Host entry.");
+        }
+        else if(profile==NativeFreshWizardResourceProfile.AuthoredSameLayout)
+            NativeFreshWizardAuthoringShape.RequireSurfaceComplement(data,0x8FC,"bea93c58d6d568c7c6162816ddad1afff32a51886f9412a0809b22887e0b83d4");
+        else throw new InvalidDataException("Unknown closed Wizard body profile.");
     }
     private static void RequireSceneStructure(ReadOnlySpan<byte> scene)
     {

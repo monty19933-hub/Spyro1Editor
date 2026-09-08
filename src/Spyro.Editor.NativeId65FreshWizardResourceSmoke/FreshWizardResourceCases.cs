@@ -32,10 +32,10 @@ internal static class FreshWizardResourceCases
         Check(t.IsSealed && t.GetConstructors().Length == 0, "No caller construction/inheritance authority.");
         Check(t.GetProperties().All(p => p.SetMethod == null), "No public mutable result metadata.");
         MethodInfo[] factories = t.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
-        Check(factories.Length == 1 && factories[0].Name == "CaptureAsync" &&
-            factories[0].GetParameters().Select(p => p.ParameterType).SequenceEqual(new[] {
+        Check(factories.Length == 2 && factories.Select(m=>m.Name).Order().SequenceEqual(new[]{"CaptureAsync","CaptureAuthoredAsync"}) &&
+            factories.All(m=>m.GetParameters().Select(p => p.ParameterType).SequenceEqual(new[] {
                 typeof(string), typeof(NativeId65FreshDocumentCompilation), typeof(NativeWizardFamilyAssetPlan), typeof(CancellationToken)
-            }), "Only actual issued inputs; no public bytes/hash/flags/policy or source catalog.");
+            })), "Two named closed producers require actual issued inputs; no public bytes/hash/flags/policy or source catalog.");
         Check(t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
             .All(m => !new[] { "Publish", "Write", "CompileBody", "CompileScene", "CompileOverlay" }.Any(n => m.Name.Contains(n, StringComparison.Ordinal))),
             "No output or body/scene/overlay writer on the research resource type.");

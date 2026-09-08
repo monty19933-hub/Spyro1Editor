@@ -18,14 +18,17 @@ internal sealed class NativeId65FreshWizardSceneLayout
 {
     private readonly byte[] _scene;
     private NativeId65FreshWizardSceneLayout(ReadOnlySpan<byte> p0,ReadOnlySpan<byte> sourceRow,
-        ReadOnlySpan<byte> sourcePrivate,NativeWizardPlacementIntent intent)
+        ReadOnlySpan<byte> sourcePrivate,NativeWizardPlacementIntent intent,NativeId65FreshDocumentIntent? authoredBase=null)
     {
-        ValidatePlacement(intent);
+        if(authoredBase is null)ValidatePlacement(intent);
+        else NativeFreshWizardAuthoringShape.RequirePlacement(intent,authoredBase);
         // Bound every input before decoding, hashing, cloning or allocating.
         if(p0.Length!=0x3000 || sourceRow.Length!=0x58 || sourcePrivate.Length!=0x50)
             throw new InvalidDataException("Fresh Wizard scene needs complete fixed P0/row/private owners.");
         var original=NativeId65FreshSceneLayout.DecodeCanonical(p0);
-        if(original.NativeNominalCapacity!=16 || original.Spawn!=new NativeId65SceneSpawn(8960,8960,9216,64) ||
+        var expectedSpawn=authoredBase is null?new NativeId65SceneSpawn(8960,8960,9216,64):
+            new NativeId65SceneSpawn(authoredBase.SpawnX,authoredBase.SpawnY,authoredBase.SpawnZ,authoredBase.Heading);
+        if(original.NativeNominalCapacity!=16 || original.Spawn!=expectedSpawn ||
             Hash(sourceRow)!="59401eafeab453fd9d26f14eedca58390653dc5f4fcc3d2560f7b3e8fc7afa82" ||
             Hash(sourcePrivate)!="5b3d762f6117ea30e959a21bf2778f3442b03eba93125c9a0e0a642cc58d345b")
             throw new InvalidDataException("Fixed A/N16 and complete Wizard33/T6 source-form bytes required.");
@@ -122,6 +125,9 @@ internal sealed class NativeId65FreshWizardSceneLayout
     {if(!bytes.SequenceEqual(_scene))throw new InvalidDataException("Complete fresh Wizard scene owner or complement changed.");}
     internal static NativeId65FreshWizardSceneLayout Compile(ReadOnlySpan<byte> p0,ReadOnlySpan<byte> row,
         ReadOnlySpan<byte> properties,NativeWizardPlacementIntent intent)=>new(p0,row,properties,intent);
+    internal static NativeId65FreshWizardSceneLayout CompileAuthored(ReadOnlySpan<byte> p0,ReadOnlySpan<byte> row,
+        ReadOnlySpan<byte> properties,NativeWizardPlacementIntent intent,NativeId65FreshDocumentIntent authoredBase)
+    {ArgumentNullException.ThrowIfNull(authoredBase);return new(p0,row,properties,intent,authoredBase);}
     internal static void ValidatePlacement(NativeWizardPlacementIntent intent)
     {
         NativeWizardPlacementGeometry.Validate(intent);
@@ -145,36 +151,41 @@ internal sealed class NativeId65FreshWizardSceneLayout
 public sealed class NativeId65FreshWizardResearchScenePlan
 {
     private NativeId65FreshWizardResearchScenePlan(NativeId65FreshDocumentCompilation compilation,
-        NativeWizardFamilyAssetPlan family,NativeId65FreshWizardResearchResourcePlan resources,NativeWizardPlacementIntent placement)
+        NativeWizardFamilyAssetPlan family,NativeId65FreshWizardResearchResourcePlan resources,NativeWizardPlacementIntent placement,
+        NativeFreshLevelDocumentIntent? authoredDocument=null)
     {
         resources.RequireAncestry(compilation,family);
-        NativeId65FreshWizardResearchResourceSource.RequireFixedIntent(compilation.Intent);
+        RequireCaptureInputs(compilation,family,resources,placement,authoredDocument);
         if(!compilation.CopyCanonicalDocument().AsSpan().SequenceEqual(NativeId65FreshDocumentCodec.SerializeCanonical(compilation.Intent)))
             throw new InvalidDataException("Actual canonical source compilation changed.");
         var fresh=compilation.FreshResourceAncestor;
         NativeId65FreshSceneSource.ValidateSourceExecutable(fresh.ResourceChainAncestor.Resources.Surface.CopySourceExecutable());
         byte[] scene=fresh.CopyScene();
-        if(Hash(scene)!="4a6e7b5c6c53199b8a7aa6ae0d24ac9bce32634aa259d5f49535282080641433" ||
+        if((authoredDocument is null && Hash(scene)!="4a6e7b5c6c53199b8a7aa6ae0d24ac9bce32634aa259d5f49535282080641433") ||
             fresh.SourceImageSha256!=SourceImageSha256 || family.SourceImageSha256!=SourceImageSha256 || resources.SourceImageSha256!=SourceImageSha256 ||
             !family.SceneReferences.SequenceEqual(new[]{
                 new NativeWizardFamilySceneReference("wizard.row",0,"wizard.private",0,0xC350),
                 new NativeWizardFamilySceneReference("wizard.private",0,"wizard.private",0x28,0xC378)}))
             throw new InvalidDataException("Fixed scene/source or complete two-field family fixup schema changed.");
-        CompilationAncestor=compilation;FamilyAncestor=family;ResourceAncestor=resources;Placement=placement;
-        Layout=NativeId65FreshWizardSceneLayout.Compile(scene,family.CopyOwner("wizard.row"),family.CopyOwner("wizard.private"),placement);
+        CompilationAncestor=compilation;FamilyAncestor=family;ResourceAncestor=resources;Placement=placement;AuthoringDocumentAncestor=authoredDocument;
+        Layout=authoredDocument is null
+            ?NativeId65FreshWizardSceneLayout.Compile(scene,family.CopyOwner("wizard.row"),family.CopyOwner("wizard.private"),placement)
+            :NativeId65FreshWizardSceneLayout.CompileAuthored(scene,family.CopyOwner("wizard.row"),family.CopyOwner("wizard.private"),placement,authoredDocument.Base);
         SceneSha256=Hash(Layout.CopyScene());
         PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{
-            ProfileId,SourceImageSha256,CanonicalDocumentSha256,FamilyPlanSha256=family.PlanSha256,ResourcePlanSha256=resources.PlanSha256,
+            ProfileId=BindingProfileId,SourceImageSha256,CanonicalDocumentSha256,FamilyPlanSha256=family.PlanSha256,ResourcePlanSha256=resources.PlanSha256,
             BaseSceneSha256=fresh.SceneSha256,SceneSha256,Placement,PlacedCount,SceneOrdinal,NativeNominalCapacity,DynamicArenaByteLength,
             Owners,Mutations,PointerFixups,RuntimeAnchors,PendingOwners}));
     }
     internal NativeId65FreshDocumentCompilation CompilationAncestor{get;}
     internal NativeWizardFamilyAssetPlan FamilyAncestor{get;}
     internal NativeId65FreshWizardResearchResourcePlan ResourceAncestor{get;}
+    internal NativeFreshLevelDocumentIntent? AuthoringDocumentAncestor{get;}
     internal NativeId65FreshWizardSceneLayout Layout{get;}
     internal void RequireAncestry(NativeId65FreshDocumentCompilation c,NativeWizardFamilyAssetPlan f,NativeId65FreshWizardResearchResourcePlan r)
-    {if(!ReferenceEquals(c,CompilationAncestor)||!ReferenceEquals(f,FamilyAncestor)||!ReferenceEquals(r,ResourceAncestor))throw new InvalidDataException("Scene belongs to another actual issued triple.");r.RequireAncestry(c,f);}
+    {if(!ReferenceEquals(c,CompilationAncestor)||!ReferenceEquals(f,FamilyAncestor)||!ReferenceEquals(r,ResourceAncestor))throw new InvalidDataException("Scene belongs to another actual issued triple.");r.RequireAncestry(c,f);RequireCaptureInputs(c,f,r,Placement,AuthoringDocumentAncestor);}
     public const string ProfileId="fresh-A-wizard33-T6-P1-N32-detached-scene-research-v1";
+    public string BindingProfileId=>AuthoringDocumentAncestor is null?ProfileId:"fresh-authored-same-layout-wizard33-T6-P1-N32-detached-scene-v1";
     public string SourceImageSha256=>NativeMobySourceInventory.OriginalImageSha256;
     public string CanonicalDocumentSha256=>CompilationAncestor.CanonicalSha256;
     public string SceneSha256{get;}
@@ -210,11 +221,43 @@ public sealed class NativeId65FreshWizardResearchScenePlan
     public static async Task<NativeId65FreshWizardResearchScenePlan> CaptureAsync(string originalBin,
         NativeId65FreshDocumentCompilation compilation,NativeWizardFamilyAssetPlan family,
         NativeId65FreshWizardResearchResourcePlan resources,NativeWizardPlacementIntent placement,CancellationToken token=default)
+        =>await CaptureCoreAsync(originalBin,compilation,family,resources,placement,null,token);
+
+    /// <summary>One actual aggregate-owned route and its compiled Base; no safety or output permission is inferred.</summary>
+    public static async Task<NativeId65FreshWizardResearchScenePlan> CaptureAuthoredAsync(string originalBin,
+        NativeFreshLevelDocumentIntent document,NativeId65FreshDocumentCompilation compilation,NativeWizardFamilyAssetPlan family,
+        NativeId65FreshWizardResearchResourcePlan resources,CancellationToken token=default)
+    {
+        token.ThrowIfCancellationRequested();ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(compilation);ArgumentNullException.ThrowIfNull(family);ArgumentNullException.ThrowIfNull(resources);
+        var placement=NativeFreshWizardAuthoringShape.RequireDocument(document,compilation);
+        return await CaptureCoreAsync(originalBin,compilation,family,resources,placement,document,token);
+    }
+
+    private static void RequireCaptureInputs(NativeId65FreshDocumentCompilation compilation,NativeWizardFamilyAssetPlan family,
+        NativeId65FreshWizardResearchResourcePlan resources,NativeWizardPlacementIntent placement,NativeFreshLevelDocumentIntent? document)
+    {
+        resources.RequireAncestry(compilation,family);resources.RequireCompilationProfile();
+        if(document is null)
+        {
+            if(resources.ResourceProfile!=NativeFreshWizardResourceProfile.FixedA)
+                throw new InvalidDataException("Legacy fixed scene cannot consume an authored-profile resource.");
+            NativeId65FreshWizardResearchResourceSource.RequireFixedIntent(compilation.Intent);
+            NativeId65FreshWizardSceneLayout.ValidatePlacement(placement);
+        }
+        else if(resources.ResourceProfile!=NativeFreshWizardResourceProfile.AuthoredSameLayout ||
+            NativeFreshWizardAuthoringShape.RequireDocument(document,compilation)!=placement)
+            throw new InvalidDataException("Authored scene requires its actual aggregate route and authored resource producer.");
+    }
+
+    private static async Task<NativeId65FreshWizardResearchScenePlan> CaptureCoreAsync(string originalBin,
+        NativeId65FreshDocumentCompilation compilation,NativeWizardFamilyAssetPlan family,
+        NativeId65FreshWizardResearchResourcePlan resources,NativeWizardPlacementIntent placement,
+        NativeFreshLevelDocumentIntent? document,CancellationToken token)
     {
         token.ThrowIfCancellationRequested();ArgumentNullException.ThrowIfNull(compilation);ArgumentNullException.ThrowIfNull(family);
         ArgumentNullException.ThrowIfNull(resources);resources.RequireAncestry(compilation,family);
-        NativeId65FreshWizardResearchResourceSource.RequireFixedIntent(compilation.Intent);
-        NativeId65FreshWizardSceneLayout.ValidatePlacement(placement);
+        RequireCaptureInputs(compilation,family,resources,placement,document);
         ArgumentException.ThrowIfNullOrWhiteSpace(originalBin);string path=Path.GetFullPath(originalBin);
         await using FileStream image=new(path,FileMode.Open,FileAccess.Read,FileShare.Read);
         await NativeId65FreshWizardResearchResourceSource.RequireSnapshotIdentityAsync(image,NativeMobySourceInventory.OriginalImageByteLength,
@@ -222,7 +265,7 @@ public sealed class NativeId65FreshWizardResearchScenePlan
         try
         {
             token.ThrowIfCancellationRequested();
-            var result=new NativeId65FreshWizardResearchScenePlan(compilation,family,resources,placement);
+            var result=new NativeId65FreshWizardResearchScenePlan(compilation,family,resources,placement,document);
             token.ThrowIfCancellationRequested();return result;
         }
         finally
