@@ -44,6 +44,11 @@ Pending consent is not native editor acceptance. Do not reuse this PID without
 fresh verification. The permission history is retained in
 `evidence/root-documents-consent-r04.log`.
 
+A later September8 process check found no editor or launch helper running.
+The earlier pending PID is therefore closed, not an active prompt to reuse.
+Native editing acceptance still has not been observed; no preserved package
+was rebuilt or permission boundary bypassed.
+
 ## What to test once the window opens
 
 1. Open **Fresh Level…** from the main editor. The default **Legacy floor (v1)**

@@ -211,13 +211,14 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
-        self.assertEqual(3, len(lines))
+        self.assertEqual(4, len(lines))
         self.assertTrue(any(flag + " | " + marker in line for line in lines))
 
     def test_aggregate_ui_is_an_additional_isolated_mode_not_a_source_or_default_alias(self):
         name = "UiSmoke"
         expected = [(name, "FRESH_LEVEL_DOCUMENT_SESSION_OK", ["--fresh-native-level-session-only"]),
-                    (name, "FRESH_NATIVE_LEVEL_UI_OK", ["--fresh-native-level-ui-only"])]
+                    (name, "FRESH_NATIVE_LEVEL_UI_OK", ["--fresh-native-level-ui-only"]),
+                    (name, "FRESH_MATERIAL_PICKER_UI_OK", ["--fresh-material-picker-only"])]
         self.assertEqual(expected, [case for case in RUNNER.ADDITIONAL_CORE_CASES if case[0] == name])
         self.assertEqual(["--fresh-native-document-only"], RUNNER.CASE_ARGUMENTS[name])
         self.assertFalse(any(case[0] == name for case in RUNNER.SOURCE_QA_CASES))
@@ -228,9 +229,50 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
-        self.assertEqual(3, len(lines))
+        self.assertEqual(4, len(lines))
         for _, marker, arguments in expected:
             self.assertTrue(any(arguments[0] + " | " + marker in line for line in lines))
+
+    def test_material_picker_has_its_own_sourcefree_marker_and_result(self):
+        name, old_marker = "UiSmoke", "FRESH_NATIVE_DOCUMENT_UI_OK"
+        marker, flag = "FRESH_MATERIAL_PICKER_UI_OK", "--fresh-material-picker-only"
+        self.assertEqual([(name, marker, [flag])],
+                         [case for case in RUNNER.ADDITIONAL_CORE_CASES if case[2] == [flag]])
+        self.assertFalse(any(case[0] == name for case in RUNNER.SOURCE_QA_CASES))
+        for emit_marker in (False, True):
+            calls = []
+
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                if command[:2] == ["dotnet", "run"]:
+                    kwargs["stdout"].write(marker if flag in command and emit_marker else old_marker)
+                return subprocess.CompletedProcess(command, 0)
+
+            with self.subTest(emit_marker=emit_marker), tempfile.TemporaryDirectory(prefix="spyro-material-picker-runner-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", ((name, old_marker),)), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ((name, marker, [flag]),)), \
+                        mock.patch.object(RUNNER, "SOURCE_QA_CASES", ()), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("source read")), \
+                        mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("CUE read")), \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin)]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0 if emit_marker else 1, RUNNER.main())
+                summary = json.loads((Path(output) / "summary.json").read_text())
+            self.assertEqual(2, sum(command[:2] == ["dotnet", "build"] for command in calls))
+            runs = [command for command in calls if command[:2] == ["dotnet", "run"]]
+            self.assertEqual([["--fresh-native-document-only"], [flag]],
+                             [command[command.index("--") + 1:] for command in runs])
+            self.assertTrue(all("--no-build" in command and "--no-restore" in command for command in runs))
+            self.assertEqual(["run-Spyro.Editor.UiSmoke", "run-Spyro.Editor.UiSmoke-fresh-material-picker"],
+                             [row["name"] for row in summary[-2:]])
+            self.assertEqual(len(summary), len({row["name"] for row in summary}))
+            self.assertEqual(len(summary), len({row["log"] for row in summary}))
+            self.assertTrue(all(row["passed"] for row in summary[:-1]))
+            self.assertEqual(emit_marker, summary[-1]["passed"])
+            if not emit_marker:
+                self.assertEqual("missing success marker", summary[-1]["detail"])
 
     def test_aggregate_ui_marker_log_and_result_are_distinct_from_both_prior_ui_modes(self):
         name, old_marker = "UiSmoke", "FRESH_NATIVE_DOCUMENT_UI_OK"
@@ -608,6 +650,10 @@ class RunnerOptionsTests(unittest.TestCase):
 
     def test_textured_disc_modes_are_read_only_with_separate_source_and_default_markers(self):
         self.assert_texture_modes("NativeId65TexturedDiscSmoke", "NATIVE_ID65_TEXTURED_DISC")
+
+    def test_saved_material_bridge_is_source_opt_in_without_cue_or_publication(self):
+        self.assert_texture_modes("NativeFreshSavedMaterialSmoke", "NATIVE_FRESH_SAVED_MATERIAL")
+        self.assertFalse(any(c[0] == "NativeFreshSavedMaterialSmoke" for c in RUNNER.ADDITIONAL_CORE_CASES))
 
     def test_textured_research_baseline_requires_bin_cue_and_never_selects_candidate_probe(self):
         name = "NativeId65TexturedResearchSmoke"
@@ -1146,6 +1192,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeId65TexturedBodySmoke": ["--source", "/selected original.bin"],
             "NativeId65TexturedDiscSmoke": ["--source", "/selected original.bin"],
             "NativeId65TexturedResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],
+            "NativeFreshSavedMaterialSmoke": ["--source", "/selected original.bin"],
             "NativeId65FreshDiscSmoke": ["/selected original.bin"],
             "NativeId65FreshDiscStreamSmoke": ["/selected original.bin"],
             "NativeId65FreshDiscResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],

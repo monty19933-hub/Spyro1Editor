@@ -1,0 +1,162 @@
+{
+  "marker": "SAVED_MATERIAL_BRIDGE_ORACLE_OK",
+  "inherited": [
+    {
+      "name": "fixed-a",
+      "selections": [
+        [
+          14,
+          0
+        ],
+        [
+          70,
+          0
+        ]
+      ],
+      "upload_sha256": "2ab548f540fbfadddc38d96e70a9633a1c6f37c37ee2d1a896919ac30f929333",
+      "data_sha256": "c13c21171e5ed4755f1598914eba89b0b31795b91aaeb2605efc6fed9aa17160",
+      "record_sha256": [
+        "06138c4791b32b848dd81cd4dbab46419d7f3bd1c6b46a6f38194c8645ba7251",
+        "b57966bf69be49d581dfd73d764155de838906d5d7550ff4d1c85de7c272d100"
+      ],
+      "body_sha256": "347ab532881afb3975088e0872792192d8567b0abe05e7708f271741b9568cdd",
+      "output_sha256": "998a47930c5f20e36cf87d41bfb9ec3cab237d8d42c443ed706bd50c692611a3",
+      "restored_original_sha256": "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37",
+      "changed_sectors": 1253,
+      "final_executable_lba": 54921,
+      "final_end": 55125,
+      "root_sha256": "2412be680f008e5ebbf19e64948e84ad1d5eeadf07ab1c858c825c6608631089",
+      "wad_sha256": "0a227cbf0d9f6b269ae7d41ce610129b0b48590519bbaaa2eac375e8818e23e0",
+      "heading": 64,
+      "music": 19,
+      "evidence": "retained-prior-oracle"
+    },
+    {
+      "name": "selected",
+      "selections": [
+        [
+          14,
+          1
+        ],
+        [
+          70,
+          1
+        ]
+      ],
+      "upload_sha256": "24012924df5b9d6f082d7ce7e54de703f30c9dc6afe47f6ad113f9942780f577",
+      "data_sha256": "8be0174883aa221d0cf2fea6dfde58db5b25445dafcd8f58b0abd9f9e32dc7ca",
+      "record_sha256": [
+        "89afcb090d0e4f361c590a519af11b69761e9c83762f55564c3c4f467e32f7e1",
+        "0046ffc5b009ab31c1bacb46c1b3f6662cbf24510464fd762d92dfbceeeb7e11"
+      ],
+      "body_sha256": "3ec8ecb5fab1e04dfdbc4113c93059b6d03e5b2aae0faa59f7b95faaf3ceb64f",
+      "output_sha256": "9e42afbc4144783b533df3dcbfd428da31e70e4d23269d8b0b52987d7d700bb6",
+      "restored_original_sha256": "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37",
+      "changed_sectors": 1253,
+      "final_executable_lba": 54921,
+      "final_end": 55125,
+      "root_sha256": "2412be680f008e5ebbf19e64948e84ad1d5eeadf07ab1c858c825c6608631089",
+      "wad_sha256": "0a227cbf0d9f6b269ae7d41ce610129b0b48590519bbaaa2eac375e8818e23e0",
+      "heading": 64,
+      "music": 19,
+      "evidence": "retained-prior-oracle"
+    },
+    {
+      "name": "reversed",
+      "selections": [
+        [
+          70,
+          1
+        ],
+        [
+          14,
+          1
+        ]
+      ],
+      "upload_sha256": "834afc8ef80988f04e350d5088d055271489a845887339a541391b36867c08c2",
+      "data_sha256": "8b6c53104cea987ae03332786bbbea9eddeb905f05bdb2e91a62a5ba34f262e4",
+      "record_sha256": [
+        "aeaaafd90e2c59d9c0fe96d3e5c4acc95bb028f4d551ff431a34f9874ffff5a0",
+        "607062e97ea8068ee57145008b513163a8fbd322b68155b74e728af74677f3d0"
+      ],
+      "body_sha256": "e694453b6a4f05d4d7948a4cec5d8189381ce7d2c74b002d437dfc1084bd6bad",
+      "output_sha256": "99d06e2905deee01e9166f506d40b735abaf81a2ce19bec017b1699903f96e7a",
+      "restored_original_sha256": "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37",
+      "changed_sectors": 1253,
+      "final_executable_lba": 54921,
+      "final_end": 55125,
+      "root_sha256": "2412be680f008e5ebbf19e64948e84ad1d5eeadf07ab1c858c825c6608631089",
+      "wad_sha256": "0a227cbf0d9f6b269ae7d41ce610129b0b48590519bbaaa2eac375e8818e23e0",
+      "heading": 64,
+      "music": 19,
+      "evidence": "retained-prior-oracle"
+    },
+    {
+      "name": "same-source",
+      "selections": [
+        [
+          14,
+          1
+        ],
+        [
+          14,
+          1
+        ]
+      ],
+      "upload_sha256": "7276869ac1df6044264b31d1191221137a9a864e1d2d537164168def9eb8b594",
+      "data_sha256": "8209beae409a80c3794ac0a98e080b53a6ecbb4e176d420b7175d32c54049d80",
+      "record_sha256": [
+        "89afcb090d0e4f361c590a519af11b69761e9c83762f55564c3c4f467e32f7e1",
+        "87d05e7c06d9a36461c948fc639486edaef13ad5fc5f5151b640796d8f6f97f6"
+      ],
+      "body_sha256": "daef8b444c56512bb7a9716349fc94622e652dec603737e915a6e03d58d51211",
+      "output_sha256": "2999405b7721292776d2bc76500986433e7c3d0d08c137bc28001f30df099281",
+      "restored_original_sha256": "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37",
+      "changed_sectors": 1253,
+      "final_executable_lba": 54921,
+      "final_end": 55125,
+      "root_sha256": "2412be680f008e5ebbf19e64948e84ad1d5eeadf07ab1c858c825c6608631089",
+      "wad_sha256": "0a227cbf0d9f6b269ae7d41ce610129b0b48590519bbaaa2eac375e8818e23e0",
+      "heading": 64,
+      "music": 19,
+      "evidence": "retained-prior-oracle"
+    }
+  ],
+  "newly_reconstructed": {
+    "name": "heading-music",
+    "heading": 128,
+    "music": 20,
+    "selections": [
+      [
+        14,
+        1
+      ],
+      [
+        70,
+        1
+      ]
+    ],
+    "upload_sha256": "24012924df5b9d6f082d7ce7e54de703f30c9dc6afe47f6ad113f9942780f577",
+    "data_sha256": "8be0174883aa221d0cf2fea6dfde58db5b25445dafcd8f58b0abd9f9e32dc7ca",
+    "body_sha256": "3ed74c433a9b79e916383434343ea4e51d93cd154e072f2a073edc4e4d92166a",
+    "scene_sha256": "5d9c67890af2ae9fce1433dfcd2193f384d3b1bb531004870b27d61f5a3fc8c3",
+    "executable_sha256": "b08cb4e9ee2cacba2ed4d6be89165c9cd8e305fda85e24905f260ffa9695dadf",
+    "record_sha256": [
+      "89afcb090d0e4f361c590a519af11b69761e9c83762f55564c3c4f467e32f7e1",
+      "0046ffc5b009ab31c1bacb46c1b3f6662cbf24510464fd762d92dfbceeeb7e11"
+    ],
+    "output_sha256": "2533ee961f13e43db03b08f221921cb60e35465e662e51bf221e6c096eb75b70",
+    "restored_original_sha256": "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37",
+    "changed_sectors": 1253,
+    "final_executable_lba": 54921,
+    "final_end": 55125,
+    "root_sha256": "2412be680f008e5ebbf19e64948e84ad1d5eeadf07ab1c858c825c6608631089",
+    "wad_sha256": "0a227cbf0d9f6b269ae7d41ce610129b0b48590519bbaaa2eac375e8818e23e0"
+  },
+  "physical_output_written": false,
+  "payload_helpers_reopen_pinned_original": true,
+  "new_reads_same_pass_index": true,
+  "runtime_verified": false,
+  "publication_approved": false,
+  "all_final_owners_verified": true
+}

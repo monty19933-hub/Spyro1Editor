@@ -23,6 +23,15 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+// Strict raw-only material picker route, before workspace discovery.
+if (args.Contains("--fresh-material-picker-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --fresh-material-picker-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    NativeFreshMaterialPickerUiCases.Run();
+    return 0;
+}
+
 // Strict source-free aggregate UI route, before workspace discovery or legacy setup.
 if (args.Contains("--fresh-native-level-ui-only", StringComparer.Ordinal))
 {

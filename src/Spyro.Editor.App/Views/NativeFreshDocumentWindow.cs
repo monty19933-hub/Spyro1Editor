@@ -104,7 +104,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         previewPanel.Children.Add(Preview);
         var previewNote = new TextBlock
         {
-            Text = "Two untextured triangles; the marker shows the authored spawn +512 above the floor. No player footprint, native camera, terrain clearance or runtime behavior is inferred.",
+            Text = "Two schematic triangles; the marker shows the authored spawn +512 above the floor. No player footprint, native camera, terrain clearance or runtime behavior is inferred.",
             TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, FontSize = 12
         };
         Grid.SetRow(previewNote, 2);
@@ -122,6 +122,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         _fieldsPanel.Children.Add(Section("Music", "Select an existing native track. Research compilation uses this selection; the schematic has no audio preview."));
         _fieldsPanel.Children.Add(_music);
         _fieldsPanel.Children.Add(BuildAggregateFields());
+        _fieldsPanel.Children.Add(BuildMaterialFields());
         _fieldsPanel.Children.Add(_apply);
         _music.SelectionChanged += (_, _) => FieldsChanged();
         var inspector = new ScrollViewer { Content = _fieldsPanel, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
@@ -364,6 +365,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
             _fields["FreshSkyColor"].Text = value == null ? "" : Hex(value.SkyColor);
             _music.SelectedItem = value == null ? null : MusicTrackCatalog.Find(value.MusicTrackId);
             WriteAggregateFields();
+            WriteMaterialFields();
             _appliedFields = FieldSignature();
             if (_aggregateMode) Preview.SetAggregate(CurrentAggregateIntent, _aggregateSession?.SelectedEditorId);
             else Preview.Intent = value;

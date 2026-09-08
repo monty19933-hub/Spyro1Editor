@@ -55,10 +55,13 @@ matched their pre-test hashes. No original card was replaced.
   observed at normal speed. See the [textured-floor test](native-fresh-textured-runtime-r01.md).
 - The whole-level document now preserves two material selections through edits,
   undo/redo and save/reopen. It labels selections honestly as unrendered; a
-  material picker is now being implemented. Actual saved-material compilation
+  material picker now passes88 headless checks, including both ordered slots
+  and whole-form edit/save protection. Actual saved-material compilation
   passes five complete-image goldens, including ordered donors and edited
   heading/music. Aggregate publication and source previews are next; the
-  successful gameplay candidate still uses a fixed recipe.
+  successful gameplay candidate still uses a fixed recipe. These new controls
+  are in source, not yet in the preserved R04 package. See the
+  [material-picker checkpoint](native-fresh-saved-material-picker.md).
 - Two Wizards imported into an existing level previously passed a bounded
   gameplay sequence: attacks, separate rewards, repeat defeat without a
   duplicate reward, and ordinary portal re-entry preserving collected states.
@@ -68,8 +71,9 @@ matched their pre-test hashes. No original card was replaced.
 
 The newer, separate **R04 whole-level test editor** has now been built from
 checkpoint60f6d6f. Package/signature, source preservation and packaged PNG checks
-pass. Its normal launch is waiting for macOS Documents permission; native
-edit/save/reopen testing follows once the window opens. See the
+pass. Its earlier normal launch reached macOS Documents permission; the launch
+helper has since exited and native edit/save/reopen acceptance remains pending.
+No permission bypass was used. See the
 [R04 app location and test checklist](native-fresh-level-mac-r04.md).
 
 R04 adds **Level aggregate → Fork saved legacy floor** and Wizard-route
@@ -112,8 +116,11 @@ feature.
 
 ## Remaining work toward V6
 
-The immediate parallel tracks are native validation/packaging of the placement
-window, saved-material compilation/picker, and editable Wizard-floor/route checks.
+The immediate parallel tracks are saved whole-level publication, actual source
+texture previews, and native validation/packaging of the placement window.
+The authored Wizard source matrix completed72 recipes across46 music selections;
+that is complete-image/initial-footprint evidence, not72 gameplay tests. See the
+[issued-matrix report](native-fresh-wizard-issued-matrix.md).
 Saved aggregate export also needs a final project/document lease, so a valid
 draft cannot be exported against a different saved revision.
 
@@ -123,11 +130,11 @@ in each destination. A model catalog alone cannot provide that. Multiple
 editable new-level slots, normal portal integration, save/reboot compatibility,
 animated textures and arbitrary object/material mixtures remain open.
 
-Latest completed all-project Release gate: **325 checks, zero failures**, including
-material persistence, actual texture publication/failure-recovery controls and
-exact saved-Wizard pairing. Exporter checkpoint: f8b382c. These latest source
+Latest completed all-project Release gate: **328 checks, zero failures**, including
+the saved-material bridge, raw picker, initial footprint and prior texture
+publication/failure-recovery controls. Fixed-recipe exporter checkpoint: f8b382c. These latest source
 changes are not in the preserved R03/R04 apps.
 These are engineering
-checks, not325 gameplay runs. The [engineering handoff](native-editor-resume-20260906.md)
+checks, not328 gameplay runs. The [engineering handoff](native-editor-resume-20260906.md)
 and [V6 readiness assessment](v6-readiness-20260906.md) retain the detailed
 boundaries and next steps.

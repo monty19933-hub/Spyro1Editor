@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <SavedMaterialProbe Condition="'$(SavedMaterialProbe)' == ''">Full</SavedMaterialProbe>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(SavedMaterialProbe)' == 'Api'">
+    <Compile Include="ApiProbe.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(SavedMaterialProbe)' == 'Full'">
+    <Compile Include="Program.cs" />
+    <Compile Include="Cases.cs" />
+    <Compile Include="FreeCases.cs" />
+    <Compile Include="SourceCases.cs" />
+    <Compile Include="BoundaryCases.cs" />
+    <EmbeddedResource Include="source_saved_material_golden.json" />
+  </ItemGroup>
+  <Target Name="RequireSavedMaterialProbe" BeforeTargets="BeforeBuild"
+          Condition="'$(SavedMaterialProbe)' != 'Api' and '$(SavedMaterialProbe)' != 'Full'">
+    <Error Text="SavedMaterialProbe must be Api or Full; no implicit omission of tests." />
+  </Target>
+</Project>

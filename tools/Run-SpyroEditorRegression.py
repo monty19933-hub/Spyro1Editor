@@ -58,6 +58,7 @@ CORE_CASES = (
     ("NativeId65TexturedBodySmoke", "NATIVE_ID65_TEXTURED_BODY_FREE_OK"),
     ("NativeId65TexturedDiscSmoke", "NATIVE_ID65_TEXTURED_DISC_FREE_OK"),
     ("NativeId65TexturedResearchSmoke", "NATIVE_ID65_TEXTURED_RESEARCH_BASELINE_FREE_OK"),
+    ("NativeFreshSavedMaterialSmoke", "NATIVE_FRESH_SAVED_MATERIAL_FREE_OK"),
     ("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC_SMOKE_OK"),
     ("NativeId65FreshDiscStreamSmoke", "NATIVE_ID65_FRESH_DISC_STREAM_SMOKE_OK"),
     ("NativeId65FreshDiscResearchSmoke", "NATIVE_ID65_FRESH_DISC_RESEARCH_SMOKE_OK"),
@@ -118,6 +119,8 @@ ADDITIONAL_CORE_CASES = (
      ["--fresh-native-level-session-only"]),
     ("UiSmoke", "FRESH_NATIVE_LEVEL_UI_OK",
      ["--fresh-native-level-ui-only"]),
+    ("UiSmoke", "FRESH_MATERIAL_PICKER_UI_OK",
+     ["--fresh-material-picker-only"]),
 )
 SOURCE_QA_CASES = (
     # This read-only mode checks both preserved V2 and V3 native closure goldens;
@@ -158,6 +161,7 @@ SOURCE_QA_CASES = (
     ("NativeId65TexturedBodySmoke", "NATIVE_ID65_TEXTURED_BODY_SOURCE_OK", ["--source"]),
     ("NativeId65TexturedDiscSmoke", "NATIVE_ID65_TEXTURED_DISC_SOURCE_OK", ["--source"]),
     ("NativeId65TexturedResearchSmoke", "NATIVE_ID65_TEXTURED_RESEARCH_BASELINE_SOURCE_OK", ["--source"]),
+    ("NativeFreshSavedMaterialSmoke", "NATIVE_FRESH_SAVED_MATERIAL_SOURCE_OK", ["--source"]),
     ("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC_SOURCE_OK", []),
     ("NativeId65FreshDiscStreamSmoke", "NATIVE_ID65_FRESH_DISC_STREAM_SOURCE_OK", []),
     # Capture checks only; never stage faults, exercise publication or verify outputs here.
@@ -379,6 +383,7 @@ def main():
             ("--variable-data-free",): "-variable-data",
             ("--fresh-native-level-session-only",): "-fresh-level-session",
             ("--fresh-native-level-ui-only",): "-fresh-level-ui",
+            ("--fresh-material-picker-only",): "-fresh-material-picker",
         }.get(tuple(arguments), "")
         execute("run-" + project.stem + suffix,
                 ["dotnet", "run", "--project", str(project), "--configuration",

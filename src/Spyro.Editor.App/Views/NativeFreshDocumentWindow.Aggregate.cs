@@ -52,7 +52,8 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private bool AggregateCommandsBlocked => _decisionBusy || _researchBusy || _modeSwitchBusy || _forkBusy;
     private bool AggregateHasUnappliedFields => _addingWizard || CurrentAggregateIntent != null &&
-        (FieldSignature() != _appliedFields || RouteFieldSignature() != _appliedRouteFields);
+        (FieldSignature() != _appliedFields || RouteFieldSignature() != _appliedRouteFields ||
+            MaterialFieldSignature() != _appliedMaterialFields);
 
     private Control BuildAggregateActions()
     {
@@ -230,6 +231,8 @@ internal sealed partial class NativeFreshDocumentWindow
             {
                 if (FieldSignature() != _appliedFields)
                     throw new InvalidDataException("Base fields are locked while adding a route. Cancel the new route before editing the Base.");
+                if (MaterialFieldSignature() != _appliedMaterialFields)
+                    throw new InvalidDataException("Material fields are locked while adding a route. Cancel the new route before editing materials.");
                 _aggregateSession!.AddWizardRoute(RouteNumber("FreshWizardOriginX"), RouteNumber("FreshWizardOriginY"),
                     RouteNumber("FreshWizardOriginZ"), RouteNumber("FreshWizardEndX"), RouteNumber("FreshWizardEndY"));
                 _addingWizard = false;
@@ -249,7 +252,8 @@ internal sealed partial class NativeFreshDocumentWindow
                 }
                 // Validate the selected Base/route pair and every untouched route
                 // together before the Session sees any mutation.
-                _aggregateSession.Apply(CurrentAggregateIntent.WithContent(floor, rows));
+                var candidate = ApplyMaterialFieldsTo(CurrentAggregateIntent.WithContent(floor, rows));
+                _aggregateSession.Apply(candidate);
             }
             WriteFields();
             _status.Text = "Applied the entire aggregate to the authored schematic. Save writes the exact applied values; aggregate export remains unavailable.";
@@ -407,6 +411,7 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private void RefreshAggregateChrome(bool editable)
     {
+        RefreshMaterialChrome(editable);
         var current = CurrentAggregateIntent;
         _schemaVersion.IsVisible = _materialSummary.IsVisible = current != null;
         _schemaVersion.Text = current == null ? "" : $"Aggregate schema {current.SchemaVersion}";
