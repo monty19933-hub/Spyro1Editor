@@ -1,6 +1,6 @@
 # Spyro editor — what is working now
 
-Updated September 8, 2026 after physical textured export and normal-speed gameplay.
+Updated September 8, 2026 after textured gameplay and fresh-Wizard reward testing.
 Development continues with the requested pause near 5% usage **remaining**.
 This is a development checkpoint, not a V6 release. Original game/save files and
 the preserved R03 editor have not been replaced.
@@ -18,13 +18,15 @@ checked read-only observations support this exact sequence.
 
 This used controlled 10% emulation speed. Player-state6/timer0 was observed at
 the exact spawn with zero motion before the subsequent vertical descent. This
-is not continuous execution tracing or an all-game acceptance test. Enemy
-defeat/reward, normal-speed gameplay, normal portal reentry, sound and resource
-limits remain separate checks. A later normal-speed cold boot reached the same
-floor with the Wizard active and health decreasing; reliable held-input movement
-and defeat/reward remain pending. Both sessions are closed and settings restored.
+is not continuous execution tracing or an all-game acceptance test. A later
+normal-speed test with working held controls now passed flame defeat, yellow
+gem pickup (LAB10/10,total58→68), edge fall/respawn, and second defeat producing
+a purple orb without another gem award. Ordinary portal reentry, sound,
+resource limits and save/reboot persistence remain separate checks. All sessions
+are closed and original settings restored.
 See the [death/respawn report](native-fresh-separated-wizard-runtime-r02.md) and
-[normal-speed entry report](native-fresh-separated-wizard-runtime-r03.md).
+[normal-speed entry report](native-fresh-separated-wizard-runtime-r03.md), then the
+[held gameplay and reward report](native-fresh-separated-wizard-runtime-r04.md).
 The earlier observer refusal remains preserved and was not reclassified.
 
 Both DuckStation settings files were restored exactly after quitting. Original
@@ -53,8 +55,10 @@ matched their pre-test hashes. No original card was replaced.
   observed at normal speed. See the [textured-floor test](native-fresh-textured-runtime-r01.md).
 - The whole-level document now preserves two material selections through edits,
   undo/redo and save/reopen. It labels selections honestly as unrendered; a
-  material picker and preview are next. Saved-material compilation is being
-  integrated; the successful gameplay candidate still uses a fixed recipe.
+  material picker is now being implemented. Actual saved-material compilation
+  passes five complete-image goldens, including ordered donors and edited
+  heading/music. Aggregate publication and source previews are next; the
+  successful gameplay candidate still uses a fixed recipe.
 - Two Wizards imported into an existing level previously passed a bounded
   gameplay sequence: attacks, separate rewards, repeat defeat without a
   duplicate reward, and ordinary portal re-entry preserving collected states.

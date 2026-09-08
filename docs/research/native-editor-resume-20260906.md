@@ -63,15 +63,20 @@ must not be repaired, deleted or adopted. See native-fresh-textured-candidate.md
 The exact998a/1253 candidate then showed two imported materials, normal-speed
 movement/fall/respawn, jump/landing and flame; native session is CLOSED, both INIs
 restored and all nine protected hashes unchanged. See native-fresh-textured-runtime-r01.md.
-Current parallel work is saved-material bridge/picker and actual-issued72-row
-Wizard/46-track comparison plus strict source-owned initial footprint. The first
-saved-material source run matched all five independent full-image goldens but
-exposed an incorrect test assumption about held read guards; tests are being
-corrected without changing Store or weakening native bytes. Aggregate export
-remains disabled until its full lifecycle is bound.
-The corrected Wizard also reached the floor with an active enemy at normal
-speed; this bounded entry/attack session is closed and settings restored, not a
-defeat/reward pass. See `native-fresh-separated-wizard-runtime-r03.md`.
+Saved-material bridge source13 is now CLOSED220/35, free43/17, all five full-image
+goldens unchanged, originals final/cmp exact. Earlier wrong held-read-guard
+assumptions were corrected in tests only; Core197 stayed reviewed/unchanged.
+Root runner registration has67 Python tests passing. Parallel work is raw
+material-picker UI and actual-issued72-row Wizard/46-track comparison plus
+strict source-owned initial footprint. The actual72 run is still active; do not
+infer completion from the independent expected matrix. Aggregate export remains
+disabled until its full lifecycle is bound; one closed saved-level publication
+path is in private preparation rather than another class per authored recipe.
+A separate corrected-Wizard R04 native session now passed normal100% flame
+defeat, yellow-gem pickup LAB10/10,total58→68, edge fall/respawn, second defeat
+with purple repeat-kill orb and unchanged final10/10,total68. PID50221/exec48620
+are CLOSED0, originals restored and all9 full hashes unchanged. No observer,
+audio/reentry/save-persistence claim. See native-fresh-separated-wizard-runtime-r04.md.
 A minor test
 comment/README clarification after325 states tiny cleanup is name/link/byte
 bound, not inode/hostile-race authentication; no behavior changed.
