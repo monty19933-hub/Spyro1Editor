@@ -17,6 +17,7 @@ internal enum FreshDocumentDecision { Cancel, Discard, Save }
 /// <summary>Separate neutral authoring UI. Never inserts a fabricated retail scene into MainWindow.</summary>
 internal sealed partial class NativeFreshDocumentWindow : Window
 {
+    private const string LegacyCapabilityText = "Fresh floor and spawn — not the Town-bound Blank-Level Lab. Normal Create BIN is unavailable for this document. The separate research action compiles the actual applied, saved document to a new BIN/CUE; it does not certify gameplay.";
     private readonly EditorProjectLayout _project;
     private readonly Func<bool> _isCurrentProject;
     private NativeId65FreshDocumentSnapshot _snapshot;
@@ -27,6 +28,11 @@ internal sealed partial class NativeFreshDocumentWindow : Window
     private readonly TextBlock _status = new() { Name = "FreshDocumentStatus", TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _state = new() { FontWeight = FontWeight.SemiBold };
     private readonly TextBlock _spawnHeight = new();
+    private readonly TextBlock _capability = new()
+    {
+        Name = "FreshDocumentCapability", Text = LegacyCapabilityText,
+        TextWrapping = TextWrapping.Wrap, FontSize = 12, MaxWidth = 1050
+    };
     private readonly ComboBox _music = new() { Name = "FreshDocumentMusic", ItemsSource = MusicTrackCatalog.SelectableTracks, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly Button _new;
     private readonly Button _apply;
@@ -61,10 +67,16 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         Preview = new NativeFreshDocumentPreview { Name = "FreshDocumentPreview", MinHeight = 360 };
 
         _new = Button("FreshDocumentNew", "New starter", NewStarter);
-        _apply = Button("FreshDocumentApply", "Apply to preview", () => ApplyFields());
+        _apply = Button("FreshDocumentApply", "Apply to preview", () =>
+        {
+            if (!_modeSwitchBusy) ApplyFields();
+        });
         _undoButton = Button("FreshDocumentUndo", "Undo", Undo);
         _redoButton = Button("FreshDocumentRedo", "Redo", Redo);
-        _save = Button("FreshDocumentSave", "Save document", () => SaveDocument());
+        _save = Button("FreshDocumentSave", "Save document", () =>
+        {
+            if (!_modeSwitchBusy && (!_aggregateMode || !AggregateCommandsBlocked)) SaveDocument();
+        });
         _save.Background = new SolidColorBrush(Color.Parse("#2468B2"));
         _save.Foreground = Brushes.White;
         _reopen = Button("FreshDocumentReopen", "Reopen saved", null);
@@ -80,12 +92,8 @@ internal sealed partial class NativeFreshDocumentWindow : Window
             {
                 new TextBlock { Text = "Fresh Native Level", FontSize = 26, FontWeight = FontWeight.SemiBold },
                 new TextBlock { Text = $"Project: {project.ProjectId}  ·  separate authored document", Foreground = Brushes.DimGray },
-                new TextBlock
-                {
-                    Name = "FreshDocumentCapability",
-                    Text = "Fresh floor and spawn — not the Town-bound Blank-Level Lab. Normal Create BIN is unavailable for this document. The separate research action compiles the actual applied, saved document to a new BIN/CUE; it does not certify gameplay.",
-                    TextWrapping = TextWrapping.Wrap, FontSize = 12, MaxWidth = 1050
-                },
+                _capability,
+                BuildAggregateActions(),
                 actions,
                 BuildResearchActions()
             }
@@ -113,6 +121,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         _fieldsPanel.Children.Add(Row(Field("FreshFloorColor", "Floor"), Field("FreshSkyColor", "Sky")));
         _fieldsPanel.Children.Add(Section("Music", "Select an existing native track. Research compilation uses this selection; the schematic has no audio preview."));
         _fieldsPanel.Children.Add(_music);
+        _fieldsPanel.Children.Add(BuildAggregateFields());
         _fieldsPanel.Children.Add(_apply);
         _music.SelectionChanged += (_, _) => FieldsChanged();
         var inspector = new ScrollViewer { Content = _fieldsPanel, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
@@ -146,12 +155,14 @@ internal sealed partial class NativeFreshDocumentWindow : Window
     internal NativeId65FreshDocumentIntent? CurrentIntent { get; private set; }
     internal NativeFreshDocumentPreview Preview { get; }
     internal Func<string, Task<FreshDocumentDecision>>? DecisionForTesting { get; set; }
-    internal bool HasUnappliedFields => CurrentIntent != null && FieldSignature() != _appliedFields;
-    internal bool HasUnsavedChanges => HasUnappliedFields || !Equal(CurrentIntent, _snapshot.Intent);
+    internal bool HasUnappliedFields => _aggregateMode ? AggregateHasUnappliedFields :
+        CurrentIntent != null && FieldSignature() != _appliedFields;
+    internal bool HasUnsavedChanges => HasUnappliedFields || (_aggregateMode
+        ? _aggregateSession?.HasUnsavedChanges == true : !Equal(CurrentIntent, _snapshot.Intent));
 
     private void NewStarter()
     {
-        if (CurrentIntent != null || _snapshot.Exists || _decisionBusy || _researchBusy) return;
+        if (_aggregateMode || _modeSwitchBusy || CurrentIntent != null || _snapshot.Exists || _decisionBusy || _researchBusy) return;
         Push(_undo, CurrentIntent);
         _redo.Clear();
         CurrentIntent = NativeId65FreshDocumentIntent.Create(8448, 8448, 8704, 1024, 1024, 8960, 8960, 64,
@@ -162,6 +173,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
 
     private bool ApplyFields()
     {
+        if (_aggregateMode) return ApplyAggregateFields();
         if (CurrentIntent == null || _researchBusy) return false;
         try
         {
@@ -188,6 +200,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
 
     private bool SaveDocument()
     {
+        if (_aggregateMode) return SaveAggregateDocument();
         if (CurrentIntent == null || _researchBusy) return false;
         try
         {
@@ -218,6 +231,8 @@ internal sealed partial class NativeFreshDocumentWindow : Window
 
     private async Task ReopenAsync()
     {
+        if (_aggregateMode) { await ReopenAggregateAsync(); return; }
+        if (_modeSwitchBusy) return;
         if (_decisionBusy || _researchBusy) return;
         try
         {
@@ -241,6 +256,11 @@ internal sealed partial class NativeFreshDocumentWindow : Window
 
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
+        if (_modeSwitchBusy || _forkBusy)
+        {
+            e.Cancel = true;
+            return;
+        }
         if (_researchBusy)
         {
             e.Cancel = true;
@@ -303,6 +323,8 @@ internal sealed partial class NativeFreshDocumentWindow : Window
 
     private void Undo()
     {
+        if (_aggregateMode) { UndoAggregate(); return; }
+        if (_modeSwitchBusy) return;
         if (_researchBusy) return;
         if (HasUnappliedFields)
         {
@@ -319,6 +341,8 @@ internal sealed partial class NativeFreshDocumentWindow : Window
 
     private void Redo()
     {
+        if (_aggregateMode) { RedoAggregate(); return; }
+        if (_modeSwitchBusy) return;
         if (_researchBusy) return;
         if (HasUnappliedFields || _redo.Count == 0) return;
         Push(_undo, CurrentIntent);
@@ -332,15 +356,17 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         _refreshing = true;
         try
         {
-            var value = CurrentIntent;
+            var value = _aggregateMode ? CurrentAggregateIntent?.Base : CurrentIntent;
             Set("FreshFloorX", value?.FloorX); Set("FreshFloorY", value?.FloorY); Set("FreshFloorZ", value?.FloorZ);
             Set("FreshFloorWidth", value?.FloorWidth); Set("FreshFloorDepth", value?.FloorDepth);
             Set("FreshSpawnX", value?.SpawnX); Set("FreshSpawnY", value?.SpawnY); Set("FreshHeading", value?.Heading);
             _fields["FreshFloorColor"].Text = value == null ? "" : Hex(value.FloorColor);
             _fields["FreshSkyColor"].Text = value == null ? "" : Hex(value.SkyColor);
             _music.SelectedItem = value == null ? null : MusicTrackCatalog.Find(value.MusicTrackId);
+            WriteAggregateFields();
             _appliedFields = FieldSignature();
-            Preview.Intent = value;
+            if (_aggregateMode) Preview.SetAggregate(CurrentAggregateIntent, _aggregateSession?.SelectedEditorId);
+            else Preview.Intent = value;
             _spawnHeight.Text = value == null ? "Spawn Z = floor Z +512 (fixed)." : $"Spawn Z: {value.SpawnZ}  ·  floor +512 (fixed)";
         }
         finally { _refreshing = false; }
@@ -356,17 +382,19 @@ internal sealed partial class NativeFreshDocumentWindow : Window
 
     private void RefreshChrome()
     {
-        bool editable = !_decisionBusy && !_researchBusy;
-        _new.IsEnabled = editable && CurrentIntent == null && !_snapshot.Exists;
-        _fieldsPanel.IsEnabled = editable && CurrentIntent != null;
-        _apply.IsEnabled = editable && CurrentIntent != null;
-        _save.IsEnabled = editable && CurrentIntent != null;
+        bool editable = !_decisionBusy && !_researchBusy && !_modeSwitchBusy && !_forkBusy;
+        bool hasDocument = _aggregateMode ? CurrentAggregateIntent != null : CurrentIntent != null;
+        _new.IsEnabled = editable && !_aggregateMode && CurrentIntent == null && !_snapshot.Exists;
+        _fieldsPanel.IsEnabled = editable && hasDocument;
+        _apply.IsEnabled = editable && hasDocument;
+        _save.IsEnabled = editable && hasDocument;
         _reopen.IsEnabled = editable;
-        _undoButton.IsEnabled = editable && (HasUnappliedFields || _undo.Count > 0);
-        _redoButton.IsEnabled = editable && !HasUnappliedFields && _redo.Count > 0;
+        _undoButton.IsEnabled = editable && (HasUnappliedFields || (_aggregateMode ? _aggregateSession?.CanUndo == true : _undo.Count > 0));
+        _redoButton.IsEnabled = editable && !HasUnappliedFields && (_aggregateMode ? _aggregateSession?.CanRedo == true : _redo.Count > 0);
+        RefreshAggregateChrome(editable);
         RefreshResearchChrome();
         _state.Text = HasUnappliedFields ? "Unapplied fields · preview unchanged" : HasUnsavedChanges ? "Unsaved document" :
-            CurrentIntent == null ? "No fresh document" : "Saved document";
+            !hasDocument ? "No fresh document" : "Saved document";
         Title = "Fresh Native Level Document" + (HasUnsavedChanges ? " *" : "");
     }
 

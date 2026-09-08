@@ -128,3 +128,36 @@ runner RED failures preceded registration; all62 runner tests pass afterward,
 including unique result names and refusal to substitute the old UI success marker.
 Detailed frozen evidence: `aggregate-session-r01.oGDkMe/` under the private
 `dark-wizard-native-closure-20260906` research parent.
+
+## Existing Fresh window integration — September 8
+
+The existing window now offers explicit Legacy floor (v1) and Level aggregate
+modes with the active filename visible. Aggregate absence has no default: an
+explicit Fork uses the actual saved legacy snapshot captured at mode entry.
+Save/reopen, selected-route editing, blank Add/Cancel, removal, reordering and
+whole-document undo/redo use the same Store and App session. All ordered routes
+are shown in an XY schematic; authored Z remains numeric, not simulated.
+
+The complete Base and selected route are validated together before Apply. Raw
+fields and pending blank Add are retained on refusal. Dirty mode switches defer
+Discard until target capture succeeds; a source Save before a target-read error
+is reported truthfully. Actual Fork uncertainty preserves evidence and never
+adopts observed destination bytes. Existing legacy behavior remains tested.
+
+Aggregate export is deliberately unavailable, including direct invocation: no
+inactive legacy file, first-placement truncation or preset can be substituted.
+A real saved-aggregate context and final publication lease are a separate next
+step. R03 has not been replaced or rebuilt by this source checkpoint.
+
+Missing-API and capability-wording REDs preceded their corrections. The final
+Release build passed without warnings/errors; new headless UI219, old UI65,
+researchUI333 and session138 passed from an empty cwd. Root fully read all
+production/tests and inspected the headless render; an independent peer review
+is clear. Root replayed all65 regression-runner tests after registration of the
+isolated `--fresh-native-level-ui-only` mode and its own required marker/suffix.
+Root then replayed the inclusive Release build9.13s/zero warnings/errors and
+new UI219, unchanged old UI65/researchUI333 and session138 from a fresh empty cwd.
+The Root headless render is retained in `spyro-fresh-level-ui-artifacts-LLWzOd`
+under the macOS temporary directory. All-project integration and native packaged
+usability remain separate gates. Evidence: `aggregate-window-ui-r01.PuHlgO/` under the private
+research parent (HANDOFF.md and RUNNER-HANDOFF.md).

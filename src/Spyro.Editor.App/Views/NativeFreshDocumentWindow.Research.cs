@@ -69,7 +69,7 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         bool hasSource = _researchSourceForTesting != null || _researchSourcePaths != null;
         bool hasOwner = _researchWorkForTesting != null || _beginResearch != null;
-        _research.IsEnabled = !_researchBusy && !_decisionBusy && hasSource && hasOwner &&
+        _research.IsEnabled = !_aggregateMode && !_researchBusy && !_decisionBusy && hasSource && hasOwner &&
             _snapshot.Exists && _snapshot.RetainedRecoveryDirectory.Length == 0 && CurrentIntent != null && !HasUnsavedChanges;
         _cancelResearch.IsVisible = _researchBusy;
         _cancelResearch.IsEnabled = _researchBusy && _researchCancellation?.IsCancellationRequested == false;
@@ -78,6 +78,11 @@ internal sealed partial class NativeFreshDocumentWindow
     private async Task CreateResearchCandidateAsync()
     {
         if (_researchBusy || _decisionBusy) return;
+        if (_aggregateMode)
+        {
+            _status.Text = "Aggregate research export is unavailable until an actual saved aggregate revision and final Store publication guard are bound. No legacy or partial aggregate will be exported.";
+            return;
+        }
         if (!_snapshot.Exists || CurrentIntent == null || HasUnsavedChanges || _snapshot.RetainedRecoveryDirectory.Length != 0)
         {
             _status.Text = "Research candidates require an applied, saved document with resolved save recovery. Apply and Save explicitly, or Reopen; no content was replaced.";

@@ -10,10 +10,22 @@ namespace Spyro.Editor.App.Views;
 internal sealed class NativeFreshDocumentPreview : Control
 {
     private NativeId65FreshDocumentIntent? _intent;
+    private bool _aggregatePresentation;
     internal NativeId65FreshDocumentIntent? Intent
     {
         get => _intent;
-        set { _intent = value; InvalidateVisual(); }
+        set { _intent = value; _aggregatePresentation = false; AggregateIntent = null; SelectedEditorId = null; InvalidateVisual(); }
+    }
+    internal NativeFreshLevelDocumentIntent? AggregateIntent { get; private set; }
+    internal string? SelectedEditorId { get; private set; }
+
+    internal void SetAggregate(NativeFreshLevelDocumentIntent? aggregate, string? selectedEditorId)
+    {
+        AggregateIntent = aggregate;
+        _aggregatePresentation = true;
+        SelectedEditorId = selectedEditorId;
+        _intent = aggregate?.Base;
+        InvalidateVisual();
     }
 
     public override void Render(DrawingContext context)
@@ -26,7 +38,8 @@ internal sealed class NativeFreshDocumentPreview : Control
         if (intent == null)
         {
             Text(context, "No authored scene", new Point(24, 28), Brushes.DarkSlateGray, 20);
-            Text(context, "Open a saved document or choose New starter.", new Point(24, 60), Brushes.DarkSlateGray, 13);
+            Text(context, _aggregatePresentation ? "No aggregate exists. Fork a saved legacy floor explicitly." :
+                "Open a saved document or choose New starter.", new Point(24, 60), Brushes.DarkSlateGray, 13);
             return;
         }
 
@@ -64,12 +77,31 @@ internal sealed class NativeFreshDocumentPreview : Control
         Vector side = new(-unit.Y, unit.X);
         Polygon(context, [tip, tip - unit * 10 + side * 5, tip - unit * 10 - side * 5], Brushes.White, null);
 
+        if (AggregateIntent is { } aggregate)
+        {
+            // Display every authored route in XY at the floor projection. Exact Z
+            // remains numeric; this is not a native trajectory/height simulation.
+            for (int i = 0; i < aggregate.Placements.Count; i++)
+            {
+                var route = (NativeFreshWizardRouteIntent)aggregate.Placements[i];
+                bool selected = route.EditorId == SelectedEditorId;
+                Point origin = Project(route.OriginX, route.OriginY, intent.FloorZ);
+                Point end = Project(route.EndX, route.EndY, intent.FloorZ);
+                IBrush ink = selected ? Brushes.Yellow : Brushes.Cyan;
+                context.DrawLine(new Pen(ink, selected ? 3 : 1.5, new DashStyle([4, 3], 0)), origin, end);
+                context.DrawEllipse(ink, new Pen(Brushes.DarkSlateGray, 1), origin, selected ? 6 : 4, selected ? 6 : 4);
+                context.DrawEllipse(Brushes.Transparent, new Pen(ink, selected ? 3 : 1.5), end, 4, 4);
+                if (selected) Text(context, $"Route {i + 1} · authored Z {route.OriginZ}", origin + new Vector(9, -20), Brushes.White, 12);
+            }
+        }
+
         context.FillRectangle(new SolidColorBrush(Color.FromArgb(210, 18, 30, 45)), new Rect(0, 0, bounds.Width, 76));
         Text(context, $"{intent.FloorWidth} × {intent.FloorDepth}  ·  floor Z {intent.FloorZ}", new Point(16, 12), Brushes.White, 17);
         Text(context, $"Origin {intent.FloorX}, {intent.FloorY}  ·  spawn {intent.SpawnX}, {intent.SpawnY}, {intent.SpawnZ}",
             new Point(16, 40), Brushes.White, 12);
         context.FillRectangle(new SolidColorBrush(Color.FromArgb(210, 18, 30, 45)), new Rect(0, bounds.Height - 34, bounds.Width, 34));
-        Text(context, $"Heading {intent.Heading}/255 (schematic)  ·  music track {intent.MusicTrackId:00}  ·  0 placed Mobys",
+        string placementCaption = AggregateIntent == null ? "0 placed Mobys" : $"{AggregateIntent.Placements.Count} authored routes (XY only)";
+        Text(context, $"Heading {intent.Heading}/255 (schematic)  ·  music track {intent.MusicTrackId:00}  ·  {placementCaption}",
             new Point(16, bounds.Height - 26), Brushes.White, 12);
     }
 

@@ -23,6 +23,17 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+// Strict source-free aggregate UI route, before workspace discovery or legacy setup.
+if (args.Contains("--fresh-native-level-ui-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --fresh-native-level-ui-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    string aggregateArtifacts = Directory.CreateTempSubdirectory("spyro-fresh-level-ui-artifacts-").FullName;
+    NativeFreshLevelDocumentUiCases.Run(aggregateArtifacts);
+    Console.WriteLine($"FRESH_NATIVE_LEVEL_UI_ARTIFACTS path={aggregateArtifacts}");
+    return 0;
+}
+
 // Pure aggregate session/actual tiny Store fixtures, before workspace discovery.
 if (args.Contains("--fresh-native-level-session-only", StringComparer.Ordinal))
 {
