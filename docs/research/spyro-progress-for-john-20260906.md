@@ -1,6 +1,6 @@
 # Spyro editor — what is working now
 
-Updated September 8, 2026 after material persistence and normal-speed entry tests.
+Updated September 8, 2026 after physical textured export and normal-speed gameplay.
 Development continues with the requested pause near 5% usage **remaining**.
 This is a development checkpoint, not a V6 release. Original game/save files and
 the preserved R03 editor have not been replaced.
@@ -47,11 +47,14 @@ matched their pre-test hashes. No original card was replaced.
   materials from the original game. Textured disc composition passes source
   checks and six complete-image/inverse comparisons against an independent raw
   oracle. Physical textured candidates, texture painting and mixed
-  texture/Wizard export are not yet available in the window.
+  texture/Wizard export are not yet available in the window. A separate exact
+  two-material candidate has now been published and played: both textures
+  appeared, and movement, edge fall/respawn, jump/landing and flame effects were
+  observed at normal speed. See the [textured-floor test](native-fresh-textured-runtime-r01.md).
 - The whole-level document now preserves two material selections through edits,
   undo/redo and save/reopen. It labels selections honestly as unrendered; a
-  material picker and preview are next. A guarded fixed-texture candidate passes
-  full-image checks, but still needs physical publication and DuckStation tests.
+  material picker and preview are next. Saved-material compilation is being
+  integrated; the successful gameplay candidate still uses a fixed recipe.
 - Two Wizards imported into an existing level previously passed a bounded
   gameplay sequence: attacks, separate rewards, repeat defeat without a
   duplicate reward, and ordinary portal re-entry preserving collected states.
@@ -106,7 +109,7 @@ feature.
 ## Remaining work toward V6
 
 The immediate parallel tracks are native validation/packaging of the placement
-window, a guarded textured-candidate path, and further fresh-Wizard gameplay.
+window, saved-material compilation/picker, and editable Wizard-floor/route checks.
 Saved aggregate export also needs a final project/document lease, so a valid
 draft cannot be exported against a different saved revision.
 
@@ -117,8 +120,9 @@ editable new-level slots, normal portal integration, save/reboot compatibility,
 animated textures and arbitrary object/material mixtures remain open.
 
 Latest completed all-project Release gate: **325 checks, zero failures**, including
-material persistence, the guarded texture candidate and exact saved-Wizard
-pairing. These latest source changes are not in the preserved R03/R04 apps.
+material persistence, actual texture publication/failure-recovery controls and
+exact saved-Wizard pairing. Exporter checkpoint: f8b382c. These latest source
+changes are not in the preserved R03/R04 apps.
 These are engineering
 checks, not325 gameplay runs. The [engineering handoff](native-editor-resume-20260906.md)
 and [V6 readiness assessment](v6-readiness-20260906.md) retain the detailed

@@ -29,18 +29,20 @@ damage/death/respawn cycle; see the latest R02 report below. App aggregate windo
 integration passes219 headless checks (plus session138/oldUI65/researchUI333),
 with Root/peer review and replay clear. A separate R04 package is now built;
 see `native-fresh-level-mac-r04.md` for its actual pending native permission gate.
-Source-tested textured Disc composition is committed446e84d; guarded candidate
-publication remains a later gate. None of these changes is silently in R03.
+Source-tested textured Disc composition is committed446e84d; later fixed-a
+physical publication and native tests are now complete as bounded below.
+None of these changes is silently in R03.
 The old source contracts and historical failed records remain preserved.
 
 Latest full all-project Release/default gate:325/zero failures, including new
 material persistence/UI, fixed-a candidate and actual saved-Wizard pairing.
 Exact summary:
-`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-kcn758vr/summary.json`.
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-tlhoquxc/summary.json`.
 Root separately replayed source-backed textured baseline193/complete original
 final checks, all66 runner tests, and UI219/legacy65/research333/session138.
 Four internal lineage-retention lines and old binding/Measure characterization
-are independently peer-reviewed; actual new texture publication remains absent.
+are independently peer-reviewed; actual new texture publication subsequently
+passed at f8b382c.
 R04 was built from clean60f6d6f and independently passed288 bundle/4387 seed/
 ten protected-tree/nineteen pin checks, plus native contract and packaged PNG.
 Normal launch reached a Documents permission prompt; John was asked to handle
@@ -51,11 +53,22 @@ Schema2 two-slot material persistence, all five existing-editor anti-loss fixes
 and actual saved aggregate/Wizard pairing are now committed92b1cef. Focused
 material UI48/old219, aggregate689 and authored source232 (binding47/free4) pass;
 see `native-fresh-material-intent-and-saved-binding.md`. The guarded fixed-a
-textured candidate is committed7fb9720: default55, source325 and independently
-replayed30 exact old-owner inverse checks pass, no physical output yet. See
-`native-fresh-textured-candidate.md`. Current parallel work is its opt-in physical
-publication gate, saved-material bridge/picker and parameterized Wizard source
-oracle. Aggregate export remains disabled until its full lifecycle is bound.
+textured candidate is committed7fb9720: its original default55/source325 and
+independently replayed30 exact old-owner inverse checks passed before publication.
+f8b382c now adds reviewed explicit CLI/fault seams, default379/source663,
+Root-replayed inverse27 and the latest full325/0 gate. All actual precommit,
+Unconfirmed/postcommit cases, one clean physical Publish and separate-process
+Verify closed0. Only candidate-r01 is a gameplay target; retained fault evidence
+must not be repaired, deleted or adopted. See native-fresh-textured-candidate.md.
+The exact998a/1253 candidate then showed two imported materials, normal-speed
+movement/fall/respawn, jump/landing and flame; native session is CLOSED, both INIs
+restored and all nine protected hashes unchanged. See native-fresh-textured-runtime-r01.md.
+Current parallel work is saved-material bridge/picker and actual-issued72-row
+Wizard/46-track comparison plus strict source-owned initial footprint. The first
+saved-material source run matched all five independent full-image goldens but
+exposed an incorrect test assumption about held read guards; tests are being
+corrected without changing Store or weakening native bytes. Aggregate export
+remains disabled until its full lifecycle is bound.
 The corrected Wizard also reached the floor with an active enemy at normal
 speed; this bounded entry/attack session is closed and settings restored, not a
 defeat/reward pass. See `native-fresh-separated-wizard-runtime-r03.md`.

@@ -1,7 +1,7 @@
 # Fixed-a textured research candidate
 
-September 8, 2026. Physically published and independently verified. Native
-playtesting is in progress in a separate protected DuckStation session.
+September 8, 2026. Physically published, independently verified and played in
+a separate protected DuckStation session, now closed/settings restored.
 
 A new sealed candidate binds the actual textured Disc → Body → texture plan →
 fresh scene → ordered source materials. Its only admitted recipe is the existing
@@ -70,8 +70,10 @@ Exact commands, closed sessions, fault paths and hashes are retained in
 Root's combined all-project Release/default gate closed exit0,325/zero failures:
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-tlhoquxc/summary.json`.
 
-DuckStation has reached this floor with two visible materials; gameplay checks
-and settings restoration are still in progress. This is not yet a closed runtime
-pass. The editor has no aggregate publication button enabled, and preserved app
-packages have not been replaced. Saved-material binding and mixed Wizard/texture
-publication remain separate work.
+DuckStation reached this floor with two visible materials. Normal-speed movement,
+edge fall/respawn, jump/landing and flame effects were observed; see the exact
+[closed runtime report](native-fresh-textured-runtime-r01.md). Both original INIs
+and all nine protected file hashes were restored/unchanged. The editor has no
+aggregate publication button enabled, and preserved app packages have not been
+replaced. Saved-material binding, HQ/distance and mixed Wizard/texture publication
+remain separate work.
