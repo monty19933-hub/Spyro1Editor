@@ -27,7 +27,8 @@ the September8 runtime section below and `native-fresh-separated-wizard-publicat
 Current work has passed the fresh null-Sparx diagnostic and one cold-entry/
 damage/death/respawn cycle; see the latest R02 report below. App aggregate window
 integration passes219 headless checks (plus session138/oldUI65/researchUI333),
-with Root/peer review clear; Root replay and a separate new package are next.
+with Root/peer review and replay clear. A separate R04 package is now built;
+see `native-fresh-level-mac-r04.md` for its actual pending native permission gate.
 Source-tested textured Disc composition is committed446e84d; guarded candidate
 publication remains a later gate. None of these changes is silently in R03.
 The old source contracts and historical failed records remain preserved.
@@ -39,8 +40,12 @@ Root separately replayed source-backed textured baseline193/complete original
 final checks, all66 runner tests, and UI219/legacy65/research333/session138.
 Four internal lineage-retention lines and old binding/Measure characterization
 are independently peer-reviewed; actual new texture publication remains absent.
-Current next work is a separately packaged aggregate-window preview and then
-the exact extraction-only shared streaming/closed binding step. A minor test
+R04 was built from clean60f6d6f and independently passed288 bundle/4387 seed/
+ten protected-tree/nineteen pin checks, plus native contract and packaged PNG.
+Normal launch reached a Documents permission prompt; John was asked to handle
+it, with no bypass. R03 remains unchanged. Current parallel work is the exact
+extraction-only shared streaming/closed binding step and a neutral saved
+aggregate final-read guard. Neither enables new publication yet. A minor test
 comment/README clarification after325 states tiny cleanup is name/link/byte
 bound, not inode/hostile-race authentication; no behavior changed.
 

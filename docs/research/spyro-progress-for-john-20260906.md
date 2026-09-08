@@ -27,7 +27,7 @@ Both DuckStation settings files were restored exactly after quitting. Original
 BIN, CUE and memory card, the three candidate files and emulator executable
 matched their pre-test hashes. No original card was replaced.
 
-## Other working foundations, not yet packaged into R03
+## Other working foundations
 
 - A separate whole-level document preserves floor settings and an ordered object
   list with stable IDs. Its first supported placement type is a Wizard route.
@@ -50,6 +50,16 @@ matched their pre-test hashes. No original card was replaced.
   See [that separate runtime report](native-two-wizard-r01-runtime-observations.md).
 
 ## Which editor can I test now?
+
+The newer, separate **R04 whole-level test editor** has now been built from
+checkpoint60f6d6f. Package/signature, source preservation and packaged PNG checks
+pass. Its normal launch is waiting for macOS Documents permission; native
+edit/save/reopen testing follows once the window opens. See the
+[R04 app location and test checklist](native-fresh-level-mac-r04.md).
+
+R04 adds **Level aggregate → Fork saved legacy floor** and Wizard-route
+placement controls. Aggregate export remains disabled; this is not yet the
+all-Moby/all-texture V6 editor. Your R03 copy remains separate and unchanged.
 
 The preserved private R03 app is here:
 
