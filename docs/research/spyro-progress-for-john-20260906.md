@@ -1,6 +1,6 @@
 # Spyro editor — what is working now
 
-Updated September 8, 2026 after the corrected fresh-Wizard death/respawn test.
+Updated September 8, 2026 after material persistence and normal-speed entry tests.
 Development continues with the requested pause near 5% usage **remaining**.
 This is a development checkpoint, not a V6 release. Original game/save files and
 the preserved R03 editor have not been replaced.
@@ -20,7 +20,11 @@ This used controlled 10% emulation speed. Player-state6/timer0 was observed at
 the exact spawn with zero motion before the subsequent vertical descent. This
 is not continuous execution tracing or an all-game acceptance test. Enemy
 defeat/reward, normal-speed gameplay, normal portal reentry, sound and resource
-limits remain separate checks. See [the closed runtime report](native-fresh-separated-wizard-runtime-r02.md).
+limits remain separate checks. A later normal-speed cold boot reached the same
+floor with the Wizard active and health decreasing; reliable held-input movement
+and defeat/reward remain pending. Both sessions are closed and settings restored.
+See the [death/respawn report](native-fresh-separated-wizard-runtime-r02.md) and
+[normal-speed entry report](native-fresh-separated-wizard-runtime-r03.md).
 The earlier observer refusal remains preserved and was not reclassified.
 
 Both DuckStation settings files were restored exactly after quitting. Original
@@ -44,6 +48,10 @@ matched their pre-test hashes. No original card was replaced.
   checks and six complete-image/inverse comparisons against an independent raw
   oracle. Physical textured candidates, texture painting and mixed
   texture/Wizard export are not yet available in the window.
+- The whole-level document now preserves two material selections through edits,
+  undo/redo and save/reopen. It labels selections honestly as unrendered; a
+  material picker and preview are next. A guarded fixed-texture candidate passes
+  full-image checks, but still needs physical publication and DuckStation tests.
 - Two Wizards imported into an existing level previously passed a bounded
   gameplay sequence: attacks, separate rewards, repeat defeat without a
   duplicate reward, and ordinary portal re-entry preserving collected states.
@@ -109,7 +117,9 @@ editable new-level slots, normal portal integration, save/reboot compatibility,
 animated textures and arbitrary object/material mixtures remain open.
 
 Latest completed all-project Release gate: **325 checks, zero failures**, including
-the new placement UI and textured-research baseline. These are engineering
+material persistence, the guarded texture candidate and exact saved-Wizard
+pairing. These latest source changes are not in the preserved R03/R04 apps.
+These are engineering
 checks, not325 gameplay runs. The [engineering handoff](native-editor-resume-20260906.md)
 and [V6 readiness assessment](v6-readiness-20260906.md) retain the detailed
 boundaries and next steps.
