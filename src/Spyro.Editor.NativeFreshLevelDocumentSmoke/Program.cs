@@ -4,4 +4,5 @@ AggregateCases.Run();
 CodecCases.Run();
 AggregateStorageCases.Run();
 AggregateForkCases.Run();
+AggregateReadGuardCases.Run();
 Console.WriteLine($"NATIVE_FRESH_LEVEL_DOCUMENT_SMOKE_OK checks={Cases.Checks} refusals={Cases.Refusals}");

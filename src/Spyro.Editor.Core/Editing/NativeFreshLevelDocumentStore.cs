@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using Spyro.Editor.Core.Persistence;
 
 [assembly: InternalsVisibleTo("Spyro.Editor.NativeFreshLevelDocumentSmoke")]
@@ -104,4 +105,77 @@ public static class NativeFreshLevelDocumentStore
     internal static NativeFreshLevelDocumentSnapshot SaveForSmoke(NativeFreshLevelDocumentSnapshot expected,
         NativeFreshLevelDocumentIntent intent, Action<string> checkpoint, CancellationToken cancellationToken = default) =>
         NativeFreshDocumentStorage.SaveAggregate(expected, intent, cancellationToken, checkpoint);
+
+    internal static ReadLease AcquireReadLease(NativeFreshLevelDocumentSnapshot expected,
+        CancellationToken token = default) => ReadLease.Acquire(expected, token, null);
+
+    internal static ReadLease AcquireReadLeaseForSmoke(NativeFreshLevelDocumentSnapshot expected,
+        Action<string> checkpoint, CancellationToken token = default)
+    {
+        token.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        return ReadLease.Acquire(expected, token, checkpoint);
+    }
+
+    // Explicit primary-aware completion, not a masking using/Dispose contract.
+    // This type excludes cooperating aggregate saves; it cannot publish anything.
+    internal sealed class ReadLease
+    {
+        private readonly NativeFreshDocumentStorage.ReadLease _inner;
+        private readonly object _completionLock = new();
+        private bool _completed;
+        private Exception? _primary, _outcome;
+        private ReadLease(NativeFreshDocumentStorage.ReadLease inner) => _inner = inner;
+        internal string LeasePath => _inner.LeasePath;
+        internal string RetainedEvidencePath => _inner.RetainedEvidencePath;
+        internal Exception? TerminalFailure => _inner.TerminalFailure;
+
+        internal static ReadLease Acquire(NativeFreshLevelDocumentSnapshot expected,
+            CancellationToken token, Action<string>? checkpoint)
+        {
+            NativeFreshDocumentStorage.ReadLease? owner = null;
+            try
+            {
+                NativeFreshDocumentStorage.AcquireAggregateReadLease(expected, token, ref owner, checkpoint);
+                return new(owner!);
+            }
+            catch (Exception primary)
+            {
+                if (owner != null) new ReadLease(owner).Complete(primary);
+                throw; // No CreateNew owner, or unreachable after primary-aware Complete.
+            }
+        }
+
+        internal void Complete(Exception? primary = null)
+        {
+            lock (_completionLock)
+            {
+                if (_completed)
+                {
+                    if (primary != null && !ReferenceEquals(primary, _primary))
+                        throw new InvalidOperationException("A completed aggregate guard cannot accept another primary failure.");
+                }
+                else
+                {
+                    _completed = true;
+                    _primary = primary;
+                    var errors = new List<Exception>();
+                    if (primary != null) errors.Add(primary);
+                    Exception? thrown = null;
+                    try { _inner.Dispose(); } // Always uncancellable, including failed acquisition.
+                    catch (Exception error) { thrown = error; errors.Add(error); }
+                    if (_inner.TerminalFailure != null && !ReferenceEquals(_inner.TerminalFailure, thrown))
+                        errors.Add(_inner.TerminalFailure);
+                    if (_inner.RetainedEvidencePath.Length != 0 && _inner.TerminalFailure == null && thrown == null)
+                        errors.Add(new IOException("Aggregate guard release retained unresolved evidence: " + _inner.RetainedEvidencePath));
+                    int primaryCount = primary == null ? 0 : 1;
+                    _outcome = errors.Count == primaryCount ? primary :
+                        new IOException("Aggregate final read guard cleanup failed; preserve evidence at " +
+                            (_inner.RetainedEvidencePath.Length != 0 ? _inner.RetainedEvidencePath : _inner.LeasePath),
+                            new AggregateException("Primary failure followed by aggregate guard release/accounting errors.", errors));
+                }
+                if (_outcome != null) ExceptionDispatchInfo.Capture(_outcome).Throw();
+            }
+        }
+    }
 }

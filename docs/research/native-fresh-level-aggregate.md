@@ -161,3 +161,36 @@ The Root headless render is retained in `spyro-fresh-level-ui-artifacts-LLWzOd`
 under the macOS temporary directory. All-project integration and native packaged
 usability remain separate gates. Evidence: `aggregate-window-ui-r01.PuHlgO/` under the private
 research parent (HANDOFF.md and RUNNER-HANDOFF.md).
+
+## Saved aggregate final-read guard — September 8
+
+The aggregate now has an internal neutral saved read context and final lease.
+The context retains the actual Snapshot.Intent, including every ordered route,
+and checks raw document/manifest versions. Equal independently parsed objects
+cannot replace its original document reference. Capture does not hold a marker;
+final acquisition shares the existing aggregate writer namespace and excludes
+cooperating Save/Fork operations without blocking the separate legacy profile.
+
+The new adapter has explicit primary-aware Complete rather than a masking
+Dispose path. It attempts uncancellable release once, preserves exact primary
+and distinct cleanup errors in order, retains unresolved evidence, and caches
+its terminal outcome. Repeated completion cannot remove a later owner or turn
+a failed release into success. Old Acquire/Fork/Finish/Save bodies are unchanged.
+This is cooperating-writer protection, not hostile-path or crash-atomic proof.
+
+Missing-API RED preceded implementation. Two later fixture-assumption failures
+were retained: existing Save recovery already retained a marker, and a throw
+before32-byte initialization retained the empty acquired marker. Only the test
+expectations changed; the old cleanup policy was not relaxed. New guard170
+checks, overall aggregate478/271 refusals, separate Store112/Fork248 and old
+legacy Store83/readlease59/compat38/intent243 gates pass. Tiny JSON fixture
+Save/Fork operations are real; no game image or candidate artifact is published.
+Root fully reviewed and replayed the final tests, with independent peer review.
+
+Root's combined all-project Release/default gate passed325 checks/zero failures:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-458465r0/summary.json`.
+The final marker explicitly says `artifactPublicationInvoked=false`.
+Evidence: `aggregate-final-read-guard-r01.2QDezW/` under the private research parent.
+Actual saved aggregate compiler/candidate pairing, receipt/final publication
+integration and UI export remain separate work. R04 predates this guard and is
+preserved as built; see [its package report](native-fresh-level-mac-r04.md).

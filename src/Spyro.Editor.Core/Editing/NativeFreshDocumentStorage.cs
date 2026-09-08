@@ -187,6 +187,32 @@ internal static class NativeFreshDocumentStorage
     internal static ReadLease AcquireLegacyReadLease(NativeId65FreshDocumentSnapshot expected,
         CancellationToken cancellationToken = default) => ReadLease.Acquire(expected, cancellationToken);
 
+    // New neutral aggregate arm only. Existing legacy/Fork acquisition and
+    // terminal behavior remain unchanged; no caller-selected profile or IO.
+    internal static StorageObservation RequireSavedAggregate(NativeFreshLevelDocumentSnapshot expected)
+    {
+        ArgumentNullException.ThrowIfNull(expected);
+        StorageObservation observation = StorageObservation.FromAggregate(expected);
+        observation.RequireProfile(StorageProfile.LevelAggregateV1);
+        if (!expected.Exists || expected.Intent == null || expected.RetainedRecoveryDirectory.Length != 0)
+            throw new InvalidDataException("A saved aggregate with resolved save recovery is required for a final read guard.");
+        return observation;
+    }
+
+    internal static void RequireAggregateCurrent(NativeFreshLevelDocumentSnapshot expected, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        StorageObservation observation = RequireSavedAggregate(expected);
+        StorageObservation current = RequireCurrent(observation, token);
+        if (current.RootPath != observation.RootPath || current.ProjectId != observation.ProjectId)
+            throw new InvalidDataException("The saved aggregate project identity changed since capture.");
+        token.ThrowIfCancellationRequested();
+    }
+
+    internal static void AcquireAggregateReadLease(NativeFreshLevelDocumentSnapshot expected,
+        CancellationToken token, ref ReadLease? owner, Action<string>? checkpoint = null) =>
+        ReadLease.AcquireAggregate(expected, token, ref owner, checkpoint);
+
     internal sealed class ReadLease : IDisposable
     {
         private readonly FileStream _stream;
@@ -240,6 +266,19 @@ internal static class NativeFreshDocumentStorage
             if (owner != null) throw new InvalidOperationException("A guard owner is already assigned.");
             owner = Open(observation);
             owner.Initialize(observation, token);
+        }
+
+        internal static void AcquireAggregate(NativeFreshLevelDocumentSnapshot expected, CancellationToken token,
+            ref ReadLease? owner, Action<string>? checkpoint)
+        {
+            token.ThrowIfCancellationRequested();
+            StorageObservation observation = RequireSavedAggregate(expected);
+            if (owner != null) throw new InvalidOperationException("A guard owner is already assigned.");
+            owner = Open(observation); // Retain actual ownership before any following operation can fail.
+            checkpoint?.Invoke("owned");
+            owner.Initialize(observation, token);
+            checkpoint?.Invoke("initialized");
+            token.ThrowIfCancellationRequested();
         }
 
         private static ReadLease Open(StorageObservation observation)
