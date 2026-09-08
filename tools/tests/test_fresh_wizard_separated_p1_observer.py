@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 sys.dont_write_bytecode=True
 REVIEWED_ACTIVE_SPEC=False
+ABSENCE_SOURCE=False
 TOOLS=Path(__file__).resolve().parents[1]
 def load(path,name):
     spec=importlib.util.spec_from_file_location(name,path)
@@ -44,6 +45,208 @@ def observed(*,image=None,start='Mon Sep  7 01:02:03 2026',cache=None):
 
 def leaves(error):
     return [x for e in error.exceptions for x in leaves(e)] if isinstance(error,BaseExceptionGroup) else [error]
+
+def absent_fixture(health=0,count=1):
+    m=F.fixture();m.word(0x80075898,0);m.blob(0x80078BBC,struct.pack('<i',health))
+    m.word(0x800756A4,count);m.word(0x80075930,N.L.END-count*24)
+    m.word(0x8007573C,N.L.BASE+count*88)
+    for i in range(32):
+        m.blob(N.L.BASE+i*88,F.row(0x26,0 if i<count else 0xFF,N.L.END-(i+1)*24))
+    m.blob(N.L.RESERVE+0x48,b'\xff')
+    # Added independently source-bound fingerprints will be installed here once
+    # the new arm exists. This synthetic memory is never source/runtime proof.
+    for at,b in getattr(N,'ABSENCE_CODE_WINDOWS',()):m.blob(at,b)
+    return m
+
+class AbsentCompanionTests(unittest.TestCase):
+    def test_complete_frozen_absence_fingerprints_not_just_matching_prefixes(self):
+        self.assertEqual({
+            0x80083178:(0x80,'d0d8e98656ea6c3b4dd760fc38c8f4b9976647d41074815704c1becb8556b8f2'),
+            0x80087248:(0x30,'bb460ef160eeb33d5c7f722ed97a4055ea58fb4aecf05f960fe3d28f2cfd85d8'),
+            0x80052568:(0x130,'5f7a95466d261fadeee8641fe17e0b94c81692cfafb8be376eb613016a3a16af'),
+            0x80040F68:(0xF8,'20b8910053abca1f5a3bfb052c241d4b242a851add580b50ce44894fc50456f6')},
+            {at:(len(b),N._hash(b)) for at,b in N.ABSENCE_CODE_WINDOWS})
+        self.assertEqual(4,len(N.ABSENCE_CODE_WINDOWS))
+
+    def test_fresh_closed_health_set_without_zero_page_or_old_refusal_upgrade(self):
+        for health in (0,-1):
+            for count in (0,1,32):
+                with self.subTest(health=health,count=count):
+                    old=N.L.capture(absent_fixture(health,count),'historical-contract')
+                    self.assertFalse(old['payload_valid']);self.assertFalse(old['gate_reread_consistent'])
+                    m=absent_fixture(health,count);r=N.capture(m,'fresh-absence')
+                    self.assertTrue(r['payload_valid'],r.get('payload_refused'))
+                    self.assertTrue(r['gate_reread_consistent']);self.assertIsNone(r['companion'])
+                    self.assertEqual('absent',r['companion_observation'])
+                    self.assertEqual('native-nonpositive-health-branch-compatible',r['absence_reason'])
+                    self.assertIs(r['absence_cause_proven'],False)
+                    self.assertEqual(count,len(r['dynamic_rows']['active']))
+                    self.assertTrue(all(at>=0x80000000 for at,n in m.reads))
+                    for key in N.FALSE_FLAGS:self.assertIs(r[key],False)
+                    self.assertIs(r['external_session_binding_checked'],False)
+                    self.assertNotIn('player_dead',r)
+
+    def test_unsupported_health_or_nonzero_handle_never_routes_or_reads_zero(self):
+        for health,handle in ((1,0),(3,0),(-2,0),(-2147483648,0),(0,N.L.BASE+1),
+                              (0,N.L.RESERVE),(0,N.L.END),(0,0xDEADBEEF)):
+            m=absent_fixture();m.blob(0x80078BBC,struct.pack('<i',health));m.word(0x80075898,handle)
+            with self.subTest(health=health,handle=handle),patch.object(N,'_capture_absent_companion',side_effect=AssertionError('No null arm')):
+                r=N.capture(m,'unsupported');self.assertFalse(r['payload_valid'])
+                self.assertNotIn((N.L.PLACED,88),m.reads);self.assertTrue(all(at>=0x80000000 for at,n in m.reads))
+
+    def test_every_gate_and_cursor_still_refuses_before_heap(self):
+        changes=[(at,value^1) for at,value in F.LITERALS.items()]
+        changes += [(0x800756A4,n) for n in (33,0xFFFFFFFF)]
+        for at,start,end,stride in ((0x80075930,N.L.PRIVATE,N.L.END,24),(0x8007573C,N.L.BASE,N.L.RESERVE,88),
+                                    (0x80075738,N.L.POOL,N.L.PETE,32)):
+            changes.extend((at,n) for n in (0,start-1,start+1,end+stride))
+        for at,value in changes:
+            with self.subTest(at=hex(at),value=value):
+                m=absent_fixture();m.word(at,value);r=N.capture(m,'wrong-owner')
+                self.assertFalse(r['payload_valid']);self.assertFalse(r['gate_reread_consistent'])
+                self.assertNotIn((N.L.PLACED,88),m.reads)
+
+    def test_all_code_first_last_byte_and_reread_mutations(self):
+        for at,b in (*N.L.CODE_WINDOWS,*N.ABSENCE_CODE_WINDOWS):
+            for offset in (0,len(b)-1):
+                m=absent_fixture();m.data[at+offset]^=1
+                with self.subTest(at=hex(at),offset=offset):
+                    r=N.capture(m,'code');self.assertFalse(r['payload_valid'])
+                    self.assertIn('code witness',r['payload_refused']);self.assertNotIn((N.L.PLACED,88),m.reads)
+            m=absent_fixture();m.flip[at]=1;r=N.capture(m,'code-drift')
+            self.assertFalse(r['payload_valid']);self.assertIn('witness changed',r['payload_refused'])
+
+    def test_inconsistent_rows_private_and_sentinels_refuse_without_opaque_dereference(self):
+        controls=(('count',lambda m:m.word(0x800756A4,0)),
+            ('Sparx',lambda m:m.blob(N.L.BASE,F.row(0x78,0,N.L.END-24))),
+            ('terminal',lambda m:m.blob(N.L.BASE+0x48,b'\xff')),
+            ('Wizard-class',lambda m:m.blob(N.L.PLACED,F.row(0x78,0,N.L.WPRIVATE))),
+            ('Wizard-owner',lambda m:m.word(N.L.PLACED,0xDEADBEEF)),
+            ('nested-link',lambda m:m.word(N.L.WPRIVATE,0)),
+            ('particle-terminal',lambda m:m.word(N.L.PETE,0)))
+        for name,mutate in controls:
+            with self.subTest(name=name):
+                m=absent_fixture();mutate(m);r=N.capture(m,name)
+                self.assertFalse(r['payload_valid']);self.assertFalse(r['gate_reread_consistent'])
+                self.assertNotIn('companion_observation',r)
+        m=absent_fixture(count=32);m.blob(N.L.RESERVE+0x48,b'\x00')
+        self.assertFalse(N.capture(m,'reserve')['payload_valid'])
+        m=absent_fixture();m.word(N.L.BASE,0xDEADBEEF);r=N.capture(m,'opaque')
+        self.assertTrue(r['payload_valid']);self.assertTrue(any('Opaque' in a for a in r['attention']))
+        self.assertNotIn((0xDEADBEEF,24),m.reads)
+
+    def test_holes_are_not_repaired_into_dense_cursor_equations(self):
+        m=absent_fixture();m.blob(N.L.BASE,F.row(0x78,0xFE,0))
+        m.blob(N.L.BASE+88,F.row(0x26,0,N.L.END-24));m.blob(N.L.BASE+176,F.row(status=0xFF))
+        m.word(0x8007573C,N.L.BASE);m.word(0x80075930,N.L.END)
+        r=N.capture(m,'hole');self.assertTrue(r['payload_valid'])
+        self.assertEqual(2,r['dynamic_rows']['terminal_slot']);self.assertEqual(N.L.BASE+88,r['dynamic_rows']['active'][0]['address'])
+        for at in (N.L.BASE,N.L.BASE+88,N.L.BASE+176):self.assertEqual(2,m.reads.count((at,88)))
+
+    def test_fresh_acquisition_and_final_scalar_barriers(self):
+        # The old refusal's fields are only a hint: every field is acquired again.
+        m=absent_fixture();N.capture(m,'reads')
+        for at,fmt in N.L.FIELDS.values():self.assertEqual(3,m.reads.count((at,struct.calcsize(fmt))))
+        for stage in (2,3):
+            changes=[(0x80075898,struct.pack('<I',N.L.BASE)),(0x80078BBC,struct.pack('<i',1))]
+            if stage==3:changes += [(at,bytes([m.data[at]^1])+bytes(m.data[at+i] for i in range(1,struct.calcsize(fmt)))) for at,fmt in N.L.FIELDS.values()]
+            for at,replacement in changes:
+                with self.subTest(stage=stage,at=hex(at)):
+                    x=absent_fixture();read=x.read
+                    def changing(address,n):
+                        if address==at and x.reads.count((address,n))==stage-1:x.blob(address,replacement)
+                        return read(address,n)
+                    x.read=changing;r=N.capture(x,'scalar-drift')
+                    self.assertFalse(r['payload_valid']);self.assertFalse(r['gate_reread_consistent'])
+        # A legal health0 -> -1 transition at the final barrier is still refused.
+        m=absent_fixture();read=m.read
+        def negative(at,n):
+            if at==0x80078BBC and m.reads.count((at,n))==2:m.blob(at,struct.pack('<i',-1))
+            return read(at,n)
+        m.read=negative;self.assertFalse(N.capture(m,'health-transition')['payload_valid'])
+
+    def test_every_full_dynamic_row_and_all_fixed_payload_owners_are_reread(self):
+        m=absent_fixture(count=32);r=N.capture(m,'all-rows');self.assertTrue(r['payload_valid'])
+        for i in range(32):self.assertEqual(2,m.reads.count((N.L.BASE+i*88,88)))
+        owners=[(N.L.PLACED,88),(N.L.WPRIVATE,80),(N.L.PRIVATE,0x300),(N.L.RESERVE+0x48,1),(N.L.PETE,4)]
+        owners += [(N.L.POOL+i,1024) for i in range(0,0x2000,1024)]
+        for at,n in owners:self.assertEqual(2,m.reads.count((at,n)))
+        for at,n in owners+[(N.L.BASE+i*88,88) for i in range(32)]:
+            with self.subTest(at=hex(at)):
+                m=absent_fixture(count=32);m.flip[at]=1;r=N.capture(m,'payload-drift')
+                self.assertFalse(r['payload_valid']);self.assertIn('witness changed',r['payload_refused'])
+        m=absent_fixture();m.blob(N.L.BASE,F.row(0x78,0xFE));m.blob(N.L.BASE+88,F.row(0x26,0,N.L.END-24))
+        m.blob(N.L.BASE+176,F.row(status=0xFF));read=m.read
+        def inactive_to_sparx(at,n):
+            if at==N.L.BASE and m.reads.count((at,n))==1:m.blob(at,F.row(0x78,0,N.L.END-48))
+            return read(at,n)
+        m.read=inactive_to_sparx;self.assertFalse(N.capture(m,'inactive-to-Sparx')['payload_valid'])
+
+    def test_new_absence_retains_renderer_floor_and_full_pool_warnings(self):
+        for mutate,warning in ((lambda m:m.word(0x800758B0,1),'renderer'),
+            (lambda m:m.word(0x800757B0,0),'renderer'),
+            (lambda m:m.blob(0x80078A58,struct.pack('<iii',10497,8960,9064)),'outside authored floor'),
+            (lambda m:m.blob(N.L.POOL,bytes(0x2000)),'full pool')):
+            m=absent_fixture();mutate(m);r=N.capture(m,'warnings')
+            self.assertTrue(r['payload_valid']);self.assertTrue(any(warning in a for a in r['attention']))
+            for key in N.FALSE_FLAGS:self.assertIs(r[key],False)
+
+    def test_explicit_original_and_published_source_windows_and_historical_refusal(self):
+        if not ABSENCE_SOURCE:self.skipTest('Explicit source-absence mode only; no BIN/default live reads.')
+        # Full actual original/candidate owners, not fixture bytes or a private
+        # disassembly helper. Close/check every acquired owner after any failure.
+        before=N._source_snapshot();owners=[];errors=[]
+        def logical(owner,offset,length):
+            out=bytearray()
+            while length:
+                n=min(length,2048-offset%2048)
+                out.extend(N._read_at(owner,offset//2048*2352+24+offset%2048,n));offset+=n;length-=n
+            return bytes(out)
+        try:
+            pins=dict(N._pins())
+            for role in ('original_bin','candidate_bin'):owners.append(N.L._open_verified_file(pins[role]))
+            original,candidate=owners
+            town=logical(original,37*2048+0x118E800,0xF800);exe=logical(original,53875*2048,0x66000)
+            self.assertEqual('9bc923cc8d27703537b81b01f51fde351e58aabee87d38a8afc630f1031878a5',N._hash(town))
+            self.assertEqual('a533d75cab8afaae6107ec35a02a9a5fe979a92c7c955f9cf1ee50f693a1b998',N._hash(exe))
+            overlay=logical(candidate,53875*2048,0x11000);issuedexe=logical(candidate,54958*2048,0x66000)
+            self.assertEqual('ad6d952cbf70ab8b1eab53f7637ffd0235271b7b20696956c9406f36f714fa7e',N._hash(overlay))
+            self.assertEqual('a0eb46c2735355c05d66cc33492ed70c6c2174e77e8e8eb6c2ca8fae0f3fc8dc',N._hash(issuedexe))
+            self.assertEqual([0x80083178,0x80087248,0x80052568,0x80040F68],[at for at,b in N.ABSENCE_CODE_WINDOWS])
+            for at,b in N.ABSENCE_CODE_WINDOWS:
+                base,source,issued=(0x8007AA38,town,overlay) if at>=0x8007AA38 else (0x8000F800,exe,issuedexe)
+                self.assertEqual(b,source[at-base:at-base+len(b)]);self.assertEqual(b,issued[at-base:at-base+len(b)])
+            def word(data,base,at):return struct.unpack_from('<I',data,at-base)[0]
+            literal={0x80083178:0x3C058008,0x8008317C:0x24A58BBC,0x80083180:0x8CA20000,
+                0x80083184:0,0x80083188:0x1C40000E,0x8008318C:0,0x800831B4:0x3C018007,
+                0x800831B8:0xAC205898,0x800831BC:0x08021C94,0x800831C0:0x02602021,
+                0x80087250:0x0C01495A,0x80087254:0}
+            for at,w in literal.items():self.assertEqual(w,word(town,0x8007AA38,at))
+            for at,w in {0x80040FE8:0x3C038008,0x80040FEC:0x8C638BBC,0x80040FF0:0,
+                0x80040FF4:0x0460004B,0x80041010:0x2462FFFF,0x80041014:0x3C018008,
+                0x80041018:0xAC228BBC,0x800525CC:0x3C018007,0x800525D0:0x242156A4,
+                0x800525D4:0x8C220000,0x800525D8:0,0x800525DC:0x2042FFFF,0x800525E0:0xAC220000}.items():
+                self.assertEqual(w,word(exe,0x8000F800,at))
+            # No live RAM reconstruction or upgrade of this historical refusal.
+            log=TOOLS.parent/'_local/native-fresh-wizard-separated-runtime-20260908-r01.V9FBOP/observer01.jsonl'
+            self.assertLessEqual(log.stat().st_size,1024*1024);b=log.read_bytes()
+            self.assertEqual('00fe5641fb891d8f6c76c296d692720396cee139c51336b730442c2ef9525372',N._hash(b))
+            records=[json.loads(line) for line in b.splitlines()]
+            sample=next(r for r in records if r.get('kind')=='sample' and r.get('ordinal')==11)
+            self.assertFalse(sample['payload_valid']);self.assertFalse(sample['gate_reread_consistent'])
+            self.assertEqual('Out-of-owner or unaligned cursor: companion_handle',sample['payload_refused'])
+            self.assertNotIn('wizard',sample);self.assertEqual(0,sample['companion_handle'])
+        except BaseException as e:errors.append(e)
+        finally:
+            for owner in owners:
+                try:owner.check(full=True)
+                except BaseException as e:errors.append(e)
+                finally:
+                    try:owner.close()
+                    except BaseException as e:errors.append(e)
+            try:self.assertEqual(before,N._source_snapshot())
+            except BaseException as e:errors.append(e)
+        N._raise(errors)
 
 class ProfileTests(unittest.TestCase):
     def test_old_sources_are_unchanged(self):
@@ -363,8 +566,12 @@ class FinalizationTests(unittest.TestCase):
             owner.close()
 
     def test_fake_orchestration_discards_failed_postcheck_and_checks_every_owner(self):
-        for changed,close_error in ((None,False),(2,False),(3,False),(4,False),(6,False),(None,True),(6,True)):
+        cases=[(changed,close_error,False) for changed,close_error in ((None,False),(2,False),(3,False),(4,False),(6,False),(None,True),(6,True))]
+        cases += [(None,False,True),(6,False,True),(None,True,True),(6,True,True)]
+        actual_capture=N.capture
+        for changed,close_error,actual_absent in cases:
             trace=[];events=[];owners={};counter=0
+            memory=absent_fixture()
             class Owner:
                 def check(self,full=False):trace.append(('file-final',self.name,full))
                 def close(self):trace.append(('file-close',self.name))
@@ -378,7 +585,8 @@ class FinalizationTests(unittest.TestCase):
                     if close_error:raise OSError('socket-close')
             class Client:
                 def __init__(self,_):pass
-                def read(self,at,n):trace.append(('m',at,n));return bytes(n)
+                def read(self,at,n):
+                    trace.append(('m',at,n));return memory.read(at,n) if actual_absent else bytes(n)
             def external(*args):
                 nonlocal counter
                 counter+=1;trace.append(('external',counter))
@@ -386,7 +594,9 @@ class FinalizationTests(unittest.TestCase):
                 connected=len(args)==3
                 return N.L._BoundSession(process,N.L.FileIdentity('/synthetic/DuckStation',1,3,10),7,
                     8 if connected else None,('127.0.0.1',50000) if connected else None,('127.0.0.1',2345) if connected else None,0)
-            def sample(*_):trace.append(('payload',));return {'payload_valid':True,'buffered_secret':'not emitted until postcheck'}
+            def sample(client,label):
+                trace.append(('payload',))
+                return actual_capture(client,label) if actual_absent else {'payload_valid':True,'buffered_secret':'not emitted until postcheck'}
             error=None
             with patch.object(N,'LIVE_READY',True),patch.object(N,'_REVIEWED_PUBLICATION',profile()),patch.object(N,'_REVIEWED_CACHES',()), \
                  patch.object(N,'_source_snapshot',return_value={'fixture':'not source proof'}),patch.object(N,'_open_profile_files',return_value=owners), \
@@ -410,11 +620,17 @@ class FinalizationTests(unittest.TestCase):
             else:
                 self.assertIsNone(error);self.assertEqual('session_closed',events[-1]['kind'])
                 s=next(e for e in events if e['kind']=='sample');self.assertTrue(s['external_session_binding_checked'])
+                if actual_absent:
+                    self.assertTrue(s['payload_valid']);self.assertEqual('absent',s['companion_observation'])
+                    self.assertFalse(s['absence_cause_proven']);self.assertIsNone(s['companion'])
                 for key in N.FALSE_FLAGS:self.assertIs(s[key],False)
                 self.assertLess(trace.index(('external',3)),trace.index(('m',0x8007596C,4)))
                 self.assertLess(trace.index(('payload',)),trace.index(('external',6)))
 
 if __name__=='__main__':
+    if '--source-absence' in sys.argv:
+        if sys.argv.count('--source-absence')!=1:raise SystemExit('Repeated source-absence flag.')
+        ABSENCE_SOURCE=True;sys.argv.remove('--source-absence')
     if '--reviewed-active-spec' in sys.argv:
         if sys.argv.count('--reviewed-active-spec')!=1:raise SystemExit('Repeated reviewed-active-spec flag.')
         REVIEWED_ACTIVE_SPEC=True;sys.argv.remove('--reviewed-active-spec')
