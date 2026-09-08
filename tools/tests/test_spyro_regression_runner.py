@@ -655,6 +655,14 @@ class RunnerOptionsTests(unittest.TestCase):
         self.assert_texture_modes("NativeFreshSavedMaterialSmoke", "NATIVE_FRESH_SAVED_MATERIAL")
         self.assertFalse(any(c[0] == "NativeFreshSavedMaterialSmoke" for c in RUNNER.ADDITIONAL_CORE_CASES))
 
+    def test_saved_level_candidate_is_explicit_source_only_without_native_publication(self):
+        name = "NativeFreshSavedLevelResearchSmoke"
+        self.assert_texture_modes(name, "NATIVE_FRESH_SAVED_LEVEL_RESEARCH", needs_cue=True)
+        self.assertFalse(any(c[0] == name for c in RUNNER.ADDITIONAL_CORE_CASES))
+        project = RUNNER.ROOT / ("src/Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
+        self.assertIn('<SavedLevelProbe Condition="\'$(SavedLevelProbe)\' == \'\'">Full</SavedLevelProbe>',
+                      project.read_text())
+
     def test_textured_research_baseline_requires_bin_cue_and_never_selects_candidate_probe(self):
         name = "NativeId65TexturedResearchSmoke"
         self.assert_texture_modes(name, "NATIVE_ID65_TEXTURED_RESEARCH_BASELINE", needs_cue=True)
@@ -718,6 +726,24 @@ class RunnerOptionsTests(unittest.TestCase):
 
     def test_authored_wizard_default_and_source_never_materialize_candidate(self):
         self.assert_texture_modes("NativeFreshWizardAuthoringSmoke", "FRESH_WIZARD_AUTHORING", needs_cue=True)
+
+    def test_exhaustive_issued_matrix_is_separate_from_shared_source_deadline(self):
+        self.assertEqual([("NativeFreshWizardAuthoringSmoke", "FRESH_WIZARD_AUTHORING_SOURCE_OK", ["--source"])],
+                         [case for case in RUNNER.SOURCE_QA_CASES if case[0] == "NativeFreshWizardAuthoringSmoke"])
+        self.assertNotIn("--source-issued-matrix", repr((RUNNER.CASE_ARGUMENTS, RUNNER.ADDITIONAL_CORE_CASES,
+                                                       RUNNER.SOURCE_QA_CASES, RUNNER.SOURCE_PYTHON_CASES)))
+        source = (RUNNER.ROOT / "src/Spyro.Editor.NativeFreshWizardAuthoringSmoke/Program.cs").read_text()
+        self.assertIn('"--source-issued-matrix"', source)
+        self.assertEqual(1, source.count("await IssuedMatrixCases.Source(bin,Check);"))
+        self.assertIn("if (request.IssuedMatrix)", source)
+        matrix, ordinary = source.split("if (request.IssuedMatrix)", 1)[1].split("\ntry\n{", 1)
+        self.assertIn("await IssuedMatrixCases.Source(bin,Check);", matrix)
+        self.assertIn("SeparatedPublicationCases.FinishAsync", matrix)
+        self.assertIn("return;", matrix)
+        self.assertNotIn("IssuedMatrixCases.Source", ordinary)
+        self.assertIn("ACTUAL_WIZARD_MATRIX_FINAL_OK", source)
+        self.assertIn("FRESH_WIZARD_AUTHORING_FINAL_OK", source)
+        # This is a source/registration boundary check, not a 72-row execution.
 
     def test_saved_document_publisher_modes_never_activate_output(self):
         self.assert_texture_modes("NativeId65FreshDocumentPublicationSmoke", "NATIVE_ID65_FRESH_DOCUMENT_PUBLICATION",
@@ -968,9 +994,10 @@ class RunnerOptionsTests(unittest.TestCase):
             self.assertEqual(free_marker, dict(RUNNER.CORE_CASES).get(name))
             self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
             self.assertEqual([(name, source_marker, arguments)], [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
-        self.assertEqual(frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke"}), RUNNER.SOURCE_QA_CUE_CASES)
-        for name in RUNNER.SOURCE_QA_CUE_CASES - {"NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke"}:
-            self.assertIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        self.assertEqual(frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke", "NativeFreshSavedLevelResearchSmoke"}), RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertEqual({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"},
+                         RUNNER.SOURCE_QA_CUE_CASES & RUNNER.SOURCE_QA_WORKSPACE_CASES,
+                         "Only these CUE consumers also inspect the configured workspace; new detached candidates must not inherit it.")
 
     def test_flight_preferences_are_sourcefree_and_never_a_rom_writer(self):
         self.assertEqual("FREE_FLIGHT_SETTINGS_SMOKE_OK", dict(RUNNER.CORE_CASES).get("FreeFlightSettingsSmoke"))
@@ -1193,6 +1220,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeId65TexturedDiscSmoke": ["--source", "/selected original.bin"],
             "NativeId65TexturedResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],
             "NativeFreshSavedMaterialSmoke": ["--source", "/selected original.bin"],
+            "NativeFreshSavedLevelResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],
             "NativeId65FreshDiscSmoke": ["/selected original.bin"],
             "NativeId65FreshDiscStreamSmoke": ["/selected original.bin"],
             "NativeId65FreshDiscResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],

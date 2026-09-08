@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" />
+    <EmbeddedResource Include="source_material_preview_golden.json" LogicalName="MaterialPreviewSourceOracle" />
   </ItemGroup>
 </Project>

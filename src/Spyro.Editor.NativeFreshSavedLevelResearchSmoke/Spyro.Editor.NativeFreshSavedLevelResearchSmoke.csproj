@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <SavedLevelProbe Condition="'$(SavedLevelProbe)' == ''">Full</SavedLevelProbe>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" /></ItemGroup>
+  <ItemGroup Condition="'$(SavedLevelProbe)' == 'Api'"><Compile Include="ApiProbe.cs" /></ItemGroup>
+  <ItemGroup Condition="'$(SavedLevelProbe)' == 'Full'">
+    <Compile Include="Program.cs" /><Compile Include="CandidateCases.cs" />
+    <Compile Include="SourceOwnerCases.cs" /><Compile Include="LeaseOutcomeCases.cs" />
+    <Compile Include="ActualAttemptCases.cs" />
+    <Compile Include="../Spyro.Editor.NativeFreshSavedMaterialSmoke/Cases.cs" Link="Cases.cs" />
+  </ItemGroup>
+  <Target Name="RequireSavedLevelProbe" BeforeTargets="BeforeBuild"
+          Condition="'$(SavedLevelProbe)' != 'Api' and '$(SavedLevelProbe)' != 'Full'">
+    <Error Text="SavedLevelProbe must be Api or Full; no implicit omitted cases." />
+  </Target>
+</Project>

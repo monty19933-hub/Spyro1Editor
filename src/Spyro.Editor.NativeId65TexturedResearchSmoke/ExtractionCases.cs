@@ -17,12 +17,12 @@ internal static class ExtractionCases
         Check(constructors.Length == 1 && constructors[0].IsPrivate &&
             constructors[0].GetParameters().Select(p => p.ParameterType).SequenceEqual([role!]), "Only private closed Role construction.");
         var adapters = binding.GetNestedTypes(BindingFlags.NonPublic).Where(t => t.BaseType == role).ToArray();
-        Check(adapters.Length == 5 && adapters.All(t => t.IsNestedPrivate && t.IsSealed) &&
-            adapters.Select(t => t.Name).Order().SequenceEqual(new[] { "EditedRole", "SavedRole", "StarterRole", "TexturedRole", "WizardRole" }),
-            "Exactly five named private sealed roles; all four legacy role identities preserved.");
+        Check(adapters.Length == 6 && adapters.All(t => t.IsNestedPrivate && t.IsSealed) &&
+            adapters.Select(t => t.Name).Order().SequenceEqual(new[] { "EditedRole", "SavedLevelRole", "SavedRole", "StarterRole", "TexturedRole", "WizardRole" }),
+            "Exactly six named private sealed roles; all five prior role identities preserved.");
         var expected = new[] { typeof(NativeId65FreshDiscResearchCandidatePlan), typeof(NativeId65FreshEditedDocumentResearchPlan),
             typeof(NativeId65FreshSavedDocumentExportContext), typeof(NativeId65FreshWizardResearchCandidatePlan),
-            typeof(NativeId65FreshTexturedResearchCandidatePlan) };
+            typeof(NativeId65FreshTexturedResearchCandidatePlan), typeof(NativeFreshSavedLevelResearchCandidatePlan) };
         var owners = adapters.Select(t => t.GetFields(PrivateInstance | BindingFlags.DeclaredOnly)).ToArray();
         Check(owners.All(f => f.Length == 1 && f[0].IsInitOnly) &&
             owners.Select(f => f[0].FieldType.FullName).Order().SequenceEqual(expected.Select(t => t.FullName).Order()),

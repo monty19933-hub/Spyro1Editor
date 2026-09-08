@@ -8,23 +8,27 @@ in `native-editor-resume-20260906.md`. Since this original assessment, saved-flo
 UI/export and an edited-floor DuckStation walk were established, as was a bounded
 two-Wizard reward/re-entry sequence. None establishes universal importing.
 
-The latest backend checkpoints add explicit preserved legacy-to-aggregate
-conversion, source-bound initial spawn clearance, authored same-layout Wizard
-composition and two selected static texture sources. They are not yet in R03.
+The latest checkpoints add explicit preserved legacy-to-aggregate conversion,
+source-bound initial spawn/footprint checks, authored same-layout Wizard
+composition, saved two-material compilation and a raw material picker. The
+latest combined all-project Release/default gate is330/zero failures. These
+source changes are not silently rebuilt into the preserved R03/R04 packages.
 The next work order is:
 
-1. Continue the corrected fresh-Wizard lifecycle tests. Separate publication and
-   readback passed, and DuckStation showed vertical descent/stable landing plus
-   attacks on the larger floor. A separately tested fresh absence observer now
-   supports a cold-entry/damage/Sparx-disappearance/death/respawn cycle at10%.
-   Enemy defeat/reward, full-speed behavior and normal portal reentry are next.
-   See `native-fresh-separated-wizard-runtime-r02.md` for the closed result.
-2. Integrate the aggregate document/placed-route workflow into the editor with
-   saved-version export binding, undo/redo and actual edit/save/export/play tests.
-   The existing window now passes219 headless placement/history/persistence
-   checks; aggregate export stays disabled pending actual saved-version binding.
-3. Carry selected static materials through a separately validated textured Disc
-   path, test near/far rendering in game, then expose persisted material controls.
+1. Finish the actual saved whole-level publication path and physical failure
+   gates, then the App edit/save/export/play workflow. The internal first arm
+   passes source138/default83; aggregate export stays disabled in the window.
+   The source picker passes100 checks, prior placement/history UI219 remains
+   green, and saved-material compilation matches five full-image references.
+2. Connect actual source-texture thumbnails (decoder64 source rows passed), then package a separately identified
+   usable preview. Preserve both slots, drafts and source-job ownership through
+   cancellation/close; a thumbnail must not imply destination compatibility.
+3. Extend the current gameplay evidence: the corrected fresh Wizard passed
+   normal-speed defeat, yellow gem pickup and repeat defeat without another
+   gem. The separate fixed two-material floor passed normal-speed movement,
+   fall/respawn, jump/landing and flame. Saved-selected candidate gameplay,
+   ordinary new-level portal integration, audio and save/reboot remain open.
+   See the R04 Wizard and R01 textured runtime reports for their exact scope.
 4. Expand imported dependency families and destination conditions through the
    shared allocation/linking machinery; cover private state, emitted children,
    sound, collision, rewards and re-entry instead of enabling untested rows.

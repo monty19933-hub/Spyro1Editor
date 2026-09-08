@@ -29,6 +29,7 @@ internal static class NativeFreshMaterialPickerUiCases
         {
             Upgrade(Add("upgrade", Document()));
             Atomic(Add("atomic", Document().WithFloorMaterials(Pair(14, 0, 70, 1))));
+            KindAndBaseFailures(Add("kind-base-failures", Document().WithFloorMaterials(Pair(14, 0, 70, 1))));
             PendingAdd(Add("pending-add", Document().WithFloorMaterials(Pair(14, 0, 70, 1))));
             AllIds(Add("all-ids", Document().WithContent(Document().Base,
                 Enumerable.Range(1, 128).Select(i => NativeFreshWizardRouteIntent.Create(
@@ -144,6 +145,40 @@ internal static class NativeFreshMaterialPickerUiCases
         f.Fire("FreshDocumentResearch");
         Check(f.SourceCalls == 0 && f.Label("FreshDocumentStatus").Contains("unavailable", StringComparison.OrdinalIgnoreCase),
             "material editing never enables whole-level export or source access");
+    }
+
+    private static void KindAndBaseFailures(Fixture f)
+    {
+        f.Open(); f.Select(A); var original = f.Window.CurrentAggregateIntent!; byte[] disk = f.Disk();
+        var kind = f.Find<ComboBox>("FreshMaterial0Kind");
+        var items = kind.ItemsSource;
+        object nonString = new();
+        kind.ItemsSource = new object[] { ColorKind, RetailKind, "Unknown material kind", nonString };
+        foreach (object invalid in new object[] { "Unknown material kind", nonString })
+        {
+            kind.SelectedItem = invalid; Pump();
+            Check(ReferenceEquals(kind.SelectedItem, invalid), "fixture installs actual unknown/non-string Kind, not just null selection");
+            f.Set("FreshHeading", "75"); f.Set("FreshWizardOriginZ", "8910"); f.Retail(1, 14, "1");
+            f.Click("FreshDocumentApply");
+            Check(ReferenceEquals(f.Window.CurrentAggregateIntent, original) &&
+                ReferenceEquals(kind.SelectedItem, invalid) && f.Text("FreshHeading") == "75" &&
+                f.Text("FreshWizardOriginZ") == "8910" && f.Disk().SequenceEqual(disk),
+                "unknown/non-string Kind refuses the entire changed Base/route/pair and retains exact raw selection");
+        }
+        kind.ItemsSource = items; kind.SelectedItem = RetailKind; Pump();
+        f.Click("FreshDocumentUndo");
+        f.Set("FreshFloorWidth", "15"); f.Set("FreshWizardOriginZ", "8910"); f.Retail(0, 70, "0");
+        foreach (string action in new[] { "FreshDocumentApply", "FreshDocumentSave" })
+        {
+            f.Click(action);
+            Check(ReferenceEquals(f.Window.CurrentAggregateIntent, original) &&
+                ReferenceEquals(f.Window.CurrentAggregateIntent!.Base, original.Base) &&
+                ReferenceEquals(f.Window.CurrentAggregateIntent.FloorMaterials, original.FloorMaterials) &&
+                f.Window.CurrentAggregateIntent.Placements.Select(p => p.EditorId).SequenceEqual(new[] { A, B }) &&
+                f.Text("FreshFloorWidth") == "15" && f.Text("FreshMaterial0TextureId") == "0" &&
+                f.Text("FreshWizardOriginZ") == "8910" && f.Disk().SequenceEqual(disk) && f.SourceCalls == 0,
+                "invalid Base with valid changed materials leaves all applied Base/route/pair/IDs and disk unchanged");
+        }
     }
 
     private static void PendingAdd(Fixture f)

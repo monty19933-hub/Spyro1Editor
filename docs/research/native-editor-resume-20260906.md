@@ -34,13 +34,15 @@ physical publication and native tests are now complete as bounded below.
 None of these changes is silently in R03.
 The old source contracts and historical failed records remain preserved.
 
-Latest full all-project Release/default gate:328/zero failures, including saved
-material compilation, raw picker, initial footprint and prior fixed-a candidate.
+Latest full all-project Release/default gate:330/zero failures, including the
+saved whole-level Candidate, actual-source preview wrapper, raw picker and
+initial footprint, while preserving the five prior publication roles.
 Exact summary:
-`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-uw03anzv/summary.json`.
-Root17031 CLOSED0. Final picker88 ran against rebuilt wording and Root viewed
-both regenerated1120x800 PNGs in `spyro-material-picker-ui-tzE9dR` under the same
-temporary parent. Runner68 and all Python223/13 explicit skips pass. No live
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-ne_jn4ap/summary.json`.
+Root77331 CLOSED0. Final picker100 includes unknown kinds and reverse invalid-Base
+atomicity; Root viewed both regenerated1120x800 PNGs in
+`spyro-material-picker-ui-KYgopu` under the same temporary parent. Runner70 and
+all Python225/13 explicit skips pass. No live
 editor/DuckStation/launch helper was found on the fresh post-gate process check.
 Root separately replayed source-backed textured baseline193/complete original
 final checks, all66 runner tests, and UI219/legacy65/research333/session138.
@@ -70,20 +72,35 @@ restored and all nine protected hashes unchanged. See native-fresh-textured-runt
 Saved-material bridge source13 is now CLOSED220/35, free43/17, all five full-image
 goldens unchanged, originals final/cmp exact. Earlier wrong held-read-guard
 assumptions were corrected in tests only; Core197 stayed reviewed/unchanged.
-Raw material-picker UI is now implemented and focused88/old material48/219/
+Raw material-picker UI is now implemented and focused100/old material48/219/
 session138/legacy65/research333 pass. H's actual-issued72-row Wizard/46-track
 comparison is CLOSED0:67 initial-policy admissions/5 refusals, source447/final449
 and original BIN/CUE unchanged. Row durations sum1014.805s; this is not72 native
 gameplay runs. The strict source-owned initial footprint passes new58/25 and
 actual source200/95, with historical diagnostic SHA unchanged. See
 `native-fresh-saved-material-picker.md` and `native-fresh-wizard-issued-matrix.md`.
-Aggregate export remains
-disabled until its full lifecycle is bound; one closed saved-level publication
-path is in private preparation rather than another class per authored recipe.
+Aggregate export remains disabled in the App. One closed saved-level publication
+path is now implemented rather than another class per authored recipe.
 Root/H review found and corrected a missing first final-artifact attempt after
 actual commit plus failed saved guard completion in that private draft. The
-exact old five-role/source-owner inverse passed52, independently replayed by
-H and Root. This is not compiled or physical new-publication evidence yet.
+exact old five-role/source-owner inverse passed52 privately, then85 against actual
+promoted source, independently replayed by Root. New Candidate source138/35 and
+default83/20 pass, with all five complete-image goldens and all original/CUE
+finals. All five older publishers passed inclusive builds/default/source gates
+with their previous image/receipt/CUE/plan goldens unchanged. The exact new
+saved-selected heading128/music20 recipe matches2533ee96...b75b70/1253 sectors.
+Physical failure gates, Publish/new-process Verify and gameplay remain pending.
+See `native-fresh-saved-level-publication.md` for the actual source evidence.
+The new source-preview wrapper separately matches64 original-only RGBA literals;
+actual source268/total673, free405 and prior UI gates pass. After the330 gate,
+H's test-only first-invalid LQ cache-index correction passed build/free406;
+the source comparison and immutable literal were unchanged. Its explicit App
+inspection worker and UI are not yet implemented. See
+`native-fresh-material-source-preview.md`. The exhaustive72-row Wizard matrix
+now has a strict separate opt-in CLI so its17-minute run does not consume the
+ordinary source suite's shared deadline. New dispatch default164, malformed CLI9
+and unchanged ordinary source288/final290 passed in90s. The unchanged72-row
+chain has not been rerun through that new CLI; its earlier full evidence stands.
 A separate corrected-Wizard R04 native session now passed normal100% flame
 defeat, yellow-gem pickup LAB10/10,total58→68, edge fall/respawn, second defeat
 with purple repeat-kill orb and unchanged final10/10,total68. PID50221/exec48620

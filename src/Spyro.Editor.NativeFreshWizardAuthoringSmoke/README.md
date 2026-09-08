@@ -33,6 +33,43 @@ explicit and requires the user's matching original game files. The source
 success marker precedes final cleanup, so require a successful process exit and
 the `FRESH_WIZARD_AUTHORING_FINAL_OK` marker as well.
 
+## Explicit exhaustive issued matrix
+
+The 72-row / 46-track source comparison is a separate opt-in. It is **not** run
+by default, by ordinary `--source`, or by the common regression runner's shared
+source-QA deadline. It needs about 17 minutes on the measured host:
+
+```sh
+dotnet run --project src/Spyro.Editor.NativeFreshWizardAuthoringSmoke -c Release --no-build -- --source-issued-matrix /absolute/original.bin /absolute/original.cue
+```
+
+This exact three-token mode runs only the matrix source chain, not the ordinary
+source suite or publication. Blank, NUL, option-like and duplicate BIN/CUE paths,
+unknown/mixed modes and extra arguments refuse before file I/O. Relative paths
+remain supported and are resolved before either original is opened.
+
+The unchanged matrix compares actual issued bytes against 72 independently
+derived original-source expectation rows, including all 46 music tracks and 67
+initial-footprint-admitted rows. Every track travels through its own actual
+Compilation → Resource → Scene → Host → Body → EXE → Disc ancestry. Full forward
+image hashes are independently expected; the production inverse is a round trip,
+not a second independent inverse. There is no Candidate or physical-image output.
+
+The matrix retains its held/current-image whole-source checks and closure. The
+new outer arm authenticates both original BIN and CUE and independently attempts
+both full named-file final checks even after a failed initial check or matrix
+action. Errors remain primary-first. Require exit 0 plus both
+`ACTUAL_WIZARD_MATRIX_SOURCE_OK` and `ACTUAL_WIZARD_MATRIX_FINAL_OK`; ordinary
+authoring completion markers are not emitted by this arm.
+
+The full 72-row implementation already passed before this dispatch split:
+72 rows, 46 tracks, 67 admissions; summed logged row durations 1014.805 seconds.
+That retained run used the former combined `--source` dispatch. It is evidence
+for the unchanged matrix, not an execution claim for this new standalone CLI.
+Neither route asserts future movement safety, native gameplay, audio or export
+approval. The ordinary source suite retains its historical sequential final
+checks and error ordering; the new arm does not retroactively strengthen them.
+
 ## Explicit separated candidate
 
 The separate reviewed modes accept exactly four arguments. They are never

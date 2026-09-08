@@ -55,10 +55,12 @@ matched their pre-test hashes. No original card was replaced.
   observed at normal speed. See the [textured-floor test](native-fresh-textured-runtime-r01.md).
 - The whole-level document now preserves two material selections through edits,
   undo/redo and save/reopen. It labels selections honestly as unrendered; a
-  material picker now passes88 headless checks, including both ordered slots
+  material picker now passes100 headless checks, including both ordered slots
   and whole-form edit/save protection. Actual saved-material compilation
   passes five complete-image goldens, including ordered donors and edited
-  heading/music. Aggregate publication and source previews are next; the
+  heading/music. Saved aggregate publication is now source-tested, and the
+  preview decoder matches64 independent source-image references. Physical
+  publication tests and the preview's window integration are next; the
   successful gameplay candidate still uses a fixed recipe. These new controls
   are in source, not yet in the preserved R04 package. See the
   [material-picker checkpoint](native-fresh-saved-material-picker.md).
@@ -121,8 +123,9 @@ texture previews, and native validation/packaging of the placement window.
 The authored Wizard source matrix completed72 recipes across46 music selections;
 that is complete-image/initial-footprint evidence, not72 gameplay tests. See the
 [issued-matrix report](native-fresh-wizard-issued-matrix.md).
-Saved aggregate export also needs a final project/document lease, so a valid
-draft cannot be exported against a different saved revision.
+The new saved-aggregate backend holds the actual final project/document guard
+at publication. Physical interrupted-export checks and the App integration
+remain to be completed before enabling that action in the window.
 
 Universal importing still requires each object's behavior, effects, sound,
 collision, animation, private/shared state and resource needs to remain correct
@@ -130,11 +133,12 @@ in each destination. A model catalog alone cannot provide that. Multiple
 editable new-level slots, normal portal integration, save/reboot compatibility,
 animated textures and arbitrary object/material mixtures remain open.
 
-Latest completed all-project Release gate: **328 checks, zero failures**, including
-the saved-material bridge, raw picker, initial footprint and prior texture
-publication/failure-recovery controls. Fixed-recipe exporter checkpoint: f8b382c. These latest source
+Latest completed all-project Release gate: **330 checks, zero failures**, including
+the saved-level Candidate, source-preview decoder, raw picker, initial footprint
+and prior texture publication/failure-recovery controls. Fixed-recipe exporter
+checkpoint: f8b382c. These latest source
 changes are not in the preserved R03/R04 apps.
 These are engineering
-checks, not328 gameplay runs. The [engineering handoff](native-editor-resume-20260906.md)
+checks, not330 gameplay runs. The [engineering handoff](native-editor-resume-20260906.md)
 and [V6 readiness assessment](v6-readiness-20260906.md) retain the detailed
 boundaries and next steps.

@@ -9,11 +9,13 @@ internal static class Program
             throw new ArgumentException("Usage: NativeId65StaticTerrainTextureSmoke [--source original.bin]");
         NativeScalarCases.Run(Check, Reject);
         StaticSourceCases.Free(Check, Reject);
+        SourcePreviewCases.Free(Check, Reject);
         Console.WriteLine($"NATIVE_ID65_STATIC_TERRAIN_TEXTURE_FREE_OK checks={_checks}");
         if (args.Length == 2)
         {
             int before = _checks;
             StaticSourceCases.Source(args[1], Check, Reject);
+            SourcePreviewCases.Source(args[1], Check, Reject);
             Console.WriteLine($"NATIVE_ID65_STATIC_TERRAIN_TEXTURE_SOURCE_OK checks={_checks - before} total={_checks}");
         }
         return 0;

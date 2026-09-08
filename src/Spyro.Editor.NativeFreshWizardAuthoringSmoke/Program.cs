@@ -3,23 +3,45 @@ using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
 
 if (SeparatedPublicationCases.IsReviewedMode(args)) { await SeparatedPublicationCases.RunAsync(args); return; }
-if (args.Length != 0 && (args.Length != 3 || args[0] != "--source"))
-    throw new ArgumentException("Usage: NativeFreshWizardAuthoringSmoke [--source original.bin original.cue]");
+var request = AuthoringSourceArguments.Parse(args);
 int checks = 0;
-using (var cancelled = new CancellationTokenSource())
+if (request?.IssuedMatrix != true)
 {
-    cancelled.Cancel();
-    await Refuse<OperationCanceledException>(() => NativeId65FreshWizardResearchResourcePlan.CaptureAuthoredAsync(null!, null!, null!, cancelled.Token));
-    await Refuse<OperationCanceledException>(() => NativeId65FreshWizardResearchScenePlan.CaptureAuthoredAsync(null!, null!, null!, null!, null!, cancelled.Token));
+    await AuthoringSourceArgumentCases.Run(Check);
+    using (var cancelled = new CancellationTokenSource())
+    {
+        cancelled.Cancel();
+        await Refuse<OperationCanceledException>(() => NativeId65FreshWizardResearchResourcePlan.CaptureAuthoredAsync(null!, null!, null!, cancelled.Token));
+        await Refuse<OperationCanceledException>(() => NativeId65FreshWizardResearchScenePlan.CaptureAuthoredAsync(null!, null!, null!, null!, null!, cancelled.Token));
+    }
+    await Refuse<ArgumentNullException>(() => NativeId65FreshWizardResearchResourcePlan.CaptureAuthoredAsync("must-not-open", null!, null!));
+    await Refuse<ArgumentNullException>(() => NativeId65FreshWizardResearchScenePlan.CaptureAuthoredAsync("must-not-open", null!, null!, null!, null!));
+    await SeparatedCandidateCases.Free(Check);
+    await SeparatedPublicationArgumentCases.Run(Check);
+    SavedWizardBindingCases.Free(Check);
+    Console.WriteLine($"FRESH_WIZARD_AUTHORING_FREE_OK checks={checks}");
 }
-await Refuse<ArgumentNullException>(() => NativeId65FreshWizardResearchResourcePlan.CaptureAuthoredAsync("must-not-open", null!, null!));
-await Refuse<ArgumentNullException>(() => NativeId65FreshWizardResearchScenePlan.CaptureAuthoredAsync("must-not-open", null!, null!, null!, null!));
-await SeparatedCandidateCases.Free(Check);
-await SeparatedPublicationArgumentCases.Run(Check);
-SavedWizardBindingCases.Free(Check);
-Console.WriteLine($"FRESH_WIZARD_AUTHORING_FREE_OK checks={checks}");
-if (args.Length == 0) return;
-string bin = Path.GetFullPath(args[1]), cue = Path.GetFullPath(args[2]);
+if (request == null) return;
+string bin = request.Image, cue = request.Cue;
+if (request.IssuedMatrix)
+{
+    // Explicit exhaustive opt-in, outside the runner's ordinary source budget.
+    // Keep the old source suite and its error ordering below unchanged.
+    const string imagePin = "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37";
+    const string cuePin = "05142502c75d3a0b6374003a8fe41893d6faf0ad55863ff0b62a265a1b152766";
+    await SeparatedPublicationCases.FinishAsync(async () =>
+    {
+        Check(FileHash(bin) == imagePin, "Matrix complete original image identity.");
+        Check(FileHash(cue) == cuePin, "Matrix complete original CUE identity.");
+        await IssuedMatrixCases.Source(bin,Check);
+        return "";
+    }, [
+        () => Check(FileHash(bin) == imagePin, "Matrix original image preserved through final source checks."),
+        () => Check(FileHash(cue) == cuePin, "Matrix original CUE preserved through final source checks.")
+    ]);
+    Console.WriteLine($"ACTUAL_WIZARD_MATRIX_FINAL_OK checks={checks} originalAndCueUnchanged=true outputWritten=false");
+    return;
+}
 string originalHash = FileHash(bin), cueHash = FileHash(cue);
 Check(originalHash == "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37", "Complete original identity.");
 try
@@ -99,7 +121,6 @@ try
     Check(otherLayout.FreshResourceAncestor.CopyDataComponents().Length!=0x8C8,"A genuine valid fresh compilation has a different copy-layout size.");
     await Refuse<InvalidDataException>(()=>NativeId65FreshWizardResearchResourcePlan.CaptureAuthoredAsync("must-not-open",otherLayout,family));
     Check(!disc.RuntimeVerified && !disc.PublicationApproved && !disc.NormalCreateBinEnabled, "Detached composition is not runtime/publication authority.");
-    await IssuedMatrixCases.Source(bin,Check);
     Console.WriteLine($"FRESH_WIZARD_AUTHORING_SOURCE_OK checks={checks} body={Hash(disc.CopyBody())} scene={Hash(scene.CopyScene())} data={Hash(newData)} disc={disc.PlanSha256} outputWritten=false");
 }
 finally
@@ -124,3 +145,22 @@ async Task Refuse<T>(Func<Task> action) where T : Exception
 }
 string FileHash(string path) { using var file = File.OpenRead(path); return Convert.ToHexStringLower(SHA256.HashData(file)); }
 string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+internal static class AuthoringSourceArguments
+{
+    internal sealed record Request(bool IssuedMatrix, string Image, string Cue);
+
+    internal static Request? Parse(string[] args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        if (args.Length == 0) return null;
+        if (args.Length != 3 || args[0] is not ("--source" or "--source-issued-matrix") ||
+            args.Skip(1).Any(value => string.IsNullOrWhiteSpace(value) || value.Contains('\0') ||
+                value.StartsWith("--", StringComparison.Ordinal)))
+            throw new ArgumentException("Usage: NativeFreshWizardAuthoringSmoke [--source BIN CUE | --source-issued-matrix BIN CUE]");
+        string image = Path.GetFullPath(args[1]), cue = Path.GetFullPath(args[2]);
+        if (string.Equals(image, cue, StringComparison.Ordinal))
+            throw new ArgumentException("Select distinct original BIN and CUE paths.");
+        return new(args[0] == "--source-issued-matrix", image, cue);
+    }
+}

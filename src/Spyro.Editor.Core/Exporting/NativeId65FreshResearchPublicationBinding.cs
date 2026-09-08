@@ -37,8 +37,15 @@ internal sealed class NativeId65FreshResearchPublicationBinding
         return new(new TexturedRole(plan));
     }
 
+    internal static NativeId65FreshResearchPublicationBinding FromSavedLevel(NativeFreshSavedLevelResearchCandidatePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        return new(new SavedLevelRole(plan));
+    }
+
+    internal NativeFreshSavedLevelResearchCandidatePlan? SavedLevelPlan => _role.SavedLevelPlan;
     internal NativeId65FreshTexturedResearchCandidatePlan? TexturedPlan => _role.TexturedPlan;
-    internal bool PreserveAnyPostcommitStageOwner => WizardPlan != null || TexturedPlan != null;
+    internal bool PreserveAnyPostcommitStageOwner => WizardPlan != null || TexturedPlan != null || SavedLevelPlan != null;
     internal NativeId65FreshWizardResearchCandidatePlan? WizardPlan => _role.WizardPlan;
     internal bool TracksCommittedFailure => _role.TracksCommittedFailure;
     internal NativeId65FreshSavedDocumentExportContext? SavedContext => _role.SavedContext;
@@ -64,6 +71,7 @@ internal sealed class NativeId65FreshResearchPublicationBinding
     // externally implementable source authority or caller-selected policy.
     private abstract class Role
     {
+        internal virtual NativeFreshSavedLevelResearchCandidatePlan? SavedLevelPlan => null;
         internal abstract NativeId65FreshTexturedResearchCandidatePlan? TexturedPlan { get; }
         internal abstract NativeId65FreshWizardResearchCandidatePlan? WizardPlan { get; }
         internal abstract bool TracksCommittedFailure { get; }
@@ -220,4 +228,32 @@ internal sealed class NativeId65FreshResearchPublicationBinding
         internal override NativeId65FreshDiscVerification VerifyImage(string path, CancellationToken token) => _plan.VerifyImage(path, token);
         internal override void WriteNewImage(string path, CancellationToken token, Action firstSector) => _plan.WriteNewImage(path, token, firstSector);
     }
+
+    private sealed class SavedLevelRole : Role
+    {
+        private readonly NativeFreshSavedLevelResearchCandidatePlan _plan;
+        internal SavedLevelRole(NativeFreshSavedLevelResearchCandidatePlan plan) => _plan = plan;
+        internal override NativeFreshSavedLevelResearchCandidatePlan? SavedLevelPlan => _plan;
+        internal override NativeId65FreshTexturedResearchCandidatePlan? TexturedPlan => null;
+        internal override NativeId65FreshWizardResearchCandidatePlan? WizardPlan => null;
+        internal override bool TracksCommittedFailure => true;
+        internal override NativeId65FreshSavedDocumentExportContext? SavedContext => null;
+        internal override string SourceImagePath => _plan.SourceImagePath;
+        internal override string SourceCuePath => _plan.SourceCuePath;
+        internal override string PlanSha256 => _plan.PlanSha256;
+        internal override string Label => "Saved whole-level LAB";
+        internal override string ImageName => NativeFreshSavedLevelResearchCandidatePlan.ImageName;
+        internal override string CueName => NativeFreshSavedLevelResearchCandidatePlan.CueName;
+        internal override string ReceiptName => NativeFreshSavedLevelResearchCandidatePlan.ReceiptName;
+        internal override string[] OutputNames => NativeFreshSavedLevelResearchCandidatePlan.OutputNames;
+        internal override string LeaseName => ".native-fresh-saved-level.writer.lock";
+        internal override string StagePrefix => ".native-fresh-saved-level-stage-";
+        internal override CancellationToken PostCommitToken(CancellationToken supplied) => CancellationToken.None;
+        internal override Task RequireFreshAsync(CancellationToken token) => _plan.RequireFreshAsync(token);
+        internal override byte[] CopyCueBytes() => _plan.CopyCueBytes();
+        internal override byte[] BuildReceipt(NativeId65FreshDiscVerification verified) => _plan.BuildReceipt(verified);
+        internal override NativeId65FreshDiscVerification VerifyImage(string path, CancellationToken token) => _plan.VerifyImage(path, token);
+        internal override void WriteNewImage(string path, CancellationToken token, Action firstSector) => _plan.WriteNewImage(path, token, firstSector);
+    }
+
 }
