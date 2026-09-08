@@ -34,8 +34,9 @@ publication remains a later gate. None of these changes is silently in R03.
 The old source contracts and historical failed records remain preserved.
 
 Latest full all-project Release/default gate:325/zero failures, including new
-aggregate UI219 and textured-research baseline25. Exact summary:
-`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-32b5q8qm/summary.json`.
+aggregate UI219, textured-research baseline34 and aggregate final-read guards.
+Exact summary:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-458465r0/summary.json`.
 Root separately replayed source-backed textured baseline193/complete original
 final checks, all66 runner tests, and UI219/legacy65/research333/session138.
 Four internal lineage-retention lines and old binding/Measure characterization
@@ -43,9 +44,14 @@ are independently peer-reviewed; actual new texture publication remains absent.
 R04 was built from clean60f6d6f and independently passed288 bundle/4387 seed/
 ten protected-tree/nineteen pin checks, plus native contract and packaged PNG.
 Normal launch reached a Documents permission prompt; John was asked to handle
-it, with no bypass. R03 remains unchanged. Current parallel work is the exact
-extraction-only shared streaming/closed binding step and a neutral saved
-aggregate final-read guard. Neither enables new publication yet. A minor test
+it, with no bypass. R03 remains unchanged. The neutral saved aggregate final-read
+guard is committed ec29521; exact shared streaming/closed binding extraction is
+committed79915ee. Both passed full Root/peer review and the combined325 gate.
+Neither enables new publication yet. Current tests-first parallel work is a
+guarded fixed-a textured candidate, schema2 two-slot material persistence with
+existing-editor anti-loss handling, and actual saved aggregate/Wizard candidate
+pairing. Aggregate export remains disabled until its full lifecycle is bound.
+A minor test
 comment/README clarification after325 states tiny cleanup is name/link/byte
 bound, not inode/hostile-race authentication; no behavior changed.
 
