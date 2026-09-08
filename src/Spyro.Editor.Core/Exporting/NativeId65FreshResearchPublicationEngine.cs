@@ -80,6 +80,29 @@ internal static class NativeId65FreshResearchPublicationEngine
             wizardUnconfirmedCheckpoint: checkpoint);
     }
 
+    internal static async Task<NativeId65FreshDiscResearchPublication> PublishTexturedPostcommitForSmokeAsync(
+        NativeId65FreshResearchPublicationBinding plan, string directory,
+        Action<NativeId65FreshTexturedPostcommitPoint, string> checkpoint, CancellationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if (plan.TexturedPlan == null)
+            throw new InvalidDataException("Postcommit exercise requires an actual fresh textured binding.");
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        return await PublishCoreAsync(plan, directory, NativeId65FreshResearchFault.None, null, token,
+            texturedPostcommitCheckpoint: checkpoint);
+    }
+
+    internal static async Task<NativeId65FreshDiscResearchPublication> PublishTexturedUnconfirmedForSmokeAsync(
+        NativeId65FreshResearchPublicationBinding plan, string directory, Action<string> checkpoint, CancellationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if (plan.TexturedPlan == null)
+            throw new InvalidDataException("Unconfirmed exercise requires an actual fresh textured binding.");
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        return await PublishCoreAsync(plan, directory, NativeId65FreshResearchFault.None, null, token,
+            texturedUnconfirmedCheckpoint: checkpoint);
+    }
+
     private static async Task<NativeId65FreshDiscResearchPublication> PublishCoreAsync(NativeId65FreshResearchPublicationBinding plan,
         string outputDirectory, NativeId65FreshResearchFault fault,
         Action<NativeId65FreshResearchFault, string>? checkpoint, CancellationToken token,
@@ -87,7 +110,9 @@ internal static class NativeId65FreshResearchPublicationEngine
         Action<NativeId65FreshDocumentResearchFault, string>? documentCheckpoint = null,
         Action<NativeId65FreshDocumentPostcommitPoint, string>? postcommitCheckpoint = null,
         Action<NativeId65FreshWizardPostcommitPoint, string>? wizardPostcommitCheckpoint = null,
-        Action<string>? wizardUnconfirmedCheckpoint = null)
+        Action<string>? wizardUnconfirmedCheckpoint = null,
+        Action<NativeId65FreshTexturedPostcommitPoint, string>? texturedPostcommitCheckpoint = null,
+        Action<string>? texturedUnconfirmedCheckpoint = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         if (!Enum.IsDefined(fault)) throw new InvalidDataException($"Unknown {plan.Label} research fault.");
@@ -99,6 +124,8 @@ internal static class NativeId65FreshResearchPublicationEngine
             throw new InvalidDataException("Wizard postcommit exercise cannot bind another publisher kind.");
         if (wizardUnconfirmedCheckpoint != null && plan.WizardPlan == null)
             throw new InvalidDataException("Wizard unconfirmed exercise cannot bind another publisher kind.");
+        if ((texturedPostcommitCheckpoint != null || texturedUnconfirmedCheckpoint != null) && plan.TexturedPlan == null)
+            throw new InvalidDataException("Textured exercise cannot bind another publisher kind.");
         token.ThrowIfCancellationRequested();
         string root = Resolve(plan, outputDirectory);
         RequireEmpty(plan, root); // Complete sets may only be separately verified.
@@ -163,6 +190,14 @@ internal static class NativeId65FreshResearchPublicationEngine
                     if (!File.Exists(blockingLock) || Directory.Exists(blockingLock))
                         throw new InvalidDataException("Unconfirmed exercise must install a real non-linked transaction lock before invocation.");
                 }
+                if (texturedUnconfirmedCheckpoint != null)
+                {
+                    string blockingLock = Path.Combine(root, ".export-publication.lock");
+                    texturedUnconfirmedCheckpoint(blockingLock);
+                    RequireNoLink(plan, blockingLock);
+                    if (!File.Exists(blockingLock) || Directory.Exists(blockingLock))
+                        throw new InvalidDataException("Textured unconfirmed exercise must install a real non-linked transaction lock before invocation.");
+                }
                 publication = attempt.Invoke(root,
                     plan.OutputNames.Select(name => new ExportArtifactReplacement(
                         Path.Combine(root, name), Path.Combine(stage, name))).ToArray(), token);
@@ -193,6 +228,8 @@ internal static class NativeId65FreshResearchPublicationEngine
             postcommitCheckpoint?.Invoke(NativeId65FreshDocumentPostcommitPoint.AfterCommit,
                 Path.Combine(root, plan.ImageName));
             wizardPostcommitCheckpoint?.Invoke(NativeId65FreshWizardPostcommitPoint.AfterCommit,
+                Path.Combine(root, plan.ImageName));
+            texturedPostcommitCheckpoint?.Invoke(NativeId65FreshTexturedPostcommitPoint.AfterCommit,
                 Path.Combine(root, plan.ImageName));
             // Own lease/empty stage and typed retained recovery can exist here.
             // Separate Verify permits only the exact three-artifact set.
@@ -245,6 +282,8 @@ internal static class NativeId65FreshResearchPublicationEngine
                         postcommitCheckpoint?.Invoke(NativeId65FreshDocumentPostcommitPoint.BeforeStageCleanup, stage);
                     if (plan.WizardPlan != null && published && completed != null)
                         wizardPostcommitCheckpoint?.Invoke(NativeId65FreshWizardPostcommitPoint.BeforeStageCleanup, stage);
+                    if (plan.TexturedPlan != null && published && completed != null)
+                        texturedPostcommitCheckpoint?.Invoke(NativeId65FreshTexturedPostcommitPoint.BeforeStageCleanup, stage);
                     RequireNoLink(plan, stage);
                     // PublishNew moved all three owned files. ANY subsequently
                     // present Wizard/textured stage entry is a new owner, even a reused

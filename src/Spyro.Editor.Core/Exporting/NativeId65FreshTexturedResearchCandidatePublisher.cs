@@ -1,4 +1,11 @@
+using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("Spyro.Editor.NativeId65TexturedResearchSmoke")]
+
 namespace Spyro.Editor.Core.Exporting;
+
+internal enum NativeId65FreshTexturedResearchFault { None, AfterFirstSector, AfterImageWrite, BeforePublication }
+internal enum NativeId65FreshTexturedPostcommitPoint { AfterCommit, BeforeStageCleanup }
 
 /// <summary>PublishNew actually returned, but final verification or accounted
 /// cleanup failed. Retained paths are evidence, not verified success.</summary>
@@ -29,6 +36,48 @@ public sealed class NativeId65FreshTexturedResearchCommittedException : IOExcept
 /// transaction. Trusted ancestors/cooperating writers required; no runtime approval.</summary>
 public static class NativeId65FreshTexturedResearchCandidatePublisher
 {
+    internal static Task<NativeId65FreshDiscResearchPublication> PublishForSmokeAsync(
+        NativeId65FreshTexturedResearchCandidatePlan plan, string directory, NativeId65FreshTexturedResearchFault fault,
+        Action<NativeId65FreshTexturedResearchFault, string>? checkpoint = null, CancellationToken token = default)
+    {
+        if (fault == NativeId65FreshTexturedResearchFault.None)
+            throw new InvalidDataException("A textured staging exercise must force a precommit fault.");
+        return PublishFaultCore(plan, directory, fault, checkpoint, token);
+    }
+    private static async Task<NativeId65FreshDiscResearchPublication> PublishFaultCore(
+        NativeId65FreshTexturedResearchCandidatePlan plan, string directory, NativeId65FreshTexturedResearchFault fault,
+        Action<NativeId65FreshTexturedResearchFault, string>? checkpoint, CancellationToken token)
+    {
+        var binding = NativeId65FreshResearchPublicationBinding.FromTextured(plan);
+        var shared = fault switch
+        {
+            NativeId65FreshTexturedResearchFault.AfterFirstSector => NativeId65FreshResearchFault.AfterFirstSector,
+            NativeId65FreshTexturedResearchFault.AfterImageWrite => NativeId65FreshResearchFault.AfterImageWrite,
+            NativeId65FreshTexturedResearchFault.BeforePublication => NativeId65FreshResearchFault.BeforePublication,
+            _ => throw new InvalidDataException("Unknown textured precommit fault.")
+        };
+        return await NativeId65FreshResearchPublicationEngine.PublishAsync(binding, directory, shared,
+            checkpoint == null ? null : (point, image) => checkpoint(point switch
+            {
+                NativeId65FreshResearchFault.AfterFirstSector => NativeId65FreshTexturedResearchFault.AfterFirstSector,
+                NativeId65FreshResearchFault.AfterImageWrite => NativeId65FreshTexturedResearchFault.AfterImageWrite,
+                NativeId65FreshResearchFault.BeforePublication => NativeId65FreshTexturedResearchFault.BeforePublication,
+                _ => throw new InvalidDataException("Unknown shared precommit checkpoint.")
+            }, image), token);
+    }
+
+    internal static async Task<NativeId65FreshDiscResearchPublication> PublishPostcommitForSmokeAsync(
+        NativeId65FreshTexturedResearchCandidatePlan plan, string directory,
+        Action<NativeId65FreshTexturedPostcommitPoint, string> checkpoint, CancellationToken token = default) =>
+        await NativeId65FreshResearchPublicationEngine.PublishTexturedPostcommitForSmokeAsync(
+            NativeId65FreshResearchPublicationBinding.FromTextured(plan), directory, checkpoint, token);
+
+    internal static async Task<NativeId65FreshDiscResearchPublication> PublishUnconfirmedForSmokeAsync(
+        NativeId65FreshTexturedResearchCandidatePlan plan, string directory, Action<string> checkpoint,
+        CancellationToken token = default) =>
+        await NativeId65FreshResearchPublicationEngine.PublishTexturedUnconfirmedForSmokeAsync(
+            NativeId65FreshResearchPublicationBinding.FromTextured(plan), directory, checkpoint, token);
+
     public static async Task<NativeId65FreshDiscResearchPublication> PublishAsync(
         NativeId65FreshTexturedResearchCandidatePlan plan, string outputDirectory, CancellationToken token = default) =>
         await NativeId65FreshResearchPublicationEngine.PublishAsync(

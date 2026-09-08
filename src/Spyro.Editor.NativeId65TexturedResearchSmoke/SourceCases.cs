@@ -37,15 +37,18 @@ internal static class SourceCases
 
     private static async Task Core(string bin, string cue)
     {
+        await TexturedPublicationArgumentCases.ActualInitialSourceFailure();
         var aIntent = NativeId65FreshDocumentIntent.Create(8448, 8448, 8704, 1024, 1024, 8960, 8960, 64,
             new(80,128,112), new(128,96,64), 19);
         var a = await NativeId65FreshDocumentCompilation.CaptureAsync(bin, aIntent);
         await LineageCases.Source(bin, a);
-        await CandidateSourceCases.Run(bin, cue, a);
+        var texturedCandidate = await CandidateSourceCases.Run(bin, cue, a);
         var editedIntent = NativeId65FreshDocumentIntent.Create(8192, 8192, 8704, 2048, 2048, 9216, 9216, 96,
             new(72,132,120), new(44,66,100), 2);
         var editedCompilation = await NativeId65FreshDocumentCompilation.CaptureAsync(bin, editedIntent);
         var starter = await NativeId65FreshDiscResearchCandidatePlan.CaptureAsync(bin, cue, a.DiscPlan);
+        await TexturedFaultApiCases.Source(texturedCandidate,
+            (NativeId65FreshResearchPublicationBinding)Call(null, Type("NativeId65FreshResearchPublicationBinding"), "FromStarter", starter)!);
         var edited = await NativeId65FreshEditedDocumentResearchPlan.CaptureAsync(bin, cue, editedCompilation);
         var generic = await NativeId65FreshDocumentResearchPlan.CaptureAsync(bin, cue, editedCompilation);
         Check(generic.ExpectedImageSha256 == "ecc8f61cc16bf86a2f5117b327c49aede18f5c1e6a602c0e67f2ba58565aed16" &&

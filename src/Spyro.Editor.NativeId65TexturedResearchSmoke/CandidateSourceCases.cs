@@ -7,7 +7,7 @@ using static Inspection;
 internal static class CandidateSourceCases
 {
     private const string ImageHash = "998a47930c5f20e36cf87d41bfb9ec3cab237d8d42c443ed706bd50c692611a3";
-    internal static async Task Run(string bin, string cue, NativeId65FreshDocumentCompilation compilation)
+    internal static async Task<NativeId65FreshTexturedResearchCandidatePlan> Run(string bin, string cue, NativeId65FreshDocumentCompilation compilation)
     {
         var fresh = Get<NativeId65FreshSceneBundle>(compilation, "FreshResourceAncestor");
         var chain = Get<NativeId65NormalResourceChain>(fresh, "ResourceChainAncestor");
@@ -104,6 +104,7 @@ internal static class CandidateSourceCases
 
         static async Task Reject(NativeId65FreshDiscPlan actual, string label) =>
             await RefuseAsync<InvalidDataException>(() => NativeId65FreshTexturedResearchCandidatePlan.CaptureAsync("\0", "\0", actual), "Recipe rejection before invalid path IO: " + label);
+        return plan;
     }
 
     private delegate byte[] Sector(int lba, ReadOnlySpan<byte> source);

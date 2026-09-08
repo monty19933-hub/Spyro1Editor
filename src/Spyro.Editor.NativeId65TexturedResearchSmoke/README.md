@@ -1,6 +1,6 @@
 # Exact fixed-a textured research candidate checks
 
-This isolated project preserves the two actual-Texture lineage references and the four existing publication roles, and tests a separate fifth role for one exact fixed-a/P0/N16/two-static-material/track19 candidate. The new candidate and thin publisher use the existing sector writer and transaction. This smoke project has no physical-output mode.
+This isolated project preserves the two actual-Texture lineage references and the four existing publication roles, and tests a separate fifth role for one exact fixed-a/P0/N16/two-static-material/track19 candidate. The new candidate and thin publisher use the existing sector writer and transaction. Default and `--source` never publish a disc; five separately explicit reviewed modes can perform physical publication/fault work.
 
 ```sh
 dotnet build src/Spyro.Editor.NativeId65TexturedResearchSmoke/Spyro.Editor.NativeId65TexturedResearchSmoke.csproj -c Release
@@ -24,4 +24,24 @@ Step4 focused gates passed: inclusive Release build with zero warnings/errors, d
 
 New source accounting independently observes held and current named BIN/CUE owners, preserving the primary plus every final/close failure. Tiny actual exclusive-CUE and malformed-CUE fixtures exercise partial acquisition and finalization; pure error-fold controls are labelled simulations. Logical path/link checks do not prove inode identity against hostile equal-byte replacement. Final source checks use None even after failure or cancellation; cancellation during this accounting is best-effort, not prompt-cancellation proof. A missing/invalid output passed to read-only Verify may still trigger final SOURCE reads.
 
-Physical publication, typed postcommit/Unconfirmed execution for this new role, native texture testing, HQ/close behavior and saved-material-to-candidate binding remain separate gates. No runtime or general texture-portability approval is claimed.
+Physical publication and typed postcommit/Unconfirmed execution now pass their separate reviewed gates below. Native texture testing, HQ/close behavior and saved-material-to-candidate binding remain separate gates. No runtime or general texture-portability approval is claimed.
+
+## Explicit reviewed physical modes
+
+Each mode requires exactly four tokens: the mode, original BIN, original CUE, and an absolute output path whose parent already exists. The first four writing workflows require a new absent output/workspace; Verify requires an existing exact three-file candidate. All output ancestors must be unlinked, and source overlap, occupied writing targets, unknown/mixed/repeated options, empty/NUL fields and relative output paths refuse before capture.
+
+```text
+--publish-textured-reviewed BIN CUE ABSENT_ABSOLUTE_DIRECTORY
+--stage-textured-reviewed BIN CUE ABSENT_ABSOLUTE_WORKSPACE
+--unconfirmed-textured-reviewed BIN CUE ABSENT_ABSOLUTE_WORKSPACE
+--postcommit-textured-reviewed BIN CUE ABSENT_ABSOLUTE_WORKSPACE
+--verify-textured-reviewed BIN CUE EXISTING_ABSOLUTE_DIRECTORY
+```
+
+These modes recapture the actual public fixed-a chain. They do not accept caller hashes, receipt authority, selected-material equivalence, a Wizard role or saved-project claims. The three precommit cases force actual staging points. The Unconfirmed case blocks the actual transaction with a new lock and retains its complete stage and sentinel. The three postcommit cases test late cancellation and two new foreign stage owners only after actual commit; all artifacts and uncertain/failed evidence remain retained. The fixture can replace only its verified empty stage directory, never a preexisting user directory. No output repair, retry or cleanup of retained evidence is offered.
+
+Actual result/companion/full-BIN checks precede a success record, which is emitted only after independent full held and current named BIN/CUE final checks and every acquired close attempt. One failure keeps its exact exception; multiple failures retain an ordered primary-first aggregate. A read-only Verify is not labelled committed; uncertainty/known-commit classifications come only from actual API return or actual typed errors, never matching bytes.
+
+Step5 focused gates passed: inclusive Release 0 warnings/errors, default379, explicit source663 and exact seam inverse27. All prior five recipe rows and fixed-a prospective Plan/CUE/receipt goldens stayed exact. New API-null/token/enum controls do not open output paths. A source-only tiny fixture invokes the actual CLI with an invalid three-byte BIN and wrong-hash 88-byte CUE, proving refusal before Candidate capture, independent current-name final checks and acquired CUE closure; this is not publication evidence. Default remains fixture/source-free. The retained first temporary-path refusal is distinguished from the later genuine missing-final-check RED.
+
+All five reviewed physical invocations subsequently closed exit0: three real precommit points, typed Unconfirmed, three postcommit cases, separate clean Publish and separate-process Verify. Fault evidence remains retained; only `candidate-r01` is nominated for later native testing. Root/peer review and independent source preservation are clear. Full combined all-project325/zero failures passed. See `docs/research/native-fresh-textured-candidate.md` and `_local/research/textured-publication-next-r01.gsLsn2/HANDOFF.md` for exact paths, hashes and evidence boundaries.

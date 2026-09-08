@@ -1,6 +1,7 @@
 # Fixed-a textured research candidate
 
-September 8, 2026. Implemented and source-tested; no physical output yet.
+September 8, 2026. Physically published and independently verified. Native
+playtesting is in progress in a separate protected DuckStation session.
 
 A new sealed candidate binds the actual textured Disc → Body → texture plan →
 fresh scene → ordered source materials. Its only admitted recipe is the existing
@@ -33,6 +34,44 @@ Retained commands, source-owner tests and prospective companion identities:
 Combined all-project Release/default325/zero failures, closed exit0:
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-kcn758vr/summary.json`.
 
-Next: opt-in physical publication/fault checks, independent new-process readback,
-then DuckStation visual/playtesting. The editor has no new aggregate publication
-button enabled, and preserved app packages have not been replaced.
+## Physical publication checkpoint
+
+The explicit five-mode CLI uses actual fixed-a chain recapture. Its early-error
+regression now verifies both current named originals even if capture fails before
+the candidate exists. Every acquired close is attempted. Explicit enum mappings
+and textured-only fault hooks preserve all old public roles and serializers.
+Focused default379/source663 and Root-replayed whole-old-code inverse27 pass.
+The earlier fixture refusal caused by macOS's linked /var path is retained
+separately from the genuine missing-final-check RED and its correction.
+
+All actual physical modes closed exit0: three forced precommit failures cleaned
+their new empty outputs; actual transaction-lock uncertainty retained its whole
+stage and markers; late cancellation completed cleanly after actual commit; two
+distinct postcommit cleanup failures retained known-commit evidence. No retained
+evidence was repaired, deleted, retried or adopted as a clean result.
+
+One separate clean publication and a new-process read-only verification both
+passed complete image/readback and original BIN/CUE held/current-name/EOF/final
+close checks. Root separately rehashed the exact three files. Only this clean
+directory is nominated for gameplay:
+
+`_local/research/textured-publication-next-r01.gsLsn2/candidate-r01`
+
+Stem: `native-id65-fresh-textured-fixed-a-track19-r01`.
+BIN661547040 bytes/full998a4793…611a3 as above; CUE109 bytes/SHA
+`ef08d3e5d1b3b65e2051d2087a582815a4af01d8d459dc12b3228ae5c7928df2`;
+receipt43349 bytes/SHA
+`0362a2f5a1a2ee3afca00e342d3c80cd7c88089eb7e40271e5ef8db4b4739f48`.
+The plan remains `6b1518cc0c125c248e0036f0731996028624e03dbaec05b8e6af460ed0008932`.
+Receipt policy flags remain false; this does not certify universal textures.
+
+Exact commands, closed sessions, fault paths and hashes are retained in
+`_local/research/textured-publication-next-r01.gsLsn2/HANDOFF.md`.
+Root's combined all-project Release/default gate closed exit0,325/zero failures:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-tlhoquxc/summary.json`.
+
+DuckStation has reached this floor with two visible materials; gameplay checks
+and settings restoration are still in progress. This is not yet a closed runtime
+pass. The editor has no aggregate publication button enabled, and preserved app
+packages have not been replaced. Saved-material binding and mixed Wizard/texture
+publication remain separate work.
