@@ -8,11 +8,13 @@ internal static class Program
         if (args.Length != 0 && (args.Length != 2 || args[0] != "--source"))
             throw new ArgumentException("Usage: NativeId65FreshTerrainTextureSmoke [--source original.bin]");
         AllocationCases.Run();
+        await SelectedBindingCases.Free();
         Console.WriteLine($"NATIVE_ID65_FRESH_TERRAIN_TEXTURE_FREE_OK checks={_checks}");
         if (args.Length == 2)
         {
             int before = _checks;
             await SourceCases.Run(args[1]);
+            await SelectedBindingCases.Source(args[1]);
             Console.WriteLine($"NATIVE_ID65_FRESH_TERRAIN_TEXTURE_SOURCE_OK checks={_checks - before} total={_checks}");
         }
         return 0;

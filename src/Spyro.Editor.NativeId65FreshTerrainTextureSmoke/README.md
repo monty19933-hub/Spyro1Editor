@@ -4,6 +4,30 @@ This smoke exercises the new neutral allocator and its private exact-original
 adapter. It does not publish or install a level, change ordinary exporters, or
 approve renderer/runtime behavior. No old untextured output is replaced.
 
+## September 8 selected-source extension
+
+The separately named `CaptureSelectedAsync` factory now accepts two ordered
+actual static texture source issuers. It reuses the same full-record allocator;
+the old Dark14/T0 + Gnasty70/T0 factory, plan hash and byte goldens are unchanged.
+The same source may occupy both separately allocated slots. Actual ancestor
+references are retained and cannot be swapped for equal-looking handles.
+
+Selected Dark14/T1 and Gnasty70/T1 source fixtures, reverse order, repeated source,
+detached copies and wrong-ancestor cases pass:7,579 source-free and132,825 source
+checks. The existing textured body/staging compatibility suite separately passes
+all157 checks. Its existing equal-byte reissued-plan compatibility is explicitly
+preserved; the new binding's reference check must not be confused with that older
+boundary. Read-only source tests write no ROM. The historical allocation section
+below describes the original fixed-material profile, not these selected bytes.
+
+Source issuers still refuse unsupported animated, scrolling or rotated texture
+semantics. This adds no texture picker/painting UI, persisted material document,
+Disc acceptance or gameplay approval. Evidence, including actual failed tests
+and corrections, is retained in
+`_local/research/fresh-selected-texture-binding-r01.nPnQeq/HANDOFF.md`.
+
+## Original fixed-material profile
+
 The source-issued profile takes an actual `NativeId65FreshSceneBundle`, Dark
 Hollow WAD14/T0 and **Gnasty's World (level ID60), WAD70/T0**. The two actual fresh
 HP triangles receive material IDs0 and1. Local texture ID0 is not a global asset

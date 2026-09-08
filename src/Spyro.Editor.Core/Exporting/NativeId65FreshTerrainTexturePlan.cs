@@ -23,9 +23,12 @@ public sealed class NativeId65FreshTerrainTexturePlan
     ];
 
     private NativeId65FreshTerrainTexturePlan(NativeId65FreshSceneBundle fresh,
-        NativeStaticTerrainTextureSource dark, NativeStaticTerrainTextureSource gnasty, byte[] executable)
+        NativeStaticTerrainTextureSource material0, NativeStaticTerrainTextureSource material1, byte[] executable,
+        string bindingProfileId)
     {
         FreshAncestor = fresh;
+        BindingProfileId = bindingProfileId;
+        MaterialSources = Array.AsReadOnly(new[] { material0, material1 });
         // The shared reader already binds the complete original image/EXE. Keep
         // exact small consumer obligations visible, without claiming a full GPU.
         foreach (var span in Consumers)
@@ -40,15 +43,15 @@ public sealed class NativeId65FreshTerrainTexturePlan
             throw new InvalidDataException("Actual immutable fresh scene/data/model/upload revision changed.");
         NativeId65ZeroSceneAnimationLists.ValidateCanonicalBytes(_scene.AsSpan(0x88, 0x44));
         fresh.RequireExactOutputs(_scene, upload);
-        SourceHandles = Array.AsReadOnly(new[] { dark.Handle, gnasty.Handle });
-        var inputs = new[] { Input(dark, 0), Input(gnasty, 1) };
+        SourceHandles = Array.AsReadOnly(new[] { material0.Handle, material1.Handle });
+        var inputs = new[] { Input(material0, 0), Input(material1, 1) };
         Allocation = NativeStaticTerrainTextureAllocation.Compile(upload, fresh.UploadOwners, inputs, NativeClip);
         _upload = Allocation.CopyUploadPayload(); _data = Allocation.ComposeTwoFaceData(data);
         UploadSha256 = Hash(_upload); DataSha256 = Hash(_data);
         SceneSha256 = Hash(_scene); ModelSha256 = Hash(_model); UpstreamPlanSha256 = fresh.PlanSha256;
         PlanSha256 = Hash(JsonSerializer.SerializeToUtf8Bytes(new
         {
-            ProfileId, SourceImageSha256, UpstreamPlanSha256, SourceHandles,
+            ProfileId = BindingProfileId, SourceImageSha256, UpstreamPlanSha256, SourceHandles,
             BeforeUploadSha256 = fresh.UploadSha256, BeforeDataSha256 = fresh.DataSha256,
             UploadSha256, DataSha256, SceneSha256, ModelSha256, NativeClip, AdditionalPacketBytesPerPass,
             Records = Allocation.Records.Select(r => r.RecordSha256).ToArray(),
@@ -57,9 +60,12 @@ public sealed class NativeId65FreshTerrainTexturePlan
     }
 
     public const string ProfileId = "native-id65-fresh-two-static-materials-dark14-gnastyworld70-clean-usa-v1";
+    public const string SelectedBindingProfileId = "native-id65-fresh-two-selected-static-materials-clean-usa-v1";
     // The exact private ancestor is retained for closed downstream composition;
     // it is never reconstructed from caller-visible hashes or profile labels.
     internal NativeId65FreshSceneBundle FreshAncestor { get; }
+    public string BindingProfileId { get; }
+    public IReadOnlyList<NativeStaticTerrainTextureSource> MaterialSources { get; }
     public string SourceImageSha256 => NativeId65AuthoredSurfaceConsumers.ImageSha256;
     public string UpstreamPlanSha256 { get; }
     public string PlanSha256 { get; }
@@ -100,9 +106,38 @@ public sealed class NativeId65FreshTerrainTexturePlan
             "2ffdf4bc69645c31a1cc75862288bf3620955567ef65e35b2f8f65862b7dda72");
         byte[] executable = await NativeId65AuthoredSurfaceConsumers.ReadOriginalExecutableAsync(originalImagePath, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        var result = new NativeId65FreshTerrainTexturePlan(fresh, dark, gnasty, executable);
+        var result = new NativeId65FreshTerrainTexturePlan(fresh, dark, gnasty, executable, ProfileId);
         cancellationToken.ThrowIfCancellationRequested();
         return result;
+    }
+
+    /// <summary>
+    /// Binds two ordered, actual static source issuers to the existing two-face
+    /// allocation grammar. The same source may fill both independently allocated
+    /// slots. This does not authorize an animated/rotated source or a disc output.
+    /// </summary>
+    public static async Task<NativeId65FreshTerrainTexturePlan> CaptureSelectedAsync(string originalImagePath,
+        NativeId65FreshSceneBundle fresh, NativeStaticTerrainTextureSource material0,
+        NativeStaticTerrainTextureSource material1, CancellationToken token = default)
+    {
+        ArgumentNullException.ThrowIfNull(fresh); ArgumentNullException.ThrowIfNull(material0); ArgumentNullException.ThrowIfNull(material1);
+        token.ThrowIfCancellationRequested();
+        if (!fresh.SourceCertified || fresh.SourceImageSha256 != NativeId65AuthoredSurfaceConsumers.ImageSha256)
+            throw new InvalidDataException("Selected two-material composition requires an actual source-issued fresh bundle.");
+        RequireSelectedSource(material0); RequireSelectedSource(material1);
+        byte[] executable = await NativeId65AuthoredSurfaceConsumers.ReadOriginalExecutableAsync(originalImagePath, token);
+        token.ThrowIfCancellationRequested();
+        var result = new NativeId65FreshTerrainTexturePlan(fresh, material0, material1, executable, SelectedBindingProfileId);
+        token.ThrowIfCancellationRequested();
+        return result;
+    }
+
+    internal void RequireAncestry(NativeId65FreshSceneBundle fresh, NativeStaticTerrainTextureSource material0,
+        NativeStaticTerrainTextureSource material1)
+    {
+        if (!ReferenceEquals(FreshAncestor, fresh) || !ReferenceEquals(MaterialSources[0], material0) ||
+            !ReferenceEquals(MaterialSources[1], material1))
+            throw new InvalidDataException("Two-material binding requires its actual fresh and ordered source ancestors, not equal hashes or handles.");
     }
     public byte[] CopyUploadPayload() => _upload.ToArray();
     public byte[] CopyDataComponents() => _data.ToArray();
@@ -119,6 +154,12 @@ public sealed class NativeId65FreshTerrainTexturePlan
             source.SourceWadEntry != entry || source.SourceTextureId != 0 || source.SourceDataSha256 != dataHash ||
             source.Layout.RecordSha256 != recordHash)
             throw new InvalidDataException("The code-owned Dark14/T0 and Gnasty's World70/T0 profile cannot substitute another source variant.");
+        source.RequireExactSourceRecord(source.Layout.CopyRecord());
+    }
+    private static void RequireSelectedSource(NativeStaticTerrainTextureSource source)
+    {
+        if (!source.SourceCertified || !source.StaticRecordProven || source.SourceImageSha256 != NativeId65AuthoredSurfaceConsumers.ImageSha256)
+            throw new InvalidDataException("Selected material requires an actual exact-original static terrain source issuer.");
         source.RequireExactSourceRecord(source.Layout.CopyRecord());
     }
     private static NativeStaticTerrainTextureInput Input(NativeStaticTerrainTextureSource source, int material) =>
