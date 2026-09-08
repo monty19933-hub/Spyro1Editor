@@ -15,8 +15,9 @@ latest combined all-project Release/default gate is331/zero failures. These
 source changes are not silently rebuilt into the preserved R03/R04 packages.
 The next work order is:
 
-1. Finish the actual saved whole-level publication path and physical failure
-   gates, then the App edit/save/export/play workflow. The internal first arm
+1. Connect the saved whole-level publication path to the App edit/save/export
+   workflow; its physical failure, clean publication, independent readback and
+   bounded normal-speed gameplay gates have passed. The internal first arm
    and its physical-test seam pass source219/default157; aggregate export stays disabled in the window.
    The source picker passes100 checks, prior placement/history UI219 remains
    green, and saved-material compilation matches five full-image references.
@@ -27,12 +28,15 @@ The next work order is:
 3. Extend the current gameplay evidence: the corrected fresh Wizard passed
    normal-speed defeat, yellow gem pickup and repeat defeat without another
    gem. The separate fixed two-material floor passed normal-speed movement,
-   fall/respawn, jump/landing and flame. Saved-selected candidate gameplay,
-   ordinary new-level portal integration, audio and save/reboot remain open.
+   fall/respawn, jump/landing and flame. Saved-selected candidate gameplay now
+   passes the same bounded actions. Ordinary new-level portal integration,
+   audio and save/reboot remain open.
    See the R04 Wizard and R01 textured runtime reports for their exact scope.
 4. Expand imported dependency families and destination conditions through the
    shared allocation/linking machinery; cover private state, emitted children,
    sound, collision, rewards and re-entry instead of enabling untested rows.
+   Three independent mixed Wizard/material expectations now fit without
+   weakening ownership; actual C# comparison and mixed gameplay remain pending.
 5. Package a separately identified preview once its actual user workflow works;
    keep remaining incompatible families/material semantics visible to the user.
 

@@ -40,11 +40,14 @@ actual-source preview wrapper, raw picker and
 initial footprint, while preserving the five prior publication roles.
 Exact summary:
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-o2zgovh9/summary.json`.
-Root91392 CLOSED0. Final picker100 includes unknown kinds and reverse invalid-Base
+Root91392 CLOSED0; checkpoint7b22a9a. Final picker100 includes unknown kinds and reverse invalid-Base
 atomicity; Root viewed both regenerated1120x800 PNGs in
 `spyro-material-picker-ui-KYgopu` under the same temporary parent. Runner71 and
-all Python226/13 explicit skips pass. No live
-editor/DuckStation/launch helper was found on the fresh post-gate process check.
+all Python226/13 explicit skips pass. The broad earlier helper-absence check
+missed the wrapper process: fresh15:33 ps found R04 LaunchFreshDocumentTest.zsh
+PID36028 still waiting, and CUA inventories it as running. It was left untouched;
+native editor permission/usability is not accepted. DuckStation is now CLOSED
+after the saved-selected test described below; no observer is active.
 Root separately replayed source-backed textured baseline193/complete original
 final checks, all66 runner tests, and UI219/legacy65/research333/session138.
 Four internal lineage-retention lines and old binding/Measure characterization
@@ -91,9 +94,15 @@ finals. All five older publishers passed inclusive builds/default/source gates
 with their previous image/receipt/CUE/plan goldens unchanged. The exact new
 saved-selected heading128/music20 recipe matches2533ee96...b75b70/1253 sectors.
 The physical seam now passes default157/76, source219/97, actual promoted-source
-inverse73 and previous textured source663. Three actual Store projects are ready
-in saved-level-native-publication-gates-20260908-r01.ViLjhm. Eight explicit native
-failure/clean publication modes, new-process Verify and gameplay remain pending.
+inverse73 and previous textured source663. Three actual Store projects remain
+in saved-level-native-publication-gates-20260908-r01.ViLjhm. All eight explicit
+native fault/cancel/clean publication modes now CLOSED0, with correct actual
+NotInvoked/Unconfirmed/Committed accounting. Root Verify82149 CLOSED0 and
+all three artifacts/raw/manifest remained exact. The clean2533...b75b70 candidate
+then passed bounded normal100% entry/two materials/jump/landing/flame/movement/
+edge fall/respawn/stable idle. Duck64671/exec91100 CLOSED0; both original INIs
+restored and protected9 SHA cmp0 (88152). Eight actual native PNGs Root/H viewed.
+See native-fresh-saved-material-runtime-r01.md. App aggregate export stays disabled.
 See `native-fresh-saved-level-publication.md` for the actual source evidence.
 The new source-preview wrapper separately matches64 original-only RGBA literals;
 actual source268/total673, free405 and prior UI gates pass. After the330 gate,
@@ -107,6 +116,14 @@ now has a strict separate opt-in CLI so its17-minute run does not consume the
 ordinary source suite's shared deadline. New dispatch default164, malformed CLI9
 and unchanged ordinary source288/final290 passed in90s. The unchanged72-row
 chain has not been rerun through that new CLI; its earlier full evidence stands.
+The independent mixed Wizard/material oracle now passed1375/32 with all31
+held/current original/helper owners finalized and closed. Root81686 replay is
+byte-identical to H82243, complete receipt e04c7a6c...0df31. Three corrected-B/T1
+pairs fit while preserving complete GPU65800:7F000 sound-transfer residue;
+floor-first allocation actually conflicts atGPU+0x10. Expected full images and
+all1290 changed-sector hashes are retained, not actual C# or runtime issuance.
+See native-fresh-mixed-resource-expectations.md. Next private GPU-only mechanics
+extraction must preserve the old DE000 adapter exactly before mixed-chain work.
 A separate corrected-Wizard R04 native session now passed normal100% flame
 defeat, yellow-gem pickup LAB10/10,total58→68, edge fall/respawn, second defeat
 with purple repeat-kill orb and unchanged final10/10,total68. PID50221/exec48620

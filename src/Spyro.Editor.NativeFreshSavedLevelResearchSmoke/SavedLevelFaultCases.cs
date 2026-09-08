@@ -3,7 +3,7 @@ using System.Text;
 using Spyro.Editor.Core.Exporting;
 using static SavedLevelPublicationCases;
 
-// PRIVATE uncompiled physical gates. Never default/source simulations.
+// Internal explicit reviewed physical gates. Never default/source simulations.
 internal static class SavedLevelFaultCases
 {
     internal sealed record Outcome(string Kind, int AfterReturnCount, int FinalArtifactCount,

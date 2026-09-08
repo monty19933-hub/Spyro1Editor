@@ -5,7 +5,7 @@ using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Persistence;
 
-// PRIVATE uncompiled CLI draft. Default tests only its pre-capture invalid-tiny
+// Internal explicit reviewed CLI. Default tests only its pre-capture invalid-tiny
 // input refusal; no default/source Candidate publication or native output.
 internal static class SavedLevelPublicationCases
 {

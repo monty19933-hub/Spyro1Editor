@@ -44,10 +44,11 @@ Pending consent is not native editor acceptance. Do not reuse this PID without
 fresh verification. The permission history is retained in
 `evidence/root-documents-consent-r04.log`.
 
-A later September8 process check found no editor or launch helper running.
-The earlier pending PID is therefore closed, not an active prompt to reuse.
-Native editing acceptance still has not been observed; no preserved package
-was rebuilt or permission boundary bypassed.
+A later broad process-name check incorrectly reported the helper absent. A
+fresh September8 15:33 full command inventory finds the same waiting wrapper
+PID36028, and CUA lists R04 as running. It was left untouched; no actual editor
+usability or permission acceptance follows from a live wrapper. Native editing
+acceptance is still pending; no package was rebuilt or permission bypassed.
 
 ## What to test once the window opens
 

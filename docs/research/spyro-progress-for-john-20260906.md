@@ -1,6 +1,6 @@
 # Spyro editor — what is working now
 
-Updated September 8, 2026 after textured gameplay and fresh-Wizard reward testing.
+Updated September 8, 2026 after saved-selected textured gameplay and fresh-Wizard reward testing.
 Development continues with the requested pause near 5% usage **remaining**.
 This is a development checkpoint, not a V6 release. Original game/save files and
 the preserved R03 editor have not been replaced.
@@ -59,9 +59,12 @@ matched their pre-test hashes. No original card was replaced.
   and whole-form edit/save protection. Actual saved-material compilation
   passes five complete-image goldens, including ordered donors and edited
   heading/music. Saved aggregate publication is now source-tested, and the
-  preview decoder matches64 independent source-image references. Physical
-  publication tests and the preview's window integration are next; the
-  successful gameplay candidate still uses a fixed recipe. These new controls
+  preview decoder matches64 independent source-image references. All eight saved
+  publication/failure cases and independent readback now pass. A candidate from
+  the saved14/T1+70/T1, heading128/music20 document passed normal-speed native
+  entry, jump/landing, flame, movement and fall/respawn. See the
+  [saved-material gameplay report](native-fresh-saved-material-runtime-r01.md).
+  The preview's window integration and saved-level export UI are next. These controls
   are in source, not yet in the preserved R04 package. See the
   [material-picker checkpoint](native-fresh-saved-material-picker.md).
 - Two Wizards imported into an existing level previously passed a bounded
@@ -74,7 +77,8 @@ matched their pre-test hashes. No original card was replaced.
 The newer, separate **R04 whole-level test editor** has now been built from
 checkpoint60f6d6f. Package/signature, source preservation and packaged PNG checks
 pass. Its earlier normal launch reached macOS Documents permission; the launch
-helper has since exited and native edit/save/reopen acceptance remains pending.
+helper was still waiting on the latest process check; native edit/save/reopen
+acceptance remains pending. It was left untouched.
 No permission bypass was used. See the
 [R04 app location and test checklist](native-fresh-level-mac-r04.md).
 
@@ -124,8 +128,12 @@ The authored Wizard source matrix completed72 recipes across46 music selections;
 that is complete-image/initial-footprint evidence, not72 gameplay tests. See the
 [issued-matrix report](native-fresh-wizard-issued-matrix.md).
 The new saved-aggregate backend holds the actual final project/document guard
-at publication. Physical interrupted-export checks and the App integration
-remain to be completed before enabling that action in the window.
+at publication. Physical interrupted-export checks are now complete; the App
+integration remains before enabling that action in the window. A separate
+original-only mixed Wizard/material check also fits three selected material
+pairs while preserving enemy and sound-transfer memory. Actual editor output
+and gameplay for those mixed recipes remain next; see the
+[mixed-resource findings](native-fresh-mixed-resource-expectations.md).
 
 Universal importing still requires each object's behavior, effects, sound,
 collision, animation, private/shared state and resource needs to remain correct

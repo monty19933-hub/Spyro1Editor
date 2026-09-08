@@ -1,7 +1,8 @@
 # Saved whole-level publication — first material-only arm
 
-September8,2026. Internal implementation/source checkpoint; no
-physical candidate or App export is claimed by this report. The new window's
+September8,2026. The original source checkpoint and later physical gates are
+distinguished below. A clean candidate has now been published, separately
+verified and played; no App export is claimed. The new window's
 aggregate export remains disabled. Preserved R03/R04 apps are unchanged.
 
 ## Closed saved-level path
@@ -120,3 +121,27 @@ The subsequent combined all-project Release/default gate passed331/zero failures
 Root session91392 CLOSED0, report `spyro-regression-o2zgovh9/summary.json` under
 the macOS temporary root. This includes the physical seam and separate App
 inspection worker, not execution of any native publication mode.
+
+## Subsequent actual native publication gates — closed
+
+After clean7b22a9a/full331, all eight explicit processes closed0 with their
+expected outcomes: partial-sector and stale-raw refused before invocation;
+actual blocked transaction stayed Unconfirmed; actual commit plus guard-release
+failure still performed one full artifact verification; actual damaged-CUE
+readback failed; damaged-CUE plus notification retained both errors in order;
+late cancellation preserved clean commit; ordinary clean Publish returned exact
+readback. All held/current original and saved finals completed. Only the
+dedicated stale aggregate received a trailing space; no manifest changed.
+No fault output was repaired, retried or adopted. Exact sessions/log hashes and
+retained markers are in ViLjhm/HANDOFF.md, fully read by Root.
+
+Clean08 uses actual plan7896ca...c3e0f and expected2533...b75b70/1253 sectors;
+Root's separate Verify82149 CLOSED0 with all three artifacts plus saved
+raw/manifest hashes unchanged and exact three-file output set. Then the separate
+normal-speed DuckStation test observed entry, both selected materials,
+jump/landing, flame, movement/edge fall/respawn and stable idle. Original settings
+were restored and all9 full protected hashes matched. See
+`native-fresh-saved-material-runtime-r01.md` for exact hashes and bounded evidence.
+App API/window integration, mixed placement/material output and native persistent
+save ownership remain open. The only post-run test-source changes so far are
+two stale comment-line corrections; the executed DLL hashes remain retained.
