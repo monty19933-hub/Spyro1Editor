@@ -95,6 +95,8 @@ class SourcePythonOracleTests(unittest.TestCase):
          "FRESH_WIZARD_STAGING_RAW_ORACLE_OK"),
         ("fresh-wizard-fallback-resources", "src/Spyro.Editor.NativeId65FreshWizardFallbackResourceSmoke/source_fallback_resource_oracle.py",
          "SOURCE_TOWN_FALLBACK_ASSETS_OK"),
+        ("fresh-textured-disc", "src/Spyro.Editor.NativeId65TexturedDiscSmoke/source_textured_disc_oracle.py",
+         "NATIVE_ID65_TEXTURED_DISC_RAW_ORACLE_OK"),
     )
 
     def test_exact_source_only_python_registry(self):
@@ -545,6 +547,9 @@ class RunnerOptionsTests(unittest.TestCase):
 
     def test_textured_body_modes_use_only_exact_read_only_source_and_separate_markers(self):
         self.assert_texture_modes("NativeId65TexturedBodySmoke", "NATIVE_ID65_TEXTURED_BODY")
+
+    def test_textured_disc_modes_are_read_only_with_separate_source_and_default_markers(self):
+        self.assert_texture_modes("NativeId65TexturedDiscSmoke", "NATIVE_ID65_TEXTURED_DISC")
 
     def test_fresh_disc_modes_require_their_own_markers_and_only_the_selected_image(self):
         self.assert_texture_modes("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC", (), "SMOKE")
@@ -1070,6 +1075,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeId65StaticTerrainTextureSmoke": ["--source", "/selected original.bin"],
             "NativeId65FreshTerrainTextureSmoke": ["--source", "/selected original.bin"],
             "NativeId65TexturedBodySmoke": ["--source", "/selected original.bin"],
+            "NativeId65TexturedDiscSmoke": ["--source", "/selected original.bin"],
             "NativeId65FreshDiscSmoke": ["/selected original.bin"],
             "NativeId65FreshDiscStreamSmoke": ["/selected original.bin"],
             "NativeId65FreshDiscResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],

@@ -56,6 +56,7 @@ CORE_CASES = (
     ("NativeId65StaticTerrainTextureSmoke", "NATIVE_ID65_STATIC_TERRAIN_TEXTURE_FREE_OK"),
     ("NativeId65FreshTerrainTextureSmoke", "NATIVE_ID65_FRESH_TERRAIN_TEXTURE_FREE_OK"),
     ("NativeId65TexturedBodySmoke", "NATIVE_ID65_TEXTURED_BODY_FREE_OK"),
+    ("NativeId65TexturedDiscSmoke", "NATIVE_ID65_TEXTURED_DISC_FREE_OK"),
     ("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC_SMOKE_OK"),
     ("NativeId65FreshDiscStreamSmoke", "NATIVE_ID65_FRESH_DISC_STREAM_SMOKE_OK"),
     ("NativeId65FreshDiscResearchSmoke", "NATIVE_ID65_FRESH_DISC_RESEARCH_SMOKE_OK"),
@@ -152,6 +153,7 @@ SOURCE_QA_CASES = (
     ("NativeId65StaticTerrainTextureSmoke", "NATIVE_ID65_STATIC_TERRAIN_TEXTURE_SOURCE_OK", ["--source"]),
     ("NativeId65FreshTerrainTextureSmoke", "NATIVE_ID65_FRESH_TERRAIN_TEXTURE_SOURCE_OK", ["--source"]),
     ("NativeId65TexturedBodySmoke", "NATIVE_ID65_TEXTURED_BODY_SOURCE_OK", ["--source"]),
+    ("NativeId65TexturedDiscSmoke", "NATIVE_ID65_TEXTURED_DISC_SOURCE_OK", ["--source"]),
     ("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC_SOURCE_OK", []),
     ("NativeId65FreshDiscStreamSmoke", "NATIVE_ID65_FRESH_DISC_STREAM_SOURCE_OK", []),
     # Capture checks only; never stage faults, exercise publication or verify outputs here.
@@ -188,6 +190,8 @@ SOURCE_PYTHON_CASES = (
      "FRESH_WIZARD_STAGING_RAW_ORACLE_OK"),
     ("fresh-wizard-fallback-resources", "src/Spyro.Editor.NativeId65FreshWizardFallbackResourceSmoke/source_fallback_resource_oracle.py",
      "SOURCE_TOWN_FALLBACK_ASSETS_OK"),
+    ("fresh-textured-disc", "src/Spyro.Editor.NativeId65TexturedDiscSmoke/source_textured_disc_oracle.py",
+     "NATIVE_ID65_TEXTURED_DISC_RAW_ORACLE_OK"),
 )
 
 

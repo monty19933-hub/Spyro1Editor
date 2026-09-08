@@ -4,6 +4,7 @@ using System.Text.Json;
 using Spyro.Editor.Core.Music;
 
 [assembly: InternalsVisibleTo("Spyro.Editor.NativeId65FreshDiscSmoke")]
+[assembly: InternalsVisibleTo("Spyro.Editor.NativeId65TexturedDiscSmoke")]
 
 namespace Spyro.Editor.Core.Exporting;
 
@@ -47,6 +48,7 @@ public sealed class NativeId65FreshDiscPlan
 {
     public const string ProfileId = "native-id65-fresh-normal-disc-LAB-source-only-usa-v1";
     public const string AcceptedBodyResourceProfile = "fresh-untextured-G3-two-triangle-data-8C8-v1";
+    private const string TexturedProfileId = "native-id65-fresh-textured-normal-disc-direct-lq-source-only-usa-v1";
     private static readonly DiscLayout Layout = new(2352, 24, 22, 2048);
     private readonly NativeId65FreshDiscSource _source;
     private readonly NativeId65FreshDiscGeometry _geometry;
@@ -60,6 +62,9 @@ public sealed class NativeId65FreshDiscPlan
         NativeId65NormalBodyPlan body, byte[] bodyBytes, byte[] overlay, int track)
     {
         _source = source;
+        BodyAncestor = body;
+        BindingProfileId = body.ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials
+            ? TexturedProfileId : ProfileId;
         _geometry = NativeId65FreshDiscGeometry.Compile(bodyBytes.Length);
         _body = bodyBytes;
         _overlay = overlay;
@@ -74,23 +79,49 @@ public sealed class NativeId65FreshDiscPlan
         BinaryPrimitives.WriteInt32LittleEndian(_wadDirectory.AsSpan(80 * 8 + 4), _body.Length);
         PatchRoot("WAD.WAD", 37, _geometry.FinalWadByteLength);
         PatchRoot("SCUS_942.28", _geometry.FinalExecutableLba, 0x66000);
-        string acceptedBodyProfile = body.DataUsedByteLength == 0x8C8 ? AcceptedBodyResourceProfile
-            : "fresh-untextured-G3-two-triangle-variable-cell-tree-v2";
-        PlanSha256 = NativeId65FreshExecutablePlan.Hash(JsonSerializer.SerializeToUtf8Bytes(new
+        if (body.ResourceProfile == NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles)
         {
-            ProfileId,
-            Original = NativeId65FreshDiscSource.OriginalSha256,
-            BodyProfile = NativeId65NormalBodyPlan.ProfileId,
-            AcceptedBodyResourceProfile = acceptedBodyProfile,
-            BodyPlanSha256,
-            BodySha256 = NativeId65FreshExecutablePlan.Hash(_body),
-            OverlaySha256 = NativeId65FreshExecutablePlan.Hash(_overlay),
-            ExecutableSha256 = Executable.FinalSha256,
-            RootSha256 = NativeId65FreshExecutablePlan.Hash(_isoRoot),
-            WadHeaderSha256 = NativeId65FreshExecutablePlan.Hash(_wadDirectory),
-            _geometry.FinalExecutableLba,
-            _geometry.FinalWadByteLength
-        }));
+            // Preserve the complete old payload, property order and labels.
+            string acceptedBodyProfile = body.DataUsedByteLength == 0x8C8 ? AcceptedBodyResourceProfile
+                : "fresh-untextured-G3-two-triangle-variable-cell-tree-v2";
+            PlanSha256 = NativeId65FreshExecutablePlan.Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                ProfileId,
+                Original = NativeId65FreshDiscSource.OriginalSha256,
+                BodyProfile = NativeId65NormalBodyPlan.ProfileId,
+                AcceptedBodyResourceProfile = acceptedBodyProfile,
+                BodyPlanSha256,
+                BodySha256 = NativeId65FreshExecutablePlan.Hash(_body),
+                OverlaySha256 = NativeId65FreshExecutablePlan.Hash(_overlay),
+                ExecutableSha256 = Executable.FinalSha256,
+                RootSha256 = NativeId65FreshExecutablePlan.Hash(_isoRoot),
+                WadHeaderSha256 = NativeId65FreshExecutablePlan.Hash(_wadDirectory),
+                _geometry.FinalExecutableLba,
+                _geometry.FinalWadByteLength
+            }));
+        }
+        else
+        {
+            PlanSha256 = NativeId65FreshExecutablePlan.Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                ProfileId = BindingProfileId,
+                Original = NativeId65FreshDiscSource.OriginalSha256,
+                body.ResourceProfile,
+                TexturePlanSha256 = body.UpstreamPlanSha256,
+                body.StagingPlanSha256,
+                body.DataUsedByteLength,
+                body.ModelRuntimeAddress,
+                body.SceneRuntimeAddress,
+                BodyPlanSha256,
+                BodySha256 = NativeId65FreshExecutablePlan.Hash(_body),
+                OverlaySha256 = NativeId65FreshExecutablePlan.Hash(_overlay),
+                ExecutableSha256 = Executable.FinalSha256,
+                RootSha256 = NativeId65FreshExecutablePlan.Hash(_isoRoot),
+                WadHeaderSha256 = NativeId65FreshExecutablePlan.Hash(_wadDirectory),
+                _geometry.FinalExecutableLba,
+                _geometry.FinalWadByteLength
+            }));
+        }
 
         var original = new NativeAddressSpace(NativeAddressKind.DiscLogical,
             NativeId65FreshDiscSource.OriginalSha256, NativeAddressRevision.Original,
@@ -115,6 +146,12 @@ public sealed class NativeId65FreshDiscPlan
             "Fixed LAB uses an exact four-byte source owner and bounded ordinary index consumers, not arbitrary strings or proof of native glyph allocation/rendering.",
             "No CUE freshness, filesystem transaction, normal exporter, save/portal travel, hardware timing or complete resource/runtime approval is supplied."
         }).ToArray());
+        if (body.ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials)
+            PendingOwners = Array.AsReadOnly(PendingOwners.Concat(new[]
+            {
+                "Two complete static LQ/HQ records are relocated, but consumer evidence remains direct-LQ with clip8000. HQ/close execution, all-frame packet peak and native appearance are not approved.",
+                "This distinct textured Disc does not add material persistence, a saved-document compilation route, normal export, or publication authority."
+            }).ToArray());
 
         void PatchRoot(string name, int lba, int length)
         {
@@ -139,6 +176,8 @@ public sealed class NativeId65FreshDiscPlan
     public bool CompleteNativeDependencyClosureProven => false;
     public bool CheckpointOrForeignStateSupported => false;
     public bool NormalCreateBinEnabled => false;
+    public string BindingProfileId { get; }
+    internal NativeId65NormalBodyPlan BodyAncestor { get; }
     public string BodyPlanSha256 { get; }
     public string PlanSha256 { get; }
     public NativeId65FreshExecutablePlan Executable { get; }
@@ -155,6 +194,12 @@ public sealed class NativeId65FreshDiscPlan
     public byte[] CopyWadDirectory() => _wadDirectory.ToArray();
     public byte[] CopyIsoRootDirectory() => _isoRoot.ToArray();
 
+    internal void RequireAncestry(NativeId65NormalBodyPlan body)
+    {
+        if (!ReferenceEquals(BodyAncestor, body))
+            throw new InvalidDataException("Fresh-disc binding requires its actual retained body ancestor.");
+    }
+
     public static async Task<NativeId65FreshDiscPlan> CaptureAsync(string originalBin,
         NativeId65NormalBodyPlan issuedBody, int selectedBuiltInTrack, CancellationToken cancellationToken = default)
     {
@@ -164,6 +209,23 @@ public sealed class NativeId65FreshDiscPlan
         RequireCurrentUntexturedShape(issuedBody.DataUsedByteLength, issuedBody.DataSectorByteLength,
             issuedBody.Descriptors[0].ByteLength, issuedBody.Descriptors[2].ByteLength,
             issuedBody.Descriptors[3].ByteLength);
+        return await CaptureIssuedAsync(originalBin, issuedBody, selectedBuiltInTrack, cancellationToken);
+    }
+
+    public static async Task<NativeId65FreshDiscPlan> CaptureTexturedAsync(string originalBin,
+        NativeId65NormalBodyPlan issuedBody, int selectedBuiltInTrack, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(issuedBody);
+        RequireCurrentTexturedShape(issuedBody.ResourceProfile, issuedBody.DataUsedByteLength, issuedBody.DataSectorByteLength,
+            issuedBody.Descriptors[0].ByteLength, issuedBody.Descriptors[2].ByteLength, issuedBody.Descriptors[3].ByteLength);
+        return await CaptureIssuedAsync(originalBin, issuedBody, selectedBuiltInTrack, cancellationToken);
+    }
+
+    // The original validated capture sequence is shared verbatim; profile/shape
+    // admission remains in the two distinct public factories, before token/I/O.
+    private static async Task<NativeId65FreshDiscPlan> CaptureIssuedAsync(string originalBin,
+        NativeId65NormalBodyPlan issuedBody, int selectedBuiltInTrack, CancellationToken cancellationToken)
+    {
         if (!issuedBody.SourceCertified || issuedBody.SourceImageSha256 != NativeId65FreshDiscSource.OriginalSha256 ||
             issuedBody.RequiredInitializerRuntimeAddress != 0x8005A898 || issuedBody.RequiredOverlayRuntimeAddress != 0x8007AA38 ||
             !issuedBody.RequiresInitializerBeforeOverlay || !issuedBody.RequiresOverlayRead || issuedBody.CheckpointOrForeignStateSupported ||
@@ -209,6 +271,15 @@ public sealed class NativeId65FreshDiscPlan
         if (dataSector != 0x1000 || upload != 0xDE000 || model != 0xF800 ||
             scene is not (0x2800 or 0x3000))
             throw new InvalidDataException("Fresh-disc authority is restricted to the exact current untextured resource profile.");
+    }
+
+    internal static void RequireCurrentTexturedShape(NativeId65NormalResourceProfile profile,
+        int dataUsed, int dataSector, int upload, int model, int scene)
+    {
+        if (profile != NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials ||
+            dataUsed != 0xA38 || dataSector != 0x1000 || upload != 0xDE000 || model != 0xF800 ||
+            scene is not (0x2800 or 0x3000))
+            throw new InvalidDataException("Fresh-disc textured authority requires the exact issued direct-LQ two-static-material profile and shape.");
     }
 
     internal byte[] CreateExpectedRawSector(int lba, ReadOnlySpan<byte> sourceSector)

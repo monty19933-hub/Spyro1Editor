@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TexturedDiscProbe Condition="'$(TexturedDiscProbe)' == ''">Full</TexturedDiscProbe>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" />
+    <Compile Include="ApiCases.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TexturedDiscProbe)' == 'Api'">
+    <Compile Include="ApiProbe.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TexturedDiscProbe)' == 'Full'">
+    <Compile Include="Program.cs" />
+    <Compile Include="ShapeCases.cs" />
+    <Compile Include="SourceCases.cs" />
+    <Compile Include="StreamCases.cs" />
+    <EmbeddedResource Include="source_textured_disc_golden.json" />
+  </ItemGroup>
+  <Target Name="RequireTexturedDiscProbe" BeforeTargets="BeforeBuild"
+          Condition="'$(TexturedDiscProbe)' != 'Api' and '$(TexturedDiscProbe)' != 'Full'">
+    <Error Text="TexturedDiscProbe must be Api or Full; no implicit omission of tests." />
+  </Target>
+</Project>
