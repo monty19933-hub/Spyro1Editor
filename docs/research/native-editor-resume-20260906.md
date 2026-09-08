@@ -24,9 +24,12 @@ tests/12 explicit skips before current session/texture/absence work.
 
 The corrected candidate WAS published, independently verified and played; see
 the September8 runtime section below and `native-fresh-separated-wizard-publication.md`.
-Current next work: a fresh null-Sparx diagnostic branch, App aggregate placement
-integration and source-tested textured Disc composition. Neutral App session
-tests pass138 actual-file checks; integration is not yet in the window or R03.
+Current work has passed the fresh null-Sparx diagnostic and one cold-entry/
+damage/death/respawn cycle; see the latest R02 report below. App aggregate window
+integration passes219 headless checks (plus session138/oldUI65/researchUI333),
+with Root/peer review clear; Root replay and a separate new package are next.
+Source-tested textured Disc composition is committed446e84d; guarded candidate
+publication remains a later gate. None of these changes is silently in R03.
 The old source contracts and historical failed records remain preserved.
 
 ## Repository and authority
@@ -62,7 +65,24 @@ checkpoint near5% usage remaining. Do not redeem a reset credit. Do not replace
 the preserved editor silently, modify original game/save owners, bypass OS
 permissions, or call a usage pause completion. Serialize the shared .NET slot.
 
-## Latest closed runtime — September 8, corrected separated Wizard
+## Latest closed runtime — September 8, corrected Wizard R02
+
+Read `native-fresh-separated-wizard-runtime-r02.md` and private journal
+`_local/native-fresh-wizard-separated-runtime-20260908-r02.CABpLh/RUNTIME-SESSION.md`.
+Same corrected e57fed…3cbdb candidate, fresh cold boot/private-card/native LAB
+entry, no savestate/debugger writes. Samples15/16 capture exact spawn/zero motion,
+including state6/timer0;17 descends vertically;18 settles. Health3→2→1→0 with
+Sparx removed, then-1/state30, lives4→3, then health3/state0/Sparx restored on the
+authored floor. Native screenshot shows life counter3. Controlled10% speed only;
+enemy defeat/reward, normal portal reentry, full-speed/audio/peaks remain open.
+
+Duck27834/exec98346 and observer26105 CLOSED/exit0; observer final full checks
+passed. Disconnect auto-resume handled before Quit with resume save unchecked.
+Both INIs restored byte-exact; all nine protected pre/post hashes matched.
+No original-card copy-back, R03 change or active emulator. Do not reuse old IDs.
+JSONL SHA b09368b146d6e6e4050f93671dfddcb1bf31fd377b7fc5cb234f452083d5e082.
+
+## Earlier closed runtime — September 8, corrected Wizard R01
 
 Exact candidate is the clean `04-separated-candidate` child of
 `_local/research/dark-wizard-native-closure-20260906/separated-publication-gates-20260908-r01.PsfP2X/`.

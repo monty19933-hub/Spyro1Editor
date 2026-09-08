@@ -1,6 +1,6 @@
 # Spyro editor — what is working now
 
-Updated September 8, 2026 after the corrected fresh-Wizard DuckStation test.
+Updated September 8, 2026 after the corrected fresh-Wizard death/respawn test.
 Development continues with the requested pause near 5% usage **remaining**.
 This is a development checkpoint, not a V6 release. Original game/save files and
 the preserved R03 editor have not been replaced.
@@ -11,17 +11,17 @@ The corrected, separately published test ROM loaded the authored teal floor,
 brown sky, Spyro, Sparx and the imported Wizard. Spyro descended vertically and
 landed at the saved spawn without the earlier sideways launch. The Wizard then
 attacked; health decreased from 3 to 2 to 1 while Spyro remained on the floor.
+In a fresh cold-boot test, Sparx disappeared, the next attack killed Spyro,
+the life count decreased from four to three, and Spyro respawned on the authored
+floor with Sparx and full health restored. Native screenshots and independently
+checked read-only observations support this exact sequence.
 
-Testing stopped when Sparx disappeared and the strict observer refused its
-now-null pointer. Original native source supports removing Sparx at nonpositive
-health. The refused sample stays refused; a separately tested diagnostic change
-is required before observing that state again. This is not evidence of a crash,
-player death, successful re-entry or full gameplay completion.
-
-This run used controlled 10% emulation speed. The earliest observed normal
-update was timer2, not the first native update. Enemy defeat/reward, normal-speed
-gameplay, death/return, sound and resource limits remain separate checks.
-See [publication and closed runtime evidence](native-fresh-separated-wizard-publication.md).
+This used controlled 10% emulation speed. Player-state6/timer0 was observed at
+the exact spawn with zero motion before the subsequent vertical descent. This
+is not continuous execution tracing or an all-game acceptance test. Enemy
+defeat/reward, normal-speed gameplay, normal portal reentry, sound and resource
+limits remain separate checks. See [the closed runtime report](native-fresh-separated-wizard-runtime-r02.md).
+The earlier observer refusal remains preserved and was not reclassified.
 
 Both DuckStation settings files were restored exactly after quitting. Original
 BIN, CUE and memory card, the three candidate files and emulator executable
@@ -33,13 +33,17 @@ matched their pre-test hashes. No original card was replaced.
   list with stable IDs. Its first supported placement type is a Wizard route.
 - Explicitly forking a saved floor into that document preserves the legacy file;
   the two documents do not silently synchronize.
-- The new App-side document session passes actual save/reopen, raw-file conflict,
-  selection and whole-document undo/redo tests, including 128 stored placements.
-  That storage capacity is **not** a native-game allocation guarantee.
+- The existing Fresh window now has an explicit whole-level mode with route
+  adding/editing/removal/reordering, save/reopen and whole-document undo/redo.
+  New headless UI219, session138 and unchanged legacy UI65/researchUI333 pass.
+  Its 128 stored-placement limit is **not** a native-game allocation guarantee.
+  Aggregate export is still disabled until the actual saved revision is bound
+  through final publication; it never exports an inactive legacy file instead.
 - The fresh-level texture backend can source two individually selected static
-  materials from the original game. Textured disc composition and its tests are
-  under development; texture painting and mixed texture/Wizard export are not
-  yet available in the window.
+  materials from the original game. Textured disc composition passes source
+  checks and six complete-image/inverse comparisons against an independent raw
+  oracle. Physical textured candidates, texture painting and mixed
+  texture/Wizard export are not yet available in the window.
 - Two Wizards imported into an existing level previously passed a bounded
   gameplay sequence: attacks, separate rewards, repeat defeat without a
   duplicate reward, and ordinary portal re-entry preserving collected states.
@@ -58,8 +62,9 @@ In R03, open **Fresh Level…** to test:
 
 1. Change floor/spawn coordinates, heading, floor/sky colors or music selection,
    then click Apply. The preview is schematic, not a gameplay renderer.
-2. Try Undo/Redo, then Save document and Reopen saved. Only applied values are
-   saved; typed-but-unapplied fields are not the document.
+2. Try Undo/Redo, then Save document and Reopen saved. Save validates and applies
+   the complete form before writing; invalid text is retained without replacing
+   the valid preview.
 3. Close/reopen the window to check persistence. The existing saved floor is
    2048×2048 with heading96 and Stone Hill Track02.
 4. Check validation: on that existing floor, spawnX8192 lies on its boundary and
@@ -81,8 +86,8 @@ feature.
 
 ## Remaining work toward V6
 
-The immediate parallel tracks are placement controls in the existing Fresh
-window, the textured-disc path, and the next fresh-Wizard lifecycle playtest.
+The immediate parallel tracks are native validation/packaging of the placement
+window, a guarded textured-candidate path, and further fresh-Wizard gameplay.
 Saved aggregate export also needs a final project/document lease, so a valid
 draft cannot be exported against a different saved revision.
 

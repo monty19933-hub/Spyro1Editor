@@ -13,10 +13,16 @@ conversion, source-bound initial spawn clearance, authored same-layout Wizard
 composition and two selected static texture sources. They are not yet in R03.
 The next work order is:
 
-1. Publish and play the corrected, separated Wizard on the larger fresh floor;
-   preserve uncertain publication outcomes and observe native behavior directly.
+1. Continue the corrected fresh-Wizard lifecycle tests. Separate publication and
+   readback passed, and DuckStation showed vertical descent/stable landing plus
+   attacks on the larger floor. A separately tested fresh absence observer now
+   supports a cold-entry/damage/Sparx-disappearance/death/respawn cycle at10%.
+   Enemy defeat/reward, full-speed behavior and normal portal reentry are next.
+   See `native-fresh-separated-wizard-runtime-r02.md` for the closed result.
 2. Integrate the aggregate document/placed-route workflow into the editor with
    saved-version export binding, undo/redo and actual edit/save/export/play tests.
+   The existing window now passes219 headless placement/history/persistence
+   checks; aggregate export stays disabled pending actual saved-version binding.
 3. Carry selected static materials through a separately validated textured Disc
    path, test near/far rendering in game, then expose persisted material controls.
 4. Expand imported dependency families and destination conditions through the
