@@ -21,6 +21,7 @@ if (request?.IssuedMatrix != true)
     SavedWizardBindingCases.Free(Check);
     await MixedResourceCases.Free(Check);
     await Schema2MaterialAncestryCases.Free(Check);
+    await MixedBodyCases.Free(Check);
     Console.WriteLine($"FRESH_WIZARD_AUTHORING_FREE_OK checks={checks}");
 }
 if (request == null) return;

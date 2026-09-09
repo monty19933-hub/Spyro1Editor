@@ -38,12 +38,14 @@ Latest full all-project Release/default gate:335/zero failures, including the
 nonfriend saved-level API, actual window inspection controls, readonly96-check
 regression, scrollable preview layout, saved research action, mixed resource
 component, shared GPU mechanics and all earlier default gates.
-The latest run also builds the schema2 material-ancestry component and runs its
-source-free API checks. Actual old-Body anti-loss refusals run separately in
-the source13130 gate, not in this default335 count.
+The latest run also builds the schema2 material-ancestry/mixed Body component
+and runs its source-free API checks. Actual mixed Body and old-EXE refusals run
+separately in source89793, not in this default335 count.
 Exact summary:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-u99k8x7_/summary.json`.
+Root22346 CLOSED0; independent summary census335/all passed, real246.78s.
+The preceding ancestry335 gate was28830 at
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-80bvegt4/summary.json`.
-Root28830 CLOSED0; independent summary census335/all passed, real247.82s.
 The preceding mixed-resource335 gate was74153 at
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-wvu37voa/summary.json`.
 The preceding connected-export335 gate was19495 at
@@ -156,8 +158,19 @@ expectations and old Body/Disc/Candidate full-image/receipt/CUE goldens remain
 unchanged. The promoted whole-old-file inverse passes44 direct-text checks;
 independent original BIN/CUE posthash39719/cmp0. Existing untextured Body entries
 explicitly refuse the new producer before source I/O, preventing material loss.
-This is aggregate ancestry, not saved-revision/publication authority; mixed
-Body/EXE/Disc and gameplay remain pending. See native-fresh-schema2-material-ancestry.md.
+This established aggregate ancestry, not saved-revision/publication authority.
+The subsequent actual mixed Body now passes source7025/final7027 (89793 CLOSED0,
+real125.09s): all three complete Body goldens, fixed CD geometry, A6C/594 used
+data/padding, derived runtime addresses and old authored Candidate controls.
+New tests-only RED14 preceded build0/0/free203; the private whole-old inverse62
+and exact promoted-file comparisons pass. Shared old EXE admission refuses the
+new Body before ancestry/copies/I/O. Independent source-closed original hashes
+35666/cmp0 follow; intermediate99647 was not the source-completion gate.
+Mixed EXE/Disc and gameplay remain pending. See native-fresh-schema2-material-body.md
+and native-fresh-schema2-material-ancestry.md.
+After the Body change, old fixed-Wizard source14561 also CLOSED0
+(165/20,real48.80s,physicalOutputFiles=0), retaining original Plan/receipt/CUE.
+Final original BIN/CUE hashes47005/cmp0; R05 App/Core are still exact.
 Fresh fixed-Wizard source replay39205 also CLOSED0 (165/20, real48.78s,
 no physical output), retaining its original Plan/receipt/CUE byte controls.
 Independent final original BIN/CUE hashes83597/cmp0; R05 App/Core remain exact.
@@ -535,12 +548,15 @@ Next outcomes, in parallel where ownership permits:
    with fresh INI/card copies and actual process/candidate binding. Preserve that
    evidence. A future native R05 GUI export still needs its own publication check;
    the headless Window test is not a native file-picker interaction.
-4. Actual schema2 Wizard/material ancestry and the old-Body anti-loss refusal
-   now pass source checks for three ordered T1 pairs. Next, compose the actual
-   mixed Body while retaining those objects and full data/padding/native-address
-   owners. Keep old EXE entry closed until its matching composition is reviewed;
-   then complete EXE/Disc and saved-revision publication before enabling mixed
-   saved export. Preserve GPU/audio ownership and all old goldens.
+4. Actual schema2 Wizard/material ancestry and mixed Body now pass source checks
+   for three ordered T1 pairs. Next, add a reviewed internal mixed EXE arm,
+   retaining the exact Body while reusing the unchanged initializer/census/music
+   byte recipe. Keep public old EXE admission closed, and add an explicit old-Disc
+   barrier before enabling the new EXE ancestry. Then address Disc separately:
+   fixed physical geometry, actual mixed A6C runtime relations, complete1290-sector
+   and full-image references. Saved-revision publication and mixed gameplay
+   follow before enabling mixed saved export. Preserve GPU/audio owners and all
+   old serializers/goldens; never apply a blanket +170 native-address patch.
 5. Expand Moby family/dependency support and destination capacity coverage.
    Generic inventory is not placement authority. Preserve source-derived
    callbacks, private state, animation/collision lookahead, shared audio and

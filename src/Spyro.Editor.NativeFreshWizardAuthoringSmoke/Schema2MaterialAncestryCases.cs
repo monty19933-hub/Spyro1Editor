@@ -154,6 +154,7 @@ internal static class Schema2MaterialAncestryCases
         await TinyFailure(path=>NativeId65FreshWizardResearchScenePlan.CaptureMaterialAuthoredAsync(
             path,actualDocument,compilation,family,resource),check);
         await TinyFailure(path=>NativeFreshWizardMaterialResource.CaptureMaterialAuthoredAsync(path,primaryHost,a,b),check);
+        await MixedBodyCases.Source(bin,issued.Select(p=>p.Resource).ToArray(),own,check);
         check(oldScene.PlanSha256==oldScenePlan&&oldHost.PlanSha256==oldHostPlan,
             "Existing schema1 objects and JSON identities remain unchanged; outer source suite still exercises old full goldens.");
     }

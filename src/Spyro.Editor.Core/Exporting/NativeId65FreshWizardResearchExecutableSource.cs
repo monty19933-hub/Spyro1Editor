@@ -34,7 +34,10 @@ internal sealed class NativeId65FreshWizardResearchExecutableSource
     internal IReadOnlyList<NativeId65EngineEvidence> Evidence{get;}
     internal static void RequireBody(NativeId65FreshWizardResearchBodyPlan body)
     {
-        ArgumentNullException.ThrowIfNull(body);body.RequireAncestry(body.HostAncestor);
+        ArgumentNullException.ThrowIfNull(body);
+        if(body.IsMaterialAuthored)
+            throw new InvalidDataException("Mixed material Body executable composition is not enabled.");
+        body.RequireAncestry(body.HostAncestor);
         body.RequireExactOutputs(body.CopyLevelData(),body.CopyOverlay(),body.CopyInitializerPatch(),body.CopyTransferSourceImage());
         body.HostAncestor.SceneAncestor.ResourceAncestor.RequireCompilationProfile();
     }

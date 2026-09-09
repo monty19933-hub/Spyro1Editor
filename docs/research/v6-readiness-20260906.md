@@ -49,9 +49,11 @@ The next work order is:
    weakening ownership, and actual C# resource results match all three. The
    helper changes preserve the complete old-source inverse. Actual schema2
    aggregate/material ancestry now passes source checks without discarding the
-   material choices. Mixed Body/EXE/Disc output, saved-revision binding and mixed
-   gameplay remain pending; old untextured Body export explicitly refuses this
-   producer. See native-fresh-schema2-material-ancestry.md and
+   material choices. The actual mixed Body now matches all three full-body
+   references, including A6C used data,594 padding and derived runtime addresses.
+   Mixed EXE/Disc output, saved-revision binding and mixed gameplay remain
+   pending; old executable export explicitly refuses the new Body. See
+   native-fresh-schema2-material-body.md, native-fresh-schema2-material-ancestry.md and
    native-fresh-mixed-resource-component.md.
 5. Complete native acceptance of the separately identified R05 preview; package
    a later build only for newly verified scope. Keep remaining incompatible

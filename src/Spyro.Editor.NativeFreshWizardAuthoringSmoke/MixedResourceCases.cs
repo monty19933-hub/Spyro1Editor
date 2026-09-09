@@ -96,6 +96,7 @@ internal static class MixedResourceCases
             var m0=g.A==14?a:b;var m1=g.B==14?a:b;
             var result=await NativeFreshWizardMaterialResource.CaptureAsync(bin,host,m0,m1);
             result.RequireAncestry(host,document,m0,m1);
+            await MixedBodyCases.Schema1Refusal(result,check);
             check(ReferenceEquals(result.HostAncestor,host)&&ReferenceEquals(result.DocumentAncestor,document)&&
                 ReferenceEquals(result.FallbackAncestor,host.FallbackAncestor)&&
                 ReferenceEquals(result.SceneAncestor,host.SceneAncestor)&&

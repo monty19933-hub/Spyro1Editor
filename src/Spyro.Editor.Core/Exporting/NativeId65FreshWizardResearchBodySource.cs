@@ -23,6 +23,17 @@ internal sealed class NativeId65FreshWizardResearchBodySource
         byte[] executable=host.SceneAncestor.CompilationAncestor.FreshResourceAncestor.ResourceChainAncestor.Resources.Surface.CopySourceExecutable();
         NativeId65NormalUploadStagingSource.ValidateSourceExecutable(executable);
     }
+    private NativeId65FreshWizardResearchBodySource(NativeFreshWizardMaterialResource mixed,NativeId65NormalBodySource retail)
+    {
+        RequireMixed(mixed);MixedResourceAncestor=mixed;Host=mixed.HostAncestor;_retail=retail;
+        // Same genuine retail auxiliary/PETE issuer; its historical capture
+        // lifecycle is not widened by this new outer Body entry.
+        if(retail.ResidentPeteAddress!=0x801C5BB8||retail.NormalReservedLowerAddress!=0x80187BB0)
+            throw new InvalidDataException("Original shared/native reserved owners changed.");
+        byte[] executable=Host.SceneAncestor.CompilationAncestor.FreshResourceAncestor.ResourceChainAncestor.Resources.Surface.CopySourceExecutable();
+        NativeId65NormalUploadStagingSource.ValidateSourceExecutable(executable);
+    }
+    internal NativeFreshWizardMaterialResource? MixedResourceAncestor{get;}
     internal NativeId65FreshWizardResearchHostPlan Host{get;}
     internal uint ResidentPeteAddress=>_retail.ResidentPeteAddress;
     internal uint NormalReservedLowerAddress=>_retail.NormalReservedLowerAddress;
@@ -38,6 +49,27 @@ internal sealed class NativeId65FreshWizardResearchBodySource
         if(host.CopyAnchor!=0x8008BA38||host.OverlayByteLength!=0x11000||host.SceneAncestor.PlacedCount!=1||
             host.SceneAncestor.NativeNominalCapacity!=32||host.SourceImageSha256!=NativeMobySourceInventory.OriginalImageSha256)
             throw new InvalidDataException("Body requires its actual fixed P1/N32 enlarged Town Host.");
+    }
+    internal static void RequireMixed(NativeFreshWizardMaterialResource mixed)
+    {
+        ArgumentNullException.ThrowIfNull(mixed);
+        if(!mixed.Schema2MaterialBindingProven)
+            throw new InvalidDataException("Mixed body requires actual schema2 material binding.");
+        mixed.RequireAncestry(mixed.HostAncestor,mixed.DocumentAncestor,mixed.MaterialSources[0],mixed.MaterialSources[1]);
+        var host=mixed.HostAncestor;host.RequireExactOutputs(host.CopyOverlay(),host.CopyInitializerPatch());
+        byte[] upload=mixed.CopyUploadPayload(),data=mixed.CopyDataComponents(),models=mixed.CopyModelPayload(),scene=mixed.CopyScene();
+        mixed.RequireExactOutputs(upload,data,models,scene);
+        if(host.CopyAnchor!=0x8008BA38||host.OverlayByteLength!=0x11000||host.SceneAncestor.PlacedCount!=1||
+            host.SceneAncestor.NativeNominalCapacity!=32||host.SourceImageSha256!=NativeMobySourceInventory.OriginalImageSha256||
+            upload.Length!=0xE5800||data.Length!=0xA6C||models.Length!=0x19000||scene.Length!=0x3000)
+            throw new InvalidDataException("Mixed body requires complete actual separatedB material resource lengths and Host bounds.");
+    }
+    internal static async Task<NativeId65FreshWizardResearchBodySource> CaptureMaterialAuthoredAsync(string path,
+        NativeFreshWizardMaterialResource mixed,CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();RequireMixed(mixed);
+        var retail=await NativeId65NormalBodySource.CaptureAsync(path,token);
+        token.ThrowIfCancellationRequested();return new(mixed,retail);
     }
     internal static async Task<NativeId65FreshWizardResearchBodySource> CaptureAsync(string path,
         NativeId65FreshWizardResearchHostPlan host,CancellationToken token)
@@ -61,21 +93,22 @@ internal sealed class NativeId65FreshWizardBodyLayout
         (0x11B,0x13B80,0x35B4,0x3C80),(0xE,0x17800,0x7EC,0x7EC),(0xF,0x17FEC,0x78C,0x78C),(0x10,0x18778,0x330,0x888)];
     private readonly byte[] _body;
     private readonly NativeFreshWizardResourceProfile _profile;
+    private readonly NativeFreshWizardMaterialResource? _mixed;
     private NativeId65FreshWizardBodyLayout(byte[] upload,byte[] data,byte[] model,byte[] scene,byte[][] auxiliary,
-        NativeFreshWizardResourceProfile profile)
+        NativeFreshWizardResourceProfile profile,NativeFreshWizardMaterialResource? mixed=null)
     {
-        _profile=profile;
+        _profile=profile;_mixed=mixed;
         _body=new byte[0x20C800];MakeHeader().CopyTo(_body,0);Descriptors=DecodeHeader(_body.AsSpan(0,0x800));
         byte[] padded=new byte[0x1000];data.CopyTo(padded,0);
         byte[][] parts=[upload,padded,model,scene,..auxiliary];
         for(int i=0;i<parts.Length;i++)parts[i].CopyTo(_body,Descriptors[i].Offset);
-        ValidateStructureCore(_body,_profile);
+        if(_mixed is null)ValidateStructureCore(_body,_profile);else ValidateMaterialStructure(_body,_mixed);
         ModelRoots=Array.AsReadOnly(Roots.Select((r,i)=>new NativeId65NormalBodyRoot(i,0xE7000+r.At,r.At,r.Payload,r.Allocation,r.Class)).ToArray());
         var owners=new List<NativeId65NormalBodyOwner>();
         Add("header",0,0x800,"generated-native-fields-and-zero-complement");
-        Add("same-fallback-upload",0x800,0xE5800,"neutral-input-not-authority");
-        Add("same-fallback-used-data",0xE6000,0x8FC,"neutral-input-not-authority");
-        Add("data-CD-padding",0xE68FC,0x704,"generated-zero-CD-padding");
+        Add(mixed is null?"same-fallback-upload":"same-mixed-upload",0x800,0xE5800,"neutral-input-not-authority");
+        Add(mixed is null?"same-fallback-used-data":"same-mixed-used-data",0xE6000,mixed is null?0x8FC:0xA6C,"neutral-input-not-authority");
+        Add("data-CD-padding",mixed is null?0xE68FC:0xE6A6C,mixed is null?0x704:0x594,"generated-zero-CD-padding");
         Add("same-fallback-seven-model-roots",0xE7000,0x19000,"neutral-input-not-authority");
         Add("same-host-P1-N32-scene",0x100000,0x3000,"neutral-input-not-authority");
         var subowners=new List<NativeId65AuxiliaryBodyOwner>();
@@ -97,7 +130,10 @@ internal sealed class NativeId65FreshWizardBodyLayout
     internal IReadOnlyList<NativeId65AuxiliaryBodyOwner> AuxiliaryOwners{get;}
     internal byte[] CopyLevelData()=>_body.ToArray();
     internal void RequireExactLevelData(ReadOnlySpan<byte> body)
-    {ValidateStructureCore(body,_profile);if(!body.SequenceEqual(_body))throw new InvalidDataException("Body source owner/complement changed.");}
+    {
+        if(_mixed is null)ValidateStructureCore(body,_profile);else ValidateMaterialStructure(body,_mixed);
+        if(!body.SequenceEqual(_body))throw new InvalidDataException("Body source owner/complement changed.");
+    }
     internal static NativeId65FreshWizardBodyLayout Compile(ReadOnlySpan<byte> upload,ReadOnlySpan<byte> data,
         ReadOnlySpan<byte> models,ReadOnlySpan<byte> scene,IReadOnlyList<byte[]> auxiliary)
         =>CompileCore(upload,data,models,scene,auxiliary,NativeFreshWizardResourceProfile.FixedA);
@@ -112,6 +148,36 @@ internal sealed class NativeId65FreshWizardBodyLayout
         byte[] upload=fallback.CopyUploadPayload(),data=fallback.CopyDataComponents(),models=fallback.CopyModelPayload(),sceneBytes=scene.CopyScene();
         fallback.RequireExactOutputs(upload,data,models);scene.RequireExactScene(sceneBytes);
         return CompileCore(upload,data,models,sceneBytes,auxiliary,NativeFreshWizardResourceProfile.AuthoredSameLayout);
+    }
+
+    internal static NativeId65FreshWizardBodyLayout CompileMaterialAuthored(NativeFreshWizardMaterialResource mixed,
+        IReadOnlyList<byte[]> auxiliary)
+    {
+        // Genuine mixed ancestry is checked before touching caller auxiliaries.
+        NativeId65FreshWizardResearchBodySource.RequireMixed(mixed);
+        ArgumentNullException.ThrowIfNull(auxiliary);
+        if(auxiliary.Count!=4)throw new InvalidDataException("Mixed body requires exactly four complete auxiliary allocations.");
+        byte[][] snapshot=auxiliary.Take(5).ToArray();
+        if(snapshot.Length!=4||snapshot.Where((a,i)=>a is null||a.Length!=PartLengths[i+4]).Any())
+            throw new InvalidDataException("Actual bounded auxiliary count/length changed.");
+        foreach(var bytes in snapshot)_=DecodeAuxiliaryOwners(bytes);
+        byte[] upload=mixed.CopyUploadPayload(),data=mixed.CopyDataComponents(),models=mixed.CopyModelPayload(),scene=mixed.CopyScene();
+        mixed.RequireExactOutputs(upload,data,models,scene);RequireSceneStructure(scene);
+        return new(upload,data,models,scene,snapshot.Select(b=>b.ToArray()).ToArray(),
+            NativeFreshWizardResourceProfile.AuthoredSameLayout,mixed);
+    }
+
+    private static void ValidateMaterialStructure(ReadOnlySpan<byte> body,NativeFreshWizardMaterialResource mixed)
+    {
+        NativeId65FreshWizardResearchBodySource.RequireMixed(mixed);
+        if(body.Length!=0x20C800)throw new InvalidDataException("Mixed body length must remain the exact20C800 CD allocation.");
+        var descriptors=DecodeHeader(body[..0x800]);
+        if(body.Slice(0xE6A6C,0x594).ContainsAnyExcept((byte)0))
+            throw new InvalidDataException("Mixed discarded data CD padding changed.");
+        mixed.RequireExactOutputs(body.Slice(0x800,0xE5800),body.Slice(0xE6000,0xA6C),
+            body.Slice(0xE7000,0x19000),body.Slice(0x100000,0x3000));
+        RequireSceneStructure(body.Slice(0x100000,0x3000));
+        foreach(var d in descriptors.Where(d=>d.RetainedAuxiliary))_=DecodeAuxiliaryOwners(body.Slice(d.Offset,d.ByteLength));
     }
 
     private static NativeId65FreshWizardBodyLayout CompileCore(ReadOnlySpan<byte> upload,ReadOnlySpan<byte> data,
