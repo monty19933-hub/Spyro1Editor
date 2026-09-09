@@ -28,25 +28,31 @@ The next work order is:
 2. Actual source-texture thumbnails are now connected: window source75 and
    free argument15/control68/lifecycle80 pass. The scoped Mac dropdown safeguard
    separately passes96 checks after reproducing the actual R04 crash. The preview
-   layout correction passes18 checks. Package a separately identified usable
-   preview from the verified saved-export checkpoint. Preserve
+   layout correction passes18 checks. R05 is now separately packaged from
+   clean71fd499; independent inventories, native launch contract and packaged
+   PNG pass. Its normal launch is waiting for user Documents consent, not yet
+   native GUI acceptance. See native-fresh-level-mac-r05.md. Preserve
    both slots, drafts and source ownership; a thumbnail is not compatibility.
 3. Extend the current gameplay evidence: the corrected fresh Wizard passed
    normal-speed defeat, yellow gem pickup and repeat defeat without another
    gem. The separate fixed two-material floor passed normal-speed movement,
    fall/respawn, jump/landing and flame. Saved-selected candidate gameplay now
-   passes the same bounded actions. Ordinary new-level portal integration,
+   passes the same bounded actions. The exact later Window-produced S8E0wQ
+   candidate also passed its own closed native session; see
+   native-fresh-saved-ui-runtime-r01.md. Ordinary new-level portal integration,
    audio and save/reboot remain open.
    See the R04 Wizard and R01 textured runtime reports for their exact scope.
 4. Expand imported dependency families and destination conditions through the
    shared allocation/linking machinery; cover private state, emitted children,
    sound, collision, rewards and re-entry instead of enabling untested rows.
    Three independent mixed Wizard/material expectations now fit without
-   weakening ownership. Shared GPU mechanics are extracted with exact old-owner
-   inverse and original source goldens preserved; actual mixed C# comparison
-   and mixed gameplay remain pending.
-5. Package a separately identified preview once its actual user workflow works;
-   keep remaining incompatible families/material semantics visible to the user.
+   weakening ownership, and actual C# resource results match all three. The
+   helper changes preserve the complete old-source inverse. Saved schema2
+   ancestry, mixed Body/Disc output and mixed gameplay remain pending; see
+   native-fresh-mixed-resource-component.md.
+5. Complete native acceptance of the separately identified R05 preview; package
+   a later build only for newly verified scope. Keep remaining incompatible
+   families/material semantics visible to the user.
 
 ## Original September 6 assessment
 

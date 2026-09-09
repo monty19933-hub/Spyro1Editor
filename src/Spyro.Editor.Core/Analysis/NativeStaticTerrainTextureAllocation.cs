@@ -128,20 +128,7 @@ public sealed class NativeStaticTerrainTextureAllocation
             Word(originalData, 0x98) != 255 || Word(originalData, 0x9C) != 128 ||
             Word(originalData, 0xA8) != 255 || Word(originalData, 0xAC) != 128)
             throw new InvalidDataException("The bounded fresh untextured two-direct-triangle metadata/face preimages changed.");
-        byte[] output = new byte[0xA38];
-        Put(output, 0, 0x178); Put(output, 4, 2);
-        for (int material = 0; material < 2; material++)
-        {
-            byte[] record = Records[material].CopyRecord();
-            record.AsSpan(0, 16).CopyTo(output.AsSpan(8 + material * 16));
-            record.AsSpan(16, 168).CopyTo(output.AsSpan(40 + material * 168));
-        }
-        originalData[8..].CopyTo(output.AsSpan(0x178));
-        Put(output, 0x208, 0); Put(output, 0x218, 1);
-        for (int i = 8; i < originalData.Length; i++)
-            if (i is not (>= 0x98 and < 0x9C) and not (>= 0xA8 and < 0xAC) && originalData[i] != output[i + 0x170])
-                throw new InvalidDataException("Data metadata growth changed an unowned translated tail byte.");
-        return output;
+        return NativeStaticTerrainGpuAllocation.ComposeTwoFaceMetadata(originalData, Records);
     }
 
     private static T[] Snapshot<T>(IEnumerable<T> values, int maximum) where T : class

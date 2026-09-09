@@ -36,10 +36,13 @@ The old source contracts and historical failed records remain preserved.
 
 Latest full all-project Release/default gate:335/zero failures, including the
 nonfriend saved-level API, actual window inspection controls, readonly96-check
-regression, scrollable preview layout, saved research action, shared GPU mechanics and all earlier default gates.
+regression, scrollable preview layout, saved research action, mixed resource
+component, shared GPU mechanics and all earlier default gates.
 Exact summary:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-wvu37voa/summary.json`.
+Root74153 CLOSED0; independent summary census335/all passed, real247.64s.
+The preceding connected-export335 gate was19495 at
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-r6bwly3f/summary.json`.
-Root19495 CLOSED0; independent summary census335/all passed.
 The preceding334 gate was12027/checkpointed2727c;331 was91392/checkpoint7b22a9a.
 Final picker100 includes unknown kinds and reverse invalid-Base
 atomicity; Root viewed both regenerated1120x800 PNGs in
@@ -134,7 +137,15 @@ all1290 changed-sector hashes are retained, not actual C# or runtime issuance.
 See native-fresh-mixed-resource-expectations.md. The GPU-only mechanics extraction
 now preserves the whole old DE000 adapter by exact inverse; default7627 and actual
 terrain132825/body139/disc312/saved-material220 source checks passed with old goldens.
-Root replayed the promoted inverse. Mixed component drafts remain private. See
+Root replayed the promoted inverse. The mixed component is now promoted and
+source-tested: three complete upload/data goldens match, free192/source6667/
+final6669 pass, and a real invalid-source fixture proves ordered initial/held/
+current failures and acquired-file closure. Exact whole-old source inverse46
+passes independently. Original BIN/CUE full posthashes match. The component
+retains schema1 ancestry, not saved schema2 material binding, and issues no mixed
+Body/Disc/image. Fresh adjacent terrain132825/body139/Disc312/saved-material220
+source gates all close0 with old goldens unchanged; independent final original
+BIN/CUE full hashes32572/cmp0. See native-fresh-mixed-resource-component.md and
 native-fresh-shared-gpu-allocation.md. The same saved Candidate/public publisher
 now passes nonfriend default56/source136, nine exact negative compile controls,
 and internal saved default157/source222 with all five full images unchanged.
@@ -153,8 +164,14 @@ Root's separate Verify25333 CLOSED0: exact2533...b75b70/1253 image,
 Plan d4cd178c6476a04625d43414cb25d91418b501551030cf5131f8e0eaed45a704,
 receipt dca4d7b3a019f5c25f1436ac35c79af5eac9767ec5df44cfa981a873fadf9347,
 all artifacts/saved owners unchanged and original held/current finalization complete.
-This new output has no new native gameplay observation yet. Typed committed/
-unconfirmed Window formatting remains source-reviewed, not fabricated UI coverage.
+This exact new output subsequently passed native DuckStation entry, jump/landing,
+flame, edge movement/fall and return to the floor. Execution36725/PID77523 is
+CLOSED0; both original INIs restored and all9 protected hashes match (69065
+CLOSED0/cmp0). Root and H viewed all9 PNGs; W independently cross-checked the
+documentary chain. See native-fresh-saved-ui-runtime-r01.md and private
+`_local/native-fresh-saved-ui-runtime-20260908-r01.tk7y2X/`.
+Typed committed/unconfirmed Window formatting remains source-reviewed, not
+fabricated UI coverage. Runtime observations do not mutate receipt flags.
 A separate corrected-Wizard R04 native session now passed normal100% flame
 defeat, yellow-gem pickup LAB10/10,total58→68, edge fall/respawn, second defeat
 with purple repeat-kill orb and unchanged final10/10,total68. PID50221/exec48620
@@ -484,23 +501,28 @@ rebuild. See `native-fresh-document-mac-r03.md` and
 
 Next outcomes, in parallel where ownership permits:
 
-1. The inclusive connected saved-aggregate gate is now335/0. Bind the separately
-   reviewed R05 driver to the resulting exact clean checkpoint.
-   Package a new isolated app/project with both explicit modes, source thumbnails,
-   saved export, readonly dropdown safeguard and scrollable preview caption.
-   Preserve R03/R04 and their actual current projects; never overwrite or reset.
+1. R05 is now separately packaged from clean71fd499, with both explicit modes,
+   source thumbnails, saved export, readonly dropdown safeguard and scrollable
+   preview caption. Corrected build55570 and independent pre-GUI checks49357/
+   98849 all CLOSED0; native contract and packaged PNG also CLOSED0. The initial
+   canary-link preflight failure47131 is retained; narrowly scoped preservation
+   adapter20/old52 pass. See native-fresh-level-mac-r05.md. Preserve R03/R04/R05
+   and actual projects; never overwrite, re-seed or silently rebuild them.
 2. Test the exact new native window: ordinary menu selection, source inspection,
    draft/Apply/Undo/Save/Reopen and the saved export workflow. Source/headless
-   checks are not native UI acceptance; no TCC bypass is authorized.
-3. Cold-boot the exact new UI-produced S8E0wQ CUE in DuckStation, using fresh
-   INI/card copies and actual process/candidate binding. Capture visible gameplay,
-   close the emulator and restore original settings byte-for-byte. Earlier equal
-   game-data images are supporting controls, not a new session observation.
-4. Finish the private mixed Wizard/material component through tests-first actual
-   C# issuance and three independent full-image comparisons. Its initial seam
-   retains actual schema-1 Wizard ancestry and must not claim schema-2 material
-   binding. Complete that binding and metadata/body relocation before enabling
-   mixed saved export. Keep prior GPU/audio ownership and all old goldens intact.
+   checks are not native UI acceptance; no TCC bypass is authorized. First normal
+   launch17:33:22 reached Documents consent, OS prompt17:33:23; John was asked
+   to click Allow. Managed startup/manifest had not occurred at that observation.
+3. Exact new UI-produced S8E0wQ DuckStation gameplay is now complete and closed,
+   with fresh INI/card copies and actual process/candidate binding. Preserve that
+   evidence. A future native R05 GUI export still needs its own publication check;
+   the headless Window test is not a native file-picker interaction.
+4. The mixed resource component now passes actual C# issuance and three complete
+   mixed-resource comparisons. Its initial seam retains actual schema1 Wizard
+   ancestry, not schema2 material binding. Complete the separately reviewed
+   schema2 ancestry seam with an explicit old-Body anti-loss refusal, then
+   metadata/body relocation, before enabling mixed saved export. Keep prior
+   GPU/audio ownership and all old goldens intact.
 5. Expand Moby family/dependency support and destination capacity coverage.
    Generic inventory is not placement authority. Preserve source-derived
    callbacks, private state, animation/collision lookahead, shared audio and

@@ -123,6 +123,34 @@ internal sealed class NativeStaticTerrainGpuAllocation
         return new(output, occupancy, records, regions.ToArray(), aliases.ToArray());
     }
 
+    // Neutral bounded metadata writer only. Each source adapter validates its
+    // own full input grammar/ancestry before this call; this helper issues none.
+    internal static byte[] ComposeTwoFaceMetadata(ReadOnlySpan<byte> originalData,
+        IReadOnlyList<NativeStaticTerrainTextureLayout> records)
+    {
+        if (originalData.Length is not (0x8C8 or 0x8FC))
+            throw new InvalidDataException("Metadata composition requires the bounded8C8 or8FC input extent.");
+        ArgumentNullException.ThrowIfNull(records);
+        if (records.Count != 2 || records[0] is null || records[1] is null)
+            throw new InvalidDataException("Metadata composition requires exactly two complete decoded records.");
+        byte[] output = new byte[originalData.Length + 0x170];
+        Put(output, 0, 0x178); Put(output, 4, 2);
+        for (int material = 0; material < 2; material++)
+        {
+            byte[] record = records[material].CopyRecord();
+            record.AsSpan(0, 16).CopyTo(output.AsSpan(8 + material * 16));
+            record.AsSpan(16, 168).CopyTo(output.AsSpan(40 + material * 168));
+        }
+        originalData[8..].CopyTo(output.AsSpan(0x178));
+        Put(output, 0x208, 0); Put(output, 0x218, 1);
+        for (int i = 8; i < originalData.Length; i++)
+            if (i is not (>= 0x98 and < 0x9C) and not (>= 0xA8 and < 0xAC) && originalData[i] != output[i + 0x170])
+                throw new InvalidDataException("Data metadata growth changed an unowned translated tail byte.");
+        return output;
+    }
+
+    private static void Put(Span<byte> bytes, int at, uint value) => BinaryPrimitives.WriteUInt32LittleEndian(bytes[at..], value);
+
     private sealed record Resource(int Material, string Kind, int Bpp, int X, int Y, int Width, int Rows)
     { internal int Offset => Y * 1024 + X; }
     private static Resource R(int material, string kind, int bpp, int offset, int width, int rows) =>

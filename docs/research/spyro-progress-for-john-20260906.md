@@ -1,6 +1,7 @@
 # Spyro editor — what is working now
 
-Updated September 8, 2026 after the connected Save → research export and independent image verification.
+Updated September 8, 2026 after the connected Save → research export, exact
+DuckStation gameplay test and separate R05 Mac package verification.
 Development continues with the requested pause near 5% usage **remaining**.
 This is a development checkpoint, not a V6 release. Original game/save files and
 the preserved R03 editor have not been replaced.
@@ -71,7 +72,11 @@ matched their pre-test hashes. No original card was replaced.
   actual Save followed by that action produced the expected complete BIN, and
   a separate process verified all output bytes and the saved project binding.
   Late cancellation and a simulated UI cleanup error did not erase its real
-  publication result. These controls are in source, not yet in R04. See the
+  publication result. That exact new output now also passed native jump/landing,
+  flame and edge-fall/return checks, with both settings files restored and all
+  nine protected hashes unchanged. See the
+  [new UI-output gameplay report](native-fresh-saved-ui-runtime-r01.md).
+  These controls are in the separate R05 package, not the preserved R04. See the
   [connected export report](native-fresh-saved-research-window.md),
   [source-thumbnail window](native-fresh-material-inspection-window.md) and
   [material-picker checkpoint](native-fresh-saved-material-picker.md).
@@ -82,19 +87,19 @@ matched their pre-test hashes. No original card was replaced.
 
 ## Which editor can I test now?
 
-The newer, separate **R04 whole-level test editor** has now been built from
-checkpoint60f6d6f. Package/signature, source preservation and packaged PNG checks
-pass. Its normal launch has now reached the actual main/Fresh windows. A native
-accessibility write to a read-only dropdown exposed a crash; keyboard Down/Return
-selection worked after recovery. The focused source fix passes96 checks but is
-not installed into preserved R04. Native edit/save/reopen acceptance remains
-pending; use ordinary menu/keyboard selection, not an accessibility text write.
-No permission bypass was used. See the [dropdown regression](native-fresh-readonly-selection.md) and
-[R04 app location and test checklist](native-fresh-level-mac-r04.md).
+The newest separate build is **Spyro Fresh Level Materials Test r05.app**, from
+checkpoint71fd499. It includes the material picker, source thumbnails, guarded
+saved export, dropdown crash safeguard and small-window layout fix.
+Package/signature, preservation, native launch-contract and packaged PNG checks
+pass. Its first normal launch is waiting for you to allow Documents access;
+native edit/save/reopen/export acceptance remains pending. No permission bypass
+was used. See the [R05 app location and test checklist](native-fresh-level-mac-r05.md).
 
-R04 adds **Level aggregate → Fork saved legacy floor** and Wizard-route
-placement controls. Aggregate export remains disabled; this is not yet the
-all-Moby/all-texture V6 editor. Your R03 copy remains separate and unchanged.
+R05's research export supports a saved two-retail-material floor with no placed
+Mobys. Placement editing exists, but mixed Wizard/material export remains
+disabled. This is not the all-Moby/all-texture V6 editor. R03 and R04 remain
+separate and unchanged; the older R04 dropdown crash is documented in the
+[regression report](native-fresh-readonly-selection.md).
 
 The preserved private R03 app is here:
 
@@ -132,19 +137,20 @@ feature.
 
 ## Remaining work toward V6
 
-The immediate parallel tracks are a separately identified preview package with
-saved export, source thumbnails, the Mac dropdown safeguard and the small-window
-layout fix; native testing of that workflow; and mixed Wizard/material composition.
+The separate R05 package is built and verified. Immediate parallel tracks are
+native testing after Documents consent, and mixed Wizard/material composition.
 The authored Wizard source matrix completed72 recipes across46 music selections;
 that is complete-image/initial-footprint evidence, not72 gameplay tests. See the
 [issued-matrix report](native-fresh-wizard-issued-matrix.md).
 The new saved-aggregate backend holds the actual final project/document guard
 at publication. Physical interrupted-export checks and the guarded App action
 are now tested. This does not enable Wizard/material mixtures. A separate
-original-only mixed Wizard/material check also fits three selected material
-pairs while preserving enemy and sound-transfer memory. Actual editor output
-and gameplay for those mixed recipes remain next; see the
-[mixed-resource findings](native-fresh-mixed-resource-expectations.md).
+original-only mixed Wizard/material check fits three selected material pairs
+while preserving enemy and sound-transfer memory. The actual code now matches
+all three resource results, and the full regression suite remains green.
+Connecting the saved mixed document to a complete test ROM and checking it in
+game remain next. This new component is not in R05. See the
+[mixed-resource checkpoint](native-fresh-mixed-resource-component.md).
 
 Universal importing still requires each object's behavior, effects, sound,
 collision, animation, private/shared state and resource needs to remain correct
@@ -154,7 +160,8 @@ animated textures and arbitrary object/material mixtures remain open.
 
 Latest completed all-project Release gate: **335 checks, zero failures**, including
 the public saved-level API, source-thumbnail window, Mac dropdown regression,
-shared GPU allocation, connected saved research export, layout, background inspection worker, raw picker, initial footprint
+shared GPU allocation, mixed Wizard/material resources, connected saved research export,
+layout, background inspection worker, raw picker, initial footprint
 and prior texture publication/failure-recovery controls. Fixed-recipe exporter
 checkpoint: f8b382c. These latest source
 changes are not in the preserved R03/R04 apps.

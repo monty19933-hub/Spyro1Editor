@@ -31,11 +31,7 @@ public sealed class NativeId65FreshTerrainTexturePlan
         MaterialSources = Array.AsReadOnly(new[] { material0, material1 });
         // The shared reader already binds the complete original image/EXE. Keep
         // exact small consumer obligations visible, without claiming a full GPU.
-        foreach (var span in Consumers)
-            if ((long)span.ExecutableFileOffset + 0x8000F800L != span.RuntimeAddress ||
-                Hash(executable.AsSpan(span.ExecutableFileOffset, span.ByteLength)) != span.Sha256)
-                throw new InvalidDataException("A native static-texture clip/loader/renderer consumer changed.");
-        Evidence = Array.AsReadOnly(Consumers.ToArray());
+        Evidence = CaptureConsumerEvidence(executable);
         _scene = fresh.CopyScene(); _model = fresh.CopyModelPayload();
         byte[] upload = fresh.CopyUploadPayload(), data = fresh.CopyDataComponents();
         if (Hash(_scene) != fresh.SceneSha256 || Hash(_model) != fresh.ModelSha256 ||
@@ -162,6 +158,16 @@ public sealed class NativeId65FreshTerrainTexturePlan
             throw new InvalidDataException("Selected material requires an actual exact-original static terrain source issuer.");
         source.RequireExactSourceRecord(source.Layout.CopyRecord());
     }
+    // Both adapters first authenticate the complete original EXE.
+    internal static IReadOnlyList<NativeId65SurfaceConsumerEvidence> CaptureConsumerEvidence(byte[] executable)
+    {
+        foreach (var span in Consumers)
+            if ((long)span.ExecutableFileOffset + 0x8000F800L != span.RuntimeAddress ||
+                Hash(executable.AsSpan(span.ExecutableFileOffset, span.ByteLength)) != span.Sha256)
+                throw new InvalidDataException("A native static-texture clip/loader/renderer consumer changed.");
+        return Array.AsReadOnly(Consumers.ToArray());
+    }
+
     private static NativeStaticTerrainTextureInput Input(NativeStaticTerrainTextureSource source, int material) =>
         new(material, source.Handle, "source-right-half-vram:wad-" + source.SourceWadEntry,
             NativeStaticTerrainTextureAllocation.RelocationPolicyId, source.Layout.CopyRecord(), source.CopySourceVram());
