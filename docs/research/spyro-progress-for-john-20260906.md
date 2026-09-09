@@ -1,6 +1,6 @@
 # Spyro editor — what is working now
 
-Updated September 8, 2026 after saved-selected gameplay, source thumbnails and native dropdown regression testing.
+Updated September 8, 2026 after the connected Save → research export and independent image verification.
 Development continues with the requested pause near 5% usage **remaining**.
 This is a development checkpoint, not a V6 release. Original game/save files and
 the preserved R03 editor have not been replaced.
@@ -43,13 +43,14 @@ matched their pre-test hashes. No original card was replaced.
   adding/editing/removal/reordering, save/reopen and whole-document undo/redo.
   New headless UI219, session138 and unchanged legacy UI65/researchUI333 pass.
   Its 128 stored-placement limit is **not** a native-game allocation guarantee.
-  Aggregate export is still disabled until the actual saved revision is bound
-  through final publication; it never exports an inactive legacy file instead.
+  Aggregate research export is now connected for a saved schema-2 document with
+  two retail materials and no placements. Other shapes remain refused; it never
+  exports an inactive legacy file or only the first object instead.
 - The fresh-level texture backend can source two individually selected static
   materials from the original game. Textured disc composition passes source
   checks and six complete-image/inverse comparisons against an independent raw
-  oracle. Physical textured candidates, texture painting and mixed
-  texture/Wizard export are not yet available in the window. A separate exact
+  oracle. The window now publishes a bounded saved two-material candidate;
+  texture painting and mixed texture/Wizard export remain unavailable. A separate exact
   two-material candidate has now been published and played: both textures
   appeared, and movement, edge fall/respawn, jump/landing and flame effects were
   observed at normal speed. See the [textured-floor test](native-fresh-textured-runtime-r01.md).
@@ -66,8 +67,12 @@ matched their pre-test hashes. No original card was replaced.
   [saved-material gameplay report](native-fresh-saved-material-runtime-r01.md).
   The window now shows explicit source thumbnails, with75 actual-source UI checks
   passing alongside cancellation/stale-result and bitmap-cleanup tests. The same
-  saved-level publisher is now available through a guarded public API; connecting
-  the export button is next. These controls are in source, not yet in R04. See the
+  saved-level publisher is now connected to the existing research button. An
+  actual Save followed by that action produced the expected complete BIN, and
+  a separate process verified all output bytes and the saved project binding.
+  Late cancellation and a simulated UI cleanup error did not erase its real
+  publication result. These controls are in source, not yet in R04. See the
+  [connected export report](native-fresh-saved-research-window.md),
   [source-thumbnail window](native-fresh-material-inspection-window.md) and
   [material-picker checkpoint](native-fresh-saved-material-picker.md).
 - Two Wizards imported into an existing level previously passed a bounded
@@ -127,15 +132,15 @@ feature.
 
 ## Remaining work toward V6
 
-The immediate parallel tracks are the saved whole-level export button, mixed
-Wizard/material composition, and a separately identified preview package with
-source thumbnails and the Mac dropdown safeguard.
+The immediate parallel tracks are a separately identified preview package with
+saved export, source thumbnails, the Mac dropdown safeguard and the small-window
+layout fix; native testing of that workflow; and mixed Wizard/material composition.
 The authored Wizard source matrix completed72 recipes across46 music selections;
 that is complete-image/initial-footprint evidence, not72 gameplay tests. See the
 [issued-matrix report](native-fresh-wizard-issued-matrix.md).
 The new saved-aggregate backend holds the actual final project/document guard
-at publication. Physical interrupted-export checks are now complete; the App
-integration remains before enabling that action in the window. A separate
+at publication. Physical interrupted-export checks and the guarded App action
+are now tested. This does not enable Wizard/material mixtures. A separate
 original-only mixed Wizard/material check also fits three selected material
 pairs while preserving enemy and sound-transfer memory. Actual editor output
 and gameplay for those mixed recipes remain next; see the
@@ -147,14 +152,14 @@ in each destination. A model catalog alone cannot provide that. Multiple
 editable new-level slots, normal portal integration, save/reboot compatibility,
 animated textures and arbitrary object/material mixtures remain open.
 
-Latest completed all-project Release gate: **334 checks, zero failures**, including
+Latest completed all-project Release gate: **335 checks, zero failures**, including
 the public saved-level API, source-thumbnail window, Mac dropdown regression,
-shared GPU allocation, background inspection worker, raw picker, initial footprint
+shared GPU allocation, connected saved research export, layout, background inspection worker, raw picker, initial footprint
 and prior texture publication/failure-recovery controls. Fixed-recipe exporter
 checkpoint: f8b382c. These latest source
 changes are not in the preserved R03/R04 apps.
 These are engineering
-checks, not334 gameplay runs. Texture inspection is now connected to the window
+checks, not335 gameplay runs. Texture inspection is now connected to the window
 and separately passes actual-source and cancellation tests. The [engineering handoff](native-editor-resume-20260906.md)
 and [V6 readiness assessment](v6-readiness-20260906.md) retain the detailed
 boundaries and next steps.

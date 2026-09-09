@@ -143,8 +143,9 @@ internal static class NativeFreshMaterialPickerUiCases
             f.Window.CurrentAggregateIntent.FloorMaterials!.Triangle0.Tag == "base-floor-color" &&
             f.Window.CurrentAggregateIntent.FloorMaterials.Triangle1.Tag == "base-floor-color", "clearing both slots never downgrades");
         f.Fire("FreshDocumentResearch");
-        Check(f.SourceCalls == 0 && f.Label("FreshDocumentStatus").Contains("unavailable", StringComparison.OrdinalIgnoreCase),
-            "material editing never enables whole-level export or source access");
+        Check(f.SourceCalls == 0 && f.Label("FreshDocumentStatus").Contains("two retail materials", StringComparison.Ordinal) &&
+            f.Label("FreshDocumentStatus").Contains("no placements", StringComparison.Ordinal),
+            "base-color slots refuse material-only research before source access with exact restrictions");
     }
 
     private static void KindAndBaseFailures(Fixture f)

@@ -127,6 +127,8 @@ ADDITIONAL_CORE_CASES = (
      ["--fresh-material-inspection-worker-only"]),
     ("UiSmoke", "FRESH_MATERIAL_INSPECTION_UI_OK",
      ["--fresh-material-inspection-only"]),
+    ("UiSmoke", "FRESH_SAVED_RESEARCH_UI_OK",
+     ["--fresh-saved-research-ui"]),
 )
 SOURCE_QA_CASES = (
     # This read-only mode checks both preserved V2 and V3 native closure goldens;
@@ -398,6 +400,7 @@ def main():
             ("--fresh-material-picker-only",): "-fresh-material-picker",
             ("--fresh-material-inspection-worker-only",): "-fresh-material-inspection-worker",
             ("--fresh-material-inspection-only",): "-fresh-material-inspection",
+            ("--fresh-saved-research-ui",): "-fresh-saved-research",
         }.get(tuple(arguments), "")
         execute("run-" + project.stem + suffix,
                 ["dotnet", "run", "--project", str(project), "--configuration",

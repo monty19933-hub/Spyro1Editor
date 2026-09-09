@@ -113,10 +113,12 @@ internal static class NativeFreshLevelMaterialUiCases
         Check(disk.Intent!.SchemaVersion == 2 && Bytes(disk.Intent).SequenceEqual(Bytes(f.Window.CurrentAggregateIntent!)) &&
             disk.Intent.Placements.Select(p=>p.EditorId).SequenceEqual(new[]{B,A}) && !f.Window.HasUnsavedChanges,
             "Save/Reopen persists all edited content and both material slots");
-        Check(!f.Button("FreshDocumentResearch").IsEnabled, "schema2 does not enable existing aggregate export");
+        Check(!f.Button("FreshDocumentResearch").IsEnabled, "schema2 with Wizard placements does not enable material-only research export");
         f.Fire("FreshDocumentResearch");
-        Check(f.SourceCalls == 0 && f.PickerCalls == 0 && f.Label("FreshDocumentStatus").Contains("unavailable",StringComparison.OrdinalIgnoreCase),
-            "direct schema2 export event refuses before source/picker/worker");
+        Check(f.SourceCalls == 0 && f.PickerCalls == 0 &&
+            f.Label("FreshDocumentStatus").Contains("two retail materials",StringComparison.Ordinal) &&
+            f.Label("FreshDocumentStatus").Contains("no placements",StringComparison.Ordinal),
+            "direct schema2-with-Wizards export refuses before source/picker/worker with exact material-only restrictions");
         var floorBounds = f.Window.Preview.FloorSchematicBounds ?? throw new InvalidDataException("Actual projected floor required");
         Check(floorBounds.Left >= 0 && floorBounds.Right <= f.Window.Preview.Bounds.Width && floorBounds.Top >= 76 &&
             floorBounds.Bottom < f.Window.Preview.SchematicCaptionTop,

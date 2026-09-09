@@ -34,21 +34,23 @@ physical publication and native tests are now complete as bounded below.
 None of these changes is silently in R03.
 The old source contracts and historical failed records remain preserved.
 
-Latest full all-project Release/default gate:334/zero failures, including the
+Latest full all-project Release/default gate:335/zero failures, including the
 nonfriend saved-level API, actual window inspection controls, readonly96-check
-regression, shared GPU mechanics and all earlier default gates.
+regression, scrollable preview layout, saved research action, shared GPU mechanics and all earlier default gates.
 Exact summary:
-`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-e8hn4gvm/summary.json`.
-Root12027 CLOSED0. The previous331 gate was91392/checkpoint7b22a9a.
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-r6bwly3f/summary.json`.
+Root19495 CLOSED0; independent summary census335/all passed.
+The preceding334 gate was12027/checkpointed2727c;331 was91392/checkpoint7b22a9a.
 Final picker100 includes unknown kinds and reverse invalid-Base
 atomicity; Root viewed both regenerated1120x800 PNGs in
 `spyro-material-picker-ui-KYgopu` under the same temporary parent. Runner71 and
 all Python226/13 explicit skips passed at that earlier gate. Latest standalone
-runner73 and Python discovery228/13 explicit skips pass. R04 later started at15:35,
+runner74 and Python discovery229/13 explicit skips pass. R04 later started at15:35,
 with actual main/Fresh windows observed16:00. A read-only accessibility SetValue
 crashed PID36028; native recovery started67619. Root verified exact legacy seed,
 absent aggregate and unchanged App/Core, then used Down/Return successfully and
-closed only the Fresh window. Main R04 remains open, not patched. Native
+closed only the Fresh window. Root later quit main R04 normally with Cmd-Q;
+PID67619 is now absent. R04 is preserved, not patched. Native
 edit/save/reopen acceptance remains pending. DuckStation is now CLOSED
 after the saved-selected test described below; no observer is active.
 Root separately replayed source-backed textured baseline193/complete original
@@ -86,7 +88,7 @@ and original BIN/CUE unchanged. Row durations sum1014.805s; this is not72 native
 gameplay runs. The strict source-owned initial footprint passes new58/25 and
 actual source200/95, with historical diagnostic SHA unchanged. See
 `native-fresh-saved-material-picker.md` and `native-fresh-wizard-issued-matrix.md`.
-Aggregate export remains disabled in the App. One closed saved-level publication
+At that earlier checkpoint aggregate export remained disabled. One closed saved-level publication
 path is now implemented rather than another class per authored recipe.
 Root/H review found and corrected a missing first final-artifact attempt after
 actual commit plus failed saved guard completion in that private draft. The
@@ -105,7 +107,7 @@ all three artifacts/raw/manifest remained exact. The clean2533...b75b70 candidat
 then passed bounded normal100% entry/two materials/jump/landing/flame/movement/
 edge fall/respawn/stable idle. Duck64671/exec91100 CLOSED0; both original INIs
 restored and protected9 SHA cmp0 (88152). Eight actual native PNGs Root/H viewed.
-See native-fresh-saved-material-runtime-r01.md. App aggregate export stays disabled.
+See native-fresh-saved-material-runtime-r01.md. That runtime test predates App export integration.
 See `native-fresh-saved-level-publication.md` for the actual source evidence.
 The new source-preview wrapper separately matches64 original-only RGBA literals;
 actual source268/total673, free405 and prior UI gates pass. After the330 gate,
@@ -137,7 +139,22 @@ native-fresh-shared-gpu-allocation.md. The same saved Candidate/public publisher
 now passes nonfriend default56/source136, nine exact negative compile controls,
 and internal saved default157/source222 with all five full images unchanged.
 Its narrow public API retains real Snapshot ownership and private constructors;
-App button integration remains next. See native-fresh-saved-public-api.md.
+The App button integration is now implemented; see native-fresh-saved-public-api.md
+and native-fresh-saved-research-window.md. Its free arguments46/readiness101/
+lifecycle556 checks pass, as do all adjacent legacy/material/inspection gates.
+Actual UI publication93196 CLOSED0 after a real unchanged Save returned a new
+Snapshot with a distinct parsed Intent but identical canonical bytes. The Window
+retained that actual Save Snapshot through public Capture/Publish, not an equal
+applied object or inactive legacy document. Six actual checks include retaining
+the real result after late cancellation, changed-project advisory and a labeled
+simulated UI owner-release failure. Candidate is
+`_local/research/saved-level-ui-publication-20260908-r01.S8E0wQ/candidate-r01`.
+Root's separate Verify25333 CLOSED0: exact2533...b75b70/1253 image,
+Plan d4cd178c6476a04625d43414cb25d91418b501551030cf5131f8e0eaed45a704,
+receipt dca4d7b3a019f5c25f1436ac35c79af5eac9767ec5df44cfa981a873fadf9347,
+all artifacts/saved owners unchanged and original held/current finalization complete.
+This new output has no new native gameplay observation yet. Typed committed/
+unconfirmed Window formatting remains source-reviewed, not fabricated UI coverage.
 A separate corrected-Wizard R04 native session now passed normal100% flame
 defeat, yellow-gem pickup LAB10/10,total58→68, edge fall/respawn, second defeat
 with purple repeat-kill orb and unchanged final10/10,total68. PID50221/exec48620
@@ -467,35 +484,23 @@ rebuild. See `native-fresh-document-mac-r03.md` and
 
 Next outcomes, in parallel where ownership permits:
 
-1. Finish the new absent-Sparx observer arm with genuine RED/GREEN tests, full
-   Root/peer review and explicit original-source branch ownership. Never change
-   the three old pinned observers or reinterpret sample11. Then use a fresh
-   DuckStation session for the corrected candidate's death/return and reward
-   checks. Use actual native UI input, fresh INI/card copies and exact candidate/
-   process/cache binding; no debugger execution or RAM writes. Capture early
-   entry by stepping before the transition rather than assuming a loading timer
-   from a different recipe. Disconnect may auto-resume; verify native pause.
-2. Integrate the approved whole-level App session into the existing Fresh
-   window: explicit legacy/aggregate mode, explicit saved-floor Fork, ordered
-   placement list, stable selection and Wizard route fields/preview. Neutral
-   multi-placement drafts must remain fully editable and stored; native export
-   must still refuse unsupported shapes instead of using the first row, a
-   hidden preset or the old floor-only fallback. Preserve raw unapplied fields,
-   dirty prompts, active-project/busy checks and existing legacy behavior.
-3. Add actual saved-aggregate publication context and a final Store read lease
-   held through PublishNew. Compile the actual captured Snapshot.Intent; its
-   independently parsed object is not reference-identical to CurrentIntent after
-   Save. Context must bind full aggregate canonical bytes AND raw manifest/
-   document revision and actual project identity. Detached candidates remain
-   explicitly detached; do not relabel their projectSaveBindingClaimed=false.
-   Existing typed Unconfirmed and known-commit retention rules remain mandatory.
-4. Finish the bounded textured Disc issuer/source tests. Use the actual typed
-   DirectLq body discriminator plus shape, not A38 used length alone (untextured
-   data can share that length). Preserve old Disc JSON/goldens and staging/
-   material ancestry. Then progress guarded candidate publication, editable
-   persisted material slots and a separate real textured-level playtest.
-   Complete static texture records do not yet prove HQ/near rendering, animated
-   materials or arbitrary simultaneous Wizard/resource composition.
+1. The inclusive connected saved-aggregate gate is now335/0. Bind the separately
+   reviewed R05 driver to the resulting exact clean checkpoint.
+   Package a new isolated app/project with both explicit modes, source thumbnails,
+   saved export, readonly dropdown safeguard and scrollable preview caption.
+   Preserve R03/R04 and their actual current projects; never overwrite or reset.
+2. Test the exact new native window: ordinary menu selection, source inspection,
+   draft/Apply/Undo/Save/Reopen and the saved export workflow. Source/headless
+   checks are not native UI acceptance; no TCC bypass is authorized.
+3. Cold-boot the exact new UI-produced S8E0wQ CUE in DuckStation, using fresh
+   INI/card copies and actual process/candidate binding. Capture visible gameplay,
+   close the emulator and restore original settings byte-for-byte. Earlier equal
+   game-data images are supporting controls, not a new session observation.
+4. Finish the private mixed Wizard/material component through tests-first actual
+   C# issuance and three independent full-image comparisons. Its initial seam
+   retains actual schema-1 Wizard ancestry and must not claim schema-2 material
+   binding. Complete that binding and metadata/body relocation before enabling
+   mixed saved export. Keep prior GPU/audio ownership and all old goldens intact.
 5. Expand Moby family/dependency support and destination capacity coverage.
    Generic inventory is not placement authority. Preserve source-derived
    callbacks, private state, animation/collision lookahead, shared audio and

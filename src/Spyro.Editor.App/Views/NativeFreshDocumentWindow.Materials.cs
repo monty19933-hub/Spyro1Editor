@@ -76,7 +76,7 @@ internal sealed partial class NativeFreshDocumentWindow
         _materialFields.Children.Add(new TextBlock
         {
             Name = "FreshMaterialAuthoringNotice",
-            Text = "Material descriptors are authoring intent. Inspect sources explicitly for separate source thumbnails; aggregate export remains unavailable.",
+            Text = "Material descriptors are authoring intent. Inspect sources explicitly for separate thumbnails. Clean saved two-retail/no-placement aggregates may use the research action; actual source eligibility is checked during preparation.",
             TextWrapping = TextWrapping.Wrap, FontSize = 11, Foreground = Brushes.DimGray
         });
         return _materialFields;

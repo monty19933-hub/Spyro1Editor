@@ -23,6 +23,23 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+// Explicit saved aggregate UI tests; neither old/default nor source-only modes write.
+if (NativeFreshSavedResearchUiArguments.Handles(args))
+{
+    bool publish = NativeFreshSavedResearchUiArguments.RequirePublication(args);
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    if (publish) NativeFreshSavedResearchSourceUiCases.Run(args[1], args[2], args[3], args[4]);
+    else
+    {
+        NativeFreshSavedResearchUiArguments.Run();
+        string savedUiFixtures = Directory.CreateTempSubdirectory("spyro-saved-research-ui-").FullName;
+        NativeFreshSavedResearchReadinessCases.Run(savedUiFixtures);
+        NativeFreshSavedResearchLifecycleCases.Run(savedUiFixtures);
+        Console.WriteLine($"FRESH_SAVED_RESEARCH_UI_OK sourceOpened=false nativeOutputWritten=false fixtures={savedUiFixtures}");
+    }
+    return 0;
+}
+
 // Explicit headless inspection UI modes; worker-only dispatch remains independent.
 if (NativeFreshMaterialInspectionUiArguments.Handles(args))
 {
