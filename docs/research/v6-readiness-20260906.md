@@ -51,8 +51,10 @@ The next work order is:
    aggregate/material ancestry now passes source checks without discarding the
    material choices. The actual mixed Body now matches all three full-body
    references, including A6C used data,594 padding and derived runtime addresses.
-   Mixed EXE/Disc output, saved-revision binding and mixed gameplay remain
-   pending; old executable export explicitly refuses the new Body. See
+   The new internal mixed EXE also retains that actual Body and matches the
+   old track19 byte recipe. Mixed Disc output, saved-revision binding and mixed
+   gameplay remain pending; old disc export explicitly refuses the new EXE.
+   See native-fresh-schema2-material-executable.md,
    native-fresh-schema2-material-body.md, native-fresh-schema2-material-ancestry.md and
    native-fresh-mixed-resource-component.md.
 5. Complete native acceptance of the separately identified R05 preview; package

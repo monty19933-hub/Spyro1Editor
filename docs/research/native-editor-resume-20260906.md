@@ -4,6 +4,15 @@ This page describes the current state, not an appended list of contradictory
 historical ACTIVE statuses. Earlier chronology remains in Git and
 `native-editor-checkpoint-20260906.md`; individual reports own exact evidence.
 
+September 8 safe usage pause: last observed 7% remaining, stopping at the
+verified mixed-EXE checkpoint before the larger Disc integration so the
+requested approximate 5% reserve is preserved. This is not goal completion;
+no reset was redeemed. All owned build/source runs and subagent work are closed.
+DuckStation is closed/restored. The exact R05 launch helper is still waiting
+for user Documents consent; Computer Use refused that permission dialog,
+and no alternate consent route was attempted. Resume from actual clean HEAD
+and the next-Disc contract below; do not rebuild or reseed R05 silently.
+
 Resumed September8 from clean773f52f at John's request, preserving the same5%
 remaining reserve. Fresh usage was12% used (88% remaining), not12% remaining;
 no reset was redeemed. The fresh all-project baseline passed315/0 in
@@ -38,12 +47,14 @@ Latest full all-project Release/default gate:335/zero failures, including the
 nonfriend saved-level API, actual window inspection controls, readonly96-check
 regression, scrollable preview layout, saved research action, mixed resource
 component, shared GPU mechanics and all earlier default gates.
-The latest run also builds the schema2 material-ancestry/mixed Body component
-and runs its source-free API checks. Actual mixed Body and old-EXE refusals run
-separately in source89793, not in this default335 count.
+The latest run also builds the schema2 material-ancestry/mixed Body/EXE components
+and runs their source-free API checks. Actual mixed EXE and old-Disc refusals run
+separately in source12663, not in this default335 count.
 Exact summary:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-ba0cxiuc/summary.json`.
+Root60319 CLOSED0; independent summary census335/all passed, real246.87s.
+The preceding mixed Body335 gate was22346 at
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-u99k8x7_/summary.json`.
-Root22346 CLOSED0; independent summary census335/all passed, real246.78s.
 The preceding ancestry335 gate was28830 at
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-80bvegt4/summary.json`.
 The preceding mixed-resource335 gate was74153 at
@@ -171,6 +182,22 @@ and native-fresh-schema2-material-ancestry.md.
 After the Body change, old fixed-Wizard source14561 also CLOSED0
 (165/20,real48.80s,physicalOutputFiles=0), retaining original Plan/receipt/CUE.
 Final original BIN/CUE hashes47005/cmp0; R05 App/Core are still exact.
+The next internal EXE arm now passes source7147/final7149 (12663 CLOSED0,
+real127.35s), all three complete EXEs matching a0eb46…3fc8dc. It retains exact
+Body/mixed/full aggregate ownership, with no native-code address patch.
+Tests-only RED8 preceded build0/0/free208; private whole-old inverse42 and exact
+promoted comparisons pass. The old public EXE arm stays closed; shared old Disc
+admission explicitly refuses material EXEs before Body access/ancestry/copies.
+Actual same-Mixed Body reissue isolates the exact Body-reference negative.
+Independent original BIN/CUE posthash71642/cmp0. Source mode retains all old
+authored Body/Disc/Candidate/full-image/receipt/CUE controls. See
+native-fresh-schema2-material-executable.md. No mixed Disc/image was emitted.
+The freshly rebuilt old executable source gate14746 CLOSED0,973/716,
+real17.32s, including its unchanged46-track byte/reversal matrix and actual
+old Body-reference controls. Old EXE Plan617b56…4cf28f remains exact.
+Old fixed-candidate85181 also CLOSED0 (165/20,real48.43s), no physical output,
+all old Plan/receipt/CUE goldens exact. Independent final original BIN/CUE
+hash54556/cmp0; record16 confirms original settings/card/emulator and R05 DLLs.
 Fresh fixed-Wizard source replay39205 also CLOSED0 (165/20, real48.78s,
 no physical output), retaining its original Plan/receipt/CUE byte controls.
 Independent final original BIN/CUE hashes83597/cmp0; R05 App/Core remain exact.
@@ -548,15 +575,19 @@ Next outcomes, in parallel where ownership permits:
    with fresh INI/card copies and actual process/candidate binding. Preserve that
    evidence. A future native R05 GUI export still needs its own publication check;
    the headless Window test is not a native file-picker interaction.
-4. Actual schema2 Wizard/material ancestry and mixed Body now pass source checks
-   for three ordered T1 pairs. Next, add a reviewed internal mixed EXE arm,
-   retaining the exact Body while reusing the unchanged initializer/census/music
-   byte recipe. Keep public old EXE admission closed, and add an explicit old-Disc
-   barrier before enabling the new EXE ancestry. Then address Disc separately:
-   fixed physical geometry, actual mixed A6C runtime relations, complete1290-sector
-   and full-image references. Saved-revision publication and mixed gameplay
-   follow before enabling mixed saved export. Preserve GPU/audio owners and all
-   old serializers/goldens; never apply a blanket +170 native-address patch.
+4. Actual schema2 Wizard/material ancestry, mixed Body and internal mixed EXE
+   now pass source checks for three ordered T1 pairs. Next address Disc:
+   retain the exact actual EXE, fixed physical geometry, actual mixed A6C runtime
+   relations, complete1290-sector and full-image references through a hash sink.
+   Keep old public Disc refusal; add a shared old-Candidate producer barrier
+   before ancestry in BOTH RequireDisc/RequireSeparatedDisc, preserving all old
+   recipe predicates. Review new-arm construction and inner failure accounting;
+   an outer finalizer cannot recover a primary error already lost inside.
+   Private reviewed next contract:
+   `_local/research/schema2-wizard-material-disc-next-r01.qs9RTn/CONTRACT.md`.
+   Saved-revision publication and mixed gameplay follow before enabling mixed
+   saved export. Preserve GPU/audio owners and all old serializers/goldens;
+   never apply a blanket +170 native-address patch.
 5. Expand Moby family/dependency support and destination capacity coverage.
    Generic inventory is not placement authority. Preserve source-derived
    callbacks, private state, animation/collision lookahead, shared audio and

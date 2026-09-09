@@ -2,8 +2,10 @@
 
 Updated September 8, 2026 after the connected Save → research export, exact
 DuckStation gameplay test, separate R05 package verification and source-tested
-Wizard/material document ancestry and source-tested combined level bodies.
-Development continues with the requested pause near 5% usage **remaining**.
+Wizard/material document ancestry and source-tested combined bodies/executables.
+Development is safely paused at the verified mixed-executable checkpoint,
+with 7% usage remaining at the last check, preserving the requested approximate
+5% reserve before starting the larger disc-assembly step.
 This is a development checkpoint, not a V6 release. Original game/save files and
 the preserved R03 editor have not been replaced.
 
@@ -150,10 +152,12 @@ original-only mixed Wizard/material check fits three selected material pairs
 while preserving enemy and sound-transfer memory. The actual code now matches
 all three resource results. The combined level body now also matches all three
 independent references, retaining the whole Wizard/material document and its
-corrected memory layout. Older executable export explicitly refuses this new
-body. Connecting it to a complete test ROM, binding the
+corrected memory layout. A separate internal executable path now retains that
+body and matches the existing game-code reference; ordinary disc export still
+refuses it. Connecting it to a complete test ROM, binding the
 saved revision and checking it in game remain next. These backend components
-are not in R05. See the [combined-body checkpoint](native-fresh-schema2-material-body.md),
+are not in R05. See the [executable checkpoint](native-fresh-schema2-material-executable.md),
+[combined-body checkpoint](native-fresh-schema2-material-body.md),
 [material ancestry checkpoint](native-fresh-schema2-material-ancestry.md)
 and [mixed-resource checkpoint](native-fresh-mixed-resource-component.md).
 
@@ -166,7 +170,7 @@ animated textures and arbitrary object/material mixtures remain open.
 Latest completed all-project Release gate: **335 checks, zero failures**, including
 the public saved-level API, source-thumbnail window, Mac dropdown regression,
 shared GPU allocation, mixed Wizard/material resources, document ancestry and
-combined level bodies, connected saved research export,
+combined level bodies/executables, connected saved research export,
 layout, background inspection worker, raw picker, initial footprint
 and prior texture publication/failure-recovery controls. Fixed-recipe exporter
 checkpoint: f8b382c. These latest source

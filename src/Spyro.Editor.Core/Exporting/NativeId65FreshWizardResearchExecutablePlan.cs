@@ -25,12 +25,27 @@ public sealed class NativeId65FreshWizardResearchExecutablePlan
             PendingOwners,SourceCertified,InstalledDispatchProven,GlobalTransitionState12Supported,PersistentOwnerIssued,
             CardOrHistoryCompatibilityProven,WholePickupOrDeathProven,GlobalAudioCompatibilityProven,PeakRuntimeMemoryProven,
             CompleteIncomingEdgeClosureProven,CompleteNativeDependencyClosureProven,RuntimeVerified,PublicationApproved}));
+        // Preserve the historical evidence shape; only the actual new source
+        // arm receives this distinct binding envelope.
+        if(source.MixedResourceAncestor is { } mixed)
+            PlanSha256=NativeId65FreshWizardExecutableLayout.Hash(JsonSerializer.SerializeToUtf8Bytes(new{
+                Profile="internal-schema2-separated-B-three-T1-pairs-detached-mixed-executable-v1",
+                ExecutableEvidenceSha256=PlanSha256,BodyPlanSha256,MixedResourcePlanSha256=mixed.PlanSha256,
+                AggregateCanonicalSha256=mixed.SceneAncestor.MaterialCanonicalSha256}));
     }
+    internal bool IsMaterialAuthored=>_source.MixedResourceAncestor is not null;
+    internal NativeFreshWizardMaterialResource? MixedResourceAncestor=>_source.MixedResourceAncestor;
     internal NativeId65FreshWizardResearchBodyPlan BodyAncestor=>_source.Body;
     internal void RequireAncestry(NativeId65FreshWizardResearchBodyPlan body)
     {
         if(!ReferenceEquals(body,BodyAncestor))throw new InvalidDataException("Executable belongs to another actual Body, even when every executable byte/hash is equal.");
-        NativeId65FreshWizardResearchExecutableSource.RequireBody(body);
+        if(_source.MixedResourceAncestor is { } mixed)
+        {
+            if(!ReferenceEquals(mixed,body.MixedResourceAncestor))
+                throw new InvalidDataException("Executable lost its exact retained Body/mixed source pair.");
+            NativeId65FreshWizardResearchExecutableSource.RequireMaterialBody(body);
+        }
+        else NativeId65FreshWizardResearchExecutableSource.RequireBody(body);
     }
     internal byte[] RevertExact(ReadOnlySpan<byte> executable)=>Layout.RevertExact(executable);
     public const string ProfileId="fresh-A-P1-N32-Town-Host-R1-static-target10-detached-executable-v1";
@@ -86,6 +101,45 @@ public sealed class NativeId65FreshWizardResearchExecutablePlan
             image.Position=0;
             await NativeId65FreshWizardResearchResourceSource.RequireSnapshotIdentityAsync(image,NativeMobySourceInventory.OriginalImageByteLength,
                 NativeMobySourceInventory.OriginalImageSha256,CancellationToken.None);token.ThrowIfCancellationRequested();
+        }
+    }
+    internal static async Task<NativeId65FreshWizardResearchExecutablePlan> CaptureMaterialAuthoredAsync(string originalBin,
+        NativeId65FreshWizardResearchBodyPlan body,CancellationToken token=default)
+    {
+        token.ThrowIfCancellationRequested();NativeId65FreshWizardResearchExecutableSource.RequireMaterialBody(body);
+        ArgumentException.ThrowIfNullOrWhiteSpace(originalBin);string path=Path.GetFullPath(originalBin);
+        FileStream? held=null;NativeId65FreshWizardResearchExecutablePlan? result=null;List<Exception> failures=[];
+        try
+        {
+            held=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
+            await RequireOriginal(held,token);
+            var source=NativeId65FreshWizardResearchExecutableSource.CaptureMaterialAuthored(held,body,token);
+            token.ThrowIfCancellationRequested();result=new(source);
+        }
+        catch(Exception error){failures.Add(error);}
+        finally
+        {
+            if(held is not null)await TryAsync(()=>RequireOriginal(held,CancellationToken.None));
+            FileStream? current=null;
+            try
+            {
+                current=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
+                await RequireOriginal(current,CancellationToken.None);
+            }
+            catch(Exception error){failures.Add(error);}
+            finally{if(current is not null)Try(current.Dispose);}
+            if(held is not null)Try(held.Dispose);
+        }
+        NativeFreshResearchSourceOwners.ThrowFailures(failures);
+        token.ThrowIfCancellationRequested();
+        return result??throw new InvalidDataException("Material-authored executable source capture returned no result.");
+        async Task TryAsync(Func<Task> action){try{await action();}catch(Exception error){failures.Add(error);}}
+        void Try(Action action){try{action();}catch(Exception error){failures.Add(error);}}
+        static Task RequireOriginal(Stream image,CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();image.Position=0;
+            return NativeId65FreshWizardResearchResourceSource.RequireSnapshotIdentityAsync(image,
+                NativeMobySourceInventory.OriginalImageByteLength,NativeMobySourceInventory.OriginalImageSha256,ct);
         }
     }
 }

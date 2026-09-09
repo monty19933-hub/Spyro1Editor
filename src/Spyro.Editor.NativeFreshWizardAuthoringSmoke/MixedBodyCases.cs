@@ -183,6 +183,7 @@ internal static class MixedBodyCases
             ReferenceEquals(ownBody.MixedResourceAncestor,sameInputsAgain),"A same-input reissued component may issue its own Body, not replace the first component.");
         await Refuse<InvalidDataException>(()=>{ownBody.RequireMixedAncestry(mixed[0]);return Task.CompletedTask;},check);
         await TinyFailure(path=>NativeId65FreshWizardResearchBodyPlan.CaptureMaterialAuthoredAsync(path,mixed[0]),check);
+        await MixedExecutableCases.Source(bin,bodies,ownBody,check);
     }
 
     private static void RequireOwners(NativeId65FreshWizardResearchBodyPlan body,byte[] bytes,Action<bool,string> check)

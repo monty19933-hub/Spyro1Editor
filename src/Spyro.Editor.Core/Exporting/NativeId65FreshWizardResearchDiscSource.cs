@@ -26,7 +26,10 @@ internal sealed class NativeId65FreshWizardResearchDiscSource
     internal void RequireRawSector(int lba,ReadOnlySpan<byte> bytes)=>_original.RequireRawSector(lba,bytes);
     internal static void RequireExecutable(NativeId65FreshWizardResearchExecutablePlan executable)
     {
-        ArgumentNullException.ThrowIfNull(executable);var body=executable.BodyAncestor;
+        ArgumentNullException.ThrowIfNull(executable);
+        if(executable.IsMaterialAuthored)
+            throw new InvalidDataException("Material-authored Wizard executable disc composition is not enabled.");
+        var body=executable.BodyAncestor;
         executable.RequireAncestry(body);executable.RequireExactExecutable(executable.CopyExecutable());
         NativeId65FreshWizardResearchExecutableSource.RequireBody(body);
         var g=NativeId65FreshWizardDiscGeometry.Compile(body.CopyOverlay().Length,body.CopyLevelData().Length);

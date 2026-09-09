@@ -13,7 +13,12 @@ internal sealed class NativeId65FreshWizardResearchExecutableSource
 {
     private NativeId65FreshWizardResearchExecutableSource(NativeId65FreshWizardResearchBodyPlan body,byte[] original,byte[] town)
     {
-        RequireBody(body);var host=body.HostAncestor;var scene=host.SceneAncestor;
+        if(body.MixedResourceAncestor is { } mixed)
+        {
+            RequireMaterialBody(body);MixedResourceAncestor=mixed;
+        }
+        else RequireBody(body);
+        var host=body.HostAncestor;var scene=host.SceneAncestor;
         if(!original.AsSpan().SequenceEqual(scene.CompilationAncestor.FreshResourceAncestor.ResourceChainAncestor.Resources.Surface.CopySourceExecutable()))
             throw new InvalidDataException("Executable source is not the actual retained Compilation source.");
         NativeId65FreshWizardExecutableLayout.ValidateSourceWindows(original,town);
@@ -29,6 +34,7 @@ internal sealed class NativeId65FreshWizardResearchExecutableSource
             new NativeId65EngineEvidence("actual-issued-P1-static-census-row","actual-issued-scene",0xD4,0x58,Layout.Census.SceneRowSha256),
             new("actual-issued-Host-initializer","actual-issued-Host",patch.Offset,patch.ByteLength,patch.AfterSha256)}).ToArray());
     }
+    internal NativeFreshWizardMaterialResource? MixedResourceAncestor{get;}
     internal NativeId65FreshWizardResearchBodyPlan Body{get;}
     internal NativeId65FreshWizardExecutableLayout Layout{get;}
     internal IReadOnlyList<NativeId65EngineEvidence> Evidence{get;}
@@ -41,14 +47,38 @@ internal sealed class NativeId65FreshWizardResearchExecutableSource
         body.RequireExactOutputs(body.CopyLevelData(),body.CopyOverlay(),body.CopyInitializerPatch(),body.CopyTransferSourceImage());
         body.HostAncestor.SceneAncestor.ResourceAncestor.RequireCompilationProfile();
     }
+    internal static void RequireMaterialBody(NativeId65FreshWizardResearchBodyPlan body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        var mixed=body.MixedResourceAncestor;
+        if(mixed is null)
+            throw new InvalidDataException("Material-authored executable requires its actual mixed Body.");
+        body.RequireMixedAncestry(mixed);body.RequireAncestry(body.HostAncestor);
+        body.RequireExactOutputs(body.CopyLevelData(),body.CopyOverlay(),body.CopyInitializerPatch(),body.CopyTransferSourceImage());
+        body.HostAncestor.SceneAncestor.ResourceAncestor.RequireCompilationProfile();
+        if(mixed.CompilationAncestor.Intent.MusicTrackId!=19)
+            throw new InvalidDataException("Material-authored executable currently requires actual separatedB track19.");
+    }
     internal static NativeId65FreshWizardResearchExecutableSource Capture(FileStream image,NativeId65FreshWizardResearchBodyPlan body,CancellationToken token)
     {
-        token.ThrowIfCancellationRequested();RequireBody(body);var layout=DiscImage.DetectLayout(image);
+        token.ThrowIfCancellationRequested();RequireBody(body);
+        var bytes=ReadOriginal(image,token);return new(body,bytes.Original,bytes.Town);
+    }
+    internal static NativeId65FreshWizardResearchExecutableSource CaptureMaterialAuthored(FileStream image,
+        NativeId65FreshWizardResearchBodyPlan body,CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();RequireMaterialBody(body);
+        var bytes=ReadOriginal(image,token);return new(body,bytes.Original,bytes.Town);
+    }
+    // Exact old bounded sparse-read body; no stream ownership or source callback.
+    private static (byte[] Original,byte[] Town) ReadOriginal(FileStream image,CancellationToken token)
+    {
+        var layout=DiscImage.DetectLayout(image);
         var wad=DiscImage.FindRootFileRecord(image,layout,n=>n.Equals("WAD.WAD",StringComparison.OrdinalIgnoreCase));
         var executable=DiscImage.FindRootFileRecord(image,layout,n=>n.Equals("SCUS_942.28",StringComparison.OrdinalIgnoreCase));
         if(layout.SectorSize!=2352||layout.UserOffset!=24||wad.Lba!=37||wad.Size!=0x6927000||executable.Lba!=53875||executable.Size!=0x66000)
             throw new InvalidDataException("Executable capture requires exact original physical source owners.");
-        return new(body,Read(53875,0,0x66000),Read(37,0x118E800,0xF800));
+        return (Read(53875,0,0x66000),Read(37,0x118E800,0xF800));
         byte[] Read(int lba,long offset,int length)
         {token.ThrowIfCancellationRequested();byte[] bytes=DiscImage.ReadFileBytes(image,layout,lba,offset,length);if(bytes.Length!=length)throw new InvalidDataException("Incomplete executable source owner.");token.ThrowIfCancellationRequested();return bytes;}
     }
