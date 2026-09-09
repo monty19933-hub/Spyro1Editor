@@ -1,7 +1,8 @@
 # Spyro editor — what is working now
 
 Updated September 8, 2026 after the connected Save → research export, exact
-DuckStation gameplay test and separate R05 Mac package verification.
+DuckStation gameplay test, separate R05 package verification and source-tested
+Wizard/material document ancestry.
 Development continues with the requested pause near 5% usage **remaining**.
 This is a development checkpoint, not a V6 release. Original game/save files and
 the preserved R03 editor have not been replaced.
@@ -147,10 +148,12 @@ at publication. Physical interrupted-export checks and the guarded App action
 are now tested. This does not enable Wizard/material mixtures. A separate
 original-only mixed Wizard/material check fits three selected material pairs
 while preserving enemy and sound-transfer memory. The actual code now matches
-all three resource results, and the full regression suite remains green.
-Connecting the saved mixed document to a complete test ROM and checking it in
-game remain next. This new component is not in R05. See the
-[mixed-resource checkpoint](native-fresh-mixed-resource-component.md).
+all three resource results. The next source-tested step now retains the whole
+Wizard/material document and refuses older export paths that would lose its
+textures. Connecting that mixed document to a complete test ROM, binding the
+saved revision and checking it in game remain next. These backend components
+are not in R05. See the [material ancestry checkpoint](native-fresh-schema2-material-ancestry.md)
+and [mixed-resource checkpoint](native-fresh-mixed-resource-component.md).
 
 Universal importing still requires each object's behavior, effects, sound,
 collision, animation, private/shared state and resource needs to remain correct
@@ -160,7 +163,7 @@ animated textures and arbitrary object/material mixtures remain open.
 
 Latest completed all-project Release gate: **335 checks, zero failures**, including
 the public saved-level API, source-thumbnail window, Mac dropdown regression,
-shared GPU allocation, mixed Wizard/material resources, connected saved research export,
+shared GPU allocation, mixed Wizard/material resources and document ancestry, connected saved research export,
 layout, background inspection worker, raw picker, initial footprint
 and prior texture publication/failure-recovery controls. Fixed-recipe exporter
 checkpoint: f8b382c. These latest source

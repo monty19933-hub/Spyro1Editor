@@ -20,6 +20,7 @@ if (request?.IssuedMatrix != true)
     await SeparatedPublicationArgumentCases.Run(Check);
     SavedWizardBindingCases.Free(Check);
     await MixedResourceCases.Free(Check);
+    await Schema2MaterialAncestryCases.Free(Check);
     Console.WriteLine($"FRESH_WIZARD_AUTHORING_FREE_OK checks={checks}");
 }
 if (request == null) return;
@@ -95,6 +96,7 @@ try
     var fallback = await NativeId65FreshWizardResearchFallbackResourcePlan.CaptureAsync(bin, newResource);
     var host = await NativeId65FreshWizardResearchHostPlan.CaptureAsync(bin, scene, fallback);
     await MixedResourceCases.Source(bin,host,Check);
+    await Schema2MaterialAncestryCases.Source(bin,host,Check);
     var body = await NativeId65FreshWizardResearchBodyPlan.CaptureAsync(bin, host);
     var exe = await NativeId65FreshWizardResearchExecutablePlan.CaptureAsync(bin, body);
     var disc = await NativeId65FreshWizardResearchDiscPlan.CaptureAsync(bin, exe);

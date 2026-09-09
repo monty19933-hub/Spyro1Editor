@@ -32,6 +32,8 @@ internal sealed class NativeId65FreshWizardResearchBodySource
     {
         ArgumentNullException.ThrowIfNull(host);
         host.RequireAncestry(host.SceneAncestor,host.FallbackAncestor);
+        if(host.SceneAncestor.Producer==NativeFreshWizardSceneProducer.MaterialAuthored)
+            throw new InvalidDataException("Material-authored Scene requires its mixed body; old untextured Body capture is forbidden.");
         host.RequireExactOutputs(host.CopyOverlay(),host.CopyInitializerPatch());
         if(host.CopyAnchor!=0x8008BA38||host.OverlayByteLength!=0x11000||host.SceneAncestor.PlacedCount!=1||
             host.SceneAncestor.NativeNominalCapacity!=32||host.SourceImageSha256!=NativeMobySourceInventory.OriginalImageSha256)

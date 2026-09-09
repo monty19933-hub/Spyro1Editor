@@ -38,9 +38,14 @@ Latest full all-project Release/default gate:335/zero failures, including the
 nonfriend saved-level API, actual window inspection controls, readonly96-check
 regression, scrollable preview layout, saved research action, mixed resource
 component, shared GPU mechanics and all earlier default gates.
+The latest run also builds the schema2 material-ancestry component and runs its
+source-free API checks. Actual old-Body anti-loss refusals run separately in
+the source13130 gate, not in this default335 count.
 Exact summary:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-80bvegt4/summary.json`.
+Root28830 CLOSED0; independent summary census335/all passed, real247.82s.
+The preceding mixed-resource335 gate was74153 at
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-wvu37voa/summary.json`.
-Root74153 CLOSED0; independent summary census335/all passed, real247.64s.
 The preceding connected-export335 gate was19495 at
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-r6bwly3f/summary.json`.
 The preceding334 gate was12027/checkpointed2727c;331 was91392/checkpoint7b22a9a.
@@ -142,8 +147,21 @@ source-tested: three complete upload/data goldens match, free192/source6667/
 final6669 pass, and a real invalid-source fixture proves ordered initial/held/
 current failures and acquired-file closure. Exact whole-old source inverse46
 passes independently. Original BIN/CUE full posthashes match. The component
-retains schema1 ancestry, not saved schema2 material binding, and issues no mixed
-Body/Disc/image. Fresh adjacent terrain132825/body139/Disc312/saved-material220
+initially retained schema1 ancestry and issued no mixed Body/Disc/image.
+The next closed arm now retains the actual schema2 aggregate, its complete
+canonical material choices and both ordered source instances. Root's actual
+tests-only missing-API RED22 was followed by inclusive build0/zero warnings,
+free199 and source6740/final6742 (13130 CLOSED0, real117.04s). All three resource
+expectations and old Body/Disc/Candidate full-image/receipt/CUE goldens remain
+unchanged. The promoted whole-old-file inverse passes44 direct-text checks;
+independent original BIN/CUE posthash39719/cmp0. Existing untextured Body entries
+explicitly refuse the new producer before source I/O, preventing material loss.
+This is aggregate ancestry, not saved-revision/publication authority; mixed
+Body/EXE/Disc and gameplay remain pending. See native-fresh-schema2-material-ancestry.md.
+Fresh fixed-Wizard source replay39205 also CLOSED0 (165/20, real48.78s,
+no physical output), retaining its original Plan/receipt/CUE byte controls.
+Independent final original BIN/CUE hashes83597/cmp0; R05 App/Core remain exact.
+Fresh adjacent terrain132825/body139/Disc312/saved-material220
 source gates all close0 with old goldens unchanged; independent final original
 BIN/CUE full hashes32572/cmp0. See native-fresh-mixed-resource-component.md and
 native-fresh-shared-gpu-allocation.md. The same saved Candidate/public publisher
@@ -517,12 +535,12 @@ Next outcomes, in parallel where ownership permits:
    with fresh INI/card copies and actual process/candidate binding. Preserve that
    evidence. A future native R05 GUI export still needs its own publication check;
    the headless Window test is not a native file-picker interaction.
-4. The mixed resource component now passes actual C# issuance and three complete
-   mixed-resource comparisons. Its initial seam retains actual schema1 Wizard
-   ancestry, not schema2 material binding. Complete the separately reviewed
-   schema2 ancestry seam with an explicit old-Body anti-loss refusal, then
-   metadata/body relocation, before enabling mixed saved export. Keep prior
-   GPU/audio ownership and all old goldens intact.
+4. Actual schema2 Wizard/material ancestry and the old-Body anti-loss refusal
+   now pass source checks for three ordered T1 pairs. Next, compose the actual
+   mixed Body while retaining those objects and full data/padding/native-address
+   owners. Keep old EXE entry closed until its matching composition is reviewed;
+   then complete EXE/Disc and saved-revision publication before enabling mixed
+   saved export. Preserve GPU/audio ownership and all old goldens.
 5. Expand Moby family/dependency support and destination capacity coverage.
    Generic inventory is not placement authority. Preserve source-derived
    callbacks, private state, animation/collision lookahead, shared audio and

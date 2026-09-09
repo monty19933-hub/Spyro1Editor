@@ -9,6 +9,9 @@ using Spyro.Editor.Core.Editing;
 
 namespace Spyro.Editor.Core.Exporting;
 
+// Set only by private construction/named factories; never a caller policy flag.
+internal enum NativeFreshWizardSceneProducer { FixedA, Authored, MaterialAuthored }
+
 public sealed record NativeFreshWizardSceneOwner(string Id,int Offset,int ByteLength,string Sha256,
     string Provenance,string? SourceOwnerId,int? SourceOffset);
 public sealed record NativeFreshWizardScenePointerFixup(string SourceOwnerId,int SourceOffset,int SceneOffset,int Before,int After);
@@ -150,12 +153,14 @@ internal sealed class NativeId65FreshWizardSceneLayout
 /// </summary>
 public sealed class NativeId65FreshWizardResearchScenePlan
 {
+    private readonly byte[]? _materialCanonical;
     private NativeId65FreshWizardResearchScenePlan(NativeId65FreshDocumentCompilation compilation,
         NativeWizardFamilyAssetPlan family,NativeId65FreshWizardResearchResourcePlan resources,NativeWizardPlacementIntent placement,
-        NativeFreshLevelDocumentIntent? authoredDocument=null)
+        NativeFreshLevelDocumentIntent? authoredDocument=null,NativeFreshWizardSceneProducer? producer=null)
     {
+        Producer=producer??(authoredDocument is null?NativeFreshWizardSceneProducer.FixedA:NativeFreshWizardSceneProducer.Authored);
         resources.RequireAncestry(compilation,family);
-        RequireCaptureInputs(compilation,family,resources,placement,authoredDocument);
+        RequireProducerInputs(compilation,family,resources,placement,authoredDocument,Producer);
         if(!compilation.CopyCanonicalDocument().AsSpan().SequenceEqual(NativeId65FreshDocumentCodec.SerializeCanonical(compilation.Intent)))
             throw new InvalidDataException("Actual canonical source compilation changed.");
         var fresh=compilation.FreshResourceAncestor;
@@ -172,20 +177,34 @@ public sealed class NativeId65FreshWizardResearchScenePlan
             ?NativeId65FreshWizardSceneLayout.Compile(scene,family.CopyOwner("wizard.row"),family.CopyOwner("wizard.private"),placement)
             :NativeId65FreshWizardSceneLayout.CompileAuthored(scene,family.CopyOwner("wizard.row"),family.CopyOwner("wizard.private"),placement,authoredDocument.Base);
         SceneSha256=Hash(Layout.CopyScene());
+        _materialCanonical=Producer==NativeFreshWizardSceneProducer.MaterialAuthored
+            ?NativeFreshLevelDocumentCodec.SerializeCanonical(authoredDocument!):null;
         PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{
             ProfileId=BindingProfileId,SourceImageSha256,CanonicalDocumentSha256,FamilyPlanSha256=family.PlanSha256,ResourcePlanSha256=resources.PlanSha256,
             BaseSceneSha256=fresh.SceneSha256,SceneSha256,Placement,PlacedCount,SceneOrdinal,NativeNominalCapacity,DynamicArenaByteLength,
             Owners,Mutations,PointerFixups,RuntimeAnchors,PendingOwners}));
+        // New arm only: the complete old-shaped scene evidence is a hash child.
+        // Existing schema1/fixed JSON statement and its bytes above are unchanged.
+        if(_materialCanonical is not null)
+            PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{ScenePlanSha256=PlanSha256,MaterialCanonicalSha256}));
     }
+    internal NativeFreshWizardSceneProducer Producer{get;}
+    internal string? MaterialCanonicalSha256=>_materialCanonical is null?null:Hash(_materialCanonical);
+    internal byte[] CopyMaterialCanonicalDocument()=>_materialCanonical?.ToArray()??
+        throw new InvalidDataException("Scene has no material-authored aggregate.");
     internal NativeId65FreshDocumentCompilation CompilationAncestor{get;}
     internal NativeWizardFamilyAssetPlan FamilyAncestor{get;}
     internal NativeId65FreshWizardResearchResourcePlan ResourceAncestor{get;}
     internal NativeFreshLevelDocumentIntent? AuthoringDocumentAncestor{get;}
     internal NativeId65FreshWizardSceneLayout Layout{get;}
     internal void RequireAncestry(NativeId65FreshDocumentCompilation c,NativeWizardFamilyAssetPlan f,NativeId65FreshWizardResearchResourcePlan r)
-    {if(!ReferenceEquals(c,CompilationAncestor)||!ReferenceEquals(f,FamilyAncestor)||!ReferenceEquals(r,ResourceAncestor))throw new InvalidDataException("Scene belongs to another actual issued triple.");r.RequireAncestry(c,f);RequireCaptureInputs(c,f,r,Placement,AuthoringDocumentAncestor);}
+    {if(!ReferenceEquals(c,CompilationAncestor)||!ReferenceEquals(f,FamilyAncestor)||!ReferenceEquals(r,ResourceAncestor))throw new InvalidDataException("Scene belongs to another actual issued triple.");r.RequireAncestry(c,f);RequireProducerInputs(c,f,r,Placement,AuthoringDocumentAncestor,Producer);
+        if(_materialCanonical is not null&&!_materialCanonical.AsSpan().SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(AuthoringDocumentAncestor!)))
+            throw new InvalidDataException("Actual material-authored aggregate canonical ownership changed.");}
     public const string ProfileId="fresh-A-wizard33-T6-P1-N32-detached-scene-research-v1";
-    public string BindingProfileId=>AuthoringDocumentAncestor is null?ProfileId:"fresh-authored-same-layout-wizard33-T6-P1-N32-detached-scene-v1";
+    public string BindingProfileId=>Producer==NativeFreshWizardSceneProducer.MaterialAuthored
+        ?"fresh-schema2-material-authored-wizard33-T6-P1-N32-detached-scene-v1"
+        :AuthoringDocumentAncestor is null?ProfileId:"fresh-authored-same-layout-wizard33-T6-P1-N32-detached-scene-v1";
     public string SourceImageSha256=>NativeMobySourceInventory.OriginalImageSha256;
     public string CanonicalDocumentSha256=>CompilationAncestor.CanonicalSha256;
     public string SceneSha256{get;}
@@ -232,6 +251,71 @@ public sealed class NativeId65FreshWizardResearchScenePlan
         ArgumentNullException.ThrowIfNull(compilation);ArgumentNullException.ThrowIfNull(family);ArgumentNullException.ThrowIfNull(resources);
         var placement=NativeFreshWizardAuthoringShape.RequireDocument(document,compilation);
         return await CaptureCoreAsync(originalBin,compilation,family,resources,placement,document,token);
+    }
+
+    // Actual schema2 ownership only: same detached scene grammar, not a body.
+    // This separate arm has independent all-owner finalization; old paths below
+    // retain their existing validation/JSON/finally behavior byte-for-byte.
+    internal static async Task<NativeId65FreshWizardResearchScenePlan> CaptureMaterialAuthoredAsync(string originalBin,
+        NativeFreshLevelDocumentIntent document,NativeId65FreshDocumentCompilation compilation,NativeWizardFamilyAssetPlan family,
+        NativeId65FreshWizardResearchResourcePlan resources,CancellationToken token=default)
+    {
+        token.ThrowIfCancellationRequested();ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(compilation);ArgumentNullException.ThrowIfNull(family);ArgumentNullException.ThrowIfNull(resources);
+        var placement=NativeFreshWizardAuthoringShape.RequireMaterialDocument(document,compilation);
+        RequireProducerInputs(compilation,family,resources,placement,document,NativeFreshWizardSceneProducer.MaterialAuthored);
+        ArgumentException.ThrowIfNullOrWhiteSpace(originalBin);string path=Path.GetFullPath(originalBin);
+        FileStream? held=null;NativeId65FreshWizardResearchScenePlan? result=null;List<Exception> failures=[];
+        try
+        {
+            held=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
+            await Original(held,token);
+            token.ThrowIfCancellationRequested();
+            result=new(compilation,family,resources,placement,document,NativeFreshWizardSceneProducer.MaterialAuthored);
+            token.ThrowIfCancellationRequested();
+        }
+        catch(Exception error){failures.Add(error);}
+        finally
+        {
+            if(held is not null)await Observe(()=>Original(held,CancellationToken.None));
+            FileStream? current=null;
+            try
+            {
+                current=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
+                await Original(current,CancellationToken.None);
+            }
+            catch(Exception error){failures.Add(error);}
+            finally{if(current is not null)Close(current);}
+            if(held is not null)Close(held);
+        }
+        NativeFreshResearchSourceOwners.ThrowFailures(failures);
+        token.ThrowIfCancellationRequested();
+        return result??throw new InvalidDataException("Material-authored Scene returned no actual result.");
+        static Task Original(FileStream file,CancellationToken cancellation)
+        {
+            file.Position=0;
+            return NativeId65FreshWizardResearchResourceSource.RequireSnapshotIdentityAsync(file,
+                NativeMobySourceInventory.OriginalImageByteLength,NativeMobySourceInventory.OriginalImageSha256,cancellation);
+        }
+        async Task Observe(Func<Task> action){try{await action();}catch(Exception error){failures.Add(error);}}
+        void Close(FileStream file){try{file.Dispose();}catch(Exception error){failures.Add(error);}}
+    }
+
+    private static void RequireProducerInputs(NativeId65FreshDocumentCompilation compilation,NativeWizardFamilyAssetPlan family,
+        NativeId65FreshWizardResearchResourcePlan resources,NativeWizardPlacementIntent placement,
+        NativeFreshLevelDocumentIntent? document,NativeFreshWizardSceneProducer producer)
+    {
+        if(producer==NativeFreshWizardSceneProducer.MaterialAuthored)
+        {
+            resources.RequireAncestry(compilation,family);resources.RequireCompilationProfile();
+            if(resources.ResourceProfile!=NativeFreshWizardResourceProfile.AuthoredSameLayout||
+                NativeFreshWizardAuthoringShape.RequireMaterialDocument(document!,compilation)!=placement)
+                throw new InvalidDataException("Material-authored Scene requires its actual authored resource and aggregate route.");
+            return;
+        }
+        if(producer!=(document is null?NativeFreshWizardSceneProducer.FixedA:NativeFreshWizardSceneProducer.Authored))
+            throw new InvalidDataException("Unknown or mismatched closed Wizard Scene producer.");
+        RequireCaptureInputs(compilation,family,resources,placement,document);
     }
 
     private static void RequireCaptureInputs(NativeId65FreshDocumentCompilation compilation,NativeWizardFamilyAssetPlan family,

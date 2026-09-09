@@ -75,6 +75,35 @@ internal static class NativeFreshWizardAuthoringShape
         return placement;
     }
 
+    // New closed schema2 arm only. Neutral Store accepts more than this recipe.
+    internal static NativeWizardPlacementIntent RequireMaterialDocument(NativeFreshLevelDocumentIntent document,
+        NativeId65FreshDocumentCompilation compilation)
+    {
+        ArgumentNullException.ThrowIfNull(document);ArgumentNullException.ThrowIfNull(compilation);
+        if (!ReferenceEquals(document.Base, compilation.Intent))
+            throw new InvalidDataException("Material-authored Scene requires the actual compiled Base, not equal canonical bytes.");
+        if (document.SchemaVersion != 2 || document.FloorMaterials == null || document.Placements.Count != 1 ||
+            document.Placements[0] is not NativeFreshWizardRouteIntent wizard)
+            throw new InvalidDataException("Material-authored Scene requires schema2 and exactly one actual Wizard route.");
+        if (document.FloorMaterials.Triangle0 is not NativeFreshRetailTerrainMaterialIntent first ||
+            document.FloorMaterials.Triangle1 is not NativeFreshRetailTerrainMaterialIntent second ||
+            first.SourceVariant != NativeFreshRetailTerrainMaterialIntent.SupportedSourceVariant ||
+            second.SourceVariant != NativeFreshRetailTerrainMaterialIntent.SupportedSourceVariant ||
+            first.TextureId != 1 || second.TextureId != 1 ||
+            (first.SourceWadEntry, second.SourceWadEntry) is not ((14,70) or (70,14) or (14,14)))
+            throw new InvalidDataException("Material-authored Scene supports only the three explicit T1 retail pairs14/70,70/14,14/14.");
+        var placement = new NativeWizardPlacementIntent(wizard.OriginX,wizard.OriginY,wizard.OriginZ,wizard.EndX,wizard.EndY);
+        var b = document.Base;
+        if (b.FloorX != 8448 || b.FloorY != 8448 || b.FloorZ != 8704 || b.FloorWidth != 2048 || b.FloorDepth != 2048 ||
+            b.SpawnX != 8960 || b.SpawnY != 8960 || b.SpawnZ != 9216 || b.Heading != 64 || b.MusicTrackId != 19 ||
+            b.FloorColor != new Spyro.Editor.Core.Primitives.ColorRgba(80,128,112) ||
+            b.SkyColor != new Spyro.Editor.Core.Primitives.ColorRgba(128,96,64) ||
+            placement != new NativeWizardPlacementIntent(9984,9984,8704,9472,9984))
+            throw new InvalidDataException("Material-authored Scene currently supports only the exact separatedB floor/route/track19.");
+        RequirePlacement(placement,b);
+        return placement;
+    }
+
     internal static void RequirePlacement(NativeWizardPlacementIntent placement, NativeId65FreshDocumentIntent floor)
     {
         NativeWizardPlacementGeometry.Validate(placement);

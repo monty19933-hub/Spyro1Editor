@@ -47,8 +47,11 @@ The next work order is:
    sound, collision, rewards and re-entry instead of enabling untested rows.
    Three independent mixed Wizard/material expectations now fit without
    weakening ownership, and actual C# resource results match all three. The
-   helper changes preserve the complete old-source inverse. Saved schema2
-   ancestry, mixed Body/Disc output and mixed gameplay remain pending; see
+   helper changes preserve the complete old-source inverse. Actual schema2
+   aggregate/material ancestry now passes source checks without discarding the
+   material choices. Mixed Body/EXE/Disc output, saved-revision binding and mixed
+   gameplay remain pending; old untextured Body export explicitly refuses this
+   producer. See native-fresh-schema2-material-ancestry.md and
    native-fresh-mixed-resource-component.md.
 5. Complete native acceptance of the separately identified R05 preview; package
    a later build only for newly verified scope. Keep remaining incompatible
