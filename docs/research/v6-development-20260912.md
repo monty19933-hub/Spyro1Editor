@@ -452,3 +452,29 @@ INIs were not installed and the original card was never modified/copied back.
 The new prepared native session is
 `_local/native-v6-preview-runtime-20260912-r01.Tjt4Iy/RUNTIME-SESSION.md`.
 The user was informed; source work continues while desktop access is unavailable.
+
+## Retained sound residency prerequisite
+
+Log149 is the genuine tests-first missing-API RED (six errors, no warnings).
+The new internal NativeFreshMobySoundResidencyBinding consumes only an actual
+extracted locked-chest source and actual Fresh family composition. It derives
+component/bank/descriptor/sample offsets through the existing sound codecs and
+builds eight narrow shared-graph preservations: three complete20-byte target
+descriptors, three complete ADPCM samples, and global map0/0x37. Both Root and
+independent peer review checked that the binder itself reads every final byte;
+the generic graph compiler checks source promises, not actual final bytes.
+
+Global source17/35 remains resident17/35; the chest's source-local47 maps to
+resident54. Original model wordFFFFFF2F is retained only as a future selector
+obligation. No model is installed, no byte changes, and no behavior/playback/
+native-import capability is issued. Complete original decoder owners, actual
+composition ancestry, immutable results and whole-body complement are rechecked.
+
+Logs150–153 pass builds0/0, free2130 plus23 stream checks, and actual untextured
+source10152 checks. Log154 is a Root invocation missing the required CUE argument,
+not a feature failure. Correct mixed source155 passes7531 final checks with
+original BIN/CUE unchanged and no output. Both actual sound offsets are derived
+(Data+1DC untextured; Data+34C mixed). Mixed family Body7812d3…262 and full image
+408dfd…5c98, as well as all three historical mixed images, remain unchanged.
+Private V6 packages remain the sealed ac50def build; this source prerequisite
+does not silently replace or rebuild them.

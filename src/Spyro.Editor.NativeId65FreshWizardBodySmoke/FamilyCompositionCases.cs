@@ -9,6 +9,7 @@ internal static class FamilyCompositionCases
     internal static void Free(Action<bool,string> check)
     {
         FamilyRowSpanCases.Free(check);
+        FamilySoundResidencyCases.Free(check);
         var type=typeof(NativeFreshMobyFamilyCompositionPlan);
         check(type.IsSealed&&!type.IsPublic&&type.GetConstructors().Length==0,"Family composition is internal, closed and has no caller-byte authority.");
         Reject<ArgumentNullException>(()=>NativeFreshMobyFamilyCompositionPlan.Compose(null!,[]),check);
@@ -62,6 +63,7 @@ internal static class FamilyCompositionCases
         var repeat=NativeFreshMobyFamilyCompositionPlan.Compose(body,[retained,added]);
         check(repeat.PlanSha256==p2.PlanSha256&&repeat.CopyLevelData().SequenceEqual(bytes),"Repeat actual family request is deterministic.");
         FamilyRowSpanCases.Source(wizard,grass,p1,p2,check);
+        await FamilySoundResidencyCases.Source(original,p2,repeat,check);
         if(onP2 is not null)await onP2(original,p2,check);
         var p3=NativeFreshMobyFamilyCompositionPlan.Compose(body,[retained,added,
             NativeFreshMobyFamilyPlacement.Passive("22222222222222222222222222222222",grass,proof,8832,9152,8704,0)]);

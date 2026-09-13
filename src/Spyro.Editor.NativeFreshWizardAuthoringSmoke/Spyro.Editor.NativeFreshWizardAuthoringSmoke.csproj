@@ -6,5 +6,6 @@
   <ItemGroup><ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" /></ItemGroup>
   <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilyCompositionCases.cs" Link="FamilyCompositionCases.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilyRowSpanCases.cs" Link="FamilyRowSpanCases.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilySoundResidencyCases.cs" Link="FamilySoundResidencyCases.cs" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="matrix-expectations.json" LogicalName="WizardMatrixExpectations" /></ItemGroup>
 </Project>
