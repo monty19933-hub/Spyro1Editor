@@ -57,8 +57,8 @@ internal sealed class NativeComposedMobyModelRegistrationPlan
             if (BinaryPrimitives.ReadUInt32LittleEndian(_header.AsSpan(rootField)) != 0 ||
                 BinaryPrimitives.ReadUInt16LittleEndian(_header.AsSpan(classField)) != 0 || cursor > uint.MaxValue)
                 throw new InvalidDataException("Composed registration root/class preimage is occupied or unencodable.");
-            BinaryPrimitives.WriteUInt32LittleEndian(_header.AsSpan(rootField), (uint)cursor);
-            BinaryPrimitives.WriteUInt16LittleEndian(_header.AsSpan(classField), p.ActorId);
+            _header=NativeMobyRegistrationTableLayout.Decode(_header,layout.Subfiles[2].FinalOffset,layout.Subfiles[2].FinalLength)
+                .Append(p.ActorId,(uint)cursor).CopyHeader();
             BinaryPrimitives.WriteUInt16LittleEndian(_unresolvedHeader.AsSpan(classField), p.ActorId);
             packages.Add(new(p.NodeId, p.ActorId, slot, new(layout.Final, rootField, 4), new(layout.Final, classField, 2), p.Destination,
                 new("root-" + slot, rootField, p.NodeId, 0, 4, 0)));

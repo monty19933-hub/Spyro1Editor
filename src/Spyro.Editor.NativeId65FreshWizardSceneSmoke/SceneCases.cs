@@ -39,6 +39,7 @@ internal static class SceneCases
             NativeId65ZeroSceneAnimationLists.CreateNeutral().CopyComponents()).CopyScene();
         var layout=NativeId65FreshWizardSceneLayout.Compile(p0,Row,Private,Placement);
         RequireLayout(layout,p0,Row,Private);
+        StorageCases.Run(p0,Row,Private);
         Check(!layout.SourceCertified, "Neutral layout never issues source capability.");
         byte[] b=layout.CopyScene();
         for(int at=0;at<b.Length;at++)
@@ -121,6 +122,7 @@ internal static class SceneCases
     private static void RequireLayout(NativeId65FreshWizardSceneLayout l,byte[] p0,byte[] row,byte[] props)
     {
         byte[] b=l.CopyScene();
+        StorageCases.RequireLegacy(p0,row,props,b);
         Reject<InvalidDataException>(()=>NativeId65FreshSceneLayout.DecodeCanonical(b));
         Check(b.Length==0x3000 && I32(b,0xCC)==0xEB8 && I32(b,0xD0)==1 && l.DynamicArenaOffset==0x12C &&
             l.DynamicArenaByteLength==0xE58 && l.NativeNominalCapacity==32,"P1 row is additional to N32+58 arena.");

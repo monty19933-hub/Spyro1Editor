@@ -135,13 +135,7 @@ internal sealed class NativeStaticTerrainGpuAllocation
         if (records.Count != 2 || records[0] is null || records[1] is null)
             throw new InvalidDataException("Metadata composition requires exactly two complete decoded records.");
         byte[] output = new byte[originalData.Length + 0x170];
-        Put(output, 0, 0x178); Put(output, 4, 2);
-        for (int material = 0; material < 2; material++)
-        {
-            byte[] record = records[material].CopyRecord();
-            record.AsSpan(0, 16).CopyTo(output.AsSpan(8 + material * 16));
-            record.AsSpan(16, 168).CopyTo(output.AsSpan(40 + material * 168));
-        }
+        NativeTerrainMaterialTableCodec.Encode([records[0], records[1]]).CopyTo(output, 0);
         originalData[8..].CopyTo(output.AsSpan(0x178));
         Put(output, 0x208, 0); Put(output, 0x218, 1);
         for (int i = 8; i < originalData.Length; i++)

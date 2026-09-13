@@ -34,6 +34,7 @@ internal static class GpuExtractionCases
             "One internal exact GPU/map/ordered-input method, not an owner/clip/SPU/source factory.");
         VariableCountCases();
         KernelCases();
+        MaterialTableCases.Run();
     }
 
     private static void PublicOrderGolden()

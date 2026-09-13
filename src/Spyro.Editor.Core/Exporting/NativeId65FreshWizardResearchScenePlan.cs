@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Spyro.Editor.Core.Analysis;
 using Spyro.Editor.Core.Editing;
+using Spyro.Editor.Core.Scene;
 
 [assembly: InternalsVisibleTo("Spyro.Editor.NativeId65FreshWizardSceneSmoke")]
 
@@ -39,11 +40,12 @@ internal sealed class NativeId65FreshWizardSceneLayout
             I32(sourcePrivate,0x28)!=2 || I32(sourcePrivate,0x2C)!=-65536 ||
             I32(sourcePrivate,0x38)-I32(sourceRow,20)!=287 || I32(sourcePrivate,0x48)!=I32(sourcePrivate,0x38))
             throw new InvalidDataException("Exact source route/fixup scalar schema changed.");
-        _scene=new byte[0x3000];p0[..0xCC].CopyTo(_scene);
-        Put(_scene,0xCC,0xEB8);Put(_scene,0xD0,1);
-        sourceRow.CopyTo(_scene.AsSpan(0xD4));sourcePrivate.CopyTo(_scene.AsSpan(0xF88));
-        Put(_scene,0xF84,0x54);Put(_scene,0xFD8,8);Put(_scene,0xFE0,0x2004);
-        Put(_scene,0x2FE4,2);Put(_scene,0x2FE8,0xD4);Put(_scene,0x2FEC,0xF88);
+        // The neutral storage kernel owns byte geometry only. Keep this exact
+        // old source/placement validator, mutation ledger and public lineage.
+        _scene=NativeFreshMobySceneStorageLayout.Create([0x50],32,2).Compile(p0[..0xCC],
+            [new("wizard",sourceRow,sourcePrivate)],[
+                new(0,NativeFreshMobySceneOwnerKind.Row,0,0,NativeFreshMobySceneOwnerKind.Private,0,0xC350),
+                new(0,NativeFreshMobySceneOwnerKind.Private,0,0,NativeFreshMobySceneOwnerKind.Private,0x28,0xC378)]).CopyScene();
         PointerFixups=Array.AsReadOnly(new[]{
             new NativeFreshWizardScenePointerFixup("wizard.row",0,0xD4,0xC350,0xF88),
             new NativeFreshWizardScenePointerFixup("wizard.private",0,0xF88,0xC378,0xFB0)});

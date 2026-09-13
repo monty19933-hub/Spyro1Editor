@@ -72,22 +72,7 @@ internal sealed class NativeMobyModelRegistrationSource
         ModelOffset=checked((int)Word(bytes,0x10));ModelLength=checked((int)Word(bytes,0x14));
         if(ModelOffset<0x800||ModelLength==0||ModelOffset+(long)ModelLength!=Word(bytes,0x18))
             throw new InvalidDataException("Native model owner does not end at the next scene subfile.");
-        List<NativeMobySourceRegistration> roots=[];HashSet<ushort> classes=[];bool ended=false;uint previous=0;
-        for(int i=0;i<64;i++)
-        {
-            uint root=Word(bytes,0x50+i*4);ushort cls=BinaryPrimitives.ReadUInt16LittleEndian(bytes[(0x150+i*2)..]);
-            if(i==0&&(root==0||cls!=0))throw new InvalidDataException("Native slot 0 must retain the special Spyro stream.");
-            if(root==0){ended=true;if(cls!=0)throw new InvalidDataException("Native root terminator retains a class ID.");continue;}
-            if(ended)throw new InvalidDataException("Native model registrations must form a contiguous positive prefix.");
-            if(root>int.MaxValue)throw new InvalidDataException("Native loader requires positive signed root offsets.");
-            if(i!=0&&cls==0)throw new InvalidDataException("Generic registrations cannot replace special class 0.");
-            if(cls>=512)throw new InvalidDataException("Native class identity exceeds the 512-pointer table.");
-            if(root<ModelOffset||root+4L>ModelOffset+(long)ModelLength||root%4!=0)
-                throw new InvalidDataException("Native registration points outside its aligned model owner.");
-            if(root<=previous||!classes.Add(cls))throw new InvalidDataException("Native roots must be ascending and class identities unique.");
-            roots.Add(new(i,cls,root));previous=root;
-        }
-        Registrations=Array.AsReadOnly(roots.ToArray());
+        Registrations=NativeMobyRegistrationTableLayout.Decode(bytes[..0x800],ModelOffset,ModelLength).Registrations;
     }
     internal NativeAddressSpace Original { get; }
     internal string SourceSha256 { get; }
@@ -253,7 +238,8 @@ internal sealed class NativeMobyModelRegistrationPlan
             int field=0x50+slot*4,cls=0x150+slot*2;
             if(Word(_header,field)!=0||BinaryPrimitives.ReadUInt16LittleEndian(_header.AsSpan(cls))!=0)
                 throw new InvalidDataException("Native tail registration preimage is occupied.");
-            Put(_header,field,(uint)offset);BinaryPrimitives.WriteUInt16LittleEndian(_header.AsSpan(cls),p.ActorId);
+            _header=NativeMobyRegistrationTableLayout.Decode(_header,FinalModelOffset,FinalModelLength)
+                .Append(p.ActorId,(uint)offset).CopyHeader();
             entries.Add(new(p.NodeId,p.ActorId,slot,new(final,field,4),new(final,cls,2),p.Destination,
                 new("actor-root",0,p.NodeId,0,4,0)));
             offset=checked(offset+(int)p.Destination.ByteLength);slot++;

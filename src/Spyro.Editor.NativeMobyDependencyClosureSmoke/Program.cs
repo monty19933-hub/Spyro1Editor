@@ -213,6 +213,8 @@ NativeMipsBehaviorFragmentCases.Run(Check,Reject);
 NativeWizardSpawn26Cases.Run(Check,Reject);
 NativeWizardOverlayCases.Run(Check,Reject);
 NativeWizardDeathRewardCases.Run(Check,Reject);
+NativeRegistrationTableCases.Free(Check);
+await NativeGrassFamilyAssetCases.Free(Check);
 Reject(()=>NativeTownSquareClosurePlacement.Decode(new byte[80],0),"payload shape");
 Check(NativeTownSquareClosurePlacement.Decode(NativeTownSquareClosurePlacement.Encode(NativeTownSquareClosurePlacement.Locations(NativeTownSquareClosureRecipe.SpatiallySeparatedV3)),1)==new NativeTownSquarePlacementPoint(121680,102288,8192),"Closed V3 coherent translation changed.");
 if(args.Length>0)
@@ -231,6 +233,7 @@ if(args.Length>0)
     NativeMobySceneAppendCases.Source(nativeSource,Check,Reject);
     NativeMipsBehaviorFragmentCases.Source(nativeSource,Check);
     await NativeWizardOverlayCases.Source(nativeSource,Check,Reject);
+    if(mode=="--source")await NativeGrassFamilyAssetCases.Source(nativeSource,Check);
     Check(native.Graph.Fingerprint=="d484fc13504ac0afc0b7a63e81dd4a6a3a3a7672dd7959654b02fd6103a3edcc","Default V2 graph regression golden changed.");
     Check(Hash(native.Data)=="e442a02d3aa899dca0d5ddac4392f4b602aabb7ac6dc5dd1e4616c00fab6908d","Default V2 data regression golden changed.");
     Check(native.Graph.Nodes.Count>100,"Source-bound graph did not enumerate native imports.");

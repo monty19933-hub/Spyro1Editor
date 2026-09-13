@@ -42,6 +42,7 @@ internal static class HostCases
 
     internal static async Task SourceFree()
     {
+        HostedGrassCases.SourceFree(Check);
         var t=typeof(NativeId65FreshWizardResearchHostPlan);
         Check(t.IsSealed&&t.GetConstructors().Length==0&&t.GetProperties().All(p=>p.SetMethod is null),"Closed immutable actual-source result.");
         var api=t.GetMethods(BindingFlags.Public|BindingFlags.Static|BindingFlags.DeclaredOnly);
@@ -186,6 +187,7 @@ internal static class HostCases
             Reject<InvalidDataException>(()=>p.RequireAncestry(scene2,fallback2));
             var own=await NativeId65FreshWizardResearchHostPlan.CaptureAsync(original,scene2,fallback2);own.RequireAncestry(scene2,fallback2);
             Check(own.PlanSha256==p.PlanSha256,"Matching other actual pair can issue its own identical result, without rebinding earlier object.");
+            await HostedGrassCases.Source(original,p,repeat,alt,own,town,Check);
             using(var cancel=new CancellationTokenSource())
             {cancel.Cancel();await Reject<OperationCanceledException>(()=>NativeId65FreshWizardResearchHostPlan.CaptureAsync("not-opened.bin",scene,fallback,cancel.Token));}
             await Reject<ArgumentNullException>(()=>NativeId65FreshWizardResearchHostPlan.CaptureAsync("not-opened.bin",scene,null!));
