@@ -32,6 +32,7 @@ internal static class BodyCases
     }
     internal static async Task SourceFree()
     {
+        FamilyCompositionCases.Free(Check);
         var t=typeof(NativeId65FreshWizardResearchBodyPlan);
         Check(t.IsSealed&&t.GetConstructors().Length==0&&t.GetProperties().All(p=>p.SetMethod is null),"Closed immutable body issuer.");
         var api=t.GetMethods(BindingFlags.Public|BindingFlags.Static|BindingFlags.DeclaredOnly);
@@ -78,6 +79,7 @@ internal static class BodyCases
             var host=await NativeId65FreshWizardResearchHostPlan.CaptureAsync(original,scene,fallback);
             string ancestors=JsonSerializer.Serialize(new{c,f,r,scene,fallback,host});
             var p=await NativeId65FreshWizardResearchBodyPlan.CaptureAsync(original,host);p.RequireAncestry(host);
+            await FamilyCompositionCases.Source(original,p,Check);
             Check(ReferenceEquals(p.HostAncestor,host),"Retained exact issued Host reference.");
             byte[] body=p.CopyLevelData(),overlay=p.CopyOverlay(),initializer=p.CopyInitializerPatch(),transfer=p.CopyTransferSourceImage();
             Check(body.Length==0x20C800&&Hash(body)==BodyGolden&&p.LevelDataSha256==BodyGolden&&p.HeaderSha256==HeaderGolden&&body.AsSpan(0,0x800).SequenceEqual(Header()),"Independent complete body/header golden, not old2MiB envelope.");

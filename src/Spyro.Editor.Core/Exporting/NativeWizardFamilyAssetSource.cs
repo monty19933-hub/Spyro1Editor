@@ -15,6 +15,8 @@ internal sealed class NativeWizardFamilyAssetSource
     internal const long DonorWadOffset = 0x2F6B000;
     internal const string DonorSha256 = "9973493f865b5e86bc17b32c5af9e3d7596e25615618c007ed28e0379161f2d8";
     private readonly byte[] _donor;
+    private readonly byte[] _executable;
+    private readonly NativeMobyModelLoaderCertificate _loader;
 
     private NativeWizardFamilyAssetSource(NativeId65EngineProfileContract engine,
         byte[] donor, byte[] peteHeader, byte[] pete)
@@ -22,6 +24,9 @@ internal sealed class NativeWizardFamilyAssetSource
         byte[] town = engine.CopyTownData(), exe = engine.CopyExecutable();
         ValidateCapturedBytes(donor, town, exe, peteHeader, pete);
         _donor = donor;
+        _executable = exe;
+        OriginalExecutableDomain = new(NativeAddressKind.ExecutableFile,
+            "wizard-family-original-executable:" + Hash(exe), NativeAddressRevision.Original, exe.Length);
         EngineContractSha256 = engine.ContractSha256;
         // This fixed definition is an independent native locator assertion,
         // not caller catalog authority. DecodeLevel remains a neutral decoder;
@@ -41,6 +46,7 @@ internal sealed class NativeWizardFamilyAssetSource
             NativeAddressRevision.Original, donor.Length);
         Models = NativeMobyModelRegistrationSource.CaptureInventory(Level, original, Read);
         NativeMobyModelLoaderCertificate loader = NativeMobyModelLoaderCertificate.CaptureRetail(exe, peteHeader, pete);
+        _loader = loader;
         if (loader.SharedClasses.Contains((ushort)0x11B) || loader.SharedClasses.Contains((ushort)0x26) ||
             !loader.SharedClasses.Contains((ushort)0x56))
             throw new InvalidDataException("Wizard/local and reward/shared native model registrations changed.");
@@ -74,6 +80,7 @@ internal sealed class NativeWizardFamilyAssetSource
     internal NativeMobySourceLevel Level { get; }
     internal NativeMobySourceRow Row { get; }
     internal NativeMobyModelRegistrationSource Models { get; }
+    internal NativeAddressSpace OriginalExecutableDomain { get; }
     internal NativeLevelSoundLayout DonorSound { get; }
     internal NativeLevelSoundLayout TownSound { get; }
     internal NativePlayerAnimationRecord Animation { get; }
@@ -82,6 +89,32 @@ internal sealed class NativeWizardFamilyAssetSource
     internal string SharedGeometrySha256 { get; }
     internal string EngineContractSha256 { get; }
     internal byte[] CopyDonor() => _donor.ToArray();
+
+    // Only exact original owners retained by this existing issuer are readable.
+    // Its emitted source-asset block and future authored Body/Scene never become
+    // Original domains merely because their bytes are available to a caller.
+    internal byte[] ReadPrivateSource(NativeByteExtent extent)
+    {
+        ArgumentNullException.ThrowIfNull(extent);
+        ReadOnlySpan<byte> source = ReferenceEquals(extent.Space, Models.Original) ? _donor :
+            ReferenceEquals(extent.Space, OriginalExecutableDomain) ? _executable :
+            throw new InvalidDataException("Wizard private read belongs to another actual original source domain.");
+        return source.Slice(checked((int)extent.Offset), checked((int)extent.ByteLength)).ToArray();
+    }
+
+    internal void RequirePrivateStorageSource()
+    {
+        Models.RequireSource(ReadPrivateSource);
+        Require(_executable, 0x66000, "a533d75cab8afaae6107ec35a02a9a5fe979a92c7c955f9cf1ee50f693a1b998");
+    }
+
+    internal void RequireNonSharedModelClass(ushort nativeClass)
+    {
+        if (!_loader.IsRetailCertified || nativeClass == 0 || nativeClass >= 512 || _loader.SharedClasses.Contains(nativeClass))
+            throw new InvalidDataException("A new local generic model cannot replace special class 0, escape 512 entries or collide with an actual PETE shared class.");
+        // Absence from this actual shared table is not model-space, native
+        // behavior, placement, runtime or publication approval.
+    }
 
     internal static async Task<NativeWizardFamilyAssetSource> CaptureAsync(string originalBin, CancellationToken token)
     {

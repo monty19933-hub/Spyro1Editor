@@ -6,6 +6,7 @@ using Spyro.Editor.Core.Exporting;
 if (args.Length != 0 && (args.Length != 2 || args[0] != "--source"))
     throw new ArgumentException("Usage: NativeWizardFamilyAssetSmoke [--source original.bin]");
 int checks = 0, refusals = 0;
+PrivateStorageCases.Free(Check);
 Check(typeof(NativeWizardFamilyAssetPlan).GetConstructors().Length == 0, "source plan has no caller constructor");
 Check(typeof(NativeWizardFamilyAssetPlan).IsSealed, "source plan cannot be overridden");
 Reject(() => NativeWizardFamilyAssetPlan.CaptureAsync(" ").GetAwaiter().GetResult(), "empty original path");
@@ -42,6 +43,7 @@ if (args.Length == 2)
     try
     {
         var plan = await NativeWizardFamilyAssetPlan.CaptureAsync(path);
+        PrivateStorageCases.Source(plan,Check,Reject);
         byte[] block = plan.CopySourceAssetBlock();
         Check(plan.SourceImageSha256 == NativeMobySourceInventory.OriginalImageSha256 &&
             plan.DonorLevelId == 33 && plan.DonorTrueIndex == 6, "exact fixed issuer identity");

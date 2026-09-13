@@ -36,11 +36,13 @@ public sealed class NativeWizardFamilyTextureReference
 /// registration, scene, behavior, fresh level, runtime or publication capability.
 /// No caller bytes, profile flags or expected hashes can construct this plan.
 /// </summary>
-public sealed class NativeWizardFamilyAssetPlan
+public sealed partial class NativeWizardFamilyAssetPlan
 {
     private readonly byte[] _block;
+    private readonly NativeWizardFamilyAssetSource _source;
     private NativeWizardFamilyAssetPlan(NativeWizardFamilyAssetSource source)
     {
+        _source = source;
         byte[] donor = source.CopyDonor();
         SourceVariantId = source.Row.SourceVariantId;
         AnimationTextureHeaderSha256 = source.AnimationTextureHeaderSha256;

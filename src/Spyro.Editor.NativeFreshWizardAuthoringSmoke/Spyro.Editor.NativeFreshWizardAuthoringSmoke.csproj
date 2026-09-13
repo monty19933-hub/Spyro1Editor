@@ -4,5 +4,6 @@
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" /></ItemGroup>
+  <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilyCompositionCases.cs" Link="FamilyCompositionCases.cs" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="matrix-expectations.json" LogicalName="WizardMatrixExpectations" /></ItemGroup>
 </Project>

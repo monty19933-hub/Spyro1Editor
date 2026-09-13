@@ -35,7 +35,7 @@ Final focused free checks pass 181. Explicit mixed source checks close with
 195 checks/98 expected refusals: exact saved ancestry, repeat save/reopen output,
 equal-but-distinct Disc/clearance refusal, raw-only revision binding, and 14/14
 source reuse pass. Physical publication and independent verification pass.
-Mixed export is not yet enabled in the App window.
+Mixed export was subsequently enabled in the canonical App window (see below).
 
 Evidence directory:
 `_local/research/v6-mixed-export-20260912-r01.jR0oBr/`.
@@ -132,8 +132,8 @@ dispatch path, checked against an independent original-Town-plus-wrapper oracle.
 Logs53–54 pass 65745 final source checks; the 31-word path hash is
 `4a175442c2b0891aec9425a6c518b32ed44697ae99453b8ef8a232223d1df8cb`.
 No Wizard-specialized role is entered and no call, properties read or actor write
-appears in that path. This is only dispatch evidence: no Grass model/row is yet
-installed in a new candidate, and it has not been tested there in DuckStation.
+appears in that path. This is only dispatch evidence: the later two-family Body
+below is not yet a published candidate or tested in DuckStation.
 
 Next integration joins the actual family templates, complete model packages and
 growing scene under one resource layout. Existing source checks and old recipe
@@ -154,3 +154,30 @@ existing aggregate/material/selection/layout UI checks and 100 picker checks.
 All three admitted pairs, unsupported geometry/routes/music/materials/counts,
 dirty fields and absent/failing owners are covered. This is headless App evidence,
 not a newly installed app or another physical/native acceptance session.
+
+## Actual two-family Body composition
+
+The shared scene allocator now composes the retained Wizard and source-certified
+Artisans Grass using their actual original row/private/model owners. Wizard
+private storage retains the original level-data and EXE domains; generated Body
+bytes are never relabeled as original. Full model packages, registration, private
+copies, row pointers, fixups and section growth use the shared kernels. Ordered
+editor identity is preserved independently of allocator key sorting.
+
+Logs63–64 retain tests-first missing-API failures. Logs65–68 pass Release builds
+with zero warnings/errors, 9955 fixed-Body source checks and 580 Wizard-family
+checks. Log74 passes the mixed source suite with 7310 final checks and unchanged
+original BIN/CUE. All three old mixed whole-image hashes remain unchanged. The
+mixed Wizard-plus-Grass Body is `7812d34d4253f38770dd85d49b3e24d72c7a6aa4896e667ef87562191ae86262`;
+its growing scene is `70312f09b2441c602ac5e8a5edd10dd0be7edb3246928ad0bf9aba8450653cf0`.
+The complete inverse reconstructs the actual previous Body, not just selected
+fields. A two-Grass case shares its model but retains distinct instance storage.
+Independent review found no blocking storage or ancestry defect.
+
+These are internal source/storage proofs only. The EXE/Disc and saved-document
+arms do not yet accept this composition. Raw Z and yaw are authored values, not
+grounding, spawn-clearance or model-orientation acceptance. Grass's `FF` reward
+selector is not a universal no-drop promise: the original runtime masks it to127
+and enters a random-selection branch. Any forthcoming zero-static-treasure
+ledger must bind the exact retained family and passive Host evidence, not infer
+all rewards from placement count. No native two-family result is claimed.
