@@ -14,14 +14,17 @@ replays normal ON/OFF publication with the same complete hashes and stale-ON
 refusal. Earlier full suites146/167/177 passed335 checks/0 failures. Sections below are chronological evidence: older "next"
 and "pending" statements describe their historical checkpoint, not this summary.
 
-The unified private V6 package is the preserved clean ac50def build, not the
-later source-only dependency work. It lives in
-`_local/v6-private-preview-20260912-r01.rotSq4/`; use its
-`Open V6 Private Test.command` and `PRIVATE-PREVIEW.md`. It has an isolated copy
+The latest unified private V6 package is the clean9310a65 R02 build, including
+flight and model-batch changes, at
+`_local/v6-private-preview-20260912-r02.cn1OIy/`. Use its
+`Open V6 Private Test.command`, `Open V6 Flight Test.command` and `PRIVATE-PREVIEW.md`.
+The first has an isolated copy
 of the two-family/two-material document, the normal Fresh Level editor, source
 Moby browsing/staged placement, history/save/reopen and exact saved-family test
-export. Source/UI automation and physical publication are verified; native
-desktop acceptance is still pending because the Mac is locked. The schematic
+export; the second starts a clean Toasty flight-test project with separate private
+settings. Source/UI automation and physical publication are verified; native
+desktop acceptance is still pending because the Mac is locked. The older ac50def
+R01 at `_local/v6-private-preview-20260912-r01.rotSq4/` remains sealed. The schematic
 floor view is not a native textured/model preview. Do not silently rebuild this
 package, alter the protected default project or overwrite historical outputs.
 
@@ -706,3 +709,31 @@ Current outputs are private under the same evidence directory:
 No sealed app, original disc, protected project, emulator setting or memory card
 was changed. The Mac was rechecked through native UI discovery and still reports
 locked; no native application was launched or emulation settings installed.
+
+## Sealed unified V6 R02 private handoff
+
+Clean package checkpoint9310a65 includes implementations99f93b8 and b0db75b.
+Log209 builds the standard unified editor and both Mac/Windows packages with
+zero warnings/errors and passes the existing package verifier, using disclosed
+community/ad-hoc signing plus its existing narrow host-provenance allowance.
+No notarization, public upload, or new research-only application was introduced.
+
+Folder: `_local/v6-private-preview-20260912-r02.cn1OIy/`.
+The two executable, syntax-checked launchers start the SAME Mac application with
+different isolated projects/userdata: the copied mixed fresh-level example and
+a clean retail Toasty flight project. Neither launcher builds or resets anything.
+Package README separates source/physical checks from pending native acceptance.
+The Windows package has not been run. R02 has not been launched on the locked Mac.
+
+Mac ZIP3406a132e4e9e7afce24b261850f877cd6b4e5c5fd78fb6bcd07b76da666eea9;
+Windows ZIP21b97baa18a3f505ed0abc8844acf038e2dcd2f7cc5b76eddde466d52d4de497.
+Mac App DLL21c66818205102b47ded790241644fbc782fe1c23da0f250eaef93b36f772be1;
+Core DLL5af5c45f9b5316fffc28a949114a60b0740093f350866bf48d14d15bb66eaf7c.
+
+Log210 confirms full original BIN/CUE, fresh DuckStation global/game INIs,
+original card and both R01 ZIPs retain all previously recorded hashes. No editor,
+emulator or build/test process remains running. The prepared old native session
+is still NOT STARTED and no test settings were installed. Account usage reports
+8% remaining; the approximately5% safe-stop rule remains in force and no reset
+was consumed. The next native checks need manual Mac unlock. This is a completed
+implementation/package milestone, not completion of the overall V6 goal.
