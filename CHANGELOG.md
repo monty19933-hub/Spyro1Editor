@@ -1,45 +1,30 @@
-# Spyro Editor Beta V5
+# Spyro Editor Beta V6
 
-## Changes since Spyro Editor Beta V4
+## Changes since Spyro Editor Beta V5
 
-- Added the public **ID65 Blank-Level Lab** to the Level workspace. From the
-  user's exact clean USA BIN/CUE, it transactionally builds a versioned locked
-  ID65 base in physically independent storage, validates exact focused-runtime
-  evidence and hashes, and admits the Lab to the in-memory level picker without
-  changing the checked-in 35-level retail catalog.
-- The Lab keeps its locked base, manifest, authored layer, and disposable test
-  outputs separate from retail projects. Normal `Create BIN`, release catalog
-  iteration, portals, totals, music ownership, Return Home, and save ownership
-  cannot silently consume or promote ID65 work.
-- The Lab now decodes the exact locked payload's 66 resident terrain textures
-  into a source-bound local preview cache and exposes the normal paint gallery
-  for existing HP faces. Resident paint saves and reloads in the isolated Lab
-  authored layer while preserving material, tint, surface, and collision state;
-  cross-level/custom/private art and runtime export remain fail-closed.
-- Existing high-detail terrain height edits now use a topology-safe atomic
-  collision transaction: every shared physical vertex and referenced native
-  collision triangle is resolved, cyclic winding is preserved, exact collision
-  cell membership must remain unchanged, and any incomplete, aliased, hidden,
-  cross-cell, XY, LP, or mixed structural operation rejects the whole geometry
-  batch before a BIN is written.
-- The complete collision-fan path is statically covered across Town Square,
-  Dark Hollow, Dry Canyon, and Artisans, with atomic rejection cases for cell
-  crossings, unavailable native context, physical aliases, target conflicts,
-  hidden geometry, XY/LP edits, and unmatched fans. The exact ID65 entrance-ramp
-  candidate was also confirmed in DuckStation with the entire edited surface
-  solid, resolving the earlier one-sided collision failure mode.
-- Generic terrain BIN export now rebuilds and verifies MODE2/2352 Form 1 EDC/ECC
-  for every modified raw sector before publication. This closes the integrity
-  gap between editor-authored terrain output and the previously proven isolated
-  runtime candidate writers.
-- Every ID65 Lab test handoff identifies the exact disposable CUE, provides a
-  Finder/Explorer reveal action where supported, and includes complete load codes
-  for ID65, original Town Square, Gnasty's Loot, and Sunny Flight.
-- Object Manager and Level Building Editor remain shared views over one project,
-  session, and viewport. Switching workspaces preserves camera, selection, and
-  unsaved object or terrain edits.
-- The V5 Lab deliberately describes its current boundary instead of claiming a
-  byte-empty map or whole-game asset portability. True Add Terrain/component
-  growth, LP geometry, arbitrary cross-level Mobys, and private/custom texture
-  allocation remain separate research gates until their own DuckStation checks
-  pass.
+Private development preview, internal build `0.1.0-beta.43`. This is not a
+published release or a claim of universal Moby, texture or new-level support.
+
+- Added Fresh Level authoring to the normal application: floor bounds, spawn,
+  heading, colors, native music selection, ordered placements and two floor
+  material references. Apply, undo/redo, save and reopen preserve the complete
+  document. The preview remains schematic, not game rendering.
+- Added source browsing for native Moby donor rows across the inventoried game,
+  with source variants kept distinct, explicit placement staging/cancellation,
+  and clear separation between saved authoring intent and supported imports.
+- Connected supported saved fresh-level profiles to the existing checked
+  candidate/publisher path, with separate BIN/CUE output, exact source checks,
+  stale-save refusal, complete disc readback and retained recovery evidence.
+- Added the bounded Wizard + Grass, two-material example. Focused native tests
+  observed its authored background, Wizard attack/charge defeat and gem reward,
+  fall/respawn and isolated jump/landing. Other combinations, portals and
+  durable native save ownership are not implied by those observations.
+- Strengthened shared Moby source/dependency handling and regression coverage
+  while retaining historical locked-chest outputs and the original retail
+  editor's guarded export behavior. Native family portability remains ongoing.
+- Preserved the legacy ID65 Blank-Level Lab separately from fresh documents.
+  Normal retail Create BIN does not consume fresh-level documents; the separate
+  fresh-level action reports its supported profiles and refusals explicitly.
+- The private Mac preview uses disclosed ad-hoc signing, not Apple signing or
+  notarization. No game images, BIOS, extracted assets, emulator cards or states
+  are bundled. Existing apps and protected projects are not replaced.

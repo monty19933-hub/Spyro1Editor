@@ -12,9 +12,18 @@
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
-  <ItemGroup>
-    <AssemblyMetadata Include="SpyroEditorBetaRelease" Value="5" />
-    <AssemblyMetadata Include="SpyroEditorPublicReleaseVersion" Value="5.1" />
-    <AssemblyMetadata Include="SpyroEditorReleaseManifestSchema" Value="2" />
-  </ItemGroup>
+  <!-- The fixture models the first increment after the checkout's current
+       whole-number bridge. Keep one source of truth when that bridge advances. -->
+  <Target Name="BindIncrementalFixtureMajor" BeforeTargets="GetAssemblyAttributes">
+    <XmlPeek XmlInputPath="$(MSBuildThisFileDirectory)../../Spyro.Editor.App/Spyro.Editor.App.csproj"
+             Query="/Project/PropertyGroup/BetaReleaseNumber/text()">
+      <Output TaskParameter="Result" PropertyName="FixtureBetaMajor" />
+    </XmlPeek>
+    <Error Condition="'$(FixtureBetaMajor)' == ''" Text="The incremental fixture requires the current application's declared beta major." />
+    <ItemGroup>
+      <AssemblyMetadata Include="SpyroEditorBetaRelease" Value="$(FixtureBetaMajor)" />
+      <AssemblyMetadata Include="SpyroEditorPublicReleaseVersion" Value="$(FixtureBetaMajor).1" />
+      <AssemblyMetadata Include="SpyroEditorReleaseManifestSchema" Value="2" />
+    </ItemGroup>
+  </Target>
 </Project>

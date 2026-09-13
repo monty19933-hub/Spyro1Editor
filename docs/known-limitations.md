@@ -1,4 +1,10 @@
-# Spyro Editor Beta V5 Known Limitations
+# Spyro Editor Beta V6 Known Limitations
+
+V6 is a private development preview. The integrated Fresh Level window is
+distinct from the retained Town Square-derived Lab below. Its native test-export
+boundary is narrow: see [current limitations](public-known-limitations.md).
+Neither a catalogue entry nor a successful source/build check establishes
+whole-game compatibility. The detailed retained V5 restrictions still apply.
 
 ## ID65 Blank-Level Lab
 

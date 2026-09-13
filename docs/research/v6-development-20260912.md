@@ -314,3 +314,113 @@ and an inline native-Moby catalogue with staged Add/Cancel. Logs106 and107
 retain their genuine missing-API RED builds. Exact saved-family research
 readiness will reuse the existing full-document validator and publication path,
 not broaden generic catalogue authoring into native compatibility.
+
+## Explicit resume: source extraction, catalogue and row spans
+
+The user explicitly resumed from clean shutdown checkpoint `e41da64`. No
+protected app/project was reset or reseeded. DuckStation was already open at
+its game list with no game running; its current global INI differs from the
+previous session, so any new native test must capture a fresh baseline.
+
+Logs110–113 close the locked-chest extraction WIP: Release build0 warnings/
+errors, free1451, original-source V3 checks4157 and V2 checks3558. Historical
+Town graph/data/overlay/executable outputs remain unchanged. This extracts
+source ownership; it does not admit the chest family into a fresh destination.
+
+Logs114/116/120 record the shared fixture access error and genuine missing
+family-readiness gates. The fixture now uses its exact private source-variant
+literal without widening Core visibility. Logs121–125 pass both builds0/0,
+catalogue107, native35, materials48, aggregate219, selection96, layout18,
+saved readiness821, saved lifecycle1585, and free saved354 with169 refusals.
+Log119 used an incorrect Root CLI suffix and is only an argument refusal,
+not a feature RED. Exact family readiness now reuses the existing full-document
+validator; generic native references and normal Create BIN remain unapproved.
+
+The catalogue covers placed donor references, variants and inspect-only
+resources, with explicit staged Add/Cancel and complete raw/saved/source/owner
+checks. Additional tests reject source/project/raw changes during actual owner
+release, including A-B-A raw edits and failed disposal after donor selection.
+Root reviewed actual headless frames. Logs127/128 then reproduced off-screen
+controls after Browse (search top1471, list top1591 against394-pixel viewport).
+The narrow queued-scroll fix is undergoing follow-up checks; metadata-only
+fixtures and schematic frames are not real model or catalogue-source evidence.
+
+Logs126 and129–132 establish the row-span prerequisite: genuine missing-API
+RED, clean builds, free2120/2073 refusals plus23 resource-stream checks, then
+actual source7405 final checks with original BIN/CUE unchanged and no output.
+The composer derives private sizes and pointers from retained Original schemas
+before final-address allocation, then requires exact actual template/allocated
+bindings. Authored placement count and expanded native row count are distinct;
+the limits remain128 placements/256 rows. Current Wizard/Grass admission,
+singleton shared-source identity, fingerprints and output writers are unchanged.
+Family Body `7812d3…262`, scene `70312f…cf0`, full image `408dfd…5c98` and all
+three historical mixed images match. No fresh Chest admission or new runtime
+claim follows from neutral multirow sizing.
+
+App identity is being prepared as private **Spyro Editor Beta V6**, internal
+`0.1.0-beta.43`, using the normal application and existing community/ad-hoc
+packaging mode. This is not a public release/tag/notarization or replacement of
+R03/R04/R05. Updated guides separate fresh authoring from exact test-export
+profiles and list unfinished universal imports, materials, fly mode and portals.
+Actual Window Save→Export and package/native validation remain the next gates.
+
+Logs133–136 pass both current builds0/0, catalogue109 (including automatic
+viewport visibility before test-assisted capture), native35, materials48,
+aggregate219, selection96, layout18, arguments95, readiness821 and lifecycle1585.
+Root viewed the pending placement frame with source identity, empty XYZ/yaw and
+Cancel visible together. Delayed reveal does not focus controls or grant Add,
+and stale/canceled/failed owners cannot scroll or stage later.
+
+Log137 passes actual Window Save→Export for the family profile, including9
+checks of the returned Save Snapshot, complete ordered schema3 receipt, original
+held/named/final/close checks and saved/manifest/inactive-legacy preservation.
+The existing publisher returned successfully even when the UI owner then
+reported a deliberately simulated cleanup error; exact output paths and that
+warning both survive. This is a headless real worker/publication exercise, not
+a native desktop click or new emulator observation.
+
+Log138 independently verifies its new physical output:
+`_local/research/v6-mixed-export-20260912-r01.jR0oBr/family-ui-candidate-r01/`.
+BIN `408dfd…5c98`,1292 owners, plan `1cd5ac…cef8`; saved canonical/raw
+`f4607c…64f9`, manifest `a566dd…006d`. Both historical candidate directories
+remain unchanged. The frozen exact UI producer is `producer-ui-family-r01/`:
+App `59ed299d27ac2391bb27d3735c31dd18d9dee90416358f095b3ce435dca1f4e9`,
+Core `b6f8f9b73ec62f602d6d715d158f493209304796894ea6ceb57a775f710a5b77`,
+UiSmoke `ba4f94ffee200c3868e915a2b637ff59624ef191110c7fdec3588fe018e1cafb`.
+Receipt runtime/normal-export/closure/persistent-save flags remain false.
+
+Logs139/140 reproduce Apply being buried in the scrolling inspector. It now
+shares the fixed action row with Save; new tests check both modes at minimum,
+default and enlarged sizes. Final focused/build-all regression logs141–143
+and private packaging/native validation are the next gates.
+
+Logs141/142 pass build0/0 and all targeted UI checks, now including30 layout
+checks. Full build-all regression143 completed335 checks with one failure:
+UpdateSmoke's incremental fixture hard-coded public5.1 while the actual App
+advanced to6. The fixture now derives its major from the App project during
+assembly metadata generation; identity assertions are retained and historical
+V2/V3 updater coverage is unchanged. Logs144/145 pass the focused build and
+complete updater checks. Full rerun146 is pending before packaging.
+
+Full rerun146 now passes335 checks/0 failures, including every project build
+and the complete source-free/targeted UI suite. Detailed report:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-2jdtb0bb/summary.json`.
+The private V6 package and actual desktop/native checks follow this checkpoint.
+
+Next dependency slice, independently reviewed: bind the extracted chest's
+three sound requirements to the actual retained fresh Body using the existing
+sound-bank/component grammar and full descriptor/sample equivalence. Existing
+global0→17, global0x37→35 and local54 appear retained; the source model selector
+0x2F→54 remains an obligation until its model exists in the destination. No new
+bank, Town-offset reuse, blanket sound-routine preservation, playback claim or
+Chest admission follows. Missing models/textures/handlers and shared globals
+need separate actual destination bindings. Broad original EXE and overlay
+windows overlap the fresh Host's patches and cannot be declared unchanged.
+
+The flight review found existing native Toasty R02 evidence and a default-OFF
+settings store, but no App checkbox or saved ON/OFF export coordinator. A future
+closed integration must rebuild OFF from the original source, removing animation
+growth as well as instructions; a no-edits early return could leave an old ON
+output. Retail-only flight policy rejects ID65. Do not relax that ID guard or
+call an executable inverse a full-image OFF proof. No flight integration was
+added to this preview checkpoint.

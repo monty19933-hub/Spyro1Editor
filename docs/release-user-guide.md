@@ -1,6 +1,12 @@
-# Spyro Editor Beta V5 Guide
+# Spyro Editor Beta V6 Guide
 
-Internal diagnostic build: `0.1.0-beta.42`.
+Internal diagnostic build: `0.1.0-beta.43`.
+
+V6 is a private development preview. The normal application includes Fresh
+Level authoring and bounded saved-level test export. Follow the
+[tester guide](public-user-guide.md) and [current limitations](public-known-limitations.md).
+The V5-era sections below describe retained retail and legacy Lab behavior;
+they do not grant new-level or arbitrary Moby export approval.
 
 This beta build uses three everyday workspaces around the unchanged level view:
 `Objects`, `Level`, and `Environment`. Internal research probes stay hidden.
@@ -71,9 +77,8 @@ the ZIP came from the official Spyro Editor GitHub release. The file states
 whether the package is Developer ID signed but not notarized, or uses the more
 limited disclosed ad-hoc community signature. If macOS blocks it, use System
 Settings > Privacy & Security > Open Anyway only if you accept that exact risk.
-This Beta V5 test package is Developer ID signed, hardened, and securely
-timestamped, but it is not notarized; compare its SHA-256 digest before opening
-it.
+The private V6 test package is hardened and ad-hoc signed, not Apple-signed or
+notarized. Compare its recorded SHA-256 digest and read its opening instructions.
 
 ## Projects and Updates
 

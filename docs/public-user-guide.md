@@ -1,4 +1,8 @@
-# Spyro Editor Beta V5 User Guide
+# Spyro Editor Beta V6 User Guide
+
+Private development preview, internal build `0.1.0-beta.43`. V6 is not finished
+or publicly released. The Mac preview is ad-hoc signed and is not Apple-signed
+or notarized; read the included opening instructions before launching it.
 
 ## Start a project
 
@@ -8,7 +12,67 @@
 
 The editor keeps projects and saved edits outside the application folder. Installing a newer beta does not replace your work.
 
-## Use the ID65 Blank-Level Lab
+## Make a fresh level
+
+Choose **Fresh Level…** in the normal editor. This window is separate from the
+older Blank-Level Lab below, but belongs to the same application and active
+project. It stores its own document; normal **Create BIN** does not include it.
+
+1. Select **Level aggregate**, then explicitly choose **New starter** if there
+   is no saved document. Existing work is not reset automatically.
+2. Edit floor bounds, spawn, heading, colors and music. Add or select placements
+   in the list. Their markers and routes are schematic, not rendered game
+   models, collision or lighting previews.
+3. Use **Browse native Moby sources…** to search placed donors across the game.
+   Choose a donor, enter position and rotation, then apply it. **Cancel new native
+   Moby** leaves the document unchanged. A source reference can be saved before
+   its native import is supported; browsing does not make it playable.
+4. The two floor-material slots can reference retail textures. Inspect sources
+   explicitly for donor thumbnails. Selected art is not painted onto the
+   schematic. Material references and native export support are separate.
+5. **Apply to preview**, **Undo**, **Redo**, **Save document**, and **Reopen saved**
+   operate on the complete document. Pending fields are not silently discarded
+   when selecting an object or starting source work.
+6. **Create research candidate…** is the current separate test-export action.
+   It requires a clean, explicitly saved supported document, the exact original
+   USA BIN/CUE, and a new output location. It verifies the complete written disc
+   before reporting success. Load that exact resulting CUE in DuckStation.
+
+The tested native example contains the Wizard, Artisans Grass, two floor
+materials and an authored background without Town Square's visible terrain.
+Export currently requires the exact supported example's geometry, placements
+and material selection; editing outside the profile can disable export. Other
+donors remain authoring-only. This is not yet general new-level publishing.
+Portals, durable saves, unrestricted materials/Mobys and **Fly Anywhere Enabled**
+remain unfinished.
+
+For an exported ID65 test, open the in-game inventory and enter:
+**R1, R2, L1, L2, R1, L1, R2, L2, Left, Down**. Use a disposable copied emulator
+memory card. This development entry route is not a finished portal.
+
+### Current two-family test recipe
+
+To recreate the supported example, keep these exact values. This is a temporary
+testing boundary, not the intended long-term editing limit. Editor-generated
+placement IDs can differ, but placement order and the values below must match.
+
+| Part | Values |
+| --- | --- |
+| Floor | X 8448, Y 8448, Z 8704, width 2048, depth 2048 |
+| Spawn | X 8960, Y 8960, heading 64; spawn height is floor +512 |
+| Colors | Floor `#508070`, sky `#806040` |
+| Music | Native track 19 |
+| Placement 1 | **Add Wizard route**: origin 9984 / 9984 / 8704, route end 9472 / 9984 |
+| Placement 2 | Browse **Artisans Grass**, WAD 10, true index 121, class 501; position 9152 / 9152 / 8704, native yaw 64 |
+| Triangle 0 material | Retail source WAD 14, texture 1 |
+| Triangle 1 material | Retail source WAD 70, texture 1 |
+
+Use the original USA retail source for both materials and the Grass. Apply each
+placement before adding the next, then Save document before creating the test
+candidate. Choosing a Wizard from the generic Moby browser does not substitute
+for **Add Wizard route** in this particular test profile.
+
+## Use the older ID65 Blank-Level Lab
 
 1. Open the **Level** workspace and expand **ID65 Blank-Level Lab**.
 2. Select your exact clean USA BIN/CUE with **Open BIN/CUE**, then choose

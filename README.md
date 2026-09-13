@@ -9,27 +9,35 @@ or copied game asset. Users must provide their own legally obtained disc image.
 
 ## Releases
 
-GitHub Releases are the intended place for public Mac and Windows builds.
+This checkout targets **Spyro Editor Beta V6**, internal build
+`0.1.0-beta.43`. It is a private development preview, not a published V6 release
+or a claim that every Moby or texture works in every level. The normal editor
+includes **Fresh Level…**; a separate research application is not required.
+See the [tester guide](docs/public-user-guide.md) and
+[limitations](docs/public-known-limitations.md) before testing.
+
+GitHub Releases remain the intended place for public builds, but creating a
+local package does not authorize publishing, tagging or replacing old assets.
 
 The release packages are self-contained:
 
-- `SpyroEditor-Beta-V5-osx-arm64.zip`
-- `SpyroEditor-Beta-V5-win-x64.zip`
+- `SpyroEditor-Beta-V6-osx-arm64.zip`
+- `SpyroEditor-Beta-V6-win-x64.zip`
 
 The public release name is independent of internal build iterations. Publish
-only intentional bundled releases: tag `beta-v5`, use the exact GitHub title
-`Spyro Editor Beta V5`, mark it as a prerelease, attach the two exact package
+only intentional bundled releases after separate approval: tag `beta-v6`, use the exact GitHub title
+`Spyro Editor Beta V6`, mark it as a prerelease, attach the two exact package
 names above, and paste `CHANGELOG.md` unchanged into the GitHub release body.
 Ordinary commits and fixes do not create update prompts.
 
-V5 is the current whole-number compatibility bridge. Its tag, title, asset
-names, schema-1 manifest, `publicBeta: 5`, and legacy integer assembly identity
+V6 uses the whole-number compatibility-bridge format. Its tag, title, asset
+names, schema-1 manifest, `publicBeta: 6`, and legacy integer assembly identity
 retain the exact numbered-beta contract understood by older installed clients.
-The published V3 and V4 bridges remain immutable and must not be retagged or replaced.
+Existing V3/V4/V5 artifacts remain immutable and must not be retagged or replaced.
 
 After that bridge, incremental public updates use canonical dotted identities:
-`beta-v5.1`, `Spyro Editor Beta V5.1`, and matching `Beta-V5.1` assets. Those
-packages use manifest schema 2, carry `publicVersion: "5.1"`, and retain legacy
+`beta-v6.1`, `Spyro Editor Beta V6.1`, and matching `Beta-V6.1` assets. Those
+packages use manifest schema 2, carry `publicVersion: "6.1"`, and retain legacy
 integer beta metadata only for compatibility. Each `CHANGELOG.md` is solely the
 delta from the immediately previous public release, not accumulated history.
 
@@ -64,10 +72,9 @@ be replaced by the normal notarized asset as soon as possible.
 When the release owner explicitly approves an accept-the-risk package because
 no Developer ID identity is installed, `SPYRO_EDITOR_MAC_BUILD_MODE=community`
 produces a hardened ad-hoc-signed ZIP with the same opening instructions and
-published SHA-256 digests. A local Beta V5 test package may use the `signed-only`
-path: it is Developer ID signed, hardened, and securely timestamped, but not
-notarized. A public V5 package should use the normal notarized path when Apple
-notarization credentials are available.
+published SHA-256 digests. The private V6 development package uses this explicit
+local ad-hoc mode; it is not Apple-signed or notarized. This does not change the
+normal public-release requirements or replace preserved V5 test apps.
 
 ## Current Editor
 
@@ -80,7 +87,14 @@ from the released capabilities below. Run `python3 tools/Run-SpyroEditorRegressi
 for the source-free regression gate, or add `--build-all` to compile every
 project without executing research candidate generators.
 
-Current release features include:
+The V6 development preview adds saved fresh-level documents with floor, spawn,
+sky, music, ordered placements, source browsing, and two floor-material slots.
+The drawing is a schematic, not native game rendering. The separate test-export
+action supports only checked profiles, including the exact Wizard + Grass and
+two-material example. Generic catalogue references remain authoring-only.
+Normal retail **Create BIN** does not consume fresh-level documents.
+
+Retained V5 features include:
 
 - **ID65 Blank-Level Lab (V5 beta):** the Level workspace can build a versioned,
   evidence-bound ID65 construction lab from the user's exact clean USA BIN/CUE.
