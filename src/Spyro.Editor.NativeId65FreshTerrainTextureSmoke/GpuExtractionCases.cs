@@ -11,6 +11,7 @@ internal static class GpuExtractionCases
     private const string OwnerHash = "An upload owner's captured preimage changed.";
     private const string DirtyFree = "Fresh-free ownership requires actual zero background.";
     private const string Capacity = "No complete free texture/palette rectangle remains; partial reservations are discarded.";
+    private const string KernelInputShape = "GPU allocation requires a nonempty ordered array of bounded neutral material inputs.";
     private static Type? _kernel;
 
     internal static void Run()
@@ -31,6 +32,7 @@ internal static class GpuExtractionCases
             compile.GetParameters().Select(p => p.ParameterType).SequenceEqual(new[]
             { typeof(byte[]), typeof(byte[]), typeof(NativeStaticTerrainTextureInput[]) }),
             "One internal exact GPU/map/ordered-input method, not an owner/clip/SPU/source factory.");
+        VariableCountCases();
         KernelCases();
     }
 
@@ -144,6 +146,123 @@ internal static class GpuExtractionCases
         KernelRefusals();
     }
 
+    private static void VariableCountCases()
+    {
+        foreach (int count in new[] { 1, 3, 7 })
+        {
+            byte[] gpu = new byte[0x80000], occupied = new byte[0x80000];
+            // Same-upload zero residue is occupied too; include the DMA-only
+            // final16 bytes and nonzero sentinels in this neutral fixture.
+            occupied.AsSpan(0x65800, 0x7F000 - 0x65800).Fill(1);
+            gpu[0x65800] = 0xA5;
+            gpu.AsSpan(0x7EFF0, 16).Fill(0x5A);
+            AllocationCases.Hole(occupied, 0, 0, 16, 32, 1);
+            var inputs = VariableInputs(count);
+            string gpuHash = Hash(gpu), maskHash = Hash(occupied);
+            string[] inputHashes = InputHashes(inputs);
+            object result = Compile(gpu, occupied, inputs);
+            byte[] output = Copy(result);
+            var records = Property<IReadOnlyList<NativeStaticTerrainTextureLayout>>(result, "Records");
+            var regions = Property<IReadOnlyList<NativeStaticTerrainTextureAllocationRegion>>(result, "Allocations");
+            Check(records.Count == count && records.All(r => r.Descriptors.Count == 23),
+                "Every requested material retains its complete184-byte/23-descriptor record without truncation.");
+            Check(regions.Count == count * 4 && Property<int>(result, "AllocatedByteCount") == count * 2560 &&
+                Property<int>(result, "FreeByteCount") == occupied.Count(b => b == 0) - count * 2560,
+                "Variable material counts consume every independent physical owner and report exact remaining bytes.");
+            var expectedOrder = Enumerable.Range(0, count).SelectMany(m => new[] { (m, "palette", 4), (m, "palette", 8) })
+                .Concat(Enumerable.Range(0, count).Select(m => (m, "pixel", 8)))
+                .Concat(Enumerable.Range(0, count).Select(m => (m, "pixel", 4)));
+            Check(regions.Select(r => (r.MaterialId, r.Kind, r.BitsPerPixel)).SequenceEqual(expectedOrder),
+                "All materials retain the established palette/area/material request order.");
+            for (int material = 0; material < count; material++)
+            {
+                var source = NativeStaticTerrainTextureLayout.Decode(inputs[material].Record);
+                for (int descriptor = 0; descriptor < 23; descriptor++)
+                {
+                    var before = source.Descriptors[descriptor]; var after = records[material].Descriptors[descriptor];
+                    Check(before.CopyPixels(inputs[material].SourceVram).SequenceEqual(after.CopyPixels(output)) &&
+                        before.CopyPalette(inputs[material].SourceVram).SequenceEqual(after.CopyPalette(output)),
+                        "Every complete emitted descriptor retains the exact selected material's pixels and full palette.");
+                    byte[] a = before.CopyDescriptor(), b = after.CopyDescriptor();
+                    Check((a[6] & 0xE0) == (b[6] & 0xE0) && a[7] == b[7],
+                        "Variable-count rebasing preserves descriptor mode/material bits.");
+                }
+                Check(regions.Where(r => r.MaterialId == material).All(r =>
+                    r.SourceIdentity == inputs[material].SourceIdentity &&
+                    r.AddressDomainIdentity == inputs[material].AddressDomainIdentity &&
+                    r.RelocationPolicy == inputs[material].RelocationPolicy),
+                    "Ordered records and allocation regions retain their actual neutral source labels.");
+            }
+            var written = new byte[gpu.Length];
+            bool disjoint = true;
+            foreach (var region in regions)
+                for (int row = 0; row < region.RowCount; row++)
+                    for (int x = 0; x < region.RowByteLength; x++)
+                    {
+                        int at = region.TargetOffset + row * 1024 + x;
+                        disjoint &= occupied[at] == 0 && written[at] == 0;
+                        written[at] = 1;
+                    }
+            Check(disjoint && gpu.Where((b, i) => written[i] == 0).SequenceEqual(output.Where((b, i) => written[i] == 0)),
+                "All complete regions are disjoint and preserve every unallocated or occupied byte, including zero residue.");
+            Check(output.AsSpan(0x65800, 0x7F000 - 0x65800).SequenceEqual(gpu.AsSpan(0x65800, 0x7F000 - 0x65800)),
+                "The entire declared fallback residue and final DMA-only16 bytes remain exact.");
+            Check(Hash(gpu) == gpuHash && Hash(occupied) == maskHash && InputHashes(inputs).SequenceEqual(inputHashes),
+                "Variable-count success cannot mutate any caller array.");
+            object retry = Compile(gpu, occupied, inputs);
+            Check(Copy(retry).SequenceEqual(output) &&
+                Property<IReadOnlyList<NativeStaticTerrainTextureAllocationRegion>>(retry, "Allocations").SequenceEqual(regions),
+                "A fresh variable-count retry preserves complete output and allocation order.");
+            byte[] detached = Copy(result); detached[0] ^= 1;
+            gpu[0] ^= 1; occupied[0] = 0;
+            inputs[^1].Record[0] ^= 1; inputs[^1].SourceVram[0] ^= 1;
+            Check(Copy(result).SequenceEqual(output), "The final material and every exposed input/output buffer remain detached.");
+        }
+
+        var three = VariableInputs(3);
+        byte[] plane = new byte[0x80000], available = new byte[0x80000];
+        foreach (var bad in new[] { three.Reverse().ToArray(),
+            new[] { three[0], three[1], three[2] with { MaterialId = 3 } },
+            new[] { three[0], three[1], three[2] with { MaterialId = 1 } } })
+        {
+            string[] before = InputHashes(bad);
+            Exact(() => Compile(plane, available, bad), KernelInputShape);
+            Check(InputHashes(bad).SequenceEqual(before) && plane.All(b => b == 0) && available.All(b => b == 0),
+                "Reordered, gapped and duplicate material IDs fail without mutating caller buffers.");
+        }
+
+        // The otherwise-fitting32-row window overlaps protected zero residue.
+        // Palette reservations fit first; complete pixels then cannot fit.
+        byte[] unprotected = Enumerable.Repeat((byte)1, 0x80000).ToArray();
+        AllocationCases.Hole(unprotected, 0, 384, 1024, 32, 0);
+        byte[] protectedMask = unprotected.ToArray();
+        protectedMask.AsSpan(0x65800, 0x7F000 - 0x65800).Fill(1);
+        string planeHash = Hash(plane), protectedHash = Hash(protectedMask);
+        string[] threeHashes = InputHashes(three);
+        Exact(() => Compile(plane, protectedMask, three), Capacity);
+        Check(Hash(plane) == planeHash && Hash(protectedMask) == protectedHash && InputHashes(three).SequenceEqual(threeHashes),
+            "Late variable-count capacity failure discards tentative reservations and preserves every caller buffer.");
+        object fitting = Compile(plane, unprotected, three);
+        Check(Property<int>(fitting, "AllocatedByteCount") == 7680 &&
+            Property<IReadOnlyList<NativeStaticTerrainTextureAllocationRegion>>(fitting, "Allocations")
+                .Any(r => Enumerable.Range(0, r.RowCount).Any(row =>
+                    r.TargetOffset + row * 1024 < 0x7F000 && r.TargetOffset + row * 1024 + r.RowByteLength > 0x65800)),
+            "The same full request fits only when its neutral mask releases residue; the failed attempt leaks no reservations.");
+    }
+
+    private static NativeStaticTerrainTextureInput[] VariableInputs(int count)
+    {
+        byte[] record = new byte[184];
+        for (int i = 0; i < 23; i++)
+            Convert.FromHexString(i < 3 ? "000020201f000880" : "004020281f408880").CopyTo(record, i * 8);
+        return Enumerable.Range(0, count).Select(material => new NativeStaticTerrainTextureInput(material,
+            "variable-source-" + material, "variable-GPU-domain-" + material, AllocationCases.Policy, record.ToArray(),
+            Enumerable.Range(0, 0x80000).Select(p => (byte)(p * 17 + p / 1024 + material * 31)).ToArray())).ToArray();
+    }
+
+    private static string[] InputHashes(NativeStaticTerrainTextureInput[] inputs) =>
+        inputs.SelectMany(i => new[] { Hash(i.Record), Hash(i.SourceVram) }).ToArray();
+
     private static void KernelRefusals()
     {
         byte[] gpu = new byte[0x80000], mask = new byte[0x80000];
@@ -158,12 +277,12 @@ internal static class GpuExtractionCases
             byte[] bad = mask.ToArray(); bad[^1] = value;
             Exact(() => Compile(gpu, bad, inputs), "GPU allocation requires one exact80000 plane and binary occupied map.");
         }
-        foreach (var bad in new[] { inputs.Reverse().ToArray(), inputs[..1],
+        foreach (var bad in new[] { inputs.Reverse().ToArray(), Array.Empty<NativeStaticTerrainTextureInput>(),
             new[] { inputs[0], null! }, new[] { inputs[0] with { Record = new byte[183] }, inputs[1] },
             new[] { inputs[0] with { SourceVram = new byte[0x80001] }, inputs[1] },
             new[] { inputs[0] with { SourceIdentity = "" }, inputs[1] },
             new[] { inputs[0] with { RelocationPolicy = "different-policy" }, inputs[1] } })
-            Exact(() => Compile(gpu, mask, bad), "GPU allocation requires two ordered, bounded neutral material inputs.");
+            Exact(() => Compile(gpu, mask, bad), KernelInputShape);
         foreach (int parameter in new[] { 0, 1, 2 })
         {
             try { Compile(parameter == 0 ? null! : gpu, parameter == 1 ? null! : mask, parameter == 2 ? null! : inputs); }

@@ -39,12 +39,12 @@ internal sealed class NativeStaticTerrainGpuAllocation
         if (gpu.Length != GpuLength || occupied.Length != GpuLength ||
             occupied.Any(b => b is not (0 or 1)))
             throw new InvalidDataException("GPU allocation requires one exact80000 plane and binary occupied map.");
-        if (selected.Length != 2 || selected.Where((input, index) => input is null ||
+        if (selected.Length == 0 || selected.Where((input, index) => input is null ||
             input.MaterialId != index || !Label(input.SourceIdentity) || !Label(input.AddressDomainIdentity) ||
             input.RelocationPolicy != NativeStaticTerrainTextureAllocation.RelocationPolicyId ||
             input.Record is null || input.Record.Length != 184 ||
             input.SourceVram is null || input.SourceVram.Length != GpuLength).Any())
-            throw new InvalidDataException("GPU allocation requires two ordered, bounded neutral material inputs.");
+            throw new InvalidDataException("GPU allocation requires a nonempty ordered array of bounded neutral material inputs.");
         byte[] before = gpu.ToArray(), occupancy = occupied.ToArray();
         var captured = selected.Select(i => i with { Record = i.Record.ToArray(), SourceVram = i.SourceVram.ToArray() }).ToArray();
         var decoded = captured.Select(i => NativeStaticTerrainTextureLayout.Decode(i.Record)).ToArray();
@@ -54,8 +54,9 @@ internal sealed class NativeStaticTerrainGpuAllocation
             R(material, "palette", d.BitsPerPixel, d.PaletteByteOffset, d.PaletteRowByteLength, d.PaletteRowCount)
         }).ToArray()).ToArray();
         var unique = fields.SelectMany(a => a).SelectMany(a => a).Distinct().ToArray();
-        // At most2*23*2 resources. Containment is source-coordinate/interpretation
-        // identity, never content-hash or cross-material deduplication.
+        // Each finite array entry contributes at most23*2 resources. Containment
+        // is source-coordinate/interpretation identity, never content-hash or
+        // cross-material deduplication. Complete physical fit determines capacity.
         for (int i = 0; i < unique.Length; i++)
             for (int j = 0; j < i; j++)
                 if (SameDomain(unique[i], unique[j]) && Overlaps(unique[i], unique[j]) &&
@@ -98,8 +99,8 @@ internal sealed class NativeStaticTerrainGpuAllocation
             aliases.Add(new(child.Material, source.SourceIdentity, source.AddressDomainIdentity, source.RelocationPolicy,
                 child.Kind, child.Bpp, child.Offset, target, parent.Offset, targets[parent], child.Width, child.Rows));
         }
-        var records = new NativeStaticTerrainTextureLayout[2];
-        for (int material = 0; material < 2; material++)
+        var records = new NativeStaticTerrainTextureLayout[captured.Length];
+        for (int material = 0; material < captured.Length; material++)
         {
             byte[] record = captured[material].Record.ToArray();
             for (int index = 0; index < 23; index++)
