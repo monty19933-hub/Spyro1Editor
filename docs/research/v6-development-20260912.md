@@ -8,9 +8,13 @@ BIN/CUE, saves and preserved R03/R04/R05 apps remain protected. Stop safely near
 
 ## Current checkpoint summary
 
-Latest source work adds shared atomic actor-texture materialization (September13,
-full217 passes336 steps and source218 passes4412 checks), following99f93b8
+Latest source work installs the complete unplaced AE model/four texture sets
+through the existing family Body composer, following shared atomic actor-texture
+materialization at d588106 (full217 passed336 steps, source218 passed4412 checks), and99f93b8
 (normal flight export) and b0db75b (model batch).
+Safely paused September13 at5% account usage remaining. Full226 passes336 steps;
+source223/225 passed the untextured/mixed resource installs. The two additional
+source-only assertion groups added afterward still need a replay after reset.
 Full combined regression207 also passed336 checks/0 failures; actual-source208
 replays normal ON/OFF publication with the same complete hashes and stale-ON
 refusal. Earlier full suites146/167/177 passed335 checks/0 failures. Sections below are chronological evidence: older "next"
@@ -42,9 +46,10 @@ Priority order from here:
 1. After manual Mac unlock, verify the preserved V6 native window and focused
    cold-boot/seam check; restore the fresh c07823…854 global INI baseline.
 2. Extend real family imports using the shared model/scene/dependency machinery.
-   Sound residency, key-particle residency and reversible detached chest selector
-   editing are prerequisites only. Chest model/texture registration, handlers,
-   renderer dispatch and singleton mutable globals still require actual bindings.
+   The complete AE model/four texture sets now install into actual resource-only
+   descendant Bodies with newly rebound sound/particle preservation. Key/reward
+   rows, handlers, debris, renderer dispatch and singleton mutable globals remain
+   unfinished; the existing export lane explicitly refuses unplaced resources.
 3. Connect scalable geometry/surface/material authoring to the shared ordered
    resource graph without raising fixed native-profile limits as a substitute.
 4. Verify the integrated default-OFF Fly Anywhere through native ON/OFF gameplay.
@@ -792,3 +797,58 @@ Native UI discovery again reports the Mac locked. No emulator/editor was
 launched, no test settings installed, no ROM exported and no sealed app rebuilt
 in this source pass. Native R02 preview/flight/seam checks still require manual
 unlock. Usage remains7% remaining at this entry; stop-near5% remains in force.
+
+## September13 — actual unplaced chest model/GPU composition
+
+Continued from clean d588106. The existing `NativeFreshMobyFamilyCompositionPlan`
+now has a closed resource-descendant path, not another exporter. It consumes an
+actual parent family, that parent's sound binding, and an actual retained fallback
+source. The source-owned materializer transforms the complete registered0x1008 AE
+package, sound47→54 and all146 texture descriptors; four complete tile/CLUT pairs
+install132 row/palette patches totaling2176 bytes into the real Final Body.
+The shared model-tail batch appends/registers AE after all old model ownership
+and grows once by0x1800. Existing scene bytes and their actual relative allocation
+remain identical; the containing Body and scene runtime location grow together.
+
+`NativeFreshWizardGpuOwnership` reconstructs actual fallback producer ownership
+and is also used by the existing mixed-material issuer. It verifies complete
+fallback upload/data/models and zero-inclusive provenance, adds protected
+CPU/DMA residue65800..7F000 and the actual mixed material allocation, and checks
+the complete current upload. Generated Fresh bytes are never relabelled Original.
+The new model/texture graph checks all133 actual Final installs; typed renderer
+bindings name every12-byte descriptor in that same Final model domain. UV/CLUT
+fields use their codec, not fake linear-address graph references.
+
+Complete inverse removes only installed GPU patches, uses the shared exact model
+inverse to recover the parent, then recovers the actual base Body. Existing sound
+and key-particle binders inspect the new complete Final Body independently and
+rebind8 and34 preservations. No rows, handlers, renderer callbacks, debris models,
+singleton globals or gameplay eligibility are added. The shared executable
+validator explicitly refuses `HasUnplacedModelResources` before source IO; the
+existing Disc and saved-family routes already funnel through that validator.
+
+Missing-API RED220 precedes production. Build221 has zero warnings/errors;
+free222 passes2158 checks plus23 stream checks. Source223 passes10912 checks:
+untextured resource Body e1dc6c8e071ad55894f51ab2a771c530fe64e4b11093da8f8693caec30f19bad.
+Authoring build224 passes with zero warnings/errors; source225 passes8264 final
+checks, with mixed14/70 resource Body
+3e8d3f6a06142a1db8ee147c4a9906dea81c9955de29a48cce2f3ef8e6e7bf51.
+All old Wizard/Grass Body, mixed material, EXE and complete-image pins still pass;
+neither source suite publishes a ROM. Additional live-zero-mask corruption and
+actual Final-consumer assertions compile in full226 but need final source replay.
+
+Independent review found no inverse/domain/recursion/export-gate defect. Both
+resource descendants remain unexportable and untested in DuckStation. The sealed
+R01/R02 apps, default project, original BIN/CUE and emulator settings/card were
+not changed. Usage is6% remaining during verification; only finishing this
+checkpoint and safe handoff remains in this near-threshold pass.
+
+Safe-stop result: account usage reached5% while full226 was already running.
+That existing run completed336 steps/0 failures; report:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-grku_0zk/summary.json`.
+All source223/225 implementation results above remain valid. No final source
+replay was started after the threshold; proposed logs227/228 do not exist. On
+resume, first replay Body and Authoring source suites to exercise the last two
+test-only assertion groups (mask corruption/restoration and Final consumer
+domains), before any further production changes. Native gameplay remains
+pending; the desktop is locked. No goal-completion claim or usage reset was made.

@@ -10,6 +10,7 @@ internal static class FamilyCompositionCases
     {
         FamilyRowSpanCases.Free(check);
         FamilySoundResidencyCases.Free(check);
+        FamilyChestResourceCases.Free(check);
         var type=typeof(NativeFreshMobyFamilyCompositionPlan);
         check(type.IsSealed&&!type.IsPublic&&type.GetConstructors().Length==0,"Family composition is internal, closed and has no caller-byte authority.");
         Reject<ArgumentNullException>(()=>NativeFreshMobyFamilyCompositionPlan.Compose(null!,[]),check);

@@ -9,8 +9,8 @@ namespace Spyro.Editor.Core.Exporting;
 internal sealed record NativeFreshMobySoundResidentSelection(string Id,int? GlobalSelector,
     int SourceDescriptorIndex,int TargetDescriptorIndex,NativeByteExtent Descriptor,NativeByteExtent Sample);
 
-// An Original source-field obligation only. The chest package has not been
-// installed in Fresh, so no final model extent or resolved reference exists.
+// An Original source-field obligation only. This binding does not own an
+// installed model extent; the separate family model materializer must bind it.
 internal sealed record NativeFreshMobySoundLocalSelectorObligation(NativeMobyDependencyRead SourceField,
     int SourceDescriptorIndex,int TargetDescriptorIndex);
 
@@ -191,8 +191,8 @@ internal sealed class NativeFreshMobySoundResidencyBinding
                 NativeMobyDependencySharing.Immutable,source.PackageRead.ExpectedSha256,dependencies.AsReadOnly(),equivalence));
         }
 
-        // Only the Original four-byte model word is owned here. Its eventual
-        // installed field is a different producer's still-unresolved obligation.
+        // Only the Original four-byte model word is owned here. Any installed
+        // field belongs to the separate family model materializer, not this binding.
         NativeByteExtent field=new(source.PackageRead.Extent.Space,checked(source.PackageRead.Extent.Offset+4),4);
         byte[] fieldBytes=source.ReadSource(field);
         var localSelection=selections.Single(s=>s.GlobalSelector is null);

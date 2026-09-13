@@ -162,6 +162,7 @@ internal static class FamilySoundResidencyCases
         Console.WriteLine($"NATIVE_FRESH_LOCKED_CHEST_SOUND_RESIDENCY_SOURCE_OK mixed={mixed} body={composition.LevelDataSha256} installs=0 nativeAdmission=false playback=false");
         FamilyParticleResidencyCases.Source(source,composition,equalComposition,check);
         FamilySoundRetargetedPackageCases.Source(source,plan,composition,equalComposition,check);
+        await FamilyChestResourceCases.Source(original,source,plan,composition,equalComposition,check);
     }
 
     private static NativeSoundBank Bank(int offset)

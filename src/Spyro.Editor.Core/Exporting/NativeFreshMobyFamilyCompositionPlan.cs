@@ -40,9 +40,10 @@ internal sealed class NativeFreshMobyFamilyPlacement
 internal sealed class NativeFreshMobyFamilyCompositionPlan
 {
     private readonly byte[] _body,_scene,_inverse;
-    private readonly NativeLevelDataGrowthLayout _growth;
     private readonly NativeModelTailBatch _modelBatch;
     private readonly IReadOnlyList<NativeMobyDependencyClosurePlan> _graphs;
+    private readonly NativeFreshMobyChestModelMaterialization? _chestResources;
+    private readonly byte[]? _inverseResource;
     private NativeFreshMobyFamilyCompositionPlan(NativeId65FreshWizardResearchBodyPlan body,NativeFreshMobyFamilyPlacement[] placements)
     {
         BaseBodyAncestor=body;Placements=Array.AsReadOnly(placements);RequireAncestry(body);
@@ -135,10 +136,10 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
         List<NativeSkyRelocationPayload> payloads=[];
         if(_modelBatch.Packages.Count!=0)payloads.Add(new(0,0,0,0,oldModelLength,0,appended,2,false));
         payloads.Add(new(1,0,0,0,0,baselineScene.Length,_scene,3,false));
-        _growth=new(baseline.AsSpan(0,0x800),baseline.Length,payloads);
-        _body=_growth.Expand(baseline);
-        if(_body.Length!=finalLength||_growth.Subfiles[2].FinalLength!=modelLength||
-            _growth.Subfiles[3].FinalLength!=Layout.SceneByteLength)
+        var growth=new NativeLevelDataGrowthLayout(baseline.AsSpan(0,0x800),baseline.Length,payloads);
+        _body=growth.Expand(baseline);
+        if(_body.Length!=finalLength||growth.Subfiles[2].FinalLength!=modelLength||
+            growth.Subfiles[3].FinalLength!=Layout.SceneByteLength)
             throw new InvalidDataException("Shared growth geometry disagrees with the family storage allocation.");
         var registrations=NativeMobyRegistrationTableLayout.Decode(_body.AsSpan(0,0x800),modelOffset,modelLength);
         foreach(var package in _modelBatch.Packages)
@@ -154,7 +155,7 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
             if(!ReferenceEquals(install.Destination.Space,FinalBodyDomain)||!graph.CopyPayload(install.NodeId).AsSpan().SequenceEqual(
                 _body.AsSpan((int)install.Destination.Offset,(int)install.Destination.ByteLength)))
                 throw new InvalidDataException("A shared family model dependency is not installed in its exact actual final owner.");
-        _inverse=Inverse(baseline,baselineScene,storage);
+        _inverse=Inverse(baseline,baselineScene,storage,growth);
         if(!_inverse.AsSpan().SequenceEqual(baseline))throw new InvalidDataException("Family layout failed complete inverse to its actual base Body.");
         LevelDataSha256=Hash(_body);SceneSha256=Hash(_scene);
         PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{
@@ -171,7 +172,69 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
             passive?.ReadSource(extent)??throw new InvalidDataException("Family read has no actual retained original owner.");
     }
 
+    private NativeFreshMobyFamilyCompositionPlan(NativeFreshMobyChestModelMaterialization resources)
+    {
+        _chestResources=resources;ResourceAncestor=resources.Ancestor;
+        var ancestor=ResourceAncestor;BaseBodyAncestor=ancestor.BaseBodyAncestor;
+        Placements=ancestor.Placements;RowSpans=ancestor.RowSpans;Layout=ancestor.Layout;Allocation=ancestor.Allocation;
+        // Complete scene bytes and their actual relative-domain allocation are
+        // unchanged. Only their containing Body and runtime placement grow.
+        _scene=ancestor.CopyScene();FinalSceneDomain=ancestor.FinalSceneDomain;
+        byte[] before=ancestor.CopyLevelData();ancestor.RequireExactLevelData(before);
+        _modelBatch=NativeModelTailBatch.Compile(before,[resources.ModelContribution],[]);
+        _body=_modelBatch.CopyFinalBody();
+        foreach(var patch in resources.Texture.Patches)
+        {
+            int at=resources.UploadOffset+patch.Offset;
+            if(!_body.AsSpan(at,patch.ByteLength).SequenceEqual(patch.CopyBefore()))
+                throw new InvalidDataException("Chest GPU install lost its complete current upload preimage.");
+            patch.CopyAfter().CopyTo(_body,at);
+        }
+        if(!_body.AsSpan(resources.UploadOffset,0x80000).SequenceEqual(resources.Texture.CopyUpload()))
+            throw new InvalidDataException("Chest model and GPU transactions disagree on the complete final upload.");
+        ModelRuntimeAddress=ancestor.ModelRuntimeAddress;
+        SceneRuntimeAddress=checked(ModelRuntimeAddress+(uint)_modelBatch.FinalModelLength);
+        KnownSceneEndAddress=checked(SceneRuntimeAddress+(uint)_scene.Length);
+        if(KnownSceneEndAddress>BaseBodyAncestor.NormalReservedLowerAddress||
+            _modelBatch.FinalModelLength+_scene.Length>0x80000||
+            BaseBodyAncestor.CopyBufferAddress+0x80000>BaseBodyAncestor.NormalReservedLowerAddress)
+            throw new InvalidDataException("Chest resources exceed known Body/copy-reserve bounds; no peak-runtime proof is implied.");
+        FinalBodyDomain=new(NativeAddressKind.LevelData,"fresh-family-chest-resources:"+ancestor.PlanSha256,
+            NativeAddressRevision.Final,_body.Length);
+        var graph=resources.BindFinal(FinalBodyDomain,_modelBatch.Packages.Single(),_body,out var consumers);
+        ChestTextureConsumers=consumers;_graphs=Array.AsReadOnly(new[]{graph});
+        byte[] modelAfterimage=_body.ToArray();
+        foreach(var patch in resources.Texture.Patches)
+        {
+            int at=resources.UploadOffset+patch.Offset;
+            if(!modelAfterimage.AsSpan(at,patch.ByteLength).SequenceEqual(patch.CopyAfter()))
+                throw new InvalidDataException("Chest inverse lost a complete installed texture afterimage.");
+            patch.CopyBefore().CopyTo(modelAfterimage,at);
+        }
+        _inverseResource=_modelBatch.RevertExact(modelAfterimage);
+        ancestor.RequireExactLevelData(_inverseResource);
+        _inverse=ancestor.CopyInverseBaseBody();
+        if(!_inverse.AsSpan().SequenceEqual(BaseBodyAncestor.CopyLevelData()))
+            throw new InvalidDataException("Chest resource inverse chain failed to recover its complete actual base Body.");
+        LevelDataSha256=Hash(_body);SceneSha256=Hash(_scene);
+        PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{
+            profile="native-fresh-family-unplaced-model-resources-v1",ancestor=ancestor.PlanSha256,
+            LevelDataSha256,SceneSha256,graph.Fingerprint,ModelRuntimeAddress,SceneRuntimeAddress,KnownSceneEndAddress,
+            textureConsumers=consumers.Select(c=>new{c.Descriptor,c.TileIndex,Before=Hash(c.Rewrite.CopyBefore()),After=Hash(c.Rewrite.CopyAfter())}),
+            rowsAdded=0,completeBehavior=false,runtime=false,publication=false}));
+        RequireAncestry(BaseBodyAncestor);
+        // Parent-domain residency is not a certificate for this new Body. Both
+        // existing binders inspect its complete actual Final bytes afresh.
+        NativeFreshMobySoundResidencyBinding.BindLockedChest(resources.Source,this).RequireExactLevelData(_body);
+        NativeFreshMobyParticleResidencyBinding.BindLockedChestKey(resources.Source,this).RequireExactLevelData(_body);
+    }
+
     internal NativeId65FreshWizardResearchBodyPlan BaseBodyAncestor{get;}
+    internal NativeFreshMobyFamilyCompositionPlan? ResourceAncestor{get;}
+    internal bool HasUnplacedModelResources=>_chestResources is not null;
+    internal NativeModelTailPackage? ChestModelContribution=>_chestResources?.ModelContribution;
+    internal NativeMobyTextureMaterialization? ChestTextureMaterialization=>_chestResources?.Texture;
+    internal IReadOnlyList<NativeFreshMobyTextureConsumer> ChestTextureConsumers{get;}=Array.Empty<NativeFreshMobyTextureConsumer>();
     internal IReadOnlyList<NativeFreshMobyFamilyPlacement> Placements{get;}
     internal NativeFreshMobyFamilyRowSpanPlan RowSpans{get;}
     internal NativeFreshMobySceneStorageLayout Layout{get;}
@@ -187,11 +250,19 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
     internal byte[] CopyLevelData()=>_body.ToArray();
     internal byte[] CopyScene()=>_scene.ToArray();
     internal byte[] CopyInverseBaseBody()=>_inverse.ToArray();
+    internal byte[] CopyInverseResourceAncestorBody()=>_inverseResource?.ToArray()??
+        throw new InvalidDataException("This family composition has no resource ancestor inverse.");
     internal void RequireExactLevelData(ReadOnlySpan<byte> bytes)
     {RequireAncestry(BaseBodyAncestor);if(!bytes.SequenceEqual(_body))throw new InvalidDataException("Family composed body changed an owned byte or complement.");}
     internal void RequireAncestry(NativeId65FreshWizardResearchBodyPlan body)
     {
         if(!ReferenceEquals(body,BaseBodyAncestor))throw new InvalidDataException("Family composition belongs to another actual base Body.");
+        if(_chestResources is not null)
+        {
+            if(!ReferenceEquals(ResourceAncestor,_chestResources.Ancestor))
+                throw new InvalidDataException("Chest resource composition lost its actual parent.");
+            _chestResources.RequireRetainedOwners();
+        }
         var host=body.HostAncestor;body.RequireAncestry(host);
         body.RequireExactOutputs(body.CopyLevelData(),body.CopyOverlay(),body.CopyInitializerPatch(),body.CopyTransferSourceImage());
         if(Placements.Count==0||!ReferenceEquals(Placements[0].WizardAsset,host.SceneAncestor.FamilyAncestor)||
@@ -216,10 +287,16 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
         return new(body,copy);
     }
 
-    private byte[] Inverse(byte[] baseline,byte[] baselineScene,NativeFreshMobySceneStoragePlan storage)
+    internal static NativeFreshMobyFamilyCompositionPlan ComposeWithLockedChestResources(
+        NativeFreshMobyFamilyCompositionPlan ancestor,NativeFreshMobySoundResidencyBinding sound,
+        NativeId65FreshWizardResearchFallbackResourceSource fallbackSource)=>
+        new(new NativeFreshMobyChestModelMaterialization(ancestor,sound,fallbackSource));
+
+    private byte[] Inverse(byte[] baseline,byte[] baselineScene,NativeFreshMobySceneStoragePlan storage,
+        NativeLevelDataGrowthLayout growth)
     {
         byte[] inverse=new byte[baseline.Length];_body.AsSpan(0,0x800).CopyTo(inverse);
-        foreach(var part in _growth.Subfiles)
+        foreach(var part in growth.Subfiles)
         {
             Put(inverse,part.Index*8,part.OriginalOffset);Put(inverse,part.Index*8+4,part.OriginalLength);
             if(part.Index!=3)_body.AsSpan(part.FinalOffset,part.OriginalLength).CopyTo(inverse.AsSpan(part.OriginalOffset));
@@ -237,7 +314,7 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
                 new(0,NativeFreshMobySceneOwnerKind.Private,0,0,NativeFreshMobySceneOwnerKind.Private,0x28,(uint)(Layout.PrivateOffsets[0]+0x28))]).CopyScene();
         if(!recovered.AsSpan().SequenceEqual(baselineScene)||!ReferenceEquals(storage.Allocation,Allocation))
             throw new InvalidDataException("Family inverse lost retained Wizard bytes or its actual private allocator.");
-        recovered.CopyTo(inverse,_growth.Subfiles[3].OriginalOffset);
+        recovered.CopyTo(inverse,growth.Subfiles[3].OriginalOffset);
         return inverse;
     }
     private static int Word(ReadOnlySpan<byte> b,int at)=>BinaryPrimitives.ReadInt32LittleEndian(b[at..]);

@@ -79,6 +79,8 @@ internal sealed class NativeId65FreshWizardResearchExecutableSource
     internal static void RequireFamilyComposition(NativeFreshMobyFamilyCompositionPlan family)
     {
         ArgumentNullException.ThrowIfNull(family);
+        if(family.HasUnplacedModelResources)
+            throw new InvalidDataException("Unplaced model resources have no native family behavior/export profile.");
         var body=family.BaseBodyAncestor;RequireMaterialBody(body);family.RequireAncestry(body);
         family.RequireExactLevelData(family.CopyLevelData());
         var mixed=body.MixedResourceAncestor!;
