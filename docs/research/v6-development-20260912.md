@@ -478,3 +478,27 @@ original BIN/CUE unchanged and no output. Both actual sound offsets are derived
 408dfd…5c98, as well as all three historical mixed images, remain unchanged.
 Private V6 packages remain the sealed ac50def build; this source prerequisite
 does not silently replace or rebuild them.
+
+## Retained key-particle residency prerequisite
+
+Log158 is the tests-first missing-API RED (six errors, no warnings). The new
+internal NativeFreshMobyParticleResidencyBinding accepts only the actual
+extracted chest source and actual Fresh family composition. Existing particle,
+level-component and texture-footprint codecs derive descriptor0C, its complete
+32 pixel rows and CLUT from both Original and Final owners. The source is Town's
+retained support, not an assertion that Peace Keepers' particle data is equal.
+
+Exactly34 graph preservations protect556 bytes: the12-byte descriptor,
+512 pixel bytes and32-byte CLUT. Every actual final byte is compared to its
+source preimage at binding and recheck. Full composition identity/complement,
+reissued-owner refusal and referenced zero bytes remain covered. No install,
+reference patch, renderer/callback/frame-lifetime capability or chest admission
+is issued; no native output is changed by this prerequisite.
+
+Logs159/163 pass both builds0/0; log160 passes free2154/2073 refusals plus23
+stream checks. Actual untextured164 passes10526 checks; mixed165 passes7882
+final checks with original BIN/CUE unchanged and no output. The key descriptor
+is derived at Data+188 untextured and Data+2F8 mixed, not reused at a Town final
+offset. Existing family Body7812d3…262/full image408dfd…5c98 and all three
+historical mixed images remain byte-identical. Root and independent peer review
+are complete. The private ac50def V6 package remains sealed and unchanged.

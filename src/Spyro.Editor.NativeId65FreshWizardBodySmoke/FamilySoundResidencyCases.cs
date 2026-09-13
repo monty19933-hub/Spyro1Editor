@@ -42,6 +42,7 @@ internal static class FamilySoundResidencyCases
                 "Complete ADPCM equivalence includes interior and final sample bytes.");
         }
         Console.WriteLine("NATIVE_FRESH_FAMILY_SOUND_RESIDENCY_FREE_OK nativeAdmission=false playback=false");
+        FamilyParticleResidencyCases.Free(check);
     }
 
     internal static async Task Source(string original,NativeFreshMobyFamilyCompositionPlan composition,
@@ -158,6 +159,7 @@ internal static class FamilySoundResidencyCases
             composition.CopyInverseBaseBody().SequenceEqual(composition.BaseBodyAncestor.CopyLevelData()),
             "Copy mutations and every refusal preserve original source, complete Body/Scene and old inverse bytes.");
         Console.WriteLine($"NATIVE_FRESH_LOCKED_CHEST_SOUND_RESIDENCY_SOURCE_OK mixed={mixed} body={composition.LevelDataSha256} installs=0 nativeAdmission=false playback=false");
+        FamilyParticleResidencyCases.Source(source,composition,equalComposition,check);
     }
 
     private static NativeSoundBank Bank(int offset)
