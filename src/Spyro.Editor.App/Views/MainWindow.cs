@@ -1909,6 +1909,7 @@ public sealed partial class MainWindow : Window
         _lastRemovedMoby = null;
         _lastRemovedMobyBundle.Clear();
         _currentLevel = null;
+        RefreshFreeFlightSettingsEditor(null);
         _id65FreshAuthoringDocument = null;
         _id65FreshDocumentProjectionSynchronized = false;
         ApplyEditorExperienceForCurrentLevel();
@@ -11590,6 +11591,7 @@ public sealed partial class MainWindow : Window
         RefreshLevelTextTargetEditor();
         RefreshId65SkyAndNameAvailability(level);
         RefreshLevelMusicEditor(level);
+        RefreshFreeFlightSettingsEditor(level);
         RefreshPortalControlPanel();
         RefreshNativeLevelReplacementPanel();
     }
@@ -13068,6 +13070,7 @@ public sealed partial class MainWindow : Window
         }
 
         _createBinBusy = true;
+        RefreshFreeFlightSettingsAvailability();
         object? idleButtonContent = _toolbarCreateBinButton?.Content;
         ReportCreateBinProgress(
             "Preparing BIN...",
@@ -13090,6 +13093,7 @@ public sealed partial class MainWindow : Window
         finally
         {
             _createBinBusy = false;
+            RefreshFreeFlightSettingsAvailability();
             if (_toolbarCreateBinButton != null)
             {
                 _toolbarCreateBinButton.Content =
@@ -13121,6 +13125,18 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (TryGetFreeFlightSettingsExportBlockReason(out string flightBlockReason))
+        {
+            _statusText.Text = flightBlockReason;
+            return;
+        }
+        var flightIntent = NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
+        var flightWorkspace = _workspace;
+        int flightWorkspaceGeneration = _workspaceTransitionGeneration;
+        var flightLevel = _currentLevel;
+        string? flightImageSelection = _discImagePathBox.Text;
+        string? flightSkyImageSelection = _skyboxDiscImagePathBox.Text;
+
         if (TryGetCurrentReleaseTerrainEditBlockReason(out string releaseTerrainBlockReason))
         {
             _statusText.Text = releaseTerrainBlockReason;
@@ -13150,7 +13166,8 @@ public sealed partial class MainWindow : Window
             return;
         }
         IReadOnlyList<EditedLevelExportTarget> targets = FindEditedLevelExportTargets();
-        if (targets.Count == 0)
+        flightIntent.RequireOrdinaryEditCompatibility(targets.Any(HasOrdinarySavedEdits));
+        if (targets.Count == 0 && !flightIntent.RequiresRebuild)
         {
             _statusText.Text = "No saved edits were found. Change a level name, music track, skybox, object, or terrain first.";
             return;
@@ -13221,6 +13238,11 @@ public sealed partial class MainWindow : Window
         CombinedTestBinResult result;
         try
         {
+            flightIntent.RequireCurrent(_workspace.RootPath);
+            if (!ReferenceEquals(flightWorkspace, _workspace) || flightWorkspaceGeneration != _workspaceTransitionGeneration ||
+                !ReferenceEquals(flightLevel, _currentLevel) || flightImageSelection != _discImagePathBox.Text ||
+                flightSkyImageSelection != _skyboxDiscImagePathBox.Text)
+                throw new InvalidOperationException("Create BIN project, level or selected source changed during preparation. Start the export again.");
             result = await CreateAllSavedEditsTestAsync(
                 sourceImage,
                 DiscImageLocator.FindCueForImage(sourceImage),
@@ -13275,7 +13297,7 @@ public sealed partial class MainWindow : Window
             : $" for {FormatShortList(result.PatchedLevelNames, 4)}";
         string treasureSummary = BuildExportedTreasureStatus(result.ExportedTreasureTargets);
         string skippedSummary = BuildSkippedExportStatus(result.SkippedEdits, result.SkippedEditDetails);
-        string successStatus = $"Created all-edits test {Path.GetFileName(result.OutputCuePath)}{levelSummary}: {result.ObjectPatches} object patch(es), {result.TerrainPatches} terrain patch(es), {result.EnvironmentGradePatches} environment patch(es), {result.SkyboxPatches} sky block patch(es), {result.LevelNamePatches} level name(s), {result.MusicLevelPatches} music level(s).{treasureSummary}{skippedSummary}";
+        string successStatus = $"Created all-edits test {Path.GetFileName(result.OutputCuePath)}{levelSummary}: {result.ObjectPatches} object patch(es), {result.TerrainPatches} terrain patch(es), {result.EnvironmentGradePatches} environment patch(es), {result.SkyboxPatches} sky block patch(es), {result.LevelNamePatches} level name(s), {result.MusicLevelPatches} music level(s).{treasureSummary}{skippedSummary}{result.FreeFlightSummary}";
         _statusText.Text = successStatus;
         try
         {
@@ -13327,6 +13349,7 @@ public sealed partial class MainWindow : Window
 
     private IReadOnlyList<EditedLevelExportTarget> FindEditedLevelExportTargets()
     {
+        var flightIntent = NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
         List<EditedLevelExportTarget> targets = [];
         foreach (LevelDefinition level in _catalog.Levels)
         {
@@ -13364,7 +13387,8 @@ public sealed partial class MainWindow : Window
             bool hasLevelTextEdit = textTarget != null && LevelTextEditStore.Load(_workspace.RootPath, textTarget) != null;
             bool hasLevelMusicEdit = LevelMusicEditStore.Load(_workspace.RootPath, level) != null;
             bool hasSkyboxEdit = NativeSkyEditStore.Load(_workspace.RootPath, level) != null;
-            if (hasObjectEdits || hasTerrainEdits || hasCustomTerrainTextures || hasNativeTerrainTextureRelocations || hasLevelTextEdit || hasLevelMusicEdit || hasSkyboxEdit)
+            bool hasFlightSelection = flightIntent.HasExplicitSelection(level.LevelId);
+            if (hasObjectEdits || hasTerrainEdits || hasCustomTerrainTextures || hasNativeTerrainTextureRelocations || hasLevelTextEdit || hasLevelMusicEdit || hasSkyboxEdit || hasFlightSelection)
             {
                 targets.Add(new EditedLevelExportTarget(
                     level,
@@ -13374,7 +13398,7 @@ public sealed partial class MainWindow : Window
                     hasNativeTerrainTextureRelocations,
                     hasLevelTextEdit,
                     hasLevelMusicEdit,
-                    hasSkyboxEdit));
+                    hasSkyboxEdit) { HasFreeFlightSelection = hasFlightSelection });
             }
         }
 
@@ -13413,6 +13437,15 @@ public sealed partial class MainWindow : Window
         if (TryGetId65BlankLabNormalCreateBinBlockReason(out string id65BlockReason))
             throw new InvalidOperationException(id65BlockReason);
 
+        if (TryGetFreeFlightSettingsExportBlockReason(out string flightBlockReason))
+            throw new InvalidOperationException(flightBlockReason);
+        var flightIntent = NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
+        var flightOwner = CaptureSourceDiscOperationIdentity();
+        string? flightImageSelection = _discImagePathBox.Text;
+        string? flightSkyImageSelection = _skyboxDiscImagePathBox.Text;
+        flightIntent.RequireOrdinaryEditCompatibility(targets.Any(HasOrdinarySavedEdits) ||
+            flightIntent.RequiresRebuild && FindEditedLevelExportTargets().Any(HasOrdinarySavedEdits));
+
         string tempDir = Path.Combine(outputDir, "_combined-build", $"run-{Guid.NewGuid():N}");
         string finalPrefix = Path.Combine(outputDir, "Spyro Editor - All Saved Edits");
         string finalImage = $"{finalPrefix}.bin";
@@ -13426,6 +13459,8 @@ public sealed partial class MainWindow : Window
             throw new InvalidOperationException(
                 "Create BIN cannot replace its selected source image or CUE. Select the original disc before publishing All Saved Edits.");
         }
+        ExportArtifactTransaction.RequireSourceSeparation(sourceImage, sourceCue,
+            finalImage, finalCue, finalSummary, finalSkipped, finalDiagnostics, finalSupportBundle);
         Directory.CreateDirectory(tempDir);
 
         string currentImage = sourceImage;
@@ -13446,6 +13481,21 @@ public sealed partial class MainWindow : Window
         List<NativeSkyBatchEdit> skyboxEdits = [];
         List<NativeEnvironmentGradeBatchEdit> environmentGradeEdits = [];
         List<object> stepSummaries = [];
+        NativeFreeFlightExportStageResult? flightStage = null;
+        if (flightIntent.RequiresRebuild)
+        {
+            ReportCreateBinProgress("Preparing flight...", flightIntent.EnabledLevelId == null
+                ? "Create BIN: rebuilding Fly Anywhere OFF from the original disc before ordinary saved edits..."
+                : "Create BIN: composing Toasty Fly Anywhere ON from the original disc...");
+            flightStage = await NativeFreeFlightExportStage.CreateAsync(flightIntent, _workspace.RootPath,
+                sourceImage, sourceCue, Path.Combine(tempDir, $"{++step:00}-free-flight"));
+            RequireFreeFlightExportOwner(flightIntent, flightOwner, flightImageSelection, flightSkyImageSelection);
+            currentImage = flightStage.OutputImagePath;
+            currentCue = flightStage.OutputCuePath;
+            stepSummaries.Add(new { kind = "free-flight", enabledLevelId = flightStage.EnabledLevelId,
+                rebuiltFromOriginal = true, flightStage.SourceImageSha256, flightStage.OutputImageSha256,
+                flightStage.ChangedRawSectors, nativeGameplayAcceptance = false });
+        }
         List<(LockedChestRuntimeBundleDestinationProfile Profile, LockedChestRuntimeBundleIntent Intent, string LevelName)>
             lockedChestRuntimeBundles = [];
         bool incompatibleStructuralWadRelocationApplied = false;
@@ -13971,7 +14021,7 @@ public sealed partial class MainWindow : Window
             }
         }
 
-        if (objectPatches + terrainPatches + environmentGradePatches + skyboxPatches + levelNamePatches + musicLevelPatches == 0 || !File.Exists(currentImage))
+        if (objectPatches + terrainPatches + environmentGradePatches + skyboxPatches + levelNamePatches + musicLevelPatches == 0 && flightStage == null || !File.Exists(currentImage))
             return new CombinedTestBinResult("", "", objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, false);
 
         string stagedPrefix = Path.Combine(tempDir, Path.GetFileName(finalPrefix));
@@ -13980,6 +14030,11 @@ public sealed partial class MainWindow : Window
         string stagedSummary = $"{stagedPrefix}.combined-export-summary.json";
         string stagedSkipped = $"{stagedPrefix}.skipped-edits.txt";
         string cueText = BuildCueText(currentCue, currentImage, Path.GetFileName(finalImage));
+        string? flightFinalImageHash = flightStage == null ? null : await HashFileSha256Async(currentImage);
+        if (flightStage != null && (flightStage.EnabledLevelId != null ||
+            objectPatches + terrainPatches + environmentGradePatches + skyboxPatches + levelNamePatches + musicLevelPatches == 0) &&
+            flightFinalImageHash != flightStage.OutputImageSha256)
+            throw new InvalidDataException("The flight-only stage changed before publication.");
         await StageCombinedBuildImageAsync(
             currentImage,
             stagedImage,
@@ -14005,6 +14060,24 @@ public sealed partial class MainWindow : Window
             steps = stepSummaries
         }, new JsonSerializerOptions { WriteIndented = true }));
         WriteSkippedExportDetails(stagedPrefix, skippedEditDetails);
+        if (FreeFlightExportDelayOverrideForTesting != null)
+            await FreeFlightExportDelayOverrideForTesting("free-flight-before-publication");
+        if (flightStage != null)
+        {
+            if (await HashFileSha256Async(stagedImage) != flightFinalImageHash ||
+                await File.ReadAllTextAsync(stagedCue, DiscCueSheet.TextEncoding) != cueText)
+                throw new InvalidDataException("The complete staged flight export changed before publication.");
+            await flightStage.RequireCurrentAsync(_workspace.RootPath);
+            RequireFreeFlightExportOwner(flightIntent, flightOwner, flightImageSelection, flightSkyImageSelection);
+            flightIntent.RequireOrdinaryEditCompatibility(FindEditedLevelExportTargets().Any(HasOrdinarySavedEdits));
+        }
+        // Absence is also a captured choice. A new saved ON setting or dirty
+        // draft must not arrive unnoticed during an ordinary async export.
+        flightIntent.RequireCurrent(_workspace.RootPath);
+        if (TryGetFreeFlightSettingsExportBlockReason(out string finalFlightBlockReason))
+            throw new InvalidOperationException(finalFlightBlockReason);
+        ExportArtifactTransaction.RequireSourceSeparation(sourceImage, sourceCue,
+            finalImage, finalCue, finalSummary, finalSkipped, finalDiagnostics, finalSupportBundle);
         ExportArtifactPublicationResult publication = ExportArtifactTransaction.Publish(outputDir,
         [
             new(finalImage, stagedImage),
@@ -14022,7 +14095,10 @@ public sealed partial class MainWindow : Window
                 publication.RetainedRecoveryDirectory);
         }
 
-        return new CombinedTestBinResult(finalImage, finalCue, objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, true, tempDir);
+        return new CombinedTestBinResult(finalImage, finalCue, objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, true, tempDir)
+        { FreeFlightSummary = flightStage == null ? "" : flightStage.EnabledLevelId == null
+            ? " Fly Anywhere OFF: rebuilt from the original disc."
+            : " Fly Anywhere ON: Toasty only; gameplay validation pending." };
     }
 
     private static bool IsDisposableCombinedBuildImage(
@@ -31776,7 +31852,10 @@ public sealed partial class MainWindow : Window
         bool HasNativeTerrainTextureRelocations,
         bool HasLevelTextEdit,
         bool HasLevelMusicEdit,
-        bool HasSkyboxEdit);
+        bool HasSkyboxEdit)
+    {
+        public bool HasFreeFlightSelection { get; init; }
+    }
 
     internal sealed record PrivateTextureAggregateSavedWriterScope(
         string LevelName,
@@ -31803,7 +31882,10 @@ public sealed partial class MainWindow : Window
         IReadOnlyList<ExportedTreasureTarget> ExportedTreasureTargets,
         IReadOnlyList<string> PatchedLevelNames,
         bool WroteImage,
-        string BuildDirectory = "");
+        string BuildDirectory = "")
+    {
+        public string FreeFlightSummary { get; init; } = "";
+    }
 
     private sealed record ExportedTreasureTarget(string LevelName, int Before, int After);
 

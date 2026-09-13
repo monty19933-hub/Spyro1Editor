@@ -3,8 +3,9 @@ using Spyro.Editor.Core.Levels;
 using System.Text.Json;
 
 int checks = AdversarialCases.Run();
+checks += await ProductionStageCases.RunFreeAsync();
 if (args.Length != 0 && args.Length != 3 && args.Length != 5)
-    throw new ArgumentException("Usage: NativeFreeFlightResearchSmoke [original.bin original.cue workspace [--verify|--exercise-staging|--publish|--verify-fast-entry|--exercise-staging-fast-entry|--publish-fast-entry directory]]");
+    throw new ArgumentException("Usage: NativeFreeFlightResearchSmoke [original.bin original.cue workspace [--verify|--exercise-staging|--publish|--verify-fast-entry|--exercise-staging-fast-entry|--publish-fast-entry|--exercise-production-stage directory]]");
 
 Require(NativeFreeFlightResearchCandidatePlan.TargetLevelId == 14, "one explicit source profile");
 Require(NativeFreeFlightResearchCandidatePlan.RequiredNormalBufferGap == 0xA780, "known extents exact margin, not runtime fit");
@@ -31,7 +32,11 @@ Require(plan.RelocatedExecutableLba == 53882, "live executable moves seven secto
 await plan.RequireFreshAsync();
 if (args.Length == 5)
 {
-    if (args[3] is "--verify" or "--verify-fast-entry")
+    if (args[3] == "--exercise-production-stage")
+    {
+        checks += await ProductionStageCases.RunSourceAsync(args[0], args[1], plan, args[4]);
+    }
+    else if (args[3] is "--verify" or "--verify-fast-entry")
     {
         var verified = await NativeFreeFlightResearchCandidatePublisher.VerifyAsync(plan, args[4]);
         Require(verified.WholeImageReadback && !verified.RuntimeVerified, "published readback distinct from gameplay");

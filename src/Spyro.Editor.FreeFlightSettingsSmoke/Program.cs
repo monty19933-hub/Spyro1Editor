@@ -74,7 +74,8 @@ try
     }
     Check(!Directory.EnumerateFiles(root).Any(p => Path.GetFileName(p).StartsWith(".free-flight-", StringComparison.Ordinal)),
         "owned staging files and writer lease are cleaned after success/refusal");
-    Console.WriteLine($"FREE_FLIGHT_SETTINGS_SMOKE_OK checks={checks}: default-off, explicit disable, durable per-level intent, stale-CAS, strict decode, cancellation and publication failure preservation.");
+    ProjectExportIntentCases.Run(Check, Refuse);
+    Console.WriteLine($"FREE_FLIGHT_SETTINGS_SMOKE_OK checks={checks}: default-off, explicit disable, durable per-level intent, stale-CAS, strict decode, cancellation, production intent and publication failure preservation.");
 }
 finally { Directory.Delete(root, recursive: true); }
 void Check(bool value, string label) { if (!value) throw new InvalidOperationException(label); checks++; }

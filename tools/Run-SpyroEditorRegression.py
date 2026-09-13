@@ -113,6 +113,8 @@ CASE_ARGUMENTS = {
 # Additional modes retain their own arguments/markers without replacing the
 # established mode of the same executable. Project builds remain deduplicated.
 ADDITIONAL_CORE_CASES = (
+    ("UiSmoke", "FREE_FLIGHT_UI_OK",
+     ["--free-flight-ui-only"]),
     ("Id65AuthoringMobyDependencyBundleCompilerSmoke", "NATIVE_ROUTE_SURFACE_SMOKE_OK",
      ["--source-free-route-surfaces"]),
     ("NativeId65FreshDocumentSmoke", "NATIVE_ID65_VARIABLE_DATA_FREE_OK",
@@ -393,6 +395,7 @@ def main():
             print(f"SKIP {project.stem}: build failed", flush=True)
             continue
         suffix = {
+            ("--free-flight-ui-only",): "-free-flight-ui",
             ("--source-free-route-surfaces",): "-route-surfaces",
             ("--variable-data-free",): "-variable-data",
             ("--fresh-native-level-session-only",): "-fresh-level-session",

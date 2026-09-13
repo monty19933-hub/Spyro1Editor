@@ -211,12 +211,13 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
-        self.assertEqual(7, len(lines))
+        self.assertEqual(8, len(lines))
         self.assertTrue(any(flag + " | " + marker in line for line in lines))
 
     def test_aggregate_ui_is_an_additional_isolated_mode_not_a_source_or_default_alias(self):
         name = "UiSmoke"
-        expected = [(name, "FRESH_LEVEL_DOCUMENT_SESSION_OK", ["--fresh-native-level-session-only"]),
+        expected = [(name, "FREE_FLIGHT_UI_OK", ["--free-flight-ui-only"]),
+                    (name, "FRESH_LEVEL_DOCUMENT_SESSION_OK", ["--fresh-native-level-session-only"]),
                     (name, "FRESH_NATIVE_LEVEL_UI_OK", ["--fresh-native-level-ui-only"]),
                     (name, "FRESH_MATERIAL_PICKER_UI_OK", ["--fresh-material-picker-only"]),
                     (name, "FRESH_MATERIAL_INSPECTION_WORKER_FREE_OK", ["--fresh-material-inspection-worker-only"]),
@@ -233,7 +234,7 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
-        self.assertEqual(7, len(lines))
+        self.assertEqual(8, len(lines))
         for _, marker, arguments in expected:
             self.assertTrue(any(arguments[0] + " | " + marker in line for line in lines))
 
@@ -430,6 +431,7 @@ class RunnerOptionsTests(unittest.TestCase):
 
     def test_aggregate_ui_marker_log_and_result_are_distinct_from_both_prior_ui_modes(self):
         name, old_marker = "UiSmoke", "FRESH_NATIVE_DOCUMENT_UI_OK"
+        flight_marker, flight_flag = "FREE_FLIGHT_UI_OK", "--free-flight-ui-only"
         session_marker, session_flag = "FRESH_LEVEL_DOCUMENT_SESSION_OK", "--fresh-native-level-session-only"
         marker, flag = "FRESH_NATIVE_LEVEL_UI_OK", "--fresh-native-level-ui-only"
         for emit_marker in (False, True):
@@ -438,13 +440,13 @@ class RunnerOptionsTests(unittest.TestCase):
             def fake_run(command, **kwargs):
                 calls.append(command)
                 if command[:2] == ["dotnet", "run"]:
-                    emitted = marker if flag in command and emit_marker else session_marker if flag in command or session_flag in command else old_marker
+                    emitted = flight_marker if flight_flag in command else marker if flag in command and emit_marker else session_marker if flag in command or session_flag in command else old_marker
                     kwargs["stdout"].write(emitted)
                 return subprocess.CompletedProcess(command, 0)
 
             with self.subTest(emit_marker=emit_marker), tempfile.TemporaryDirectory(prefix="spyro-aggregate-ui-runner-") as output:
                 with mock.patch.object(RUNNER, "CORE_CASES", ((name, old_marker),)), \
-                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ((name, session_marker, [session_flag]), (name, marker, [flag]))), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ((name, flight_marker, [flight_flag]), (name, session_marker, [session_flag]), (name, marker, [flag]))), \
                         mock.patch.object(RUNNER, "SOURCE_QA_CASES", ()), \
                         mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
                         mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("source read")), \
@@ -456,11 +458,11 @@ class RunnerOptionsTests(unittest.TestCase):
                 summary = json.loads((Path(output) / "summary.json").read_text())
             self.assertEqual(2, sum(command[:2] == ["dotnet", "build"] for command in calls), "App and UiSmoke build once each")
             runs = [command for command in calls if command[:2] == ["dotnet", "run"]]
-            self.assertEqual([["--fresh-native-document-only"], [session_flag], [flag]],
+            self.assertEqual([["--fresh-native-document-only"], [flight_flag], [session_flag], [flag]],
                              [command[command.index("--") + 1:] for command in runs])
             self.assertTrue(all("--no-build" in command and "--no-restore" in command for command in runs))
-            self.assertEqual(["run-Spyro.Editor.UiSmoke", "run-Spyro.Editor.UiSmoke-fresh-level-session", "run-Spyro.Editor.UiSmoke-fresh-level-ui"],
-                             [row["name"] for row in summary[-3:]])
+            self.assertEqual(["run-Spyro.Editor.UiSmoke", "run-Spyro.Editor.UiSmoke-free-flight-ui", "run-Spyro.Editor.UiSmoke-fresh-level-session", "run-Spyro.Editor.UiSmoke-fresh-level-ui"],
+                             [row["name"] for row in summary[-4:]])
             self.assertEqual(len(summary), len({row["name"] for row in summary}))
             self.assertEqual(len(summary), len({row["log"] for row in summary}))
             self.assertTrue(all(row["passed"] for row in summary[:-1]))

@@ -11,6 +11,7 @@ using Spyro.Editor.App.Views;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Music;
+using Spyro.Editor.Core.Persistence;
 using Spyro.Editor.Core.Workspace;
 
 internal static class PublishedDiagnosticsCases
@@ -98,6 +99,45 @@ internal static class PublishedDiagnosticsCases
                 string extension = index == 0 ? ".build-safety.json" : ".build-safety.md";
                 Require(Sha256(File.ReadAllBytes(finalPrefix + extension)) == historicalSafetyHashes[index],
                     "Creating an inventory-only support ZIP changed a retained local report.");
+            }
+
+            // An ordinary build starts with absent flight preferences. Saving
+            // ON at the final asynchronous boundary must still invalidate it.
+            var flightDelay = typeof(MainWindow).GetProperty("FreeFlightExportDelayOverrideForTesting", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            flightDelay.SetValue(window, (Func<string, Task>)(_ =>
+            {
+                NativeFreeFlightSettingsStore.Save(NativeFreeFlightSettingsStore.Capture(workspace), 14, true);
+                return Task.CompletedTask;
+            }));
+            bool staleAbsenceRefused = false;
+            try { Complete((Task)Invoke(window, "CreateAllSavedEditsTestAsync", sourceImage, sourceCue, output, targets)!); }
+            catch (InvalidDataException) { staleAbsenceRefused = true; }
+            finally
+            {
+                flightDelay.SetValue(window, null);
+                File.Delete(Path.Combine(workspace, NativeFreeFlightSettingsStore.FileName));
+            }
+            Require(staleAbsenceRefused && File.ReadAllBytes(finalPrefix + ".bin").AsSpan().SequenceEqual(publishedImage) &&
+                File.ReadAllText(finalPrefix + ".cue") == publishedCue,
+                "An absent-to-ON flight settings change escaped ordinary export publication ownership.");
+
+            if (!OperatingSystem.IsWindows())
+            {
+                string cueAlias = Path.Combine(workspace, "selected-source-alias.cue");
+                File.CreateSymbolicLink(cueAlias, sourceCue);
+                flightDelay.SetValue(window, (Func<string, Task>)(_ =>
+                {
+                    File.Delete(cueAlias);
+                    File.CreateSymbolicLink(cueAlias, finalPrefix + ".cue");
+                    return Task.CompletedTask;
+                }));
+                bool aliasRetargetRefused = false;
+                try { Complete((Task)Invoke(window, "CreateAllSavedEditsTestAsync", sourceImage, cueAlias, output, targets)!); }
+                catch (InvalidOperationException) { aliasRetargetRefused = true; }
+                finally { flightDelay.SetValue(window, null); File.Delete(cueAlias); }
+                Require(aliasRetargetRefused && File.ReadAllBytes(finalPrefix + ".bin").AsSpan().SequenceEqual(publishedImage) &&
+                    File.ReadAllText(finalPrefix + ".cue") == publishedCue,
+                    "A source alias retargeted to the final CUE escaped the precommit physical-separation check.");
             }
 
             // A workspace directory may disappear/unmount after publication.

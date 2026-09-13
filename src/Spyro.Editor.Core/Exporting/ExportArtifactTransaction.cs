@@ -24,6 +24,26 @@ public sealed class ExportArtifactRollbackException : IOException
 /// </summary>
 public static class ExportArtifactTransaction
 {
+    /// <summary>
+    /// Refuses lexical and symbolic-link aliases between selected inputs and
+    /// publication destinations. Call before staging and again before Publish;
+    /// the normal trusted-directory contract still applies to filesystem races.
+    /// </summary>
+    public static void RequireSourceSeparation(string sourceImage, string? sourceCue, params string[] destinations)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceImage);
+        ArgumentNullException.ThrowIfNull(destinations);
+        foreach (string destination in destinations)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(destination);
+            Persistence.PersistencePathSafety.EnsureTreesDoNotOverlap(sourceImage, destination,
+                "Export publication cannot replace its selected source BIN, including a symbolic-link alias.");
+            if (!string.IsNullOrWhiteSpace(sourceCue))
+                Persistence.PersistencePathSafety.EnsureTreesDoNotOverlap(sourceCue, destination,
+                    "Export publication cannot replace its selected source CUE, including a symbolic-link alias.");
+        }
+    }
+
     public static ExportArtifactPublicationResult Publish(
         string outputDirectory,
         IReadOnlyList<ExportArtifactReplacement> artifacts,

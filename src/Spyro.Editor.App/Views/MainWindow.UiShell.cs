@@ -927,6 +927,7 @@ public sealed partial class MainWindow
         panel.Children.Add(ModernSectionHeading("Level settings"));
         panel.Children.Add(BuildModernDisclosure("Level name", BuildLevelTextPanel(), true));
         panel.Children.Add(BuildModernDisclosure("Music", BuildLevelMusicPanel(), false));
+        panel.Children.Add(BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), false));
         _homeworldTextGroup = BuildModernDisclosure("Portal location", BuildPortalControlPanel(), false);
         panel.Children.Add(_homeworldTextGroup);
 

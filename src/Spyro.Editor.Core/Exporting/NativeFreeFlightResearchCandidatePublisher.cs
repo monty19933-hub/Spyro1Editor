@@ -64,27 +64,12 @@ public static class NativeFreeFlightResearchCandidatePublisher
                 throw new IOException("Research output became occupied while acquiring its writer lease.");
             Directory.CreateDirectory(stage);
             WriteNew(analysis, plan.CopyAnalysisBytes());
-            var payload = plan.CopyInsertionPayload();
-            NativeSkyWadRelocationPlan relocation = NativeSkyWadRelocator.BuildPlan(plan.SourceImagePath, analysis, [payload]);
-            plan.RequireRelocation(relocation);
             string imagePath = Path.Combine(stage, plan.OutputImageName);
             // Shared typed insertion/writer; the separately constructed complete
             // target and raw-sector oracle do not borrow this writer's output.
-            NativeSkyWadRelocator.WriteExpandedImage(plan.SourceImagePath, imagePath, analysis, relocation, [payload]);
+            await plan.WriteInitialImageAsync(imagePath, analysis, cancellationToken);
             Checkpoint(NativeFreeFlightResearchFault.AfterRelocation, imagePath);
-            DiscLayout liveLayout = DiscImage.DetectLayout(imagePath);
-            using (FileStream output = new(imagePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-            {
-                DiscFileRecord liveExe = DiscImage.FindRootFileRecord(output, liveLayout, name => name == "SCUS_942.28");
-                if (liveExe.Lba != plan.RelocatedExecutableLba || liveExe.Size != 0x66000)
-                    throw new InvalidDataException("Research relocation did not install the expected live executable owner.");
-                byte[] current = DiscImage.ReadFileBytes(output, liveLayout, liveExe.Lba, 0, liveExe.Size);
-                byte[] changed = plan.ApplyToExecutable(current);
-                if (!changed.AsSpan().SequenceEqual(plan.CopyExecutable()))
-                    throw new InvalidDataException("Research executable differs from its independently bound byte plan.");
-                DiscImage.WriteFileBytes(output, liveLayout, liveExe.Lba, 0, changed);
-                output.Flush(flushToDisk: true);
-            }
+            plan.ApplyExecutableToImage(imagePath);
             Checkpoint(NativeFreeFlightResearchFault.AfterExecutable, imagePath);
             var verified = plan.VerifyImage(imagePath);
             WriteNew(Path.Combine(stage, NativeFreeFlightResearchCandidatePlan.ReceiptName), plan.BuildReceipt(verified));

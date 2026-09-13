@@ -141,6 +141,28 @@ research-only and are refused by Save Terrain Changes and Create BIN. Choose
 
 Create BIN writes a new output and does not modify the source disc image.
 
+### Fly Anywhere (initial Toasty support)
+
+The Level tab now has **Fly Anywhere Enabled**, **Save Flight**, and **Revert**.
+The initial choice is OFF. Save stores the choice in the current project for
+the selected level; Revert discards the checkbox draft. A draft must be saved
+or reverted before Create BIN.
+
+ON currently supports **Toasty only**, in a project without other saved edits.
+Other levels and independent ID65 are not enabled by this initial native recipe.
+To test, select the original BIN/CUE, open Toasty, enable the checkbox, save it,
+and use the normal **Create BIN** command. Enter Toasty through the normal game;
+this export does not add a diagnostic level-selector shortcut or emulator cheat.
+
+To disable it, uncheck the box, save, and create the BIN again. Explicit OFF
+rebuilds from the complete original ROM even if there are no other edits, so an
+older enabled output is not silently left in place. Ordinary edits may then be
+applied to that original-layout OFF build. ON/OFF source and export tests pass;
+visible native gameplay acceptance remains separate and pending.
+
+The sealed September 12 R01 private-preview package was not overwritten and does
+not contain these later source changes. Do not assume an older app has this panel.
+
 ## Backups and updates
 
 Open **Project Data** to find the current project folder and automatic backups. The updater shows a changelog before installing a newer beta, and the existing project remains in place.

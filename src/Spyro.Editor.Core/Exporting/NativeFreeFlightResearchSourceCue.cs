@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
 
 namespace Spyro.Editor.Core.Exporting;
 
@@ -16,7 +17,7 @@ internal sealed class NativeFreeFlightResearchSourceCue
         _output = output;
         _cueIdentity = PathIdentity(cue);
         _imageIdentity = PathIdentity(image);
-        SourceSha256 = NativeFreeFlightResearchCandidatePlan.Hash(source);
+        SourceSha256 = Convert.ToHexStringLower(SHA256.HashData(source));
     }
 
     internal string CuePath { get; }

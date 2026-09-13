@@ -23,6 +23,15 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+// Actual flight settings controls and isolated tiny project files only.
+if (args.Contains("--free-flight-ui-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --free-flight-ui-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    NativeFreeFlightUiCases.Run();
+    return 0;
+}
+
 // Explicit saved aggregate UI tests; neither old/default nor source-only modes write.
 if (NativeFreshSavedResearchUiArguments.Handles(args))
 {

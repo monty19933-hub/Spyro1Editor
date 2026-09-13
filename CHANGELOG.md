@@ -22,6 +22,13 @@ published release or a claim of universal Moby, texture or new-level support.
 - Strengthened shared Moby source/dependency handling and regression coverage
   while retaining historical locked-chest outputs and the original retail
   editor's guarded export behavior. Native family portability remains ongoing.
+- Added default-OFF Fly Anywhere settings with Save/Revert in the Level tab.
+  The initial ON export supports Toasty without other edits; explicit OFF
+  rebuilds the complete original ROM through normal Create BIN. Stale settings,
+  unsaved drafts and source/output aliases are refused. ON/OFF physical export
+  checks pass; native gameplay acceptance of this integrated path is pending.
+- Replaced the family composer's single-model append with shared ordered batch
+  storage while preserving existing output bytes and native admission limits.
 - Preserved the legacy ID65 Blank-Level Lab separately from fresh documents.
   Normal retail Create BIN does not consume fresh-level documents; the separate
   fresh-level action reports its supported profiles and refusals explicitly.

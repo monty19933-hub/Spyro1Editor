@@ -94,17 +94,32 @@ public sealed class NativeLevelRuntimeMemoryReport
         ReadOnlySpan<byte> executable,ReadOnlySpan<byte> peteHeader,ReadOnlySpan<byte> peteRuntimeCopy)
     {
         ArgumentNullException.ThrowIfNull(level);
-        if(data.Length!=level.SourceDataByteLength||Hash(data)!=level.SourceDataSha256)
+        return CaptureOriginal(level.LevelId,level.SourceDataByteLength,level.SourceDataSha256,data,executable,peteHeader,peteRuntimeCopy);
+    }
+
+    /// <summary>The actual player-source issuer already binds the complete
+    /// retail level entry. This overload does not invent catalogue metadata.</summary>
+    public static NativeLevelRuntimeMemoryReport CaptureOriginal(NativePlayerAnimationSourceLevel level,ReadOnlySpan<byte> data,
+        ReadOnlySpan<byte> executable,ReadOnlySpan<byte> peteHeader,ReadOnlySpan<byte> peteRuntimeCopy)
+    {
+        ArgumentNullException.ThrowIfNull(level);
+        return CaptureOriginal(level.LevelId,level.DataByteLength,level.DataSha256,data,executable,peteHeader,peteRuntimeCopy);
+    }
+
+    private static NativeLevelRuntimeMemoryReport CaptureOriginal(int levelId,int sourceLength,string sourceHash,ReadOnlySpan<byte> data,
+        ReadOnlySpan<byte> executable,ReadOnlySpan<byte> peteHeader,ReadOnlySpan<byte> peteRuntimeCopy)
+    {
+        if(data.Length!=sourceLength||Hash(data)!=sourceHash)
             throw new InvalidDataException("Native RAM report data differs from its complete source inventory certificate.");
         _=NativeMobyModelLoaderCertificate.CaptureRetail(executable,peteHeader,peteRuntimeCopy);
-        uint pc=Word(executable,checked(0x1BA4+4*level.LevelId));
+        uint pc=Word(executable,checked(0x1BA4+4*levelId));
         int entry=checked((int)(pc-0x8000F800));
         uint copy=DecodeCopyBuffer(executable,entry);
         // Exact executable/PETE certificates bind both terms, not an unexplained
         // fixed 'maximum level size'. Native 8005B8B8 selects normal mode a0=0.
         uint pete=checked(0x80200000-Word(executable,0x65DA4)-Word(peteHeader,0));
         uint lower=checked(pete-0x6008-2*0x1C000);
-        return new(level.LevelId,data,copy,lower,level.SourceDataSha256,true,
+        return new(levelId,data,copy,lower,sourceHash,true,
             $"retail EXE case {pc:X8}; g785D8 to g785DC; PETE normal buffer mode");
     }
 
