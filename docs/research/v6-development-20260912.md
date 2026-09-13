@@ -502,3 +502,28 @@ is derived at Data+188 untextured and Data+2F8 mixed, not reused at a Town final
 offset. Existing family Body7812d3…262/full image408dfd…5c98 and all three
 historical mixed images remain byte-identical. Root and independent peer review
 are complete. The private ac50def V6 package remains sealed and unchanged.
+
+## Canonical-static texture resource graph
+
+Logs156/157 establish the tests-first build and missing-type runtime RED.
+NativeStaticTerrainTextureResourceGraph now separates complete descriptor
+consumers, unique source rectangles and contained aliases from GPU allocation.
+All46 consumers per material are retained. Before both overlap validation and
+containing-parent search, resources are bucketed by actual material binding,
+kind and bit depth. The work budget grows with the input; no arbitrary material
+cap is raised. The graph retains no GPU buffers and copies only small records.
+
+The existing allocator uses one input-reference snapshot for both this graph
+and GPU capture. Allocation order, per-material isolation, partial-overlap
+refusal, reencoding, complete pixel/CLUT comparisons and protected complement
+checks remain unchanged. Retail donor sharing and the global research packer's
+coupled-palette policy are distinct contracts and are not silently unified.
+This prerequisite neither allocates on its own nor widens native export scope.
+
+Log161 builds0/0; log162 passes8294 free checks, including hostile enumeration,
+exact comparison-budget boundaries, no per-binding GPU clone, first-seen
+resources and31 independent material bindings. Actual source166 passes132825
+checks (141119 including free checks), preserving the selected-texture golden
+plan/upload/data and original source. Shared actual source164/165 also preserve
+all historical family/mixed output hashes. Root and independent peer review are
+complete. Full build-all regression follows these focused source checkpoints.

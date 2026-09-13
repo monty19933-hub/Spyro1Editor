@@ -9,6 +9,7 @@ internal static class Program
             throw new ArgumentException("Usage: NativeId65FreshTerrainTextureSmoke [--source original.bin]");
         AllocationCases.Run();
         GpuExtractionCases.Run();
+        ResourceGraphCases.Run();
         await SelectedBindingCases.Free();
         Console.WriteLine($"NATIVE_ID65_FRESH_TERRAIN_TEXTURE_FREE_OK checks={_checks}");
         if (args.Length == 2)
