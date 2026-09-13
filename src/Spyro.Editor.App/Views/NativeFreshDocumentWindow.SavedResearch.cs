@@ -38,15 +38,16 @@ internal sealed partial class NativeFreshDocumentWindow
         !_materialInspectionClosed && _beginResearch != null &&
         (_researchSourceForTesting ?? _researchSourcePaths) != null &&
         _aggregateSession?.Snapshot is { Exists: true, RetainedRecoveryDirectory.Length: 0 } &&
-        CurrentAggregateIntent is { SchemaVersion: 2, Placements.Count: 0,
+        (CurrentAggregateIntent is { SchemaVersion: 2, Placements.Count: 0,
             FloorMaterials.Triangle0: NativeFreshRetailTerrainMaterialIntent,
-            FloorMaterials.Triangle1: NativeFreshRetailTerrainMaterialIntent } && !HasUnsavedChanges;
+            FloorMaterials.Triangle1: NativeFreshRetailTerrainMaterialIntent } ||
+            NativeFreshSavedLevelResearchEligibility.IsSupportedMixedProfile(CurrentAggregateIntent)) && !HasUnsavedChanges;
 
     private async Task CreateSavedResearchCandidateAsync()
     {
         if (!IsSavedResearchReady)
         {
-            _status.Text = "Aggregate research requires an explicitly applied and saved schema-2 document with two retail materials, no placements, no pending fields and resolved recovery. No legacy or partial document was exported.";
+            _status.Text = "Aggregate research requires an explicitly applied and saved schema-2 document with two retail materials and either no placements or the supported one-Wizard mixed profile. Resolve pending fields and recovery first. No legacy or partial document was exported.";
             return;
         }
         _researchBusy = true;

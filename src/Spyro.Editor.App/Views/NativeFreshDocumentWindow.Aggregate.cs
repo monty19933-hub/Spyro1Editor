@@ -256,7 +256,7 @@ internal sealed partial class NativeFreshDocumentWindow
                 _aggregateSession.Apply(candidate);
             }
             WriteFields();
-            _status.Text = "Applied the entire aggregate to the authored schematic. Save explicitly before research export; two retail materials and no placements are currently supported.";
+            _status.Text = "Applied the entire aggregate to the authored schematic. Save explicitly before research export; two retail materials with no placements or the supported one-Wizard mixed profile are currently supported.";
             return true;
         }
         catch (Exception error) when (error is ArgumentException or InvalidDataException or OverflowException or InvalidOperationException)
@@ -314,7 +314,7 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private string AggregateOpenMessage() => CurrentAggregateIntent == null
         ? "No aggregate exists. Fork an actual saved legacy floor explicitly to begin; no default or placement was inferred."
-        : $"Opened saved aggregate: {_aggregateSession!.Snapshot.Path}. Research export supports clean saved schema-2 documents with two retail materials and no placements; actual source eligibility is checked during preparation.";
+        : $"Opened saved aggregate: {_aggregateSession!.Snapshot.Path}. Research export supports clean saved schema-2 documents with two retail materials and either no placements or the supported one-Wizard mixed profile; actual source eligibility is checked during preparation.";
 
     private void BeginWizardAdd()
     {
@@ -421,7 +421,7 @@ internal sealed partial class NativeFreshDocumentWindow
         _materialPreviewNotice.Text = Preview.MaterialPreviewNotice;
         _materialPreviewNotice.IsVisible = current?.SchemaVersion == 2;
         _capability.Text = _aggregateMode
-            ? "Whole-level authoring document — floor, spawn and ordered placements. Normal Create BIN is unavailable. Research export supports clean saved schema-2 documents with two retail materials and no placements, subject to actual source validation. The schematic does not certify gameplay."
+            ? "Whole-level authoring document — floor, spawn and ordered placements. Normal Create BIN is unavailable. Research export supports clean saved schema-2 documents with two retail materials and either no placements or the supported one-Wizard mixed profile, subject to actual source validation. The schematic does not certify gameplay."
             : LegacyCapabilityText;
         _documentMode.IsEnabled = editable;
         _activeFile.Text = _aggregateMode ? $"Active file: {_aggregateSession?.Snapshot.Path}" : $"Active file: {_snapshot.Path}";
@@ -443,7 +443,7 @@ internal sealed partial class NativeFreshDocumentWindow
             ? CurrentAggregateIntent.Placements.ToList().FindIndex(p => p.EditorId == _aggregateSession!.SelectedEditorId) : -1;
         _moveWizardUp.IsEnabled = _removeWizard.IsEnabled && index > 0;
         _moveWizardDown.IsEnabled = _removeWizard.IsEnabled && index >= 0 && index + 1 < CurrentAggregateIntent!.Placements.Count;
-        _placementSummary.Text = $"{CurrentAggregateIntent?.Placements.Count ?? 0} authored placements · maximum {NativeFreshLevelDocumentIntent.MaximumPlacements}. Placement export is not supported by the current material-only research action.";
+        _placementSummary.Text = $"{CurrentAggregateIntent?.Placements.Count ?? 0} authored placements · maximum {NativeFreshLevelDocumentIntent.MaximumPlacements}. Research supports no placements or the supported one-Wizard mixed profile only, with two retail materials and actual source validation.";
     }
 
     private static string MaterialSummary(NativeFreshFloorMaterialIntent material) => material switch

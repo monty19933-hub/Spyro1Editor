@@ -138,3 +138,19 @@ installed in a new candidate, and it has not been tested there in DuckStation.
 Next integration joins the actual family templates, complete model packages and
 growing scene under one resource layout. Existing source checks and old recipe
 outputs remain regression targets; the final combined suite is still pending.
+
+## Main-window mixed export integration
+
+The canonical App's existing saved-level research action now admits the same
+strict mixed profile as the saved Candidate. A source-free predicate calls the
+existing Core shape validator; it does not issue source or runtime authority.
+The old no-placement arm, captured saved-revision ticket, mutation lock, source
+selection, publisher and recovery accounting remain unchanged. Unsupported
+mixed shapes are refused before the source provider or output picker.
+
+Logs61–62 retain the real tests-first behavioral failure. Logs69–71/73 pass the
+Release build (zero warnings/errors), 288 readiness checks, 556 lifecycle checks,
+existing aggregate/material/selection/layout UI checks and 100 picker checks.
+All three admitted pairs, unsupported geometry/routes/music/materials/counts,
+dirty fields and absent/failing owners are covered. This is headless App evidence,
+not a newly installed app or another physical/native acceptance session.

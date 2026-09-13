@@ -113,12 +113,12 @@ internal static class NativeFreshLevelMaterialUiCases
         Check(disk.Intent!.SchemaVersion == 2 && Bytes(disk.Intent).SequenceEqual(Bytes(f.Window.CurrentAggregateIntent!)) &&
             disk.Intent.Placements.Select(p=>p.EditorId).SequenceEqual(new[]{B,A}) && !f.Window.HasUnsavedChanges,
             "Save/Reopen persists all edited content and both material slots");
-        Check(!f.Button("FreshDocumentResearch").IsEnabled, "schema2 with Wizard placements does not enable material-only research export");
+        Check(!f.Button("FreshDocumentResearch").IsEnabled, "schema2 with two Wizard placements does not enable bounded research export");
         f.Fire("FreshDocumentResearch");
         Check(f.SourceCalls == 0 && f.PickerCalls == 0 &&
             f.Label("FreshDocumentStatus").Contains("two retail materials",StringComparison.Ordinal) &&
-            f.Label("FreshDocumentStatus").Contains("no placements",StringComparison.Ordinal),
-            "direct schema2-with-Wizards export refuses before source/picker/worker with exact material-only restrictions");
+            f.Label("FreshDocumentStatus").Contains("no placements or the supported one-Wizard mixed profile",StringComparison.Ordinal),
+            "direct unsupported schema2-with-Wizards export refuses before source/picker/worker with both bounded research arms");
         var floorBounds = f.Window.Preview.FloorSchematicBounds ?? throw new InvalidDataException("Actual projected floor required");
         Check(floorBounds.Left >= 0 && floorBounds.Right <= f.Window.Preview.Bounds.Width && floorBounds.Top >= 76 &&
             floorBounds.Bottom < f.Window.Preview.SchematicCaptionTop,

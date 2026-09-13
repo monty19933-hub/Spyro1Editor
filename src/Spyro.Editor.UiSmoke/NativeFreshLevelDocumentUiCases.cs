@@ -59,10 +59,10 @@ internal static class NativeFreshLevelDocumentUiCases
             Check(f.Window.CurrentAggregateIntent == null && f.ActiveFile.Contains(NativeId65FreshDocumentStore.FileName, StringComparison.Ordinal), "no implicit aggregate selection by existence/mtime");
             f.Switch(Aggregate);
             Check(f.ActiveFile.Contains(NativeFreshLevelDocumentStore.FileName, StringComparison.Ordinal) && f.Window.CurrentAggregateIntent?.Placements.Count == (modern ? 1 : null), "actual aggregate presence/absence is visible");
-            Check(!f.Button("FreshDocumentNew").IsEnabled && !f.Button("FreshDocumentResearch").IsEnabled, "absent/schema1-Wizard aggregate offers neither legacy starter nor material-only export");
+            Check(!f.Button("FreshDocumentNew").IsEnabled && !f.Button("FreshDocumentResearch").IsEnabled, "absent/schema1-Wizard aggregate offers neither legacy starter nor supported schema2 research export");
             Check(Find<TextBlock>(f.Window,"FreshDocumentCapability").Text!.Contains("two retail materials",StringComparison.Ordinal) &&
-                Find<TextBlock>(f.Window,"FreshDocumentCapability").Text!.Contains("no placements",StringComparison.Ordinal),
-                "visible capability states exact material-only restriction, not the legacy export promise");
+                Find<TextBlock>(f.Window,"FreshDocumentCapability").Text!.Contains("no placements or the supported one-Wizard mixed profile",StringComparison.Ordinal),
+                "visible capability states both bounded research arms, not a legacy export promise");
             if (!modern)
             {
                 Check(!f.Window.HasUnsavedChanges && !File.Exists(f.ModernPath) && f.Button("FreshDocumentForkLegacy").IsEnabled == legacy, "absence has no default; only actual saved legacy can be explicitly forked");
@@ -325,8 +325,8 @@ internal static class NativeFreshLevelDocumentUiCases
                 f.Window.ResearchSnapshotForTesting == null && File.ReadAllBytes(f.LegacyPath).SequenceEqual(legacy) && File.ReadAllBytes(f.ModernPath).SequenceEqual(modern),
                 "direct aggregate research refuses before source/picker/worker, never inactive legacy or first-row export");
             Check(f.Status.Contains("aggregate",StringComparison.OrdinalIgnoreCase) &&
-                f.Status.Contains("two retail materials",StringComparison.Ordinal) && f.Status.Contains("no placements",StringComparison.Ordinal),
-                "schema1/Wizard refusal states exact material-only restriction, not a legacy or partial fallback");
+                f.Status.Contains("two retail materials",StringComparison.Ordinal) && f.Status.Contains("no placements or the supported one-Wizard mixed profile",StringComparison.Ordinal),
+                "schema1/Wizard refusal states both bounded research arms, not a legacy or partial fallback");
         }
     }
 

@@ -144,8 +144,8 @@ internal static class NativeFreshMaterialPickerUiCases
             f.Window.CurrentAggregateIntent.FloorMaterials.Triangle1.Tag == "base-floor-color", "clearing both slots never downgrades");
         f.Fire("FreshDocumentResearch");
         Check(f.SourceCalls == 0 && f.Label("FreshDocumentStatus").Contains("two retail materials", StringComparison.Ordinal) &&
-            f.Label("FreshDocumentStatus").Contains("no placements", StringComparison.Ordinal),
-            "base-color slots refuse material-only research before source access with exact restrictions");
+            f.Label("FreshDocumentStatus").Contains("no placements or the supported one-Wizard mixed profile", StringComparison.Ordinal),
+            "base-color slots refuse both bounded research arms before source access with exact restrictions");
     }
 
     private static void KindAndBaseFailures(Fixture f)
