@@ -30,6 +30,7 @@ public sealed class NativeId65FreshWizardResearchCandidatePlan
     private NativeId65FreshWizardResearchCandidatePlan(string image,string cue,NativeId65FreshWizardResearchDiscPlan disc,
         byte[] sourceCue,string imageIdentity,string cueIdentity,NativeFreshInitialSpawnClearancePlan? clearance=null)
     {
+        if(clearance is null)RequireDisc(disc);else RequireSeparatedDisc(disc,clearance);
         SourceImagePath=image;SourceCuePath=cue;_disc=disc;_sourceCue=sourceCue;_imageIdentity=imageIdentity;_cueIdentity=cueIdentity;
         _clearance=clearance;
         _canonical=disc.ExecutableAncestor.BodyAncestor.HostAncestor.SceneAncestor.CompilationAncestor.CopyCanonicalDocument();
@@ -105,6 +106,7 @@ public sealed class NativeId65FreshWizardResearchCandidatePlan
     }
     private static void RequireSeparatedDisc(NativeId65FreshWizardResearchDiscPlan disc,NativeFreshInitialSpawnClearancePlan clearance)
     {
+        RequireLegacyDisc(disc);
         disc.RequireAncestry(disc.ExecutableAncestor);
         var exe=disc.ExecutableAncestor;var scene=exe.BodyAncestor.HostAncestor.SceneAncestor;
         var document=scene.AuthoringDocumentAncestor??throw new InvalidDataException("Separated candidate requires an actual authored document/scene.");
@@ -125,7 +127,7 @@ public sealed class NativeId65FreshWizardResearchCandidatePlan
     }
     internal static void RequireDisc(NativeId65FreshWizardResearchDiscPlan disc)
     {
-        ArgumentNullException.ThrowIfNull(disc);disc.RequireAncestry(disc.ExecutableAncestor);
+        RequireLegacyDisc(disc);disc.RequireAncestry(disc.ExecutableAncestor);
         var exe=disc.ExecutableAncestor;var body=exe.BodyAncestor;var host=body.HostAncestor;var scene=host.SceneAncestor;
         if(!scene.CompilationAncestor.CopyCanonicalDocument().AsSpan().SequenceEqual(Encoding.UTF8.GetBytes(CanonicalJson))||
             scene.Placement!=new NativeWizardPlacementIntent(8704,8960,8704,9216,8960)||exe.SelectedBuiltInTrack!=19||
@@ -138,6 +140,12 @@ public sealed class NativeId65FreshWizardResearchCandidatePlan
             Hash(disc.CopyWadDirectory())!="4a862b5fa39739d5a6041b8de75aa8801824aed35afe0283f9ad572810580e82"||
             Hash(disc.CopyIsoRootDirectory())!="2769092a104860606518faf9cc8188c27257236b471d11153ac714ebba6ee5ee")
             throw new InvalidDataException("Wizard candidate requires the actual exact primary A/P1/N32/track19/target10 recipe; alternate valid scenes are not replaced.");
+    }
+    private static void RequireLegacyDisc(NativeId65FreshWizardResearchDiscPlan disc)
+    {
+        ArgumentNullException.ThrowIfNull(disc);
+        if(disc.IsMaterialAuthored)
+            throw new InvalidDataException("Material-authored Wizard disc requires its separate saved candidate binding.");
     }
     internal byte[] CopyCanonicalDocument()=>_canonical.ToArray();
     internal byte[] CopyCueBytes()=>_outputCue.ToArray();

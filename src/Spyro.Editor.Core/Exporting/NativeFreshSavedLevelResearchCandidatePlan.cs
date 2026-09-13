@@ -9,9 +9,9 @@ using Spyro.Editor.Core.Editing;
 
 namespace Spyro.Editor.Core.Exporting;
 
-// First closed saved whole-level arm only. No schema1/Wizard
-// branch, public caller serializer, fixture-hash allowlist or persistent-save proof.
-public sealed class NativeFreshSavedLevelResearchCandidatePlan
+// Saved whole-level exports share source/revision guards and publication.
+// Concrete compiled arms do not confer universal or persistent-save proof.
+public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
 {
     internal const string ProfileId = "native-fresh-saved-level-research-r01";
     internal const string Variant = "schema2-two-retail-materials-p0-n16";
@@ -22,11 +22,12 @@ public sealed class NativeFreshSavedLevelResearchCandidatePlan
     private readonly byte[] _sourceCue, _outputCue, _canonical, _receipt;
     private readonly string _imageIdentity, _cueIdentity;
     private readonly NativeId65FreshDiscVerification _expected;
+    private readonly NativeFreshSavedMaterialCompilation? _material;
 
     private NativeFreshSavedLevelResearchCandidatePlan(NativeFreshSavedMaterialCompilation material,
         NativeFreshResearchSourceOwners owners, NativeId65FreshDiscVerification measured)
     {
-        Saved = material.Saved; MaterialCompilation = material;
+        Saved = material.Saved; _material = material;
         SourceImagePath = owners.ImagePath; SourceCuePath = owners.CuePath;
         _imageIdentity = owners.ImageIdentity!; _cueIdentity = owners.CueIdentity!;
         _sourceCue = owners.CueSnapshot!.ToArray(); SourceCueSha256 = Hash(_sourceCue);
@@ -90,7 +91,8 @@ public sealed class NativeFreshSavedLevelResearchCandidatePlan
     }
 
     internal NativeFreshSavedLevelDocumentReadContext Saved { get; }
-    internal NativeFreshSavedMaterialCompilation MaterialCompilation { get; }
+    internal NativeFreshSavedMaterialCompilation MaterialCompilation => _material ??
+        throw new InvalidDataException("This saved level has a mixed compilation, not a material-only ancestor.");
     public NativeFreshLevelDocumentSnapshot SavedSnapshot => Saved.Snapshot;
     public string SourceImagePath { get; }
     public string SourceCuePath { get; }
@@ -101,7 +103,7 @@ public sealed class NativeFreshSavedLevelResearchCandidatePlan
     public long ExpectedImageByteLength => NativeId65FreshDiscSource.ImageByteLength;
     public bool RuntimeVerified => false;
 
-    /// <summary>Capture the actual saved schema2 material-only revision; no runtime or normal-export approval.</summary>
+    /// <summary>Compile the actual supported saved whole-level revision; no runtime or normal-export approval.</summary>
     public static async Task<NativeFreshSavedLevelResearchCandidatePlan> CaptureSavedAsync(string originalBin,
         string sourceCue, NativeFreshLevelDocumentSnapshot savedSnapshot, CancellationToken token = default)
     {
@@ -116,6 +118,8 @@ public sealed class NativeFreshSavedLevelResearchCandidatePlan
         token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(saved);
         ArgumentException.ThrowIfNullOrWhiteSpace(originalBin); ArgumentException.ThrowIfNullOrWhiteSpace(sourceCue);
+        if (saved.Document.Placements.Count != 0)
+            return await CaptureMixedAsync(originalBin, sourceCue, saved, token);
         RequireProfile(saved.Document);
         NativeFreshDocumentStorage.RequireAggregateCurrent(saved.Snapshot, token);
         var owners = new NativeFreshResearchSourceOwners(Path.GetFullPath(originalBin), Path.GetFullPath(sourceCue));
@@ -160,7 +164,7 @@ public sealed class NativeFreshSavedLevelResearchCandidatePlan
         var owners = NewOwners(); Exception? primary = null;
         try
         {
-            RequireAncestry(Saved, MaterialCompilation);
+            RequireCurrentAncestry();
             owners.Open(token);
             await NativeId65FreshDiscSource.RequireWholeOriginalAsync(owners.Bin!, token);
         }
@@ -174,9 +178,10 @@ public sealed class NativeFreshSavedLevelResearchCandidatePlan
         var owners = NewOwners(); Exception? primary = null; NativeId65FreshDiscVerification? result = null;
         try
         {
-            RequireAncestry(Saved, MaterialCompilation); owners.Open(token);
+            RequireCurrentAncestry(); owners.Open(token);
             owners.Output = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            result = MaterialCompilation.Disc.VerifyImage(owners.Bin!, owners.Output, token);
+            result = _mixedDisc is { } mixed ? mixed.VerifyImage(owners.Bin!, owners.Output, token) :
+                MaterialCompilation.Disc.VerifyImage(owners.Bin!, owners.Output, token);
             RequireVerification(result);
         }
         catch (Exception error) { primary = error; }
@@ -189,10 +194,12 @@ public sealed class NativeFreshSavedLevelResearchCandidatePlan
         var owners = NewOwners(); Exception? primary = null;
         try
         {
-            RequireAncestry(Saved, MaterialCompilation); owners.Open(token);
+            RequireCurrentAncestry(); owners.Open(token);
             owners.Output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-            RequireVerification(NativeId65FreshDiscStreaming.Measure(MaterialCompilation.Disc,
-                owners.Bin!, token, owners.Output, firstSector));
+            RequireVerification(_mixedDisc is { } mixed
+                ? NativeId65FreshDiscStreaming.Measure(mixed, owners.Bin!, token, owners.Output, firstSector)
+                : NativeId65FreshDiscStreaming.Measure(MaterialCompilation.Disc,
+                    owners.Bin!, token, owners.Output, firstSector));
             owners.Output.Flush(flushToDisk: true); token.ThrowIfCancellationRequested();
         }
         catch (Exception error) { primary = error; }

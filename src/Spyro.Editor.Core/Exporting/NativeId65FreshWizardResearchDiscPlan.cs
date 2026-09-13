@@ -17,6 +17,7 @@ public sealed class NativeId65FreshWizardResearchDiscPlan
     private readonly byte _wadFlags,_exeFlags;
     private NativeId65FreshWizardResearchDiscPlan(NativeId65FreshWizardResearchDiscSource source)
     {
+        source.RequireAncestry();
         _source=source;var exe=source.Executable;var body=exe.BodyAncestor;
         _body=body.CopyLevelData();_overlay=body.CopyOverlay();_executable=exe.CopyExecutable();
         _geometry=NativeId65FreshWizardDiscGeometry.Compile(_overlay.Length,_body.Length);
@@ -38,6 +39,11 @@ public sealed class NativeId65FreshWizardResearchDiscPlan
             SourceCertified,InstalledDispatchProven,GlobalTransitionState12Supported,PersistentOwnerIssued,CardOrHistoryCompatibilityProven,
             WholePickupOrDeathProven,GlobalAudioCompatibilityProven,PeakRuntimeMemoryProven,HardwareTransfersProven,
             CompleteIncomingEdgeClosureProven,CompleteNativeDependencyClosureProven,RuntimeVerified,PublicationApproved,NormalCreateBinEnabled}));
+        if(source.MixedResourceAncestor is { } mixed)
+            PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{
+                Profile="internal-schema2-separated-B-three-T1-pairs-detached-mixed-disc-v1",
+                DiscEvidenceSha256=PlanSha256,ExecutablePlanSha256,BodyPlanSha256,
+                MixedResourcePlanSha256=mixed.PlanSha256,AggregateCanonicalSha256=mixed.SceneAncestor.MaterialCanonicalSha256}));
         var original=new NativeAddressSpace(NativeAddressKind.DiscLogical,SourceImageSha256,NativeAddressRevision.Original,281270L*2048);
         var final=new NativeAddressSpace(NativeAddressKind.DiscLogical,PlanSha256,NativeAddressRevision.Final,original.ByteLength);
         AddressMap=new(original,final,[
@@ -49,12 +55,13 @@ public sealed class NativeId65FreshWizardResearchDiscPlan
         Regions=Array.AsReadOnly(AddressMap.Regions.Select(r=>new NativeId65FreshDiscRegion(r.Id,r.Original?.Offset,r.Final.Offset,r.Final.ByteLength)).ToArray());
     }
     public const string ProfileId="fresh-A-P1-N32-Town-Host-R1-target10-detached-physical-disc-v1";
+    internal bool IsMaterialAuthored=>_source.MixedResourceAncestor is not null;
     internal NativeId65FreshWizardResearchExecutablePlan ExecutableAncestor=>_source.Executable;
     internal NativeRelocationMap AddressMap{get;}
     internal void RequireAncestry(NativeId65FreshWizardResearchExecutablePlan executable)
     {
         if(!ReferenceEquals(executable,ExecutableAncestor))throw new InvalidDataException("Disc belongs to another actual EXE, even when executable bytes/hashes are equal.");
-        NativeId65FreshWizardResearchDiscSource.RequireExecutable(executable);
+        _source.RequireAncestry();
     }
     public string SourceImageSha256=>NativeId65FreshDiscSource.OriginalSha256;
     public string ExecutablePlanSha256=>ExecutableAncestor.PlanSha256;
@@ -106,6 +113,45 @@ public sealed class NativeId65FreshWizardResearchDiscPlan
         await using FileStream image=new(Path.GetFullPath(originalBin),FileMode.Open,FileAccess.Read,FileShare.Read);
         var source=await NativeId65FreshWizardResearchDiscSource.CaptureAsync(image,executable,token);
         token.ThrowIfCancellationRequested();var result=new NativeId65FreshWizardResearchDiscPlan(source);token.ThrowIfCancellationRequested();return result;
+    }
+    internal static async Task<NativeId65FreshWizardResearchDiscPlan> CaptureMaterialAuthoredAsync(string originalBin,
+        NativeId65FreshWizardResearchExecutablePlan executable,CancellationToken token=default)
+    {
+        token.ThrowIfCancellationRequested();NativeId65FreshWizardResearchDiscSource.RequireMaterialExecutable(executable);
+        ArgumentException.ThrowIfNullOrWhiteSpace(originalBin);string path=Path.GetFullPath(originalBin);
+        FileStream? held=null;NativeId65FreshWizardResearchDiscSource? source=null;
+        NativeId65FreshWizardResearchDiscPlan? result=null;List<Exception> failures=[];
+        try
+        {
+            held=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
+            await NativeId65FreshDiscSource.RequireWholeOriginalAsync(held,token);
+            source=await NativeId65FreshWizardResearchDiscSource.CaptureMaterialAuthoredAsync(held,executable,token);
+            token.ThrowIfCancellationRequested();result=new(source);
+        }
+        catch(Exception error){failures.Add(error);}
+        finally
+        {
+            if(held is not null)await TryAsync(()=>NativeId65FreshDiscSource.RequireWholeOriginalAsync(held,CancellationToken.None));
+            FileStream? current=null;
+            try
+            {
+                current=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
+                await NativeId65FreshDiscSource.RequireWholeOriginalAsync(current,CancellationToken.None);
+            }
+            catch(Exception error){failures.Add(error);}
+            finally{if(current is not null)Try(current.Dispose);}
+            if(source is not null)
+            {
+                Try(source.RequireAncestry);
+                Try(source.RequireRetainedOriginalOwners);
+            }
+            if(held is not null)Try(held.Dispose);
+        }
+        NativeFreshResearchSourceOwners.ThrowFailures(failures);
+        token.ThrowIfCancellationRequested();
+        return result??throw new InvalidDataException("Material-authored disc source capture returned no result.");
+        async Task TryAsync(Func<Task> action){try{await action();}catch(Exception error){failures.Add(error);}}
+        void Try(Action action){try{action();}catch(Exception error){failures.Add(error);}}
     }
     internal static void PatchRoot(Span<byte> root,NativeFlatIsoFile row,int lba,int length)
     {

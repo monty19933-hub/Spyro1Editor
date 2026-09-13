@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using Spyro.Editor.Core.Exporting;
 using static Inspection;
 
@@ -29,14 +30,30 @@ internal static class ExtractionCases
             "One readonly actual issued owner per role; no delegate/profile authority.");
         var helper = Type("NativeId65FreshDiscStreaming");
         Check(!helper.IsVisible && helper.IsAbstract && helper.IsSealed, "Streaming helper is internal static, not a public writer API.");
-        var measure = helper.GetMethod("Measure", BindingFlags.NonPublic | BindingFlags.Static);
+        var measure = MeasureMethod();
         Check(measure is { IsAssembly: true } && measure.ReturnType == typeof(NativeId65FreshDiscVerification) &&
             measure.GetParameters().Select(p => p.ParameterType).SequenceEqual(new[] {
                 typeof(NativeId65FreshDiscPlan), typeof(Stream), typeof(CancellationToken), typeof(Stream), typeof(Action) }),
             "Exact actual-Disc streaming signature, not caller sector generation.");
+        Check(helper.GetMethods(BindingFlags.NonPublic | BindingFlags.Static).Count(m => m.Name == "Measure") == 2 &&
+            helper.GetMethod("Measure", BindingFlags.NonPublic | BindingFlags.Static,
+                [typeof(NativeId65FreshWizardResearchDiscPlan), typeof(Stream), typeof(CancellationToken), typeof(Stream), typeof(Action)]) is { IsAssembly: true },
+            "The additional overload accepts only the concrete issued Wizard Disc, not caller sector generation.");
         using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
-        Refuse<OperationCanceledException>(() => Call(null, helper, "Measure", null, null, cancelled.Token, null, null), "Moved helper cancellation precedence.");
-        Refuse<ArgumentNullException>(() => Call(null, helper, "Measure", null, null, CancellationToken.None, null, null), "Moved helper null source precedence.");
+        Refuse<OperationCanceledException>(() => InvokeMeasure(null, null, cancelled.Token), "Moved helper cancellation precedence.");
+        Refuse<ArgumentNullException>(() => InvokeMeasure(null, null, CancellationToken.None), "Moved helper null source precedence.");
+    }
+
+    private static MethodInfo MeasureMethod() => Type("NativeId65FreshDiscStreaming").GetMethod("Measure",
+        BindingFlags.NonPublic | BindingFlags.Static,
+        [typeof(NativeId65FreshDiscPlan), typeof(Stream), typeof(CancellationToken), typeof(Stream), typeof(Action)])
+        ?? throw new InvalidDataException("Missing exact original Disc streaming overload.");
+
+    private static object? InvokeMeasure(NativeId65FreshDiscPlan? disc, Stream? source, CancellationToken token)
+    {
+        try { return MeasureMethod().Invoke(null, [disc, source, token, null, null]); }
+        catch (TargetInvocationException error) when (error.InnerException != null)
+        { ExceptionDispatchInfo.Capture(error.InnerException).Throw(); throw; }
     }
 
     internal static void ActualOwner(object binding, object owner)

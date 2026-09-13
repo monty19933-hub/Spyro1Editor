@@ -82,6 +82,14 @@ internal static class NativeFreshWizardAuthoringShape
         ArgumentNullException.ThrowIfNull(document);ArgumentNullException.ThrowIfNull(compilation);
         if (!ReferenceEquals(document.Base, compilation.Intent))
             throw new InvalidDataException("Material-authored Scene requires the actual compiled Base, not equal canonical bytes.");
+        return RequireMaterialDocumentShape(document);
+    }
+
+    // Shared preflight for the saved exporter; shape is necessary, never a
+    // substitute for the actual source-bound compilation checked above.
+    internal static NativeWizardPlacementIntent RequireMaterialDocumentShape(NativeFreshLevelDocumentIntent document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
         if (document.SchemaVersion != 2 || document.FloorMaterials == null || document.Placements.Count != 1 ||
             document.Placements[0] is not NativeFreshWizardRouteIntent wizard)
             throw new InvalidDataException("Material-authored Scene requires schema2 and exactly one actual Wizard route.");

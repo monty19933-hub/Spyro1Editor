@@ -15,9 +15,15 @@ internal static class SavedLevelPublicationCases
     internal static readonly string[] Modes = ["--publish-saved-level-reviewed", "--verify-saved-level-reviewed",
         "--partial-saved-level-reviewed", "--stale-saved-level-reviewed", "--unconfirmed-saved-level-reviewed",
         "--guard-release-saved-level-reviewed", "--artifact-saved-level-reviewed",
-        "--artifact-notify-saved-level-reviewed", "--cancel-saved-level-reviewed"];
+        "--artifact-notify-saved-level-reviewed", "--cancel-saved-level-reviewed",
+        "--publish-mixed-saved-level-reviewed", "--verify-mixed-saved-level-reviewed",
+        "--stale-mixed-saved-level-reviewed"];
     internal sealed record Request(string Mode, string Bin, string Cue, string ProjectRoot, string ProjectId, string Output);
     internal static bool IsMode(string[] args) => args.Length > 0 && Modes.Contains(args[0], StringComparer.Ordinal);
+    internal static bool IsMixedMode(string mode) => mode == Modes[9] || mode == Modes[10] || mode == Modes[11];
+    internal static string OperationMode(string mode) => mode == Modes[9] ? Modes[0] :
+        mode == Modes[10] ? Modes[1] : mode == Modes[11] ? Modes[3] :
+        Modes.Contains(mode, StringComparer.Ordinal) ? mode : throw new ArgumentException("Unknown reviewed saved-level mode.");
     internal static Request Parse(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
@@ -32,9 +38,11 @@ internal static class SavedLevelPublicationCases
     internal static async Task RunAsync(string[] args)
     {
         var request = Parse(args);
+        string operationMode = OperationMode(request.Mode);
+        bool mixed = IsMixedMode(request.Mode), verify = operationMode == Modes[1];
         string bin = Path.GetFullPath(request.Bin), cue = Path.GetFullPath(request.Cue);
         string projectRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.ProjectRoot));
-        string output = RequireLocation(request.Output, bin, cue, projectRoot, request.Mode == Modes[1]);
+        string output = RequireLocation(request.Output, bin, cue, projectRoot, verify);
         var project = new EditorProjectLayout(projectRoot, request.ProjectId);
         var owners = new NativeFreshResearchSourceOwners(bin, cue);
         SavedFiles? savedFiles = null; NativeFreshSavedLevelDocumentReadContext? saved = null;
@@ -50,13 +58,19 @@ internal static class SavedLevelPublicationCases
             savedFiles = SavedFiles.Capture(project); // All small acquired streams close internally, even on error.
             saved = NativeFreshSavedLevelDocumentReadContext.Capture(NativeFreshLevelDocumentStore.Capture(project));
             savedFiles.RequireCurrent();
-            candidate = await NativeFreshSavedLevelResearchCandidatePlan.CaptureAsync(bin, cue, saved);
-            Check(candidate.ExpectedImageByteLength == ImageLength && candidate.ExpectedChangedRawSectors == 1253 &&
-                candidate.ExpectedImageSha256 == ExpectedImage, "Exact independently derived first physical recipe.");
+            candidate = mixed
+                ? await NativeFreshSavedLevelResearchCandidatePlan.CaptureSavedAsync(bin, cue, saved.Snapshot)
+                : await NativeFreshSavedLevelResearchCandidatePlan.CaptureAsync(bin, cue, saved);
+            if (mixed)
+                Check(candidate.MixedDisc != null && ReferenceEquals(candidate.SavedSnapshot, saved.Snapshot) &&
+                    candidate.ExpectedImageByteLength == ImageLength && candidate.ExpectedChangedRawSectors == 1290 &&
+                    candidate.ExpectedImageSha256 == MixedSavedCases.Expected, "Exact independently derived mixed saved physical recipe.");
+            else
+                Check(candidate.ExpectedImageByteLength == ImageLength && candidate.ExpectedChangedRawSectors == 1253 &&
+                    candidate.ExpectedImageSha256 == ExpectedImage, "Exact independently derived first physical recipe.");
             // The actual neutral document comparison prevents an accidental equal-image alternate recipe.
-            Check(candidate.CopyCanonicalDocument().SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(
-                Cases.Document(14, 1, 70, 1, 128, 20))), "Exact actual canonical recipe; no caller hash authority.");
-            if (request.Mode == Modes[1])
+            RequireFixtureDocument(request.Mode, candidate.CopyCanonicalDocument());
+            if (verify)
             {
                 string[] before = ReadComplete(candidate, output);
                 result = await NativeFreshSavedLevelResearchCandidatePublisher.VerifyAsync(candidate, output);
@@ -64,14 +78,14 @@ internal static class SavedLevelPublicationCases
                 artifacts = ReadComplete(candidate, output);
                 Check(before.SequenceEqual(artifacts), "New-process Verify leaves every artifact byte unchanged.");
             }
-            else if (request.Mode == Modes[0])
+            else if (operationMode == Modes[0])
             {
                 result = await NativeFreshSavedLevelResearchCandidatePublisher.PublishAsync(candidate, output);
                 returned = true; // Only an actual Publish return, before any smoke assertions.
                 RequireResult(candidate, output, result);
                 artifacts = ReadComplete(candidate, output);
             }
-            else exercise = await SavedLevelFaultCases.Run(candidate, output, request.Mode, savedFiles, () => returned = true);
+            else exercise = await SavedLevelFaultCases.Run(candidate, output, operationMode, savedFiles, () => returned = true);
         }
         catch (Exception error) { primary = error; }
 
@@ -92,7 +106,7 @@ internal static class SavedLevelPublicationCases
             var combined = Fold(failures);
             Console.Error.WriteLine("SAVED_LEVEL_REVIEWED_FAILED " + JsonSerializer.Serialize(new
             {
-                request.Mode, output, outcome = Classify(combined, returned, request.Mode == Modes[1]),
+                request.Mode, output, outcome = Classify(combined, returned, verify),
                 success = false, outputsRetained = true, automaticRetry = false,
                 errors = Errors(combined).Select(e => new { type = e.GetType().FullName, e.Message })
             }));
@@ -112,6 +126,14 @@ internal static class SavedLevelPublicationCases
                     Errors(exercise.Failure).Select(e => new { type = e.GetType().FullName, e.Message }).ToArray() },
             runtimeVerified = false, normalExport = false, nativePersistentSaveOwnerProven = false
         })); // Only after every independent final observation/close.
+    }
+
+    internal static void RequireFixtureDocument(string mode, ReadOnlySpan<byte> canonical)
+    {
+        _ = OperationMode(mode);
+        var document = IsMixedMode(mode) ? MixedSavedCases.Document() : Cases.Document(14, 1, 70, 1, 128, 20);
+        Check(canonical.SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(document)),
+            "Exact actual canonical recipe; no caller hash authority.");
     }
 
     internal static string RequireLocation(string value, string bin, string cue, string project, bool verify)
@@ -145,7 +167,8 @@ internal static class SavedLevelPublicationCases
     {
         RequireNames(root);
         var readback = plan.VerifyImage(Path.Combine(root, NativeFreshSavedLevelResearchCandidatePlan.ImageName), CancellationToken.None);
-        Check(readback.OutputSha256 == ExpectedImage && readback.ChangedSectors == 1253, "Independent full raw image readback.");
+        Check(readback.OutputSha256 == (plan.MixedDisc == null ? ExpectedImage : MixedSavedCases.Expected) &&
+            readback.ChangedSectors == (plan.MixedDisc == null ? 1253 : 1290), "Independent full raw image readback.");
         byte[] receipt = plan.BuildReceipt(readback), cue = plan.CopyCueBytes();
         Check(ReadSmall(Path.Combine(root, NativeFreshSavedLevelResearchCandidatePlan.ReceiptName), 65536).SequenceEqual(receipt), "Exact actual receipt.");
         Check(ReadSmall(Path.Combine(root, NativeFreshSavedLevelResearchCandidatePlan.CueName), 65536).SequenceEqual(cue), "Exact actual CUE.");
@@ -153,7 +176,9 @@ internal static class SavedLevelPublicationCases
     }
     internal static void RequireResult(NativeFreshSavedLevelResearchCandidatePlan plan, string root, NativeId65FreshDiscResearchPublication result)
     {
-        Check(result.PlanSha256 == plan.PlanSha256 && result.ImageSha256 == ExpectedImage && result.ChangedRawSectors == 1253 &&
+        Check(result.PlanSha256 == plan.PlanSha256 &&
+            result.ImageSha256 == (plan.MixedDisc == null ? ExpectedImage : MixedSavedCases.Expected) &&
+            result.ChangedRawSectors == (plan.MixedDisc == null ? 1253 : 1290) &&
             result.WholeImageReadback && result.RetainedRecoveryDirectory.Length == 0 && result.OutputDirectory == root &&
             result.ResearchOnly && !result.RuntimeVerified && !result.NormalCreateBinApproved && !result.CompleteNativeDependencyClosureProven &&
             result.ImagePath == Path.Combine(root, NativeFreshSavedLevelResearchCandidatePlan.ImageName) &&

@@ -146,7 +146,7 @@ internal static class SeparatedCandidateCases
         var exe=await NativeId65FreshWizardResearchExecutablePlan.CaptureAsync(bin,body);
         return await NativeId65FreshWizardResearchDiscPlan.CaptureAsync(bin,exe);
     }
-    private sealed class HashSink:Stream
+    internal sealed class HashSink:Stream
     {
         private readonly IncrementalHash hash=IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         private long length;

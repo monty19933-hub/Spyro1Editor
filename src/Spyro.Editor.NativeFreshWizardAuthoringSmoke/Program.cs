@@ -23,6 +23,7 @@ if (request?.IssuedMatrix != true)
     await Schema2MaterialAncestryCases.Free(Check);
     await MixedBodyCases.Free(Check);
     await MixedExecutableCases.Free(Check);
+    await MixedDiscCases.Free(Check);
     Console.WriteLine($"FRESH_WIZARD_AUTHORING_FREE_OK checks={checks}");
 }
 if (request == null) return;
@@ -102,6 +103,7 @@ try
     var body = await NativeId65FreshWizardResearchBodyPlan.CaptureAsync(bin, host);
     await MixedExecutableCases.LegacyBodyRefusal(body,Check);
     var exe = await NativeId65FreshWizardResearchExecutablePlan.CaptureAsync(bin, body);
+    await MixedDiscCases.LegacyExecutableRefusal(exe,Check);
     var disc = await NativeId65FreshWizardResearchDiscPlan.CaptureAsync(bin, exe);
     var candidate = await SeparatedCandidateCases.Source(bin,cue,disc,clearance,Check);
     await SavedWizardBindingCases.Source(bin,cue,family,ca,oldResource,candidate,Check);

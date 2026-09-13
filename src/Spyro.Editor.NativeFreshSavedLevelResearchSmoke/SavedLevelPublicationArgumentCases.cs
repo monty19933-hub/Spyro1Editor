@@ -1,3 +1,4 @@
+using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Persistence;
 using static Cases;
 using P = SavedLevelPublicationCases;
@@ -7,12 +8,35 @@ internal static class SavedLevelPublicationArgumentCases
 {
     internal static async Task Free()
     {
+        string[] originalModes = ["--publish-saved-level-reviewed", "--verify-saved-level-reviewed",
+            "--partial-saved-level-reviewed", "--stale-saved-level-reviewed", "--unconfirmed-saved-level-reviewed",
+            "--guard-release-saved-level-reviewed", "--artifact-saved-level-reviewed",
+            "--artifact-notify-saved-level-reviewed", "--cancel-saved-level-reviewed"];
+        Check(P.Modes.Take(9).SequenceEqual(originalModes) && P.Modes.Skip(9).SequenceEqual(new[] {
+            "--publish-mixed-saved-level-reviewed", "--verify-mixed-saved-level-reviewed", "--stale-mixed-saved-level-reviewed" }),
+            "Existing nine reviewed modes retain their order; exactly three explicit mixed modes are appended.");
         string[] valid = [P.Modes[0], "original.bin", "original.cue", "/private/tmp/test-project", "test-project", "/private/tmp/test-output"];
         foreach (string mode in P.Modes)
         {
             var args = valid.ToArray(); args[0] = mode;
             Check(P.Parse(args).Mode == mode && P.IsMode(args), "Exact six-token supported mode.");
         }
+        Check(originalModes.All(mode => !P.IsMixedMode(mode) && P.OperationMode(mode) == mode) &&
+            P.Modes.Skip(9).All(P.IsMixedMode) && P.OperationMode(P.Modes[9]) == P.Modes[0] &&
+            P.OperationMode(P.Modes[10]) == P.Modes[1] && P.OperationMode(P.Modes[11]) == P.Modes[3],
+            "Mixed modes reuse only publish, verify and stale implementations; existing fault selections are unchanged.");
+        byte[] materialDocument = NativeFreshLevelDocumentCodec.SerializeCanonical(Document(14, 1, 70, 1, 128, 20));
+        byte[] mixedDocument = NativeFreshLevelDocumentCodec.SerializeCanonical(MixedSavedCases.Document());
+        // No reviewed mode may borrow the other arm's canonical fixture.
+        foreach (string mode in P.Modes)
+        {
+            bool mixed = P.IsMixedMode(mode);
+            P.RequireFixtureDocument(mode, mixed ? mixedDocument : materialDocument);
+            await Throws<InvalidDataException>(() => {
+                P.RequireFixtureDocument(mode, mixed ? materialDocument : mixedDocument); return Task.CompletedTask;
+            });
+        }
+        await Throws<ArgumentException>(() => { P.OperationMode("--unknown"); return Task.CompletedTask; });
         foreach (var args in new[] { Array.Empty<string>(), valid[..5], valid.Concat(new[] { "extra" }).ToArray(),
             new[] { "--unknown", "b", "c", "/p", "id", "/o" }, new[] { "--source", "b", "c" } })
             await Throws<ArgumentException>(() => { P.Parse(args); return Task.CompletedTask; });
@@ -57,6 +81,11 @@ internal static class SavedLevelPublicationArgumentCases
             errors[0].Message == errors[3].Message && errors[0].Message == errors[4].Message &&
             errors[1].Message == errors[2].Message && errors[0].Message != errors[1].Message,
             "Actual CUE primary, held/current BIN failures, then held/current CUE failures, once each.");
+        var mixedEarly = await Throws<IOException>(() => P.RunAsync(
+            [P.Modes[9], bin, cue, project, "tiny-project", output]));
+        Check(Leaves(mixedEarly).Select(e => (e.GetType(), e.Message)).SequenceEqual(
+            errors.Select(e => (e.GetType(), e.Message))),
+            "Mixed public-factory mode keeps the same tiny-source primary and independent final-owner failure ordering before capture.");
         foreach (var (path, expected) in new[] { (bin, (byte)1), (cue, (byte)2) })
         {
             using var reopened = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);

@@ -160,13 +160,15 @@ internal static class MixedExecutableCases
         await TinyFailure(path=>NativeId65FreshWizardResearchExecutablePlan.CaptureMaterialAuthoredAsync(path,bodies[0]),check);
         check(bodies.Select(b=>b.PlanSha256).SequenceEqual(bodyIdentities),
             "New captures, copy mutations and refusals leave the actual incoming Bodies unchanged.");
+        await MixedDiscCases.Source(bin,plans,check);
     }
 
-    private static async Task TinyFailure(Func<string,Task> capture,Action<bool,string> check)
+    internal static async Task TinyFailure(Func<string,Task> capture,Action<bool,string> check,
+        string failurePrefix="Original snapshot length/initial position",string fixtureKind="exe")
     {
-        var directory=Directory.CreateTempSubdirectory("spyro-schema2-exe-refusal-");
+        var directory=Directory.CreateTempSubdirectory("spyro-schema2-"+fixtureKind+"-refusal-");
         string path=Path.Combine(directory.FullName,"tiny.bin");
-        Console.WriteLine($"SCHEMA2_EXE_REFUSAL_FIXTURE_RETAINED path={path}");
+        Console.WriteLine($"SCHEMA2_{fixtureKind.ToUpperInvariant()}_REFUSAL_FIXTURE_RETAINED path={path}");
         using(var created=new FileStream(path,FileMode.CreateNew,FileAccess.Write,FileShare.None))created.Write([17,29]);
         Exception? actual=null;List<Exception> failures=[];
         try{await capture(path);}catch(Exception error){actual=error;}
@@ -175,7 +177,7 @@ internal static class MixedExecutableCases
             check(actual is IOException{InnerException:AggregateException},"Actual initial source refusal retains its error tree.");
             var leaves=((AggregateException)actual!.InnerException!).InnerExceptions;
             check(leaves.Count==3&&leaves.All(e=>e is InvalidDataException&&
-                e.Message.StartsWith("Original snapshot length/initial position",StringComparison.Ordinal))&&
+                e.Message.StartsWith(failurePrefix,StringComparison.Ordinal))&&
                 !ReferenceEquals(leaves[0],leaves[1])&&!ReferenceEquals(leaves[0],leaves[2])&&!ReferenceEquals(leaves[1],leaves[2]),
                 "Actual primary, None held and None named final failures are pairwise distinct.");
         }

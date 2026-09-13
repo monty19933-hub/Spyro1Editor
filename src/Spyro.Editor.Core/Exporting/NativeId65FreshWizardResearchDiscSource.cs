@@ -14,16 +14,40 @@ internal sealed class NativeId65FreshWizardResearchDiscSource
         NativeId65FreshWizardResearchExecutablePlan executable,byte[] root,byte[] wad,
         Dictionary<int,byte[]> preimages)
     {
+        if(executable.MixedResourceAncestor is { } mixed)
+        {
+            RequireMaterialExecutable(executable);MixedResourceAncestor=mixed;
+        }
+        else RequireExecutable(executable);
         _original=original;Executable=executable;_root=root;_wad=wad;
         _preimages=new System.Collections.ObjectModel.ReadOnlyDictionary<int,byte[]>(preimages);
     }
     internal NativeId65FreshWizardResearchExecutablePlan Executable{get;}
+    internal NativeFreshWizardMaterialResource? MixedResourceAncestor{get;}
     internal IReadOnlyList<NativeFlatIsoFile> RootFiles=>_original.RootFiles;
     internal byte[] CopyRoot()=>_root.ToArray();
     internal byte[] CopyWadHeader()=>_wad.ToArray();
     internal byte[] CopyPreimage(int lba)=>_preimages.TryGetValue(lba,out var b)?b.ToArray():
         throw new InvalidDataException("No newly captured Wizard physical preimage owner.");
     internal void RequireRawSector(int lba,ReadOnlySpan<byte> bytes)=>_original.RequireRawSector(lba,bytes);
+    internal void RequireAncestry()
+    {
+        if(MixedResourceAncestor is { } mixed)
+        {
+            if(!ReferenceEquals(mixed,Executable.MixedResourceAncestor))
+                throw new InvalidDataException("Disc lost its retained actual executable/mixed source pair.");
+            RequireMaterialExecutable(Executable);
+        }
+        else RequireExecutable(Executable);
+    }
+    internal void RequireRetainedOriginalOwners()
+    {
+        if(!_root.SequenceEqual(_original.CopyRoot())||!_wad.SequenceEqual(_original.CopyWadHeader())||
+            !Executable.RevertExact(Executable.CopyExecutable()).SequenceEqual(_original.CopyExecutable())||
+            !_preimages.Keys.Order().SequenceEqual(new[]{22,37}.Concat(Enumerable.Range(53874,1288))))
+            throw new InvalidDataException("Retained Wizard physical source owners changed.");
+        foreach(var owner in _preimages)_original.RequireRawSector(owner.Key,owner.Value);
+    }
     internal static void RequireExecutable(NativeId65FreshWizardResearchExecutablePlan executable)
     {
         ArgumentNullException.ThrowIfNull(executable);
@@ -37,6 +61,33 @@ internal sealed class NativeId65FreshWizardResearchDiscSource
             body.ModelRuntimeAddress!=body.CopyBufferAddress+0x8FC||body.SceneRuntimeAddress!=body.ModelRuntimeAddress+0x19000||
             body.KnownSceneEndAddress!=body.SceneRuntimeAddress+0x3000||body.KnownSceneEndAddress>body.NormalReservedLowerAddress)
             throw new InvalidDataException("Wizard disc requires the complete actual fixed EXE/Body/Host layout.");
+    }
+    internal static void RequireMaterialExecutable(NativeId65FreshWizardResearchExecutablePlan executable)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        var mixed=executable.MixedResourceAncestor;
+        if(mixed is null)
+            throw new InvalidDataException("Material-authored disc requires its actual mixed executable.");
+        var body=executable.BodyAncestor;
+        executable.RequireAncestry(body);body.RequireMixedAncestry(mixed);
+        NativeId65FreshWizardResearchExecutableSource.RequireMaterialBody(body);
+        byte[] exe=executable.CopyExecutable();executable.RequireExactExecutable(exe);
+        var geometry=NativeId65FreshWizardDiscGeometry.Compile(body.CopyOverlay().Length,body.CopyLevelData().Length);
+        int used=mixed.CopyDataComponents().Length;
+        if(exe.Length!=0x66000||used!=0xA6C||body.CopyBufferAddress!=0x8007AA38u+geometry.OverlayByteLength||
+            body.CopyBufferAddress!=0x8008BA38||body.ModelRuntimeAddress!=body.CopyBufferAddress+used||
+            body.ModelRuntimeAddress!=0x8008C4A4||body.SceneRuntimeAddress!=body.ModelRuntimeAddress+0x19000||
+            body.KnownSceneEndAddress!=body.SceneRuntimeAddress+0x3000||body.NormalReservedLowerAddress!=0x80187BB0||
+            body.KnownSceneEndAddress>body.NormalReservedLowerAddress||body.ResidentPeteAddress!=0x801C5BB8)
+            throw new InvalidDataException("Material-authored disc requires its actual A6C runtime relation and unchanged physical allocation.");
+    }
+    internal static async Task<NativeId65FreshWizardResearchDiscSource> CaptureMaterialAuthoredAsync(Stream image,
+        NativeId65FreshWizardResearchExecutablePlan executable,CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();ArgumentNullException.ThrowIfNull(image);RequireMaterialExecutable(executable);
+        // The new path's acquired-owner finalization belongs to the Plan. It
+        // must not inherit the old finally's primary-masking error path.
+        return await CaptureOwnersAsync(image,executable,null,token);
     }
     internal static Task<NativeId65FreshWizardResearchDiscSource> CaptureAsync(Stream image,
         NativeId65FreshWizardResearchExecutablePlan executable,CancellationToken token)=>CaptureCoreAsync(image,executable,null,token);
@@ -52,6 +103,19 @@ internal sealed class NativeId65FreshWizardResearchDiscSource
         await NativeId65FreshDiscSource.RequireWholeOriginalAsync(image,token);
         try
         {
+            return await CaptureOwnersAsync(image,executable,afterOriginalCapture,token);
+        }
+        finally
+        {
+            await NativeId65FreshDiscSource.RequireWholeOriginalAsync(image,CancellationToken.None);
+            token.ThrowIfCancellationRequested();
+        }
+    }
+    // Exact shared physical reads and original-index capture. Arm validation
+    // and acquired stream ownership remain with their distinct entry points.
+    private static async Task<NativeId65FreshWizardResearchDiscSource> CaptureOwnersAsync(Stream image,
+        NativeId65FreshWizardResearchExecutablePlan executable,Action? afterOriginalCapture,CancellationToken token)
+    {
             var original=await NativeId65FreshDiscSource.CaptureAsync(image,token);
             if(!executable.RevertExact(executable.CopyExecutable()).SequenceEqual(original.CopyExecutable()))
                 throw new InvalidDataException("Actual retained EXE is not bound to this authenticated original executable.");
@@ -77,12 +141,6 @@ internal sealed class NativeId65FreshWizardResearchDiscSource
             }
             if(preimages.Count!=1290)throw new InvalidDataException("Wizard physical owner partition changed.");
             token.ThrowIfCancellationRequested();return new(original,executable,root,wad,preimages);
-        }
-        finally
-        {
-            await NativeId65FreshDiscSource.RequireWholeOriginalAsync(image,CancellationToken.None);
-            token.ThrowIfCancellationRequested();
-        }
     }
     // All contributing later physical reads authenticate before exposing even a
     // requested logical fragment. This non-owning wrapper does not close source.
