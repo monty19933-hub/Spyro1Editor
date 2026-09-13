@@ -8,8 +8,10 @@ BIN/CUE, saves and preserved R03/R04/R05 apps remain protected. Stop safely near
 
 ## Current checkpoint summary
 
-Latest implementation:99f93b8 (normal flight export) and b0db75b (model batch).
-Full combined regression207 passes336 checks/0 failures; actual-source208
+Latest source work adds shared atomic actor-texture materialization (September13,
+full217 passes336 steps and source218 passes4412 checks), following99f93b8
+(normal flight export) and b0db75b (model batch).
+Full combined regression207 also passed336 checks/0 failures; actual-source208
 replays normal ON/OFF publication with the same complete hashes and stale-ON
 refusal. Earlier full suites146/167/177 passed335 checks/0 failures. Sections below are chronological evidence: older "next"
 and "pending" statements describe their historical checkpoint, not this summary.
@@ -737,3 +739,56 @@ is still NOT STARTED and no test settings were installed. Account usage reports
 8% remaining; the approximately5% safe-stop rule remains in force and no reset
 was consumed. The next native checks need manual Mac unlock. This is a completed
 implementation/package milestone, not completion of the overall V6 goal.
+
+## September13 — shared actor-texture materialization
+
+Continued from clean e183855. Two independent agent reviews identified the same
+next dependency: actual model/texture installation must retain the generated
+Fresh upload's live ownership, not treat zero bytes or retail Town coordinates as
+free space. The immediate bounded implementation extracts the real Wizard tile
+copy/allocation mechanics into `NativeMobyTextureMaterialization`, consumed now
+by `NativeDarkHollowWizardTexturePlan` for all five Wizard/bolt/particle tiles.
+It is not a new exporter or an unused approval object.
+
+The neutral compiler snapshots complete source/current uploads, validates an
+ordered batch, and atomically allocates/copies every pixel row and full CLUT.
+It retains all unallocated bytes, protects supplied zero-valued owners, and
+returns immutable upload-relative patches and allocation evidence. It does not
+certify the caller's ownership mask, Original ancestry, GPU lifetime or import
+eligibility. Existing Wizard source/all-consumer guards, every typed descriptor
+rewrite, whole-package inverse, public patch order and complete target complement
+checks remain in the actual producer.
+
+Old compiled source oracle211 passed3730 checks. Missing-API RED212 precedes the
+implementation; build213 has zero warnings/errors; free214 passes1869 checks and
+source215 passes4409. The new independent AE source checks decode all146 texture
+references using the shared animated grammar, match all132 exact four-tile source
+reads and invert all descriptor rewrites to the complete original package.
+No chest is registered or placed. Old Wizard texture/model/scene/behavior/overlay
+and Town graph/data/EXE evidence lines compare byte-for-byte before/after.
+
+Peer review found that a lying IReadOnlyList.Count bypassed the defensive request
+ceiling. Genuine finite RED216 reproduces it; bounded enumeration now refuses the
+4097th declaration and disposes its enumerator before any allocation. Full217
+passes336 steps/0 failures, including1872 source-free closure checks; all build
+logs report zero warnings/errors. Report:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-t7wia02j/summary.json`.
+Final retained-source replay218 passes4412 checks, requires the unchanged full
+Original BIN, and again exactly matches the old compiled source evidence lines.
+Log219 confirms original CUE, current DuckStation global/game
+settings/card and both sealed R01/R02 ZIP pairs retain their exact prior hashes.
+
+The concrete next installation seam remains a closed transformed-model
+contribution, not weakening Grass's complete-Original-copy gate. Reuse the actual
+`NativeFreshWizardMaterialResource.ReproduceFallback` ancestry reconstruction,
+union every mixed `Allocation.IsAllocated` range and the zero-inclusive
+`[0x65800,0x7F000)` transfer residue, then invoke the shared materializer. Bind the
+complete sound/texture-transformed AE package to an actual `NativeModelTailBatch`
+and new Final Body; rebind sound/particle preservations to that new domain. Model
+resources alone do not admit key/reward rows, private owner links, debris models,
+handlers, special renderer, mutable globals or gameplay/export support.
+
+Native UI discovery again reports the Mac locked. No emulator/editor was
+launched, no test settings installed, no ROM exported and no sealed app rebuilt
+in this source pass. Native R02 preview/flight/seam checks still require manual
+unlock. Usage remains7% remaining at this entry; stop-near5% remains in force.

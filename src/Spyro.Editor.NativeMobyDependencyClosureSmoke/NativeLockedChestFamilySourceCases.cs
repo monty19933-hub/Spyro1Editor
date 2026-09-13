@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Reflection;
 using System.Security.Cryptography;
+using Spyro.Editor.Core.Analysis;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Scene;
 
@@ -101,6 +102,7 @@ internal static class NativeLockedChestFamilySourceCases
             package.ExpectedSha256==PackageSha256&&
             Hash(packageBytes)==package.ExpectedSha256&&Word(packageBytes,4)==0xFFFFFF2F,
             "AE retains the complete original animation package and model-local descriptor47, not Town descriptor54.");
+        CheckSharedTextureGrammar(source,packageBytes,check);
         byte[] relocated=packageBytes.ToArray();
         check(TownSquareNativeLockedChestCandidateExporter.RebaseLockedChestDescriptors(relocated)==146,
             "All original animation/LOD face references still satisfy the existing exact146-descriptor grammar.");
@@ -203,6 +205,87 @@ internal static class NativeLockedChestFamilySourceCases
             Hash(native.Executable)=="4268f9943233b9f8c24d1d4b0924cba8747547b44b82eddd13f0a2ac10ac17de",
             "Source extraction preserves the complete historical V2/V3 graph, data, overlay and executable goldens.");
         Console.WriteLine($"NATIVE_LOCKED_CHEST_SOURCE_EXTRACTION_AND_OLD_TOWN_GOLDENS_OK recipe={native.Recipe} destination=false runtime=false");
+    }
+
+    private static void CheckSharedTextureGrammar(NativeLockedChestFamilySource source,byte[] package,Action<bool,string> check)
+    {
+        // Exercise the shared renderer grammar independently of the Town rebaser.
+        // These synthetic descriptor destinations do not allocate or install VRAM.
+        var layout=NativeMobyModelTextureLayout.Decode(package);
+        check(layout.PackageSha256==source.PackageRead.ExpectedSha256&&layout.References.Count==146,
+            $"Shared AE texture grammar decodes the complete original package and exactly146 references; actual={layout.References.Count}.");
+        (ushort Page,int U,int V,ushort Clut)[] regions=[
+            (0xE,192,192,0x4A2A),(0xE,192,224,0x4C2A),
+            (0xF,0,160,0x5C2A),(0xF,0,192,0x5E2A)];
+        var groups=layout.References.GroupBy(r=>(r.Page,r.Palette)).ToDictionary(g=>g.Key,g=>g.ToArray());
+        check(groups.Count==4&&regions.All(r=>groups.ContainsKey((r.Page,r.Clut))),
+            "Shared AE descriptor regions must be exactly E/4A2A,E/4C2A,F/5C2A,F/5E2A; actual="+
+            string.Join(",",groups.Keys.OrderBy(k=>k.Page).ThenBy(k=>k.Palette).Select(k=>$"{k.Page:X}/{k.Palette:X}")));
+        byte[] rebased=package.ToArray();bool[] fields=new bool[package.Length];
+        int[] uvOffsets=[0,4,8,10];
+        for(int i=0;i<regions.Length;i++)
+        {
+            var region=regions[i];var references=groups[(region.Page,region.Clut)];
+            var coordinates=references.SelectMany(r=>{
+                byte[] bytes=r.CopyBytes();return uvOffsets.Select(at=>(U:(int)bytes[at],V:(int)bytes[at+1]));
+            }).ToArray();
+            int minU=coordinates.Min(p=>p.U),maxU=coordinates.Max(p=>p.U);
+            int minV=coordinates.Min(p=>p.V),maxV=coordinates.Max(p=>p.V);
+            check(minU==region.U&&maxU==region.U+31&&minV==region.V&&maxV==region.V+31,
+                $"AE region{i} uses all four UV pairs within its exact32x32 source footprint; actual U={minU}..{maxU}, V={minV}..{maxV}.");
+            int pixelX=(region.Page&15)*128+region.U/2-1024;
+            int pixelY=((region.Page&16)!=0?256:0)+region.V;
+            for(int row=0;row<32;row++)
+            {
+                var read=source.ResourceInputs[$"texture.{i}.{row}"].Single();
+                check(ReferenceEquals(read.Extent.Space,source.PackageRead.Extent.Space)&&
+                    read.Extent.Offset==0x800+(pixelY+row)*1024+pixelX&&read.Extent.ByteLength==16&&
+                    Hash(source.ReadSource(read.Extent))==read.ExpectedSha256,
+                    $"Shared AE footprint{i} row{row} resolves the exact retained Original16-byte pixel owner.");
+            }
+            var palette=source.ResourceInputs[$"texture.{i}.32"].Single();
+            int paletteOffset=0x800+(region.Clut>>6)*1024+(region.Clut&63)*32-1024;
+            check(ReferenceEquals(palette.Extent.Space,source.PackageRead.Extent.Space)&&
+                palette.Extent.Offset==paletteOffset&&palette.Extent.ByteLength==32&&
+                Hash(source.ReadSource(palette.Extent))==palette.ExpectedSha256,
+                $"Shared AE footprint{i} resolves its complete retained Original32-byte CLUT owner.");
+            int deltaU=16+32*i-region.U,deltaV=48+32*i-region.V;
+            ushort targetPage=(ushort)(8+i),targetClut=(ushort)(0x2820+i);
+            foreach(var reference in references)
+            {
+                byte[] before=reference.CopyBytes();int at=reference.PackageOffset;
+                check(!fields.AsSpan(at,12).Contains(true)&&package.AsSpan(at,12).SequenceEqual(before),
+                    "Each shared AE descriptor has one disjoint exact original12-byte field owner.");
+                Array.Fill(fields,true,at,12);
+                byte[] after=NativeMobyModelTextureLayout.Rebase(reference,deltaU,deltaV,targetClut,targetPage);
+                check(uvOffsets.All(o=>after[o]==before[o]+deltaU&&after[o+1]==before[o+1]+deltaV)&&
+                    Half(after,2)==targetClut&&Half(after,6)==targetPage,
+                    "Shared Rebase translates all four AE UV pairs and only their descriptor words.");
+                after.CopyTo(rebased,at);
+            }
+        }
+        var afterLayout=NativeMobyModelTextureLayout.Decode(rebased);
+        check(afterLayout.References.Count==146&&afterLayout.FaceTableOffsets.SequenceEqual(layout.FaceTableOffsets)&&
+            afterLayout.References.Select(r=>r.PackageOffset).SequenceEqual(layout.References.Select(r=>r.PackageOffset))&&
+            Enumerable.Range(0,package.Length).All(i=>fields[i]||rebased[i]==package[i]),
+            "Synthetic AE rebasing preserves the complete non-descriptor package complement and actual renderer field topology.");
+        byte[] recovered=rebased.ToArray();
+        var afterFields=afterLayout.References.ToDictionary(r=>r.PackageOffset);
+        foreach(var reference in layout.References)
+        {
+            int i=Array.FindIndex(regions,r=>r.Page==reference.Page&&r.Clut==reference.Palette);
+            var region=regions[i];
+            byte[] before=NativeMobyModelTextureLayout.Rebase(afterFields[reference.PackageOffset],
+                region.U-(16+32*i),region.V-(48+32*i),region.Clut,region.Page);
+            before.CopyTo(recovered,reference.PackageOffset);
+        }
+        check(recovered.AsSpan().SequenceEqual(package)&&Hash(recovered)==source.PackageRead.ExpectedSha256&&
+            source.CopyPackage().AsSpan().SequenceEqual(package),
+            "Inverse shared AE rebasing recovers the complete exact Original package without mutating retained source bytes.");
+        check(!layout.CompleteModelClosureProven&&!layout.PublicationApproved&&
+            !afterLayout.CompleteModelClosureProven&&!afterLayout.PublicationApproved,
+            "Shared AE texture grammar and synthetic roundtrip do not issue complete model, residency or import eligibility.");
+        Console.WriteLine("NATIVE_LOCKED_CHEST_SHARED_TEXTURE_GRAMMAR_146_FOUR_SOURCE_FOOTPRINTS_ROUNDTRIP_OK residency=false eligibility=false");
     }
 
     private static NativeLockedChestFamilySource Decode(NativeAddressSpace[] domains,Func<NativeByteExtent,byte[]> read)=>

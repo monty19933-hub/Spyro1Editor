@@ -41,25 +41,31 @@ public sealed class NativeDarkHollowWizardTexturePlan
             ownership.AddressableTexturePageByteLength!=0x80000||!ownership.AllConsumerClosureComplete||
             !ownership.ProvablyPrivatePixelAndClutSpace||!string.Equals(ownership.AddressableTexturePagesSha256,Hash(dark.AsSpan(0x800,0x80000)),StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("Dark native all-consumer VRAM ownership is incomplete or stale.");
-        var allocator=new NativeMobyIndexedTextureAllocation(dark.AsSpan(0x800,0x80000),ownership.ProtectedRanges);
         List<NativeMobyTextureBytePatch> patches=[];List<NativeMobyTextureAllocationEvidence> allocations=[];
         var wizardLayout=NativeMobyModelTextureLayout.Decode(_wizard);var boltLayout=NativeMobyModelTextureLayout.Decode(_lightning);
         if(wizardLayout.References.Count!=51||boltLayout.References.Count!=9||
             !wizardLayout.FaceTableOffsets.SequenceEqual(new[]{0x238,0x700})||!boltLayout.FaceTableOffsets.SequenceEqual(new[]{0x1A8,0x260}))
             throw new InvalidDataException("Native Wizard/lightning renderer texture schemas changed.");
-        RebaseModel("wizard",_wizard,wizardLayout);RebaseModel("lightning",_lightning,boltLayout);
         if(BinaryPrimitives.ReadUInt16LittleEndian(_particle)!=7||BinaryPrimitives.ReadUInt16LittleEndian(_particle.AsSpan(2))!=8)
             throw new InvalidDataException("Native particle-7 descriptor schema changed.");
         int minU=Math.Min(_particle[4],_particle[8]),maxU=Math.Max(_particle[4],_particle[8]);
         int minV=Math.Min(_particle[5],_particle[9]),maxV=Math.Max(_particle[5],_particle[9]);
         ushort palette=BinaryPrimitives.ReadUInt16LittleEndian(_particle.AsSpan(6)),page=BinaryPrimitives.ReadUInt16LittleEndian(_particle.AsSpan(10));
-        var tile=Install("particle7",palette,page,minU,minV,maxU,maxV);
+        var wizardTiles=DescribeModel("wizard",wizardLayout);var boltTiles=DescribeModel("lightning",boltLayout);
+        var particleRequest=new NativeMobyTextureTileRequest("particle7",palette,page,minU,minV,maxU,maxV);
+        var requests=wizardTiles.Select(t=>t.Request).Concat(boltTiles.Select(t=>t.Request)).Append(particleRequest).ToArray();
+        var materialization=NativeMobyTextureMaterialization.Compile(donor.AsSpan(0x800,0x80000),
+            dark.AsSpan(0x800,0x80000),ownership.ProtectedRanges,requests);
+        int nextTile=0,nextPatch=0;
+        RebaseModel("wizard",_wizard,wizardTiles);RebaseModel("lightning",_lightning,boltTiles);
+        var tile=Install(particleRequest);
         byte[] beforeParticle=_particle.ToArray();
         foreach(int field in new[]{4,8}){_particle[field]=checked((byte)(_particle[field]+tile.U-minU));_particle[field+1]=checked((byte)(_particle[field+1]+tile.V-minV));}
         BinaryPrimitives.WriteUInt16LittleEndian(_particle.AsSpan(6),tile.Palette);
         BinaryPrimitives.WriteUInt16LittleEndian(_particle.AsSpan(10),(ushort)((page&~0x1F)|tile.Page));
         patches.Add(new("particle7",0,beforeParticle,_particle));
-        if(allocations.Count!=5||allocations.Sum(a=>a.RowBytes*a.Rows)!=2056||allocations.Count*32!=160)
+        if(allocations.Count!=5||allocations.Sum(a=>a.RowBytes*a.Rows)!=2056||allocations.Count*32!=160||
+            nextTile!=requests.Length||nextPatch!=materialization.Patches.Count)
             throw new InvalidDataException("Native five-tile Wizard texture dependency accounting changed.");
         // Every target-native byte, including all 128 rows/properties/model data,
         // survives unless it belongs to an explicit new texture install.
@@ -75,49 +81,51 @@ public sealed class NativeDarkHollowWizardTexturePlan
             if(!_target.AsSpan(offset,p.ByteLength).SequenceEqual(p.CopyAfter()))throw new InvalidDataException("Native texture install readback failed.");
         }
         for(int i=0;i<dark.Length;i++)if(!changed[i]&&dark[i]!=_target[i])throw new InvalidDataException("Native target complement changed during texture relocation.");
+        if(!_target.AsSpan(0x800,0x80000).SequenceEqual(materialization.CopyUpload()))
+            throw new InvalidDataException("Native Wizard texture transaction differs from the shared complete upload.");
         VerifyModel("wizard",donor.AsSpan(wizardOffset,0x35AC),_wizard);
         VerifyModel("lightning",donor.AsSpan(lightningOffset,0x564),_lightning);
         SourceDataSha256=Hash(dark);DonorDataSha256=Hash(donor);FinalTextureDataSha256=Hash(_target);Player8ResidentTextureHeaderSha256=playerTextureHeaderHash;
         Patches=Array.AsReadOnly(patches.ToArray());Allocations=Array.AsReadOnly(allocations.ToArray());
         WizardTextureReferences=wizardLayout.References.Count;LightningTextureReferences=boltLayout.References.Count;
 
-        void RebaseModel(string id,byte[] package,NativeMobyModelTextureLayout model)
+        static (NativeMobyTextureTileRequest Request,NativeMobyModelTextureReference[] References)[] DescribeModel(
+            string id,NativeMobyModelTextureLayout model)
         {
-            foreach(var group in model.References.GroupBy(r=>(r.Palette,r.Page)).OrderBy(g=>g.Key.Palette).ThenBy(g=>g.Key.Page))
+            return model.References.GroupBy(r=>(r.Palette,r.Page)).OrderBy(g=>g.Key.Palette).ThenBy(g=>g.Key.Page).Select(group=>
             {
                 var bytes=group.Select(r=>r.CopyBytes()).ToArray();
                 int u0=bytes.Min(b=>new[]{b[0],b[4],b[8],b[10]}.Min()),u1=bytes.Max(b=>new[]{b[0],b[4],b[8],b[10]}.Max());
                 int v0=bytes.Min(b=>new[]{b[1],b[5],b[9],b[11]}.Min()),v1=bytes.Max(b=>new[]{b[1],b[5],b[9],b[11]}.Max());
-                var target=Install($"{id}:{group.Key.Palette:X4}:{group.Key.Page:X4}",group.Key.Palette,group.Key.Page,u0,v0,u1,v1);
-                foreach(var reference in group)
+                return (new NativeMobyTextureTileRequest($"{id}:{group.Key.Palette:X4}:{group.Key.Page:X4}",
+                    group.Key.Palette,group.Key.Page,u0,v0,u1,v1),group.ToArray());
+            }).ToArray();
+        }
+        void RebaseModel(string id,byte[] package,
+            (NativeMobyTextureTileRequest Request,NativeMobyModelTextureReference[] References)[] tiles)
+        {
+            foreach(var entry in tiles)
+            {
+                var target=Install(entry.Request);
+                foreach(var reference in entry.References)
                 {
                     byte[] original=reference.CopyBytes();
-                    byte[] after=NativeMobyModelTextureLayout.Rebase(reference,target.U-u0,target.V-v0,target.Palette,(ushort)((reference.Page&~0x1F)|target.Page));
+                    byte[] after=NativeMobyModelTextureLayout.Rebase(reference,target.U-entry.Request.MinU,target.V-entry.Request.MinV,
+                        target.Palette,(ushort)((reference.Page&~0x1F)|target.Page));
                     after.CopyTo(package,reference.PackageOffset);patches.Add(new(id,reference.PackageOffset,original,after));
                 }
             }
         }
-        NativeMobyIndexedTextureLocation Install(string id,ushort clut,ushort tpage,int u0,int v0,int u1,int v1)
+        NativeMobyIndexedTextureLocation Install(NativeMobyTextureTileRequest request)
         {
-            int width=u1-u0+1,height=v1-v0+1;
-            if(((tpage>>7)&3)!=0||u0%2!=0||width%2!=0)
-                throw new InvalidDataException("Native Wizard tile is outside the supported exact 4-bpp extraction schema.");
-            int sourceX=(tpage&15)*128+u0/2-1024,sourceY=((tpage&16)!=0?256:0)+v0;
-            int sourceClutX=(clut&63)*32-1024,sourceClutY=clut>>6;
-            if(sourceX<0||sourceX+width/2>1024||sourceY<0||sourceY+height>512||sourceClutX<0||sourceClutX+32>1024||sourceClutY>=512)
-                throw new InvalidDataException("Native Wizard tile/CLUT is not owned by the level VRAM upload.");
-            var target=allocator.Reserve(width,height);int sourcePixel=sourceY*1024+sourceX,sourceClut=sourceClutY*1024+sourceClutX;
-            byte[] pixels=new byte[width/2*height];
-            for(int row=0;row<height;row++)
-            {
-                byte[] after=donor.AsSpan(0x800+sourcePixel+row*1024,width/2).ToArray();after.CopyTo(pixels,row*width/2);
-                int destination=target.PixelOffset+row*1024;
-                patches.Add(new("target-vram",destination,dark.AsSpan(0x800+destination,width/2),after));
-            }
-            byte[] clutBytes=donor.AsSpan(0x800+sourceClut,32).ToArray();
-            patches.Add(new("target-vram",target.PaletteOffset,dark.AsSpan(0x800+target.PaletteOffset,32),clutBytes));
-            allocations.Add(new(id,sourcePixel,target.PixelOffset,width/2,height,sourceClut,target.PaletteOffset,Hash(pixels),Hash(clutBytes)));
-            return target;
+            if(nextTile>=requests.Length||requests[nextTile]!=request)
+                throw new InvalidDataException("Native Wizard texture request order changed.");
+            var allocation=materialization.Allocations[nextTile];
+            // Preserve the existing public patch order: tile rows/CLUT followed
+            // by that tile's model consumers, then the next dependency.
+            patches.AddRange(materialization.Patches.Skip(nextPatch).Take(allocation.Rows+1));
+            nextPatch+=allocation.Rows+1;allocations.Add(allocation);
+            return materialization.Locations[nextTile++];
         }
         void VerifyModel(string id,ReadOnlySpan<byte> before,byte[] after)
         {

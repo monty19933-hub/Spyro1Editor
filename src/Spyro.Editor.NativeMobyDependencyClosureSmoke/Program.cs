@@ -216,6 +216,7 @@ NativeWizardOverlayCases.Run(Check,Reject);
 NativeWizardDeathRewardCases.Run(Check,Reject);
 NativeRegistrationTableCases.Free(Check);
 NativeModelTailBatchCases.Run(Check);
+NativeMobyTextureMaterializationCases.Run(Check,Reject);
 await NativeGrassFamilyAssetCases.Free(Check);
 NativeLockedChestFamilySourceCases.Free(Check);
 Reject(()=>NativeTownSquareClosurePlacement.Decode(new byte[80],0),"payload shape");
