@@ -5,31 +5,43 @@ using static Cases;
 
 internal static class FamilySavedCases
 {
-    private const string GrassId="22222222222222222222222222222222";
     internal static NativeFreshLevelDocumentIntent Document(int entry=10,int index=121,int nativeClass=501,
-        int x=9152,int y=9152,int z=8704,int yaw=64)
-    {
-        var old=MixedSavedCases.Document().UpgradeForNativeMobys();
-        return old.WithContent(old.Base,[old.Placements[0],NativeFreshMobyPlacementIntent.Create(GrassId,
-            NativeFreshRetailMobyReference.Create(NativeFreshRetailTerrainMaterialIntent.SupportedSourceVariant,entry,index,nativeClass),x,y,z,yaw)]);
-    }
+        int x=9152,int y=9152,int z=8704,int yaw=64) =>
+        SavedFamilyDocumentFixture.Document(entry,index,nativeClass,x,y,z,yaw);
     internal static async Task Free()
     {
+        var valid=Document();
+        var old=MixedSavedCases.Document().UpgradeForNativeMobys();
+        var historical=old.WithContent(old.Base,[old.Placements[0],NativeFreshMobyPlacementIntent.Create(
+            "22222222222222222222222222222222",NativeFreshRetailMobyReference.Create(
+                NativeFreshRetailTerrainMaterialIntent.SupportedSourceVariant,10,121,501),9152,9152,8704,64)]);
+        Check(NativeFreshLevelDocumentCodec.SerializeCanonical(valid).SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(historical)),
+            "Shared Core/UI fixture retains the former literal schema3 canonical content and stable IDs.");
+        Check(NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(valid)&&
+            NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(NativeFreshLevelDocumentCodec.Parse(
+                NativeFreshLevelDocumentCodec.SerializeCanonical(valid)))&&!NativeFreshSavedLevelResearchEligibility.IsSupportedMixedProfile(valid),
+            "Exact family shape and canonical reopen are neutral eligibility, never the old mixed arm.");
+        Check(!NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(null),"Missing document grants no family eligibility.");
+        foreach(var mixed in new[]{MixedSavedCases.Document(),MixedSavedCases.Document(secondEntry:14),
+            MixedSavedCases.Document().WithFloorMaterials(NativeFreshFloorMaterialsIntent.Create(Retail(70,1),Retail(14,1)))})
+            Check(NativeFreshSavedLevelResearchEligibility.IsSupportedMixedProfile(mixed)&&
+                !NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(mixed)&&
+                !NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(mixed.UpgradeForNativeMobys()),
+                "All three old schema2 mixed arms retain their own eligibility; a schema3 upgrade alone is not family admission.");
+        var p0=NativeFreshLevelDocumentIntent.Create(valid.Base,[]).WithFloorMaterials(valid.FloorMaterials!);
+        Check(!NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(p0)&&
+            !NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(NativeFreshLevelDocumentIntent.Create(valid.Base,[valid.Placements[0]])),
+            "P0 and schema1 are not silently recast as a family profile.");
         var (_,saved)=Save("family-source-preflight",Document());
         var error=await Throws<IOException>(()=>NativeFreshSavedLevelResearchCandidatePlan.CaptureSavedAsync(Missing,Missing,saved.Snapshot));
         Check(Leaves(error)[0].Message.StartsWith("Textured research source path is missing",StringComparison.Ordinal),
             "Complete supported schema3 reaches source authentication through the one existing saved factory.");
-        var valid=Document();
-        var invalid=new[]{Document(entry:14),Document(index:122),Document(nativeClass:500),Document(x:9153),Document(y:9153),
-            Document(z:8705),Document(yaw:65),valid.WithContent(valid.Base,valid.Placements.Reverse()),
-            valid.WithContent(valid.Base,[valid.Placements[0]]),valid.WithContent(valid.Base,[]),
-            MixedSavedCases.Document().UpgradeForNativeMobys(),
-            valid.WithFloorMaterials(NativeFreshFloorMaterialsIntent.Create(Retail(70,1),Retail(14,1))),
-            valid.WithContent(valid.Base,[..valid.Placements,NativeFreshMobyPlacementIntent.Create(new string('3',32),
-                ((NativeFreshMobyPlacementIntent)valid.Placements[1]).Source,9200,9200,8704,64)])};
-        for(int i=0;i<invalid.Length;i++)
+        foreach(var (name,invalid) in SavedFamilyDocumentFixture.Unsupported())
         {
-            var (_,bad)=Save("family-unsupported-"+i,invalid[i]);
+            Check(!NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(invalid)&&
+                !NativeFreshSavedLevelResearchEligibility.IsSupportedMixedProfile(invalid),
+                "Near-miss family/native intent refuses both neutral predicates: "+name);
+            var (_,bad)=Save("family-unsupported-"+name,invalid);
             var refusal=await Throws<InvalidDataException>(()=>NativeFreshSavedLevelResearchCandidatePlan.CaptureSavedAsync(Missing,Missing,bad.Snapshot));
             Check(!Leaves(refusal).Any(e=>e is FileNotFoundException or DirectoryNotFoundException),
                 "Unsupported full schema3 is not silently reduced to the old Wizard/no-placement arm.");

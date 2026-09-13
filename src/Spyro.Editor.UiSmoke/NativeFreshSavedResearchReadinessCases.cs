@@ -6,30 +6,36 @@ using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Persistence;
 using F = NativeFreshMaterialInspectionUiFixture;
 
-// Tests-first: compiles against the old App without any proposed new API.
 // Genuine tiny Store documents only; the picker cancels before source preparation.
 internal static class NativeFreshSavedResearchReadinessCases
 {
     internal static void Run(string parent)
     {
         int checks = 0;
+        var unsupportedFamilies = SavedFamilyDocumentFixture.Unsupported().ToDictionary(
+            item => "family-" + item.Name, item => item.Document, StringComparer.Ordinal);
         foreach (string kind in new[] { "retail", "retail-t2", "schema1", "base-color", "mixed", "wizard", "dirty", "no-owner", "no-source", "owner-null", "owner-throw",
             "mixed-14-70", "mixed-70-14", "mixed-14-14", "mixed-route", "mixed-base", "mixed-music", "mixed-t2", "mixed-pair", "mixed-two-wizards", "mixed-nonretail",
-            "mixed-dirty", "mixed-no-owner", "mixed-no-source", "mixed-owner-null", "mixed-owner-throw" })
+            "mixed-dirty", "mixed-no-owner", "mixed-no-source", "mixed-owner-null", "mixed-owner-throw",
+            "family", "family-dirty", "family-native-dirty", "family-no-owner", "family-no-source", "family-owner-null", "family-owner-throw" }
+            .Concat(unsupportedFamilies.Keys))
         {
             string root = Path.Combine(parent, "saved-research-ready-" + kind);
             Directory.CreateDirectory(root);
             var project = new EditorProjectLayout(root, "saved-research-ready-" + kind);
             File.WriteAllText(project.ManifestPath, "{\"schemaVersion\":1,\"projectId\":\"" + project.ProjectId + "\",\"sentinel\":true}");
-            var intent = Document(kind);
-            bool dirty = kind is "dirty" or "mixed-dirty";
-            bool noOwner = kind is "no-owner" or "mixed-no-owner";
-            bool noSource = kind is "no-source" or "mixed-no-source";
-            bool nullOwner = kind is "owner-null" or "mixed-owner-null";
-            bool throwingOwner = kind is "owner-throw" or "mixed-owner-throw";
-            bool ready = kind is "retail" or "retail-t2" or "mixed-14-70" or "mixed-70-14" or "mixed-14-14" || nullOwner || throwingOwner;
+            bool family = kind.StartsWith("family", StringComparison.Ordinal);
+            var intent = unsupportedFamilies.TryGetValue(kind, out var unsupported) ? unsupported :
+                family ? SavedFamilyDocumentFixture.Document() : Document(kind);
+            bool dirty = kind is "dirty" or "mixed-dirty" or "family-dirty" or "family-native-dirty";
+            bool noOwner = kind is "no-owner" or "mixed-no-owner" or "family-no-owner";
+            bool noSource = kind is "no-source" or "mixed-no-source" or "family-no-source";
+            bool nullOwner = kind is "owner-null" or "mixed-owner-null" or "family-owner-null";
+            bool throwingOwner = kind is "owner-throw" or "mixed-owner-throw" or "family-owner-throw";
+            bool ready = kind is "retail" or "retail-t2" or "mixed-14-70" or "mixed-70-14" or "mixed-14-14" or "family" || nullOwner || throwingOwner;
             bool reachesPicker = ready && !nullOwner && !throwingOwner;
-            string dirtyHeading = kind == "mixed-dirty" ? "0064" : "0128";
+            string dirtyField = kind == "family-native-dirty" ? "FreshNativeMobyX" : "FreshHeading";
+            string dirtyValue = kind == "family-native-dirty" ? "09152" : kind is "mixed-dirty" or "family-dirty" ? "0064" : "0128";
             var old = NativeId65FreshDocumentStore.Save(NativeId65FreshDocumentStore.Capture(project), intent.Base);
             var saved = NativeFreshLevelDocumentStore.Save(NativeFreshLevelDocumentStore.Capture(project), intent);
             byte[] manifest = File.ReadAllBytes(project.ManifestPath), legacy = File.ReadAllBytes(old.Path), aggregate = File.ReadAllBytes(saved.Path);
@@ -51,13 +57,25 @@ internal static class NativeFreshSavedResearchReadinessCases
                 window.ResearchOutputPickerForTesting = _ => { pickers++; return Task.FromResult<string?>(null); };
                 window.Show(); F.Pump();
                 Find<ComboBox>("FreshDocumentMode").SelectedItem = "Level aggregate"; F.Pump();
+                if (kind == "family-native-dirty")
+                {
+                    Find<ListBox>("FreshLevelPlacements").SelectedItem = window.CurrentAggregateIntent!.Placements[1]; F.Pump();
+                    Check(Find<TextBox>(dirtyField).Text == "9152", "Native dirty control starts from the actual saved Grass row.");
+                }
                 var actual = window.CurrentAggregateIntent;
-                Check(Find<TextBlock>("FreshLevelPlacementSummary").Text!.Contains("no placements or the supported one-Wizard mixed profile", StringComparison.Ordinal) &&
-                    Find<TextBlock>("FreshDocumentStatus").Text!.Contains("no placements or the supported one-Wizard mixed profile", StringComparison.Ordinal),
-                    "Placement summary and saved-open message describe both bounded research arms.");
-                if (dirty) { Find<TextBox>("FreshHeading").Text = dirtyHeading; F.Pump(); }
+                foreach (string text in new[] { Find<TextBlock>("FreshLevelPlacementSummary").Text!, Find<TextBlock>("FreshDocumentStatus").Text! })
+                {
+                    if (!family) Check(text.Contains("no placements or the supported one-Wizard mixed profile", StringComparison.Ordinal),
+                        "Old placement summary and saved-open message retain both old bounded research arms.");
+                    else if (unsupported == null) Check(text.Contains("exact saved Wizard + Grass profile", StringComparison.Ordinal) &&
+                        text.Contains("Normal Create BIN", StringComparison.Ordinal) && !text.Contains("native dependencies are unsupported", StringComparison.Ordinal),
+                        "Exact family summary/open text distinguishes bounded research from normal export and generic native imports.");
+                    else Check(text.Contains("authored-only", StringComparison.Ordinal) && text.Contains("Normal Create BIN", StringComparison.Ordinal),
+                        "Other native documents remain authored-only in summary and saved-open text: " + kind);
+                }
+                if (dirty) { Find<TextBox>(dirtyField).Text = dirtyValue; F.Pump(); }
                 var button = Find<Button>("FreshDocumentResearch");
-                Check(button.IsEnabled == ready, "Exact saved no-placement or supported mixed-profile readiness: " + kind);
+                Check(button.IsEnabled == ready, "Exact saved old-arm or bounded family-profile readiness: " + kind);
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button)); F.Pump();
                 if (window.ResearchTaskForTesting is { } task) F.Wait(task);
                 Check(ReferenceEquals(actual, window.CurrentAggregateIntent) && window.ResearchPublicationForTesting == null,
@@ -68,7 +86,7 @@ internal static class NativeFreshSavedResearchReadinessCases
                     "Owner invocation is distinct from an actually returned owner.");
                 Check(reachesPicker ? sourceSelections > 0 : sourceSelections == 0,
                     "Unsupported/dirty direct click refuses before source provider.");
-                if (dirty) Check(Find<TextBox>("FreshHeading").Text == dirtyHeading && window.HasUnappliedFields,
+                if (dirty) Check(Find<TextBox>(dirtyField).Text == dirtyValue && window.HasUnappliedFields,
                     "Unapplied raw spelling remains untouched.");
             }
             catch (Exception error) { failures.Add(error); }

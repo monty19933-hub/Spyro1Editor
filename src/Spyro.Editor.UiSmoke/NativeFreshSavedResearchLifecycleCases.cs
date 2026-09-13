@@ -13,17 +13,32 @@ internal static class NativeFreshSavedResearchLifecycleCases
     internal static void Run(string parent)
     {
         int checks = 0;
+        foreach (bool family in new[] { false, true })
         foreach (string stage in new[] { "picker", "prepare" })
-        foreach (string change in new[] { "none", "raw-aba", "raw", "native-raw-aba", "native-raw", "source", "project", "disk", "manifest", "session", "snapshot", "applied", "close", "cancel", "prepare-refusal", "owner-release" })
+        foreach (string change in new[] { "none", "raw-aba", "raw", "native-raw-aba", "native-raw", "source", "project", "disk", "manifest", "session", "snapshot", "applied", "close", "cancel", "prepare-refusal", "owner-release" }
+            .Concat(family ? new[] { "native-y-aba", "native-z-aba", "native-yaw-aba" } : Array.Empty<string>()))
         {
-            var fixture = new Fixture(parent, stage + "-" + change);
+            var fixture = new Fixture(parent, (family ? "family-" : "") + stage + "-" + change,
+                document: family ? SavedFamilyDocumentFixture.Document() : null,
+                selectedEditorId: family ? SavedFamilyDocumentFixture.GrassId : null);
             List<Exception> failures = [];
             var picker = new TaskCompletionSource<string?>();
             var work = new FailureWork();
             Task? task = null;
             var original = fixture.Window.CurrentAggregateIntent;
+            string headingBefore = fixture.Find<TextBox>("FreshHeading").Text!;
+            string nativeField = change switch
+            {
+                "native-y-aba" => "FreshNativeMobyY", "native-z-aba" => "FreshNativeMobyZ",
+                "native-yaw-aba" => "FreshNativeMobyYaw", _ => "FreshNativeMobyX"
+            };
+            string nativeBefore = fixture.Find<TextBox>(nativeField).Text!;
             try
             {
+                if (family) Check(fixture.Find<TextBox>(nativeField).IsEnabled && nativeBefore.Length > 0 &&
+                    fixture.CurrentSession.SelectedEditorId == SavedFamilyDocumentFixture.GrassId &&
+                    original!.Placements[1] is NativeFreshMobyPlacementIntent,
+                    "Family lifecycle starts with the actual saved Grass selected and its native fields populated.");
                 fixture.Window.SavedResearchWorkForTesting = work;
                 fixture.Window.ResearchOutputPickerForTesting = _ => stage == "picker" ? picker.Task : Task.FromResult<string?>(fixture.Output);
                 fixture.Fire("FreshDocumentResearch");
@@ -37,6 +52,9 @@ internal static class NativeFreshSavedResearchLifecycleCases
                     Check(!fixture.Find<Button>(button).IsEnabled, "Busy UI control disabled: " + button);
                     fixture.Fire(button); // Direct routed events must remain guarded.
                 }
+                if (family)
+                    foreach (string name in new[] { "FreshNativeMobyX", "FreshNativeMobyY", "FreshNativeMobyZ", "FreshNativeMobyYaw" })
+                        Check(!fixture.Find<TextBox>(name).IsEnabled, "Busy native field is disabled: " + name);
                 fixture.Find<ComboBox>("FreshDocumentMode").SelectedItem = "Legacy floor (v1)"; F.Pump();
                 Check(fixture.Window.CurrentAggregateIntent == original && fixture.Find<ComboBox>("FreshDocumentMode").SelectedItem as string == "Level aggregate",
                     "Busy direct mode/command calls retain aggregate and raw form.");
@@ -44,9 +62,13 @@ internal static class NativeFreshSavedResearchLifecycleCases
                 catch (InvalidOperationException) { checks++; }
                 switch (change)
                 {
-                    case "raw-aba": fixture.Set("FreshHeading", "0128"); fixture.Set("FreshHeading", "128"); break;
+                    case "raw-aba": fixture.Set("FreshHeading", "0" + headingBefore); fixture.Set("FreshHeading", headingBefore); break;
                     case "raw": fixture.Set("FreshHeading", "129"); break;
-                    case "native-raw-aba": fixture.Set("FreshNativeMobyX", "1"); fixture.Set("FreshNativeMobyX", ""); break;
+                    case "native-raw-aba":
+                    case "native-y-aba":
+                    case "native-z-aba":
+                    case "native-yaw-aba":
+                        fixture.Set(nativeField, family ? "0" + nativeBefore : "1"); fixture.Set(nativeField, nativeBefore); break;
                     case "native-raw": fixture.Set("FreshNativeMobyX", "1"); break;
                     case "source": fixture.Source = (fixture.Source.Item1 + ".different", fixture.Source.Item2); break;
                     case "project": fixture.Current = false; break;
@@ -72,10 +94,13 @@ internal static class NativeFreshSavedResearchLifecycleCases
                 if (change == "close") Check(fixture.Window.IsVisible, "Research requires a fresh user Close after settlement, preserving old behavior.");
                 bool shouldReachPublish = change is "none" or "owner-release";
                 Check(work.PublishCalls == (shouldReachPublish ? 1 : 0), "Every stale/cancel fence precedes publication.");
-                if (change == "raw-aba") Check(fixture.Find<TextBox>("FreshHeading").Text == "128" && !fixture.Window.HasUnsavedChanges &&
+                if (change == "raw-aba") Check(fixture.Find<TextBox>("FreshHeading").Text == headingBefore && !fixture.Window.HasUnsavedChanges &&
                     fixture.Window.SavedResearchFailureForTesting is InvalidDataException, "Actual A-B-A remains refused via generation despite equal final raw state.");
-                if (change == "native-raw-aba") Check(fixture.Find<TextBox>("FreshNativeMobyX").Text == "" && !fixture.Window.HasUnsavedChanges &&
-                    fixture.Window.SavedResearchFailureForTesting is InvalidDataException, "Inactive native raw A-B-A remains stale across the old schema2 research ticket.");
+                if (change is "native-raw-aba" or "native-y-aba" or "native-z-aba" or "native-yaw-aba")
+                    Check(fixture.Find<TextBox>(nativeField).Text == nativeBefore && !fixture.Window.HasUnsavedChanges &&
+                        fixture.Window.SavedResearchFailureForTesting is InvalidDataException,
+                        family ? "Actual selected Grass " + nativeField + " A-B-A remains stale despite equal final raw/native intent." :
+                            "Inactive native raw A-B-A remains stale across the old schema2 research ticket.");
                 if (change == "owner-release")
                 {
                     var leaves = F.Leaves(fixture.Window.SavedResearchFailureForTesting!);
@@ -157,7 +182,8 @@ internal static class NativeFreshSavedResearchLifecycleCases
         internal Exception? ReleaseFailure;
         internal Action? OnRelease;
         internal (string, string) Source;
-        internal Fixture(string parent, string id, string? reviewedOutput = null)
+        internal Fixture(string parent, string id, string? reviewedOutput = null,
+            NativeFreshLevelDocumentIntent? document = null, string? selectedEditorId = null)
         {
             string root = Path.Combine(parent, "saved-research-lifecycle-" + id);
             if (Directory.Exists(root) || File.Exists(root) || new FileInfo(root).LinkTarget != null)
@@ -169,7 +195,7 @@ internal static class NativeFreshSavedResearchLifecycleCases
                 new(80, 128, 112), new(128, 96, 64), 20);
             var old = NativeId65FreshDocumentStore.Save(NativeId65FreshDocumentStore.Capture(project), floor);
             var saved = NativeFreshLevelDocumentStore.Save(NativeFreshLevelDocumentStore.Capture(project),
-                NativeFreshLevelDocumentIntent.Create(floor, []).WithFloorMaterials(F.Pair(14, 1, 70, 1)));
+                document ?? NativeFreshLevelDocumentIntent.Create(floor, []).WithFloorMaterials(F.Pair(14, 1, 70, 1)));
             documentPath = saved.Path; legacyPath = old.Path;
             manifest = File.ReadAllBytes(project.ManifestPath); aggregate = File.ReadAllBytes(documentPath); legacy = File.ReadAllBytes(legacyPath);
             Output = reviewedOutput ?? Path.Combine(root, "never-created-native-output"); Source = (Path.Combine(root, "absent.bin"), Path.Combine(root, "absent.cue"));
@@ -178,6 +204,11 @@ internal static class NativeFreshSavedResearchLifecycleCases
             {
                 Window.DecisionForTesting = _ => Task.FromResult(FreshDocumentDecision.Discard);
                 Window.Show(); F.Pump(); Find<ComboBox>("FreshDocumentMode").SelectedItem = "Level aggregate"; F.Pump();
+                if (selectedEditorId != null)
+                {
+                    Find<ListBox>("FreshLevelPlacements").SelectedItem = Window.CurrentAggregateIntent!.Placements.Single(
+                        placement => placement.EditorId == selectedEditorId); F.Pump();
+                }
             }
             catch (Exception primary)
             {

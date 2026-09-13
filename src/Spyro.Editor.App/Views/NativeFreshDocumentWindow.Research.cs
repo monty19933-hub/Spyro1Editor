@@ -49,7 +49,7 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         _research.Click += (_, _) =>
         {
-            if (!_researchBusy && !_decisionBusy && !_materialInspectionBusy) _researchTask = CreateResearchCandidateAsync();
+            if (!_researchBusy && !_decisionBusy && !_materialInspectionBusy && !_mobyCatalogueBusy) _researchTask = CreateResearchCandidateAsync();
         };
         _cancelResearch.Click += (_, _) =>
         {

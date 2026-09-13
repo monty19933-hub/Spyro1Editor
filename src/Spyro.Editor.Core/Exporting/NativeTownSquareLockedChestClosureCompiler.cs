@@ -101,20 +101,29 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         NativeAddressSpace exeFinal = new(NativeAddressKind.ExecutableFile,profile+":exe",NativeAddressRevision.Final,executable.Length);
         Dictionary<NativeAddressSpace,byte[]> originals = new(){[dataOriginal]=data,[peaceOriginal]=peace,[sceneOriginal]=scene,
             [overlayOriginal]=overlay,[donorOverlayOriginal]=donorOverlay,[exeOriginal]=executable};
-        byte[] ReadNative(NativeByteExtent e)=>originals[e.Space].AsSpan((int)e.Offset,(int)e.ByteLength).ToArray();
+        byte[] ReadOriginal(NativeByteExtent e)=>originals[e.Space].AsSpan((int)e.Offset,(int)e.ByteLength).ToArray();
+        var familySource=NativeLockedChestFamilySource.DecodeOriginal(peaceOriginal,donorOverlayOriginal,
+            dataOriginal,overlayOriginal,exeOriginal,ReadOriginal);
+        byte[] ReadNative(NativeByteExtent e)=>ReferenceEquals(e.Space,sceneOriginal)?ReadOriginal(e):familySource.ReadSource(e);
         var registrationSource=NativeMobyModelRegistrationSource.CaptureExactTown(dataOriginal,ReadNative);
         var registrationDonor=NativeMobyModelRegistrationSource.CaptureExactPeace(peaceOriginal,ReadNative);
         List<NativeMobyDependencyNode> nodes=[];
         List<(NativeAddressSpace Space,int Offset,int Length)> reservations=[];
         NativeMobyDependencyRead Read(NativeAddressSpace space,int off,int len,string id="native") =>
             new(id,new(space,off,len),Hash(originals[space].AsSpan(off,len)));
+        NativeMobyDependencyRead[] SourceInputs(string id,NativeMobyDependencyRead[] reads)
+        {
+            if(!familySource.ResourceInputs.TryGetValue(id,out var retained))return reads;
+            if(!retained.SequenceEqual(reads))throw new InvalidDataException("Town resource declaration differs from its original family source inputs.");
+            return retained.ToArray();
+        }
         NativeMobyDependencyNode Add(string id,NativeMobyDependencyKind kind,string[] deps,NativeMobyDependencyRead[] reads,
             Func<NativeMobyDependencyBuildContext,byte[]> build,NativeAddressSpace? destination=null,int offset=0,int length=0,
             string? owner=null,NativeMobyDependencyReference[]? references=null)
         {
             if(destination!=null) reservations.Add((destination,offset,length));
             NativeMobyDependencyNode node=new(id,kind,NativeMobyDependencyResolution.ImportFromSource,
-                owner==null?NativeMobyDependencySharing.Immutable:NativeMobyDependencySharing.PrivateInstance,SourceSha256,deps,reads,
+                owner==null?NativeMobyDependencySharing.Immutable:NativeMobyDependencySharing.PrivateInstance,SourceSha256,deps,SourceInputs(id,reads),
                 c=>new(build(c),destination==null?[]:[new("install",new(destination,offset,length))],references??[]),owner);
             nodes.Add(node);return node;
         }
@@ -122,7 +131,7 @@ internal static class NativeTownSquareLockedChestClosureCompiler
             NativeMobyDependencyResolution.Aggregate,NativeMobyDependencySharing.Immutable,SourceSha256,deps,[]));
         void Resident(string id,NativeMobyDependencyKind kind,NativeAddressSpace from,int offset,int length,NativeAddressSpace to,int finalOffset,
             bool global=false,string[]? deps=null)=>nodes.Add(new(id,kind,global?NativeMobyDependencyResolution.GlobalShared:NativeMobyDependencyResolution.DestinationResident,
-                NativeMobyDependencySharing.Immutable,SourceSha256,deps??[],[Read(from,offset,length)],Preserved:[new("native",0,new(to,finalOffset,length))]));
+                NativeMobyDependencySharing.Immutable,SourceSha256,deps??[],SourceInputs(id,[Read(from,offset,length)]),Preserved:[new("native",0,new(to,finalOffset,length))]));
 
         if(recipe==NativeTownSquareClosureRecipe.SpatiallySeparatedV3)
             Add("placement.site",NativeMobyDependencyKind.ObjectIndex,[],[Read(dataOriginal,0,data.Length,"data"),Read(exeOriginal,0,executable.Length,"executable")],
@@ -198,8 +207,7 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         Aggregate("effects.native-debris-and-particles",NativeMobyDependencyKind.Effect,
             nodes.Where(n=>n.Id.StartsWith("effects.native-",StringComparison.Ordinal)||n.Id.StartsWith("key.particle-",StringComparison.Ordinal)).Select(n=>n.Id).ToArray());
 
-        NativeMobyDependencyRead[] codeReads=[Read(donorOverlayOriginal,0x188719C-0x187E000,0x30,"setup"),
-            Read(donorOverlayOriginal,0x1887330-0x187E000,0x70C,"state"),Read(donorOverlayOriginal,0x1881B64-0x187E000,0x434,"reward")];
+        NativeMobyDependencyRead[] codeReads=familySource.HandlerReads.ToArray();
         Add("behavior.bundle",NativeMobyDependencyKind.Behavior,["effects.native-debris-and-particles","sound.reward","sound.map.55"],codeReads,
             c=>TownSquareNativeLockedChestCandidateExporter.BuildHandlerPayload((o,n)=>o switch {
                 0x188719C when n==0x30=>c.Read("setup"),0x1887330 when n==0x70C=>c.Read("state"),
@@ -229,7 +237,7 @@ internal static class NativeTownSquareLockedChestClosureCompiler
                 Add(id,NativeMobyDependencyKind.Texture,[],[Read(peaceOriginal,0x800+slice.Item1,slice.Item3)],c=>c.Read("native"),dataFinal,targetOffset,slice.Item3);
             }
         }
-        Add("actor.ae",NativeMobyDependencyKind.ActorPackage,[..textureIds,"sound.chest-local54"],[Read(peaceOriginal,0x1B3978,0x1008)],c=>{
+        Add("actor.ae",NativeMobyDependencyKind.ActorPackage,[..textureIds,"sound.chest-local54"],[familySource.PackageRead],c=>{
             byte[] b=c.Read("native");RequireWord(b,4,0xFFFFFF2F);
             if(TownSquareNativeLockedChestCandidateExporter.RebaseLockedChestDescriptors(b)!=146)throw new InvalidDataException("Actor face dependency grammar changed.");
             b[4]=0x36;return b;},dataFinal,registrationSource.ModelEnd,0x1008);
@@ -247,7 +255,7 @@ internal static class NativeTownSquareLockedChestClosureCompiler
 
         var sharedInstances=NativeMobyDependencyClosureCompiler.Compile(nodes,
             ["actor.registration","actor.class","behavior.bundle","key.rootless-rendering"],ReadNative);
-        var instances=NativeTownSquareLockedChestInstantiation.Capture(peaceOriginal,sceneOriginal,sceneFinal,exeOriginal,
+        var instances=NativeTownSquareLockedChestInstantiation.Capture(familySource,sceneOriginal,sceneFinal,exeOriginal,
             [dataFinal,sceneFinal,overlayFinal,exeFinal],sharedInstances,ReadNative);
         var allocatedRows=instances.Allocated.Rows;
         NativeTownSquarePlacementPoint[] locations=NativeTownSquareClosurePlacement.Locations(recipe);
@@ -302,7 +310,7 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         PreserveComplement("overlay.preserved",overlayOriginal,overlayFinal,(0,0,0xF494));
         PreserveComplement("executable.preserved",exeOriginal,exeFinal,(0,0,executable.Length));
         Aggregate("bundle",NativeMobyDependencyKind.Bundle,nodes.Select(n=>n.Id).ToArray());
-        NativeMobyDependencyClosurePlan graph=NativeMobyDependencyClosureCompiler.Compile(nodes,["bundle"],e=>originals[e.Space].AsSpan((int)e.Offset,(int)e.ByteLength).ToArray());
+        NativeMobyDependencyClosurePlan graph=NativeMobyDependencyClosureCompiler.Compile(nodes,["bundle"],ReadNative);
         instances.Allocated.RequireSharedBinding(graph);
         byte[] Compose(NativeAddressSpace space)
         {
@@ -336,7 +344,8 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         var placement=recipe==NativeTownSquareClosureRecipe.SpatiallySeparatedV3?NativeTownSquareClosurePlacement.CaptureCertificate(data,executable,recipe):null;
         if(placement!=null&&!graph.CopyPayload("placement.site").SequenceEqual(NativeTownSquareClosurePlacement.Encode(placement.Locations)))
             throw new InvalidDataException("Graph-driven placement does not match independently recaptured native site certificate.");
-        return new(sourcePath,layout,header,graph,finalData,finalOverlay,finalExe,Hash(legacy.Entry),recipe,placement,instances,modelRegistration);
+        familySource.RequireRetainedOwners();
+        return new(sourcePath,layout,header,graph,finalData,finalOverlay,finalExe,Hash(legacy.Entry),recipe,placement,instances,modelRegistration,familySource);
     }
     internal static string Hash(ReadOnlySpan<byte> bytes,bool alreadyDigest=false)=>Convert.ToHexStringLower(alreadyDigest?bytes:SHA256.HashData(bytes));
     private static uint U32(byte[] bytes,int offset)=>BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(offset,4));
@@ -350,4 +359,4 @@ internal static class NativeTownSquareLockedChestClosureCompiler
 internal sealed record NativeTownSquareLockedChestClosure(string SourcePath,DiscLayout Layout,byte[] OriginalWadHeader,
     NativeMobyDependencyClosurePlan Graph,byte[] Data,byte[] Overlay,byte[] Executable,string LegacyDataSha256,
     NativeTownSquareClosureRecipe Recipe,NativeTownSquarePlacementCertificate? Placement,NativeTownSquareLockedChestInstanceCapture Instances,
-    NativeMobyModelRegistrationPlan ModelRegistration);
+    NativeMobyModelRegistrationPlan ModelRegistration,NativeLockedChestFamilySource FamilySource);

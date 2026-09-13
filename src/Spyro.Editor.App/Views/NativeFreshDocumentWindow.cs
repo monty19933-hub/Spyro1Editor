@@ -46,7 +46,8 @@ internal sealed partial class NativeFreshDocumentWindow : Window
     private string _appliedFields = "";
 
     internal NativeFreshDocumentWindow(EditorProjectLayout project, Func<bool> isCurrentProject,
-        Func<(string Image, string Cue)>? researchSourcePaths = null, Func<IDisposable>? beginResearch = null)
+        Func<(string Image, string Cue)>? researchSourcePaths = null, Func<IDisposable>? beginResearch = null,
+        INativeFreshMobyCatalogueProvider? mobyCatalogueProvider = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(isCurrentProject);
@@ -54,6 +55,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         _isCurrentProject = isCurrentProject;
         _researchSourcePaths = researchSourcePaths;
         _beginResearch = beginResearch;
+        _mobyCatalogueProvider = mobyCatalogueProvider;
         RequireCurrentProject();
         _snapshot = NativeId65FreshDocumentStore.Capture(project);
         CurrentIntent = _snapshot.Intent;
@@ -125,7 +127,8 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         _fieldsPanel.Children.Add(BuildMaterialFields());
         _fieldsPanel.Children.Add(_apply);
         _music.SelectionChanged += (_, _) => FieldsChanged();
-        var inspectorContent = new StackPanel { Spacing = 12, Children = { _fieldsPanel, BuildMaterialInspectionFields() } };
+        // Source-capture cancellation must not sit inside the disabled form.
+        var inspectorContent = new StackPanel { Spacing = 12, Children = { _fieldsPanel, BuildMaterialInspectionFields(), BuildMobyCataloguePanel() } };
         var inspector = new ScrollViewer { Content = inspectorContent, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
         var body = new Grid { ColumnDefinitions = new ColumnDefinitions("*,380"), ColumnSpacing = 20 };
         // Long aggregate/status text can leave less than the schematic's
@@ -156,7 +159,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
             if (e.Key == Key.S && e.KeyModifiers == command)
             {
                 e.Handled = true;
-                if (!_decisionBusy && !_researchBusy && !_materialInspectionBusy) SaveDocument();
+                if (!_decisionBusy && !_researchBusy && !_materialInspectionBusy && !_mobyCatalogueBusy && !_mobyCatalogueCleanupBlocked) SaveDocument();
             }
         };
     }
@@ -265,6 +268,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
 
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
+        if (DeferMobyCatalogueClose(e)) return;
         if (DeferMaterialInspectionClose(e)) return;
         if (_modeSwitchBusy || _forkBusy)
         {
@@ -363,6 +367,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
 
     private void WriteFields()
     {
+        InvalidateMobyCatalogue();
         InvalidateMaterialInspection();
         _refreshing = true;
         try
@@ -388,14 +393,16 @@ internal sealed partial class NativeFreshDocumentWindow : Window
     private void FieldsChanged()
     {
         if (_refreshing) return;
+        InvalidateMobyCatalogue();
         InvalidateMaterialInspection();
         RefreshChrome();
-        if (HasUnappliedFields && !_researchBusy && !_materialInspectionBusy) _status.Text = "Unapplied fields — the schematic still shows the last applied intent. Apply or Save validates the complete form.";
+        if (HasUnappliedFields && !_researchBusy && !_materialInspectionBusy && !_mobyCatalogueBusy) _status.Text = "Unapplied fields — the schematic still shows the last applied intent. Apply or Save validates the complete form.";
     }
 
     private void RefreshChrome()
     {
-        bool editable = !_decisionBusy && !_researchBusy && !_materialInspectionBusy && !_modeSwitchBusy && !_forkBusy;
+        bool editable = !_decisionBusy && !_researchBusy && !_materialInspectionBusy && !_modeSwitchBusy && !_forkBusy &&
+            !_mobyCatalogueBusy && !_mobyCatalogueCleanupBlocked;
         bool hasDocument = _aggregateMode ? CurrentAggregateIntent != null : CurrentIntent != null;
         _new.IsEnabled = editable && !_aggregateMode && CurrentIntent == null && !_snapshot.Exists;
         _fieldsPanel.IsEnabled = editable && hasDocument;
@@ -407,6 +414,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         RefreshAggregateChrome(editable);
         RefreshResearchChrome();
         RefreshMaterialInspectionChrome();
+        RefreshMobyCatalogueChrome(editable);
         _state.Text = HasUnappliedFields ? "Unapplied fields · preview unchanged" : HasUnsavedChanges ? "Unsaved document" :
             !hasDocument ? "No fresh document" : "Saved document";
         Title = "Fresh Native Level Document" + (HasUnsavedChanges ? " *" : "");

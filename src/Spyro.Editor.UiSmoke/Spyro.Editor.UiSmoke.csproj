@@ -9,5 +9,6 @@
   <ItemGroup>
     <PackageReference Include="Avalonia.Headless" Version="12.0.3" />
     <ProjectReference Include="../Spyro.Editor.App/Spyro.Editor.App.csproj" />
+    <Compile Include="../Spyro.Editor.NativeFreshSavedLevelResearchSmoke/SavedFamilyDocumentFixture.cs" Link="SavedFamilyDocumentFixture.cs" />
   </ItemGroup>
 </Project>

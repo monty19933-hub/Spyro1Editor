@@ -14,11 +14,16 @@ internal sealed record NativeTownSquareLockedChestInstanceCapture(NativeMobyDepe
 internal static class NativeTownSquareLockedChestInstantiation
 {
     internal const string FamilyId = "peace-native-chest-family";
-    internal static NativeTownSquareLockedChestInstanceCapture Capture(NativeAddressSpace peace,
+    internal static NativeTownSquareLockedChestInstanceCapture Capture(NativeLockedChestFamilySource familySource,
         NativeAddressSpace sceneOriginal, NativeAddressSpace sceneFinal, NativeAddressSpace executable,
         IEnumerable<NativeAddressSpace> finalDomains, NativeMobyDependencyClosurePlan shared,
         Func<NativeByteExtent, byte[]> readSource)
     {
+        ArgumentNullException.ThrowIfNull(familySource);
+        familySource.RequireRetainedOwners();
+        var peace=familySource.PrivateRows[0].Row.Extent.Space;
+        if(familySource.MutableGlobals.Any(g=>!ReferenceEquals(g.ExecutableDomain,executable)))
+            throw new InvalidDataException("Native chest template requires its actual original executable source owner.");
         // Recheck actual bytes at the factory boundary; domain labels are not source authority.
         byte[] donor = readSource(new(peace, 0, peace.ByteLength));
         byte[] exe = readSource(new(executable, 0, executable.ByteLength));
@@ -32,37 +37,15 @@ internal static class NativeTownSquareLockedChestInstantiation
             scene.AsSpan(rowOffset, 7 * 0x58).ContainsAnyExcept((byte)0))
             throw new InvalidDataException("Native chest row append arena is occupied or not source-owned.");
         RequireNoPlacedKeyFamily(scene);
-        NativeMobyDependencyRead Read(NativeAddressSpace space, int offset, int length, string id = "native") =>
-            new(id, new(space, offset, length), NativeMobyDependencyInstanceTemplate.Hash(readSource(new(space, offset, length))));
-        int[] indices = [78,79,118,119,120,121,122];
-        int[] offsets = [0xEA94,0xEA98,0xEF9C,0xEFC4,0xEFEC,0xF014,0xF03C];
-        int[] lengths = [4,0x18,0x28,0x28,0x28,0x28,0x28];
-        int fixupCount = checked((int)U32(donor, 0x1C2800 + 0x11234));
-        if (fixupCount <= 0 || 0x11238L + fixupCount * 4L > 0x11800)
-            throw new InvalidDataException("Native donor fixup table changed.");
-        var fixups = Enumerable.Range(0,fixupCount).Select(i => U32(donor, 0x1C2800 + 0x11238 + i * 4)).ToArray();
-        List<NativeMobyDependencyPrivateSchema> rows = [];
-        for (int i = 0; i < indices.Length; i++)
-        {
-            if (!fixups.Contains((uint)(0x8260 + indices[i] * 0x58)) ||
-                fixups.Any(f => f >= offsets[i] && f < offsets[i] + lengths[i]))
-                throw new InvalidDataException("Native key/chest/reward properties have an unknown internal pointer obligation.");
-            rows.Add(new(i == 0 ? "key" : i == 1 ? "chest" : "reward." + (i - 1), indices[i],
-                (ushort)(i == 0 ? 0xAD : i == 1 ? 0xAE : 0xD),
-                Read(peace, 0x1CAA60 + indices[i] * 0x58, 0x58), Read(peace, 0x1C2800 + offsets[i], lengths[i]),
-                0x1C2800, i == 0 ? [] : [new(0, i == 1 ? 0 : 1)], i != 0));
-        }
         // These exact consumers are already closed/hashed by the native shared resource graph.
         // Pickup writes one g5830; every chest reads that same state; the award tail compares one
         // g5758 and writes g5830=3. Private pointers cannot make those globals per-family.
         var keyConsumer = shared.Nodes.Single(n => n.Id == "key.native-handler").Reads.Single();
         var chestConsumer = shared.Nodes.Single(n => n.Id == "behavior.bundle").Reads.Single(r => r.Id == "state");
-        NativeMobyDependencyMutableGlobal[] globals = [
-            new("key-state", executable, 0x80075830, 4, [keyConsumer, chestConsumer]),
-            new("tracked-chest-gem", executable, 0x80075758, 4, [chestConsumer, Read(executable, 0x2C21C, 0x14, "award-tracked-gem")])
-        ];
+        if(keyConsumer!=familySource.MutableGlobals[0].Consumers[0]||chestConsumer!=familySource.HandlerReads[1])
+            throw new InvalidDataException("Native chest shared graph does not consume its actual original family handlers.");
         var template = NativeMobyDependencyInstanceTemplate.Capture(
-            "native-chest.peace-to-town.source-bound-relocation.v2", rows, globals, shared, readSource);
+            "native-chest.peace-to-town.source-bound-relocation.v2", familySource.PrivateRows, familySource.MutableGlobals, shared, readSource);
         var empty = NativeMobyDependencyInstantiationPlan.Create(new(sceneFinal, rowOffset, 7 * 0x58),
             new(sceneFinal, propertyOffset, 0xE4), 0x170, first, finalDomains, executable);
         return new(template, empty, empty.Allocate([new(FamilyId, template)]));

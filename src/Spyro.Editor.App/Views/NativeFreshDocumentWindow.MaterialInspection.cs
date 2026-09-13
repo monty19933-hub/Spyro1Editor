@@ -67,7 +67,7 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         _inspectMaterials.Click += (_, _) =>
         {
-            if (!_materialInspectionBusy) _materialInspectionTask = InspectMaterialSourcesAsync();
+            if (!_materialInspectionBusy && !_mobyCatalogueBusy) _materialInspectionTask = InspectMaterialSourcesAsync();
         };
         _cancelMaterialInspection.Click += (_, _) =>
         {
@@ -123,7 +123,7 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         pair = null;
         if (!_aggregateMode || CurrentAggregateIntent == null || !_materialsEnabled ||
-            _addingWizard || AggregateCommandsBlocked || _materialInspectionCleanupBlocked ||
+            _addingWizard || _pendingNativeMobyAdd != null || AggregateCommandsBlocked || _materialInspectionCleanupBlocked ||
             _materialInspectionClosed || _beginResearch == null ||
             (_researchSourceForTesting ?? _researchSourcePaths) == null) return false;
         try
@@ -151,7 +151,7 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         if (!TryReadInspectionPair(out var pair))
         {
-            _materialInspectionStatus.Text = "Inspection requires an explicit valid retail slot in a present aggregate, with no other operation or pending route.";
+            _materialInspectionStatus.Text = "Inspection requires an explicit valid retail slot in a present aggregate, with no other operation or pending placement.";
             return;
         }
         List<Exception> failures = [];

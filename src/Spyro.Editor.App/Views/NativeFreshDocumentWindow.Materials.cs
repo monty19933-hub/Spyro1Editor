@@ -90,7 +90,7 @@ internal sealed partial class NativeFreshDocumentWindow
     private void EnableMaterialIntent()
     {
         if (!_aggregateMode || CurrentAggregateIntent == null || AggregateCommandsBlocked ||
-            _addingWizard || _materialsEnabled) return;
+            _addingWizard || _pendingNativeMobyAdd != null || _materialsEnabled) return;
 
         // Explicit raw upgrade only. No applied history, source WAD or ID is
         // created until the complete form is validated and applied.
@@ -168,8 +168,8 @@ internal sealed partial class NativeFreshDocumentWindow
         _materialFields.IsVisible = present;
         _enableMaterials.IsVisible = present && CurrentAggregateIntent!.FloorMaterials == null;
         _enableMaterials.Content = CurrentAggregateIntent?.SchemaVersion == 3 ? "Add material intent (keeps schema 3)" : "Add material intent (schema 2)";
-        _enableMaterials.IsEnabled = editable && present && !_addingWizard && !_materialsEnabled;
-        bool canEdit = editable && present && !_addingWizard && _materialsEnabled;
+        _enableMaterials.IsEnabled = editable && present && !_addingWizard && _pendingNativeMobyAdd == null && !_materialsEnabled;
+        bool canEdit = editable && present && !_addingWizard && _pendingNativeMobyAdd == null && _materialsEnabled;
         foreach (MaterialSlotEditor slot in _materialSlots)
         {
             slot.Kind.IsEnabled = canEdit;

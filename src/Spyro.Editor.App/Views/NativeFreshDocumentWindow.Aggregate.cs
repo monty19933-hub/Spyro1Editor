@@ -51,8 +51,9 @@ internal sealed partial class NativeFreshDocumentWindow
     internal NativeFreshLevelDocumentIntent? CurrentAggregateIntent =>
         _aggregateMode ? _aggregateSession?.CurrentIntent : null;
 
-    private bool AggregateCommandsBlocked => _decisionBusy || _researchBusy || _materialInspectionBusy || _modeSwitchBusy || _forkBusy;
-    private bool AggregateHasUnappliedFields => _addingWizard || CurrentAggregateIntent != null &&
+    private bool AggregateCommandsBlocked => _decisionBusy || _researchBusy || _materialInspectionBusy || _modeSwitchBusy || _forkBusy ||
+        _mobyCatalogueBusy || _mobyCatalogueCleanupBlocked;
+    private bool AggregateHasUnappliedFields => _addingWizard || _pendingNativeMobyAdd != null || CurrentAggregateIntent != null &&
         (FieldSignature() != _appliedFields || RouteFieldSignature() != _appliedRouteFields ||
             NativeMobyFieldSignature() != _appliedNativeMobyFields || MaterialFieldSignature() != _appliedMaterialFields);
 
@@ -92,6 +93,7 @@ internal sealed partial class NativeFreshDocumentWindow
         _aggregateFields.Children.Add(_placementSummary);
         _aggregateFields.Children.Add(_placements);
         _aggregateFields.Children.Add(new WrapPanel { Children = { _addWizard, _removeWizard, _moveWizardUp, _moveWizardDown } });
+        _aggregateFields.Children.Add(_browseMobys);
         _wizardRouteEditor.Children.Add(Row(RouteField("FreshWizardOriginX", "Origin X"), RouteField("FreshWizardOriginY", "Origin Y"), RouteField("FreshWizardOriginZ", "Origin Z")));
         _wizardRouteEditor.Children.Add(Row(RouteField("FreshWizardEndX", "End X"), RouteField("FreshWizardEndY", "End Y")));
         _wizardRouteEditor.Children.Add(_cancelAddWizard);
@@ -148,6 +150,7 @@ internal sealed partial class NativeFreshDocumentWindow
                 _forkSourceSnapshot = null;
             }
             _addingWizard = false;
+            _pendingNativeMobyAdd = null;
             _forkRecoveryPending = false;
             WriteFields();
             _status.Text = _aggregateMode ? AggregateOpenMessage() : $"Opened saved legacy floor: {_snapshot.Path}";
@@ -194,6 +197,7 @@ internal sealed partial class NativeFreshDocumentWindow
             RefreshChrome();
             NativeFreshLevelDocumentSnapshot result = _aggregateSession.ForkLegacyFloor(_forkSourceSnapshot);
             _addingWizard = false;
+            _pendingNativeMobyAdd = null;
             WriteFields();
             _status.Text = $"Forked and verified a separate aggregate with no placements: {result.Path}. The legacy source was not changed." +
                 (result.RetainedRecoveryDirectory.Length == 0 ? "" : $" Recovery was retained: {result.RetainedRecoveryDirectory}.");
@@ -230,10 +234,12 @@ internal sealed partial class NativeFreshDocumentWindow
     private bool ApplyAggregateFields(bool forSave = false)
     {
         if (!_aggregateMode || CurrentAggregateIntent == null || _researchBusy || _materialInspectionBusy || _forkBusy ||
+            _mobyCatalogueBusy || _mobyCatalogueCleanupBlocked ||
             !forSave && AggregateCommandsBlocked) return false;
         try
         {
-            if (_addingWizard)
+            if (_pendingNativeMobyAdd != null) ApplyPendingNativeMoby();
+            else if (_addingWizard)
             {
                 RequireNativeMobyFieldsUnchanged();
                 if (FieldSignature() != _appliedFields)
@@ -278,7 +284,8 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private bool SaveAggregateDocument()
     {
-        if (CurrentAggregateIntent == null || _researchBusy || _materialInspectionBusy || _forkBusy) return false;
+        if (CurrentAggregateIntent == null || _researchBusy || _materialInspectionBusy || _forkBusy ||
+            _mobyCatalogueBusy || _mobyCatalogueCleanupBlocked) return false;
         try
         {
             RequireCurrentProject();
@@ -311,6 +318,7 @@ internal sealed partial class NativeFreshDocumentWindow
             _aggregateSession = next;
             _forkSourceSnapshot = source;
             _addingWizard = false;
+            _pendingNativeMobyAdd = null;
             _forkRecoveryPending = false;
             WriteFields();
             _status.Text = AggregateOpenMessage() + " Undo history was reset.";
@@ -384,6 +392,7 @@ internal sealed partial class NativeFreshDocumentWindow
         if (HasUnappliedFields)
         {
             _addingWizard = false;
+            _pendingNativeMobyAdd = null;
             WriteFields();
             _status.Text = "Discarded pending raw fields only; the applied aggregate is unchanged.";
             return;
@@ -444,9 +453,10 @@ internal sealed partial class NativeFreshDocumentWindow
         bool canEditRows = editable && _aggregateMode && CurrentAggregateIntent != null;
         bool hasSelection = _aggregateSession?.SelectedEditorId != null;
         var selectedPlacement = current?.Placements.FirstOrDefault(p => p.EditorId == _aggregateSession?.SelectedEditorId);
-        foreach (TextBox field in _fields.Values) field.IsEnabled = !_aggregateMode || !_addingWizard;
-        _music.IsEnabled = !_aggregateMode || !_addingWizard;
-        bool wizardEditor = _addingWizard || selectedPlacement is NativeFreshWizardRouteIntent;
+        bool addingPlacement = _addingWizard || _pendingNativeMobyAdd != null;
+        foreach (TextBox field in _fields.Values) field.IsEnabled = !_aggregateMode || !addingPlacement;
+        _music.IsEnabled = !_aggregateMode || !addingPlacement;
+        bool wizardEditor = _pendingNativeMobyAdd == null && (_addingWizard || selectedPlacement is NativeFreshWizardRouteIntent);
         _wizardRouteEditor.IsVisible = _aggregateMode && wizardEditor;
         foreach (TextBox field in _routeFields.Values) field.IsEnabled = canEditRows && wizardEditor;
         RefreshNativeMobyChrome(canEditRows, selectedPlacement);

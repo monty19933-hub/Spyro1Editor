@@ -13,10 +13,10 @@ public sealed partial class MainWindow
     {
         Dispatcher.UIThread.VerifyAccess();
         if (!IsNativeFreshDocumentProjectCurrent(project, ReleaseProjectBootstrap.Current?.Project, _workspace.RootPath))
-            throw new InvalidDataException("The active project root or project ID changed before research export.");
+            throw new InvalidDataException("The active project root or project ID changed before the fresh document source operation.");
         if (_freshNativeResearchBusy || _id65BlankLabBusy || _id65BlankLabManualOperation != null ||
             HasConflictingId65BlankLabManualOperationState())
-            throw new InvalidDataException("Finish the active editor save, source, load, Lab or export operation before fresh research export.");
+            throw new InvalidDataException("Finish the active editor save, source, load, Lab or export operation before fresh document source work.");
         int generation = checked(_freshNativeResearchGeneration + 1);
         _freshNativeResearchGeneration = generation;
         _freshNativeResearchBusy = true;
@@ -32,7 +32,7 @@ public sealed partial class MainWindow
     private bool TryBlockFreshDocumentResearchMutation(string action)
     {
         if (!_freshNativeResearchBusy) return false;
-        _statusText.Text = $"Wait for fresh research export to finish before {action}. The captured saved document and output are still being processed.";
+        _statusText.Text = $"Wait for fresh document source work to finish before {action}. The active catalogue, inspection or research operation still owns the editor.";
         return true;
     }
 

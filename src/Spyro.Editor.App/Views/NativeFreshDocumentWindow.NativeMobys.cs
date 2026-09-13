@@ -24,6 +24,7 @@ internal sealed partial class NativeFreshDocumentWindow
         _nativeMobyEditor.Children.Add(_nativeMobySourceIdentity);
         _nativeMobyEditor.Children.Add(Row(NativeMobyField("FreshNativeMobyX", "X"), NativeMobyField("FreshNativeMobyY", "Y"), NativeMobyField("FreshNativeMobyZ", "Z 0–65535")));
         _nativeMobyEditor.Children.Add(NativeMobyField("FreshNativeMobyYaw", "Native yaw byte 0–255"));
+        _nativeMobyEditor.Children.Add(_cancelNativeMobyAdd);
         return _nativeMobyEditor;
     }
 
@@ -37,11 +38,12 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private void WriteNativeMobyFields()
     {
-        var selected = _addingWizard ? null : _placements.SelectedItem as NativeFreshMobyPlacementIntent;
+        var selected = _addingWizard || _pendingNativeMobyAdd != null ? null : _placements.SelectedItem as NativeFreshMobyPlacementIntent;
         SetNativeMoby("FreshNativeMobyX", selected?.X); SetNativeMoby("FreshNativeMobyY", selected?.Y);
         SetNativeMoby("FreshNativeMobyZ", selected?.Z); SetNativeMoby("FreshNativeMobyYaw", selected?.NativeYawByte);
-        _nativeMobySourceIdentity.Text = selected == null ? "No native Moby selected." :
-            $"Read-only source intent · {selected.Source.SourceVariant} · WAD {selected.Source.SourceWadEntry} · true index {selected.Source.SourceTrueIndex} · expected class {selected.Source.ExpectedNativeClass}";
+        var source = _pendingNativeMobyAdd?.Source ?? selected?.Source;
+        _nativeMobySourceIdentity.Text = source == null ? "No native Moby selected." :
+            $"Read-only source intent · {source.SourceVariant} · WAD {source.SourceWadEntry} · true index {source.SourceTrueIndex} · expected class {source.ExpectedNativeClass}";
         _appliedNativeMobyFields = NativeMobyFieldSignature();
     }
 
@@ -75,7 +77,7 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private void RefreshNativeMobyChrome(bool canEditRows, NativeFreshPlacementIntent? selected)
     {
-        bool native = !_addingWizard && selected is NativeFreshMobyPlacementIntent;
+        bool native = !_addingWizard && (_pendingNativeMobyAdd != null || selected is NativeFreshMobyPlacementIntent);
         _nativeMobyEditor.IsVisible = _aggregateMode && native;
         foreach (TextBox field in _nativeMobyFields.Values) field.IsEnabled = canEditRows && native;
     }
