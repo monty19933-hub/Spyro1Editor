@@ -6,6 +6,48 @@ default-off Fly Anywhere Enabled and integrated new-level editing. Original
 BIN/CUE, saves and preserved R03/R04/R05 apps remain protected. Stop safely near
 5% account usage remaining. No reset credit is authorized automatically.
 
+## Current checkpoint summary
+
+Latest implementation:22184d2. Focused actual-source gates through176 pass;
+full combined regression177 passed335 checks/0 failures. Earlier full suites
+146/167 also passed335 checks/0 failures. Sections below are chronological evidence: older "next"
+and "pending" statements describe their historical checkpoint, not this summary.
+
+The unified private V6 package is the preserved clean ac50def build, not the
+later source-only dependency work. It lives in
+`_local/v6-private-preview-20260912-r01.rotSq4/`; use its
+`Open V6 Private Test.command` and `PRIVATE-PREVIEW.md`. It has an isolated copy
+of the two-family/two-material document, the normal Fresh Level editor, source
+Moby browsing/staged placement, history/save/reopen and exact saved-family test
+export. Source/UI automation and physical publication are verified; native
+desktop acceptance is still pending because the Mac is locked. The schematic
+floor view is not a native textured/model preview. Do not silently rebuild this
+package, alter the protected default project or overwrite historical outputs.
+
+The actual-Window candidate is
+`_local/research/v6-mixed-export-20260912-r01.jR0oBr/family-ui-candidate-r01/`.
+Its image408dfd…5c98 matches prior bounded DuckStation Wizard/Grass/material,
+combat/reward, fall/respawn and isolated jump/landing observations. A clean
+material-seam walk is still pending. The newly prepared native session remains
+NOT STARTED at `_local/native-v6-preview-runtime-20260912-r01.Tjt4Iy/`.
+
+Priority order from here:
+
+1. After manual Mac unlock, verify the preserved V6 native window and focused
+   cold-boot/seam check; restore the fresh c07823…854 global INI baseline.
+2. Extend real family imports using the shared model/scene/dependency machinery.
+   Sound residency, key-particle residency and reversible detached chest selector
+   editing are prerequisites only. Chest model/texture registration, handlers,
+   renderer dispatch and singleton mutable globals still require actual bindings.
+3. Connect scalable geometry/surface/material authoring to the shared ordered
+   resource graph without raising fixed native-profile limits as a substitute.
+4. Integrate default-OFF Fly Anywhere with source-based full-image OFF rebuild,
+   project/export ownership and separate ON/OFF native proof. Keep ID65 excluded
+   from the existing retail-only flight policy until its own evidence exists.
+
+Universal Moby/texture interchangeability, ordinary new-level portals/durable
+save ownership and a broadly editable native blank-level publisher are unfinished.
+
 ## Checkpoints and completed checks
 
 - `13a84a7`: the neutral GPU allocator now accepts a complete nonempty ordered
@@ -572,3 +614,15 @@ source/body memory corruption restored in finally. Both methods refuse while an
 actual owner is corrupted and succeed after exact restoration. Root and peer
 review agree; family Body7812d3…262/image408dfd…5c98 and all historical mixed
 image pins remain unchanged. Full combined build-all177 follows this checkpoint.
+
+Final build-all177 now passes335 checks/0 failures at implementation22184d2.
+Report:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-4405pune/summary.json`.
+All new work is committed; no source/test WIP remains. Log178 confirms the fresh
+DuckStation global/game INIs and original card retain c07823…854,629d9b…d1f3
+and d69b43…ae2; both private V6 ZIPs retain their sealed hashes. Test INIs were
+never installed for this still-unstarted native session. User was asked to
+unlock the Mac for native V6 and DuckStation checks while final automation ran.
+Account usage is still above the requested approximately5% stop threshold; no
+reset was consumed. Next hands-on acceptance requires the manual Mac unlock,
+not a weakened native test or an invented successful desktop launch.
