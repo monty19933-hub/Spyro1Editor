@@ -41,7 +41,7 @@ internal static class MaterialCodecCases
         foreach (string invalid in new[]
         {
             Golden.Replace("\"schema\":2", "\"schema\":1"),
-            Golden.Replace("\"schema\":2", "\"schema\":3"),
+            Golden.Replace("\"schema\":2", "\"schema\":4"),
             Golden.Replace(",\"floorMaterials\":" + PairJson, ""),
             Golden.Replace(PairJson, "null"), Golden.Replace(PairJson, "[]"),
             Golden.Replace("rectangle-two-triangles-v1", "rectangle-two-triangles-v2"),

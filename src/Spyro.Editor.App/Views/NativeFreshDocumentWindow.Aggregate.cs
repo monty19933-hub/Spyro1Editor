@@ -32,6 +32,7 @@ internal sealed partial class NativeFreshDocumentWindow
     private readonly ListBox _placements = new() { Name = "FreshLevelPlacements", Height = 145 };
     private readonly TextBlock _placementSummary = new() { Name = "FreshLevelPlacementSummary", TextWrapping = TextWrapping.Wrap };
     private readonly Dictionary<string, TextBox> _routeFields = new(StringComparer.Ordinal);
+    private readonly StackPanel _wizardRouteEditor = new() { Name = "FreshWizardRouteFields", Spacing = 8 };
     private Button _forkLegacy = null!;
     private Button _addWizard = null!;
     private Button _cancelAddWizard = null!;
@@ -53,7 +54,7 @@ internal sealed partial class NativeFreshDocumentWindow
     private bool AggregateCommandsBlocked => _decisionBusy || _researchBusy || _materialInspectionBusy || _modeSwitchBusy || _forkBusy;
     private bool AggregateHasUnappliedFields => _addingWizard || CurrentAggregateIntent != null &&
         (FieldSignature() != _appliedFields || RouteFieldSignature() != _appliedRouteFields ||
-            MaterialFieldSignature() != _appliedMaterialFields);
+            NativeMobyFieldSignature() != _appliedNativeMobyFields || MaterialFieldSignature() != _appliedMaterialFields);
 
     private Control BuildAggregateActions()
     {
@@ -79,18 +80,23 @@ internal sealed partial class NativeFreshDocumentWindow
         _moveWizardDown = Button("FreshWizardMoveDown", "Move down", () => MoveWizard(1));
         _placements.ItemTemplate = new FuncDataTemplate<NativeFreshPlacementIntent>((value, _) => new TextBlock
         {
-            Text = value is NativeFreshWizardRouteIntent route
-                ? $"Wizard route · {route.EditorId}\n({route.OriginX}, {route.OriginY}, {route.OriginZ}) → ({route.EndX}, {route.EndY})"
-                : "", TextWrapping = TextWrapping.Wrap, FontSize = 11
+            Text = value switch
+            {
+                NativeFreshWizardRouteIntent route => $"Wizard route · {route.EditorId}\n({route.OriginX}, {route.OriginY}, {route.OriginZ}) → ({route.EndX}, {route.EndY})",
+                NativeFreshMobyPlacementIntent moby => $"Native Moby intent · {moby.EditorId}\nWAD {moby.Source.SourceWadEntry} / true index {moby.Source.SourceTrueIndex} / class {moby.Source.ExpectedNativeClass}\n({moby.X}, {moby.Y}, {moby.Z}) · native yaw {moby.NativeYawByte}",
+                _ => "Unsupported placement"
+            }, TextWrapping = TextWrapping.Wrap, FontSize = 11
         });
         _placements.SelectionChanged += (_, _) => SelectWizard();
-        _aggregateFields.Children.Add(Section("Authored placements", "Ordered editor IDs are not native ownership. Routes are XY schematics only, with exact authored Z shown numerically. No trajectory, collision or gameplay is certified."));
+        _aggregateFields.Children.Add(Section("Authored placements", "Ordered editor IDs are not native ownership. Wizard routes and native Moby markers are XY schematics only, with exact authored Z shown numerically. No model, trajectory, collision or gameplay is certified."));
         _aggregateFields.Children.Add(_placementSummary);
         _aggregateFields.Children.Add(_placements);
         _aggregateFields.Children.Add(new WrapPanel { Children = { _addWizard, _removeWizard, _moveWizardUp, _moveWizardDown } });
-        _aggregateFields.Children.Add(Row(RouteField("FreshWizardOriginX", "Origin X"), RouteField("FreshWizardOriginY", "Origin Y"), RouteField("FreshWizardOriginZ", "Origin Z")));
-        _aggregateFields.Children.Add(Row(RouteField("FreshWizardEndX", "End X"), RouteField("FreshWizardEndY", "End Y")));
-        _aggregateFields.Children.Add(_cancelAddWizard);
+        _wizardRouteEditor.Children.Add(Row(RouteField("FreshWizardOriginX", "Origin X"), RouteField("FreshWizardOriginY", "Origin Y"), RouteField("FreshWizardOriginZ", "Origin Z")));
+        _wizardRouteEditor.Children.Add(Row(RouteField("FreshWizardEndX", "End X"), RouteField("FreshWizardEndY", "End Y")));
+        _wizardRouteEditor.Children.Add(_cancelAddWizard);
+        _aggregateFields.Children.Add(_wizardRouteEditor);
+        _aggregateFields.Children.Add(BuildNativeMobyFields());
         return _aggregateFields;
     }
 
@@ -229,6 +235,7 @@ internal sealed partial class NativeFreshDocumentWindow
         {
             if (_addingWizard)
             {
+                RequireNativeMobyFieldsUnchanged();
                 if (FieldSignature() != _appliedFields)
                     throw new InvalidDataException("Base fields are locked while adding a route. Cancel the new route before editing the Base.");
                 if (MaterialFieldSignature() != _appliedMaterialFields)
@@ -247,16 +254,18 @@ internal sealed partial class NativeFreshDocumentWindow
                 if (selected != null)
                 {
                     int index = Array.FindIndex(rows, placement => placement.EditorId == selected);
-                    rows[index] = NativeFreshWizardRouteIntent.Create(selected, RouteNumber("FreshWizardOriginX"), RouteNumber("FreshWizardOriginY"),
-                        RouteNumber("FreshWizardOriginZ"), RouteNumber("FreshWizardEndX"), RouteNumber("FreshWizardEndY"));
+                    rows[index] = ReadSelectedPlacement(rows[index]);
                 }
-                // Validate the selected Base/route pair and every untouched route
+                else RequireNativeMobyFieldsUnchanged();
+                // Validate the selected Base/placement and every untouched row
                 // together before the Session sees any mutation.
                 var candidate = ApplyMaterialFieldsTo(CurrentAggregateIntent.WithContent(floor, rows));
                 _aggregateSession.Apply(candidate);
             }
             WriteFields();
-            _status.Text = "Applied the entire aggregate to the authored schematic. Save explicitly before research export; two retail materials with no placements or the supported one-Wizard mixed profile are currently supported.";
+            _status.Text = CurrentAggregateIntent?.SchemaVersion == 3
+                ? "Applied the entire schema-3 aggregate to the authored schematic. Save explicitly to persist. " + NativeMobyCapabilityText
+                : "Applied the entire aggregate to the authored schematic. Save explicitly before research export; two retail materials with no placements or the supported one-Wizard mixed profile are currently supported.";
             return true;
         }
         catch (Exception error) when (error is ArgumentException or InvalidDataException or OverflowException or InvalidOperationException)
@@ -314,6 +323,7 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private string AggregateOpenMessage() => CurrentAggregateIntent == null
         ? "No aggregate exists. Fork an actual saved legacy floor explicitly to begin; no default or placement was inferred."
+        : CurrentAggregateIntent.SchemaVersion == 3 ? $"Opened saved aggregate: {_aggregateSession!.Snapshot.Path}. " + NativeMobyCapabilityText
         : $"Opened saved aggregate: {_aggregateSession!.Snapshot.Path}. Research export supports clean saved schema-2 documents with two retail materials and either no placements or the supported one-Wizard mixed profile; actual source eligibility is checked during preparation.";
 
     private void BeginWizardAdd()
@@ -351,7 +361,7 @@ internal sealed partial class NativeFreshDocumentWindow
         if (!_aggregateMode || AggregateCommandsBlocked || HasUnappliedFields || _aggregateSession?.SelectedEditorId is not { } id) return;
         _aggregateSession.RemovePlacement(id);
         WriteFields();
-        _status.Text = "Removed the selected route from the applied aggregate. Save to persist; Undo restores its editor ID.";
+        _status.Text = "Removed the selected placement from the applied aggregate. Save to persist; Undo restores its editor ID.";
     }
 
     private void MoveWizard(int direction)
@@ -399,6 +409,7 @@ internal sealed partial class NativeFreshDocumentWindow
         SetRoute("FreshWizardOriginX", selected?.OriginX); SetRoute("FreshWizardOriginY", selected?.OriginY);
         SetRoute("FreshWizardOriginZ", selected?.OriginZ); SetRoute("FreshWizardEndX", selected?.EndX); SetRoute("FreshWizardEndY", selected?.EndY);
         _appliedRouteFields = RouteFieldSignature();
+        WriteNativeMobyFields();
     }
 
     private void RestorePlacementSelection()
@@ -417,11 +428,12 @@ internal sealed partial class NativeFreshDocumentWindow
         _schemaVersion.Text = current == null ? "" : $"Aggregate schema {current.SchemaVersion}";
         _materialSummary.Text = current?.FloorMaterials is { } materials
             ? $"Triangle 0: {MaterialSummary(materials.Triangle0)}\nTriangle 1: {MaterialSummary(materials.Triangle1)}"
-            : "Materials: implicit base floor color (schema 1).";
+            : current?.SchemaVersion == 3 ? "Materials: implicit base floor color (no material pair)." : "Materials: implicit base floor color (schema 1).";
         _materialPreviewNotice.Text = Preview.MaterialPreviewNotice;
-        _materialPreviewNotice.IsVisible = current?.SchemaVersion == 2;
+        _materialPreviewNotice.IsVisible = current?.FloorMaterials != null;
         _capability.Text = _aggregateMode
-            ? "Whole-level authoring document — floor, spawn and ordered placements. Normal Create BIN is unavailable. Research export supports clean saved schema-2 documents with two retail materials and either no placements or the supported one-Wizard mixed profile, subject to actual source validation. The schematic does not certify gameplay."
+            ? current?.SchemaVersion == 3 ? NativeMobyCapabilityText
+                : "Whole-level authoring document — floor, spawn and ordered placements. Normal Create BIN is unavailable. Research export supports clean saved schema-2 documents with two retail materials and either no placements or the supported one-Wizard mixed profile, subject to actual source validation. The schematic does not certify gameplay."
             : LegacyCapabilityText;
         _documentMode.IsEnabled = editable;
         _activeFile.Text = _aggregateMode ? $"Active file: {_aggregateSession?.Snapshot.Path}" : $"Active file: {_snapshot.Path}";
@@ -431,9 +443,13 @@ internal sealed partial class NativeFreshDocumentWindow
             CurrentAggregateIntent == null && !HasUnsavedChanges && _forkSourceSnapshot?.Exists == true && _forkSourceSnapshot.RetainedRecoveryDirectory.Length == 0;
         bool canEditRows = editable && _aggregateMode && CurrentAggregateIntent != null;
         bool hasSelection = _aggregateSession?.SelectedEditorId != null;
+        var selectedPlacement = current?.Placements.FirstOrDefault(p => p.EditorId == _aggregateSession?.SelectedEditorId);
         foreach (TextBox field in _fields.Values) field.IsEnabled = !_aggregateMode || !_addingWizard;
         _music.IsEnabled = !_aggregateMode || !_addingWizard;
-        foreach (TextBox field in _routeFields.Values) field.IsEnabled = canEditRows && (hasSelection || _addingWizard);
+        bool wizardEditor = _addingWizard || selectedPlacement is NativeFreshWizardRouteIntent;
+        _wizardRouteEditor.IsVisible = _aggregateMode && wizardEditor;
+        foreach (TextBox field in _routeFields.Values) field.IsEnabled = canEditRows && wizardEditor;
+        RefreshNativeMobyChrome(canEditRows, selectedPlacement);
         _placements.IsEnabled = canEditRows && !HasUnappliedFields;
         _addWizard.IsEnabled = canEditRows && !HasUnappliedFields && CurrentAggregateIntent!.Placements.Count < NativeFreshLevelDocumentIntent.MaximumPlacements;
         _cancelAddWizard.IsVisible = _aggregateMode && _addingWizard;
@@ -443,7 +459,9 @@ internal sealed partial class NativeFreshDocumentWindow
             ? CurrentAggregateIntent.Placements.ToList().FindIndex(p => p.EditorId == _aggregateSession!.SelectedEditorId) : -1;
         _moveWizardUp.IsEnabled = _removeWizard.IsEnabled && index > 0;
         _moveWizardDown.IsEnabled = _removeWizard.IsEnabled && index >= 0 && index + 1 < CurrentAggregateIntent!.Placements.Count;
-        _placementSummary.Text = $"{CurrentAggregateIntent?.Placements.Count ?? 0} authored placements · maximum {NativeFreshLevelDocumentIntent.MaximumPlacements}. Research supports no placements or the supported one-Wizard mixed profile only, with two retail materials and actual source validation.";
+        _placementSummary.Text = $"{CurrentAggregateIntent?.Placements.Count ?? 0} authored placements · maximum {NativeFreshLevelDocumentIntent.MaximumPlacements}. " +
+            (current?.SchemaVersion == 3 ? "Schema-3 placements are authored-only; native dependencies and research export are unsupported."
+                : "Research supports no placements or the supported one-Wizard mixed profile only, with two retail materials and actual source validation.");
     }
 
     private static string MaterialSummary(NativeFreshFloorMaterialIntent material) => material switch

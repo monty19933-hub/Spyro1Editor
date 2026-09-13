@@ -181,3 +181,31 @@ selector is not a universal no-drop promise: the original runtime masks it to127
 and enters a random-selection branch. Any forthcoming zero-static-treasure
 ledger must bind the exact retained family and passive Host evidence, not infer
 all rewards from placement count. No native two-family result is claimed.
+
+## Saved native-Moby document and editor support
+
+Schema3 explicitly retains the same Base, ordered stable IDs, optional material
+pair and generic retail-row references with raw XYZ/native yaw. Adding a native
+placement upgrades atomically; removing the last one never silently downgrades.
+Schemas1/2 retain their exact canonical bytes. The neutral reference bounds are
+ingestion limits, not a catalogue or import-compatibility certificate.
+
+Log75 is the genuine missing-type RED. Logs77–78 pass the Core build and 985
+checks/504 refusals, including strict parsing, saved-version conflicts and Store
+history. Log80 captured the actual preview InvalidCastException before typed
+rendering was implemented. The Window now switches editing and XY markers by
+placement type, preserves source identity, validates the complete form atomically
+and includes native raw fields in dirty-state and asynchronous operation tickets.
+Native models and selected materials are not rendered in this schematic.
+
+Log82 exposed a new test fixture's invalid uppercase boolean project ID; only
+the fixture name was corrected. Log86 passes 220 session checks. Logs84–85 are
+isolated App/UI builds against the already compiled schema3 Core; log96 is a
+subsequent complete Core/App/UI Release build, zero warnings/errors. Logs87/90/
+94/95 pass 35 native UI checks, 48 materials, 219 aggregate, 96 selection, 18
+layout, 288 readiness, 636 saved-lifecycle, 68 inspection controls, 80 inspection
+lifecycle and 100 picker checks. The rendered mixed-marker frame was inspected.
+These are headless controls, not an installed app or native gameplay acceptance.
+The catalogue/Add UI and schema3 research action remain deliberately unwired.
+Log97 repeats all five session/UI/readiness/inspection/picker groups together
+against the complete current build and passes every group.

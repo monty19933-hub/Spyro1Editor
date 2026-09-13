@@ -8,4 +8,7 @@ AggregateReadGuardCases.Run();
 MaterialIntentCases.Run();
 MaterialCodecCases.Run();
 MaterialStorageCases.Run();
+MobyIntentCases.Run();
+MobyCodecCases.Run();
+MobyStorageCases.Run();
 Console.WriteLine($"NATIVE_FRESH_LEVEL_DOCUMENT_SMOKE_OK checks={Cases.Checks} refusals={Cases.Refusals}");

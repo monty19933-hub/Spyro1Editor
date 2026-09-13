@@ -14,7 +14,7 @@ internal static class NativeFreshSavedResearchLifecycleCases
     {
         int checks = 0;
         foreach (string stage in new[] { "picker", "prepare" })
-        foreach (string change in new[] { "none", "raw-aba", "raw", "source", "project", "disk", "manifest", "session", "snapshot", "applied", "close", "cancel", "prepare-refusal", "owner-release" })
+        foreach (string change in new[] { "none", "raw-aba", "raw", "native-raw-aba", "native-raw", "source", "project", "disk", "manifest", "session", "snapshot", "applied", "close", "cancel", "prepare-refusal", "owner-release" })
         {
             var fixture = new Fixture(parent, stage + "-" + change);
             List<Exception> failures = [];
@@ -46,6 +46,8 @@ internal static class NativeFreshSavedResearchLifecycleCases
                 {
                     case "raw-aba": fixture.Set("FreshHeading", "0128"); fixture.Set("FreshHeading", "128"); break;
                     case "raw": fixture.Set("FreshHeading", "129"); break;
+                    case "native-raw-aba": fixture.Set("FreshNativeMobyX", "1"); fixture.Set("FreshNativeMobyX", ""); break;
+                    case "native-raw": fixture.Set("FreshNativeMobyX", "1"); break;
                     case "source": fixture.Source = (fixture.Source.Item1 + ".different", fixture.Source.Item2); break;
                     case "project": fixture.Current = false; break;
                     case "disk": fixture.ChangeSavedRaw(); break;
@@ -72,6 +74,8 @@ internal static class NativeFreshSavedResearchLifecycleCases
                 Check(work.PublishCalls == (shouldReachPublish ? 1 : 0), "Every stale/cancel fence precedes publication.");
                 if (change == "raw-aba") Check(fixture.Find<TextBox>("FreshHeading").Text == "128" && !fixture.Window.HasUnsavedChanges &&
                     fixture.Window.SavedResearchFailureForTesting is InvalidDataException, "Actual A-B-A remains refused via generation despite equal final raw state.");
+                if (change == "native-raw-aba") Check(fixture.Find<TextBox>("FreshNativeMobyX").Text == "" && !fixture.Window.HasUnsavedChanges &&
+                    fixture.Window.SavedResearchFailureForTesting is InvalidDataException, "Inactive native raw A-B-A remains stale across the old schema2 research ticket.");
                 if (change == "owner-release")
                 {
                     var leaves = F.Leaves(fixture.Window.SavedResearchFailureForTesting!);

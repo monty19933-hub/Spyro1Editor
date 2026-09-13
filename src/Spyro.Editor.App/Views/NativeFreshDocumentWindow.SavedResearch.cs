@@ -31,7 +31,7 @@ internal sealed partial class NativeFreshDocumentWindow
     private sealed record SavedResearchTicket(NativeFreshLevelDocumentSession Session,
         NativeFreshLevelDocumentSnapshot Snapshot, NativeFreshLevelDocumentIntent Applied,
         string? Selection, string?[] BaseFields, object? Music, string?[] RouteFields,
-        MaterialFields Materials, long RawGeneration, string Image, string Cue);
+        NativeMobyFields NativeFields, MaterialFields Materials, long RawGeneration, string Image, string Cue);
 
     private bool IsSavedResearchReady => _aggregateMode && !AggregateCommandsBlocked &&
         !_addingWizard && !_forkRecoveryPending && !_materialInspectionCleanupBlocked &&
@@ -47,7 +47,8 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         if (!IsSavedResearchReady)
         {
-            _status.Text = "Aggregate research requires an explicitly applied and saved schema-2 document with two retail materials and either no placements or the supported one-Wizard mixed profile. Resolve pending fields and recovery first. No legacy or partial document was exported.";
+            _status.Text = CurrentAggregateIntent?.SchemaVersion == 3 ? NativeMobyCapabilityText + " No legacy or partial document was exported."
+                : "Aggregate research requires an explicitly applied and saved schema-2 document with two retail materials and either no placements or the supported one-Wizard mixed profile. Resolve pending fields and recovery first. No legacy or partial document was exported.";
             return;
         }
         _researchBusy = true;
@@ -70,7 +71,7 @@ internal sealed partial class NativeFreshDocumentWindow
             var session = _aggregateSession!;
             ticket = new SavedResearchTicket(session, session.Snapshot, session.CurrentIntent!, session.SelectedEditorId,
                 _fields.Values.Select(f => f.Text).ToArray(), _music.SelectedItem,
-                _routeFields.Values.Select(f => f.Text).ToArray(), MaterialFieldSignature(),
+                _routeFields.Values.Select(f => f.Text).ToArray(), NativeMobyFieldSignature(), MaterialFieldSignature(),
                 _materialInspectionGeneration, source.Image, source.Cue);
             RequireSavedResearchCurrent(ticket, token);
             _savedResearchSnapshot = ticket.Snapshot;
@@ -135,7 +136,8 @@ internal sealed partial class NativeFreshDocumentWindow
             !ReferenceEquals(ticket.Session, _aggregateSession) || !ReferenceEquals(ticket.Snapshot, _aggregateSession?.Snapshot) ||
             !ReferenceEquals(ticket.Applied, CurrentAggregateIntent) || ticket.Selection != _aggregateSession?.SelectedEditorId ||
             !ticket.BaseFields.SequenceEqual(_fields.Values.Select(f => f.Text)) || !ReferenceEquals(ticket.Music, _music.SelectedItem) ||
-            !ticket.RouteFields.SequenceEqual(_routeFields.Values.Select(f => f.Text)) || ticket.Materials != MaterialFieldSignature() ||
+            !ticket.RouteFields.SequenceEqual(_routeFields.Values.Select(f => f.Text)) || ticket.NativeFields != NativeMobyFieldSignature() ||
+            ticket.Materials != MaterialFieldSignature() ||
             // Existing generation increments for FieldsChanged and WriteFields,
             // not RefreshChrome: exact raw ABA during an await is still stale.
             ticket.RawGeneration != _materialInspectionGeneration ||

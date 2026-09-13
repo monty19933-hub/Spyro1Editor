@@ -76,7 +76,7 @@ internal sealed partial class NativeFreshDocumentWindow
         _materialFields.Children.Add(new TextBlock
         {
             Name = "FreshMaterialAuthoringNotice",
-            Text = "Material descriptors are authoring intent. Inspect sources explicitly for separate thumbnails. Clean saved two-retail/no-placement aggregates may use the research action; actual source eligibility is checked during preparation.",
+            Text = "Material descriptors are authoring intent. Inspect sources explicitly for separate thumbnails. Research currently requires a supported saved schema-2 profile; schema-3 native dependencies are unsupported. Actual source eligibility is checked during preparation.",
             TextWrapping = TextWrapping.Wrap, FontSize = 11, Foreground = Brushes.DimGray
         });
         return _materialFields;
@@ -108,7 +108,7 @@ internal sealed partial class NativeFreshDocumentWindow
     private void WriteMaterialFields()
     {
         NativeFreshFloorMaterialsIntent? pair = CurrentAggregateIntent?.FloorMaterials;
-        _materialsEnabled = CurrentAggregateIntent?.SchemaVersion == 2;
+        _materialsEnabled = pair != null;
         WriteMaterialSlot(_materialSlots[0], pair?.Triangle0 ?? NativeFreshFloorMaterialIntent.BaseFloorColor());
         WriteMaterialSlot(_materialSlots[1], pair?.Triangle1 ?? NativeFreshFloorMaterialIntent.BaseFloorColor());
         _appliedMaterialFields = MaterialFieldSignature();
@@ -166,7 +166,8 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         bool present = _aggregateMode && CurrentAggregateIntent != null;
         _materialFields.IsVisible = present;
-        _enableMaterials.IsVisible = present && CurrentAggregateIntent!.SchemaVersion == 1;
+        _enableMaterials.IsVisible = present && CurrentAggregateIntent!.FloorMaterials == null;
+        _enableMaterials.Content = CurrentAggregateIntent?.SchemaVersion == 3 ? "Add material intent (keeps schema 3)" : "Add material intent (schema 2)";
         _enableMaterials.IsEnabled = editable && present && !_addingWizard && !_materialsEnabled;
         bool canEdit = editable && present && !_addingWizard && _materialsEnabled;
         foreach (MaterialSlotEditor slot in _materialSlots)

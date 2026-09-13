@@ -18,8 +18,19 @@ internal sealed class NativeFreshDocumentPreview : Control
     }
     internal NativeFreshLevelDocumentIntent? AggregateIntent { get; private set; }
     internal string? SelectedEditorId { get; private set; }
-    internal string MaterialPreviewNotice => AggregateIntent?.SchemaVersion == 2
+    internal string MaterialPreviewNotice => AggregateIntent?.FloorMaterials != null
         ? "Selected materials are not rendered in this schematic." : "";
+    internal string PlacementPreviewCaption
+    {
+        get
+        {
+            if (AggregateIntent == null) return "0 placed Mobys";
+            int native = AggregateIntent.Placements.OfType<NativeFreshMobyPlacementIntent>().Count();
+            if (native == 0) return $"{AggregateIntent.Placements.Count} authored routes (XY only)";
+            int routes = AggregateIntent.Placements.Count - native;
+            return $"{routes} authored route{(routes == 1 ? "" : "s")} + {native} native marker{(native == 1 ? "" : "s")} (XY only)";
+        }
+    }
     internal double SchematicCaptionTop => Bounds.Height - (MaterialPreviewNotice.Length == 0 ? 34 : 56);
     internal Rect? FloorSchematicBounds
     {
@@ -92,19 +103,32 @@ internal sealed class NativeFreshDocumentPreview : Control
 
         if (AggregateIntent is { } aggregate)
         {
-            // Display every authored route in XY at the floor projection. Exact Z
-            // remains numeric; this is not a native trajectory/height simulation.
+            // Display typed authored routes/markers in XY at the floor projection.
+            // Exact Z/yaw remain numeric: no native model or height simulation.
             for (int i = 0; i < aggregate.Placements.Count; i++)
             {
-                var route = (NativeFreshWizardRouteIntent)aggregate.Placements[i];
-                bool selected = route.EditorId == SelectedEditorId;
-                Point origin = Project(route.OriginX, route.OriginY, intent.FloorZ);
-                Point end = Project(route.EndX, route.EndY, intent.FloorZ);
-                IBrush ink = selected ? Brushes.Yellow : Brushes.Cyan;
-                context.DrawLine(new Pen(ink, selected ? 3 : 1.5, new DashStyle([4, 3], 0)), origin, end);
-                context.DrawEllipse(ink, new Pen(Brushes.DarkSlateGray, 1), origin, selected ? 6 : 4, selected ? 6 : 4);
-                context.DrawEllipse(Brushes.Transparent, new Pen(ink, selected ? 3 : 1.5), end, 4, 4);
-                if (selected) Text(context, $"Route {i + 1} · authored Z {route.OriginZ}", origin + new Vector(9, -20), Brushes.White, 12);
+                var placement = aggregate.Placements[i];
+                bool selected = placement.EditorId == SelectedEditorId;
+                if (placement is NativeFreshWizardRouteIntent route)
+                {
+                    Point origin = Project(route.OriginX, route.OriginY, intent.FloorZ);
+                    Point end = Project(route.EndX, route.EndY, intent.FloorZ);
+                    IBrush ink = selected ? Brushes.Yellow : Brushes.Cyan;
+                    context.DrawLine(new Pen(ink, selected ? 3 : 1.5, new DashStyle([4, 3], 0)), origin, end);
+                    context.DrawEllipse(ink, new Pen(Brushes.DarkSlateGray, 1), origin, selected ? 6 : 4, selected ? 6 : 4);
+                    context.DrawEllipse(Brushes.Transparent, new Pen(ink, selected ? 3 : 1.5), end, 4, 4);
+                    if (selected) Text(context, $"Route {i + 1} · authored Z {route.OriginZ}", origin + new Vector(9, -20), Brushes.White, 12);
+                }
+                else if (placement is NativeFreshMobyPlacementIntent moby)
+                {
+                    Point point = Project(moby.X, moby.Y, intent.FloorZ);
+                    double radius = selected ? 7 : 5;
+                    IBrush ink = selected ? Brushes.Yellow : Brushes.Orange;
+                    Polygon(context, [point + new Vector(0, -radius), point + new Vector(radius, 0),
+                        point + new Vector(0, radius), point + new Vector(-radius, 0)], ink, new Pen(Brushes.DarkSlateGray, 1));
+                    if (selected) Text(context, $"Native marker {i + 1} · Z {moby.Z} · yaw {moby.NativeYawByte}",
+                        point + new Vector(9, -20), Brushes.White, 12);
+                }
             }
         }
 
@@ -116,8 +140,7 @@ internal sealed class NativeFreshDocumentPreview : Control
         double captionHeight = hasMaterialNotice ? 56 : 34;
         context.FillRectangle(new SolidColorBrush(Color.FromArgb(210, 18, 30, 45)),
             new Rect(0, SchematicCaptionTop, bounds.Width, captionHeight));
-        string placementCaption = AggregateIntent == null ? "0 placed Mobys" : $"{AggregateIntent.Placements.Count} authored routes (XY only)";
-        Text(context, $"Heading {intent.Heading}/255 (schematic)  ·  music track {intent.MusicTrackId:00}  ·  {placementCaption}",
+        Text(context, $"Heading {intent.Heading}/255 (schematic)  ·  music track {intent.MusicTrackId:00}  ·  {PlacementPreviewCaption}",
             new Point(16, bounds.Height - captionHeight + 8), Brushes.White, 12);
         if (hasMaterialNotice)
             Text(context, MaterialPreviewNotice, new Point(16, bounds.Height - 26), Brushes.White, 12);
@@ -127,7 +150,7 @@ internal sealed class NativeFreshDocumentPreview : Control
     {
         bool materialNotice = MaterialPreviewNotice.Length != 0;
         double w = intent.FloorWidth, d = intent.FloorDepth;
-        // Reserve the extra schema2 caption space without changing schema1 pixels.
+        // Reserve extra material caption space without changing material-absent pixels.
         double padding = materialNotice ? 172 : 150;
         double centerOffset = materialNotice ? 40 : 80;
         double scale = Math.Max(0.01, Math.Min((Bounds.Width - 80) / ((w + d) * 0.866),

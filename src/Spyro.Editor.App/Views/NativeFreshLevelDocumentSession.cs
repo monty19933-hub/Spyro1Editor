@@ -65,7 +65,33 @@ internal sealed class NativeFreshLevelDocumentSession
     {
         NativeFreshLevelDocumentIntent current = RequireDocument();
         RequirePlacement(current, editorId);
+        if (current.Placements.Single(placement => placement.EditorId == editorId) is not NativeFreshWizardRouteIntent)
+            throw new InvalidDataException("The selected editor ID is not an authored Wizard route; replacement cannot change its placement tag.");
         var replacement = NativeFreshWizardRouteIntent.Create(editorId, originX, originY, originZ, endX, endY);
+        var next = current.WithContent(current.Base,
+            current.Placements.Select(placement => placement.EditorId == editorId ? replacement : placement));
+        Apply(next);
+    }
+
+    internal NativeFreshMobyPlacementIntent AddNativeMoby(NativeFreshRetailMobyReference source, int x, int y, int z, int nativeYawByte)
+    {
+        NativeFreshLevelDocumentIntent current = RequireDocument();
+        var added = NativeFreshMobyPlacementIntent.Create(Guid.NewGuid().ToString("N"), source, x, y, z, nativeYawByte);
+        // Upgrade is an explicit Add action, installed only after the full current
+        // floor/list validation succeeds. An invalid Add preserves old schema/history.
+        var next = current.UpgradeForNativeMobys().WithContent(current.Base, current.Placements.Append(added));
+        Apply(next);
+        SelectedEditorId = added.EditorId;
+        return added;
+    }
+
+    internal void ReplaceNativeMoby(string editorId, NativeFreshRetailMobyReference source, int x, int y, int z, int nativeYawByte)
+    {
+        NativeFreshLevelDocumentIntent current = RequireDocument();
+        RequirePlacement(current, editorId);
+        if (current.Placements.Single(placement => placement.EditorId == editorId) is not NativeFreshMobyPlacementIntent)
+            throw new InvalidDataException("The selected editor ID is not an authored native Moby; replacement cannot change its placement tag.");
+        var replacement = NativeFreshMobyPlacementIntent.Create(editorId, source, x, y, z, nativeYawByte);
         var next = current.WithContent(current.Base,
             current.Placements.Select(placement => placement.EditorId == editorId ? replacement : placement));
         Apply(next);

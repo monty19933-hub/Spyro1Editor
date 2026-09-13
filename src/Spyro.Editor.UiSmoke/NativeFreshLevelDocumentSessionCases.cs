@@ -17,6 +17,7 @@ internal static class NativeFreshLevelDocumentSessionCases
         {
             AbsentAndWholeApply();
             RouteIdentityAndHistory();
+            NativeMobys();
             MultipleAndMaximum();
             SaveAndReopen();
             FailedReadsAndRawCas();
@@ -98,6 +99,81 @@ internal static class NativeFreshLevelDocumentSessionCases
         int undos=0;while(session.Undo())undos++;
         Check(undos==100&&!session.CanUndo&&session.CanRedo,"history bounded at100 actual whole-document changes");
         Check(Names(project).All(n=>!Path.GetFileName(n).StartsWith('.')),"editing creates no leases/stages");
+    }
+    private static void NativeMobys()
+    {
+        const string variant="spyro1-usa-retail-mode2-2352-v1";
+        var source=NativeFreshRetailMobyReference.Create(variant,10,121,501);
+        var unresolved=NativeFreshRetailMobyReference.Create(variant,78,4095,65535);
+        foreach(bool materials in new[]{false,true})
+        {
+            var old=Document(Wizard(A));
+            if(materials)old=old.WithFloorMaterials(NativeFreshFloorMaterialsIntent.Create(
+                NativeFreshFloorMaterialIntent.RetailTerrain(variant,14,1),NativeFreshFloorMaterialIntent.RetailTerrain(variant,70,1)));
+            var (project,session)=SavedSession(materials?"native-moby-materials":"native-moby-color",old);session.Select(A);
+            var original=session.CurrentIntent!;var originalSnapshot=session.Snapshot;byte[] disk=File.ReadAllBytes(originalSnapshot.Path);
+            foreach(var point in new[]{(8448,9001,0,0),(10496,9001,0,0),(9001,8448,0,0),(9001,10496,0,0),
+                (9001,9001,-1,0),(9001,9001,65536,0),(9001,9001,0,-1),(9001,9001,0,256)})
+            {
+                Throws<InvalidDataException>(()=>session.AddNativeMoby(source,point.Item1,point.Item2,point.Item3,point.Item4));
+                Check(ReferenceEquals(session.CurrentIntent,original)&&ReferenceEquals(session.Snapshot,originalSnapshot)&&
+                    session.SelectedEditorId==A&&!session.CanUndo&&!session.CanRedo&&!session.HasUnsavedChanges,
+                    "invalid native Add cannot upgrade old version or alter selection/history");
+            }
+            Throws<ArgumentNullException>(()=>session.AddNativeMoby(null!,9001,9001,0,0));
+            var added=session.AddNativeMoby(source,9001,9001,65535,64);var upgraded=session.CurrentIntent!;
+            Check(upgraded.SchemaVersion==3&&ReferenceEquals(upgraded.FloorMaterials,original.FloorMaterials)&&
+                ReferenceEquals(upgraded.Base,original.Base)&&ReferenceEquals(upgraded.Placements[0],original.Placements[0])&&
+                ReferenceEquals(upgraded.Placements[1],added)&&ReferenceEquals(added.Source,source)&&
+                added.X==9001&&added.Y==9001&&added.Z==65535&&added.NativeYawByte==64&&session.SelectedEditorId==added.EditorId&&
+                added.EditorId.Length==32&&added.EditorId.Any(c=>c!='0')&&added.EditorId!=A,
+                "explicit valid Add atomically upgrades once, retains unrelated owners and selects stable raw-transform ID");
+            Check(session.Undo()&&ReferenceEquals(session.CurrentIntent,original)&&session.SelectedEditorId==A&&session.CanRedo,
+                "undo native Add restores exact old schema and prior selection");
+            Check(session.Redo()&&ReferenceEquals(session.CurrentIntent,upgraded)&&session.SelectedEditorId==added.EditorId,
+                "redo native Add restores the same schema3 object and generated ID");
+            session.ReplaceNativeMoby(added.EditorId,unresolved,9002,9003,1,255);var edited=session.CurrentIntent!;
+            var replacement=(NativeFreshMobyPlacementIntent)edited.Placements[1];
+            Check(replacement.EditorId==added.EditorId&&ReferenceEquals(replacement.Source,unresolved)&&replacement.X==9002&&replacement.Y==9003&&
+                replacement.Z==1&&replacement.NativeYawByte==255&&ReferenceEquals(edited.Placements[0],upgraded.Placements[0]),
+                "neutral replacement permits unresolved generic reference while preserving ID and unrelated Wizard");
+            foreach(Action wrong in new Action[]{()=>session.ReplaceWizardRoute(added.EditorId,9984,9984,8909,9472,9984),
+                ()=>session.ReplaceNativeMoby(A,source,9001,9001,0,0),()=>session.ReplaceNativeMoby("missing",source,9001,9001,0,0),
+                ()=>session.ReplaceNativeMoby(added.EditorId,source,8448,9001,0,0)})
+            {
+                Throws<InvalidDataException>(wrong);
+                Check(ReferenceEquals(session.CurrentIntent,edited)&&session.SelectedEditorId==added.EditorId&&session.CanUndo&&!session.CanRedo,
+                    "wrong-type/missing/outside replacement does not convert variant or partially mutate session");
+            }
+            Check(session.Undo()&&ReferenceEquals(session.CurrentIntent,upgraded)&&session.CanRedo,"native edit undo restores original reference/transform");
+            session.ReplaceNativeMoby(added.EditorId,source,9001,9001,65535,64);
+            Check(ReferenceEquals(session.CurrentIntent,upgraded)&&session.CanRedo,"semantic no-op native replacement preserves actual object and redo");
+            session.Redo();session.Save();session.Reopen();
+            Check(session.CurrentIntent!.SchemaVersion==3&&session.SelectedEditorId==added.EditorId&&!session.HasUnsavedChanges&&!session.CanUndo&&
+                ((NativeFreshMobyPlacementIntent)session.CurrentIntent.Placements[1]).Source.SourceTrueIndex==4095,
+                "generic source/transform persist through actual Save/Reopen without family compilation");
+            var snapshot=session.Snapshot;session.ReplaceNativeMoby(added.EditorId,source,9004,9005,2,0);var draft=session.CurrentIntent;
+            File.AppendAllText(snapshot.Path," \n");byte[] external=File.ReadAllBytes(snapshot.Path);
+            Throws<InvalidDataException>(()=>session.Save());
+            Check(ReferenceEquals(session.Snapshot,snapshot)&&ReferenceEquals(session.CurrentIntent,draft)&&session.SelectedEditorId==added.EditorId&&
+                session.CanUndo&&File.ReadAllBytes(snapshot.Path).SequenceEqual(external),"stale schema3 Save retains draft/history/selection and external raw bytes");
+            File.WriteAllBytes(snapshot.Path,Canonical(snapshot.Intent!));
+            session.RemovePlacement(added.EditorId);var removed=session.CurrentIntent!;
+            Check(removed.SchemaVersion==3&&removed.Placements.Single() is NativeFreshWizardRouteIntent&&session.SelectedEditorId==null&&
+                (removed.FloorMaterials!=null)==materials,"removing last native placement retains schema3/material intent and clears selection");
+            Check(session.Undo()&&ReferenceEquals(session.CurrentIntent,draft)&&session.SelectedEditorId==added.EditorId,"undo removal restores the exact selected native row");
+            session.Redo();session.Save();session.Reopen();
+            Check(session.CurrentIntent!.SchemaVersion==3&&session.CurrentIntent.Placements.Count==1&&
+                disk.SequenceEqual(Canonical(original)),"retained schema3 persists after final-native removal; original schema fixture bytes unchanged");
+        }
+        var maximum=Document(Enumerable.Range(1,128).Select(i=>Wizard(i.ToString("x32"))).ToArray());
+        var (_,full)=SavedSession("native-moby-maximum",maximum);var before=full.CurrentIntent;
+        Throws<InvalidDataException>(()=>full.AddNativeMoby(source,9001,9001,0,0));
+        Check(ReferenceEquals(full.CurrentIntent,before)&&full.CurrentIntent!.SchemaVersion==1&&!full.CanUndo&&!full.HasUnsavedChanges,
+            "129th native Add refuses without even upgrading the valid old128-row document");
+        var absentProject=Project("native-moby-absent");var absent=new NativeFreshLevelDocumentSession(NativeFreshLevelDocumentStore.Capture(absentProject));
+        Throws<InvalidOperationException>(()=>absent.AddNativeMoby(source,9001,9001,0,0));
+        Check(absent.CurrentIntent==null&&!absent.CanUndo&&!absent.HasUnsavedChanges,"native Add does not infer a missing floor/aggregate");
     }
     private static void MultipleAndMaximum()
     {
