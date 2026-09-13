@@ -424,3 +424,31 @@ growth as well as instructions; a no-edits early return could leave an old ON
 output. Retail-only flight policy rejects ID65. Do not relax that ID guard or
 call an executable inverse a full-image OFF proof. No flight integration was
 added to this preview checkpoint.
+
+## Private V6 packages sealed; desktop blocked by Mac lock
+
+Clean checkpoints11a985b (derived row spans),1b80e7d (catalogue/save/export UI)
+and ac50def (V6 preview identity/guides) are complete. Existing package build147
+produced Mac ARM64 and Windows x64 folders/ZIPs under
+`_local/v6-private-preview-20260912-r01.rotSq4/`. The initial strict verifier
+rejected only host-added com.apple.provenance attributes. Re-verification148
+passed using the verifier's existing explicit ad-hoc and host-provenance options;
+no verifier/assertion/signature bypass was added. This is private community
+packaging, not notarization, a public tag, upload or a replaced preserved app.
+
+Mac ZIP SHA256 a2725c67695fca2b9822186a0704e94e296b8ac6788c066eeb2962e6b83e3c28;
+Windows ZIP 7b78dc9f1fba6a6f9d0da9fc434e9a7d65f0be770a80e992e5703a1936c555ad.
+Packaged Mac App DLL76b4f3e4288561f1c1b441999280d0874b8405be8dd857a870a3cf492da94950,
+Core1fa2c3ab74d6ab379ce21fbf8791d1346081c0d53043743158747d05c5d01fe5.
+`PRIVATE-PREVIEW.md` and a syntax-checked `Open V6 Private Test.command` in that
+folder describe the preserved artifact and launch with isolated test-state.
+The exact family document was copied into that private test project only.
+
+Actual packaged launch exited134 before a window: Avalonia.Native RenderTimer
+error -6661. A subsequent native UI inventory explicitly reported a locked Mac
+and failed automatic unlock. Desktop testing and focused DuckStation seam walk
+are pending, not failed gameplay. DuckStation was not relaunched; prepared test
+INIs were not installed and the original card was never modified/copied back.
+The new prepared native session is
+`_local/native-v6-preview-runtime-20260912-r01.Tjt4Iy/RUNTIME-SESSION.md`.
+The user was informed; source work continues while desktop access is unavailable.
