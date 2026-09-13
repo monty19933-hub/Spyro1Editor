@@ -118,6 +118,8 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
         token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(saved);
         ArgumentException.ThrowIfNullOrWhiteSpace(originalBin); ArgumentException.ThrowIfNullOrWhiteSpace(sourceCue);
+        if (saved.Document.SchemaVersion == 3)
+            return await CaptureFamilyAsync(originalBin, sourceCue, saved, token);
         if (saved.Document.Placements.Count != 0)
             return await CaptureMixedAsync(originalBin, sourceCue, saved, token);
         RequireProfile(saved.Document);

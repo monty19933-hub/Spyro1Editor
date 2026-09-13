@@ -92,25 +92,7 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
             owners.Open(token);
             await NativeId65FreshDiscSource.RequireWholeOriginalAsync(owners.Bin!, token);
             string image = owners.ImagePath;
-            var document = saved.Document;
-            var compilation = await NativeId65FreshDocumentCompilation.CaptureAsync(image, document.Base, token);
-            var family = await NativeWizardFamilyAssetPlan.CaptureAsync(image, token);
-            var resources = await NativeId65FreshWizardResearchResourcePlan.CaptureAuthoredAsync(image, compilation, family, token);
-            var scene = await NativeId65FreshWizardResearchScenePlan.CaptureMaterialAuthoredAsync(
-                image, document, compilation, family, resources, token);
-            var clearance = await NativeFreshInitialSpawnClearancePlan.CaptureWizardAsync(image, document, scene, token);
-            _ = clearance.RequireInitialFloorFootprint(document, scene);
-            var fallback = await NativeId65FreshWizardResearchFallbackResourcePlan.CaptureAsync(image, resources, token);
-            var host = await NativeId65FreshWizardResearchHostPlan.CaptureAsync(image, scene, fallback, token);
-            var first = (NativeFreshRetailTerrainMaterialIntent)document.FloorMaterials!.Triangle0;
-            var second = (NativeFreshRetailTerrainMaterialIntent)document.FloorMaterials.Triangle1;
-            var material0 = NativeStaticTerrainTextureSource.Capture(image, first.SourceWadEntry, first.TextureId);
-            token.ThrowIfCancellationRequested();
-            var material1 = first.SourceWadEntry == second.SourceWadEntry && first.TextureId == second.TextureId
-                ? material0 : NativeStaticTerrainTextureSource.Capture(image, second.SourceWadEntry, second.TextureId);
-            token.ThrowIfCancellationRequested();
-            var mixed = await NativeFreshWizardMaterialResource.CaptureMaterialAuthoredAsync(image, host, material0, material1, token);
-            var body = await NativeId65FreshWizardResearchBodyPlan.CaptureMaterialAuthoredAsync(image, mixed, token);
+            var (body, clearance) = await CaptureMixedBodyAsync(image, saved.Document, token);
             var exe = await NativeId65FreshWizardResearchExecutablePlan.CaptureMaterialAuthoredAsync(image, body, token);
             var disc = await NativeId65FreshWizardResearchDiscPlan.CaptureMaterialAuthoredAsync(image, exe, token);
             owners.Bin!.Position = 0;
@@ -124,11 +106,37 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
         return result!;
     }
 
+    // The actual source compilation is shared; only the full saved-document arm
+    // decides which complete placement list is admissible and retains its binding.
+    internal static async Task<(NativeId65FreshWizardResearchBodyPlan Body, NativeFreshInitialSpawnClearancePlan Clearance)>
+        CaptureMixedBodyAsync(string image, NativeFreshLevelDocumentIntent document, CancellationToken token)
+    {
+        NativeFreshWizardAuthoringShape.RequireMaterialDocumentShape(document);
+        var compilation = await NativeId65FreshDocumentCompilation.CaptureAsync(image, document.Base, token);
+        var family = await NativeWizardFamilyAssetPlan.CaptureAsync(image, token);
+        var resources = await NativeId65FreshWizardResearchResourcePlan.CaptureAuthoredAsync(image, compilation, family, token);
+        var scene = await NativeId65FreshWizardResearchScenePlan.CaptureMaterialAuthoredAsync(image, document, compilation, family, resources, token);
+        var clearance = await NativeFreshInitialSpawnClearancePlan.CaptureWizardAsync(image, document, scene, token);
+        _ = clearance.RequireInitialFloorFootprint(document, scene);
+        var fallback = await NativeId65FreshWizardResearchFallbackResourcePlan.CaptureAsync(image, resources, token);
+        var host = await NativeId65FreshWizardResearchHostPlan.CaptureAsync(image, scene, fallback, token);
+        var first = (NativeFreshRetailTerrainMaterialIntent)document.FloorMaterials!.Triangle0;
+        var second = (NativeFreshRetailTerrainMaterialIntent)document.FloorMaterials.Triangle1;
+        var material0 = NativeStaticTerrainTextureSource.Capture(image, first.SourceWadEntry, first.TextureId);
+        token.ThrowIfCancellationRequested();
+        var material1 = first.SourceWadEntry == second.SourceWadEntry && first.TextureId == second.TextureId
+            ? material0 : NativeStaticTerrainTextureSource.Capture(image, second.SourceWadEntry, second.TextureId);
+        token.ThrowIfCancellationRequested();
+        var mixed = await NativeFreshWizardMaterialResource.CaptureMaterialAuthoredAsync(image, host, material0, material1, token);
+        var body = await NativeId65FreshWizardResearchBodyPlan.CaptureMaterialAuthoredAsync(image, mixed, token);
+        return (body, clearance);
+    }
+
     internal void RequireMixedAncestry(NativeFreshSavedLevelDocumentReadContext saved,
         NativeId65FreshWizardResearchDiscPlan disc, NativeFreshInitialSpawnClearancePlan clearance)
     {
         if (!ReferenceEquals(saved, Saved) || !ReferenceEquals(disc, _mixedDisc) ||
-            !ReferenceEquals(clearance, _mixedClearance) || _material != null || disc is null || clearance is null)
+            !ReferenceEquals(clearance, _mixedClearance) || _material != null || _familyCompilation != null || disc is null || clearance is null)
             throw new InvalidDataException("Saved mixed Candidate belongs to its actual saved context, Disc and initial clearance, not equal hashes.");
         disc.RequireAncestry(disc.ExecutableAncestor);
         if (!disc.IsMaterialAuthored)
@@ -145,7 +153,8 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
 
     private void RequireCurrentAncestry()
     {
-        if (_mixedDisc is { } mixed) RequireMixedAncestry(Saved, mixed, _mixedClearance!);
+        if (_familyCompilation is { } family) RequireFamilyAncestry(Saved, family);
+        else if (_mixedDisc is { } mixed) RequireMixedAncestry(Saved, mixed, _mixedClearance!);
         else RequireAncestry(Saved, MaterialCompilation);
     }
 }

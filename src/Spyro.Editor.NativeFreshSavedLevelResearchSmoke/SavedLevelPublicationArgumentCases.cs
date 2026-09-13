@@ -12,9 +12,13 @@ internal static class SavedLevelPublicationArgumentCases
             "--partial-saved-level-reviewed", "--stale-saved-level-reviewed", "--unconfirmed-saved-level-reviewed",
             "--guard-release-saved-level-reviewed", "--artifact-saved-level-reviewed",
             "--artifact-notify-saved-level-reviewed", "--cancel-saved-level-reviewed"];
-        Check(P.Modes.Take(9).SequenceEqual(originalModes) && P.Modes.Skip(9).SequenceEqual(new[] {
+        string[] familyModes=["--publish-family-saved-level-reviewed","--verify-family-saved-level-reviewed","--stale-family-saved-level-reviewed"];
+        Check(P.Modes.Take(9).SequenceEqual(originalModes) && P.Modes.Skip(9).Take(3).SequenceEqual(new[] {
             "--publish-mixed-saved-level-reviewed", "--verify-mixed-saved-level-reviewed", "--stale-mixed-saved-level-reviewed" }),
-            "Existing nine reviewed modes retain their order; exactly three explicit mixed modes are appended.");
+            "Existing twelve reviewed modes retain their exact order and meaning.");
+        Check(P.Modes.Skip(12).SequenceEqual(familyModes)&&P.ExpectedFamilyImage==
+            "408dfdfc577f991e635e4c0b636344333ca4b2654d89afabd88af88cc1a55c98",
+            "Exactly three family modes use the observed full-source regression reference, not an independent oracle.");
         string[] valid = [P.Modes[0], "original.bin", "original.cue", "/private/tmp/test-project", "test-project", "/private/tmp/test-output"];
         foreach (string mode in P.Modes)
         {
@@ -22,19 +26,33 @@ internal static class SavedLevelPublicationArgumentCases
             Check(P.Parse(args).Mode == mode && P.IsMode(args), "Exact six-token supported mode.");
         }
         Check(originalModes.All(mode => !P.IsMixedMode(mode) && P.OperationMode(mode) == mode) &&
-            P.Modes.Skip(9).All(P.IsMixedMode) && P.OperationMode(P.Modes[9]) == P.Modes[0] &&
+            P.Modes.Skip(9).Take(3).All(P.IsMixedMode) && P.OperationMode(P.Modes[9]) == P.Modes[0] &&
             P.OperationMode(P.Modes[10]) == P.Modes[1] && P.OperationMode(P.Modes[11]) == P.Modes[3],
             "Mixed modes reuse only publish, verify and stale implementations; existing fault selections are unchanged.");
+        Check(P.Modes.Take(12).All(mode=>!P.IsFamilyMode(mode))&&familyModes.All(mode=>P.IsFamilyMode(mode)&&!P.IsMixedMode(mode))&&
+            P.OperationMode(familyModes[0])==P.Modes[0]&&P.OperationMode(familyModes[1])==P.Modes[1]&&
+            P.OperationMode(familyModes[2])==P.Modes[3],"Family modes map to the same publisher, verifier and stale-transaction test.");
         byte[] materialDocument = NativeFreshLevelDocumentCodec.SerializeCanonical(Document(14, 1, 70, 1, 128, 20));
         byte[] mixedDocument = NativeFreshLevelDocumentCodec.SerializeCanonical(MixedSavedCases.Document());
+        byte[] familyDocument=NativeFreshLevelDocumentCodec.SerializeCanonical(FamilySavedCases.Document());
         // No reviewed mode may borrow the other arm's canonical fixture.
         foreach (string mode in P.Modes)
         {
-            bool mixed = P.IsMixedMode(mode);
-            P.RequireFixtureDocument(mode, mixed ? mixedDocument : materialDocument);
-            await Throws<InvalidDataException>(() => {
-                P.RequireFixtureDocument(mode, mixed ? materialDocument : mixedDocument); return Task.CompletedTask;
-            });
+            byte[] actual=P.IsFamilyMode(mode)?familyDocument:P.IsMixedMode(mode)?mixedDocument:materialDocument;
+            P.RequireFixtureDocument(mode,actual);
+            foreach(byte[] foreign in new[]{materialDocument,mixedDocument,familyDocument}.Where(value=>!ReferenceEquals(value,actual)))
+                await Throws<InvalidDataException>(()=>{P.RequireFixtureDocument(mode,foreign);return Task.CompletedTask;});
+        }
+        foreach(string mode in familyModes)
+        {
+            foreach(string altered in new[]{mode+"-extra",mode[..^1],mode.ToUpperInvariant()})
+            {
+                var args=valid.ToArray();args[0]=altered;
+                Check(!P.IsMode(args),"Family command prefixes/case changes never select an explicit reviewed action.");
+                await Throws<ArgumentException>(()=>{P.Parse(args);return Task.CompletedTask;});
+            }
+            var wrong=NativeFreshLevelDocumentCodec.SerializeCanonical(FamilySavedCases.Document(x:9153));
+            await Throws<InvalidDataException>(()=>{P.RequireFixtureDocument(mode,wrong);return Task.CompletedTask;});
         }
         await Throws<ArgumentException>(() => { P.OperationMode("--unknown"); return Task.CompletedTask; });
         foreach (var args in new[] { Array.Empty<string>(), valid[..5], valid.Concat(new[] { "extra" }).ToArray(),
@@ -86,6 +104,19 @@ internal static class SavedLevelPublicationArgumentCases
         Check(Leaves(mixedEarly).Select(e => (e.GetType(), e.Message)).SequenceEqual(
             errors.Select(e => (e.GetType(), e.Message))),
             "Mixed public-factory mode keeps the same tiny-source primary and independent final-owner failure ordering before capture.");
+        string verifyOutput=Path.Combine(root,"family-verify-argument-output");Directory.CreateDirectory(verifyOutput);
+        foreach(string name in Spyro.Editor.Core.Exporting.NativeFreshSavedLevelResearchCandidatePlan.OutputNames)
+            P.WriteNewSmall(Path.Combine(verifyOutput,name),[3]);
+        foreach(string mode in familyModes)
+        {
+            bool verify=P.OperationMode(mode)==P.Modes[1];string target=verify?verifyOutput:output;
+            var args=valid.ToArray();args[0]=mode;
+            await Throws<ArgumentException>(()=>{P.Parse(args[..5]);return Task.CompletedTask;});
+            args[5]="relative";await Throws<ArgumentException>(()=>{P.Parse(args);return Task.CompletedTask;});
+            var familyEarly=await Throws<IOException>(()=>P.RunAsync([mode,bin,cue,project,"tiny-project",target]));
+            Check(Leaves(familyEarly).Select(e=>(e.GetType(),e.Message)).SequenceEqual(errors.Select(e=>(e.GetType(),e.Message))),
+                "Actual family "+mode+" reaches safe tiny original-owner refusal before Candidate capture or publication.");
+        }
         foreach (var (path, expected) in new[] { (bin, (byte)1), (cue, (byte)2) })
         {
             using var reopened = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
@@ -94,6 +125,10 @@ internal static class SavedLevelPublicationArgumentCases
         }
         Check(!Directory.EnumerateFileSystemEntries(project).Any(), "Early refusal never captured/saved a project.");
         Check(!Directory.Exists(output), "Argument-only controls never create an output.");
+        Check(Directory.GetParent(verifyOutput)!.FullName==root&&!verifyOutput.StartsWith(project+Path.DirectorySeparatorChar,StringComparison.Ordinal)&&
+            Directory.EnumerateFileSystemEntries(verifyOutput).Count()==3&&Directory.EnumerateFiles(verifyOutput).All(path=>
+                P.ReadSmall(path,1).SequenceEqual(new byte[]{3})),
+            "Three explicitly test-owned tiny verification companions remain unchanged outside the project; no native image was emitted.");
         Console.WriteLine("SAVED_LEVEL_PHYSICAL_ARGUMENTS_OK originalOpened=false tinyInputsOpened=true candidateCaptureReached=false nativeOutput=false");
     }
 }

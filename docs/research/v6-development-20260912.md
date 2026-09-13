@@ -235,3 +235,42 @@ Independent read-only review found no concrete ancestry, old-arm guard or
 physical-range defect. No physical family image has yet been published or
 launched. The saved full-document adapter and its normal Publisher verification
 are the next gate; no new output writer is introduced.
+
+## Complete saved-family binding and regression gate
+
+The saved Candidate retains the actual complete schema3 revision plus an explicit
+schema2 base subdocument for the unchanged Wizard resource producer. Every
+ordered editor ID, source tuple and native transform is resolved against its
+actual family. The receipt embeds each exact authored row, avoiding misleading
+Wizard placeholder transforms. The base Wizard clearance is labeled with its
+limited scope; it is not recast as generic family collision proof. The existing
+Publisher/Engine, CUE-last transaction, raw revision/manifest checks and recovery
+classification are reused without a new writer.
+
+Logs76/83 retain the tests-first saved binding failures (76 was the missing test
+Compile include, 83 the five intended missing APIs). Log91 passes the first full
+build/free gate. Log98 is the explicit publication-mode tests-first failure;
+log99 passes the final Release build with zero warnings/errors. Log100 passes
+268 free checks/147 refusals and closes the family source gate at286 checks/153
+refusals. Reopen/recompile, complete receipt mapping, exact actual ancestors,
+defensive copies and raw-only revisions pass. Log102 rechecks the old mixed
+saved arm after the shared-source helper extraction:282 checks/153 refusals,
+unchanged images and original BIN/CUE.
+
+Log101 completes the full repository regression run: **335 checks, zero failed**.
+The report is retained beside the log as101-full-regression-summary.json. This
+supersedes the earlier combined run's single reflection failure; it does not
+replace separate physical or native acceptance.
+
+Log103 exercises the actual family precommit stale-save boundary in a separate
+test project. Publication is refused after staging; both independent final raw
+revision failures remain recorded, zero final artifacts exist, and the original
+ROM/CUE and manifest are unchanged. The deliberate tiny raw edit and its before
+image remain as evidence. The normal family project is not modified.
+
+Frozen family producer in `producer-family-r01`: Core DLL
+`14e2cc32ad122c7c5a9b35a5b879718f235a6727c9d047b03eaf109cd87302fc`,
+saved research smoke DLL
+`2b0cbb6ab9cb8a0f541d84e519854baaed4d0b3266f6f03165903282d26dc459`.
+Physical publication and independent verification follow from this retained
+producer. No emulator is currently open; original settings remain restored.

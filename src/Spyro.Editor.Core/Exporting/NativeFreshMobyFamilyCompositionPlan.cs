@@ -34,7 +34,8 @@ internal sealed class NativeFreshMobyFamilyPlacement
 /// registration grammar and multi-subfile growth kernel. The retained Host currently
 /// admits its one Wizard at ordinal0 and the proven passive Grass source family.
 /// These are closed family resolvers, not a new output writer or complete behavior
-/// certificate. No EXE/Disc/publication factory accepts this result yet.
+/// certificate. Only the separately checked, closed family research arm may
+/// consume this result; structural composition alone grants no export scope.
 /// </summary>
 internal sealed class NativeFreshMobyFamilyCompositionPlan
 {

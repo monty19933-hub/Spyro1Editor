@@ -11,18 +11,24 @@ internal static class SavedLevelPublicationCases
 {
     internal const long ImageLength = 661547040;
     internal const string ExpectedImage = "2533ee961f13e43db03b08f221921cb60e35465e662e51bf221e6c096eb75b70";
+    // Observed full-source family regression reference (source92), including
+    // complete original inverse. This is not an independent image oracle.
+    internal const string ExpectedFamilyImage = "408dfdfc577f991e635e4c0b636344333ca4b2654d89afabd88af88cc1a55c98";
     internal const string OriginalCue = "05142502c75d3a0b6374003a8fe41893d6faf0ad55863ff0b62a265a1b152766";
     internal static readonly string[] Modes = ["--publish-saved-level-reviewed", "--verify-saved-level-reviewed",
         "--partial-saved-level-reviewed", "--stale-saved-level-reviewed", "--unconfirmed-saved-level-reviewed",
         "--guard-release-saved-level-reviewed", "--artifact-saved-level-reviewed",
         "--artifact-notify-saved-level-reviewed", "--cancel-saved-level-reviewed",
         "--publish-mixed-saved-level-reviewed", "--verify-mixed-saved-level-reviewed",
-        "--stale-mixed-saved-level-reviewed"];
+        "--stale-mixed-saved-level-reviewed", "--publish-family-saved-level-reviewed",
+        "--verify-family-saved-level-reviewed", "--stale-family-saved-level-reviewed"];
     internal sealed record Request(string Mode, string Bin, string Cue, string ProjectRoot, string ProjectId, string Output);
     internal static bool IsMode(string[] args) => args.Length > 0 && Modes.Contains(args[0], StringComparer.Ordinal);
     internal static bool IsMixedMode(string mode) => mode == Modes[9] || mode == Modes[10] || mode == Modes[11];
+    internal static bool IsFamilyMode(string mode) => mode == Modes[12] || mode == Modes[13] || mode == Modes[14];
     internal static string OperationMode(string mode) => mode == Modes[9] ? Modes[0] :
         mode == Modes[10] ? Modes[1] : mode == Modes[11] ? Modes[3] :
+        mode == Modes[12] ? Modes[0] : mode == Modes[13] ? Modes[1] : mode == Modes[14] ? Modes[3] :
         Modes.Contains(mode, StringComparer.Ordinal) ? mode : throw new ArgumentException("Unknown reviewed saved-level mode.");
     internal static Request Parse(string[] args)
     {
@@ -39,7 +45,7 @@ internal static class SavedLevelPublicationCases
     {
         var request = Parse(args);
         string operationMode = OperationMode(request.Mode);
-        bool mixed = IsMixedMode(request.Mode), verify = operationMode == Modes[1];
+        bool mixed = IsMixedMode(request.Mode), family = IsFamilyMode(request.Mode), verify = operationMode == Modes[1];
         string bin = Path.GetFullPath(request.Bin), cue = Path.GetFullPath(request.Cue);
         string projectRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.ProjectRoot));
         string output = RequireLocation(request.Output, bin, cue, projectRoot, verify);
@@ -58,10 +64,18 @@ internal static class SavedLevelPublicationCases
             savedFiles = SavedFiles.Capture(project); // All small acquired streams close internally, even on error.
             saved = NativeFreshSavedLevelDocumentReadContext.Capture(NativeFreshLevelDocumentStore.Capture(project));
             savedFiles.RequireCurrent();
-            candidate = mixed
+            // The new gate preserves the complete schema3 fixture and its IDs
+            // before invoking the same public saved Candidate factory.
+            if (family) RequireFixtureDocument(request.Mode, NativeFreshLevelDocumentCodec.SerializeCanonical(saved.Document));
+            candidate = mixed || family
                 ? await NativeFreshSavedLevelResearchCandidatePlan.CaptureSavedAsync(bin, cue, saved.Snapshot)
                 : await NativeFreshSavedLevelResearchCandidatePlan.CaptureAsync(bin, cue, saved);
-            if (mixed)
+            if (family)
+                Check(candidate.FamilyCompilation != null && ReferenceEquals(candidate.SavedSnapshot, saved.Snapshot) &&
+                    candidate.ExpectedImageByteLength == ImageLength && candidate.ExpectedChangedRawSectors == 1292 &&
+                    candidate.ExpectedImageSha256 == ExpectedFamilyImage,
+                    "Exact source-measured saved family physical recipe; no independent-oracle or runtime claim.");
+            else if (mixed)
                 Check(candidate.MixedDisc != null && ReferenceEquals(candidate.SavedSnapshot, saved.Snapshot) &&
                     candidate.ExpectedImageByteLength == ImageLength && candidate.ExpectedChangedRawSectors == 1290 &&
                     candidate.ExpectedImageSha256 == MixedSavedCases.Expected, "Exact independently derived mixed saved physical recipe.");
@@ -131,7 +145,8 @@ internal static class SavedLevelPublicationCases
     internal static void RequireFixtureDocument(string mode, ReadOnlySpan<byte> canonical)
     {
         _ = OperationMode(mode);
-        var document = IsMixedMode(mode) ? MixedSavedCases.Document() : Cases.Document(14, 1, 70, 1, 128, 20);
+        var document = IsFamilyMode(mode) ? FamilySavedCases.Document() :
+            IsMixedMode(mode) ? MixedSavedCases.Document() : Cases.Document(14, 1, 70, 1, 128, 20);
         Check(canonical.SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(document)),
             "Exact actual canonical recipe; no caller hash authority.");
     }
@@ -167,8 +182,10 @@ internal static class SavedLevelPublicationCases
     {
         RequireNames(root);
         var readback = plan.VerifyImage(Path.Combine(root, NativeFreshSavedLevelResearchCandidatePlan.ImageName), CancellationToken.None);
-        Check(readback.OutputSha256 == (plan.MixedDisc == null ? ExpectedImage : MixedSavedCases.Expected) &&
-            readback.ChangedSectors == (plan.MixedDisc == null ? 1253 : 1290), "Independent full raw image readback.");
+        var expected = ExpectedRecipe(plan);
+        Check(readback.OutputSha256 == expected.Image && readback.ChangedSectors == expected.Sectors,
+            plan.FamilyCompilation == null ? "Independent full raw image readback." :
+            "Source-measured family regression reference plus full raw image readback; not an independent oracle.");
         byte[] receipt = plan.BuildReceipt(readback), cue = plan.CopyCueBytes();
         Check(ReadSmall(Path.Combine(root, NativeFreshSavedLevelResearchCandidatePlan.ReceiptName), 65536).SequenceEqual(receipt), "Exact actual receipt.");
         Check(ReadSmall(Path.Combine(root, NativeFreshSavedLevelResearchCandidatePlan.CueName), 65536).SequenceEqual(cue), "Exact actual CUE.");
@@ -176,14 +193,27 @@ internal static class SavedLevelPublicationCases
     }
     internal static void RequireResult(NativeFreshSavedLevelResearchCandidatePlan plan, string root, NativeId65FreshDiscResearchPublication result)
     {
+        var expected = ExpectedRecipe(plan);
         Check(result.PlanSha256 == plan.PlanSha256 &&
-            result.ImageSha256 == (plan.MixedDisc == null ? ExpectedImage : MixedSavedCases.Expected) &&
-            result.ChangedRawSectors == (plan.MixedDisc == null ? 1253 : 1290) &&
+            result.ImageSha256 == expected.Image && result.ChangedRawSectors == expected.Sectors &&
             result.WholeImageReadback && result.RetainedRecoveryDirectory.Length == 0 && result.OutputDirectory == root &&
             result.ResearchOnly && !result.RuntimeVerified && !result.NormalCreateBinApproved && !result.CompleteNativeDependencyClosureProven &&
             result.ImagePath == Path.Combine(root, NativeFreshSavedLevelResearchCandidatePlan.ImageName) &&
             result.ReceiptPath == Path.Combine(root, NativeFreshSavedLevelResearchCandidatePlan.ReceiptName) &&
             result.CuePath == Path.Combine(root, NativeFreshSavedLevelResearchCandidatePlan.CueName), "Only actual clean readback result.");
+    }
+    private static (string Image, int Sectors) ExpectedRecipe(NativeFreshSavedLevelResearchCandidatePlan plan)
+    {
+        if (plan.FamilyCompilation is { } family)
+        {
+            plan.RequireFamilyAncestry(plan.Saved, family);
+            RequireFixtureDocument(Modes[12], plan.CopyCanonicalDocument());
+            Check(ReferenceEquals(plan.MixedDisc, family.Disc) &&
+                ReferenceEquals(family.Disc.FamilyCompositionAncestor, family.Composition),
+                "Family physical expectation requires the actual saved composition and Disc chain.");
+            return (ExpectedFamilyImage, 1292);
+        }
+        return plan.MixedDisc == null ? (ExpectedImage, 1253) : (MixedSavedCases.Expected, 1290);
     }
     internal static byte[] ReadSmall(string path, int max)
     {
