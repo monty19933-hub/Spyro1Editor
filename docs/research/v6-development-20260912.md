@@ -527,3 +527,10 @@ checks (141119 including free checks), preserving the selected-texture golden
 plan/upload/data and original source. Shared actual source164/165 also preserve
 all historical family/mixed output hashes. Root and independent peer review are
 complete. Full build-all regression follows these focused source checkpoints.
+
+Full build-all regression167 passed335 checks/0 failures at bf385a7. Report:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-7_rh048_/summary.json`.
+Particle/source checkpoint6544342 and texture-graph checkpointbf385a7 are now
+covered by both focused actual-source and whole-repository free/build gates.
+A later native UI inventory still reports the Mac locked; no new desktop or
+DuckStation observation is claimed and prepared emulator settings remain unused.
