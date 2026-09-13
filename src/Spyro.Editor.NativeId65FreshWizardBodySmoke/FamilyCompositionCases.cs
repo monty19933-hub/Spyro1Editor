@@ -15,7 +15,8 @@ internal static class FamilyCompositionCases
         Reject<ArgumentNullException>(()=>NativeFreshMobyFamilyPlacement.Passive(GrassId,null!,null!,8960,8960,8704,0),check);
     }
 
-    internal static async Task Source(string original,NativeId65FreshWizardResearchBodyPlan body,Action<bool,string> check)
+    internal static async Task Source(string original,NativeId65FreshWizardResearchBodyPlan body,Action<bool,string> check,
+        Func<string,NativeFreshMobyFamilyCompositionPlan,Action<bool,string>,Task>? onP2=null)
     {
         var wizard=body.HostAncestor.SceneAncestor.FamilyAncestor;
         var retained=NativeFreshMobyFamilyPlacement.RetainedWizard(WizardId,wizard);
@@ -59,6 +60,7 @@ internal static class FamilyCompositionCases
         p2.RequireAncestry(body);p2.RequireExactLevelData(bytes);
         var repeat=NativeFreshMobyFamilyCompositionPlan.Compose(body,[retained,added]);
         check(repeat.PlanSha256==p2.PlanSha256&&repeat.CopyLevelData().SequenceEqual(bytes),"Repeat actual family request is deterministic.");
+        if(onP2 is not null)await onP2(original,p2,check);
         var p3=NativeFreshMobyFamilyCompositionPlan.Compose(body,[retained,added,
             NativeFreshMobyFamilyPlacement.Passive("22222222222222222222222222222222",grass,proof,8832,9152,8704,0)]);
         check(p3.Layout.PlacedCount==3&&p3.CopyLevelData().AsSpan(0x100000,0x174).SequenceEqual(grass.CopyPackage())&&

@@ -32,12 +32,26 @@ public sealed class NativeId65FreshWizardResearchExecutablePlan
                 Profile="internal-schema2-separated-B-three-T1-pairs-detached-mixed-executable-v1",
                 ExecutableEvidenceSha256=PlanSha256,BodyPlanSha256,MixedResourcePlanSha256=mixed.PlanSha256,
                 AggregateCanonicalSha256=mixed.SceneAncestor.MaterialCanonicalSha256}));
+        if(source.FamilyCompositionAncestor is { } family)
+        {
+            var ledger=FamilyCensus??throw new InvalidDataException("Family executable has no actual static census.");
+            PlanSha256=NativeId65FreshWizardExecutableLayout.Hash(JsonSerializer.SerializeToUtf8Bytes(new{
+                Profile="internal-mixed-B14-70-one-wizard-one-passive-grass-executable-v1",
+                ExecutableEvidenceSha256=PlanSha256,FamilyCompositionPlanSha256=family.PlanSha256,
+                BaseBodyPlanSha256=family.BaseBodyAncestor.PlanSha256,FinalBodySha256=family.LevelDataSha256,
+                ledger.Rows,ledger.StaticTreasureTarget,ledger.TargetSlot,
+                ledger.TargetFileOffset,ledger.RuntimeDropGuarantee}));
+        }
     }
+    internal NativeFreshMobyFamilyCompositionPlan? FamilyCompositionAncestor=>_source.FamilyCompositionAncestor;
+    internal NativeFreshFamilyStaticRewardCensus? FamilyCensus=>Layout.FamilyCensus;
     internal bool IsMaterialAuthored=>_source.MixedResourceAncestor is not null;
     internal NativeFreshWizardMaterialResource? MixedResourceAncestor=>_source.MixedResourceAncestor;
     internal NativeId65FreshWizardResearchBodyPlan BodyAncestor=>_source.Body;
     internal void RequireAncestry(NativeId65FreshWizardResearchBodyPlan body)
     {
+        if(FamilyCompositionAncestor is not null)
+            throw new InvalidDataException("Family-composed executable requires its actual family ancestry, not its historical base Body arm.");
         if(!ReferenceEquals(body,BodyAncestor))throw new InvalidDataException("Executable belongs to another actual Body, even when every executable byte/hash is equal.");
         if(_source.MixedResourceAncestor is { } mixed)
         {
@@ -47,10 +61,19 @@ public sealed class NativeId65FreshWizardResearchExecutablePlan
         }
         else NativeId65FreshWizardResearchExecutableSource.RequireBody(body);
     }
+    internal void RequireFamilyAncestry(NativeFreshMobyFamilyCompositionPlan family)
+    {
+        ArgumentNullException.ThrowIfNull(family);
+        if(!ReferenceEquals(family,FamilyCompositionAncestor)||!ReferenceEquals(family.BaseBodyAncestor,BodyAncestor)||
+            !ReferenceEquals(MixedResourceAncestor,BodyAncestor.MixedResourceAncestor))
+            throw new InvalidDataException("Family executable belongs to another actual composition/base Body/mixed resource chain.");
+        NativeId65FreshWizardResearchExecutableSource.RequireFamilyComposition(family);
+        RequireExactExecutable(CopyExecutable());
+    }
     internal byte[] RevertExact(ReadOnlySpan<byte> executable)=>Layout.RevertExact(executable);
     public const string ProfileId="fresh-A-P1-N32-Town-Host-R1-static-target10-detached-executable-v1";
     public string SourceImageSha256=>NativeMobySourceInventory.OriginalImageSha256;
-    public string BodyPlanSha256=>BodyAncestor.PlanSha256;
+    public string BodyPlanSha256=>FamilyCompositionAncestor?.PlanSha256??BodyAncestor.PlanSha256;
     public string HostPlanSha256=>BodyAncestor.HostPlanSha256;
     public string CanonicalDocumentSha256=>BodyAncestor.CanonicalDocumentSha256;
     public string PlanSha256{get;}
@@ -108,12 +131,27 @@ public sealed class NativeId65FreshWizardResearchExecutablePlan
     {
         token.ThrowIfCancellationRequested();NativeId65FreshWizardResearchExecutableSource.RequireMaterialBody(body);
         ArgumentException.ThrowIfNullOrWhiteSpace(originalBin);string path=Path.GetFullPath(originalBin);
+        return await CaptureBoundAsync(path,body,null,token);
+    }
+    internal static async Task<NativeId65FreshWizardResearchExecutablePlan> CaptureFamilyComposedAsync(string originalBin,
+        NativeFreshMobyFamilyCompositionPlan family,CancellationToken token=default)
+    {
+        token.ThrowIfCancellationRequested();NativeId65FreshWizardResearchExecutableSource.RequireFamilyComposition(family);
+        ArgumentException.ThrowIfNullOrWhiteSpace(originalBin);string path=Path.GetFullPath(originalBin);
+        return await CaptureBoundAsync(path,family.BaseBodyAncestor,family,token);
+    }
+    // Same acquired-owner lifecycle for the two internal source-bound arms.
+    // Public historical capture above retains its original behavior unchanged.
+    private static async Task<NativeId65FreshWizardResearchExecutablePlan> CaptureBoundAsync(string path,
+        NativeId65FreshWizardResearchBodyPlan body,NativeFreshMobyFamilyCompositionPlan? family,CancellationToken token)
+    {
         FileStream? held=null;NativeId65FreshWizardResearchExecutablePlan? result=null;List<Exception> failures=[];
         try
         {
             held=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
             await RequireOriginal(held,token);
-            var source=NativeId65FreshWizardResearchExecutableSource.CaptureMaterialAuthored(held,body,token);
+            var source=family is null?NativeId65FreshWizardResearchExecutableSource.CaptureMaterialAuthored(held,body,token):
+                NativeId65FreshWizardResearchExecutableSource.CaptureFamilyComposed(held,family,token);
             token.ThrowIfCancellationRequested();result=new(source);
         }
         catch(Exception error){failures.Add(error);}
@@ -128,11 +166,13 @@ public sealed class NativeId65FreshWizardResearchExecutablePlan
             }
             catch(Exception error){failures.Add(error);}
             finally{if(current is not null)Try(current.Dispose);}
+            if(family is not null)Try(()=>NativeId65FreshWizardResearchExecutableSource.RequireFamilyComposition(family));
             if(held is not null)Try(held.Dispose);
         }
         NativeFreshResearchSourceOwners.ThrowFailures(failures);
         token.ThrowIfCancellationRequested();
-        return result??throw new InvalidDataException("Material-authored executable source capture returned no result.");
+        return result??throw new InvalidDataException(family is null?"Material-authored executable source capture returned no result.":
+            "Family-composed executable source capture returned no result.");
         async Task TryAsync(Func<Task> action){try{await action();}catch(Exception error){failures.Add(error);}}
         void Try(Action action){try{action();}catch(Exception error){failures.Add(error);}}
         static Task RequireOriginal(Stream image,CancellationToken ct)

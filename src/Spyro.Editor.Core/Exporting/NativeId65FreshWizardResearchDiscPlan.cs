@@ -19,8 +19,8 @@ public sealed class NativeId65FreshWizardResearchDiscPlan
     {
         source.RequireAncestry();
         _source=source;var exe=source.Executable;var body=exe.BodyAncestor;
-        _body=body.CopyLevelData();_overlay=body.CopyOverlay();_executable=exe.CopyExecutable();
-        _geometry=NativeId65FreshWizardDiscGeometry.Compile(_overlay.Length,_body.Length);
+        _body=source.FamilyCompositionAncestor?.CopyLevelData()??body.CopyLevelData();_overlay=body.CopyOverlay();_executable=exe.CopyExecutable();
+        _geometry=source.Geometry;
         _wad=source.CopyWadHeader();_root=source.CopyRoot();
         if(!_wad.AsSpan(79*8,16).SequenceEqual(new byte[16])||!_wad.AsSpan(81*8,8).SequenceEqual(Convert.FromHexString("0078C90500200000")))
             throw new InvalidDataException("Reserved Wizard WAD pair or adjacent occupied owner changed.");
@@ -44,6 +44,12 @@ public sealed class NativeId65FreshWizardResearchDiscPlan
                 Profile="internal-schema2-separated-B-three-T1-pairs-detached-mixed-disc-v1",
                 DiscEvidenceSha256=PlanSha256,ExecutablePlanSha256,BodyPlanSha256,
                 MixedResourcePlanSha256=mixed.PlanSha256,AggregateCanonicalSha256=mixed.SceneAncestor.MaterialCanonicalSha256}));
+        if(source.FamilyCompositionAncestor is { } family)
+            PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{
+                Profile="internal-mixed-B14-70-one-wizard-one-passive-grass-disc-v1",
+                DiscEvidenceSha256=PlanSha256,FamilyCompositionPlanSha256=family.PlanSha256,
+                BaseBodyPlanSha256=family.BaseBodyAncestor.PlanSha256,FinalBodySha256=family.LevelDataSha256,
+                FamilyCensus=exe.FamilyCensus}));
         var original=new NativeAddressSpace(NativeAddressKind.DiscLogical,SourceImageSha256,NativeAddressRevision.Original,281270L*2048);
         var final=new NativeAddressSpace(NativeAddressKind.DiscLogical,PlanSha256,NativeAddressRevision.Final,original.ByteLength);
         AddressMap=new(original,final,[
@@ -56,6 +62,7 @@ public sealed class NativeId65FreshWizardResearchDiscPlan
     }
     public const string ProfileId="fresh-A-P1-N32-Town-Host-R1-target10-detached-physical-disc-v1";
     internal bool IsMaterialAuthored=>_source.MixedResourceAncestor is not null;
+    internal NativeFreshMobyFamilyCompositionPlan? FamilyCompositionAncestor=>_source.FamilyCompositionAncestor;
     internal NativeId65FreshWizardResearchExecutablePlan ExecutableAncestor=>_source.Executable;
     internal NativeRelocationMap AddressMap{get;}
     internal void RequireAncestry(NativeId65FreshWizardResearchExecutablePlan executable)
@@ -77,7 +84,7 @@ public sealed class NativeId65FreshWizardResearchDiscPlan
     public int FinalExecutableLba=>_geometry.FinalExecutableLba;
     public int FinalWadByteLength=>_geometry.FinalWadByteLength;
     public int FinalExecutableEndExclusive=>_geometry.FinalExecutableEndExclusive;
-    public int ChangedSectorOwnerCount=>1290;
+    public int ChangedSectorOwnerCount=>_geometry.ChangedSectorOwnerCount;
     public IReadOnlyList<NativeId65FreshDiscRegion> Regions{get;}
     public IReadOnlyList<string> PendingOwners{get;}=Array.AsReadOnly(new[]{
         "Detached exact physical bytes only. No destination writer, CUE, receipt, transaction, project authority, candidate or normal Create BIN route is supplied.",
@@ -119,13 +126,28 @@ public sealed class NativeId65FreshWizardResearchDiscPlan
     {
         token.ThrowIfCancellationRequested();NativeId65FreshWizardResearchDiscSource.RequireMaterialExecutable(executable);
         ArgumentException.ThrowIfNullOrWhiteSpace(originalBin);string path=Path.GetFullPath(originalBin);
+        return await CaptureBoundAsync(path,executable,false,token);
+    }
+    internal static async Task<NativeId65FreshWizardResearchDiscPlan> CaptureFamilyComposedAsync(string originalBin,
+        NativeId65FreshWizardResearchExecutablePlan executable,CancellationToken token=default)
+    {
+        token.ThrowIfCancellationRequested();NativeId65FreshWizardResearchDiscSource.RequireFamilyExecutable(executable);
+        ArgumentException.ThrowIfNullOrWhiteSpace(originalBin);string path=Path.GetFullPath(originalBin);
+        return await CaptureBoundAsync(path,executable,true,token);
+    }
+    // Same physical writer and acquired-owner lifecycle; the internal callers
+    // perform distinct actual-arm checks before opening an input stream.
+    private static async Task<NativeId65FreshWizardResearchDiscPlan> CaptureBoundAsync(string path,
+        NativeId65FreshWizardResearchExecutablePlan executable,bool family,CancellationToken token)
+    {
         FileStream? held=null;NativeId65FreshWizardResearchDiscSource? source=null;
         NativeId65FreshWizardResearchDiscPlan? result=null;List<Exception> failures=[];
         try
         {
             held=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
             await NativeId65FreshDiscSource.RequireWholeOriginalAsync(held,token);
-            source=await NativeId65FreshWizardResearchDiscSource.CaptureMaterialAuthoredAsync(held,executable,token);
+            source=family?await NativeId65FreshWizardResearchDiscSource.CaptureFamilyComposedAsync(held,executable,token):
+                await NativeId65FreshWizardResearchDiscSource.CaptureMaterialAuthoredAsync(held,executable,token);
             token.ThrowIfCancellationRequested();result=new(source);
         }
         catch(Exception error){failures.Add(error);}
@@ -149,7 +171,8 @@ public sealed class NativeId65FreshWizardResearchDiscPlan
         }
         NativeFreshResearchSourceOwners.ThrowFailures(failures);
         token.ThrowIfCancellationRequested();
-        return result??throw new InvalidDataException("Material-authored disc source capture returned no result.");
+        return result??throw new InvalidDataException(family?"Family-composed disc source capture returned no result.":
+            "Material-authored disc source capture returned no result.");
         async Task TryAsync(Func<Task> action){try{await action();}catch(Exception error){failures.Add(error);}}
         void Try(Action action){try{action();}catch(Exception error){failures.Add(error);}}
     }
@@ -203,6 +226,6 @@ public sealed class NativeId65FreshWizardResearchDiscPlan
         NativeId65FreshDiscSource.RequireActualEof(original,token);NativeId65FreshDiscSource.RequireActualEof(output,token);
         token.ThrowIfCancellationRequested();return new(result.Hash,result.Changed);
     }
-    private static bool IsChangedOwner(int lba)=>lba is 22 or 37||lba>=53874&&lba<55162;
+    private bool IsChangedOwner(int lba)=>lba is 22 or 37||lba>=53874&&lba<FinalExecutableEndExclusive;
     private static string Hash(ReadOnlySpan<byte> b)=>NativeId65FreshExecutablePlan.Hash(b);
 }

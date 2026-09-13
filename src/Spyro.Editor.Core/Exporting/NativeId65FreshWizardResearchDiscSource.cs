@@ -14,15 +14,27 @@ internal sealed class NativeId65FreshWizardResearchDiscSource
         NativeId65FreshWizardResearchExecutablePlan executable,byte[] root,byte[] wad,
         Dictionary<int,byte[]> preimages)
     {
-        if(executable.MixedResourceAncestor is { } mixed)
+        if(executable.FamilyCompositionAncestor is { } family)
+        {
+            RequireFamilyExecutable(executable);FamilyCompositionAncestor=family;MixedResourceAncestor=executable.MixedResourceAncestor;
+            Geometry=NativeId65FreshWizardDiscGeometry.CompileFamily(family);
+        }
+        else if(executable.MixedResourceAncestor is { } mixed)
         {
             RequireMaterialExecutable(executable);MixedResourceAncestor=mixed;
+            Geometry=NativeId65FreshWizardDiscGeometry.Compile(executable.BodyAncestor.CopyOverlay().Length,executable.BodyAncestor.CopyLevelData().Length);
         }
-        else RequireExecutable(executable);
+        else
+        {
+            RequireExecutable(executable);
+            Geometry=NativeId65FreshWizardDiscGeometry.Compile(executable.BodyAncestor.CopyOverlay().Length,executable.BodyAncestor.CopyLevelData().Length);
+        }
         _original=original;Executable=executable;_root=root;_wad=wad;
         _preimages=new System.Collections.ObjectModel.ReadOnlyDictionary<int,byte[]>(preimages);
     }
     internal NativeId65FreshWizardResearchExecutablePlan Executable{get;}
+    internal NativeFreshMobyFamilyCompositionPlan? FamilyCompositionAncestor{get;}
+    internal NativeId65FreshWizardDiscGeometry Geometry{get;}
     internal NativeFreshWizardMaterialResource? MixedResourceAncestor{get;}
     internal IReadOnlyList<NativeFlatIsoFile> RootFiles=>_original.RootFiles;
     internal byte[] CopyRoot()=>_root.ToArray();
@@ -32,7 +44,13 @@ internal sealed class NativeId65FreshWizardResearchDiscSource
     internal void RequireRawSector(int lba,ReadOnlySpan<byte> bytes)=>_original.RequireRawSector(lba,bytes);
     internal void RequireAncestry()
     {
-        if(MixedResourceAncestor is { } mixed)
+        if(FamilyCompositionAncestor is { } family)
+        {
+            if(!ReferenceEquals(family,Executable.FamilyCompositionAncestor)||!ReferenceEquals(MixedResourceAncestor,Executable.MixedResourceAncestor))
+                throw new InvalidDataException("Disc lost its retained actual executable/family/mixed source chain.");
+            RequireFamilyExecutable(Executable);
+        }
+        else if(MixedResourceAncestor is { } mixed)
         {
             if(!ReferenceEquals(mixed,Executable.MixedResourceAncestor))
                 throw new InvalidDataException("Disc lost its retained actual executable/mixed source pair.");
@@ -44,13 +62,15 @@ internal sealed class NativeId65FreshWizardResearchDiscSource
     {
         if(!_root.SequenceEqual(_original.CopyRoot())||!_wad.SequenceEqual(_original.CopyWadHeader())||
             !Executable.RevertExact(Executable.CopyExecutable()).SequenceEqual(_original.CopyExecutable())||
-            !_preimages.Keys.Order().SequenceEqual(new[]{22,37}.Concat(Enumerable.Range(53874,1288))))
+            !_preimages.Keys.Order().SequenceEqual(new[]{22,37}.Concat(Enumerable.Range(53874,Geometry.FinalExecutableEndExclusive-53874))))
             throw new InvalidDataException("Retained Wizard physical source owners changed.");
         foreach(var owner in _preimages)_original.RequireRawSector(owner.Key,owner.Value);
     }
     internal static void RequireExecutable(NativeId65FreshWizardResearchExecutablePlan executable)
     {
         ArgumentNullException.ThrowIfNull(executable);
+        if(executable.FamilyCompositionAncestor is not null)
+            throw new InvalidDataException("Family-composed executable requires its separate actual-family Disc arm.");
         if(executable.IsMaterialAuthored)
             throw new InvalidDataException("Material-authored Wizard executable disc composition is not enabled.");
         var body=executable.BodyAncestor;
@@ -65,6 +85,8 @@ internal sealed class NativeId65FreshWizardResearchDiscSource
     internal static void RequireMaterialExecutable(NativeId65FreshWizardResearchExecutablePlan executable)
     {
         ArgumentNullException.ThrowIfNull(executable);
+        if(executable.FamilyCompositionAncestor is not null)
+            throw new InvalidDataException("Family-composed executable requires its separate actual-family Disc arm.");
         var mixed=executable.MixedResourceAncestor;
         if(mixed is null)
             throw new InvalidDataException("Material-authored disc requires its actual mixed executable.");
@@ -80,6 +102,27 @@ internal sealed class NativeId65FreshWizardResearchDiscSource
             body.KnownSceneEndAddress!=body.SceneRuntimeAddress+0x3000||body.NormalReservedLowerAddress!=0x80187BB0||
             body.KnownSceneEndAddress>body.NormalReservedLowerAddress||body.ResidentPeteAddress!=0x801C5BB8)
             throw new InvalidDataException("Material-authored disc requires its actual A6C runtime relation and unchanged physical allocation.");
+    }
+    internal static void RequireFamilyExecutable(NativeId65FreshWizardResearchExecutablePlan executable)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        var family=executable.FamilyCompositionAncestor??
+            throw new InvalidDataException("Family Disc requires its actual family-composed executable.");
+        executable.RequireFamilyAncestry(family);
+        var body=family.BaseBodyAncestor;var geometry=NativeId65FreshWizardDiscGeometry.CompileFamily(family);
+        if(executable.CopyExecutable().Length!=0x66000||body.CopyOverlay().Length!=0x11000||
+            body.CopyBufferAddress!=0x8007AA38u+geometry.OverlayByteLength||body.CopyBufferAddress!=0x8008BA38||
+            family.ModelRuntimeAddress!=body.CopyBufferAddress+0xA6C||family.ModelRuntimeAddress!=0x8008C4A4||
+            family.SceneRuntimeAddress!=family.ModelRuntimeAddress+0x19800||family.KnownSceneEndAddress!=family.SceneRuntimeAddress+0x3800||
+            body.NormalReservedLowerAddress!=0x80187BB0||body.ResidentPeteAddress!=0x801C5BB8||
+            family.KnownSceneEndAddress>body.NormalReservedLowerAddress||executable.FamilyCensus?.StaticTreasureTarget!=10)
+            throw new InvalidDataException("Family Disc requires actual source-bound P2 growth, static census and retained Host/PETE bounds.");
+    }
+    internal static async Task<NativeId65FreshWizardResearchDiscSource> CaptureFamilyComposedAsync(Stream image,
+        NativeId65FreshWizardResearchExecutablePlan executable,CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();ArgumentNullException.ThrowIfNull(image);RequireFamilyExecutable(executable);
+        return await CaptureOwnersAsync(image,executable,null,token);
     }
     internal static async Task<NativeId65FreshWizardResearchDiscSource> CaptureMaterialAuthoredAsync(Stream image,
         NativeId65FreshWizardResearchExecutablePlan executable,CancellationToken token)
@@ -125,21 +168,22 @@ internal sealed class NativeId65FreshWizardResearchDiscSource
             if(layout!=new DiscLayout(2352,24,22,2048))throw new InvalidDataException("Wizard raw ISO geometry changed.");
             var rows=NativeWadGrowthSectorPreparation.ReadFlatRootFiles(reader,layout);
             if(!rows.SequenceEqual(original.RootFiles))throw new InvalidDataException("New authenticated ISO records differ from the actual original snapshot.");
-            var geometry=NativeId65FreshWizardDiscGeometry.Compile(0x11000,0x20C800);
+            var geometry=executable.FamilyCompositionAncestor is { } family?NativeId65FreshWizardDiscGeometry.CompileFamily(family):
+                NativeId65FreshWizardDiscGeometry.Compile(0x11000,0x20C800);
             // The old capture checked only its old allocation. This new call
-            // validates all metadata and every gap sector through55162, including
-            // the extra37. The geometry record is never passed to a writer.
+            // validates all metadata and every sector of this arm's complete
+            // gap. The arithmetic record is never passed to a writer.
             _=NativeWadGrowthSectorPreparation.Create(reader,layout,geometry.CreateGrowthGeometry());
             byte[] root=DiscImage.ReadFileBytes(reader,layout,22,0,2048),wad=DiscImage.ReadFileBytes(reader,layout,37,0,2048);
             if(!root.SequenceEqual(original.CopyRoot())||!wad.SequenceEqual(original.CopyWadHeader()))
                 throw new InvalidDataException("Complete original root/WAD owners changed during new physical capture.");
-            var preimages=new Dictionary<int,byte[]>(1290);
-            foreach(int lba in new[]{22,37}.Concat(Enumerable.Range(53874,1288)))
+            var preimages=new Dictionary<int,byte[]>(geometry.ChangedSectorOwnerCount);
+            foreach(int lba in new[]{22,37}.Concat(Enumerable.Range(53874,geometry.FinalExecutableEndExclusive-53874)))
             {
                 token.ThrowIfCancellationRequested();byte[] raw=new byte[2352];reader.Position=lba*2352L;
                 reader.ReadExactly(raw);preimages.Add(lba,raw);
             }
-            if(preimages.Count!=1290)throw new InvalidDataException("Wizard physical owner partition changed.");
+            if(preimages.Count!=geometry.ChangedSectorOwnerCount)throw new InvalidDataException("Wizard physical owner partition changed.");
             token.ThrowIfCancellationRequested();return new(original,executable,root,wad,preimages);
     }
     // All contributing later physical reads authenticate before exposing even a
@@ -183,23 +227,32 @@ internal sealed class NativeId65FreshWizardResearchDiscSource
     }
 }
 
-/// <summary>Fixed arithmetic only; not source, payload or gap ownership.</summary>
+/// <summary>Closed-arm arithmetic only; not source, payload or gap ownership.</summary>
 internal sealed class NativeId65FreshWizardDiscGeometry
 {
-    private NativeId65FreshWizardDiscGeometry(){}
+    private NativeId65FreshWizardDiscGeometry(int bodyLength){BodyByteLength=bodyLength;}
     internal bool SourceCertified=>false;
     internal int OverlayWadOffset=>0x6927000;
     internal int OverlayByteLength=>0x11000;
     internal int BodyWadOffset=>checked(OverlayWadOffset+OverlayByteLength);
-    internal int BodyByteLength=>0x20C800;
+    internal int BodyByteLength{get;}
     internal int GrowthByteLength=>checked(OverlayByteLength+BodyByteLength);
     internal int FinalWadByteLength=>checked(OverlayWadOffset+GrowthByteLength);
     internal int FinalExecutableLba=>checked(53875+GrowthByteLength/2048);
     internal int FinalExecutableEndExclusive=>checked(FinalExecutableLba+204);
+    internal int ChangedSectorOwnerCount=>checked(2+FinalExecutableEndExclusive-53874);
     internal static NativeId65FreshWizardDiscGeometry Compile(int overlay,int body)
     {
         if(overlay!=0x11000||body!=0x20C800)throw new InvalidDataException("Only the current actual Wizard Host11000/Body20C800 allocation is supported.");
-        return new();
+        return new(body);
+    }
+    internal static NativeId65FreshWizardDiscGeometry CompileFamily(NativeFreshMobyFamilyCompositionPlan family)
+    {
+        NativeId65FreshWizardResearchExecutableSource.RequireFamilyComposition(family);
+        var result=new NativeId65FreshWizardDiscGeometry(family.CopyLevelData().Length);
+        if(result.BodyByteLength%2048!=0||result.FinalExecutableEndExclusive>60000)
+            throw new InvalidDataException("Actual family body is not sector aligned or exceeds the separately checked original gap.");
+        return result;
     }
     internal NativeSkyWadRelocationPlan CreateGrowthGeometry()=>new(true,37,0x6927000,FinalWadByteLength,GrowthByteLength,
         53875,FinalExecutableLba,0x66000,60000,checked((60000-54079)*2048),new Dictionary<int,int>(),new Dictionary<int,long>(),Array.Empty<NativeSkyRelocatedPatch>());

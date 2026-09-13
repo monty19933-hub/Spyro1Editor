@@ -174,8 +174,8 @@ The complete inverse reconstructs the actual previous Body, not just selected
 fields. A two-Grass case shares its model but retains distinct instance storage.
 Independent review found no blocking storage or ancestry defect.
 
-These are internal source/storage proofs only. The EXE/Disc and saved-document
-arms do not yet accept this composition. Raw Z and yaw are authored values, not
+At that checkpoint these were internal source/storage proofs only; the later
+EXE/Disc integration is recorded below. Raw Z and yaw are authored values, not
 grounding, spawn-clearance or model-orientation acceptance. Grass's `FF` reward
 selector is not a universal no-drop promise: the original runtime masks it to127
 and enters a random-selection branch. Any forthcoming zero-static-treasure
@@ -209,3 +209,29 @@ These are headless controls, not an installed app or native gameplay acceptance.
 The catalogue/Add UI and schema3 research action remain deliberately unwired.
 Log97 repeats all five session/UI/readiness/inspection/picker groups together
 against the complete current build and passes every group.
+
+## Family-composed executable and physical Disc
+
+The existing EXE/Disc types now retain an internal actual-family arm, separate
+from the historical base Body. The old factories reject family results even
+when executable bytes match. The new arm admits only the exact mixed14/70 T1
+two-placement fixture: the retained Wizard and source-certified Grass at
+9152/9152/8704 with native yaw64. A family-specific static ledger records10+0;
+the original selector/branch window and passive dispatch are bound to it.
+Runtime drops, generic collision, persistence and universal compatibility are
+not certified. The historical one-Wizard census is not relabeled as two actors.
+
+Log81 retains the16-missing-API RED. Log88 found one missing namespace import;
+log89 passes the corrected Release build with zero warnings/errors. Log92
+completes with7380 checks, original BIN/CUE unchanged and all three old mixed
+full-image hashes unchanged. The family image measured by the common sector
+stream is `408dfdfc577f991e635e4c0b636344333ca4b2654d89afabd88af88cc1a55c98`.
+All1292 owned sectors and the complete inverse to the original pass, including
+both added sectors and the first unchanged sector. This is an observed source
+regression reference, not an independently authored image oracle. Body20D800
+places EXE at LBA54960, ends at55164 and gives WAD length6B45800.
+
+Independent read-only review found no concrete ancestry, old-arm guard or
+physical-range defect. No physical family image has yet been published or
+launched. The saved full-document adapter and its normal Publisher verification
+are the next gate; no new output writer is introduced.

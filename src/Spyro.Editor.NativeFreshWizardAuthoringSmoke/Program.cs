@@ -24,6 +24,7 @@ if (request?.IssuedMatrix != true)
     await MixedBodyCases.Free(Check);
     await MixedExecutableCases.Free(Check);
     await MixedDiscCases.Free(Check);
+    await FamilyExecutableDiscCases.Free(Check);
     Console.WriteLine($"FRESH_WIZARD_AUTHORING_FREE_OK checks={checks}");
 }
 if (request == null) return;

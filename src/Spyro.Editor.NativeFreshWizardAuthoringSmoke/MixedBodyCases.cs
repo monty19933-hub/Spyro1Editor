@@ -67,7 +67,7 @@ internal static class MixedBodyCases
             var resource=mixed[i];var host=resource.HostAncestor;var scene=resource.SceneAncestor;
             var body=await NativeId65FreshWizardResearchBodyPlan.CaptureMaterialAuthoredAsync(bin,resource);
             bodies.Add(body);body.RequireMixedAncestry(resource);body.RequireAncestry(host);
-            if(i==0)await FamilyCompositionCases.Source(bin,body,check);
+            if(i==0)await FamilyCompositionCases.Source(bin,body,check,FamilyExecutableDiscCases.Source);
             var retained=body.MixedResourceAncestor;
             check(body.IsMaterialAuthored&&retained is not null&&ReferenceEquals(retained,resource)&&
                 ReferenceEquals(body.HostAncestor,host)&&ReferenceEquals(retained.DocumentAncestor,resource.DocumentAncestor)&&
