@@ -15,6 +15,11 @@ internal sealed partial class NativeFreshDocumentWindow
     private const string RetailMaterialVariant = "spyro1-usa-retail-mode2-2352-v1";
     private readonly StackPanel _materialFields = new() { Spacing = 8, IsVisible = false };
     private readonly MaterialSlotEditor[] _materialSlots = [new(0), new(1)];
+    private readonly TextBlock _materialAuthoringNotice = new()
+    {
+        Name = "FreshMaterialAuthoringNotice", TextWrapping = TextWrapping.Wrap,
+        FontSize = 11, Foreground = Brushes.DimGray
+    };
     private Button _enableMaterials = null!;
     private bool _materialsEnabled;
     private MaterialFields _appliedMaterialFields;
@@ -73,12 +78,7 @@ internal sealed partial class NativeFreshDocumentWindow
             _materialFields.Children.Add(MaterialLabel("Source variant", slot.SourceVariant));
             _materialFields.Children.Add(Row(MaterialLabel("Source level", slot.SourceLevel), MaterialLabel("Texture ID 0–127", slot.TextureId)));
         }
-        _materialFields.Children.Add(new TextBlock
-        {
-            Name = "FreshMaterialAuthoringNotice",
-            Text = "Material descriptors are authoring intent. Inspect sources explicitly for separate thumbnails. Research currently requires a supported saved schema-2 profile; schema-3 native dependencies are unsupported. Actual source eligibility is checked during preparation.",
-            TextWrapping = TextWrapping.Wrap, FontSize = 11, Foreground = Brushes.DimGray
-        });
+        _materialFields.Children.Add(_materialAuthoringNotice);
         return _materialFields;
     }
 
@@ -165,6 +165,9 @@ internal sealed partial class NativeFreshDocumentWindow
     private void RefreshMaterialChrome(bool editable)
     {
         bool present = _aggregateMode && CurrentAggregateIntent != null;
+        _materialAuthoringNotice.Text = "Material descriptors are authoring intent. Inspect sources explicitly for separate thumbnails. " +
+            (CurrentAggregateIntent?.SchemaVersion == 3 ? NativeMobyCapabilityText
+                : "Research currently requires a supported saved schema-2 profile. Actual source eligibility is checked during preparation.");
         _materialFields.IsVisible = present;
         _enableMaterials.IsVisible = present && CurrentAggregateIntent!.FloorMaterials == null;
         _enableMaterials.Content = CurrentAggregateIntent?.SchemaVersion == 3 ? "Add material intent (keeps schema 3)" : "Add material intent (schema 2)";

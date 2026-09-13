@@ -415,7 +415,7 @@ public sealed partial class MainWindow : Window
             if (_releaseMode)
             {
                 _statusText.Text =
-                    "Beta V5 keeps hidden terrain-brush shortcuts disabled. Use the visible HP Raise/Lower controls.";
+                    "The editor keeps hidden terrain-brush shortcuts disabled. Use the visible HP Raise/Lower controls.";
                 return;
             }
             AdjustTerrainBrushFromViewport(e);
@@ -426,7 +426,7 @@ public sealed partial class MainWindow : Window
             {
                 _viewport.TerrainBrushAction = TerrainBrushAction.Off;
                 _statusText.Text =
-                    "Beta V5 keeps hidden terrain-brush shortcuts disabled. Use the visible HP Raise/Lower controls.";
+                    "The editor keeps hidden terrain-brush shortcuts disabled. Use the visible HP Raise/Lower controls.";
                 return;
             }
             SelectTerrainBrushMode(e.Action);
@@ -10702,7 +10702,7 @@ public sealed partial class MainWindow : Window
         if (!selectedExistingHpFace)
         {
             _releaseTerrainHeightHint.Text =
-                "Height editing is unavailable for this selection. Beta V5 accepts only existing HP faces; LP, added, and removed faces remain unchanged.";
+                "Height editing is unavailable for this selection. The editor accepts only existing HP faces; LP, added, and removed faces remain unchanged.";
             return;
         }
 
@@ -11057,7 +11057,7 @@ public sealed partial class MainWindow : Window
                 continue;
 
             reason =
-                $"Beta V5 refused this terrain operation because {face} {unsupported}. " +
+                $"The editor refused this terrain operation because {face} {unsupported}. " +
                 "The public beta saves existing HP height plus texture/surface edits only. " +
                 "Undo or restore that research edit before Save Terrain Changes or Create BIN.";
             return true;
@@ -11081,7 +11081,7 @@ public sealed partial class MainWindow : Window
 
             reason =
                 $"Create BIN refused saved terrain edits for {level.DisplayName}: {blocker}. " +
-                "Open that level and undo or restore the research edit. Beta V5 exports existing HP height plus texture/surface edits only.";
+                "Open that level and undo or restore the research edit. The editor exports existing HP height plus texture/surface edits only.";
             return true;
         }
 

@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using Avalonia.Layout;
@@ -14,7 +15,7 @@ internal sealed partial class NativeFreshDocumentWindow
     private readonly Button _browseMobys = Button("FreshNativeMobyBrowse", "Browse native Moby sources…", null);
     private readonly Button _cancelNativeMobyAdd = Button("FreshNativeMobyCancelAdd", "Cancel new native Moby", null);
     private readonly StackPanel _mobyCataloguePanel = new() { Name = "FreshMobyCataloguePanel", Spacing = 8, IsVisible = false };
-    private readonly TextBox _mobyCatalogueSearch = new() { Name = "FreshMobyCatalogueSearch", Watermark = "Search name, class, level or true index", MaxLength = 256 };
+    private readonly TextBox _mobyCatalogueSearch = new() { Name = "FreshMobyCatalogueSearch", PlaceholderText = "Search name, class, level or true index", MaxLength = 256 };
     private readonly ComboBox _mobyCatalogueLevel = new ReadOnlySelectionComboBox { Name = "FreshMobyCatalogueLevel", HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly ComboBox _mobyCatalogueView = new ReadOnlySelectionComboBox
     {
@@ -205,6 +206,7 @@ internal sealed partial class NativeFreshDocumentWindow
             finally { _refreshingMobyCatalogue = false; }
             RefreshMobyCatalogueRows();
             RefreshChrome();
+            QueueMobyCatalogueReveal(ticket, listing);
             NativeFreshMobyCatalogueItem? chosen = await _mobyCatalogueChoice.Task;
             if (chosen != null)
             {
@@ -229,11 +231,12 @@ internal sealed partial class NativeFreshDocumentWindow
             _mobyCatalogueBusy = false;
             try
             {
-                if (failures.Count == 0 && pending != null && !_mobyCatalogueCancelRequested)
+                if (failures.Count == 0 && pending != null && ticket != null && !_mobyCatalogueCancelRequested)
                 {
                     _pendingNativeMobyAdd = pending;
                     WriteFields();
                     _status.Text = $"New native Moby ({pending.Label}) is pending. Enter raw XYZ and native yaw, then Apply. No editor ID exists yet. Cancel restores the prior selection. " + MobyAuthoringStatus;
+                    QueuePendingNativeMobyReveal(ticket, pending);
                 }
                 else
                 {
@@ -269,6 +272,51 @@ internal sealed partial class NativeFreshDocumentWindow
             ticket.RawGeneration != _materialInspectionGeneration || HasUnappliedFields || CaptureResearchSourcePaths() != (ticket.Image, ticket.Cue))
             throw new InvalidDataException("The catalogue's document, raw fields, selection, mode, project or source changed. Browse again explicitly; no replacement was adopted.");
     }
+
+    private void QueueMobyCatalogueReveal(MobyCatalogueTicket ticket, NativeFreshMobyCatalogueListing listing) =>
+        QueueMobyReveal(_mobyCatalogueSearch, _mobyCatalogueEntries, () =>
+        {
+            if (!_mobyCatalogueBusy || _mobyCatalogueCleanupBlocked || !ReferenceEquals(listing, _mobyCatalogueListing)) return false;
+            RequireMobyCatalogueCurrent(ticket);
+            return true;
+        });
+
+    private void QueuePendingNativeMobyReveal(MobyCatalogueTicket ticket, PendingNativeMobyAdd pending)
+    {
+        long rawGeneration = _materialInspectionGeneration;
+        QueueMobyReveal(_nativeMobySourceIdentity, _nativeMobyFields["FreshNativeMobyYaw"], () =>
+        {
+            if (!ReferenceEquals(pending, _pendingNativeMobyAdd) || AggregateCommandsBlocked || !_aggregateMode ||
+                _documentMode.SelectedItem as string != AggregateModeLabel || _mobyCatalogueClosed || _mobyCatalogueCloseRequested ||
+                _mobyCatalogueCancelRequested || _materialInspectionCleanupBlocked || _addingWizard || _forkRecoveryPending ||
+                ticket.RequestGeneration != _mobyCatalogueGeneration || rawGeneration != _materialInspectionGeneration ||
+                !ReferenceEquals(ticket.Session, _aggregateSession) || !ReferenceEquals(ticket.Snapshot, _aggregateSession?.Snapshot) ||
+                !ReferenceEquals(ticket.Applied, CurrentAggregateIntent) || ticket.Selection != _aggregateSession?.SelectedEditorId)
+                return false;
+            RequireCurrentProject();
+            return CaptureResearchSourcePaths() == (ticket.Image, ticket.Cue);
+        });
+    }
+
+    private static void QueueMobyReveal(Control first, Control last, Func<bool> isCurrent) =>
+        Dispatcher.UIThread.Post(() =>
+        {
+            // The queued layout callback grants no authoring permission. Recheck
+            // its exact operation after layout; canceled/stale work cannot scroll.
+            try
+            {
+                if (!isCurrent() || !first.IsVisible || !last.IsVisible ||
+                    first.Bounds.Width <= 0 || last.Bounds.Height <= 0 || last.TranslatePoint(default, first) is not { } end)
+                    return;
+                first.BringIntoView(new Rect(0, 0, Math.Max(first.Bounds.Width, end.X + last.Bounds.Width),
+                    end.Y + last.Bounds.Height));
+            }
+            catch (Exception)
+            {
+                // Source/project checks may fail after the UI operation settled.
+                // Skip optional scrolling; never turn it into a late Add or error.
+            }
+        }, DispatcherPriority.Loaded);
 
     private void InvalidateMobyCatalogue()
     {

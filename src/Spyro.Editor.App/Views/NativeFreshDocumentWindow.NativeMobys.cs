@@ -2,12 +2,15 @@ using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Spyro.Editor.Core.Editing;
+using Spyro.Editor.Core.Exporting;
 
 namespace Spyro.Editor.App.Views;
 
 internal sealed partial class NativeFreshDocumentWindow
 {
-    private const string NativeMobyCapabilityText = "Schema-3 native Moby authoring is authored-only; native dependencies are unsupported by the current research action. Normal Create BIN and research export are unavailable. Source references and XY markers do not certify imported models, collision or gameplay.";
+    private string NativeMobyCapabilityText => NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(CurrentAggregateIntent)
+        ? "Research supports the exact saved Wizard + Grass profile after explicit Apply and Save, subject to actual original BIN/CUE validation. Normal Create BIN is unavailable. This bounded profile does not certify other native imports or general gameplay."
+        : "Schema-3 native Moby authoring is authored-only; native dependencies are unsupported by the current research action. Normal Create BIN and research export are unavailable. Source references and XY markers do not certify imported models, collision or gameplay.";
     private readonly StackPanel _nativeMobyEditor = new() { Name = "FreshNativeMobyFields", Spacing = 8, IsVisible = false };
     private readonly TextBlock _nativeMobySourceIdentity = new()
     {

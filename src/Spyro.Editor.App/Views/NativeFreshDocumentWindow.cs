@@ -85,7 +85,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         _reopen.Click += async (_, _) => await ReopenAsync();
         var close = Button("FreshDocumentClose", "Close", Close);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        foreach (var button in new[] { _new, _undoButton, _redoButton, _reopen, _save, close }) actions.Children.Add(button);
+        foreach (var button in new[] { _new, _apply, _undoButton, _redoButton, _reopen, _save, close }) actions.Children.Add(button);
 
         var heading = new StackPanel
         {
@@ -125,7 +125,6 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         _fieldsPanel.Children.Add(_music);
         _fieldsPanel.Children.Add(BuildAggregateFields());
         _fieldsPanel.Children.Add(BuildMaterialFields());
-        _fieldsPanel.Children.Add(_apply);
         _music.SelectionChanged += (_, _) => FieldsChanged();
         // Source-capture cancellation must not sit inside the disabled form.
         var inspectorContent = new StackPanel { Spacing = 12, Children = { _fieldsPanel, BuildMaterialInspectionFields(), BuildMobyCataloguePanel() } };

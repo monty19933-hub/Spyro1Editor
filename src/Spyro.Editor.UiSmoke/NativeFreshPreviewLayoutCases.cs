@@ -27,6 +27,14 @@ internal static class NativeFreshPreviewLayoutCases
                         $"Schematic must not cover its caption: {mode}/{width}x{height}; bottom={preview.Bounds.Bottom}; note={note.Bounds.Top}.");
                     Check(preview.Bounds.Height >= 360 && note.Bounds.Height > 0,
                         "Retain the existing minimum schematic and a real caption.");
+                    var apply = fixture.Find<Button>("FreshDocumentApply");
+                    var save = fixture.Find<Button>("FreshDocumentSave");
+                    Check(ReferenceEquals(apply.Parent, save.Parent) &&
+                        !apply.GetLogicalAncestors().OfType<ScrollViewer>().Any(),
+                        "Apply stays beside Save outside the scrolling inspector in both document modes.");
+                    Check(apply.Bounds.Width > 0 && apply.Bounds.Left >= 0 &&
+                        apply.Bounds.Right <= ((Control)apply.Parent!).Bounds.Width,
+                        "Apply remains fully reachable at default, minimum and enlarged window sizes.");
                 }
             }
         }

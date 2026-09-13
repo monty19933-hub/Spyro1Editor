@@ -7264,7 +7264,7 @@ public sealed partial class MainWindow
             if (releaseViewportGesture || structural || movesXy)
             {
                 _statusText.Text =
-                    $"Beta V5 blocked {action}: release terrain editing uses the visible HP Raise/Lower and guarded texture-paint controls. " +
+                    $"The editor blocked {action}: release terrain editing uses the visible HP Raise/Lower and guarded texture-paint controls. " +
                     "XY movement, drag sculpting, full edit dialogs, add/remove, and hidden viewport shortcuts remain research-only.";
                 return true;
             }
@@ -7275,7 +7275,7 @@ public sealed partial class MainWindow
                 terrain.IsTerrainAddClone)
             {
                 _statusText.Text =
-                    $"Beta V5 blocked {action}: only existing high-detail (HP) faces may receive Z-height edits.";
+                    $"The editor blocked {action}: only existing high-detail (HP) faces may receive Z-height edits.";
                 return true;
             }
 

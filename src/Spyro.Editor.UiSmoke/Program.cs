@@ -28,7 +28,12 @@ if (NativeFreshSavedResearchUiArguments.Handles(args))
 {
     bool publish = NativeFreshSavedResearchUiArguments.RequirePublication(args);
     HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
-    if (publish) NativeFreshSavedResearchSourceUiCases.Run(args[1], args[2], args[3], args[4]);
+    if (publish)
+    {
+        if (NativeFreshSavedResearchUiArguments.RequireFamilyPublication(args))
+            NativeFreshSavedResearchSourceUiCases.RunFamily(args[1], args[2], args[3], args[4]);
+        else NativeFreshSavedResearchSourceUiCases.Run(args[1], args[2], args[3], args[4]);
+    }
     else
     {
         NativeFreshSavedResearchUiArguments.Run();
@@ -1003,7 +1008,7 @@ void RunWorkspaceShellOnly()
         if (!terrain.TerrainVertexDeltas().SequenceEqual(selectedHeightBeforeRefusedUndo) ||
             !researchOnlyFace.IsTerrainRemoved ||
             !string.Equals(FileSha256(terrainEditsPath), savedReleaseTerrainSha256, StringComparison.Ordinal) ||
-            !(statusText.Text ?? string.Empty).Contains("Beta V5 refused", StringComparison.Ordinal))
+            !(statusText.Text ?? string.Empty).Contains("The editor refused", StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 "Undo Height Only partially mutated or persisted terrain while another release structural edit was staged.");
@@ -1060,7 +1065,7 @@ void RunWorkspaceShellOnly()
         WaitForUiTask(blockedSaveTask, "refusing a live release structural terrain save");
         if (blockedSaveTask.GetAwaiter().GetResult() ||
             !string.Equals(FileSha256(terrainEditsPath), savedReleaseTerrainSha256, StringComparison.Ordinal) ||
-            !(statusText.Text ?? string.Empty).Contains("Beta V5 refused", StringComparison.Ordinal))
+            !(statusText.Text ?? string.Empty).Contains("The editor refused", StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 "Save Terrain Changes admitted or rewrote data for a live research structural terrain edit.");
@@ -12598,7 +12603,7 @@ static void AssertDirectTerrainPersistenceRefused(
     {
         WaitForUiTask(directPersistTask, $"centrally refusing direct persistence of {context}");
     }
-    catch (InvalidOperationException ex) when (ex.Message.Contains("Beta V5 refused", StringComparison.Ordinal))
+    catch (InvalidOperationException ex) when (ex.Message.Contains("The editor refused", StringComparison.Ordinal))
     {
         refused = true;
     }

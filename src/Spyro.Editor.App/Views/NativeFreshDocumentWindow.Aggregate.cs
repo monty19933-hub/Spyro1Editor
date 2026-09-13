@@ -470,7 +470,7 @@ internal sealed partial class NativeFreshDocumentWindow
         _moveWizardUp.IsEnabled = _removeWizard.IsEnabled && index > 0;
         _moveWizardDown.IsEnabled = _removeWizard.IsEnabled && index >= 0 && index + 1 < CurrentAggregateIntent!.Placements.Count;
         _placementSummary.Text = $"{CurrentAggregateIntent?.Placements.Count ?? 0} authored placements · maximum {NativeFreshLevelDocumentIntent.MaximumPlacements}. " +
-            (current?.SchemaVersion == 3 ? "Schema-3 placements are authored-only; native dependencies and research export are unsupported."
+            (current?.SchemaVersion == 3 ? NativeMobyCapabilityText
                 : "Research supports no placements or the supported one-Wizard mixed profile only, with two retail materials and actual source validation.");
     }
 

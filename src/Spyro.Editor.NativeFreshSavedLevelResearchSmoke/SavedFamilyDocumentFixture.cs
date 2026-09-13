@@ -4,6 +4,8 @@ using Spyro.Editor.Core.Editing;
 // This is an intent, not a captured asset, source certificate or runtime proof.
 internal static class SavedFamilyDocumentFixture
 {
+    // Keep this shared fixture independent of Core friend-assembly access.
+    private const string RetailSourceVariant = "spyro1-usa-retail-mode2-2352-v1";
     internal const string WizardId = "11111111111111111111111111111111";
     internal const string GrassId = "22222222222222222222222222222222";
 
@@ -16,7 +18,7 @@ internal static class SavedFamilyDocumentFixture
             .WithFloorMaterials(Pair(14, 1, 70, 1)).UpgradeForNativeMobys();
         return old.WithContent(old.Base, [old.Placements[0],
                 NativeFreshMobyPlacementIntent.Create(GrassId,
-                    NativeFreshRetailMobyReference.Create(NativeFreshRetailTerrainMaterialIntent.SupportedSourceVariant,
+                    NativeFreshRetailMobyReference.Create(RetailSourceVariant,
                         entry, index, nativeClass), x, y, z, yaw)]);
     }
 
@@ -73,6 +75,6 @@ internal static class SavedFamilyDocumentFixture
 
     private static NativeFreshFloorMaterialsIntent Pair(int firstEntry, int firstTexture, int secondEntry, int secondTexture) =>
         NativeFreshFloorMaterialsIntent.Create(
-            NativeFreshFloorMaterialIntent.RetailTerrain(NativeFreshRetailTerrainMaterialIntent.SupportedSourceVariant, firstEntry, firstTexture),
-            NativeFreshFloorMaterialIntent.RetailTerrain(NativeFreshRetailTerrainMaterialIntent.SupportedSourceVariant, secondEntry, secondTexture));
+            NativeFreshFloorMaterialIntent.RetailTerrain(RetailSourceVariant, firstEntry, firstTexture),
+            NativeFreshFloorMaterialIntent.RetailTerrain(RetailSourceVariant, secondEntry, secondTexture));
 }

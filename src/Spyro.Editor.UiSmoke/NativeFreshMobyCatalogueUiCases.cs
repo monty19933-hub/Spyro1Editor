@@ -1,4 +1,7 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using Spyro.Editor.App.Views;
 using Spyro.Editor.Core.Analysis;
 using Spyro.Editor.Core.Editing;
@@ -24,13 +27,16 @@ internal static class NativeFreshMobyCatalogueUiCases
         {
             ListingCases();
             Defaults(Add("catalogue-default", null));
-            StageAndApply(Add("catalogue-stage", new()));
+            StageAndApply(Add("catalogue-stage", new()), parent);
             ChangedSourceListing(Add("catalogue-modified", new(Listing(new string('0', 64)))));
             foreach (string kind in new[] { "dirty", "stale", "no-owner", "null-owner", "owner-failure", "source-failure" })
                 EarlyRefusal(Add("catalogue-refuse-" + kind, new(), owner: kind != "no-owner"), kind);
             foreach (string kind in new[] { "cancel", "project", "source", "base-aba", "route-aba", "native-aba", "material-aba" })
                 CaptureInvalidation(Add("catalogue-capture-" + kind, new(hold: true)), kind);
             PickerInvalidation(Add("catalogue-picker-stale", new()));
+            foreach (string kind in new[] { "source-image", "source-cue", "project", "raw", "raw-aba" })
+                OwnerReleaseInvalidation(Add("catalogue-release-" + kind, new()), kind);
+            SelectedDonorReleaseFailure(Add("catalogue-selected-release-failure", new()));
             BusyCommands(Add("catalogue-busy", new(hold: true)));
             CloseDrains(Add("catalogue-close", new(hold: true)));
             FailurePreservation(Add("catalogue-failure", new(hold: true)));
@@ -112,7 +118,7 @@ internal static class NativeFreshMobyCatalogueUiCases
         Check(!f.Find<Button>("FreshNativeMobyBrowse").IsVisible, "Native catalogue stays outside legacy mode.");
     }
 
-    private static void StageAndApply((F Fixture, MetadataProvider? Provider) item)
+    private static void StageAndApply((F Fixture, MetadataProvider? Provider) item, string artifacts)
     {
         var (f, provider) = item;
         var original = f.Window.CurrentAggregateIntent!;
@@ -124,6 +130,8 @@ internal static class NativeFreshMobyCatalogueUiCases
         Check(f.Window.MobyCatalogueBusyForTesting && provider!.Calls == 1 && provider.Image == f.SelectedSource.Image &&
             f.AcquiredOwners == 1 && f.ReleaseAttempts == 0 && f.Find<StackPanel>("FreshMobyCataloguePanel").IsVisible,
             "Actual window catalogue holds one real UI owner through source capture and donor choice.");
+        RequireVisibleWithoutScrolling(f, ["FreshMobyCatalogueSearch", "FreshMobyCatalogueEntries"],
+            "Browse automatically reveals its actual search and populated rows without test-assisted scrolling.");
         f.Set("FreshMobyCatalogueSearch", "chest");
         Check(Rows(f).Count == 2 && Rows(f).Select(x => x.SourceVariantId).Distinct().Count() == 2,
             "Visible search does not collapse same-class source variants.");
@@ -137,6 +145,8 @@ internal static class NativeFreshMobyCatalogueUiCases
         SelectDonor(f, Wizard);
         Check(f.Find<TextBlock>("FreshMobyCatalogueDetails").Text!.Contains("Authoring reference only", StringComparison.OrdinalIgnoreCase),
             "A Wizard-shaped native donor is authoring-only, not the independently supported Wizard-route recipe.");
+        CaptureWindow(f, artifacts, "FreshMobyCatalogueEntries", "fresh-moby-catalogue-populated.png");
+        CaptureWindow(f, artifacts, "FreshMobyCatalogueStage", "fresh-moby-catalogue-donor-details.png");
         f.Fire("FreshMobyCatalogueStage"); F.Wait(task);
         Check(f.ReleaseAttempts == 1 && !f.Window.MobyCatalogueBusyForTesting && f.Window.HasUnappliedFields &&
             ReferenceEquals(appliedBase, f.Window.CurrentAggregateIntent) && f.Window.Preview.SelectedEditorId == F.A &&
@@ -149,6 +159,9 @@ internal static class NativeFreshMobyCatalogueUiCases
         string identity = f.Find<TextBlock>("FreshNativeMobySourceIdentity").Text!;
         Check(identity.Contains(F.Variant) && identity.Contains("WAD 14") && identity.Contains("true index 7") && identity.Contains("class 51"),
             "Staged source identity is complete read-only text, not a writable source form.");
+        RequireVisibleWithoutScrolling(f, ["FreshNativeMobySourceIdentity", .. NativeFields],
+            "Successful Stage automatically reveals the selected source and every blank XYZ/yaw field without test-assisted scrolling.");
+        CaptureWindow(f, artifacts, "FreshNativeMobyFields", "fresh-moby-catalogue-pending-add.png");
         f.Select(F.B);
         Check(f.Window.Preview.SelectedEditorId == F.A, "Pending Add cannot drift the retained placement selection.");
         f.Fire("FreshDocumentApply");
@@ -298,6 +311,77 @@ internal static class NativeFreshMobyCatalogueUiCases
             f.Window.Preview.SelectedEditorId == F.A, "Source ticket is rechecked at donor acceptance, not only at inventory completion.");
     }
 
+    private static void OwnerReleaseInvalidation((F Fixture, MetadataProvider? Provider) item, string kind)
+    {
+        var (f, provider) = item;
+        var initial = f.Window.CurrentAggregateIntent;
+        string heading = f.Text("FreshHeading");
+        Task task = Start(f); SelectDonor(f, Chest);
+        int callbacks = 0;
+        bool releaseBeforeStaging = false;
+        f.OnRelease = () =>
+        {
+            callbacks++;
+            releaseBeforeStaging = f.Window.MobyCatalogueBusyForTesting && !task.IsCompleted &&
+                !f.Window.HasUnappliedFields && !f.Find<Button>("FreshNativeMobyCancelAdd").IsVisible &&
+                ReferenceEquals(initial, f.Window.CurrentAggregateIntent);
+            if (kind == "source-image") f.SelectedSource = (f.SelectedSource.Image + ".release-drift", f.SelectedSource.Cue);
+            else if (kind == "source-cue") f.SelectedSource = (f.SelectedSource.Image, f.SelectedSource.Cue + ".release-drift");
+            else if (kind == "project") f.CurrentProject = false;
+            else
+            {
+                f.Set("FreshHeading", "0064");
+                if (kind == "raw-aba") f.Set("FreshHeading", heading);
+            }
+        };
+        f.Fire("FreshMobyCatalogueStage"); F.Wait(task);
+        Check(callbacks == 1 && releaseBeforeStaging && f.ReleaseAttempts == 1 && provider!.Calls == 1,
+            "Accepted donor remains unstaged until the actual owner's single release returns: " + kind);
+        Check(f.Window.MobyCatalogueFailureForTesting != null && !f.Window.MobyCatalogueBusyForTesting &&
+            !f.Find<StackPanel>("FreshMobyCataloguePanel").IsVisible && !f.Find<Button>("FreshNativeMobyCancelAdd").IsVisible &&
+            ReferenceEquals(initial, f.Window.CurrentAggregateIntent) && f.Window.Preview.SelectedEditorId == F.A,
+            "Owner-release drift rejects the already chosen donor without adding an ID, selection or applied history: " + kind);
+        Check(f.Window.HasUnappliedFields == (kind == "raw") && f.Text("FreshHeading") == (kind == "raw" ? "0064" : heading) &&
+            f.Text("FreshWizardOriginZ") == "8909" && NativeFields.All(name => f.Text(name) == ""),
+            "Release-time raw spelling is retained, and raw A-B-A cannot stage a late donor: " + kind);
+        f.OnRelease = null;
+        f.CurrentProject = true;
+    }
+
+    private static void SelectedDonorReleaseFailure((F Fixture, MetadataProvider? Provider) item)
+    {
+        var (f, provider) = item;
+        var initial = f.Window.CurrentAggregateIntent;
+        var cleanup = new IOException("selected catalogue donor owner release failed");
+        Task task = Start(f); SelectDonor(f, Chest);
+        f.ReleaseFailure = cleanup;
+        f.Fire("FreshMobyCatalogueStage"); F.Wait(task);
+        Check(ReferenceEquals(f.Window.MobyCatalogueFailureForTesting, cleanup) && f.ReleaseAttempts == 1 &&
+            !f.Window.MobyCatalogueBusyForTesting && !f.Find<Button>("FreshNativeMobyCancelAdd").IsVisible &&
+            !f.Find<StackPanel>("FreshMobyCataloguePanel").IsVisible && !f.Window.HasUnsavedChanges &&
+            ReferenceEquals(initial, f.Window.CurrentAggregateIntent) && f.Window.Preview.SelectedEditorId == F.A,
+            "A chosen donor does not stage after uncertain actual owner release; retain the exact cleanup failure and saved document.");
+        Check(!f.Find<Button>("FreshNativeMobyBrowse").IsEffectivelyEnabled &&
+            !f.Find<Button>("FreshMaterialsInspect").IsEffectivelyEnabled &&
+            !f.Find<Button>("FreshDocumentResearch").IsEffectivelyEnabled &&
+            !f.Find<Button>("FreshDocumentApply").IsEffectivelyEnabled &&
+            !f.Find<Button>("FreshDocumentSave").IsEffectivelyEnabled,
+            "Uncertain catalogue owner cleanup keeps authoring and all new source operations disabled.");
+        int owners = f.OwnerAttempts, sources = f.SourceCalls, captures = provider!.Calls;
+        f.ReleaseFailure = null; // Clearing an external failure must not clear the Window's cleanup guard.
+        foreach (string command in new[] { "FreshNativeMobyBrowse", "FreshMaterialsInspect", "FreshDocumentResearch",
+            "FreshDocumentApply", "FreshDocumentSave" }) f.Fire(command);
+        f.CmdSave();
+        if (f.Window.MobyCatalogueTaskForTesting is { } catalogue) F.Wait(catalogue);
+        if (f.Window.MaterialInspectionTaskForTesting is { } inspection) F.Wait(inspection);
+        if (f.Window.ResearchTaskForTesting is { } research) F.Wait(research);
+        Check(f.OwnerAttempts == owners && f.SourceCalls == sources && provider.Calls == captures && f.ReleaseAttempts == 1 &&
+            ReferenceEquals(f.Window.MobyCatalogueFailureForTesting, cleanup) &&
+            ReferenceEquals(initial, f.Window.CurrentAggregateIntent) && !f.Window.HasUnsavedChanges &&
+            !f.Find<Button>("FreshNativeMobyCancelAdd").IsVisible,
+            "Direct commands cannot retry the uncertain owner, read a new source or adopt the rejected donor after cleanup failure.");
+    }
+
     private static void BusyCommands((F Fixture, MetadataProvider? Provider) item)
     {
         var (f, provider) = item;
@@ -355,6 +439,39 @@ internal static class NativeFreshMobyCatalogueUiCases
     {
         f.Fire("FreshNativeMobyBrowse");
         return f.Window.MobyCatalogueTaskForTesting ?? throw new InvalidDataException("Expected actual catalogue UI task.");
+    }
+    private static void RequireVisibleWithoutScrolling(F f, string[] controls, string message)
+    {
+        // Let actual queued layout/render work settle, but never BringIntoView,
+        // focus a field or assign a scroll offset before measuring the transition.
+        f.Window.InvalidateVisual(); F.Pump();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick(2); F.Pump();
+        List<string> clipped = [];
+        foreach (string name in controls)
+        {
+            var target = f.Find<Control>(name);
+            var scroll = target.GetLogicalAncestors().OfType<ScrollViewer>().First();
+            Point? top = target.TranslatePoint(default, scroll);
+            if (!target.IsVisible || target.Bounds.Width <= 0 || target.Bounds.Height <= 0 || top is not { } point ||
+                point.X < -1 || point.Y < -1 || point.X + target.Bounds.Width > scroll.Viewport.Width + 1 ||
+                point.Y + target.Bounds.Height > scroll.Viewport.Height + 1)
+                clipped.Add($"{name}: top={top}, size={target.Bounds.Size}, viewport={scroll.Viewport}, offset={scroll.Offset}");
+        }
+        Check(clipped.Count == 0, message + (clipped.Count == 0 ? "" : " Clipped: " + string.Join("; ", clipped)));
+    }
+
+    private static void CaptureWindow(F f, string artifacts, string control, string name)
+    {
+        // Existing default-size headless Window, with actual inspector scrolling.
+        // These synthetic metadata frames contain no native source or model render.
+        var target = f.Find<Control>(control);
+        target.BringIntoView(); F.Pump();
+        f.Window.InvalidateVisual(); F.Pump();
+        using var frame = f.Window.CaptureRenderedFrame() ?? throw new InvalidDataException("Expected actual catalogue Window frame.");
+        string path = Path.Combine(artifacts, name); frame.Save(path);
+        Console.WriteLine("FRESH_MOBY_CATALOGUE_WINDOW_FRAME path=" + path);
+        Check(target.GetLogicalAncestors().OfType<ScrollViewer>().Any(scroll => scroll.Offset.Y > 0),
+            "Catalogue and pending source controls are reachable in the actual inspector scroll: " + control);
     }
     private static IReadOnlyList<NativeFreshMobyCatalogueItem> Rows(F f) =>
         f.Find<ListBox>("FreshMobyCatalogueEntries").ItemsSource!.Cast<NativeFreshMobyCatalogueItem>().ToArray();

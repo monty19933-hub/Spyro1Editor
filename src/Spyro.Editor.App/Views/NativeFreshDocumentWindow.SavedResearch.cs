@@ -41,7 +41,8 @@ internal sealed partial class NativeFreshDocumentWindow
         (CurrentAggregateIntent is { SchemaVersion: 2, Placements.Count: 0,
             FloorMaterials.Triangle0: NativeFreshRetailTerrainMaterialIntent,
             FloorMaterials.Triangle1: NativeFreshRetailTerrainMaterialIntent } ||
-            NativeFreshSavedLevelResearchEligibility.IsSupportedMixedProfile(CurrentAggregateIntent)) && !HasUnsavedChanges;
+            NativeFreshSavedLevelResearchEligibility.IsSupportedMixedProfile(CurrentAggregateIntent) ||
+            NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(CurrentAggregateIntent)) && !HasUnsavedChanges;
 
     private async Task CreateSavedResearchCandidateAsync()
     {

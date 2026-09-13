@@ -51,7 +51,7 @@ public sealed partial class MainWindow
             throw new InvalidDataException("Select your original source BIN/CUE in the main editor first.");
         string cue = DiscImageLocator.FindCueForImage(image);
         if (string.IsNullOrWhiteSpace(cue) || !File.Exists(cue))
-            throw new InvalidDataException("Fresh research export requires the existing source CUE; no source CUE is generated or configured here.");
+            throw new InvalidDataException("Fresh document source work requires the existing source CUE; no source CUE is generated or configured here.");
         return (Path.GetFullPath(image), Path.GetFullPath(cue));
     }
 
