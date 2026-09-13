@@ -274,3 +274,43 @@ saved research smoke DLL
 `2b0cbb6ab9cb8a0f541d84e519854baaed4d0b3266f6f03165903282d26dc459`.
 Physical publication and independent verification follow from this retained
 producer. No emulator is currently open; original settings remain restored.
+
+## Published saved two-family candidate and bounded gameplay
+
+Logs104 and105 now pass actual publication and a separate-process Verify through
+the retained producer and unchanged Publisher/Engine. Candidate directory:
+`_local/research/v6-mixed-export-20260912-r01.jR0oBr/family-candidate-r01/`.
+BIN `408dfd…5c98`, CUE `e77f08…701d`, receipt `f21dbf…efd7`,
+plan `41602d…2e4`;1292 changed-sector owners and whole-image readback.
+The complete saved schema3 project, original BIN/CUE and manifest are unchanged.
+
+DuckStation session
+`_local/native-v6-family-runtime-20260912-r01.NVKd1A/` is closed and contains
+RUNTIME-SESSION.md,19 F10 screenshots, fresh original/test/after-test INIs and
+a private memory-card copy. Exact CUE cold boot, copied slot1 and native LAB
+entry visibly show Wizard/cloud, imported Artisans Grass, two floor materials
+and authored brown sky without Town Square scenery. Wizard attack effects,
+flame, charge defeat, yellow reward/10 overlay, falling and respawn were observed.
+The10 gems remain through native respawn. This does not prove durable save
+ownership or ordinary portal/re-entry.
+
+After early enemy/input interference, the on-screen controller overlay showed
+an isolated Cross-only stationary jump and a grounded return with yellow Sparx
+unchanged; F10 landing20:47:56 and paired live input/airborne captures are
+identified in the session report. Right-only and Up-only walking also moved
+Spyro across the authored floor. Wizard contact interrupted the final material
+seam check, so isolated seam-crossing acceptance remains pending. Flame-only
+defeat and generic Grass collision were not independently isolated.
+
+Session15222 exited0 without a resume savestate. Original global/game INIs were
+restored byte-for-byte, retaining `5e751a…dab3` and `629d9b…d1f3`.
+Original card `d69b43…e8ae2`, DuckStation executable `34c62f…c870`,
+published BIN/CUE/receipt and preserved apps are unchanged. The private card
+was not copied back. No runtime/normal-export/closure flag was retroactively
+changed in the source receipt. No canonical V6 app is installed yet.
+
+The next active regression work is original-source locked-chest extraction
+and an inline native-Moby catalogue with staged Add/Cancel. Logs106 and107
+retain their genuine missing-API RED builds. Exact saved-family research
+readiness will reuse the existing full-document validator and publication path,
+not broaden generic catalogue authoring into native compatibility.
