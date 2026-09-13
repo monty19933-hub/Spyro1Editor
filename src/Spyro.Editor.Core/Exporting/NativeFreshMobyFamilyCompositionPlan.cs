@@ -41,6 +41,7 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
 {
     private readonly byte[] _body,_scene,_inverse;
     private readonly NativeLevelDataGrowthLayout _growth;
+    private readonly NativeModelTailBatch _modelBatch;
     private readonly IReadOnlyList<NativeMobyDependencyClosurePlan> _graphs;
     private NativeFreshMobyFamilyCompositionPlan(NativeId65FreshWizardResearchBodyPlan body,NativeFreshMobyFamilyPlacement[] placements)
     {
@@ -62,8 +63,14 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
             throw new InvalidDataException("Current Wizard/Grass transform policies require their exact single-row source schemas.");
         Layout=RowSpans.Layout;
         int modelOffset=body.Descriptors[2].Offset,oldModelLength=body.Descriptors[2].ByteLength;
-        byte[] appended=passive?.CopyPackage()??[];
-        int modelLength=checked(oldModelLength+AlignSector(appended.Length));
+        var contributions=passive?.ModelContributions??Array.Empty<NativeModelTailPackage>();
+        // The actual retained Wizard source already owns the PETE certificate.
+        // Keep its per-class guard; the neutral batch cannot issue that proof.
+        foreach(var contribution in contributions)wizard.RequireNonSharedModelClass(contribution.ActorId);
+        _modelBatch=NativeModelTailBatch.Compile(baseline,contributions,[]);
+        _modelBatch.RequireExactCurrentBody(baseline);
+        byte[] appended=_modelBatch.CopyAppendBytes();
+        int modelLength=_modelBatch.FinalModelLength;
         int finalLength=checked(baseline.Length+modelLength-oldModelLength+Layout.SceneByteLength-baselineScene.Length);
         FinalBodyDomain=new(NativeAddressKind.LevelData,"fresh-family-body:"+body.PlanSha256,NativeAddressRevision.Final,finalLength);
         FinalSceneDomain=new(NativeAddressKind.Scene,"fresh-family-scene:"+body.PlanSha256,NativeAddressRevision.Final,Layout.SceneByteLength);
@@ -98,14 +105,7 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
         List<NativeMobyDependencyClosurePlan> graphs=[wizardGraph];
         if(passive is not null)
         {
-            wizard.RequireNonSharedModelClass(passive.NativeClass);
-            var package=passive.AssetGraph.Nodes.Single(n=>n.Id=="grass.package");
-            var dispatch=passive.AssetGraph.Nodes.Single(n=>n.Id=="grass.donor-dispatch");
-            var graph=NativeMobyDependencyClosureCompiler.Compile([
-                new(dispatch.Id,dispatch.Kind,dispatch.Resolution,dispatch.Sharing,dispatch.EvidenceSha256,dispatch.Dependencies,dispatch.Reads),
-                new(package.Id,package.Kind,package.Resolution,package.Sharing,package.EvidenceSha256,package.Dependencies,package.Reads,
-                    context=>new(context.Read("complete-registration"),[new("registered-passive-package",
-                        new(FinalBodyDomain,modelOffset+oldModelLength,appended.Length))],[]))], [package.Id],passive.ReadSource);
+            var graph=passive.BindCompositionModels(FinalBodyDomain,_modelBatch.Packages);
             passiveTemplate=NativeMobyDependencyInstanceTemplate.Capture(passive.InstanceTemplate.Policy,
                 passive.InstanceTemplate.Rows,passive.InstanceTemplate.Globals,graph,passive.ReadSource);
             graphs.Add(graph);
@@ -133,7 +133,7 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
         // Payload WAD locators are unused by the neutral outer-layout kernel;
         // this detached Body deliberately has no claimed physical archive slot.
         List<NativeSkyRelocationPayload> payloads=[];
-        if(passive!=null)payloads.Add(new(0,0,0,0,oldModelLength,0,appended,2,false));
+        if(_modelBatch.Packages.Count!=0)payloads.Add(new(0,0,0,0,oldModelLength,0,appended,2,false));
         payloads.Add(new(1,0,0,0,0,baselineScene.Length,_scene,3,false));
         _growth=new(baseline.AsSpan(0,0x800),baseline.Length,payloads);
         _body=_growth.Expand(baseline);
@@ -141,7 +141,13 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
             _growth.Subfiles[3].FinalLength!=Layout.SceneByteLength)
             throw new InvalidDataException("Shared growth geometry disagrees with the family storage allocation.");
         var registrations=NativeMobyRegistrationTableLayout.Decode(_body.AsSpan(0,0x800),modelOffset,modelLength);
-        if(passive!=null)registrations=registrations.Append(passive.NativeClass,(uint)(modelOffset+oldModelLength));
+        foreach(var package in _modelBatch.Packages)
+        {
+            if(package.Slot!=registrations.Registrations.Count||package.RootFieldOffset!=0x50+package.Slot*4||
+                package.ClassFieldOffset!=0x150+package.Slot*2)
+                throw new InvalidDataException("Shared model-tail registration fields disagree with the actual composed header.");
+            registrations=registrations.Append(package.Input.ActorId,(uint)package.PackageOffset);
+        }
         registrations.CopyHeader().CopyTo(_body,0);
         foreach(var graph in _graphs)
         foreach(var install in graph.Installs)
@@ -218,10 +224,10 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
             Put(inverse,part.Index*8,part.OriginalOffset);Put(inverse,part.Index*8+4,part.OriginalLength);
             if(part.Index!=3)_body.AsSpan(part.FinalOffset,part.OriginalLength).CopyTo(inverse.AsSpan(part.OriginalOffset));
         }
-        if(Placements.Count>1)
+        foreach(var package in _modelBatch.Packages)
         {
-            int oldCount=BaseBodyAncestor.ModelRoots.Count;
-            inverse.AsSpan(0x50+oldCount*4,4).Clear();inverse.AsSpan(0x150+oldCount*2,2).Clear();
+            baseline.AsSpan(package.RootFieldOffset,4).CopyTo(inverse.AsSpan(package.RootFieldOffset));
+            baseline.AsSpan(package.ClassFieldOffset,2).CopyTo(inverse.AsSpan(package.ClassFieldOffset));
         }
         // Recover the complete old scene from actual retained row/private bytes;
         // the old generated storage is rebuilt by the same neutral grammar.
@@ -234,7 +240,6 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
         recovered.CopyTo(inverse,_growth.Subfiles[3].OriginalOffset);
         return inverse;
     }
-    private static int AlignSector(int n)=>checked((n+0x7FF)&~0x7FF);
     private static int Word(ReadOnlySpan<byte> b,int at)=>BinaryPrimitives.ReadInt32LittleEndian(b[at..]);
     private static void Put(Span<byte> b,int at,int value)=>BinaryPrimitives.WriteInt32LittleEndian(b[at..],value);
     private static string Hash(ReadOnlySpan<byte> b)=>Convert.ToHexStringLower(SHA256.HashData(b));

@@ -38,6 +38,9 @@ public sealed class NativeMobyFamilyAssetPlan
                 NativeMobyDependencySharing.Immutable,PackageSha256,["grass.donor-dispatch"],[packageRead],
                 context=>new(context.Read("complete-registration"),[new("detached-package",new(DetachedModelDomain,0,0x174))],[]))];
         AssetGraph=NativeMobyDependencyClosureCompiler.Compile(nodes,["grass.package"],ReadSource);
+        // Only this closed original-source issuer chooses model contributions.
+        // Neutral package inputs themselves confer no family/import authority.
+        ModelContributions=Array.AsReadOnly(new[]{new NativeModelTailPackage(NativeClass,"grass.package",_package)});
         InstanceTemplate=NativeMobyDependencyInstanceTemplate.Capture("source-assets-artisans-t121-01f5-private-copy-v1",
             [new("grass",121,0x01F5,new("row",new(_sceneSource,0xCC44,0x58),RowSha256),
                 new("properties",new(_sceneSource,0x11ACC,8),PropertiesSha256),0,[],false)],[],AssetGraph,ReadSource);
@@ -75,6 +78,7 @@ public sealed class NativeMobyFamilyAssetPlan
     public byte[] CopyProperties()=>_properties.ToArray();
     public byte[] CopyPackage()=>_package.ToArray();
     internal NativeMobyDependencyClosurePlan AssetGraph{get;}
+    internal IReadOnlyList<NativeModelTailPackage> ModelContributions{get;}
     internal NativeMobyDependencyInstanceTemplate InstanceTemplate{get;}
     internal NativeAddressSpace DetachedModelDomain{get;}
     internal byte[] ReadSource(NativeByteExtent extent)
@@ -91,11 +95,56 @@ public sealed class NativeMobyFamilyAssetPlan
         var donor=NativeGrassFamilySourceDecoder.DecodeDonor(_data);
         var dispatch=NativeGrassFamilySourceDecoder.DecodeDonorDispatch(_overlay);
         if(!donor.Row.SequenceEqual(_row)||!donor.Properties.SequenceEqual(_properties)||!donor.Package.SequenceEqual(_package)||
-            dispatch.ExecutedTraceSha256!=DonorDispatchSha256||!AssetGraph.CopyPayload("grass.package").SequenceEqual(_package))
+            dispatch.ExecutedTraceSha256!=DonorDispatchSha256||!AssetGraph.CopyPayload("grass.package").SequenceEqual(_package)||
+            ModelContributions.Count!=1||ModelContributions[0].ActorId!=NativeClass||ModelContributions[0].Id!="grass.package"||
+            !ModelContributions[0].CopyBytes().AsSpan().SequenceEqual(_package))
             throw new InvalidDataException("Native family retained donor or detached asset owners changed.");
         foreach(var read in AssetGraph.Nodes.SelectMany(n=>n.Reads).Concat(InstanceTemplate.Rows.SelectMany(r=>new[]{r.Row,r.Properties})))
             if(Hash(ReadSource(read.Extent))!=read.ExpectedSha256)
                 throw new InvalidDataException("Native family retained graph/template preimage changed.");
+    }
+
+    /// <summary>
+    /// Rebind this issuer's complete source-form model contributions into the
+    /// actual composer's allocated Final domain. The current Grass source has
+    /// only immutable source-copy packages and aggregate source evidence; this
+    /// does not admit another family or silently relocate richer dependencies.
+    /// </summary>
+    internal NativeMobyDependencyClosurePlan BindCompositionModels(NativeAddressSpace final,
+        IReadOnlyList<NativeModelTailBatchEntry> packages)
+    {
+        ArgumentNullException.ThrowIfNull(final);ArgumentNullException.ThrowIfNull(packages);RequireRetainedOwners();
+        if(final.Kind!=NativeAddressKind.LevelData||final.Revision!=NativeAddressRevision.Final||
+            packages.Count!=ModelContributions.Count||packages.Where((p,i)=>p is null||
+                !ReferenceEquals(p.Input,ModelContributions[i])||p.ByteLength!=p.Input.ByteLength).Any()||AssetGraph.References.Count!=0)
+            throw new InvalidDataException("Family models require their actual code-owned package inputs and a complete allocated Final domain.");
+        List<NativeMobyDependencyNode> nodes=[];
+        foreach(var node in AssetGraph.Nodes)
+        {
+            var entry=packages.SingleOrDefault(p=>p.Input.Id==node.Id);
+            if(entry is null)
+            {
+                if(node.Resolution!=NativeMobyDependencyResolution.Aggregate||node.Preserved.Count!=0||node.PayloadSha256 is not null)
+                    throw new InvalidDataException("This family source has an unresolved non-model destination dependency.");
+                nodes.Add(new(node.Id,node.Kind,node.Resolution,node.Sharing,node.EvidenceSha256,node.Dependencies,node.Reads));
+                continue;
+            }
+            if(node.Kind!=NativeMobyDependencyKind.ActorPackage||node.Resolution!=NativeMobyDependencyResolution.ImportFromSource||
+                node.Sharing!=NativeMobyDependencySharing.Immutable||node.Reads.Count!=1||node.Preserved.Count!=0||
+                !AssetGraph.CopyPayload(node.Id).AsSpan().SequenceEqual(entry.Input.CopyBytes()))
+                throw new InvalidDataException("A code-owned family model lost its complete source-copy materialization policy.");
+            var read=node.Reads[0];
+            NativeByteExtent destination=new(final,entry.PackageOffset,entry.ByteLength);
+            nodes.Add(new(node.Id,node.Kind,node.Resolution,node.Sharing,node.EvidenceSha256,node.Dependencies,node.Reads,
+                context=>
+                {
+                    byte[] bytes=context.Read(read.Id);
+                    if(!bytes.AsSpan().SequenceEqual(entry.Input.CopyBytes()))
+                        throw new InvalidDataException("A model contribution differs from its exact complete Original source read.");
+                    return new(bytes,[new("registered-passive-package",destination)],[]);
+                }));
+        }
+        return NativeMobyDependencyClosureCompiler.Compile(nodes,ModelContributions.Select(p=>p.Id),ReadSource);
     }
 
     public static async Task<NativeMobyFamilyAssetPlan> CaptureArtisansGrassAsync(string originalBin,CancellationToken token=default)
