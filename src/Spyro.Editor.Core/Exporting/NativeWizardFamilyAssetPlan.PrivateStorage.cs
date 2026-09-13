@@ -15,9 +15,8 @@ public sealed partial class NativeWizardFamilyAssetPlan
     /// bindings. This is not a new family/behavior admission or a claim that
     /// all mutable globals, callbacks, persistence or runtime uses are closed.
     /// </summary>
-    internal NativeMobyDependencyInstanceTemplate CapturePrivateStorageTemplate(NativeMobyDependencyClosurePlan shared)
+    internal IReadOnlyList<NativeMobyDependencyPrivateSchema> CapturePrivateStorageRows()
     {
-        ArgumentNullException.ThrowIfNull(shared);
         _source.RequirePrivateStorageSource();
         var rowOwner = Owners.Single(o => o.Id == "wizard.row");
         var privateOwner = Owners.Single(o => o.Id == "wizard.private");
@@ -26,7 +25,29 @@ public sealed partial class NativeWizardFamilyAssetPlan
         if (!ReadPrivateSource(row.Extent).AsSpan().SequenceEqual(CopyOwner("wizard.row")) ||
             !ReadPrivateSource(properties.Extent).AsSpan().SequenceEqual(CopyOwner("wizard.private")))
             throw new InvalidDataException("Wizard private schema lost its complete existing source-asset owners.");
+        return Array.AsReadOnly(new[]{new NativeMobyDependencyPrivateSchema("wizard",6,0x11B,row,properties,0x1CE800,
+            Array.AsReadOnly(Array.Empty<NativeMobyDependencyOwnerField>()),false)});
+    }
+
+    internal IReadOnlyList<NativeFreshMobyScenePointerReference> CapturePrivateStorageInternalPointers()
+    {
+        var row=CapturePrivateStorageRows().Single();
+        // The original route header points to its own complete route at +0x28.
+        // Check the actual retained field, not a caller-supplied pointer label.
+        const int targetOffset=0x28;
+        byte[] properties=ReadPrivateSource(row.Properties.Extent);
+        uint before=System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(properties);
+        uint target=checked((uint)(row.Properties.Extent.Offset+targetOffset-row.PropertiesPointerBaseOffset));
+        if(properties.Length<targetOffset+4||before!=target)
+            throw new InvalidDataException("Wizard original private route pointer lost its actual source field or owned target.");
+        return Array.AsReadOnly(new[]{new NativeFreshMobyScenePointerReference(0,NativeFreshMobySceneOwnerKind.Private,0,
+            0,NativeFreshMobySceneOwnerKind.Private,targetOffset,before)});
+    }
+
+    internal NativeMobyDependencyInstanceTemplate CapturePrivateStorageTemplate(NativeMobyDependencyClosurePlan shared)
+    {
+        ArgumentNullException.ThrowIfNull(shared);
         return NativeMobyDependencyInstanceTemplate.Capture("source-assets-wizard33-t6-private-copy-v1",
-            [new("wizard", 6, 0x11B, row, properties, 0x1CE800, [], false)], [], shared, ReadPrivateSource);
+            CapturePrivateStorageRows(),[],shared,ReadPrivateSource);
     }
 }

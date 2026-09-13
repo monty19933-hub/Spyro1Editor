@@ -8,6 +8,7 @@ internal static class FamilyCompositionCases
     private const string WizardId="ffffffffffffffffffffffffffffffff",GrassId="11111111111111111111111111111111";
     internal static void Free(Action<bool,string> check)
     {
+        FamilyRowSpanCases.Free(check);
         var type=typeof(NativeFreshMobyFamilyCompositionPlan);
         check(type.IsSealed&&!type.IsPublic&&type.GetConstructors().Length==0,"Family composition is internal, closed and has no caller-byte authority.");
         Reject<ArgumentNullException>(()=>NativeFreshMobyFamilyCompositionPlan.Compose(null!,[]),check);
@@ -60,6 +61,7 @@ internal static class FamilyCompositionCases
         p2.RequireAncestry(body);p2.RequireExactLevelData(bytes);
         var repeat=NativeFreshMobyFamilyCompositionPlan.Compose(body,[retained,added]);
         check(repeat.PlanSha256==p2.PlanSha256&&repeat.CopyLevelData().SequenceEqual(bytes),"Repeat actual family request is deterministic.");
+        FamilyRowSpanCases.Source(wizard,grass,p1,p2,check);
         if(onP2 is not null)await onP2(original,p2,check);
         var p3=NativeFreshMobyFamilyCompositionPlan.Compose(body,[retained,added,
             NativeFreshMobyFamilyPlacement.Passive("22222222222222222222222222222222",grass,proof,8832,9152,8704,0)]);
@@ -67,6 +69,12 @@ internal static class FamilyCompositionCases
             p3.Allocation.Rows[1].Properties.Offset!=p3.Allocation.Rows[2].Properties.Offset&&
             Word(p3.CopyLevelData(),0x14)==0x19800&&Word(p3.CopyLevelData(),0x70)==0,
             "Repeated passive instances share one registered immutable package and have distinct private state.");
+        var reissuedGrass=await NativeMobyFamilyAssetPlan.CaptureArtisansGrassAsync(original);
+        var reissuedProof=NativeMobyFamilyPassiveHostBinding.Bind(body.HostAncestor,reissuedGrass);
+        check(!ReferenceEquals(reissuedGrass,grass)&&reissuedGrass.PlanSha256==grass.PlanSha256,
+            "Equal reissued Grass evidence still has another actual retained source-asset identity.");
+        Reject<InvalidDataException>(()=>NativeFreshMobyFamilyCompositionPlan.Compose(body,[retained,added,
+            NativeFreshMobyFamilyPlacement.Passive("33333333333333333333333333333333",reissuedGrass,reissuedProof,8832,9152,8704,0)]),check);
         foreach(var bad in new[]{Array.Empty<NativeFreshMobyFamilyPlacement>(),new[]{added,retained},new[]{retained,retained},new[]{retained,added,added}})
             Reject<InvalidDataException>(()=>NativeFreshMobyFamilyCompositionPlan.Compose(body,bad),check);
         var floor=body.HostAncestor.SceneAncestor.CompilationAncestor.Intent;

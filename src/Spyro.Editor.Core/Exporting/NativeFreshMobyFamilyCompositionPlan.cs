@@ -52,7 +52,15 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
         // not merged merely because a caller supplied matching names or hashes.
         if(placements.Skip(1).Any(p=>!ReferenceEquals(p.PassiveAsset,passive)))
             throw new InvalidDataException("Resolve one actual source owner per passive family before composing repeated instances.");
-        Layout=NativeFreshMobySceneStorageLayout.Create(placements.Select(p=>p.WizardAsset!=null?0x50:8).ToArray(),32,placements.Length+1);
+        var wizardRows=wizard.CapturePrivateStorageRows();var wizardPointers=wizard.CapturePrivateStorageInternalPointers();
+        passive?.RequireRetainedOwners();
+        RowSpans=NativeFreshMobyFamilyRowSpanPlan.Create(placements.Select(p=>new NativeFreshMobyFamilyRowSpanRequest(p.EditorId,
+            p.WizardAsset!=null?wizardRows:passive!.InstanceTemplate.Rows,p.WizardAsset!=null?wizardPointers:[])).ToArray());
+        // Current family resolvers own one Wizard/Grass row each. The neutral
+        // projection supports larger schemas without admitting new behaviors.
+        if(RowSpans.Placements.Any(p=>p.RowCount!=1))
+            throw new InvalidDataException("Current Wizard/Grass transform policies require their exact single-row source schemas.");
+        Layout=RowSpans.Layout;
         int modelOffset=body.Descriptors[2].Offset,oldModelLength=body.Descriptors[2].ByteLength;
         byte[] appended=passive?.CopyPackage()??[];
         int modelLength=checked(oldModelLength+AlignSector(appended.Length));
@@ -103,24 +111,22 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
             graphs.Add(graph);
         }
         _graphs=graphs.AsReadOnly();
-        Allocation=Layout.Allocate(FinalSceneDomain,placements.Select(p=>new NativeMobyDependencyInstantiationRequest(p.EditorId,
-            p.WizardAsset!=null?wizardTemplate:passiveTemplate!)).ToArray(),[FinalBodyDomain,FinalSceneDomain],wizard.OriginalExecutableDomain);
-        List<NativeFreshMobyScenePointerReference> references=[
-            new(0,NativeFreshMobySceneOwnerKind.Row,0,0,NativeFreshMobySceneOwnerKind.Private,0,0xC350),
-            new(0,NativeFreshMobySceneOwnerKind.Private,0,0,NativeFreshMobySceneOwnerKind.Private,0x28,0xC378)];
-        for(int i=1;i<placements.Length;i++)references.Add(new(i,NativeFreshMobySceneOwnerKind.Row,0,i,
-            NativeFreshMobySceneOwnerKind.Private,0,BinaryPrimitives.ReadUInt32LittleEndian(passive!.CopyRow())));
-        var storage=Layout.CompileAllocated(baselineScene.AsSpan(0,0xCC),Allocation,references,ReadSource);
+        var requests=placements.Select(p=>new NativeMobyDependencyInstantiationRequest(p.EditorId,
+            p.WizardAsset!=null?wizardTemplate:passiveTemplate!)).ToArray();
+        RowSpans.RequireTemplates(requests);
+        Allocation=Layout.Allocate(FinalSceneDomain,requests,[FinalBodyDomain,FinalSceneDomain],wizard.OriginalExecutableDomain);
+        RowSpans.RequireAllocation(Allocation);
+        var storage=Layout.CompileAllocated(baselineScene.AsSpan(0,0xCC),Allocation,RowSpans.PointerReferences,ReadSource);
         _scene=storage.CopyScene();
         foreach(var mutation in oldScene.Mutations)
         {
-            int at=mutation.SceneOffset>=0xF88?Layout.PrivateOffsets[0]+mutation.SceneOffset-0xF88:mutation.SceneOffset;
+            int at=mutation.SceneOffset>=0xF88?Layout.PrivateOffsets[RowSpans.Placements[0].FirstRowIndex]+mutation.SceneOffset-0xF88:mutation.SceneOffset;
             if(Word(_scene,at)!=mutation.Before)throw new InvalidDataException("Retained authored Wizard coordinate preimage changed.");
             Put(_scene,at,mutation.After);
         }
         for(int i=1;i<placements.Length;i++)
         {
-            var p=placements[i];int at=Layout.RowTableOffset+i*0x58;
+            var p=placements[i];int at=checked((int)Allocation.Rows[RowSpans.Placements[i].FirstRowIndex].Row.Offset);
             Put(_scene,at+12,p.X);Put(_scene,at+16,p.Y);Put(_scene,at+20,p.Z);
             Moby.YawByteToMatrixBytes(p.NativeYawByte).CopyTo(_scene,at+0x20);_scene[at+0x46]=(byte)p.NativeYawByte;
         }
@@ -161,6 +167,7 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
 
     internal NativeId65FreshWizardResearchBodyPlan BaseBodyAncestor{get;}
     internal IReadOnlyList<NativeFreshMobyFamilyPlacement> Placements{get;}
+    internal NativeFreshMobyFamilyRowSpanPlan RowSpans{get;}
     internal NativeFreshMobySceneStorageLayout Layout{get;}
     internal NativeMobyDependencyInstantiationPlan Allocation{get;}
     internal NativeAddressSpace FinalBodyDomain{get;}
