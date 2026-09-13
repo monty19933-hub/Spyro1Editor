@@ -8,9 +8,10 @@ BIN/CUE, saves and preserved R03/R04/R05 apps remain protected. Stop safely near
 
 ## Current checkpoint summary
 
-Latest implementation:22184d2. Focused actual-source gates through176 pass;
-full combined regression177 passed335 checks/0 failures. Earlier full suites
-146/167 also passed335 checks/0 failures. Sections below are chronological evidence: older "next"
+Latest implementation:99f93b8 (normal flight export) and b0db75b (model batch).
+Full combined regression207 passes336 checks/0 failures; actual-source208
+replays normal ON/OFF publication with the same complete hashes and stale-ON
+refusal. Earlier full suites146/167/177 passed335 checks/0 failures. Sections below are chronological evidence: older "next"
 and "pending" statements describe their historical checkpoint, not this summary.
 
 The unified private V6 package is the preserved clean ac50def build, not the
@@ -41,8 +42,9 @@ Priority order from here:
    renderer dispatch and singleton mutable globals still require actual bindings.
 3. Connect scalable geometry/surface/material authoring to the shared ordered
    resource graph without raising fixed native-profile limits as a substitute.
-4. Integrate default-OFF Fly Anywhere with source-based full-image OFF rebuild,
-   project/export ownership and separate ON/OFF native proof. Keep ID65 excluded
+4. Verify the integrated default-OFF Fly Anywhere through native ON/OFF gameplay.
+   Source-based full-image OFF rebuild and project/export ownership are now wired.
+   Keep ID65 excluded
    from the existing retail-only flight policy until its own evidence exists.
 
 Universal Moby/texture interchangeability, ordinary new-level portals/durable
@@ -626,3 +628,81 @@ unlock the Mac for native V6 and DuckStation checks while final automation ran.
 Account usage is still above the requested approximately5% stop threshold; no
 reset was consumed. Next hands-on acceptance requires the manual Mac unlock,
 not a weakened native test or an invented successful desktop launch.
+
+## Shared model-tail batch and normal Fly Anywhere export
+
+Checkpoint b0db75b replaces the actual family composer's single package append
+and single registration inverse with ordered NativeModelTailBatch storage. The
+existing registration and outer-growth grammars allocate all code-owned model
+contributions with one aggregate sector rounding. The complete current Body,
+including old model padding, is retained without relabelling it Original.
+Equal reissued package objects cannot acquire sharing authority; actual retries
+share by object identity, while class/label/PETE conflicts fail closed. The real
+Grass source owns its contribution and complete source-copy graph; the real
+composer binds installs to its actual Final Body. Full inverse restores every
+new registration field and exact original-body bytes. Fixed input ceilings are
+defensive desktop bounds, not native memory or admission certificates.
+
+This does not admit a new family. One Wizard plus the existing Grass source,
+single-row transforms, richer model materializers, textures/VRAM, handlers and
+mutable shared globals remain separate native requirements. Root and peer review
+found no new admission or current-path defect. Genuine missing-API RED180 precedes
+production; free193 passes1623 checks. Actual Body199 passes10571 checks and
+saved mixed200 passes7924 final checks, with old Body/scene/Disc pins unchanged.
+
+Flight now has a real Level-tab controller, durable project/level intent and a
+stage in the normal all-saved-edits dispatcher. Absent settings remain read-only
+default OFF. Explicit OFF always produces a complete-original private image,
+then permits the existing ordinary original-layout writers; it bypasses BOTH
+old no-edit/no-patch returns. ON is exactly Toasty14 with no other ordinary edits.
+Multiple enabled targets, other enabled IDs, ID65, malformed settings, dirty
+drafts, changed raw saved settings and stale UI/project/source owners refuse.
+Save/Revert use the existing persistence owner and CAS store. Save is blocked
+while Create BIN runs, and the checkbox is disabled during that operation.
+
+NativeFreeFlightImageComposition now serves both the existing research wrapper
+and production disposable stage. The old research publisher/receipt/profile
+semantics remain unchanged. Production has no selector input and does not use
+the research wrapper as its exporter. Full-image output verification and retained
+source/intent freshness are distinct: OFF ordinary writers and final staging may
+consume or move the disposable image before the sole existing final publication
+transaction. Full raw BIN/CUE and saved intent are checked independently; this
+is not hostile-filesystem-race or arbitrary external ordinary-edit-store snapshot
+certification. Native gameplay acceptance remains false.
+
+RED179/181/182 cover missing UI/stage/intent APIs. RED183 reproduces the old
+explicit-OFF no-patch bug. Builds185–190/197 have0 warnings/errors; free191–196
+pass, including76 intent/settings checks,38 actual control checks and77 stage
+refusal checks. Source198 passes137 checks with22 production-stage cases:
+ON c0b30e5354b1050d59a79593f54fc9e014c12819213bd719fc0ab5d42493d87d;
+OFF fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37.
+The OLD compiled research source oracle was run before rebuilding (184): R01
+plan6f95efb443dc80ce9cc3c9e64fe2ae437f5dcbc28802b73cc69f02110b530337
+and R02 f8d268758f10d199cdf1210c2a3c38f2984eb8a86c4879ee95350f1709151a02
+both remain identical after extraction. The full normal App dispatcher and final
+transaction201 also produce those ON/OFF images. Saving OFF just before an ON
+publication rejects that pending export and preserves the prior usable pair.
+
+Independent review found a selected-source symlink could alias a final output.
+Generated RED202 demonstrates that early refusal was missing. The shared
+ExportArtifactTransaction source-separation guard now resolves aliases before
+staging and before publication, including all companion destinations. Build203
+and source-free204 pass. A further generated late-alias-retarget regression is
+included for the final full suite. The suite205 stopped in runner self-tests,
+before any builds: two expected route lists need the added flight UI mode.
+That integration fix and final build-all/source replay follow this record.
+
+Final suite207 passes336 checks/0 failures, including the updated74 runner
+self-tests and unique flight UI route. Report:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-xp7ox5p2/summary.json`.
+Source208 repeats the actual normal App dispatcher/publisher on the final code:
+ON c0b30e…d87d, OFF fc866b…ee37 and late OFF refuses pending ON publication.
+Both generated early BIN/CUE aliases and a late source-CUE retarget now refuse
+without replacing prior output. Logs206 was never run because suite205 failed;
+the final normal output is `flight-normal-create-bin-r02/normal-create-bin/`.
+
+Current outputs are private under the same evidence directory:
+`flight-production-stage-r01/` and `flight-normal-create-bin-r01/`.
+No sealed app, original disc, protected project, emulator setting or memory card
+was changed. The Mac was rechecked through native UI discovery and still reports
+locked; no native application was launched or emulation settings installed.
