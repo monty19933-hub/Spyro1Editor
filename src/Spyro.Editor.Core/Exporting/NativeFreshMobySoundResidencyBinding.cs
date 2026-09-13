@@ -78,6 +78,58 @@ internal sealed class NativeFreshMobySoundResidencyBinding
         RequireFinalPreservations(Graph,SourceAncestor,CompositionAncestor.FinalBodyDomain,bytes);
     }
 
+    // Detached sound-only package bytes, not an installed model, a Final model
+    // extent or complete package dependency closure. The residency plan identity
+    // remains a source/composition identity, not an output-package certificate.
+    internal byte[] CopySoundRetargetedSourcePackage() => PrepareSoundRetargetedSourcePackage().After;
+
+    internal byte[] RevertExactSoundRetargetedPackage(ReadOnlySpan<byte> bytes)
+    {
+        var prepared=PrepareSoundRetargetedSourcePackage();
+        if(!bytes.SequenceEqual(prepared.After))
+            throw new InvalidDataException("Sound-only package inverse requires the complete exact detached afterimage, including its unchanged complement.");
+        var slot=prepared.Binding;
+        byte[] original=NativeModelSoundPackageSource.ApplyBindings(bytes,
+            [slot with {Before=slot.After,After=slot.Before}]);
+        if(!original.AsSpan().SequenceEqual(prepared.Before))
+            throw new InvalidDataException("Sound-only package inverse did not recover its complete original source package.");
+        return original;
+    }
+
+    private (byte[] Before,byte[] After,NativeModelSoundSlotBinding Binding) PrepareSoundRetargetedSourcePackage()
+    {
+        RequireRetainedOwners();
+        var source=SourceAncestor;var read=source.PackageRead;var original=read.Extent.Space;
+        var registration=NativeMobyModelRegistrationSource.CaptureExactPeace(original,source.ReadSource);
+        var root=registration.Registrations.SingleOrDefault(r=>r.ActorId==0xAE&&r.Slot>0)
+            ??throw new InvalidDataException("The chest sound package has no exact generic source registration.");
+        long end=root.Slot+1<registration.Registrations.Count?
+            registration.Registrations[root.Slot+1].RootDataOffset:registration.ModelEnd;
+        NativeByteExtent extent=new(original,root.RootDataOffset,end-root.RootDataOffset);
+        byte[] package=source.ReadSource(extent);
+        if(!ReferenceEquals(registration.Original,original)||extent!=read.Extent||
+            package.LongLength!=read.Extent.ByteLength||Hash(package)!=read.ExpectedSha256||
+            !package.AsSpan().SequenceEqual(source.CopyPackage()))
+            throw new InvalidDataException("Sound-only retargeting requires the complete registered Original chest package interval.");
+        var field=LocalSelector.SourceField;var selection=Selections.Single(s=>s.GlobalSelector is null);
+        long relative=field.Extent.Offset-extent.Offset;
+        if(!ReferenceEquals(field.Extent.Space,original)||relative!=4||field.Extent.ByteLength!=4||
+            Hash(package.AsSpan(4,4))!=field.ExpectedSha256||
+            !package.AsSpan(4,4).SequenceEqual(source.ReadSource(field.Extent))||
+            BinaryPrimitives.ReadUInt32LittleEndian(package.AsSpan(4,4))!=0xFFFFFF2F||
+            LocalSelector.SourceDescriptorIndex!=47||LocalSelector.TargetDescriptorIndex!=54||
+            selection.SourceDescriptorIndex!=LocalSelector.SourceDescriptorIndex||
+            selection.TargetDescriptorIndex!=LocalSelector.TargetDescriptorIndex)
+            throw new InvalidDataException("Sound-only retargeting lost its original four-byte local selector and actual resident sound obligation.");
+        var binding=new NativeModelSoundSlotBinding(0,checked((int)relative),
+            checked((byte)LocalSelector.SourceDescriptorIndex),checked((byte)LocalSelector.TargetDescriptorIndex));
+        byte[] after=NativeModelSoundPackageSource.ApplyBindings(package,[binding]);
+        if(after.Length!=package.Length||after[4]!=54||!after.AsSpan(0,4).SequenceEqual(package.AsSpan(0,4))||
+            !after.AsSpan(5).SequenceEqual(package.AsSpan(5)))
+            throw new InvalidDataException("Sound-only retargeting changed bytes outside its single owned local selector.");
+        return(package,after,binding);
+    }
+
     private static (NativeMobyDependencyClosurePlan Graph,NativeFreshMobySoundResidentSelection[] Selections,
         NativeFreshMobySoundLocalSelectorObligation LocalSelector) Inspect(NativeLockedChestFamilySource source,
         NativeFreshMobyFamilyCompositionPlan composition)
@@ -187,16 +239,7 @@ internal sealed class NativeFreshMobySoundResidencyBinding
     {
         if(graph.Installs.Count!=0||graph.References.Count!=0||graph.Nodes.Sum(n=>n.Preserved.Count)!=8||body.Length!=finalDomain.ByteLength)
             throw new InvalidDataException("The sound binding must preserve exactly eight owners without installs or resolved native references.");
-        foreach(var node in graph.Nodes)
-        foreach(var preservation in node.Preserved)
-        {
-            var read=node.Reads.Single(r=>r.Id==preservation.ReadId);
-            byte[] original=source.ReadSource(read.Extent);
-            if(!ReferenceEquals(preservation.Final.Space,finalDomain)||Hash(original)!=read.ExpectedSha256||
-                !body.Slice(checked((int)preservation.Final.Offset),checked((int)preservation.Final.ByteLength)).SequenceEqual(
-                    original.AsSpan(preservation.ReadOffset,checked((int)preservation.Final.ByteLength))))
-                throw new InvalidDataException("Sound residency's source promise does not match its actual preserved FinalBody bytes.");
-        }
+        graph.RequirePreservedFinalBytes(finalDomain,body,source.ReadSource);
     }
 
     private static string Hash(ReadOnlySpan<byte> bytes)=>Convert.ToHexStringLower(SHA256.HashData(bytes));

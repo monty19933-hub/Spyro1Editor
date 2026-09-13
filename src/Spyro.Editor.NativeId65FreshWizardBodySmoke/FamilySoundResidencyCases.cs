@@ -43,6 +43,7 @@ internal static class FamilySoundResidencyCases
         }
         Console.WriteLine("NATIVE_FRESH_FAMILY_SOUND_RESIDENCY_FREE_OK nativeAdmission=false playback=false");
         FamilyParticleResidencyCases.Free(check);
+        FamilySoundRetargetedPackageCases.Free(check);
     }
 
     internal static async Task Source(string original,NativeFreshMobyFamilyCompositionPlan composition,
@@ -160,6 +161,7 @@ internal static class FamilySoundResidencyCases
             "Copy mutations and every refusal preserve original source, complete Body/Scene and old inverse bytes.");
         Console.WriteLine($"NATIVE_FRESH_LOCKED_CHEST_SOUND_RESIDENCY_SOURCE_OK mixed={mixed} body={composition.LevelDataSha256} installs=0 nativeAdmission=false playback=false");
         FamilyParticleResidencyCases.Source(source,composition,equalComposition,check);
+        FamilySoundRetargetedPackageCases.Source(source,plan,composition,equalComposition,check);
     }
 
     private static NativeSoundBank Bank(int offset)

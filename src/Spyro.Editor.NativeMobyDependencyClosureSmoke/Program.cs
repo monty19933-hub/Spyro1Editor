@@ -205,6 +205,7 @@ Reject(()=>NativeTownSquareClosurePlacement.RequireCenterSeparation(3072),"cente
 Reject(()=>NativeTownSquareClosurePlacement.RequireCenterSeparation(double.NaN),"center-separation");
 NativeTownSquareClosurePlacement.RequireCenterSeparation(3073);checks++;
 NativeMobyDependencyInstantiationCases.Run(Check,Reject);
+NativePreservedFinalBytesCases.Run(Check,Reject);
 NativeMobyModelRegistrationCases.Run(Check,Reject);
 NativeLevelRuntimeMemoryCases.Run(Check,Reject);
 NativeMobyModelTextureCases.Run(Check,Reject);

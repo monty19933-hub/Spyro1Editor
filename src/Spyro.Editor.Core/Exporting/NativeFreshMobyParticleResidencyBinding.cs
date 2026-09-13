@@ -161,18 +161,8 @@ internal sealed class NativeFreshMobyParticleResidencyBinding
         if(graph.Installs.Count!=0||graph.References.Count!=0||preserved.Length!=34||
             preserved.Sum(p=>p.Final.ByteLength)!=556||body.Length!=finalDomain.ByteLength)
             throw new InvalidDataException("Key-particle residency must preserve exactly 34 owners/556 bytes without installs or references.");
-        // Successful graph compilation verifies source promises, not final
-        // bytes. Read every actual afterimage, including referenced zero bytes.
-        foreach(var node in graph.Nodes)
-        foreach(var preservation in node.Preserved)
-        {
-            var read=node.Reads.Single(r=>r.Id==preservation.ReadId);
-            byte[] original=source.ReadSource(read.Extent);
-            if(!ReferenceEquals(preservation.Final.Space,finalDomain)||Hash(original)!=read.ExpectedSha256||
-                !body.Slice(checked((int)preservation.Final.Offset),checked((int)preservation.Final.ByteLength)).SequenceEqual(
-                    original.AsSpan(preservation.ReadOffset,checked((int)preservation.Final.ByteLength))))
-                throw new InvalidDataException("Key-particle source promise differs from its actual preserved FinalBody bytes.");
-        }
+        // Successful graph compilation verifies source promises, not final bytes.
+        graph.RequirePreservedFinalBytes(finalDomain,body,source.ReadSource);
     }
 
     private static string Hash(ReadOnlySpan<byte> bytes)=>Convert.ToHexStringLower(SHA256.HashData(bytes));

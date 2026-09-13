@@ -534,3 +534,41 @@ Particle/source checkpoint6544342 and texture-graph checkpointbf385a7 are now
 covered by both focused actual-source and whole-repository free/build gates.
 A later native UI inventory still reports the Mac locked; no new desktop or
 DuckStation observation is claimed and prepared emulator settings remain unused.
+
+## Shared Final preservation check and detached chest sound package
+
+Log168 establishes20 missing-method errors/0 warnings before production.
+NativeMobyDependencyClosurePlan.RequirePreservedFinalBytes now provides the
+single shared verification primitive for the sound and particle bindings.
+It requires a nonempty preservation set, one actual Final-domain object and
+complete length, preflights every owner before callbacks, snapshots each
+node/read once and checks its complete source length/hash, then compares all
+actual Final ranges only after callbacks have finished. A later callback cannot
+mutate an already-accepted Final range or recycle a retained borrowed source
+buffer. Mixed or equal-labelled replacement domains fail closed.
+
+This is strictly a preservation check: it verifies neither installs/references
+nor unclaimed complement, source authority or runtime closure. Both profile
+callers retain complete composition/ancestry and exact8 or34/556-byte guards.
+Log169 builds0/0; log170 passes1497 checks, including46 new shared-verifier
+checks and unchanged closure fingerprints. Independent peer review is complete.
+
+Log171 establishes16 missing-method errors/0 warnings before the detached
+sound-package implementation. Two methods on the EXISTING sound binding now
+derive the complete Original AE registration interval using the existing model
+registration grammar and retarget only package byte4 from local descriptor47 to
+actual resident54 using the existing neutral sound writer. The entire expected
+afterimage is required before inverse; inverse recovers the entire Original
+package. Both calls recheck retained source/composition owners. There is no new
+chest-specific plan/source factory, Final model extent, install, graph reference,
+registration, capability flag or runtime claim. PlanSha remains residency identity,
+not a claimed output-package or native-import certificate.
+
+Logs172/174 build0/0; log173 passes2157 free checks plus23 stream checks.
+Actual untextured175 passes10571 checks; mixed176 passes7924 final checks with
+Original BIN/CUE unchanged and no output written. Tests include exact single-byte
+change/full inverse, complete package complement refusals, and test-only retained
+source/body memory corruption restored in finally. Both methods refuse while an
+actual owner is corrupted and succeed after exact restoration. Root and peer
+review agree; family Body7812d3…262/image408dfd…5c98 and all historical mixed
+image pins remain unchanged. Full combined build-all177 follows this checkpoint.

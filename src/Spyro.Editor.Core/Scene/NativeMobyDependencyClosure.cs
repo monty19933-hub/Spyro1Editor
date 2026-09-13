@@ -94,6 +94,62 @@ internal sealed class NativeMobyDependencyClosurePlan
     public string Fingerprint { get; }
     public byte[] CopyPayload(string nodeId) => _payloads.TryGetValue(nodeId, out byte[]? value)
         ? value.ToArray() : throw new InvalidDataException($"Dependency '{nodeId}' has no materialized payload.");
+
+    /// <summary>
+    /// Verifies only declared preservations in one actual Final address owner.
+    /// This does not verify installs, references, unclaimed complement, source
+    /// authority or runtime closure. Multi-domain plans must not be filtered
+    /// silently into a weaker check. Callers retain their complete-owner guards.
+    /// </summary>
+    internal void RequirePreservedFinalBytes(NativeAddressSpace finalDomain,
+        ReadOnlySpan<byte> completeFinal, Func<NativeByteExtent, byte[]> readOriginal)
+    {
+        ArgumentNullException.ThrowIfNull(finalDomain);
+        ArgumentNullException.ThrowIfNull(readOriginal);
+        if (finalDomain.Revision != NativeAddressRevision.Final || completeFinal.Length != finalDomain.ByteLength)
+            throw new InvalidDataException("Preserved final bytes require the exact complete Final address owner length and revision.");
+
+        List<(string NodeId, NativeMobyDependencyRead Read, NativeMobyDependencyPreservation Preservation)> promises = [];
+        // Finish all domain/read checks before invoking any source callback.
+        foreach (var node in Nodes)
+        foreach (var preservation in node.Preserved)
+        {
+            var matching = node.Reads.Where(r => r.Id == preservation.ReadId).Take(2).ToArray();
+            if (!ReferenceEquals(preservation.Final.Space, finalDomain))
+                throw new InvalidDataException("Preserved final bytes require one actual Final address domain, not mixed or equal-labelled replacement owners.");
+            if (matching.Length != 1 || matching[0].Extent.Space.Revision != NativeAddressRevision.Original ||
+                matching[0].Extent.Space.Kind != finalDomain.Kind || preservation.ReadOffset < 0 ||
+                preservation.ReadOffset > matching[0].Extent.ByteLength - preservation.Final.ByteLength)
+                throw new InvalidDataException("Preserved final bytes require an exact declared Original read and bounded source slice.");
+            promises.Add((node.Id, matching[0], preservation));
+        }
+        if (promises.Count == 0)
+            throw new InvalidDataException("Preserved final bytes require a nonempty preservation set.");
+
+        Dictionary<(string NodeId, string ReadId), byte[]> captured = [];
+        foreach (var promise in promises)
+        {
+            var key = (promise.NodeId, promise.Read.Id);
+            if (captured.ContainsKey(key)) continue;
+            byte[] bytes = readOriginal(promise.Read.Extent)?.ToArray() ??
+                throw new InvalidDataException("Preserved final source reader returned no bytes.");
+            if (bytes.LongLength != promise.Read.Extent.ByteLength ||
+                Convert.ToHexStringLower(SHA256.HashData(bytes)) != promise.Read.ExpectedSha256)
+                throw new InvalidDataException("Preserved final source read failed its complete preimage hash/length.");
+            captured.Add(key, bytes);
+        }
+        // All callbacks finish before comparisons: a later callback cannot
+        // change an earlier Final range after it has already passed. Borrowed
+        // source buffers were copied immediately, never retained by this plan.
+        foreach (var promise in promises)
+        {
+            var preserved = promise.Preservation;
+            if (!completeFinal.Slice(checked((int)preserved.Final.Offset), checked((int)preserved.Final.ByteLength))
+                .SequenceEqual(captured[(promise.NodeId, promise.Read.Id)].AsSpan(
+                    preserved.ReadOffset, checked((int)preserved.Final.ByteLength))))
+                throw new InvalidDataException("Preserved source bytes differ from their actual Final afterimage.");
+        }
+    }
 }
 
 /// <summary>
