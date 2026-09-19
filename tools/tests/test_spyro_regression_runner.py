@@ -511,7 +511,8 @@ class RunnerOptionsTests(unittest.TestCase):
         marker, flag = "NATIVE_ID65_VARIABLE_DATA_FREE_OK", "--variable-data-free"
         self.assertEqual([(name, "NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK")],
                          [row for row in RUNNER.CORE_CASES if row[0] == name])
-        self.assertEqual([(name, marker, [flag])],
+        self.assertEqual([(name, marker, [flag]),
+                          (name, "NATIVE_ID65_TILED_RESOURCE_FREE_OK", ["--tiled-resource-free"])],
                          [row for row in RUNNER.ADDITIONAL_CORE_CASES if row[0] == name])
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS, "Original no-argument document grammar remains a distinct test")
         self.assertFalse(any(row[0] == name for row in RUNNER.SOURCE_QA_CASES))
@@ -524,13 +525,20 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor." + name + "/" in line]
-        self.assertEqual(2, len(lines))
+        self.assertEqual(3, len(lines))
         self.assertTrue(any(flag + " | " + marker in line for line in lines))
+        self.assertTrue(any("--tiled-resource-free | NATIVE_ID65_TILED_RESOURCE_FREE_OK" in line for line in lines))
         self.assertFalse(any("--variable-data-source" in line or "--variable-data-red" in line for line in lines))
+        self.assertFalse(any("--tiled-resource-source" in line for line in lines))
 
     def test_variable_data_marker_and_result_suffix_preserve_old_mode_and_single_build(self):
+        self.assert_additional_fresh_case("NATIVE_ID65_VARIABLE_DATA_FREE_OK", "--variable-data-free", "-variable-data")
+
+    def test_tiled_resource_marker_and_result_suffix_preserve_old_mode_and_single_build(self):
+        self.assert_additional_fresh_case("NATIVE_ID65_TILED_RESOURCE_FREE_OK", "--tiled-resource-free", "-tiled-resource")
+
+    def assert_additional_fresh_case(self, marker, flag, suffix):
         name, old_marker = "NativeId65FreshDocumentSmoke", "NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK"
-        marker, flag = "NATIVE_ID65_VARIABLE_DATA_FREE_OK", "--variable-data-free"
         for emit_marker in (False, True):
             calls = []
 
@@ -559,12 +567,12 @@ class RunnerOptionsTests(unittest.TestCase):
             self.assertNotIn("--", runs[0])
             self.assertEqual([flag], runs[1][runs[1].index("--") + 1:])
             self.assertTrue(all("--no-build" in command and "--no-restore" in command for command in runs))
-            self.assertEqual(["run-Spyro.Editor." + name, "run-Spyro.Editor." + name + "-variable-data"],
+            self.assertEqual(["run-Spyro.Editor." + name, "run-Spyro.Editor." + name + suffix],
                              [row["name"] for row in summary[-2:]])
             self.assertEqual(len(summary), len({row["name"] for row in summary}))
             self.assertEqual(len(summary), len({row["log"] for row in summary}))
             self.assertTrue(summary[-2]["passed"])
-            self.assertEqual(emit_marker, summary[-1]["passed"], "Old marker cannot stand in for variable-data regression")
+            self.assertEqual(emit_marker, summary[-1]["passed"], "Old marker cannot stand in for the additional regression")
             self.assertFalse(any(command[0] == "env" for command in calls))
 
     def test_fresh_ui_uses_only_the_isolated_headless_mode_and_its_own_marker(self):

@@ -66,6 +66,8 @@ internal static class SceneListCases
         }
         MipsOracle.Source(executable, lists, check, reject);
         var plan = NativeId65NormalResourceChain.Compile(first, lists);
+        check(plan.PlanSha256 == "886c9d850a2159e6dfd8ed235aa9c3080f90a89f322a8714f834147c780de078",
+            "Legacy paired identity remains exact against the pre-tiled source checkpoint, including serialized field names/order.");
         byte[] data = plan.CopyDataComponents(), prefix = plan.CopySceneAnimationComponents();
         reject(() => NativeId65NormalResourceChain.Compile(first, null!), "missing paired scene authority refuses");
         check(plan.DataSha256 == "821d25d4c012aa180d369f755d82a780dbcf244b4e53c6c4bcf349da533dce65" &&

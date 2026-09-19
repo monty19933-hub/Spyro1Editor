@@ -115,6 +115,8 @@ internal static class FreshSceneCases
         var chain = NativeId65NormalResourceChain.Compile(first, lists);
         var spawn = new NativeId65SceneSpawn(8960, 8960, 9216, 64);
         var plan = await NativeId65FreshSceneBundle.CaptureAsync(image, chain, spawn, 16);
+        check(plan.PlanSha256 == "384b5b1ae255f99f5c9587383cb5083a047defd06e1469ee578f03eeed69a8af",
+            "Legacy fresh-scene identity stays exact against the pre-tiled source checkpoint.");
         check(plan.SourceCertified && !plan.RuntimeVerified && !plan.PublicationApproved &&
             !plan.CompleteLevelResourcesProven && !plan.CompleteHeaderTextureConsumerClosureProven,
             "actual fresh scene/atlas bytes do not promote unavailable texture/state/runtime gates");

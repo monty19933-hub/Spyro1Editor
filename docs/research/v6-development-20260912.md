@@ -1255,3 +1255,89 @@ regression273 passes336steps/0failures, report
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-9gvi9lzr/summary.json`.
 R03 remains sealed at2155776;
 this later internal refactor is not silently installed into its package.
+
+## Source-issued tiled document/resource chain
+
+The next increment now binds actual schema4 tiled documents to the existing
+normal resource assembler without projecting a first tile into legacy Base.
+NativeId65TiledSurfaceBundle is internal, sealed and privately constructed only
+after exact-original image/executable capture. It retains immutable canonical
+document bytes, all five generated surface components and captured consumers.
+Before any source I/O it refuses legacy schemas, every placement variant and
+either retail-material face on any tile. Cancellation and the canonical64KiB
+document bound also precede source access. This is deliberately a color-only,
+zero-placement resource slice, not permission to omit unsupported content.
+
+NativeId65SurfaceRevision is a closed adapter over the actual legacy or tiled
+private issuers. The same NormalResourceBundle assembler consumes its real
+bytes/components/executable, retaining complete player, companion, particle,
+VRAM and sound owners with offsets derived from surface length. Public legacy
+Surface access throws for tiled resources. The paired chain decodes its actual
+tiled data and compares the complete surface to its issuer, then hashes the
+whole document identity under a distinct profile. Changing only editor IDs,
+spawn or music changes the chain identity even when every payload byte matches.
+The old chain hash branch retains exact property names/order and identifiers.
+
+FreshScene rejects the tiled arm before source I/O and again in its private
+constructor. NormalResourceRevision, its public profile enum, staging, Body,
+Disc and saved publication are not widened. In-range two-tile data cannot use
+the old single-floor path. No scene or native image was issued by this increment.
+
+Root captured the pre-change legacy source baseline276 (15423checks) before
+implementation. Missing-API RED277 failed exactly on the absent tiled issuer;
+build278 then passed0warnings/errors. Source-free279 passes15checks. Actual
+source280 passes531checks, including all moved owners and sound links, complete
+retained upload/model goldens, defensive copies, neutral-list refusal, repeated
+identity, same-bytes/different-document ancestry and both three-tile/out-of-range
+and two-tile/in-range legacy refusal. Original complete SHA/length/EOF remain
+unchanged; sourceWritten=false/nativeCpuExecuted=false/sceneIssued=false.
+
+The three2048-square tiles at X8448/10496/12544,Y8448,Z8704 encode surface2D4,
+dataA58, tree28 and sector allocation1000. Observed source-bound identities:
+
+- document `a5770b64f06055a289726aaa291303df5812b86e81b712b197291a7b224f1d3b`
+- surface `809c2442de920c36fe2bb97db36abd82b2e5888322c95bee51e661c1408ec3d1`
+- data `fef347e230881f796927562fd4d9482a94c15a43ceae050cbfe5821b6edb59cb`
+- chain `15d6bb6b7bcbd7ee1509259396165441efc673f17e7253162f49bebfa14cde5c`
+
+Legacy build281 passes0warnings/errors; source282 passes15426checks, preserving
+the complete upload/data/model bytes and the separately pinned chain, scene and
+staging identities from276. Independent read-only review found no actionable
+production defect. Full regression283 stopped before project builds on its old
+runner case-count expectation. Root updated that expected registration and
+added the tiled mode's own missing-marker/suffix/single-build checks. Full284
+passes337steps/0failures (including75Python runner tests), report
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-8dps09ep/summary.json`.
+Log285 confirms original CUE, both DuckStation INIs, original card and sealed
+R03 App/Core hashes unchanged. R03 remains built from2155776, not silently
+replaced by this internal source change. Latest usage check was14%used,
+86%remaining; the requested safe stop near5%remaining remains in effect.
+
+### Next exact-three-tile native admission
+
+Independent downstream review maps the next coordinated slice; nothing below
+is implemented or approved by the resource-chain checkpoint:
+
+- Add a separately named source-issued three-tile Scene path deriving spawn,
+  heading and fixed N16 from the actual tiled document. Keep old factory guards.
+  Retain that actual ancestry through resource revision, Body and Disc; music
+  must come from the same document, not a contradictory caller parameter.
+- Add a distinct resource profile and explicit branches in staging/Body/Disc.
+  Current staging evidence uses non-legacy as textured, and Disc uses both a
+  textured-versus-other binding and a non-legacy TexturePlanSha256 branch; these
+  must become closed choices, not accidental third-arm fallthroughs. Preserve
+  old hashes and keep the two-face terrain material factories legacy-only before
+  I/O. Do not admit arbitrary tiled chains merely by their A58 length.
+- Reuse the body packing kernel through a distinct exact-three-tile admission,
+  leaving the legacy8BC..A38 guard unchanged. At A58/N16, expected live model is
+  8008A924, scene8009A124, scene end8009D124 and discarded data padding5A8.
+  Physical data/model/scene offsets stay DE800/DF800/EF000; body1FB800,
+  executable LBA54921 and WAD length6B32000 need no expansion. These are reviewed
+  arithmetic expectations, not new runtime evidence.
+- Extend source_variable_native_loader_oracle.py with a separately reconstructed
+  tiled fixture; retain the old canonical validator and all96 legacy lengths.
+  Exercise actual parser/returned endpoint/sound pointers/model registration and
+  bounded scene pointers before whole-body/image/inverse checks and publication.
+  Existing fixed-hash candidates stay pinned. Only then cold-boot the exact new
+  CUE in DuckStation and verify rendering/collision/seams. Native CPU subset
+  execution alone will not count as gameplay or hardware acceptance.

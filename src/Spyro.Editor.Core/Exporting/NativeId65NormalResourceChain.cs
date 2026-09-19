@@ -53,16 +53,38 @@ public sealed class NativeId65NormalResourceChain
             throw new InvalidDataException("Paired data components lost their complete inherited tail complement.");
         DataSha256 = Hash(_data);
         SceneComponentsSha256 = Hash(_sceneLists);
-        PlanSha256 = Hash(JsonSerializer.SerializeToUtf8Bytes(new
+        if (resources.SurfaceRevision.TiledSurface is { } tiled)
         {
-            ProfileId, SourceImageSha256, resources.UploadSha256, resources.ModelSha256,
-            resources.DataTailSha256, resources.CompanionPlanSha256, resources.Surface.BundleSha256,
-            DataSha256, SceneComponentsSha256, ScenePlacementRequirement, DataOwners,
-            SceneOwners = lists.Lists, SceneConsumerEvidence = lists.Evidence
-        }));
+            // Measure the assembled chain, then bind its exact canonical surface
+            // to the actual document issuer. This is not legacy profile admission.
+            var decoded = NativeId65TiledNormalDataLayout.DecodeUntextured(_data);
+            tiled.RequireExactBundle(decoded.Surface.CopyBundle());
+            PlanSha256 = Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                ProfileId = TiledProfileId, SourceImageSha256, tiled.DocumentSha256,
+                resources.UploadSha256, resources.ModelSha256, resources.DataTailSha256,
+                resources.CompanionPlanSha256, tiled.BundleSha256,
+                DataSha256, SceneComponentsSha256, ScenePlacementRequirement, DataOwners,
+                SceneOwners = lists.Lists, SceneConsumerEvidence = lists.Evidence
+            }));
+        }
+        else
+        {
+            // Preserve the complete legacy identity, including anonymous JSON
+            // property name/order. Do not insert a revision tag into old plans.
+            PlanSha256 = Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                ProfileId, SourceImageSha256, resources.UploadSha256, resources.ModelSha256,
+                resources.DataTailSha256, resources.CompanionPlanSha256,
+                BundleSha256 = resources.SurfaceRevision.BundleSha256,
+                DataSha256, SceneComponentsSha256, ScenePlacementRequirement, DataOwners,
+                SceneOwners = lists.Lists, SceneConsumerEvidence = lists.Evidence
+            }));
+        }
     }
 
     public const string ProfileId = "native-id65-paired-normal-resource-chain-clean-usa-v1";
+    internal const string TiledProfileId = "native-id65-paired-tiled-normal-resource-chain-clean-usa-v1";
     public string SourceImageSha256 => _resources.SourceImageSha256;
     internal NativeId65NormalResourceBundle Resources => _resources;
     public NativeId65ZeroSceneAnimationLists SceneLists { get; }
@@ -93,7 +115,7 @@ public sealed class NativeId65NormalResourceChain
         if (!resources.SourceCertified || !lists.SourceCertified ||
             resources.SourceImageSha256 != lists.SourceImageSha256)
             throw new InvalidDataException("Paired data requires both private source-issued resource and scene-list captures.");
-        lists.RequireSourceExecutable(resources.Surface.CopySourceExecutable());
+        lists.RequireSourceExecutable(resources.SurfaceRevision.CopySourceExecutable());
         NativeId65ZeroSceneAnimationLists.ValidateCanonicalBytes(lists.CopyComponents());
         return new(resources, lists);
     }

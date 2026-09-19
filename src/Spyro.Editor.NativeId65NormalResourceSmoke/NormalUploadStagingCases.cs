@@ -72,6 +72,8 @@ internal static class NormalUploadStagingCases
         byte[] priorUpload = fresh.CopyUploadPayload(), priorScene = fresh.CopyScene();
         byte[] priorData = fresh.CopyDataComponents(), priorModel = fresh.CopyModelPayload();
         var stage = await NativeId65NormalUploadStaging.CaptureAsync(image, fresh);
+        check(stage.PlanSha256 == "98bd43761b87de15d2915d1377e0298ce7a0f133d2ee07c2f5672bad503af000",
+            "Legacy upload staging identity stays exact against the pre-tiled source checkpoint.");
         check(stage.SourceCertified && !stage.RuntimeVerified && !stage.PublicationApproved && !stage.IndependentLevelSupported &&
             !stage.CompleteLevelResourcesProven && !stage.CompleteSpuStateProven && !stage.SpuWrapSemanticsProven &&
             !stage.ReservedLow16PreservationProven && !stage.PeakRuntimeMemoryProven && !stage.TransferTimingProven,

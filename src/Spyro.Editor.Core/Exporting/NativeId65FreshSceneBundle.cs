@@ -146,6 +146,7 @@ public sealed class NativeId65FreshSceneBundle
     private NativeId65FreshSceneBundle(NativeId65FreshSceneSource source, NativeId65NormalResourceChain chain,
         NativeId65SceneSpawn spawn, int dynamicSlotBudget)
     {
+        RequireLegacySurface(chain);
         _chain = chain;
         byte[] executable = source.CopyExecutable();
         chain.SceneLists.RequireSourceExecutable(executable);
@@ -265,10 +266,17 @@ public sealed class NativeId65FreshSceneBundle
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(issuedChain);
+        RequireLegacySurface(issuedChain);
         NativeId65FreshSceneLayout.ValidateAuthoredInput(spawn, dynamicSlotBudget);
         NativeId65FreshSceneSource source = await NativeId65FreshSceneSource.CaptureAsync(originalImagePath, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         return new(source, issuedChain, spawn, dynamicSlotBudget);
+    }
+
+    private static void RequireLegacySurface(NativeId65NormalResourceChain chain)
+    {
+        if (chain.Resources.SurfaceRevision.TiledSurface != null)
+            throw new InvalidDataException("Tiled resource issuance currently stops at the data/list chain; the legacy fresh-scene, Body and Disc profiles are not tiled approvals.");
     }
 
     public byte[] CopyScene() => SceneLayout.CopyScene();

@@ -28,7 +28,7 @@ public sealed class NativeId65NormalResourceBundle
     private readonly byte[] _upload, _tail, _model;
     private readonly byte[] _particleComponent;
     private NativeId65NormalResourceBundle(NativeId65NormalResourceSource source,
-        NativeId65AuthoredSurfaceBundle surface, NativeId65CompanionAssetPlan companion)
+        NativeId65SurfaceRevision surface, NativeId65CompanionAssetPlan companion)
     {
         RequireInputs(surface, companion);
         byte[] data = source.CopyData(), player = source.CopyPlayerPackage();
@@ -39,7 +39,7 @@ public sealed class NativeId65NormalResourceBundle
         NativeId65CompanionAssetBlock block = companion.CompileAssetBlock();
         var recompiled = NativeId65CompanionAssetLayout.CompileExactTown(companion.EngineProfile);
         block.RequireExactBlock(recompiled.CopyAssetBlock());
-        Surface = surface;
+        SurfaceRevision = surface;
         CompanionPlanSha256 = companion.PlanSha256;
         Evidence = source.Evidence;
         PlayerTextures = NativeId65PlayerTextureOwners.Capture(player, data.AsSpan(0x173000, 0xCC30));
@@ -169,7 +169,8 @@ public sealed class NativeId65NormalResourceBundle
     public string SharedPlayerPackageSha256 => NativeId65NormalResourceSource.PlayerPackageHash;
     public long SharedPlayerPackageWadOffset => 0x7B9000;
     public int SharedPlayerPackageByteLength => 0x32E1C;
-    public NativeId65AuthoredSurfaceBundle Surface { get; }
+    public NativeId65AuthoredSurfaceBundle Surface => SurfaceRevision.LegacySurface;
+    internal NativeId65SurfaceRevision SurfaceRevision { get; }
     public string CompanionPlanSha256 { get; }
     public NativeId65PlayerTextureOwners PlayerTextures { get; }
     public IReadOnlyList<NativeId65EngineEvidence> Evidence { get; }
@@ -213,6 +214,9 @@ public sealed class NativeId65NormalResourceBundle
             throw new InvalidDataException("Normal resource byte owner or complete untouched/fresh complement changed.");
     }
     internal static void RequireInputs(NativeId65AuthoredSurfaceBundle surface, NativeId65CompanionAssetPlan companion)
+        => RequireInputs(NativeId65SurfaceRevision.From(surface), companion);
+
+    private static void RequireInputs(NativeId65SurfaceRevision surface, NativeId65CompanionAssetPlan companion)
     {
         ArgumentNullException.ThrowIfNull(surface); ArgumentNullException.ThrowIfNull(companion);
         if (!surface.SourceCertified || surface.SourceImageSha256 != companion.SourceImageSha256 ||
@@ -222,10 +226,22 @@ public sealed class NativeId65NormalResourceBundle
     public static async Task<NativeId65NormalResourceBundle> CaptureAsync(string originalImagePath,
         NativeId65AuthoredSurfaceBundle surface, NativeId65CompanionAssetPlan companion, CancellationToken cancellationToken = default)
     {
-        RequireInputs(surface, companion);
+        var revision = NativeId65SurfaceRevision.From(surface);
+        RequireInputs(revision, companion);
         var source = await NativeId65NormalResourceSource.CaptureAsync(originalImagePath, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        return new(source, surface, companion);
+        return new(source, revision, companion);
+    }
+
+    internal static async Task<NativeId65NormalResourceBundle> CaptureTiledAsync(string originalImagePath,
+        NativeId65TiledSurfaceBundle surface, NativeId65CompanionAssetPlan companion, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var revision = NativeId65SurfaceRevision.From(surface);
+        RequireInputs(revision, companion);
+        var source = await NativeId65NormalResourceSource.CaptureAsync(originalImagePath, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        return new(source, revision, companion);
     }
     private void VerifyPartition()
     {
