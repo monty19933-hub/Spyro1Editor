@@ -60,7 +60,7 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         _enableMaterials = Button("FreshMaterialsEnable", "Add material intent (schema 2)", EnableMaterialIntent);
         _materialFields.Children.Add(Section("Floor material intent",
-            "Two ordered triangle slots. Base floor color follows the Base color above; retail coordinates identify source intent, not an issued texture."));
+            "Two ordered triangle slots for the selected floor or tile. Base floor color follows its color above; retail coordinates identify source intent, not an issued texture."));
         _materialFields.Children.Add(_enableMaterials);
         for (int i = 0; i < _materialSlots.Length; i++)
         {
@@ -107,7 +107,7 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private void WriteMaterialFields()
     {
-        NativeFreshFloorMaterialsIntent? pair = CurrentAggregateIntent?.FloorMaterials;
+        NativeFreshFloorMaterialsIntent? pair = ActiveMaterialPair;
         _materialsEnabled = pair != null;
         WriteMaterialSlot(_materialSlots[0], pair?.Triangle0 ?? NativeFreshFloorMaterialIntent.BaseFloorColor());
         WriteMaterialSlot(_materialSlots[1], pair?.Triangle1 ?? NativeFreshFloorMaterialIntent.BaseFloorColor());
@@ -166,10 +166,10 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         bool present = _aggregateMode && CurrentAggregateIntent != null;
         _materialAuthoringNotice.Text = "Material descriptors are authoring intent. Inspect sources explicitly for separate thumbnails. " +
-            (CurrentAggregateIntent?.SchemaVersion == 3 ? NativeMobyCapabilityText
+            (CurrentAggregateIntent?.TiledContent != null ? TiledCapabilityText : CurrentAggregateIntent?.SchemaVersion == 3 ? NativeMobyCapabilityText
                 : "Research currently requires a supported saved schema-2 profile. Actual source eligibility is checked during preparation.");
         _materialFields.IsVisible = present;
-        _enableMaterials.IsVisible = present && CurrentAggregateIntent!.FloorMaterials == null;
+        _enableMaterials.IsVisible = present && CurrentAggregateIntent!.TiledContent == null && CurrentAggregateIntent.FloorMaterials == null;
         _enableMaterials.Content = CurrentAggregateIntent?.SchemaVersion == 3 ? "Add material intent (keeps schema 3)" : "Add material intent (schema 2)";
         _enableMaterials.IsEnabled = editable && present && !_addingWizard && _pendingNativeMobyAdd == null && !_materialsEnabled;
         bool canEdit = editable && present && !_addingWizard && _pendingNativeMobyAdd == null && _materialsEnabled;

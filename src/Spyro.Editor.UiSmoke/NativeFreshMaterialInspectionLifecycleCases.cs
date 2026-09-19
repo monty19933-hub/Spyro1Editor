@@ -15,6 +15,7 @@ internal static class NativeFreshMaterialInspectionLifecycleCases
         try
         {
             Commands(Add("commands"));
+            TiledCommands(Add("tiled-commands"));
             Cancellation(Add("cancel"));
             foreach (string dirty in new[] { "clean", "base", "route", "material", "invalid" })
                 foreach (var decision in new[] { FreshDocumentDecision.Cancel, FreshDocumentDecision.Discard, FreshDocumentDecision.Save })
@@ -77,6 +78,65 @@ internal static class NativeFreshMaterialInspectionLifecycleCases
         F.Throw(failures);
         Outcome(f, !f.Window.MaterialInspectionBusyForTesting && f.ReleaseAttempts == 1 && f.NoImages &&
             ReferenceEquals(f.Window.MaterialInspectionFailureForTesting, work.Primary), "actual expected failed work settles once without success");
+    }
+
+    private static void TiledCommands(F f)
+    {
+        f.Fire("FreshTilesUpgrade");
+        var one = f.Window.CurrentAggregateIntent!;
+        f.Fire("FreshTileAddAdjacent");
+        var original = f.Window.CurrentAggregateIntent!;
+        var tiles = original.TiledContent!.Tiles;
+        Check(tiles.Count == 2, "actual tiled session is established before busy test");
+        var selected = tiles[1];
+        var work = new FailingMaterialInspectionWork();
+        f.Window.MaterialInspectionWorkForTesting = work;
+        Task? task = null; List<Exception> failures = [];
+        try
+        {
+            task = f.Start(); F.Wait(work.Entered.Task);
+            Check(f.Window.MaterialInspectionBusyForTesting && !task.IsCompleted &&
+                ReferenceEquals(work.Request!.Document, original), "inspection binds the actual tiled content");
+            Check(!f.Find<TextBox>("FreshSpawnZ").IsEffectivelyEnabled &&
+                !f.Find<ListBox>("FreshLevelTiles").IsEffectivelyEnabled,
+                "tile selection and independent spawn field are disabled during inspection");
+            foreach (string name in new[] { "FreshTilesUpgrade", "FreshTileAddAdjacent", "FreshTileRemove",
+                "FreshTileMoveUp", "FreshTileMoveDown", "FreshDocumentApply", "FreshDocumentUndo", "FreshDocumentRedo" })
+                f.Fire(name);
+            f.Find<ListBox>("FreshLevelTiles").SelectedItem = tiles[0]; F.Pump();
+            f.Select(F.B);
+            Check(ReferenceEquals(f.Window.CurrentAggregateIntent, original) &&
+                ReferenceEquals(f.Find<ListBox>("FreshLevelTiles").SelectedItem, selected) &&
+                f.Window.Preview.SelectedEditorId == F.A,
+                "busy guards refuse tile actions and both selections even without dirty raw fields");
+            // Programmatic events bypass disabled controls: they must invalidate
+            // the worker but never install a partial document or erase the draft.
+            f.Set("FreshSpawnZ", "invalid-spawn-z");
+            f.Set("FreshMaterial0TextureId", "invalid-tile-material");
+            f.Fire("FreshDocumentApply"); f.Fire("FreshDocumentSave"); f.CmdSave();
+            f.Fire("FreshTileRemove");
+            Check(work.Token.IsCancellationRequested && !task.IsCompleted && f.ReleaseAttempts == 0 &&
+                ReferenceEquals(f.Window.CurrentAggregateIntent, original) && work.Calls == 1 && f.SourceCalls == 1,
+                "raw tiled drift cancels without adopting state, saving, or releasing an active owner");
+        }
+        catch (Exception error) { failures.Add(error); }
+        finally { ReleaseAndDrain(f, work, task, failures); }
+        F.Throw(failures);
+        Outcome(f, ReferenceEquals(f.Window.MaterialInspectionFailureForTesting, work.Primary) &&
+            ReferenceEquals(f.Window.CurrentAggregateIntent, original) &&
+            ReferenceEquals(f.Find<ListBox>("FreshLevelTiles").SelectedItem, selected) &&
+            f.Text("FreshSpawnZ") == "invalid-spawn-z" && f.Text("FreshMaterial0TextureId") == "invalid-tile-material" &&
+            f.ReleaseAttempts == 1 && f.NoImages,
+            "settlement preserves primary error, actual tiled document, selection and both raw fields");
+        f.Fire("FreshDocumentUndo");
+        Check(ReferenceEquals(f.Window.CurrentAggregateIntent, original) && !f.Window.HasUnappliedFields,
+            "first Undo discards only unapplied draft after real worker settlement");
+        f.Fire("FreshDocumentUndo");
+        Check(ReferenceEquals(f.Window.CurrentAggregateIntent, one), "busy refusals preserved pre-inspection tile history");
+        f.Fire("FreshDocumentRedo");
+        Check(ReferenceEquals(f.Window.CurrentAggregateIntent, original) &&
+            ReferenceEquals(f.Find<ListBox>("FreshLevelTiles").SelectedItem, selected),
+            "redo restores exact document and selected tile without regenerated IDs");
     }
 
     private static void Cancellation(F f)

@@ -1,10 +1,11 @@
 using System.Text;
 using System.Text.Json;
+using Spyro.Editor.Core.Primitives;
 
 namespace Spyro.Editor.Core.Editing;
 
 /// <summary>
-/// Strict neutral whole-level schema1/schema2/schema3. No filesystem, implicit migration, native payload,
+/// Strict neutral whole-level schemas1..4. No filesystem, implicit migration, native payload,
 /// compiler or publisher API. The embedded floor uses the unchanged v1 codec;
 /// its legacy format and its independent16KiB parser bound remain intact.
 /// </summary>
@@ -33,6 +34,7 @@ public static class NativeFreshLevelDocumentCodec
             {
                 1 => Object(rootElement, "kind", "schema", "base", "placements"),
                 2 or 3 => Object(rootElement, "kind", "schema", "base", "placements", "floorMaterials"),
+                4 => Object(rootElement, "kind", "schema", "surface", "spawn", "skyRgb", "musicTrackId", "placements"),
                 _ => throw new InvalidDataException("Not a supported distinct fresh-level schema.")
             };
             if (String(root["kind"]) != Kind)
@@ -40,11 +42,11 @@ public static class NativeFreshLevelDocumentCodec
             JsonElement rows = root["placements"];
             if (rows.ValueKind != JsonValueKind.Array || rows.GetArrayLength() > NativeFreshLevelDocumentIntent.MaximumPlacements)
                 throw new InvalidDataException("Fresh level placements require an array with at most128 authoring rows.");
-            var @base = NativeId65FreshDocumentCodec.Parse(StrictUtf8.GetBytes(root["base"].GetRawText()));
+            var @base = version == 4 ? null : NativeId65FreshDocumentCodec.Parse(StrictUtf8.GetBytes(root["base"].GetRawText()));
             var placements = new List<NativeFreshPlacementIntent>(rows.GetArrayLength());
             foreach (var row in rows.EnumerateArray())
             {
-                if (version == 3 && row.ValueKind == JsonValueKind.Object && row.TryGetProperty("tag", out var tag) &&
+                if (version >= 3 && row.ValueKind == JsonValueKind.Object && row.TryGetProperty("tag", out var tag) &&
                     String(tag) == "native-moby")
                 {
                     var native = Object(row, "id", "tag", "source", "position", "nativeYawByte");
@@ -64,13 +66,15 @@ public static class NativeFreshLevelDocumentCodec
                 placements.Add(NativeFreshWizardRouteIntent.Create(String(placement["id"]),
                     Integer(origin["x"]), Integer(origin["y"]), Integer(origin["z"]), Integer(end["x"]), Integer(end["y"])));
             }
+            if (version == 4)
+                return NativeFreshLevelDocumentIntent.CreateTiled(ParseTiledContent(root), placements);
             if (version == 3)
             {
-                var modern = NativeFreshLevelDocumentIntent.Create(@base, []).UpgradeForNativeMobys().WithContent(@base, placements);
+                var modern = NativeFreshLevelDocumentIntent.Create(@base!, []).UpgradeForNativeMobys().WithContent(@base!, placements);
                 return root["floorMaterials"].ValueKind == JsonValueKind.Null
                     ? modern : modern.WithFloorMaterials(ParseMaterials(root["floorMaterials"]));
             }
-            var intent = NativeFreshLevelDocumentIntent.Create(@base, placements);
+            var intent = NativeFreshLevelDocumentIntent.Create(@base!, placements);
             return version == 1 ? intent : intent.WithFloorMaterials(ParseMaterials(root["floorMaterials"]));
         }
         catch (DecoderFallbackException error)
@@ -86,12 +90,17 @@ public static class NativeFreshLevelDocumentCodec
         using (var json = new Utf8JsonWriter(memory))
         {
             json.WriteStartObject(); json.WriteString("kind", Kind); json.WriteNumber("schema", intent.SchemaVersion);
-            json.WritePropertyName("base");
-            json.WriteRawValue(NativeId65FreshDocumentCodec.SerializeCanonical(intent.Base));
+            if (intent.TiledContent is { } tiled)
+                WriteTiledContent(json, tiled);
+            else
+            {
+                json.WritePropertyName("base");
+                json.WriteRawValue(NativeId65FreshDocumentCodec.SerializeCanonical(intent.Base));
+            }
             json.WriteStartArray("placements");
             foreach (var placement in intent.Placements)
             {
-                if (intent.SchemaVersion == 3 && placement is NativeFreshMobyPlacementIntent moby)
+                if (intent.SchemaVersion >= 3 && placement is NativeFreshMobyPlacementIntent moby)
                 {
                     json.WriteStartObject(); json.WriteString("id", moby.EditorId); json.WriteString("tag", "native-moby");
                     json.WriteStartObject("source");
@@ -116,11 +125,7 @@ public static class NativeFreshLevelDocumentCodec
             json.WriteEndArray();
             if (intent.FloorMaterials is { } materials)
             {
-                json.WriteStartObject("floorMaterials");
-                json.WriteString("layout", "rectangle-two-triangles-v1");
-                json.WritePropertyName("triangle0"); WriteMaterial(json, materials.Triangle0);
-                json.WritePropertyName("triangle1"); WriteMaterial(json, materials.Triangle1);
-                json.WriteEndObject();
+                json.WritePropertyName("floorMaterials"); WriteMaterials(json, materials);
             }
             else if (intent.SchemaVersion == 3) json.WriteNull("floorMaterials");
             json.WriteEndObject();
@@ -128,6 +133,70 @@ public static class NativeFreshLevelDocumentCodec
         if (memory.Length > MaximumByteLength)
             throw new InvalidDataException("Canonical fresh level exceeds the independent authoring byte budget.");
         return memory.ToArray();
+    }
+
+    private static NativeFreshTiledLevelContent ParseTiledContent(Dictionary<string, JsonElement> root)
+    {
+        var surface = Object(root["surface"], "layout", "tiles");
+        if (String(surface["layout"]) != "ordered-flat-tiles-v1")
+            throw new InvalidDataException("Unsupported tiled surface layout.");
+        JsonElement rows = surface["tiles"];
+        if (rows.ValueKind != JsonValueKind.Array || rows.GetArrayLength() is < 1 or > NativeFreshTiledLevelContent.MaximumTiles)
+            throw new InvalidDataException("Tiled surface requires1..255 ordered authoring tiles.");
+        List<NativeFreshFlatTileIntent> tiles = [];
+        foreach (var row in rows.EnumerateArray())
+        {
+            var tile = Object(row, "id", "x", "y", "z", "width", "depth", "floorRgb", "materials");
+            tiles.Add(NativeFreshFlatTileIntent.Create(String(tile["id"]), Integer(tile["x"]), Integer(tile["y"]),
+                Integer(tile["z"]), Integer(tile["width"]), Integer(tile["depth"]), Color(tile["floorRgb"]),
+                ParseMaterials(tile["materials"])));
+        }
+        var spawn = Object(root["spawn"], "x", "y", "z", "heading");
+        return NativeFreshTiledLevelContent.Create(tiles, Integer(spawn["x"]), Integer(spawn["y"]),
+            Integer(spawn["z"]), Integer(spawn["heading"]), Color(root["skyRgb"]), Integer(root["musicTrackId"]));
+    }
+
+    private static void WriteTiledContent(Utf8JsonWriter json, NativeFreshTiledLevelContent tiled)
+    {
+        json.WriteStartObject("surface"); json.WriteString("layout", "ordered-flat-tiles-v1");
+        json.WriteStartArray("tiles");
+        foreach (var tile in tiled.Tiles)
+        {
+            json.WriteStartObject(); json.WriteString("id", tile.EditorId);
+            json.WriteNumber("x", tile.X); json.WriteNumber("y", tile.Y); json.WriteNumber("z", tile.Z);
+            json.WriteNumber("width", tile.Width); json.WriteNumber("depth", tile.Depth);
+            WriteColor(json, "floorRgb", tile.FloorColor);
+            json.WritePropertyName("materials"); WriteMaterials(json, tile.Materials);
+            json.WriteEndObject();
+        }
+        json.WriteEndArray(); json.WriteEndObject();
+        json.WriteStartObject("spawn"); json.WriteNumber("x", tiled.SpawnX); json.WriteNumber("y", tiled.SpawnY);
+        json.WriteNumber("z", tiled.SpawnZ); json.WriteNumber("heading", tiled.Heading); json.WriteEndObject();
+        WriteColor(json, "skyRgb", tiled.SkyColor); json.WriteNumber("musicTrackId", tiled.MusicTrackId);
+    }
+
+    private static ColorRgba Color(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.Array || value.GetArrayLength() != 3)
+            throw new InvalidDataException("Tiled display color requires exactly three integer channels.");
+        int r = Integer(value[0]), g = Integer(value[1]), b = Integer(value[2]);
+        if (r is < 0 or > 255 || g is < 0 or > 255 || b is < 0 or > 255)
+            throw new InvalidDataException("Tiled display color channels require0..255.");
+        return new((byte)r, (byte)g, (byte)b);
+    }
+
+    private static void WriteColor(Utf8JsonWriter json, string name, ColorRgba color)
+    {
+        json.WriteStartArray(name); json.WriteNumberValue(color.R); json.WriteNumberValue(color.G);
+        json.WriteNumberValue(color.B); json.WriteEndArray();
+    }
+
+    private static void WriteMaterials(Utf8JsonWriter json, NativeFreshFloorMaterialsIntent materials)
+    {
+        json.WriteStartObject(); json.WriteString("layout", "rectangle-two-triangles-v1");
+        json.WritePropertyName("triangle0"); WriteMaterial(json, materials.Triangle0);
+        json.WritePropertyName("triangle1"); WriteMaterial(json, materials.Triangle1);
+        json.WriteEndObject();
     }
 
     private static NativeFreshFloorMaterialsIntent ParseMaterials(JsonElement value)

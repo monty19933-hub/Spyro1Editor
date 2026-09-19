@@ -50,6 +50,32 @@ For an exported ID65 test, open the in-game inventory and enter:
 **R1, R2, L1, L2, R1, L1, R2, L2, Left, Down**. Use a disposable copied emulator
 memory card. This development entry route is not a finished portal.
 
+### Author a larger tiled floor (not yet exportable)
+
+In **Level aggregate**, choose **Use tiled geometry (schema 4)** explicitly.
+The existing floor becomes the first tile, retaining its material choices,
+spawn, settings and placements. Existing documents are never upgraded merely
+by opening them. This upgrade disables the old single-floor test export.
+
+- Select a tile to edit its position, size, color and two material slots.
+  **Add tile to right** copies the selected tile's size and materials into an
+  adjacent tile. Apply pending fields before changing selection.
+- **Move tile up/down** changes list order, not world position. **Remove tile**
+  refuses if it would invalidate the spawn or a placement endpoint.
+- Spawn, heading, sky and music belong to the whole level. Spawn Z must be
+  exactly 512 above a supporting tile plane. Shared edges are valid; gaps are
+  not treated as floor, and overlapping interiors on the same plane refuse.
+- **Apply**, **Undo/Redo**, **Save document** and **Reopen saved** use the same
+  whole-document workflow. Tile IDs and per-tile materials survive save/reopen.
+
+Each rectangular tile is 16–2048 native units per side, on a 16-unit grid.
+The document permits at most 255 tiles and 128 placements, also subject to its
+64 KiB file-size limit. These are authoring limits, not proven in-game capacity.
+The schematic draws the actual tiles, but does not render their selected
+textures or prove collision, enemy behavior or a safe route between endpoints.
+Schema-4 tiled documents cannot yet produce a BIN/CUE. Keep the original
+single-floor example if you want to test the currently supported native export.
+
 ### Current two-family test recipe
 
 To recreate the supported example, keep these exact values. This is a temporary

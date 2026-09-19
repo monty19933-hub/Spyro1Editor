@@ -252,9 +252,6 @@ internal sealed partial class NativeFreshDocumentWindow
             }
             else
             {
-                var floor = NativeId65FreshDocumentIntent.Create(Number("FreshFloorX"), Number("FreshFloorY"), Number("FreshFloorZ"),
-                    Number("FreshFloorWidth"), Number("FreshFloorDepth"), Number("FreshSpawnX"), Number("FreshSpawnY"), Number("FreshHeading"),
-                    Rgb("FreshFloorColor"), Rgb("FreshSkyColor"), (_music.SelectedItem as MusicTrackEntry)?.TrackId ?? -1);
                 NativeFreshPlacementIntent[] rows = CurrentAggregateIntent.Placements.ToArray();
                 string? selected = _aggregateSession!.SelectedEditorId;
                 if (selected != null)
@@ -265,11 +262,20 @@ internal sealed partial class NativeFreshDocumentWindow
                 else RequireNativeMobyFieldsUnchanged();
                 // Validate the selected Base/placement and every untouched row
                 // together before the Session sees any mutation.
-                var candidate = ApplyMaterialFieldsTo(CurrentAggregateIntent.WithContent(floor, rows));
+                NativeFreshLevelDocumentIntent candidate;
+                if (CurrentAggregateIntent.TiledContent != null) candidate = ReadTiledFields(rows);
+                else
+                {
+                    var floor = NativeId65FreshDocumentIntent.Create(Number("FreshFloorX"), Number("FreshFloorY"), Number("FreshFloorZ"),
+                        Number("FreshFloorWidth"), Number("FreshFloorDepth"), Number("FreshSpawnX"), Number("FreshSpawnY"), Number("FreshHeading"),
+                        Rgb("FreshFloorColor"), Rgb("FreshSkyColor"), (_music.SelectedItem as MusicTrackEntry)?.TrackId ?? -1);
+                    candidate = ApplyMaterialFieldsTo(CurrentAggregateIntent.WithContent(floor, rows));
+                }
                 _aggregateSession.Apply(candidate);
             }
             WriteFields();
-            _status.Text = CurrentAggregateIntent?.SchemaVersion == 3
+            _status.Text = CurrentAggregateIntent?.TiledContent != null ? "Applied the entire tiled document. Save explicitly to persist. " + TiledCapabilityText
+                : CurrentAggregateIntent?.SchemaVersion == 3
                 ? "Applied the entire schema-3 aggregate to the authored schematic. Save explicitly to persist. " + NativeMobyCapabilityText
                 : "Applied the entire aggregate to the authored schematic. Save explicitly before research export; two retail materials with no placements or the supported one-Wizard mixed profile are currently supported.";
             return true;
@@ -315,6 +321,8 @@ internal sealed partial class NativeFreshDocumentWindow
             var (next, source) = CaptureAggregateSession();
             string? selected = _aggregateSession?.SelectedEditorId;
             if (selected != null && next.CurrentIntent?.Placements.Any(p => p.EditorId == selected) == true) next.Select(selected);
+            string? selectedTile = _aggregateSession?.SelectedTileId;
+            if (selectedTile != null && next.CurrentIntent?.TiledContent?.Tiles.Any(t => t.EditorId == selectedTile) == true) next.SelectTile(selectedTile);
             _aggregateSession = next;
             _forkSourceSnapshot = source;
             _addingWizard = false;
@@ -331,6 +339,7 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private string AggregateOpenMessage() => CurrentAggregateIntent == null
         ? "No aggregate exists. Fork an actual saved legacy floor explicitly to begin; no default or placement was inferred."
+        : CurrentAggregateIntent.TiledContent != null ? $"Opened saved tiled aggregate: {_aggregateSession!.Snapshot.Path}. " + TiledCapabilityText
         : CurrentAggregateIntent.SchemaVersion == 3 ? $"Opened saved aggregate: {_aggregateSession!.Snapshot.Path}. " + NativeMobyCapabilityText
         : $"Opened saved aggregate: {_aggregateSession!.Snapshot.Path}. Research export supports clean saved schema-2 documents with two retail materials and either no placements or the supported one-Wizard mixed profile; actual source eligibility is checked during preparation.";
 
@@ -381,7 +390,7 @@ internal sealed partial class NativeFreshDocumentWindow
         int target = index + direction;
         if (target < 0 || target >= rows.Length) return;
         (rows[index], rows[target]) = (rows[target], rows[index]);
-        _aggregateSession.Apply(CurrentAggregateIntent.WithContent(CurrentAggregateIntent.Base, rows));
+        _aggregateSession.Apply(CurrentAggregateIntent.WithPlacements(rows));
         WriteFields();
         _status.Text = "Changed authored order without changing editor IDs. Save to persist.";
     }
@@ -432,16 +441,17 @@ internal sealed partial class NativeFreshDocumentWindow
     private void RefreshAggregateChrome(bool editable)
     {
         RefreshMaterialChrome(editable);
+        RefreshTileChrome(editable);
         var current = CurrentAggregateIntent;
         _schemaVersion.IsVisible = _materialSummary.IsVisible = current != null;
         _schemaVersion.Text = current == null ? "" : $"Aggregate schema {current.SchemaVersion}";
-        _materialSummary.Text = current?.FloorMaterials is { } materials
+        _materialSummary.Text = ActiveMaterialPair is { } materials
             ? $"Triangle 0: {MaterialSummary(materials.Triangle0)}\nTriangle 1: {MaterialSummary(materials.Triangle1)}"
             : current?.SchemaVersion == 3 ? "Materials: implicit base floor color (no material pair)." : "Materials: implicit base floor color (schema 1).";
         _materialPreviewNotice.Text = Preview.MaterialPreviewNotice;
-        _materialPreviewNotice.IsVisible = current?.FloorMaterials != null;
+        _materialPreviewNotice.IsVisible = ActiveMaterialPair != null;
         _capability.Text = _aggregateMode
-            ? current?.SchemaVersion == 3 ? NativeMobyCapabilityText
+            ? current?.TiledContent != null ? TiledCapabilityText : current?.SchemaVersion == 3 ? NativeMobyCapabilityText
                 : "Whole-level authoring document — floor, spawn and ordered placements. Normal Create BIN is unavailable. Research export supports clean saved schema-2 documents with two retail materials and either no placements or the supported one-Wizard mixed profile, subject to actual source validation. The schematic does not certify gameplay."
             : LegacyCapabilityText;
         _documentMode.IsEnabled = editable;
@@ -470,7 +480,7 @@ internal sealed partial class NativeFreshDocumentWindow
         _moveWizardUp.IsEnabled = _removeWizard.IsEnabled && index > 0;
         _moveWizardDown.IsEnabled = _removeWizard.IsEnabled && index >= 0 && index + 1 < CurrentAggregateIntent!.Placements.Count;
         _placementSummary.Text = $"{CurrentAggregateIntent?.Placements.Count ?? 0} authored placements · maximum {NativeFreshLevelDocumentIntent.MaximumPlacements}. " +
-            (current?.SchemaVersion == 3 ? NativeMobyCapabilityText
+            (current?.TiledContent != null ? TiledCapabilityText : current?.SchemaVersion == 3 ? NativeMobyCapabilityText
                 : "Research supports no placements or the supported one-Wizard mixed profile only, with two retail materials and actual source validation.");
     }
 

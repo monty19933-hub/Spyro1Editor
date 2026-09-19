@@ -1,74 +1,115 @@
 using Spyro.Editor.Core.Exporting;
+using Spyro.Editor.Core.Primitives;
 
 namespace Spyro.Editor.Core.Editing;
 
 /// <summary>
-/// Neutral authoring aggregate: one unchanged immutable floor intent and an
-/// ordered closed placement list, an explicit schema2 floor-material pair, and
-/// explicitly upgraded schema3 neutral native-Moby references/transforms.
+/// Neutral authoring aggregate: unchanged legacy schemas1..3 or explicit schema4
+/// ordered tiles, plus the bounded closed placement list. Only the active content
+/// variant owns geometry, spawn and common settings.
 /// Counts and editor IDs are document ownership,
 /// never native capacity, save bits, source authority or publication approval.
 /// </summary>
 public sealed class NativeFreshLevelDocumentIntent
 {
     public const int MaximumPlacements = 128;
-    private NativeFreshLevelDocumentIntent(NativeId65FreshDocumentIntent @base,
-        IReadOnlyList<NativeFreshPlacementIntent> placements, NativeFreshFloorMaterialsIntent? materials, int schemaVersion)
-    { Base = @base; Placements = placements; FloorMaterials = materials; SchemaVersion = schemaVersion; }
+    private NativeFreshLevelDocumentIntent(NativeFreshLevelContent content,
+        IReadOnlyList<NativeFreshPlacementIntent> placements, int schemaVersion)
+    { Content = content; Placements = placements; SchemaVersion = schemaVersion; }
 
-    public NativeId65FreshDocumentIntent Base { get; }
+    public NativeFreshLevelContent Content { get; }
+    public NativeFreshLegacyLevelContent? LegacyContent => Content as NativeFreshLegacyLevelContent;
+    public NativeFreshTiledLevelContent? TiledContent => Content as NativeFreshTiledLevelContent;
+    public NativeId65FreshDocumentIntent Base => LegacyContent?.Base ??
+        throw new InvalidDataException("Tiled content has no legacy Base; use its actual tiles and common settings.");
     public IReadOnlyList<NativeFreshPlacementIntent> Placements { get; }
     public int SchemaVersion { get; }
-    public NativeFreshFloorMaterialsIntent? FloorMaterials { get; }
+    public NativeFreshFloorMaterialsIntent? FloorMaterials => LegacyContent?.FloorMaterials;
+    public int SpawnX => Content.SpawnX;
+    public int SpawnY => Content.SpawnY;
+    public int SpawnZ => Content.SpawnZ;
+    public int Heading => Content.Heading;
+    public ColorRgba SkyColor => Content.SkyColor;
+    public int MusicTrackId => Content.MusicTrackId;
 
     /// <summary>Original schema1 factory; never infers or upgrades material intent.</summary>
     public static NativeFreshLevelDocumentIntent Create(NativeId65FreshDocumentIntent @base,
-        IEnumerable<NativeFreshPlacementIntent> placements) => CreateContent(@base, placements, null, 1);
+        IEnumerable<NativeFreshPlacementIntent> placements)
+    {
+        ArgumentNullException.ThrowIfNull(@base);
+        return CreateContent(new NativeFreshLegacyLevelContent(@base, null), placements, 1);
+    }
+
+    public static NativeFreshLevelDocumentIntent CreateTiled(NativeFreshTiledLevelContent content,
+        IEnumerable<NativeFreshPlacementIntent> placements) => CreateContent(content, placements, 4);
 
     /// <summary>Validate/copy all content while retaining this document's version and material choices.</summary>
     public NativeFreshLevelDocumentIntent WithContent(NativeId65FreshDocumentIntent @base,
-        IEnumerable<NativeFreshPlacementIntent> placements) => CreateContent(@base, placements, FloorMaterials, SchemaVersion);
+        IEnumerable<NativeFreshPlacementIntent> placements)
+    {
+        ArgumentNullException.ThrowIfNull(@base);
+        if (LegacyContent == null) throw new InvalidDataException("Legacy edits cannot replace or downgrade tiled content.");
+        return CreateContent(new NativeFreshLegacyLevelContent(@base, FloorMaterials), placements, SchemaVersion);
+    }
+
+    public NativeFreshLevelDocumentIntent WithPlacements(IEnumerable<NativeFreshPlacementIntent> placements) =>
+        CreateContent(Content, placements, SchemaVersion);
+
+    public NativeFreshLevelDocumentIntent WithTiledContent(NativeFreshTiledLevelContent content)
+    {
+        if (TiledContent == null) throw new InvalidDataException("Use an explicit tiled upgrade or factory before editing tiled content.");
+        return CreateContent(content, Placements, 4);
+    }
+
+    public NativeFreshLevelDocumentIntent UpgradeToTiled(string tileEditorId)
+    {
+        var old = LegacyContent ?? throw new InvalidDataException("This document already owns tiled content.");
+        var b = old.Base;
+        var materials = old.FloorMaterials ?? NativeFreshFloorMaterialsIntent.Create(
+            NativeFreshFloorMaterialIntent.BaseFloorColor(), NativeFreshFloorMaterialIntent.BaseFloorColor());
+        var tile = NativeFreshFlatTileIntent.Create(tileEditorId, b.FloorX, b.FloorY, b.FloorZ,
+            b.FloorWidth, b.FloorDepth, b.FloorColor, materials);
+        return CreateTiled(NativeFreshTiledLevelContent.Create([tile], b.SpawnX, b.SpawnY, b.SpawnZ,
+            b.Heading, b.SkyColor, b.MusicTrackId), Placements);
+    }
 
     /// <summary>Explicit material edit, upgrading schema1 to2 but retaining schema3. Clearing both slots does not downgrade.</summary>
     public NativeFreshLevelDocumentIntent WithFloorMaterials(NativeFreshFloorMaterialsIntent materials)
     {
         ArgumentNullException.ThrowIfNull(materials);
-        return new(Base, Placements, materials, Math.Max(SchemaVersion, 2));
+        return new(new NativeFreshLegacyLevelContent(Base, materials), Placements, Math.Max(SchemaVersion, 2));
     }
 
     /// <summary>Explicit schema3 upgrade, retaining all existing content and nullable material intent. Removal never downgrades it.</summary>
     public NativeFreshLevelDocumentIntent UpgradeForNativeMobys() =>
-        SchemaVersion == 3 ? this : new(Base, Placements, FloorMaterials, 3);
+        SchemaVersion >= 3 ? this : new(Content, Placements, 3);
 
-    private static NativeFreshLevelDocumentIntent CreateContent(NativeId65FreshDocumentIntent @base,
-        IEnumerable<NativeFreshPlacementIntent> placements, NativeFreshFloorMaterialsIntent? materials, int schemaVersion)
+    private static NativeFreshLevelDocumentIntent CreateContent(NativeFreshLevelContent content,
+        IEnumerable<NativeFreshPlacementIntent> placements, int schemaVersion)
     {
-        ArgumentNullException.ThrowIfNull(@base); ArgumentNullException.ThrowIfNull(placements);
+        ArgumentNullException.ThrowIfNull(content); ArgumentNullException.ThrowIfNull(placements);
         var copy = new List<NativeFreshPlacementIntent>();
         var ids = new HashSet<string>(StringComparer.Ordinal);
-        int maxX = checked(@base.FloorX + @base.FloorWidth), maxY = checked(@base.FloorY + @base.FloorDepth);
         foreach (var placement in placements)
         {
             // Bound enumeration itself, not just a possibly unbounded ToArray.
             if (copy.Count == MaximumPlacements)
                 throw new InvalidDataException("Fresh level authoring permits at most128 placements; this is not native capacity.");
             if (placement is not NativeFreshWizardRouteIntent &&
-                !(schemaVersion == 3 && placement is NativeFreshMobyPlacementIntent))
+                !(schemaVersion >= 3 && placement is NativeFreshMobyPlacementIntent))
                 throw new InvalidDataException("Fresh level requires a non-null supported closed placement variant.");
             if (!ids.Add(placement.EditorId))
                 throw new InvalidDataException("Fresh level editor placement IDs must be unique without regeneration or deduplication.");
             if (placement is NativeFreshWizardRouteIntent wizard &&
-                (wizard.OriginX <= @base.FloorX || wizard.OriginX >= maxX ||
-                wizard.EndX <= @base.FloorX || wizard.EndX >= maxX ||
-                wizard.OriginY <= @base.FloorY || wizard.OriginY >= maxY ||
-                wizard.EndY <= @base.FloorY || wizard.EndY >= maxY))
-                throw new InvalidDataException("Both authored route endpoints must be strictly inside the base rectangle; no body or corridor clearance is implied.");
+                (!content.ContainsInteriorXY(wizard.OriginX, wizard.OriginY) ||
+                 !content.ContainsInteriorXY(wizard.EndX, wizard.EndY)))
+                throw new InvalidDataException("Both authored route endpoints must be strictly inside the active surface union; no ground, body or corridor clearance is implied.");
             if (placement is NativeFreshMobyPlacementIntent moby &&
-                (moby.X <= @base.FloorX || moby.X >= maxX || moby.Y <= @base.FloorY || moby.Y >= maxY))
-                throw new InvalidDataException("Authored native Moby XY must be strictly inside the current base rectangle; no body, ground or collision clearance is implied.");
+                !content.ContainsInteriorXY(moby.X, moby.Y))
+                throw new InvalidDataException("Authored native Moby XY must be strictly inside the active surface union; no body, ground or collision clearance is implied.");
             copy.Add(placement);
         }
-        return new(@base, copy.AsReadOnly(), materials, schemaVersion);
+        return new(content, copy.AsReadOnly(), schemaVersion);
     }
 }
 
@@ -77,10 +118,7 @@ public abstract class NativeFreshPlacementIntent
 {
     private protected NativeFreshPlacementIntent(string editorId)
     {
-        ArgumentNullException.ThrowIfNull(editorId);
-        if (editorId.Length != 32 || editorId.All(c => c == '0') ||
-            editorId.Any(c => c is not (>= '0' and <= '9') and not (>= 'a' and <= 'f')))
-            throw new InvalidDataException("Editor placement ID requires exactly32 lowercase hex digits and a nonzero value.");
+        NativeFreshEditorId.Require(editorId);
         EditorId = editorId;
     }
     public string EditorId { get; }

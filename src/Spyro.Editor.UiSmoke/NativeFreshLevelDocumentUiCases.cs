@@ -37,6 +37,7 @@ internal static class NativeFreshLevelDocumentUiCases
             MaximumAndNeutralCoordinates();
             ProjectAndBusyGuards();
             UnsupportedAggregateResearchRefused();
+            NativeFreshTiledDocumentUiCases.Run();
             foreach (var f in Fixtures) f.AssertSentinels();
             passed = true;
         }

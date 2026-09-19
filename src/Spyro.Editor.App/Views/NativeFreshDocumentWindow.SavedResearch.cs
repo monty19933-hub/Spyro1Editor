@@ -48,7 +48,8 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         if (!IsSavedResearchReady)
         {
-            _status.Text = CurrentAggregateIntent?.SchemaVersion == 3 ? NativeMobyCapabilityText + " No legacy or partial document was exported."
+            _status.Text = CurrentAggregateIntent?.TiledContent != null ? TiledCapabilityText
+                : CurrentAggregateIntent?.SchemaVersion == 3 ? NativeMobyCapabilityText + " No legacy or partial document was exported."
                 : "Aggregate research requires an explicitly applied and saved schema-2 document with two retail materials and either no placements or the supported one-Wizard mixed profile. Resolve pending fields and recovery first. No legacy or partial document was exported.";
             return;
         }

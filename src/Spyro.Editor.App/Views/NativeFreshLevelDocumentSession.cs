@@ -14,18 +14,20 @@ internal sealed class NativeFreshLevelDocumentSession
     private readonly List<HistoryEntry> _undo = [];
     private readonly List<HistoryEntry> _redo = [];
 
-    private sealed record HistoryEntry(NativeFreshLevelDocumentIntent? Intent, string? SelectedEditorId);
+    private sealed record HistoryEntry(NativeFreshLevelDocumentIntent? Intent, string? SelectedEditorId, string? SelectedTileId);
 
     internal NativeFreshLevelDocumentSession(NativeFreshLevelDocumentSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         Snapshot = snapshot;
         CurrentIntent = snapshot.Intent;
+        SelectedTileId = CurrentIntent?.TiledContent?.Tiles.FirstOrDefault()?.EditorId;
     }
 
     internal NativeFreshLevelDocumentSnapshot Snapshot { get; private set; }
     internal NativeFreshLevelDocumentIntent? CurrentIntent { get; private set; }
     internal string? SelectedEditorId { get; private set; }
+    internal string? SelectedTileId { get; private set; }
     internal bool HasUnsavedChanges => !Equal(CurrentIntent, Snapshot.Intent);
     internal bool CanUndo => _undo.Count != 0;
     internal bool CanRedo => _redo.Count != 0;
@@ -47,6 +49,8 @@ internal sealed class NativeFreshLevelDocumentSession
         _redo.Clear();
         CurrentIntent = intent;
         if (!Contains(intent, SelectedEditorId)) SelectedEditorId = null;
+        if (intent.TiledContent?.Tiles.Any(t => t.EditorId == SelectedTileId) != true)
+            SelectedTileId = intent.TiledContent?.Tiles.FirstOrDefault()?.EditorId;
     }
 
     internal NativeFreshWizardRouteIntent AddWizardRoute(int originX, int originY, int originZ, int endX, int endY)
@@ -55,7 +59,7 @@ internal sealed class NativeFreshLevelDocumentSession
         var added = NativeFreshWizardRouteIntent.Create(Guid.NewGuid().ToString("N"),
             originX, originY, originZ, endX, endY);
         // Validate count and whole-floor containment before changing session state.
-        var next = current.WithContent(current.Base, current.Placements.Append(added));
+        var next = current.WithPlacements(current.Placements.Append(added));
         Apply(next);
         SelectedEditorId = added.EditorId;
         return added;
@@ -68,7 +72,7 @@ internal sealed class NativeFreshLevelDocumentSession
         if (current.Placements.Single(placement => placement.EditorId == editorId) is not NativeFreshWizardRouteIntent)
             throw new InvalidDataException("The selected editor ID is not an authored Wizard route; replacement cannot change its placement tag.");
         var replacement = NativeFreshWizardRouteIntent.Create(editorId, originX, originY, originZ, endX, endY);
-        var next = current.WithContent(current.Base,
+        var next = current.WithPlacements(
             current.Placements.Select(placement => placement.EditorId == editorId ? replacement : placement));
         Apply(next);
     }
@@ -79,7 +83,7 @@ internal sealed class NativeFreshLevelDocumentSession
         var added = NativeFreshMobyPlacementIntent.Create(Guid.NewGuid().ToString("N"), source, x, y, z, nativeYawByte);
         // Upgrade is an explicit Add action, installed only after the full current
         // floor/list validation succeeds. An invalid Add preserves old schema/history.
-        var next = current.UpgradeForNativeMobys().WithContent(current.Base, current.Placements.Append(added));
+        var next = current.UpgradeForNativeMobys().WithPlacements(current.Placements.Append(added));
         Apply(next);
         SelectedEditorId = added.EditorId;
         return added;
@@ -92,7 +96,7 @@ internal sealed class NativeFreshLevelDocumentSession
         if (current.Placements.Single(placement => placement.EditorId == editorId) is not NativeFreshMobyPlacementIntent)
             throw new InvalidDataException("The selected editor ID is not an authored native Moby; replacement cannot change its placement tag.");
         var replacement = NativeFreshMobyPlacementIntent.Create(editorId, source, x, y, z, nativeYawByte);
-        var next = current.WithContent(current.Base,
+        var next = current.WithPlacements(
             current.Placements.Select(placement => placement.EditorId == editorId ? replacement : placement));
         Apply(next);
     }
@@ -101,7 +105,7 @@ internal sealed class NativeFreshLevelDocumentSession
     {
         NativeFreshLevelDocumentIntent current = RequireDocument();
         RequirePlacement(current, editorId);
-        var next = current.WithContent(current.Base,
+        var next = current.WithPlacements(
             current.Placements.Where(placement => placement.EditorId != editorId));
         Apply(next);
     }
@@ -112,6 +116,54 @@ internal sealed class NativeFreshLevelDocumentSession
         Push(_redo, CaptureHistory());
         Restore(Pop(_undo));
         return true;
+    }
+
+    internal void SelectTile(string editorId)
+    {
+        if (CurrentIntent?.TiledContent?.Tiles.Any(t => t.EditorId == editorId) != true)
+            throw new InvalidDataException("The tile editor ID is not in the applied tiled document.");
+        SelectedTileId = editorId;
+    }
+
+    internal void UpgradeToTiles()
+    {
+        var current = RequireDocument();
+        if (current.TiledContent != null) return;
+        Apply(current.UpgradeToTiled(Guid.NewGuid().ToString("N")));
+    }
+
+    internal void AddAdjacentTile()
+    {
+        var current = RequireDocument();
+        var content = current.TiledContent ?? throw new InvalidDataException("Upgrade to tiled geometry first.");
+        var selected = content.Tiles.Single(t => t.EditorId == SelectedTileId);
+        var added = NativeFreshFlatTileIntent.Create(Guid.NewGuid().ToString("N"),
+            checked(selected.X + selected.Width), selected.Y, selected.Z, selected.Width, selected.Depth,
+            selected.FloorColor, selected.Materials);
+        Apply(current.WithTiledContent(content.WithTiles(content.Tiles.Append(added))));
+        SelectedTileId = added.EditorId;
+    }
+
+    internal void RemoveSelectedTile()
+    {
+        var current = RequireDocument();
+        var content = current.TiledContent ?? throw new InvalidDataException("No tiled geometry is active.");
+        if (SelectedTileId == null) throw new InvalidDataException("Select a tile first.");
+        // Whole-content and placement validation happens before any history/state mutation.
+        Apply(current.WithTiledContent(content.WithTiles(content.Tiles.Where(t => t.EditorId != SelectedTileId))));
+    }
+
+    internal void MoveSelectedTile(int direction)
+    {
+        if (direction is not (-1 or 1)) throw new ArgumentOutOfRangeException(nameof(direction));
+        var current = RequireDocument();
+        var content = current.TiledContent ?? throw new InvalidDataException("No tiled geometry is active.");
+        var tiles = content.Tiles.ToArray();
+        int index = Array.FindIndex(tiles, t => t.EditorId == SelectedTileId), target = index + direction;
+        if (index < 0) throw new InvalidDataException("Select a tile first.");
+        if (target < 0 || target >= tiles.Length) return;
+        (tiles[index], tiles[target]) = (tiles[target], tiles[index]);
+        Apply(current.WithTiledContent(content.WithTiles(tiles)));
     }
 
     internal bool Redo()
@@ -147,6 +199,8 @@ internal sealed class NativeFreshLevelDocumentSession
         _undo.Clear();
         _redo.Clear();
         if (!Contains(CurrentIntent, SelectedEditorId)) SelectedEditorId = null;
+        if (CurrentIntent?.TiledContent?.Tiles.Any(t => t.EditorId == SelectedTileId) != true)
+            SelectedTileId = CurrentIntent?.TiledContent?.Tiles.FirstOrDefault()?.EditorId;
         return next;
     }
 
@@ -187,12 +241,13 @@ internal sealed class NativeFreshLevelDocumentSession
         NativeFreshLevelDocumentCodec.SerializeCanonical(left).AsSpan()
             .SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(right));
 
-    private HistoryEntry CaptureHistory() => new(CurrentIntent, SelectedEditorId);
+    private HistoryEntry CaptureHistory() => new(CurrentIntent, SelectedEditorId, SelectedTileId);
 
     private void Restore(HistoryEntry entry)
     {
         CurrentIntent = entry.Intent;
         SelectedEditorId = entry.SelectedEditorId;
+        SelectedTileId = entry.SelectedTileId;
     }
 
     private static void Push(List<HistoryEntry> history, HistoryEntry entry)

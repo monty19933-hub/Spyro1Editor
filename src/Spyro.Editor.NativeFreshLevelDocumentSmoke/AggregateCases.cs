@@ -15,13 +15,16 @@ internal static class AggregateCases
             Check(type.GetConstructors().Length == 0, "no public unchecked constructors");
             Check(type.GetProperties().All(p => p.SetMethod == null), "all public properties readonly");
             Check(type.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
-                .All(m => m.Name == "Create"), "neutral factory only, no source/file/compiler API");
+                .All(m => m.Name == "Create" || type == typeof(NativeFreshLevelDocumentIntent) && m.Name == "CreateTiled"),
+                "neutral factories only, no source/file/compiler API");
         }
         Check(typeof(NativeFreshPlacementIntent).IsAbstract &&
             typeof(NativeFreshPlacementIntent).GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
                 .All(c => !c.IsFamily && !c.IsFamilyOrAssembly), "union cannot be externally subclassed");
         Check(typeof(NativeFreshLevelDocumentIntent).GetProperties().Select(p => p.Name).Order()
-            .SequenceEqual(new[] { "Base", "FloorMaterials", "Placements", "SchemaVersion" }), "aggregate owns only versioned neutral content");
+            .SequenceEqual(new[] { "Base", "Content", "FloorMaterials", "Heading", "LegacyContent", "MusicTrackId",
+                "Placements", "SchemaVersion", "SkyColor", "SpawnX", "SpawnY", "SpawnZ", "TiledContent" }),
+            "aggregate owns only versioned neutral content and active-variant settings");
         Check(typeof(NativeFreshWizardRouteIntent).GetProperties().Select(p => p.Name).Order()
             .SequenceEqual(new[] { "EditorId", "EndX", "EndY", "OriginX", "OriginY", "OriginZ", "Tag" }),
             "variant contains no native/save/pool/payload/approval fields");

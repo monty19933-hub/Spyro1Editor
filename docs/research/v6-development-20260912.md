@@ -24,8 +24,10 @@ floor encoder, preserves its complete golden bytes and passes full244
 (336steps,0failures). The following shared ordered flat-tile producer now emits
 real matching multi-sector/multi-cell geometry and is consumed by the existing
 single-floor adapter. Source249 passes853checks; full250 passes336steps/0failures.
-Saved tiled documents, source-bound larger-level export and native seam traversal
-are not yet connected or approved.
+The following schema-4 increment connects saved tiled documents to the SAME
+Fresh Level window/session/store. Source-bound larger-level export and native
+seam traversal are not yet connected or approved; old export profiles refuse
+tiled content before acquiring source owners.
 Full combined regression207 also passed336 checks/0 failures; actual-source208
 replays normal ON/OFF publication with the same complete hashes and stale-ON
 refusal. Earlier full suites146/167/177 passed335 checks/0 failures. Sections below are chronological evidence: older "next"
@@ -1071,3 +1073,86 @@ both actual producers' complete existing bytes/metadata first. Scene row storage
 already supports the seven-row schema; it needs source-bound composition tests,
 not another private row allocator. Keep singleton global-domain identity shared
 with the actual Wizard ancestor, not merely an equal-name reissued domain.
+
+## Schema-4 tiled authoring in the unified editor
+
+The existing immutable aggregate now owns a closed legacy/tiled content variant.
+Schema 4 has actual ordered stable-ID tiles, per-tile material pairs, a common
+spawn/heading/sky/music owner and the existing closed placement list. There is
+no placeholder Base or competing persisted legacy geometry. Old Base access
+fails for tiled content; old v1/v2/v3 canonical bytes remain exact. Upgrade is an
+explicit user edit and creates one real tile from the old floor. Adding a native
+Moby cannot downgrade schema 4. Placement-only edits preserve the content variant.
+
+Validation calls the shared NativeFlatTileSurfaceLayout producer. Interior
+tests use actual rectangle-union coverage, including full shared seams and T
+junctions while rejecting holes, outer edges and corner-only contacts. Spawn
+coverage additionally requires the matching plane exactly512 below spawn Z;
+placement validation remains XY-only and proves no body/route/ground clearance.
+The existing255-tile/128-placement and64KiB byte bounds are independent.
+
+The same Fresh Level window now explicitly upgrades, selects, adds adjacent,
+removes and reorders tiles. Its geometry/color/material controls edit the actual
+selected tile; common settings and the selected placement apply atomically with
+all untouched content revalidated. Existing Undo/Redo, Save, read leases, stale
+revision rejection and Reopen are reused. History retains tile/placement IDs.
+The schematic projects every actual tile rather than drawing a filled bounding
+rectangle, and fits corners and spawn between its captions. It remains untextured
+and schematic, not a native model/physics renderer.
+
+Source-free tests first failed at missing Core API251. Core build252 passed;
+initial App test build253 caught two test-only inaccessible types, fixed without
+exposing internals. Build254 passed0warnings/errors; Core255 passed1300checks
+with753expected refusals; session256 passed230checks. UI257 passed new tiled
+checks but found an old layout locator coupled to caption wording. The caption
+now has a stable control name and the original layout assertions remain intact.
+Build258 passes0warnings/errors. UI259 passes tiled38, oldaggregate219,
+read-only96, layout30, catalogue109, native-Moby35 and material48checks.
+Lifecycle260 passes89checks plus controls68 and argument15checks: busy tile
+actions and selections cannot mutate the document, direct raw spawn/material
+drift cancels without releasing active owners early, and settlement retains the
+draft, actual document, selection and prior Undo/Redo history.
+
+Independent read-only review found no new actionable defect. The saved tiled
+UI fixture has a real counting owner/provider, so its direct unsupported export
+event proves refusal BEFORE either is acquired, not merely missing-owner gating.
+The Core candidate also explicitly rejects tiled content before source path
+validation/open. Existing exact single-floor native eligibility is unchanged.
+Log262 confirms original BIN/CUE, DuckStation global/game INIs and original card
+retain their previously recorded complete hashes. No native app/emulator or
+output ROM was touched by these focused checks. Full regression261 passes all
+336steps with0failures, report
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-lfvpuecn/summary.json`.
+Original-source replay263 passes368checks/175refusals for mixed saved export;
+264 passes372checks/175refusals for the Wizard/Grass family. Complete native
+image hashes, saved lineage and repeat/revision checks remain unchanged.
+Both finish originalFinal=true and nativeImageWritten=false. No partial output
+is promoted and the sealed R02 package remains unchanged.
+
+### Next native tiled-resource slice
+
+Root cross-check of the independent trace confirms that a neutral component
+walker should own actual component offsets, collision-tree length from pointers,
+raw portal/particle/sound owners, used end and aligned CD allocation. Keep the
+old NormalDataLayout DecodeUntextured wrapper and its8BC..A38 grammar exact;
+add a distinct tiled wrapper using the shared tile validator. A private tiled
+source issuer must retain the actual schema-4 document/canonical bytes and exact
+original executable capture. Initially require zero placements and base-color
+materials; never silently discard authored retail material references.
+
+The three2048-square tiles yield surface2D4 and used dataA58, still fitting the
+existing1000-byte CD allocation but not the legacy used-length certificate.
+The existing resource assembly derives tail offsets; adapt it through a closed
+legacy/tiled surface revision rather than cloning the assembler. Initially stop
+at the source-bound resource chain. Later explicit tiled staging/Body/Disc arms
+must retain old hash payloads/profile guards. Body already derives model address
+from actual used data, then scene address from model allocation. Extend the
+existing native-loader oracle with a separate tiled fixture to exercise actual
+parser80012D58 through call/store800158E0, sound helper80012CF0, model global
+800785E0, registration80015A54 and scene global800785E4. This is interpreter
+evidence, not DuckStation camera/collision/gameplay acceptance.
+
+The remote Wizard needs another component-owned refactor: fixed150 prefix,
+particle/sound offsets and144 surface checks cannot admit tiled content. Keep
+its old exact recipe alive while binding a new document/profile. This sequence
+has been reviewed, not implemented or approved for native tiled publication.

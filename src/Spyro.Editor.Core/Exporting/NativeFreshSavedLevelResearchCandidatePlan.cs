@@ -117,6 +117,8 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
     {
         token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(saved);
+        if (saved.Document.TiledContent != null)
+            throw new InvalidDataException("Tiled-level native resource composition is not yet supported. No legacy or partial document can be exported.");
         ArgumentException.ThrowIfNullOrWhiteSpace(originalBin); ArgumentException.ThrowIfNullOrWhiteSpace(sourceCue);
         if (saved.Document.SchemaVersion == 3)
             return await CaptureFamilyAsync(originalBin, sourceCue, saved, token);

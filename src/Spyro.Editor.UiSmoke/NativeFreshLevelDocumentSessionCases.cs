@@ -18,6 +18,7 @@ internal static class NativeFreshLevelDocumentSessionCases
             AbsentAndWholeApply();
             RouteIdentityAndHistory();
             NativeMobys();
+            TiledGeometry();
             MultipleAndMaximum();
             SaveAndReopen();
             FailedReadsAndRawCas();
@@ -175,6 +176,44 @@ internal static class NativeFreshLevelDocumentSessionCases
         Throws<InvalidOperationException>(()=>absent.AddNativeMoby(source,9001,9001,0,0));
         Check(absent.CurrentIntent==null&&!absent.CanUndo&&!absent.HasUnsavedChanges,"native Add does not infer a missing floor/aggregate");
     }
+    private static void TiledGeometry()
+    {
+        var (_, session) = SavedSession("tiled-history", Document());
+        var legacy = session.CurrentIntent!;
+        session.UpgradeToTiles(); var first = session.CurrentIntent!;
+        string firstId = session.SelectedTileId!;
+        Check(first.SchemaVersion == 4 && first.TiledContent!.Tiles[0].EditorId == firstId && session.CanUndo,
+            "explicit tiled upgrade selects the real new tile within existing history");
+        Check(session.Undo() && ReferenceEquals(session.CurrentIntent, legacy) && session.SelectedTileId == null,
+            "undo upgrade restores actual old content with no tile selection");
+        Check(session.Redo() && ReferenceEquals(session.CurrentIntent, first) && session.SelectedTileId == firstId,
+            "redo upgrade retains tile identity and exact document");
+        session.AddAdjacentTile(); session.AddAdjacentTile();
+        string thirdId = session.SelectedTileId!; var three = session.CurrentIntent!;
+        var source = NativeFreshRetailMobyReference.Create("spyro1-usa-retail-mode2-2352-v1",14,1,1);
+        var moby = session.AddNativeMoby(source,13001,9001,1,0);
+        Check(session.CurrentIntent!.SchemaVersion == 4 && ReferenceEquals(session.CurrentIntent.TiledContent, three.TiledContent) &&
+            session.SelectedTileId == thirdId && session.SelectedEditorId == moby.EditorId,
+            "native Add beyond old Base preserves schema4 content and independent tile/placement selections");
+        var withMoby = session.CurrentIntent;
+        Throws<InvalidDataException>(() => session.RemoveSelectedTile());
+        Check(ReferenceEquals(session.CurrentIntent, withMoby) && session.SelectedTileId == thirdId,
+            "failed tile removal preserves complete history and selection when a placement needs it");
+        session.Save(); var snapshot = session.Snapshot;
+        session.ReplaceNativeMoby(moby.EditorId,source,13002,9003,2,1); var draft = session.CurrentIntent;
+        File.AppendAllText(snapshot.Path," \n"); byte[] external = File.ReadAllBytes(snapshot.Path);
+        Throws<InvalidDataException>(() => session.Save());
+        Check(ReferenceEquals(session.Snapshot,snapshot) && ReferenceEquals(session.CurrentIntent,draft) &&
+            session.SelectedTileId == thirdId && session.SelectedEditorId == moby.EditorId &&
+            File.ReadAllBytes(snapshot.Path).SequenceEqual(external),
+            "schema4 stale raw save retains draft, both selections and external bytes");
+        File.WriteAllBytes(snapshot.Path,Canonical(snapshot.Intent!));
+        session.Reopen();
+        Check(session.CurrentIntent!.SchemaVersion == 4 && session.SelectedTileId == thirdId &&
+            session.SelectedEditorId == moby.EditorId && !session.CanUndo && !session.HasUnsavedChanges,
+            "schema4 actual reopen retains valid IDs and resets history without reissuing source authority");
+    }
+
     private static void MultipleAndMaximum()
     {
         var routes=Enumerable.Range(1,128).Select(i=>Wizard(i.ToString("x32"))).ToArray();

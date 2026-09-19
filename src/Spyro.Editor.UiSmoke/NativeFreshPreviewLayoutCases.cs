@@ -18,8 +18,7 @@ internal static class NativeFreshPreviewLayoutCases
                 {
                     fixture.Window.Width = width; fixture.Window.Height = height; F.Pump();
                     var preview = fixture.Window.Preview;
-                    var note = fixture.Window.GetLogicalDescendants().OfType<TextBlock>().Single(
-                        block => block.Text?.StartsWith("Two schematic triangles;", StringComparison.Ordinal) == true);
+                    var note = fixture.Find<TextBlock>("FreshDocumentPreviewNote");
                     // Both are immediate children of the same Grid. A parent
                     // viewport may scroll, but their own layout must not overlap.
                     Check(ReferenceEquals(preview.Parent, note.Parent), "Shared schematic layout parent.");

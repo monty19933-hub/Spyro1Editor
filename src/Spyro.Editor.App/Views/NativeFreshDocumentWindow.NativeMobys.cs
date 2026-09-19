@@ -8,7 +8,8 @@ namespace Spyro.Editor.App.Views;
 
 internal sealed partial class NativeFreshDocumentWindow
 {
-    private string NativeMobyCapabilityText => NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(CurrentAggregateIntent)
+    private string NativeMobyCapabilityText => CurrentAggregateIntent?.TiledContent != null ? TiledCapabilityText
+        : NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(CurrentAggregateIntent)
         ? "Research supports the exact saved Wizard + Grass profile after explicit Apply and Save, subject to actual original BIN/CUE validation. Normal Create BIN is unavailable. This bounded profile does not certify other native imports or general gameplay."
         : "Schema-3 native Moby authoring is authored-only; native dependencies are unsupported by the current research action. Normal Create BIN and research export are unavailable. Source references and XY markers do not certify imported models, collision or gameplay.";
     private readonly StackPanel _nativeMobyEditor = new() { Name = "FreshNativeMobyFields", Spacing = 8, IsVisible = false };

@@ -106,19 +106,22 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         previewPanel.Children.Add(Preview);
         var previewNote = new TextBlock
         {
-            Text = "Two schematic triangles; the marker shows the authored spawn +512 above the floor. No player footprint, native camera, terrain clearance or runtime behavior is inferred.",
+            Name = "FreshDocumentPreviewNote",
+            Text = "Two schematic triangles per tile; the marker shows the authored spawn +512 above its supporting floor. No player footprint, native camera, terrain clearance or runtime behavior is inferred.",
             TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, FontSize = 12
         };
         Grid.SetRow(previewNote, 2);
         previewPanel.Children.Add(previewNote);
 
-        _fieldsPanel.Children.Add(Section("Floor rectangle", "Native world units. Floor origin and size use multiples of 16; size is 16–2048 and must fit one native cell."));
+        _fieldsPanel.Children.Add(BuildTileFields());
+        _fieldsPanel.Children.Add(Section("Floor rectangle / selected tile", "Native world units, multiples of 16; each size is 16–2048. Legacy floors must fit one native cell. Schema-4 tiles may cross cells."));
         _fieldsPanel.Children.Add(Row(Field("FreshFloorX", "X"), Field("FreshFloorY", "Y"), Field("FreshFloorZ", "Z")));
         _fieldsPanel.Children.Add(Row(Field("FreshFloorWidth", "Width"), Field("FreshFloorDepth", "Depth")));
         _fieldsPanel.Children.Add(Section("Spawn", "XY must be strictly inside the floor. Change floor and spawn together, then Apply."));
         _fieldsPanel.Children.Add(Row(Field("FreshSpawnX", "X"), Field("FreshSpawnY", "Y"), Field("FreshHeading", "Heading 0–255")));
         _spawnHeight.FontSize = 12;
         _fieldsPanel.Children.Add(_spawnHeight);
+        _fieldsPanel.Children.Add(_tiledSpawnRow);
         _fieldsPanel.Children.Add(Section("Display colors", "Opaque RGB hex, #RRGGBB. The schematic uses these authored colors directly."));
         _fieldsPanel.Children.Add(Row(Field("FreshFloorColor", "Floor"), Field("FreshSkyColor", "Sky")));
         _fieldsPanel.Children.Add(Section("Music", "Select an existing native track. Research compilation uses this selection; the schematic has no audio preview."));
@@ -371,19 +374,31 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         _refreshing = true;
         try
         {
-            var value = _aggregateMode ? CurrentAggregateIntent?.Base : CurrentIntent;
+            var value = _aggregateMode ? CurrentAggregateIntent?.LegacyContent?.Base : CurrentIntent;
             Set("FreshFloorX", value?.FloorX); Set("FreshFloorY", value?.FloorY); Set("FreshFloorZ", value?.FloorZ);
             Set("FreshFloorWidth", value?.FloorWidth); Set("FreshFloorDepth", value?.FloorDepth);
             Set("FreshSpawnX", value?.SpawnX); Set("FreshSpawnY", value?.SpawnY); Set("FreshHeading", value?.Heading);
             _fields["FreshFloorColor"].Text = value == null ? "" : Hex(value.FloorColor);
             _fields["FreshSkyColor"].Text = value == null ? "" : Hex(value.SkyColor);
             _music.SelectedItem = value == null ? null : MusicTrackCatalog.Find(value.MusicTrackId);
+            if (CurrentAggregateIntent?.TiledContent is { } tiled)
+            {
+                var tile = SelectedTile;
+                Set("FreshFloorX", tile?.X); Set("FreshFloorY", tile?.Y); Set("FreshFloorZ", tile?.Z);
+                Set("FreshFloorWidth", tile?.Width); Set("FreshFloorDepth", tile?.Depth);
+                Set("FreshSpawnX", tiled.SpawnX); Set("FreshSpawnY", tiled.SpawnY); Set("FreshHeading", tiled.Heading);
+                _fields["FreshFloorColor"].Text = tile == null ? "" : Hex(tile.FloorColor);
+                _fields["FreshSkyColor"].Text = Hex(tiled.SkyColor);
+                _music.SelectedItem = MusicTrackCatalog.Find(tiled.MusicTrackId);
+            }
+            WriteTileFields();
             WriteAggregateFields();
             WriteMaterialFields();
             _appliedFields = FieldSignature();
             if (_aggregateMode) Preview.SetAggregate(CurrentAggregateIntent, _aggregateSession?.SelectedEditorId);
             else Preview.Intent = value;
             _spawnHeight.Text = value == null ? "Spawn Z = floor Z +512 (fixed)." : $"Spawn Z: {value.SpawnZ}  ·  floor +512 (fixed)";
+            if (CurrentAggregateIntent?.TiledContent != null) _spawnHeight.Text = "Spawn XY must be inside the actual tile union at its supporting plane.";
         }
         finally { _refreshing = false; }
         RefreshChrome();
@@ -474,7 +489,8 @@ internal sealed partial class NativeFreshDocumentWindow : Window
     }
 
     private void Set(string name, int? value) => _fields[name].Text = value?.ToString(CultureInfo.InvariantCulture) ?? "";
-    private string FieldSignature() => string.Join("\n", _fields.Values.Select(box => box.Text ?? "")) + "\n" + (_music.SelectedItem as MusicTrackEntry)?.TrackId;
+    private string FieldSignature() => string.Join("\n", _fields.Values.Select(box => box.Text ?? "")) + "\n" +
+        (_music.SelectedItem as MusicTrackEntry)?.TrackId + (CurrentAggregateIntent?.TiledContent == null ? "" : "\n" + _tiledSpawnZ.Text);
     private static string Hex(ColorRgba color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
     private static bool Equal(NativeId65FreshDocumentIntent? a, NativeId65FreshDocumentIntent? b) =>
         ReferenceEquals(a, b) || a != null && b != null && NativeId65FreshDocumentCodec.SerializeCanonical(a).AsSpan()
