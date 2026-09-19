@@ -181,16 +181,16 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
         // unchanged. Only their containing Body and runtime placement grow.
         _scene=ancestor.CopyScene();FinalSceneDomain=ancestor.FinalSceneDomain;
         byte[] before=ancestor.CopyLevelData();ancestor.RequireExactLevelData(before);
-        _modelBatch=NativeModelTailBatch.Compile(before,[resources.ModelContribution],[]);
+        _modelBatch=NativeModelTailBatch.Compile(before,resources.ModelContributions,[]);
         _body=_modelBatch.CopyFinalBody();
-        foreach(var patch in resources.Texture.Patches)
+        foreach(var patch in resources.TexturePatches)
         {
             int at=resources.UploadOffset+patch.Offset;
             if(!_body.AsSpan(at,patch.ByteLength).SequenceEqual(patch.CopyBefore()))
                 throw new InvalidDataException("Chest GPU install lost its complete current upload preimage.");
             patch.CopyAfter().CopyTo(_body,at);
         }
-        if(!_body.AsSpan(resources.UploadOffset,0x80000).SequenceEqual(resources.Texture.CopyUpload()))
+        if(!_body.AsSpan(resources.UploadOffset,0x80000).SequenceEqual(resources.CopyUpload()))
             throw new InvalidDataException("Chest model and GPU transactions disagree on the complete final upload.");
         ModelRuntimeAddress=ancestor.ModelRuntimeAddress;
         SceneRuntimeAddress=checked(ModelRuntimeAddress+(uint)_modelBatch.FinalModelLength);
@@ -201,10 +201,10 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
             throw new InvalidDataException("Chest resources exceed known Body/copy-reserve bounds; no peak-runtime proof is implied.");
         FinalBodyDomain=new(NativeAddressKind.LevelData,"fresh-family-chest-resources:"+ancestor.PlanSha256,
             NativeAddressRevision.Final,_body.Length);
-        var graph=resources.BindFinal(FinalBodyDomain,_modelBatch.Packages.Single(),_body,out var consumers);
+        var graph=resources.BindFinal(FinalBodyDomain,_modelBatch.Packages,_body,out var consumers);
         ChestTextureConsumers=consumers;_graphs=Array.AsReadOnly(new[]{graph});
         byte[] modelAfterimage=_body.ToArray();
-        foreach(var patch in resources.Texture.Patches)
+        foreach(var patch in resources.TexturePatches)
         {
             int at=resources.UploadOffset+patch.Offset;
             if(!modelAfterimage.AsSpan(at,patch.ByteLength).SequenceEqual(patch.CopyAfter()))
@@ -218,7 +218,7 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
             throw new InvalidDataException("Chest resource inverse chain failed to recover its complete actual base Body.");
         LevelDataSha256=Hash(_body);SceneSha256=Hash(_scene);
         PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{
-            profile="native-fresh-family-unplaced-model-resources-v1",ancestor=ancestor.PlanSha256,
+            profile="native-fresh-family-unplaced-model-resources-v2",ancestor=ancestor.PlanSha256,
             LevelDataSha256,SceneSha256,graph.Fingerprint,ModelRuntimeAddress,SceneRuntimeAddress,KnownSceneEndAddress,
             textureConsumers=consumers.Select(c=>new{c.Descriptor,c.TileIndex,Before=Hash(c.Rewrite.CopyBefore()),After=Hash(c.Rewrite.CopyAfter())}),
             rowsAdded=0,completeBehavior=false,runtime=false,publication=false}));
@@ -233,7 +233,9 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
     internal NativeFreshMobyFamilyCompositionPlan? ResourceAncestor{get;}
     internal bool HasUnplacedModelResources=>_chestResources is not null;
     internal NativeModelTailPackage? ChestModelContribution=>_chestResources?.ModelContribution;
+    internal IReadOnlyList<NativeModelTailPackage> ChestModelContributions=>_chestResources?.ModelContributions??Array.Empty<NativeModelTailPackage>();
     internal NativeMobyTextureMaterialization? ChestTextureMaterialization=>_chestResources?.Texture;
+    internal NativeMobyTextureMaterialization? ChestDebrisTextureMaterialization=>_chestResources?.DebrisTexture;
     internal IReadOnlyList<NativeFreshMobyTextureConsumer> ChestTextureConsumers{get;}=Array.Empty<NativeFreshMobyTextureConsumer>();
     internal IReadOnlyList<NativeFreshMobyFamilyPlacement> Placements{get;}
     internal NativeFreshMobyFamilyRowSpanPlan RowSpans{get;}

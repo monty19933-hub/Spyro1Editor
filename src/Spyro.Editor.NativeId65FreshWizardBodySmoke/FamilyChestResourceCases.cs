@@ -15,9 +15,11 @@ internal static class FamilyChestResourceCases
         NativeFreshMobySoundResidencyBinding sound,NativeFreshMobyFamilyCompositionPlan ancestor,
         NativeFreshMobyFamilyCompositionPlan equalAncestor,Action<bool,string> check)
     {
+        CheckRetainedDebrisGrammar(source,check);
         byte[] before=ancestor.CopyLevelData(),scene=ancestor.CopyScene();
         check(!ancestor.HasUnplacedModelResources&&ancestor.ResourceAncestor is null&&
-            ancestor.ChestModelContribution is null&&ancestor.ChestTextureMaterialization is null,
+            ancestor.ChestModelContribution is null&&ancestor.ChestTextureMaterialization is null&&
+            ancestor.ChestModelContributions.Count==0&&ancestor.ChestDebrisTextureMaterialization is null,
             "Existing family compositions retain their original no-unplaced-resource state.");
         // One additional exact capture for the actual fallback ownership mask;
         // the chest source and sound binding reuse the surrounding source pass.
@@ -45,6 +47,7 @@ internal static class FamilyChestResourceCases
 
         var child=NativeFreshMobyFamilyCompositionPlan.ComposeWithLockedChestResources(ancestor,sound,fallback);
         byte[] after=child.CopyLevelData();var package=child.ChestModelContribution!;var texture=child.ChestTextureMaterialization!;
+        var packages=child.ChestModelContributions;var debrisTexture=child.ChestDebrisTextureMaterialization!;
         check(child.HasUnplacedModelResources&&ReferenceEquals(child.ResourceAncestor,ancestor)&&
             ReferenceEquals(child.BaseBodyAncestor,ancestor.BaseBodyAncestor)&&
             !ReferenceEquals(child.FinalBodyDomain,ancestor.FinalBodyDomain)&&
@@ -54,24 +57,37 @@ internal static class FamilyChestResourceCases
         check(child.CopyScene().SequenceEqual(scene)&&child.Placements.SequenceEqual(ancestor.Placements)&&
             child.Layout.PlacedCount==ancestor.Layout.PlacedCount&&child.Layout.DynamicCapacity==ancestor.Layout.DynamicCapacity&&
             !child.CompleteNativeBehaviorProven&&!child.RuntimeVerified&&!child.PublicationApproved,
-            "AE resource installation adds no key/chest/reward rows, behavior or export approval.");
+            "AE/debris resource installation adds no key/chest/reward rows, behavior or export approval.");
         int oldModels=Word(before,0x10),oldLength=Word(before,0x14),oldScene=Word(before,0x18);
         int newModels=Word(after,0x10),newLength=Word(after,0x14),newScene=Word(after,0x18);
         var oldRoots=NativeMobyRegistrationTableLayout.Decode(before.AsSpan(0,0x800),oldModels,oldLength).Registrations;
         var newRoots=NativeMobyRegistrationTableLayout.Decode(after.AsSpan(0,0x800),newModels,newLength).Registrations;
+        check(newRoots.Count==oldRoots.Count+4&&newRoots.Skip(oldRoots.Count).Select(r=>r.ActorId)
+            .SequenceEqual(new ushort[]{0xAE,0x135,0x136,0x137}),
+            "The actual resource Body must install AE and all three native debris packages in one ordered model-tail batch.");
         var chestRoot=newRoots.Single(r=>r.ActorId==0xAE);
         check(package.ActorId==0xAE&&package.ByteLength==0x1008&&Word(package.CopyBytes(),4)==unchecked((int)0xFFFFFF36)&&
-            newRoots.Count==oldRoots.Count+1&&newRoots.Take(oldRoots.Count).SequenceEqual(oldRoots)&&
+            packages.Count==4&&ReferenceEquals(packages[0],package)&&packages.Sum(p=>p.ByteLength)==0x16D8&&
+            newRoots.Count==oldRoots.Count+4&&newRoots.Take(oldRoots.Count).SequenceEqual(oldRoots)&&
             chestRoot.Slot==oldRoots.Count&&chestRoot.RootDataOffset==oldModels+oldLength&&
             newModels==oldModels&&newLength==oldLength+0x1800&&newScene==oldScene+0x1800&&after.Length==before.Length+0x1800,
-            "One complete registered AE package grows the actual model allocation once by1800, retaining all old roots.");
+            "AE and all three debris packages share one1800 model allocation growth, retaining all old roots.");
         check(after.AsSpan((int)chestRoot.RootDataOffset,0x1008).SequenceEqual(package.CopyBytes())&&
-            !after.AsSpan((int)chestRoot.RootDataOffset+0x1008,0x7F8).ContainsAnyExcept((byte)0)&&
+            !after.AsSpan((int)chestRoot.RootDataOffset+0x16D8,0x128).ContainsAnyExcept((byte)0)&&
             after.AsSpan(newScene,scene.Length).SequenceEqual(scene)&&
             child.ModelRuntimeAddress==ancestor.ModelRuntimeAddress&&child.SceneRuntimeAddress==ancestor.SceneRuntimeAddress+0x1800&&
             child.KnownSceneEndAddress==ancestor.KnownSceneEndAddress+0x1800&&
             child.KnownSceneEndAddress<=ancestor.BaseBodyAncestor.NormalReservedLowerAddress&&newLength+scene.Length<=0x80000,
-            "Installed AE bytes, generated model padding, unchanged scene and existing runtime-reserve bounds remain exact.");
+            "Installed AE bytes, final four-package padding, unchanged scene and existing runtime-reserve bounds remain exact.");
+        int packageAt=oldModels+oldLength;
+        for(int i=0;i<packages.Count;i++)
+        {
+            var contribution=packages[i];var root=newRoots[oldRoots.Count+i];
+            check(root.ActorId==contribution.ActorId&&root.Slot==oldRoots.Count+i&&root.RootDataOffset==packageAt&&
+                after.AsSpan(packageAt,contribution.ByteLength).SequenceEqual(contribution.CopyBytes()),
+                "Every actual ordered package is complete at its appended registration; no old model bytes are overwritten.");
+            packageAt+=contribution.ByteLength;
+        }
 
         check(texture.Locations.Count==4&&texture.Allocations.Count==4&&texture.Patches.Count==132&&
             texture.Patches.Sum(p=>p.ByteLength)==2176&&texture.Locations.All(l=>l.PixelRowBytes==16&&l.Rows==32),
@@ -105,22 +121,26 @@ internal static class FamilyChestResourceCases
         }
         check(package.CopyBytes().SequenceEqual(expectedPackage)&&NativeMobyModelTextureLayout.Decode(package.CopyBytes()).References.Count==146,
             "The installed complete AE package contains exactly shared texture rebasing plus sound47-to54, preserving its whole complement.");
-        check(child.ChestTextureConsumers.Count==146&&child.ChestTextureConsumers.All(c=>
-            ReferenceEquals(c.Descriptor.Space,child.FinalBodyDomain)&&c.Descriptor.ByteLength==12&&c.TileIndex is >=0 and <4&&
-            c.Descriptor.Offset==chestRoot.RootDataOffset+c.Rewrite.Offset&&
+        var modelRoots=packages.ToDictionary(p=>p.Id,p=>newRoots.Single(r=>r.ActorId==p.ActorId));
+        check(child.ChestTextureConsumers.Count==210&&child.ChestTextureConsumers.Count(c=>c.TileIndex==4)==64&&
+            child.ChestTextureConsumers.All(c=>
+            ReferenceEquals(c.Descriptor.Space,child.FinalBodyDomain)&&c.Descriptor.ByteLength==12&&c.TileIndex is >=0 and <5&&
+            c.Descriptor.Offset==modelRoots[c.Rewrite.Owner].RootDataOffset+c.Rewrite.Offset&&
             after.AsSpan((int)c.Descriptor.Offset,12).SequenceEqual(c.Rewrite.CopyAfter())),
-            "All146 renderer consumers bind complete installed fields in the actual new Final model domain.");
-        var tail=NativeModelTailBatch.Compile(before,[package],[]);byte[] expectedBody=tail.CopyFinalBody();
+            "All210 chest/debris renderer consumers bind complete installed fields in the actual new Final model domain.");
+        CheckInstalledDebris(source,child,after,uploadAt,check);
+        var tail=NativeModelTailBatch.Compile(before,packages,[]);byte[] expectedBody=tail.CopyFinalBody();
         var touched=new bool[0x80000];
-        foreach(var patch in texture.Patches)
+        foreach(var patch in texture.Patches.Concat(debrisTexture.Patches))
         {
             check(!touched.AsSpan(patch.Offset,patch.ByteLength).Contains(true)&&
+                !ownership.AsSpan(patch.Offset,patch.ByteLength).ContainsAnyExcept((byte)0)&&
                 before.AsSpan(oldUploadAt+patch.Offset,patch.ByteLength).SequenceEqual(patch.CopyBefore()),
-                "Every texture patch owns one disjoint exact parent-upload preimage, including zero bytes.");
+                "Every texture patch owns one disjoint exact parent-upload preimage outside all live owners, including zero bytes.");
             Array.Fill(touched,true,patch.Offset,patch.ByteLength);
             patch.CopyAfter().CopyTo(expectedBody,uploadAt+patch.Offset);
         }
-        check(after.SequenceEqual(expectedBody)&&after.AsSpan(uploadAt,0x80000).SequenceEqual(texture.CopyUpload())&&
+        check(after.SequenceEqual(expectedBody)&&after.AsSpan(uploadAt,0x80000).SequenceEqual(debrisTexture.CopyUpload())&&
             before.AsSpan(oldUploadAt+0x65800,0x19800).SequenceEqual(after.AsSpan(uploadAt+0x65800,0x19800))&&
             child.CopyInverseResourceAncestorBody().SequenceEqual(before)&&
             child.CopyInverseBaseBody().SequenceEqual(ancestor.BaseBodyAncestor.CopyLevelData()),
@@ -152,16 +172,117 @@ internal static class FamilyChestResourceCases
         check(repeat.PlanSha256==child.PlanSha256&&repeat.CopyLevelData().SequenceEqual(after),
             "Repeated actual resource composition is deterministic without accumulating another package or allocation.");
         foreach(int at in new[]{0,(int)chestRoot.RootDataOffset,(int)chestRoot.RootDataOffset+4,
-            uploadAt+texture.Locations[0].PixelOffset,uploadAt+texture.Locations[3].PaletteOffset,newScene,after.Length-1})
+            uploadAt+texture.Locations[0].PixelOffset,uploadAt+texture.Locations[3].PaletteOffset,
+            uploadAt+debrisTexture.Locations[0].PixelOffset,uploadAt+debrisTexture.Locations[0].PaletteOffset,newScene,after.Length-1}
+            .Concat(packages.Skip(1).SelectMany(p=>new[]{(int)modelRoots[p.Id].RootDataOffset,
+                (int)modelRoots[p.Id].RootDataOffset+p.ByteLength-1})))
         {byte[] bad=after.ToArray();bad[at]^=1;Reject<InvalidDataException>(()=>child.RequireExactLevelData(bad),check);}
         Reject<InvalidDataException>(()=>child.RequireExactLevelData(after[..^1]),check);
         byte[] inverse=child.CopyInverseResourceAncestorBody(),modelCopy=package.CopyBytes(),uploadCopy=texture.CopyUpload();
-        inverse[0]^=1;modelCopy[4]^=1;uploadCopy[0]^=1;after[^1]^=1;
+        byte[] debrisModelCopy=packages[1].CopyBytes(),debrisUploadCopy=debrisTexture.CopyUpload();
+        inverse[0]^=1;modelCopy[4]^=1;uploadCopy[0]^=1;debrisModelCopy[0]^=1;debrisUploadCopy[0]^=1;after[^1]^=1;
         child.RequireExactLevelData(child.CopyLevelData());sound.RequireRetainedOwners();
         check(Hash(child.CopyLevelData())==child.LevelDataSha256&&child.CopyInverseResourceAncestorBody().SequenceEqual(before)&&
             ancestor.CopyLevelData().SequenceEqual(before)&&ancestor.CopyScene().SequenceEqual(scene),
             "Copy mutation and all refusals preserve child resources, actual parent Body/Scene and complete inverse.");
-        Console.WriteLine($"NATIVE_FRESH_CHEST_RESOURCE_BODY_SOURCE_OK mixed={ancestor.BaseBodyAncestor.MixedResourceAncestor is not null} body={child.LevelDataSha256} package=1008 textures=4 refs=146 rowsAdded=0 export=false");
+        Console.WriteLine($"NATIVE_FRESH_CHEST_RESOURCE_BODY_SOURCE_OK mixed={ancestor.BaseBodyAncestor.MixedResourceAncestor is not null} body={child.LevelDataSha256} packages=4 payload=16D8 textures=5 refs=210 rowsAdded=0 export=false");
+    }
+
+    private static void CheckInstalledDebris(NativeLockedChestFamilySource source,NativeFreshMobyFamilyCompositionPlan child,
+        byte[] after,int uploadAt,Action<bool,string> check)
+    {
+        var texture=child.ChestDebrisTextureMaterialization!;var location=texture.Locations.Single();
+        var allocation=texture.Allocations.Single();
+        check(texture.Patches.Count==33&&texture.Patches.Sum(p=>p.ByteLength)==544&&location.PixelRowBytes==16&&location.Rows==32&&
+            allocation.SourcePixelOffset==0x58A70-0x800&&allocation.SourcePaletteOffset==0x78AA0-0x800&&
+            allocation.TargetPixelOffset==location.PixelOffset&&allocation.TargetPaletteOffset==location.PaletteOffset,
+            "Three debris models share one installed32-square tile/CLUT,33patches and544bytes.");
+        for(int row=0;row<=32;row++)
+        {
+            var read=source.ResourceInputs[row==32?"effects.native-debris-clut":"effects.native-debris-pixels."+row].Single();
+            int at=row==32?location.PaletteOffset:location.PixelOffset+row*1024,length=row==32?32:16;
+            check(texture.Patches[row].Offset==at&&texture.Patches[row].ByteLength==length&&
+                after.AsSpan(uploadAt+at,length).SequenceEqual(source.ReadSource(read.Extent)),
+                "Every installed debris row/CLUT equals its complete retained Original source footprint.");
+        }
+        foreach(var contribution in child.ChestModelContributions.Skip(1))
+        {
+            var read=source.ResourceInputs["effects.native-debris."+contribution.ActorId].Single();
+            byte[] original=source.ReadSource(read.Extent),expected=original.ToArray();
+            var grammar=NativeMobyModelTextureLayout.Decode(original);var first=grammar.References[0];
+            // Derive the common tile origin from the historical owned pixels,
+            // not from whichever subset of UVs this individual fragment uses.
+            int sourceX=(0x58A70-0x800)%1024,sourceY=(0x58A70-0x800)/1024;
+            int minU=(sourceX+1024-(first.Page&15)*128)*2,minV=sourceY-((first.Page&16)!=0?256:0);
+            foreach(var reference in grammar.References)
+                NativeMobyModelTextureLayout.Rebase(reference,location.U-minU,location.V-minV,location.Palette,
+                    (ushort)((reference.Page&~31)|location.Page)).CopyTo(expected,reference.PackageOffset);
+            check(contribution.CopyBytes().SequenceEqual(expected),
+                "Each complete debris package contains exactly its independently derived descriptor rebases and unchanged model complement.");
+            byte[] inverse=contribution.CopyBytes();
+            var consumers=child.ChestTextureConsumers.Where(c=>c.Rewrite.Owner==contribution.Id).ToArray();
+            check(consumers.Length==grammar.References.Count&&consumers.All(c=>c.TileIndex==4)&&
+                consumers.Select(c=>c.Rewrite.Offset).SequenceEqual(grammar.References.Select(r=>r.PackageOffset)),
+                "Every debris field has exactly one typed Final consumer of the shared fifth tile.");
+            foreach(var consumer in consumers)
+            {
+                check(inverse.AsSpan(consumer.Rewrite.Offset,12).SequenceEqual(consumer.Rewrite.CopyAfter())&&
+                    original.AsSpan(consumer.Rewrite.Offset,12).SequenceEqual(consumer.Rewrite.CopyBefore()),
+                    "Every debris descriptor inverse checks its complete Original preimage and transformed afterimage.");
+                consumer.Rewrite.CopyBefore().CopyTo(inverse,consumer.Rewrite.Offset);
+            }
+            check(inverse.SequenceEqual(original),"Debris descriptor inversion recovers the complete Original package.");
+        }
+    }
+
+    private static void CheckRetainedDebrisGrammar(NativeLockedChestFamilySource source,Action<bool,string> check)
+    {
+        // Read only the source object already retained by this source pass. The
+        // existing Town recipe is the independent descriptor-offset oracle.
+        var specifications=new[]{(Class:0x135,At:0x1CC804,Length:0x224,Faces:20),
+            (Class:0x136,At:0x1CCA28,Length:0x1D4,Faces:16),(Class:0x137,At:0x1CCBFC,Length:0x2D8,Faces:28)};
+        List<NativeMobyModelTextureReference> references=[];
+        foreach(var spec in specifications)
+        {
+            string id="effects.native-debris."+spec.Class;
+            var read=source.ResourceInputs[id].Single();byte[] original=source.ReadSource(read.Extent);
+            var grammar=NativeMobyModelTextureLayout.Decode(original);
+            check(read.Extent.Offset==spec.At&&read.Extent.ByteLength==spec.Length&&Hash(original)==read.ExpectedSha256&&
+                grammar.References.Count==spec.Faces&&grammar.References.Select(r=>r.PackageOffset)
+                    .SequenceEqual(Enumerable.Range(0,spec.Faces).Select(f=>0x74+f*0x14)),
+                "Each retained debris package decodes with the shared renderer grammar and the exact historical Town descriptor census.");
+            var equivalent=source.ResourceInputs[id+".equivalence"];
+            byte[] donor=source.ReadSource(equivalent.Single(r=>r.Id=="donor").Extent);
+            byte[] target=source.ReadSource(equivalent.Single(r=>r.Id=="target").Extent);
+            check(target.SequenceEqual(original)&&NativeMobyModelTextureLayout.Decode(donor).References.Count==spec.Faces,
+                "The actual retained Town package and Peace equivalence input share the known complete debris grammar.");
+            foreach(var reference in grammar.References)
+            {donor.AsSpan(reference.PackageOffset,12).Clear();target.AsSpan(reference.PackageOffset,12).Clear();}
+            check(donor.SequenceEqual(target),"Native debris source equivalence preserves every byte outside complete texture descriptors.");
+            references.AddRange(grammar.References);
+        }
+        var groups=references.GroupBy(r=>(r.Page,r.Palette)).ToArray();
+        check(references.Count==64&&groups.Length==1,"All64 retained debris renderer references share exactly one source tile and CLUT.");
+        var group=groups.Single();int[] uv=[0,4,8,10];
+        var coordinates=group.SelectMany(r=>{byte[] bytes=r.CopyBytes();return uv.Select(at=>(U:(int)bytes[at],V:(int)bytes[at+1]));}).ToArray();
+        int minU=coordinates.Min(p=>p.U),minV=coordinates.Min(p=>p.V);
+        int x=(group.Key.Page&15)*128+minU/2-1024,y=((group.Key.Page&16)!=0?256:0)+minV;
+        int palette=(group.Key.Palette>>6)*1024+(group.Key.Palette&63)*32-1024;
+        check(coordinates.Max(p=>p.U)==minU+31&&coordinates.Max(p=>p.V)==minV+31&&
+            0x800+y*1024+x==0x58A70&&0x800+palette==0x78AA0,
+            "The decoded debris footprint matches the existing complete32-square Town pixel/CLUT owners.");
+        var domain=source.ResourceInputs["effects.native-debris.309"].Single().Extent.Space;
+        for(int row=0;row<32;row++)
+        {
+            var read=source.ResourceInputs["effects.native-debris-pixels."+row].Single();
+            check(ReferenceEquals(read.Extent.Space,domain)&&read.Extent.Offset==0x58A70+row*0x400&&read.Extent.ByteLength==16&&
+                Hash(source.ReadSource(read.Extent))==read.ExpectedSha256,
+                "Every decoded debris pixel row has its exact retained Original source read.");
+        }
+        var clut=source.ResourceInputs["effects.native-debris-clut"].Single();
+        check(ReferenceEquals(clut.Extent.Space,domain)&&clut.Extent.Offset==0x78AA0&&clut.Extent.ByteLength==32&&
+            Hash(source.ReadSource(clut.Extent))==clut.ExpectedSha256,"The complete debris CLUT retains its exact Original owner.");
+        Console.WriteLine("NATIVE_FRESH_CHEST_DEBRIS_RETAINED_GRAMMAR_OK packages=3 refs=64 textures=1 pixels=58A70 clut=78AA0");
     }
 
     private static int Word(ReadOnlySpan<byte> bytes,int at)=>BinaryPrimitives.ReadInt32LittleEndian(bytes[at..]);

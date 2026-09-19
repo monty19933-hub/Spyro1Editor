@@ -8,13 +8,17 @@ BIN/CUE, saves and preserved R03/R04/R05 apps remain protected. Stop safely near
 
 ## Current checkpoint summary
 
-Latest source work installs the complete unplaced AE model/four texture sets
-through the existing family Body composer, following shared atomic actor-texture
+Latest source work installs complete unplaced AE+135/136/137 models/five texture
+sets through the existing family Body composer, following shared atomic actor-texture
 materialization at d588106 (full217 passed336 steps, source218 passed4412 checks), and99f93b8
 (normal flight export) and b0db75b (model batch).
-Safely paused September13 at5% account usage remaining. Full226 passes336 steps;
-source223/225 passed the untextured/mixed resource installs. The two additional
-source-only assertion groups added afterward still need a replay after reset.
+Resumed September19 from clean1f01244 after the account usage reset. Full226
+passes336 steps; source223/225 passed the untextured/mixed resource installs.
+The final source-only assertions now replay successfully: log227 Body10917 and
+log228 authoring8269, with Original BIN/CUE unchanged. No additional output ROM
+was written by those checks. The5% safe-stop rule remains in force. The debris
+extension subsequently passes source233(11114), source235(8466) and full236
+(336steps,0failures); see the September19 section for its exact boundary.
 Full combined regression207 also passed336 checks/0 failures; actual-source208
 replays normal ON/OFF publication with the same complete hashes and stale-ON
 refusal. Earlier full suites146/167/177 passed335 checks/0 failures. Sections below are chronological evidence: older "next"
@@ -28,8 +32,11 @@ The first has an isolated copy
 of the two-family/two-material document, the normal Fresh Level editor, source
 Moby browsing/staged placement, history/save/reopen and exact saved-family test
 export; the second starts a clean Toasty flight-test project with separate private
-settings. Source/UI automation and physical publication are verified; native
-desktop acceptance is still pending because the Mac is locked. The older ac50def
+settings. Source/UI automation and physical publication are verified. On
+September19 the native R02 window opened on the unlocked Mac and passed
+aggregate Apply(heading64→65), Undo, Redo, Undo-to64, Save and Reopen in the
+private example project. Unsupported heading65 correctly disabled its exact
+saved-family export; Undo restored availability. The older ac50def
 R01 at `_local/v6-private-preview-20260912-r01.rotSq4/` remains sealed. The schematic
 floor view is not a native textured/model preview. Do not silently rebuild this
 package, alter the protected default project or overwrite historical outputs.
@@ -38,17 +45,23 @@ The actual-Window candidate is
 `_local/research/v6-mixed-export-20260912-r01.jR0oBr/family-ui-candidate-r01/`.
 Its image408dfd…5c98 matches prior bounded DuckStation Wizard/Grass/material,
 combat/reward, fall/respawn and isolated jump/landing observations. A clean
-material-seam walk is still pending. The newly prepared native session remains
-NOT STARTED at `_local/native-v6-preview-runtime-20260912-r01.Tjt4Iy/`.
+material-seam walk is still pending. The September12 prepared session remains
+NOT STARTED. A separate September19 cold-boot replay is closed at
+`_local/native-v6-runtime-20260919-r01.gG43hL/`: entry/rendering and repeated
+Wizard contact were observed, but the seam was not isolated. Global/game INIs
+were restored exactly and the original card is unchanged. Its RUNTIME-SESSION.md
+records four screenshots, input uncertainty and cleanup; no new combat acceptance.
 
 Priority order from here:
 
-1. After manual Mac unlock, verify the preserved V6 native window and focused
-   cold-boot/seam check; restore the fresh c07823…854 global INI baseline.
+1. Build genuine multi-sector/multi-cell floor authoring so a test can offer a
+   spawn outside the native Wizard attack range; then repeat hands-off entry and
+   seam walking. The2048-square cannot offer that horizontal separation. Native
+   R02 window/history/save acceptance and exact INI restoration are recorded.
 2. Extend real family imports using the shared model/scene/dependency machinery.
-   The complete AE model/four texture sets now install into actual resource-only
+   Complete AE+three-debris models/five texture sets now install into actual resource-only
    descendant Bodies with newly rebound sound/particle preservation. Key/reward
-   rows, handlers, debris, renderer dispatch and singleton mutable globals remain
+   rows, handlers, renderer dispatch and singleton mutable globals remain
    unfinished; the existing export lane explicitly refuses unplaced resources.
 3. Connect scalable geometry/surface/material authoring to the shared ordered
    resource graph without raising fixed native-profile limits as a substitute.
@@ -852,3 +865,66 @@ resume, first replay Body and Authoring source suites to exercise the last two
 test-only assertion groups (mask corruption/restoration and Final consumer
 domains), before any further production changes. Native gameplay remains
 pending; the desktop is locked. No goal-completion claim or usage reset was made.
+
+## September19 resume — native window, debris resources and playable space
+
+Started clean1f01244 with reset usage; the goal is active and the5% safe-stop
+policy remains. Final pre-pause source assertions replayed successfully in227
+(Body10917) and228(authoring8269), preserving Original BIN/CUE. The Mac is now
+unlocked. Native R02 source/history/save acceptance and the bounded but
+inconclusive cold-boot session are summarized above. R02 still contains9310a65,
+not the following source-only resource changes. Log237 rechecks unchanged sealed
+App/Core hashes21c668…be1/5af5c4…f7c and Original BIN/CUE fc866b…e37/051425…766.
+
+The actual retained Town debris packages decode with the existing animated
+renderer grammar:135 at1CC804/224,136 at1CCA28/1D4,137 at1CCBFC/2D8. Their
+20/16/28 descriptors have exact historical offsets74+face*14 and share one
+32-square tile(pixels58A70+row*400, CLUT78AA0). The independently checked Peace
+equivalence differs only in complete texture descriptors; no new parser was
+invented. Log230 is a clean RED-stage build;231 first passes this actual-source
+grammar census, then fails because the Body still has only AE instead of four
+new registered packages.
+
+The existing chest materializer now contributes all four complete packages to
+one NativeModelTailBatch. Total payload16D8 still rounds to1800, so scene
+movement/allocation growth does not increase relative to AE-only. AE's four
+tiles allocate first; the shared debris tile uses that actual updated private
+upload and zero-inclusive protection of every first-pass allocation. Its extra
+33patches/544bytes are bound to retained source reads. The final graph contains
+165GPU installs+4models and210actual descriptor consumers. No key/chest/reward
+rows are added and the existing export refusal stays enforced.
+
+Tests read every model, descriptor, pixel row/CLUT, registration, padding and
+complete Body/complement; reverse the full texture/model transaction; retain
+the unchanged Scene and newly rebound8sound/34particle owners; and reject wrong
+ancestry, repeat descendants and corrupted/caller-mutated copies. Source233
+passes11114 checks with untextured resource Body17de9087d37d457a13281b6bb27978144d91692b183b14d5ab434eec33625984.
+Source235 passes8466 final checks with mixed resource Bodyc88472238d79923e8334cc5e4df2c2e920de4546bc8aa857f226265a79ad1622.
+Builds232/234 have0warnings/errors. Normal family, authored Body/EXE and ordered
+mixed Disc golden images are unchanged; no output ROM was written. Combined
+regression236 passes336steps/0failures, report
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-xz6ihg_c/summary.json`.
+Independent final review found no correctness defect or high-value missing
+regression in the three-file implementation/test delta. No native chest export
+or gameplay approval is introduced by these completed source gates.
+
+Cross-checked the agent's attack-space finding against retained native
+disassembly and NativeGreenWizardMoverContractMath.ArrivalMetric. At
+800829AC/B4 and80082A5C/64, the Wizard idle branches require metric<1000(hex),
+with a separate absolute vertical difference<800(hex). The horizontal metric
+is max(|dx|,|dy|)+floor(3*min/8). Exact spawn/origin metric1408 and route-end1216
+are both below4096; any two positions inside2048-square are at most2816 apart
+under that metric. Initial sphere/edge clearance does not establish AI safety.
+This establishes insufficient quiet space, not unavoidable hits or a proven
+combat defect. Do not label the inconclusive input attempts as passed gameplay.
+
+Next implementation should use an ordered native flat-tile collection, not
+raise the single-floor bound. A proposed three-tile6144×2048 floor starting
+8192/8192/Z8704, spawn8704/9216/Z9216 and Wizard13824/9216→13312/9216 would
+provide nearest authored-route metric4608. It needs three real render sectors,
+two native collision cells, complete per-face materials and component-derived
+live addresses. NativeCollisionIndexCodec.Rebuild currently cannot allocate
+missing tree segments; shared multi-cell generation and old single-cell golden
+preservation must precede UI/publication. This proposal is not yet encoded or
+runtime-approved. Fresh's main-window viewport integration and decoded Moby
+mesh rendering remain distinct unfinished work.
