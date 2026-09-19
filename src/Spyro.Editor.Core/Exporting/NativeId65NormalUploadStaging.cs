@@ -101,10 +101,15 @@ public sealed class NativeId65NormalUploadStaging
         source.RequireIssuedInput(bundle, upload);
         _layout = NativeId65NormalUploadTransferLayout.Compile(upload);
         ResourceProfile = bundle.ResourceProfile;
+        TiledSceneAncestor = bundle.TiledSceneAncestor;
         UpstreamPlanSha256 = bundle.PlanSha256;
-        Evidence = ResourceProfile == NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles
-            ? Array.AsReadOnly(source.Evidence.ToArray())
-            : Array.AsReadOnly(source.Evidence.Concat(bundle.Evidence).ToArray());
+        Evidence = ResourceProfile switch
+        {
+            NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles => Array.AsReadOnly(source.Evidence.ToArray()),
+            NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials or NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles =>
+                Array.AsReadOnly(source.Evidence.Concat(bundle.Evidence).ToArray()),
+            _ => throw new InvalidDataException("Unissued normal staging profile.")
+        };
         PlanSha256 = NativeId65NormalResourceSource.Hash(JsonSerializer.SerializeToUtf8Bytes(new
         {
             ProfileId, SourceImageSha256, UpstreamPlanSha256, PairedUploadSha256, TransferSourceSha256,
@@ -123,10 +128,18 @@ public sealed class NativeId65NormalUploadStaging
                 ResourceProfile, ComposedPlanSha256 = PlanSha256,
                 bundle.SourceHandles, bundle.TextureEvidence
             }));
+        else if (ResourceProfile == NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles)
+            PlanSha256 = NativeId65NormalResourceSource.Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                Profile = "native-id65-tiled-normal-upload-two-sector-data-clean-usa-v1",
+                ResourceProfile, ComposedPlanSha256 = PlanSha256,
+                TiledSceneAncestor!.TiledSurfaceAncestor!.DocumentSha256
+            }));
     }
 
     public const string ProfileId = "native-id65-normal-upload-transfer-source-clean-usa-v1";
     public NativeId65NormalResourceProfile ResourceProfile { get; }
+    internal NativeId65FreshSceneBundle? TiledSceneAncestor { get; }
     public string SourceImageSha256 => NativeId65EngineProfileContract.OriginalImageSha256;
     public string UpstreamPlanSha256 { get; }
     public string PairedUploadSha256 => _layout.PairedUploadSha256;
@@ -172,6 +185,10 @@ public sealed class NativeId65NormalUploadStaging
         var revision = NativeId65NormalResourceRevision.From(issuedTexture);
         return await CaptureRevisionAsync(originalImagePath, revision, cancellationToken);
     }
+
+    internal static Task<NativeId65NormalUploadStaging> CaptureTiledAsync(string originalImagePath,
+        NativeId65FreshSceneBundle issuedBundle, CancellationToken cancellationToken = default) =>
+        CaptureRevisionAsync(originalImagePath, NativeId65NormalResourceRevision.FromTiled(issuedBundle), cancellationToken);
 
     private static async Task<NativeId65NormalUploadStaging> CaptureRevisionAsync(string originalImagePath,
         NativeId65NormalResourceRevision revision, CancellationToken cancellationToken)

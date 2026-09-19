@@ -61,7 +61,8 @@ internal sealed class NativeId65NormalBodyLayout
         Add("fresh-native-header-and-zero-complement", 0, 0x800, "fresh-relative-native-fields");
         Add("paired-native-upload", Descriptors[0].Offset, upload.Length, "neutral-input-not-source-authority");
         Add("fresh-used-data-components", Descriptors[1].Offset, data.Length, "neutral-input-not-source-authority");
-        Add("fresh-data-sector-padding", Descriptors[1].Offset + data.Length, paddedData.Length - data.Length, "fresh-zero-CD-padding");
+        if (paddedData.Length > data.Length)
+            Add("fresh-data-sector-padding", Descriptors[1].Offset + data.Length, paddedData.Length - data.Length, "fresh-zero-CD-padding");
         Add("special-player-and-generic-companion-models", models, model.Length, "neutral-input-not-source-authority");
         Add("fresh-scene-and-dynamic-arena", Descriptors[3].Offset, scene.Length, "neutral-input-not-source-authority");
         var auxiliaryOwners = new List<NativeId65AuxiliaryBodyOwner>();
@@ -106,6 +107,22 @@ internal sealed class NativeId65NormalBodyLayout
     {
         ArgumentNullException.ThrowIfNull(auxiliary);
         NativeId65NormalDataLayout.RequireBoundedUsedLength(data.Length);
+        return CompileOwners(upload, data, model, scene, auxiliary);
+    }
+
+    internal static NativeId65NormalBodyLayout CompileTiled(ReadOnlySpan<byte> upload, ReadOnlySpan<byte> data,
+        ReadOnlySpan<byte> model, ReadOnlySpan<byte> scene, IReadOnlyList<byte[]> auxiliary)
+    {
+        ArgumentNullException.ThrowIfNull(auxiliary);
+        _ = NativeId65TiledNormalDataLayout.DecodeForFixedBody(data);
+        if (NativeId65FreshSceneLayout.DecodeCanonical(scene).NativeNominalCapacity != 16)
+            throw new InvalidDataException("Tiled body requires the complete sixteen-slot scene allocation.");
+        return CompileOwners(upload, data, model, scene, auxiliary);
+    }
+
+    private static NativeId65NormalBodyLayout CompileOwners(ReadOnlySpan<byte> upload, ReadOnlySpan<byte> data,
+        ReadOnlySpan<byte> model, ReadOnlySpan<byte> scene, IReadOnlyList<byte[]> auxiliary)
+    {
         if (upload.Length != 0xDE000 || model.Length != 0xF800 ||
             scene.Length is not (0x2800 or 0x3000) || auxiliary.Count != 4)
             throw new InvalidDataException("Normal body requires the bounded fixed fresh profile and all four auxiliary allocations.");
@@ -183,9 +200,17 @@ public sealed class NativeId65NormalBodyPlan
         byte[] model = fresh.CopyModelPayload();
         byte[] scene = fresh.CopyScene();
         source.RequireIssuedInputs(fresh, staging, upload, data, model, scene);
-        _layout = NativeId65NormalBodyLayout.Compile(upload, data, model, scene, source.CopyAuxiliaryAllocations());
+        _layout = fresh.ResourceProfile switch
+        {
+            NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles or NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials =>
+                NativeId65NormalBodyLayout.Compile(upload, data, model, scene, source.CopyAuxiliaryAllocations()),
+            NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles =>
+                NativeId65NormalBodyLayout.CompileTiled(upload, data, model, scene, source.CopyAuxiliaryAllocations()),
+            _ => throw new InvalidDataException("Unissued normal body profile.")
+        };
         _overlay = source.CopyOverlay();
         TextureAncestor = fresh.TextureAncestor;
+        TiledSceneAncestor = fresh.TiledSceneAncestor;
         ResourceProfile = fresh.ResourceProfile;
         UpstreamPlanSha256 = fresh.PlanSha256;
         StagingPlanSha256 = staging.PlanSha256;
@@ -226,15 +251,17 @@ public sealed class NativeId65NormalBodyPlan
             new NativeId65NormalBodyReadPhase("model-read", ModelRuntimeAddress, model.Length, "CD writes at native used-data end", true),
             new NativeId65NormalBodyReadPhase("scene-read", SceneRuntimeAddress, scene.Length, "CD writes after full model CD allocation", true)
         });
-        PhaseOverlaps = Array.AsReadOnly(new[]
+        var overlaps = new List<NativeId65NormalBodyPhaseOverlap>
         {
             new NativeId65NormalBodyPhaseOverlap("incoming-overlay-tail", "header-and-later-copy-buffer", CopyBufferAddress,
                 checked((int)(RequiredOverlayRuntimeAddress + (uint)_overlay.Length - CopyBufferAddress)),
-                "Original native overwrite pattern and direct-use scan only; indirect lifetime and async completion remain unproved."),
-            new NativeId65NormalBodyPhaseOverlap("data-sector-padding", "model-CD-read", ModelRuntimeAddress,
+                "Original native overwrite pattern and direct-use scan only; indirect lifetime and async completion remain unproved.")
+        };
+        if (_layout.DataSectorByteLength > _layout.DataUsedByteLength)
+            overlaps.Add(new NativeId65NormalBodyPhaseOverlap("data-sector-padding", "model-CD-read", ModelRuntimeAddress,
                 _layout.DataSectorByteLength - _layout.DataUsedByteLength,
-                "Discarded CD sector padding is not retained live data; hardware request completion remains required.")
-        });
+                "Discarded CD sector padding is not retained live data; hardware request completion remains required."));
+        PhaseOverlaps = overlaps.AsReadOnly();
         PlanSha256 = NativeId65NormalResourceSource.Hash(JsonSerializer.SerializeToUtf8Bytes(new
         {
             ProfileId, SourceImageSha256, UpstreamPlanSha256, StagingPlanSha256, LevelDataSha256,
@@ -254,9 +281,17 @@ public sealed class NativeId65NormalBodyPlan
                 ResourceProfile, ComposedPlanSha256 = PlanSha256,
                 fresh.SourceHandles, fresh.TextureEvidence
             }));
+        else if (ResourceProfile == NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles)
+            PlanSha256 = NativeId65NormalResourceSource.Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                Profile = "native-id65-tiled-normal-body-two-sector-data-clean-usa-v1",
+                ResourceProfile, ComposedPlanSha256 = PlanSha256,
+                TiledSceneAncestor!.TiledSurfaceAncestor!.DocumentSha256
+            }));
     }
 
     internal NativeId65FreshTerrainTexturePlan? TextureAncestor { get; }
+    internal NativeId65FreshSceneBundle? TiledSceneAncestor { get; }
     public const string ProfileId = "native-id65-fresh-normal-body-retained-Town-aux-clean-usa-v1";
     public NativeId65NormalResourceProfile ResourceProfile { get; }
     public string SourceImageSha256 => NativeId65EngineProfileContract.OriginalImageSha256;
@@ -324,6 +359,11 @@ public sealed class NativeId65NormalBodyPlan
         var revision = NativeId65NormalResourceRevision.From(issuedTexture);
         return await CaptureRevisionAsync(originalImagePath, revision, issuedStaging, cancellationToken);
     }
+
+    internal static Task<NativeId65NormalBodyPlan> CaptureTiledAsync(string originalImagePath,
+        NativeId65FreshSceneBundle issuedBundle, NativeId65NormalUploadStaging issuedStaging,
+        CancellationToken cancellationToken = default) =>
+        CaptureRevisionAsync(originalImagePath, NativeId65NormalResourceRevision.FromTiled(issuedBundle), issuedStaging, cancellationToken);
 
     private static async Task<NativeId65NormalBodyPlan> CaptureRevisionAsync(string originalImagePath,
         NativeId65NormalResourceRevision revision, NativeId65NormalUploadStaging issuedStaging,

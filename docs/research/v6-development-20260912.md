@@ -1341,3 +1341,64 @@ is implemented or approved by the resource-chain checkpoint:
   Existing fixed-hash candidates stay pinned. Only then cold-boot the exact new
   CUE in DuckStation and verify rendering/collision/seams. Native CPU subset
   execution alone will not count as gameplay or hardware acceptance.
+
+## Tiled native compilation: canonical fixed-allocation profile (2026-09-19)
+
+The following work supersedes the proposed literal three-tile admission above.
+The source-issued compiler now accepts actual canonical untextured tiled data
+whose complete used length fits the existing two-sector allocation (<=0x1000),
+not a hardcoded tile count, position or fixture hash. Placements remain empty,
+every face must use BaseFloorColor, and scene capacity stays N16. Spawn, heading,
+sky and built-in music come from the same complete schema-4 document. This is
+an internal compilation path, not saved publication, UI export or runtime proof.
+
+Actual document ancestry survives Surface -> ResourceChain -> FreshScene ->
+closed ResourceRevision -> Staging -> Body -> Disc. A separately named tiled
+factory is required at each existing legacy boundary. Physical packing reuses
+the normal body kernel; live model/scene addresses derive from actual data end.
+At exactly0x1000, no zero-byte padding owner or phase overlap is invented. The
+old enum ordinals, legacy/textured plan JSON and factory guards are retained.
+
+Independent pre-production Python references reconstruct the three adjacent
+2048-square tiles without Core output. Log286 passes5987checks/29refusals,
+retaining all190 original cell sums and96 original lengths. Original native
+parser/sound/model-registration instructions produce the derived endpoints and
+bounded scene pointers. This does not execute collision tree queries, complete
+scene initialization, CD/timing/GTE/hardware behavior, rendering or gameplay.
+
+Log288 independently reconstructs all281270 raw sectors, native Form1 parity,
+ISO/WAD/EXE relocation and a guarded raw-preimage inverse; three legacy images,
+46 music controls and corruption refusals remain covered. Reference hashes:
+
+- three-tile complete body: `37157a7248c90665309d8cee21c739a846aca284426cd602c65d627788c06009`
+- complete image: `7ba0b29b68a1bee415901382c3a3b5345ccb01ca84872502131f68361afdc305`
+- changed raw sectors:1253; first22, last55124
+
+Missing-API RED287 precedes implementation. Build289 and reviewed build291
+pass0warnings/errors. Free290 passes23checks, including actual producer lengths
+FFC/1000/1004 and rejection before original I/O. Source293 first passes281347
+checks, including complete C# forward/inverse comparison, unchanged original
+SHA/length/EOF, alternate geometry/spawn/heading/music, exact-full ownership,
+and equal-hash but different actual scene/staging ancestry refusal.
+
+Independent review found one real legacy publication bypass: a one-tile schema4
+document can reproduce every physical hash of the old fixed LAB candidate.
+The initial missing-path refusal assertion was insufficient because that old
+path check also throws InvalidDataException. Root strengthened it to malformed
+NUL paths; RED295 reaches Path.GetFullPath/ArgumentException after proving all
+five physical domains equal. Explicit legacy resource AND binding-profile
+checks now precede those paths and hashes. Build296 passes0warnings/errors;
+GREEN297 passes281347checks with the decisive profile refusal. No candidate,
+BIN, CUE or runtime acceptance is issued by these tests.
+
+Legacy source299 passes15426checks, preserving exact upload/data/model,
+chain/scene/staging hashes. Full source-free regression300 passes338steps,
+0failures, including76 Python runner tests; report
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-kr7vjvo2/summary.json`.
+Log301 confirms original CUE, both DuckStation INIs/card, and sealed R03
+App/Core hashes are unchanged.
+Original source files, protected default project, DuckStation settings/card
+and sealed R03 application remain outside the implementation scope. The next
+step is an explicit tiled arm of the existing saved-project candidate and
+publisher, with retained canonical/raw revision identity and actual physical
+forward/inverse verification before cold-boot DuckStation testing.

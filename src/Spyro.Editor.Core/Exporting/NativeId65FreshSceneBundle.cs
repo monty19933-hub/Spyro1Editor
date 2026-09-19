@@ -146,11 +146,18 @@ public sealed class NativeId65FreshSceneBundle
     private NativeId65FreshSceneBundle(NativeId65FreshSceneSource source, NativeId65NormalResourceChain chain,
         NativeId65SceneSpawn spawn, int dynamicSlotBudget)
     {
-        RequireLegacySurface(chain);
+        if (chain.Resources.SurfaceRevision.TiledSurface is { } tiled)
+        {
+            RequireTiledChain(chain);
+            var document = tiled.Document;
+            if (dynamicSlotBudget != 16 || spawn != new NativeId65SceneSpawn(document.SpawnX,
+                document.SpawnY, document.SpawnZ, document.Heading))
+                throw new InvalidDataException("Tiled scene must preserve the actual document spawn/heading and fixed16-slot budget.");
+        }
         _chain = chain;
         byte[] executable = source.CopyExecutable();
         chain.SceneLists.RequireSourceExecutable(executable);
-        if (!chain.Resources.Surface.CopySourceExecutable().AsSpan().SequenceEqual(executable))
+        if (!chain.Resources.SurfaceRevision.CopySourceExecutable().AsSpan().SequenceEqual(executable))
             throw new InvalidDataException("Fresh scene and issued resources belong to different native source captures.");
         HeaderTextures = source.HeaderTextures;
         EntryProfile = source.EntryProfile;
@@ -229,10 +236,17 @@ public sealed class NativeId65FreshSceneBundle
             SceneLayout.NativeNominalCapacity, SceneLayout.Owners, SceneLayout.RuntimeAnchors,
             UploadOwners, HeaderTextures.Footprints, HeaderTextures.UnavailableDescriptorIds, Evidence
         }));
+        if (TiledSurfaceAncestor is { } tiledAncestor)
+            PlanSha256 = NativeId65NormalResourceSource.Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                Profile = "native-id65-tiled-scene-two-sector-data-clean-usa-v1",
+                tiledAncestor.DocumentSha256, ComposedPlanSha256 = PlanSha256
+            }));
     }
 
     public const string ProfileId = "native-id65-fresh-scene-presentation-assets-clean-usa-v1";
     internal NativeId65NormalResourceChain ResourceChainAncestor => _chain;
+    internal NativeId65TiledSurfaceBundle? TiledSurfaceAncestor => _chain.Resources.SurfaceRevision.TiledSurface;
     public string SourceImageSha256 => _chain.SourceImageSha256;
     public NativeId65FreshSceneLayout SceneLayout { get; }
     public NativeId65SceneHeaderTextureOwners HeaderTextures { get; }
@@ -276,7 +290,30 @@ public sealed class NativeId65FreshSceneBundle
     private static void RequireLegacySurface(NativeId65NormalResourceChain chain)
     {
         if (chain.Resources.SurfaceRevision.TiledSurface != null)
-            throw new InvalidDataException("Tiled resource issuance currently stops at the data/list chain; the legacy fresh-scene, Body and Disc profiles are not tiled approvals.");
+            throw new InvalidDataException("The legacy fresh-scene profile does not accept tiled source ancestry.");
+    }
+
+    internal void RequireLegacyResourceProfile() => RequireLegacySurface(_chain);
+
+    internal static async Task<NativeId65FreshSceneBundle> CaptureTiledAsync(string originalImagePath,
+        NativeId65NormalResourceChain issuedChain, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var tiled = RequireTiledChain(issuedChain);
+        var document = tiled.Document;
+        var source = await NativeId65FreshSceneSource.CaptureAsync(originalImagePath, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        return new(source, issuedChain, new(document.SpawnX, document.SpawnY, document.SpawnZ, document.Heading), 16);
+    }
+
+    private static NativeId65TiledSurfaceBundle RequireTiledChain(NativeId65NormalResourceChain chain)
+    {
+        ArgumentNullException.ThrowIfNull(chain);
+        var tiled = chain.Resources.SurfaceRevision.TiledSurface ??
+            throw new InvalidDataException("Tiled scene requires actual source-issued tiled document ancestry.");
+        var decoded = NativeId65TiledNormalDataLayout.DecodeForFixedBody(chain.CopyDataComponents());
+        tiled.RequireExactBundle(decoded.Surface.CopyBundle());
+        return tiled;
     }
 
     public byte[] CopyScene() => SceneLayout.CopyScene();

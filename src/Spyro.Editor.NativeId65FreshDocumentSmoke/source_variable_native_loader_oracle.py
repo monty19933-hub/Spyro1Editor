@@ -24,6 +24,7 @@ HELPERS = {
     "src/Spyro.Editor.NativeId65NormalResourceSmoke/source_resource_oracle.py": "280087ec3b80e005872b6ec2fe793c9bbbbd69bde70ea6c64de234afa37ad76d",
     "src/Spyro.Editor.NativeId65AuthoredSurfaceSmoke/source_surface_oracle.py": "bcaa7349277bc5150cd17cf3e8cebbc689b68a58e9dee21a2709841c899aa592",
     "src/Spyro.Editor.NativeId65NormalBodySmoke/NativeBodySourceWindows.cs": "674ac959cd1b451fc11c3945c1446059a2d09b505e03ddda27e6fbe3851594ec",
+    "src/Spyro.Editor.NativeId65FreshDocumentSmoke/source_tiled_surface_oracle.py": "4aa6bc207bed327c8fb2f9832b8bd1bc098b26b0f50a4817ba55183373be0ec3",
 }
 SPANS = (
     ("sound-pointer-initializer", 0x80012CF0, 0x68, "ecd95b895b0f1dd85b2aed1c926a6e5e818ac3c41ddaf38565e34459808f89a0"),
@@ -228,6 +229,7 @@ def main(path):
         raise AssertionError("Expected refusal: " + label)
 
     surface = load("src/Spyro.Editor.NativeId65AuthoredSurfaceSmoke/source_surface_oracle.py", "variable_surface")
+    tiled = load("src/Spyro.Editor.NativeId65FreshDocumentSmoke/source_tiled_surface_oracle.py", "tiled_surface")
     raw_body = load("src/Spyro.Editor.NativeId65FreshDiscSmoke/source_fresh_disc_body.py", "variable_body")
     with contextlib.redirect_stdout(io.StringIO()):
         (body, _), *_ = raw_body.build_bodies(path)
@@ -272,14 +274,11 @@ def main(path):
             check(m.calls == [(0x800158E8, 0x80012D58), (0x80013208, 0x80012CF0)], "Actual parser and sound helper called; no helper stubs")
             return m
 
-        lengths = set()
-        for total in range(190):
-            cx, cy = min(total, 63), min(max(total - 63, 0), 63)
-            xyz = (cx * 4096, cy * 4096, (total - cx - cy) * 4096)
-            data = struct.pack("<II", 8, 0) + surface.fresh(*xyz, 16, 16, 0x708050, 0x406080) + tail
-            positions, tail_at = canonical(data, xyz, surface, tail)
-            used = 0x8B0 + ((2 * (total + 6) + 3) & ~3)
-            check(len(data) == used and (used + 0x7FF) & ~0x7FF == 0x1000, "Independent used length and fixed CD sector arithmetic")
+        def execute_owned_chain(data, positions, tail_at):
+            # Callers retain their DISTINCT strict canonical validators. The
+            # actual parser/relocator execution below is shared without any
+            # host helper stub or widened legacy coordinate/length admission.
+            used = len(data)
             m = parser(data)
             model_at = m.read(0x800785E0)
             check(model_at == COPY + used and m.r[2] == model_at, "Native returned endpoint/store, not seeded model address")
@@ -351,14 +350,53 @@ def main(path):
                   "Scene auxiliary buffer, empty routes and both native arena sentinels remain correctly owned")
             check(m.bytes(COPY, used) == loaded_data and scene_at + len(scene) <= 0x80187BB0,
                   "Scene pointer production preserves used data and remains below separate reserved buffers")
+            return dict(used=used, data_sha256=sha(data), model=hex(model_at), scene=hex(scene_at),
+                        end=hex(scene_at + len(scene)), arena_end=hex(m.read(0x800756E8)), instructions=m.instructions)
+
+        lengths = set()
+        for total in range(190):
+            cx, cy = min(total, 63), min(max(total - 63, 0), 63)
+            xyz = (cx * 4096, cy * 4096, (total - cx - cy) * 4096)
+            data = struct.pack("<II", 8, 0) + surface.fresh(*xyz, 16, 16, 0x708050, 0x406080) + tail
+            positions, tail_at = canonical(data, xyz, surface, tail)
+            used = 0x8B0 + ((2 * (total + 6) + 3) & ~3)
+            check(len(data) == used and (used + 0x7FF) & ~0x7FF == 0x1000, "Independent used length and fixed CD sector arithmetic")
+            row = execute_owned_chain(data, positions, tail_at)
+            row.update(cell_sum=total, xyz=list(xyz))
+            rows.append(row)
             lengths.add(used)
-            rows.append(dict(cell_sum=total, xyz=list(xyz), used=used, data_sha256=sha(data), model=hex(model_at),
-                             scene=hex(scene_at), arena_end=hex(m.read(0x800756E8)), instructions=m.instructions))
 
         check(len(lengths) == 96 and min(lengths) == 0x8BC and max(lengths) == 0xA38, "All96 canonical lengths executed across190 coordinate sums")
         legacy = body[0xDE800:0xDF0C8]
         check(len(legacy) == 0x8C8 and sha(legacy) == "821d25d4c012aa180d369f755d82a780dbcf244b4e53c6c4bcf349da533dce65" and
               parser(legacy).read(0x800785E0) == 0x8008A794, "Exact legacy data golden/native endpoint unchanged")
+
+        tiled_surface = tiled.fresh()
+        tiled_data = struct.pack("<II", 8, 0) + tiled_surface + tail
+        tiled_positions, tiled_tail_at = tiled.canonical(tiled_data, tail)
+        tiled_body = tiled.body(body, tiled_data, tail)
+        tiled_row = execute_owned_chain(tiled_data, tiled_positions, tiled_tail_at)
+        check(tiled_row["model"] == hex(0x8008A924) and tiled_row["scene"] == hex(0x8009A124) and
+              tiled_row["end"] == hex(0x8009D124), "Actual three-tile parser/model/scene endpoints match independent arithmetic")
+        check(len(tiled_data) == 0xA58 and len(tiled_surface) == 0x2D4 and
+              sha(tiled_surface) == tiled.SURFACE_SHA and sha(tiled_data) == tiled.DATA_SHA,
+              "Independent three-tile surface and complete retained data goldens")
+        tiled_row.update(tiles=[list(p) + [2048, 2048] for p in tiled.TILES],
+                         surface_sha256=sha(tiled_surface), body_sha256=sha(tiled_body), body_length=len(tiled_body),
+                         physical_header_unchanged=True, data_sector_padding_zero=True)
+        # Native pointer initialization is NOT tree validation. Keep that
+        # negative explicit for the new multi-cell fixture too.
+        bad_tiled_tree = bytearray(tiled_data); bad_tiled_tree[tiled_positions[3] + 32] ^= 1
+        reject(lambda: tiled.canonical(bytes(bad_tiled_tree), tail), "surface/tree", "Malformed tiled tree canonical refusal")
+        check(parser(bytes(bad_tiled_tree)).read(0x800785E0) == COPY + len(tiled_data),
+              "Native tiled pointer parser does not certify multi-cell tree contents")
+        bad_tiled_component = bytearray(tiled_data); struct.pack_into("<I", bad_tiled_component, 8, 501)
+        reject(lambda: tiled.canonical(bytes(bad_tiled_component), tail), "component", "Malformed tiled component canonical refusal")
+        reject(lambda: parser(bytes(bad_tiled_component)), "Unaligned", "Native tiled access alignment negative")
+        reject(lambda: tiled.canonical(tiled_data[:-1], tail), "alignment/length", "Tiled truncated owner refusal")
+        reject(lambda: tiled.canonical(tiled_data + bytes(4), tail), "alignment/length", "Tiled unowned suffix refusal")
+        reject(lambda: tiled.canonical(legacy, tail), "alignment/length", "Legacy data cannot masquerade as the exact tiled fixture")
+        reject(lambda: canonical(tiled_data, (0, 0, 0), surface, tail), "alignment/length", "Tiled fixture cannot widen old canonical profile")
 
         origin = struct.pack("<II", 8, 0) + surface.fresh(0, 0, 0, 16, 16, 0x708050, 0x406080) + tail
         collision_at = 8 + 172 + 32 + 8
@@ -418,6 +456,7 @@ def main(path):
                          original_sha256=native.IMAGE_SHA, complete_executable_sha256=native.EXE_SHA,
                          source_pins=[dict(name=n, pc=hex(a), length=l, sha256=h) for n, a, l, h in SPANS],
                          helper_pins=HELPERS, coordinate_sums=190, distinct_used_lengths=96, cases=rows,
+                         tiled_cases=[tiled_row],
                          refusal_cases=refused, native_parser_and_sound_helper_executed=True,
                          model_global_seeded_to_expected=False, native_model_loaders_executed=True,
                          scene_producers_are_bounded_entry_slices=True, source_tree_query_executed=False,

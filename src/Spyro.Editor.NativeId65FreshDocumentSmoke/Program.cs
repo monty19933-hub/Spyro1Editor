@@ -4,6 +4,16 @@ using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Music;
 using Spyro.Editor.Core.Primitives;
 
+if (args.Length == 1 && args[0] == "--tiled-compilation-free")
+{
+    await TiledCompilationCases.Free();
+    return;
+}
+if (args.Length == 2 && args[0] == "--tiled-compilation-source")
+{
+    await TiledCompilationCases.Source(args[1]);
+    return;
+}
 if (args.Length == 1 && args[0] == "--tiled-resource-free")
 {
     await TiledResourceChainCases.SourceFree();
@@ -25,7 +35,7 @@ if (args.Length == 2 && args[0] is "--variable-data-red" or "--variable-data-sou
     return;
 }
 if (args.Length != 0)
-    throw new ArgumentException("Usage: NativeId65FreshDocumentSmoke [--variable-data-free | --variable-data-source <original> | --tiled-resource-free | --tiled-resource-source <original>]");
+    throw new ArgumentException("Usage: NativeId65FreshDocumentSmoke [--variable-data-free | --variable-data-source <original> | --tiled-resource-free | --tiled-resource-source <original> | --tiled-compilation-free | --tiled-compilation-source <original>]");
 
 int checks = 0;
 const string canonical = "{\"kind\":\"spyro-native-fresh-intent\",\"schema\":1,\"floor\":{\"x\":8448,\"y\":8448,\"z\":8704,\"width\":1024,\"depth\":1024},\"spawn\":{\"x\":8960,\"y\":8960,\"heading\":64},\"display\":{\"floorRgb\":[80,128,112],\"skyRgb\":[128,96,64]},\"musicTrackId\":19}";

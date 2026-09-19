@@ -49,6 +49,7 @@ public sealed class NativeId65FreshDiscPlan
     public const string ProfileId = "native-id65-fresh-normal-disc-LAB-source-only-usa-v1";
     public const string AcceptedBodyResourceProfile = "fresh-untextured-G3-two-triangle-data-8C8-v1";
     private const string TexturedProfileId = "native-id65-fresh-textured-normal-disc-direct-lq-source-only-usa-v1";
+    private const string TiledProfileId = "native-id65-tiled-normal-disc-two-sector-data-source-only-usa-v1";
     private static readonly DiscLayout Layout = new(2352, 24, 22, 2048);
     private readonly NativeId65FreshDiscSource _source;
     private readonly NativeId65FreshDiscGeometry _geometry;
@@ -63,8 +64,13 @@ public sealed class NativeId65FreshDiscPlan
     {
         _source = source;
         BodyAncestor = body;
-        BindingProfileId = body.ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials
-            ? TexturedProfileId : ProfileId;
+        BindingProfileId = body.ResourceProfile switch
+        {
+            NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles => ProfileId,
+            NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials => TexturedProfileId,
+            NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles => TiledProfileId,
+            _ => throw new InvalidDataException("Unissued fresh-disc resource profile.")
+        };
         _geometry = NativeId65FreshDiscGeometry.Compile(bodyBytes.Length);
         _body = bodyBytes;
         _overlay = overlay;
@@ -100,7 +106,7 @@ public sealed class NativeId65FreshDiscPlan
                 _geometry.FinalWadByteLength
             }));
         }
-        else
+        else if (body.ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials)
         {
             PlanSha256 = NativeId65FreshExecutablePlan.Hash(JsonSerializer.SerializeToUtf8Bytes(new
             {
@@ -120,6 +126,27 @@ public sealed class NativeId65FreshDiscPlan
                 WadHeaderSha256 = NativeId65FreshExecutablePlan.Hash(_wadDirectory),
                 _geometry.FinalExecutableLba,
                 _geometry.FinalWadByteLength
+            }));
+        }
+        else
+        {
+            // Closed switch above and the named issuer bind this actual third
+            // variant. Never serialize a tiled ancestor as a texture plan.
+            var tiled = body.TiledSceneAncestor?.TiledSurfaceAncestor ??
+                throw new InvalidDataException("Tiled disc lost its actual authored document ancestor.");
+            if (track != tiled.Document.MusicTrackId)
+                throw new InvalidDataException("Tiled disc cannot substitute another document's music selection.");
+            PlanSha256 = NativeId65FreshExecutablePlan.Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                ProfileId = BindingProfileId, Original = NativeId65FreshDiscSource.OriginalSha256,
+                body.ResourceProfile, tiled.DocumentSha256, body.UpstreamPlanSha256, body.StagingPlanSha256,
+                body.DataUsedByteLength, body.ModelRuntimeAddress, body.SceneRuntimeAddress, BodyPlanSha256,
+                BodySha256 = NativeId65FreshExecutablePlan.Hash(_body),
+                OverlaySha256 = NativeId65FreshExecutablePlan.Hash(_overlay),
+                ExecutableSha256 = Executable.FinalSha256,
+                RootSha256 = NativeId65FreshExecutablePlan.Hash(_isoRoot),
+                WadHeaderSha256 = NativeId65FreshExecutablePlan.Hash(_wadDirectory),
+                _geometry.FinalExecutableLba, _geometry.FinalWadByteLength
             }));
         }
 
@@ -219,6 +246,23 @@ public sealed class NativeId65FreshDiscPlan
         RequireCurrentTexturedShape(issuedBody.ResourceProfile, issuedBody.DataUsedByteLength, issuedBody.DataSectorByteLength,
             issuedBody.Descriptors[0].ByteLength, issuedBody.Descriptors[2].ByteLength, issuedBody.Descriptors[3].ByteLength);
         return await CaptureIssuedAsync(originalBin, issuedBody, selectedBuiltInTrack, cancellationToken);
+    }
+
+    internal static Task<NativeId65FreshDiscPlan> CaptureTiledAsync(string originalBin,
+        NativeId65NormalBodyPlan issuedBody, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(issuedBody);
+        var fresh = issuedBody.TiledSceneAncestor;
+        if (issuedBody.ResourceProfile != NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles ||
+            fresh?.TiledSurfaceAncestor is not { } tiled || issuedBody.DataSectorByteLength != 0x1000 ||
+            issuedBody.Descriptors[0].ByteLength != 0xDE000 || issuedBody.Descriptors[2].ByteLength != 0xF800 ||
+            issuedBody.Descriptors[3].ByteLength != 0x3000 || issuedBody.UpstreamPlanSha256 != fresh.PlanSha256)
+            throw new InvalidDataException("Tiled disc requires the actual issued two-sector-data, sixteen-slot tiled body and authored scene.");
+        var decoded = NativeId65TiledNormalDataLayout.DecodeForFixedBody(fresh.CopyDataComponents());
+        tiled.RequireExactBundle(decoded.Surface.CopyBundle());
+        if (issuedBody.DataUsedByteLength != decoded.Layout.UsedByteLength)
+            throw new InvalidDataException("Tiled body and authored component used end disagree.");
+        return CaptureIssuedAsync(originalBin, issuedBody, tiled.Document.MusicTrackId, cancellationToken);
     }
 
     // The original validated capture sequence is shared verbatim; profile/shape

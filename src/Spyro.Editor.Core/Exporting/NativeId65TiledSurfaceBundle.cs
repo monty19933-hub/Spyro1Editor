@@ -50,6 +50,19 @@ internal sealed class NativeId65TiledSurfaceBundle
         NativeFreshLevelDocumentIntent document, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var (canonical, surface) = PrepareDocument(document);
+        cancellationToken.ThrowIfCancellationRequested();
+        byte[] executable = await NativeId65AuthoredSurfaceConsumers.ReadOriginalExecutableAsync(
+            originalImagePath, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        return new(document, canonical, surface, executable);
+    }
+
+    // Neutral preparation can establish bounds before I/O. It cannot create a
+    // source issuer or promote caller bytes/hashes to the private constructor.
+    internal static (byte[] Canonical, NativeFlatTileSurfaceSnapshot Surface) PrepareDocument(
+        NativeFreshLevelDocumentIntent document)
+    {
         ArgumentNullException.ThrowIfNull(document);
         if (document.SchemaVersion != 4 || document.TiledContent is not { } content ||
             document.Placements.Count != 0)
@@ -63,10 +76,6 @@ internal sealed class NativeId65TiledSurfaceBundle
         byte[] canonical = NativeFreshLevelDocumentCodec.SerializeCanonical(document);
         var surface = NativeFlatTileSurfaceLayout.Compile(content.Tiles.Select(t => t.ToNativeTile()),
             NativeFreshFlatTileIntent.ColorWord(content.SkyColor));
-        cancellationToken.ThrowIfCancellationRequested();
-        byte[] executable = await NativeId65AuthoredSurfaceConsumers.ReadOriginalExecutableAsync(
-            originalImagePath, cancellationToken);
-        cancellationToken.ThrowIfCancellationRequested();
-        return new(document, canonical, surface, executable);
+        return (canonical, surface);
     }
 }

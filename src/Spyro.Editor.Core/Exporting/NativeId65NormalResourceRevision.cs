@@ -6,13 +6,14 @@ namespace Spyro.Editor.Core.Exporting;
 public enum NativeId65NormalResourceProfile
 {
     UntexturedGouraudTwoTriangles,
-    DirectLqTwoStaticMaterials
+    DirectLqTwoStaticMaterials,
+    UntexturedGouraudFlatTiles
 }
 
 /// <summary>
-/// Closed adapter over two actual private issuers. No caller bytes, hashes,
+/// Closed adapter over actual private issuers. No caller bytes, hashes,
 /// enum or interface implementation can manufacture an upstream revision.
-/// Both downstream profiles use the same transfer and native body assemblers.
+/// All downstream profiles use the same transfer and native body assemblers.
 /// </summary>
 internal sealed class NativeId65NormalResourceRevision
 {
@@ -30,8 +31,12 @@ internal sealed class NativeId65NormalResourceRevision
             throw new InvalidDataException("Normal resource revision lost its actual original-issued fresh ancestor or fixed texture profile.");
 
         TextureAncestor = texture;
-        ResourceProfile = texture == null ? NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles
-            : NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials;
+        TiledSceneAncestor = fresh.TiledSurfaceAncestor == null ? null : fresh;
+        if (texture != null && TiledSceneAncestor != null)
+            throw new InvalidDataException("The legacy two-face texture issuer cannot be attached to tiled scene ancestry.");
+        ResourceProfile = TiledSceneAncestor != null ? NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles :
+            texture == null ? NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles :
+            NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials;
         PlanSha256 = texture?.PlanSha256 ?? fresh.PlanSha256;
         UploadSha256 = texture?.UploadSha256 ?? fresh.UploadSha256;
         DataSha256 = texture?.DataSha256 ?? fresh.DataSha256;
@@ -45,9 +50,13 @@ internal sealed class NativeId65NormalResourceRevision
         // Derive the live used end from the complete actual chain, not the
         // starter's cell sum. Keep the separately issued texture profile fixed;
         // valid untextured maximum-cell data also has lengthA38.
-        DataUsedByteLength = texture == null
-            ? NativeId65NormalDataLayout.DecodeUntextured(_data).UsedByteLength
-            : 0xA38;
+        DataUsedByteLength = ResourceProfile switch
+        {
+            NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles => NativeId65NormalDataLayout.DecodeUntextured(_data).UsedByteLength,
+            NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials => 0xA38,
+            NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles => NativeId65TiledNormalDataLayout.DecodeForFixedBody(_data).Layout.UsedByteLength,
+            _ => throw new InvalidDataException("Unissued normal resource profile.")
+        };
         if (_upload.Length != 0xDE000 || _data.Length != DataUsedByteLength || _model.Length != 0xF800 ||
             _scene.Length is not (0x2800 or 0x3000) ||
             NativeId65NormalResourceSource.Hash(_upload) != UploadSha256 ||
@@ -74,6 +83,7 @@ internal sealed class NativeId65NormalResourceRevision
     internal static NativeId65NormalResourceRevision From(NativeId65FreshSceneBundle fresh)
     {
         ArgumentNullException.ThrowIfNull(fresh);
+        fresh.RequireLegacyResourceProfile();
         return new(fresh, null);
     }
 
@@ -83,7 +93,18 @@ internal sealed class NativeId65NormalResourceRevision
         return new(texture.FreshAncestor, texture);
     }
 
+    internal static NativeId65NormalResourceRevision FromTiled(NativeId65FreshSceneBundle fresh)
+    {
+        ArgumentNullException.ThrowIfNull(fresh);
+        var tiled = fresh.TiledSurfaceAncestor ??
+            throw new InvalidDataException("Tiled revision requires its actual source-issued scene and document.");
+        var decoded = NativeId65TiledNormalDataLayout.DecodeForFixedBody(fresh.CopyDataComponents());
+        tiled.RequireExactBundle(decoded.Surface.CopyBundle());
+        return new(fresh, null);
+    }
+
     internal NativeId65FreshTerrainTexturePlan? TextureAncestor { get; }
+    internal NativeId65FreshSceneBundle? TiledSceneAncestor { get; }
     internal NativeId65NormalResourceProfile ResourceProfile { get; }
     internal string SourceImageSha256 => NativeId65EngineProfileContract.OriginalImageSha256;
     internal string PlanSha256 { get; }

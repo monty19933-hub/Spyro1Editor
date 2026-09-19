@@ -18,6 +18,22 @@ internal sealed class NativeId65TiledNormalDataLayout
     internal NativeId65NormalComponentLayout Layout { get; }
     internal NativeFlatTileSurfaceSnapshot Surface { get; }
 
+    // Current shared Body/Disc packing owns two CD sectors. This allocation
+    // check supplements canonical geometry; it is never source/runtime proof.
+    internal static NativeId65TiledNormalDataLayout DecodeForFixedBody(ReadOnlySpan<byte> data)
+    {
+        var decoded = DecodeUntextured(data);
+        RequireFixedSurfaceAllocation(decoded.Layout.SurfaceByteLength);
+        return decoded;
+    }
+
+    internal static void RequireFixedSurfaceAllocation(int surfaceByteLength)
+    {
+        if (surfaceByteLength <= 0 || (surfaceByteLength & 3) != 0 ||
+            surfaceByteLength + (long)NativeId65NormalComponentLayout.NonSurfaceByteLength > 0x1000)
+            throw new InvalidDataException("Tiled data exceeds the current two-sector native allocation; the authored content is not truncated or replaced.");
+    }
+
     internal static NativeId65TiledNormalDataLayout DecodeUntextured(ReadOnlySpan<byte> data)
     {
         var layout = NativeId65NormalComponentLayout.Decode(data);

@@ -57,9 +57,12 @@ public sealed class NativeId65FreshDiscResearchCandidatePlan
     {
         ArgumentNullException.ThrowIfNull(issuedDisc);
         token.ThrowIfCancellationRequested();
-        // The private disc issuer requires its code-owned untextured revision.
-        // Complete hashes narrow it further; equal CD length alone is not authority.
-        if (!issuedDisc.SourceCertified || issuedDisc.Executable.SelectedBuiltInTrack != 19 ||
+        // Require the legacy issuer as well as its exact bytes. A one-tile
+        // schema-4 document can emit these same bytes but must retain its own
+        // document/profile binding, not acquire this fixed candidate's authority.
+        if (issuedDisc.BodyAncestor.ResourceProfile != NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles ||
+            issuedDisc.BindingProfileId != NativeId65FreshDiscPlan.ProfileId ||
+            !issuedDisc.SourceCertified || issuedDisc.Executable.SelectedBuiltInTrack != 19 ||
             issuedDisc.FinalExecutableLba != 54921 || issuedDisc.FinalWadByteLength != 0x6B32000 ||
             Hash(issuedDisc.CopyBody()) != "b4abbdd09f794510d9b9341d7c7111ddd0b9068411bab30e70e7477b4f8c096c" ||
             Hash(issuedDisc.CopyOverlay()) != "9bc923cc8d27703537b81b01f51fde351e58aabee87d38a8afc630f1031878a5" ||

@@ -132,6 +132,9 @@ internal sealed class NativeId65NormalBodySource
             staging.SourceImageSha256 != fresh.SourceImageSha256 ||
             staging.UpstreamPlanSha256 != fresh.PlanSha256 || staging.PairedUploadSha256 != fresh.UploadSha256)
             throw new InvalidDataException("Normal body and transfer source must share the exact privately issued upstream revision.");
+        if (fresh.ResourceProfile == NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles &&
+            (fresh.TiledSceneAncestor == null || !ReferenceEquals(fresh.TiledSceneAncestor, staging.TiledSceneAncestor)))
+            throw new InvalidDataException("Tiled body and staging must retain the same actual source-issued document/scene ancestor.");
     }
 
     internal static NativeId65DetachedEngineInitializer ValidateCapturedBytes(ReadOnlySpan<byte> executable,

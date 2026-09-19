@@ -26,6 +26,7 @@ public sealed class NativeId65FreshTerrainTexturePlan
         NativeStaticTerrainTextureSource material0, NativeStaticTerrainTextureSource material1, byte[] executable,
         string bindingProfileId)
     {
+        fresh.RequireLegacyResourceProfile();
         FreshAncestor = fresh;
         BindingProfileId = bindingProfileId;
         MaterialSources = Array.AsReadOnly(new[] { material0, material1 });
@@ -93,6 +94,7 @@ public sealed class NativeId65FreshTerrainTexturePlan
         NativeStaticTerrainTextureSource gnasty, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(fresh); ArgumentNullException.ThrowIfNull(dark); ArgumentNullException.ThrowIfNull(gnasty);
+        fresh.RequireLegacyResourceProfile();
         cancellationToken.ThrowIfCancellationRequested();
         if (!fresh.SourceCertified || fresh.SourceImageSha256 != NativeId65AuthoredSurfaceConsumers.ImageSha256)
             throw new InvalidDataException("Two-material composition requires an actual source-issued fresh bundle.");
@@ -117,6 +119,7 @@ public sealed class NativeId65FreshTerrainTexturePlan
         NativeStaticTerrainTextureSource material1, CancellationToken token = default)
     {
         ArgumentNullException.ThrowIfNull(fresh); ArgumentNullException.ThrowIfNull(material0); ArgumentNullException.ThrowIfNull(material1);
+        fresh.RequireLegacyResourceProfile();
         token.ThrowIfCancellationRequested();
         if (!fresh.SourceCertified || fresh.SourceImageSha256 != NativeId65AuthoredSurfaceConsumers.ImageSha256)
             throw new InvalidDataException("Selected two-material composition requires an actual source-issued fresh bundle.");

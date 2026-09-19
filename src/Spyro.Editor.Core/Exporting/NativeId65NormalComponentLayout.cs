@@ -18,7 +18,7 @@ internal sealed class NativeId65NormalComponentLayout
     // The remaining owners are exactly 8 + 4 + 0x80 + 0x6F8 bytes. These are
     // parser allocation bounds, not legacy admission or a larger body policy.
     private const int MaximumSurfaceByteLength = 0x20000;
-    private const int NonSurfaceByteLength = 0x784;
+    internal const int NonSurfaceByteLength = 0x784;
     private const int MinimumByteLength = NonSurfaceByteLength + 5 * 4;
 
     private NativeId65NormalComponentLayout(NativeId65NormalComponentSpan[] components,

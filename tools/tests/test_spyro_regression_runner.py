@@ -512,7 +512,8 @@ class RunnerOptionsTests(unittest.TestCase):
         self.assertEqual([(name, "NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK")],
                          [row for row in RUNNER.CORE_CASES if row[0] == name])
         self.assertEqual([(name, marker, [flag]),
-                          (name, "NATIVE_ID65_TILED_RESOURCE_FREE_OK", ["--tiled-resource-free"])],
+                          (name, "NATIVE_ID65_TILED_RESOURCE_FREE_OK", ["--tiled-resource-free"]),
+                          (name, "NATIVE_ID65_TILED_COMPILATION_FREE_OK", ["--tiled-compilation-free"])],
                          [row for row in RUNNER.ADDITIONAL_CORE_CASES if row[0] == name])
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS, "Original no-argument document grammar remains a distinct test")
         self.assertFalse(any(row[0] == name for row in RUNNER.SOURCE_QA_CASES))
@@ -525,17 +526,22 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor." + name + "/" in line]
-        self.assertEqual(3, len(lines))
+        self.assertEqual(4, len(lines))
         self.assertTrue(any(flag + " | " + marker in line for line in lines))
         self.assertTrue(any("--tiled-resource-free | NATIVE_ID65_TILED_RESOURCE_FREE_OK" in line for line in lines))
+        self.assertTrue(any("--tiled-compilation-free | NATIVE_ID65_TILED_COMPILATION_FREE_OK" in line for line in lines))
         self.assertFalse(any("--variable-data-source" in line or "--variable-data-red" in line for line in lines))
         self.assertFalse(any("--tiled-resource-source" in line for line in lines))
+        self.assertFalse(any("--tiled-compilation-source" in line for line in lines))
 
     def test_variable_data_marker_and_result_suffix_preserve_old_mode_and_single_build(self):
         self.assert_additional_fresh_case("NATIVE_ID65_VARIABLE_DATA_FREE_OK", "--variable-data-free", "-variable-data")
 
     def test_tiled_resource_marker_and_result_suffix_preserve_old_mode_and_single_build(self):
         self.assert_additional_fresh_case("NATIVE_ID65_TILED_RESOURCE_FREE_OK", "--tiled-resource-free", "-tiled-resource")
+
+    def test_tiled_compilation_marker_and_result_suffix_preserve_old_mode_and_single_build(self):
+        self.assert_additional_fresh_case("NATIVE_ID65_TILED_COMPILATION_FREE_OK", "--tiled-compilation-free", "-tiled-compilation")
 
     def assert_additional_fresh_case(self, marker, flag, suffix):
         name, old_marker = "NativeId65FreshDocumentSmoke", "NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK"

@@ -14,10 +14,12 @@ internal static class RevisionCases
             .All(c => c.IsPrivate), "No caller/Core metadata constructor can manufacture a revision from bytes, hashes or labels.");
         MethodInfo[] factories = revision.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
             .Where(m => m.ReturnType == revision).ToArray();
-        Check(factories.Length == 2 && factories.All(m => !m.IsPublic && m.Name == "From" && m.GetParameters().Length == 1) &&
-            factories.Select(m => m.GetParameters()[0].ParameterType).ToHashSet().SetEquals(new[]
-            { typeof(NativeId65FreshSceneBundle), typeof(NativeId65FreshTerrainTexturePlan) }),
-            "Exactly two closed factories accept actual private upstream types; no neutral allocator/raw bytes/source hash input.");
+        Check(factories.Length == 3 && factories.All(m => !m.IsPublic && m.GetParameters().Length == 1) &&
+            factories.Where(m => m.Name == "From").Select(m => m.GetParameters()[0].ParameterType).ToHashSet().SetEquals(new[]
+            { typeof(NativeId65FreshSceneBundle), typeof(NativeId65FreshTerrainTexturePlan) }) &&
+            factories.Count(m => m.Name == "From") == 2 &&
+            factories.Single(m => m.Name == "FromTiled").GetParameters()[0].ParameterType == typeof(NativeId65FreshSceneBundle),
+            "Closed legacy/texture factories and one distinct tiled factory accept actual private upstream types, never raw bytes or caller authority.");
         foreach (Type type in new[] { typeof(NativeId65NormalBodyPlan), typeof(NativeId65NormalUploadStaging) })
         {
             Check(type.IsSealed && type.GetConstructors().Length == 0, "Public stage/body remain private source issuers.");
@@ -33,8 +35,9 @@ internal static class RevisionCases
                     "Neutral allocation, caller profile and raw byte arrays are not source-issued construction routes.");
         }
         Check(Enum.GetValues<NativeId65NormalResourceProfile>().SequenceEqual(new[]
-        { NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles, NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials }),
-            "The bounded discriminator names exactly the existing and new source-issued byte profiles.");
+        { NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles, NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials,
+            NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles }),
+            "The discriminator preserves the old numeric profiles and explicitly names the separate tiled variant.");
         Reject(() => NativeId65NormalUploadStaging.CaptureTexturedAsync("must-not-open.bin", null!).GetAwaiter().GetResult(),
             "Missing exact texture revision refuses before source I/O; FileNotFound cannot satisfy this test.");
         Reject(() => NativeId65NormalBodyPlan.CaptureTexturedAsync("must-not-open.bin", null!, null!).GetAwaiter().GetResult(),
