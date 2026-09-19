@@ -33,7 +33,14 @@ replays normal ON/OFF publication with the same complete hashes and stale-ON
 refusal. Earlier full suites146/167/177 passed335 checks/0 failures. Sections below are chronological evidence: older "next"
 and "pending" statements describe their historical checkpoint, not this summary.
 
-The latest unified private V6 package is the clean9310a65 R02 build, including
+The latest unified private V6 package is R03 from clean2155776, at
+`_local/v6-private-preview-20260919-r03.9GZd54/`. Its three launchers use the SAME
+Mac app with isolated tiled, supported-native and retail-flight projects. Read
+`PRIVATE-PREVIEW.md`: actual Mac tiled authoring/history/save/reopen and refusal
+checks passed; schema4 native export remains unavailable. R03 package/native
+evidence is recorded in the final section below. R02 remains preserved:
+
+The preceding unified private V6 package is the clean9310a65 R02 build, including
 flight and model-batch changes, at
 `_local/v6-private-preview-20260912-r02.cn1OIy/`. Use its
 `Open V6 Private Test.command`, `Open V6 Flight Test.command` and `PRIVATE-PREVIEW.md`.
@@ -1156,3 +1163,49 @@ The remote Wizard needs another component-owned refactor: fixed150 prefix,
 particle/sound offsets and144 surface checks cannot admit tiled content. Keep
 its old exact recipe alive while binding a new document/profile. This sequence
 has been reviewed, not implemented or approved for native tiled publication.
+
+## R03 sealed preview and actual Mac tiled workflow
+
+Schema4 implementation checkpoint2155776 is committed. Log265 builds and
+verifies normal Mac ARM64/Windows x64 packages under
+`_local/v6-private-preview-20260919-r03.9GZd54/`, with0warnings/errors. The
+existing community/ad-hoc signing and explicit host-provenance allowance were
+used; no notarization, public tag or upload. All three syntax-checked launchers
+start the SAME packaged Mac app with isolated userdata/projects: tiled editing,
+unchanged supported Wizard/Grass native example, and clean retail flight.
+The saved native example is byte-identical to R02's corresponding source.
+
+Log266 records package hashes: Mac ZIP1cd09d…7230, Windows ZIP979351…e8f2,
+App DLL199b6e…bcae and Core3c3f0a…61f3. The full digests and source checkpoint
+are in PRIVATE-PREVIEW.md. Internal build remains0.1.0-beta.43, so use that
+folder/checkpoint/digest rather than the internal version alone to identify R03.
+The preserved packages will not be rebuilt in place as source work continues.
+
+Actual Mac testing launched Open V6 Tiled Editor.command, selected Fresh Level
+and Level aggregate, explicitly upgraded to4 and added two adjacent tiles.
+The actual native window rendered all three tiles/six triangles. Applying third
+tile color#AA5522 and WAD14/texture2 alongside common heading80 succeeded.
+Undo restored#508070/texture1/heading64 together; Redo restored the new values.
+Save and Reopen succeeded and cleared history. Selection roundtrip showed the
+first tile's unchanged#508070/texture1 and third tile's changed#AA5522/texture2.
+Changing the selected third tile X to8448 refused overlap and retained raw text;
+Undo discarded only the invalid draft, restoring12544 with no saved-file change.
+The disabled research button and schema4 capability warning were visible.
+
+The actual saved JSON has no Base, three stable tile IDs at
+X8448/10496/12544,Y8448,Z8704, two retained placements and common spawn
+8960/8960/9216/heading80. Complete hash
+`bdea96045e4ad024ef357a37c3b4430e1f98b7b3542c934fc46422a3cf57aa8b`.
+The package's independent supported-native example remains unchanged. No ROM
+was selected or opened in this native UI test; browsing/inspection/export were
+not exercised there. No new native tiled gameplay is claimed.
+
+The test-owned App process exited0 after normal document/window close. A
+post-close accessibility query timed out and unexpectedly relaunched the SAME
+packaged executable as another process with no inspectable window; root
+terminated that exact validated PID23933 and confirmed no editor/emulator
+process remains. Future native cleanup must use inventory/process observation,
+not getAXState on a closed app handle. The protected default-project manifest
+still has its August1 modification time. Log269 rechecks complete original
+BIN/CUE, global/game DuckStation INIs, original card and sealed R02 App/Core/ZIP
+hashes unchanged. Windows was packaged/verified but not run.
