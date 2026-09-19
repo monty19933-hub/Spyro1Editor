@@ -60,13 +60,142 @@ internal sealed class NativeCollisionIndexSnapshot
 }
 
 /// <summary>
-/// Shared fixed-capacity codec for native Z/Y/X collision lookup trees. Rebuild
-/// owns leaf words and block storage only; it cannot relocate components, infer
-/// triangle geometry, allocate missing tree segments, or authorize retirement.
+/// Shared codec for native Z/Y/X collision lookup trees. Create allocates a new
+/// lookup from explicit cell memberships. Rebuild remains fixed-capacity and
+/// owns leaf words and block storage only. Neither operation infers triangle
+/// geometry, relocates containing components, or grants ownership or gameplay authority.
 /// </summary>
 internal static class NativeCollisionIndexCodec
 {
     private const int MaximumLogicalLeafCount = 1_048_576;
+    private const int MaximumGeneratedTriangleReferenceCount = 1_048_576;
+
+    public static NativeCollisionIndexSnapshot Create(
+        IEnumerable<KeyValuePair<NativeCollisionCell, IReadOnlyList<int>>> desiredCells,
+        int triangleCount, bool requireDescendingOrder = true)
+    {
+        ArgumentNullException.ThrowIfNull(desiredCells);
+        if (triangleCount is < 0 or > 0x8000)
+            throw new InvalidDataException("Invalid native collision triangle count.");
+
+        // Do not trust Count, ToArray, or collection-copy shortcuts on caller
+        // collections. Bound both levels of enumeration before growing buffers.
+        Dictionary<NativeCollisionCell, int[]> desired = [];
+        Dictionary<int, int> yLengths = [];
+        Dictionary<(int Z, int Y), int> xLengths = [];
+        int zLength = 0, treeWords = 1, logicalLeaves = 0, references = 0;
+        foreach (var (cell, sequence) in desiredCells)
+        {
+            if (desired.Count >= MaximumLogicalLeafCount ||
+                cell.X is < 0 or > 255 || cell.Y is < 0 or > 255 || cell.Z is < 0 or > 255 ||
+                sequence == null || desired.ContainsKey(cell))
+                throw new InvalidDataException("Invalid, repeated, or excessive generated collision cell.");
+
+            int nextZLength = Math.Max(zLength, cell.Z + 1);
+            bool hasY = yLengths.TryGetValue(cell.Z, out int oldYLength);
+            int nextYLength = Math.Max(oldYLength, cell.Y + 1);
+            bool hasX = xLengths.TryGetValue((cell.Z, cell.Y), out int oldXLength);
+            int nextXLength = Math.Max(oldXLength, cell.X + 1);
+            int nextTreeWords = treeWords + nextZLength - zLength +
+                nextYLength - oldYLength + (hasY ? 0 : 1) +
+                nextXLength - oldXLength + (hasX ? 0 : 1);
+            int nextLogicalLeaves = logicalLeaves + nextXLength - oldXLength;
+            if (nextTreeWords > 0x8000 || nextLogicalLeaves > MaximumLogicalLeafCount)
+                throw new InvalidDataException("Generated collision tree exceeds native or logical-cell capacity.");
+
+            List<int> copy = [];
+            foreach (int triangle in sequence)
+            {
+                if (references >= MaximumGeneratedTriangleReferenceCount)
+                    throw new InvalidDataException("Generated collision input exceeds the bounded triangle-reference limit.");
+                if (triangle < 0 || triangle >= triangleCount ||
+                    requireDescendingOrder && copy.Count > 0 && copy[^1] <= triangle)
+                    throw new InvalidDataException("Requested collision sequence has invalid native triangle references.");
+                references++;
+                copy.Add(triangle);
+            }
+            if (copy.Count == 0)
+                throw new InvalidDataException("Omit empty cells instead of emitting empty collision groups.");
+            desired.Add(cell, copy.ToArray());
+            zLength = nextZLength;
+            yLengths[cell.Z] = nextYLength;
+            xLengths[(cell.Z, cell.Y)] = nextXLength;
+            treeWords = nextTreeWords;
+            logicalLeaves = nextLogicalLeaves;
+        }
+
+        // Stable cell order determines group order. Equal owned sequences share
+        // blocks, but each generated logical leaf has an independent tree field.
+        var ordered = desired.OrderBy(p => p.Key.Z).ThenBy(p => p.Key.Y)
+            .ThenBy(p => p.Key.X).ToArray();
+        Dictionary<int[], int> groups = new(TriangleSequenceComparer.Instance);
+        Dictionary<NativeCollisionCell, int> groupOffsets = [];
+        List<ushort> words = [];
+        foreach (var (cell, sequence) in ordered)
+        {
+            if (!groups.TryGetValue(sequence, out int offset))
+            {
+                offset = words.Count;
+                if (offset >= 0xFFFF)
+                    throw new InvalidDataException("Collision group pointer collides with the native empty-leaf sentinel.");
+                for (int i = 0; i < sequence.Length; i++)
+                    words.Add((ushort)(sequence[i] | (i == 0 ? 0x8000 : 0)));
+                groups.Add(sequence, offset);
+            }
+            groupOffsets.Add(cell, offset);
+        }
+        words.Add(0x8000);
+        int usedBlockBytes = words.Count * 2;
+        byte[] blocks = new byte[(usedBlockBytes + 3) & ~3];
+        for (int i = 0; i < words.Count; i++)
+            BinaryPrimitives.WriteUInt16LittleEndian(blocks.AsSpan(i * 2), words[i]);
+
+        byte[] tree = new byte[(treeWords * 2 + 3) & ~3];
+        void Write(int offset, int value) =>
+            BinaryPrimitives.WriteUInt16LittleEndian(tree.AsSpan(offset), (ushort)value);
+        void InitializeSegment(int offset, int length)
+        {
+            Write(offset, length);
+            for (int i = 0; i < length; i++) Write(offset + (i + 1) * 2, 0xFFFF);
+        }
+        void Link(int field, int offset)
+        {
+            if (offset < 0 || offset >= 0xFFFF || (offset & 1) != 0)
+                throw new InvalidDataException("Generated collision segment has no native byte pointer.");
+            Write(field, offset);
+        }
+
+        InitializeSegment(0, zLength);
+        int nextOffset = (zLength + 1) * 2;
+        Dictionary<int, int> yOffsets = [];
+        foreach (var (z, length) in yLengths.OrderBy(p => p.Key))
+        {
+            Link((z + 1) * 2, nextOffset);
+            yOffsets.Add(z, nextOffset);
+            InitializeSegment(nextOffset, length);
+            nextOffset += (length + 1) * 2;
+        }
+        Dictionary<(int Z, int Y), int> xOffsets = [];
+        foreach (var (row, length) in xLengths.OrderBy(p => p.Key.Z).ThenBy(p => p.Key.Y))
+        {
+            Link(yOffsets[row.Z] + (row.Y + 1) * 2, nextOffset);
+            xOffsets.Add(row, nextOffset);
+            InitializeSegment(nextOffset, length);
+            nextOffset += (length + 1) * 2;
+        }
+        foreach (var (cell, offset) in groupOffsets)
+            Write(xOffsets[(cell.Z, cell.Y)] + (cell.X + 1) * 2, offset);
+        if (nextOffset != treeWords * 2)
+            throw new InvalidDataException("Generated collision segment extents do not match their measured capacity.");
+
+        NativeCollisionIndexSnapshot result = Decode(tree, blocks, usedBlockBytes,
+            triangleCount, requireDescendingOrder);
+        if (result.LeafPointerOffsets.Count != logicalLeaves || result.Cells.Count != desired.Count ||
+            desired.Any(p => !result.Cells.TryGetValue(p.Key, out var actual) ||
+                !actual.OrderedTriangleIndexes.SequenceEqual(p.Value)))
+            throw new InvalidDataException("Generated collision lookup failed complete semantic readback.");
+        return result;
+    }
 
     public static NativeCollisionIndexSnapshot Decode(ReadOnlySpan<byte> sourceTree,
         ReadOnlySpan<byte> sourceBlocks, int usedBlockBytes, int triangleCount,
@@ -257,5 +386,18 @@ internal static class NativeCollisionIndexCodec
         if (offset < 0 || (offset & 1) != 0 || offset > bytes.Length - 2)
             throw new InvalidDataException("Collision index word is outside its exact buffer.");
         return BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(offset));
+    }
+
+    private sealed class TriangleSequenceComparer : IEqualityComparer<int[]>
+    {
+        internal static readonly TriangleSequenceComparer Instance = new();
+        public bool Equals(int[]? x, int[]? y) => ReferenceEquals(x, y) ||
+            x != null && y != null && x.AsSpan().SequenceEqual(y);
+        public int GetHashCode(int[] sequence)
+        {
+            HashCode hash = new();
+            foreach (int triangle in sequence) hash.Add(triangle);
+            return hash.ToHashCode();
+        }
     }
 }

@@ -8,7 +8,7 @@ BIN/CUE, saves and preserved R03/R04/R05 apps remain protected. Stop safely near
 
 ## Current checkpoint summary
 
-Latest source work installs complete unplaced AE+135/136/137 models/five texture
+Checkpoint0157116 installs complete unplaced AE+135/136/137 models/five texture
 sets through the existing family Body composer, following shared atomic actor-texture
 materialization at d588106 (full217 passed336 steps, source218 passed4412 checks), and99f93b8
 (normal flight export) and b0db75b (model batch).
@@ -19,6 +19,9 @@ log228 authoring8269, with Original BIN/CUE unchanged. No additional output ROM
 was written by those checks. The5% safe-stop rule remains in force. The debris
 extension subsequently passes source233(11114), source235(8466) and full236
 (336steps,0failures); see the September19 section for its exact boundary.
+The subsequent shared collision-index generator is consumed by the existing
+floor encoder, preserves its complete golden bytes and passes full244
+(336steps,0failures). Larger render/collision geometry remains the next step.
 Full combined regression207 also passed336 checks/0 failures; actual-source208
 replays normal ON/OFF publication with the same complete hashes and stale-ON
 refusal. Earlier full suites146/167/177 passed335 checks/0 failures. Sections below are chronological evidence: older "next"
@@ -928,3 +931,42 @@ missing tree segments; shared multi-cell generation and old single-cell golden
 preservation must precede UI/publication. This proposal is not yet encoded or
 runtime-approved. Fresh's main-window viewport integration and decoded Moby
 mesh rendering remain distinct unfinished work.
+
+## Shared generated collision indexes — actual existing-floor integration
+
+The next increment adds NativeCollisionIndexCodec.Create beside unchanged
+Decode/Rebuild. It generates real Z/Y/X segments from explicit cell memberships,
+deduplicates immutable block sequences without aliasing editable leaf fields,
+and reads back every generated cell. Segment links remain byte offsets; leaf
+links remain word offsets. Empty0xFFFF leaves, exact0x8000 group termination and
+zero-aligned storage are independently tested. Native64KiB tree and representable
+group-start limits remain enforced; a final group may extend past the ushort
+terminal position, matching existing decoder semantics. Explicit reference
+enumeration is bounded independently of both caller Count values and shared
+input-array aliases. This primitive neither infers geometry nor issues native
+resource, runtime, or export authority.
+
+The actual one-floor authored-surface encoder consumes Create for its existing
+cell and descending[1,0] group. Its duplicated private tree encoder and manual
+group words were removed. Independent compatibility tests cover eight
+asymmetric/minimum/maximum native cells, every tree hole, segment, block marker
+and alignment byte; the existing complete surface oracle is unchanged.
+
+Logs238/239 record genuine missing-producer build failures from that real
+consumer. Builds240/242 then pass0warnings/errors. Collision241 passes108checks,
+including two real adjacent cells, shared seam triangles, multi-Z/Y segments,
+immutability, empty/full cases, pointer boundaries and hostile enumeration.
+Source243 passes731checks with exact Original image and unchanged complete
+surface `ee82c4d3bb2589eb821028337499d062762c47d3f6af2267f6b0fabee8df58b9`
+(324bytes). Independent review found no actionable defect. Full244 passes
+336steps/0failures, report
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-89zy8c38/summary.json`.
+No larger floor is exported by this change.
+
+Next: an ordered tile/surface producer must emit matching render sectors,
+visibility lists, compressed triangles, per-face materials and conservative
+closed-boundary collision membership. The proposed three-tile arena needs its
+middle tile indexed on both sides of the4096-unit cell seam. Reuse the existing
+single-floor path through that producer and preserve all old outputs before
+introducing larger-world document/schema and UI edits. Do not treat caller cell
+memberships alone as a generated terrain mesh or an in-game floor.

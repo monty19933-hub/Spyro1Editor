@@ -19,6 +19,7 @@ Require(bundle.CopyBundle().SequenceEqual(NativeId65AuthoredSurfaceLayout.Compil
     "deterministic fresh compilation");
 Require(NativeId65AuthoredSurfaceLayout.DecodeAndValidate(bundle.CopyBundle()) == floor, "strict independent readback");
 Oracle(bundle, floor);
+SharedCollisionGenerationCases.Run(Require);
 
 // Display channels are not packed native words: native storage is R, G, B, 0.
 var displayEquivalent = NativeId65AuthoredFloor.FromDisplayColors(8448, 8448, 8704, 1024, 1024,

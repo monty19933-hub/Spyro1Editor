@@ -233,8 +233,16 @@ internal static class NativeId65AuthoredSurfaceLayout
         byte[] special = new byte[SpecialLength];
         W(special, 0, SpecialLength);
 
-        byte[] tree = EncodeTree(floor.X >> 12, floor.Y >> 12, floor.Z >> 12);
-        int triangles = 32 + tree.Length + 8;
+        // The shared producer owns real Z/Y/X segments and block groups. This
+        // legacy adapter still admits exactly one cell and keeps its byte-level
+        // grammar unchanged; more cells require a complete terrain producer.
+        var index = NativeCollisionIndexCodec.Create(
+            new Dictionary<NativeCollisionCell, IReadOnlyList<int>>
+            {
+                [new(floor.X >> 12, floor.Y >> 12, floor.Z >> 12)] = new[] { 1, 0 }
+            }, 2);
+        byte[] tree = index.CopyTree(), blocks = index.CopyBlocks();
+        int triangles = 32 + tree.Length + blocks.Length;
         int assignments = triangles + 24;
         int flags = assignments + 4;
         byte[] collision = new byte[flags + 4];
@@ -247,8 +255,7 @@ internal static class NativeId65AuthoredSurfaceLayout
         W(collision, 24, (uint)(assignments - 4));
         W(collision, 28, (uint)(flags - 4));
         tree.CopyTo(collision, 32);
-        H(collision, 32 + tree.Length, 0x8001);
-        H(collision, 36 + tree.Length, 0x8000);
+        blocks.CopyTo(collision, 32 + tree.Length);
         // Native collision order A,C,B and B,C,D is the negative normal-Z
         // counterpart of visible triangles A,B,C and B,D,C.
         W(collision, triangles, PackAxis(x, 0, width));
@@ -408,27 +415,6 @@ internal static class NativeId65AuthoredSurfaceLayout
             "collision.tree", target, (uint)target, 0xFFFF, 1));
     }
 
-    private static byte[] EncodeTree(int x, int y, int z)
-    {
-        int zLength = (z + 2) * 2;
-        int yLength = (y + 2) * 2;
-        int xLength = (x + 2) * 2;
-        int used = zLength + yLength + xLength;
-        byte[] tree = new byte[(used + 3) & ~3];
-        Segment(0, z, zLength);
-        Segment(zLength, y, zLength + yLength);
-        Segment(zLength + yLength, x, 0);
-        return tree;
-
-        void Segment(int offset, int selected, int target)
-        {
-            H(tree, offset, (ushort)(selected + 1));
-            for (int i = 0; i < selected; i++)
-                H(tree, offset + 2 + i * 2, 0xFFFF);
-            H(tree, offset + 2 + selected * 2, (ushort)target);
-        }
-    }
-
     private static uint PackAxis(int origin, int deltaB, int deltaC)
     {
         if (origin is < 0 or > 16383 || deltaB is < -256 or > 255 || deltaC is < -256 or > 255)
@@ -439,5 +425,4 @@ internal static class NativeId65AuthoredSurfaceLayout
     internal static string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
     private static uint U(ReadOnlySpan<byte> b, int o) => BinaryPrimitives.ReadUInt32LittleEndian(b[o..]);
     private static void W(Span<byte> b, int o, uint value) => BinaryPrimitives.WriteUInt32LittleEndian(b[o..], value);
-    private static void H(Span<byte> b, int o, ushort value) => BinaryPrimitives.WriteUInt16LittleEndian(b[o..], value);
 }

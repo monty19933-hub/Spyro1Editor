@@ -119,6 +119,7 @@ Reject(() => NativeCollisionIndexCodec.Rebuild(full,
     { [a] = new[] { 3, 2, 1, 0 }, [b] = new[] { 2, 1, 0 } }), "capacity exhaustion");
 Require(source.CopyTree().SequenceEqual(savedTree) && source.CopyBlocks().SequenceEqual(savedBlocks),
     "all failures leave source unchanged");
+CreationCases.Run(Require, Reject);
 Console.WriteLine($"NATIVE_COLLISION_INDEX_SMOKE_OK checks={checks}; native roundtrip, alias conflicts, deterministic retirement; no game image");
 
 void Require(bool condition, string label)
