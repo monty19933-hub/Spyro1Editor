@@ -19,9 +19,13 @@ log228 authoring8269, with Original BIN/CUE unchanged. No additional output ROM
 was written by those checks. The5% safe-stop rule remains in force. The debris
 extension subsequently passes source233(11114), source235(8466) and full236
 (336steps,0failures); see the September19 section for its exact boundary.
-The subsequent shared collision-index generator is consumed by the existing
+Checkpoint f56167d adds the shared collision-index generator consumed by the existing
 floor encoder, preserves its complete golden bytes and passes full244
-(336steps,0failures). Larger render/collision geometry remains the next step.
+(336steps,0failures). The following shared ordered flat-tile producer now emits
+real matching multi-sector/multi-cell geometry and is consumed by the existing
+single-floor adapter. Source249 passes853checks; full250 passes336steps/0failures.
+Saved tiled documents, source-bound larger-level export and native seam traversal
+are not yet connected or approved.
 Full combined regression207 also passed336 checks/0 failures; actual-source208
 replays normal ON/OFF publication with the same complete hashes and stale-ON
 refusal. Earlier full suites146/167/177 passed335 checks/0 failures. Sections below are chronological evidence: older "next"
@@ -970,3 +974,100 @@ middle tile indexed on both sides of the4096-unit cell seam. Reuse the existing
 single-floor path through that producer and preserve all old outputs before
 introducing larger-world document/schema and UI edits. Do not treat caller cell
 memberships alone as a generated terrain mesh or an in-game floor.
+
+## Shared flat-tile geometry — source-only production integration
+
+The next increment replaces the old one-floor encoder body with an adapter to
+NativeFlatTileSurfaceLayout. It accepts a bounded ordered collection of actual
+native flat tiles, not a single stretched triangle. Each tile produces its own
+LP/HP sector, four corners, color tables, two visible faces, two oppositely wound
+collision triangles and a separate four-byte zero speculative-read guard.
+Single-floor admission, source certificates, metadata, saved schemas, publisher
+guards and complete old native bytes remain unchanged.
+
+The three-tile example uses X8192/10240/12288, Y8192, Z8704, each2048-square.
+Its component lengths are500/32/8/168/16, total724bytes. The actual environment
+pointers16/176/336 are relative to component+4. Visibility lists all three real
+sector indexes and no sky parts. Six collision rows own six group0 assignments
+and six dry-land3F flags with separate aligned padding. The conservative closed
+tile bounds generate two native cells: (2,2,2)=[3,2,1,0] and
+(3,2,2)=[5,4,3,2]. The middle tile's endpoint on12288 is indexed in both.
+Every corner, not merely the origin, is checked against the packed14-bit world
+range. Coplanar overlapping interiors refuse; touching edges and distinct flat
+elevations are retained. This is not a connected-union or arbitrary-mesh claim.
+
+Regression245 first failed because the new producer/types did not exist.
+Build246 then passed0warnings/errors and source247 passed851checks. Independent
+review found no concrete framing/bounds/immutability defect and requested a
+finite-triangle seam oracle. That oracle now decodes actual emitted corners,
+queries indexed candidates at seam-minus16/seam/seam-plus16, and rejects points
+outside the real rectangle even within the same coarse cell. It is explicitly
+a software geometry oracle, not execution of the native candidate loop.
+Reviewed build248 passes0warnings/errors; source249 passes853checks with the
+unchanged324-byte old floor hash ee82c4…58b9 and exact Original image identity.
+Tests also cover255byte-indexed sectors, visibility relocation at the fourth
+sector, sparse/corner/Z cells, overflow, guards, alignment, deterministic order,
+caller mutation and Count/indexer-independent bounded enumeration. Full250
+passes336steps/0failures, report
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-pb1wbyrk/summary.json`.
+
+No new source-bound tiled Body/EXE/disc or UI eligibility is issued. Native
+candidate-loop ordering/side effects, renderer/camera traversal and actual seam
+walking remain separate gates, including for conservative broad-phase triangle
+over-inclusion. The sealed R02 app was not rebuilt and no output ROM was made.
+
+### Next document/compiler integration constraints
+
+Independent review plus root inspection of the active intent/codec/session
+confirms that NativeFreshLevelDocumentIntent.Base owns the old one-floor bounds
+and spawn. Do not widen it, install a dummy rectangle, or serialize a stale
+Base alongside a new active geometry field. Introduce an explicit closed
+legacy-versus-tiled content variant, preserving v1/v2/v3 exact canonical bytes;
+the new schema should own ordered stable-ID tiles, per-tile material pairs,
+spawn, sky/music and the existing placement list. An explicit upgrade maps the
+old rectangle/materials into one real tile. UpgradeForNativeMobys currently
+forces non-3 content to3, and parser/writer/placement branches compare ==3;
+all must preserve the actual variant instead of downgrading future content.
+
+Retain the existing immutable aggregate/session/store/read-lease/history
+architecture. Replace placement-only WithContent(current.Base,...) with a
+variant-preserving placement operation. UI Apply currently reconstructs Base,
+so selected-tile editing and common level settings must replace that assumption
+before the new schema is exposed. Actual union coverage matters: internal seams
+are not holes, and an unchecked bounding rectangle must not admit real gaps.
+
+Source composition is a later explicit admission: NormalDataLayout currently
+derives tree length as surfaceLength-300, and Wizard paths pin surface144 and
+used-data8C8/8FC. A tiled producer must derive live component/Body/EXE ownership
+from its complete actual output, preserving those legacy recipe guards. First
+prove a zero-placement three-tile source candidate; then separately admit the
+remote Wizard/material family on that actual ancestry. Do not substitute a
+legacy Base for a saved tiled document or describe neutral geometry as export.
+
+### Parallel chest behavior audit — next shared allocation boundary
+
+Read-only review, cross-checked against current Host/legacy chest source, finds
+the actual Wizard Host already owns appended code F800..10DB4 and padding through
+11000. Its copy anchor is8008BA38 =8007AA38+11000. Historical Town chest output
+writes F494..10054, which overlaps the current Wizard code; it is not a reusable
+afterimage. A future append preserving the entire current11000 allocation would
+place the historical BC0-byte logical payload at11000..11BC0, pad to12000 and
+derive anchor8008CA38. Those sizes are design arithmetic, not linked chest code,
+Body relocation or an admitted candidate. Do not claim UsedByteLength denotes
+reusable free padding or bypass current exact Host/Body/Disc profile guards.
+
+The shared MIPS linker also has a deliberate target-ownership boundary:
+NativeMipsBehaviorFragmentCodec requires a Final target inside the supplied
+owner extent; an Original external target must carry executable-domain source
+evidence. Earlier retained Town overlay instructions cannot be relabeled as
+Original EXE or included by widening a reservation over occupied code. The
+existing Wizard Host uses owned leave thunks. Chest integration needs explicit
+retained-target ownership or a proven equivalent thunk binding, followed by
+actual setup/state/reward/key dispatch, globals and seven scene rows/privateE4
+state. A neutral append allocator alone does not establish those behaviors.
+The concrete shared extraction seam is the duplicated ordered code-block
+allocation in NativeDarkHollowWizardOverlayPlan and the Fresh Host. Preserve
+both actual producers' complete existing bytes/metadata first. Scene row storage
+already supports the seven-row schema; it needs source-bound composition tests,
+not another private row allocator. Keep singleton global-domain identity shared
+with the actual Wizard ancestor, not merely an equal-name reissued domain.

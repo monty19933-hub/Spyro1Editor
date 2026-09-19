@@ -169,109 +169,11 @@ internal static class NativeId65AuthoredSurfaceLayout
     internal static byte[] Encode(NativeId65AuthoredFloor floor)
     {
         ValidateIntent(floor);
-        int x = floor.X / 16;
-        int y = floor.Y / 16;
-        int z = floor.Z / 16;
-        int width = floor.Width / 16;
-        int depth = floor.Depth / 16;
-        byte[] environment = new byte[EnvironmentLength];
-        W(environment, 0, EnvironmentLength);
-        W(environment, 4, 1);
-        W(environment, 8, 8);
-        int sector = 12;
-        W(environment, sector, (uint)(((x + width / 2) << 16) | (y + depth / 2)));
-        // This conservative radius belongs only to native render culling. It
-        // does not describe player/Moby collision bounds or swept-path safety.
-        W(environment, sector + 4, (uint)((z << 16) | (width + depth)));
-        W(environment, sector + 8, (uint)((x << 16) | y));
-        W(environment, sector + 12, (uint)(z << 16));
-        new byte[] { 4, 4, 2, 0, 4, 4, 2, 12 }.CopyTo(environment, sector + 16);
-        // Native optional scene consumers use four signed-byte indices. -1
-        // disables each; zero would request scene index0, not mean "unused".
-        W(environment, sector + 24, uint.MaxValue);
-        uint[] vertices = [0, (uint)width << 21, (uint)depth << 10,
-            ((uint)width << 21) | ((uint)depth << 10)];
-        for (int i = 0; i < 4; i++)
-        {
-            W(environment, sector + 28 + i * 4, vertices[i]);
-            W(environment, sector + 76 + i * 4, vertices[i]);
-            W(environment, sector + 44 + i * 4, floor.FloorRgb);
-            W(environment, sector + 92 + i * 4, floor.FloorRgb);
-            W(environment, sector + 108 + i * 4, floor.FloorRgb);
-        }
-        int[][] faces = [[0, 1, 2], [1, 3, 2]];
-        for (int i = 0; i < faces.Length; i++)
-        {
-            int a = faces[i][0];
-            int b = faces[i][1];
-            int c = faces[i][2];
-            uint low = (uint)((a << 26) | (b << 20) | (c << 14) | (c << 8));
-            uint high = (uint)(a | (a << 8) | (b << 16) | (c << 24));
-            W(environment, sector + 60 + i * 8, low);
-            W(environment, sector + 64 + i * 8, low);
-            W(environment, sector + 124 + i * 16, high);
-            W(environment, sector + 128 + i * 16, high);
-            W(environment, sector + 132 + i * 16, 0xFF);
-            // The source-proven direct primitive path avoids claiming closure
-            // of unrelated normal/close texture subdivision queues.
-            W(environment, sector + 136 + i * 16, 0x80);
-        }
-        Id65EnvironmentSectorHeaderContract.Stamp(environment.AsSpan(sector, 156));
-        // +168..171 is an owned zero word: native HP iteration prefetches the
-        // next face before detecting the table end.
-
-        byte[] visibility = new byte[VisibilityLength];
-        W(visibility, 0, VisibilityLength);
-        W(visibility, 4, 16);
-        W(visibility, 8, 1);
-        W(visibility, 12, 12);
-        visibility.AsSpan(16, 4).Fill(0xFF);
-        visibility[16] = 0;
-        W(visibility, 20, 1);
-        W(visibility, 24, 8);
-        visibility.AsSpan(28, 4).Fill(0xFF);
-        byte[] special = new byte[SpecialLength];
-        W(special, 0, SpecialLength);
-
-        // The shared producer owns real Z/Y/X segments and block groups. This
-        // legacy adapter still admits exactly one cell and keeps its byte-level
-        // grammar unchanged; more cells require a complete terrain producer.
-        var index = NativeCollisionIndexCodec.Create(
-            new Dictionary<NativeCollisionCell, IReadOnlyList<int>>
-            {
-                [new(floor.X >> 12, floor.Y >> 12, floor.Z >> 12)] = new[] { 1, 0 }
-            }, 2);
-        byte[] tree = index.CopyTree(), blocks = index.CopyBlocks();
-        int triangles = 32 + tree.Length + blocks.Length;
-        int assignments = triangles + 24;
-        int flags = assignments + 4;
-        byte[] collision = new byte[flags + 4];
-        W(collision, 0, (uint)collision.Length);
-        W(collision, 4, 2);
-        W(collision, 8, 2);
-        W(collision, 12, 28);
-        W(collision, 16, (uint)(28 + tree.Length));
-        W(collision, 20, (uint)(triangles - 4));
-        W(collision, 24, (uint)(assignments - 4));
-        W(collision, 28, (uint)(flags - 4));
-        tree.CopyTo(collision, 32);
-        blocks.CopyTo(collision, 32 + tree.Length);
-        // Native collision order A,C,B and B,C,D is the negative normal-Z
-        // counterpart of visible triangles A,B,C and B,D,C.
-        W(collision, triangles, PackAxis(x, 0, width));
-        W(collision, triangles + 4, PackAxis(y, depth, 0));
-        W(collision, triangles + 8, (uint)z);
-        W(collision, triangles + 12, PackAxis(x + width, -width, 0));
-        W(collision, triangles + 16, PackAxis(y, depth, depth));
-        W(collision, triangles + 20, (uint)z);
-        collision[flags] = 0x3F;
-        collision[flags + 1] = 0x3F;
-        byte[] sky = new byte[CycloramaLength];
-        W(sky, 0, CycloramaLength);
-        W(sky, 4, floor.SkyRgb);
-        // Zero parts are supported, but the all-parts loop's delay-slot LW
-        // still reads the first pointer. +12 is its explicit zero guard owner.
-        return environment.Concat(visibility).Concat(special).Concat(collision).Concat(sky).ToArray();
+        // The legacy admission and certificates stay unchanged. Shared tiled
+        // production owns the actual geometry; one tile preserves every byte.
+        return NativeFlatTileSurfaceLayout.Compile(
+            new[] { new NativeFlatSurfaceTile(floor.X, floor.Y, floor.Z,
+                floor.Width, floor.Depth, floor.FloorRgb) }, floor.SkyRgb).CopyBundle();
     }
 
     internal static NativeId65AuthoredFloor DecodeAndValidate(ReadOnlySpan<byte> bytes)
@@ -414,15 +316,6 @@ internal static class NativeId65AuthoredSurfaceLayout
             NativeId65SurfaceReferenceKind.RelativeBytePointer, collision + 32,
             "collision.tree", target, (uint)target, 0xFFFF, 1));
     }
-
-    private static uint PackAxis(int origin, int deltaB, int deltaC)
-    {
-        if (origin is < 0 or > 16383 || deltaB is < -256 or > 255 || deltaC is < -256 or > 255)
-            throw new InvalidDataException("Native compressed collision axis cannot represent the authored triangle exactly.");
-        return (uint)origin | (((uint)deltaB & 511) << 14) | (((uint)deltaC & 511) << 23);
-    }
-
     internal static string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
     private static uint U(ReadOnlySpan<byte> b, int o) => BinaryPrimitives.ReadUInt32LittleEndian(b[o..]);
-    private static void W(Span<byte> b, int o, uint value) => BinaryPrimitives.WriteUInt32LittleEndian(b[o..], value);
 }
