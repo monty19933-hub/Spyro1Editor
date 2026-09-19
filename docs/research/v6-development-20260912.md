@@ -28,6 +28,10 @@ The following schema-4 increment connects saved tiled documents to the SAME
 Fresh Level window/session/store. Source-bound larger-level export and native
 seam traversal are not yet connected or approved; old export profiles refuse
 tiled content before acquiring source owners.
+The subsequent shared normal-component walker now serves the existing legacy
+decoder and a separate neutral tiled decoder. Source272 preserves two complete
+image references and full273 passes336steps/0failures; a source-issued tiled
+resource chain and Body/Disc publication are still the next implementation.
 Full combined regression207 also passed336 checks/0 failures; actual-source208
 replays normal ON/OFF publication with the same complete hashes and stale-ON
 refusal. Earlier full suites146/167/177 passed335 checks/0 failures. Sections below are chronological evidence: older "next"
@@ -1209,3 +1213,45 @@ not getAXState on a closed app handle. The protected default-project manifest
 still has its August1 modification time. Log269 rechecks complete original
 BIN/CUE, global/game DuckStation INIs, original card and sealed R02 App/Core/ZIP
 hashes unchanged. Windows was packaged/verified but not run.
+
+## Shared normal component layout for larger floors
+
+The next source increment replaces NormalDataLayout's implicit
+surfaceLength-minus300 collision-tree calculation with a shared bounded
+component walk. NativeId65NormalComponentLayout measures all five actual
+data-relative surface spans, raw portal word, particle/sound allocations,
+complete used end and CD-sector rounding. Both tree endpoints derive from
+unsigned native collision+4 pointers using wide arithmetic and checked storage
+bounds. The returned span collection is immutable. This is neutral structural
+information, never a source/resource or runtime certificate.
+
+The existing production DecodeUntextured path consumes that shared walk while
+keeping its original8BC..A38 early length guard and exact one-floor canonical
+decoder unchanged. The separate internal NativeId65TiledNormalDataLayout wraps
+the same walk with the actual canonical flat-tile decoder. Three tiles measure
+surface2D4/dataA58/tree28; a two-tile case whose used length lies inside the old
+numeric range still fails the old canonical profile. Sixteen neutral tiles
+derive a larger1800-sector allocation without granting old Body/Disc admission.
+No source-issued tiled resource, scene, Body, EXE or publication was added here.
+
+Root ran the missing-API RED268 before implementation:3errors/0warnings.
+Build270 passes0warnings/errors; free271 passes729new component checks and
+20627existing variable-layout checks across190cell sums/96used lengths.
+Corruption cases require InvalidDataException, so unsafe slicing exceptions
+cannot satisfy them. Tests cover unsigned pointer wrap/header/end/alias,
+unaligned or oversized lengths, tail counts, truncation, extra bytes, canonical
+collision flags, rebased structural-only gaps, immutable snapshots and old
+profile rejection. Root and an independent read-only review found no actionable
+production defect; a sector-crossing fixture was corrected before the green run.
+
+Actual-source272 passes583188checks and two complete reference images with full
+inverse verification, original SHA/length/EOF unchanged and no physical ROM
+written. The retained starter Body and Body-plan hashes remain exact. The
+separate unchanged legacy native-loader oracle274 passes5945checks, executing
+the pinned parser/sound/model-loader/scene-entry instruction slices for all old
+96used lengths. That oracle does NOT execute the new tiled parser input or
+claim CD hardware, full boot, tree traversal or DuckStation gameplay. Full
+regression273 passes336steps/0failures, report
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-9gvi9lzr/summary.json`.
+R03 remains sealed at2155776;
+this later internal refactor is not silently installed into its package.

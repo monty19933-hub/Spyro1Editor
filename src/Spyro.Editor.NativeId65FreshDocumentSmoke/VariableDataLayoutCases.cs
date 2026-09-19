@@ -13,6 +13,7 @@ internal static class VariableDataLayoutCases
 
     internal static void SourceFree()
     {
+        NormalComponentLayoutCases.Run();
         _checks = 0;
         var lengths = new HashSet<int>();
         for (int sum = 0; sum <= 189; sum++)

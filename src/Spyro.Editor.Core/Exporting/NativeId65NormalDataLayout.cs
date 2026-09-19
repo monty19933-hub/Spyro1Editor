@@ -1,5 +1,3 @@
-using System.Buffers.Binary;
-
 namespace Spyro.Editor.Core.Exporting;
 
 /// <summary>
@@ -9,16 +7,14 @@ namespace Spyro.Editor.Core.Exporting;
 /// </summary>
 internal sealed class NativeId65NormalDataLayout
 {
-    private NativeId65NormalDataLayout(int used, int surfaceLength)
-    {
-        UsedByteLength = used;
-        SurfaceByteLength = surfaceLength;
-    }
+    private readonly NativeId65NormalComponentLayout _components;
 
-    internal int UsedByteLength { get; }
-    internal int SurfaceByteLength { get; }
-    internal int CollisionTreeByteLength => SurfaceByteLength - 300;
-    internal int SectorByteLength => 0x1000;
+    private NativeId65NormalDataLayout(NativeId65NormalComponentLayout components) => _components = components;
+
+    internal int UsedByteLength => _components.UsedByteLength;
+    internal int SurfaceByteLength => _components.SurfaceByteLength;
+    internal int CollisionTreeByteLength => _components.CollisionTreeByteLength;
+    internal int SectorByteLength => _components.SectorByteLength;
 
     internal static void RequireBoundedUsedLength(int length)
     {
@@ -31,39 +27,11 @@ internal sealed class NativeId65NormalDataLayout
     internal static NativeId65NormalDataLayout DecodeUntextured(ReadOnlySpan<byte> data)
     {
         RequireBoundedUsedLength(data.Length); // Before any slicing/allocation.
-        if (Word(data, 0) != 8 || Word(data, 4) != 0)
-            throw new InvalidDataException("Untextured data requires its complete zero texture-metadata owner.");
-        int cursor = 8;
-        for (int component = 0; component < 5; component++)
-            cursor = checked(cursor + ComponentLength(data, cursor));
-        int surfaceLength = cursor - 8;
+        var components = NativeId65NormalComponentLayout.Decode(data);
         // Canonical re-encoding validates all five components, triangle winding,
         // reachability, relative pointers, guards and surface padding.
-        _ = NativeId65AuthoredSurfaceLayout.DecodeAndValidate(data.Slice(8, surfaceLength));
-        if (cursor > data.Length - 4 || Word(data, cursor) != 0)
-            throw new InvalidDataException("Canonical fresh data requires the raw zero-portal count owner.");
-        cursor += 4;
-        if (ComponentLength(data, cursor) != 0x80 || Word(data, cursor + 4) != 10)
-            throw new InvalidDataException("Canonical fresh data lost its complete ten-record particle allocation.");
-        cursor += 0x80;
-        if (ComponentLength(data, cursor) != 0x6F8 || Word(data, cursor + 0x104) != 76)
-            throw new InvalidDataException("Canonical fresh data lost its complete retained sound-descriptor allocation.");
-        cursor += 0x6F8;
-        if (cursor != data.Length || data.Length != 0x784 + surfaceLength)
-            throw new InvalidDataException("Native data used end differs from its complete owned component chain.");
-        return new(data.Length, surfaceLength);
+        _ = NativeId65AuthoredSurfaceLayout.DecodeAndValidate(
+            data.Slice(components.SurfaceOffset, components.SurfaceByteLength));
+        return new(components);
     }
-
-    private static int ComponentLength(ReadOnlySpan<byte> data, int offset)
-    {
-        if (offset < 0 || offset > data.Length - 4)
-            throw new InvalidDataException("Native component length field escaped the data owner.");
-        int length = Word(data, offset);
-        if (length < 4 || (length & 3) != 0 || offset + (long)length > data.Length)
-            throw new InvalidDataException("Native component escaped its bounded aligned data owner.");
-        return length;
-    }
-
-    private static int Word(ReadOnlySpan<byte> data, int offset) =>
-        BinaryPrimitives.ReadInt32LittleEndian(data[offset..]);
 }
