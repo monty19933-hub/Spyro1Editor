@@ -104,6 +104,34 @@ a2+36 as an actor class, so a bare12-byte XYZ vector is not sufficient input.
 The actual incoming row ownership and helper-preservation path need separate
 evidence; this result does not manufacture them. Source BIN remains unchanged.
 
+Original-only value witness/inspection472 passes22 checks and5 negative
+controls (`source_fresh_chest_static_reward_census_oracle.py`, SHA256
+`a85f431aa212426413b87d8065a0d7396ad170fce055715ef9d2268667ff6f99`).
+Actual native dispatch selects53/54/55/56/57 values1/2/5/10/25 through the real
+award JAL/delay, stopping before the award body. The actual nine source rows
+have selectors56/FF/FF/54/54/53/54/53/54. Seven deterministic selections total20
+(Wizard10 plus chest/rewards10), not19; neither FF row is silently counted as
+zero. The emitted-FF control reaches native RNG, disproving generic FF=no-drop.
+The complete P9 census remains null until actual key/passive behavior and the
+final scene/Host are bound; the detached Host executable still has target10.
+
+Follow-up finite direct-CFG review of472 separates the AD key handler from its
+neighbor: the key extent is80083B4C..80083DBF (274 bytes, source SHA256
+`c33bdcc3cc509eeaf4dc1a5eb2eaf5f81791bdc1f3a8046fce6a292ba8d18bab`).
+Its final J at83DB8 reaches87258 with a real timer-store delay at83DBC; no direct
+path falls into neighboring83DC0. Emitter83F08 and deletion-marker83F10 belong
+to that neighbor. The key has no direct selector53 read/emitter/award call, but
+metric, sound, collider, matrix/vector, slot, RNG and computed particle calls
+remain transitive dependencies; this is not a whole-handler non-award proof.
+
+Effect0C's AE path likewise requires the actual actor row: class+36, matrix+20,
+XYZ+C and constant vector8006E498 for index0. Its matrix helper17048 reaches
+`80017054:48C10000` (CTC2/GTE), outside the integer interpreter. Vector-add17758,
+packing17BFC and native RNG follow on return. No synthetic helper result or
+substitute GTE was added. The relevant acceptance gate is exact-candidate
+DuckStation testing after placement/Body/disc integration, not a claim that
+integer-only witnesses execute this path.
+
 All source/code/runtime flags retain their scoped meaning: source-owned bytes
 are available; full dependency closure, Body/placed-family/final-EXE issuance,
 runtime verification and publication approval remain false.
