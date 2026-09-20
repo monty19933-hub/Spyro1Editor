@@ -21,6 +21,13 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
         _outputCue = Encoding.UTF8.GetBytes("FILE \"" + ImageName + "\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n");
         _expected = measured; _canonical = tiled.CopyCanonicalDocument();
         RequireTiledAncestry(saved, tiled);
+        if (tiled.TiledMaterialAncestor is { } material)
+        {
+            var evidence = BuildTiledMaterialEvidence(tiled, material, measured);
+            PlanSha256 = evidence.PlanSha256;
+            _receipt = evidence.Receipt;
+            return;
+        }
         var disc = tiled.DiscPlan; var body = disc.BodyAncestor; var fresh = tiled.FreshResourceAncestor;
         var surface = fresh.TiledSurfaceAncestor!;
         using var document = JsonDocument.Parse(_canonical);
@@ -79,8 +86,16 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
     {
         // Reject an unsupported WHOLE document before opening any source. This
         // neutral preflight cannot issue a compiler or truncate unsupported rows.
-        var (_, surface) = NativeId65TiledSurfaceBundle.PrepareDocument(saved.Document);
-        NativeId65TiledNormalDataLayout.RequireFixedSurfaceAllocation(surface.CopyBundle().Length);
+        bool hasMaterials = saved.Document.TiledContent!.Tiles.Any(tile =>
+            tile.Materials.Triangle0 is not NativeFreshBaseFloorColorMaterialIntent ||
+            tile.Materials.Triangle1 is not NativeFreshBaseFloorColorMaterialIntent);
+        if (hasMaterials)
+            _ = NativeId65TiledSurfaceBundle.PrepareGeometryForMaterials(saved.Document);
+        else
+        {
+            var (_, surface) = NativeId65TiledSurfaceBundle.PrepareDocument(saved.Document);
+            NativeId65TiledNormalDataLayout.RequireFixedSurfaceAllocation(surface.CopyBundle().Length);
+        }
         NativeFreshDocumentStorage.RequireAggregateCurrent(saved.Snapshot, token);
         ArgumentException.ThrowIfNullOrWhiteSpace(originalBin); ArgumentException.ThrowIfNullOrWhiteSpace(sourceCue);
         var owners = new NativeFreshResearchSourceOwners(Path.GetFullPath(originalBin), Path.GetFullPath(sourceCue));
@@ -89,7 +104,9 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
         {
             owners.Open(token);
             await NativeId65FreshDiscSource.RequireWholeOriginalAsync(owners.Bin!, token);
-            var tiled = await NativeId65TiledDocumentCompilation.CaptureAsync(owners.ImagePath, saved.Document, token);
+            var tiled = hasMaterials
+                ? await NativeId65TiledDocumentCompilation.CaptureMaterialsAsync(owners.ImagePath, saved.Document, token)
+                : await NativeId65TiledDocumentCompilation.CaptureAsync(owners.ImagePath, saved.Document, token);
             saved.RequireDocument(tiled.Document);
             owners.Bin!.Position = 0;
             var measured = NativeId65FreshDiscStreaming.Measure(tiled.DiscPlan, owners.Bin, token);
@@ -112,10 +129,39 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
         var fresh = tiled.FreshResourceAncestor; var body = tiled.DiscPlan.BodyAncestor;
         if (!ReferenceEquals(fresh.TiledSurfaceAncestor?.Document, saved.Document) ||
             !ReferenceEquals(body.TiledSceneAncestor, fresh) ||
-            body.ResourceProfile != NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles ||
             !_canonical.AsSpan().SequenceEqual(tiled.CopyCanonicalDocument()) ||
             !_canonical.AsSpan().SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(saved.Document)) ||
             Hash(_canonical) != tiled.CanonicalSha256)
             throw new InvalidDataException("Saved-tiled actual document, scene, body or complete canonical binding changed.");
+        if (tiled.TiledMaterialAncestor is not { } material)
+        {
+            if (body.ResourceProfile != NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles ||
+                body.TiledMaterialAncestor != null || body.UpstreamPlanSha256 != fresh.PlanSha256)
+                throw new InvalidDataException("Base-only saved-tiled Candidate cannot adopt a material revision.");
+            var (_, surface) = NativeId65TiledSurfaceBundle.PrepareDocument(saved.Document);
+            NativeId65TiledNormalDataLayout.RequireFixedSurfaceAllocation(surface.CopyBundle().Length);
+            return;
+        }
+        if (body.ResourceProfile != NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles ||
+            !ReferenceEquals(body.TiledMaterialAncestor, material) || body.TextureAncestor != null ||
+            body.UpstreamPlanSha256 != material.PlanSha256 || material.UpstreamPlanSha256 != fresh.PlanSha256 ||
+            material.CanonicalDocumentSha256 != tiled.CanonicalSha256 ||
+            !_canonical.AsSpan().SequenceEqual(material.CopyCanonicalDocument()) || body.DataSectorByteLength != 0x1000)
+            throw new InvalidDataException("Material saved-tiled Candidate requires its actual complete material revision and final data owner.");
+        material.RequireAncestry(fresh, saved.Document, material.MaterialSources[0], material.MaterialSources[1]);
+        var prepared = NativeId65TiledSurfaceBundle.PrepareGeometryForMaterials(saved.Document);
+        if (!material.OrderedFaceMaterials.SequenceEqual(prepared.OrderedFaceMaterials) ||
+            body.DataUsedByteLength != material.CopyDataComponents().Length ||
+            body.DataUsedByteLength is < 1 or > 0x1000)
+            throw new InvalidDataException("Saved-tiled material face bindings or final measured data endpoint changed.");
+        byte[] bodyBytes = body.CopyLevelData();
+        material.RequireExactOutputs(
+            bodyBytes.AsSpan(body.Descriptors[0].Offset, body.Descriptors[0].ByteLength),
+            bodyBytes.AsSpan(body.Descriptors[1].Offset, body.DataUsedByteLength),
+            bodyBytes.AsSpan(body.Descriptors[2].Offset, body.Descriptors[2].ByteLength),
+            bodyBytes.AsSpan(body.Descriptors[3].Offset, body.Descriptors[3].ByteLength));
+        if (bodyBytes.AsSpan(body.Descriptors[1].Offset + body.DataUsedByteLength,
+            body.DataSectorByteLength - body.DataUsedByteLength).IndexOfAnyExcept((byte)0) != -1)
+            throw new InvalidDataException("Saved-tiled material data allocation padding changed.");
     }
 }

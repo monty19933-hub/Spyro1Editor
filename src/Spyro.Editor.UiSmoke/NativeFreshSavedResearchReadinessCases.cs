@@ -17,6 +17,33 @@ internal static class NativeFreshSavedResearchReadinessCases
             item => "family-" + item.Name, item => item.Document, StringComparer.Ordinal);
         var unsupportedTiles = SavedTiledDocumentFixture.Unsupported().ToDictionary(
             item => "tiled-" + item.Name, item => item.Document, StringComparer.Ordinal);
+        var supportedMaterials = new Dictionary<string, NativeFreshLevelDocumentIntent>(StringComparer.Ordinal)
+        {
+            ["tiled-mat"] = SavedTiledMaterialDocumentFixture.Document(),
+            ["tiled-mat-mixed"] = SavedTiledMaterialDocumentFixture.Document([0, 1, 255, 1, 0, 255]),
+            ["tiled-mat-nonselected"] = SavedTiledMaterialDocumentFixture.Document([255, 255, 0, 1, 0, 1]),
+            ["tiled-mat-ffc"] = SavedTiledMaterialDocumentFixture.BoundaryDocument(56),
+            ["tiled-mat-full"] = SavedTiledMaterialDocumentFixture.BoundaryDocument(58)
+        };
+        var unsupportedMaterials = new Dictionary<string, NativeFreshLevelDocumentIntent>(StringComparer.Ordinal)
+        {
+            ["tiled-mat-one"] = SavedTiledMaterialDocumentFixture.Document([0, 255, 0, 255, 0, 255]),
+            ["tiled-mat-third"] = SavedTiledMaterialDocumentFixture.Document([0, 1, 0, 1, 0, 2]),
+            ["tiled-mat-over"] = SavedTiledMaterialDocumentFixture.BoundaryDocument(60),
+            ["tiled-mat-wizard"] = SavedTiledMaterialDocumentFixture.Document().WithPlacements([
+                NativeFreshWizardRouteIntent.Create(new string('a', 32), 13056, 8960, 8704, 13568, 8960)]),
+            ["tiled-mat-native"] = SavedTiledMaterialDocumentFixture.Document().WithPlacements([
+                NativeFreshMobyPlacementIntent.Create(new string('b', 32),
+                    NativeFreshRetailMobyReference.Create("spyro1-usa-retail-mode2-2352-v1", 10, 121, 501),
+                    13056, 8960, 8704, 64)])
+        };
+        foreach (var supported in supportedMaterials.Values)
+            Check(NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(supported) &&
+                !NativeFreshSavedLevelResearchEligibility.IsSupportedTiledProfile(supported),
+                "Material readiness examines all faces and full allocation, without widening the Base-only profile.");
+        foreach (var unsupported in unsupportedMaterials.Values)
+            Check(!NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(unsupported),
+                "Material readiness refuses a third nonselected descriptor, missing second descriptor, placements and allocation overflow.");
         foreach (var supported in new[] { SavedTiledDocumentFixture.Document(), SavedTiledDocumentFixture.BoundaryDocument(44),
             SavedTiledDocumentFixture.BoundaryDocument(46) })
             Check(NativeFreshSavedLevelResearchEligibility.IsSupportedTiledProfile(supported) &&
@@ -34,8 +61,10 @@ internal static class NativeFreshSavedResearchReadinessCases
             "mixed-14-70", "mixed-70-14", "mixed-14-14", "mixed-route", "mixed-base", "mixed-music", "mixed-t2", "mixed-pair", "mixed-two-wizards", "mixed-nonretail",
             "mixed-dirty", "mixed-no-owner", "mixed-no-source", "mixed-owner-null", "mixed-owner-throw",
             "family", "family-dirty", "family-native-dirty", "family-no-owner", "family-no-source", "family-owner-null", "family-owner-throw",
-            "tiled", "tiled-data1000", "tiled-dirty", "tiled-tile-dirty", "tiled-no-owner", "tiled-no-source", "tiled-owner-null", "tiled-owner-throw" }
-            .Concat(unsupportedFamilies.Keys).Concat(unsupportedTiles.Keys))
+            "tiled", "tiled-data1000", "tiled-dirty", "tiled-tile-dirty", "tiled-no-owner", "tiled-no-source", "tiled-owner-null", "tiled-owner-throw",
+            "tiled-mat-dirty", "tiled-mat-no-owner", "tiled-mat-no-source", "tiled-mat-owner-null", "tiled-mat-owner-throw" }
+            .Concat(unsupportedFamilies.Keys).Concat(unsupportedTiles.Keys)
+            .Concat(supportedMaterials.Keys).Concat(unsupportedMaterials.Keys))
         {
             string root = Path.Combine(parent, "saved-research-ready-" + kind);
             Directory.CreateDirectory(root);
@@ -43,20 +72,25 @@ internal static class NativeFreshSavedResearchReadinessCases
             File.WriteAllText(project.ManifestPath, "{\"schemaVersion\":1,\"projectId\":\"" + project.ProjectId + "\",\"sentinel\":true}");
             bool family = kind.StartsWith("family", StringComparison.Ordinal);
             bool tiled = kind.StartsWith("tiled", StringComparison.Ordinal);
+            bool tiledMaterial = kind.StartsWith("tiled-mat", StringComparison.Ordinal);
             var intent = unsupportedFamilies.TryGetValue(kind, out var unsupported) ? unsupported :
                 unsupportedTiles.TryGetValue(kind, out var unsupportedTile) ? unsupportedTile :
+                unsupportedMaterials.TryGetValue(kind, out var unsupportedMaterial) ? unsupportedMaterial :
+                supportedMaterials.TryGetValue(kind, out var supportedMaterial) ? supportedMaterial :
+                tiledMaterial ? SavedTiledMaterialDocumentFixture.Document() :
                 family ? SavedFamilyDocumentFixture.Document() : kind == "tiled-data1000" ? SavedTiledDocumentFixture.BoundaryDocument(46) :
                 tiled ? SavedTiledDocumentFixture.Document() : Document(kind);
-            bool dirty = kind is "dirty" or "mixed-dirty" or "family-dirty" or "family-native-dirty" or "tiled-dirty" or "tiled-tile-dirty";
-            bool noOwner = kind is "no-owner" or "mixed-no-owner" or "family-no-owner" or "tiled-no-owner";
-            bool noSource = kind is "no-source" or "mixed-no-source" or "family-no-source" or "tiled-no-source";
-            bool nullOwner = kind is "owner-null" or "mixed-owner-null" or "family-owner-null" or "tiled-owner-null";
-            bool throwingOwner = kind is "owner-throw" or "mixed-owner-throw" or "family-owner-throw" or "tiled-owner-throw";
-            bool ready = kind is "retail" or "retail-t2" or "mixed-14-70" or "mixed-70-14" or "mixed-14-14" or "family" or "tiled" or "tiled-data1000" || nullOwner || throwingOwner;
+            bool dirty = kind is "dirty" or "mixed-dirty" or "family-dirty" or "family-native-dirty" or "tiled-dirty" or "tiled-tile-dirty" or "tiled-mat-dirty";
+            bool noOwner = kind is "no-owner" or "mixed-no-owner" or "family-no-owner" or "tiled-no-owner" or "tiled-mat-no-owner";
+            bool noSource = kind is "no-source" or "mixed-no-source" or "family-no-source" or "tiled-no-source" or "tiled-mat-no-source";
+            bool nullOwner = kind is "owner-null" or "mixed-owner-null" or "family-owner-null" or "tiled-owner-null" or "tiled-mat-owner-null";
+            bool throwingOwner = kind is "owner-throw" or "mixed-owner-throw" or "family-owner-throw" or "tiled-owner-throw" or "tiled-mat-owner-throw";
+            bool ready = kind is "retail" or "retail-t2" or "mixed-14-70" or "mixed-70-14" or "mixed-14-14" or "family" or "tiled" or "tiled-data1000" ||
+                supportedMaterials.ContainsKey(kind) || nullOwner || throwingOwner;
             bool reachesPicker = ready && !nullOwner && !throwingOwner;
-            string dirtyField = kind switch { "family-native-dirty" => "FreshNativeMobyX", "tiled-dirty" => "FreshSpawnZ", "tiled-tile-dirty" => "FreshFloorX", _ => "FreshHeading" };
+            string dirtyField = kind switch { "family-native-dirty" => "FreshNativeMobyX", "tiled-dirty" => "FreshSpawnZ", "tiled-tile-dirty" => "FreshFloorX", "tiled-mat-dirty" => "FreshMaterial0TextureId", _ => "FreshHeading" };
             string dirtyValue = kind switch { "family-native-dirty" => "09152", "tiled-dirty" => "09216", "tiled-tile-dirty" => "012544",
-                "mixed-dirty" or "family-dirty" => "0064", _ => "0128" };
+                "mixed-dirty" or "family-dirty" => "0064", "tiled-mat-dirty" => "00", _ => "0128" };
             // This inactive floor is an independent sentinel, never a projected
             // legacy authority manufactured from the schema4 document.
             var legacyIntent = tiled ? Document("retail").Base : intent.Base;

@@ -1819,3 +1819,59 @@ Report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-4h0y9
 This includes the source-free Python runner guards, all discovered project
 builds and the six targeted fresh-editor UI modes. Source/runtime conclusions
 remain those separately recorded above; this broad run does not execute a disc.
+
+### Saved tiled-material candidate and editor integration
+
+Tests377/378 first recorded the missing neutral material eligibility API (five
+saved-test and two UI compile errors, zero warnings). A separate material arm
+now enters the existing saved tiled compilation and publication workflow. It
+preflights the whole schema4 document before source-path I/O, retains its actual
+material/fresh/document/body instances and final data length, and binds final
+upload/data hashes rather than the intermediate untextured geometry. No Base
+projection, alternate writer, filename/role change or publication-accounting
+change was introduced. The old Base receipt block remains textually unchanged.
+
+The new receipt variant `schema4-two-static-material-flat-tiles-p0-n16-data1000`
+includes all face slots (including FF), first-occurrence descriptor order,
+actual source/relocated record identities, complete allocation/alias/consumer
+evidence, intermediate and final four-domain hashes, live body addresses and
+the complete saved canonical/raw/manifest identities. Inverse verification is
+required; normal export, persistent-save ownership and runtime flags stay false.
+
+Build383 is warning/error-free. Source-free384 passes624 checks and364 expected
+refusals. Actual-source385 passes711 total checks/381 refusals, including all
+three independently frozen complete images, final-vs-intermediate identities,
+detached receipt/canonical copies, exact-instance ancestry refusal, deterministic
+reissue, and equal-native-image ID-only/raw-only saved revision changes. Original
+held/named source final checks pass. No output image is written by this mode.
+Three explicit publish/verify/stale material CLI modes append after the old18;
+all use the existing publication engine and actual-file forward/inverse checks.
+
+UI behavior RED380 built cleanly but refused the newly supported material arm,
+as expected before App admission. The production App change is one eligibility
+OR and two capability-text updates. Green382 passes7,420 checks (95 argument,
+1,176 readiness,6,149 lifecycle), with no source reads or native output. Tests
+include two materials appearing only on nonselected tiles, a third descriptor
+only on the last face, mixed Base faces, exact capacity, raw texture-ID/source
+level/kind ABA, busy controls and actual nonselected-tile material changes during
+picker/preparation. The existing ticket/worker remains unchanged. Independent
+review found no actionable issue in those UI changes.
+
+For the next separate native test, observer RED379 precedes the exact
+`tiled-two-material-three-track19-r01` profile. Source-free381 runs56 tests,
+53 passing and three explicit source-dependent tests skipped. New14 controls
+pin the independently derived BC8/model8008AA94/scene8009A294 layout, preserve
+all three old profiles, bound every read and reject incompatible layouts.
+The transport still issues memory reads only; hashes and matching memory are
+annotations, never loaded-disc authentication or gameplay approval. No emulator
+was launched for these checks. Saved physical publication, native editor output
+and DuckStation texture appearance remain pending at this point.
+
+Post-change386 reissues and verifies the preserved R04 actual-file export:
+the old plan `3d586aa6...`, complete receipt `da2dc3ab...`, BIN `7ba0b29b...`,
+CUE, raw/canonical and manifest all remain exactly unchanged from374. The
+forward readback, second actual-file inverse and original-source finals pass.
+Independent review of the candidate and saved test changes found no actionable
+defect. Full rebuild/regression387 passes **340 steps, zero failures**:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-ltslt2kd/summary.json`.
+The sealed R04 application was not rebuilt or replaced.

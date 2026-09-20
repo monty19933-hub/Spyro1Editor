@@ -13,15 +13,17 @@ internal static class NativeFreshSavedResearchLifecycleCases
     internal static void Run(string parent)
     {
         int checks = 0;
-        foreach (string profile in new[] { "material", "family", "tiled" })
+        foreach (string profile in new[] { "material", "family", "tiled", "tiled-mat" })
         foreach (string stage in new[] { "picker", "prepare" })
         foreach (string change in new[] { "none", "raw-aba", "raw", "native-raw-aba", "native-raw", "source", "project", "disk", "manifest", "session", "snapshot", "applied", "close", "cancel", "prepare-refusal", "owner-release" }
             .Concat(profile == "family" ? new[] { "native-y-aba", "native-z-aba", "native-yaw-aba" } :
-                profile == "tiled" ? new[] { "tile-selection", "spawn-z", "spawn-z-aba", "tile-x", "tile-x-aba", "tile-material-aba" } : Array.Empty<string>()))
+                profile.StartsWith("tiled", StringComparison.Ordinal) ? new[] { "tile-selection", "spawn-z", "spawn-z-aba", "tile-x", "tile-x-aba", "tile-material-aba" } : Array.Empty<string>())
+            .Concat(profile == "tiled-mat" ? new[] { "texture-id-aba", "source-level-aba", "nonselected-material" } : Array.Empty<string>()))
         {
-            bool family = profile == "family", tiled = profile == "tiled";
+            bool family = profile == "family", tiled = profile.StartsWith("tiled", StringComparison.Ordinal);
             var fixture = new Fixture(parent, (profile == "material" ? "" : profile + "-") + stage + "-" + change,
-                document: family ? SavedFamilyDocumentFixture.Document() : tiled ? SavedTiledDocumentFixture.Document() : null,
+                document: family ? SavedFamilyDocumentFixture.Document() : profile == "tiled-mat" ? SavedTiledMaterialDocumentFixture.Document() :
+                    tiled ? SavedTiledDocumentFixture.Document() : null,
                 selectedEditorId: family ? SavedFamilyDocumentFixture.GrassId : null);
             List<Exception> failures = [];
             var picker = new TaskCompletionSource<string?>();
@@ -38,6 +40,9 @@ internal static class NativeFreshSavedResearchLifecycleCases
             string spawnZBefore = tiled ? fixture.Find<TextBox>("FreshSpawnZ").Text! : "";
             string tileXBefore = tiled ? fixture.Find<TextBox>("FreshFloorX").Text! : "";
             string? tileBefore = fixture.CurrentSession.SelectedTileId;
+            object? materialKindBefore = fixture.Find<ComboBox>("FreshMaterial0Kind").SelectedItem;
+            object? materialLevelBefore = fixture.Find<ComboBox>("FreshMaterial0SourceLevel").SelectedItem;
+            string? materialIdBefore = fixture.Find<TextBox>("FreshMaterial0TextureId").Text;
             try
             {
                 if (family) Check(fixture.Find<TextBox>(nativeField).IsEnabled && nativeBefore.Length > 0 &&
@@ -106,8 +111,29 @@ internal static class NativeFreshSavedResearchLifecycleCases
                     case "tile-x": fixture.Set("FreshFloorX", "08448"); break;
                     case "tile-x-aba": fixture.Set("FreshFloorX", "0" + tileXBefore); fixture.Set("FreshFloorX", tileXBefore); break;
                     case "tile-material-aba":
-                        fixture.Find<ComboBox>("FreshMaterial0Kind").SelectedItem = "Retail terrain record"; F.Pump();
-                        fixture.Find<ComboBox>("FreshMaterial0Kind").SelectedItem = "Base floor color"; F.Pump(); break;
+                        fixture.Find<ComboBox>("FreshMaterial0Kind").SelectedItem = materialKindBefore as string == "Base floor color"
+                            ? "Retail terrain record" : "Base floor color"; F.Pump();
+                        fixture.Find<ComboBox>("FreshMaterial0Kind").SelectedItem = materialKindBefore; F.Pump(); break;
+                    case "texture-id-aba":
+                        fixture.Set("FreshMaterial0TextureId", "0" + materialIdBefore);
+                        fixture.Set("FreshMaterial0TextureId", materialIdBefore!); break;
+                    case "source-level-aba":
+                        fixture.Find<ComboBox>("FreshMaterial0SourceLevel").SelectedItem = 70; F.Pump();
+                        fixture.Find<ComboBox>("FreshMaterial0SourceLevel").SelectedItem = materialLevelBefore; F.Pump(); break;
+                    case "nonselected-material":
+                        var contentBefore = original!.TiledContent!;
+                        var third = contentBefore.Tiles[2];
+                        var editedThird = NativeFreshFlatTileIntent.Create(third.EditorId, third.X, third.Y, third.Z,
+                            third.Width, third.Depth, third.FloorColor,
+                            NativeFreshFloorMaterialsIntent.Create(third.Materials.Triangle1, third.Materials.Triangle0));
+                        fixture.CurrentSession.Apply(original.WithTiledContent(contentBefore.WithTiles(
+                            contentBefore.Tiles.Select(tile => tile.EditorId == third.EditorId ? editedThird : tile))));
+                        Check(fixture.CurrentSession.SelectedTileId == tileBefore &&
+                            fixture.Find<ComboBox>("FreshMaterial0Kind").SelectedItem == materialKindBefore &&
+                            fixture.Find<TextBox>("FreshMaterial0TextureId").Text == materialIdBefore &&
+                            fixture.Find<TextBox>("FreshFloorX").Text == tileXBefore,
+                            "A material change only on the third tile leaves selected-tile raw fields unchanged; the whole applied document must remain bound.");
+                        break;
                     case "tile-selection":
                         var generation = fixture.RawGeneration; var snapshot = fixture.CurrentSession.Snapshot;
                         fixture.CurrentSession.SelectTile(original!.TiledContent!.Tiles[1].EditorId);
@@ -158,9 +184,11 @@ internal static class NativeFreshSavedResearchLifecycleCases
                         fixture.Window.SavedResearchFailureForTesting is InvalidDataException,
                         family ? "Actual selected Grass " + nativeField + " A-B-A remains stale despite equal final raw/native intent." :
                             "Inactive native raw A-B-A remains stale across the old schema2 research ticket.");
-                if (change is "spawn-z-aba" or "tile-x-aba" or "tile-material-aba")
+                if (change is "spawn-z-aba" or "tile-x-aba" or "tile-material-aba" or "texture-id-aba" or "source-level-aba")
                     Check(fixture.Find<TextBox>("FreshSpawnZ").Text == spawnZBefore && fixture.Find<TextBox>("FreshFloorX").Text == tileXBefore &&
-                        fixture.Find<ComboBox>("FreshMaterial0Kind").SelectedItem as string == "Base floor color" &&
+                        Equals(fixture.Find<ComboBox>("FreshMaterial0Kind").SelectedItem, materialKindBefore) &&
+                        Equals(fixture.Find<ComboBox>("FreshMaterial0SourceLevel").SelectedItem, materialLevelBefore) &&
+                        fixture.Find<TextBox>("FreshMaterial0TextureId").Text == materialIdBefore &&
                         !fixture.Window.HasUnsavedChanges && fixture.Window.SavedResearchFailureForTesting is InvalidDataException,
                         "Raw tiled/common/material A-B-A is stale even though the complete final form again equals saved content.");
                 if (change is "spawn-z" or "tile-x")

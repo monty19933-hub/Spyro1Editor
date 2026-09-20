@@ -2,16 +2,16 @@ using Spyro.Editor.Core.Exporting;
 using static Cases;
 
 if (SavedLevelPublicationCases.IsMode(args)) { await SavedLevelPublicationCases.RunAsync(args); return; }
-if (args.Length != 0 && (args.Length != 3 || args[0] is not ("--source" or "--mixed-source" or "--family-source" or "--tiled-source") || args.Skip(1).Any(v =>
+if (args.Length != 0 && (args.Length != 3 || args[0] is not ("--source" or "--mixed-source" or "--family-source" or "--tiled-source" or "--tiled-material-source") || args.Skip(1).Any(v =>
     string.IsNullOrWhiteSpace(v) || v.StartsWith("--", StringComparison.Ordinal) || v.Contains('\0'))))
-    throw new ArgumentException("Usage: NativeFreshSavedLevelResearchSmoke [--source|--mixed-source|--family-source|--tiled-source original.bin original.cue], or an explicit reviewed saved-level mode with BIN CUE ABSOLUTE_PROJECT_ROOT PROJECT_ID ABSOLUTE_OUTPUT (six tokens including mode).");
+    throw new ArgumentException("Usage: NativeFreshSavedLevelResearchSmoke [--source|--mixed-source|--family-source|--tiled-source|--tiled-material-source original.bin original.cue], or an explicit reviewed saved-level mode with BIN CUE ABSOLUTE_PROJECT_ROOT PROJECT_ID ABSOLUTE_OUTPUT (six tokens including mode).");
 Root = Directory.CreateTempSubdirectory("spyro-saved-level-research-smoke-").FullName;
 try
 {
     await CandidateCases.Free(); await SourceOwnerCases.Free();
     await SavedLevelPhysicalApiCases.Free(); await SavedLevelPublicationArgumentCases.Free();
     await LeaseOutcomeCases.Free(); await ActualAttemptCases.Free();
-    await MixedSavedCases.Free(); await FamilySavedCases.Free(); await TiledSavedCases.Free();
+    await MixedSavedCases.Free(); await FamilySavedCases.Free(); await TiledSavedCases.Free(); await TiledMaterialSavedCases.Free();
     Console.WriteLine($"NATIVE_FRESH_SAVED_LEVEL_RESEARCH_FREE_OK checks={Checks} refusals={Refusals} originalOpened=false nativeImageWritten=false tinyTransactionInvoked=true");
     if (args.Length != 0)
     {
@@ -21,7 +21,8 @@ try
         {
             owners.Open(CancellationToken.None);
             await NativeId65FreshDiscSource.RequireWholeOriginalAsync(owners.Bin!, CancellationToken.None);
-            if (args[0] == "--tiled-source") await TiledSavedCases.Source(owners.ImagePath, owners.CuePath);
+            if (args[0] == "--tiled-material-source") await TiledMaterialSavedCases.Source(owners.ImagePath, owners.CuePath);
+            else if (args[0] == "--tiled-source") await TiledSavedCases.Source(owners.ImagePath, owners.CuePath);
             else if (args[0] == "--family-source") await FamilySavedCases.Source(owners.ImagePath, owners.CuePath);
             else if (args[0] == "--mixed-source") await MixedSavedCases.Source(owners.ImagePath, owners.CuePath);
             else await CandidateCases.Source(owners.ImagePath, owners.CuePath);

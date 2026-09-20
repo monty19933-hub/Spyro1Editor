@@ -43,7 +43,8 @@ internal sealed partial class NativeFreshDocumentWindow
             FloorMaterials.Triangle1: NativeFreshRetailTerrainMaterialIntent } ||
             NativeFreshSavedLevelResearchEligibility.IsSupportedMixedProfile(CurrentAggregateIntent) ||
             NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(CurrentAggregateIntent) ||
-            NativeFreshSavedLevelResearchEligibility.IsSupportedTiledProfile(CurrentAggregateIntent)) && !HasUnsavedChanges;
+            NativeFreshSavedLevelResearchEligibility.IsSupportedTiledProfile(CurrentAggregateIntent) ||
+            NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(CurrentAggregateIntent)) && !HasUnsavedChanges;
 
     private async Task CreateSavedResearchCandidateAsync()
     {

@@ -26,6 +26,23 @@ public static class NativeFreshSavedLevelResearchEligibility
         }
     }
 
+    public static bool IsSupportedTiledMaterialProfile(NativeFreshLevelDocumentIntent? document)
+    {
+        if (document == null) return false;
+        try
+        {
+            // Exactly two distinct selections across the actual whole document,
+            // including both complete records in the measured data allocation.
+            // This does not authenticate either selection as a static source.
+            _ = NativeId65TiledSurfaceBundle.PrepareGeometryForMaterials(document);
+            return true;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+    }
+
     public static bool IsSupportedFamilyProfile(NativeFreshLevelDocumentIntent? document)
     {
         if (document == null) return false;

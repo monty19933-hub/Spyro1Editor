@@ -43,7 +43,8 @@ CAPACITY = 16
 # This is an observation-scope boundary, NOT a player footprint, safe inset,
 # Z/ground-state certificate or authentication of the loaded candidate.
 AUTHORED_FLOOR_XY_BOUNDS = (8448, 8448, 9472, 9472)
-PROFILE_CHOICES = ("starter-a-n16", "edited-landing-track02-r01", "tiled-three-track19-r01")
+PROFILE_CHOICES = ("starter-a-n16", "edited-landing-track02-r01", "tiled-three-track19-r01",
+                   "tiled-two-material-three-track19-r01")
 
 # Both legacy exact untextured N16 bodies retain this address layout. Equal RAM gates
 # cannot distinguish their geometry/document/music or authenticate either disc.
@@ -102,6 +103,26 @@ _TILED_GATES = MappingProxyType({
     name: (at, encoding, _TILED_MOVED.get(name, expected))
     for name, (at, encoding, expected) in GATES.items()
 })
+# Separate exact six-textured-face profile: native-loader346 derives the final
+# BC8 used end, model8008AA94 and scene8009A294, not intermediate geometry A58.
+# Rows/arena follow the same native D4 + 70*N + 58 layout; source369 confirms
+# the complete scene/EXE stay byte-equal to A. None of these gates proves texture
+# appearance, static source identity, GPU behavior or the loaded disc identity.
+_TILED_MATERIAL_USED = 0xBC8
+_TILED_MATERIAL_MODEL = 0x80089ECC + _TILED_MATERIAL_USED
+_TILED_MATERIAL_SCENE = _TILED_MATERIAL_MODEL + 0xF800
+_TILED_MATERIAL_BASE = _TILED_MATERIAL_SCENE + 0xD4
+_TILED_MATERIAL_ARENA_END = _TILED_MATERIAL_BASE + 0x70 * CAPACITY + 0x58
+_TILED_MATERIAL_MOVED = MappingProxyType({
+    "model_anchor": _TILED_MATERIAL_MODEL, "scene_anchor": _TILED_MATERIAL_SCENE,
+    "moby_base": _TILED_MATERIAL_BASE, "dynamic_base": _TILED_MATERIAL_BASE,
+    "arena_end": _TILED_MATERIAL_ARENA_END, "bucket_base": _TILED_MATERIAL_ARENA_END + 4 + 8 + 4,
+    "companion_model_root": _TILED_MATERIAL_MODEL + 0xCC30,
+})
+_TILED_MATERIAL_GATES = MappingProxyType({
+    name: (at, encoding, _TILED_MATERIAL_MOVED.get(name, expected))
+    for name, (at, encoding, expected) in GATES.items()
+})
 CURSORS = {
     "dynamic_count": (0x800756A4, "<I"),
     "dynamic_properties_cursor": (0x80075930, "<I"),
@@ -129,6 +150,8 @@ def _profile_layout(profile):
         raise ValueError("Only a fixed code-owned observer profile may be selected.")
     if profile == "tiled-three-track19-r01":
         return _TILED_GATES, _TILED_BASE, _TILED_ARENA_END, (8448, 8448, 14592, 10496)
+    if profile == "tiled-two-material-three-track19-r01":
+        return _TILED_MATERIAL_GATES, _TILED_MATERIAL_BASE, _TILED_MATERIAL_ARENA_END, (8448, 8448, 14592, 10496)
     bounds = (8192, 8192, 10240, 10240) if profile == "edited-landing-track02-r01" else AUTHORED_FLOOR_XY_BOUNDS
     return GATES, BASE, ARENA_END, bounds
 
@@ -145,6 +168,8 @@ def read_fields(client, names):
 def require_baseline(values, *, profile="starter-a-n16"):
     gates, row_base, arena_end, _ = _profile_layout(profile)
     baseline = "three-tile/N16" if profile == "tiled-three-track19-r01" else "A/N16"
+    if profile == "tiled-two-material-three-track19-r01":
+        baseline = "six-textured-three-tile/N16"
     for name, (_, _, expected) in gates.items():
         if values[name] != expected:
             raise ValueError("Not the initialized fixed " + baseline + " baseline: " + name)
@@ -201,6 +226,7 @@ def capture(client, label, *, profile="starter-a-n16"):
     _, row_base, _, bounds = _profile_layout(profile)
     edited = profile == "edited-landing-track02-r01"
     tiled = profile == "tiled-three-track19-r01"
+    tiled_material = profile == "tiled-two-material-three-track19-r01"
     result = {
         "utc": datetime.now(timezone.utc).isoformat(), "label": label[:120],
         "expected_profile_annotation": PROFILE,
@@ -237,6 +263,18 @@ def capture(client, label, *, profile="starter-a-n16"):
             expected_candidate_sha256_annotation="7ba0b29b68a1bee415901382c3a3b5345ccb01ca84872502131f68361afdc305",
             expected_body_sha256_annotation="37157a7248c90665309d8cee21c739a846aca284426cd602c65d627788c06009",
             expected_used_data_length_annotation=_TILED_USED,
+            expected_spawn_xyz_annotation=[8960, 8960, 9216], expected_spawn_heading_u8_annotation=64,
+            expected_floor_z_annotation=8704, expected_music_track_id_annotation=19,
+            ui_result_approved=False, normal_export_approved=False)
+    elif tiled_material:
+        # Only the independently frozen352 six-textured Body/image is described.
+        # Same RAM anchors cannot distinguish Base/FF edits or different material
+        # bindings, and these expected hashes are not process/disc authentication.
+        result.update(
+            expected_profile_annotation="fresh-id65-tiled-two-material-three-track19-r01-idle-seam-walk-research-v1",
+            expected_candidate_sha256_annotation="462c992f80f512f0b6be781b1a79e707e37a0e18f5e5e47356cd332ef61b2ba8",
+            expected_body_sha256_annotation="461326c0e362a7c0bdb4c15c21996d15f6b1674e2156d60802f0efc94e6c36be",
+            expected_used_data_length_annotation=_TILED_MATERIAL_USED,
             expected_spawn_xyz_annotation=[8960, 8960, 9216], expected_spawn_heading_u8_annotation=64,
             expected_floor_z_annotation=8704, expected_music_track_id_annotation=19,
             ui_result_approved=False, normal_export_approved=False)

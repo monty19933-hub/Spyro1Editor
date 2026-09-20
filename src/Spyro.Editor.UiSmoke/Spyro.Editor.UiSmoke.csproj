@@ -11,5 +11,6 @@
     <ProjectReference Include="../Spyro.Editor.App/Spyro.Editor.App.csproj" />
     <Compile Include="../Spyro.Editor.NativeFreshSavedLevelResearchSmoke/SavedFamilyDocumentFixture.cs" Link="SavedFamilyDocumentFixture.cs" />
     <Compile Include="../Spyro.Editor.NativeFreshSavedLevelResearchSmoke/SavedTiledDocumentFixture.cs" Link="SavedTiledDocumentFixture.cs" />
+    <Compile Include="../Spyro.Editor.NativeFreshSavedLevelResearchSmoke/SavedTiledMaterialDocumentFixture.cs" Link="SavedTiledMaterialDocumentFixture.cs" />
   </ItemGroup>
 </Project>
