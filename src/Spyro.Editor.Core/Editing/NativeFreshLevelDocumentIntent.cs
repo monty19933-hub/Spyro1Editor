@@ -4,8 +4,9 @@ using Spyro.Editor.Core.Primitives;
 namespace Spyro.Editor.Core.Editing;
 
 /// <summary>
-/// Neutral authoring aggregate: unchanged legacy schemas1..3 or explicit schema4
-/// ordered tiles, plus the bounded closed placement list. Only the active content
+/// Neutral authoring aggregate: unchanged legacy schemas1..3, explicit schema4
+/// ordered tiles, or explicit schema5 family intent with either content variant.
+/// The bounded closed placement list is independent of native expansion. Only the active content
 /// variant owns geometry, spawn and common settings.
 /// Counts and editor IDs are document ownership,
 /// never native capacity, save bits, source authority or publication approval.
@@ -58,7 +59,7 @@ public sealed class NativeFreshLevelDocumentIntent
     public NativeFreshLevelDocumentIntent WithTiledContent(NativeFreshTiledLevelContent content)
     {
         if (TiledContent == null) throw new InvalidDataException("Use an explicit tiled upgrade or factory before editing tiled content.");
-        return CreateContent(content, Placements, 4);
+        return CreateContent(content, Placements, SchemaVersion == 5 ? 5 : 4);
     }
 
     public NativeFreshLevelDocumentIntent UpgradeToTiled(string tileEditorId)
@@ -69,8 +70,8 @@ public sealed class NativeFreshLevelDocumentIntent
             NativeFreshFloorMaterialIntent.BaseFloorColor(), NativeFreshFloorMaterialIntent.BaseFloorColor());
         var tile = NativeFreshFlatTileIntent.Create(tileEditorId, b.FloorX, b.FloorY, b.FloorZ,
             b.FloorWidth, b.FloorDepth, b.FloorColor, materials);
-        return CreateTiled(NativeFreshTiledLevelContent.Create([tile], b.SpawnX, b.SpawnY, b.SpawnZ,
-            b.Heading, b.SkyColor, b.MusicTrackId), Placements);
+        return CreateContent(NativeFreshTiledLevelContent.Create([tile], b.SpawnX, b.SpawnY, b.SpawnZ,
+            b.Heading, b.SkyColor, b.MusicTrackId), Placements, SchemaVersion == 5 ? 5 : 4);
     }
 
     /// <summary>Explicit material edit, upgrading schema1 to2 but retaining schema3. Clearing both slots does not downgrade.</summary>
@@ -84,6 +85,10 @@ public sealed class NativeFreshLevelDocumentIntent
     public NativeFreshLevelDocumentIntent UpgradeForNativeMobys() =>
         SchemaVersion >= 3 ? this : new(Content, Placements, 3);
 
+    /// <summary>Explicit schema5 upgrade with either active content variant. Family removal never downgrades it.</summary>
+    public NativeFreshLevelDocumentIntent UpgradeForFamilies() =>
+        SchemaVersion == 5 ? this : new(Content, Placements, 5);
+
     private static NativeFreshLevelDocumentIntent CreateContent(NativeFreshLevelContent content,
         IEnumerable<NativeFreshPlacementIntent> placements, int schemaVersion)
     {
@@ -96,7 +101,8 @@ public sealed class NativeFreshLevelDocumentIntent
             if (copy.Count == MaximumPlacements)
                 throw new InvalidDataException("Fresh level authoring permits at most128 placements; this is not native capacity.");
             if (placement is not NativeFreshWizardRouteIntent &&
-                !(schemaVersion >= 3 && placement is NativeFreshMobyPlacementIntent))
+                !(schemaVersion >= 3 && placement is NativeFreshMobyPlacementIntent) &&
+                !(schemaVersion == 5 && placement is NativeFreshLockedChestFamilyPlacementIntent))
                 throw new InvalidDataException("Fresh level requires a non-null supported closed placement variant.");
             if (!ids.Add(placement.EditorId))
                 throw new InvalidDataException("Fresh level editor placement IDs must be unique without regeneration or deduplication.");
@@ -107,6 +113,9 @@ public sealed class NativeFreshLevelDocumentIntent
             if (placement is NativeFreshMobyPlacementIntent moby &&
                 !content.ContainsInteriorXY(moby.X, moby.Y))
                 throw new InvalidDataException("Authored native Moby XY must be strictly inside the active surface union; no body, ground or collision clearance is implied.");
+            if (placement is NativeFreshLockedChestFamilyPlacementIntent family &&
+                (!content.ContainsInteriorXY(family.KeyX, family.KeyY) || !content.ContainsInteriorXY(family.ChestX, family.ChestY)))
+                throw new InvalidDataException("Both authored family anchors must be strictly inside the active surface union; reward destinations, footprints and trajectories are not approved by this check.");
             copy.Add(placement);
         }
         return new(content, copy.AsReadOnly(), schemaVersion);

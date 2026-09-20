@@ -172,6 +172,12 @@ internal sealed partial class NativeFreshDocumentWindow
     private (NativeFreshLevelDocumentSession Session, NativeId65FreshDocumentSnapshot? Source) CaptureAggregateSession()
     {
         NativeFreshLevelDocumentSnapshot target = NativeFreshLevelDocumentStore.Capture(_project);
+        // Neutral persistence can represent families before this UI can render
+        // or edit them. Reject the whole schema, even with no family rows, so
+        // form reconstruction cannot silently downgrade a stored document.
+        if (target.Intent is { SchemaVersion: > 4 })
+            throw new InvalidDataException($"The stored schema-{target.Intent.SchemaVersion} aggregate is a neutral family authoring document. " +
+                "This editor cannot edit or render it yet. Its saved content has not been adopted or changed.");
         // Fork retains this actual saved source at mode entry/reopen. Never silently
         // recapture it in the Fork command after another writer changes the file.
         NativeId65FreshDocumentSnapshot? source = target.Exists ? null : NativeId65FreshDocumentStore.Capture(_project);

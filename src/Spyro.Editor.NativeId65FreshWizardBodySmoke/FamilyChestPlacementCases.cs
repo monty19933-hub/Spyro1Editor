@@ -19,9 +19,9 @@ internal static class FamilyChestPlacementCases
     private static void RewardDestinationFree(Action<bool,string> check)
     {
         var type=typeof(NativeFreshChestRewardDestinationOverrides);
-        check(!type.IsPublic&&type.IsSealed&&type.GetConstructors(BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic)
+        check(type.IsPublic&&type.IsSealed&&type.GetConstructors(BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic)
             .All(c=>c.IsPrivate)&&type.GetProperties(BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic)
-            .All(p=>p.SetMethod==null),"Reward overrides are a closed immutable internal neutral owner, not a public source/export capability.");
+            .All(p=>p.SetMethod==null),"Public reward overrides carry immutable neutral authoring values; the source/placement/export issuers remain internal.");
         check(Enum.GetValues<NativeFreshChestRewardRole>().Select(v=>(int)v).SequenceEqual(new[]{0,1,2,3,4})&&
             Enum.GetNames<NativeFreshChestRewardRole>().SequenceEqual(new[]{"Reward1","Reward2","Reward3","Reward4","Reward5"}),
             "Exactly five explicit semantic D-child roles, not raw scene ordinals or an open integer role.");

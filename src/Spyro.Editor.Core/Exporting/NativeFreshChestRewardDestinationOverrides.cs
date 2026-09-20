@@ -1,6 +1,7 @@
 namespace Spyro.Editor.Core.Exporting;
 
-internal enum NativeFreshChestRewardRole
+/// <summary>Authored semantic child roles, not native row ordinals or source-certified owners.</summary>
+public enum NativeFreshChestRewardRole
 {
     Reward1=0,
     Reward2=1,
@@ -9,21 +10,22 @@ internal enum NativeFreshChestRewardRole
     Reward5=4
 }
 
-internal sealed record NativeFreshChestRewardDestinationOverride(NativeFreshChestRewardRole Role,int X,int Y,int Z);
+/// <summary>Raw authored WORLD destination; Create on the override owner validates it without granting source authority.</summary>
+public sealed record NativeFreshChestRewardDestinationOverride(NativeFreshChestRewardRole Role,int X,int Y,int Z);
 
 /// <summary>
 /// Detached neutral authorship of one to five reward destinations in WORLD
 /// coordinates, not chest-relative offsets or native trajectory evidence.
 /// Only the source-owned placement producer can bind these values to D rows.
 /// </summary>
-internal sealed class NativeFreshChestRewardDestinationOverrides
+public sealed class NativeFreshChestRewardDestinationOverrides
 {
     private NativeFreshChestRewardDestinationOverrides(NativeFreshChestRewardDestinationOverride[] values) =>
         Values=Array.AsReadOnly(values);
 
-    internal IReadOnlyList<NativeFreshChestRewardDestinationOverride> Values{get;}
+    public IReadOnlyList<NativeFreshChestRewardDestinationOverride> Values{get;}
 
-    internal static NativeFreshChestRewardDestinationOverrides Create(IReadOnlyList<NativeFreshChestRewardDestinationOverride> values)
+    public static NativeFreshChestRewardDestinationOverrides Create(IReadOnlyList<NativeFreshChestRewardDestinationOverride> values)
     {
         ArgumentNullException.ThrowIfNull(values);
         int count=values.Count;

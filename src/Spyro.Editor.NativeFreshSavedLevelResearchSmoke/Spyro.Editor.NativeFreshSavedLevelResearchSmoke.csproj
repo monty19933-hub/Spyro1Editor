@@ -13,6 +13,7 @@
     <Compile Include="SourceOwnerCases.cs" /><Compile Include="LeaseOutcomeCases.cs" />
     <Compile Include="ActualAttemptCases.cs" /><Compile Include="MixedSavedCases.cs" />
     <Compile Include="FamilySavedCases.cs" /><Compile Include="SavedFamilyDocumentFixture.cs" />
+    <Compile Include="NeutralFamilyAdmissionCases.cs" />
     <Compile Include="TiledSavedCases.cs" /><Compile Include="SavedTiledDocumentFixture.cs" />
     <Compile Include="TiledMaterialSavedCases.cs" /><Compile Include="SavedTiledMaterialDocumentFixture.cs" />
     <Compile Include="SelectedTiledMaterialSavedCases.cs" />

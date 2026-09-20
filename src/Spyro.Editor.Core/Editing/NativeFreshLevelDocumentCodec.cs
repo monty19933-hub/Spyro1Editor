@@ -5,11 +5,11 @@ using Spyro.Editor.Core.Primitives;
 namespace Spyro.Editor.Core.Editing;
 
 /// <summary>
-/// Strict neutral whole-level schemas1..4. No filesystem, implicit migration, native payload,
+/// Strict neutral whole-level schemas1..5. No filesystem, implicit migration, native payload,
 /// compiler or publisher API. The embedded floor uses the unchanged v1 codec;
 /// its legacy format and its independent16KiB parser bound remain intact.
 /// </summary>
-public static class NativeFreshLevelDocumentCodec
+public static partial class NativeFreshLevelDocumentCodec
 {
     public const int MaximumByteLength = 64 * 1024;
     private const string Kind = "spyro-native-fresh-level";
@@ -35,6 +35,7 @@ public static class NativeFreshLevelDocumentCodec
                 1 => Object(rootElement, "kind", "schema", "base", "placements"),
                 2 or 3 => Object(rootElement, "kind", "schema", "base", "placements", "floorMaterials"),
                 4 => Object(rootElement, "kind", "schema", "surface", "spawn", "skyRgb", "musicTrackId", "placements"),
+                5 => Object(rootElement, "kind", "schema", "content", "placements"),
                 _ => throw new InvalidDataException("Not a supported distinct fresh-level schema.")
             };
             if (String(root["kind"]) != Kind)
@@ -42,30 +43,12 @@ public static class NativeFreshLevelDocumentCodec
             JsonElement rows = root["placements"];
             if (rows.ValueKind != JsonValueKind.Array || rows.GetArrayLength() > NativeFreshLevelDocumentIntent.MaximumPlacements)
                 throw new InvalidDataException("Fresh level placements require an array with at most128 authoring rows.");
-            var @base = version == 4 ? null : NativeId65FreshDocumentCodec.Parse(StrictUtf8.GetBytes(root["base"].GetRawText()));
+            var @base = version is 4 or 5 ? null : NativeId65FreshDocumentCodec.Parse(StrictUtf8.GetBytes(root["base"].GetRawText()));
             var placements = new List<NativeFreshPlacementIntent>(rows.GetArrayLength());
             foreach (var row in rows.EnumerateArray())
-            {
-                if (version >= 3 && row.ValueKind == JsonValueKind.Object && row.TryGetProperty("tag", out var tag) &&
-                    String(tag) == "native-moby")
-                {
-                    var native = Object(row, "id", "tag", "source", "position", "nativeYawByte");
-                    var source = Object(native["source"], "sourceVariant", "sourceWadEntry", "sourceTrueIndex", "expectedNativeClass");
-                    var position = Object(native["position"], "x", "y", "z");
-                    placements.Add(NativeFreshMobyPlacementIntent.Create(String(native["id"]),
-                        NativeFreshRetailMobyReference.Create(String(source["sourceVariant"]), Integer(source["sourceWadEntry"]),
-                            Integer(source["sourceTrueIndex"]), Integer(source["expectedNativeClass"])),
-                        Integer(position["x"]), Integer(position["y"]), Integer(position["z"]), Integer(native["nativeYawByte"])));
-                    continue;
-                }
-                var placement = Object(row, "id", "tag", "origin", "routeEnd");
-                if (String(placement["tag"]) != "wizard-route")
-                    throw new InvalidDataException("Unknown fresh-level placement tag; no opaque payload is retained or discarded.");
-                var origin = Object(placement["origin"], "x", "y", "z");
-                var end = Object(placement["routeEnd"], "x", "y");
-                placements.Add(NativeFreshWizardRouteIntent.Create(String(placement["id"]),
-                    Integer(origin["x"]), Integer(origin["y"]), Integer(origin["z"]), Integer(end["x"]), Integer(end["y"])));
-            }
+                placements.Add(ParsePlacement(row, version));
+            if (version == 5)
+                return ParseFamilyContent(root["content"], placements);
             if (version == 4)
                 return NativeFreshLevelDocumentIntent.CreateTiled(ParseTiledContent(root), placements);
             if (version == 3)
@@ -90,7 +73,9 @@ public static class NativeFreshLevelDocumentCodec
         using (var json = new Utf8JsonWriter(memory))
         {
             json.WriteStartObject(); json.WriteString("kind", Kind); json.WriteNumber("schema", intent.SchemaVersion);
-            if (intent.TiledContent is { } tiled)
+            if (intent.SchemaVersion == 5)
+                WriteFamilyContent(json, intent);
+            else if (intent.TiledContent is { } tiled)
                 WriteTiledContent(json, tiled);
             else
             {
@@ -99,31 +84,9 @@ public static class NativeFreshLevelDocumentCodec
             }
             json.WriteStartArray("placements");
             foreach (var placement in intent.Placements)
-            {
-                if (intent.SchemaVersion >= 3 && placement is NativeFreshMobyPlacementIntent moby)
-                {
-                    json.WriteStartObject(); json.WriteString("id", moby.EditorId); json.WriteString("tag", "native-moby");
-                    json.WriteStartObject("source");
-                    json.WriteString("sourceVariant", moby.Source.SourceVariant);
-                    json.WriteNumber("sourceWadEntry", moby.Source.SourceWadEntry);
-                    json.WriteNumber("sourceTrueIndex", moby.Source.SourceTrueIndex);
-                    json.WriteNumber("expectedNativeClass", moby.Source.ExpectedNativeClass);
-                    json.WriteEndObject(); json.WriteStartObject("position");
-                    json.WriteNumber("x", moby.X); json.WriteNumber("y", moby.Y); json.WriteNumber("z", moby.Z);
-                    json.WriteEndObject(); json.WriteNumber("nativeYawByte", moby.NativeYawByte); json.WriteEndObject();
-                    continue;
-                }
-                if (placement is not NativeFreshWizardRouteIntent wizard)
-                    throw new InvalidDataException("Unsupported fresh-level placement variant.");
-                json.WriteStartObject(); json.WriteString("id", wizard.EditorId); json.WriteString("tag", "wizard-route");
-                json.WriteStartObject("origin");
-                json.WriteNumber("x", wizard.OriginX); json.WriteNumber("y", wizard.OriginY); json.WriteNumber("z", wizard.OriginZ);
-                json.WriteEndObject(); json.WriteStartObject("routeEnd");
-                json.WriteNumber("x", wizard.EndX); json.WriteNumber("y", wizard.EndY);
-                json.WriteEndObject(); json.WriteEndObject();
-            }
+                WritePlacement(json, placement, intent.SchemaVersion);
             json.WriteEndArray();
-            if (intent.FloorMaterials is { } materials)
+            if (intent.SchemaVersion != 5 && intent.FloorMaterials is { } materials)
             {
                 json.WritePropertyName("floorMaterials"); WriteMaterials(json, materials);
             }
@@ -135,12 +98,72 @@ public static class NativeFreshLevelDocumentCodec
         return memory.ToArray();
     }
 
+    private static NativeFreshPlacementIntent ParsePlacement(JsonElement row, int version)
+    {
+        if (version >= 3 && row.ValueKind == JsonValueKind.Object && row.TryGetProperty("tag", out var tag))
+        {
+            if (version == 5 && String(tag) == "locked-chest-family")
+                return ParseFamilyPlacement(row);
+            if (String(tag) == "native-moby")
+            {
+                var native = Object(row, "id", "tag", "source", "position", "nativeYawByte");
+                var source = Object(native["source"], "sourceVariant", "sourceWadEntry", "sourceTrueIndex", "expectedNativeClass");
+                var position = Object(native["position"], "x", "y", "z");
+                return NativeFreshMobyPlacementIntent.Create(String(native["id"]),
+                    NativeFreshRetailMobyReference.Create(String(source["sourceVariant"]), Integer(source["sourceWadEntry"]),
+                        Integer(source["sourceTrueIndex"]), Integer(source["expectedNativeClass"])),
+                    Integer(position["x"]), Integer(position["y"]), Integer(position["z"]), Integer(native["nativeYawByte"]));
+            }
+        }
+        var placement = Object(row, "id", "tag", "origin", "routeEnd");
+        if (String(placement["tag"]) != "wizard-route")
+            throw new InvalidDataException("Unknown fresh-level placement tag; no opaque payload is retained or discarded.");
+        var origin = Object(placement["origin"], "x", "y", "z");
+        var end = Object(placement["routeEnd"], "x", "y");
+        return NativeFreshWizardRouteIntent.Create(String(placement["id"]),
+            Integer(origin["x"]), Integer(origin["y"]), Integer(origin["z"]), Integer(end["x"]), Integer(end["y"]));
+    }
+
+    private static void WritePlacement(Utf8JsonWriter json, NativeFreshPlacementIntent placement, int version)
+    {
+        if (version == 5 && placement is NativeFreshLockedChestFamilyPlacementIntent family)
+        {
+            WriteFamilyPlacement(json, family);
+            return;
+        }
+        if (version >= 3 && placement is NativeFreshMobyPlacementIntent moby)
+        {
+            json.WriteStartObject(); json.WriteString("id", moby.EditorId); json.WriteString("tag", "native-moby");
+            json.WriteStartObject("source");
+            json.WriteString("sourceVariant", moby.Source.SourceVariant);
+            json.WriteNumber("sourceWadEntry", moby.Source.SourceWadEntry);
+            json.WriteNumber("sourceTrueIndex", moby.Source.SourceTrueIndex);
+            json.WriteNumber("expectedNativeClass", moby.Source.ExpectedNativeClass);
+            json.WriteEndObject(); json.WriteStartObject("position");
+            json.WriteNumber("x", moby.X); json.WriteNumber("y", moby.Y); json.WriteNumber("z", moby.Z);
+            json.WriteEndObject(); json.WriteNumber("nativeYawByte", moby.NativeYawByte); json.WriteEndObject();
+            return;
+        }
+        if (placement is not NativeFreshWizardRouteIntent wizard)
+            throw new InvalidDataException("Unsupported fresh-level placement variant.");
+        json.WriteStartObject(); json.WriteString("id", wizard.EditorId); json.WriteString("tag", "wizard-route");
+        json.WriteStartObject("origin");
+        json.WriteNumber("x", wizard.OriginX); json.WriteNumber("y", wizard.OriginY); json.WriteNumber("z", wizard.OriginZ);
+        json.WriteEndObject(); json.WriteStartObject("routeEnd");
+        json.WriteNumber("x", wizard.EndX); json.WriteNumber("y", wizard.EndY);
+        json.WriteEndObject(); json.WriteEndObject();
+    }
+
     private static NativeFreshTiledLevelContent ParseTiledContent(Dictionary<string, JsonElement> root)
     {
         var surface = Object(root["surface"], "layout", "tiles");
         if (String(surface["layout"]) != "ordered-flat-tiles-v1")
             throw new InvalidDataException("Unsupported tiled surface layout.");
-        JsonElement rows = surface["tiles"];
+        return ParseTiledContent(surface["tiles"], root);
+    }
+
+    private static NativeFreshTiledLevelContent ParseTiledContent(JsonElement rows, Dictionary<string, JsonElement> settings)
+    {
         if (rows.ValueKind != JsonValueKind.Array || rows.GetArrayLength() is < 1 or > NativeFreshTiledLevelContent.MaximumTiles)
             throw new InvalidDataException("Tiled surface requires1..255 ordered authoring tiles.");
         List<NativeFreshFlatTileIntent> tiles = [];
@@ -151,14 +174,21 @@ public static class NativeFreshLevelDocumentCodec
                 Integer(tile["z"]), Integer(tile["width"]), Integer(tile["depth"]), Color(tile["floorRgb"]),
                 ParseMaterials(tile["materials"])));
         }
-        var spawn = Object(root["spawn"], "x", "y", "z", "heading");
+        var spawn = Object(settings["spawn"], "x", "y", "z", "heading");
         return NativeFreshTiledLevelContent.Create(tiles, Integer(spawn["x"]), Integer(spawn["y"]),
-            Integer(spawn["z"]), Integer(spawn["heading"]), Color(root["skyRgb"]), Integer(root["musicTrackId"]));
+            Integer(spawn["z"]), Integer(spawn["heading"]), Color(settings["skyRgb"]), Integer(settings["musicTrackId"]));
     }
 
     private static void WriteTiledContent(Utf8JsonWriter json, NativeFreshTiledLevelContent tiled)
     {
         json.WriteStartObject("surface"); json.WriteString("layout", "ordered-flat-tiles-v1");
+        WriteTiles(json, tiled);
+        json.WriteEndObject();
+        WriteTiledSettings(json, tiled);
+    }
+
+    private static void WriteTiles(Utf8JsonWriter json, NativeFreshTiledLevelContent tiled)
+    {
         json.WriteStartArray("tiles");
         foreach (var tile in tiled.Tiles)
         {
@@ -169,7 +199,11 @@ public static class NativeFreshLevelDocumentCodec
             json.WritePropertyName("materials"); WriteMaterials(json, tile.Materials);
             json.WriteEndObject();
         }
-        json.WriteEndArray(); json.WriteEndObject();
+        json.WriteEndArray();
+    }
+
+    private static void WriteTiledSettings(Utf8JsonWriter json, NativeFreshTiledLevelContent tiled)
+    {
         json.WriteStartObject("spawn"); json.WriteNumber("x", tiled.SpawnX); json.WriteNumber("y", tiled.SpawnY);
         json.WriteNumber("z", tiled.SpawnZ); json.WriteNumber("heading", tiled.Heading); json.WriteEndObject();
         WriteColor(json, "skyRgb", tiled.SkyColor); json.WriteNumber("musicTrackId", tiled.MusicTrackId);

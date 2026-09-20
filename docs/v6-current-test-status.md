@@ -103,3 +103,11 @@ See [the R03 runtime record](research/native-fresh-chest-r03-runtime.md).
 This does not yet add chest-family authoring to R06. See
 [destination editing and evidence](research/native-fresh-chest-authored-destinations.md)
 and [the pending saved-document integration plan](research/native-fresh-family-authoring-integration-plan.md).
+
+The next source checkpoint adds neutral schema5 persistence for a complete
+locked-chest family (one editor identity, independent key/chest anchors and
+optional named WORLD reward destinations) alongside legacy or tiled content.
+Save/Reopen, strict parsing and old document compatibility pass343 integrated
+regression steps. Existing UI and native exporters deliberately refuse schema5
+until they can preserve and compile the entire family; this is not a new
+user-facing editor feature yet. See [the schema5 record](research/native-fresh-family-document-schema5.md).

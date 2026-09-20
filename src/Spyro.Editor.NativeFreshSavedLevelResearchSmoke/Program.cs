@@ -27,6 +27,7 @@ try
     await SavedLevelPhysicalApiCases.Free(); await SavedLevelPublicationArgumentCases.Free();
     await LeaseOutcomeCases.Free(); await ActualAttemptCases.Free();
     await MixedSavedCases.Free(); await FamilySavedCases.Free(); await TiledSavedCases.Free(); await TiledMaterialSavedCases.Free();
+    await NeutralFamilyAdmissionCases.Free();
     Console.WriteLine($"NATIVE_FRESH_SAVED_LEVEL_RESEARCH_FREE_OK checks={Checks} refusals={Refusals} originalOpened=false nativeImageWritten=false tinyTransactionInvoked=true");
     if (args.Length != 0)
     {

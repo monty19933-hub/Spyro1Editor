@@ -86,6 +86,17 @@ if (args.Contains("--fresh-material-picker-only", StringComparer.Ordinal))
     return 0;
 }
 
+// Persistence-only family admission; no source paths or native export setup.
+if (args.Contains("--fresh-family-document-admission-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --fresh-family-document-admission-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    string familyArtifacts = Directory.CreateTempSubdirectory("spyro-family-admission-ui-").FullName;
+    FamilyDocumentAdmissionCases.Run(familyArtifacts);
+    Console.WriteLine($"FRESH_FAMILY_DOCUMENT_ADMISSION_ARTIFACTS path={familyArtifacts}");
+    return 0;
+}
+
 // Strict source-free aggregate UI route, before workspace discovery or legacy setup.
 if (args.Contains("--fresh-native-level-ui-only", StringComparer.Ordinal))
 {
@@ -98,6 +109,7 @@ if (args.Contains("--fresh-native-level-ui-only", StringComparer.Ordinal))
     NativeFreshLevelDocumentUiCases.Run(aggregateArtifacts);
     NativeFreshReadOnlySelectionCases.Run(aggregateArtifacts);
     NativeFreshPreviewLayoutCases.Run(aggregateArtifacts);
+    FamilyDocumentAdmissionCases.Run(aggregateArtifacts);
     Console.WriteLine($"FRESH_NATIVE_LEVEL_UI_ARTIFACTS path={aggregateArtifacts}");
     return 0;
 }
