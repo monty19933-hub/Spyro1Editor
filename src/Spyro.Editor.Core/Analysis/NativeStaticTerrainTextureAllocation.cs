@@ -18,14 +18,15 @@ public sealed record NativeStaticTerrainTextureContainedAlias(int MaterialId, st
     int RowByteLength, int RowCount);
 
 /// <summary>
-/// Detached two-record allocator/reencoder. A complete declared upload partition
+/// Detached allocator/reencoder with an unchanged public two-record adapter.
+/// A complete declared upload partition
 /// is required even for zero bytes. Public neutral ownership and source labels
 /// do not establish native source authority. No staging, body or runtime approval.
 /// </summary>
 public sealed class NativeStaticTerrainTextureAllocation
 {
     public const string RelocationPolicyId = "native-canonical-static-terrain-right-half-vram-v1";
-    private const int GpuLength = 0x80000, UploadLength = 0xDE000, MaximumOwners = 65536;
+    private const int GpuLength = 0x80000, UploadLength = 0xDE000, MaximumOwners = 65536, MaximumSelectedRecords = 128;
     private readonly byte[] _upload;
     private NativeStaticTerrainTextureAllocation(byte[] upload, NativeStaticTerrainTextureLayout[] records,
         NativeStaticTerrainTextureAllocationRegion[] regions, NativeStaticTerrainTextureContainedAlias[] aliases,
@@ -58,14 +59,56 @@ public sealed class NativeStaticTerrainTextureAllocation
         if (selected.Length != 2) throw new InvalidDataException("The detached profile requires exactly two complete material records.");
         foreach (var input in selected)
         {
-            if (input.MaterialId is < 0 or > 1 || !Label(input.SourceIdentity) || !Label(input.AddressDomainIdentity) ||
-                input.RelocationPolicy != RelocationPolicyId || input.Record is null || input.Record.Length != 184 ||
-                input.SourceVram is null || input.SourceVram.Length != GpuLength)
+            if (!ValidInput(input, 1))
                 throw new InvalidDataException("Material/source-domain/policy or complete record/GPU byte budget is invalid.");
         }
         if (selected[0].MaterialId == selected[1].MaterialId)
             throw new InvalidDataException("Two material owners must have distinct IDs0 and1.");
         Array.Sort(selected, (a, b) => a.MaterialId.CompareTo(b.MaterialId));
+        return CompileOwned(upload, owners, selected);
+    }
+
+    /// <summary>
+    /// Internal neutral selected-record adapter. This accepts complete bounded
+    /// caller resources, not captured source instances or document admission.
+    /// The legacy public adapter retains its exact-two validation order.
+    /// </summary>
+    internal static NativeStaticTerrainTextureAllocation CompileSelected(ReadOnlySpan<byte> upload,
+        IEnumerable<NativeId65NormalResourceOwner> uploadOwners,
+        IEnumerable<NativeStaticTerrainTextureInput> inputs, int nativeClip)
+    {
+        if (upload.Length != UploadLength || nativeClip != 0x8000)
+            throw new InvalidDataException("Selected allocation requires the completeDE000 upload and exact admitted native clip8000.");
+        // The fixed upload is captured before any caller-owned iterator runs.
+        // Each source is shape-checked and captured at its yield boundary, so
+        // later input/owner enumeration cannot replace an earlier preimage.
+        byte[] before = upload.ToArray();
+        ArgumentNullException.ThrowIfNull(inputs);
+        var captured = new List<NativeStaticTerrainTextureInput>();
+        foreach (var input in inputs)
+        {
+            if (captured.Count == MaximumSelectedRecords || input is null)
+                throw new InvalidDataException("Selected allocation requires at most128 non-null complete material records.");
+            if (!ValidInput(input, MaximumSelectedRecords - 1))
+                throw new InvalidDataException("Material/source-domain/policy or complete record/GPU byte budget is invalid.");
+            captured.Add(input with { Record = input.Record.ToArray(), SourceVram = input.SourceVram.ToArray() });
+        }
+        if (captured.Count == 0)
+            throw new InvalidDataException("Selected allocation requires at least one complete material record.");
+        var selected = captured.ToArray();
+        Array.Sort(selected, (a, b) => a.MaterialId.CompareTo(b.MaterialId));
+        for (int i = 0; i < selected.Length; i++)
+            if (selected[i].MaterialId != i)
+                throw new InvalidDataException("Selected material IDs must be exactly contiguous0..N-1, without gaps or duplicates.");
+        var owners = Snapshot(uploadOwners, MaximumOwners);
+        return CompileOwned(before, owners, selected);
+    }
+
+    // Both adapters use the same exhaustive ownership/address/hash validation,
+    // GPU allocator and complete protected/unallocated/SPU complement check.
+    private static NativeStaticTerrainTextureAllocation CompileOwned(ReadOnlySpan<byte> upload,
+        NativeId65NormalResourceOwner[] owners, NativeStaticTerrainTextureInput[] selected)
+    {
         Array.Sort(owners, (a, b) => a.Offset.CompareTo(b.Offset));
         int cursor = 0;
         foreach (var owner in owners)
@@ -143,6 +186,10 @@ public sealed class NativeStaticTerrainTextureAllocation
         return result.ToArray();
     }
     private static bool Label(string? value) => !string.IsNullOrWhiteSpace(value) && value.Length <= 1024 && !value.Any(char.IsControl);
+    private static bool ValidInput(NativeStaticTerrainTextureInput input, int maximumId) =>
+        input.MaterialId >= 0 && input.MaterialId <= maximumId && Label(input.SourceIdentity) && Label(input.AddressDomainIdentity) &&
+        input.RelocationPolicy == RelocationPolicyId && input.Record is { Length: 184 } &&
+        input.SourceVram is { Length: GpuLength };
     private static string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
     private static uint Word(ReadOnlySpan<byte> bytes, int at) => BinaryPrimitives.ReadUInt32LittleEndian(bytes[at..]);
     private static void Put(Span<byte> bytes, int at, uint value) => BinaryPrimitives.WriteUInt32LittleEndian(bytes[at..], value);
