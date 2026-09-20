@@ -8,7 +8,8 @@ public enum NativeId65NormalResourceProfile
     UntexturedGouraudTwoTriangles,
     DirectLqTwoStaticMaterials,
     UntexturedGouraudFlatTiles,
-    DirectLqTwoStaticMaterialsFlatTiles
+    DirectLqTwoStaticMaterialsFlatTiles,
+    DirectLqSelectedStaticMaterialsFlatTiles
 }
 
 /// <summary>
@@ -96,10 +97,12 @@ internal sealed class NativeId65NormalResourceRevision
             !ReferenceEquals(material.Document, material.SurfaceAncestor.Document) ||
             material.CanonicalDocumentSha256 != material.SurfaceAncestor.DocumentSha256 ||
             !material.CopyCanonicalDocument().AsSpan().SequenceEqual(material.SurfaceAncestor.CopyDocumentBytes()) ||
-            material.MaterialSources.Count != 2 || material.Allocation.Records.Count != 2 || material.NativeClip != 0x8000 ||
+            material.MaterialSources.Count is < 1 or > 128 ||
+            material.Allocation.Records.Count != material.MaterialSources.Count ||
+            material.SourceHandles.Count != material.MaterialSources.Count || material.NativeClip != 0x8000 ||
             material.AdditionalPacketBytesPerPass != 12 * material.OrderedFaceMaterials.Count(slot => slot != 0xFF))
             throw new InvalidDataException("Tiled material revision lost its actual whole-document/static-source/fresh ancestor.");
-        material.RequireAncestry(fresh, material.Document, material.MaterialSources[0], material.MaterialSources[1]);
+        material.RequireSelectedAncestry(fresh, material.Document, material.MaterialSources);
         _upload = material.CopyUploadPayload();
         _data = material.CopyDataComponents();
         _model = material.CopyModelPayload();
@@ -124,7 +127,7 @@ internal sealed class NativeId65NormalResourceRevision
         TiledMaterialAncestor = material;
         TiledSceneAncestor = fresh;
         TextureAncestor = null;
-        ResourceProfile = NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles;
+        ResourceProfile = material.ResourceProfile;
         PlanSha256 = material.PlanSha256;
         UploadSha256 = material.UploadSha256;
         DataSha256 = material.DataSha256;

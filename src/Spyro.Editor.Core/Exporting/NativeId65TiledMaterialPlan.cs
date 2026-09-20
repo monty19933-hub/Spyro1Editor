@@ -7,7 +7,7 @@ namespace Spyro.Editor.Core.Exporting;
 /// <summary>
 /// Source-issued detached material revision of an actual P0/schema4 scene.
 /// The complete original document, geometry and ordered source instances remain
-/// ancestors. This installs two static records and every authored face binding;
+/// ancestors. This installs the complete selected static table and every face binding;
 /// it grants no staging, Body, disc, runtime or publication authority.
 /// </summary>
 internal sealed class NativeId65TiledMaterialPlan
@@ -15,14 +15,14 @@ internal sealed class NativeId65TiledMaterialPlan
     private readonly byte[] _canonical, _upload, _data, _model, _scene;
 
     private NativeId65TiledMaterialPlan(NativeId65FreshSceneBundle fresh,
-        NativeStaticTerrainTextureSource material0, NativeStaticTerrainTextureSource material1, byte[] executable)
+        NativeStaticTerrainTextureSource[] sources, bool exactTwo, byte[] executable)
     {
-        var prepared = RequireInputs(fresh, material0, material1);
+        var prepared = RequireInputs(fresh, sources, exactTwo);
         FreshAncestor = fresh;
         SurfaceAncestor = fresh.TiledSurfaceAncestor!;
         Document = SurfaceAncestor.Document;
-        MaterialSources = Array.AsReadOnly(new[] { material0, material1 });
-        SourceHandles = Array.AsReadOnly(new[] { material0.Handle, material1.Handle });
+        MaterialSources = Array.AsReadOnly(sources.ToArray());
+        SourceHandles = Array.AsReadOnly(sources.Select(s => s.Handle).ToArray());
         OrderedFaceMaterials = Array.AsReadOnly(prepared.OrderedFaceMaterials.ToArray());
         _canonical = prepared.Canonical.ToArray();
         CanonicalDocumentSha256 = Hash(_canonical);
@@ -34,13 +34,15 @@ internal sealed class NativeId65TiledMaterialPlan
         _scene = fresh.CopyScene();
         _model = fresh.CopyModelPayload();
         byte[] upload = fresh.CopyUploadPayload(), data = fresh.CopyDataComponents();
-        Allocation = NativeStaticTerrainTextureAllocation.Compile(upload, fresh.UploadOwners,
-            [Input(material0, 0), Input(material1, 1)], NativeClip);
+        var inputs = sources.Select((source, slot) => Input(source, slot));
+        Allocation = sources.Length == 2
+            ? NativeStaticTerrainTextureAllocation.Compile(upload, fresh.UploadOwners, inputs, NativeClip)
+            : NativeStaticTerrainTextureAllocation.CompileSelected(upload, fresh.UploadOwners, inputs, NativeClip);
         _upload = Allocation.CopyUploadPayload();
         _data = NativeId65TiledMaterialDataLayout.Compose(data, Allocation.Records, OrderedFaceMaterials, NativeClip);
-        if (_data.Length != data.Length + 2 * NativeStaticTerrainTextureLayout.RecordByteLength || _data.Length > 0x1000 ||
+        if (_data.Length != data.Length + sources.Length * NativeStaticTerrainTextureLayout.RecordByteLength || _data.Length > 0x1000 ||
             _upload.Length != upload.Length || _model.Length != 0xF800 || _scene.Length != 0x3000)
-            throw new InvalidDataException("Tiled material revision escaped the complete two-record/data/upload/model/scene allocation.");
+            throw new InvalidDataException("Tiled material revision escaped its complete selected-record/data/upload/model/scene allocation.");
         fresh.SceneLayout.RequireExactScene(_scene);
         if (!_model.AsSpan().SequenceEqual(fresh.CopyModelPayload()))
             throw new InvalidDataException("Tiled material composition cannot substitute the actual model owner.");
@@ -52,7 +54,7 @@ internal sealed class NativeId65TiledMaterialPlan
         AdditionalPacketBytesPerPass = checked(12 * OrderedFaceMaterials.Count(slot => slot != 0xFF));
         PlanSha256 = Hash(JsonSerializer.SerializeToUtf8Bytes(new
         {
-            ProfileId, SourceImageSha256, UpstreamPlanSha256, CanonicalDocumentSha256,
+            ProfileId = InstanceProfileId, SourceImageSha256, UpstreamPlanSha256, CanonicalDocumentSha256,
             SurfaceAncestor.BundleSha256,
             Selections = prepared.Selections.Select(s => new { s.SourceVariant, s.SourceWadEntry, s.TextureId }).ToArray(),
             OrderedFaceMaterials, SourceHandles,
@@ -64,6 +66,11 @@ internal sealed class NativeId65TiledMaterialPlan
     }
 
     internal const string ProfileId = "native-id65-tiled-two-selected-static-materials-source-revision-clean-usa-v1";
+    private const string SelectedProfileId = "native-id65-tiled-selected-static-materials-source-revision-clean-usa-v1";
+    internal string InstanceProfileId => MaterialSources.Count == 2 ? ProfileId : SelectedProfileId;
+    internal NativeId65NormalResourceProfile ResourceProfile => MaterialSources.Count == 2
+        ? NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles
+        : NativeId65NormalResourceProfile.DirectLqSelectedStaticMaterialsFlatTiles;
     internal NativeId65FreshSceneBundle FreshAncestor { get; }
     internal NativeId65TiledSurfaceBundle SurfaceAncestor { get; }
     internal NativeFreshLevelDocumentIntent Document { get; }
@@ -89,10 +96,12 @@ internal sealed class NativeId65TiledMaterialPlan
     internal bool CompleteLevelResourcesProven => false;
     internal bool RuntimeVerified => false;
     internal bool PublicationApproved => false;
-    internal IReadOnlyList<string> PendingOwners { get; } = Array.AsReadOnly(new[]
+    internal IReadOnlyList<string> PendingOwners => Array.AsReadOnly(new[]
     {
         "This is source-bound upload/data composition only; unresolved material geometry and this new revision are not old untextured staging or Body inputs.",
-        "Both complete184-byte source records are retained; clip8000 direct-LQ evidence does not approve HQ/close execution or full-frame GPU demand.",
+        MaterialSources.Count == 2
+            ? "Both complete184-byte source records are retained; clip8000 direct-LQ evidence does not approve HQ/close execution or full-frame GPU demand."
+            : "All complete184-byte source records are retained; clip8000 direct-LQ evidence does not approve HQ/close execution or full-frame GPU demand.",
         "The12 additional packet bytes per textured face are per emitted pass, not a complete GTE/GPU/RAM peak or measured gameplay budget.",
         "Actual staging, Body, disc installation, native gameplay and publication remain separate unissued stages."
     });
@@ -102,11 +111,33 @@ internal sealed class NativeId65TiledMaterialPlan
         NativeStaticTerrainTextureSource material1, CancellationToken token = default)
     {
         token.ThrowIfCancellationRequested();
-        _ = RequireInputs(fresh, material0, material1);
+        ArgumentNullException.ThrowIfNull(fresh);
+        ArgumentNullException.ThrowIfNull(material0);
+        ArgumentNullException.ThrowIfNull(material1);
+        var sources = new[] { material0, material1 };
+        _ = RequireInputs(fresh, sources, exactTwo: true);
         token.ThrowIfCancellationRequested();
         byte[] executable = await NativeId65AuthoredSurfaceConsumers.ReadOriginalExecutableAsync(originalImagePath, token);
         token.ThrowIfCancellationRequested();
-        var result = new NativeId65TiledMaterialPlan(fresh, material0, material1, executable);
+        var result = new NativeId65TiledMaterialPlan(fresh, sources, exactTwo: true, executable);
+        token.ThrowIfCancellationRequested();
+        return result;
+    }
+
+    internal static async Task<NativeId65TiledMaterialPlan> CaptureSelectedAsync(string originalImagePath,
+        NativeId65FreshSceneBundle fresh, IEnumerable<NativeStaticTerrainTextureSource> materials,
+        CancellationToken token = default)
+    {
+        token.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(fresh);
+        // Capture actual immutable source instances before any await. Do not
+        // trust collection Count/CopyTo/indexers or deduplicate by equal hashes.
+        var sources = CaptureSources(materials, token);
+        _ = RequireInputs(fresh, sources, exactTwo: false);
+        token.ThrowIfCancellationRequested();
+        byte[] executable = await NativeId65AuthoredSurfaceConsumers.ReadOriginalExecutableAsync(originalImagePath, token);
+        token.ThrowIfCancellationRequested();
+        var result = new NativeId65TiledMaterialPlan(fresh, sources, exactTwo: false, executable);
         token.ThrowIfCancellationRequested();
         return result;
     }
@@ -114,8 +145,18 @@ internal sealed class NativeId65TiledMaterialPlan
     internal void RequireAncestry(NativeId65FreshSceneBundle fresh, NativeFreshLevelDocumentIntent document,
         NativeStaticTerrainTextureSource material0, NativeStaticTerrainTextureSource material1)
     {
+        if (MaterialSources.Count != 2)
+            throw new InvalidDataException("The old pair ancestry adapter cannot omit selected material instances.");
+        RequireSelectedAncestry(fresh, document, new[] { material0, material1 });
+    }
+
+    internal void RequireSelectedAncestry(NativeId65FreshSceneBundle fresh, NativeFreshLevelDocumentIntent document,
+        IEnumerable<NativeStaticTerrainTextureSource> materials)
+    {
+        var sources = CaptureSources(materials, default);
         if (!ReferenceEquals(fresh, FreshAncestor) || !ReferenceEquals(document, Document) ||
-            !ReferenceEquals(material0, MaterialSources[0]) || !ReferenceEquals(material1, MaterialSources[1]) ||
+            sources.Length != MaterialSources.Count ||
+            sources.Where((source, index) => !ReferenceEquals(source, MaterialSources[index])).Any() ||
             !ReferenceEquals(fresh.TiledSurfaceAncestor, SurfaceAncestor) || !ReferenceEquals(SurfaceAncestor.Document, document))
             throw new InvalidDataException("Tiled material revision requires its actual fresh scene, whole document, surface and ordered source instances, not equal hashes or handles.");
     }
@@ -136,14 +177,13 @@ internal sealed class NativeId65TiledMaterialPlan
 
     private static (byte[] Canonical, NativeFlatTileSurfaceSnapshot Surface,
         NativeFreshRetailTerrainMaterialIntent[] Selections, int[] OrderedFaceMaterials) RequireInputs(
-        NativeId65FreshSceneBundle fresh, NativeStaticTerrainTextureSource material0, NativeStaticTerrainTextureSource material1)
+        NativeId65FreshSceneBundle fresh, NativeStaticTerrainTextureSource[] sources, bool exactTwo)
     {
         ArgumentNullException.ThrowIfNull(fresh);
-        ArgumentNullException.ThrowIfNull(material0);
-        ArgumentNullException.ThrowIfNull(material1);
         var surface = fresh.TiledSurfaceAncestor ??
             throw new InvalidDataException("Tiled material revision requires an actual source-issued tiled scene and whole document.");
-        var prepared = NativeId65TiledSurfaceBundle.PrepareGeometryForMaterials(surface.Document);
+        var prepared = exactTwo ? NativeId65TiledSurfaceBundle.PrepareGeometryForMaterials(surface.Document)
+            : NativeId65TiledSurfaceBundle.PrepareGeometryForSelectedMaterials(surface.Document);
         if (!fresh.SourceCertified || !surface.SourceCertified ||
             fresh.SourceImageSha256 != NativeId65AuthoredSurfaceConsumers.ImageSha256 ||
             surface.SourceImageSha256 != fresh.SourceImageSha256 ||
@@ -151,14 +191,16 @@ internal sealed class NativeId65TiledMaterialPlan
             Hash(prepared.Canonical) != surface.DocumentSha256)
             throw new InvalidDataException("Tiled material geometry lost its actual complete original-source document ancestry.");
         surface.RequireExactBundle(prepared.Surface.CopyBundle());
-        RequireSource(material0, prepared.Selections[0]);
-        RequireSource(material1, prepared.Selections[1]);
+        if (sources.Length != prepared.Selections.Length)
+            throw new InvalidDataException("Tiled material sources must cover every distinct ordered document selection exactly once.");
+        for (int i = 0; i < sources.Length; i++)
+            RequireSource(sources[i], prepared.Selections[i]);
 
         byte[] data = fresh.CopyDataComponents(), upload = fresh.CopyUploadPayload();
         byte[] scene = fresh.CopyScene(), model = fresh.CopyModelPayload();
         var decoded = NativeId65TiledNormalDataLayout.DecodeForFixedBody(data);
         surface.RequireExactBundle(decoded.Surface.CopyBundle());
-        if (data.Length + (long)(2 * NativeStaticTerrainTextureLayout.RecordByteLength) > 0x1000 ||
+        if (data.Length + (long)(sources.Length * NativeStaticTerrainTextureLayout.RecordByteLength) > 0x1000 ||
             upload.Length != 0xDE000 || model.Length != 0xF800 || scene.Length != 0x3000 ||
             Hash(data) != fresh.DataSha256 || Hash(upload) != fresh.UploadSha256 ||
             Hash(scene) != fresh.SceneSha256 || Hash(model) != fresh.ModelSha256 ||
@@ -170,6 +212,24 @@ internal sealed class NativeId65TiledMaterialPlan
         NativeId65ZeroSceneAnimationLists.ValidateCanonicalBytes(scene.AsSpan(0x88, 0x44));
         fresh.ResourceChainAncestor.RequireExactPairedBytes(data, scene.AsSpan(0x88, 0x44));
         return prepared;
+    }
+
+    private static NativeStaticTerrainTextureSource[] CaptureSources(
+        IEnumerable<NativeStaticTerrainTextureSource> materials, CancellationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(materials);
+        var captured = new List<NativeStaticTerrainTextureSource>();
+        foreach (var source in materials)
+        {
+            token.ThrowIfCancellationRequested();
+            if (source is null || captured.Count == 128)
+                throw new InvalidDataException("Selected tiled materials require at most128 non-null actual source instances.");
+            captured.Add(source);
+        }
+        token.ThrowIfCancellationRequested();
+        if (captured.Count == 0)
+            throw new InvalidDataException("Selected tiled materials require at least one actual source instance.");
+        return captured.ToArray();
     }
 
     private static void RequireSource(NativeStaticTerrainTextureSource source, NativeFreshRetailTerrainMaterialIntent selection)

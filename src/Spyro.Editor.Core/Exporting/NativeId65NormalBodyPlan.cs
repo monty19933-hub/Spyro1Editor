@@ -219,7 +219,8 @@ public sealed class NativeId65NormalBodyPlan
                 NativeId65NormalBodyLayout.Compile(upload, data, model, scene, source.CopyAuxiliaryAllocations()),
             NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles =>
                 NativeId65NormalBodyLayout.CompileTiled(upload, data, model, scene, source.CopyAuxiliaryAllocations()),
-            NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles =>
+            NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles or
+                NativeId65NormalResourceProfile.DirectLqSelectedStaticMaterialsFlatTiles =>
                 NativeId65NormalBodyLayout.CompileTiledMaterial(fresh.TiledMaterialAncestor ??
                     throw new InvalidDataException("Tiled material body lost its actual material issuer."), source.CopyAuxiliaryAllocations()),
             _ => throw new InvalidDataException("Unissued normal body profile.")
@@ -305,7 +306,8 @@ public sealed class NativeId65NormalBodyPlan
                 ResourceProfile, ComposedPlanSha256 = PlanSha256,
                 TiledSceneAncestor!.TiledSurfaceAncestor!.DocumentSha256
             }));
-        else if (ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles)
+        else if (ResourceProfile is NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles or
+            NativeId65NormalResourceProfile.DirectLqSelectedStaticMaterialsFlatTiles)
             PlanSha256 = NativeId65NormalResourceSource.Hash(JsonSerializer.SerializeToUtf8Bytes(new
             {
                 Profile = "native-id65-tiled-material-normal-body-direct-LQ-two-sector-data-clean-usa-v1",

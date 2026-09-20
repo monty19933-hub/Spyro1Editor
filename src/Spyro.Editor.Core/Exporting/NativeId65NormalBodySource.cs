@@ -135,7 +135,8 @@ internal sealed class NativeId65NormalBodySource
         if (fresh.ResourceProfile == NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles &&
             (fresh.TiledSceneAncestor == null || !ReferenceEquals(fresh.TiledSceneAncestor, staging.TiledSceneAncestor)))
             throw new InvalidDataException("Tiled body and staging must retain the same actual source-issued document/scene ancestor.");
-        if (fresh.ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles &&
+        if ((fresh.ResourceProfile is NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles or
+            NativeId65NormalResourceProfile.DirectLqSelectedStaticMaterialsFlatTiles) &&
             (fresh.TiledMaterialAncestor == null ||
                 !ReferenceEquals(fresh.TiledMaterialAncestor, staging.TiledMaterialAncestor) ||
                 !ReferenceEquals(fresh.TiledSceneAncestor, fresh.TiledMaterialAncestor.FreshAncestor) ||

@@ -51,6 +51,7 @@ public sealed class NativeId65FreshDiscPlan
     private const string TexturedProfileId = "native-id65-fresh-textured-normal-disc-direct-lq-source-only-usa-v1";
     private const string TiledProfileId = "native-id65-tiled-normal-disc-two-sector-data-source-only-usa-v1";
     private const string TiledMaterialProfileId = "native-id65-tiled-material-normal-disc-two-sector-data-source-only-usa-v1";
+    private const string TiledSelectedMaterialProfileId = "native-id65-tiled-selected-material-normal-disc-two-sector-data-source-only-usa-v1";
     private static readonly DiscLayout Layout = new(2352, 24, 22, 2048);
     private readonly NativeId65FreshDiscSource _source;
     private readonly NativeId65FreshDiscGeometry _geometry;
@@ -71,6 +72,7 @@ public sealed class NativeId65FreshDiscPlan
             NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials => TexturedProfileId,
             NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles => TiledProfileId,
             NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles => TiledMaterialProfileId,
+            NativeId65NormalResourceProfile.DirectLqSelectedStaticMaterialsFlatTiles => TiledSelectedMaterialProfileId,
             _ => throw new InvalidDataException("Unissued fresh-disc resource profile.")
         };
         _geometry = NativeId65FreshDiscGeometry.Compile(bodyBytes.Length);
@@ -202,10 +204,13 @@ public sealed class NativeId65FreshDiscPlan
                 "Two complete static LQ/HQ records are relocated, but consumer evidence remains direct-LQ with clip8000. HQ/close execution, all-frame packet peak and native appearance are not approved.",
                 "This distinct textured Disc does not add material persistence, a saved-document compilation route, normal export, or publication authority."
             }).ToArray());
-        else if (body.ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles)
+        else if (body.ResourceProfile is NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles or
+            NativeId65NormalResourceProfile.DirectLqSelectedStaticMaterialsFlatTiles)
             PendingOwners = Array.AsReadOnly(PendingOwners.Concat(new[]
             {
-                "This exact P0 tiled material document uses two static records and direct-LQ clip8000; HQ/close rendering and full-frame resource demand remain unapproved.",
+                body.ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles
+                    ? "This exact P0 tiled material document uses two static records and direct-LQ clip8000; HQ/close rendering and full-frame resource demand remain unapproved."
+                    : "This exact P0 tiled material document uses its complete selected static table and direct-LQ clip8000; HQ/close rendering and full-frame resource demand remain unapproved.",
                 "The actual material revision reaches this byte plan, but saved candidate publication, UI export, native rendering/collision and gameplay still require separate validation."
             }).ToArray());
 
@@ -306,14 +311,13 @@ public sealed class NativeId65FreshDiscPlan
     {
         ArgumentNullException.ThrowIfNull(body);
         var material = body.TiledMaterialAncestor;
-        if (body.ResourceProfile != NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles ||
-            material == null || !ReferenceEquals(body.TiledSceneAncestor, material.FreshAncestor) ||
+        if (material == null || body.ResourceProfile != material.ResourceProfile ||
+            !ReferenceEquals(body.TiledSceneAncestor, material.FreshAncestor) ||
             body.TextureAncestor != null || body.UpstreamPlanSha256 != material.PlanSha256 ||
             body.DataSectorByteLength != 0x1000 || body.Descriptors[0].ByteLength != 0xDE000 ||
             body.Descriptors[2].ByteLength != 0xF800 || body.Descriptors[3].ByteLength != 0x3000)
             throw new InvalidDataException("Material tiled disc requires its actual source-issued material, scene and fixed native body owners.");
-        material.RequireAncestry(body.TiledSceneAncestor!, material.Document,
-            material.MaterialSources[0], material.MaterialSources[1]);
+        material.RequireSelectedAncestry(body.TiledSceneAncestor!, material.Document, material.MaterialSources);
         byte[] data = material.CopyDataComponents();
         if (data.Length != body.DataUsedByteLength || data.Length > body.DataSectorByteLength)
             throw new InvalidDataException("Material tiled body must use the final material data endpoint, not intermediate untextured geometry.");

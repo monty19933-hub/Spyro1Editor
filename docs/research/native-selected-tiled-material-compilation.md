@@ -78,5 +78,21 @@ field order, allocator, plan/receipt identity and pending-owner wording. Whole
 source objects, not equal hashes, authorize each step. UI and saved-candidate
 admission remain unchanged while this compilation slice is verified.
 
-Production comparison, regressions, saved publication and runtime for N1/N3
-are pending at this reference-freeze checkpoint.
+## Production comparison after reference freeze
+
+Independent review found no actionable defect in the eight Core files. Build407
+has zero warnings/errors. Free408 passes 88 checks; source409 passes all five
+frozen upload/data/body/image references and full shared forward/inverse checks,
+including changed/unchanged raw-sector corruption. The run totals 10222 checks,
+mostly distinct complete resource-owner/source-row and complement comparisons.
+Mutation probes target structural boundaries rather than repeating one case per
+data byte. Every source index, extra/truncated lists, equal-handle substitutions,
+hostile enumeration/disposal/mutation, cancellation and sibling staging are
+covered. The original source is revalidated at final exit; no image is written.
+
+The same selected adapter at N2 has identical material, staging, Body and Disc
+plan hashes to the old adapter, plus unchanged frozen full Body and image bytes.
+Preserved free controls410/411 pass 41/33 checks. Source-free selected and chest
+behavior modes are added to the existing regression runner with distinct log
+names. Full regression, saved publication and native runtime for N1/N3 remain
+separate pending gates at this compilation checkpoint.

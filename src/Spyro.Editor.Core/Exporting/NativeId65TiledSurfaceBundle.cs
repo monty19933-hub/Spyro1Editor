@@ -72,6 +72,18 @@ internal sealed class NativeId65TiledSurfaceBundle
         return new(document, prepared.Canonical, prepared.Surface, executable);
     }
 
+    internal static async Task<NativeId65TiledSurfaceBundle> CaptureGeometryForSelectedMaterialsAsync(string originalImagePath,
+        NativeFreshLevelDocumentIntent document, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var prepared = PrepareGeometryForSelectedMaterials(document);
+        cancellationToken.ThrowIfCancellationRequested();
+        byte[] executable = await NativeId65AuthoredSurfaceConsumers.ReadOriginalExecutableAsync(
+            originalImagePath, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        return new(document, prepared.Canonical, prepared.Surface, executable);
+    }
+
     // Neutral preparation can establish bounds before I/O. It cannot create a
     // source issuer or promote caller bytes/hashes to the private constructor.
     internal static (byte[] Canonical, NativeFlatTileSurfaceSnapshot Surface) PrepareDocument(
@@ -90,7 +102,17 @@ internal sealed class NativeId65TiledSurfaceBundle
     // by the private material issuer before allocating any texture resources.
     internal static (byte[] Canonical, NativeFlatTileSurfaceSnapshot Surface,
         NativeFreshRetailTerrainMaterialIntent[] Selections, int[] OrderedFaceMaterials) PrepareGeometryForMaterials(
-        NativeFreshLevelDocumentIntent document)
+        NativeFreshLevelDocumentIntent document) => PrepareMaterialGeometry(document, exactTwo: true);
+
+    // The old adapter is also used by UI readiness. Keep it closed until the
+    // selected-material compilation and saved publication chain are verified.
+    internal static (byte[] Canonical, NativeFlatTileSurfaceSnapshot Surface,
+        NativeFreshRetailTerrainMaterialIntent[] Selections, int[] OrderedFaceMaterials) PrepareGeometryForSelectedMaterials(
+        NativeFreshLevelDocumentIntent document) => PrepareMaterialGeometry(document, exactTwo: false);
+
+    private static (byte[] Canonical, NativeFlatTileSurfaceSnapshot Surface,
+        NativeFreshRetailTerrainMaterialIntent[] Selections, int[] OrderedFaceMaterials) PrepareMaterialGeometry(
+        NativeFreshLevelDocumentIntent document, bool exactTwo)
     {
         var content = RequireGeometryDocument(document);
         var selections = new List<NativeFreshRetailTerrainMaterialIntent>();
@@ -110,20 +132,26 @@ internal sealed class NativeId65TiledSurfaceBundle
                 var key = (retail.SourceVariant, retail.SourceWadEntry, retail.TextureId);
                 if (!slots.TryGetValue(key, out int slot))
                 {
-                    if (selections.Count == 2)
-                        throw new InvalidDataException("Tiled material geometry supports exactly two distinct static selections, not a truncated material table.");
+                    if (selections.Count == (exactTwo ? 2 : 128))
+                        throw new InvalidDataException(exactTwo
+                            ? "Tiled material geometry supports exactly two distinct static selections, not a truncated material table."
+                            : "Tiled material geometry supports at most128 distinct static selections; no source is omitted.");
                     slot = selections.Count;
                     slots.Add(key, slot);
                     selections.Add(retail);
                 }
                 faces.Add(slot);
             }
-        if (selections.Count != 2)
-            throw new InvalidDataException("Tiled material geometry requires exactly two distinct material selections.");
+        if (exactTwo ? selections.Count != 2 : selections.Count == 0)
+            throw new InvalidDataException(exactTwo
+                ? "Tiled material geometry requires exactly two distinct material selections."
+                : "Selected tiled material geometry requires at least one retail selection; all-Base documents use the existing Base route.");
         var prepared = PrepareGeometry(document, content);
         if (prepared.Surface.CopyBundle().Length + (long)NativeId65NormalComponentLayout.NonSurfaceByteLength +
-            2 * NativeStaticTerrainTextureLayout.RecordByteLength > 0x1000)
-            throw new InvalidDataException("Complete tiled material geometry and both records exceed1000; no tile, face or retained tail is omitted.");
+            selections.Count * NativeStaticTerrainTextureLayout.RecordByteLength > 0x1000)
+            throw new InvalidDataException(exactTwo
+                ? "Complete tiled material geometry and both records exceed1000; no tile, face or retained tail is omitted."
+                : "Complete tiled material geometry and all selected records exceed1000; no tile, face or retained tail is omitted.");
         return (prepared.Canonical, prepared.Surface, selections.ToArray(), faces.ToArray());
     }
 

@@ -108,7 +108,8 @@ public sealed class NativeId65NormalUploadStaging
         {
             NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles => Array.AsReadOnly(source.Evidence.ToArray()),
             NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials or NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles or
-                NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles =>
+                NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles or
+                NativeId65NormalResourceProfile.DirectLqSelectedStaticMaterialsFlatTiles =>
                 Array.AsReadOnly(source.Evidence.Concat(bundle.Evidence).ToArray()),
             _ => throw new InvalidDataException("Unissued normal staging profile.")
         };
@@ -137,7 +138,8 @@ public sealed class NativeId65NormalUploadStaging
                 ResourceProfile, ComposedPlanSha256 = PlanSha256,
                 TiledSceneAncestor!.TiledSurfaceAncestor!.DocumentSha256
             }));
-        else if (ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles)
+        else if (ResourceProfile is NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles or
+            NativeId65NormalResourceProfile.DirectLqSelectedStaticMaterialsFlatTiles)
             PlanSha256 = NativeId65NormalResourceSource.Hash(JsonSerializer.SerializeToUtf8Bytes(new
             {
                 Profile = "native-id65-tiled-material-normal-upload-direct-LQ-two-sector-data-clean-usa-v1",

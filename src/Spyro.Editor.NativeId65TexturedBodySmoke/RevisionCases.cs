@@ -42,9 +42,10 @@ internal static class RevisionCases
         Check(Enum.GetValues<NativeId65NormalResourceProfile>().SequenceEqual(new[]
         { NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles, NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials,
             NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles,
-            NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles }) &&
-            Enum.GetValues<NativeId65NormalResourceProfile>().Select(value => (int)value).SequenceEqual(new[] { 0, 1, 2, 3 }),
-            "The discriminator preserves old numeric profiles and appends the separately issued tiled-material variant.");
+            NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles,
+            NativeId65NormalResourceProfile.DirectLqSelectedStaticMaterialsFlatTiles }) &&
+            Enum.GetValues<NativeId65NormalResourceProfile>().Select(value => (int)value).SequenceEqual(new[] { 0, 1, 2, 3, 4 }),
+            "The discriminator preserves all four old numeric profiles and appends only the source-issued selected-table variant.");
         Reject(() => NativeId65NormalUploadStaging.CaptureTexturedAsync("must-not-open.bin", null!).GetAwaiter().GetResult(),
             "Missing exact texture revision refuses before source I/O; FileNotFound cannot satisfy this test.");
         Reject(() => NativeId65NormalBodyPlan.CaptureTexturedAsync("must-not-open.bin", null!, null!).GetAwaiter().GetResult(),

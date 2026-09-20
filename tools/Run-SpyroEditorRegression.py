@@ -113,6 +113,8 @@ CASE_ARGUMENTS = {
 # Additional modes retain their own arguments/markers without replacing the
 # established mode of the same executable. Project builds remain deduplicated.
 ADDITIONAL_CORE_CASES = (
+    ("TownSquareLockedChestSmoke", "LOCKED_CHEST_BEHAVIOR_FREE_OK",
+     ["--behavior-free"]),
     ("UiSmoke", "FREE_FLIGHT_UI_OK",
      ["--free-flight-ui-only"]),
     ("Id65AuthoringMobyDependencyBundleCompilerSmoke", "NATIVE_ROUTE_SURFACE_SMOKE_OK",
@@ -127,6 +129,8 @@ ADDITIONAL_CORE_CASES = (
      ["--tiled-material-free"]),
     ("NativeId65FreshDocumentSmoke", "NATIVE_ID65_TILED_MATERIAL_COMPILATION_FREE_OK",
      ["--tiled-material-compilation-free"]),
+    ("NativeId65FreshDocumentSmoke", "NATIVE_ID65_SELECTED_TILED_MATERIAL_FREE_OK",
+     ["--selected-tiled-material-free"]),
     ("UiSmoke", "FRESH_LEVEL_DOCUMENT_SESSION_OK",
      ["--fresh-native-level-session-only"]),
     ("UiSmoke", "FRESH_NATIVE_LEVEL_UI_OK",
@@ -403,6 +407,7 @@ def main():
             print(f"SKIP {project.stem}: build failed", flush=True)
             continue
         suffix = {
+            ("--behavior-free",): "-behavior",
             ("--free-flight-ui-only",): "-free-flight-ui",
             ("--source-free-route-surfaces",): "-route-surfaces",
             ("--variable-data-free",): "-variable-data",
@@ -410,6 +415,7 @@ def main():
             ("--tiled-compilation-free",): "-tiled-compilation",
             ("--tiled-material-free",): "-tiled-material",
             ("--tiled-material-compilation-free",): "-tiled-material-compilation",
+            ("--selected-tiled-material-free",): "-selected-tiled-material",
             ("--fresh-native-level-session-only",): "-fresh-level-session",
             ("--fresh-native-level-ui-only",): "-fresh-level-ui",
             ("--fresh-material-picker-only",): "-fresh-material-picker",
