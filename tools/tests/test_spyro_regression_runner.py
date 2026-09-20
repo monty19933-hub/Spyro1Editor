@@ -1,5 +1,7 @@
 """Source-free process ownership tests; no .NET builds or disc images."""
 
+import ast
+import hashlib
 import importlib.util
 import contextlib
 import io
@@ -79,6 +81,71 @@ class OwnedCommandTests(unittest.TestCase):
                 self.assertFalse(sentinel.exists(), "Timed-out descendant wrote after the runner returned")
                 self.assertFalse(process_is_running(parent_pid), "Timed-out parent survived")
                 self.assertFalse(process_is_running(child_pid), "Timed-out child survived")
+
+
+class SourceOracleHelperPinTests(unittest.TestCase):
+    LOADER = "src/Spyro.Editor.NativeId65FreshDocumentSmoke/source_variable_native_loader_oracle.py"
+    RESOURCE = "src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_resource_oracle.py"
+    HELPER_DICTIONARIES = (
+        "src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_collider_lifetime_oracle.py",
+        RESOURCE,
+    )
+    HELPER_BINDINGS = (
+        ("src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_deferred_damage_oracle.py",
+         "MACHINE_PATH", "MACHINE_SHA", LOADER),
+        ("src/Spyro.Editor.NativeId65FreshWizardSceneSmoke/source_p1_scene_oracle.py",
+         "HELPER", "HELPER_SHA", LOADER),
+        ("src/Spyro.Editor.NativeId65FreshWizardFallbackResourceSmoke/source_fallback_resource_oracle.py",
+         "RESOURCE", "RESOURCE_SHA", RESOURCE),
+        ("src/Spyro.Editor.NativeId65FreshWizardStagingSmoke/source_fresh_wizard_staging_oracle.py",
+         "RESOURCE_HELPER", "RESOURCE_SHA", RESOURCE),
+    )
+
+    def literal_assignment(self, tree, name):
+        assignments = [node for node in tree.body if isinstance(node, ast.Assign)
+                       and any(isinstance(target, ast.Name) and target.id == name for target in node.targets)]
+        self.assertEqual(1, len(assignments), f"Expected one top-level literal {name} assignment")
+        self.assertEqual(1, len(assignments[0].targets), f"Expected a standalone {name} binding")
+        try:
+            return ast.literal_eval(assignments[0].value)
+        except (ValueError, TypeError, SyntaxError) as error:
+            self.fail(f"{name} must remain a static literal: {error}")
+
+    def assert_source_hash(self, relative, expected):
+        self.assertIsInstance(relative, str)
+        self.assertIsInstance(expected, str)
+        self.assertRegex(expected, r"\A[0-9a-f]{64}\Z")
+        path = Path(relative)
+        self.assertFalse(path.is_absolute(), "Helper must be repository-relative")
+        self.assertNotIn("..", path.parts, "Helper cannot escape the source tree")
+        self.assertEqual("src", path.parts[0])
+        self.assertIn(path.suffix, (".py", ".cs"), "Only code files may be hashed")
+        source = (RUNNER.ROOT / path).resolve()
+        self.assertTrue(source.is_relative_to((RUNNER.ROOT / "src").resolve()),
+                        "Helper must resolve inside the source tree")
+        self.assertEqual(expected, hashlib.sha256(source.read_bytes()).hexdigest(),
+                         f"Stale source helper pin: {relative}")
+
+    def test_literal_helper_dictionaries_match_complete_source_hashes(self):
+        # Parse declarations only: never import an oracle, call its helpers, or
+        # resolve/read a disc image. Include every pin in both dictionaries.
+        for relative in self.HELPER_DICTIONARIES:
+            with self.subTest(oracle=relative):
+                tree = ast.parse((RUNNER.ROOT / relative).read_text(), filename=relative)
+                helpers = self.literal_assignment(tree, "HELPERS")
+                self.assertIsInstance(helpers, dict)
+                self.assertIn(self.LOADER, helpers, "Native loader pin must remain present")
+                for helper, expected in helpers.items():
+                    with self.subTest(helper=helper):
+                        self.assert_source_hash(helper, expected)
+
+    def test_named_helper_path_hash_bindings_match_complete_source_hashes(self):
+        for relative, path_name, hash_name, expected_path in self.HELPER_BINDINGS:
+            with self.subTest(oracle=relative, binding=path_name):
+                tree = ast.parse((RUNNER.ROOT / relative).read_text(), filename=relative)
+                helper = self.literal_assignment(tree, path_name)
+                self.assertEqual(expected_path, helper, "Pinned helper identity must remain exact")
+                self.assert_source_hash(helper, self.literal_assignment(tree, hash_name))
 
 
 class SourcePythonOracleTests(unittest.TestCase):
@@ -514,7 +581,8 @@ class RunnerOptionsTests(unittest.TestCase):
         self.assertEqual([(name, marker, [flag]),
                           (name, "NATIVE_ID65_TILED_RESOURCE_FREE_OK", ["--tiled-resource-free"]),
                           (name, "NATIVE_ID65_TILED_COMPILATION_FREE_OK", ["--tiled-compilation-free"]),
-                          (name, "NATIVE_ID65_TILED_MATERIAL_FREE_OK", ["--tiled-material-free"])],
+                          (name, "NATIVE_ID65_TILED_MATERIAL_FREE_OK", ["--tiled-material-free"]),
+                          (name, "NATIVE_ID65_TILED_MATERIAL_COMPILATION_FREE_OK", ["--tiled-material-compilation-free"])],
                          [row for row in RUNNER.ADDITIONAL_CORE_CASES if row[0] == name])
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS, "Original no-argument document grammar remains a distinct test")
         self.assertFalse(any(row[0] == name for row in RUNNER.SOURCE_QA_CASES))
@@ -527,15 +595,17 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor." + name + "/" in line]
-        self.assertEqual(5, len(lines))
+        self.assertEqual(6, len(lines))
         self.assertTrue(any(flag + " | " + marker in line for line in lines))
         self.assertTrue(any("--tiled-resource-free | NATIVE_ID65_TILED_RESOURCE_FREE_OK" in line for line in lines))
         self.assertTrue(any("--tiled-compilation-free | NATIVE_ID65_TILED_COMPILATION_FREE_OK" in line for line in lines))
         self.assertTrue(any("--tiled-material-free | NATIVE_ID65_TILED_MATERIAL_FREE_OK" in line for line in lines))
+        self.assertTrue(any("--tiled-material-compilation-free | NATIVE_ID65_TILED_MATERIAL_COMPILATION_FREE_OK" in line for line in lines))
         self.assertFalse(any("--variable-data-source" in line or "--variable-data-red" in line for line in lines))
         self.assertFalse(any("--tiled-resource-source" in line for line in lines))
         self.assertFalse(any("--tiled-compilation-source" in line for line in lines))
         self.assertFalse(any("--tiled-material-source" in line for line in lines))
+        self.assertFalse(any("--tiled-material-compilation-source" in line for line in lines))
 
     def test_variable_data_marker_and_result_suffix_preserve_old_mode_and_single_build(self):
         self.assert_additional_fresh_case("NATIVE_ID65_VARIABLE_DATA_FREE_OK", "--variable-data-free", "-variable-data")
@@ -548,6 +618,9 @@ class RunnerOptionsTests(unittest.TestCase):
 
     def test_tiled_material_marker_and_result_suffix_preserve_old_mode_and_single_build(self):
         self.assert_additional_fresh_case("NATIVE_ID65_TILED_MATERIAL_FREE_OK", "--tiled-material-free", "-tiled-material")
+
+    def test_tiled_material_compilation_marker_and_result_suffix_preserve_old_mode_and_single_build(self):
+        self.assert_additional_fresh_case("NATIVE_ID65_TILED_MATERIAL_COMPILATION_FREE_OK", "--tiled-material-compilation-free", "-tiled-material-compilation")
 
     def assert_additional_fresh_case(self, marker, flag, suffix):
         name, old_marker = "NativeId65FreshDocumentSmoke", "NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK"

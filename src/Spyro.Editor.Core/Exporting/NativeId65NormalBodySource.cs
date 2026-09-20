@@ -135,6 +135,12 @@ internal sealed class NativeId65NormalBodySource
         if (fresh.ResourceProfile == NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles &&
             (fresh.TiledSceneAncestor == null || !ReferenceEquals(fresh.TiledSceneAncestor, staging.TiledSceneAncestor)))
             throw new InvalidDataException("Tiled body and staging must retain the same actual source-issued document/scene ancestor.");
+        if (fresh.ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles &&
+            (fresh.TiledMaterialAncestor == null ||
+                !ReferenceEquals(fresh.TiledMaterialAncestor, staging.TiledMaterialAncestor) ||
+                !ReferenceEquals(fresh.TiledSceneAncestor, fresh.TiledMaterialAncestor.FreshAncestor) ||
+                !ReferenceEquals(fresh.TiledSceneAncestor, staging.TiledSceneAncestor)))
+            throw new InvalidDataException("Tiled material body and staging must retain the same actual material and fresh scene instances, not equal hashes.");
     }
 
     internal static NativeId65DetachedEngineInitializer ValidateCapturedBytes(ReadOnlySpan<byte> executable,

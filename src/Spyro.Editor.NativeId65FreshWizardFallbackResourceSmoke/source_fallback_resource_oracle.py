@@ -19,7 +19,7 @@ import sys
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 RESOURCE = "src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_resource_oracle.py"
-RESOURCE_SHA = "3f34505e2058a16bf2eb26751c0d5cb27dc48965e6d5d6b648654f34a50cdc6f"
+RESOURCE_SHA = "2767ddf79a33e3b97a972d6650e1ee42575c24849753b011142ec434145ea57d"
 PACKAGES = {
     0x0E: (0x1C8D04, 0x7EC, "ca65a14da356546aa00e308319e637809c87c9de8f0901b353de9b377a4a4a62"),
     0x0F: (0x1C94F0, 0x78C, "4e1dbb926be5b833e1fb314a154de05f9dd104c5a2148713b2a9e9e9094613f1"),

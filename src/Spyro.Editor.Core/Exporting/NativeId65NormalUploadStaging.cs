@@ -102,11 +102,13 @@ public sealed class NativeId65NormalUploadStaging
         _layout = NativeId65NormalUploadTransferLayout.Compile(upload);
         ResourceProfile = bundle.ResourceProfile;
         TiledSceneAncestor = bundle.TiledSceneAncestor;
+        TiledMaterialAncestor = bundle.TiledMaterialAncestor;
         UpstreamPlanSha256 = bundle.PlanSha256;
         Evidence = ResourceProfile switch
         {
             NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles => Array.AsReadOnly(source.Evidence.ToArray()),
-            NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials or NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles =>
+            NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials or NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles or
+                NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles =>
                 Array.AsReadOnly(source.Evidence.Concat(bundle.Evidence).ToArray()),
             _ => throw new InvalidDataException("Unissued normal staging profile.")
         };
@@ -135,11 +137,19 @@ public sealed class NativeId65NormalUploadStaging
                 ResourceProfile, ComposedPlanSha256 = PlanSha256,
                 TiledSceneAncestor!.TiledSurfaceAncestor!.DocumentSha256
             }));
+        else if (ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles)
+            PlanSha256 = NativeId65NormalResourceSource.Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                Profile = "native-id65-tiled-material-normal-upload-direct-LQ-two-sector-data-clean-usa-v1",
+                ResourceProfile, ComposedPlanSha256 = PlanSha256,
+                TiledMaterialAncestor!.CanonicalDocumentSha256, bundle.SourceHandles, bundle.TextureEvidence
+            }));
     }
 
     public const string ProfileId = "native-id65-normal-upload-transfer-source-clean-usa-v1";
     public NativeId65NormalResourceProfile ResourceProfile { get; }
     internal NativeId65FreshSceneBundle? TiledSceneAncestor { get; }
+    internal NativeId65TiledMaterialPlan? TiledMaterialAncestor { get; }
     public string SourceImageSha256 => NativeId65EngineProfileContract.OriginalImageSha256;
     public string UpstreamPlanSha256 { get; }
     public string PairedUploadSha256 => _layout.PairedUploadSha256;
@@ -189,6 +199,13 @@ public sealed class NativeId65NormalUploadStaging
     internal static Task<NativeId65NormalUploadStaging> CaptureTiledAsync(string originalImagePath,
         NativeId65FreshSceneBundle issuedBundle, CancellationToken cancellationToken = default) =>
         CaptureRevisionAsync(originalImagePath, NativeId65NormalResourceRevision.FromTiled(issuedBundle), cancellationToken);
+
+    internal static Task<NativeId65NormalUploadStaging> CaptureTiledMaterialsAsync(string originalImagePath,
+        NativeId65TiledMaterialPlan issuedMaterial, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return CaptureRevisionAsync(originalImagePath, NativeId65NormalResourceRevision.FromTiledMaterials(issuedMaterial), cancellationToken);
+    }
 
     private static async Task<NativeId65NormalUploadStaging> CaptureRevisionAsync(string originalImagePath,
         NativeId65NormalResourceRevision revision, CancellationToken cancellationToken)

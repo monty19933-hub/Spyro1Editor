@@ -18,7 +18,7 @@ import sys
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 RESOURCE_HELPER = "src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_resource_oracle.py"
-RESOURCE_SHA = "3f34505e2058a16bf2eb26751c0d5cb27dc48965e6d5d6b648654f34a50cdc6f"
+RESOURCE_SHA = "2767ddf79a33e3b97a972d6650e1ee42575c24849753b011142ec434145ea57d"
 SPANS = (
     ("source-s0-copy-global-address", 0x80015784, 8, "15d44e624b77e93218f097ced75d8a415830725b99a3b55ffd74fe2ce3e25801"),
     ("phase-increment-bank-request", 0x800157B0, 0x84, "385084ac7101e2882db5be60e3b25a524b8f1a24f8ac14923808982cad537f4b"),

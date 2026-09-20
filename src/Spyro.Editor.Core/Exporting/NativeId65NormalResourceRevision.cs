@@ -7,7 +7,8 @@ public enum NativeId65NormalResourceProfile
 {
     UntexturedGouraudTwoTriangles,
     DirectLqTwoStaticMaterials,
-    UntexturedGouraudFlatTiles
+    UntexturedGouraudFlatTiles,
+    DirectLqTwoStaticMaterialsFlatTiles
 }
 
 /// <summary>
@@ -82,6 +83,61 @@ internal sealed class NativeId65NormalResourceRevision
             new NativeId65EngineEvidence(e.Id, "EXE", e.ExecutableFileOffset, e.ByteLength, e.Sha256))).ToArray());
     }
 
+    // A separate closed arm preserves every old constructor/profile decision.
+    // Only this privately issued material plan can supply material-bearing
+    // tiled data; neither a profile enum nor equal-looking byte buffers can.
+    private NativeId65NormalResourceRevision(NativeId65TiledMaterialPlan material)
+    {
+        var fresh = material.FreshAncestor;
+        if (!material.SourceCertified || !material.DestinationAllocationProven || !fresh.SourceCertified ||
+            material.SourceImageSha256 != NativeId65EngineProfileContract.OriginalImageSha256 ||
+            fresh.SourceImageSha256 != material.SourceImageSha256 || material.UpstreamPlanSha256 != fresh.PlanSha256 ||
+            !ReferenceEquals(material.SurfaceAncestor, fresh.TiledSurfaceAncestor) ||
+            !ReferenceEquals(material.Document, material.SurfaceAncestor.Document) ||
+            material.CanonicalDocumentSha256 != material.SurfaceAncestor.DocumentSha256 ||
+            !material.CopyCanonicalDocument().AsSpan().SequenceEqual(material.SurfaceAncestor.CopyDocumentBytes()) ||
+            material.MaterialSources.Count != 2 || material.Allocation.Records.Count != 2 || material.NativeClip != 0x8000 ||
+            material.AdditionalPacketBytesPerPass != 12 * material.OrderedFaceMaterials.Count(slot => slot != 0xFF))
+            throw new InvalidDataException("Tiled material revision lost its actual whole-document/static-source/fresh ancestor.");
+        material.RequireAncestry(fresh, material.Document, material.MaterialSources[0], material.MaterialSources[1]);
+        _upload = material.CopyUploadPayload();
+        _data = material.CopyDataComponents();
+        _model = material.CopyModelPayload();
+        _scene = material.CopyScene();
+        // Replay the existing strict composer against the actual prior chain.
+        // This proves the complete final used end without widening an old
+        // untextured decoder or treating BC8/A38/<=1000 alone as byte grammar.
+        byte[] composed = NativeId65TiledMaterialDataLayout.Compose(fresh.CopyDataComponents(),
+            material.Allocation.Records, material.OrderedFaceMaterials, material.NativeClip);
+        material.RequireExactOutputs(_upload, composed, _model, _scene);
+        material.RequireExactOutputs(_upload, _data, _model, _scene);
+        if (!_data.AsSpan().SequenceEqual(composed) || _data.Length > 0x1000 ||
+            _upload.Length != 0xDE000 || _model.Length != 0xF800 || _scene.Length != 0x3000 ||
+            NativeId65NormalResourceSource.Hash(_upload) != material.UploadSha256 ||
+            NativeId65NormalResourceSource.Hash(_data) != material.DataSha256 ||
+            NativeId65NormalResourceSource.Hash(_model) != material.ModelSha256 ||
+            NativeId65NormalResourceSource.Hash(_scene) != material.SceneSha256 ||
+            !_model.AsSpan().SequenceEqual(fresh.CopyModelPayload()) ||
+            fresh.SceneLayout.NativeNominalCapacity != 16 || fresh.SceneLayout.PlacedCount != 0)
+            throw new InvalidDataException("Tiled material revision escaped its complete measured P0/N16 resource allocation.");
+        fresh.SceneLayout.RequireExactScene(_scene);
+        TiledMaterialAncestor = material;
+        TiledSceneAncestor = fresh;
+        TextureAncestor = null;
+        ResourceProfile = NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles;
+        PlanSha256 = material.PlanSha256;
+        UploadSha256 = material.UploadSha256;
+        DataSha256 = material.DataSha256;
+        ModelSha256 = material.ModelSha256;
+        SceneSha256 = material.SceneSha256;
+        DataUsedByteLength = composed.Length;
+        EntryProfile = fresh.EntryProfile;
+        TextureEvidence = Array.AsReadOnly(material.Evidence.ToArray());
+        SourceHandles = Array.AsReadOnly(material.SourceHandles.ToArray());
+        Evidence = Array.AsReadOnly(fresh.Evidence.Concat(TextureEvidence.Select(e =>
+            new NativeId65EngineEvidence(e.Id, "EXE", e.ExecutableFileOffset, e.ByteLength, e.Sha256))).ToArray());
+    }
+
     internal static NativeId65NormalResourceRevision From(NativeId65FreshSceneBundle fresh)
     {
         ArgumentNullException.ThrowIfNull(fresh);
@@ -102,6 +158,12 @@ internal sealed class NativeId65NormalResourceRevision
         return new(fresh, null);
     }
 
+    internal static NativeId65NormalResourceRevision FromTiledMaterials(NativeId65TiledMaterialPlan material)
+    {
+        ArgumentNullException.ThrowIfNull(material);
+        return new(material);
+    }
+
     private static void RequireBaseTiledSurface(NativeId65FreshSceneBundle fresh)
     {
         var tiled = fresh.TiledSurfaceAncestor ??
@@ -119,6 +181,7 @@ internal sealed class NativeId65NormalResourceRevision
 
     internal NativeId65FreshTerrainTexturePlan? TextureAncestor { get; }
     internal NativeId65FreshSceneBundle? TiledSceneAncestor { get; }
+    internal NativeId65TiledMaterialPlan? TiledMaterialAncestor { get; }
     internal NativeId65NormalResourceProfile ResourceProfile { get; }
     internal string SourceImageSha256 => NativeId65EngineProfileContract.OriginalImageSha256;
     internal string PlanSha256 { get; }

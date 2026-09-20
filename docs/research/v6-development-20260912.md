@@ -1715,3 +1715,107 @@ global/game INIs and original card still match their saved identities. A separat
 read-only audit found four stale scalar-helper pins and two transitive consumers
 in older Moby source oracles; their repair and source reruns are the next test
 maintenance slice, not part of this successful source-free gate.
+
+### Repair stale Moby research-helper references
+
+The earlier tiled-loader fixture addition changed the complete helper file hash
+without changing its `Machine`, globals, instruction windows or native scalar
+semantics. Four older Moby Python oracles still pinned the earlier whole-file
+hash, so they refused before opening the source. Two downstream oracles also
+depended on the affected resource helper. This was a real test-maintenance
+regression, not a new game-format or Moby behavior failure.
+
+A source-free static AST/hash test now checks the literal declarations of all
+six consumers without importing an oracle or resolving a disc path. Log353
+records its four expected stale-pin failures. The repair changes only six hash
+literals: four references to the reviewed current loader and two references to
+the resulting resource-helper hash. No code window, output golden, assertion,
+resource layout or source/gameplay gate changed. Runner355 passes all79 tests.
+
+Root then re-ran every affected actual-source mode: 356 collider39 checks,
+357 resource542, 358 deferred damage370, 359 P1 scene23, 360 fallback3,018 and
+361 staging404. All succeed and retain their complete-source and existing byte
+controls. Intentional negative modes 362/363/364 still fail respectively at
+the unowned `801035B4+4` native read, the original low-20/deferred-attribution
+counterexample, and the missing-next-row-reserve allocation overlap. The helper
+and all production Moby code remain unchanged; no new family was admitted.
+
+### Tiled materials through the shared native body and disc
+
+The source-bound material revision now reaches the existing transfer, body and
+disc producers under appended profile 3 (`DirectLqTwoStaticMaterialsFlatTiles`).
+The original enum values and profile 0/1/2 serialization branches stay unchanged.
+Typed `CompileTiledMaterial` reuses strict composition and the same body-packing
+kernel; no permissive metadata decoder or alternate ROM writer was added.
+Staging/body retain the actual material **and** fresh scene instances. A second
+material plan with identical hashes, the same scene and the same source objects
+cannot impersonate the one held by staging. This guard runs before source I/O.
+
+The existing tiled compiler has a named material arm sharing resource/scene
+capture. It never substitutes a Base-only document. Disc admission binds the
+final material upload and `0xBC8` used-data end, not intermediate `0xA58` data.
+Physical data/model/scene offsets remain `DE800/DF800/EF000`; live addresses are
+`8008AA94/8009A294/8009D294`, matching the separately executed original-loader
+oracle. Music comes from the same document. Exact-full `0x1000` data has no
+zero-length padding owner or overlap; unsupported geometry is not truncated.
+
+352 independently reconstructed and froze these complete body/image references
+before the new production adapters executed; pinned rerun372 also passes:
+
+| Fixture | Body SHA-256 | Complete raw image SHA-256 |
+| --- | --- | --- |
+| Six textured faces | `461326c0e362a7c0bdb4c15c21996d15f6b1674e2156d60802f0efc94e6c36be` | `462c992f80f512f0b6be781b1a79e707e37a0e18f5e5e47356cd332ef61b2ba8` |
+| Mixed Base/textured | `94c11a4de02529ccac39f09207f4c23d294a55652194966a8a4cb9499c73df49` | `af46a6a0861af60a92669128512a94b6fca115ab12da699e5c5e12e5354beb22` |
+| Changed third tile | `675a29ec5f0876feb32b03a47101ee62ab0c5b656b2e724107c8f18517321898` | `bb1c2263afe49a9a603c71981f88e1c750e982bc650156c81bb42ba550ec7578` |
+
+All three retain body length `0x1FB800`, 1,253 changed raw sectors, original
+full-image inverse, all legacy/tiled physical controls, parity and 46 music
+controls. No physical output was written by the Python oracle.
+
+354 records tests-first RED (nine missing APIs/profile errors, zero warnings).
+365/366 record runner-mode RED then GREEN (80 Python tests), preserving a
+separate marker/suffix and source-free default. Build367 has zero warnings or
+errors; 368 passes33 free checks; 369 passes255 source checks. Production
+forward/readback and the actual shared C# inverse match all three independent
+whole-ROM references and actual EOF. Tests also cover changed/untouched sector
+corruption, exact-instance substitution, full physical complements, detached
+copies, capacity limits and a one-tile `0xA38` body that still cannot enter an
+old texture profile merely because its size matches. 370 again passes281,356
+old tiled/source checks with the unchanged `7ba0b29b...` complete image.
+
+Root and independent review found no actionable defects in the six Core files,
+new raw oracle or source tests. This remains **in-memory source compilation**:
+saved candidate publication, UI eligibility, DuckStation rendering and gameplay
+for textured tiles are not yet enabled or verified. Existing Base-only saved
+candidate gates and the sealed R04 application remain unchanged.
+
+371 additionally rebuilds and re-runs the older two-face textured Disc controls:
+zero warnings/errors and312 source checks pass. Fixed A/B/short, selected,
+reversed and same-source complete image hashes remain `998a4793...`,
+`f0987ac5...`, `f7f8fc2a...`, `9e42afbc...`, `99d06e29...`, `2999405b...`;
+the legacy body/plan and original full-image controls also pass unchanged.
+
+The first broad run373 completed340 steps with one failure: the older
+`NativeId65TexturedBodySmoke` closed-API reflection assertion still required
+exactly three revision factories and three enum values. Its replacement keeps
+those exact signatures and numeric values, admits exactly the fourth private
+typed material issuer and appended value3, and checks that issuer is internal,
+sealed and privately constructed. No production gate was relaxed. Targeted
+build375 has zero warnings/errors and all19 free checks pass.
+
+Before saved-material candidate work, new-process verify374 reissued the
+preserved R04 Base candidate from the unchanged saved project and original
+BIN/CUE owners. Its plan remains `3d586aa6992dcad95c6703f9426c20881faf05860b6705f8e115f6b26dc470a1`,
+receipt `da2dc3abdedad2613655c01f9c043f2bb95bd049c131be9120fc9a36bbe6e341`,
+and complete image `7ba0b29b68a1bee415901382c3a3b5345ccb01ca84872502131f68361afdc305`.
+Actual-file forward/readback/inverse, saved raw/canonical and manifest checks,
+complete receipt/CUE comparisons, original held-and-named final validation
+and owner closes all pass. This freezes an across-version Base receipt control
+with stable absolute source/project identities; it is not merely same-binary
+repeat determinism. No R04 application, candidate or saved-project byte changed.
+
+The corrected full rebuild/regression376 passes **340 steps, zero failures**.
+Report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-4h0y920b/summary.json`.
+This includes the source-free Python runner guards, all discovered project
+builds and the six targeted fresh-editor UI modes. Source/runtime conclusions
+remain those separately recorded above; this broad run does not execute a disc.

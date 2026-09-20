@@ -18,7 +18,7 @@ sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 HELPERS = {
     "src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_wizard_family_asset_oracle.py": "e92cfc1a4c53611cfe11ccc87931dec71ce6b4c254c34a9d6a74bf56caef2a43",
-    "src/Spyro.Editor.NativeId65FreshDocumentSmoke/source_variable_native_loader_oracle.py": "8410f6fcf9f06504d9e607406f1c1169f104b434b07f64a4cf5ec27a61f5c8fa",
+    "src/Spyro.Editor.NativeId65FreshDocumentSmoke/source_variable_native_loader_oracle.py": "75f6762822c79520176bb3127e9b426822fb7b007b2ba6da931e4822cb43f283",
 }
 PINS = (
     ("allocator-and-free", 0x800524C4, 0x1E4, "768e4181d81333e0e27bbe6419e8d94114096a9bd8e8556314af5f0e628327ff"),

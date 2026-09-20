@@ -22,7 +22,7 @@ HELPERS = {
     "src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_wizard_family_asset_oracle.py": "e92cfc1a4c53611cfe11ccc87931dec71ce6b4c254c34a9d6a74bf56caef2a43",
     "src/Spyro.Editor.NativeId65FreshTerrainTextureSmoke/source_fresh_upload_fixture.py": "727ea1028d36db37c70e25a112836c4740b967a667aad64c78f6a900786b6cfe",
     "src/Spyro.Editor.NativeId65FreshDiscSmoke/source_fresh_disc_body.py": "e69619f391814c270c9c28bc588f432f79f8a6cd3f61301e3a1c483a8645ad07",
-    "src/Spyro.Editor.NativeId65FreshDocumentSmoke/source_variable_native_loader_oracle.py": "8410f6fcf9f06504d9e607406f1c1169f104b434b07f64a4cf5ec27a61f5c8fa",
+    "src/Spyro.Editor.NativeId65FreshDocumentSmoke/source_variable_native_loader_oracle.py": "75f6762822c79520176bb3127e9b426822fb7b007b2ba6da931e4822cb43f283",
     "src/Spyro.Editor.NativeMobyPersistentOwnerSmoke/source_owner_lifecycle_oracle.py": "4374150efed3d518ae5a6ae0aeae6b8fe05e03b940961049a480759c9f958429",
     "src/Spyro.Editor.NativeId65AuthoredSurfaceSmoke/source_surface_oracle.py": "bcaa7349277bc5150cd17cf3e8cebbc689b68a58e9dee21a2709841c899aa592",
     "src/Spyro.Editor.NativeId65NormalResourceSmoke/source_resource_oracle.py": "280087ec3b80e005872b6ec2fe793c9bbbbd69bde70ea6c64de234afa37ad76d",

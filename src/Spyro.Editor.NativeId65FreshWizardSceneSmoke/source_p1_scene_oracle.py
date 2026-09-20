@@ -17,7 +17,7 @@ import sys
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 HELPER = 'src/Spyro.Editor.NativeId65FreshDocumentSmoke/source_variable_native_loader_oracle.py'
-HELPER_SHA = '8410f6fcf9f06504d9e607406f1c1169f104b434b07f64a4cf5ec27a61f5c8fa'
+HELPER_SHA = '75f6762822c79520176bb3127e9b426822fb7b007b2ba6da931e4822cb43f283'
 SOURCES = {
     'exe': (53875*2048, 0x66000, 'a533d75cab8afaae6107ec35a02a9a5fe979a92c7c955f9cf1ee50f693a1b998'),
     'town': (37*2048+0x119E000, 0x2E2000, '7ddbf6d9a6ee6c0f64c8564a89e374ca0ca234ef608ec812aae68e8176de1dc0'),

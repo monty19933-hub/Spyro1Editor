@@ -50,6 +50,7 @@ public sealed class NativeId65FreshDiscPlan
     public const string AcceptedBodyResourceProfile = "fresh-untextured-G3-two-triangle-data-8C8-v1";
     private const string TexturedProfileId = "native-id65-fresh-textured-normal-disc-direct-lq-source-only-usa-v1";
     private const string TiledProfileId = "native-id65-tiled-normal-disc-two-sector-data-source-only-usa-v1";
+    private const string TiledMaterialProfileId = "native-id65-tiled-material-normal-disc-two-sector-data-source-only-usa-v1";
     private static readonly DiscLayout Layout = new(2352, 24, 22, 2048);
     private readonly NativeId65FreshDiscSource _source;
     private readonly NativeId65FreshDiscGeometry _geometry;
@@ -69,6 +70,7 @@ public sealed class NativeId65FreshDiscPlan
             NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles => ProfileId,
             NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials => TexturedProfileId,
             NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles => TiledProfileId,
+            NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles => TiledMaterialProfileId,
             _ => throw new InvalidDataException("Unissued fresh-disc resource profile.")
         };
         _geometry = NativeId65FreshDiscGeometry.Compile(bodyBytes.Length);
@@ -128,7 +130,7 @@ public sealed class NativeId65FreshDiscPlan
                 _geometry.FinalWadByteLength
             }));
         }
-        else
+        else if (body.ResourceProfile == NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles)
         {
             // Closed switch above and the named issuer bind this actual third
             // variant. Never serialize a tiled ancestor as a texture plan.
@@ -141,6 +143,27 @@ public sealed class NativeId65FreshDiscPlan
                 ProfileId = BindingProfileId, Original = NativeId65FreshDiscSource.OriginalSha256,
                 body.ResourceProfile, tiled.DocumentSha256, body.UpstreamPlanSha256, body.StagingPlanSha256,
                 body.DataUsedByteLength, body.ModelRuntimeAddress, body.SceneRuntimeAddress, BodyPlanSha256,
+                BodySha256 = NativeId65FreshExecutablePlan.Hash(_body),
+                OverlaySha256 = NativeId65FreshExecutablePlan.Hash(_overlay),
+                ExecutableSha256 = Executable.FinalSha256,
+                RootSha256 = NativeId65FreshExecutablePlan.Hash(_isoRoot),
+                WadHeaderSha256 = NativeId65FreshExecutablePlan.Hash(_wadDirectory),
+                _geometry.FinalExecutableLba, _geometry.FinalWadByteLength
+            }));
+        }
+        else
+        {
+            var material = RequireTiledMaterialBody(body);
+            if (track != material.Document.MusicTrackId)
+                throw new InvalidDataException("Material tiled disc cannot replace its actual document's music selection.");
+            PlanSha256 = NativeId65FreshExecutablePlan.Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                ProfileId = BindingProfileId, Original = NativeId65FreshDiscSource.OriginalSha256,
+                body.ResourceProfile, material.CanonicalDocumentSha256,
+                MaterialPlanSha256 = material.PlanSha256, material.UploadSha256, material.DataSha256,
+                material.SourceHandles, material.OrderedFaceMaterials,
+                body.UpstreamPlanSha256, body.StagingPlanSha256, body.DataUsedByteLength,
+                body.ModelRuntimeAddress, body.SceneRuntimeAddress, BodyPlanSha256,
                 BodySha256 = NativeId65FreshExecutablePlan.Hash(_body),
                 OverlaySha256 = NativeId65FreshExecutablePlan.Hash(_overlay),
                 ExecutableSha256 = Executable.FinalSha256,
@@ -178,6 +201,12 @@ public sealed class NativeId65FreshDiscPlan
             {
                 "Two complete static LQ/HQ records are relocated, but consumer evidence remains direct-LQ with clip8000. HQ/close execution, all-frame packet peak and native appearance are not approved.",
                 "This distinct textured Disc does not add material persistence, a saved-document compilation route, normal export, or publication authority."
+            }).ToArray());
+        else if (body.ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles)
+            PendingOwners = Array.AsReadOnly(PendingOwners.Concat(new[]
+            {
+                "This exact P0 tiled material document uses two static records and direct-LQ clip8000; HQ/close rendering and full-frame resource demand remain unapproved.",
+                "The actual material revision reaches this byte plan, but saved candidate publication, UI export, native rendering/collision and gameplay still require separate validation."
             }).ToArray());
 
         void PatchRoot(string name, int lba, int length)
@@ -265,8 +294,42 @@ public sealed class NativeId65FreshDiscPlan
         return CaptureIssuedAsync(originalBin, issuedBody, tiled.Document.MusicTrackId, cancellationToken);
     }
 
+    internal static Task<NativeId65FreshDiscPlan> CaptureTiledMaterialsAsync(string originalBin,
+        NativeId65NormalBodyPlan issuedBody, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var material = RequireTiledMaterialBody(issuedBody);
+        return CaptureIssuedAsync(originalBin, issuedBody, material.Document.MusicTrackId, cancellationToken);
+    }
+
+    private static NativeId65TiledMaterialPlan RequireTiledMaterialBody(NativeId65NormalBodyPlan body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        var material = body.TiledMaterialAncestor;
+        if (body.ResourceProfile != NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles ||
+            material == null || !ReferenceEquals(body.TiledSceneAncestor, material.FreshAncestor) ||
+            body.TextureAncestor != null || body.UpstreamPlanSha256 != material.PlanSha256 ||
+            body.DataSectorByteLength != 0x1000 || body.Descriptors[0].ByteLength != 0xDE000 ||
+            body.Descriptors[2].ByteLength != 0xF800 || body.Descriptors[3].ByteLength != 0x3000)
+            throw new InvalidDataException("Material tiled disc requires its actual source-issued material, scene and fixed native body owners.");
+        material.RequireAncestry(body.TiledSceneAncestor!, material.Document,
+            material.MaterialSources[0], material.MaterialSources[1]);
+        byte[] data = material.CopyDataComponents();
+        if (data.Length != body.DataUsedByteLength || data.Length > body.DataSectorByteLength)
+            throw new InvalidDataException("Material tiled body must use the final material data endpoint, not intermediate untextured geometry.");
+        byte[] bytes = body.CopyLevelData();
+        material.RequireExactOutputs(bytes.AsSpan(body.Descriptors[0].Offset, body.Descriptors[0].ByteLength),
+            bytes.AsSpan(body.Descriptors[1].Offset, body.DataUsedByteLength),
+            bytes.AsSpan(body.Descriptors[2].Offset, body.Descriptors[2].ByteLength),
+            bytes.AsSpan(body.Descriptors[3].Offset, body.Descriptors[3].ByteLength));
+        if (bytes.AsSpan(body.Descriptors[1].Offset + data.Length, body.DataSectorByteLength - data.Length)
+            .IndexOfAnyExcept((byte)0) != -1)
+            throw new InvalidDataException("Material tiled data allocation padding changed.");
+        return material;
+    }
+
     // The original validated capture sequence is shared verbatim; profile/shape
-    // admission remains in the two distinct public factories, before token/I/O.
+    // admission remains in the named profile factories, before source I/O.
     private static async Task<NativeId65FreshDiscPlan> CaptureIssuedAsync(string originalBin,
         NativeId65NormalBodyPlan issuedBody, int selectedBuiltInTrack, CancellationToken cancellationToken)
     {

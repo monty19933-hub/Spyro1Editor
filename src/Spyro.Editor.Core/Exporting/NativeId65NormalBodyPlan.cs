@@ -120,6 +120,19 @@ internal sealed class NativeId65NormalBodyLayout
         return CompileOwners(upload, data, model, scene, auxiliary);
     }
 
+    // Typed source-issuer adapter only: no new byte-only material admission.
+    // Reuse the resource revision's exact recomposition, then the unchanged
+    // packing kernel. Caller auxiliaries remain neutral until BodySource binds
+    // their complete original owners; this layout itself stays uncertified.
+    internal static NativeId65NormalBodyLayout CompileTiledMaterial(NativeId65TiledMaterialPlan issued,
+        IReadOnlyList<byte[]> auxiliary)
+    {
+        var revision = NativeId65NormalResourceRevision.FromTiledMaterials(issued);
+        ArgumentNullException.ThrowIfNull(auxiliary);
+        return CompileOwners(revision.CopyUploadPayload(), revision.CopyDataComponents(),
+            revision.CopyModelPayload(), revision.CopyScene(), auxiliary);
+    }
+
     private static NativeId65NormalBodyLayout CompileOwners(ReadOnlySpan<byte> upload, ReadOnlySpan<byte> data,
         ReadOnlySpan<byte> model, ReadOnlySpan<byte> scene, IReadOnlyList<byte[]> auxiliary)
     {
@@ -206,11 +219,15 @@ public sealed class NativeId65NormalBodyPlan
                 NativeId65NormalBodyLayout.Compile(upload, data, model, scene, source.CopyAuxiliaryAllocations()),
             NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles =>
                 NativeId65NormalBodyLayout.CompileTiled(upload, data, model, scene, source.CopyAuxiliaryAllocations()),
+            NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles =>
+                NativeId65NormalBodyLayout.CompileTiledMaterial(fresh.TiledMaterialAncestor ??
+                    throw new InvalidDataException("Tiled material body lost its actual material issuer."), source.CopyAuxiliaryAllocations()),
             _ => throw new InvalidDataException("Unissued normal body profile.")
         };
         _overlay = source.CopyOverlay();
         TextureAncestor = fresh.TextureAncestor;
         TiledSceneAncestor = fresh.TiledSceneAncestor;
+        TiledMaterialAncestor = fresh.TiledMaterialAncestor;
         ResourceProfile = fresh.ResourceProfile;
         UpstreamPlanSha256 = fresh.PlanSha256;
         StagingPlanSha256 = staging.PlanSha256;
@@ -288,10 +305,18 @@ public sealed class NativeId65NormalBodyPlan
                 ResourceProfile, ComposedPlanSha256 = PlanSha256,
                 TiledSceneAncestor!.TiledSurfaceAncestor!.DocumentSha256
             }));
+        else if (ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles)
+            PlanSha256 = NativeId65NormalResourceSource.Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                Profile = "native-id65-tiled-material-normal-body-direct-LQ-two-sector-data-clean-usa-v1",
+                ResourceProfile, ComposedPlanSha256 = PlanSha256,
+                TiledMaterialAncestor!.CanonicalDocumentSha256, fresh.SourceHandles, fresh.TextureEvidence
+            }));
     }
 
     internal NativeId65FreshTerrainTexturePlan? TextureAncestor { get; }
     internal NativeId65FreshSceneBundle? TiledSceneAncestor { get; }
+    internal NativeId65TiledMaterialPlan? TiledMaterialAncestor { get; }
     public const string ProfileId = "native-id65-fresh-normal-body-retained-Town-aux-clean-usa-v1";
     public NativeId65NormalResourceProfile ResourceProfile { get; }
     public string SourceImageSha256 => NativeId65EngineProfileContract.OriginalImageSha256;
@@ -364,6 +389,15 @@ public sealed class NativeId65NormalBodyPlan
         NativeId65FreshSceneBundle issuedBundle, NativeId65NormalUploadStaging issuedStaging,
         CancellationToken cancellationToken = default) =>
         CaptureRevisionAsync(originalImagePath, NativeId65NormalResourceRevision.FromTiled(issuedBundle), issuedStaging, cancellationToken);
+
+    internal static Task<NativeId65NormalBodyPlan> CaptureTiledMaterialsAsync(string originalImagePath,
+        NativeId65TiledMaterialPlan issuedMaterial, NativeId65NormalUploadStaging issuedStaging,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return CaptureRevisionAsync(originalImagePath, NativeId65NormalResourceRevision.FromTiledMaterials(issuedMaterial),
+            issuedStaging, cancellationToken);
+    }
 
     private static async Task<NativeId65NormalBodyPlan> CaptureRevisionAsync(string originalImagePath,
         NativeId65NormalResourceRevision revision, NativeId65NormalUploadStaging issuedStaging,
