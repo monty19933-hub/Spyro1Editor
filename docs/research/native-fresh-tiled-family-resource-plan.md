@@ -167,7 +167,51 @@ new address domain, native loader or runtime certificate.
 Tests-first Body smoke601 fails only for the missing Body type (CS0246, zero
 warnings). The test is wired into ordinary free mode and explicit read-only
 R03 source mode; every existing image writer remains on the old placed Body.
-The Body implementation and native model-registration witness remain pending.
+The Body implementation remains pending. The independent native model witness
+below is now verified; it does not grant production Body or disc authority.
+
+## Executed shared and local model witnesses
+
+`source_tiled_family_native_model_oracle.py` is frozen at
+`20bf2c8f6ba2716752982b98c25869ccc9cd6cc8b3439b8c8d0894212e1521d7`.
+Root replay603 passes on explicit absolute Original and R07 BIN/CUE pairs;
+602 refused relative child paths before opening files. The unchanged old
+variable-loader control still passes5987 checks/29 refusals and remains labelled
+as a historical seeded-player fixture, not evidence of actual shared registration.
+
+The new witness derives resident base801C5BB8 from Original instructions and
+the complete actual39C48-byte PETE payload/header, then executes all54 shared
+registrations (11127 instructions). The independently assembled complete Body
+`c8c85e…` and actual data-parser result supply local model base8008D6F0. Eleven
+generic local roots and five player-animation streams execute15612 instructions,
+deriving/storing Scene base800A86F0 without pre-seeding that endpoint. The key's
+classAD model comes from the shared package, not the twelve-root local Body
+table; model-less reward-controller classD remains absent. Simple native model
+registrations correctly retain their low-address aliases.
+
+An independent structural relocation formula compares the complete memory and
+exact write multiset, including every unchanged owner, then verifies immediate
+inverse. The relocated local model hash is
+`257dc6fb534ff0cc529206238626d941799b5acb08bcc02bb09fc39a797bff52`;
+final resident payload hash is
+`57eea4581ba06a6215d518ecbfb3e9004ddfbcb481a25a824d056d4eed261b47`.
+Eighteen refusals cover missing code/owners, malformed root/class bounds,
+instruction budget and physical ownership. Two counterexamples establish that
+native registration does not authenticate a changed class identity, and that
+skipping the Scene endpoint store leaves poison despite a correct register.
+
+Header/CD delivery is explicitly mapped, not executed. Shared allocation and
+registration are named instruction cuts, not a full loader chronology. The
+model phase imports only the actual parsed data/globals/register result into a
+new machine; the old parser's temporary frame overlaps the full PETE payload
+and is deliberately retired. New stack801FFF00 is disjoint from PETE ending
+801FF800, with explicit overlapping-map refusals. No Scene bytes, unused data
+padding, free RAM, hardware or fabricated CD-helper return is mapped. The
+actual physical model allocation is mapped in full, including its padding.
+Full Original/current EXE, Host, PETE, four-file identity/EOF/reopen and loaded
+definition guards pass. Scene initialization, Host execution, rendering,
+collision queries, full-game loading, disc publication and gameplay remain
+unverified by this witness.
 
 ## Smallest closed fixture
 
