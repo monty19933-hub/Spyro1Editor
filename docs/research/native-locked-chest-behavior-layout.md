@@ -1,5 +1,89 @@
 # Shared locked-chest behavior layout: preserved Town compatibility
 
+## Detached Fresh Host extension (September19 continuation)
+
+`NativeFreshLockedChestResearchHostExtension` now composes a separate, internal
+code/initializer/EXE prototype from the actual admitted mixed Wizard/Grass
+executable and an actual original-source chest family. It does **not** admit
+the seven chest-family rows, a Body, a final executable/disc, or public placement.
+The previous Host, executable factories and resource-only rejection stay closed.
+The static treasure target remains10 until a separate placed-family census exists.
+
+The complete old11000 Host is retained, including Wizard code, four particle
+table entries and all old padding. Six code owners occupy11000..11BC0; the new
+allocation ends12000. Only the two original eight-byte default D/AE hooks at3148
+and3214 change. The initializer is an immediate-current-owner patch atEXE4B098:
+the conditional copy anchor changes8008BA38 to8008CA38 while all callbacks,
+non65 behavior, existing LAB/music/dispatch and census bytes remain unchanged.
+The prototype inverses completely to the actual current Family EXE; it is not
+passed to the old executable or disc issuer.
+
+Independent original-only reference450 preceded the producer. Its frozen script
+`source_fresh_chest_host_extension_oracle.py` SHA256
+`9d96b3023ae27a6fdc1cb5d0bda07dd080142e71e192eedc07a66046e87bdb77`
+reconstructs the old Host/current EXE from prior independent source recipes,
+never Core output. It passes44 new scalar checks, one execution refusal and nine
+complete-output negative probes, plus the unchanged436 and445 controls. It
+executes the relocated five reward waiting paths with full differential traces,
+outer class dispatch, retained Town continuation paths, thunk call-entry
+arguments and incoming initializer cases13/65. Synthetic reset models and
+separate post-call cuts remain explicit; no helper return or full lifecycle is
+claimed. Source image identity/content is rechecked on the held and named file.
+
+Reference identities:
+
+- Overlay12000: `9d828474ed59e411b570e011e4b4156037e628c4cc9596cb476e7e2abdb995b2`
+- AppendedBC0: `0ca0dbacfd8418e5c2c4db1c8f1a82ece201264a051254e0aea17e5120436162`
+- Initializer98: `4ba757dcac9e8a476c97a6767f82e5fe8bcdcd6511f5464ba1d87e981df16cf0`
+- Detached EXE66000: `ce341af853579b6b17a18222c08d2c17dbf6a9a572be672cf39edd5a6699ad20`
+
+The failed attempts are retained:447 stopped before opening the ROM because
+the historical selector's interpreter pin predates7093265; the new reference
+now separately pins the current unchanged Machine class without changing any
+old pin/file.448 rejected the five computed JALRs that the historical direct
+relocator intentionally leaves untouched.450 explicitly inventories those
+source instructions and delays as unexecuted computed calls instead of either
+discarding them or claiming their destinations proved.
+
+RED449 produced the six expected missing-type errors before implementation.
+Build451 exposed one integer-literal typing error; corrected452 and457 pass
+with zero warnings/errors. Free454 passes228 authoring checks; Free458 passes
+2163 Body checks and23 resource-stream checks. Source455 passes8574 final
+authoring checks, including all three new complete output hashes, existing
+family/material/disc goldens, exact-current-reference refusals and unchanged
+original BIN/CUE. The immutable R06 app/package and test project were not rebuilt
+or modified by this source work.
+Full build/source-free regression459 passes343 steps with zero failures.
+An independent reviewer found no actionable issue in the bounded Host issuer;
+actual source-reference substitution and all28 consumer windows are also covered.
+Final source461 passes8579 assertions with original BIN/CUE unchanged.
+
+Original-only inspection456 additionally pins five72-byte computed-call
+contexts and all eight original/current/new initializer callback stores.
+`source_fresh_chest_computed_callbacks_inspector.py` SHA256
+`31158f24efafd7e597ef491021963612cf77d7f0f365a83385f0a49afbebbe3d`
+shows three JALR-ra-v0 sites loadingg758CC (Town872A4 moby spawn), and two loading
+g758E4 (Town88F68 particles), with both84454 incoming sequences present. This is
+literal source/control-context inspection, not callback execution, complete
+incoming closure, installed model-root proof or runtime acceptance.
+
+Original-only witness462 then executes six bounded source/relocated callback
+entry cuts under callback globals produced by actual original/current/new Town
+initializer instructions. It passes75 checks and10 refusal controls. Script
+`source_fresh_chest_callback_entry_witness.py` SHA256
+`ed7cd81048b4357e5d443aa41eae4edf5c20bf2987f0feeede5506f48901143a`
+checks full registers, memory, read/write/call traces, HI/LO, JALR links and delay
+slots. It stops before the real Town spawn/particle bodies and initializer tail;
+no callback return is synthesized. Two cuts explicitly start after an unexecuted
+earlier call, capacity cuts declare v0=0, and particle cuts declare incoming
+a0=1. These are entry-argument/relocation checks, not full handler or lifecycle
+acceptance. Original Peace code is run under target Town globals, not claimed
+to be original Peace runtime. Whole original owners remain unchanged.
+
+All source/code/runtime flags retain their scoped meaning: source-owned bytes
+are available; full dependency closure, Body/placed-family/final-EXE issuance,
+runtime verification and publication approval remain false.
+
 September 19, 2026. This is a bounded extraction, not new Fresh-level admission.
 `NativeLockedChestBehaviorLayout` replaces the relocation/assembly hidden inside
 `TownSquareNativeLockedChestCandidateExporter.BuildHandlerPayload`. The old

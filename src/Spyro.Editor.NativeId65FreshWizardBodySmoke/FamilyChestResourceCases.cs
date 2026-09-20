@@ -16,6 +16,19 @@ internal static class FamilyChestResourceCases
         NativeFreshMobyFamilyCompositionPlan equalAncestor,Action<bool,string> check)
     {
         CheckRetainedDebrisGrammar(source,check);
+        if(ancestor.BaseBodyAncestor.MixedResourceAncestor is not null)
+        {
+            var current=await NativeId65FreshWizardResearchExecutablePlan.CaptureFamilyComposedAsync(original,ancestor);
+            FamilyChestHostCases.Source(current,source,check);
+            var extension=NativeFreshLockedChestResearchHostExtension.Compose(current,source);
+            var equalCurrent=await NativeId65FreshWizardResearchExecutablePlan.CaptureFamilyComposedAsync(original,ancestor);
+            check(equalCurrent.ExecutableSha256==current.ExecutableSha256&&!ReferenceEquals(equalCurrent,current),
+                "A genuinely equal reissued current executable remains another actual owner.");
+            Reject<InvalidDataException>(()=>extension.RequireAncestry(equalCurrent,source),check);
+            var oldArm=await NativeId65FreshWizardResearchExecutablePlan.CaptureMaterialAuthoredAsync(original,ancestor.BaseBodyAncestor);
+            check(oldArm.ExecutableSha256==current.ExecutableSha256,"Historical material arm genuinely shares executable bytes.");
+            Reject<InvalidDataException>(()=>NativeFreshLockedChestResearchHostExtension.Compose(oldArm,source),check);
+        }
         byte[] before=ancestor.CopyLevelData(),scene=ancestor.CopyScene();
         check(!ancestor.HasUnplacedModelResources&&ancestor.ResourceAncestor is null&&
             ancestor.ChestModelContribution is null&&ancestor.ChestTextureMaterialization is null&&
