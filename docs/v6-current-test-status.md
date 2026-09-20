@@ -58,8 +58,15 @@ the full run passes9573 source assertions and343 regression steps, with prior
 export goldens preserved. This is not yet a gameplay pass or editor admission.
 Key-zero contribution remains an explicit assumption, not a complete census.
 See [the private experiment record](research/native-fresh-chest-experimental-disc.md).
-Complete native behavior/lifecycle, actual output and fresh gameplay checks
-remain distinct gates.
+The actual chest BIN was subsequently written and fully read back/inversed
+(544 assertions). Its first DuckStation entry **failed usable spawn**: the
+authored spawn overlaps the chest's native sphere and Spyro is displaced off
+the small floor. This is not a verified chest gameplay path and is not enabled
+in R06. A separate source-bound diagnostic and earliest-entry observations are
+recorded in [the failed-spawn record](research/native-fresh-chest-spawn-failure.md).
+DuckStation is closed; both original settings files were restored byte-for-byte
+and the original memory card was unchanged. Corrected spawn/landing clearance,
+chest interaction and complete native lifecycle remain pending gates.
 See [the scene record](research/native-fresh-chest-scene-extension.md) and
 [the behavior record](research/native-locked-chest-behavior-layout.md) for current
 implementation evidence. These source-only changes do not replace R06.

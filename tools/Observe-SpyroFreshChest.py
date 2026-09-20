@@ -93,6 +93,16 @@ FIELDS = MappingProxyType({name: (address, fmt) for name, (address, fmt, _) in G
         "actual_slot35_gems": (0x80077420 + 4 * 35, "<I"),
         "animated_hud_gems": (0x80077FC8, "<I"),
         "slot35_target_s16": (0x8006F438 + 2 * 35, "<h"),
+        # Existing source-bound P1 observer fields, kept distinct: state6 is
+        # neither proof of damage nor proof of an initiating collider contact.
+        "player_health_s32": (0x80078BBC, "<i"),
+        "player_damage_accumulator_u32": (0x80078A84, "<I"),
+        "player_motion_78b4c_s32x3": (0x80078B4C, "<iii"),
+        "player_motion_78b64_s32x3": (0x80078B64, "<iii"),
+        "player_motion_78ba4_s32": (0x80078BA4, "<i"),
+        "player_state_input_78af4_s32": (0x80078AF4, "<i"),
+        "player_state_input_78b08_s32": (0x80078B08, "<i"),
+        "companion_handle_raw_u32": (0x80075898, "<I"),
     })
 REREAD = tuple(GATES) + tuple(CURSORS)
 AUTHORITY_FLAGS = ("candidate_authenticated", "source_certified", "runtime_pass",
@@ -322,6 +332,20 @@ def self_test():
             self.assertIn((0x8006F47E, 2), memory.reads)
             self.assertTrue(all(sample[name] is False for name in AUTHORITY_FLAGS))
 
+        def test_motion_fields_keep_signed_width_and_never_chase_companion(self):
+            memory = fixture()
+            memory.map(0x80078BBC, struct.pack("<i", -1))
+            memory.map(0x80078B4C, struct.pack("<iii", -352, 3264, 0))
+            memory.map(0x80078B64, struct.pack("<iii", 7008, 192, 4640))
+            memory.map(0x80075898, struct.pack("<I", 0xDEADBEEF))
+            sample = capture(memory, "signed-motion")
+            self.assertTrue(sample["bounded_sample_valid"])
+            self.assertEqual(-1, sample["player_health_s32"])
+            self.assertEqual([-352, 3264, 0], sample["player_motion_78b4c_s32x3"])
+            self.assertEqual([7008, 192, 4640], sample["player_motion_78b64_s32x3"])
+            self.assertFalse(any(at == 0xDEADBEEF for at, _ in memory.reads))
+            self.assertTrue(all(sample[name] is False for name in AUTHORITY_FLAGS))
+
         def test_destroyed_or_transformed_classes_do_not_become_false_layout_failures(self):
             memory = fixture(); dead = row(2, 0xFD)
             struct.pack_into("<HI", dead, 0x36, 0xFFFF, 0)
@@ -381,7 +405,7 @@ def self_test():
         result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(Tests))
     if not result.wasSuccessful():
         raise SystemExit(1)
-    print("FRESH_CHEST_OBSERVER_OFFLINE_OK tests=8 connections=0 romReads=0 runtime=false")
+    print("FRESH_CHEST_OBSERVER_OFFLINE_OK tests=9 connections=0 romReads=0 runtime=false")
 
 
 def main(argv=None):

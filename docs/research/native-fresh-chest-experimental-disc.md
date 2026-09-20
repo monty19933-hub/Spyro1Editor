@@ -94,4 +94,9 @@ Observer489 adds the exact gated slot35, actual global/level gem totals, animate
 HUD and signed target halfword; eight offline tests pass. Key-state3 and retired
 controllers are deliberately not treated as complete collection evidence.
 
-Physical output and DuckStation observations remain separate pending gates.
+Physical output490 passed544 assertions, including actual-file readback and
+complete original-image inverse. The exact candidate then cold-booted through
+full firmware, but its first usable level entry **failed**: Spyro is displaced
+off the floor. The source-bound sphere overlaps the authored spawn; this is not
+a chest interaction or lifecycle pass. See the [failed-spawn record](native-fresh-chest-spawn-failure.md)
+for observation limits, regression diagnostics and restored emulator state.
