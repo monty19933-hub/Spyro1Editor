@@ -1402,3 +1402,74 @@ and sealed R03 application remain outside the implementation scope. The next
 step is an explicit tiled arm of the existing saved-project candidate and
 publisher, with retained canonical/raw revision identity and actual physical
 forward/inverse verification before cold-boot DuckStation testing.
+
+### Saved tiled publication work after7093265
+
+Checkpoint7093265 contains the complete tiled compiler and its338-step green
+regression. The next saved-publication increment reuses the existing closed
+Candidate, SourceOwners, streaming transform and transactional publication
+engine. It will not widen the old fixed LAB candidate or create another writer.
+
+Before connecting publication, root added a shared read-only inverse verifier
+for an actual complete candidate stream. Missing-API RED302 has6expected
+missing-method errors. Build303 passes0warnings/errors; source304 passes281356
+checks. It authenticates all281270 actual candidate sectors through the private
+disc inverse and requires full restored-original SHA, candidate SHA/changed
+count, declared length, position and actual EOF. Changed/untouched corruptions,
+short actual reads and trailing bytes behind a declared full length refuse.
+These controls use a generated read-only stream, not a physically published
+image. The later publisher must invoke it on the actual readback file.
+
+Native traversal planning distinguishes tile seams X10496/12544 from the
+collision-tree leaf boundary X12288, which lies inside tile1. The uniform
+three-tile fixture needs read-only XYZ observations to identify crossings.
+Planned centerline Y9472, X8960->14080->8960 crosses both seams, the leaf change
+and all three internal diagonals; jumping/landing and outer-edge recovery are
+separate observations. No current native loader check executes the terrain
+query or proves these gameplay outcomes. A separately selected exact tiled
+observer profile is being added; old RAM gates must not be relabeled or widened.
+
+The saved tiled arm is now implemented through the same public Snapshot
+factory and saved publication binding. Its distinct variant retains actual
+ReadContext/Document/Compilation/Scene/Body ancestry; complete canonical, raw
+and manifest identities; derived layout/ownership; and measured image identity.
+The existing SourceOwners finalization, aggregate compare-and-swap/read guard,
+new-only transaction, rollback and committed/unconfirmed handling are reused.
+Legacy fixed candidates and old receipt constructors are unchanged. UI admission
+remains closed pending native checks and a selected-tile ticket review.
+
+Missing-API RED306 has8expected errors/0warnings. Build307 passes0/0. Free308
+passes475checks/260refusals, including unsupported whole-document and actual
+1000/1004 boundary cases. Source309 passes501checks/268refusals: exact independent
+image, actual saved identity, deterministic reissue, equal-image ID changes,
+raw-only stale/reissue, complete receipts and defensive copies. The fixture is
+restored to its exact3IDs after testing. No physical image is written by309.
+
+Full regression311 passes338steps/0failures; report
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-9lw_0tl1/summary.json`.
+Mixed baseline305 passes368checks/175refusals before integration; post-change312
+passes489checks/266refusals (new free cases included), retaining image98b4c9d2.
+Independent read-only production review found no additional actionable defect.
+Root replay310 passes42observer tests,3explicit-source skips; the new11cases
+retain exact legacy sample/read traces and use no real socket or source ROM.
+
+Exact physical publication313 and new-process Verify314 both pass through the
+public saved path, including the actual file's forward AND complete inverse
+readback. Original held/named BIN/CUE and all acquired closes are checked on
+completion. Output is
+`_local/native-v6-tiled-runtime-20260919-r01.5OPOBH/candidate-r01`:
+
+- image `7ba0b29b68a1bee415901382c3a3b5345ccb01ca84872502131f68361afdc305`
+- receipt `06fae575d013f8a857649cc8e86ab20cdfafa2ae988ed425c17ed300aeb2db46`
+- CUE `e77f08fc145b69025d8b5deeafcfc839802457159db2caf274c635a53955701d`
+- saved plan `4a729a2cb8fc476b3c0b62993bdef29d87fdf52f6743f9aba8cf5ab26b651575`
+- canonical/raw `c7cc4a5278acfe0dfbb340bd57f90a8c4f06424c49413af90f5a25bac8d91175`
+- manifest `00cee92ad1dea68c07d44c2841061e262ddb051e51395b59050f6d7a90c7712a`
+
+Separate physical stale test315 changes only its dedicated copied project at
+the actual precommit checkpoint: publication is not invoked, stage is cleaned,
+zero final artifacts return and changed raw evidence is retained. It does not
+modify the successfully published candidate's project. Log316 independently
+hashes the three published artifacts. No DuckStation gameplay has run yet;
+the private session directory contains fresh restore backups, a private card,
+draft test INIs and the runtime checklist. R03 and default project are untouched.

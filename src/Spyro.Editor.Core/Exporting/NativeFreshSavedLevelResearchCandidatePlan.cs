@@ -92,7 +92,8 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
 
     internal NativeFreshSavedLevelDocumentReadContext Saved { get; }
     internal NativeFreshSavedMaterialCompilation MaterialCompilation => _material ??
-        throw new InvalidDataException("This saved level has a mixed compilation, not a material-only ancestor.");
+        throw new InvalidDataException("This saved level does not have a material-only compilation ancestor.");
+    private NativeId65FreshDiscPlan NormalDisc => _tiledCompilation?.DiscPlan ?? MaterialCompilation.Disc;
     public NativeFreshLevelDocumentSnapshot SavedSnapshot => Saved.Snapshot;
     public string SourceImagePath { get; }
     public string SourceCuePath { get; }
@@ -118,7 +119,7 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
         token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(saved);
         if (saved.Document.TiledContent != null)
-            throw new InvalidDataException("Tiled-level native resource composition is not yet supported. No legacy or partial document can be exported.");
+            return await CaptureTiledAsync(originalBin, sourceCue, saved, token);
         ArgumentException.ThrowIfNullOrWhiteSpace(originalBin); ArgumentException.ThrowIfNullOrWhiteSpace(sourceCue);
         if (saved.Document.SchemaVersion == 3)
             return await CaptureFamilyAsync(originalBin, sourceCue, saved, token);
@@ -185,8 +186,15 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
             RequireCurrentAncestry(); owners.Open(token);
             owners.Output = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             result = _mixedDisc is { } mixed ? mixed.VerifyImage(owners.Bin!, owners.Output, token) :
-                MaterialCompilation.Disc.VerifyImage(owners.Bin!, owners.Output, token);
+                NormalDisc.VerifyImage(owners.Bin!, owners.Output, token);
             RequireVerification(result);
+            if (_tiledCompilation is { } tiled)
+            {
+                // Read the actual physical file a second time. A regenerated
+                // afterimage or a successful forward check is not this inverse.
+                owners.Output.Position = 0;
+                RequireVerification(NativeId65FreshDiscStreaming.VerifyInverse(tiled.DiscPlan, owners.Output, token));
+            }
         }
         catch (Exception error) { primary = error; }
         CompleteOperation(owners, Saved, primary); return result!;
@@ -202,7 +210,7 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
             owners.Output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
             RequireVerification(_mixedDisc is { } mixed
                 ? NativeId65FreshDiscStreaming.Measure(mixed, owners.Bin!, token, owners.Output, firstSector)
-                : NativeId65FreshDiscStreaming.Measure(MaterialCompilation.Disc,
+                : NativeId65FreshDiscStreaming.Measure(NormalDisc,
                     owners.Bin!, token, owners.Output, firstSector));
             owners.Output.Flush(flushToDisk: true); token.ThrowIfCancellationRequested();
         }

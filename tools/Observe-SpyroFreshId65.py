@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Manual m-only observations for two separately selected exact fresh-ID65 profiles.
+"""Manual m-only observations for separately selected exact fresh-ID65 profiles.
 
 Identify the actual process/open BIN and verify its published companions outside
 this tool before opting in. The SHA annotations and matching RAM layout do NOT
 authenticate the loaded disc. Initial GDB connection may pause DuckStation;
 resume/pause only through its UI. Samples are sequential, never atomic or a
-runtime/peak-usage certificate. Scope is idle and short center walk, not foreign
-entry, rescue, checkpoint reload, power grants or all-state acceptance.
+runtime/peak-usage certificate. Scope is idle and short center/seam walks, not
+foreign entry, rescue, checkpoint reload, power grants or all-state acceptance.
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from pathlib import Path
 import socket
 import struct
 import sys
+from types import MappingProxyType
 
 _spec = importlib.util.spec_from_file_location(
     "fresh_id65_read_only_primitives", Path(__file__).with_name("Observe-SpyroNativeWizard.py"))
@@ -42,9 +43,9 @@ CAPACITY = 16
 # This is an observation-scope boundary, NOT a player footprint, safe inset,
 # Z/ground-state certificate or authentication of the loaded candidate.
 AUTHORED_FLOOR_XY_BOUNDS = (8448, 8448, 9472, 9472)
-PROFILE_CHOICES = ("starter-a-n16", "edited-landing-track02-r01")
+PROFILE_CHOICES = ("starter-a-n16", "edited-landing-track02-r01", "tiled-three-track19-r01")
 
-# Both exact untextured N16 bodies retain this address layout. Equal RAM gates
+# Both legacy exact untextured N16 bodies retain this address layout. Equal RAM gates
 # cannot distinguish their geometry/document/music or authenticate either disc.
 # 785E0 uses the native used-data length8C8 rather than the CD length1000.
 # The exact-source fixture executes the complete native generic model helper,
@@ -81,6 +82,26 @@ GATES = {
     "callback_6": (0x8007574C, "<I", 0x8007B0AC),
     "callback_7": (0x800758D8, "<I", 0x8007D04C),
 }
+# Separate code-owned layout; never rewrite legacy globals to select a profile.
+# source_variable_native_loader_oracle.py execute_owned_chain derives these
+# through the actual parser, class78 relocator and native N16 scene list walk.
+# Evidence286 reports A58/model8008A924/scene8009A124/arenaEnd8009A950.
+# NativeId65FreshSceneLayout owns rows at D4, arena70*N+58, then 4/8/4 prefixes.
+_TILED_USED = 0xA58
+_TILED_MODEL = 0x80089ECC + _TILED_USED
+_TILED_SCENE = _TILED_MODEL + 0xF800
+_TILED_BASE = _TILED_SCENE + 0xD4
+_TILED_ARENA_END = _TILED_BASE + 0x70 * CAPACITY + 0x58
+_TILED_MOVED = MappingProxyType({
+    "model_anchor": _TILED_MODEL, "scene_anchor": _TILED_SCENE,
+    "moby_base": _TILED_BASE, "dynamic_base": _TILED_BASE,
+    "arena_end": _TILED_ARENA_END, "bucket_base": _TILED_ARENA_END + 4 + 8 + 4,
+    "companion_model_root": _TILED_MODEL + 0xCC30,
+})
+_TILED_GATES = MappingProxyType({
+    name: (at, encoding, _TILED_MOVED.get(name, expected))
+    for name, (at, encoding, expected) in GATES.items()
+})
 CURSORS = {
     "dynamic_count": (0x800756A4, "<I"),
     "dynamic_properties_cursor": (0x80075930, "<I"),
@@ -103,6 +124,15 @@ FIELDS = {name: (at, encoding) for name, (at, encoding, _) in GATES.items()} | C
 REREAD_GATES = tuple(GATES) + tuple(CURSORS)
 
 
+def _profile_layout(profile):
+    if type(profile) is not str or profile not in PROFILE_CHOICES:
+        raise ValueError("Only a fixed code-owned observer profile may be selected.")
+    if profile == "tiled-three-track19-r01":
+        return _TILED_GATES, _TILED_BASE, _TILED_ARENA_END, (8448, 8448, 14592, 10496)
+    bounds = (8192, 8192, 10240, 10240) if profile == "edited-landing-track02-r01" else AUTHORED_FLOOR_XY_BOUNDS
+    return GATES, BASE, ARENA_END, bounds
+
+
 def read_fields(client, names):
     result = {}
     for name in names:
@@ -112,20 +142,22 @@ def read_fields(client, names):
     return result
 
 
-def require_baseline(values):
-    for name, (_, _, expected) in GATES.items():
+def require_baseline(values, *, profile="starter-a-n16"):
+    gates, row_base, arena_end, _ = _profile_layout(profile)
+    baseline = "three-tile/N16" if profile == "tiled-three-track19-r01" else "A/N16"
+    for name, (_, _, expected) in gates.items():
         if values[name] != expected:
-            raise ValueError("Not the initialized fixed A/N16 baseline: " + name)
+            raise ValueError("Not the initialized fixed " + baseline + " baseline: " + name)
     if not 1 <= values["dynamic_count"] <= CAPACITY:
         raise ValueError("Companion baseline requires a native count in1..16.")
     properties = values["dynamic_properties_cursor"]
-    if not ARENA_END - CAPACITY * 24 <= properties <= ARENA_END or (ARENA_END - properties) % 24:
+    if not arena_end - CAPACITY * 24 <= properties <= arena_end or (arena_end - properties) % 24:
         raise ValueError("Properties cursor escaped the exact16-slot grid.")
     cursor = values["next_free_moby_not_active_end"]
-    if not BASE <= cursor <= BASE + CAPACITY * 88 or (cursor - BASE) % 88:
+    if not row_base <= cursor <= row_base + CAPACITY * 88 or (cursor - row_base) % 88:
         raise ValueError("Next-free row escaped the exact16-slot grid.")
     handle = values["companion_handle"]
-    if not BASE <= handle <= BASE + (CAPACITY - 1) * 88 or (handle - BASE) % 88:
+    if not row_base <= handle <= row_base + (CAPACITY - 1) * 88 or (handle - row_base) % 88:
         raise ValueError("Companion handle does not own a complete in-range row.")
     # Count, cursor distance and properties high-water are NOT equalities.
 
@@ -166,10 +198,9 @@ def scan_particles(pool):
 
 
 def capture(client, label, *, profile="starter-a-n16"):
-    if type(profile) is not str or profile not in PROFILE_CHOICES:
-        raise ValueError("Only a fixed code-owned observer profile may be selected.")
+    _, row_base, _, bounds = _profile_layout(profile)
     edited = profile == "edited-landing-track02-r01"
-    bounds = (8192, 8192, 10240, 10240) if edited else AUTHORED_FLOOR_XY_BOUNDS
+    tiled = profile == "tiled-three-track19-r01"
     result = {
         "utc": datetime.now(timezone.utc).isoformat(), "label": label[:120],
         "expected_profile_annotation": PROFILE,
@@ -197,16 +228,28 @@ def capture(client, label, *, profile="starter-a-n16"):
             expected_spawn_xyz_annotation=[9216, 9216, 9216], expected_spawn_heading_u8_annotation=96,
             expected_floor_z_annotation=8704, expected_music_track_id_annotation=2,
             ui_result_approved=False, normal_export_approved=False)
+    elif tiled:
+        # Closed independent three-tile fixture, not arbitrary schema4 support.
+        # Its unchanged scene/EXE are byte-equal to A (TiledCompilationCases).
+        # These hashes, bounds and layout gates NEVER identify the loaded disc.
+        result.update(
+            expected_profile_annotation="fresh-id65-tiled-three-track19-r01-idle-seam-walk-research-v1",
+            expected_candidate_sha256_annotation="7ba0b29b68a1bee415901382c3a3b5345ccb01ca84872502131f68361afdc305",
+            expected_body_sha256_annotation="37157a7248c90665309d8cee21c739a846aca284426cd602c65d627788c06009",
+            expected_used_data_length_annotation=_TILED_USED,
+            expected_spawn_xyz_annotation=[8960, 8960, 9216], expected_spawn_heading_u8_annotation=64,
+            expected_floor_z_annotation=8704, expected_music_track_id_annotation=19,
+            ui_result_approved=False, normal_export_approved=False)
     try:
         result.update(read_fields(client, FIELDS))
-        require_baseline(result)
+        require_baseline(result, profile=profile)
         handle = result["companion_handle"]
-        companion = decode_moby(client.read(handle, 88), (handle - BASE) // 88, handle)
+        companion = decode_moby(client.read(handle, 88), (handle - row_base) // 88, handle)
         if companion["class_id"] != 0x78 or companion["state_bytes"][0] >= 0x80:
             raise ValueError("Companion is absent, inactive or a stale raw reload row.")
         # Its properties are opaque data. Never chase them, nor any sampled
         # model/callback/renderer pointer. No17th Moby or257th particle read.
-        dynamic = scan_dynamic((client.read(BASE + i * 88, 88) for i in range(CAPACITY)), BASE)
+        dynamic = scan_dynamic((client.read(row_base + i * 88, 88) for i in range(CAPACITY)), row_base)
         pool = b"".join(client.read(POOL + offset, 1024) for offset in range(0, 0x2000, 1024))
         particles = scan_particles(pool)
         terminal_word = client.read(PETE, 4).hex()  # Separate PETE first-word owner.

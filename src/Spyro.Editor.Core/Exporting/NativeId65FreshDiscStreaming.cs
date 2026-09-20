@@ -6,6 +6,38 @@ namespace Spyro.Editor.Core.Exporting;
 // No filenames, sector delegates or caller hashes grant byte authority.
 internal static class NativeId65FreshDiscStreaming
 {
+    // Verify the actual candidate stream, not a regenerated forward buffer.
+    // The private disc's inverse authenticates every changed and untouched
+    // sector against its captured original index/preimages. No restore file
+    // is written, and only two sectors are retained at a time.
+    internal static NativeId65FreshDiscVerification VerifyInverse(NativeId65FreshDiscPlan disc,
+        Stream candidate, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(disc);
+        ArgumentNullException.ThrowIfNull(candidate);
+        if (!candidate.CanRead || !candidate.CanSeek || candidate.Position != 0 ||
+            candidate.Length != NativeId65FreshDiscSource.ImageByteLength)
+            throw new InvalidDataException("Fresh-disc inverse requires a complete readable candidate at offset zero.");
+        using var restoredHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var candidateHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        byte[] after = new byte[2352];
+        int changed = 0;
+        for (int lba = 0; lba < NativeId65FreshDiscSource.SectorCount; lba++)
+        {
+            token.ThrowIfCancellationRequested();
+            candidate.ReadExactly(after);
+            byte[] before = disc.CreateOriginalRawSector(lba, after);
+            restoredHash.AppendData(before); candidateHash.AppendData(after);
+            if (!before.AsSpan().SequenceEqual(after)) changed++;
+        }
+        NativeId65FreshDiscSource.RequireActualEof(candidate, token);
+        if (Convert.ToHexStringLower(restoredHash.GetHashAndReset()) != NativeId65FreshDiscSource.OriginalSha256)
+            throw new InvalidDataException("Fresh-disc inverse did not restore the complete original image identity.");
+        token.ThrowIfCancellationRequested();
+        return new(Convert.ToHexStringLower(candidateHash.GetHashAndReset()), changed);
+    }
+
     internal static NativeId65FreshDiscVerification Measure(NativeId65FreshDiscPlan disc,
         Stream source, CancellationToken token, Stream? output = null, Action? firstSector = null) =>
         MeasureCore(disc, null, source, token, output, firstSector);

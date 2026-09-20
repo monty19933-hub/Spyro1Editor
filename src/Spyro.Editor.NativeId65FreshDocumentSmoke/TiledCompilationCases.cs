@@ -52,6 +52,10 @@ internal static class TiledCompilationCases
             "Missing actual tiled scene/staging refuses before body source capture.");
         await RejectAsync<ArgumentNullException>(() => NativeId65FreshDiscPlan.CaptureTiledAsync(missing, null!),
             "Missing actual tiled body refuses before disc source capture.");
+        Reject<ArgumentNullException>(() => NativeId65FreshDiscStreaming.VerifyInverse(null!, Stream.Null, default),
+            "Inverse accepts only an actual issued disc.");
+        Reject<OperationCanceledException>(() => NativeId65FreshDiscStreaming.VerifyInverse(null!, Stream.Null, new(true)),
+            "Canceled inverse refuses before reading any owner.");
         Console.WriteLine($"NATIVE_ID65_TILED_COMPILATION_FREE_OK checks={_checks} sourceRead=false nativeCpuExecuted=false");
     }
 
@@ -113,6 +117,7 @@ internal static class TiledCompilationCases
                 disc.CopyExecutable().SequenceEqual(legacy.DiscPlan.CopyExecutable()),
                 "Only the data allocation changes: all header/upload/model/scene/auxiliary/overlay/EXE bytes remain exact for the baseline intent.");
             FullImage(original, disc, legacy.DiscPlan);
+            InverseStreams(original, disc);
 
             var equivalentTile = await NativeId65TiledDocumentCompilation.CaptureAsync(original,
                 Make([Tile(0, 8448, 8448, 8704, 1024, 1024)], 8960, 8960, 9216, 64, 19));
@@ -213,6 +218,70 @@ internal static class TiledCompilationCases
             Convert.ToHexStringLower(retained.GetHashAndReset()) == "1818fe50a132901b9ad670769d4967ccc0a5120897637efa2ad709b8f1d53188",
             "New complete image equals the independent reference; original inverse and legacy image remain exact.");
         Console.WriteLine($"TILED_COMPILATION_PHYSICAL_OK sha256={hash} changed={changed} actualInverse=true physicalOutputWritten=false");
+    }
+
+    private static void InverseStreams(string path, NativeId65FreshDiscPlan disc)
+    {
+        using (var candidate = new CandidateStream(path, disc))
+        {
+            var measured = NativeId65FreshDiscStreaming.VerifyInverse(disc, candidate, default);
+            Check(measured.OutputSha256 == ImageReference && measured.ChangedSectors == 1253 &&
+                candidate.Position == OriginalLength, "Shared bounded inverse authenticates the complete candidate and restored original.");
+        }
+        foreach (int lba in new[] { 0, 22, 55124, 100000 })
+        {
+            using var candidate = new CandidateStream(path, disc, corruptLba: lba);
+            Reject<InvalidDataException>(() => NativeId65FreshDiscStreaming.VerifyInverse(disc, candidate, default),
+                "Inverse rejects changed or untouched corruption before returning a complete digest.");
+        }
+        using (var shortCandidate = new CandidateStream(path, disc, truncated: true))
+            Reject<EndOfStreamException>(() => NativeId65FreshDiscStreaming.VerifyInverse(disc, shortCandidate, default),
+                "A declared full-length candidate cannot hide a short actual sector read.");
+        using (var trailingCandidate = new CandidateStream(path, disc, trailing: true))
+            Reject<InvalidDataException>(() => NativeId65FreshDiscStreaming.VerifyInverse(disc, trailingCandidate, default),
+                "Declared full length cannot hide a byte beyond actual EOF.");
+        Console.WriteLine("TILED_SHARED_INVERSE_OK physicalOutputWritten=false");
+    }
+
+    // Read-only generated stream for source tests. The image golden above is
+    // independently reconstructed, not learned from this production transform.
+    private sealed class CandidateStream : Stream
+    {
+        private readonly FileStream _source;
+        private readonly NativeId65FreshDiscPlan _disc;
+        private readonly int _corruptLba;
+        private readonly bool _truncated, _trailing;
+        private long _position;
+        internal CandidateStream(string path, NativeId65FreshDiscPlan disc, int corruptLba = -1,
+            bool truncated = false, bool trailing = false)
+        { _source = File.OpenRead(path); _disc = disc; _corruptLba = corruptLba; _truncated = truncated; _trailing = trailing; }
+        public override bool CanRead => true;
+        public override bool CanSeek => true;
+        public override bool CanWrite => false;
+        public override long Length => OriginalLength;
+        public override long Position { get => _position; set => throw new NotSupportedException(); }
+        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+        public override int Read(Span<byte> buffer)
+        {
+            if (buffer.Length == 0) return 0;
+            if (_position == OriginalLength)
+            {
+                if (!_trailing) return 0;
+                buffer[0] = 0xCD; _position++; return 1;
+            }
+            if (_position > OriginalLength || (_truncated && _position >= OriginalLength - 2352)) return 0;
+            int lba = checked((int)(_position / 2352)), sectorOffset = (int)(_position % 2352);
+            byte[] raw = new byte[2352]; _source.Position = lba * 2352L; _source.ReadExactly(raw);
+            byte[] after = _disc.CreateExpectedRawSector(lba, raw);
+            if (lba == _corruptLba) after[24] ^= 1;
+            int count = Math.Min(buffer.Length, 2352 - sectorOffset);
+            after.AsSpan(sectorOffset, count).CopyTo(buffer); _position += count; return count;
+        }
+        protected override void Dispose(bool disposing) { if (disposing) _source.Dispose(); base.Dispose(disposing); }
+        public override void Flush() => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     private static NativeFreshLevelDocumentIntent Document(int count = 3, int startX = 8448, int width = 2048,

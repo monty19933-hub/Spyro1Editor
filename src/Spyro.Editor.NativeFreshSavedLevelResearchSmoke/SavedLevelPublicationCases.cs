@@ -14,6 +14,8 @@ internal static class SavedLevelPublicationCases
     // Observed full-source family regression reference (source92), including
     // complete original inverse. This is not an independent image oracle.
     internal const string ExpectedFamilyImage = "408dfdfc577f991e635e4c0b636344333ca4b2654d89afabd88af88cc1a55c98";
+    // Independent test-side reconstruction, frozen before tiled production.
+    internal const string ExpectedTiledImage = "7ba0b29b68a1bee415901382c3a3b5345ccb01ca84872502131f68361afdc305";
     internal const string OriginalCue = "05142502c75d3a0b6374003a8fe41893d6faf0ad55863ff0b62a265a1b152766";
     internal static readonly string[] Modes = ["--publish-saved-level-reviewed", "--verify-saved-level-reviewed",
         "--partial-saved-level-reviewed", "--stale-saved-level-reviewed", "--unconfirmed-saved-level-reviewed",
@@ -21,14 +23,17 @@ internal static class SavedLevelPublicationCases
         "--artifact-notify-saved-level-reviewed", "--cancel-saved-level-reviewed",
         "--publish-mixed-saved-level-reviewed", "--verify-mixed-saved-level-reviewed",
         "--stale-mixed-saved-level-reviewed", "--publish-family-saved-level-reviewed",
-        "--verify-family-saved-level-reviewed", "--stale-family-saved-level-reviewed"];
+        "--verify-family-saved-level-reviewed", "--stale-family-saved-level-reviewed",
+        "--publish-tiled-saved-level-reviewed", "--verify-tiled-saved-level-reviewed", "--stale-tiled-saved-level-reviewed"];
     internal sealed record Request(string Mode, string Bin, string Cue, string ProjectRoot, string ProjectId, string Output);
     internal static bool IsMode(string[] args) => args.Length > 0 && Modes.Contains(args[0], StringComparer.Ordinal);
     internal static bool IsMixedMode(string mode) => mode == Modes[9] || mode == Modes[10] || mode == Modes[11];
     internal static bool IsFamilyMode(string mode) => mode == Modes[12] || mode == Modes[13] || mode == Modes[14];
+    internal static bool IsTiledMode(string mode) => mode == Modes[15] || mode == Modes[16] || mode == Modes[17];
     internal static string OperationMode(string mode) => mode == Modes[9] ? Modes[0] :
         mode == Modes[10] ? Modes[1] : mode == Modes[11] ? Modes[3] :
         mode == Modes[12] ? Modes[0] : mode == Modes[13] ? Modes[1] : mode == Modes[14] ? Modes[3] :
+        mode == Modes[15] ? Modes[0] : mode == Modes[16] ? Modes[1] : mode == Modes[17] ? Modes[3] :
         Modes.Contains(mode, StringComparer.Ordinal) ? mode : throw new ArgumentException("Unknown reviewed saved-level mode.");
     internal static Request Parse(string[] args)
     {
@@ -45,7 +50,7 @@ internal static class SavedLevelPublicationCases
     {
         var request = Parse(args);
         string operationMode = OperationMode(request.Mode);
-        bool mixed = IsMixedMode(request.Mode), family = IsFamilyMode(request.Mode), verify = operationMode == Modes[1];
+        bool mixed = IsMixedMode(request.Mode), family = IsFamilyMode(request.Mode), tiled = IsTiledMode(request.Mode), verify = operationMode == Modes[1];
         string bin = Path.GetFullPath(request.Bin), cue = Path.GetFullPath(request.Cue);
         string projectRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.ProjectRoot));
         string output = RequireLocation(request.Output, bin, cue, projectRoot, verify);
@@ -64,13 +69,18 @@ internal static class SavedLevelPublicationCases
             savedFiles = SavedFiles.Capture(project); // All small acquired streams close internally, even on error.
             saved = NativeFreshSavedLevelDocumentReadContext.Capture(NativeFreshLevelDocumentStore.Capture(project));
             savedFiles.RequireCurrent();
-            // The new gate preserves the complete schema3 fixture and its IDs
+            // These gates preserve the complete authored fixture and its IDs
             // before invoking the same public saved Candidate factory.
-            if (family) RequireFixtureDocument(request.Mode, NativeFreshLevelDocumentCodec.SerializeCanonical(saved.Document));
-            candidate = mixed || family
+            if (family || tiled) RequireFixtureDocument(request.Mode, NativeFreshLevelDocumentCodec.SerializeCanonical(saved.Document));
+            candidate = mixed || family || tiled
                 ? await NativeFreshSavedLevelResearchCandidatePlan.CaptureSavedAsync(bin, cue, saved.Snapshot)
                 : await NativeFreshSavedLevelResearchCandidatePlan.CaptureAsync(bin, cue, saved);
-            if (family)
+            if (tiled)
+                Check(candidate.TiledCompilation != null && ReferenceEquals(candidate.SavedSnapshot, saved.Snapshot) &&
+                    candidate.ExpectedImageByteLength == ImageLength && candidate.ExpectedChangedRawSectors == 1253 &&
+                    candidate.ExpectedImageSha256 == ExpectedTiledImage,
+                    "Exact independently reconstructed tiled saved physical recipe; no runtime claim.");
+            else if (family)
                 Check(candidate.FamilyCompilation != null && ReferenceEquals(candidate.SavedSnapshot, saved.Snapshot) &&
                     candidate.ExpectedImageByteLength == ImageLength && candidate.ExpectedChangedRawSectors == 1292 &&
                     candidate.ExpectedImageSha256 == ExpectedFamilyImage,
@@ -145,7 +155,7 @@ internal static class SavedLevelPublicationCases
     internal static void RequireFixtureDocument(string mode, ReadOnlySpan<byte> canonical)
     {
         _ = OperationMode(mode);
-        var document = IsFamilyMode(mode) ? FamilySavedCases.Document() :
+        var document = IsTiledMode(mode) ? SavedTiledDocumentFixture.Document() : IsFamilyMode(mode) ? FamilySavedCases.Document() :
             IsMixedMode(mode) ? MixedSavedCases.Document() : Cases.Document(14, 1, 70, 1, 128, 20);
         Check(canonical.SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(document)),
             "Exact actual canonical recipe; no caller hash authority.");
@@ -204,6 +214,16 @@ internal static class SavedLevelPublicationCases
     }
     private static (string Image, int Sectors) ExpectedRecipe(NativeFreshSavedLevelResearchCandidatePlan plan)
     {
+        if (plan.TiledCompilation is { } tiled)
+        {
+            plan.RequireTiledAncestry(plan.Saved, tiled);
+            RequireFixtureDocument(Modes[15], plan.CopyCanonicalDocument());
+            Check(plan.MixedDisc == null && plan.FamilyCompilation == null &&
+                ReferenceEquals(tiled.Document, plan.Saved.Document) &&
+                ReferenceEquals(tiled.DiscPlan.BodyAncestor.TiledSceneAncestor, tiled.FreshResourceAncestor),
+                "Tiled physical expectation requires the actual complete saved document and issued scene/body/disc chain.");
+            return (ExpectedTiledImage, 1253);
+        }
         if (plan.FamilyCompilation is { } family)
         {
             plan.RequireFamilyAncestry(plan.Saved, family);

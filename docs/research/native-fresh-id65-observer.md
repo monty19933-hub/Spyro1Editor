@@ -1,8 +1,9 @@
 # Fresh ID65 read-only diagnostic observer
 
-The new `tools/Observe-SpyroFreshId65.py` is a manual diagnostic for the fixed
-untextured A/N16 fresh-level candidate, not a general level viewer or a gameplay
-certificate. No emulator was launched or connected during its implementation.
+`tools/Observe-SpyroFreshId65.py` is a manual diagnostic for separately selected
+fixed fresh-level candidates, not a general level viewer or a gameplay
+certificate. Its default is the untextured A/N16 profile described first below.
+No emulator was launched or connected during its implementation.
 
 The expected whole BIN is
 `1818fe50a132901b9ad670769d4967ccc0a5120897637efa2ad709b8f1d53188`.
@@ -88,3 +89,39 @@ invalid-slack and changed-gate tests require their specific warning reasons.
 Root replay passed22 default tests (one source-only skip) and all five exact
 source checks. Logs use `fresh-id65-observer-floor-` and
 `fresh-id65-observer-clean-baseline-` prefixes in the same evidence directory.
+
+## Exact three-tile profile (2026-09-19)
+
+`--profile tiled-three-track19-r01` selects only the independently reconstructed
+three2048-square, color-only tiled fixture. It does not accept arbitrary schema4
+documents or infer a profile from runtime memory. The prior default and
+`edited-landing-track02-r01` profiles keep their existing gates and behavior.
+
+The expected image annotation is
+`7ba0b29b68a1bee415901382c3a3b5345ccb01ca84872502131f68361afdc305`;
+body `37157a7248c90665309d8cee21c739a846aca284426cd602c65d627788c06009`.
+Independently identify the exact process/open BIN and verify its saved-project
+receipt before connecting. These annotations never authenticate it themselves.
+
+Actual loader evidence286 derives used dataA58, model8008A924 and scene8009A124.
+The same N16 scene layout yields rows8009A1F8, arena end8009A950 and
+buckets8009A960; actual companion relocation yields root80097554. The old
+profiles reject these moved values, and the tiled profile rejects old addresses,
+before any dynamic-row or particle scan. No mutable global profile switching is
+used. Its XY scope is the closed rectangle8448..14592 by8448..10496; Z remains
+reported only, not a collision/contact assertion.
+
+The independent review identified seams at X10496/12544 and the separate
+collision-tree leaf boundary X12288 inside tile1. A proposed observed route near
+Y9472, X8960->14080->8960 crosses both seams, the leaf change and the internal
+triangle diagonals. Retain coordinate samples and continuous visual observations;
+uniform floor colors alone do not identify a boundary crossing. Jump/landing,
+camera visibility, outer-edge rejection and fall/recovery are separate checks.
+No gameplay acceptance is established by preparing this observer.
+
+Tests-first RED has11tests with39missing-profile subtest errors. Root replay310
+passes42tests with3explicit-source tests skipped, including11new tiled cases:
+all moved gates/cursors and rereads, complete bounded sixteenth row, malformed
+profile before reads/socket, no opaque-pointer following, boundaries and Z
+non-authority, mocked CLI only, unchanged legacy sample/read-trace hashes.
+No source image or real socket is opened by that replay.
