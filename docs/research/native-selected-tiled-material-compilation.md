@@ -180,3 +180,47 @@ again accepted the exact existing R05 BIN/CUE/receipt/plan and unchanged saved
 revision. Selected free434 passed93 checks/38 refusals. This checkpoint is ready
 for a separate new application build and actual selected-material publication/
 DuckStation work; neither N1 nor N3 gameplay has been observed at this point.
+
+## R06 actual editor publication and N3 gameplay
+
+The separate Mac/Windows package437 was built from01ef92a into the preserved
+private directory `_local/v6-private-preview-20260919-r06.ztR4LG`. Community/
+ad-hoc signing and host-provenance allowances were explicit; no public upload,
+notarization or Windows runtime test occurred. The isolated launcher is
+`Open V6 Selected Materials.command`; `PRIVATE-PREVIEW.md` records identities,
+instructions, results and limits. R05 remains unchanged.
+
+The actual Mac editor loaded35/35 terrain/object caches and2070 texture entries,
+opened the exact N3 saved aggregate and published using its normal Fresh Level
+button and native folder picker. Mutation controls were disabled while busy.
+New-process442 and post-runtime444 complete physical/inverse verification passed
+with unchanged original BIN/CUE, canonical/raw saved document and manifest.
+Runtime438/439 independently published/verified the same image;440 stale input
+refused before publication with zero candidate artifacts.
+
+UI output: `native-ui-exports/fresh-native-research-20260920-042658702-886ea630/`.
+BIN is `f1c137476833d1c046a78df812b40a47f8dc6558051c823437d7c5b3f86d8e32`,
+byte-identical to independent403 and the CLI publication. UI receipt is
+`7152ad9ad343f9399700bd716a20d1e146ce81e687348044a3d2e0d47d6f5d5c`, plan
+`d9f396119f2276dd1d3fa961fd317be429bdbde532e19d96be2db744e2da6d30`.
+
+That exact UI CUE was cold-booted via full Sony firmware in installed DuckStation
+PID83125; process/open BIN and loopback-only observer listener were independently
+identified. Normal copied-card Load Game, Stone Hill inventory and native LAB
+sequence entered the authored level. No foreign state, cheats, RAM/register
+writes or debugger execution was used. The three static materials were coherent
+in the observed forward/reverse views. Both tile seams, collision cell and face
+diagonals were crossed while grounded; far jump/landing and deliberate edge
+fall/native respawn were observed. Final idle was30game/60video FPS at100%.
+
+`_local/native-v6-selected-material-runtime-20260919-r01.GMTxFv/RUNTIME-SESSION.md`
+retains exact coordinates, one initial control overshoot, labels corrected by
+actual positions,26 sequential read-only samples and screenshot inventory.
+Observer authority flags stay false; these bounded observations do not certify
+all compositions, HQ/animated paths, audio quality, resource peaks, placed
+Mobys or full new-level portal/save ownership. N1 gameplay remains unobserved.
+
+Both apps are closed. DuckStation exited normally with resume-state saving off;
+the two original INIs were restored byte-for-byte, original card hash unchanged,
+private savestates empty. No private saves/states copied back. The exact preserved
+R06 application is not rebuilt after this test.
