@@ -56,6 +56,10 @@ public sealed class NativeFreshFlatTileIntent
     {
         NativeFreshEditorId.Require(editorId);
         ArgumentNullException.ThrowIfNull(materials);
+        // Schema4 keeps its existing authoring/source profile even when the
+        // shared packing kernel supports a wider neutral single rectangle.
+        if (width is < 16 or > 2048 || depth is < 16 or > 2048)
+            throw new InvalidDataException("Schema4 tile extents must remain16..2048 native world units.");
         var tile = new NativeFreshFlatTileIntent(editorId, x, y, z, width, depth, floorColor, materials);
         // The shared actual producer, not a parallel approximate geometry grammar.
         _ = NativeFlatTileSurfaceLayout.Compile([tile.ToNativeTile()], 0);

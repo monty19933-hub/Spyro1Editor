@@ -20,6 +20,7 @@ Require(bundle.CopyBundle().SequenceEqual(NativeId65AuthoredSurfaceLayout.Compil
 Require(NativeId65AuthoredSurfaceLayout.DecodeAndValidate(bundle.CopyBundle()) == floor, "strict independent readback");
 Oracle(bundle, floor);
 SharedCollisionGenerationCases.Run(Require);
+WideSingleSurfaceCases.Run(Require);
 FlatTileSurfaceCases.Run(Require);
 
 // Display channels are not packed native words: native storage is R, G, B, 0.
@@ -86,7 +87,7 @@ foreach (var invalid in new[]
     floor with { X = 262144 }, floor with { Y = 262144 }, floor with { Z = 262144 },
     floor with { X = 8449 }, floor with { Y = 8449 }, floor with { Z = 8705 },
     floor with { Width = 0 }, floor with { Depth = 0 }, floor with { Width = 15 },
-    floor with { Depth = 2049 }, floor with { Width = 2064 },
+    floor with { Depth = 2049 }, floor with { Width = 3088 },
     floor with { X = 11264, Width = 1024 }, floor with { Y = 11264, Depth = 1024 },
     floor with { X = int.MaxValue }, floor with { Width = int.MaxValue },
     floor with { FloorRgb = 0x1000000 }, floor with { SkyRgb = 0xFF000000 }

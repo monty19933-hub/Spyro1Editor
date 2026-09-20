@@ -89,7 +89,7 @@ internal static class NativeFreshSavedResearchReadinessCases
         foreach (var (kind, unsupported) in unsupportedTiles)
             Check(!NativeFreshSavedLevelResearchEligibility.IsSupportedTiledProfile(unsupported),
                 "Every tile face, every placement tag and actual allocation participate in readiness: " + kind);
-        foreach (string kind in new[] { "retail", "retail-t2", "schema1", "base-color", "mixed", "wizard", "dirty", "no-owner", "no-source", "owner-null", "owner-throw",
+        foreach (string kind in new[] { "retail", "retail-t2", "retail-2048", "retail-wide", "retail-deep", "retail-wide-deep", "schema1", "base-color", "mixed", "wizard", "dirty", "no-owner", "no-source", "owner-null", "owner-throw",
             "mixed-14-70", "mixed-70-14", "mixed-14-14", "mixed-route", "mixed-base", "mixed-music", "mixed-t2", "mixed-pair", "mixed-two-wizards", "mixed-nonretail",
             "mixed-dirty", "mixed-no-owner", "mixed-no-source", "mixed-owner-null", "mixed-owner-throw",
             "family", "family-dirty", "family-native-dirty", "family-no-owner", "family-no-source", "family-owner-null", "family-owner-throw",
@@ -117,7 +117,7 @@ internal static class NativeFreshSavedResearchReadinessCases
             bool noSource = kind is "no-source" or "mixed-no-source" or "family-no-source" or "tiled-no-source" or "tiled-mat-no-source";
             bool nullOwner = kind is "owner-null" or "mixed-owner-null" or "family-owner-null" or "tiled-owner-null" or "tiled-mat-owner-null";
             bool throwingOwner = kind is "owner-throw" or "mixed-owner-throw" or "family-owner-throw" or "tiled-owner-throw" or "tiled-mat-owner-throw";
-            bool ready = kind is "retail" or "retail-t2" or "mixed-14-70" or "mixed-70-14" or "mixed-14-14" or "family" or "tiled" or "tiled-data1000" ||
+            bool ready = kind is "retail" or "retail-t2" or "retail-2048" or "mixed-14-70" or "mixed-70-14" or "mixed-14-14" or "family" or "tiled" or "tiled-data1000" ||
                 supportedMaterials.ContainsKey(kind) || nullOwner || throwingOwner;
             bool reachesPicker = ready && !nullOwner && !throwingOwner;
             string dirtyField = kind switch { "family-native-dirty" => "FreshNativeMobyX", "tiled-dirty" => "FreshSpawnZ", "tiled-tile-dirty" => "FreshFloorX", "tiled-mat-dirty" => "FreshMaterial0TextureId", _ => "FreshHeading" };
@@ -238,7 +238,9 @@ internal static class NativeFreshSavedResearchReadinessCases
         var floor = mixed
             ? NativeId65FreshDocumentIntent.Create(8448, 8448, 8704, kind == "mixed-base" ? 1920 : 2048, 2048, 8960, 8960, 64,
                 new(80, 128, 112), new(128, 96, 64), kind == "mixed-music" ? 20 : 19)
-            : NativeId65FreshDocumentIntent.Create(8448, 8448, 8704, 1024, 1024, 8960, 8960, 128,
+            : NativeId65FreshDocumentIntent.Create(8448, 8448, 8704,
+                kind is "retail-wide" or "retail-wide-deep" ? 3072 : kind == "retail-2048" ? 2048 : 1024,
+                kind is "retail-deep" or "retail-wide-deep" ? 3072 : kind == "retail-2048" ? 2048 : 1024, 8960, 8960, 128,
                 new(80, 128, 112), new(128, 96, 64), 20);
         NativeFreshPlacementIntent[] placements = mixed
             ? [NativeFreshWizardRouteIntent.Create(F.A, 9984, 9984, 8704, kind == "mixed-route" ? 9456 : 9472, 9984)]

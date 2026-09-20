@@ -22,6 +22,7 @@ if (request?.IssuedMatrix != true)
     SavedWizardBindingCases.Free(Check);
     await MixedResourceCases.Free(Check);
     await Schema2MaterialAncestryCases.Free(Check);
+    await SameLayoutMaterialCases.Free(Check);
     await MixedBodyCases.Free(Check);
     await MixedExecutableCases.Free(Check);
     await MixedDiscCases.Free(Check);
@@ -102,6 +103,7 @@ try
     var host = await NativeId65FreshWizardResearchHostPlan.CaptureAsync(bin, scene, fallback);
     await MixedResourceCases.Source(bin,host,Check);
     await Schema2MaterialAncestryCases.Source(bin,host,Check);
+    await SameLayoutMaterialCases.Source(bin,Check);
     var body = await NativeId65FreshWizardResearchBodyPlan.CaptureAsync(bin, host);
     await MixedExecutableCases.LegacyBodyRefusal(body,Check);
     var exe = await NativeId65FreshWizardResearchExecutablePlan.CaptureAsync(bin, body);

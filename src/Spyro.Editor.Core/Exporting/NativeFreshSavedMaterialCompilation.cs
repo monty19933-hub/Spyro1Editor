@@ -173,19 +173,8 @@ internal sealed class NativeFreshSavedMaterialCompilation
     }
 
     private static (NativeFreshRetailTerrainMaterialIntent First, NativeFreshRetailTerrainMaterialIntent Second)
-        RequireProfile(NativeFreshLevelDocumentIntent document)
-    {
-        if (document.SchemaVersion != 2 || document.FloorMaterials == null)
-            throw new InvalidDataException("Saved material compilation requires schema 2.");
-        if (document.Placements.Count != 0)
-            throw new InvalidDataException("Saved material compilation requires zero placements; Wizard/material mixing is unavailable.");
-        if (document.FloorMaterials.Triangle0 is not NativeFreshRetailTerrainMaterialIntent first ||
-            document.FloorMaterials.Triangle1 is not NativeFreshRetailTerrainMaterialIntent second ||
-            first.SourceVariant != NativeFreshRetailTerrainMaterialIntent.SupportedSourceVariant ||
-            second.SourceVariant != NativeFreshRetailTerrainMaterialIntent.SupportedSourceVariant)
-            throw new InvalidDataException("Saved material compilation requires two retail terrain record descriptors.");
-        return (first, second);
-    }
+        RequireProfile(NativeFreshLevelDocumentIntent document) =>
+        NativeFreshSavedLevelResearchEligibility.RequireMaterialProfile(document);
 
     private static bool SameDescriptor(NativeFreshRetailTerrainMaterialIntent first, NativeFreshRetailTerrainMaterialIntent second) =>
         first.SourceVariant == second.SourceVariant && first.SourceWadEntry == second.SourceWadEntry && first.TextureId == second.TextureId;

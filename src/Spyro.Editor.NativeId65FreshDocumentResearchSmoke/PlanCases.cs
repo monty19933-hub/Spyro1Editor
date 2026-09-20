@@ -69,6 +69,21 @@ internal static class PlanCases
                 "Each valid non-music alternative changes canonical intent.");
         var tracks = Enumerable.Range(0, 48).Where(id => MusicTrackCatalog.Find(id)?.IsSelectable == true).ToArray();
         Check(tracks.Length == 46 && tracks.All(id => Recipe(track: id).MusicTrackId == id), "All46 selectable native music values are neutral-valid.");
+        Check(!NativeFreshSavedLevelResearchEligibility.IsSupportedUntexturedProfile(null) &&
+            Enumerable.Range(0, 4).All(i => NativeFreshSavedLevelResearchEligibility.IsSupportedUntexturedProfile(GoldenIntent(i))),
+            "All old public untextured golden shapes remain eligible; absent intent does not.");
+        foreach (var (width, depth) in new[] { (2048, 2048), (2064, 2048), (2048, 2064), (3072, 2048), (2048, 3072), (3072, 3072) })
+        {
+            var document = WideIntent(width, depth);
+            bool supported = width == 2048 && depth == 2048;
+            Check(NativeFreshSavedLevelResearchEligibility.IsSupportedUntexturedProfile(document) == supported &&
+                NativeFreshSavedLevelResearchEligibility.IsSupportedUntexturedProfile(NativeId65FreshDocumentCodec.Parse(
+                    NativeId65FreshDocumentCodec.SerializeCanonical(document))) == supported,
+                "Larger literal neutral geometry roundtrips without widening the public untextured profile.");
+            if (supported) NativeFreshSavedLevelResearchEligibility.RequireHistoricalFloorBounds(document);
+            else await Reject<InvalidDataException>(() =>
+            { NativeFreshSavedLevelResearchEligibility.RequireHistoricalFloorBounds(document); return Task.CompletedTask; });
+        }
         await StreamCases.SourceFree();
     }
 
@@ -157,6 +172,13 @@ internal static class PlanCases
             var starterAgain = await NativeId65FreshDocumentCompilation.CaptureAsync(original, GoldenIntent(0));
             Check((await NativeId65FreshDiscResearchCandidatePlan.CaptureAsync(original, cue, starterAgain.DiscPlan)).PlanSha256 == legacyStarterPlan,
                 "Old starter plan identity remains unchanged after generic alternatives.");
+            foreach (var (width, depth) in new[] { (3072, 2048), (2048, 3072) })
+            {
+                var document = WideIntent(width, depth);
+                var compiled = await NativeId65FreshDocumentCompilation.CaptureAsync(original, document);
+                Check(ReferenceEquals(compiled.Intent, document), "Internal experiment retains actual wider compilation intent.");
+                await Reject<InvalidDataException>(() => NativeId65FreshDocumentResearchPlan.CaptureAsync("\0", "\0", compiled));
+            }
             await StreamCases.Run(original, cue, baseline, baselinePlan);
         }
         finally
@@ -166,6 +188,10 @@ internal static class PlanCases
             Console.WriteLine($"GENERIC_FRESH_ORIGINAL_CUE_UNCHANGED sha256={Hash(cueBefore)} bytes={cueBefore.Length}");
         }
     }
+
+    private static NativeId65FreshDocumentIntent WideIntent(int width, int depth) =>
+        NativeId65FreshDocumentIntent.Create(8448, 8448, 8704, width, depth, 8960, 8960, 64,
+            new(80, 128, 112), new(128, 96, 64), 19);
 
     private static void RequireBinding(NativeId65FreshDocumentCompilation compiled, NativeId65FreshDocumentResearchPlan plan)
     {

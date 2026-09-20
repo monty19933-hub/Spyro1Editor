@@ -157,10 +157,10 @@ internal static class NativeId65AuthoredSurfaceLayout
         ArgumentNullException.ThrowIfNull(floor);
         if (floor.X is < 0 or > 262128 || floor.Y is < 0 or > 262128 || floor.Z is < 0 or > 262128 ||
             (floor.X & 15) != 0 || (floor.Y & 15) != 0 || (floor.Z & 15) != 0 ||
-            floor.Width is < 16 or > 2048 || floor.Depth is < 16 or > 2048 ||
+            floor.Width is < 16 or > 3072 || floor.Depth is < 16 or > 3072 ||
             (floor.Width & 15) != 0 || (floor.Depth & 15) != 0 ||
             floor.FloorRgb > 0xFFFFFF || floor.SkyRgb > 0xFFFFFF)
-            throw new InvalidDataException("Authored floor requires bounded nonnegative14-bit world/16 origins,16..2048 extents and RGB24 colors.");
+            throw new InvalidDataException("Authored floor requires bounded nonnegative14-bit world/16 origins,16..3072 extents and RGB24 colors.");
         if ((floor.X >> 12) != ((floor.X + floor.Width) >> 12) ||
             (floor.Y >> 12) != ((floor.Y + floor.Depth) >> 12))
             throw new InvalidDataException("The complete closed authored rectangle must remain in one native4096-unit collision cell.");
@@ -169,8 +169,8 @@ internal static class NativeId65AuthoredSurfaceLayout
     internal static byte[] Encode(NativeId65AuthoredFloor floor)
     {
         ValidateIntent(floor);
-        // The legacy admission and certificates stay unchanged. Shared tiled
-        // production owns the actual geometry; one tile preserves every byte.
+        // Shared production owns the actual geometry. The wider neutral policy
+        // preserves all existing bytes; source/export profile gates are separate.
         return NativeFlatTileSurfaceLayout.Compile(
             new[] { new NativeFlatSurfaceTile(floor.X, floor.Y, floor.Z,
                 floor.Width, floor.Depth, floor.FloorRgb) }, floor.SkyRgb).CopyBundle();

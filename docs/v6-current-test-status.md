@@ -64,9 +64,16 @@ authored spawn overlaps the chest's native sphere and Spyro is displaced off
 the small floor. This is not a verified chest gameplay path and is not enabled
 in R06. A separate source-bound diagnostic and earliest-entry observations are
 recorded in [the failed-spawn record](research/native-fresh-chest-spawn-failure.md).
-DuckStation is closed; both original settings files were restored byte-for-byte
-and the original memory card was unchanged. Corrected spawn/landing clearance,
-chest interaction and complete native lifecycle remain pending gates.
+The failed session was closed; both original settings files were restored
+byte-for-byte and the original memory card was unchanged. A separate corrected
+layout now passes source-owned spawn/landing clearance and independent wider
+floor/material/placement tests. It keeps the original spawn and native chest
+behavior, enlarging the finite floor to3072 and moving the key/chest family.
+Actual R02 output verification passes392 assertions, including full readback
+and complete Original inverse. This is not yet a gameplay pass: chest
+interaction and complete native lifecycle remain pending. Existing public
+single-floor export retains its2048 limit; this is an internal experiment,
+not a replacement R06 application. See [the wider-layout record](research/native-fresh-chest-wide-layout.md).
 See [the scene record](research/native-fresh-chest-scene-extension.md) and
 [the behavior record](research/native-locked-chest-behavior-layout.md) for current
 implementation evidence. These source-only changes do not replace R06.

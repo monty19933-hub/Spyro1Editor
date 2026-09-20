@@ -19,6 +19,7 @@ internal static class NativeFreshDocumentResearchUiCases
     {
         _checks = 0;
         RefusesAbsentUnsavedAndUnapplied();
+        RetainsHistoricalPublicFloorBounds();
         RefusesStaleRawSnapshot();
         CapturesActualSavedObjectAndCanonicalIntent();
         BusyGuardsAndKeyboardClose();
@@ -27,6 +28,27 @@ internal static class NativeFreshDocumentResearchUiCases
         PublishedCapturedVersionAdvisories();
         UncertainFailureDoesNotBecomeSuccess();
         Console.WriteLine($"FRESH_NATIVE_DOCUMENT_RESEARCH_UI_OK checks={_checks} sourceRequired=false nativeCompilation=false physicalPublication=false");
+    }
+
+    private static void RetainsHistoricalPublicFloorBounds()
+    {
+        foreach (var (width, depth) in new[] { (2048, 2048), (3072, 2048), (2048, 3072), (3072, 3072) })
+        {
+            using var f = new Fixture(width: width, depth: depth);
+            var intent = f.Window.CurrentIntent;
+            bool supported = width == 2048 && depth == 2048;
+            Check(intent is { } actual && actual.FloorWidth == width && actual.FloorDepth == depth && !f.Window.HasUnsavedChanges,
+                "Actual saved wider neutral floor remains editable without a substitute document.");
+            Check(f.Button("FreshDocumentResearch").IsEnabled == supported,
+                "Public untextured readiness retains the historical2048 dimension bound.");
+            f.Window.ResearchOutputPickerForTesting = _ => { f.PickerCalls++; return Task.FromResult<string?>(null); };
+            f.Fire("FreshDocumentResearch");
+            if (f.Window.ResearchTaskForTesting is { } task) Finish(task);
+            Check(f.PickerCalls == (supported ? 1 : 0) && f.SourceSelections == (supported ? 1 : 0) &&
+                f.Work.PrepareCalls == 0 && ReferenceEquals(intent, f.Window.CurrentIntent),
+                "Direct wider-floor click refuses before source selection/picker/worker; old2048 still reaches the canceled picker.");
+            f.AssertSavedBytes();
+        }
     }
 
     private static void RefusesAbsentUnsavedAndUnapplied()
@@ -406,13 +428,13 @@ internal static class NativeFreshDocumentResearchUiCases
         internal readonly Dictionary<string, byte[]> Sentinels;
         internal EditorProjectLayout? ActiveProject;
         internal string ActiveWorkspace;
-        internal int PickerCalls, DecisionCalls;
+        internal int PickerCalls, DecisionCalls, SourceSelections;
         internal string ImagePath;
         internal string DocumentPath => Path.Combine(Root, NativeId65FreshDocumentStore.FileName);
         internal string Output => Path.Combine(Root, "ui-outcome-only");
         internal string Status => Find<TextBlock>(Window, "FreshDocumentStatus").Text ?? "";
 
-        internal Fixture(bool save = true)
+        internal Fixture(bool save = true, int width = 1536, int depth = 1024)
         {
             Project = new(Root, "fresh-research-ui");
             ActiveProject = Project;
@@ -431,14 +453,14 @@ internal static class NativeFreshDocumentResearchUiCases
             // Tiny fixture placeholders only. FakeWork performs no native reads.
             Sentinels.Add(ImagePath, File.ReadAllBytes(ImagePath));
             Sentinels.Add(cue, File.ReadAllBytes(cue));
-            var intent = NativeId65FreshDocumentIntent.Create(8464, 8448, 8720, 1536, 1024, 9000, 8800, 77,
+            var intent = NativeId65FreshDocumentIntent.Create(8464, 8448, 8720, width, depth, 9000, 8800, 77,
                 new(190, 92, 52, 255), new(33, 49, 67, 255), 20);
             Canonical = NativeId65FreshDocumentCodec.SerializeCanonical(intent);
             Saved = NativeId65FreshDocumentStore.Capture(Project);
             if (save) Saved = NativeId65FreshDocumentStore.Save(Saved, intent);
             Window = new(Project, () => MainWindow.IsNativeFreshDocumentProjectCurrent(Project, ActiveProject, ActiveWorkspace));
             Window.ResearchWorkForTesting = Work;
-            Window.ResearchSourcePathsForTesting = () => (ImagePath, cue);
+            Window.ResearchSourcePathsForTesting = () => { SourceSelections++; return (ImagePath, cue); };
             Window.ResearchOutputPickerForTesting = _ => { PickerCalls++; return Task.FromResult<string?>(Output); };
             Window.DecisionForTesting = _ => { DecisionCalls++; return Task.FromResult(FreshDocumentDecision.Discard); };
             Window.Show(); Pump();

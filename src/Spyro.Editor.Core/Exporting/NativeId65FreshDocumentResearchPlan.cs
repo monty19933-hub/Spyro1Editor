@@ -92,6 +92,7 @@ public sealed class NativeId65FreshDocumentResearchPlan
         ArgumentNullException.ThrowIfNull(issued);
         ArgumentException.ThrowIfNullOrWhiteSpace(originalBin);
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceCue);
+        NativeFreshSavedLevelResearchEligibility.RequireHistoricalFloorBounds(issued.Intent);
         // This sealed private compilation always issues the current complete
         // untextured body, not an arbitrary DiscPlan paired with neutral intent.
         // Keep its fixed family separate from geometry/music values and lengths.

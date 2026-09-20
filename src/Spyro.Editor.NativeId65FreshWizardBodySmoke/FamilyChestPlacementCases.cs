@@ -11,6 +11,7 @@ internal static class FamilyChestPlacementCases
         check(!type.IsPublic&&type.IsSealed&&type.GetConstructors(BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic)
             .All(c=>c.IsPrivate),"Chest placement is a closed internal scene/Body transaction, not a public export gate.");
         Reject<ArgumentNullException>(()=>NativeFreshLockedChestPlacementPlan.Compose(null!,null!),check);
+        FamilyChestSpawnClearanceCases.Free(check);
         FamilyChestExecutableCases.Free(check);
     }
 
@@ -19,6 +20,7 @@ internal static class FamilyChestPlacementCases
         var intent=new NativeFreshLockedChestPlacementIntent(8960,9728,8704,9472,8960,8704);
         byte[] priorBody=body.CopyLevelData(),priorScene=body.SceneAncestor.CopyScene();
         var placement=NativeFreshLockedChestPlacementPlan.Compose(body,intent);
+        FamilyChestSpawnClearanceCases.Source(placement,check);
         FamilyChestExecutableCases.Source(placement,check);
         placement.RequireAncestry(body,intent);
         check(ReferenceEquals(body,placement.BodyAncestor)&&ReferenceEquals(intent,placement.Intent)&&

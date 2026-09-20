@@ -129,7 +129,7 @@ internal static class FlatTileSurfaceCases
         foreach (var bad in new[]
         {
             corner with { X = -16 }, corner with { Y = 1 }, corner with { Z = 262144 },
-            corner with { Width = 0 }, corner with { Depth = 2064 }, corner with { Width = int.MaxValue },
+            corner with { Width = 0 }, corner with { Depth = 3088 }, corner with { Width = int.MaxValue },
             corner with { X = 262128 }, corner with { Y = 262128 }, corner with { FloorRgb = 0x1000000 }
         }) Reject(() => NativeFlatTileSurfaceLayout.Compile(new[] { bad }, 0), "Unrepresentable native corners/extents/colors refuse.");
         Reject(() => NativeFlatTileSurfaceLayout.Compile(new[] { corner }, 0x1000000), "Unsupported sky high bits refuse.");

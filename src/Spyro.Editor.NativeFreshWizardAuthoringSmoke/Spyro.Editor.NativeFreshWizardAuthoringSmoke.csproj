@@ -12,6 +12,7 @@
   <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilyChestSceneCases.cs" Link="FamilyChestSceneCases.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilyChestBodyCases.cs" Link="FamilyChestBodyCases.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilyChestPlacementCases.cs" Link="FamilyChestPlacementCases.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilyChestSpawnClearanceCases.cs" Link="FamilyChestSpawnClearanceCases.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilyChestExecutableCases.cs" Link="FamilyChestExecutableCases.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardDiscSmoke/FamilyChestDiscCases.cs" Link="FamilyChestDiscCases.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilyParticleResidencyCases.cs" Link="FamilyParticleResidencyCases.cs" /></ItemGroup>

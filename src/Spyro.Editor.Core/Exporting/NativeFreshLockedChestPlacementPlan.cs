@@ -20,10 +20,22 @@ internal sealed class NativeFreshLockedChestPlacementPlan
     {
         BodyAncestor=body;Intent=intent;RequireAncestry(body,intent);
         var source=body.SceneAncestor;
-        var floor=body.ResourceAncestor.BaseBodyAncestor.HostAncestor.SceneAncestor.CompilationAncestor.Intent;
-        if(floor.FloorX!=8448||floor.FloorY!=8448||floor.FloorZ!=8704||floor.FloorWidth!=2048||floor.FloorDepth!=2048||
-            floor.SpawnZ!=9216||source.Allocation.Rows.Count!=9||source.Layout.SceneByteLength!=0x3800)
-            throw new InvalidDataException("Chest placement requires the actual existing separated-B floor and nine-row source owner.");
+        var baseBody=body.ResourceAncestor.BaseBodyAncestor;var baseScene=baseBody.HostAncestor.SceneAncestor;
+        var floor=baseScene.CompilationAncestor.Intent;
+        if(baseScene.Producer==NativeFreshWizardSceneProducer.SameLayoutMaterialAuthored)
+        {
+            NativeId65FreshWizardResearchExecutableSource.RequireWideFamilyMaterialBody(baseBody);
+            if(source.Allocation.Rows.Count!=9||source.Layout.SceneByteLength!=0x3800)
+                throw new InvalidDataException("Wide chest placement requires its actual nine-row source owner.");
+        }
+        else
+        {
+            if(baseScene.Producer!=NativeFreshWizardSceneProducer.MaterialAuthored)
+                throw new InvalidDataException("Chest placement requires an actual retained material Scene producer.");
+            if(floor.FloorX!=8448||floor.FloorY!=8448||floor.FloorZ!=8704||floor.FloorWidth!=2048||floor.FloorDepth!=2048||
+                floor.SpawnZ!=9216||source.Allocation.Rows.Count!=9||source.Layout.SceneByteLength!=0x3800)
+                throw new InvalidDataException("Chest placement requires the actual existing separated-B floor and nine-row source owner.");
+        }
         if(intent.KeyZ!=floor.FloorZ||intent.ChestZ!=floor.FloorZ||
             new[]{intent.KeyX,intent.KeyY,intent.KeyZ,intent.ChestX,intent.ChestY,intent.ChestZ}.Any(v=>(v&15)!=0)||
             (intent.KeyX==intent.ChestX&&intent.KeyY==intent.ChestY))

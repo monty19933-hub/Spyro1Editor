@@ -6,6 +6,9 @@ using Spyro.Editor.Core.Primitives;
 
 namespace Spyro.Editor.Core.Exporting;
 
+// Private-construction selection, never an external export-policy flag.
+internal enum NativeFreshMixedMaterialProfile { LegacySeparated, MaterialSeparated, SameLayoutMaterial }
+
 /// <summary>
 /// PRIVATE DRAFT: one source-owned resource composition, not a body or saved
 /// schema2 compiler. The retained Host/Scene still describe their old untextured
@@ -17,14 +20,14 @@ internal sealed class NativeFreshWizardMaterialResource
     private const string TransferPin = "92820254671062b6b20e2cfd2c243faac32ae6223e22d50d06221b4be8539883";
     private readonly byte[] _upload, _data, _models, _scene;
     private readonly NativeId65FreshWizardUploadTransferLayout _transfer;
-    private readonly bool _materialAuthored;
+    private readonly NativeFreshMixedMaterialProfile _profile;
 
     private NativeFreshWizardMaterialResource(NativeId65FreshWizardResearchHostPlan host,
         NativeStaticTerrainTextureSource material0, NativeStaticTerrainTextureSource material1,
-        NativeId65FreshWizardResearchFallbackResourceSource source, byte[] executable, bool materialAuthored)
+        NativeId65FreshWizardResearchFallbackResourceSource source, byte[] executable, NativeFreshMixedMaterialProfile profile)
     {
-        RequireInputs(host, material0, material1, materialAuthored);
-        _materialAuthored = materialAuthored;
+        RequireInputs(host, material0, material1, profile);
+        _profile = profile;
         HostAncestor = host;
         DocumentAncestor = SceneAncestor.AuthoringDocumentAncestor!;
         MaterialSources = Array.AsReadOnly(new[] { material0, material1 });
@@ -44,9 +47,22 @@ internal sealed class NativeFreshWizardMaterialResource
         RequirePartition(FallbackAncestor.Owners, [before, data, _models]);
         if (before.Length != UploadLength || data.Length != 0x8FC || _models.Length != 0x19000 || _scene.Length != 0x3000 ||
             Hash(before) != "8c4438fc13eca3b3bd40e9c056094c308fb272aded227577fb812ec9b16d96dc" ||
-            Hash(data) != "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b" ||
-            Hash(_scene) != "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343")
+            (!IsSameLayoutMaterialAuthored&&(Hash(data) != "b650a22bd06fe8d983a3422321981682e45c35c477aed176a88331034492983b" ||
+            Hash(_scene) != "08718e7594702ab21e17f49c459b99cf4e35c8190258abbcaaf720106a880343")))
             throw new InvalidDataException("Only the existing exact separatedB resource/scene extents are supported in this component.");
+        if(IsSameLayoutMaterialAuthored)
+        {
+            // Only canonical surface bytes may vary. Normalize for a complete
+            // complement comparison, never as a replacement for authored data.
+            NativeFreshWizardAuthoringShape.RequireSurfaceComplement(data,0x8FC,
+                "bea93c58d6d568c7c6162816ddad1afff32a51886f9412a0809b22887e0b83d4");
+            var b=DocumentAncestor.Base;
+            var actual=NativeId65AuthoredSurfaceLayout.DecodeAndValidate(data.AsSpan(8,0x144));
+            if(actual!=NativeId65AuthoredFloor.FromDisplayColors(b.FloorX,b.FloorY,b.FloorZ,
+                b.FloorWidth,b.FloorDepth,b.FloorColor,b.SkyColor))
+                throw new InvalidDataException("Same-layout mixed surface differs from its actual compiled authored floor.");
+            SceneAncestor.RequireExactScene(_scene);
+        }
         NativeId65FreshWizardResearchResourceSource.RequireInstalledGrammar(data, _models.AsSpan(0, 0x17800));
         byte[] occupied = NativeFreshWizardGpuOwnership.ReproduceFallback(source, FallbackAncestor, before, data, _models);
         var inputs = new[] { Input(material0, 0), Input(material1, 1) };
@@ -64,7 +80,8 @@ internal sealed class NativeFreshWizardMaterialResource
         UploadSha256 = Hash(_upload); DataSha256 = Hash(_data);
         PlanSha256 = Hash(JsonSerializer.SerializeToUtf8Bytes(new
         {
-            Profile = _materialAuthored ? "internal-schema2-separated-B-three-T1-pairs-mixed-resource-v1" :
+            Profile = IsSameLayoutMaterialAuthored ? "internal-schema2-same-layout-three-T1-pairs-mixed-resource-v1" :
+                Schema2MaterialBindingProven ? "internal-schema2-separated-B-three-T1-pairs-mixed-resource-v1" :
                 "internal-separated-B-three-T1-pairs-mixed-resource-v1",
             SourceImageSha256 = NativeMobySourceInventory.OriginalImageSha256,
             HostPlanSha256 = host.PlanSha256, FallbackPlanSha256 = FallbackAncestor.PlanSha256,
@@ -94,7 +111,8 @@ internal sealed class NativeFreshWizardMaterialResource
     internal string DataSha256 { get; }
     internal string TransferSourceSha256 => _transfer.TransferSourceSha256;
     internal bool SourceCertified => true;
-    internal bool Schema2MaterialBindingProven => _materialAuthored;
+    internal bool Schema2MaterialBindingProven => _profile!=NativeFreshMixedMaterialProfile.LegacySeparated;
+    internal bool IsSameLayoutMaterialAuthored => _profile==NativeFreshMixedMaterialProfile.SameLayoutMaterial;
     internal bool BodyIssued => false;
     internal bool RuntimeVerified => false;
     internal bool PublicationApproved => false;
@@ -112,7 +130,7 @@ internal sealed class NativeFreshWizardMaterialResource
         if (!ReferenceEquals(host, HostAncestor) || !ReferenceEquals(document, DocumentAncestor) ||
             !ReferenceEquals(material0, MaterialSources[0]) || !ReferenceEquals(material1, MaterialSources[1]))
             throw new InvalidDataException("Mixed resource requires its actual Host/aggregate/ordered source ancestors, not equal-looking replacements.");
-        RequireInputs(host, material0, material1, _materialAuthored);
+        RequireInputs(host, material0, material1, _profile);
     }
 
     internal void RequireExactOutputs(ReadOnlySpan<byte> upload, ReadOnlySpan<byte> data,
@@ -126,20 +144,25 @@ internal sealed class NativeFreshWizardMaterialResource
     internal static Task<NativeFreshWizardMaterialResource> CaptureAsync(string originalBin,
         NativeId65FreshWizardResearchHostPlan host, NativeStaticTerrainTextureSource material0,
         NativeStaticTerrainTextureSource material1, CancellationToken token = default) =>
-        CaptureCoreAsync(originalBin,host,material0,material1,false,token);
+        CaptureCoreAsync(originalBin,host,material0,material1,NativeFreshMixedMaterialProfile.LegacySeparated,token);
 
     internal static Task<NativeFreshWizardMaterialResource> CaptureMaterialAuthoredAsync(string originalBin,
         NativeId65FreshWizardResearchHostPlan host, NativeStaticTerrainTextureSource material0,
         NativeStaticTerrainTextureSource material1, CancellationToken token = default) =>
-        CaptureCoreAsync(originalBin,host,material0,material1,true,token);
+        CaptureCoreAsync(originalBin,host,material0,material1,NativeFreshMixedMaterialProfile.MaterialSeparated,token);
 
-    // One unchanged source-acquisition/finalization body, two named closed arms.
+    internal static Task<NativeFreshWizardMaterialResource> CaptureSameLayoutMaterialAuthoredAsync(string originalBin,
+        NativeId65FreshWizardResearchHostPlan host, NativeStaticTerrainTextureSource material0,
+        NativeStaticTerrainTextureSource material1, CancellationToken token = default) =>
+        CaptureCoreAsync(originalBin,host,material0,material1,NativeFreshMixedMaterialProfile.SameLayoutMaterial,token);
+
+    // One unchanged source-acquisition/finalization body, three named closed arms.
     private static async Task<NativeFreshWizardMaterialResource> CaptureCoreAsync(string originalBin,
         NativeId65FreshWizardResearchHostPlan host, NativeStaticTerrainTextureSource material0,
-        NativeStaticTerrainTextureSource material1, bool materialAuthored, CancellationToken token)
+        NativeStaticTerrainTextureSource material1, NativeFreshMixedMaterialProfile profile, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        RequireInputs(host, material0, material1, materialAuthored);
+        RequireInputs(host, material0, material1, profile);
         ArgumentException.ThrowIfNullOrWhiteSpace(originalBin);
         string path = Path.GetFullPath(originalBin);
         FileStream? held = null; NativeFreshWizardMaterialResource? result = null;
@@ -158,7 +181,7 @@ internal sealed class NativeFreshWizardMaterialResource
                 throw new InvalidDataException("Mixed original executable directory owner changed.");
             byte[] executable = DiscImage.ReadFileBytes(held, layout, entry.Lba, 0, 0x66000);
             token.ThrowIfCancellationRequested();
-            result = new(host, material0, material1, source, executable, materialAuthored);
+            result = new(host, material0, material1, source, executable, profile);
         }
         catch (Exception error) { failures.Add(error); }
         finally
@@ -185,23 +208,26 @@ internal sealed class NativeFreshWizardMaterialResource
     }
 
     private static void RequireInputs(NativeId65FreshWizardResearchHostPlan host,
-        NativeStaticTerrainTextureSource material0, NativeStaticTerrainTextureSource material1, bool materialAuthored)
+        NativeStaticTerrainTextureSource material0, NativeStaticTerrainTextureSource material1, NativeFreshMixedMaterialProfile profile)
     {
         ArgumentNullException.ThrowIfNull(host); ArgumentNullException.ThrowIfNull(material0); ArgumentNullException.ThrowIfNull(material1);
+        if(profile is not (NativeFreshMixedMaterialProfile.LegacySeparated or NativeFreshMixedMaterialProfile.MaterialSeparated or NativeFreshMixedMaterialProfile.SameLayoutMaterial))
+            throw new InvalidDataException("Unknown closed mixed material producer.");
         host.RequireAncestry(host.SceneAncestor, host.FallbackAncestor);
         var scene = host.SceneAncestor; var compilation = scene.CompilationAncestor;
         scene.RequireAncestry(compilation, scene.FamilyAncestor, scene.ResourceAncestor);
         var document = scene.AuthoringDocumentAncestor;
         if (document == null || scene.ResourceAncestor.ResourceProfile != NativeFreshWizardResourceProfile.AuthoredSameLayout)
             throw new InvalidDataException("Mixed source requires the actual authored schema1 separatedB aggregate ancestor.");
-        var route = materialAuthored
-            ? RequireMaterialInputs(scene,document,compilation,material0,material1)
+        var route = profile!=NativeFreshMixedMaterialProfile.LegacySeparated
+            ? RequireMaterialInputs(scene,document,compilation,material0,material1,profile)
             : NativeFreshWizardAuthoringShape.RequireDocument(document, compilation);
         var b = document.Base;
-        if (b.FloorX != 8448 || b.FloorY != 8448 || b.FloorZ != 8704 || b.FloorWidth != 2048 || b.FloorDepth != 2048 ||
+        if ((profile!=NativeFreshMixedMaterialProfile.SameLayoutMaterial&&(
+            b.FloorX != 8448 || b.FloorY != 8448 || b.FloorZ != 8704 || b.FloorWidth != 2048 || b.FloorDepth != 2048 ||
             b.SpawnX != 8960 || b.SpawnY != 8960 || b.SpawnZ != 9216 || b.Heading != 64 || b.MusicTrackId != 19 ||
             b.FloorColor != new ColorRgba(80, 128, 112) || b.SkyColor != new ColorRgba(128, 96, 64) ||
-            route != new NativeWizardPlacementIntent(9984, 9984, 8704, 9472, 9984) ||
+            route != new NativeWizardPlacementIntent(9984, 9984, 8704, 9472, 9984))) ||
             host.CopyAnchor != 0x8008BA38 || host.OverlayByteLength != 0x11000 ||
             host.OverlaySha256 != "ad6d952cbf70ab8b1eab53f7637ffd0235271b7b20696956c9406f36f714fa7e")
             throw new InvalidDataException("Only the existing exact separatedB Host/floor/route/music is supported in this component.");
@@ -222,11 +248,13 @@ internal sealed class NativeFreshWizardMaterialResource
 
     private static NativeWizardPlacementIntent RequireMaterialInputs(NativeId65FreshWizardResearchScenePlan scene,
         NativeFreshLevelDocumentIntent document, NativeId65FreshDocumentCompilation compilation,
-        NativeStaticTerrainTextureSource material0, NativeStaticTerrainTextureSource material1)
+        NativeStaticTerrainTextureSource material0, NativeStaticTerrainTextureSource material1,NativeFreshMixedMaterialProfile profile)
     {
-        if (scene.Producer != NativeFreshWizardSceneProducer.MaterialAuthored)
+        bool sameLayout=profile==NativeFreshMixedMaterialProfile.SameLayoutMaterial;
+        if (scene.Producer != (sameLayout?NativeFreshWizardSceneProducer.SameLayoutMaterialAuthored:NativeFreshWizardSceneProducer.MaterialAuthored))
             throw new InvalidDataException("Schema2 mixed resource requires its material-authored Scene producer.");
-        var route = NativeFreshWizardAuthoringShape.RequireMaterialDocument(document, compilation);
+        var route = sameLayout?NativeFreshWizardAuthoringShape.RequireSameLayoutMaterialDocument(document, compilation):
+            NativeFreshWizardAuthoringShape.RequireMaterialDocument(document, compilation);
         var first = (NativeFreshRetailTerrainMaterialIntent)document.FloorMaterials!.Triangle0;
         var second = (NativeFreshRetailTerrainMaterialIntent)document.FloorMaterials.Triangle1;
         if (!Matches(first,material0) || !Matches(second,material1) ||

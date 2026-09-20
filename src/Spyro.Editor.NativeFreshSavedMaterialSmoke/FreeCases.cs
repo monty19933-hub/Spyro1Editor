@@ -24,6 +24,25 @@ internal static class FreeCases
         await Throws<ArgumentNullException>(() => nullTask);
         var (_, valid) = Save("valid");
         await Throws<ArgumentException>(() => NativeFreshSavedMaterialCompilation.CaptureAsync(" ", valid));
+        foreach (var (width, depth) in new[] { (2048, 2048), (2064, 2048), (2048, 2064), (3072, 2048), (2048, 3072), (3072, 3072) })
+        {
+            var floor = NativeId65FreshDocumentIntent.Create(8448, 8448, 8704, width, depth, 8960, 8960, 64,
+                new(80, 128, 112), new(128, 96, 64), 19);
+            var document = Document().WithContent(floor, []);
+            var (project, saved) = Save($"public-floor-{width}-{depth}", document);
+            byte[] before = File.ReadAllBytes(saved.Snapshot.Path);
+            List<string> phases = [];
+            bool supported = width == 2048 && depth == 2048;
+            Check(NativeFreshSavedLevelResearchEligibility.IsSupportedMaterialProfile(document) == supported,
+                "Neutral larger floors remain saveable without widening the historical material export profile.");
+            if (supported)
+                await Throws<ArgumentException>(() => NativeFreshSavedMaterialCompilation.CaptureForSmokeAsync("\0", saved, phases.Add));
+            else
+                await Throws<InvalidDataException>(() => NativeFreshSavedMaterialCompilation.CaptureForSmokeAsync("\0", saved, phases.Add), "2048");
+            Check(phases.Count == 0 && File.ReadAllBytes(saved.Snapshot.Path).SequenceEqual(before) &&
+                !File.Exists(Path.Combine(project.RootPath, LockName)),
+                "Dimension refusal precedes invalid path normalization/source callbacks; saved bytes and lock remain untouched.");
+        }
 
         var color = NativeFreshFloorMaterialIntent.BaseFloorColor();
         var legacy = NativeFreshLevelDocumentIntent.Create(Base(), []);

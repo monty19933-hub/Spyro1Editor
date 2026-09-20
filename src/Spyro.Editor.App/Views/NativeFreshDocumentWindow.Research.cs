@@ -71,7 +71,8 @@ internal sealed partial class NativeFreshDocumentWindow
         bool hasOwner = _researchWorkForTesting != null || _beginResearch != null;
         _research.IsEnabled = _aggregateMode ? IsSavedResearchReady :
             !_researchBusy && !_materialInspectionBusy && !_decisionBusy && hasSource && hasOwner &&
-            _snapshot.Exists && _snapshot.RetainedRecoveryDirectory.Length == 0 && CurrentIntent != null && !HasUnsavedChanges;
+            _snapshot.Exists && _snapshot.RetainedRecoveryDirectory.Length == 0 &&
+            NativeFreshSavedLevelResearchEligibility.IsSupportedUntexturedProfile(CurrentIntent) && !HasUnsavedChanges;
         _cancelResearch.IsVisible = _researchBusy;
         _cancelResearch.IsEnabled = _researchBusy && _researchCancellation?.IsCancellationRequested == false;
     }
@@ -87,6 +88,11 @@ internal sealed partial class NativeFreshDocumentWindow
         if (!_snapshot.Exists || CurrentIntent == null || HasUnsavedChanges || _snapshot.RetainedRecoveryDirectory.Length != 0)
         {
             _status.Text = "Research candidates require an applied, saved document with resolved save recovery. Apply and Save explicitly, or Reopen; no content was replaced.";
+            return;
+        }
+        if (!NativeFreshSavedLevelResearchEligibility.IsSupportedUntexturedProfile(CurrentIntent))
+        {
+            _status.Text = "Existing public research export requires floor width and depth at most 2048. Larger neutral documents remain editable; no candidate was prepared.";
             return;
         }
 
@@ -274,6 +280,8 @@ internal sealed partial class NativeFreshDocumentWindow
             _preparationStarted = true;
             _context = await Task.Run(async () =>
             {
+                if (!NativeFreshSavedLevelResearchEligibility.IsSupportedUntexturedProfile(captured.Intent))
+                    throw new InvalidDataException("Public saved untextured research requires an actual saved floor with width and depth at most 2048.");
                 var compilation = await NativeId65FreshDocumentCompilation.CaptureAsync(image,
                     captured.Intent ?? throw new InvalidDataException("The actual saved document is absent."), token);
                 var plan = await NativeId65FreshDocumentResearchPlan.CaptureAsync(image, cue, compilation, token);

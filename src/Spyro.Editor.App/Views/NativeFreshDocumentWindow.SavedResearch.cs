@@ -38,9 +38,7 @@ internal sealed partial class NativeFreshDocumentWindow
         !_materialInspectionClosed && _beginResearch != null &&
         (_researchSourceForTesting ?? _researchSourcePaths) != null &&
         _aggregateSession?.Snapshot is { Exists: true, RetainedRecoveryDirectory.Length: 0 } &&
-        (CurrentAggregateIntent is { SchemaVersion: 2, Placements.Count: 0,
-            FloorMaterials.Triangle0: NativeFreshRetailTerrainMaterialIntent,
-            FloorMaterials.Triangle1: NativeFreshRetailTerrainMaterialIntent } ||
+        (NativeFreshSavedLevelResearchEligibility.IsSupportedMaterialProfile(CurrentAggregateIntent) ||
             NativeFreshSavedLevelResearchEligibility.IsSupportedMixedProfile(CurrentAggregateIntent) ||
             NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(CurrentAggregateIntent) ||
             NativeFreshSavedLevelResearchEligibility.IsSupportedTiledProfile(CurrentAggregateIntent) ||

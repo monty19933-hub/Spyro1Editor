@@ -84,8 +84,15 @@ internal sealed class NativeId65FreshWizardResearchExecutableSource
         var body=family.BaseBodyAncestor;RequireMaterialBody(body);family.RequireAncestry(body);
         family.RequireExactLevelData(family.CopyLevelData());
         var mixed=body.MixedResourceAncestor!;
-        _=NativeFreshWizardAuthoringShape.RequireMaterialDocument(mixed.DocumentAncestor,mixed.CompilationAncestor);
-        RequireFamilyMaterialDocumentShape(mixed.DocumentAncestor);
+        if(body.HostAncestor.SceneAncestor.Producer==NativeFreshWizardSceneProducer.SameLayoutMaterialAuthored)
+            RequireWideFamilyMaterialBody(body);
+        else
+        {
+            if(body.HostAncestor.SceneAncestor.Producer!=NativeFreshWizardSceneProducer.MaterialAuthored)
+                throw new InvalidDataException("Family executable requires an actual retained material Scene producer.");
+            _=NativeFreshWizardAuthoringShape.RequireMaterialDocument(mixed.DocumentAncestor,mixed.CompilationAncestor);
+            RequireFamilyMaterialDocumentShape(mixed.DocumentAncestor);
+        }
         if(!family.SourceCertified||family.Placements.Count!=2||family.Layout.PlacedCount!=2||family.Layout.DynamicCapacity!=32||
             mixed.MaterialSources.Count!=2||mixed.MaterialSources[0].SourceWadEntry!=14||mixed.MaterialSources[1].SourceWadEntry!=70)
             throw new InvalidDataException("Family executable currently requires the exact mixed-B14/70 T1 Wizard-plus-one-Grass profile.");
@@ -103,6 +110,32 @@ internal sealed class NativeId65FreshWizardResearchExecutableSource
             family.KnownSceneEndAddress!=family.SceneRuntimeAddress+0x3800||family.KnownSceneEndAddress>body.NormalReservedLowerAddress||
             !family.CopyInverseBaseBody().AsSpan().SequenceEqual(body.CopyLevelData()))
             throw new InvalidDataException("Family executable lost its exact source-bound growth, runtime bounds or complete base-Body inverse.");
+    }
+    // The new family profile is deliberately narrower than the neutral
+    // same-layout material grammar. Placement reuses this actual-owner gate;
+    // no caller-selected dimensions or source-free shape can issue it.
+    internal static void RequireWideFamilyMaterialBody(NativeId65FreshWizardResearchBodyPlan body)
+    {
+        RequireMaterialBody(body);
+        var mixed=body.MixedResourceAncestor!;var scene=body.HostAncestor.SceneAncestor;
+        var document=mixed.DocumentAncestor;var compilation=scene.CompilationAncestor;
+        if(scene.Producer!=NativeFreshWizardSceneProducer.SameLayoutMaterialAuthored||!mixed.IsSameLayoutMaterialAuthored||
+            !ReferenceEquals(mixed.HostAncestor,body.HostAncestor)||!ReferenceEquals(scene.AuthoringDocumentAncestor,document)||
+            !ReferenceEquals(mixed.CompilationAncestor,compilation))
+            throw new InvalidDataException("Wide family profile requires its actual same-layout material Scene, document, compilation and Body.");
+        var route=NativeFreshWizardAuthoringShape.RequireSameLayoutMaterialDocument(document,compilation);
+        var floor=compilation.Intent;
+        if(floor.FloorX!=8448||floor.FloorY!=8448||floor.FloorZ!=8704||floor.FloorWidth!=3072||floor.FloorDepth!=3072||
+            floor.SpawnX!=8960||floor.SpawnY!=8960||floor.SpawnZ!=9216||floor.Heading!=64||floor.MusicTrackId!=19||
+            floor.FloorColor!=new Spyro.Editor.Core.Primitives.ColorRgba(80,128,112)||
+            floor.SkyColor!=new Spyro.Editor.Core.Primitives.ColorRgba(128,96,64)||
+            route!=new NativeWizardPlacementIntent(9984,9984,8704,9472,9984)||
+            document.FloorMaterials!.Triangle0 is not NativeFreshRetailTerrainMaterialIntent{SourceWadEntry:14,TextureId:1}||
+            document.FloorMaterials.Triangle1 is not NativeFreshRetailTerrainMaterialIntent{SourceWadEntry:70,TextureId:1}||
+            mixed.MaterialSources.Count!=2||mixed.MaterialSources[0].SourceWadEntry!=14||mixed.MaterialSources[0].SourceTextureId!=1||
+            mixed.MaterialSources[1].SourceWadEntry!=70||mixed.MaterialSources[1].SourceTextureId!=1)
+            throw new InvalidDataException("Wide family profile requires the exact3072 floor, retained spawn/colors/track19/Wizard route and ordered14/70 T1 sources.");
+        mixed.RequireAncestry(body.HostAncestor,document,mixed.MaterialSources[0],mixed.MaterialSources[1]);
     }
     // Shape is source-free preflight only. The actual-family validator above
     // separately requires source owners, ancestry and native afterimages.

@@ -247,14 +247,7 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
         if (verified != _expected)
             throw new InvalidDataException("Saved-level readback differs from its actual source-issued measured image.");
     }
-    private static void RequireProfile(NativeFreshLevelDocumentIntent document)
-    {
-        if (document.SchemaVersion != 2 || document.Placements.Count != 0 || document.FloorMaterials == null ||
-            document.FloorMaterials.Triangle0 is not NativeFreshRetailTerrainMaterialIntent first ||
-            document.FloorMaterials.Triangle1 is not NativeFreshRetailTerrainMaterialIntent second ||
-            first.SourceVariant != NativeFreshRetailTerrainMaterialIntent.SupportedSourceVariant ||
-            second.SourceVariant != NativeFreshRetailTerrainMaterialIntent.SupportedSourceVariant)
-            throw new InvalidDataException("Saved-level research currently requires schema2, zero placements and two retail materials.");
-    }
+    private static void RequireProfile(NativeFreshLevelDocumentIntent document) =>
+        _ = NativeFreshSavedLevelResearchEligibility.RequireMaterialProfile(document);
     private static string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 }

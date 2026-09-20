@@ -58,6 +58,23 @@ internal static class CandidateCases
         }
         var (_, valid) = Save("empty-path");
         await Throws<ArgumentException>(() => NativeFreshSavedLevelResearchCandidatePlan.CaptureAsync(" ", "\0", valid));
+        foreach (var (width, depth) in new[] { (2048, 2048), (2064, 2048), (2048, 2064), (3072, 2048), (2048, 3072), (3072, 3072) })
+        {
+            var floor = NativeId65FreshDocumentIntent.Create(8448, 8448, 8704, width, depth, 8960, 8960, 64,
+                new(80, 128, 112), new(128, 96, 64), 19);
+            var document = Document().WithContent(floor, []);
+            var (_, saved) = Save($"public-floor-{width}-{depth}", document);
+            byte[] before = File.ReadAllBytes(saved.Snapshot.Path);
+            bool supported = width == 2048 && depth == 2048;
+            Check(NativeFreshSavedLevelResearchEligibility.IsSupportedMaterialProfile(document) == supported,
+                "Public saved P0 eligibility preserves both historical dimension bounds, independent of neutral editing.");
+            if (supported)
+                await Throws<ArgumentException>(() => NativeFreshSavedLevelResearchCandidatePlan.CaptureSavedAsync("\0", "\0", saved.Snapshot));
+            else
+                await Throws<InvalidDataException>(() => NativeFreshSavedLevelResearchCandidatePlan.CaptureSavedAsync("\0", "\0", saved.Snapshot), "2048");
+            Check(File.ReadAllBytes(saved.Snapshot.Path).SequenceEqual(before),
+                "Actual public Snapshot factory refuses wider saved intent before invalid source path normalization without editing it.");
+        }
         Check(!NativeFreshSavedLevelResearchCandidatePlan.OutputNames.SequenceEqual(
             NativeId65FreshTexturedResearchCandidatePlan.OutputNames), "New role cannot silently publish old fixed-a names.");
         Check(NativeFreshSavedLevelResearchCandidatePlan.OutputNames.SequenceEqual(new[] {

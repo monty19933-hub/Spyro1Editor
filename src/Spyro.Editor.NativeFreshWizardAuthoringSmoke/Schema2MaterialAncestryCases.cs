@@ -15,8 +15,10 @@ internal static class Schema2MaterialAncestryCases
 
     internal static async Task Free(Action<bool,string> check)
     {
-        check(Enum.GetValues<NativeFreshWizardSceneProducer>().Length==3,
-            "Three closed scene producer arms, not an export policy or new document class.");
+        check(Enum.GetValues<NativeFreshWizardSceneProducer>().SequenceEqual(new[]{
+            NativeFreshWizardSceneProducer.FixedA,NativeFreshWizardSceneProducer.Authored,
+            NativeFreshWizardSceneProducer.MaterialAuthored,NativeFreshWizardSceneProducer.SameLayoutMaterialAuthored}),
+            "Exactly four named scene producer arms in their retained order, not an open export policy or new document class.");
         var sceneFactory=typeof(NativeId65FreshWizardResearchScenePlan).GetMethod("CaptureMaterialAuthoredAsync",
             BindingFlags.Static|BindingFlags.NonPublic);
         var resourceFactory=typeof(NativeFreshWizardMaterialResource).GetMethod("CaptureMaterialAuthoredAsync",

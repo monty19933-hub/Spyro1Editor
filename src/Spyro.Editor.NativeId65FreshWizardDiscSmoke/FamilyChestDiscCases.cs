@@ -34,6 +34,8 @@ internal static class FamilyChestDiscCases
         Reject<InvalidDataException>(()=>NativeId65FreshWizardDiscGeometry.Compile(0x12000,0x20F000),check);
         Reject<ArgumentNullException>(()=>NativeId65FreshWizardDiscGeometry.CompileChest(null!),check);
         Reject<ArgumentNullException>(()=>NativeFreshResearchPhysicalAfterimages.ForChest(null!,null!),check);
+        Reject<ArgumentNullException>(()=>Source("\0",null!,check).GetAwaiter().GetResult(),check);
+        Reject<ArgumentNullException>(()=>SourceSameLayout("\0",null!,check).GetAwaiter().GetResult(),check);
         var helper=typeof(NativeFreshResearchPhysicalAfterimages);
         check(!helper.IsPublic&&helper.IsSealed&&helper.GetConstructors(BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic).All(c=>c.IsPrivate)&&
             helper.GetMethods(BindingFlags.Static|BindingFlags.Public|BindingFlags.Instance|BindingFlags.DeclaredOnly).Length==0,
@@ -41,7 +43,60 @@ internal static class FamilyChestDiscCases
         Console.WriteLine("NATIVE_FRESH_CHEST_DISC_FREE_OK experimentalKeyAssumption=true completeCensus=false runtime=false");
     }
 
-    internal static async Task Source(string path,NativeFreshLockedChestExperimentalExecutable executable,Action<bool,string> check)
+    internal static Task Source(string path,NativeFreshLockedChestExperimentalExecutable executable,Action<bool,string> check)
+    {
+        ArgumentNullException.ThrowIfNull(check);
+        RequireOriginalPlacement(executable);
+        Reject<InvalidDataException>(()=>RequireSameLayoutPlacement(executable),check);
+        check(true,"Historical chest disc entry retains the exact independent placed-scene reference480; it does not accept the wider fixture.");
+        return SourceCore(path,executable,check,"NATIVE_FRESH_CHEST_DISC_SOURCE_OK");
+    }
+
+    internal static Task SourceSameLayout(string path,NativeFreshLockedChestExperimentalExecutable executable,Action<bool,string> check)
+    {
+        ArgumentNullException.ThrowIfNull(check);
+        RequireSameLayoutPlacement(executable);
+        Reject<InvalidDataException>(()=>RequireOriginalPlacement(executable),check);
+        check(true,"Separate wide disc entry requires the actual retained SameLayoutMaterialAuthored producer,3072 square and exact new key/chest anchors.");
+        return SourceCore(path,executable,check,"NATIVE_FRESH_CHEST_DISC_SAME_LAYOUT_SOURCE_OK");
+    }
+
+    private static void RequireOriginalPlacement(NativeFreshLockedChestExperimentalExecutable executable)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        executable.RequireAncestry(executable.PlacementAncestor,executable.HostAncestor);
+        Require(Hash(executable.PlacementAncestor.CopyScene())=="075c84cfd5ec13dc245dfa8b888f349903056b07676fc1990c494875e90f20d3",
+            "Historical chest disc source requires the exact independent original-only placed-scene reference480.");
+    }
+
+    private static void RequireSameLayoutPlacement(NativeFreshLockedChestExperimentalExecutable executable)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        executable.RequireAncestry(executable.PlacementAncestor,executable.HostAncestor);
+        var placement=executable.PlacementAncestor;
+        var basis=placement.BodyAncestor.ResourceAncestor.BaseBodyAncestor;
+        var mixed=basis.MixedResourceAncestor??throw new InvalidDataException("Wide chest disc requires an actual material-authored base Body.");
+        var scene=basis.HostAncestor.SceneAncestor;
+        var floor=scene.CompilationAncestor.Intent;
+        basis.RequireMixedAncestry(mixed);
+        scene.RequireAncestry(scene.CompilationAncestor,scene.FamilyAncestor,scene.ResourceAncestor);
+        mixed.RequireAncestry(basis.HostAncestor,mixed.DocumentAncestor,mixed.MaterialSources[0],mixed.MaterialSources[1]);
+        Require(mixed.IsSameLayoutMaterialAuthored&&scene.Producer==NativeFreshWizardSceneProducer.SameLayoutMaterialAuthored&&
+            ReferenceEquals(mixed.SceneAncestor,scene)&&ReferenceEquals(mixed.DocumentAncestor,scene.AuthoringDocumentAncestor)&&
+            ReferenceEquals(mixed.DocumentAncestor.Base,floor)&&
+            floor.FloorX==8448&&floor.FloorY==8448&&floor.FloorZ==8704&&floor.FloorWidth==3072&&floor.FloorDepth==3072&&
+            floor.SpawnX==8960&&floor.SpawnY==8960&&floor.SpawnZ==9216&&
+            placement.Intent==new NativeFreshLockedChestPlacementIntent(9728,9120,8704,10864,9888,8704),
+            "Wide chest disc requires the actual same-layout material source/intent and exact3072 placement fixture, not just compatible physical lengths.");
+        placement.RequireAncestry(executable.BodyAncestor,placement.Intent);
+        // WideChestPlacementCases independently reconstructs every coordinate
+        // word and full scene/Body complement upstream. Do not turn this actual
+        // retained scene into a new producer-derived golden or caller hash.
+        placement.RequireExactScene(placement.CopyScene());
+    }
+
+    private static async Task SourceCore(string path,NativeFreshLockedChestExperimentalExecutable executable,
+        Action<bool,string> check,string successMarker)
     {
         using(var original=File.OpenRead(path))await NativeId65FreshDiscSource.RequireWholeOriginalAsync(original,CancellationToken.None);
         try
@@ -67,8 +122,8 @@ internal static class FamilyChestDiscCases
                 new[]{plan.BodySha256,plan.OverlaySha256,plan.ExecutableSha256,plan.WadDirectorySha256,plan.IsoRootSha256}
                     .SequenceEqual(required.Select(b=>Hash(b))),
                 "All complete typed payloads and independently patched both-endian root/reserved WAD owners match.");
-            check(Hash(plan.CopyBody().AsSpan(0x102000,0x3800))=="075c84cfd5ec13dc245dfa8b888f349903056b07676fc1990c494875e90f20d3",
-                "Disc's actual authored scene retains independent original-only placement reference480.");
+            check(plan.CopyBody().AsSpan(0x102000,0x3800).SequenceEqual(executable.PlacementAncestor.CopyScene()),
+                "Disc's complete scene is exactly its actual typed placement ancestor; entry-specific fixture authority remains separate.");
             string identity=plan.PlanSha256;
             foreach(byte[] bytes in copies){bytes[0]^=1;bytes[^1]^=1;}
             check(new[]{plan.CopyBody(),plan.CopyOverlay(),plan.CopyExecutable(),plan.CopyWadDirectory(),plan.CopyIsoRootDirectory()}
@@ -152,7 +207,7 @@ internal static class FamilyChestDiscCases
             plan.RequireAncestry(executable);
             check(plan.PlanSha256==identity&&plan.CopyBody().SequenceEqual(expected.Body)&&
                 executable.CopyExecutable().SequenceEqual(expected.Executable),"All refusals leave actual immutable ancestors and physical snapshots intact.");
-            Console.WriteLine($"NATIVE_FRESH_CHEST_DISC_SOURCE_OK observedImage={measured.OutputSha256} changed={measured.ChangedSectors} inverse={inverseHash} plan={identity} independentPayloadGolden=false outputsWritten=0 completeCensus=false runtime=false");
+            Console.WriteLine($"{successMarker} observedImage={measured.OutputSha256} changed={measured.ChangedSectors} inverse={inverseHash} plan={identity} independentPayloadGolden=false outputsWritten=0 completeCensus=false runtime=false");
         }
         finally
         {

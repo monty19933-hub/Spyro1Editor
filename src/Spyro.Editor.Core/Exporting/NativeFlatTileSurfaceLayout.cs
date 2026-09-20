@@ -133,7 +133,7 @@ internal static class NativeFlatTileSurfaceLayout
                 throw new InvalidDataException("Missing or excessive flat tiles.");
             if (tile.X is < 0 or > 262128 || tile.Y is < 0 or > 262128 || tile.Z is < 0 or > 262128 ||
                 (tile.X & 15) != 0 || (tile.Y & 15) != 0 || (tile.Z & 15) != 0 ||
-                tile.Width is < 16 or > 2048 || tile.Depth is < 16 or > 2048 ||
+                tile.Width is < 16 or > 3072 || tile.Depth is < 16 or > 3072 ||
                 (tile.Width & 15) != 0 || (tile.Depth & 15) != 0 || tile.FloorRgb > 0xFFFFFF ||
                 tile.X + tile.Width > 262128 || tile.Y + tile.Depth > 262128)
                 throw new InvalidDataException("Flat-tile corners/extents/colors are outside exact native packed geometry.");

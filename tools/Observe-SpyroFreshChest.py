@@ -4,6 +4,9 @@
 Independently identify DuckStation and its exact open BIN/CUE before connecting.
 Hashes below are annotations, never loaded-disc authentication. The initial GDB
 connection may pause emulation; resume/pause only in the UI. Use p <label> and q.
+--profile defaults to r01; r02 only selects wide-floor/anchor annotations and
+does not change runtime gates, addresses or read bounds. Unverified r02 payload
+hashes are omitted, not inferred from another candidate or the selected label.
 Only bounded memory-read packets and protocol acknowledgements are sent. No
 execution, RAM writes, automatic input, file output or gameplay certification.
 --self-test is offline and mutually exclusive with connecting.
@@ -37,6 +40,31 @@ ANNOTATIONS = MappingProxyType({
     "body_sha256": "77fdfded0383af6636ffa991c47d55f113b0f17327584213bb60a72494529d45",
     "executable_sha256": "81501f07ec9ce336089ec5a92f81bf51569aed723ac4f8ba1cf85ba0ef69a431",
 })  # Source483: these are NOT a full-image identity or CLI certificate.
+# Closed, deeply immutable annotations only. Both experiments have the same
+# native memory layout below; no profile supplies a pointer, bound or gate.
+# Preserve R01's original output fields/values by leaving its geometry absent.
+PROFILES = MappingProxyType({
+    "r01": MappingProxyType({
+        "profile": PROFILE,
+        "payload": ANNOTATIONS,
+        "geometry": None,
+    }),
+    "r02": MappingProxyType({
+        "profile": "private-fresh-chest-p9-runtime-experiment-v2",
+        "payload": MappingProxyType({}),  # Add only after actual emitted payload verification.
+        "geometry": MappingProxyType({
+            "floor_xyz": (8448, 8448, 8704),
+            "floor_width_depth": (3072, 3072),
+            "spawn_xyz": (8960, 8960, 9216),
+            "key_xyz": (9728, 9120, 8704),
+            "chest_xyz": (10864, 9888, 8704),
+            "chest_yaw_u8": 0xDC,
+            "reward_relative_xyz": ((-410, 1229, 512), (0, 1229, 512),
+                                    (-615, 205, 512), (-410, 615, 512), (204, 819, 512)),
+            "annotations_not_sampled_or_authenticated": True,
+        }),
+    }),
+})
 COPY, USED, MODEL, SCENE = 0x8008CA38, 0xA6C, 0x8008D4A4, 0x800A84A4
 ROWS, DYNAMIC, ARENA_END = SCENE + 0xD4, SCENE + 0x3EC, SCENE + 0x1244
 PLACED, CAPACITY, STRIDE = 9, 32, 0x58
@@ -171,11 +199,17 @@ def scan_particles(pool):
             "effect_samples": samples, "all256_slots_visited": terminal is None}
 
 
-def capture(client, label):
+def capture(client, label, profile="r01"):
+    if type(profile) is not str or profile not in PROFILES:
+        raise ValueError("Unsupported chest annotation profile; expected r01 or r02.")
+    annotations = PROFILES[profile]
     result = dict.fromkeys(AUTHORITY_FLAGS, False)
     result.update(utc=datetime.now(timezone.utc).isoformat(), label=str(label)[:120],
-                  expected_profile_annotation=PROFILE, expected_payload_annotations=dict(ANNOTATIONS),
+                  expected_profile_annotation=annotations["profile"],
+                  expected_payload_annotations=dict(annotations["payload"]),
                   sequential_reads_not_atomic=True, bounded_sample_valid=False, gate_reread_consistent=False)
+    if annotations["geometry"] is not None:
+        result["expected_geometry_annotations"] = dict(annotations["geometry"])
     try:
         result.update(read_fields(client, FIELDS))
         require_layout(result)  # No actor, private, particle or model reads before this.
@@ -291,18 +325,62 @@ def self_test():
             self.assertTrue(all(sample[name] is False for name in AUTHORITY_FLAGS))
             self.assertNotIn("expected_candidate_sha256", sample)
 
+        def test_closed_profiles_preserve_default_and_identical_read_bounds(self):
+            baseline = fixture(); default = capture(baseline, "same")
+            explicit_memory = fixture(); explicit = capture(explicit_memory, "same", "r01")
+            self.assertEqual(list(default), list(explicit))
+            self.assertEqual({k: v for k, v in default.items() if k != "utc"},
+                             {k: v for k, v in explicit.items() if k != "utc"})
+            self.assertEqual("private-fresh-chest-p9-runtime-experiment-v1", default["expected_profile_annotation"])
+            self.assertEqual({
+                "scene_sha256": "075c84cfd5ec13dc245dfa8b888f349903056b07676fc1990c494875e90f20d3",
+                "body_sha256": "77fdfded0383af6636ffa991c47d55f113b0f17327584213bb60a72494529d45",
+                "executable_sha256": "81501f07ec9ce336089ec5a92f81bf51569aed723ac4f8ba1cf85ba0ef69a431",
+            }, default["expected_payload_annotations"])
+            self.assertNotIn("expected_geometry_annotations", default)
+            self.assertEqual(baseline.reads, explicit_memory.reads)
+            wide_memory = fixture(); wide = capture(wide_memory, "same", "r02")
+            self.assertEqual(baseline.reads, wide_memory.reads)
+            self.assertEqual({}, wide["expected_payload_annotations"])
+            self.assertEqual("private-fresh-chest-p9-runtime-experiment-v2", wide["expected_profile_annotation"])
+            geometry = wide["expected_geometry_annotations"]
+            self.assertEqual((8448, 8448, 8704), geometry["floor_xyz"])
+            self.assertEqual((3072, 3072), geometry["floor_width_depth"])
+            self.assertEqual((8960, 8960, 9216), geometry["spawn_xyz"])
+            self.assertEqual((9728, 9120, 8704), geometry["key_xyz"])
+            self.assertEqual((10864, 9888, 8704), geometry["chest_xyz"])
+            self.assertEqual(0xDC, geometry["chest_yaw_u8"])
+            self.assertEqual(((-410, 1229, 512), (0, 1229, 512), (-615, 205, 512),
+                              (-410, 615, 512), (204, 819, 512)), geometry["reward_relative_xyz"])
+            self.assertTrue(geometry["annotations_not_sampled_or_authenticated"])
+            omitted = {"utc", "expected_profile_annotation", "expected_payload_annotations", "expected_geometry_annotations"}
+            self.assertEqual({k: v for k, v in default.items() if k not in omitted},
+                             {k: v for k, v in wide.items() if k not in omitted})
+            self.assertTrue(all(wide[name] is False for name in AUTHORITY_FLAGS))
+            for mapping in (PROFILES, PROFILES["r02"], PROFILES["r02"]["payload"], PROFILES["r02"]["geometry"]):
+                with self.assertRaises(TypeError): mapping["caller"] = "not authority"
+            wide["expected_payload_annotations"]["body_sha256"] = "caller change"
+            geometry["floor_width_depth"] = (1, 1)
+            self.assertEqual({}, PROFILES["r02"]["payload"])
+            self.assertEqual((3072, 3072), PROFILES["r02"]["geometry"]["floor_width_depth"])
+            for profile in (None, True, [], {}, "", "R01", "r03"):
+                memory = fixture()
+                with self.assertRaises(ValueError): capture(memory, "invalid", profile)
+                self.assertEqual([], memory.reads)
+
         def test_each_gate_refuses_before_payload_and_reread_discards_payload(self):
             scalar_reads = {(at, struct.calcsize(fmt)) for at, fmt in FIELDS.values()}
-            for name, (address, _, expected) in GATES.items():
-                with self.subTest(gate=name):
-                    memory = fixture(); memory.map(address, struct.pack("<I", expected ^ 1))
-                    self.assertFalse(capture(memory, "wrong")["bounded_sample_valid"])
-                    self.assertTrue(all(read in scalar_reads for read in memory.reads))
-                    memory = fixture(); memory.flip = (address, expected ^ 1)
-                    sample = capture(memory, "transition")
-                    self.assertFalse(sample["bounded_sample_valid"])
-                    self.assertEqual([name], sample["changed_gate_fields"])
-                    self.assertNotIn("placed_rows", sample); self.assertNotIn("particles", sample)
+            for profile in PROFILES:
+                for name, (address, _, expected) in GATES.items():
+                    with self.subTest(profile=profile, gate=name):
+                        memory = fixture(); memory.map(address, struct.pack("<I", expected ^ 1))
+                        self.assertFalse(capture(memory, "wrong", profile)["bounded_sample_valid"])
+                        self.assertTrue(all(read in scalar_reads for read in memory.reads))
+                        memory = fixture(); memory.flip = (address, expected ^ 1)
+                        sample = capture(memory, "transition", profile)
+                        self.assertFalse(sample["bounded_sample_valid"])
+                        self.assertEqual([name], sample["changed_gate_fields"])
+                        self.assertNotIn("placed_rows", sample); self.assertNotIn("particles", sample)
 
         def test_cursor_bounds_and_read_only_untrusted_globals(self):
             for name, values in (("dynamic_count", (33, 0xFFFFFFFF)),
@@ -367,14 +445,18 @@ def self_test():
                 self.assertNotIn((SCENE + PRIVATE_OFFSETS[3], PRIVATE_LENGTHS[3]), memory.reads)
 
         def test_both_scans_stop_at_terminal_and_never_read_one_extra(self):
-            memory = fixture(); memory.map(DYNAMIC + 0x48, b"\x00")
-            memory.map(POOL + 1, b"\x00")
-            sample = capture(memory, "full")
-            self.assertTrue(sample["dynamic_rows"]["no_in_range_terminal"])
-            self.assertTrue(sample["particles"]["all256_slots_visited"])
-            self.assertEqual(41, sum(length == STRIDE for _, length in memory.reads))
-            self.assertNotIn((DYNAMIC + 32 * STRIDE, STRIDE), memory.reads)
-            self.assertEqual([(PETE, 4)], [read for read in memory.reads if read[0] == PETE])
+            expected_reads = None
+            for profile in PROFILES:
+                memory = fixture(); memory.map(DYNAMIC + 0x48, b"\x00")
+                memory.map(POOL + 1, b"\x00")
+                sample = capture(memory, "full", profile)
+                self.assertTrue(sample["dynamic_rows"]["no_in_range_terminal"])
+                self.assertTrue(sample["particles"]["all256_slots_visited"])
+                self.assertEqual(41, sum(length == STRIDE for _, length in memory.reads))
+                self.assertNotIn((DYNAMIC + 32 * STRIDE, STRIDE), memory.reads)
+                self.assertEqual([(PETE, 4)], [read for read in memory.reads if read[0] == PETE])
+                if expected_reads is not None: self.assertEqual(expected_reads, memory.reads)
+                expected_reads = memory.reads
             def endless():
                 for _ in range(32): yield bytes(STRIDE)
                 raise AssertionError("Scanner demanded row33")
@@ -398,14 +480,34 @@ def self_test():
                 with self.assertRaises(ValueError): ReadOnlyClient(wire).read(address, length)
                 self.assertEqual([], wire.sent)
             with patch.object(socket, "create_connection", side_effect=AssertionError("No connection allowed")):
-                for args in ([], ["--profile", "anything"], ["--self-test", "--connect-identified-test-session"]):
+                for args in ([], ["--profile", "anything"],
+                             ["--connect-identified-test-session", "--profile", "anything"],
+                             ["--connect-identified-test-session", "--profile", "R01"],
+                             ["--self-test", "--profile", "r03"],
+                             ["--self-test", "--connect-identified-test-session"]):
                     with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit): main(args)
+
+        def test_cli_profile_selection_reaches_same_mocked_read_only_client(self):
+            for profile in (None, "r01", "r02"):
+                memory, output = fixture(), io.StringIO()
+                args = ["--connect-identified-test-session"]
+                if profile is not None: args += ["--profile", profile]
+                with patch.object(socket, "create_connection") as connection, \
+                        patch.object(sys, "stdin", io.StringIO("p cli\nq\n")), \
+                        patch.dict(globals(), {"ReadOnlyClient": lambda _: memory}), contextlib.redirect_stdout(output):
+                    main(args)
+                connection.assert_called_once_with(("127.0.0.1", 2345), timeout=2)
+                samples = [json.loads(line) for line in output.getvalue().splitlines() if line.startswith("{")]
+                self.assertEqual(1, len(samples))
+                self.assertEqual(PROFILES[profile or "r01"]["profile"], samples[0]["expected_profile_annotation"])
+                self.assertTrue(samples[0]["bounded_sample_valid"])
+                self.assertTrue(all(samples[0][name] is False for name in AUTHORITY_FLAGS))
 
     with patch.object(socket, "create_connection", side_effect=AssertionError("Offline test attempted socket connection")):
         result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(Tests))
     if not result.wasSuccessful():
         raise SystemExit(1)
-    print("FRESH_CHEST_OBSERVER_OFFLINE_OK tests=9 connections=0 romReads=0 runtime=false")
+    print(f"FRESH_CHEST_OBSERVER_OFFLINE_OK tests={result.testsRun} connections=0 romReads=0 runtime=false")
 
 
 def main(argv=None):
@@ -414,6 +516,8 @@ def main(argv=None):
     mode.add_argument("--self-test", action="store_true", help="Offline bounded fixtures only; never connect.")
     mode.add_argument("--connect-identified-test-session", action="store_true",
                       help="Confirm external identification of the exact private test process/open BIN; localhost2345 only.")
+    parser.add_argument("--profile", choices=tuple(PROFILES), default="r01",
+                        help="Closed annotation profile only (default r01); gates, addresses and read bounds are unchanged.")
     args = parser.parse_args(argv)
     if args.self_test:
         self_test()
@@ -428,7 +532,7 @@ def main(argv=None):
             if command == "q":
                 break
             if command == "p" or command.startswith("p "):
-                sample = capture(client, command[1:].strip())
+                sample = capture(client, command[1:].strip(), args.profile)
                 if sample["bounded_sample_valid"]:
                     if previous_lives is not None and sample["lives"] < previous_lives:
                         sample.setdefault("attention", []).append("Lives decreased since the prior bounded sample; inspect in UI.")

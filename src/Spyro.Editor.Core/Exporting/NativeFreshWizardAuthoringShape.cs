@@ -85,9 +85,27 @@ internal static class NativeFreshWizardAuthoringShape
         return RequireMaterialDocumentShape(document);
     }
 
+    internal static NativeWizardPlacementIntent RequireSameLayoutMaterialDocument(NativeFreshLevelDocumentIntent document,
+        NativeId65FreshDocumentCompilation compilation)
+    {
+        ArgumentNullException.ThrowIfNull(document);ArgumentNullException.ThrowIfNull(compilation);
+        if(!ReferenceEquals(document.Base,compilation.Intent))
+            throw new InvalidDataException("Same-layout material Scene requires its actual compiled Base.");
+        return RequireSameLayoutMaterialDocumentShape(document);
+    }
+
     // Shared preflight for the saved exporter; shape is necessary, never a
     // substitute for the actual source-bound compilation checked above.
-    internal static NativeWizardPlacementIntent RequireMaterialDocumentShape(NativeFreshLevelDocumentIntent document)
+    internal static NativeWizardPlacementIntent RequireMaterialDocumentShape(NativeFreshLevelDocumentIntent document)=>
+        RequireMaterialShape(document,false);
+
+    // Neutral geometry only. The separate source producer must still prove
+    // the complete fixed copy grammar and actual canonical surface ownership.
+    // Existing saved-export/UI readiness continues using the exact old arm.
+    internal static NativeWizardPlacementIntent RequireSameLayoutMaterialDocumentShape(NativeFreshLevelDocumentIntent document)=>
+        RequireMaterialShape(document,true);
+
+    private static NativeWizardPlacementIntent RequireMaterialShape(NativeFreshLevelDocumentIntent document,bool sameLayout)
     {
         ArgumentNullException.ThrowIfNull(document);
         if (document.SchemaVersion != 2 || document.FloorMaterials == null || document.Placements.Count != 1 ||
@@ -102,11 +120,11 @@ internal static class NativeFreshWizardAuthoringShape
             throw new InvalidDataException("Material-authored Scene supports only the three explicit T1 retail pairs14/70,70/14,14/14.");
         var placement = new NativeWizardPlacementIntent(wizard.OriginX,wizard.OriginY,wizard.OriginZ,wizard.EndX,wizard.EndY);
         var b = document.Base;
-        if (b.FloorX != 8448 || b.FloorY != 8448 || b.FloorZ != 8704 || b.FloorWidth != 2048 || b.FloorDepth != 2048 ||
+        if (!sameLayout&&(b.FloorX != 8448 || b.FloorY != 8448 || b.FloorZ != 8704 || b.FloorWidth != 2048 || b.FloorDepth != 2048 ||
             b.SpawnX != 8960 || b.SpawnY != 8960 || b.SpawnZ != 9216 || b.Heading != 64 || b.MusicTrackId != 19 ||
             b.FloorColor != new Spyro.Editor.Core.Primitives.ColorRgba(80,128,112) ||
             b.SkyColor != new Spyro.Editor.Core.Primitives.ColorRgba(128,96,64) ||
-            placement != new NativeWizardPlacementIntent(9984,9984,8704,9472,9984))
+            placement != new NativeWizardPlacementIntent(9984,9984,8704,9472,9984)))
             throw new InvalidDataException("Material-authored Scene currently supports only the exact separatedB floor/route/track19.");
         RequirePlacement(placement,b);
         return placement;
