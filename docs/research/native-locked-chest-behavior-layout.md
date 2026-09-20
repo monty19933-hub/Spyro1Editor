@@ -80,6 +80,30 @@ a0=1. These are entry-argument/relocation checks, not full handler or lifecycle
 acceptance. Original Peace code is run under target Town globals, not claimed
 to be original Peace runtime. Whole original owners remain unchanged.
 
+Original-only witness471 executes the complete effect46 callback from the
+explicit post-debris-call cut: count32, spread24, seed1 and an owned empty pool.
+Both source and relocated paths execute5136 instructions,32 real allocator
+calls and128 real RNG calls, including the native epilogue and actual return.
+It passes42 checks and14 refusal controls, comparing full pool, memory
+complement, saved registers, stack, HI/LO and relocated trace. No helper return
+is substituted. Full-pool replacement, peak demand, rendering and complete
+chest lifecycle remain unproved. Script
+`source_fresh_chest_particle46_callback_witness.py` SHA256
+`447c5472b234c0bbba2249843bcfbf961ed62e6cca26946bc7b72a83446a64c1`.
+
+The initial expected-pool formulas failed in469/470, while the native callback
+returned and RNG/sentinel agreed. Original instruction words at all six shift
+sites establish delta shift12 (`00081303`) and coordinate shift2 (`00031883`),
+not the draft's8/3. The reference formulas were corrected and those six literal
+words are now checked before execution. Failed469 script/diagnostics are retained;
+the production code and frozen interpreter were unchanged.
+
+The same source inspection finds no syntactic s3 definitions within the complete
+chest state block. Effect0C is explicitly not executed: its actual consumer reads
+a2+36 as an actor class, so a bare12-byte XYZ vector is not sufficient input.
+The actual incoming row ownership and helper-preservation path need separate
+evidence; this result does not manufacture them. Source BIN remains unchanged.
+
 All source/code/runtime flags retain their scoped meaning: source-owned bytes
 are available; full dependency closure, Body/placed-family/final-EXE issuance,
 runtime verification and publication approval remain false.
