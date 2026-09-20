@@ -111,29 +111,13 @@ public static class TownSquareNativeLockedChestCandidateExporter
     private const int ExpandedSceneOffset = 0x1D1800;
 
     private const uint LockedHandlerAddress = OriginalCopyBufferAddress;
-    private const int LockedHandlerLength = 0x740;
-    private const uint RewardHandlerAddress = 0x8008A60C;
-    private const int RewardHandlerLength = 0x438;
     private const uint RewardDispatchAddress = 0x8008AA44;
     private const uint LockedDispatchAddress = 0x8008AA58;
-    private const uint DeleteThunkAddress = 0x8008AA6C;
-    private const uint SoundThunkAddress = 0x8008AA7C;
     private const int OverlayPayloadOffset = 0xF494;
     private const int OverlayPayloadLength = 0xBC0;
     private const uint RewardDispatchHookAddress = 0x8007DB80;
     private const uint LockedDispatchHookAddress = 0x8007DC4C;
-    private const uint TownSquareLoopExitAddress = 0x80087258;
     private const uint TownSquareResetAddress = 0x800858F8;
-
-    private const long LockedSetupWadOffset = 0x188719C;
-    private const uint LockedSetupSourceAddress = 0x80083BD4;
-    private const int LockedSetupLength = 0x30;
-    private const long LockedStateWadOffset = 0x1887330;
-    private const uint LockedStateSourceAddress = 0x80083D68;
-    private const int LockedStateLength = 0x70C;
-    private const long RewardHandlerWadOffset = 0x1881B64;
-    private const uint RewardHandlerSourceAddress = 0x8007E59C;
-    private const int RewardHandlerSourceLength = 0x434;
 
     private const long PeaceKeepersDataEntryOffset = 0x1890800;
     private const int PeaceKeepersDataEntrySize = 0x29E800;
@@ -182,9 +166,6 @@ public static class TownSquareNativeLockedChestCandidateExporter
     private const string ExpectedActorSubfileSha256 = "a37b7a8e5e5e660befed91e63c699a6c6d4b25ff8406f68b08e418c00d2a711d";
     private const string ExpectedExecutableSha256 = "a533d75cab8afaae6107ec35a02a9a5fe979a92c7c955f9cf1ee50f693a1b998";
     private const string ExpectedOverlayTailSha256 = "2ab9f539e8903a18a59a254fa8dc21a186b4540e40376c1c1bd6d9055949b7c9";
-    private const string ExpectedLockedSetupSha256 = "9343243adf185b81f638f37a41be77c61d27508c45158fed1ebe0b9fc6dd97ad";
-    private const string ExpectedLockedStateSha256 = "83c507315fcf747b0c94c6bd47c7622e79f38c68ff746421fd9b2021314a479f";
-    private const string ExpectedRewardHandlerSourceSha256 = "129d8511c63925af80ab73a02def446efc39e23974255fd4b8d38f51411c2056";
     private const string ExpectedHandlerPayloadSha256 = "08f4372710b7162982397e247b75ed9b00cc5290ef9630d4e2fdd320611012b9";
     private const string ExpectedLockedChestPackageSha256 = "8edc9e9ac1e5fb1a92224d2f5f8ca541371940c1ae3f9873c02f6b802d6e22e7";
     private const string ExpectedKeyRowSha256 = "db4fbcd35c285395e2be99ab6205061d9922ea58dccb849675d4c7f514081849";
@@ -434,58 +415,7 @@ public static class TownSquareNativeLockedChestCandidateExporter
 
     internal static byte[] BuildHandlerPayload(Func<long,int,byte[]> read)
     {
-        byte[] setup = read(LockedSetupWadOffset, LockedSetupLength);
-        byte[] state = read(LockedStateWadOffset, LockedStateLength);
-        byte[] reward = read(RewardHandlerWadOffset, RewardHandlerSourceLength);
-        GuardSha256(setup, ExpectedLockedSetupSha256, "Peace Keepers Locked Chest setup");
-        GuardSha256(state, ExpectedLockedStateSha256, "Peace Keepers Locked Chest state/open path");
-        GuardSha256(reward, ExpectedRewardHandlerSourceSha256, "Peace Keepers class 0x000D reward handler");
-
-        CodeSegment[] lockedSegments =
-        [
-            new(LockedSetupSourceAddress, LockedHandlerAddress + 4, setup),
-            new(LockedStateSourceAddress, LockedHandlerAddress + 4 + LockedSetupLength, state)
-        ];
-        byte[] relocatedLockedBody = RelocateCode(
-            lockedSegments,
-            new Dictionary<uint, uint> { [0x8008A20C] = TownSquareLoopExitAddress });
-        byte[] lockedPayload = Concat(Words(0x0260A021), relocatedLockedBody);
-        if (lockedPayload.Length != LockedHandlerLength)
-            throw new InvalidDataException($"Relocated Locked Chest payload is 0x{lockedPayload.Length:X}, expected 0x{LockedHandlerLength:X}.");
-
-        CodeSegment[] rewardSegments =
-        [
-            new(RewardHandlerSourceAddress, RewardHandlerAddress + 4, reward)
-        ];
-        byte[] relocatedRewardBody = RelocateCode(
-            rewardSegments,
-            new Dictionary<uint, uint>
-            {
-                [0x8008A20C] = TownSquareLoopExitAddress,
-                [0x80088CF4] = TownSquareResetAddress,
-                [0x8008A204] = DeleteThunkAddress,
-                [0x800880FC] = SoundThunkAddress
-            });
-        byte[] rewardPayload = Concat(Words(0x0260A021), relocatedRewardBody);
-        if (rewardPayload.Length != RewardHandlerLength)
-            throw new InvalidDataException($"Relocated reward payload is 0x{rewardPayload.Length:X}, expected 0x{RewardHandlerLength:X}.");
-
-        byte[] rewardDispatch = Words(
-            0x2402000D,
-            EncodeBranch(0x04, 4, 2, RewardDispatchAddress + 4, RewardHandlerAddress),
-            0,
-            EncodeJump(TownSquareLoopExitAddress),
-            0);
-        byte[] lockedDispatch = Words(
-            0x240200AE,
-            EncodeBranch(0x04, 4, 2, LockedDispatchAddress + 4, LockedHandlerAddress),
-            0,
-            EncodeJump(TownSquareLoopExitAddress),
-            0);
-        byte[] deleteThunk = Words(0x0C01495A, 0x02602021, EncodeJump(TownSquareLoopExitAddress), 0);
-        byte[] soundThunk = Words(0x0C01569E, 0x24A70054, EncodeJump(TownSquareLoopExitAddress), 0);
-
-        byte[] payload = Concat(lockedPayload, rewardPayload, rewardDispatch, lockedDispatch, deleteThunk, soundThunk);
+        byte[] payload = NativeLockedChestBehaviorLayout.CompileTown(NativeLockedChestBehaviorSource.Capture(read)).CopyPayload();
         if (payload.Length != OverlayPayloadLength)
             throw new InvalidDataException($"Town Square handler payload is 0x{payload.Length:X}, expected 0x{OverlayPayloadLength:X}.");
         GuardSha256(payload, ExpectedHandlerPayloadSha256, "Town Square handler bundle");
@@ -1024,91 +954,6 @@ public static class TownSquareNativeLockedChestCandidateExporter
         return Enumerable.Range((y * PackedVramRowBytes) + packedX, 32).ToArray();
     }
 
-    private static byte[] RelocateCode(IReadOnlyList<CodeSegment> segments, IReadOnlyDictionary<uint, uint> externalTargets)
-    {
-        List<byte> relocated = [];
-        foreach (CodeSegment segment in segments)
-        {
-            if ((segment.Bytes.Length & 3) != 0)
-                throw new InvalidDataException("A MIPS code segment is not word aligned.");
-            byte[] output = segment.Bytes.ToArray();
-            for (int offset = 0; offset < output.Length; offset += 4)
-            {
-                uint sourcePc = segment.SourceAddress + checked((uint)offset);
-                uint targetPc = segment.TargetAddress + checked((uint)offset);
-                uint word = ReadUInt32(segment.Bytes, offset);
-                uint opcode = word >> 26;
-                if (IsBranchOpcode(opcode))
-                {
-                    short immediate = unchecked((short)(word & 0xFFFF));
-                    uint sourceTarget = unchecked((uint)((int)(sourcePc + 4) + (immediate << 2)));
-                    uint target = MapRequiredTarget(sourceTarget, segments, externalTargets, $"branch at 0x{sourcePc:X8}");
-                    int delta = unchecked((int)target - (int)(targetPc + 4));
-                    if ((delta & 3) != 0 || delta / 4 is < short.MinValue or > short.MaxValue)
-                        throw new InvalidDataException($"Relocated branch at 0x{sourcePc:X8} cannot reach 0x{target:X8}.");
-                    word = (word & 0xFFFF0000u) | unchecked((ushort)(short)(delta / 4));
-                }
-                else if (opcode is 0x02 or 0x03)
-                {
-                    uint sourceTarget = ((sourcePc + 4) & 0xF0000000u) | ((word & 0x03FFFFFFu) << 2);
-                    if (TryMapTarget(sourceTarget, segments, externalTargets, out uint target))
-                    {
-                        if (((targetPc + 4) & 0xF0000000u) != (target & 0xF0000000u))
-                            throw new InvalidDataException($"Relocated jump at 0x{sourcePc:X8} crosses a 256 MB region.");
-                        word = (word & 0xFC000000u) | ((target >> 2) & 0x03FFFFFFu);
-                    }
-                    else if (opcode == 0x02)
-                    {
-                        throw new InvalidDataException($"Unmapped external J target 0x{sourceTarget:X8} at donor PC 0x{sourcePc:X8}.");
-                    }
-                }
-                WriteWord(output, offset, word);
-            }
-            relocated.AddRange(output);
-        }
-        return relocated.ToArray();
-    }
-
-    private static uint MapRequiredTarget(
-        uint sourceTarget,
-        IReadOnlyList<CodeSegment> segments,
-        IReadOnlyDictionary<uint, uint> externalTargets,
-        string label)
-    {
-        if (TryMapTarget(sourceTarget, segments, externalTargets, out uint target))
-            return target;
-        throw new InvalidDataException($"Unmapped {label} target 0x{sourceTarget:X8}.");
-    }
-
-    private static bool TryMapTarget(
-        uint sourceTarget,
-        IReadOnlyList<CodeSegment> segments,
-        IReadOnlyDictionary<uint, uint> externalTargets,
-        out uint target)
-    {
-        foreach (CodeSegment segment in segments)
-        {
-            uint end = checked(segment.SourceAddress + (uint)segment.Bytes.Length);
-            if (sourceTarget >= segment.SourceAddress && sourceTarget < end)
-            {
-                target = checked(segment.TargetAddress + (sourceTarget - segment.SourceAddress));
-                return true;
-            }
-        }
-        return externalTargets.TryGetValue(sourceTarget, out target);
-    }
-
-    private static bool IsBranchOpcode(uint opcode) =>
-        opcode is 0x01 or 0x04 or 0x05 or 0x06 or 0x07 or 0x14 or 0x15 or 0x16 or 0x17;
-
-    private static uint EncodeBranch(uint opcode, int rs, int rt, uint branchPc, uint target)
-    {
-        int delta = unchecked((int)target - (int)(branchPc + 4));
-        if ((delta & 3) != 0 || delta / 4 is < short.MinValue or > short.MaxValue)
-            throw new InvalidDataException($"Branch at 0x{branchPc:X8} cannot reach 0x{target:X8}.");
-        return (opcode << 26) | ((uint)rs << 21) | ((uint)rt << 16) | unchecked((ushort)(short)(delta / 4));
-    }
-
     private static uint EncodeJump(uint target) => 0x08000000u | ((target >> 2) & 0x03FFFFFFu);
 
     private static (uint High, uint Low) EncodeAddiuAddressPair(int register, uint address)
@@ -1238,26 +1083,6 @@ public static class TownSquareNativeLockedChestCandidateExporter
         BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(offset + 4, 4), value);
     }
 
-    private static byte[] Words(params uint[] values)
-    {
-        byte[] bytes = new byte[values.Length * 4];
-        for (int index = 0; index < values.Length; index++)
-            WriteWord(bytes, index * 4, values[index]);
-        return bytes;
-    }
-
-    private static byte[] Concat(params byte[][] blocks)
-    {
-        byte[] bytes = new byte[blocks.Sum(block => block.Length)];
-        int offset = 0;
-        foreach (byte[] block in blocks)
-        {
-            block.CopyTo(bytes, offset);
-            offset += block.Length;
-        }
-        return bytes;
-    }
-
     private static string Sha256(byte[] bytes) =>
         Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
@@ -1338,7 +1163,6 @@ public static class TownSquareNativeLockedChestCandidateExporter
         string TileSha256,
         string PaletteSha256);
 
-    private sealed record CodeSegment(uint SourceAddress, uint TargetAddress, byte[] Bytes);
     private sealed record WadEntryLayout(int Index, long Offset, int Size);
     private sealed record WadArchiveLayout(
         int Lba,

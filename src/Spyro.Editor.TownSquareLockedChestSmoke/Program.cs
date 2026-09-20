@@ -1,6 +1,17 @@
 using System.Text.Json;
 using Spyro.Editor.Core.Exporting;
 
+if (args is ["--behavior-free"])
+{
+    NativeLockedChestBehaviorLayoutCases.Free();
+    return 0;
+}
+if (args is ["--behavior-source", var behaviorSource])
+{
+    NativeLockedChestBehaviorLayoutCases.Source(behaviorSource);
+    return 0;
+}
+
 if (args.Length is not 0 and not 5)
 {
     Console.Error.WriteLine(
