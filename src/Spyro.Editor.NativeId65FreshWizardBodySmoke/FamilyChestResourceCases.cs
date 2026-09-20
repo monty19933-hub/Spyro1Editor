@@ -61,7 +61,15 @@ internal static class FamilyChestResourceCases
         Reject<InvalidDataException>(()=>NativeFreshMobyFamilyCompositionPlan.ComposeWithLockedChestResources(ancestor,equalSound,fallback),check);
 
         var child=NativeFreshMobyFamilyCompositionPlan.ComposeWithLockedChestResources(ancestor,sound,fallback);
-        if(sceneHost is not null)FamilyChestSceneCases.Source(child,sceneHost,check);
+        if(sceneHost is not null)
+        {
+            FamilyChestSceneCases.Source(child,sceneHost,check);
+            var finalScene=NativeFreshLockedChestSceneExtension.Compose(child,sceneHost,"33333333333333333333333333333333");
+            var finalBody=NativeFreshLockedChestResearchBody.Compose(child,sceneHost,finalScene);
+            var placement=NativeFreshLockedChestPlacementPlan.Compose(finalBody,new(8960,9728,8704,9472,8960,8704));
+            var experimental=NativeFreshLockedChestExperimentalExecutable.Compose(placement,sceneHost);
+            await FamilyChestDiscCases.Source(original,experimental,check);
+        }
         byte[] after=child.CopyLevelData();var package=child.ChestModelContribution!;var texture=child.ChestTextureMaterialization!;
         var packages=child.ChestModelContributions;var debrisTexture=child.ChestDebrisTextureMaterialization!;
         check(child.HasUnplacedModelResources&&ReferenceEquals(child.ResourceAncestor,ancestor)&&

@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
 
+if (ChestExperimentCases.Matches(args)) { await ChestExperimentCases.RunAsync(args); return; }
 if (SeparatedPublicationCases.IsReviewedMode(args)) { await SeparatedPublicationCases.RunAsync(args); return; }
 var request = AuthoringSourceArguments.Parse(args);
 int checks = 0;

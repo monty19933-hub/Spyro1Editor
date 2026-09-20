@@ -120,3 +120,38 @@ source/material/disc goldens and original BIN/CUE guards. Full regression476
 passes343 command steps with zero failures. This Body adds no executable/census patch or output
 image: target10 remains explicitly provisional, and final executable, full
 dependency closure, authored placement, runtime and publication flags stay false.
+
+## Two-anchor placement on the retained floor
+
+`NativeFreshLockedChestPlacementPlan` adds a separate immutable transaction over
+that Body. Key XYZ is independent; chest and five rewards retain the original
+Peace relative offsets. Seven row XYZ and five reward-private XYZ triples are
+the only36 changed words. Complete scene and Body inverses recover the actual
+source-coordinate ancestors. Integer owners, matrix/yaw, classes, selectors,
+initial state, pointer fixups, Wizard/Grass and every non-Scene Body byte remain
+unchanged. No second row allocator or resource importer is introduced.
+
+The experimental fixture uses key8960/9728/8704 and chest9472/8960/8704, with
+the actual2048 floor unchanged. All family centers project inside its finite
+collision triangles; the minimum boundary margin is307. Reward offsets are
+not terrain vertices and intentionally retain their nonsnapped source values.
+This is not a physical-footprint, safe-approach, collision-query or gameplay
+certificate. The Wizard may interfere with rewards during the experiment.
+The rejected alternative of widening to3072 would require additional neutral
+extent and exact source-profile changes; those are not needed for this fixture.
+
+Tests-first RED477 reports8 missing-type errors and zero warnings; build478
+passes with zero warnings/errors. Source479 passes9211 final assertions,
+retaining old complete-disc/candidate goldens and original BIN/CUE guards.
+Independent original-only oracle480, script
+`src/Spyro.Editor.NativeId65FreshWizardBodySmoke/source_fresh_chest_placement_oracle.py`
+SHA256 `e996ef48e458263b11dd5b13fc68230e05463d3171e2b9c0c82bee93b80b944b`,
+reconstructs complete separated-B P9 from Original, applies the36 words and
+matches the producer's complete placed Scene SHA256
+`075c84cfd5ec13dc245dfa8b888f349903056b07676fc1990c494875e90f20d3`.
+It verifies52 corruption refusals, full coordinate/P9/P2 inverses, decoded finite
+triangle point containment and bounded loader/allocator slices. Placed updating
+remains explicitly skipped by that slice; no full lifecycle/GTE is substituted.
+The Body remains a child-relative composition, SHA256
+`77fdfded0383af6636ffa991c47d55f113b0f17327584213bb60a72494529d45`.
+Independent code review found no actionable issue. No image was written.

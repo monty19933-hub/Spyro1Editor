@@ -8,11 +8,9 @@ namespace Spyro.Editor.Core.Exporting;
 internal sealed class NativeId65FreshWizardResearchDiscSource
 {
     private readonly NativeId65FreshDiscSource _original;
-    private readonly IReadOnlyDictionary<int,byte[]> _preimages;
-    private readonly byte[] _root,_wad;
+    private readonly NativeFreshResearchPhysicalSourceOwners _owners;
     private NativeId65FreshWizardResearchDiscSource(NativeId65FreshDiscSource original,
-        NativeId65FreshWizardResearchExecutablePlan executable,byte[] root,byte[] wad,
-        Dictionary<int,byte[]> preimages)
+        NativeId65FreshWizardResearchExecutablePlan executable,NativeFreshResearchPhysicalSourceOwners owners)
     {
         if(executable.FamilyCompositionAncestor is { } family)
         {
@@ -29,18 +27,17 @@ internal sealed class NativeId65FreshWizardResearchDiscSource
             RequireExecutable(executable);
             Geometry=NativeId65FreshWizardDiscGeometry.Compile(executable.BodyAncestor.CopyOverlay().Length,executable.BodyAncestor.CopyLevelData().Length);
         }
-        _original=original;Executable=executable;_root=root;_wad=wad;
-        _preimages=new System.Collections.ObjectModel.ReadOnlyDictionary<int,byte[]>(preimages);
+        _original=original;Executable=executable;_owners=owners;
     }
     internal NativeId65FreshWizardResearchExecutablePlan Executable{get;}
+    internal NativeFreshResearchPhysicalSourceOwners PhysicalOwners=>_owners;
     internal NativeFreshMobyFamilyCompositionPlan? FamilyCompositionAncestor{get;}
     internal NativeId65FreshWizardDiscGeometry Geometry{get;}
     internal NativeFreshWizardMaterialResource? MixedResourceAncestor{get;}
     internal IReadOnlyList<NativeFlatIsoFile> RootFiles=>_original.RootFiles;
-    internal byte[] CopyRoot()=>_root.ToArray();
-    internal byte[] CopyWadHeader()=>_wad.ToArray();
-    internal byte[] CopyPreimage(int lba)=>_preimages.TryGetValue(lba,out var b)?b.ToArray():
-        throw new InvalidDataException("No newly captured Wizard physical preimage owner.");
+    internal byte[] CopyRoot()=>_owners.CopyRoot();
+    internal byte[] CopyWadHeader()=>_owners.CopyWadHeader();
+    internal byte[] CopyPreimage(int lba)=>_owners.CopyPreimage(lba);
     internal void RequireRawSector(int lba,ReadOnlySpan<byte> bytes)=>_original.RequireRawSector(lba,bytes);
     internal void RequireAncestry()
     {
@@ -60,11 +57,9 @@ internal sealed class NativeId65FreshWizardResearchDiscSource
     }
     internal void RequireRetainedOriginalOwners()
     {
-        if(!_root.SequenceEqual(_original.CopyRoot())||!_wad.SequenceEqual(_original.CopyWadHeader())||
-            !Executable.RevertExact(Executable.CopyExecutable()).SequenceEqual(_original.CopyExecutable())||
-            !_preimages.Keys.Order().SequenceEqual(new[]{22,37}.Concat(Enumerable.Range(53874,Geometry.FinalExecutableEndExclusive-53874))))
+        if(!Executable.RevertExact(Executable.CopyExecutable()).SequenceEqual(_original.CopyExecutable()))
             throw new InvalidDataException("Retained Wizard physical source owners changed.");
-        foreach(var owner in _preimages)_original.RequireRawSector(owner.Key,owner.Value);
+        _owners.RequireRetainedOriginalOwners(_original,Geometry);
     }
     internal static void RequireExecutable(NativeId65FreshWizardResearchExecutablePlan executable)
     {
@@ -163,78 +158,23 @@ internal sealed class NativeId65FreshWizardResearchDiscSource
             if(!executable.RevertExact(executable.CopyExecutable()).SequenceEqual(original.CopyExecutable()))
                 throw new InvalidDataException("Actual retained EXE is not bound to this authenticated original executable.");
             afterOriginalCapture?.Invoke();token.ThrowIfCancellationRequested();
-            using var reader=new AuthenticatedReader(image,original,token);
-            DiscLayout layout=DiscImage.DetectLayout(reader);
-            if(layout!=new DiscLayout(2352,24,22,2048))throw new InvalidDataException("Wizard raw ISO geometry changed.");
-            var rows=NativeWadGrowthSectorPreparation.ReadFlatRootFiles(reader,layout);
-            if(!rows.SequenceEqual(original.RootFiles))throw new InvalidDataException("New authenticated ISO records differ from the actual original snapshot.");
             var geometry=executable.FamilyCompositionAncestor is { } family?NativeId65FreshWizardDiscGeometry.CompileFamily(family):
                 NativeId65FreshWizardDiscGeometry.Compile(0x11000,0x20C800);
-            // The old capture checked only its old allocation. This new call
-            // validates all metadata and every sector of this arm's complete
-            // gap. The arithmetic record is never passed to a writer.
-            _=NativeWadGrowthSectorPreparation.Create(reader,layout,geometry.CreateGrowthGeometry());
-            byte[] root=DiscImage.ReadFileBytes(reader,layout,22,0,2048),wad=DiscImage.ReadFileBytes(reader,layout,37,0,2048);
-            if(!root.SequenceEqual(original.CopyRoot())||!wad.SequenceEqual(original.CopyWadHeader()))
-                throw new InvalidDataException("Complete original root/WAD owners changed during new physical capture.");
-            var preimages=new Dictionary<int,byte[]>(geometry.ChangedSectorOwnerCount);
-            foreach(int lba in new[]{22,37}.Concat(Enumerable.Range(53874,geometry.FinalExecutableEndExclusive-53874)))
-            {
-                token.ThrowIfCancellationRequested();byte[] raw=new byte[2352];reader.Position=lba*2352L;
-                reader.ReadExactly(raw);preimages.Add(lba,raw);
-            }
-            if(preimages.Count!=geometry.ChangedSectorOwnerCount)throw new InvalidDataException("Wizard physical owner partition changed.");
-            token.ThrowIfCancellationRequested();return new(original,executable,root,wad,preimages);
-    }
-    // All contributing later physical reads authenticate before exposing even a
-    // requested logical fragment. This non-owning wrapper does not close source.
-    private sealed class AuthenticatedReader(Stream source,NativeId65FreshDiscSource original,CancellationToken token):Stream
-    {
-        private long _position;
-        public override bool CanRead=>true;
-        public override bool CanSeek=>true;
-        public override bool CanWrite=>false;
-        public override long Length{get{Guard();return NativeId65FreshDiscSource.ImageByteLength;}}
-        public override long Position{get=>_position;set{Guard();if(value<0||value>NativeId65FreshDiscSource.ImageByteLength)throw new InvalidDataException("Authenticated physical seek escaped source.");_position=value;}}
-        private void Guard()
-        {
-            token.ThrowIfCancellationRequested();
-            if(!source.CanRead||!source.CanSeek||source.Length!=NativeId65FreshDiscSource.ImageByteLength)
-                throw new InvalidDataException("Authenticated physical source length/readability changed.");
-        }
-        public override int Read(byte[] b,int at,int n)=>Read(b.AsSpan(at,n));
-        public override int Read(Span<byte> destination)
-        {
-            Guard();int count=(int)Math.Min(destination.Length,Length-_position),copied=0;
-            while(copied<count)
-            {
-                Guard();int lba=checked((int)(_position/2352)),offset=(int)(_position%2352);
-                int part=Math.Min(2352-offset,count-copied);byte[] raw=new byte[2352];
-                source.Position=lba*2352L;source.ReadExactly(raw);Guard();
-                if(source.Position!=(lba+1)*2352L)throw new InvalidDataException("Authenticated physical read position changed.");
-                original.RequireRawSector(lba,raw);raw.AsSpan(offset,part).CopyTo(destination[copied..]);
-                _position+=part;copied+=part;
-            }
-            Guard();return count;
-        }
-        public override ValueTask<int> ReadAsync(Memory<byte> b,CancellationToken cancellationToken=default)
-        {cancellationToken.ThrowIfCancellationRequested();return ValueTask.FromResult(Read(b.Span));}
-        public override long Seek(long offset,SeekOrigin origin)
-        {Position=checked((origin switch{SeekOrigin.Begin=>0,SeekOrigin.Current=>Position,SeekOrigin.End=>Length,_=>throw new ArgumentOutOfRangeException(nameof(origin))})+offset);return Position;}
-        public override void Flush()=>throw new NotSupportedException();
-        public override void SetLength(long n)=>throw new NotSupportedException();
-        public override void Write(byte[] b,int at,int n)=>throw new NotSupportedException();
+            var owners=NativeFreshResearchPhysicalSourceOwners.Capture(image,original,geometry,token);
+            token.ThrowIfCancellationRequested();return new(original,executable,owners);
     }
 }
 
 /// <summary>Closed-arm arithmetic only; not source, payload or gap ownership.</summary>
 internal sealed class NativeId65FreshWizardDiscGeometry
 {
-    private NativeId65FreshWizardDiscGeometry(int bodyLength){BodyByteLength=bodyLength;}
+    private NativeId65FreshWizardDiscGeometry(int bodyLength,int overlayLength=0x11000)
+    {BodyByteLength=bodyLength;OverlayByteLength=overlayLength;}
     internal bool SourceCertified=>false;
     internal int OverlayWadOffset=>0x6927000;
-    internal int OverlayByteLength=>0x11000;
+    internal int OverlayByteLength{get;}
     internal int BodyWadOffset=>checked(OverlayWadOffset+OverlayByteLength);
+    internal int BodyLba=>checked(37+BodyWadOffset/2048);
     internal int BodyByteLength{get;}
     internal int GrowthByteLength=>checked(OverlayByteLength+BodyByteLength);
     internal int FinalWadByteLength=>checked(OverlayWadOffset+GrowthByteLength);
@@ -252,6 +192,29 @@ internal sealed class NativeId65FreshWizardDiscGeometry
         var result=new NativeId65FreshWizardDiscGeometry(family.CopyLevelData().Length);
         if(result.BodyByteLength%2048!=0||result.FinalExecutableEndExclusive>60000)
             throw new InvalidDataException("Actual family body is not sector aligned or exceeds the separately checked original gap.");
+        return result;
+    }
+    internal static NativeId65FreshWizardDiscGeometry CompileChest(NativeFreshLockedChestExperimentalExecutable executable)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        var placement=executable.PlacementAncestor;var host=executable.HostAncestor;
+        executable.RequireAncestry(placement,host);executable.RequireExactExecutable(executable.CopyExecutable());
+        var body=executable.BodyAncestor;var memory=body.RuntimeMemory;
+        byte[] level=placement.CopyLevelData(),overlay=host.CopyOverlay();
+        placement.RequireExactLevelData(level);
+        host.RequireExactOutputs(overlay,host.CopyInitializer(),host.CopyExecutablePrototype());
+        if(!ReferenceEquals(body,placement.BodyAncestor)||!ReferenceEquals(host,body.HostAncestor)||
+            overlay.Length!=0x12000||level.Length!=0x20F000||executable.CopyExecutable().Length!=0x66000||
+            host.AppendLayout.CopyAnchor!=0x8008CA38||memory.CopyBufferAddress!=0x8008CA38||
+            memory.UsedLevelDataBytes!=0xA6C||memory.ModelBytesRead!=0x1B000||memory.SceneBytesRead!=0x3800||
+            memory.ModelRamStart!=0x8008D4A4||memory.SceneRamStart!=0x800A84A4||memory.SceneReadEnd!=0x800ABCA4||
+            memory.PlacedMobyCount!=9||memory.DynamicMobyCapacity!=32||memory.NormalReservedBufferStart!=0x80187BB0||
+            body.ResourceAncestor.BaseBodyAncestor.ResidentPeteAddress!=0x801C5BB8||
+            !memory.KnownPostLoadExtentsDisjoint||memory.SceneReadEnd>memory.NormalReservedBufferStart)
+            throw new InvalidDataException("Chest physical geometry requires the actual placed Body, extended Host and bounded normal-load relation.");
+        var result=new NativeId65FreshWizardDiscGeometry(level.Length,overlay.Length);
+        if(result.BodyByteLength%2048!=0||result.OverlayByteLength%2048!=0||result.FinalExecutableEndExclusive>60000)
+            throw new InvalidDataException("Actual chest allocations are not sector aligned or exceed the separately checked Original gap.");
         return result;
     }
     internal NativeSkyWadRelocationPlan CreateGrowthGeometry()=>new(true,37,0x6927000,FinalWadByteLength,GrowthByteLength,

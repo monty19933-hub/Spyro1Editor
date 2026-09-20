@@ -64,6 +64,7 @@ internal static class FamilyChestBodyCases
         Reject<ArgumentNullException>(()=>NativeFreshLockedChestResearchBody.Compose(resources,host,null!),check);
         Reject<InvalidDataException>(()=>NativeFreshLockedChestResearchBody.Compose(parent,host,scene),check);
         var body=NativeFreshLockedChestResearchBody.Compose(resources,host,scene);
+        FamilyChestPlacementCases.Source(body,check);
         byte[] actual=body.CopyLevelData();
         check(ReferenceEquals(body.ResourceAncestor,resources)&&ReferenceEquals(body.HostAncestor,host)&&
             ReferenceEquals(body.SceneAncestor,scene),"Body retains all three actual immutable ancestors, not equal-byte stand-ins.");

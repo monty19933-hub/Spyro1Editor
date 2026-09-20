@@ -51,8 +51,15 @@ passes343 full regression steps and8885 final source assertions, and preserves
 the complete inverse to the previous scene. A subsequent Body stage installs
 that scene while preserving every byte outside it, passes9034 source assertions
 and343 full regression steps, and checks the enlarged Host's runtime addresses.
-Placement coordinates, complete behavior/lifecycle, final census/executable,
-exact-disc export and fresh gameplay checks remain distinct gates.
+The next source stage places that family on the authored floor and binds an
+explicitly experimental target20 executable. Shared physical export machinery
+now constructs the chest image and inverses all sectors back to the original;
+the full run passes9573 source assertions and343 regression steps, with prior
+export goldens preserved. This is not yet a gameplay pass or editor admission.
+Key-zero contribution remains an explicit assumption, not a complete census.
+See [the private experiment record](research/native-fresh-chest-experimental-disc.md).
+Complete native behavior/lifecycle, actual output and fresh gameplay checks
+remain distinct gates.
 See [the scene record](research/native-fresh-chest-scene-extension.md) and
 [the behavior record](research/native-locked-chest-behavior-layout.md) for current
 implementation evidence. These source-only changes do not replace R06.

@@ -176,7 +176,9 @@ internal static class FamilySoundResidencyCases
 
     // Test-only exact source acquisition. It never invokes the Town destination
     // compiler, scans inventory, writes a candidate or exposes a source issuer.
-    private static async Task<NativeLockedChestFamilySource> CaptureSource(string path,NativeWizardFamilyAssetPlan wizard)
+    // Shared by the explicit chest experiment smoke; never a production issuer
+    // or a caller-supplied resource-certificate route.
+    internal static async Task<NativeLockedChestFamilySource> CaptureSource(string path,NativeWizardFamilyAssetPlan wizard)
     {
         await using var file=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
         await NativeId65FreshDiscSource.RequireWholeOriginalAsync(file,CancellationToken.None);

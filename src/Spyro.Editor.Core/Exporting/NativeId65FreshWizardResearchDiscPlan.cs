@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Text.Json;
 
 namespace Spyro.Editor.Core.Exporting;
@@ -10,29 +9,15 @@ namespace Spyro.Editor.Core.Exporting;
 /// </summary>
 public sealed class NativeId65FreshWizardResearchDiscPlan
 {
-    private static readonly DiscLayout Layout=new(2352,24,22,2048);
     private readonly NativeId65FreshWizardResearchDiscSource _source;
     private readonly NativeId65FreshWizardDiscGeometry _geometry;
-    private readonly byte[] _body,_overlay,_executable,_wad,_root;
-    private readonly byte _wadFlags,_exeFlags;
+    private readonly NativeFreshResearchPhysicalAfterimages _physical;
     private NativeId65FreshWizardResearchDiscPlan(NativeId65FreshWizardResearchDiscSource source)
     {
-        source.RequireAncestry();
-        _source=source;var exe=source.Executable;var body=exe.BodyAncestor;
-        _body=source.FamilyCompositionAncestor?.CopyLevelData()??body.CopyLevelData();_overlay=body.CopyOverlay();_executable=exe.CopyExecutable();
-        _geometry=source.Geometry;
-        _wad=source.CopyWadHeader();_root=source.CopyRoot();
-        if(!_wad.AsSpan(79*8,16).SequenceEqual(new byte[16])||!_wad.AsSpan(81*8,8).SequenceEqual(Convert.FromHexString("0078C90500200000")))
-            throw new InvalidDataException("Reserved Wizard WAD pair or adjacent occupied owner changed.");
-        BinaryPrimitives.WriteInt32LittleEndian(_wad.AsSpan(79*8),_geometry.OverlayWadOffset);
-        BinaryPrimitives.WriteInt32LittleEndian(_wad.AsSpan(79*8+4),_overlay.Length);
-        BinaryPrimitives.WriteInt32LittleEndian(_wad.AsSpan(80*8),_geometry.BodyWadOffset);
-        BinaryPrimitives.WriteInt32LittleEndian(_wad.AsSpan(80*8+4),_body.Length);
-        foreach(var row in source.RootFiles.Where(r=>r.Name is "WAD.WAD" or "SCUS_942.28"))
-            PatchRoot(_root,row,row.Name=="WAD.WAD"?37:FinalExecutableLba,row.Name=="WAD.WAD"?FinalWadByteLength:0x66000);
-        _wadFlags=(byte)(source.CopyPreimage(53874)[18]&0x81);_exeFlags=(byte)(source.CopyPreimage(54078)[18]&0x81);
-        BodySha256=Hash(_body);OverlaySha256=Hash(_overlay);ExecutableSha256=Hash(_executable);
-        WadDirectorySha256=Hash(_wad);IsoRootSha256=Hash(_root);
+        _physical=NativeFreshResearchPhysicalAfterimages.ForWizard(source);
+        _source=source;var exe=source.Executable;_geometry=source.Geometry;
+        BodySha256=Hash(_physical.CopyBody());OverlaySha256=Hash(_physical.CopyOverlay());ExecutableSha256=Hash(_physical.CopyExecutable());
+        WadDirectorySha256=Hash(_physical.CopyWadDirectory());IsoRootSha256=Hash(_physical.CopyIsoRootDirectory());
         PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{ProfileId,SourceImageSha256,ExecutablePlanSha256,BodyPlanSha256,
             HostPlanSha256,CanonicalDocumentSha256,BodySha256,OverlaySha256,ExecutableSha256,WadDirectorySha256,IsoRootSha256,
             FinalExecutableLba,FinalWadByteLength,FinalExecutableEndExclusive,ChangedSectorOwnerCount,PendingOwners,
@@ -55,8 +40,8 @@ public sealed class NativeId65FreshWizardResearchDiscPlan
         AddressMap=new(original,final,[
             new("ISO-root-fixed-position",new(original,22*2048L,2048),new(final,22*2048L,2048)),
             new("original-WAD-fixed-position",new(original,37*2048L,0x6927000),new(final,37*2048L,0x6927000)),
-            new("actual-Wizard-Host",null,new(final,53875*2048L,_overlay.Length)),
-            new("actual-Wizard-Body",null,new(final,53909*2048L,_body.Length)),
+            new("actual-Wizard-Host",null,new(final,53875*2048L,_geometry.OverlayByteLength)),
+            new("actual-Wizard-Body",null,new(final,_geometry.BodyLba*2048L,_geometry.BodyByteLength)),
             new("relocated-actual-Wizard-EXE",new(original,53875*2048L,0x66000),new(final,FinalExecutableLba*2048L,0x66000))]);
         Regions=Array.AsReadOnly(AddressMap.Regions.Select(r=>new NativeId65FreshDiscRegion(r.Id,r.Original?.Offset,r.Final.Offset,r.Final.ByteLength)).ToArray());
     }
@@ -107,11 +92,11 @@ public sealed class NativeId65FreshWizardResearchDiscPlan
     public bool RuntimeVerified=>false;
     public bool PublicationApproved=>false;
     public bool NormalCreateBinEnabled=>false;
-    public byte[] CopyBody()=>_body.ToArray();
-    public byte[] CopyOverlay()=>_overlay.ToArray();
-    public byte[] CopyExecutable()=>_executable.ToArray();
-    public byte[] CopyWadDirectory()=>_wad.ToArray();
-    public byte[] CopyIsoRootDirectory()=>_root.ToArray();
+    public byte[] CopyBody()=>_physical.CopyBody();
+    public byte[] CopyOverlay()=>_physical.CopyOverlay();
+    public byte[] CopyExecutable()=>_physical.CopyExecutable();
+    public byte[] CopyWadDirectory()=>_physical.CopyWadDirectory();
+    public byte[] CopyIsoRootDirectory()=>_physical.CopyIsoRootDirectory();
     public static async Task<NativeId65FreshWizardResearchDiscPlan> CaptureAsync(string originalBin,
         NativeId65FreshWizardResearchExecutablePlan executable,CancellationToken token=default)
     {
@@ -177,55 +162,12 @@ public sealed class NativeId65FreshWizardResearchDiscPlan
         void Try(Action action){try{action();}catch(Exception error){failures.Add(error);}}
     }
     internal static void PatchRoot(Span<byte> root,NativeFlatIsoFile row,int lba,int length)
-    {
-        int at=row.RecordOffset;
-        if(row.IsDirectory||row.Name is not("WAD.WAD" or "SCUS_942.28")||lba<0||length<=0||at<0||at>root.Length-34||
-            BinaryPrimitives.ReadInt32LittleEndian(root[(at+2)..])!=row.Lba||BinaryPrimitives.ReadInt32BigEndian(root[(at+6)..])!=row.Lba||
-            BinaryPrimitives.ReadInt32LittleEndian(root[(at+10)..])!=row.Size||BinaryPrimitives.ReadInt32BigEndian(root[(at+14)..])!=row.Size)
-            throw new InvalidDataException("Wizard ISO fields lost exact bounded both-endian preimages.");
-        BinaryPrimitives.WriteInt32LittleEndian(root[(at+2)..],lba);BinaryPrimitives.WriteInt32BigEndian(root[(at+6)..],lba);
-        BinaryPrimitives.WriteInt32LittleEndian(root[(at+10)..],length);BinaryPrimitives.WriteInt32BigEndian(root[(at+14)..],length);
-    }
+        =>NativeFreshResearchPhysicalAfterimages.PatchRoot(root,row,lba,length);
     internal byte[] CreateExpectedRawSector(int lba,ReadOnlySpan<byte> sourceSector)
-    {
-        _source.RequireRawSector(lba,sourceSector);byte[] before=sourceSector.ToArray();
-        if(!IsChangedOwner(lba))return before;
-        byte[] after=lba>=54079?RawMode2Form1SectorIntegrity.PrepareOwnedZeroPaddingSector(before,Layout,lba):before.ToArray();
-        RawMode2Form1SectorIntegrity.RequireLogicalWriteSector(after,Layout,lba);
-        if(lba==22)_root.CopyTo(after,24);
-        else if(lba==37)_wad.CopyTo(after,24);
-        else if(lba>=53875&&lba<FinalExecutableLba)
-        {
-            int at=checked((lba-53875)*2048);
-            if(at<_overlay.Length)_overlay.AsSpan(at,2048).CopyTo(after.AsSpan(24,2048));
-            else _body.AsSpan(at-_overlay.Length,2048).CopyTo(after.AsSpan(24,2048));
-        }
-        else if(lba>=FinalExecutableLba)_executable.AsSpan((lba-FinalExecutableLba)*2048,2048).CopyTo(after.AsSpan(24,2048));
-        int flags=lba==22?before[18]&0x81:lba==FinalExecutableLba-1?_wadFlags:lba==FinalExecutableEndExclusive-1?_exeFlags:0;
-        after[18]=after[22]=(byte)((after[18]&~0x81)|flags);
-        RawMode2Form1SectorIntegrity.RebuildLogicalWriteSector(after,Layout,lba);return after;
-    }
+        =>_physical.CreateExpectedRawSector(lba,sourceSector);
     internal byte[] CreateOriginalRawSector(int lba,ReadOnlySpan<byte> finalSector)
-    {
-        if(lba<0||lba>=281270||finalSector.Length!=2352)throw new InvalidDataException("Wizard inverse requires one bounded physical sector.");
-        if(!IsChangedOwner(lba)){_source.RequireRawSector(lba,finalSector);return finalSector.ToArray();}
-        byte[] before=_source.CopyPreimage(lba);
-        if(!finalSector.SequenceEqual(CreateExpectedRawSector(lba,before)))throw new InvalidDataException("Wizard inverse afterimage payload/header/parity changed.");
-        return before;
-    }
+        =>_physical.CreateOriginalRawSector(lba,finalSector);
     public NativeId65FreshDiscVerification VerifyImage(Stream original,Stream output,CancellationToken token=default)
-    {
-        token.ThrowIfCancellationRequested();ArgumentNullException.ThrowIfNull(original);ArgumentNullException.ThrowIfNull(output);
-        var result=NativeTownSquareClosurePhysicalReadback.Verify(original,output,NativeId65FreshDiscSource.ImageByteLength,SourceImageSha256,(lba,before)=>
-        {
-            token.ThrowIfCancellationRequested();long position=(lba+1)*2352L;
-            if(original.Length!=NativeId65FreshDiscSource.ImageByteLength||output.Length!=NativeId65FreshDiscSource.ImageByteLength||
-                original.Position!=position||output.Position!=position)throw new InvalidDataException("Wizard physical readback length/position changed during a sector read.");
-            return CreateExpectedRawSector(lba,before);
-        });
-        NativeId65FreshDiscSource.RequireActualEof(original,token);NativeId65FreshDiscSource.RequireActualEof(output,token);
-        token.ThrowIfCancellationRequested();return new(result.Hash,result.Changed);
-    }
-    private bool IsChangedOwner(int lba)=>lba is 22 or 37||lba>=53874&&lba<FinalExecutableEndExclusive;
+        =>_physical.VerifyImage(original,output,token);
     private static string Hash(ReadOnlySpan<byte> b)=>NativeId65FreshExecutablePlan.Hash(b);
 }

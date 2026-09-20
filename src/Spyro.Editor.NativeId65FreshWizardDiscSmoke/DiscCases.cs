@@ -1,5 +1,6 @@
 // Exact physical bytes are tested against the independent original-source oracle.
 using System.Buffers.Binary;
+using System.Reflection;
 using System.Security.Cryptography;
 using Spyro.Editor.Core.Exporting;
 
@@ -17,6 +18,32 @@ internal static class DiscCases
             reject(()=>NativeId65FreshWizardDiscGeometry.Compile(bad,0x20C800),"not the actual Host allocation");
         foreach(int bad in new[]{-1,0,0x1FB800,0x20C000,0x20C801,0x20D000,int.MaxValue})
             reject(()=>NativeId65FreshWizardDiscGeometry.Compile(0x11000,bad),"not the actual Body allocation");
+        var owners=typeof(NativeFreshResearchPhysicalSourceOwners);
+        var constructors=owners.GetConstructors(BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic);
+        var factories=owners.GetMethods(BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.DeclaredOnly);
+        check(owners.IsSealed&&!owners.IsPublic&&constructors.Length==1&&constructors[0].IsPrivate&&
+            owners.GetMethods(BindingFlags.Public|BindingFlags.Instance|BindingFlags.Static|BindingFlags.DeclaredOnly).Length==0&&
+            owners.GetFields(BindingFlags.NonPublic|BindingFlags.Instance).All(f=>f.IsInitOnly),
+            "shared physical owners are internal, sealed, privately captured immutable storage with no public byte authority");
+        check(factories.Length==1&&factories[0].Name=="Capture"&&factories[0].IsAssembly&&
+            factories[0].ReturnType==owners&&factories[0].GetParameters().Select(p=>p.ParameterType).SequenceEqual(new[]{
+                typeof(Stream),typeof(NativeId65FreshDiscSource),typeof(NativeId65FreshWizardDiscGeometry),typeof(CancellationToken)}),
+            "only an actual Original index and closed geometry enter shared capture; no arrays, hashes, delegates or interfaces can issue owners");
+        using var unread=new NoPhysicalReadStream();
+        using(var canceled=new CancellationTokenSource())
+        {
+            canceled.Cancel();bool refused=false;
+            try{_=NativeFreshResearchPhysicalSourceOwners.Capture(unread,null!,g,canceled.Token);}
+            catch(OperationCanceledException error){refused=error.CancellationToken==canceled.Token;}
+            check(refused&&unread.Accesses==0,"shared capture pre-cancellation refuses before source access or missing-owner inspection");
+        }
+        foreach(bool absentStream in new[]{true,false})
+        {
+            bool refused=false;
+            try{_=NativeFreshResearchPhysicalSourceOwners.Capture(absentStream?null!:unread,null!,g,CancellationToken.None);}
+            catch(ArgumentNullException error){refused=error.ParamName==(absentStream?"image":"original");}
+            check(refused&&unread.Accesses==0,"shared capture requires the actual stream and Original owner before any physical read");
+        }
     }
 
     internal static async Task<NativeId65FreshWizardResearchDiscPlan> PrimarySource(string path,
@@ -80,6 +107,21 @@ internal static class DiscCases
     // return assertion + all EOF/cancel attacks; same-path authenticated-capture
     // hook overlays; alternate actual scene retained despite equal EXE; API shape.
     // No default or --source invocation writes a physical candidate.
+    private sealed class NoPhysicalReadStream:Stream
+    {
+        internal int Accesses;
+        private T Touch<T>(){Accesses++;throw new InvalidOperationException("Source-free physical owner test touched the stream.");}
+        public override bool CanRead=>Touch<bool>();
+        public override bool CanSeek=>Touch<bool>();
+        public override bool CanWrite=>Touch<bool>();
+        public override long Length=>Touch<long>();
+        public override long Position{get=>Touch<long>();set{Touch<int>();}}
+        public override int Read(byte[] b,int at,int n)=>Touch<int>();
+        public override long Seek(long offset,SeekOrigin origin)=>Touch<long>();
+        public override void Flush()=>Touch<int>();
+        public override void SetLength(long n)=>Touch<int>();
+        public override void Write(byte[] b,int at,int n)=>Touch<int>();
+    }
     static string Hash(ReadOnlySpan<byte> b)=>Convert.ToHexStringLower(SHA256.HashData(b));
     static string Hash(IncrementalHash h)=>Convert.ToHexStringLower(h.GetHashAndReset());
 }
