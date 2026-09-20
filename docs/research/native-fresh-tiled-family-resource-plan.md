@@ -1,12 +1,46 @@
 # Four-tile family terrain: next source-only resource leaf
 
-Status: **neutral independent reference gate verified; resource issuer remains
-planned**, reviewed against `46ba3fa`. No producer, native output or new admission
-is implemented. Producer implementation is a separate step after the R07 runtime gate.
+Status: **neutral independent reference and complete-document preflight verified;
+source-derived resource issuer remains planned**, reviewed against `46ba3fa`.
+No native resource producer, output or new export admission is implemented.
 The [current editor ledger](native-fresh-family-editor.md) and
 [saved R03 compiler ledger](native-fresh-saved-locked-chest-r03.md) retain their
 own verification boundaries. The [legacy R03 gameplay result](native-fresh-chest-r03-runtime.md)
 is not a tiled-surface result.
+
+## Neutral implementation gate
+
+`NativeFreshTiledFamilyTerrainIntent` now retains the complete actual schema5
+document, all ordered placement IDs, both actual first-occurrence material
+descriptor objects and all eight bindings. It uses the shared complete flat-tile
+geometry codec, then derives material-word locations from validated native
+sector headers. Copies are detached; exact surface and ancestry checks cannot
+promote caller bytes. Source/Body/runtime/publication/closure flags are false.
+
+Valid stable-ID-only changes remain supported authored identities and change
+the full canonical document hash without changing terrain bytes. The oracle's
+fixed IDs describe its test literal, not a new native ID policy. Equal but
+foreign document objects fail reference ancestry. Parsed equal material
+descriptors are tested as distinct objects to verify true first-occurrence
+retention, not merely equality of their values.
+
+Logs under `_local/research/v6-mixed-export-20260912-r01.jR0oBr`:
+
+- 586: independent source-free oracle passes102 negative controls.
+- 587: tests-first missing-type RED, CS0246, zero warnings.
+- 588: process-runner Python tests pass84; the neutral oracle now executes in
+  the ordinary pre-build gate, with no source/path/output mode.
+- 589/590: complete Core/authoring-smoke builds pass, zero warnings/errors.
+- 591: old and new source-free authoring checks pass412, including independent
+  whole/component hashes, complete inverse/complement, detached copies,
+  geometry/material/actor/override negatives and unchanged saved/P0 pre-I/O
+  refusal. The new case is wired into the existing ordinary free mode.
+- 592: complete build-all regression passes343 checks, zero failures, exit0.
+  Report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-k2mi3nve/summary.json`.
+
+This is only neutral preparation. The child-relative used-data reference,
+actual retained resource ancestry, native parser witness and all later
+Body/executable/disc/clearance/publication/runtime gates remain separate.
 
 ## Smallest closed fixture
 

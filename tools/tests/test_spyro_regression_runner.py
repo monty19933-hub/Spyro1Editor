@@ -1749,5 +1749,32 @@ class RunnerOptionsTests(unittest.TestCase):
                     RUNNER.configured_source_cue()
 
 
+class NeutralTiledFamilyOracleTests(unittest.TestCase):
+    def test_independent_reference_runs_in_default_prebuild_gate(self):
+        # This separate source-free command has no ROM/path/output mode. Keep
+        # the C# consumer on the ordinary source-free authoring path as well.
+        script = TOOLS.parent / "src/Spyro.Editor.NativeFreshWizardAuthoringSmoke/source_tiled_family_surface_oracle.py"
+        result = subprocess.run([sys.executable, str(script), "--self-test"],
+                                capture_output=True, text=True, timeout=10, check=False)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        marker = "TILED_FAMILY_SURFACE_ORACLE_OK"
+        self.assertEqual(1, result.stdout.count(marker))
+        report = json.loads(result.stdout.split(marker)[0])
+        self.assertEqual(102, report["negativeControls"])
+        self.assertEqual(2615, report["canonicalBytes"])
+        self.assertEqual(912, report["surfaceBytes"])
+        self.assertEqual("2bc9a53da03fdc5d5c8bfe6bc11b1c46fbbdd1db7ae089c1df8a664c20e5b375",
+                         report["canonicalSha256"])
+        self.assertEqual("6af708ea930471156cf3e68406eef231d2ff8b195d6ca1a832a9406c731af23f",
+                         report["surfaceSha256"])
+        self.assertEqual([0, 0, 0, 1, 0, 1, 1, 1], report["orderedFaceBindings"])
+        for flag in ("sourceOpened", "sourceCertified", "bodyIssued", "runtimeVerified", "publicationApproved"):
+            self.assertIs(False, report[flag])
+        program = (script.parent / "Program.cs").read_text(encoding="utf-8")
+        self.assertIn("TiledFamilyTerrainIntentCases.Free(Check);", program)
+        self.assertLess(program.index("TiledFamilyTerrainIntentCases.Free(Check);"),
+                        program.index("if (request == null) return;"))
+
+
 if __name__ == "__main__":
     unittest.main()

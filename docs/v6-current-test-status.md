@@ -57,6 +57,9 @@ Original emulator settings and memory-card contents were preserved/restored.
 
 - Tiled new-level export still requires zero placed Mobys. R07 can author/save
   tiled family documents, but they are not native-export eligible yet.
+  The new source-only four-tile preflight retains the complete family document
+  and matches an independent surface reference; full regression passes343/0.
+  This has not enabled a combined tiled-family export or changed either app.
 - Static material selection is bounded by native data and GPU capacity.
   Animated/scrolling/HQ materials are not universally supported.
 - The catalogue can show assets without proving that every destination has
