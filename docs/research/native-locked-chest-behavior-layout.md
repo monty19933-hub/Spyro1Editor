@@ -128,3 +128,36 @@ It pins the unchanged441/436 oracles, retains full image/owner identities, and
 checks held/named inode, length and timestamps before/finally/reopen. The report
 does not execute helpers, infer returns, admit Fresh code or certify a function
 tail. It is the input evidence for the separate retained-reward scalar witness.
+
+## Retained reward precondition scalar witness445
+
+`source_fresh_chest_reward_precondition_witness.py` SHA256
+`0868d7ce9cbab4abcb29b768490f2bfaded357bb7d57abbdc96c471509620405`
+passed121 checks/eight distinct refusals against the exact original. Independent
+read-only review found no actionable issue within this bounded scope. Existing
+436/441/443 files and pins remain unchanged.
+
+All five actual source D rows/private blocks execute their first waiting entry,
+two later ticks and an explicit owner-motion variation with the actual17700/1C
+and1778C/34 code. Every register, mapped-memory complement, read/store/call and
+finite instruction trace is checked; both load and control delay rules have a
+small independent scalar control. Actual initial private+14=0/+18=1 bypasses
+the alternate reset arm, initializes+10=1, and later waiting ticks bypass the
+initializer. This is a bounded waiting-path invariant, not all-state lifecycle
+proof. Source D need not have an invented animated model for these paths.
+
+Changed gate inputs reach the real delete-call boundary, where execution stops.
+A separately declared post-delete E660 entry executes all58 owner-row bytes
+through the526A8 call/delay, then stops: the current row is now classAE and owns
+the copied chest private pointer, while s1 retains the former D private block.
+Separate E6B0 post-call-entry cases execute the bounded owner-link scan and both
+reset exits with copied classAE. They do NOT assert that526A8 returned this
+state; the empty-list variant is explicitly only a branch-boundary fixture.
+
+Truncated helper delay, missing copy-delay store, changed subtraction/gate,
+unmapped owner, address-instead-of-integer owner, exhausted instruction budget
+and wrong family row are refused. No Core producer, Fresh executable/Host,
+reset model, full alternate initializer, emission/lifetime or runtime is issued.
+These results remove the earlier mistaken need to supply classD with a made-up
+animated root; actual remaining helper, shared-owner and composition guards
+must be checked when issuing the separate private Fresh research extension.
