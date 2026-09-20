@@ -113,6 +113,35 @@ new code and test hashes are respectively
 `936aa6e288d438e02585f767dee9c6c57dd1c424ba0ab12236c804e12e51a09d`
 and `34e5af50fabf73066053b673589010ce4b29613df1327f5cfc479389270133ae`.
 
+## Executed original data-parser witness
+
+`source_tiled_family_native_parser_oracle.py` is frozen at
+`34c598482dcb1e2798f92ab17a8105cec0b9f4058759c10c17408c7a37840a5e`.
+Root replay599 passes after executing the unchanged variable/P0 control first
+(5987 checks,29 refusals,190 coordinate sums and96 used lengths). The new
+family case executes only the actual Original data parser, sound helper and
+caller return/store:1077 instructions,124 exact write owners,228 native reads.
+It returns and stores model endpoint8008D6F0 without pre-seeding the result.
+The complete parsed-data hash is
+`5a1547251ca6326d2cc8c9f414e8c9090b6385071dc55832cdbe009c811d7109`.
+
+The fixture maps only22 global words, the64-slot particle table, an8-byte stack
+frame and exactCB8 used data. No family model, Scene or allocation padding is
+mapped. All11 particle pointers, both split material-table pointers, four
+environment pointers, five collision pointers and all78 sound rebases are
+checked against independent formulas, including every mapped-byte/register
+complement. The sound1010 adjustment is an executed native ADDIU literal;
+the external78A40=0 scalar is explicitly synthetic, not observed SPU state.
+
+Fifteen targeted refusals cover code/data/owner/budget failures. Four limitation
+controls demonstrate that the pointer parser does not render faces, query
+collision trees or validate every unread suffix byte, and that skipping the
+endpoint store leaves its poison value intact. Face/sector checks are structural
+readback, not rendering or collision gameplay. Complete Original and R07 BIN/
+CUE identities/EOF are verified before/after and through fresh reopen, along
+with all loaded definitions. No Body, full native level load, model/Scene load,
+Host initializer, hardware, disc output or runtime acceptance is claimed.
+
 ## Smallest closed fixture
 
 Keep the exact R03 floor union: `[8448,11520] × [8448,11520]` at Z8704.
