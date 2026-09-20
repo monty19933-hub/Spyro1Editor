@@ -142,6 +142,33 @@ CUE identities/EOF are verified before/after and through fresh reopen, along
 with all loaded definitions. No Body, full native level load, model/Scene load,
 Host initializer, hardware, disc output or runtime acceptance is claimed.
 
+## Independent complete-Body reference
+
+Before C# Body implementation, `source_tiled_family_body_child_oracle.py`
+independently assembles the entire prospective Body from the exact R07 child
+and frozen data reference. Script SHA256:
+`223a05de692ab0e4f9a660d62842f1805ac4d9bc13329653b147d6888a62b06a`.
+Root replay600 passes47 targeted corruption/extent/foreign-parent controls,
+complete complement and immediate inverse, with whole child BIN/CUE held/
+named/reopened/EOF and definition guards. It opens no Original or Core output
+and writes no payload or image.
+
+Expected complete Body length is20F000 and SHA256
+`c8c85e71b633e29ce573dddccb04a4a0adcd6696d292658304328e435dfaa9ca`.
+Exactly1413 bytes differ, all inside the existing data allocationE6000/1000.
+The full header hash remains
+`79a8467e3c33d6924bde2253e2f165cf8423cc1d719730c09aa01dbe042a467f`;
+the concatenated complete non-data complement hash remains
+`1216590804168647145c2ee8ddbe8a1c38c2ec80dc86363b2f7edf0b40146a6a`.
+All eight subfile hashes and the complete unchanged placed P9 Scene are frozen
+in the script. This is a **child-relative byte reference**, not a typed Body,
+new address domain, native loader or runtime certificate.
+
+Tests-first Body smoke601 fails only for the missing Body type (CS0246, zero
+warnings). The test is wired into ordinary free mode and explicit read-only
+R03 source mode; every existing image writer remains on the old placed Body.
+The Body implementation and native model-registration witness remain pending.
+
 ## Smallest closed fixture
 
 Keep the exact R03 floor union: `[8448,11520] × [8448,11520]` at Z8704.
