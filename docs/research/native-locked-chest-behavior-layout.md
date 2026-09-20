@@ -52,3 +52,40 @@ Fresh admission, per-instance seven-row/property rebasing, singleton globals,
 current executable consumer domains, extended initializer/model addresses,
 reward census and coexistence/runtime testing remain pending. Existing Town
 runtime evidence applies only to its historical exact candidate.
+
+## Independent continuation witness before Fresh integration
+
+Original-only inspections417/421 established the actual words before scalar
+tests were written. The historical overlapping40-byte reset guard was not a
+complete block: it ended at a pending byte load. The actual reset entry is4C
+bytes through its jump and delay store. Town and donor reset blocks are **not
+byte-identical**: eight row operands use s3 versus s4, and the final jump owns
+a different loop. Equivalence requires the explicit row mapping s4=s3.
+
+`src/Spyro.Editor.NativeFreshWizardHostSmoke/source_fresh_chest_continuation_oracle.py`
+SHA256 `4f407c80de5ae78642f94bf727dd113384ba3ad5baa62da308e9b4407a946b8a`
+is a new original-only script; existing oracles/pins are unchanged. Run it with
+`python3 -B <script> <original.bin> --witness` (`--inspect` remains available).
+Root execution436 passed69 checks/four explicit refusals. Whole original image,
+Town/Peace overlays, original executable, WAD entries and pinned transitive
+helper sources are checked before/finally, including a final named-image reopen.
+It invokes no Core producer and writes no image or overlay.
+
+The bounded scalar cases execute all eight declared continuation sites, their
+actual branch conditions/delay words, Town's next-row and null-list paths, and
+complete outer-frame restoration. They verify seven reset byte writes, four
+owned reads and the full unchanged register/memory complement at animation
+bytes0/7/255. Synthetic model/table/animation memory is explicit, not evidence
+that an actual rootless class has those owners. Unequal row-register and cursor
+controls expose the difference rather than hiding it: Town uses sp+180 and a
+1D0 outer frame; the donor loop reads sp+1E8. A Wizard2B0 private-frame restore,
+missing model, missing terminal delay and cancelled animation-pointer load fail.
+
+Delete and sound witnesses stop at the original EXE entry after executing real
+argument and JAL delay words. Separate post-call-entry tests do not claim helper
+execution. Original EXE consumer windows are pinned, but matching them against
+the actual current Fresh executable is still required. Test-only thunk PCs are
+not a proposed or admitted Fresh allocation. Whole-handler reachability,
+rootless-class model/animation validity, aliased scratch, callbacks, singleton
+state and native helper semantics remain unresolved. No Fresh placement, Body,
+executable, disc or UI admission is widened by this witness.
