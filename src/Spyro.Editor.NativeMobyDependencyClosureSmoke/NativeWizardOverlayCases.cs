@@ -7,6 +7,7 @@ internal static class NativeWizardOverlayCases
 {
     internal static void Run(Action<bool,string> check,Action<Action,string> reject)
     {
+        NativeOwnedOverlayAppendCases.Run(check,reject);
         var domain=new NativeAddressSpace(NativeAddressKind.LevelData,"owned-overlay-fixture",NativeAddressRevision.Final,0x20000);
         var owner=new NativeByteExtent(domain,0xB100,0x44);var lightning=new NativeByteExtent(domain,0xB000,4);var wizard=new NativeByteExtent(domain,0xB040,4);
         byte[] original=Convert.FromHexString("fb000224f4186210fc00622847004010");
@@ -59,6 +60,11 @@ internal static class NativeWizardOverlayCases
         check(plan.CodeOwners.All(o=>o.RuntimePc==0x8007AA38+o.OverlayOffset&&o.Sha256==Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(overlay.AsSpan(o.OverlayOffset,o.ByteLength)))),
             "Native code owner byte hashes/runtime addresses differ from actual materialized bytes.");
         byte[] original=plan.CopyOriginalOverlay();int[] fields=[0x4EC,0x4F0,0x158,0x240,0x29C,0x384];
+        check(!plan.AppendLayout.SourceCertified&&plan.AppendLayout.CopyRetainedPrefix().SequenceEqual(original)&&
+            plan.AppendLayout.RetainedByteLength==original.Length&&plan.AppendLayout.FinalByteLength==overlay.Length&&
+            plan.AppendLayout.CopyAnchor==plan.FinalCopyBufferAddress&&plan.AppendLayout.Blocks.Select(b=>(b.Id,b.Owner.Offset,b.Owner.ByteLength))
+                .SequenceEqual(plan.CodeOwners.Select(b=>(b.Id,(long)b.OverlayOffset,(long)b.ByteLength))),
+            "Actual retail producer consumes the neutral shared append layout without changing complete owner identity.");
         check(Enumerable.Range(0,0xB000).Where(at=>!fields.Any(f=>at>=f&&at<f+4)).All(at=>overlay[at]==original[at]),"Unowned original overlay byte changed.");
         check(overlay.AsSpan(0xAB5C,0x4A4).SequenceEqual(original.AsSpan(0xAB5C,0x4A4)),"Nonzero source tail was treated as free code space.");
         var nativeExe=plan.CopyOriginalExecutable();

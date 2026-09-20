@@ -130,14 +130,16 @@ internal sealed class NativeId65FreshWizardHostLayout
         if(particles.Fragments.Count(f=>f.HasFallthrough)!=1||!particles.Fragments[^1].HasFallthrough||particles.Fragments[^1].Source.SourcePc!=0x800893D0)
             throw new InvalidDataException("Exact condition fallthrough must remain a generated eight-byte thunk.");
         var packages=new[]{("main",main),("spawn26",spawn),("particles",particles)};
-        int cursor=0xF800;var blocks=new List<(string Id,int At,int N)>();
-        void Allocate(string id,int n){blocks.Add((id,cursor,n));cursor=checked(cursor+n);}
-        foreach(var (id,p) in packages)Allocate(id,p.Fragments.Sum(f=>f.ByteLength+(f.HasFallthrough?8:0)));
-        foreach(string id in new[]{"main-leave","tick-next-leave","tick-delete-leave","spawn-leave"})Allocate(id,0x98);
-        foreach(string id in new[]{"main26","main11B","tick07","tick41"})Allocate(id,0x9C);
-        foreach(string id in new[]{"spawn07","spawn41"})Allocate(id,0xA0);
-        Allocate("effect-call",8);Allocate("dispatch",0x44);int used=cursor,finalLength=(cursor+0x7FF)&~0x7FF;Allocate("padding",finalLength-cursor);
-        if(used!=0x10DB4||finalLength!=0x11000||blocks.Count!=16)throw new InvalidDataException("Closed Host ownership budget changed.");
+        var sizes=new List<NativeOwnedOverlayBlockSize>();
+        foreach(var (id,p) in packages)sizes.Add(new(id,p.Fragments.Sum(f=>f.ByteLength+(f.HasFallthrough?8:0))));
+        foreach(string id in new[]{"main-leave","tick-next-leave","tick-delete-leave","spawn-leave"})sizes.Add(new(id,0x98));
+        foreach(string id in new[]{"main26","main11B","tick07","tick41"})sizes.Add(new(id,0x9C));
+        foreach(string id in new[]{"spawn07","spawn41"})sizes.Add(new(id,0xA0));
+        sizes.Add(new("effect-call",8));sizes.Add(new("dispatch",0x44));
+        AppendLayout=NativeOwnedOverlayAppendLayout.Create("detached-fresh-Town-Host",town,Base,0x11000,sizes,"padding");
+        int used=AppendLayout.UsedByteLength,finalLength=AppendLayout.FinalByteLength;
+        var blocks=AppendLayout.Blocks.Select(b=>(b.Id,At:checked((int)b.Owner.Offset),N:checked((int)b.Owner.ByteLength))).ToArray();
+        if(used!=0x10DB4||finalLength!=0x11000||blocks.Length!=16)throw new InvalidDataException("Closed Host ownership budget changed.");
         var byId=blocks.ToDictionary(b=>b.Id);var mapping=new Dictionary<uint,uint>();var fragments=new List<NativeFreshWizardHostFragment>();
         foreach(var (id,p) in packages)
         {
@@ -149,7 +151,7 @@ internal sealed class NativeId65FreshWizardHostLayout
                 at+=f.ByteLength+(f.HasFallthrough?8:0);
             }
         }
-        var finalDomain=new NativeAddressSpace(NativeAddressKind.LevelData,"detached-fresh-Town-Host",NativeAddressRevision.Final,finalLength);
+        var finalDomain=AppendLayout.Domain;
         uint Pc(string id)=>Base+(uint)byId[id].At;
         NativeByteExtent Entry(uint pc)=>new(finalDomain,pc-Base,4);
         var payloads=new Dictionary<string,byte[]>();var transfers=new List<NativeFreshWizardHostTransfer>();var reservations=new List<NativeByteExtent>();
@@ -191,16 +193,20 @@ internal sealed class NativeId65FreshWizardHostLayout
         payloads["effect-call"]=Bytes([Jump(0x80088F68),0]);
         payloads["dispatch"]=Bytes([I(9,0,2,0x26),I(5,4,2,3),0,Jump(Pc("main26")),0,I(9,0,2,0x11B),I(5,4,2,3),0,Jump(Pc("main11B")),0,
             0x28820101,I(5,2,0,3),0x288200FF,Jump(0x8007DC70),0,Jump(0x8007DB40),0]);
-        payloads["padding"]=new byte[byId["padding"].N];_overlay=new byte[finalLength];town.CopyTo(_overlay,0);
-        var owners=new List<NativeWizardOverlayCodeOwner>();cursor=0xF800;
-        foreach(var b in blocks)
-        {
-            byte[] raw=payloads[b.Id];if(b.At!=cursor||raw.Length!=b.N)throw new InvalidDataException("Host owner is incomplete/overlapping.");
-            raw.CopyTo(_overlay,b.At);owners.Add(new(b.Id,b.At,Base+(uint)b.At,b.N,Hash(raw)));cursor+=b.N;
-        }
-        foreach(var reservation in reservations)
-            if(!owners.Any(o=>o.Id!="padding"&&reservation.Offset>=o.OverlayOffset&&reservation.EndExclusive<=o.OverlayOffset+o.ByteLength))
-                throw new InvalidDataException("An external codec target was never actually materialized.");
+        // Declarations come from captured package roots and these code-owned
+        // adapter/thunk roles, never from a requested reservation or an arbitrary
+        // interior instruction. Materialization discharges the separate requests.
+        var entries=new List<NativeOwnedOverlayEntry>();
+        foreach(var (id,p) in packages)
+            foreach(uint sourcePc in p.EntryPcs)entries.Add(new($"{id}:{sourcePc:X8}",id,Entry(mapping[sourcePc])));
+        foreach(var role in roles)entries.Add(new(role.Id,role.Id,Entry(role.RuntimePc)));
+        foreach(string id in new[]{"main-leave","tick-next-leave","tick-delete-leave","spawn-leave","effect-call","dispatch"})
+            entries.Add(new(id,id,Entry(Pc(id))));
+        _overlay=AppendLayout.Materialize(AppendLayout.Blocks.Where(b=>!b.IsPadding)
+            .Select(b=>new NativeOwnedOverlayBlock(b.Id,b.Owner,payloads[b.Id])),entries,reservations);
+        var owners=AppendLayout.Blocks.Select(b=>new NativeWizardOverlayCodeOwner(b.Id,checked((int)b.Owner.Offset),
+            Base+checked((uint)b.Owner.Offset),checked((int)b.Owner.ByteLength),
+            Hash(_overlay.AsSpan(checked((int)b.Owner.Offset),checked((int)b.Owner.ByteLength))))).ToList();
         var patches=new List<NativeFreshWizardHostPatch>();
         void Patch(string id,int at,byte[] after)
         {var patch=new NativeFreshWizardHostPatch(id,at,Base+(uint)at,town.AsSpan(at,after.Length),after);after.CopyTo(_overlay,at);patches.Add(patch);}
@@ -227,6 +233,7 @@ internal sealed class NativeId65FreshWizardHostLayout
         TownPatches=patches.AsReadOnly();Mapping=new ReadOnlyDictionary<uint,uint>(mapping);
     }
     internal bool SourceCertified=>false;
+    internal NativeOwnedOverlayAppendLayout AppendLayout{get;}
     internal string OverlaySha256{get;}
     internal string InitializerSha256{get;}
     internal IReadOnlyList<uint> SortedParticleSourcePcs{get;}

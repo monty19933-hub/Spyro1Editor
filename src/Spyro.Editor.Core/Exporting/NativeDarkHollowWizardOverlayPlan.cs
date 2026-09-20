@@ -42,18 +42,20 @@ public sealed class NativeDarkHollowWizardOverlayPlan
         int mainLength=EncodedLength(main),spawnLength=EncodedLength(spawn),particleLength=EncodedLength(particle);
         var sizing=NativeMipsOwnedFrameAdapter.Create(0x80082818,source.DestinationContinuationPc);
         int entryLength=sizing.CopyEntry().Length,exitLength=sizing.CopyExit().Length;
-        int exactLength=checked(mainLength+spawnLength+particleLength+4*8+8+exitLength+2*entryLength+0x44);
-        int finalLength=checked((OriginalLength+exactLength+0x7FF)&~0x7FF);
-        var domain=new NativeAddressSpace(NativeAddressKind.LevelData,"dark-native-wizard-overlay:"+resources.FinalDataSha256,
-            NativeAddressRevision.Final,finalLength);
-        var arena=new NativeByteExtent(domain,OriginalLength,finalLength-OriginalLength);
-        int cursor=OriginalLength;
-        NativeByteExtent Allocate(int length){var extent=new NativeByteExtent(domain,cursor,length);cursor=checked(cursor+length);return extent;}
-        var mainOwner=Allocate(mainLength);var spawnOwner=Allocate(spawnLength);var particleOwner=Allocate(particleLength);
         uint[] continuationPcs=[0x8008442C,0x80084448,0x80084450,0x8008553C];
-        var bridges=continuationPcs.Select(pc=>new NativeParticleBehaviorBridge(pc,Allocate(8))).ToArray();
-        var effectOwner=Allocate(8);var exitOwner=Allocate(exitLength);var lightningOwner=Allocate(entryLength);var wizardOwner=Allocate(entryLength);
-        var dispatchOwner=Allocate(0x44);
+        List<NativeOwnedOverlayBlockSize> sizes=[new("native-main",mainLength),new("private-spawn26",spawnLength),
+            new("native-particles",particleLength)];
+        sizes.AddRange(continuationPcs.Select(pc=>new NativeOwnedOverlayBlockSize($"particle-return-{pc:X8}",8)));
+        sizes.AddRange([new("effect-call",8),new("main-exit",exitLength),new("lightning-adapter",entryLength),
+            new("wizard-adapter",entryLength),new("class-dispatch",0x44)]);
+        AppendLayout=NativeOwnedOverlayAppendLayout.Create("dark-native-wizard-overlay:"+resources.FinalDataSha256,
+            _originalOverlay,OverlayBase,OriginalLength+NativeOwnedOverlayMaterializer.MaximumAppendByteLength,sizes,"owned-sector-padding");
+        var domain=AppendLayout.Domain;var arena=AppendLayout.Arena;
+        var byId=AppendLayout.Blocks.ToDictionary(b=>b.Id,b=>b.Owner);
+        var mainOwner=byId["native-main"];var spawnOwner=byId["private-spawn26"];var particleOwner=byId["native-particles"];
+        var bridges=continuationPcs.Select(pc=>new NativeParticleBehaviorBridge(pc,byId[$"particle-return-{pc:X8}"])).ToArray();
+        var effectOwner=byId["effect-call"];var exitOwner=byId["main-exit"];
+        var lightningOwner=byId["lightning-adapter"];var wizardOwner=byId["wizard-adapter"];var dispatchOwner=byId["class-dispatch"];
         NativeByteExtent Entry(NativeByteExtent owner)=>new(domain,owner.Offset,4);
         var spawnEntry=SourceEntry(spawn,spawnOwner,0x80086DD8);
         var exitEntry=Entry(exitOwner);var effectEntry=new NativeByteExtent(domain,effectOwner.Offset,8);
@@ -115,16 +117,11 @@ public sealed class NativeDarkHollowWizardOverlayPlan
             if(linkedParticle.SourceToFinalPc[entryPc]!=Pc(entry))throw new InvalidDataException("Native particle entry layout changed.");
             entries.Add(new($"particle-{entryPc:X8}","native-particles",entry));
         }
-        if(cursor<finalLength)
-        {
-            int paddingLength=finalLength-cursor;
-            blocks.Add(new("owned-sector-padding",Allocate(paddingLength),new byte[paddingLength]));
-        }
         var reservations=linkedMain.UnmaterializedExternalTargets.Concat(linkedSpawn.UnmaterializedExternalTargets)
             .Concat(linkedParticle.UnmaterializedExternalTargets).Concat(new[]{mainLightning,mainWizard,lightningEntry,wizardEntry,Entry(dispatchOwner)})
             .Concat(particle.EntryPcs.Select(pc=>SourceEntry(particle,particleOwner,pc))).ToArray();
-        byte[] appended=Materialize(arena,blocks,entries,reservations);
-        _overlay=new byte[finalLength];_originalOverlay.CopyTo(_overlay,0);appended.CopyTo(_overlay,OriginalLength);
+        _overlay=AppendLayout.Materialize(blocks.Select(b=>new NativeOwnedOverlayBlock(b.Id,b.Owner,b.Bytes)),
+            entries.Select(e=>new NativeOwnedOverlayEntry(e.Id,e.BlockId,e.Owner)),reservations);
         // Only this exact eight-byte compare-chain entry and four default particle
         // table words are owned original mutations. The old delay word stays intact.
         JumpBytes(Pc(dispatchOwner)).CopyTo(_overlay,0x4EC);
@@ -142,8 +139,8 @@ public sealed class NativeDarkHollowWizardOverlayPlan
         short low=unchecked((short)FinalCopyBufferAddress);uint high=(uint)(((long)FinalCopyBufferAddress-low)>>16);
         Write(_executable,0x4B048,0x3C020000|high);Write(_executable,0x4B04C,0x24420000u|(ushort)low);
         OverlaySha256=Hash(_overlay);ExecutableSha256=Hash(_executable);
-        CodeOwners=Array.AsReadOnly(blocks.OrderBy(b=>b.Owner.Offset).Select(b=>new NativeWizardOverlayCodeOwner(b.Id,(int)b.Owner.Offset,
-            Pc(b.Owner),(int)b.Owner.ByteLength,Hash(b.Bytes))).ToArray());
+        CodeOwners=Array.AsReadOnly(AppendLayout.Blocks.Select(b=>new NativeWizardOverlayCodeOwner(b.Id,(int)b.Owner.Offset,
+            Pc(b.Owner),(int)b.Owner.ByteLength,Hash(_overlay.AsSpan((int)b.Owner.Offset,(int)b.Owner.ByteLength)))).ToArray());
         RequireFinal(_overlay,_executable,_data);
         RuntimeMemory=resources.RuntimeMemory.AnalyzeDarkWizardOverlay(this);
         if(!RuntimeMemory.KnownPostLoadExtentsDisjoint||RuntimeMemory.DynamicMobyCapacity!=sceneRevision.DynamicCapacity||RuntimeMemory.PlacedMobyCount!=sceneRevision.PlacedCount)
@@ -177,6 +174,7 @@ public sealed class NativeDarkHollowWizardOverlayPlan
     public string OverlaySha256 { get; }
     public string ExecutableSha256 { get; }
     public IReadOnlyList<NativeWizardOverlayCodeOwner> CodeOwners { get; }
+    internal NativeOwnedOverlayAppendLayout AppendLayout { get; }
     internal NativeDarkHollowWizardSceneRevision SceneRevision=>_resources.SceneRevision!;
     internal static byte[] BuildDispatch(ReadOnlySpan<byte> originalWindow,NativeByteExtent owner,
         NativeByteExtent lightningEntry,NativeByteExtent wizardEntry)
@@ -193,45 +191,9 @@ public sealed class NativeDarkHollowWizardOverlayPlan
         IEnumerable<NativeWizardOverlayEntry> entries,IEnumerable<NativeByteExtent> reservations)
     {
         RequireFinalExtent(arena);
-        if(arena.ByteLength>0x20000)throw new InvalidDataException("Native code materialization byte budget exceeded.");
-        var blockSnapshot=NativeMipsBehaviorFragmentCodec.BoundedSnapshot(blocks,64,"code block");
-        var entrySnapshot=NativeMipsBehaviorFragmentCodec.BoundedSnapshot(entries,256,"code entry");
-        var reservationSnapshot=NativeMipsBehaviorFragmentCodec.BoundedSnapshot(reservations,1024,"code reservation");
-        if(blockSnapshot.Any(b=>b==null)||entrySnapshot.Any(e=>e==null))throw new InvalidDataException("Native code ownership is absent.");
-        long cursor=arena.Offset;HashSet<string> blockIds=new(StringComparer.Ordinal);
-        foreach(var block in blockSnapshot.OrderBy(b=>b.Owner?.Offset??-1))
-        {
-            Within(block.Owner);if(string.IsNullOrWhiteSpace(block.Id)||!blockIds.Add(block.Id)||block.Owner.Offset<cursor)
-                throw new InvalidDataException("Native code owners overlap or duplicate their identity.");
-            if(block.Owner.Offset!=cursor)throw new InvalidDataException("Native code coverage contains an unowned hole.");
-            if(block.Bytes==null||block.Bytes.LongLength!=block.Owner.ByteLength)throw new InvalidDataException("Native code owner payload length differs.");
-            cursor=block.Owner.EndExclusive;
-        }
-        if(cursor!=arena.EndExclusive)throw new InvalidDataException("Native code coverage does not fill its exact arena.");
-        HashSet<string> entryIds=new(StringComparer.Ordinal);
-        foreach(var entry in entrySnapshot)
-        {
-            Within(entry.Owner);
-            var block=blockSnapshot.SingleOrDefault(b=>b.Id==entry.BlockId);
-            if(string.IsNullOrWhiteSpace(entry.Id)||!entryIds.Add(entry.Id)||block==null||entry.Owner.Offset<block.Owner.Offset||entry.Owner.EndExclusive>block.Owner.EndExclusive)
-                throw new InvalidDataException("Native code entry has no unique owning materialized block.");
-        }
-        foreach(var target in reservationSnapshot)
-        {
-            Within(target);
-            if(!entrySnapshot.Any(e=>e.Owner.Offset==target.Offset&&e.Owner.EndExclusive>=target.EndExclusive))
-                throw new InvalidDataException("Native code reservation lacks a declared materialized entry.");
-        }
-        var result=new byte[(int)arena.ByteLength];
-        foreach(var block in blockSnapshot)block.Bytes.CopyTo(result,(int)(block.Owner.Offset-arena.Offset));
-        return result;
-        void Within(NativeByteExtent? extent)
-        {
-            if(extent==null)throw new InvalidDataException("Native code domain owner is absent.");
-            RequireFinalExtent(extent);
-            if(extent.Space!=arena.Space||extent.Offset<arena.Offset||extent.EndExclusive>arena.EndExclusive)
-                throw new InvalidDataException("Native code owner has another final domain or lies outside its arena.");
-        }
+        return NativeOwnedOverlayMaterializer.Materialize(arena,OverlayBase,
+            blocks.Select(b=>b is null?null!:new NativeOwnedOverlayBlock(b.Id,b.Owner,b.Bytes)),
+            entries.Select(e=>e is null?null!:new NativeOwnedOverlayEntry(e.Id,e.BlockId,e.Owner)),reservations);
     }
     private static NativeByteExtent SourceEntry(NativeMipsBehaviorFragmentPackage package,NativeByteExtent prefix,uint sourcePc)
     {

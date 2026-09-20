@@ -1556,3 +1556,90 @@ and consolidate owned-overlay append layout/materialization across real retail
 and Fresh Wizard consumers before widening behavior destination authority.
 Neither step should weaken legacy/tiled/placement gates or bypass whole-document
 identity. Native Fly Anywhere ON/OFF remains a separate pending gameplay gate.
+
+### Shared owned-overlay append, with both real Wizard consumers
+
+The next bounded refactor replaces duplicate overlay allocation/materialization
+in retail Dark Hollow and Fresh Wizard Host with `NativeOwnedOverlayAppendLayout`.
+It captures the **complete actual retained prefix** before caller enumeration,
+assigns immutable Final-domain owners, derives used/padded lengths and the copy
+anchor, and generates its own zero sector padding. A following family must append
+after the current complete `0x11000` Host allocation, not its `0x10DB4` used end
+or the historical `0xF494` Town tail. It does not certify source, hooks, ABI,
+arbitrary destinations, runtime fit or new placement eligibility.
+
+The shared materializer snapshots each payload before caller iteration resumes;
+it requires exact disjoint coverage, matching actual domain instances, and
+explicit entries for reservations. Fresh no longer treats any instruction inside
+a non-padding block as a declared entry. Its declarations come from captured
+package roots and named adapters/leaves/effect/dispatch, never the reservations
+themselves. Retail's internal compatibility wrapper preserves its old bounded
+Final/LevelData/B000 admission and sub-arena behavior. Public serialized owner
+reports and all existing source/profile gates are unchanged.
+
+Evidence in the existing `v6-mixed-export-20260912-r01.jR0oBr` log directory:
+
+- Pre-refactor source baselines: 323 (Fresh) and 324 (retail).
+- Tests-first RED: 325 (missing layout/types/retail property) and 326 (missing
+  Fresh property); production Core was unchanged for both.
+- Builds 331/332: zero warnings/errors. Source-free 333 passes 1,940 dependency
+  checks; 334 passes 189 Host and 23 resource-stream checks.
+- Actual source 335 passes 65,746 Host checks and 731 refusals. Complete overlay
+  `ad6d952c...`, initializer `d7f0e7c9...` and plan `e418fdb5...` exactly match 323.
+- Actual source 336 passes 4,481 checks. Complete retail overlay `10f82ee1...`,
+  executable `14aa937f...`, copy anchor `80087238`, retained Town closure and
+  death/reward outputs exactly match 324. Original-source final checks passed.
+
+Regression cases include exact sector/no-padding and RAM boundaries, exhausted
+capacity, bounded/disposed enumeration, lazy prefix/payload mutation, immutable
+copies, duplicate/hole/wrong-domain/padding owners, undeclared interior targets,
+and chaining after B000/F800/11000. Root and an independent read-only reviewer
+checked both real-consumer diffs; no new native behavior was enabled or tested.
+
+### Neutral tiled face/material data composition
+
+`NativeId65TiledMaterialDataLayout` removes the two-fixed-face addressing
+assumption from a new **internal neutral** composition entry. It validates and
+captures the whole untextured tiled input, derives each face owner from validated
+sector pointers and header counts, writes the shared ordered LQ/HQ table, and
+preserves every translated byte except the exact four-byte material owners.
+Direct flag `0x80`, clip `0x8000`, collision-relative pointers, all guards,
+visibility, sky and the complete retained particle/sound tail are preserved.
+IDs are exact table indexes or `FF`; no masking/clamping/dropped faces occurs.
+It accepts bounded 0..128 decoded records subject to the real `0x1000` data
+allocation, but grants no source, GPU allocation, body, publication or gameplay
+authority. All current tiled material/placement export gates remain closed.
+
+Tests-first 327 builds the new tests against the previous Core with no warnings
+or errors; 328 fails at the genuinely missing internal composer. Independent
+Python oracle 329/330 freezes complete synthetic input/output hashes before any
+production composition executes, using the unchanged pinned tiled surface oracle
+and patterned retained tails. C# then pins those independent whole-data hashes.
+337 builds cleanly; 338 passes 8,740 source-free texture checks, including the new
+marker. Final pinned Python rerun 339 passes separately.
+
+Coverage includes all six faces of three tiles, repeated/reversed sources and
+bindings, mixed/all-FF, zero-record identity, 1/2/3/7 records, 8-record overflow,
+malformed unselected tiles, exact metadata/flag/tail refusals, complete neutral
+inverse, and hostile bounded enumerators. Eight-tile fixtures produce `0xFFC`
+and exactly `0x1000`; `0x1004` refuses without truncation. The ordinary three-tile
+two-record result uses `0xBC8`. These are neutral byte fixtures, not source-ROM
+or GPU/runtime acceptance. Existing two-face adapters and their goldens remain.
+
+The next real-consumer integration must retain the same whole schema-4 document
+through geometry capture and a distinct source-issued tiled-material revision.
+It must use actual static source objects and the existing allocator; shared
+staging/body/disc producers must bind that exact material revision and measured
+used length. In particular, the old untextured `FromTiled` route must still reject
+unresolved retail material intent, and a new receipt must name final material
+upload/data rather than intermediate color-only bytes. No Base-only substitute
+document or duplicate exporter is permitted. R04 remains the unchanged playable
+build from c80eb4b; these foundation changes have not rebuilt or replaced it.
+
+Final full source-free run 340 rebuilds every project and passes **338 steps,
+zero failures**. Report:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-etq59gtj/summary.json`.
+The new tests run inside the already-registered dependency and texture smokes;
+the independent Python oracle is a separately recorded check. R04 App/Core
+hashes remain `45dce3be...` / `ce021966...` after this full rebuild. No runtime or
+publication flag was promoted, and no preserved app was rebuilt.

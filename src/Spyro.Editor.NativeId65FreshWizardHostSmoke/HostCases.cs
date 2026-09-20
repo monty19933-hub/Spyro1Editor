@@ -98,6 +98,12 @@ internal static class HostCases
             Check(overlay.Length==0x11000&&p.OverlayByteLength==overlay.Length&&p.UsedByteLength==0x10DB4&&
                 p.CopyAnchor==OverlayBase+overlay.Length&&p.CopyAnchor==0x8008BA38&&Hash(overlay)==OverlayGolden&&p.OverlaySha256==OverlayGolden&&
                 initializer.Length==0x98&&Hash(initializer)==InitializerGolden&&p.InitializerSha256==InitializerGolden,"Two complete independent preproduction source-oracle goldens.");
+            Check(!neutral.AppendLayout.SourceCertified&&neutral.AppendLayout.CopyRetainedPrefix().SequenceEqual(town)&&
+                neutral.AppendLayout.RetainedByteLength==town.Length&&neutral.AppendLayout.UsedByteLength==p.UsedByteLength&&
+                neutral.AppendLayout.FinalByteLength==overlay.Length&&neutral.AppendLayout.CopyAnchor==p.CopyAnchor&&
+                neutral.AppendLayout.Blocks.Select(b=>(b.Id,b.Owner.Offset,b.Owner.ByteLength)).SequenceEqual(
+                    p.AppendedOwners.Select(b=>(b.Id,(long)b.OverlayOffset,(long)b.ByteLength))),
+                "Actual Fresh producer consumes shared append ownership while retaining every established source-oracle owner.");
             Check(p.ScenePlanSha256==scene.PlanSha256&&p.FallbackResourcePlanSha256==fallback.PlanSha256&&
                 p.CanonicalDocumentSha256==c.CanonicalSha256&&p.PlanSha256.Length==64,"Actual scene/fallback/canonical lineage, no code-hash substitution.");
             Check(p.SourceCertified&&!p.RuntimeVerified&&!p.PublicationApproved&&!p.GlobalAudioCompatibilityProven&&

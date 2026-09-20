@@ -10,6 +10,7 @@ internal static class Program
         AllocationCases.Run();
         GpuExtractionCases.Run();
         ResourceGraphCases.Run();
+        TiledMaterialDataCases.Run();
         await SelectedBindingCases.Free();
         Console.WriteLine($"NATIVE_ID65_FRESH_TERRAIN_TEXTURE_FREE_OK checks={_checks}");
         if (args.Length == 2)
