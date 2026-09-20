@@ -17,6 +17,9 @@ internal static class SavedLevelPublicationCases
     // Independent test-side reconstruction, frozen before tiled production.
     internal const string ExpectedTiledImage = "7ba0b29b68a1bee415901382c3a3b5345ccb01ca84872502131f68361afdc305";
     internal const string ExpectedTiledMaterialImage = "462c992f80f512f0b6be781b1a79e707e37a0e18f5e5e47356cd332ef61b2ba8";
+    // Independent selected-source401/complete-disc403 references, not caller metadata.
+    internal const string ExpectedSelectedOneImage = "14e5b3606f652c250df9cdd6c94de1d393186d1b74f1ab64decd5dd35130a77f";
+    internal const string ExpectedSelectedThreeImage = "f1c137476833d1c046a78df812b40a47f8dc6558051c823437d7c5b3f86d8e32";
     internal const string OriginalCue = "05142502c75d3a0b6374003a8fe41893d6faf0ad55863ff0b62a265a1b152766";
     internal static readonly string[] Modes = ["--publish-saved-level-reviewed", "--verify-saved-level-reviewed",
         "--partial-saved-level-reviewed", "--stale-saved-level-reviewed", "--unconfirmed-saved-level-reviewed",
@@ -26,18 +29,21 @@ internal static class SavedLevelPublicationCases
         "--stale-mixed-saved-level-reviewed", "--publish-family-saved-level-reviewed",
         "--verify-family-saved-level-reviewed", "--stale-family-saved-level-reviewed",
         "--publish-tiled-saved-level-reviewed", "--verify-tiled-saved-level-reviewed", "--stale-tiled-saved-level-reviewed",
-        "--publish-tiled-material-saved-level-reviewed", "--verify-tiled-material-saved-level-reviewed", "--stale-tiled-material-saved-level-reviewed"];
+        "--publish-tiled-material-saved-level-reviewed", "--verify-tiled-material-saved-level-reviewed", "--stale-tiled-material-saved-level-reviewed",
+        "--publish-selected-tiled-material-saved-level-reviewed", "--verify-selected-tiled-material-saved-level-reviewed", "--stale-selected-tiled-material-saved-level-reviewed"];
     internal sealed record Request(string Mode, string Bin, string Cue, string ProjectRoot, string ProjectId, string Output);
     internal static bool IsMode(string[] args) => args.Length > 0 && Modes.Contains(args[0], StringComparer.Ordinal);
     internal static bool IsMixedMode(string mode) => mode == Modes[9] || mode == Modes[10] || mode == Modes[11];
     internal static bool IsFamilyMode(string mode) => mode == Modes[12] || mode == Modes[13] || mode == Modes[14];
     internal static bool IsTiledMode(string mode) => mode == Modes[15] || mode == Modes[16] || mode == Modes[17];
     internal static bool IsTiledMaterialMode(string mode) => mode == Modes[18] || mode == Modes[19] || mode == Modes[20];
+    internal static bool IsSelectedTiledMaterialMode(string mode) => mode == Modes[21] || mode == Modes[22] || mode == Modes[23];
     internal static string OperationMode(string mode) => mode == Modes[9] ? Modes[0] :
         mode == Modes[10] ? Modes[1] : mode == Modes[11] ? Modes[3] :
         mode == Modes[12] ? Modes[0] : mode == Modes[13] ? Modes[1] : mode == Modes[14] ? Modes[3] :
         mode == Modes[15] ? Modes[0] : mode == Modes[16] ? Modes[1] : mode == Modes[17] ? Modes[3] :
         mode == Modes[18] ? Modes[0] : mode == Modes[19] ? Modes[1] : mode == Modes[20] ? Modes[3] :
+        mode == Modes[21] ? Modes[0] : mode == Modes[22] ? Modes[1] : mode == Modes[23] ? Modes[3] :
         Modes.Contains(mode, StringComparer.Ordinal) ? mode : throw new ArgumentException("Unknown reviewed saved-level mode.");
     internal static Request Parse(string[] args)
     {
@@ -55,7 +61,7 @@ internal static class SavedLevelPublicationCases
         var request = Parse(args);
         string operationMode = OperationMode(request.Mode);
         bool mixed = IsMixedMode(request.Mode), family = IsFamilyMode(request.Mode), tiled = IsTiledMode(request.Mode),
-            tiledMaterial = IsTiledMaterialMode(request.Mode), verify = operationMode == Modes[1];
+            tiledMaterial = IsTiledMaterialMode(request.Mode), selectedMaterial = IsSelectedTiledMaterialMode(request.Mode), verify = operationMode == Modes[1];
         string bin = Path.GetFullPath(request.Bin), cue = Path.GetFullPath(request.Cue);
         string projectRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.ProjectRoot));
         string output = RequireLocation(request.Output, bin, cue, projectRoot, verify);
@@ -76,11 +82,19 @@ internal static class SavedLevelPublicationCases
             savedFiles.RequireCurrent();
             // These gates preserve the complete authored fixture and its IDs
             // before invoking the same public saved Candidate factory.
-            if (family || tiled || tiledMaterial) RequireFixtureDocument(request.Mode, NativeFreshLevelDocumentCodec.SerializeCanonical(saved.Document));
-            candidate = mixed || family || tiled || tiledMaterial
+            if (family || tiled || tiledMaterial || selectedMaterial) RequireFixtureDocument(request.Mode, NativeFreshLevelDocumentCodec.SerializeCanonical(saved.Document));
+            candidate = mixed || family || tiled || tiledMaterial || selectedMaterial
                 ? await NativeFreshSavedLevelResearchCandidatePlan.CaptureSavedAsync(bin, cue, saved.Snapshot)
                 : await NativeFreshSavedLevelResearchCandidatePlan.CaptureAsync(bin, cue, saved);
-            if (tiledMaterial)
+            if (selectedMaterial)
+            {
+                var expected = ExpectedRecipe(candidate);
+                Check(candidate.TiledCompilation?.TiledMaterialAncestor != null && ReferenceEquals(candidate.SavedSnapshot, saved.Snapshot) &&
+                    candidate.ExpectedImageByteLength == ImageLength && candidate.ExpectedChangedRawSectors == expected.Sectors &&
+                    candidate.ExpectedImageSha256 == expected.Image,
+                    "Exact independent N1/N3 canonical fixture and actual selected material ancestry select the physical recipe; no caller hash or runtime claim.");
+            }
+            else if (tiledMaterial)
                 Check(candidate.TiledCompilation?.TiledMaterialAncestor != null && ReferenceEquals(candidate.SavedSnapshot, saved.Snapshot) &&
                     candidate.ExpectedImageByteLength == ImageLength && candidate.ExpectedChangedRawSectors == 1253 &&
                     candidate.ExpectedImageSha256 == ExpectedTiledMaterialImage,
@@ -165,11 +179,21 @@ internal static class SavedLevelPublicationCases
     internal static void RequireFixtureDocument(string mode, ReadOnlySpan<byte> canonical)
     {
         _ = OperationMode(mode);
+        if (IsSelectedTiledMaterialMode(mode)) { _ = RequireSelectedFixtureDocument(canonical); return; }
         var document = IsTiledMaterialMode(mode) ? SavedTiledMaterialDocumentFixture.Document() :
             IsTiledMode(mode) ? SavedTiledDocumentFixture.Document() : IsFamilyMode(mode) ? FamilySavedCases.Document() :
             IsMixedMode(mode) ? MixedSavedCases.Document() : Cases.Document(14, 1, 70, 1, 128, 20);
         Check(canonical.SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(document)),
             "Exact actual canonical recipe; no caller hash authority.");
+    }
+
+    internal static (string Image, int SourceCount) RequireSelectedFixtureDocument(ReadOnlySpan<byte> canonical)
+    {
+        if (canonical.SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(
+            SelectedTiledMaterialSavedCases.Document([0, 0, 0, 0, 0, 0])))) return (ExpectedSelectedOneImage, 1);
+        if (canonical.SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(
+            SelectedTiledMaterialSavedCases.Document([0, 1, 2, 0, 1, 2])))) return (ExpectedSelectedThreeImage, 3);
+        throw new InvalidDataException("Selected physical gate requires one complete independently pinned N1 or N3 canonical fixture, including every tile ID, descriptor and face.");
     }
 
     internal static string RequireLocation(string value, string bin, string cue, string project, bool verify)
@@ -229,7 +253,8 @@ internal static class SavedLevelPublicationCases
         {
             plan.RequireTiledAncestry(plan.Saved, tiled);
             var material = tiled.TiledMaterialAncestor;
-            RequireFixtureDocument(material == null ? Modes[15] : Modes[18], plan.CopyCanonicalDocument());
+            bool selected = tiled.DiscPlan.BodyAncestor.ResourceProfile == NativeId65NormalResourceProfile.DirectLqSelectedStaticMaterialsFlatTiles;
+            RequireFixtureDocument(material == null ? Modes[15] : selected ? Modes[21] : Modes[18], plan.CopyCanonicalDocument());
             Check(plan.MixedDisc == null && plan.FamilyCompilation == null &&
                 ReferenceEquals(tiled.Document, plan.Saved.Document) &&
                 ReferenceEquals(tiled.DiscPlan.BodyAncestor.TiledSceneAncestor, tiled.FreshResourceAncestor),
@@ -238,8 +263,22 @@ internal static class SavedLevelPublicationCases
             {
                 Check(ReferenceEquals(material.Document, plan.Saved.Document) && ReferenceEquals(material.FreshAncestor, tiled.FreshResourceAncestor) &&
                     ReferenceEquals(tiled.DiscPlan.BodyAncestor.TiledMaterialAncestor, material) &&
-                    tiled.DiscPlan.BodyAncestor.ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles,
+                    tiled.DiscPlan.BodyAncestor.ResourceProfile == (selected ? NativeId65NormalResourceProfile.DirectLqSelectedStaticMaterialsFlatTiles :
+                        NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles),
                     "Material physical expectation uses the actual source-issued final material revision, not unresolved Base-only bytes.");
+                if (selected)
+                {
+                    var expected = RequireSelectedFixtureDocument(plan.CopyCanonicalDocument());
+                    var descriptors = tiled.Document.TiledContent!.Tiles.SelectMany(tile => new[] { tile.Materials.Triangle0, tile.Materials.Triangle1 })
+                        .OfType<NativeFreshRetailTerrainMaterialIntent>().Select(s => (s.SourceWadEntry, s.TextureId)).Distinct().ToArray();
+                    material.RequireSelectedAncestry(tiled.FreshResourceAncestor, plan.Saved.Document, material.MaterialSources);
+                    Check(material.MaterialSources.Count == expected.SourceCount && material.Allocation.Records.Count == expected.SourceCount &&
+                        material.SourceHandles.Count == expected.SourceCount &&
+                        material.MaterialSources.Select(s => (s.SourceWadEntry, s.SourceTextureId)).SequenceEqual(descriptors) &&
+                        material.OrderedFaceMaterials.Count == 6,
+                        "Selected physical expectation binds the actual ordered complete source list and all six faces, not merely a count or equal image hash.");
+                    return (expected.Image, 1253);
+                }
                 return (ExpectedTiledMaterialImage, 1253);
             }
             return (ExpectedTiledImage, 1253);

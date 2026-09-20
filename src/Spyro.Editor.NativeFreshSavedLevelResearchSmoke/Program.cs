@@ -2,6 +2,21 @@ using Spyro.Editor.Core.Exporting;
 using static Cases;
 
 if (SavedLevelPublicationCases.IsMode(args)) { await SavedLevelPublicationCases.RunAsync(args); return; }
+if (args.Length != 0 && args[0] is ("--selected-tiled-material-saved-free" or "--selected-tiled-material-saved-source"))
+{
+    bool source = args[0] == "--selected-tiled-material-saved-source";
+    if (args.Length != (source ? 3 : 1) || args.Skip(1).Any(v =>
+        string.IsNullOrWhiteSpace(v) || v.StartsWith("--", StringComparison.Ordinal) || v.Contains('\0')))
+        throw new ArgumentException("Usage: --selected-tiled-material-saved-free, or --selected-tiled-material-saved-source original.bin original.cue");
+    Root = Directory.CreateTempSubdirectory("spyro-selected-tiled-saved-smoke-").FullName;
+    try
+    {
+        await SelectedTiledMaterialSavedCases.Free();
+        if (source) await SelectedTiledMaterialSavedCases.Source(args[1], args[2]);
+    }
+    finally { Console.Error.WriteLine("Retained new test-owned tiny selected fixtures: " + Root); }
+    return;
+}
 if (args.Length != 0 && (args.Length != 3 || args[0] is not ("--source" or "--mixed-source" or "--family-source" or "--tiled-source" or "--tiled-material-source") || args.Skip(1).Any(v =>
     string.IsNullOrWhiteSpace(v) || v.StartsWith("--", StringComparison.Ordinal) || v.Contains('\0'))))
     throw new ArgumentException("Usage: NativeFreshSavedLevelResearchSmoke [--source|--mixed-source|--family-source|--tiled-source|--tiled-material-source original.bin original.cue], or an explicit reviewed saved-level mode with BIN CUE ABSOLUTE_PROJECT_ROOT PROJECT_ID ABSOLUTE_OUTPUT (six tokens including mode).");

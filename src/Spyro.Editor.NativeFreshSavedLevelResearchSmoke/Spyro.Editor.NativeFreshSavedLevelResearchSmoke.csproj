@@ -15,6 +15,7 @@
     <Compile Include="FamilySavedCases.cs" /><Compile Include="SavedFamilyDocumentFixture.cs" />
     <Compile Include="TiledSavedCases.cs" /><Compile Include="SavedTiledDocumentFixture.cs" />
     <Compile Include="TiledMaterialSavedCases.cs" /><Compile Include="SavedTiledMaterialDocumentFixture.cs" />
+    <Compile Include="SelectedTiledMaterialSavedCases.cs" />
     <Compile Include="SavedLevelPublicationCases.cs" /><Compile Include="SavedLevelFaultCases.cs" />
     <Compile Include="SavedLevelPhysicalApiCases.cs" /><Compile Include="SavedLevelPublicationArgumentCases.cs" />
     <Compile Include="../Spyro.Editor.NativeFreshSavedMaterialSmoke/Cases.cs" Link="Cases.cs" />

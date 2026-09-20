@@ -31,10 +31,11 @@ public static class NativeFreshSavedLevelResearchEligibility
         if (document == null) return false;
         try
         {
-            // Exactly two distinct selections across the actual whole document,
-            // including both complete records in the measured data allocation.
-            // This does not authenticate either selection as a static source.
-            _ = NativeId65TiledSurfaceBundle.PrepareGeometryForMaterials(document);
+            // Measure every distinct selection across the actual whole document,
+            // including every complete record in the native data allocation.
+            // Source authenticity, GPU allocation and receipt fit are checked
+            // later by the shared candidate issuer, not this neutral preflight.
+            _ = NativeId65TiledSurfaceBundle.PrepareGeometryForSelectedMaterials(document);
             return true;
         }
         catch (InvalidDataException)

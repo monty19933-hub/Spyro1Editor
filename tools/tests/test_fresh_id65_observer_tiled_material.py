@@ -1,7 +1,7 @@
 """Exact six-textured/three-tile observer tests: synthetic RAM only.
 
 No source image, emulator, real socket or runtime acceptance. Layout literals
-come from native-loader346; Body/image references were independently frozen352.
+come from native-loader346/402; Body/image references were frozen352/403.
 Matching RAM and expected hashes remain annotations, never authentication.
 """
 import hashlib
@@ -56,6 +56,36 @@ OLD_TILED_MOVED = {
 }
 OLD_PROFILES = ("starter-a-n16", "edited-landing-track02-r01", "tiled-three-track19-r01")
 
+# Independent402/403 three-six-textured fixture: ordered sources14/T0,70/T0,14/T1,
+# face slots0,1,2,0,1,2. These literals do not consult the observer's layout map.
+THREE_PROFILE = "tiled-three-material-three-track19-r01"
+THREE_BASE, THREE_END, THREE_BUCKETS, THREE_COMPANION = 0x8009A420, 0x8009AB78, 0x8009AB88, 0x8009777C
+THREE_MOVED = {
+    "model_anchor": 0x8008AB4C, "scene_anchor": 0x8009A34C,
+    "moby_base": THREE_BASE, "dynamic_base": THREE_BASE, "arena_end": THREE_END,
+    "bucket_base": THREE_BUCKETS, "companion_model_root": THREE_COMPANION,
+}
+THREE_GATES = {name: (at, fmt, THREE_MOVED.get(name, value)) for name, (at, fmt, value) in base.GATES.items()}
+THREE_CURSORS = {
+    "dynamic_count": (0x800756A4, "<I", 1),
+    "dynamic_properties_cursor": (0x80075930, "<I", THREE_END - 24),
+    "next_free_moby_not_active_end": (0x8007573C, "<I", THREE_BASE + 88),
+    "companion_handle": (0x80075898, "<I", THREE_BASE),
+}
+THREE_EXPECTED = {
+    "expected_profile_annotation": "fresh-id65-tiled-three-material-three-track19-r01-idle-seam-walk-research-v1",
+    "expected_candidate_sha256_annotation": "f1c137476833d1c046a78df812b40a47f8dc6558051c823437d7c5b3f86d8e32",
+    "expected_body_sha256_annotation": "a78a1ffcc8870ef91d26170adcd6b735d28466efdd2c24fb7018a293f439ec8c",
+    "expected_model_sha256_annotation": "88c78343c283256de6ce8d3151b43fa72ba4d96b046d869bd0a7209cbff4c23d",
+    "expected_scene_sha256_annotation": "4a6e7b5c6c53199b8a7aa6ae0d24ac9bce32634aa259d5f49535282080641433",
+    "expected_exe_sha256_annotation": "3473dc92e087c87858434125d5fb1ec879450682e3be64c508de6805029ce7a2",
+    "expected_used_data_length_annotation": 0xC80,
+    "expected_spawn_xyz_annotation": [8960, 8960, 9216],
+    "expected_spawn_heading_u8_annotation": 64,
+    "expected_floor_z_annotation": 8704,
+    "expected_music_track_id_annotation": 19,
+}
+
 
 def fixture(reader=None):
     reader = reader or base.MemoryReader()
@@ -79,6 +109,17 @@ def old_fixture(profile):
     return reader
 
 
+def three_fixture(reader=None):
+    reader = reader or base.MemoryReader()
+    for name, (_, _, value) in (THREE_GATES | THREE_CURSORS | base.REPORT).items():
+        reader.set(name, value)
+    reader.map(THREE_BASE, base.row() + base.row(0xFF) + bytes(88 * 14))
+    pool = bytearray(0x2000); pool[1] = 0xFF
+    reader.map(base.POOL, pool)
+    reader.map(base.PETE, bytes.fromhex("ffffffff"))
+    return reader
+
+
 def heap_reads(reader):
     return [(at, count) for at, count in reader.reads if at >= 0x80079000]
 
@@ -88,7 +129,7 @@ class TiledMaterialObserverTests(unittest.TestCase):
         return observer.capture(reader or fixture(), "six-textured-three-tile", profile=PROFILE)
 
     def test_exact_code_owned_layout_and_annotations_never_authenticate_candidate(self):
-        self.assertEqual(OLD_PROFILES + (PROFILE,), observer.PROFILE_CHOICES)
+        self.assertEqual(OLD_PROFILES + (PROFILE, THREE_PROFILE), observer.PROFILE_CHOICES)
         gates, row_base, arena_end, bounds = observer._profile_layout(PROFILE)
         self.assertEqual(GATES, gates)
         self.assertEqual((BASE, END, (8448, 8448, 14592, 10496)), (row_base, arena_end, bounds))
@@ -319,6 +360,183 @@ class TiledMaterialObserverTests(unittest.TestCase):
         for name, value in EXPECTED.items(): self.assertEqual(value, sample[name], name)
         self.assertFalse(sample["runtime_pass"])
         self.assertFalse(sample["candidate_authenticated"])
+
+
+class ThreeMaterialObserverTests(unittest.TestCase):
+    def capture(self, reader=None):
+        return observer.capture(reader or three_fixture(), "three-material-six-textured", profile=THREE_PROFILE)
+
+    def assert_no_authority(self, sample):
+        for name in ("candidate_authenticated", "runtime_pass", "ui_result_approved", "normal_export_approved"):
+            self.assertIs(False, sample[name], name)
+        self.assertTrue(sample["sequential_reads_not_atomic"])
+
+    def test_exact_independent_layout_annotations_and_read_owners(self):
+        self.assertEqual(OLD_PROFILES + (PROFILE, THREE_PROFILE), observer.PROFILE_CHOICES)
+        gates, row_base, arena_end, bounds = observer._profile_layout(THREE_PROFILE)
+        self.assertEqual(THREE_GATES, gates)
+        self.assertEqual((THREE_BASE, THREE_END, (8448, 8448, 14592, 10496)), (row_base, arena_end, bounds))
+        with self.assertRaises(TypeError): gates["model_anchor"] = (0, "<I", 0)
+        reader = three_fixture(); sample = self.capture(reader)
+        self.assertTrue(sample["payload_valid"])
+        self.assertTrue(sample["gate_reread_consistent"])
+        for name, value in THREE_EXPECTED.items(): self.assertEqual(value, sample[name], name)
+        for name, (_, _, value) in THREE_GATES.items(): self.assertEqual(value, sample[name], name)
+        self.assert_no_authority(sample)
+        self.assertNotIn("attention", sample)
+        self.assertEqual([(THREE_BASE, 88), (THREE_BASE, 88), (THREE_BASE + 88, 88)] +
+                         [(base.POOL + offset, 1024) for offset in range(0, 0x2000, 1024)] + [(base.PETE, 4)],
+                         heap_reads(reader))
+
+    def test_native_used_end_not_cd_padding_derives_all_moved_owners(self):
+        self.assertEqual(0xC80, 0xA58 + 3 * 184)
+        self.assertEqual(0x8008AB4C, 0x80089ECC + 0xC80)
+        self.assertEqual(0x8009A34C, 0x8008AB4C + 0xF800)
+        self.assertEqual(0x8009D34C, 0x8009A34C + 0x3000)
+        self.assertEqual(THREE_BASE, 0x8009A34C + 0xD4)
+        self.assertEqual(THREE_END, THREE_BASE + 0x70 * 16 + 0x58)
+        self.assertEqual(THREE_BUCKETS, THREE_END + 4 + 8 + 4)
+        self.assertEqual(THREE_COMPANION, 0x8008AB4C + 0xCC30)
+        self.assertEqual(0x8009A9A0, THREE_BASE + 16 * 88)
+        self.assertEqual(0x8009A9F8, THREE_END - 16 * 24)
+        self.assertEqual(88, THREE_END - 16 * 24 - (THREE_BASE + 16 * 88))
+        self.assertTrue(self.capture()["payload_valid"])
+
+    def test_four_old_profiles_reject_n3_and_are_unchanged_after_n3_selection(self):
+        for profile in OLD_PROFILES + (PROFILE,):
+            make = fixture if profile == PROFILE else lambda: old_fixture(profile)
+            reader = make(); before = observer.capture(reader, "preservation", profile=profile)
+            before["utc"] = "fixed"; reads = list(reader.reads)
+            self.assertTrue(before["payload_valid"])
+            wrong = three_fixture(); sample = observer.capture(wrong, "wrong-layout", profile=profile)
+            self.assertFalse(sample["payload_valid"]); self.assertEqual([], heap_reads(wrong))
+            wrong = make(); self.assertFalse(self.capture(wrong)["payload_valid"])
+            self.assertEqual([], heap_reads(wrong))
+            self.capture()
+            reader = make(); after = observer.capture(reader, "preservation", profile=profile)
+            after["utc"] = "fixed"
+            self.assertEqual((before, reads), (after, reader.reads), profile)
+        self.assertEqual(base.GATES, observer.GATES)
+        self.assertEqual((base.BASE, base.ARENA_END, 16), (observer.BASE, observer.ARENA_END, observer.CAPACITY))
+
+    def test_all_gates_and_cursor_boundaries_refuse_before_heap(self):
+        bad_values = [(name, value ^ 1) for name, (_, _, value) in THREE_GATES.items()]
+        bad_values += [("model_anchor", 0x8008AECC), ("scene_anchor", 0x8009A6CC),
+                       ("dynamic_count", 0), ("dynamic_count", 17),
+                       ("companion_handle", THREE_BASE - 88), ("companion_handle", THREE_BASE + 1),
+                       ("companion_handle", THREE_BASE + 16 * 88),
+                       ("dynamic_properties_cursor", THREE_END - 17 * 24),
+                       ("dynamic_properties_cursor", THREE_END + 24), ("dynamic_properties_cursor", THREE_END - 1),
+                       ("next_free_moby_not_active_end", THREE_BASE - 88),
+                       ("next_free_moby_not_active_end", THREE_BASE + 17 * 88),
+                       ("next_free_moby_not_active_end", THREE_BASE + 1)]
+        for name, value in bad_values:
+            with self.subTest(name=name, value=value):
+                reader = three_fixture(); reader.set(name, value); sample = self.capture(reader)
+                self.assertFalse(sample["payload_valid"]); self.assertEqual([], heap_reads(reader))
+                self.assert_no_authority(sample)
+        for index in (0, 1, 15, 16):
+            reader = three_fixture()
+            reader.set("next_free_moby_not_active_end", THREE_BASE + index * 88)
+            reader.set("dynamic_properties_cursor", THREE_END - (16 - index) * 24)
+            self.assertTrue(self.capture(reader)["payload_valid"])
+
+    def test_full_pools_stop_at_owned_end_and_do_not_chase_sampled_pointers(self):
+        reader = three_fixture(); reader.map(THREE_BASE, base.row() * 16)
+        reader.set("dynamic_count", 16); reader.set("companion_handle", THREE_BASE + 15 * 88)
+        reader.map(base.POOL, (bytes([0x42, 2]) + bytes(30)) * 256)
+        sample = self.capture(reader)
+        self.assertTrue(sample["payload_valid"])
+        self.assertEqual(15, sample["companion"]["index"])
+        self.assertEqual(list(range(16)), [row["index"] for row in sample["dynamic_rows"]["active"]])
+        self.assertTrue(sample["dynamic_rows"]["no_in_range_terminal"])
+        self.assertEqual(256, sample["particles"]["active_count"])
+        self.assertEqual(16, len(sample["particles"]["companion_effect_samples"]))
+        self.assertEqual(2, len(sample["attention"]))
+        self.assertTrue(all(THREE_BASE <= at and at + count <= THREE_BASE + 16 * 88
+                            for at, count in heap_reads(reader) if at < base.POOL))
+        self.assertEqual([(base.POOL + offset, 1024) for offset in range(0, 0x2000, 1024)] + [(base.PETE, 4)],
+                         [(at, count) for at, count in heap_reads(reader) if at >= base.POOL])
+        for pointer in (THREE_COMPANION, THREE_BUCKETS, 0xDEADBEEF, 0x80188000, 0x800872A4):
+            self.assertFalse(any(at == pointer for at, _ in reader.reads))
+        self.assert_no_authority(sample)
+
+    def test_every_gate_and_cursor_reread_invalidates_interpretations(self):
+        for name, (at, _, value) in (THREE_GATES | THREE_CURSORS).items():
+            with self.subTest(name=name):
+                reader = three_fixture(); reader.flip_on_second_read[at] = value ^ 1
+                sample = self.capture(reader)
+                self.assertFalse(sample["payload_valid"]); self.assertFalse(sample["gate_reread_consistent"])
+                self.assertEqual([name], sample["changed_gate_fields"])
+                for key in ("companion", "dynamic_rows", "particles", "sampled_player_xy_inside_authored_floor"):
+                    self.assertNotIn(key, sample)
+                self.assert_no_authority(sample)
+
+    def test_matching_aba_reread_remains_non_atomic_and_not_a_runtime_pass(self):
+        class AbaReader(base.MemoryReader):
+            transitions = 0
+
+            def read(self, address, length):
+                if (address, length) == (THREE_BASE, 88):
+                    self.transitions += 1
+                    self.set("game_state", 12 if self.transitions == 1 else 0)
+                return super().read(address, length)
+
+        reader = three_fixture(AbaReader()); sample = self.capture(reader)
+        self.assertEqual(2, reader.transitions)
+        self.assertTrue(sample["payload_valid"]); self.assertTrue(sample["gate_reread_consistent"])
+        self.assert_no_authority(sample)
+
+    def test_xy_edges_seams_and_z_are_observation_scope_not_collision_acceptance(self):
+        for x, y, z, inside in ((8448, 8448, -2147483648, True), (14592, 10496, 2147483647, True),
+                                (10496, 9472, 8704, True), (12544, 9472, 8704, True),
+                                (8447, 9472, 8704, False), (14593, 9472, 8704, False),
+                                (12288, 8447, 8704, False), (12288, 10497, 8704, False)):
+            reader = three_fixture(); reader.set("player_xyz", (x, y, z)); sample = self.capture(reader)
+            self.assertTrue(sample["payload_valid"])
+            self.assertEqual(inside, sample["sampled_player_xy_inside_authored_floor"])
+            self.assertEqual([8448, 8448, 14592, 10496], sample["authored_floor_xy_bounds_annotation"])
+            if not inside:
+                self.assertTrue(any("not a collision-bug diagnosis" in text for text in sample["attention"]))
+            self.assert_no_authority(sample)
+
+    def test_closed_selection_and_shared_transport_keep_read_only_limits(self):
+        for value in (THREE_PROFILE + " ", "tiled-four-material-three-track19-r01",
+                      {"profile": THREE_PROFILE}, THREE_EXPECTED["expected_candidate_sha256_annotation"]):
+            reader = three_fixture()
+            with self.assertRaises(ValueError): observer.capture(reader, "invalid", profile=value)
+            self.assertEqual([], reader.reads)
+        self.assertIs(observer.ReadOnlyClient, observer.wizard.ReadOnlyClient)
+        sock = base.FakeSocket("00" * 88)
+        self.assertEqual(bytes(88), observer.ReadOnlyClient(sock).read(THREE_BASE, 88))
+        self.assertRegex(sock.sent[0], rb"^\$m8009a420,58#[0-9a-f]{2}$")
+        self.assertEqual([b"+"], sock.sent[1:])
+        for address, count in ((True, 4), (THREE_BASE, True), (THREE_BASE, 0), (THREE_BASE, 1025), (0x801FFFFF, 2)):
+            sock = base.FakeSocket("00")
+            with self.assertRaises(ValueError): observer.ReadOnlyClient(sock).read(address, count)
+            self.assertEqual([], sock.sent)
+        self.assertTrue(self.capture()["payload_valid"])
+
+    def test_cli_requires_opt_in_and_samples_only_manual_p(self):
+        for args in (["--profile", THREE_PROFILE],
+                     ["--profile", THREE_PROFILE, "--connect-identified-test-session", "--host", "example.com"],
+                     ["--profile", THREE_PROFILE, "--connect-identified-test-session", "--candidate-sha256",
+                      THREE_EXPECTED["expected_candidate_sha256_annotation"]]):
+            with patch.object(sys, "argv", ["observer", *args]), patch.object(socket, "create_connection") as connect:
+                with self.assertRaises(SystemExit), patch("sys.stderr", io.StringIO()): observer.main()
+                connect.assert_not_called()
+        with patch.object(sys, "argv", ["observer", "--profile", THREE_PROFILE, "--connect-identified-test-session"]), \
+                patch.object(socket, "create_connection") as connect, \
+                patch.object(observer, "ReadOnlyClient", return_value=three_fixture()), \
+                patch.object(sys, "stdin", io.StringIO("continue\nstep\n\np three-material-manual\nq\np after-close\n")), \
+                patch.object(sys, "stdout", io.StringIO()) as output:
+            observer.main()
+        connect.assert_called_once_with(("127.0.0.1", 2345), timeout=2)
+        self.assertEqual(2, len(output.getvalue().splitlines()), "no automatic, execution-command, or post-q samples")
+        sample = json.loads(output.getvalue().splitlines()[1])
+        self.assertEqual("three-material-manual", sample["label"])
+        for name, value in THREE_EXPECTED.items(): self.assertEqual(value, sample[name], name)
+        self.assert_no_authority(sample)
 
 
 if __name__ == "__main__":

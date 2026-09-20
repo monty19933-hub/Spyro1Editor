@@ -5,6 +5,7 @@ namespace Spyro.Editor.Core.Exporting;
 public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
 {
     private const string TiledMaterialVariant = "schema4-two-static-material-flat-tiles-p0-n16-data1000";
+    private const string TiledSelectedMaterialVariant = "schema4-selected-static-material-flat-tiles-p0-n16-data1000";
 
     // A distinct serialization branch keeps the existing Base-only plan and
     // receipt byte-for-byte unchanged. The actual compilation, not a caller
@@ -15,7 +16,8 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
     {
         var disc = tiled.DiscPlan; var body = disc.BodyAncestor; var fresh = tiled.FreshResourceAncestor;
         var surface = material.SurfaceAncestor;
-        var prepared = NativeId65TiledSurfaceBundle.PrepareGeometryForMaterials(tiled.Document);
+        var prepared = NativeId65TiledSurfaceBundle.PrepareGeometryForSelectedMaterials(tiled.Document);
+        string variant = material.MaterialSources.Count == 2 ? TiledMaterialVariant : TiledSelectedMaterialVariant;
         using var document = JsonDocument.Parse(_canonical);
         var snapshot = Saved.Snapshot;
         var revision = new
@@ -56,7 +58,7 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
         };
         string planSha256 = Hash(JsonSerializer.SerializeToUtf8Bytes(new
         {
-            profile = ProfileId, variant = TiledMaterialVariant, saved = revision,
+            profile = ProfileId, variant, saved = revision,
             sourceImageSha256 = NativeId65FreshDiscSource.OriginalSha256,
             SourceImagePath, SourceCuePath, SourceCueSha256, imageIdentity = _imageIdentity, cueIdentity = _cueIdentity,
             lineage, expectedImageSha256 = measured.OutputSha256, expectedImageByteLength = ExpectedImageByteLength,
@@ -66,7 +68,7 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
         }));
         byte[] receipt = JsonSerializer.SerializeToUtf8Bytes(new
         {
-            schema = 1, profile = ProfileId, variant = TiledMaterialVariant, planSha256, saved = revision,
+            schema = 1, profile = ProfileId, variant, planSha256, saved = revision,
             SourceImagePath, SourceCuePath, SourceCueSha256,
             sourceImageSha256 = NativeId65FreshDiscSource.OriginalSha256, lineage,
             imageFile = ImageName, imageSha256 = measured.OutputSha256, imageByteLength = ExpectedImageByteLength,
@@ -75,9 +77,12 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
             runtimeVerified = false, normalCreateBinApproved = false, completeNativeDependencyClosureProven = false,
             hqRuntimeProven = false, audioRuntimeProven = false, peakRuntimeMemoryProven = false,
             checkpointOrForeignStateSupported = false
-        }, new JsonSerializerOptions { WriteIndented = true });
+        // The new selected variant preserves every field and array but omits
+        // cosmetic whitespace. Keep the established two-material receipt's
+        // exact formatting/bytes, including its existing companion budget.
+        }, new JsonSerializerOptions { WriteIndented = material.MaterialSources.Count == 2 });
         if (receipt.Length is < 1 or > 65536)
-            throw new InvalidDataException("Complete saved-tiled material receipt exceeds the companion bound; no evidence is truncated.");
+            throw new InvalidDataException($"Complete saved-tiled material receipt is {receipt.Length} bytes and exceeds the 65536-byte companion bound; no evidence is truncated.");
         return (planSha256, receipt);
     }
 }

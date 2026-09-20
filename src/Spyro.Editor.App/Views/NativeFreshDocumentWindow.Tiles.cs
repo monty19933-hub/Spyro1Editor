@@ -9,7 +9,7 @@ namespace Spyro.Editor.App.Views;
 
 internal sealed partial class NativeFreshDocumentWindow
 {
-    private const string TiledCapabilityText = "Schema-4 tiled authoring supports Save/Undo/Reopen. Research export requires a clean saved document, zero placements, and complete native data within 0x1000 bytes (N16). Use Base floor color throughout, or exactly two distinct static retail texture selections across the whole level; selections may repeat on any tile and mix with Base-colored faces. Actual source validation is still required. Other texture combinations and placed Mobys remain authoring-only. No legacy or partial level is exported. Normal Create BIN and general gameplay certification remain unavailable; this schematic is not gameplay proof.";
+    private const string TiledCapabilityText = "Schema-4 tiled authoring supports Save/Undo/Reopen. Research export requires a clean saved document, zero placements, and complete native data within 0x1000 bytes (N16). Use Base floor color throughout, or a bounded selection of static retail textures; selections may repeat on any tile and mix with Base-colored faces. Export checks every source, GPU allocation and the complete 64 KiB evidence report; not every combination fits. Placed Mobys remain authoring-only on tiled levels. No legacy or partial level is exported. Normal Create BIN and general gameplay certification remain unavailable; this schematic is not gameplay proof.";
     private readonly StackPanel _tilePanel = new() { Spacing = 7, IsVisible = false };
     private readonly ListBox _tiles = new() { Name = "FreshLevelTiles", Height = 110 };
     private readonly TextBlock _tileNotice = new() { TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontSize = 11 };
@@ -89,7 +89,7 @@ internal sealed partial class NativeFreshDocumentWindow
         _tileUp.IsEnabled = canEdit && index > 0;
         _tileDown.IsEnabled = canEdit && index >= 0 && index + 1 < tiled!.Tiles.Count;
         _tiledSpawnZ.IsEnabled = editable && tiled != null && !_addingWizard && _pendingNativeMobyAdd == null;
-        _tileNotice.Text = tiled == null ? "Explicit upgrade preserves this floor and its material choices as the first tile. Tiled research supports all-Base faces or exactly two distinct static retail texture selections, optionally mixed with Base. It requires zero placements, complete native data within 0x1000 bytes, and actual source validation; other tiled content remains authoring-only."
+        _tileNotice.Text = tiled == null ? "Explicit upgrade preserves this floor and its material choices as the first tile. Tiled research supports all-Base faces or bounded static retail texture selections, optionally mixed with Base. It requires zero placements, complete native data within 0x1000 bytes, validated source/GPU ownership, and a complete report within 64 KiB; other tiled content remains authoring-only."
             : $"{tiled.Tiles.Count} ordered tiles. Geometry/color/material fields edit the selected tile; spawn, sky and music belong to the whole level. Shared seams are allowed; overlapping flat interiors are not.";
     }
 

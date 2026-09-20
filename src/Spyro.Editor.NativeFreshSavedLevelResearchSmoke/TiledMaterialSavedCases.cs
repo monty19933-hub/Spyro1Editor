@@ -34,9 +34,15 @@ internal static class TiledMaterialSavedCases
         }
         foreach (var (name, invalid) in SavedTiledMaterialDocumentFixture.Unsupported())
         {
-            Check(!NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(invalid),
-                "Neutral material predicate inspects the complete intent: " + name);
+            Check(NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(invalid) ==
+                (name is "one-descriptor" or "third-descriptor-last-face"),
+                "Neutral readiness accepts fitting selected N1/N3 but retains whole placement and capacity refusals: " + name);
             var (_, saved) = Save("tiled-material-unsupported-" + name, invalid);
+            if (name is "one-descriptor" or "third-descriptor-last-face")
+            {
+                await Throws<ArgumentException>(() => NativeFreshSavedLevelResearchCandidatePlan.CaptureSavedAsync("\0", "\0", saved.Snapshot));
+                continue; // Neutral readiness is not source authentication; exact-two adapters remain unchanged.
+            }
             var error = await Throws<InvalidDataException>(() => NativeFreshSavedLevelResearchCandidatePlan.CaptureSavedAsync("\0", "\0", saved.Snapshot));
             Check(!Leaves(error).Any(e => e is ArgumentException or FileNotFoundException or DirectoryNotFoundException),
                 "Unsupported saved intent refuses before malformed source paths or projection: " + name);

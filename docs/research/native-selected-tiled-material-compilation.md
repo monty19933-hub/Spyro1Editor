@@ -96,3 +96,87 @@ Preserved free controls410/411 pass 41/33 checks. Source-free selected and chest
 behavior modes are added to the existing regression runner with distinct log
 names. Full regression, saved publication and native runtime for N1/N3 remain
 separate pending gates at this compilation checkpoint.
+
+## Saved-candidate integration and receipt budget
+
+The next slice reuses the existing saved tiled candidate, source-owner lifetime,
+publisher and inverse verifier. It selects the material revision from the full
+saved document, retains every actual ordered source instance, and checks the
+Body's actual selected resource profile. No per-count writer or partial level
+projection is introduced. N2 retains its previous variant, serialized field order,
+formatting and plan/receipt identity; N1/N3 use the count-independent selected
+variant. The old exact-two lower-level adapters remain closed.
+
+RED413 reached the old exact-two preflight instead of source-path validation.
+Build415 was clean; free418 passed93 checks/38 refusals. Source419 passed N1's
+complete image but correctly refused N3's indented receipt at the64KiB boundary.
+The correction removes cosmetic JSON whitespace only for the new variant. It
+retains every allocation, contained alias, consumer-evidence entry, owner/phase,
+source descriptor, source/relocated record hash and saved revision field. The
+strict65536-byte bound remains: native data fit does not prove report fit for
+every source combination. No evidence is truncated and the bound is not raised.
+
+Build422 was clean. Source423 passed200 checks/60 refusals with N1 receipt28570
+bytes and N3 receipt59312 bytes at its recorded temporary paths. It compared
+both complete images to independent403, ran shared C# full forward and inverse
+verification through EOF, checked exact ancestor identities and deterministic
+reopening, and exercised ID/raw/manifest staleness. Original held/named BIN/CUE
+identities were revalidated and no native image was written. Report length and
+plan identity also bind the actual saved paths, so these are fixture measurements,
+not general size guarantees.
+
+Separate physical verification420 re-opened the already-published R05 artifacts:
+image `462c992f80f512f0b6be781b1a79e707e37a0e18f5e5e47356cd332ef61b2ba8`,
+plan `4ed0e90c6479425f6a3adb24d37075637a570ad673c06ce89a091128cacb328b`,
+receipt `c9caee1d351b24a95b6815eadc3160b6d2c14e5b5cf6605dad6943e9c5473e56`.
+All exact bytes and the original saved project were unchanged. The sealed R05
+application is still the earlier build, not this new source.
+
+## Selected neutral readiness and observer
+
+UI RED425 confirmed the previous exact-two readiness refusal after clean build424.
+The production change uses the same whole-document selected preflight as the
+candidate factory. It checks all face selections and actual geometry/record
+allocation, not just the visible tile. Source authenticity, GPU allocation and
+receipt size remain later export checks; readiness is not export success or a
+runtime certificate. Base-only and placement/overflow refusals remain separate.
+User-facing capability text discloses those bounds.
+
+The existing ticket/workflow is reused. New tests cover N1/N3, mixed Base faces,
+reordered descriptors, a selection only on the third tile, cancellation, ABA,
+selection drift and nonselected-tile edits. A test-fixture project ID exceeded
+the real64-character limit in427; only the new fixture prefixes were shortened,
+without weakening persistence normalization.
+Build428 was clean; UI429 then passed1271 readiness and6444 lifecycle checks.
+Independent read-only review found no additional admission or lineage defect.
+
+One appended selected-material reviewed CLI family reuses the existing
+publish/verify/stale workflow. Its full canonical matcher recognizes only the
+independent N1/N3 fixtures, including every stable ID and face descriptor; it
+accepts no caller-provided expected hash. Existing21 modes and N2 fixture remain
+unchanged. Source-free tests cover altered final faces, third descriptors, IDs,
+Base/P>0 substitutions, malformed arguments and acquired-owner failure ordering.
+
+Observer416 passed66 tests with three explicit opt-in skips, following RED414.
+The append-only `tiled-three-material-three-track19-r01` profile describes only
+the independent403 N3 fixture with C80 used data, model8008AB4C and scene8009A34C.
+All previous profiles/defaults/read limits remain unchanged. The observer stays
+bounded and read-only, with disc-authentication and gameplay-approval flags false.
+Matching RAM is not independent identification of the emulator's open disc.
+
+## Integrated regression checkpoint
+
+Full build/regression435 passed343 steps with zero failures. The prior430
+attempt stopped before project builds because runner self-tests still expected
+the old exact additional-mode lists. Their expectations now explicitly include
+the new free modes, with mocked single-build/distinct-log/marker/source-isolation
+coverage rather than weakened checks. Default saved smoke432 also exposed the
+four old single-retail Base-fixture refusals; only those public-candidate cases
+now expect selected-source validation. Base-only APIs and placement/overflow
+refusals remain unchanged. Full435 includes those corrections.
+
+After the compact-format and neutral-readiness changes, physical verification433
+again accepted the exact existing R05 BIN/CUE/receipt/plan and unchanged saved
+revision. Selected free434 passed93 checks/38 refusals. This checkpoint is ready
+for a separate new application build and actual selected-material publication/
+DuckStation work; neither N1 nor N3 gameplay has been observed at this point.

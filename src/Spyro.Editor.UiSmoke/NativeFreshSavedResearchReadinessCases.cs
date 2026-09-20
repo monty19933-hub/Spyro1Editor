@@ -23,27 +23,59 @@ internal static class NativeFreshSavedResearchReadinessCases
             ["tiled-mat-mixed"] = SavedTiledMaterialDocumentFixture.Document([0, 1, 255, 1, 0, 255]),
             ["tiled-mat-nonselected"] = SavedTiledMaterialDocumentFixture.Document([255, 255, 0, 1, 0, 1]),
             ["tiled-mat-ffc"] = SavedTiledMaterialDocumentFixture.BoundaryDocument(56),
-            ["tiled-mat-full"] = SavedTiledMaterialDocumentFixture.BoundaryDocument(58)
-        };
-        var unsupportedMaterials = new Dictionary<string, NativeFreshLevelDocumentIntent>(StringComparer.Ordinal)
-        {
+            ["tiled-mat-full"] = SavedTiledMaterialDocumentFixture.BoundaryDocument(58),
             ["tiled-mat-one"] = SavedTiledMaterialDocumentFixture.Document([0, 255, 0, 255, 0, 255]),
             ["tiled-mat-third"] = SavedTiledMaterialDocumentFixture.Document([0, 1, 0, 1, 0, 2]),
+            ["tiled-mat-selected-one"] = SelectedMaterialDocument([0, 0, 0, 0, 0, 0]),
+            ["tiled-mat-selected-three"] = SelectedMaterialDocument([0, 1, 2, 0, 1, 2]),
+            ["tiled-mat-selected-three-mixed"] = SelectedMaterialDocument([0, 1, 255, 2, 0, 255]),
+            ["tiled-mat-selected-three-reordered"] = SelectedMaterialDocument([2, 0, 1, 2, 255, 0])
+        };
+        // These are all single-source material documents, including a choice
+        // only on the unselected third tile. They remain invalid for the Base
+        // predicate but must no longer be blanket UI research refusals.
+        foreach (string kind in unsupportedTiles.Keys.Where(k => k.EndsWith("-retail", StringComparison.Ordinal)).ToArray())
+        {
+            Check(!NativeFreshSavedLevelResearchEligibility.IsSupportedTiledProfile(unsupportedTiles[kind]),
+                "Selected material admission does not widen the Base-only predicate: " + kind);
+            supportedMaterials.Add(kind, unsupportedTiles[kind]);
+            unsupportedTiles.Remove(kind);
+        }
+        var unsupportedMaterials = new Dictionary<string, NativeFreshLevelDocumentIntent>(StringComparer.Ordinal)
+        {
             ["tiled-mat-over"] = SavedTiledMaterialDocumentFixture.BoundaryDocument(60),
             ["tiled-mat-wizard"] = SavedTiledMaterialDocumentFixture.Document().WithPlacements([
                 NativeFreshWizardRouteIntent.Create(new string('a', 32), 13056, 8960, 8704, 13568, 8960)]),
             ["tiled-mat-native"] = SavedTiledMaterialDocumentFixture.Document().WithPlacements([
                 NativeFreshMobyPlacementIntent.Create(new string('b', 32),
                     NativeFreshRetailMobyReference.Create("spyro1-usa-retail-mode2-2352-v1", 10, 121, 501),
+                    13056, 8960, 8704, 64)]),
+            ["tiled-mat-selected-one-wizard"] = SelectedMaterialDocument([0, 0, 0, 0, 0, 0]).WithPlacements([
+                NativeFreshWizardRouteIntent.Create(new string('a', 32), 13056, 8960, 8704, 13568, 8960)]),
+            ["tiled-mat-selected-three-native"] = SelectedMaterialDocument([0, 1, 2, 0, 1, 2]).WithPlacements([
+                NativeFreshMobyPlacementIntent.Create(new string('b', 32),
+                    NativeFreshRetailMobyReference.Create("spyro1-usa-retail-mode2-2352-v1", 10, 121, 501),
                     13056, 8960, 8704, 64)])
         };
+        foreach (var (kind, expected) in new[]
+        {
+            ("tiled-mat-selected-one", new[] { (14, 0) }),
+            ("tiled-mat-selected-three", new[] { (14, 0), (70, 0), (14, 1) }),
+            ("tiled-mat-selected-three-mixed", new[] { (14, 0), (70, 0), (14, 1) }),
+            ("tiled-mat-selected-three-reordered", new[] { (14, 1), (14, 0), (70, 0) })
+        })
+            Check(supportedMaterials[kind].TiledContent!.Tiles.SelectMany(t => new[] { t.Materials.Triangle0, t.Materials.Triangle1 })
+                .OfType<NativeFreshRetailTerrainMaterialIntent>().Select(m => (m.SourceWadEntry, m.TextureId)).Distinct().SequenceEqual(expected),
+                "Actual selected fixture preserves ordered first-occurrence descriptors across all tiles and Base faces: " + kind);
         foreach (var supported in supportedMaterials.Values)
             Check(NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(supported) &&
+                NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(NativeFreshLevelDocumentCodec.Parse(
+                    NativeFreshLevelDocumentCodec.SerializeCanonical(supported))) &&
                 !NativeFreshSavedLevelResearchEligibility.IsSupportedTiledProfile(supported),
                 "Material readiness examines all faces and full allocation, without widening the Base-only profile.");
         foreach (var unsupported in unsupportedMaterials.Values)
             Check(!NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(unsupported),
-                "Material readiness refuses a third nonselected descriptor, missing second descriptor, placements and allocation overflow.");
+                "Selected material readiness retains both placement-tag refusals and actual complete allocation overflow.");
         foreach (var supported in new[] { SavedTiledDocumentFixture.Document(), SavedTiledDocumentFixture.BoundaryDocument(44),
             SavedTiledDocumentFixture.BoundaryDocument(46) })
             Check(NativeFreshSavedLevelResearchEligibility.IsSupportedTiledProfile(supported) &&
@@ -131,6 +163,9 @@ internal static class NativeFreshSavedResearchReadinessCases
                             intent.TiledContent!.Tiles[kind == "tiled-tile-dirty" ? 2 : 0].EditorId,
                         "Whole tiled intent and actual selection remain distinct from the independent inactive legacy sentinel.");
                 var actual = window.CurrentAggregateIntent;
+                if (supportedMaterials.ContainsKey(kind))
+                    Check(NativeFreshLevelDocumentCodec.SerializeCanonical(actual!).SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(intent)),
+                        "Saved readiness retains every actual tile, stable ID, ordered material/Base choice and common setting; no two-source projection.");
                 foreach (string text in new[] { Find<TextBlock>("FreshLevelPlacementSummary").Text!, Find<TextBlock>("FreshDocumentStatus").Text! })
                 {
                     if (tiled) continue; // Capability wording is not the readiness authority.
@@ -176,6 +211,25 @@ internal static class NativeFreshSavedResearchReadinessCases
         }
         Console.WriteLine($"FRESH_SAVED_RESEARCH_READINESS_OK checks={checks} sourceOpened=false nativeOutputWritten=false");
         void Check(bool condition, string message) { if (!condition) throw new InvalidDataException(message); checks++; }
+    }
+
+    // The same actual source descriptors used by the independent selected-N
+    // source fixtures. This is neutral intent, never a source-certified plan.
+    internal static NativeFreshLevelDocumentIntent SelectedMaterialDocument(int[] faces)
+    {
+        if (faces.Length != 6) throw new ArgumentException("All six selected tile faces are explicit.", nameof(faces));
+        var document = SavedTiledDocumentFixture.Document();
+        return document.WithTiledContent(document.TiledContent!.WithTiles(document.TiledContent.Tiles.Select((tile, index) =>
+            NativeFreshFlatTileIntent.Create(tile.EditorId, tile.X, tile.Y, tile.Z, tile.Width, tile.Depth, tile.FloorColor,
+                NativeFreshFloorMaterialsIntent.Create(Material(faces[2 * index]), Material(faces[2 * index + 1]))))));
+        static NativeFreshFloorMaterialIntent Material(int slot) => slot switch
+        {
+            0 => NativeFreshFloorMaterialIntent.RetailTerrain(F.Variant, 14, 0),
+            1 => NativeFreshFloorMaterialIntent.RetailTerrain(F.Variant, 70, 0),
+            2 => NativeFreshFloorMaterialIntent.RetailTerrain(F.Variant, 14, 1),
+            255 => NativeFreshFloorMaterialIntent.BaseFloorColor(),
+            _ => throw new ArgumentOutOfRangeException(nameof(slot))
+        };
     }
 
     private static NativeFreshLevelDocumentIntent Document(string kind)

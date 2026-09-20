@@ -15,6 +15,7 @@ internal static class SavedLevelPublicationArgumentCases
         string[] familyModes=["--publish-family-saved-level-reviewed","--verify-family-saved-level-reviewed","--stale-family-saved-level-reviewed"];
         string[] tiledModes=["--publish-tiled-saved-level-reviewed","--verify-tiled-saved-level-reviewed","--stale-tiled-saved-level-reviewed"];
         string[] tiledMaterialModes=["--publish-tiled-material-saved-level-reviewed","--verify-tiled-material-saved-level-reviewed","--stale-tiled-material-saved-level-reviewed"];
+        string[] selectedMaterialModes=["--publish-selected-tiled-material-saved-level-reviewed","--verify-selected-tiled-material-saved-level-reviewed","--stale-selected-tiled-material-saved-level-reviewed"];
         Check(P.Modes.Take(9).SequenceEqual(originalModes) && P.Modes.Skip(9).Take(3).SequenceEqual(new[] {
             "--publish-mixed-saved-level-reviewed", "--verify-mixed-saved-level-reviewed", "--stale-mixed-saved-level-reviewed" }),
             "Existing twelve reviewed modes retain their exact order and meaning.");
@@ -24,9 +25,13 @@ internal static class SavedLevelPublicationArgumentCases
         Check(P.Modes.Skip(15).Take(3).SequenceEqual(tiledModes) && P.ExpectedTiledImage == TiledSavedCases.ExpectedImage &&
             P.ExpectedTiledImage == "7ba0b29b68a1bee415901382c3a3b5345ccb01ca84872502131f68361afdc305",
             "Exactly three tiled modes use the separately frozen independent full-image reference.");
-        Check(P.Modes.Skip(18).SequenceEqual(tiledMaterialModes) && P.ExpectedTiledMaterialImage == TiledMaterialSavedCases.ExpectedImage &&
+        Check(P.Modes.Skip(18).Take(3).SequenceEqual(tiledMaterialModes) && P.ExpectedTiledMaterialImage == TiledMaterialSavedCases.ExpectedImage &&
             P.ExpectedTiledMaterialImage == "462c992f80f512f0b6be781b1a79e707e37a0e18f5e5e47356cd332ef61b2ba8",
             "Exactly three appended material-tile modes use the independently frozen full-image reference without renumbering old modes.");
+        Check(P.Modes.Skip(21).SequenceEqual(selectedMaterialModes) && P.ExpectedSelectedOneImage ==
+            "14e5b3606f652c250df9cdd6c94de1d393186d1b74f1ab64decd5dd35130a77f" && P.ExpectedSelectedThreeImage ==
+            "f1c137476833d1c046a78df812b40a47f8dc6558051c823437d7c5b3f86d8e32",
+            "One appended selected-material mode family uses the two independent complete-image references; no modes per source count.");
         string[] valid = [P.Modes[0], "original.bin", "original.cue", "/private/tmp/test-project", "test-project", "/private/tmp/test-output"];
         foreach (string mode in P.Modes)
         {
@@ -50,20 +55,36 @@ internal static class SavedLevelPublicationArgumentCases
             P.OperationMode(tiledMaterialModes[0]) == P.Modes[0] && P.OperationMode(tiledMaterialModes[1]) == P.Modes[1] &&
             P.OperationMode(tiledMaterialModes[2]) == P.Modes[3],
             "Material-tile modes reuse only the existing publisher, verifier and stale fault; no alternate writer.");
+        Check(P.Modes.Take(21).All(mode => !P.IsSelectedTiledMaterialMode(mode)) &&
+            selectedMaterialModes.All(mode => P.IsSelectedTiledMaterialMode(mode) && !P.IsTiledMaterialMode(mode) &&
+                !P.IsTiledMode(mode) && !P.IsMixedMode(mode) && !P.IsFamilyMode(mode)) &&
+            P.OperationMode(selectedMaterialModes[0]) == P.Modes[0] && P.OperationMode(selectedMaterialModes[1]) == P.Modes[1] &&
+            P.OperationMode(selectedMaterialModes[2]) == P.Modes[3],
+            "Selected N1/N3 modes reuse the exact existing publisher/verifier/stale workflow; all old21 mode indices remain unchanged.");
         byte[] materialDocument = NativeFreshLevelDocumentCodec.SerializeCanonical(Document(14, 1, 70, 1, 128, 20));
         byte[] mixedDocument = NativeFreshLevelDocumentCodec.SerializeCanonical(MixedSavedCases.Document());
         byte[] familyDocument=NativeFreshLevelDocumentCodec.SerializeCanonical(FamilySavedCases.Document());
         byte[] tiledDocument=NativeFreshLevelDocumentCodec.SerializeCanonical(SavedTiledDocumentFixture.Document());
         byte[] tiledMaterialDocument=NativeFreshLevelDocumentCodec.SerializeCanonical(SavedTiledMaterialDocumentFixture.Document());
+        var selectedOne = SelectedTiledMaterialSavedCases.Document([0, 0, 0, 0, 0, 0]);
+        var selectedThree = SelectedTiledMaterialSavedCases.Document([0, 1, 2, 0, 1, 2]);
+        byte[] selectedOneDocument = NativeFreshLevelDocumentCodec.SerializeCanonical(selectedOne);
+        byte[] selectedThreeDocument = NativeFreshLevelDocumentCodec.SerializeCanonical(selectedThree);
+        Check(P.RequireSelectedFixtureDocument(selectedOneDocument) == (P.ExpectedSelectedOneImage, 1) &&
+            P.RequireSelectedFixtureDocument(selectedThreeDocument) == (P.ExpectedSelectedThreeImage, 3),
+            "Only complete exact canonical bytes choose independent N1/N3 references and expected actual source counts.");
         // No reviewed mode may borrow the other arm's canonical fixture.
         foreach (string mode in P.Modes)
         {
-            byte[] actual=P.IsTiledMaterialMode(mode)?tiledMaterialDocument:P.IsTiledMode(mode)?tiledDocument:P.IsFamilyMode(mode)?familyDocument:P.IsMixedMode(mode)?mixedDocument:materialDocument;
+            bool selected = P.IsSelectedTiledMaterialMode(mode);
+            byte[] actual=selected?selectedOneDocument:P.IsTiledMaterialMode(mode)?tiledMaterialDocument:P.IsTiledMode(mode)?tiledDocument:P.IsFamilyMode(mode)?familyDocument:P.IsMixedMode(mode)?mixedDocument:materialDocument;
             P.RequireFixtureDocument(mode,actual);
-            foreach(byte[] foreign in new[]{materialDocument,mixedDocument,familyDocument,tiledDocument,tiledMaterialDocument}.Where(value=>!ReferenceEquals(value,actual)))
+            if (selected) P.RequireFixtureDocument(mode, selectedThreeDocument);
+            foreach(byte[] foreign in new[]{materialDocument,mixedDocument,familyDocument,tiledDocument,tiledMaterialDocument,selectedOneDocument,selectedThreeDocument}
+                .Where(value=>!ReferenceEquals(value,actual) && !(selected && ReferenceEquals(value,selectedThreeDocument))))
                 await Throws<InvalidDataException>(()=>{P.RequireFixtureDocument(mode,foreign);return Task.CompletedTask;});
         }
-        foreach(string mode in familyModes.Concat(tiledModes).Concat(tiledMaterialModes))
+        foreach(string mode in familyModes.Concat(tiledModes).Concat(tiledMaterialModes).Concat(selectedMaterialModes))
         {
             foreach(string altered in new[]{mode+"-extra",mode[..^1],mode.ToUpperInvariant()})
             {
@@ -71,7 +92,8 @@ internal static class SavedLevelPublicationArgumentCases
                 Check(!P.IsMode(args),"Family/tiled command prefixes/case changes never select an explicit reviewed action.");
                 await Throws<ArgumentException>(()=>{P.Parse(args);return Task.CompletedTask;});
             }
-            var wrong=NativeFreshLevelDocumentCodec.SerializeCanonical(P.IsTiledMaterialMode(mode)
+            var wrong=NativeFreshLevelDocumentCodec.SerializeCanonical(P.IsSelectedTiledMaterialMode(mode)
+                ? ChangeFirstId(selectedThree) : P.IsTiledMaterialMode(mode)
                 ? SavedTiledMaterialDocumentFixture.Document(firstId:4.ToString("x32")) : P.IsTiledMode(mode)
                 ? SavedTiledDocumentFixture.Document(firstId:4.ToString("x32")) : FamilySavedCases.Document(x:9153));
             await Throws<InvalidDataException>(()=>{P.RequireFixtureDocument(mode,wrong);return Task.CompletedTask;});
@@ -84,6 +106,28 @@ internal static class SavedLevelPublicationArgumentCases
             SavedTiledDocumentFixture.BoundaryDocument(46) }.Concat(SavedTiledDocumentFixture.Unsupported().Select(item => item.Document)))
             foreach (string mode in tiledModes)
                 await Throws<InvalidDataException>(() => { P.RequireFixtureDocument(mode, NativeFreshLevelDocumentCodec.SerializeCanonical(alternate)); return Task.CompletedTask; });
+        var selectedContent = selectedThree.TiledContent!;
+        var thirdDescriptor = selectedThree.WithTiledContent(selectedContent.WithTiles(selectedContent.Tiles.Select(tile =>
+            NativeFreshFlatTileIntent.Create(tile.EditorId, tile.X, tile.Y, tile.Z, tile.Width, tile.Depth, tile.FloorColor,
+                NativeFreshFloorMaterialsIntent.Create(ChangeThirdDescriptor(tile.Materials.Triangle0), ChangeThirdDescriptor(tile.Materials.Triangle1))))));
+        foreach (var alternate in new[]
+        {
+            SelectedTiledMaterialSavedCases.Document([0, 0, 0, 0, 0, 255]), // Only the last face changes.
+            SelectedTiledMaterialSavedCases.Document([0, 1, 2, 0, 1, 0]),
+            SelectedTiledMaterialSavedCases.Document([0, 1, 255, 2, 0, 255]),
+            thirdDescriptor, ChangeFirstId(selectedOne), ChangeFirstId(selectedThree),
+            SavedTiledDocumentFixture.Document(), SavedTiledMaterialDocumentFixture.Document(),
+            selectedThree.WithTiledContent(selectedContent.WithTiles(selectedContent.Tiles.Reverse())),
+            selectedThree.WithPlacements([NativeFreshWizardRouteIntent.Create(new string('a', 32), 13056, 8960, 8704, 13568, 8960)]),
+            selectedOne.WithPlacements([NativeFreshMobyPlacementIntent.Create(new string('b', 32),
+                NativeFreshRetailMobyReference.Create(Cases.Variant, 10, 121, 501), 13056, 8960, 8704, 64)])
+        })
+        {
+            byte[] changed = NativeFreshLevelDocumentCodec.SerializeCanonical(alternate);
+            await Throws<InvalidDataException>(() => { P.RequireSelectedFixtureDocument(changed); return Task.CompletedTask; });
+            foreach (string mode in selectedMaterialModes)
+                await Throws<InvalidDataException>(() => { P.RequireFixtureDocument(mode, changed); return Task.CompletedTask; });
+        }
         var tiledMaterial = SavedTiledMaterialDocumentFixture.Document(); var materialContent = tiledMaterial.TiledContent!;
         foreach (var alternate in new[] {
             tiledMaterial.WithTiledContent(materialContent.WithTiles(materialContent.Tiles.Reverse())),
@@ -111,6 +155,20 @@ internal static class SavedLevelPublicationArgumentCases
         { var args = valid.ToArray(); args[slot] = "relative"; await Throws<ArgumentException>(() => { P.Parse(args); return Task.CompletedTask; }); }
         foreach (string id in new[] { "UPPER", "bad space", "../other", new string('a', 65) })
         { var args = valid.ToArray(); args[4] = id; await Throws<ArgumentException>(() => { P.Parse(args); return Task.CompletedTask; }); }
+        foreach (string mode in selectedMaterialModes)
+        {
+            var args = valid.ToArray(); args[0] = mode;
+            // Malformed arguments must stop the actual entry point before path
+            // location checks or acquisition, even with no real source/project.
+            await Throws<ArgumentException>(() => P.RunAsync(args[..5]));
+            await Throws<ArgumentException>(() => P.RunAsync(args.Concat(new[] { "extra" }).ToArray()));
+            foreach (int slot in Enumerable.Range(1, 5))
+                foreach (string invalid in new[] { "", " ", "\0", "prefix\0suffix", "--source", P.Modes[1] })
+                {
+                    var invalidArgs = args.ToArray(); invalidArgs[slot] = invalid;
+                    await Throws<ArgumentException>(() => P.RunAsync(invalidArgs));
+                }
+        }
 
         // Resolve only actually observed temp-ancestor links; do not weaken CLI.
         string root = Path.GetFullPath(Root);
@@ -150,7 +208,7 @@ internal static class SavedLevelPublicationArgumentCases
         string verifyOutput=Path.Combine(root,"family-verify-argument-output");Directory.CreateDirectory(verifyOutput);
         foreach(string name in Spyro.Editor.Core.Exporting.NativeFreshSavedLevelResearchCandidatePlan.OutputNames)
             P.WriteNewSmall(Path.Combine(verifyOutput,name),[3]);
-        foreach(string mode in familyModes.Concat(tiledModes).Concat(tiledMaterialModes))
+        foreach(string mode in familyModes.Concat(tiledModes).Concat(tiledMaterialModes).Concat(selectedMaterialModes))
         {
             bool verify=P.OperationMode(mode)==P.Modes[1];string target=verify?verifyOutput:output;
             var args=valid.ToArray();args[0]=mode;
@@ -174,4 +232,11 @@ internal static class SavedLevelPublicationArgumentCases
             "Three explicitly test-owned tiny verification companions remain unchanged outside the project; no native image was emitted.");
         Console.WriteLine("SAVED_LEVEL_PHYSICAL_ARGUMENTS_OK originalOpened=false tinyInputsOpened=true candidateCaptureReached=false nativeOutput=false");
     }
+
+    private static NativeFreshLevelDocumentIntent ChangeFirstId(NativeFreshLevelDocumentIntent document) =>
+        document.WithTiledContent(document.TiledContent!.WithTiles(document.TiledContent.Tiles.Select((tile, index) => index == 0
+            ? NativeFreshFlatTileIntent.Create(4.ToString("x32"), tile.X, tile.Y, tile.Z, tile.Width, tile.Depth, tile.FloorColor, tile.Materials) : tile)));
+    private static NativeFreshFloorMaterialIntent ChangeThirdDescriptor(NativeFreshFloorMaterialIntent material) =>
+        material is NativeFreshRetailTerrainMaterialIntent { SourceWadEntry: 14, TextureId: 1 }
+            ? NativeFreshFloorMaterialIntent.RetailTerrain(Cases.Variant, 14, 2) : material;
 }

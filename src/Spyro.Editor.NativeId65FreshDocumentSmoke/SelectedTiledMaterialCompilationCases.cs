@@ -7,7 +7,7 @@ using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
 
 // Explicit selected-material source tests. Neutral preparation and caller labels
-// do not authenticate static records or admit UI, publication or native runtime.
+// do not authenticate static records or grant publication/native runtime approval.
 internal static class SelectedTiledMaterialCompilationCases
 {
     private const string Variant = "spyro1-usa-retail-mode2-2352-v1";
@@ -100,8 +100,8 @@ internal static class SelectedTiledMaterialCompilationCases
                     "The existing exact-two preparation adapter is not widened by selected-N support.");
                 await RejectAsync<InvalidDataException>(() => NativeId65TiledDocumentCompilation.CaptureMaterialsAsync("\0", document),
                     "The old exact-two compilation adapter refuses N1/N3 before malformed source paths.");
-                Check(!NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(document),
-                    "This backend slice does not silently widen current exact-two UI eligibility.");
+                Check(NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(document),
+                    "Fitting whole P0 selected intent has neutral readiness without widening the old exact-two source adapters.");
             }
             await RejectAsync<OperationCanceledException>(() => NativeId65TiledSurfaceBundle.CaptureGeometryForSelectedMaterialsAsync("\0", document, new(true)),
                 "Canceled selected surface capture cannot reach source I/O.");
@@ -156,7 +156,7 @@ internal static class SelectedTiledMaterialCompilationCases
         await RejectAsync<ArgumentNullException>(() => NativeId65TiledDocumentCompilation.CaptureSelectedMaterialsAsync("\0", null!), "Missing actual compilation document refuses before I/O.");
         await RejectAsync<ArgumentNullException>(() => NativeId65TiledMaterialPlan.CaptureSelectedAsync("\0", null!, []), "Neutral records cannot replace actual fresh ancestry.");
         await RejectAsync<OperationCanceledException>(() => NativeId65TiledMaterialPlan.CaptureSelectedAsync("\0", null!, null!, new(true)), "Cancellation precedes selected-source enumeration and source I/O.");
-        Console.WriteLine($"NATIVE_ID65_SELECTED_TILED_MATERIAL_FREE_OK checks={_checks} sourceRead=false nativeOutput=false uiAdmission=false");
+        Console.WriteLine($"NATIVE_ID65_SELECTED_TILED_MATERIAL_FREE_OK checks={_checks} sourceRead=false nativeOutput=false selectedNeutralReadiness=true uiExecuted=false");
     }
 
     internal static async Task Source(string original)
@@ -193,7 +193,7 @@ internal static class SelectedTiledMaterialCompilationCases
             await TwoMaterialParity(original);
         }
         finally { RequireOriginal(original); }
-        Console.WriteLine($"NATIVE_ID65_SELECTED_TILED_MATERIAL_SOURCE_OK checks={_checks} nativeOutput=false nativeCpuExecuted=false uiAdmission=false publicationApproved=false");
+        Console.WriteLine($"NATIVE_ID65_SELECTED_TILED_MATERIAL_SOURCE_OK checks={_checks} nativeOutput=false nativeCpuExecuted=false selectedNeutralReadiness=true uiExecuted=false publicationApproved=false");
     }
 
     private static void Validate(NativeId65TiledDocumentCompilation compiled, NativeFreshLevelDocumentIntent document,
@@ -304,7 +304,7 @@ internal static class SelectedTiledMaterialCompilationCases
             "Returned complete resource and body copies cannot mutate retained issuers.");
         Check(material.SourceCertified && !material.Allocation.SourceCertified && !material.RuntimeVerified && !material.PublicationApproved &&
             !body.RuntimeVerified && !body.PublicationApproved && !compiled.DiscPlan.RuntimeVerified && !compiled.DiscPlan.PublicationApproved &&
-            !compiled.DiscPlan.NormalCreateBinEnabled, "Selected native bytes do not promote neutral allocation, UI, publication or runtime approval.");
+            !compiled.DiscPlan.NormalCreateBinEnabled, "Selected native bytes do not promote neutral allocation, normal export, publication or runtime approval.");
 
         void AddSpan(int offset, int length)
         {
@@ -484,7 +484,7 @@ internal static class SelectedTiledMaterialCompilationCases
         await RejectAsync<InvalidDataException>(() => NativeId65FreshDiscResearchCandidatePlan.CaptureAsync("\0", "\0", compiled.DiscPlan), "Fixed starter candidate cannot adopt the selected profile.");
         Reject<InvalidDataException>(() => material.RequireAncestry(fresh, compiled.Document, material.MaterialSources[0], material.MaterialSources[^1]),
             "Old exact-pair ancestry remains closed for both N1 and N3 plans.");
-        Check(!NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(compiled.Document), "Backend source compilation alone does not widen current UI admission.");
+        Check(NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(compiled.Document), "Fitting whole P0 selected intent remains neutrally ready; the predicate does not supply source or runtime authority.");
     }
 
     private static void VerifyStreams(string original, NativeId65FreshDiscPlan disc, string expected)

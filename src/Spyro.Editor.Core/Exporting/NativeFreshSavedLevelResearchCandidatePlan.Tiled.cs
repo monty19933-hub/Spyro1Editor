@@ -90,7 +90,7 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
             tile.Materials.Triangle0 is not NativeFreshBaseFloorColorMaterialIntent ||
             tile.Materials.Triangle1 is not NativeFreshBaseFloorColorMaterialIntent);
         if (hasMaterials)
-            _ = NativeId65TiledSurfaceBundle.PrepareGeometryForMaterials(saved.Document);
+            _ = NativeId65TiledSurfaceBundle.PrepareGeometryForSelectedMaterials(saved.Document);
         else
         {
             var (_, surface) = NativeId65TiledSurfaceBundle.PrepareDocument(saved.Document);
@@ -105,7 +105,7 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
             owners.Open(token);
             await NativeId65FreshDiscSource.RequireWholeOriginalAsync(owners.Bin!, token);
             var tiled = hasMaterials
-                ? await NativeId65TiledDocumentCompilation.CaptureMaterialsAsync(owners.ImagePath, saved.Document, token)
+                ? await NativeId65TiledDocumentCompilation.CaptureSelectedMaterialsAsync(owners.ImagePath, saved.Document, token)
                 : await NativeId65TiledDocumentCompilation.CaptureAsync(owners.ImagePath, saved.Document, token);
             saved.RequireDocument(tiled.Document);
             owners.Bin!.Position = 0;
@@ -142,14 +142,14 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
             NativeId65TiledNormalDataLayout.RequireFixedSurfaceAllocation(surface.CopyBundle().Length);
             return;
         }
-        if (body.ResourceProfile != NativeId65NormalResourceProfile.DirectLqTwoStaticMaterialsFlatTiles ||
+        if (body.ResourceProfile != material.ResourceProfile ||
             !ReferenceEquals(body.TiledMaterialAncestor, material) || body.TextureAncestor != null ||
             body.UpstreamPlanSha256 != material.PlanSha256 || material.UpstreamPlanSha256 != fresh.PlanSha256 ||
             material.CanonicalDocumentSha256 != tiled.CanonicalSha256 ||
             !_canonical.AsSpan().SequenceEqual(material.CopyCanonicalDocument()) || body.DataSectorByteLength != 0x1000)
             throw new InvalidDataException("Material saved-tiled Candidate requires its actual complete material revision and final data owner.");
-        material.RequireAncestry(fresh, saved.Document, material.MaterialSources[0], material.MaterialSources[1]);
-        var prepared = NativeId65TiledSurfaceBundle.PrepareGeometryForMaterials(saved.Document);
+        material.RequireSelectedAncestry(fresh, saved.Document, material.MaterialSources);
+        var prepared = NativeId65TiledSurfaceBundle.PrepareGeometryForSelectedMaterials(saved.Document);
         if (!material.OrderedFaceMaterials.SequenceEqual(prepared.OrderedFaceMaterials) ||
             body.DataUsedByteLength != material.CopyDataComponents().Length ||
             body.DataUsedByteLength is < 1 or > 0x1000)

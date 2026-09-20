@@ -30,6 +30,17 @@ internal static class TiledSavedCases
         foreach (var (name, invalid) in SavedTiledDocumentFixture.Unsupported())
         {
             var (_, saved) = Save("tiled-unsupported-" + name, invalid);
+            if (name.EndsWith("-retail", StringComparison.Ordinal))
+            {
+                Check(!NativeFreshSavedLevelResearchEligibility.IsSupportedTiledProfile(invalid) &&
+                    NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(invalid),
+                    "Single-retail whole intent remains outside Base-only readiness but is neutrally supported through selected materials: " + name);
+                await Throws<ArgumentException>(() => NativeFreshSavedLevelResearchCandidatePlan.CaptureSavedAsync("\0", "\0", saved.Snapshot));
+                var missing = await Throws<IOException>(() => NativeFreshSavedLevelResearchCandidatePlan.CaptureSavedAsync(Missing, Missing, saved.Snapshot));
+                Check(Leaves(missing)[0].Message.StartsWith("Textured research source path is missing", StringComparison.Ordinal),
+                    "Supported selected N1 intent reaches source ownership checks without discarding the retail face: " + name);
+                continue;
+            }
             var error = await Throws<InvalidDataException>(() => NativeFreshSavedLevelResearchCandidatePlan.CaptureSavedAsync(Missing, Missing, saved.Snapshot));
             Check(!Leaves(error).Any(e => e is FileNotFoundException or DirectoryNotFoundException),
                 "Unsupported complete tiled content refuses before source I/O: " + name);

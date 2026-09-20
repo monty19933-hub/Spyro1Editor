@@ -582,7 +582,8 @@ class RunnerOptionsTests(unittest.TestCase):
                           (name, "NATIVE_ID65_TILED_RESOURCE_FREE_OK", ["--tiled-resource-free"]),
                           (name, "NATIVE_ID65_TILED_COMPILATION_FREE_OK", ["--tiled-compilation-free"]),
                           (name, "NATIVE_ID65_TILED_MATERIAL_FREE_OK", ["--tiled-material-free"]),
-                          (name, "NATIVE_ID65_TILED_MATERIAL_COMPILATION_FREE_OK", ["--tiled-material-compilation-free"])],
+                          (name, "NATIVE_ID65_TILED_MATERIAL_COMPILATION_FREE_OK", ["--tiled-material-compilation-free"]),
+                          (name, "NATIVE_ID65_SELECTED_TILED_MATERIAL_FREE_OK", ["--selected-tiled-material-free"])],
                          [row for row in RUNNER.ADDITIONAL_CORE_CASES if row[0] == name])
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS, "Original no-argument document grammar remains a distinct test")
         self.assertFalse(any(row[0] == name for row in RUNNER.SOURCE_QA_CASES))
@@ -595,17 +596,19 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor." + name + "/" in line]
-        self.assertEqual(6, len(lines))
+        self.assertEqual(7, len(lines))
         self.assertTrue(any(flag + " | " + marker in line for line in lines))
         self.assertTrue(any("--tiled-resource-free | NATIVE_ID65_TILED_RESOURCE_FREE_OK" in line for line in lines))
         self.assertTrue(any("--tiled-compilation-free | NATIVE_ID65_TILED_COMPILATION_FREE_OK" in line for line in lines))
         self.assertTrue(any("--tiled-material-free | NATIVE_ID65_TILED_MATERIAL_FREE_OK" in line for line in lines))
         self.assertTrue(any("--tiled-material-compilation-free | NATIVE_ID65_TILED_MATERIAL_COMPILATION_FREE_OK" in line for line in lines))
+        self.assertTrue(any("--selected-tiled-material-free | NATIVE_ID65_SELECTED_TILED_MATERIAL_FREE_OK" in line for line in lines))
         self.assertFalse(any("--variable-data-source" in line or "--variable-data-red" in line for line in lines))
         self.assertFalse(any("--tiled-resource-source" in line for line in lines))
         self.assertFalse(any("--tiled-compilation-source" in line for line in lines))
         self.assertFalse(any("--tiled-material-source" in line for line in lines))
         self.assertFalse(any("--tiled-material-compilation-source" in line for line in lines))
+        self.assertFalse(any("--selected-tiled-material-source" in line for line in lines))
 
     def test_variable_data_marker_and_result_suffix_preserve_old_mode_and_single_build(self):
         self.assert_additional_fresh_case("NATIVE_ID65_VARIABLE_DATA_FREE_OK", "--variable-data-free", "-variable-data")
@@ -622,19 +625,48 @@ class RunnerOptionsTests(unittest.TestCase):
     def test_tiled_material_compilation_marker_and_result_suffix_preserve_old_mode_and_single_build(self):
         self.assert_additional_fresh_case("NATIVE_ID65_TILED_MATERIAL_COMPILATION_FREE_OK", "--tiled-material-compilation-free", "-tiled-material-compilation")
 
-    def assert_additional_fresh_case(self, marker, flag, suffix):
-        name, old_marker = "NativeId65FreshDocumentSmoke", "NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK"
+    def test_selected_material_marker_and_result_suffix_preserve_old_mode_and_single_build(self):
+        self.assert_additional_fresh_case("NATIVE_ID65_SELECTED_TILED_MATERIAL_FREE_OK", "--selected-tiled-material-free", "-selected-tiled-material")
+
+    def test_selected_saved_marker_and_result_suffix_preserve_old_mode_and_single_build(self):
+        self.assert_additional_fresh_case("SELECTED_TILED_MATERIAL_SAVED_FREE_OK", "--selected-tiled-material-saved-free",
+                                         "-selected-tiled-material-saved", name="NativeFreshSavedLevelResearchSmoke",
+                                         old_marker="NATIVE_FRESH_SAVED_LEVEL_RESEARCH_FREE_OK")
+
+    def test_chest_behavior_is_only_explicit_free_mode_with_distinct_marker_and_log(self):
+        name, marker, flag = "TownSquareLockedChestSmoke", "LOCKED_CHEST_BEHAVIOR_FREE_OK", "--behavior-free"
+        self.assertEqual([(name, marker, [flag])], [row for row in RUNNER.ADDITIONAL_CORE_CASES if row[0] == name])
+        self.assertFalse(any(row[0] == name for row in RUNNER.CORE_CASES), "Chest no-argument mode is source-aware and must not run")
+        self.assertFalse(any(row[0] == name for row in RUNNER.SOURCE_QA_CASES))
+        self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        with mock.patch.object(sys, "argv", [str(SPEC.origin), "--list"]), \
+                mock.patch.object(RUNNER, "run_owned_command", side_effect=AssertionError("list executed a command")), \
+                mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("default source read")), \
+                mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("default CUE read")), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(0, RUNNER.main())
+        lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor." + name + "/" in line]
+        self.assertEqual(1, len(lines))
+        self.assertTrue(lines[0].endswith(flag + " | " + marker))
+        self.assertNotIn("--behavior-source", output.getvalue())
+        self.assert_additional_fresh_case(marker, flag, "-behavior", name=name, old_marker=None)
+
+    def assert_additional_fresh_case(self, marker, flag, suffix, *,
+                                    name="NativeId65FreshDocumentSmoke", old_marker="NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK"):
+        self.assertEqual([(name, marker, [flag])], [row for row in RUNNER.ADDITIONAL_CORE_CASES if row[2] == [flag]])
         for emit_marker in (False, True):
             calls = []
 
             def fake_run(command, **kwargs):
                 calls.append(command)
                 if command[:2] == ["dotnet", "run"]:
-                    kwargs["stdout"].write(marker if flag in command and emit_marker else old_marker)
+                    kwargs["stdout"].write(marker if flag in command and emit_marker else old_marker or "wrong mode marker")
                 return subprocess.CompletedProcess(command, 0)
 
             with self.subTest(emit_marker=emit_marker), tempfile.TemporaryDirectory(prefix="spyro-variable-data-runner-") as output:
-                with mock.patch.object(RUNNER, "CORE_CASES", ((name, old_marker),)), \
+                with mock.patch.object(RUNNER, "CORE_CASES", ((name, old_marker),) if old_marker else ()), \
                         mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ((name, marker, [flag]),)), \
                         mock.patch.object(RUNNER, "SOURCE_QA_CASES", ()), \
                         mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
@@ -645,19 +677,25 @@ class RunnerOptionsTests(unittest.TestCase):
                         contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(0 if emit_marker else 1, RUNNER.main())
                 summary = json.loads((Path(output) / "summary.json").read_text())
+                run_logs = [Path(row["log"]).read_text() for row in summary if row["name"].startswith("run-")]
             builds = [command for command in calls if command[:2] == ["dotnet", "build"]]
-            self.assertEqual(2, len(builds), "Shared document project builds once, plus App")
+            self.assertEqual(2, len(builds), "The selected project builds once, plus App")
             runs = [command for command in calls if command[:2] == ["dotnet", "run"]]
-            self.assertEqual(2, len(runs))
-            self.assertNotIn("--", runs[0])
-            self.assertEqual([flag], runs[1][runs[1].index("--") + 1:])
+            self.assertEqual(1 + int(old_marker is not None), len(runs))
+            if old_marker:
+                self.assertNotIn("--", runs[0])
+                self.assertIn(old_marker, run_logs[0])
+                self.assertNotIn(marker, run_logs[0], "The additional mode cannot overwrite the original log")
+            self.assertEqual([flag], runs[-1][runs[-1].index("--") + 1:])
             self.assertTrue(all("--no-build" in command and "--no-restore" in command for command in runs))
-            self.assertEqual(["run-Spyro.Editor." + name, "run-Spyro.Editor." + name + suffix],
-                             [row["name"] for row in summary[-2:]])
+            self.assertEqual((["run-Spyro.Editor." + name] if old_marker else []) + ["run-Spyro.Editor." + name + suffix],
+                             [row["name"] for row in summary if row["name"].startswith("run-")])
             self.assertEqual(len(summary), len({row["name"] for row in summary}))
             self.assertEqual(len(summary), len({row["log"] for row in summary}))
-            self.assertTrue(summary[-2]["passed"])
+            if old_marker: self.assertTrue(summary[-2]["passed"])
             self.assertEqual(emit_marker, summary[-1]["passed"], "Old marker cannot stand in for the additional regression")
+            self.assertEqual(emit_marker, marker in run_logs[-1])
+            if not emit_marker: self.assertEqual("missing success marker", summary[-1]["detail"])
             self.assertFalse(any(command[0] == "env" for command in calls))
 
     def test_fresh_ui_uses_only_the_isolated_headless_mode_and_its_own_marker(self):
@@ -907,7 +945,18 @@ class RunnerOptionsTests(unittest.TestCase):
     def test_saved_level_candidate_is_explicit_source_only_without_native_publication(self):
         name = "NativeFreshSavedLevelResearchSmoke"
         self.assert_texture_modes(name, "NATIVE_FRESH_SAVED_LEVEL_RESEARCH", needs_cue=True)
-        self.assertFalse(any(c[0] == name for c in RUNNER.ADDITIONAL_CORE_CASES))
+        self.assertEqual([(name, "SELECTED_TILED_MATERIAL_SAVED_FREE_OK", ["--selected-tiled-material-saved-free"])],
+                         [row for row in RUNNER.ADDITIONAL_CORE_CASES if row[0] == name])
+        with mock.patch.object(sys, "argv", [str(SPEC.origin), "--list"]), \
+                mock.patch.object(RUNNER, "run_owned_command", side_effect=AssertionError("list executed a command")), \
+                mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("default source read")), \
+                mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("default CUE read")), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(0, RUNNER.main())
+        lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor." + name + "/" in line]
+        self.assertEqual(2, len(lines))
+        self.assertTrue(any("--selected-tiled-material-saved-free | SELECTED_TILED_MATERIAL_SAVED_FREE_OK" in line for line in lines))
+        self.assertFalse(any("--selected-tiled-material-saved-source" in line for line in lines))
         project = RUNNER.ROOT / ("src/Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
         self.assertIn('<SavedLevelProbe Condition="\'$(SavedLevelProbe)\' == \'\'">Full</SavedLevelProbe>',
                       project.read_text())

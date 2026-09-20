@@ -13,16 +13,22 @@ internal static class NativeFreshSavedResearchLifecycleCases
     internal static void Run(string parent)
     {
         int checks = 0;
-        foreach (string profile in new[] { "material", "family", "tiled", "tiled-mat" })
-        foreach (string stage in new[] { "picker", "prepare" })
-        foreach (string change in new[] { "none", "raw-aba", "raw", "native-raw-aba", "native-raw", "source", "project", "disk", "manifest", "session", "snapshot", "applied", "close", "cancel", "prepare-refusal", "owner-release" }
-            .Concat(profile == "family" ? new[] { "native-y-aba", "native-z-aba", "native-yaw-aba" } :
-                profile.StartsWith("tiled", StringComparison.Ordinal) ? new[] { "tile-selection", "spawn-z", "spawn-z-aba", "tile-x", "tile-x-aba", "tile-material-aba" } : Array.Empty<string>())
-            .Concat(profile == "tiled-mat" ? new[] { "texture-id-aba", "source-level-aba", "nonselected-material" } : Array.Empty<string>()))
+        foreach (var (profile, stage, change) in Scenarios())
         {
             bool family = profile == "family", tiled = profile.StartsWith("tiled", StringComparison.Ordinal);
-            var fixture = new Fixture(parent, (profile == "material" ? "" : profile + "-") + stage + "-" + change,
+            // Keep selected fixture IDs within the real 64-character project
+            // limit; do not weaken persistence normalization for longer labels.
+            string fixtureProfile = profile switch
+            {
+                "tiled-mat-selected-one" => "tiled-n1",
+                "tiled-mat-selected-three" => "tiled-n3",
+                "material" => "",
+                _ => profile
+            };
+            var fixture = new Fixture(parent, (fixtureProfile.Length == 0 ? "" : fixtureProfile + "-") + stage + "-" + change,
                 document: family ? SavedFamilyDocumentFixture.Document() : profile == "tiled-mat" ? SavedTiledMaterialDocumentFixture.Document() :
+                    profile == "tiled-mat-selected-one" ? NativeFreshSavedResearchReadinessCases.SelectedMaterialDocument([0, 255, 0, 255, 0, 255]) :
+                    profile == "tiled-mat-selected-three" ? NativeFreshSavedResearchReadinessCases.SelectedMaterialDocument([0, 1, 255, 2, 0, 255]) :
                     tiled ? SavedTiledDocumentFixture.Document() : null,
                 selectedEditorId: family ? SavedFamilyDocumentFixture.GrassId : null);
             List<Exception> failures = [];
@@ -60,6 +66,10 @@ internal static class NativeFreshSavedResearchLifecycleCases
                 Check(fixture.Window.ResearchBusyForTesting && fixture.Acquired == 1 && fixture.Released == 0, "Owner held across await.");
                 if (stage == "prepare") Check(work.Snapshot != null && ReferenceEquals(work.Snapshot, fixture.Window.SavedResearchSnapshotForTesting),
                     "Actual retained Snapshot delivered to preparation, not applied object.");
+                if (stage == "prepare" && profile.Contains("selected", StringComparison.Ordinal))
+                    Check(NativeFreshLevelDocumentCodec.SerializeCanonical(work.Snapshot!.Intent!).SequenceEqual(
+                        NativeFreshLevelDocumentCodec.SerializeCanonical(original!)),
+                        "Selected-N preparation receives the complete actual saved document, including the third descriptor and all Base faces.");
                 foreach (string button in new[] { "FreshDocumentApply", "FreshDocumentSave", "FreshDocumentUndo", "FreshDocumentRedo",
                     "FreshDocumentReopen", "FreshWizardAdd", "FreshWizardRemove", "FreshWizardMoveUp", "FreshWizardMoveDown", "FreshMaterialsInspect" })
                 {
@@ -235,6 +245,25 @@ internal static class NativeFreshSavedResearchLifecycleCases
         }
         Console.WriteLine($"FRESH_SAVED_RESEARCH_LIFECYCLE_OK checks={checks} sourceOpened=false nativeOutputWritten=false");
         void Check(bool value, string message) { if (!value) throw new InvalidDataException(message); checks++; }
+    }
+
+    private static IEnumerable<(string Profile, string Stage, string Change)> Scenarios()
+    {
+        // Retain every existing guard combination. The selected-N extension
+        // reuses this same body with six targeted witnesses, not another matrix.
+        foreach (string profile in new[] { "material", "family", "tiled", "tiled-mat" })
+        foreach (string stage in new[] { "picker", "prepare" })
+        foreach (string change in new[] { "none", "raw-aba", "raw", "native-raw-aba", "native-raw", "source", "project", "disk", "manifest", "session", "snapshot", "applied", "close", "cancel", "prepare-refusal", "owner-release" }
+            .Concat(profile == "family" ? new[] { "native-y-aba", "native-z-aba", "native-yaw-aba" } :
+                profile.StartsWith("tiled", StringComparison.Ordinal) ? new[] { "tile-selection", "spawn-z", "spawn-z-aba", "tile-x", "tile-x-aba", "tile-material-aba" } : Array.Empty<string>())
+            .Concat(profile == "tiled-mat" ? new[] { "texture-id-aba", "source-level-aba", "nonselected-material" } : Array.Empty<string>()))
+            yield return (profile, stage, change);
+        yield return ("tiled-mat-selected-one", "picker", "cancel");
+        yield return ("tiled-mat-selected-one", "prepare", "raw-aba");
+        yield return ("tiled-mat-selected-three", "picker", "tile-selection");
+        yield return ("tiled-mat-selected-three", "prepare", "nonselected-material");
+        yield return ("tiled-mat-selected-three", "prepare", "texture-id-aba");
+        yield return ("tiled-mat-selected-three", "picker", "none");
     }
 
     internal static void RetainWindowFailure(Fixture? fixture, List<Exception> failures)

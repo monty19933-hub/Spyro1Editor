@@ -44,7 +44,7 @@ CAPACITY = 16
 # Z/ground-state certificate or authentication of the loaded candidate.
 AUTHORED_FLOOR_XY_BOUNDS = (8448, 8448, 9472, 9472)
 PROFILE_CHOICES = ("starter-a-n16", "edited-landing-track02-r01", "tiled-three-track19-r01",
-                   "tiled-two-material-three-track19-r01")
+                   "tiled-two-material-three-track19-r01", "tiled-three-material-three-track19-r01")
 
 # Both legacy exact untextured N16 bodies retain this address layout. Equal RAM gates
 # cannot distinguish their geometry/document/music or authenticate either disc.
@@ -123,6 +123,25 @@ _TILED_MATERIAL_GATES = MappingProxyType({
     name: (at, encoding, _TILED_MATERIAL_MOVED.get(name, expected))
     for name, (at, encoding, expected) in GATES.items()
 })
+# One separately pinned six-textured fixture, not a per-material-count selector.
+# Independent native-loader402 derives C80/model8008AB4C/scene8009A34C for the
+# ordered14/T0,70/T0,14/T1 sources and face slots0,1,2,0,1,2. Disc403 pins its
+# complete image; equal RAM anchors still do not authenticate those bindings.
+_TILED_THREE_MATERIAL_USED = 0xC80
+_TILED_THREE_MATERIAL_MODEL = 0x80089ECC + _TILED_THREE_MATERIAL_USED
+_TILED_THREE_MATERIAL_SCENE = _TILED_THREE_MATERIAL_MODEL + 0xF800
+_TILED_THREE_MATERIAL_BASE = _TILED_THREE_MATERIAL_SCENE + 0xD4
+_TILED_THREE_MATERIAL_ARENA_END = _TILED_THREE_MATERIAL_BASE + 0x70 * CAPACITY + 0x58
+_TILED_THREE_MATERIAL_MOVED = MappingProxyType({
+    "model_anchor": _TILED_THREE_MATERIAL_MODEL, "scene_anchor": _TILED_THREE_MATERIAL_SCENE,
+    "moby_base": _TILED_THREE_MATERIAL_BASE, "dynamic_base": _TILED_THREE_MATERIAL_BASE,
+    "arena_end": _TILED_THREE_MATERIAL_ARENA_END, "bucket_base": _TILED_THREE_MATERIAL_ARENA_END + 4 + 8 + 4,
+    "companion_model_root": _TILED_THREE_MATERIAL_MODEL + 0xCC30,
+})
+_TILED_THREE_MATERIAL_GATES = MappingProxyType({
+    name: (at, encoding, _TILED_THREE_MATERIAL_MOVED.get(name, expected))
+    for name, (at, encoding, expected) in GATES.items()
+})
 CURSORS = {
     "dynamic_count": (0x800756A4, "<I"),
     "dynamic_properties_cursor": (0x80075930, "<I"),
@@ -152,6 +171,8 @@ def _profile_layout(profile):
         return _TILED_GATES, _TILED_BASE, _TILED_ARENA_END, (8448, 8448, 14592, 10496)
     if profile == "tiled-two-material-three-track19-r01":
         return _TILED_MATERIAL_GATES, _TILED_MATERIAL_BASE, _TILED_MATERIAL_ARENA_END, (8448, 8448, 14592, 10496)
+    if profile == "tiled-three-material-three-track19-r01":
+        return _TILED_THREE_MATERIAL_GATES, _TILED_THREE_MATERIAL_BASE, _TILED_THREE_MATERIAL_ARENA_END, (8448, 8448, 14592, 10496)
     bounds = (8192, 8192, 10240, 10240) if profile == "edited-landing-track02-r01" else AUTHORED_FLOOR_XY_BOUNDS
     return GATES, BASE, ARENA_END, bounds
 
@@ -170,6 +191,8 @@ def require_baseline(values, *, profile="starter-a-n16"):
     baseline = "three-tile/N16" if profile == "tiled-three-track19-r01" else "A/N16"
     if profile == "tiled-two-material-three-track19-r01":
         baseline = "six-textured-three-tile/N16"
+    if profile == "tiled-three-material-three-track19-r01":
+        baseline = "three-material-six-textured-three-tile/N16"
     for name, (_, _, expected) in gates.items():
         if values[name] != expected:
             raise ValueError("Not the initialized fixed " + baseline + " baseline: " + name)
@@ -227,6 +250,7 @@ def capture(client, label, *, profile="starter-a-n16"):
     edited = profile == "edited-landing-track02-r01"
     tiled = profile == "tiled-three-track19-r01"
     tiled_material = profile == "tiled-two-material-three-track19-r01"
+    tiled_three_material = profile == "tiled-three-material-three-track19-r01"
     result = {
         "utc": datetime.now(timezone.utc).isoformat(), "label": label[:120],
         "expected_profile_annotation": PROFILE,
@@ -275,6 +299,19 @@ def capture(client, label, *, profile="starter-a-n16"):
             expected_candidate_sha256_annotation="462c992f80f512f0b6be781b1a79e707e37a0e18f5e5e47356cd332ef61b2ba8",
             expected_body_sha256_annotation="461326c0e362a7c0bdb4c15c21996d15f6b1674e2156d60802f0efc94e6c36be",
             expected_used_data_length_annotation=_TILED_MATERIAL_USED,
+            expected_spawn_xyz_annotation=[8960, 8960, 9216], expected_spawn_heading_u8_annotation=64,
+            expected_floor_z_annotation=8704, expected_music_track_id_annotation=19,
+            ui_result_approved=False, normal_export_approved=False)
+    elif tiled_three_material:
+        # Only independent403's exact three-six-textured Body/image is described.
+        # Model/scene hashes come from402, with the same EXE as the older fixture.
+        # These are annotations, not material/GPU, process or disc authentication.
+        result.update(
+            expected_profile_annotation="fresh-id65-tiled-three-material-three-track19-r01-idle-seam-walk-research-v1",
+            expected_candidate_sha256_annotation="f1c137476833d1c046a78df812b40a47f8dc6558051c823437d7c5b3f86d8e32",
+            expected_body_sha256_annotation="a78a1ffcc8870ef91d26170adcd6b735d28466efdd2c24fb7018a293f439ec8c",
+            expected_model_sha256_annotation="88c78343c283256de6ce8d3151b43fa72ba4d96b046d869bd0a7209cbff4c23d",
+            expected_used_data_length_annotation=_TILED_THREE_MATERIAL_USED,
             expected_spawn_xyz_annotation=[8960, 8960, 9216], expected_spawn_heading_u8_annotation=64,
             expected_floor_z_annotation=8704, expected_music_track_id_annotation=19,
             ui_result_approved=False, normal_export_approved=False)
