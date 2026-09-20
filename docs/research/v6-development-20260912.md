@@ -1643,3 +1643,75 @@ The new tests run inside the already-registered dependency and texture smokes;
 the independent Python oracle is a separately recorded check. R04 App/Core
 hashes remain `45dce3be...` / `ce021966...` after this full rebuild. No runtime or
 publication flag was promoted, and no preserved app was rebuilt.
+
+### Source-bound tiled material revision
+
+The next internal slice binds the actual saved schema-4/P0 document to two
+distinct static original-ROM terrain selections. `PrepareGeometryForMaterials`
+and its named source capture share geometry preparation with the existing
+Base-only path, but retain the **same complete material-bearing document**.
+Tile IDs, order, spawn, music and every face remain canonical ancestry. First
+occurrence determines material slots; repeated selections reuse them and Base
+faces retain `FF`. The complete geometry plus both 184-byte records must fit
+the current `0x1000` allocation before source I/O. This is not arbitrary-count
+texture admission, animated-texture support or placed-Moby support.
+
+`NativeId65TiledMaterialPlan` retains the actual document, surface, fresh scene
+and ordered static source instances. It checks their complete paired resources,
+P0/N16 shape and exact source selections before reading the original executable,
+then uses the unchanged allocator and shared tiled data composer. Canonical,
+upload, data, model and scene snapshots are immutable. Every face is bound;
+model/scene and the complete translated data/upload complements are preserved.
+The old `FromTiled` factory **and** private revision constructor re-run Base-only
+document validation, so intermediate FF geometry cannot silently drop unresolved
+retail material choices and enter the old untextured staging/body path.
+
+Evidence in the existing research log directory:
+
+- 341: independent Python reconstruction of complete actual-source outputs,
+  before the new Core issuer existed or executed. 345 reruns the frozen hashes.
+- 342: genuine tests-first RED, 13 missing API/type errors, zero warnings.
+- 343/344: regression-runner registration RED then GREEN; all 77 runner tests
+  pass, including a distinct marker/suffix and no implicit source-ROM access.
+- 347: Release build, zero warnings/errors. 348: 41 source-free checks.
+- 349: **94,707 source checks pass**. Three-tile final used data is `0xBC8`;
+  all-textured data `ba244a6a...`, mixed-FF `c0ac16f6...`, changed third tile
+  `03d9dc3a...`; each complete upload is `2ab548f5...`. Per-pass additional
+  packet bytes are 72/48/72, not a full-frame GPU budget. Every original-source
+  final hash/length/EOF check passes.
+
+The source tests also cover all data-byte mutations, complete inverse and
+protected/free/SPU upload complements, exact capacity boundaries, source order,
+detached copies, deterministic repetition, ID-only edits and equal-hash but
+distinct document/scene/source ancestors. Source issuance is not granted by
+hash equality. Independent read-only review found no actionable defect.
+
+346 independently executes pinned original loader code on all three material
+fixtures, after running the preserved 190-coordinate/96-length and delay/error
+controls. Actual separated LQ/HQ pointers, texture count, collision and sound
+relocation, returned model base `8008AA94`, model-loader scene base `8009A294`
+and bounded N16 scene end `8009D294` pass; each new chain executes 12,643 scalar
+instructions. It does **not** execute CD hardware/completion, the full boot or
+scene initializer, GTE/GPU, callbacks or gameplay. The pinned earlier loader
+helper remains unchanged. No output image or payload file is written.
+
+This checkpoint does not yet pass the new material revision through staging,
+body, disc, saved publication or UI export. Those must retain the exact material
+instance and final upload/data identities, not the intermediate untextured
+scene hashes. R04 and its previously observed color-only gameplay are unchanged.
+
+350 re-runs the old tiled compilation/source controls: **281,356 checks pass**,
+including the complete `7ba0b29b...` image, all 1,253 changed sectors, the actual
+C# inverse, unchanged legacy body/image and exact-full-allocation case. No
+physical output is written. Independent review also checked the new scalar
+loader oracle's instruction ownership and non-seeded endpoints; its material
+cases intentionally cover fewer individual model/list fields than the preserved
+parent controls, and do not claim exhaustive native model or scene execution.
+
+Full source-free rebuild/regression 351 passes **339 steps, zero failures**:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-zvucg0gj/summary.json`.
+R04 App/Core remain `45dce3be...` / `ce021966...`; the restored DuckStation
+global/game INIs and original card still match their saved identities. A separate
+read-only audit found four stale scalar-helper pins and two transitive consumers
+in older Moby source oracles; their repair and source reruns are the next test
+maintenance slice, not part of this successful source-free gate.

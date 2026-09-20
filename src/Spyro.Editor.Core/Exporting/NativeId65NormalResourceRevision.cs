@@ -34,6 +34,8 @@ internal sealed class NativeId65NormalResourceRevision
         TiledSceneAncestor = fresh.TiledSurfaceAncestor == null ? null : fresh;
         if (texture != null && TiledSceneAncestor != null)
             throw new InvalidDataException("The legacy two-face texture issuer cannot be attached to tiled scene ancestry.");
+        if (TiledSceneAncestor != null)
+            RequireBaseTiledSurface(fresh);
         ResourceProfile = TiledSceneAncestor != null ? NativeId65NormalResourceProfile.UntexturedGouraudFlatTiles :
             texture == null ? NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles :
             NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials;
@@ -96,11 +98,23 @@ internal sealed class NativeId65NormalResourceRevision
     internal static NativeId65NormalResourceRevision FromTiled(NativeId65FreshSceneBundle fresh)
     {
         ArgumentNullException.ThrowIfNull(fresh);
+        RequireBaseTiledSurface(fresh);
+        return new(fresh, null);
+    }
+
+    private static void RequireBaseTiledSurface(NativeId65FreshSceneBundle fresh)
+    {
         var tiled = fresh.TiledSurfaceAncestor ??
             throw new InvalidDataException("Tiled revision requires its actual source-issued scene and document.");
+        // Material geometry may own the same FF geometry bytes, but its actual
+        // whole document still contains unresolved retail intent. It cannot
+        // acquire the old untextured staging/Body profile through byte equality.
+        var prepared = NativeId65TiledSurfaceBundle.PrepareDocument(tiled.Document);
+        if (!prepared.Canonical.AsSpan().SequenceEqual(tiled.CopyDocumentBytes()))
+            throw new InvalidDataException("Base-only tiled revision lost its complete original document ancestry.");
+        tiled.RequireExactBundle(prepared.Surface.CopyBundle());
         var decoded = NativeId65TiledNormalDataLayout.DecodeForFixedBody(fresh.CopyDataComponents());
         tiled.RequireExactBundle(decoded.Surface.CopyBundle());
-        return new(fresh, null);
     }
 
     internal NativeId65FreshTerrainTexturePlan? TextureAncestor { get; }
