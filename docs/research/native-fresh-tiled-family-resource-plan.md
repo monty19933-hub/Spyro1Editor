@@ -2,7 +2,8 @@
 
 Status: **neutral preflight, independent child reference and detached
 source-derived used-data revision verified; full regression passes343/0**.
-No revised Body, output or new export admission is implemented.
+A revised source-only Body passes961 actual-source checks below; full regression
+passes343/0. No new output or export admission is implemented.
 The [current editor ledger](native-fresh-family-editor.md) and
 [saved R03 compiler ledger](native-fresh-saved-locked-chest-r03.md) retain their
 own verification boundaries. The [legacy R03 gameplay result](native-fresh-chest-r03-runtime.md)
@@ -167,8 +168,9 @@ new address domain, native loader or runtime certificate.
 Tests-first Body smoke601 fails only for the missing Body type (CS0246, zero
 warnings). The test is wired into ordinary free mode and explicit read-only
 R03 source mode; every existing image writer remains on the old placed Body.
-The Body implementation remains pending. The independent native model witness
-below is now verified; it does not grant production Body or disc authority.
+The Body implementation is now source-verified below. The independent
+native model witness is verified; it does not grant production Body or disc
+authority.
 
 ## Executed shared and local model witnesses
 
@@ -212,6 +214,52 @@ Full Original/current EXE, Host, PETE, four-file identity/EOF/reopen and loaded
 definition guards pass. Scene initialization, Host execution, rendering,
 collision queries, full-game loading, disc publication and gameplay remain
 unverified by this witness.
+
+## Typed child-relative Body implementation
+
+`NativeFreshTiledFamilyBodyPlan.Compose(actualTerrainRevision)` uses the shared
+`NativeLevelDataGrowthLayout` for a complete padded1000-byte replacement with
+zero physical growth. The closed `CaptureForTerrainRevision` arm on existing
+`NativeFreshLockedChestSceneStorageSource` derives the complete Body and a fresh
+Final domain itself; callers cannot supply bytes, domains or callbacks. The
+legacy resource arm retains its policy, node IDs, source reads and fingerprint
+inputs. Both arms use the same source registry, graph builder and three-template
+capture, retaining both chest globals in the actual Original executable domain.
+
+The Body creates a fresh Final Scene, allocates the complete1+1+7 family with
+P9/N32/private13C/ten-fixup layout, and reconstructs all authored row/private
+owners through shared preservation mechanics. Whole Scene equality includes
+the explicit Reward2 destination, every pointer/fixup and all reserves/padding.
+The complete Body must match the independent `c8c85e…` reference; its complete
+inverse restores the exact placed R03 child, not merely the previous data hash.
+New runtime address accounting uses actual CB8 data and retained Host/model/
+Scene extents, without adopting the old Body's A6C native certificate.
+
+Source certification covers this composition only. Native-load, executable,
+disc, peak-memory, gameplay, publication and full dependency closure remain
+unproven. The new tests run in ordinary source-free mode and explicit read-only
+R03 source mode only; all existing image writers still consume the old placed
+Body/executable. No packaged preview or saved/UI eligibility was changed.
+
+Root and independent source review found no blocker. Build604 and source-free
+605 pass. Actual-source606 caught a new guard/test coordinate mistake after
+the complete Body/Scene byte checks had passed: the existing memory report's
+particle/sound offsets are Body-relative, while the new predicates expected
+data-relative50C/598. The exact predicates now require E650C/E6598. Report
+semantics, emitted bytes and all other guards are unchanged. Corrected build607
+passes with zero warnings/errors; source-free608 passes419 checks. Actual-source
+609 passes961 checks, including the complete `c8c85e…` Body, fresh graph/domains,
+Scene/private/fixup/reserve complement and complete placed-child inverse.
+The old complete R03 image remains `a5b007…`,1297 changed sectors, plan
+`7a2fe908fe976aa68db737ce24f3309c291e815bc1e249603ebb38bbe24db543`
+and full Original inverse `fc866b…`. Original BIN/CUE are unchanged and no image
+was written. Full build-all regression610 passes343 checks, zero failures,
+exit0. Report:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-fi0idqp5/summary.json`.
+
+Final Body implementation/test SHA256 values are
+`6e1d6c3fc4fa658facf38fdd03be560a0a14368fca26040671d41ce752de2ca8`
+and `b8a976f84c81cd78a463b16ec0436daaab4554d231e98b8b1f1b95185652a934`.
 
 ## Smallest closed fixture
 
@@ -501,11 +549,11 @@ extends coverage, not their admitted input sets.
   necessary, require pre-cancel/null/shape checks before I/O and independent
   held/named/actual-source finalization on success, failure and cancellation.
 
-## Explicit follow-on gates, not part of the leaf
+## Follow-on gates and shared implementation constraints
 
-A later typed Body consumer must derive used-data accounting, retain fixed
-physical descriptor capacities, recapture storage in its actual Final domain,
-and keep one shared Wizard/Grass/chest graph/policy. Reuse
+The typed Body consumer above derives used-data accounting, retains fixed
+physical descriptor capacities, recaptures storage in its actual Final domain,
+and keeps one shared Wizard/Grass/chest graph/policy. Continue to reuse
 `NativeLevelDataGrowthLayout`, existing scene allocator and shared physical-disc
 source/afterimage/streaming helpers; do not copy another exporter. Prove complete
 Body complement and immediate inverse before a full physical-image comparison.
@@ -522,9 +570,10 @@ both chest globals, and allocate the same1+1+7 P9/N32/private13C/ten-fixup
 layout. Reuse the existing Scene row/private preservation logic, then require
 the entire reconstructed authored Scene to equal the old placed Scene,
 including Reward2 and every reserve/padding byte. Old graph identities cannot
-certify this new domain. Retained Host/EXE bytes, native model/Scene loading and
-new runtime accounting remain additional checks; no Body implementation is
-included in the current data-only leaf.
+certify this new domain. Retained Host/EXE execution, native Scene initialization,
+revised executable/disc ownership and complete runtime accounting remain
+additional gates. The model witness and source-only Body above do not
+establish these later claims.
 
 For this exact union, strict floor-footprint checks can be justified against the
 proven rectangle; arbitrary tile unions require a different containment proof.
@@ -544,3 +593,29 @@ then checks spawn, seam traversal, Wizard/Grass coexistence, key/chest opening,
 all20 treasure points and healthy native reset; key3 or all D rows retired alone
 cannot establish completion. No persistent-save, universal-import or public
 release claim follows from this resource leaf.
+
+### Resume at the native Scene-storage witness
+
+The next bounded witness should consume the frozen model result, not re-seed a
+synthetic Scene base. Existing mechanics are in
+`src/Spyro.Editor.NativeId65FreshWizardBodySmoke/source_fresh_chest_scene_extension_oracle.py`
+(`native_witness`) and the unchanged P1 scene/allocator interpreter. Match both
+Original and current instruction windows:13680/44 through136C4, then13C4C/438
+through14084. Retain actual model-produced global785E4=800A86F0, map exactly the
+complete3800-byte Scene, and give an explicit post-header cut
+`s0=Scene+80,s1=0,s5=0,v0=Scene[80]`. CD delivery is still a byte-mapping fixture.
+
+Independently derive all ten pointer additions, sentinel stores at434/1243,
+P9/N32 globals and whole unchanged complement, including all six integer family
+owner fields, explicit Reward2 destination, lookahead and padding. Use disjoint
+explicit globals/stack owners, never the broad historical fixture or retired
+parser frame. Existing layout offsets are D4/3EC/EEC/F44/1244/1390/3390/33BC;
+the actual allocation ends800ABEF0. This plan has not been executed for the new
+tiled Body yet.
+
+Crucially, `s5=0` skips placed-actor updating: this is a storage/fixup witness,
+not the full Scene initializer or behavior lifecycle. A separate optional
+524C4/A4 allocator control can execute32 requests, but the known unsafe33rd
+request must remain an explicit limitation, never an exhaustion-safety claim.
+Only after these checks should new typed Host/executable/clearance/disc and
+saved-publication owners be added through the existing shared pipeline.

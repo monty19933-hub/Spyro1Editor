@@ -31,6 +31,7 @@ if (request?.IssuedMatrix != true)
     await FamilyExecutableDiscCases.Free(Check);
     TiledFamilyTerrainIntentCases.Free(Check);
     TiledFamilyTerrainRevisionCases.Free(Check);
+    TiledFamilyBodyCases.Free(Check);
     Console.WriteLine($"FRESH_WIZARD_AUTHORING_FREE_OK checks={checks}");
 }
 if (request == null) return;

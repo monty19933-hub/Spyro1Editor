@@ -78,7 +78,11 @@ internal static class ChestExperimentCases
                 new(8960,9728,8704,9472,8960,8704));
             // Detached source-only terrain validation. Preserve every existing
             // image writer and its old placed Body/executable unchanged.
-            if(authored&&!write)TiledFamilyTerrainRevisionCases.Source(placement,Check);
+            if(authored&&!write)
+            {
+                var terrain=TiledFamilyTerrainRevisionCases.Source(placement,Check);
+                TiledFamilyBodyCases.Source(terrain,Check);
+            }
             var executable=NativeFreshLockedChestExperimentalExecutable.Compose(placement,chestHost);
             var clearance=NativeFreshLockedChestSpawnClearancePlan.Compose(placement);
             if(write)

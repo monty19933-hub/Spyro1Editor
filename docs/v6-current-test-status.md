@@ -57,10 +57,12 @@ Original emulator settings and memory-card contents were preserved/restored.
 
 - Tiled new-level export still requires zero placed Mobys. R07 can author/save
   tiled family documents, but they are not native-export eligible yet.
-  The new source-only four-tile data revision retains the complete family
-  document/resources and matches an independent byte reference; actual-source
-  checks pass847 and full regression passes343/0. This has not issued a revised
-  level Body, enabled combined tiled-family export or changed either app.
+  The new source-only four-tile Body retains the complete family document,
+  resources and Scene in freshly checked address domains and matches an
+  independent whole-Body reference; actual-source checks pass961. Independent
+  native shared/local model-loading checks also pass. The complete build-all
+  regression passes343/0. This has not enabled combined tiled-family export, proved its
+  gameplay, or changed either app.
 - Static material selection is bounded by native data and GPU capacity.
   Animated/scrolling/HQ materials are not universally supported.
 - The catalogue can show assets without proving that every destination has
@@ -167,5 +169,25 @@ exact-CUE runtime recorded above. See [the family editor record](research/native
 The next source-only step is a four-tile terrain/family composition, preserving
 the existing whole-floor material split and complete Wizard/grass/chest intent.
 An independently assembled neutral reference passes102 negative controls586.
-This does not yet issue a native Body, enlarge resource authority, enable
-tiled-family export or replace either preserved application.
+Subsequent complete data and Body references, source-only composition and
+native parser/model witnesses now pass; the actual-source suite passes961
+checks while preserving the exact old R03 disc and complete inverse.
+The key's model is verified through the game's shared asset pool, not falsely
+treated as a local level model. Combined tiled-family native Scene/behavior,
+executable/disc, saved publication and exact-CUE gameplay are still next gates.
+Neither preserved application has been replaced. See the complete
+[tiled-family implementation and restart plan](research/native-fresh-tiled-family-resource-plan.md).
+
+## Safe usage checkpoint
+
+The September20 continuation stops after full regression610 (343/0), source609
+(961 assertions), and independent native-model witness603. All subagent work
+is finished. No editor, emulator or observer session remains open. R06/R07
+packaged App/Core hashes were rechecked unchanged; DuckStation global/game
+settings and the Original memory card match the preserved pre-test bytes.
+No original ROM, default project, save or known-good build was replaced.
+
+Resume with the bounded native Scene-storage witness described in the restart
+plan, then typed executable/clearance/disc and saved-publication integration.
+Do not enable combined tiled-family export or describe all Mobys/textures as
+interchangeable before those gates and fresh exact-CUE gameplay pass.

@@ -45,29 +45,7 @@ internal sealed class NativeFreshLockedChestSceneExtension
         // Preserve the complete *actual authored* Wizard/Grass owners, not a
         // second coordinate writer. Only their explicit scene pointers move.
         // The retained typed parent still validates these generated owners.
-        for(int i=0;i<2;i++)
-        {
-            var prior=resources.Allocation.Rows[i];var next=Allocation.Rows[i];
-            byte[] row=old.AsSpan(checked((int)prior.Row.Offset),0x58).ToArray();
-            byte[] properties=old.AsSpan(checked((int)prior.Properties.Offset),checked((int)prior.Properties.ByteLength)).ToArray();
-            if(prior.Source.Row!=next.Source.Row||prior.Source.Properties!=next.Source.Properties||
-                prior.Properties.ByteLength!=next.Properties.ByteLength||Word(row,0)!=prior.Properties.Offset)
-                throw new InvalidDataException("Retained authored scene lost its actual source schema/private owner.");
-            Put(row,0,checked((int)next.Properties.Offset));
-            foreach(var pointer in resources.RowSpans.PointerReferences.Where(p=>p.FieldRowIndex==i&&
-                !(p.FieldOwner==NativeFreshMobySceneOwnerKind.Row&&p.FieldOffset==0)))
-            {
-                if(pointer.TargetRowIndex>=2)throw new InvalidDataException("Retained pointer cannot acquire a new chest target.");
-                var priorTarget=resources.Allocation.Rows[pointer.TargetRowIndex];
-                var nextTarget=Allocation.Rows[pointer.TargetRowIndex];
-                byte[] field=pointer.FieldOwner==NativeFreshMobySceneOwnerKind.Row?row:properties;
-                long before=(pointer.TargetOwner==NativeFreshMobySceneOwnerKind.Row?priorTarget.Row.Offset:priorTarget.Properties.Offset)+pointer.TargetOffset;
-                long after=(pointer.TargetOwner==NativeFreshMobySceneOwnerKind.Row?nextTarget.Row.Offset:nextTarget.Properties.Offset)+pointer.TargetOffset;
-                if(Word(field,pointer.FieldOffset)!=before)throw new InvalidDataException("Retained authored pointer preimage changed.");
-                Put(field,pointer.FieldOffset,checked((int)after));
-            }
-            row.CopyTo(_scene,checked((int)next.Row.Offset));properties.CopyTo(_scene,checked((int)next.Properties.Offset));
-        }
+        PreserveAuthoredRows(old,resources.Allocation,resources.RowSpans.PointerReferences,_scene,Allocation);
         _inverse=RecoverPriorScene(_scene);
         if(!_inverse.AsSpan().SequenceEqual(old))throw new InvalidDataException("Chest scene failed complete inverse to its actual resource-parent scene.");
         SceneSha256=Hash(_scene);
@@ -137,6 +115,35 @@ internal sealed class NativeFreshLockedChestSceneExtension
             resources.Placements.Any(p=>p.EditorId==chestEditorId))
             throw new InvalidDataException("Chest scene requires a distinct stable lowercase editor identity.");
         return new(resources,host,chestEditorId);
+    }
+    // Shared byte mechanics only. The two callers first validate their actual
+    // typed source/placement owners; this helper cannot issue scene authority.
+    internal static void PreserveAuthoredRows(byte[] old,NativeMobyDependencyInstantiationPlan priorAllocation,
+        IReadOnlyList<NativeFreshMobyScenePointerReference> pointers,byte[] scene,NativeMobyDependencyInstantiationPlan allocation)
+    {
+        for(int i=0;i<priorAllocation.Rows.Count;i++)
+        {
+            var prior=priorAllocation.Rows[i];var next=allocation.Rows[i];
+            byte[] row=old.AsSpan(checked((int)prior.Row.Offset),0x58).ToArray();
+            byte[] properties=old.AsSpan(checked((int)prior.Properties.Offset),checked((int)prior.Properties.ByteLength)).ToArray();
+            if(prior.Source.Row!=next.Source.Row||prior.Source.Properties!=next.Source.Properties||
+                prior.Properties.ByteLength!=next.Properties.ByteLength||Word(row,0)!=prior.Properties.Offset)
+                throw new InvalidDataException("Retained authored scene lost its actual source schema/private owner.");
+            Put(row,0,checked((int)next.Properties.Offset));
+            foreach(var pointer in pointers.Where(p=>p.FieldRowIndex==i&&
+                !(p.FieldOwner==NativeFreshMobySceneOwnerKind.Row&&p.FieldOffset==0)))
+            {
+                if(pointer.TargetRowIndex>=priorAllocation.Rows.Count)throw new InvalidDataException("Retained pointer cannot acquire a new chest target.");
+                var priorTarget=priorAllocation.Rows[pointer.TargetRowIndex];
+                var nextTarget=allocation.Rows[pointer.TargetRowIndex];
+                byte[] field=pointer.FieldOwner==NativeFreshMobySceneOwnerKind.Row?row:properties;
+                long before=(pointer.TargetOwner==NativeFreshMobySceneOwnerKind.Row?priorTarget.Row.Offset:priorTarget.Properties.Offset)+pointer.TargetOffset;
+                long after=(pointer.TargetOwner==NativeFreshMobySceneOwnerKind.Row?nextTarget.Row.Offset:nextTarget.Properties.Offset)+pointer.TargetOffset;
+                if(Word(field,pointer.FieldOffset)!=before)throw new InvalidDataException("Retained authored pointer preimage changed.");
+                Put(field,pointer.FieldOffset,checked((int)after));
+            }
+            row.CopyTo(scene,checked((int)next.Row.Offset));properties.CopyTo(scene,checked((int)next.Properties.Offset));
+        }
     }
     private static uint Word(ReadOnlySpan<byte> bytes,int at)=>BinaryPrimitives.ReadUInt32LittleEndian(bytes[at..]);
     private static void Put(Span<byte> bytes,int at,int value)=>BinaryPrimitives.WriteInt32LittleEndian(bytes[at..],value);
