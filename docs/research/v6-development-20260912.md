@@ -1875,3 +1875,62 @@ Independent review of the candidate and saved test changes found no actionable
 defect. Full rebuild/regression387 passes **340 steps, zero failures**:
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-ltslt2kd/summary.json`.
 The sealed R04 application was not rebuilt or replaced.
+
+### Textured tiled native runtime and actual R05 editor export
+
+Checkpoint684c965 was sealed before packaging or gameplay. Physical publication388,
+new-process verify389 and stale-precommit390 pass for the complete six-face,
+three-tile WAD14/T0+WAD70/T0 fixture, with BIN `462c992f...`. The runtime and
+stale projects are new copies; source originals, default project and R04 remain.
+Exact private evidence is `_local/native-v6-tiled-material-runtime-20260919-r01.Lr7OsC/`.
+Its `RUNTIME-SESSION.md` records settings, copied card, identity and all outcomes.
+
+Native DuckStation cold boot of that exact CUE passed full firmware (19-49-21
+license screenshot), ordinary copied-save entry and the LAB inventory sequence.
+PID66041's exact open BIN and loopback-only observer listener were independently
+identified. There were no emulator cheats, memory/register writes, debugger
+execution or foreign save states. Initial menu/preset and directional-control
+mistakes are documented rather than hidden or counted as successful checks.
+
+Both static materials visibly repeated correctly on all three tiles. Controlled
+movement crossed both tile seams and the collision-cell boundary in both
+directions, and all three internal face diagonals. A far-tile jump landed back
+on the floor; reverse-camera views stayed coherent. A deliberate edge crossing
+continued into a fall and native respawn.26 sequential read-only samples retain
+exact positions and states. Final idle visibly ran30game/60video FPS at100%.
+Matching memory is not disc authentication, sampled resource flags are not peak
+stress acceptance, and observer/receipt runtime-authority flags remain false.
+
+Both original INIs were restored byte-for-byte after normal emulator exit.
+Original card SHA remains `d69b43f8...`; no private card/state was copied back.
+Global/game INIs remain `c07823d8...` / `629d9bd3...`. The exact candidate, receipt
+and saved document are unchanged. No placed Moby was part of this tiled test.
+HQ/animated materials, audio quality, exhaustive stress and full portal/save
+integration remain separate pending gates.
+
+R05 package lives at `_local/v6-private-preview-20260919-r05.FAplNu/`, with
+`Open V6 Textured Blank Level.command` and `PRIVATE-PREVIEW.md`. It is the same
+unified V6 application with isolated test state, not a new research application.
+Source remains684c965; internal version0.1.0-beta.43. Package393 passed Mac/Windows
+community/ad-hoc and host-provenance checks; no upload/notarization. Windows was
+not runtime-tested. A first local-mode package in a separate `.6xGmnd` directory
+failed the public-signature/instructions gates391/392; it was never launched.
+
+The actual R05 Mac app loaded all35 terrain/35 object caches and2070 textures,
+reopened the exact saved aggregate and published via its real button. Apply,
+Reopen, Save and Create were visibly disabled while busy. Actual UI export is
+`native-ui-exports/fresh-native-research-20260920-031520438-aa30cbe6/` beneath R05.
+Its full BIN cmp matches the independently tested runtime disc. Verify397 first
+refused relative command-line paths before I/O; corrected absolute-path run398
+passes full physical forward/inverse, exact receipt/CUE, source held-and-named
+final identity, project manifest and unchanged saved canonical/raw document.
+
+UI output plan `4ed0e90c6479425f6a3adb24d37075637a570ad673c06ce89a091128cacb328b`;
+receipt `c9caee1d351b24a95b6815eadc3160b6d2c14e5b5cf6605dad6943e9c5473e56`;
+BIN `462c992f80f512f0b6be781b1a79e707e37a0e18f5e5e47356cd332ef61b2ba8`.
+Manifest naturally records the new R05 project/open time; raw JSON remains
+`87b7fdb0777c325bd998497ed4cf8a2468efe83f0100422387c2a8cb2ee4c767`.
+App and Core DLLs are `90ab6df6...` / `5cdc87b6...`; ZIPs `b6704680...` /
+`e5dbc994...`. Full hashes and test instructions are in the private guide.
+The editor exited normally with code0 after verification. Later bounded-N
+allocator checkpoint e34ff77 is source-only and is not silently rebuilt into R05.
