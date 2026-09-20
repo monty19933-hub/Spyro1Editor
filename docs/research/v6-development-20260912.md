@@ -1523,3 +1523,36 @@ DuckStation exited normally without a resume state. After-test INIs are retained
 both original INIs restored byte-for-byte; original cardSHA remainsd69b43f8.
 No test card/state is copied back; private state directory is empty. Sealed R03
 app and its authored retail-material/placement example remain untouched.
+
+### R04 package and native editor publication fromc80eb4b
+
+Checkpointc80eb4b seals the green tiled UI increment. Fresh package321 in
+`_local/v6-private-preview-20260919-r04.99iWlu` builds both platforms and passes
+the existing verifier with explicit community/ad-hoc and host-provenance
+allowances; no notarization/upload. AppDLL45dce3be,CoreDLLce021966,
+MacZIP36842e6e,WindowsZIPdeb42a74; complete hashes and user steps are in its
+`PRIVATE-PREVIEW.md`. R03 was not rebuilt or replaced.
+
+Two new isolated projects/launchers use the SAME R04 app: base-color/P0 playable
+tiles, and a separate copy of R03's retail-material/placement authoring example.
+Actual Mac PID44239 selected the original CUE, built35terrain/35object caches
+and2070native material descriptors, opened saved Level aggregate and invoked
+the actual research button. The form visibly froze during preparation and
+reported actual byte-verified publication. No fields were applied/saved or
+silently normalized. Output:
+`native-ui-exports/fresh-native-research-20260920-004643785-67884344`.
+BIN7ba0b29b and CUEe77f08fc exactly match the DuckStation-observed candidate.
+Receipt isda2dc3abdedad2613655c01f9c043f2bb95bd049c131be9120fc9a36bbe6e341;
+plan3d586aa6992dcad95c6703f9426c20881faf05860b6705f8e115f6b26dc470a1,
+projectv6-tiled-runtime-playtest,manifest39b59261. Separate-process322 verifies
+the actual UI output forward/inverse, original held/named final identities,
+all closes and unchanged three artifacts. Raw/canonical remainsc7cc4a52.
+The app then closed normally; no claim is made for Windows runtime or modified
+tile configurations. Only the exact output identity links the two runtime tests.
+
+Next priorities from cross-checked parallel audits: extend tiled face/material
+composition through existing static allocation and data/scene/body ownership,
+and consolidate owned-overlay append layout/materialization across real retail
+and Fresh Wizard consumers before widening behavior destination authority.
+Neither step should weaken legacy/tiled/placement gates or bypass whole-document
+identity. Native Fly Anywhere ON/OFF remains a separate pending gameplay gate.
