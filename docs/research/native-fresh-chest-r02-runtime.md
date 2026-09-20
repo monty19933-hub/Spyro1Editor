@@ -58,7 +58,8 @@ The final red gem, dynamic index24/class83/state0,2, is at:
 
 Floor Y ends11520 at Z8704. The final sample is2501 units below the floor.
 The gem is still active; its eventual deletion was not observed. The chest
-credited9 of its deterministic10, not the whole level target20. Wizard's own
+credited nine of ten treasure points, not the whole level target20. The chest
+emits six physical gems worth ten points, not ten gems. Wizard's own
 reward, ordinary-speed idle, death/re-entry and complete reset were not tested.
 Wizard damage reduced player health to0 at18 without an observed completed
 death. No accepted sample reported renderer exhaustion.
@@ -75,6 +76,10 @@ and a separately identified layout candidate with adequate landing room.
 Keep chest yaw/collision, gem behavior, source-owned offsets, old export
 goldens and the public2048 limit unchanged. Any corrected layout needs fresh
 complete export/inverse checks and another cold-boot native interaction test.
+The known-failed `--chest-wide-experiment` writer is retired before source I/O
+or output-directory creation. `--chest-wide-source` and the existing R02 artifact
+remain available for exact reproduction and diagnosis; retirement is a harness
+policy, not a change to the valid static-clearance assessment or a Core runtime flag.
 
 ## Preservation
 

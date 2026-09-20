@@ -73,10 +73,12 @@ Logs are under `_local/research/v6-mixed-export-20260912-r01.jR0oBr`.
   R01/R02 annotations share unchanged bounded reads/gates; selecting a profile
   is not authentication. External process/open-disc identification is required.
 
-The new smoke modes are `--chest-wide-source ORIGINAL_BIN ORIGINAL_CUE` and
-`--chest-wide-experiment ORIGINAL_BIN ORIGINAL_CUE NEW_DIRECTORY`. The latter
-requires static landing clearance before directory creation, complete actual
-readback/inverse and final Original/CUE checks, then writes receipt and CUE last.
+The source-only mode `--chest-wide-source ORIGINAL_BIN ORIGINAL_CUE` preserves
+the exact R02 recipe. The historical writer
+`--chest-wide-experiment ORIGINAL_BIN ORIGINAL_CUE NEW_DIRECTORY` is now retired
+after the observed escaped reward: it refuses before source I/O or directory
+creation. Its preserved artifact was created after static landing clearance,
+complete actual readback/inverse and final Original/CUE checks, with receipt and CUE last.
 The key-zero treasure premise remains experimental. Build506 passes with zero
 warnings/errors. Actual R02 output507 passes392 assertions, including complete
 readback and inverse; scene hash is `6cda54db346a3fc7a4ae4338c885828d3a4759b4767872038b43bae3ede50092`.
@@ -88,7 +90,7 @@ Full regression508 passes343 command steps, zero failures, including both
 saved-export UI paths and the larger-floor refusal tests. Final source510
 passes9676 assertions and511 passes2355 checks; both preserve Original BIN/CUE.
 The new full-firmware DuckStation session succeeds at stable landing, key
-pickup, native chest opening, effects and nine of ten reward gems, but the last
+pickup, native chest opening, effects and nine of ten treasure points, but the last
 red gem escapes the floor and falls. R02 therefore **fails complete reward
 collection**, not export serialization or initial spawn. See
 [the runtime record](native-fresh-chest-r02-runtime.md). Both original INIs

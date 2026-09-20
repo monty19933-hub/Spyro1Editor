@@ -9,6 +9,7 @@ int checks = 0;
 if (request?.IssuedMatrix != true)
 {
     await AuthoringSourceArgumentCases.Run(Check);
+    await ChestExperimentArgumentCases.Run(Check);
     using (var cancelled = new CancellationTokenSource())
     {
         cancelled.Cancel();

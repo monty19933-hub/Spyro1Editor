@@ -20,6 +20,11 @@ internal static class ChestExperimentCases
         string stem=wide?"fresh-chest-p9-experiment-r02":"fresh-chest-p9-experiment-r01";
         if(!Matches(args)||args.Length!=(write?4:3)||args.Skip(1).Any(a=>string.IsNullOrWhiteSpace(a)||a.StartsWith("--",StringComparison.Ordinal)))
             throw new ArgumentException("Usage: --chest-source|--chest-wide-source ORIGINAL_BIN ORIGINAL_CUE | --chest-experiment|--chest-wide-experiment ORIGINAL_BIN ORIGINAL_CUE NEW_DIRECTORY");
+        // R02 passes the bounded static clearance assessment but its observed
+        // final red gem escaped the finite floor. Retire only this writer;
+        // retain its exact source recipe without manufacturing a Core flag.
+        if(write&&wide)
+            throw new InvalidDataException("R02 artifact creation is retired after a known escaped reward and incomplete treasure collection. Use --chest-wide-source for exact source-only reproduction; no source was opened or output directory created.");
         string bin=Path.GetFullPath(args[1]),cue=Path.GetFullPath(args[2]);
         string? output=write?Path.GetFullPath(args[3]):null;
         if(bin==cue||output is not null&&(File.Exists(output)||Directory.Exists(output)))

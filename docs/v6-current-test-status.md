@@ -71,11 +71,13 @@ floor/material/placement tests. It keeps the original spawn and native chest
 behavior, enlarging the finite floor to3072 and moving the key/chest family.
 Actual R02 output verification passes392 assertions, including full readback
 and complete Original inverse. Fresh full-firmware gameplay now confirms stable
-landing, native key pickup, chest opening, debris/effects and nine of ten chest
-gems credited. The last red gem travels off the finite floor and falls, so R02
+landing, native key pickup, chest opening, debris/effects and nine of ten treasure points
+from the chest. The last red gem travels off the finite floor and falls, so R02
 is a preserved **incomplete reward-collection test**, not a lifecycle pass.
 The next layout must accommodate actual reward motion, not merely the saved
 controller centers. See [the R02 runtime record](research/native-fresh-chest-r02-runtime.md).
+The R02 writer now refuses before source I/O or output-directory creation;
+its source-only recipe and preserved artifact are unchanged.
 Final source-backed checks pass9676 and2355 assertions/checks respectively;
 the source-only key audit identifies the additional HUD key/particle path and
 still does not claim a complete key-zero proof. Existing public

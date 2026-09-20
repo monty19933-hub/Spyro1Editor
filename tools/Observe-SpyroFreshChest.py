@@ -410,6 +410,48 @@ def self_test():
             self.assertIn((0x8006F47E, 2), memory.reads)
             self.assertTrue(all(sample[name] is False for name in AUTHORITY_FLAGS))
 
+        def test_r02_retired_controllers_key3_and_nine_points_do_not_hide_escaped_gem(self):
+            memory = fixture()
+            memory.map(FIELDS["actual_global_gems"][0], struct.pack("<I", 58))
+            before = capture(memory, "before-chest", "r02")
+            self.assertTrue(before["bounded_sample_valid"])
+            for index in range(2, 9):
+                memory.map(ROWS + index * STRIDE, row(index, 0xFD))
+            for name, value in (("key_state_raw_u32", 3), ("actual_global_gems", 67),
+                                ("actual_slot35_gems", 9), ("animated_hud_gems", 8),
+                                ("slot35_target_s16", 20)):
+                address, fmt = FIELDS[name]
+                memory.map(address, struct.pack(fmt, value))
+            # Actual R02 sample19 coordinates, but a synthetic offline memory
+            # fixture: five deleted D controllers do not count emitted gems.
+            for slot in range(15):
+                memory.map(DYNAMIC + slot * STRIDE + 0x48, b"\xfd")
+            gem = bytearray(STRIDE)
+            struct.pack_into("<H", gem, 0x36, 0x83)
+            struct.pack_into("<iii", gem, 12, 10059, 12156, 6203)
+            gem[0x48:0x4A] = b"\x00\x02"
+            memory.map(DYNAMIC + 15 * STRIDE, gem)
+            memory.map(DYNAMIC + 16 * STRIDE + 0x48, b"\xff")
+            for name, value in (("dynamic_count", 16), ("dynamic_properties_cursor", ARENA_END - 16 * 24),
+                                ("next_free_moby_not_active_end", DYNAMIC + 16 * STRIDE)):
+                memory.map(FIELDS[name][0], struct.pack("<I", value))
+            sample = capture(memory, "escaped-final-red", "r02")
+            self.assertTrue(sample["bounded_sample_valid"])
+            self.assertTrue(sample["gate_reread_consistent"])
+            self.assertTrue(all(not r["active_status_sample"] and r["class_id"] == 0xD
+                                for r in sample["placed_rows"][4:9]))
+            self.assertEqual(3, sample["key_state_raw_u32"])
+            self.assertEqual(9, sample["actual_slot35_gems"] - before["actual_slot35_gems"])
+            self.assertEqual(9, sample["actual_global_gems"] - before["actual_global_gems"])
+            self.assertEqual(8, sample["animated_hud_gems"])
+            self.assertEqual(1, len(sample["dynamic_rows"]["active"]))
+            escaped = sample["dynamic_rows"]["active"][0]
+            self.assertEqual((24, 0x83, [10059, 12156, 6203]),
+                             (escaped["index"], escaped["class_id"], escaped["xyz"]))
+            self.assertGreater(escaped["xyz"][1], 11520)
+            self.assertLess(escaped["xyz"][2], 8704)
+            self.assertTrue(all(sample[name] is False for name in AUTHORITY_FLAGS))
+
         def test_motion_fields_keep_signed_width_and_never_chase_companion(self):
             memory = fixture()
             memory.map(0x80078BBC, struct.pack("<i", -1))
