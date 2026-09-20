@@ -5,7 +5,11 @@ against checkpoint `55dd291` and the subsequent working-tree reward-destination
 extension. This document proposes the next saved-document/editor integration;
 it is not an export authorization or a report of completed tests. The R03
 source-backed and full-regression runs were still running when this plan was
-written. No R03 gameplay, lifecycle or release pass is claimed here.
+written. Subsequent exact-candidate R03 gameplay now shows all20 treasure points
+collected and retained through native reset; see
+[the separate runtime record](native-fresh-chest-r03-runtime.md). That result
+permits the scoped neutral saved-family integration below, not a general
+lifecycle or release pass.
 
 ## Current contract and intended outcome
 

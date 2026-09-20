@@ -91,7 +91,15 @@ A subsequent internal authored-destination extension removes the fixed-pattern
 limitation for the five chest reward roles without exposing raw native rows.
 The corrected R03 experiment changes only the lost red gem's destination;
 actual full-image output/readback/inverse passes417 assertions, full regression
-passes343/0, and both old image/plan identities remain unchanged. R03 gameplay
-is pending; this does not yet add chest-family authoring to R06. See
+passes343/0, and both old image/plan identities remain unchanged. The exact R03
+disc has now cold-booted through firmware and completed native Wizard/key/chest
+interaction: all20 treasure points were collected, with no active reward gem
+left in the sampled pool. The in-game inventory shows LAB20/20. A fall and
+subsequent healthy reset preserved the totals and kept the collected chest
+retired. This is one exact-candidate result, not all-layout/RNG/lifecycle or
+portal/save compatibility acceptance. Both emulator settings files were
+restored byte-for-byte; the original card and BIN/CUE are unchanged.
+See [the R03 runtime record](research/native-fresh-chest-r03-runtime.md).
+This does not yet add chest-family authoring to R06. See
 [destination editing and evidence](research/native-fresh-chest-authored-destinations.md)
 and [the pending saved-document integration plan](research/native-fresh-family-authoring-integration-plan.md).
