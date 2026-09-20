@@ -10,6 +10,7 @@ if (request?.IssuedMatrix != true)
 {
     await AuthoringSourceArgumentCases.Run(Check);
     await ChestExperimentArgumentCases.Run(Check);
+    await LockedChestSourceCaptureCases.Free(Check);
     using (var cancelled = new CancellationTokenSource())
     {
         cancelled.Cancel();

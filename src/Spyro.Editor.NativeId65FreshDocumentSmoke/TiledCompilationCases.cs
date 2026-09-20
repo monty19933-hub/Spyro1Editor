@@ -52,9 +52,9 @@ internal static class TiledCompilationCases
             "Missing actual tiled scene/staging refuses before body source capture.");
         await RejectAsync<ArgumentNullException>(() => NativeId65FreshDiscPlan.CaptureTiledAsync(missing, null!),
             "Missing actual tiled body refuses before disc source capture.");
-        Reject<ArgumentNullException>(() => NativeId65FreshDiscStreaming.VerifyInverse(null!, Stream.Null, default),
+        Reject<ArgumentNullException>(() => NativeId65FreshDiscStreaming.VerifyInverse((NativeId65FreshDiscPlan)null!, Stream.Null, default),
             "Inverse accepts only an actual issued disc.");
-        Reject<OperationCanceledException>(() => NativeId65FreshDiscStreaming.VerifyInverse(null!, Stream.Null, new(true)),
+        Reject<OperationCanceledException>(() => NativeId65FreshDiscStreaming.VerifyInverse((NativeId65FreshDiscPlan)null!, Stream.Null, new(true)),
             "Canceled inverse refuses before reading any owner.");
         Console.WriteLine($"NATIVE_ID65_TILED_COMPILATION_FREE_OK checks={_checks} sourceRead=false nativeCpuExecuted=false");
     }

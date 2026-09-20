@@ -111,3 +111,12 @@ Save/Reopen, strict parsing and old document compatibility pass343 integrated
 regression steps. Existing UI and native exporters deliberately refuse schema5
 until they can preserve and compile the entire family; this is not a new
 user-facing editor feature yet. See [the schema5 record](research/native-fresh-family-document-schema5.md).
+
+The following saved-native compiler checkpoint now resolves the complete
+schema5 R03 document to the actual Wizard/Grass/chest resource, behavior,
+scene and physical-disc chain. Normal saved publication and a separate-process
+verifier pass full readback plus complete Original inverse; its BIN matches the
+previously playtested R03 image. This is a saved-project export result, not a
+new gameplay test or an installed family editor. Additional publication-fault
+checks are being completed before UI admission. See
+[the saved R03 compiler record](research/native-fresh-saved-locked-chest-r03.md).

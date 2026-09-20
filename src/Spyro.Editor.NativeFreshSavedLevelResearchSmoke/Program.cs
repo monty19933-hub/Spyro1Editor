@@ -2,6 +2,29 @@ using Spyro.Editor.Core.Exporting;
 using static Cases;
 
 if (SavedLevelPublicationCases.IsMode(args)) { await SavedLevelPublicationCases.RunAsync(args); return; }
+if (args.Length != 0 && args[0] == "--locked-chest-source")
+{
+    if (args.Length is not (3 or 4) || args.Skip(1).Any(v =>
+        string.IsNullOrWhiteSpace(v) || v.StartsWith("--", StringComparison.Ordinal) || v.Contains('\0')))
+        throw new ArgumentException("Usage: --locked-chest-source ORIGINAL_BIN ORIGINAL_CUE [EXISTING_EXACT_CANDIDATE_BIN]; read-only native outputs.");
+    Root = Directory.CreateTempSubdirectory("spyro-saved-chest-source-").FullName;
+    var owners = new NativeFreshResearchSourceOwners(Path.GetFullPath(args[1]), Path.GetFullPath(args[2]));
+    Exception? primary = null;
+    try
+    {
+        await SavedLockedChestCompilationCases.FreeAsync();
+        await LockedChestSavedCandidateCases.FreeAsync();
+        await SavedLockedChestInverseCases.FreeAsync();
+        owners.Open(CancellationToken.None);
+        await NativeId65FreshDiscSource.RequireWholeOriginalAsync(owners.Bin!, CancellationToken.None);
+        await LockedChestSavedCandidateCases.SourceAsync(owners.ImagePath, owners.CuePath, args.Length == 4 ? args[3] : null);
+    }
+    catch (Exception error) { primary = error; }
+    finally { Console.Error.WriteLine("Retained new tiny chest source fixtures: " + Root); }
+    owners.Complete(primary);
+    Console.WriteLine($"NATIVE_FRESH_SAVED_CHEST_SOURCE_FINAL_OK checks={Checks} refusals={Refusals} originalFinal=true nativeImageWritten=false");
+    return;
+}
 if (args.Length != 0 && args[0] is ("--selected-tiled-material-saved-free" or "--selected-tiled-material-saved-source"))
 {
     bool source = args[0] == "--selected-tiled-material-saved-source";
@@ -28,6 +51,8 @@ try
     await LeaseOutcomeCases.Free(); await ActualAttemptCases.Free();
     await MixedSavedCases.Free(); await FamilySavedCases.Free(); await TiledSavedCases.Free(); await TiledMaterialSavedCases.Free();
     await NeutralFamilyAdmissionCases.Free();
+    await SavedLockedChestCompilationCases.FreeAsync();
+    await LockedChestSavedCandidateCases.FreeAsync(); await SavedLockedChestInverseCases.FreeAsync();
     Console.WriteLine($"NATIVE_FRESH_SAVED_LEVEL_RESEARCH_FREE_OK checks={Checks} refusals={Refusals} originalOpened=false nativeImageWritten=false tinyTransactionInvoked=true");
     if (args.Length != 0)
     {

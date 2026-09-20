@@ -15,6 +15,23 @@ internal static class NativeId65FreshDiscStreaming
     {
         token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(disc);
+        return VerifyInverseCore(disc, null, candidate, token);
+    }
+
+    internal static NativeId65FreshDiscVerification VerifyInverse(NativeFreshLockedChestResearchDiscPlan disc,
+        Stream candidate, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(disc);
+        disc.RequireAncestry(disc.ExecutableAncestor);
+        return VerifyInverseCore(null, disc, candidate, token);
+    }
+
+    // Concrete captured owners only; no caller-supplied inverse callback can
+    // turn arbitrary bytes into a source-authenticated candidate.
+    private static NativeId65FreshDiscVerification VerifyInverseCore(NativeId65FreshDiscPlan? disc,
+        NativeFreshLockedChestResearchDiscPlan? chest, Stream candidate, CancellationToken token)
+    {
         ArgumentNullException.ThrowIfNull(candidate);
         if (!candidate.CanRead || !candidate.CanSeek || candidate.Position != 0 ||
             candidate.Length != NativeId65FreshDiscSource.ImageByteLength)
@@ -27,7 +44,8 @@ internal static class NativeId65FreshDiscStreaming
         {
             token.ThrowIfCancellationRequested();
             candidate.ReadExactly(after);
-            byte[] before = disc.CreateOriginalRawSector(lba, after);
+            byte[] before = chest is null ? disc!.CreateOriginalRawSector(lba, after) :
+                chest.CreateOriginalRawSector(lba, after);
             restoredHash.AppendData(before); candidateHash.AppendData(after);
             if (!before.AsSpan().SequenceEqual(after)) changed++;
         }

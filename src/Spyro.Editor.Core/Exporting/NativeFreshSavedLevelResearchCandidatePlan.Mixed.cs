@@ -112,10 +112,27 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
         CaptureMixedBodyAsync(string image, NativeFreshLevelDocumentIntent document, CancellationToken token)
     {
         NativeFreshWizardAuthoringShape.RequireMaterialDocumentShape(document);
+        return await CaptureMixedBodyCoreAsync(image, document, false, token);
+    }
+
+    // Explicit subordinate same-layout producer. Admission of any complete
+    // saved family document belongs to its separate whole-document compiler.
+    internal static async Task<(NativeId65FreshWizardResearchBodyPlan Body, NativeFreshInitialSpawnClearancePlan Clearance)>
+        CaptureSameLayoutMixedBodyAsync(string image, NativeFreshLevelDocumentIntent document, CancellationToken token)
+    {
+        NativeFreshWizardAuthoringShape.RequireSameLayoutMaterialDocumentShape(document);
+        return await CaptureMixedBodyCoreAsync(image, document, true, token);
+    }
+
+    private static async Task<(NativeId65FreshWizardResearchBodyPlan Body, NativeFreshInitialSpawnClearancePlan Clearance)>
+        CaptureMixedBodyCoreAsync(string image, NativeFreshLevelDocumentIntent document, bool sameLayout, CancellationToken token)
+    {
         var compilation = await NativeId65FreshDocumentCompilation.CaptureAsync(image, document.Base, token);
         var family = await NativeWizardFamilyAssetPlan.CaptureAsync(image, token);
         var resources = await NativeId65FreshWizardResearchResourcePlan.CaptureAuthoredAsync(image, compilation, family, token);
-        var scene = await NativeId65FreshWizardResearchScenePlan.CaptureMaterialAuthoredAsync(image, document, compilation, family, resources, token);
+        var scene = sameLayout
+            ? await NativeId65FreshWizardResearchScenePlan.CaptureSameLayoutMaterialAuthoredAsync(image, document, compilation, family, resources, token)
+            : await NativeId65FreshWizardResearchScenePlan.CaptureMaterialAuthoredAsync(image, document, compilation, family, resources, token);
         var clearance = await NativeFreshInitialSpawnClearancePlan.CaptureWizardAsync(image, document, scene, token);
         _ = clearance.RequireInitialFloorFootprint(document, scene);
         var fallback = await NativeId65FreshWizardResearchFallbackResourcePlan.CaptureAsync(image, resources, token);
@@ -127,7 +144,9 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
         var material1 = first.SourceWadEntry == second.SourceWadEntry && first.TextureId == second.TextureId
             ? material0 : NativeStaticTerrainTextureSource.Capture(image, second.SourceWadEntry, second.TextureId);
         token.ThrowIfCancellationRequested();
-        var mixed = await NativeFreshWizardMaterialResource.CaptureMaterialAuthoredAsync(image, host, material0, material1, token);
+        var mixed = sameLayout
+            ? await NativeFreshWizardMaterialResource.CaptureSameLayoutMaterialAuthoredAsync(image, host, material0, material1, token)
+            : await NativeFreshWizardMaterialResource.CaptureMaterialAuthoredAsync(image, host, material0, material1, token);
         var body = await NativeId65FreshWizardResearchBodyPlan.CaptureMaterialAuthoredAsync(image, mixed, token);
         return (body, clearance);
     }
@@ -137,7 +156,7 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
     {
         if (!ReferenceEquals(saved, Saved) || !ReferenceEquals(disc, _mixedDisc) ||
             !ReferenceEquals(clearance, _mixedClearance) || _material != null || _familyCompilation != null ||
-            _tiledCompilation != null || disc is null || clearance is null)
+            _tiledCompilation != null || _lockedChestCompilation != null || disc is null || clearance is null)
             throw new InvalidDataException("Saved mixed Candidate belongs to its actual saved context, Disc and initial clearance, not equal hashes.");
         disc.RequireAncestry(disc.ExecutableAncestor);
         if (!disc.IsMaterialAuthored)
@@ -154,7 +173,8 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
 
     private void RequireCurrentAncestry()
     {
-        if (_tiledCompilation is { } tiled) RequireTiledAncestry(Saved, tiled);
+        if (_lockedChestCompilation is { } chest) RequireLockedChestAncestry(Saved, chest);
+        else if (_tiledCompilation is { } tiled) RequireTiledAncestry(Saved, tiled);
         else if (_familyCompilation is { } family) RequireFamilyAncestry(Saved, family);
         else if (_mixedDisc is { } mixed) RequireMixedAncestry(Saved, mixed, _mixedClearance!);
         else RequireAncestry(Saved, MaterialCompilation);

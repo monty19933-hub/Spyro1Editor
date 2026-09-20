@@ -16,6 +16,7 @@ internal static class SavedLevelPublicationArgumentCases
         string[] tiledModes=["--publish-tiled-saved-level-reviewed","--verify-tiled-saved-level-reviewed","--stale-tiled-saved-level-reviewed"];
         string[] tiledMaterialModes=["--publish-tiled-material-saved-level-reviewed","--verify-tiled-material-saved-level-reviewed","--stale-tiled-material-saved-level-reviewed"];
         string[] selectedMaterialModes=["--publish-selected-tiled-material-saved-level-reviewed","--verify-selected-tiled-material-saved-level-reviewed","--stale-selected-tiled-material-saved-level-reviewed"];
+        string[] lockedChestModes = originalModes.Select(mode => mode.Replace("-saved-level-", "-locked-chest-saved-level-", StringComparison.Ordinal)).ToArray();
         Check(P.Modes.Take(9).SequenceEqual(originalModes) && P.Modes.Skip(9).Take(3).SequenceEqual(new[] {
             "--publish-mixed-saved-level-reviewed", "--verify-mixed-saved-level-reviewed", "--stale-mixed-saved-level-reviewed" }),
             "Existing twelve reviewed modes retain their exact order and meaning.");
@@ -28,10 +29,15 @@ internal static class SavedLevelPublicationArgumentCases
         Check(P.Modes.Skip(18).Take(3).SequenceEqual(tiledMaterialModes) && P.ExpectedTiledMaterialImage == TiledMaterialSavedCases.ExpectedImage &&
             P.ExpectedTiledMaterialImage == "462c992f80f512f0b6be781b1a79e707e37a0e18f5e5e47356cd332ef61b2ba8",
             "Exactly three appended material-tile modes use the independently frozen full-image reference without renumbering old modes.");
-        Check(P.Modes.Skip(21).SequenceEqual(selectedMaterialModes) && P.ExpectedSelectedOneImage ==
+        Check(P.Modes.Skip(21).Take(3).SequenceEqual(selectedMaterialModes) && P.ExpectedSelectedOneImage ==
             "14e5b3606f652c250df9cdd6c94de1d393186d1b74f1ab64decd5dd35130a77f" && P.ExpectedSelectedThreeImage ==
             "f1c137476833d1c046a78df812b40a47f8dc6558051c823437d7c5b3f86d8e32",
             "One appended selected-material mode family uses the two independent complete-image references; no modes per source count.");
+        Check(P.Modes.Skip(24).SequenceEqual(lockedChestModes) && P.ExpectedLockedChestImage ==
+            "a5b00725388f73e7e6f7b9ed356c4a0d0f55b1c869d6a65f38e97ef2641d6c50" &&
+            P.Modes.Take(24).All(mode => !P.IsLockedChestMode(mode)) &&
+            lockedChestModes.Select(P.OperationMode).SequenceEqual(originalModes),
+            "Nine exact chest modes reuse every existing physical outcome gate without renumbering the earlier24 modes.");
         string[] valid = [P.Modes[0], "original.bin", "original.cue", "/private/tmp/test-project", "test-project", "/private/tmp/test-output"];
         foreach (string mode in P.Modes)
         {
@@ -64,6 +70,7 @@ internal static class SavedLevelPublicationArgumentCases
         byte[] materialDocument = NativeFreshLevelDocumentCodec.SerializeCanonical(Document(14, 1, 70, 1, 128, 20));
         byte[] mixedDocument = NativeFreshLevelDocumentCodec.SerializeCanonical(MixedSavedCases.Document());
         byte[] familyDocument=NativeFreshLevelDocumentCodec.SerializeCanonical(FamilySavedCases.Document());
+        byte[] lockedChestDocument = NativeFreshLevelDocumentCodec.SerializeCanonical(SavedLockedChestCompilationCases.Document());
         byte[] tiledDocument=NativeFreshLevelDocumentCodec.SerializeCanonical(SavedTiledDocumentFixture.Document());
         byte[] tiledMaterialDocument=NativeFreshLevelDocumentCodec.SerializeCanonical(SavedTiledMaterialDocumentFixture.Document());
         var selectedOne = SelectedTiledMaterialSavedCases.Document([0, 0, 0, 0, 0, 0]);
@@ -77,14 +84,14 @@ internal static class SavedLevelPublicationArgumentCases
         foreach (string mode in P.Modes)
         {
             bool selected = P.IsSelectedTiledMaterialMode(mode);
-            byte[] actual=selected?selectedOneDocument:P.IsTiledMaterialMode(mode)?tiledMaterialDocument:P.IsTiledMode(mode)?tiledDocument:P.IsFamilyMode(mode)?familyDocument:P.IsMixedMode(mode)?mixedDocument:materialDocument;
+            byte[] actual=P.IsLockedChestMode(mode)?lockedChestDocument:selected?selectedOneDocument:P.IsTiledMaterialMode(mode)?tiledMaterialDocument:P.IsTiledMode(mode)?tiledDocument:P.IsFamilyMode(mode)?familyDocument:P.IsMixedMode(mode)?mixedDocument:materialDocument;
             P.RequireFixtureDocument(mode,actual);
             if (selected) P.RequireFixtureDocument(mode, selectedThreeDocument);
-            foreach(byte[] foreign in new[]{materialDocument,mixedDocument,familyDocument,tiledDocument,tiledMaterialDocument,selectedOneDocument,selectedThreeDocument}
+            foreach(byte[] foreign in new[]{materialDocument,mixedDocument,familyDocument,tiledDocument,tiledMaterialDocument,selectedOneDocument,selectedThreeDocument,lockedChestDocument}
                 .Where(value=>!ReferenceEquals(value,actual) && !(selected && ReferenceEquals(value,selectedThreeDocument))))
                 await Throws<InvalidDataException>(()=>{P.RequireFixtureDocument(mode,foreign);return Task.CompletedTask;});
         }
-        foreach(string mode in familyModes.Concat(tiledModes).Concat(tiledMaterialModes).Concat(selectedMaterialModes))
+        foreach(string mode in familyModes.Concat(tiledModes).Concat(tiledMaterialModes).Concat(selectedMaterialModes).Concat(lockedChestModes))
         {
             foreach(string altered in new[]{mode+"-extra",mode[..^1],mode.ToUpperInvariant()})
             {
@@ -208,7 +215,7 @@ internal static class SavedLevelPublicationArgumentCases
         string verifyOutput=Path.Combine(root,"family-verify-argument-output");Directory.CreateDirectory(verifyOutput);
         foreach(string name in Spyro.Editor.Core.Exporting.NativeFreshSavedLevelResearchCandidatePlan.OutputNames)
             P.WriteNewSmall(Path.Combine(verifyOutput,name),[3]);
-        foreach(string mode in familyModes.Concat(tiledModes).Concat(tiledMaterialModes).Concat(selectedMaterialModes))
+        foreach(string mode in familyModes.Concat(tiledModes).Concat(tiledMaterialModes).Concat(selectedMaterialModes).Concat(lockedChestModes))
         {
             bool verify=P.OperationMode(mode)==P.Modes[1];string target=verify?verifyOutput:output;
             var args=valid.ToArray();args[0]=mode;

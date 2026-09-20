@@ -14,6 +14,9 @@ internal static class SavedLevelPublicationCases
     // Observed full-source family regression reference (source92), including
     // complete original inverse. This is not an independent image oracle.
     internal const string ExpectedFamilyImage = "408dfdfc577f991e635e4c0b636344333ca4b2654d89afabd88af88cc1a55c98";
+    // Exact R03 observed full-image reference, not a new independent oracle or
+    // runtime approval for the saved-project compiler/publication path.
+    internal const string ExpectedLockedChestImage = "a5b00725388f73e7e6f7b9ed356c4a0d0f55b1c869d6a65f38e97ef2641d6c50";
     // Independent test-side reconstruction, frozen before tiled production.
     internal const string ExpectedTiledImage = "7ba0b29b68a1bee415901382c3a3b5345ccb01ca84872502131f68361afdc305";
     internal const string ExpectedTiledMaterialImage = "462c992f80f512f0b6be781b1a79e707e37a0e18f5e5e47356cd332ef61b2ba8";
@@ -30,7 +33,12 @@ internal static class SavedLevelPublicationCases
         "--verify-family-saved-level-reviewed", "--stale-family-saved-level-reviewed",
         "--publish-tiled-saved-level-reviewed", "--verify-tiled-saved-level-reviewed", "--stale-tiled-saved-level-reviewed",
         "--publish-tiled-material-saved-level-reviewed", "--verify-tiled-material-saved-level-reviewed", "--stale-tiled-material-saved-level-reviewed",
-        "--publish-selected-tiled-material-saved-level-reviewed", "--verify-selected-tiled-material-saved-level-reviewed", "--stale-selected-tiled-material-saved-level-reviewed"];
+        "--publish-selected-tiled-material-saved-level-reviewed", "--verify-selected-tiled-material-saved-level-reviewed", "--stale-selected-tiled-material-saved-level-reviewed",
+        "--publish-locked-chest-saved-level-reviewed", "--verify-locked-chest-saved-level-reviewed",
+        "--partial-locked-chest-saved-level-reviewed", "--stale-locked-chest-saved-level-reviewed",
+        "--unconfirmed-locked-chest-saved-level-reviewed", "--guard-release-locked-chest-saved-level-reviewed",
+        "--artifact-locked-chest-saved-level-reviewed", "--artifact-notify-locked-chest-saved-level-reviewed",
+        "--cancel-locked-chest-saved-level-reviewed"];
     internal sealed record Request(string Mode, string Bin, string Cue, string ProjectRoot, string ProjectId, string Output);
     internal static bool IsMode(string[] args) => args.Length > 0 && Modes.Contains(args[0], StringComparer.Ordinal);
     internal static bool IsMixedMode(string mode) => mode == Modes[9] || mode == Modes[10] || mode == Modes[11];
@@ -38,7 +46,9 @@ internal static class SavedLevelPublicationCases
     internal static bool IsTiledMode(string mode) => mode == Modes[15] || mode == Modes[16] || mode == Modes[17];
     internal static bool IsTiledMaterialMode(string mode) => mode == Modes[18] || mode == Modes[19] || mode == Modes[20];
     internal static bool IsSelectedTiledMaterialMode(string mode) => mode == Modes[21] || mode == Modes[22] || mode == Modes[23];
-    internal static string OperationMode(string mode) => mode == Modes[9] ? Modes[0] :
+    internal static bool IsLockedChestMode(string mode) => Array.IndexOf(Modes, mode) is >= 24 and <= 32;
+    internal static string OperationMode(string mode) => IsLockedChestMode(mode) ? Modes[Array.IndexOf(Modes, mode) - 24] :
+        mode == Modes[9] ? Modes[0] :
         mode == Modes[10] ? Modes[1] : mode == Modes[11] ? Modes[3] :
         mode == Modes[12] ? Modes[0] : mode == Modes[13] ? Modes[1] : mode == Modes[14] ? Modes[3] :
         mode == Modes[15] ? Modes[0] : mode == Modes[16] ? Modes[1] : mode == Modes[17] ? Modes[3] :
@@ -61,7 +71,8 @@ internal static class SavedLevelPublicationCases
         var request = Parse(args);
         string operationMode = OperationMode(request.Mode);
         bool mixed = IsMixedMode(request.Mode), family = IsFamilyMode(request.Mode), tiled = IsTiledMode(request.Mode),
-            tiledMaterial = IsTiledMaterialMode(request.Mode), selectedMaterial = IsSelectedTiledMaterialMode(request.Mode), verify = operationMode == Modes[1];
+            tiledMaterial = IsTiledMaterialMode(request.Mode), selectedMaterial = IsSelectedTiledMaterialMode(request.Mode),
+            lockedChest = IsLockedChestMode(request.Mode), verify = operationMode == Modes[1];
         string bin = Path.GetFullPath(request.Bin), cue = Path.GetFullPath(request.Cue);
         string projectRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.ProjectRoot));
         string output = RequireLocation(request.Output, bin, cue, projectRoot, verify);
@@ -82,11 +93,17 @@ internal static class SavedLevelPublicationCases
             savedFiles.RequireCurrent();
             // These gates preserve the complete authored fixture and its IDs
             // before invoking the same public saved Candidate factory.
-            if (family || tiled || tiledMaterial || selectedMaterial) RequireFixtureDocument(request.Mode, NativeFreshLevelDocumentCodec.SerializeCanonical(saved.Document));
-            candidate = mixed || family || tiled || tiledMaterial || selectedMaterial
+            if (family || tiled || tiledMaterial || selectedMaterial || lockedChest) RequireFixtureDocument(request.Mode, NativeFreshLevelDocumentCodec.SerializeCanonical(saved.Document));
+            candidate = mixed || family || tiled || tiledMaterial || selectedMaterial || lockedChest
                 ? await NativeFreshSavedLevelResearchCandidatePlan.CaptureSavedAsync(bin, cue, saved.Snapshot)
                 : await NativeFreshSavedLevelResearchCandidatePlan.CaptureAsync(bin, cue, saved);
-            if (selectedMaterial)
+            if (lockedChest)
+                Check(candidate.LockedChestCompilation != null && candidate.MixedDisc == null &&
+                    candidate.FamilyCompilation == null && candidate.TiledCompilation == null &&
+                    ReferenceEquals(candidate.SavedSnapshot, saved.Snapshot) && candidate.ExpectedImageByteLength == ImageLength &&
+                    candidate.ExpectedChangedRawSectors == 1297 && candidate.ExpectedImageSha256 == ExpectedLockedChestImage,
+                    "Exact complete saved R03 family and actual chest physical arm; observed image reference is not generalized runtime acceptance.");
+            else if (selectedMaterial)
             {
                 var expected = ExpectedRecipe(candidate);
                 Check(candidate.TiledCompilation?.TiledMaterialAncestor != null && ReferenceEquals(candidate.SavedSnapshot, saved.Snapshot) &&
@@ -180,7 +197,8 @@ internal static class SavedLevelPublicationCases
     {
         _ = OperationMode(mode);
         if (IsSelectedTiledMaterialMode(mode)) { _ = RequireSelectedFixtureDocument(canonical); return; }
-        var document = IsTiledMaterialMode(mode) ? SavedTiledMaterialDocumentFixture.Document() :
+        var document = IsLockedChestMode(mode) ? SavedLockedChestCompilationCases.Document() :
+            IsTiledMaterialMode(mode) ? SavedTiledMaterialDocumentFixture.Document() :
             IsTiledMode(mode) ? SavedTiledDocumentFixture.Document() : IsFamilyMode(mode) ? FamilySavedCases.Document() :
             IsMixedMode(mode) ? MixedSavedCases.Document() : Cases.Document(14, 1, 70, 1, 128, 20);
         Check(canonical.SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(document)),
@@ -229,7 +247,7 @@ internal static class SavedLevelPublicationCases
         var readback = plan.VerifyImage(Path.Combine(root, NativeFreshSavedLevelResearchCandidatePlan.ImageName), CancellationToken.None);
         var expected = ExpectedRecipe(plan);
         Check(readback.OutputSha256 == expected.Image && readback.ChangedSectors == expected.Sectors,
-            plan.FamilyCompilation == null ? "Independent full raw image readback." :
+            plan.FamilyCompilation == null && plan.LockedChestCompilation == null ? "Independent full raw image readback." :
             "Source-measured family regression reference plus full raw image readback; not an independent oracle.");
         byte[] receipt = plan.BuildReceipt(readback), cue = plan.CopyCueBytes();
         Check(ReadSmall(Path.Combine(root, NativeFreshSavedLevelResearchCandidatePlan.ReceiptName), 65536).SequenceEqual(receipt), "Exact actual receipt.");
@@ -249,6 +267,16 @@ internal static class SavedLevelPublicationCases
     }
     private static (string Image, int Sectors) ExpectedRecipe(NativeFreshSavedLevelResearchCandidatePlan plan)
     {
+        if (plan.LockedChestCompilation is { } chest)
+        {
+            plan.RequireLockedChestAncestry(plan.Saved, chest);
+            RequireFixtureDocument(Modes[24], plan.CopyCanonicalDocument());
+            Check(plan.MixedDisc == null && plan.FamilyCompilation == null && plan.TiledCompilation == null &&
+                ReferenceEquals(chest.Disc.ExecutableAncestor, chest.Executable) &&
+                chest.Scene.RowSpans.Placements.Select(s => (s.FirstRowIndex, s.RowCount)).SequenceEqual(new[] { (0, 1), (1, 1), (2, 7) }),
+                "Saved chest physical expectation retains actual P9 compilation, not the P2 predecessor.");
+            return (ExpectedLockedChestImage, 1297);
+        }
         if (plan.TiledCompilation is { } tiled)
         {
             plan.RequireTiledAncestry(plan.Saved, tiled);

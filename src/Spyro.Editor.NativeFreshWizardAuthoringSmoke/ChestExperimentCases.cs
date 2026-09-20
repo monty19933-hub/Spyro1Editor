@@ -68,6 +68,7 @@ internal static class ChestExperimentCases
             var sound=NativeFreshMobySoundResidencyBinding.BindLockedChest(chestSource,family);
             var capturedFallback=await NativeId65FreshWizardResearchFallbackResourceSource.CaptureAsync(bin,resources,CancellationToken.None);
             var child=NativeFreshMobyFamilyCompositionPlan.ComposeWithLockedChestResources(family,sound,capturedFallback);
+            await LockedChestSourceCaptureCases.Source(bin,wizard,current,chestSource,child,capturedFallback,Check);
             var chestScene=NativeFreshLockedChestSceneExtension.Compose(child,chestHost,"33333333333333333333333333333333");
             var body=NativeFreshLockedChestResearchBody.Compose(child,chestHost,chestScene);
             if(wide)WideChestPlacementCases.Source(body,Check);

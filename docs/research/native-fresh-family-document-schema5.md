@@ -99,6 +99,9 @@ schema5 document; the production guard makes the same test pass. The integrated
 codec test initially exposed an uppercase test-fixture project ID; that fixture
 was corrected before the successful rerun. Earlier failed logs are retained.
 
-A separate original-ROM R03 source replay is pending at this checkpoint.
+A separate original-ROM R03 source replay passes414 checks
+(`535-family-schema5-r03-source.log`). Complete image, physical plan, scene,
+body and executable identities remain unchanged; its full inverse restores
+Original and the final BIN/CUE checks pass. This replay writes no candidate.
 No new runtime or native publication claim follows from these source-free
 document/UI checks, and no application bundle was replaced.

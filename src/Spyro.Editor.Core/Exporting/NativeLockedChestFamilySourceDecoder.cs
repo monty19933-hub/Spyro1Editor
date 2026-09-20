@@ -11,7 +11,7 @@ namespace Spyro.Editor.Core.Exporting;
 /// residency. No graph, final domain, relocation, image certificate or import
 /// authority is issued here. The destination producer must close those owners.
 /// </summary>
-internal sealed class NativeLockedChestFamilySource
+internal sealed partial class NativeLockedChestFamilySource
 {
     private const string PackageSha256="8edc9e9ac1e5fb1a92224d2f5f8ca541371940c1ae3f9873c02f6b802d6e22e7";
     private static readonly int[] OwnerLengths=[0x29E800,0x12800,0x2E2000,0xF800,0x66000];

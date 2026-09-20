@@ -1,6 +1,8 @@
 # Fresh family authoring: bounded integration plan
 
-Status: **pending integration, not implemented**. Reviewed September 20, 2026,
+Status: **neutral model/codec/storage complete at5756aaa; saved native
+integration under verification; UI integration pending**. The design below
+was originally reviewed September 20, 2026,
 against checkpoint `55dd291` and the subsequent working-tree reward-destination
 extension. This document proposes the next saved-document/editor integration;
 it is not an export authorization or a report of completed tests. The R03
@@ -9,7 +11,10 @@ written. Subsequent exact-candidate R03 gameplay now shows all20 treasure points
 collected and retained through native reset; see
 [the separate runtime record](native-fresh-chest-r03-runtime.md). That result
 permits the scoped neutral saved-family integration below, not a general
-lifecycle or release pass.
+lifecycle or release pass. The schema5 implementation and343/0 regression
+checkpoint are recorded in [the schema5 record](native-fresh-family-document-schema5.md).
+The proposed names below are now implemented there; the ordered gates remain
+applicable to the unfinished native/UI work.
 
 ## Current contract and intended outcome
 
@@ -98,7 +103,7 @@ One proposed closed root is `kind`, `schema`, `content`, `placements`, where
 - `ordered-flat-tiles-v1`: `tag`, ordered `tiles`, `spawn`, `skyRgb` and
   `musicTrackId`, retaining the existing tile/material grammar.
 
-These are proposed names, not an implemented codec. There is never a second
+These originally proposed names are implemented at5756aaa. There is never a second
 root `base`, `surface`, spawn or music authority competing with `content`.
 The new placement union can retain existing Wizard-route/native-row intent
 alongside the explicit family variant; it must not reinterpret old rows.
@@ -115,7 +120,7 @@ not downgrade it. This is an extension requirement, not a current schema4 bug.
 
 ## Ordered implementation and dependency gates
 
-1. **Neutral model/codec/storage first.** Add the family variant and explicit
+1. **Neutral model/codec/storage first — complete at5756aaa.** Add the family variant and explicit
    schema upgrade with source-free tests. Save/Reopen must preserve the full
    authored level, including family defaults versus explicit overrides, without
    needing a ROM or issuing compilation authority.
