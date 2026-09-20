@@ -4,9 +4,10 @@ internal static class ChestExperimentArgumentCases
 {
     internal static async Task Run(Action<bool,string> check)
     {
-        foreach(string mode in new[]{"--chest-source","--chest-experiment","--chest-wide-source","--chest-wide-experiment"})
+        foreach(string mode in new[]{"--chest-source","--chest-experiment","--chest-wide-source","--chest-wide-experiment",
+            "--chest-r03-source","--chest-r03-experiment"})
             check(ChestExperimentCases.Matches([mode]),"Existing chest mode retains explicit dispatch: "+mode);
-        foreach(string mode in new[]{"--chest-r03-source","--chest-r03-experiment","--chest-wide-experiment=r03","--chest-wide-experiment "})
+        foreach(string mode in new[]{"--chest-r04-source","--chest-r04-experiment","--chest-wide-experiment=r03","--chest-wide-experiment "})
             check(!ChestExperimentCases.Matches([mode]),"No future or approximate recipe selector is implicitly admitted.");
         check(!ChestExperimentCases.Matches([]),"Default invocation does not select a chest experiment.");
 
@@ -24,7 +25,7 @@ internal static class ChestExperimentArgumentCases
             check(!Directory.Exists(output)&&!File.Exists(output)&&!File.Exists(output+".bin")&&!File.Exists(output+".cue"),
                 "Retired recipe creates neither output directory nor source placeholders.");
         }
-        foreach(string mode in new[]{"--chest-r03-source","--chest-r03-experiment"})
+        foreach(string mode in new[]{"--chest-r04-source","--chest-r04-experiment"})
         {
             try{await ChestExperimentCases.RunAsync([mode,"\0","\0",output]);}
             catch(ArgumentException){check(true,"Unknown future recipe refuses before source/path access.");continue;}

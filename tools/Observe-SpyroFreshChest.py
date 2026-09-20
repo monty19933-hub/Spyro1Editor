@@ -4,7 +4,7 @@
 Independently identify DuckStation and its exact open BIN/CUE before connecting.
 Hashes below are annotations, never loaded-disc authentication. The initial GDB
 connection may pause emulation; resume/pause only in the UI. Use p <label> and q.
---profile defaults to r01; r02 only selects wide-floor/anchor annotations and
+--profile defaults to r01; r02/r03 only select floor/destination annotations and
 does not change runtime gates, addresses or read bounds. Unverified r02 payload
 hashes are omitted, not inferred from another candidate or the selected label.
 Only bounded memory-read packets and protocol acknowledgements are sent. No
@@ -61,6 +61,22 @@ PROFILES = MappingProxyType({
             "chest_yaw_u8": 0xDC,
             "reward_relative_xyz": ((-410, 1229, 512), (0, 1229, 512),
                                     (-615, 205, 512), (-410, 615, 512), (204, 819, 512)),
+            "annotations_not_sampled_or_authenticated": True,
+        }),
+    }),
+    "r03": MappingProxyType({
+        "profile": "private-fresh-chest-p9-runtime-experiment-v3",
+        "payload": MappingProxyType({}),
+        "geometry": MappingProxyType({
+            "floor_xyz": (8448, 8448, 8704),
+            "floor_width_depth": (3072, 3072),
+            "spawn_xyz": (8960, 8960, 9216),
+            "key_xyz": (9728, 9120, 8704),
+            "chest_xyz": (10864, 9888, 8704),
+            "chest_yaw_u8": 0xDC,
+            "authored_world_destination_overrides": (("reward.2", 10454, 10503, 9216),),
+            "reward_destination_xyz": ((10454, 11117, 9216), (10454, 10503, 9216),
+                                       (10249, 10093, 9216), (10454, 10503, 9216), (11068, 10707, 9216)),
             "annotations_not_sampled_or_authenticated": True,
         }),
     }),
@@ -363,10 +379,32 @@ def self_test():
             geometry["floor_width_depth"] = (1, 1)
             self.assertEqual({}, PROFILES["r02"]["payload"])
             self.assertEqual((3072, 3072), PROFILES["r02"]["geometry"]["floor_width_depth"])
-            for profile in (None, True, [], {}, "", "R01", "r03"):
+            for profile in (None, True, [], {}, "", "R01", "r04"):
                 memory = fixture()
                 with self.assertRaises(ValueError): capture(memory, "invalid", profile)
                 self.assertEqual([], memory.reads)
+
+        def test_r03_authored_destination_annotation_keeps_identical_read_authority(self):
+            baseline = fixture(); old = capture(baseline, "same", "r02")
+            memory = fixture(); authored = capture(memory, "same", "r03")
+            self.assertEqual(baseline.reads, memory.reads)
+            self.assertEqual("private-fresh-chest-p9-runtime-experiment-v3", authored["expected_profile_annotation"])
+            self.assertEqual({}, authored["expected_payload_annotations"])
+            geometry = authored["expected_geometry_annotations"]
+            self.assertEqual((("reward.2", 10454, 10503, 9216),), geometry["authored_world_destination_overrides"])
+            self.assertEqual((10454, 10503, 9216), geometry["reward_destination_xyz"][1])
+            self.assertEqual(geometry["reward_destination_xyz"][1], geometry["reward_destination_xyz"][3])
+            for name in ("floor_xyz", "floor_width_depth", "spawn_xyz", "key_xyz", "chest_xyz", "chest_yaw_u8"):
+                self.assertEqual(old["expected_geometry_annotations"][name], geometry[name])
+            omitted = {"utc", "expected_profile_annotation", "expected_payload_annotations", "expected_geometry_annotations"}
+            self.assertEqual({k: v for k, v in old.items() if k not in omitted},
+                             {k: v for k, v in authored.items() if k not in omitted})
+            self.assertTrue(all(authored[name] is False for name in AUTHORITY_FLAGS))
+            for mapping in (PROFILES["r03"], PROFILES["r03"]["payload"], PROFILES["r03"]["geometry"]):
+                with self.assertRaises(TypeError): mapping["caller"] = "not authority"
+            geometry["authored_world_destination_overrides"] = ()
+            self.assertEqual((("reward.2", 10454, 10503, 9216),),
+                             PROFILES["r03"]["geometry"]["authored_world_destination_overrides"])
 
         def test_each_gate_refuses_before_payload_and_reread_discards_payload(self):
             scalar_reads = {(at, struct.calcsize(fmt)) for at, fmt in FIELDS.values()}
@@ -525,12 +563,12 @@ def self_test():
                 for args in ([], ["--profile", "anything"],
                              ["--connect-identified-test-session", "--profile", "anything"],
                              ["--connect-identified-test-session", "--profile", "R01"],
-                             ["--self-test", "--profile", "r03"],
+                             ["--self-test", "--profile", "unsupported-profile"],
                              ["--self-test", "--connect-identified-test-session"]):
                     with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit): main(args)
 
         def test_cli_profile_selection_reaches_same_mocked_read_only_client(self):
-            for profile in (None, "r01", "r02"):
+            for profile in (None, *PROFILES):
                 memory, output = fixture(), io.StringIO()
                 args = ["--connect-identified-test-session"]
                 if profile is not None: args += ["--profile", profile]

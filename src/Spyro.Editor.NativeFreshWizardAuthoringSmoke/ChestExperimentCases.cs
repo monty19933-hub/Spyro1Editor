@@ -12,18 +12,19 @@ internal static class ChestExperimentCases
     private const string Original="fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37";
     private const string Cue="05142502c75d3a0b6374003a8fe41893d6faf0ad55863ff0b62a265a1b152766";
     internal static bool Matches(string[] args)=>args.Length>0&&args[0] is "--chest-source" or "--chest-experiment" or
-        "--chest-wide-source" or "--chest-wide-experiment";
+        "--chest-wide-source" or "--chest-wide-experiment" or "--chest-r03-source" or "--chest-r03-experiment";
     internal static async Task RunAsync(string[] args)
     {
-        bool write=args.Length>0&&args[0] is "--chest-experiment" or "--chest-wide-experiment";
-        bool wide=args.Length>0&&args[0] is "--chest-wide-source" or "--chest-wide-experiment";
-        string stem=wide?"fresh-chest-p9-experiment-r02":"fresh-chest-p9-experiment-r01";
+        bool write=args.Length>0&&args[0] is "--chest-experiment" or "--chest-wide-experiment" or "--chest-r03-experiment";
+        bool authored=args.Length>0&&args[0] is "--chest-r03-source" or "--chest-r03-experiment";
+        bool wide=authored||args.Length>0&&args[0] is "--chest-wide-source" or "--chest-wide-experiment";
+        string stem=authored?"fresh-chest-p9-experiment-r03":wide?"fresh-chest-p9-experiment-r02":"fresh-chest-p9-experiment-r01";
         if(!Matches(args)||args.Length!=(write?4:3)||args.Skip(1).Any(a=>string.IsNullOrWhiteSpace(a)||a.StartsWith("--",StringComparison.Ordinal)))
-            throw new ArgumentException("Usage: --chest-source|--chest-wide-source ORIGINAL_BIN ORIGINAL_CUE | --chest-experiment|--chest-wide-experiment ORIGINAL_BIN ORIGINAL_CUE NEW_DIRECTORY");
+            throw new ArgumentException("Usage: --chest-source|--chest-wide-source|--chest-r03-source ORIGINAL_BIN ORIGINAL_CUE | --chest-r03-experiment ORIGINAL_BIN ORIGINAL_CUE NEW_DIRECTORY (R01/R02 write recipes are retired)");
         // R02 passes the bounded static clearance assessment but its observed
         // final red gem escaped the finite floor. Retire only this writer;
         // retain its exact source recipe without manufacturing a Core flag.
-        if(write&&wide)
+        if(write&&wide&&!authored)
             throw new InvalidDataException("R02 artifact creation is retired after a known escaped reward and incomplete treasure collection. Use --chest-wide-source for exact source-only reproduction; no source was opened or output directory created.");
         string bin=Path.GetFullPath(args[1]),cue=Path.GetFullPath(args[2]);
         string? output=write?Path.GetFullPath(args[3]):null;
@@ -71,7 +72,8 @@ internal static class ChestExperimentCases
             var body=NativeFreshLockedChestResearchBody.Compose(child,chestHost,chestScene);
             if(wide)WideChestPlacementCases.Source(body,Check);
             else FamilyChestPlacementCases.Source(body,Check);
-            var placement=NativeFreshLockedChestPlacementPlan.Compose(body,wide?new(9728,9120,8704,10864,9888,8704):
+            var placement=authored?AuthoredChestDestinationCases.Source(body,Check):
+                NativeFreshLockedChestPlacementPlan.Compose(body,wide?new(9728,9120,8704,10864,9888,8704):
                 new(8960,9728,8704,9472,8960,8704));
             var executable=NativeFreshLockedChestExperimentalExecutable.Compose(placement,chestHost);
             var clearance=NativeFreshLockedChestSpawnClearancePlan.Compose(placement);
@@ -82,7 +84,8 @@ internal static class ChestExperimentCases
                 // but refuse artifact creation before creating its directory.
                 clearance.RequireStaticLandingClearance(placement);
             }
-            if(wide)await FamilyChestDiscCases.SourceSameLayout(bin,executable,Check);
+            if(authored)await FamilyChestDiscCases.SourceAuthoredDestinations(bin,executable,Check);
+            else if(wide)await FamilyChestDiscCases.SourceSameLayout(bin,executable,Check);
             else await FamilyChestDiscCases.Source(bin,executable,Check);
             if(write)
             {
@@ -116,12 +119,13 @@ internal static class ChestExperimentCases
                 using(var source=File.OpenRead(bin))await NativeId65FreshDiscSource.RequireWholeOriginalAsync(source,CancellationToken.None);
                 Check(File.ReadAllBytes(cue).SequenceEqual(cueBytes),"Original CUE unchanged before companion creation");
                 WriteNew(Path.Combine(output!,stem+".receipt.json"),JsonSerializer.SerializeToUtf8Bytes(new{
-                    profile=wide?"private-fresh-chest-p9-runtime-experiment-v2":"private-fresh-chest-p9-runtime-experiment-v1",sourceImage=Original,sourceCue=Cue,
+                    profile=authored?"private-fresh-chest-p9-runtime-experiment-v3":wide?"private-fresh-chest-p9-runtime-experiment-v2":"private-fresh-chest-p9-runtime-experiment-v1",sourceImage=Original,sourceCue=Cue,
                     disc.PlanSha256,placement.SceneSha256,placement.LevelDataSha256,executable.ExecutableSha256,
                     overlaySha256=chestHost.OverlaySha256,written.OutputSha256,written.ChangedSectors,
                     executable.KnownDeterministicSelectorSubtotal,executable.ExperimentalTreasureTarget,
                     executable.CompleteStaticCensusProven,executable.KeyZeroContributionProven,
                     placement.Intent,placement.MinimumCentreBoundaryMargin,
+                    rewardDestinationOverrides=placement.RewardDestinationsAncestor?.Values,
                     staticLandingClearance=clearance.PlanSha256,
                     chestMargins=new[]{clearance.ChestMargins.Left.ToString(),clearance.ChestMargins.Right.ToString(),
                         clearance.ChestMargins.Top.ToString(),clearance.ChestMargins.Bottom.ToString()},

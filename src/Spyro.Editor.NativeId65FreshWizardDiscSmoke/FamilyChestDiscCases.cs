@@ -36,6 +36,7 @@ internal static class FamilyChestDiscCases
         Reject<ArgumentNullException>(()=>NativeFreshResearchPhysicalAfterimages.ForChest(null!,null!),check);
         Reject<ArgumentNullException>(()=>Source("\0",null!,check).GetAwaiter().GetResult(),check);
         Reject<ArgumentNullException>(()=>SourceSameLayout("\0",null!,check).GetAwaiter().GetResult(),check);
+        Reject<ArgumentNullException>(()=>SourceAuthoredDestinations("\0",null!,check).GetAwaiter().GetResult(),check);
         var helper=typeof(NativeFreshResearchPhysicalAfterimages);
         check(!helper.IsPublic&&helper.IsSealed&&helper.GetConstructors(BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic).All(c=>c.IsPrivate)&&
             helper.GetMethods(BindingFlags.Static|BindingFlags.Public|BindingFlags.Instance|BindingFlags.DeclaredOnly).Length==0,
@@ -57,19 +58,31 @@ internal static class FamilyChestDiscCases
         ArgumentNullException.ThrowIfNull(check);
         RequireSameLayoutPlacement(executable);
         Reject<InvalidDataException>(()=>RequireOriginalPlacement(executable),check);
+        Reject<InvalidDataException>(()=>RequireSameLayoutPlacement(executable,true),check);
         check(true,"Separate wide disc entry requires the actual retained SameLayoutMaterialAuthored producer,3072 square and exact new key/chest anchors.");
         return SourceCore(path,executable,check,"NATIVE_FRESH_CHEST_DISC_SAME_LAYOUT_SOURCE_OK");
+    }
+
+    internal static Task SourceAuthoredDestinations(string path,NativeFreshLockedChestExperimentalExecutable executable,Action<bool,string> check)
+    {
+        ArgumentNullException.ThrowIfNull(check);
+        RequireSameLayoutPlacement(executable,true);
+        Reject<InvalidDataException>(()=>RequireOriginalPlacement(executable),check);
+        Reject<InvalidDataException>(()=>RequireSameLayoutPlacement(executable),check);
+        check(true,"Separate R03 physical entry consumes actual authored Reward2 destination ownership without weakening frozen R01/R02 gates.");
+        return SourceCore(path,executable,check,"NATIVE_FRESH_CHEST_DISC_AUTHORED_DESTINATIONS_SOURCE_OK");
     }
 
     private static void RequireOriginalPlacement(NativeFreshLockedChestExperimentalExecutable executable)
     {
         ArgumentNullException.ThrowIfNull(executable);
         executable.RequireAncestry(executable.PlacementAncestor,executable.HostAncestor);
-        Require(Hash(executable.PlacementAncestor.CopyScene())=="075c84cfd5ec13dc245dfa8b888f349903056b07676fc1990c494875e90f20d3",
+        Require(executable.PlacementAncestor.RewardDestinationsAncestor is null&&
+            Hash(executable.PlacementAncestor.CopyScene())=="075c84cfd5ec13dc245dfa8b888f349903056b07676fc1990c494875e90f20d3",
             "Historical chest disc source requires the exact independent original-only placed-scene reference480.");
     }
 
-    private static void RequireSameLayoutPlacement(NativeFreshLockedChestExperimentalExecutable executable)
+    private static void RequireSameLayoutPlacement(NativeFreshLockedChestExperimentalExecutable executable,bool authored=false)
     {
         ArgumentNullException.ThrowIfNull(executable);
         executable.RequireAncestry(executable.PlacementAncestor,executable.HostAncestor);
@@ -89,6 +102,15 @@ internal static class FamilyChestDiscCases
             placement.Intent==new NativeFreshLockedChestPlacementIntent(9728,9120,8704,10864,9888,8704),
             "Wide chest disc requires the actual same-layout material source/intent and exact3072 placement fixture, not just compatible physical lengths.");
         placement.RequireAncestry(executable.BodyAncestor,placement.Intent);
+        if(authored)
+        {
+            var destinations=placement.RewardDestinationsAncestor??throw new InvalidDataException("R03 requires an actual explicit destination owner.");
+            placement.RequireRewardDestinationsAncestry(destinations);
+            Require(destinations.Values.Count==1&&destinations.Values[0]==
+                new NativeFreshChestRewardDestinationOverride(NativeFreshChestRewardRole.Reward2,10454,10503,9216),
+                "R03 requires exactly the independently tested world destination for Reward2, not another authored pattern.");
+        }
+        else Require(placement.RewardDestinationsAncestor is null,"Historical R02 requires the inherited source-relative reward pattern.");
         // WideChestPlacementCases independently reconstructs every coordinate
         // word and full scene/Body complement upstream. Do not turn this actual
         // retained scene into a new producer-derived golden or caller hash.

@@ -86,3 +86,12 @@ not a replacement R06 application. See [the wider-layout record](research/native
 See [the scene record](research/native-fresh-chest-scene-extension.md) and
 [the behavior record](research/native-locked-chest-behavior-layout.md) for current
 implementation evidence. These source-only changes do not replace R06.
+
+A subsequent internal authored-destination extension removes the fixed-pattern
+limitation for the five chest reward roles without exposing raw native rows.
+The corrected R03 experiment changes only the lost red gem's destination;
+actual full-image output/readback/inverse passes417 assertions, full regression
+passes343/0, and both old image/plan identities remain unchanged. R03 gameplay
+is pending; this does not yet add chest-family authoring to R06. See
+[destination editing and evidence](research/native-fresh-chest-authored-destinations.md)
+and [the pending saved-document integration plan](research/native-fresh-family-authoring-integration-plan.md).

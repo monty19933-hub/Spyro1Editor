@@ -9,16 +9,17 @@ internal sealed record NativeFreshChestCoordinateWrite(int SceneOffset,int Befor
 
 /// <summary>
 /// Source-relative two-anchor placement: the key moves independently; the chest
-/// and its five rewards retain their complete native relative arrangement.
+/// and default rewards retain their native relative arrangement. A separate
+/// authored arm may bind explicit WORLD destinations to the five D children.
 /// Centre containment is not a footprint, approach or native-lifecycle proof.
 /// </summary>
 internal sealed class NativeFreshLockedChestPlacementPlan
 {
     private readonly byte[] _scene,_body;
     private NativeFreshLockedChestPlacementPlan(NativeFreshLockedChestResearchBody body,
-        NativeFreshLockedChestPlacementIntent intent)
+        NativeFreshLockedChestPlacementIntent intent,NativeFreshChestRewardDestinationOverrides? rewardDestinations)
     {
-        BodyAncestor=body;Intent=intent;RequireAncestry(body,intent);
+        BodyAncestor=body;Intent=intent;RewardDestinationsAncestor=rewardDestinations;RequireAncestry(body,intent);
         var source=body.SceneAncestor;
         var baseBody=body.ResourceAncestor.BaseBodyAncestor;var baseScene=baseBody.HostAncestor.SceneAncestor;
         var floor=baseScene.CompilationAncestor.Intent;
@@ -51,18 +52,23 @@ internal sealed class NativeFreshLockedChestPlacementPlan
             if(row!=0xD4+i*0x58||Word(before,row)!=properties||
                 BinaryPrimitives.ReadUInt16LittleEndian(before.AsSpan(row+0x36))!=(i==2?0xAD:i==3?0xAE:0xD))
                 throw new InvalidDataException("Chest placement lost its exact ordered source classes, private owners or row extents.");
+            NativeFreshChestRewardDestinationOverride? destination=i>=4?
+                rewardDestinations?.Values.SingleOrDefault(v=>(int)v.Role==i-4):null;
             int[] position=new int[3];
             for(int axis=0;axis<3;axis++)
             {
-                long value=i==2?newKey[axis]:(long)newChest[axis]+Word(before,row+12+axis*4)-oldChest[axis];
+                // An authored destination never suppresses the actual donor
+                // row/private preimage equality, nor supplies a native owner.
+                if(i>=4&&Word(before,properties+4+axis*4)!=Word(before,row+12+axis*4))
+                    throw new InvalidDataException("Reward private XYZ is not its actual complete source row coordinate owner.");
+                long value=destination!=null?(axis switch{0=>destination.X,1=>destination.Y,_=>destination.Z}):
+                    i==2?newKey[axis]:(long)newChest[axis]+Word(before,row+12+axis*4)-oldChest[axis];
                 if(value is <0 or >262128)throw new InvalidDataException("Chest translation escaped finite native world coordinates.");
                 position[axis]=(int)value;
                 Write(row+12+axis*4,position[axis]);
                 if(i>=4)
                 {
                     int at=properties+4+axis*4;
-                    if(Word(before,at)!=Word(before,row+12+axis*4))
-                        throw new InvalidDataException("Reward private XYZ is not its actual complete source row coordinate owner.");
                     Write(at,position[axis]);
                 }
             }
@@ -90,14 +96,21 @@ internal sealed class NativeFreshLockedChestPlacementPlan
             !_body.AsSpan(sceneAt+_scene.Length).SequenceEqual(oldBody.AsSpan(sceneAt+_scene.Length)))
             throw new InvalidDataException("Chest placement changed a non-scene Body owner.");
         SceneSha256=Hash(_scene);LevelDataSha256=Hash(_body);
+        if(rewardDestinations==null)
         PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{Profile="fresh-chest-two-anchor-placement-v1",
             Body=body.PlanSha256,Intent,CoordinateWrites,SceneSha256,LevelDataSha256,MinimumCentreBoundaryMargin,
+            SourceCertified,AuthoredCoordinatesProven,CentreContainmentProven,FootprintClearanceProven,
+            CompleteNativeBehaviorProven,FinalExecutableIssued,RuntimeVerified,PublicationApproved}));
+        else
+        PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{Profile="fresh-chest-authored-reward-destinations-placement-v1",
+            Body=body.PlanSha256,Intent,RewardDestinations=rewardDestinations.Values,CoordinateWrites,SceneSha256,LevelDataSha256,MinimumCentreBoundaryMargin,
             SourceCertified,AuthoredCoordinatesProven,CentreContainmentProven,FootprintClearanceProven,
             CompleteNativeBehaviorProven,FinalExecutableIssued,RuntimeVerified,PublicationApproved}));
         void Write(int at,int value){writes.Add(new(at,Word(before,at),value));Put(_scene,at,value);}
     }
     internal NativeFreshLockedChestResearchBody BodyAncestor{get;}
     internal NativeFreshLockedChestPlacementIntent Intent{get;}
+    internal NativeFreshChestRewardDestinationOverrides? RewardDestinationsAncestor{get;}
     internal IReadOnlyList<NativeFreshChestCoordinateWrite> CoordinateWrites{get;}
     internal int MinimumCentreBoundaryMargin{get;}
     internal string SceneSha256{get;}
@@ -121,6 +134,13 @@ internal sealed class NativeFreshLockedChestPlacementPlan
         body.RequireAncestry(body.ResourceAncestor,body.HostAncestor,body.SceneAncestor);
         body.RequireExactLevelData(body.CopyLevelData());
     }
+    internal void RequireRewardDestinationsAncestry(NativeFreshChestRewardDestinationOverrides overrides)
+    {
+        ArgumentNullException.ThrowIfNull(overrides);
+        if(!ReferenceEquals(overrides,RewardDestinationsAncestor))
+            throw new InvalidDataException("Authored reward placement belongs to its exact override owner, not equal values.");
+        RequireAncestry(BodyAncestor,Intent);
+    }
     internal void RequireExactScene(ReadOnlySpan<byte> scene)
     {RequireAncestry(BodyAncestor,Intent);if(!scene.SequenceEqual(_scene))throw new InvalidDataException("Complete placed chest scene changed.");}
     internal void RequireExactLevelData(ReadOnlySpan<byte> body)
@@ -139,7 +159,13 @@ internal sealed class NativeFreshLockedChestPlacementPlan
     }
     internal static NativeFreshLockedChestPlacementPlan Compose(NativeFreshLockedChestResearchBody body,
         NativeFreshLockedChestPlacementIntent intent)
-    {ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(intent);return new(body,intent);}
+    {ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(intent);return new(body,intent,null);}
+    internal static NativeFreshLockedChestPlacementPlan ComposeWithRewardDestinations(NativeFreshLockedChestResearchBody body,
+        NativeFreshLockedChestPlacementIntent intent,NativeFreshChestRewardDestinationOverrides overrides)
+    {
+        ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(intent);ArgumentNullException.ThrowIfNull(overrides);
+        return new(body,intent,overrides);
+    }
     private static int Word(ReadOnlySpan<byte> b,int at)=>BinaryPrimitives.ReadInt32LittleEndian(b[at..]);
     private static void Put(Span<byte> b,int at,int value)=>BinaryPrimitives.WriteInt32LittleEndian(b[at..],value);
     private static string Hash(ReadOnlySpan<byte> b)=>Convert.ToHexStringLower(SHA256.HashData(b));

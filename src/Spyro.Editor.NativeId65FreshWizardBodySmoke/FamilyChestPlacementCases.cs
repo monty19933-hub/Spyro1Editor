@@ -11,8 +11,51 @@ internal static class FamilyChestPlacementCases
         check(!type.IsPublic&&type.IsSealed&&type.GetConstructors(BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic)
             .All(c=>c.IsPrivate),"Chest placement is a closed internal scene/Body transaction, not a public export gate.");
         Reject<ArgumentNullException>(()=>NativeFreshLockedChestPlacementPlan.Compose(null!,null!),check);
+        RewardDestinationFree(check);
         FamilyChestSpawnClearanceCases.Free(check);
         FamilyChestExecutableCases.Free(check);
+    }
+
+    private static void RewardDestinationFree(Action<bool,string> check)
+    {
+        var type=typeof(NativeFreshChestRewardDestinationOverrides);
+        check(!type.IsPublic&&type.IsSealed&&type.GetConstructors(BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic)
+            .All(c=>c.IsPrivate)&&type.GetProperties(BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic)
+            .All(p=>p.SetMethod==null),"Reward overrides are a closed immutable internal neutral owner, not a public source/export capability.");
+        check(Enum.GetValues<NativeFreshChestRewardRole>().Select(v=>(int)v).SequenceEqual(new[]{0,1,2,3,4})&&
+            Enum.GetNames<NativeFreshChestRewardRole>().SequenceEqual(new[]{"Reward1","Reward2","Reward3","Reward4","Reward5"}),
+            "Exactly five explicit semantic D-child roles, not raw scene ordinals or an open integer role.");
+        for(int count=1;count<=5;count++)
+        {
+            var input=Enumerable.Range(0,count).Reverse().Select(i=>new NativeFreshChestRewardDestinationOverride(
+                (NativeFreshChestRewardRole)i,0,262128,1)).ToArray();
+            var captured=NativeFreshChestRewardDestinationOverrides.Create(input);
+            check(captured.Values.Count==count&&captured.Values.Select(v=>(int)v.Role).SequenceEqual(Enumerable.Range(0,count))&&
+                captured.Values.All(v=>v.X==0&&v.Y==262128&&v.Z==1),
+                "One through five roles are sorted into detached WORLD coordinates; neutral capture adds no grid/floor/trajectory authority.");
+            input[0]=new(NativeFreshChestRewardRole.Reward5,100,200,300);
+            check(captured.Values.All(v=>v.X==0&&v.Y==262128&&v.Z==1),"Mutating caller slots cannot change captured values.");
+            var writable=(IList<NativeFreshChestRewardDestinationOverride>)captured.Values;
+            Reject<NotSupportedException>(()=>writable[0]=new(NativeFreshChestRewardRole.Reward1,5,6,7),check);
+            var copy=captured.Values[0] with{X=123};
+            check(copy.X==123&&captured.Values[0].X==0,"Record copies cannot mutate retained destinations.");
+        }
+        Reject<ArgumentNullException>(()=>NativeFreshChestRewardDestinationOverrides.Create(null!),check);
+        Reject<InvalidDataException>(()=>NativeFreshChestRewardDestinationOverrides.Create([]),check);
+        Reject<InvalidDataException>(()=>NativeFreshChestRewardDestinationOverrides.Create([null!]),check);
+        Reject<InvalidDataException>(()=>NativeFreshChestRewardDestinationOverrides.Create(Enumerable.Range(0,6)
+            .Select(i=>new NativeFreshChestRewardDestinationOverride((NativeFreshChestRewardRole)(i%5),0,0,0)).ToArray()),check);
+        foreach(int role in new[]{-1,5,int.MinValue,int.MaxValue})
+            Reject<InvalidDataException>(()=>NativeFreshChestRewardDestinationOverrides.Create([new((NativeFreshChestRewardRole)role,0,0,0)]),check);
+        foreach(var second in new[]{new NativeFreshChestRewardDestinationOverride(NativeFreshChestRewardRole.Reward1,0,0,0),
+            new NativeFreshChestRewardDestinationOverride(NativeFreshChestRewardRole.Reward1,1,2,3)})
+            Reject<InvalidDataException>(()=>NativeFreshChestRewardDestinationOverrides.Create([new(NativeFreshChestRewardRole.Reward1,0,0,0),second]),check);
+        foreach(var (x,y,z) in new[]{(-1,0,0),(262129,0,0),(0,-1,0),(0,262129,0),(0,0,-1),(0,0,262129),(int.MinValue,0,0),(0,int.MaxValue,0)})
+            Reject<InvalidDataException>(()=>NativeFreshChestRewardDestinationOverrides.Create([new(NativeFreshChestRewardRole.Reward1,x,y,z)]),check);
+        var valid=NativeFreshChestRewardDestinationOverrides.Create([new(NativeFreshChestRewardRole.Reward3,10240,10240,9216)]);
+        Reject<ArgumentNullException>(()=>NativeFreshLockedChestPlacementPlan.ComposeWithRewardDestinations(null!,null!,null!),check);
+        Reject<ArgumentNullException>(()=>NativeFreshLockedChestPlacementPlan.ComposeWithRewardDestinations(null!,
+            new(8960,9728,8704,9472,8960,8704),valid),check);
     }
 
     internal static void Source(NativeFreshLockedChestResearchBody body,Action<bool,string> check)
