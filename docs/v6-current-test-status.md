@@ -1,6 +1,6 @@
 # V6 development: what you can test
 
-September 19 continuation. The preserved **R06 private preview** is the latest
+September 20 continuation. The preserved **R06 private preview** is the latest
 editor build tested here. Newer source checkpoints are not silently installed
 into it. Universal Moby/texture interchangeability remains the goal, not a
 completed feature or a zero-bug guarantee.
@@ -70,8 +70,15 @@ layout now passes source-owned spawn/landing clearance and independent wider
 floor/material/placement tests. It keeps the original spawn and native chest
 behavior, enlarging the finite floor to3072 and moving the key/chest family.
 Actual R02 output verification passes392 assertions, including full readback
-and complete Original inverse. This is not yet a gameplay pass: chest
-interaction and complete native lifecycle remain pending. Existing public
+and complete Original inverse. Fresh full-firmware gameplay now confirms stable
+landing, native key pickup, chest opening, debris/effects and nine of ten chest
+gems credited. The last red gem travels off the finite floor and falls, so R02
+is a preserved **incomplete reward-collection test**, not a lifecycle pass.
+The next layout must accommodate actual reward motion, not merely the saved
+controller centers. See [the R02 runtime record](research/native-fresh-chest-r02-runtime.md).
+Final source-backed checks pass9676 and2355 assertions/checks respectively;
+the source-only key audit identifies the additional HUD key/particle path and
+still does not claim a complete key-zero proof. Existing public
 single-floor export retains its2048 limit; this is an internal experiment,
 not a replacement R06 application. See [the wider-layout record](research/native-fresh-chest-wide-layout.md).
 See [the scene record](research/native-fresh-chest-scene-extension.md) and

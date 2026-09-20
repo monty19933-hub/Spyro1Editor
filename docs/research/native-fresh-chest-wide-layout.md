@@ -85,6 +85,11 @@ physical lengths/1297 sector owners and the experimental executable remain
 unchanged. The isolated artifact is
 `_local/native-v6-chest-runtime-20260920-r02.hpMyEW/candidate-r02/fresh-chest-p9-experiment-r02.cue`.
 Full regression508 passes343 command steps, zero failures, including both
-saved-export UI paths and the larger-floor refusal tests. Final source510/511
-and fresh DuckStation gameplay are still pending; their actual outcomes will
-be recorded separately.
+saved-export UI paths and the larger-floor refusal tests. Final source510
+passes9676 assertions and511 passes2355 checks; both preserve Original BIN/CUE.
+The new full-firmware DuckStation session succeeds at stable landing, key
+pickup, native chest opening, effects and nine of ten reward gems, but the last
+red gem escapes the floor and falls. R02 therefore **fails complete reward
+collection**, not export serialization or initial spawn. See
+[the runtime record](native-fresh-chest-r02-runtime.md). Both original INIs
+were restored byte-exact and the original card/BIN/CUE remain unchanged.
