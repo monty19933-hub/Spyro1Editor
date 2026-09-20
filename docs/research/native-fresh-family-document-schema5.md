@@ -2,16 +2,20 @@
 
 Current status: schema5 neutral persistence, the bounded saved R03 compiler and
 complete family editor are implemented and tested. Full regression578 passes
-343 command steps with zero failures. Actual source-backed publication initiated
-from the UI and the separate R07 application package remain pending; R06 is
-preserved and no new runtime result is claimed. See
+343 command steps with zero failures. Actual headless Window source publication579
+and separate whole-disc verification582 pass. R07 Mac/Windows packages581 pass
+the release verifier at `0.1.0-beta.44`; packaged-app exercise 583 and independent
+output verification 585 also pass. Limited exact-CUE R07 cold-boot/LAB65,
+landing, movement and native-damage observations are recorded, but no repeated
+20/20 collection or general runtime pass is claimed. R06 is preserved. See
 [the family editor implementation and test ledger](native-fresh-family-editor.md).
 
 The original5756aaa checkpoint deliberately added saved-document semantics
 before native or UI admission. That historical boundary and its tests are
 recorded below. Later integration does not widen the old research profiles or
-certify arbitrary family placement. The exact R03 runtime success remains
-recorded separately in [its runtime record](native-fresh-chest-r03-runtime.md).
+certify arbitrary family placement. The exact R03 full-collection success remains
+recorded separately in [its runtime record](native-fresh-chest-r03-runtime.md);
+it must not be relabeled as the later [limited R07 observation](native-fresh-family-editor-r07-runtime.md).
 
 ## One complete authoring document
 
@@ -147,6 +151,49 @@ The final full build-all regression passes **343 command steps, zero failures**
 (`578-family-editor-final-regression.log`; report
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-c7chmqw2/summary.json`).
 Detailed intermediate failures and reruns are retained in
-[the editor ledger](native-fresh-family-editor.md). These results do not claim
-source-backed publication from the UI, R07 packaging, new gameplay acceptance
-or normal Create BIN support.
+[the editor ledger](native-fresh-family-editor.md). These source-free results
+alone do not establish source-backed UI publication, packaging or gameplay.
+
+### Source-backed UI and packaging follow-up579–582
+
+The actual headless Window Save/research run579 passes21 checks with the real
+saved worker and publisher. A deliberate post-success owner error retains and
+correctly classifies the returned publication; source owners close with final
+held/named identity checks. Separate-process verifier582 confirms the complete
+`a5b00725…1d6c50` image,1297 changed sectors, full physical inverse, CUE/receipt
+identity and unchanged source/saved document. The earlier verifier580 refusal
+for a wrong shortened project ID remains recorded, not counted as a pass.
+
+Separate R07 Mac/Windows packages581 pass the release verifier at
+`0.1.0-beta.44`, with R06 preserved. Full identities and evidence are in
+[the current editor ledger](native-fresh-family-editor.md). These package and
+headless checks alone do not establish Windows runtime, notarization, public
+release or normal Create BIN support.
+
+### Packaged editor and bounded R07 runtime follow-up
+
+Actual R07 packaged exercise 583 changed Reward2 X from10454 to10455, immediately
+disabled research for the raw draft, accepted Apply as authored-only, then
+restored10454 through Undo. Save and the real research action published into an
+explicitly selected R07 folder rather than the remembered R06 folder. Separate
+verifier585 passed complete physical readback/inverse and Original/saved final
+checks. The editor closed normally with exit0; the initial exact profile remains
+the exported document, not the intermediate10455 edit.
+
+The exact packaged-output CUE then cold-booted through full licensed Sony
+startup and reached LAB65 through the documented native entry. A health 3 landing
+at `(8960,8960,9066)`, visible authored floor/Wizard/Grass/key/chest, controlled
+movement and native enemy damage were observed. Several lives were lost during
+ordinary elapsed gameplay; the last bounded sample recorded `lives=0`, `health=2`,
+`keyState=1` and `slot=0`. That key-state sample is not proof of a complete pickup,
+reward-collection or reset lifecycle. Full 20/20 collection was **not repeated**
+for this R07 session; the earlier separate R03 success remains separate evidence.
+
+Root closed the runtime/observer processes and confirmed byte-exact restoration
+of both original emulator INIs and the normal memory card, an empty savestates
+directory, and unchanged final Original and exact-R07 BIN/CUE hashes. See
+[the dedicated R07 record](native-fresh-family-editor-r07-runtime.md).
+No document permission, compiled approval flag or export profile was widened:
+tiled-family/native portability, full collection/lifecycle acceptance and normal
+Create BIN remain unsupported, and runtime/public/persistent-save/dependency-
+closure flags remain false.

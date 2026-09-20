@@ -2,9 +2,15 @@
 
 Status: **neutral model/codec/storage, bounded saved native integration and
 complete schema5 editor integration implemented and tested; full regression578
-passes343 steps with zero failures**. Actual source-backed publication initiated
-from the UI and the separate R07 application package remain pending. See
+passes343 steps with zero failures**. Actual headless Window source publication579
+and separate whole-disc verification582 pass. R07 Mac/Windows packages581 pass
+the release verifier at `0.1.0-beta.44`. Packaged-app exercise 583 and independent
+output verification 585 pass. The exact R07 CUE has limited cold-boot/LAB65,
+landing, movement and native-damage observations; full 20/20 collection was not
+repeated. R06 is preserved. See
 [the family editor implementation and test ledger](native-fresh-family-editor.md).
+The separate [R07 runtime record](native-fresh-family-editor-r07-runtime.md)
+states the observation and restoration limits.
 
 The design below was originally reviewed September 20, 2026,
 against checkpoint `55dd291` and the subsequent working-tree reward-destination
@@ -19,7 +25,7 @@ permits the scoped neutral saved-family integration below, not a general
 lifecycle or release pass. The schema5 implementation and343/0 regression
 checkpoint are recorded in [the schema5 record](native-fresh-family-document-schema5.md).
 The proposed names below are now implemented there; the ordered gates remain
-applicable to further native portability, UI publication and packaging work.
+applicable to further native portability and broader gameplay acceptance.
 
 ## Current contract and intended outcome
 
@@ -55,7 +61,12 @@ The implemented editor outcome is a saved family placement in
 **Fresh Level → Level aggregate**: edit its supported anchors/destinations,
 Apply, Undo and Save/Reopen the complete document. The bounded native
 saved-candidate path passed its separate verification before full UI admission;
-the actual source-backed UI publication exercise is still pending.
+the actual headless Window publication now passes using the real saved worker
+and publisher, followed by separate-process complete-image/inverse verification.
+The packaged app also passed an actual Reward2 edit/Apply/authored-only/Undo/Save
+cycle and publication, with independent whole-image/inverse verification.
+Its limited exact-output runtime observation is separate from the earlier R03
+20/20 collection result; the complete collection test was not repeated in R07.
 Universal Mobys, arbitrary tiled-family composition and normal Create BIN are
 not part of this admission.
 
@@ -149,7 +160,10 @@ family also retain schema5. The existing schema4 factory remains separate.
    The editor retains schema5 for both content variants, displays the complete
    seven-member schematic/legend and uses synchronous authored-text guards plus
    complete structured family snapshots during asynchronous work. Actual
-   source-backed UI publication and R07 packaging remain separate pending gates.
+   headless Window source publication, separate R07 packaging, packaged-app
+   editing/publication and independent output verification are verified.
+   Exact-CUE R07 gameplay has bounded boot/LAB/landing/movement observations,
+   not a repeated 20/20 collection, lifecycle or general runtime pass.
 4. **Tiled+family composition separately.** Preserve schema4 P0 source capture
    and all standalone Wizard/Grass paths. A new family-bearing tiled producer
    must prove actual terrain/material/resource/scene/Host composition. Do not
@@ -220,7 +234,38 @@ checks, including all eight retained geometry/pixel references. Full
 regression578 passes343 command steps with zero failures; report:
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-c7chmqw2/summary.json`.
 These checks cover complete controls, atomic history, schema retention and
-stale-result refusal, not a new source-backed UI publication or gameplay run.
+stale-result refusal; alone they do not establish native publication or gameplay.
+
+The subsequent actual headless Window Save/research run579 passes21 checks
+using the real saved worker and publisher, including a deliberate post-success
+owner error without losing the returned publication. Separate verifier582
+confirms the complete `a5b00725…1d6c50` image,1297 changed sectors, full physical
+inverse and unchanged source/saved document. R07 Mac/Windows packages581 pass
+the release verifier at `0.1.0-beta.44`. Details and retained failures are in
+[the current editor ledger](native-fresh-family-editor.md).
+
+Packaged R07 exercise 583 changed Reward2 X from10454 to10455: the raw edit immediately
+disabled research, Apply accepted authored-only intent, and Undo restored10454
+and exact-profile eligibility. Save and the actual research button produced a
+new candidate in R07's explicitly selected output folder, not the picker's
+remembered R06 folder. Independent verifier585 passed complete readback/inverse
+and final Original/saved identities. The app then closed normally with exit0.
+
+The exact packaged-output CUE subsequently cold-booted through the licensed
+Sony stage and reached LAB65 using the documented native entry. Landing showed
+health 3 at `(8960,8960,9066)`; the floor, Wizard, Grass, key and chest were
+visible. Controlled movement and native enemy damage were observed. Multiple
+lives were lost during ordinary elapsed gameplay; the last bounded sample was
+`lives=0`, `health=2`, `keyState=1`, `slot=0`. Key state alone is not a completed pickup or
+treasure-lifecycle proof. **R07 did not repeat the earlier separate R03 20/20
+collection/reset pass**, even though the final BIN is byte-identical.
+
+The runtime session is closed. Root verified both original emulator INIs and
+the normal memory card restored byte-exact, the savestates directory empty,
+and final Original/R07 BIN/CUE hashes unchanged. All observer/emulator processes
+are closed. See [the R07 runtime record](native-fresh-family-editor-r07-runtime.md).
+R06 is preserved; normal Create BIN, arbitrary/tiled family exports, full native
+dependency closure and general runtime/publication approval remain outside scope.
 
 ## Unknown owners and publication risks remain explicit
 

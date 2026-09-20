@@ -1,11 +1,38 @@
 # V6 development: what you can test
 
-September 20 continuation. The preserved **R06 private preview** is the latest
-editor build tested here. Newer source checkpoints are not silently installed
-into it. Universal Moby/texture interchangeability remains the goal, not a
-completed feature or a zero-bug guarantee.
+September 20 continuation. **R07 private preview, beta44**, is now the latest
+editor build exercised here. R06 remains available and unchanged. Newer source
+work is not silently installed into either. Universal Moby/texture
+interchangeability remains the goal, not a completed feature or zero-bug guarantee.
 
-## Playable editor workflow
+## New R07: complete chest-family editor
+
+Open this repository's
+`_local/v6-private-preview-20260920-r07.6brXeJ/Open V6 Chest Family.command`.
+It uses its own test project/settings without rebuilding or resetting yours.
+
+In **Fresh Level… → Level aggregate**, select the chest family. You can edit
+the key/chest positions and all five reward destinations as one complete entry,
+with default or explicit world coordinates, Apply, Undo and Save/Reopen.
+The seven-member schematic/legend shows every family member. Pending Add,
+Cancel and raw-field guards are tested; incomplete raw edits disable export.
+
+The included exact Wizard/grass/chest example can use **Create research
+candidate…** to publish a new BIN/CUE/receipt folder. Other authored layouts can
+be saved but may be labelled authored-only: this is not arbitrary native
+placement or normal Create BIN support. Choose an R07 output folder explicitly;
+the native folder picker may remember an older R06 folder.
+
+This actual packaged workflow passed editing, Save, publication and independent
+complete-disc verification. Its exact output cold-booted in DuckStation and
+reached LAB65 with visible authored floor/actors, grounded movement and native
+enemy damage. This new run did **not** repeat20/20 collection; it ended after
+lost lives with0/20, so the earlier separate R03 full collection remains separate.
+All usual emulator settings and original card/ROM contents are preserved.
+See [the exact R07 evidence and limits](research/native-fresh-family-editor-r07-runtime.md)
+and the launch folder's `PRIVATE-PREVIEW.md` for test instructions.
+
+## Preserved R06: editable tiled terrain/material example
 
 Open this repository's
 `_local/v6-private-preview-20260919-r06.ztR4LG/Open V6 Selected Materials.command`.
@@ -26,10 +53,10 @@ Its source checkpoint is `01ef92a`; its whole BIN hash is
 `f1c137476833d1c046a78df812b40a47f8dc6558051c823437d7c5b3f86d8e32`.
 Original emulator settings and memory-card contents were preserved/restored.
 
-## Not yet available in that build
+## Still unfinished
 
-- Tiled new-level export still requires zero placed Mobys. Existing separate
-  Wizard/Grass research paths are not unrestricted tiled-level placement.
+- Tiled new-level export still requires zero placed Mobys. R07 can author/save
+  tiled family documents, but they are not native-export eligible yet.
 - Static material selection is bounded by native data and GPU capacity.
   Animated/scrolling/HQ materials are not universally supported.
 - The catalogue can show assets without proving that every destination has
@@ -129,5 +156,12 @@ The build-all repository gate passes343/0, including new timing, async, preview
 and complete schema5 controls tests. Internal R07 version is beta.44, distinct
 from preserved R06 beta.43. Actual headless Window source publication579 and
 independent complete-disc verification582 pass. Separate Mac/Windows R07
-packages pass verification581. Packaged-app exercise and its exact-CUE gameplay
-remain separate next gates; see [the family editor record](research/native-fresh-family-editor.md).
+packages pass verification581. Packaged-app controls/Save/publication583 and
+independent verification585 subsequently passed, followed by the limited
+exact-CUE runtime recorded above. See [the family editor record](research/native-fresh-family-editor.md).
+
+The next source-only step is a four-tile terrain/family composition, preserving
+the existing whole-floor material split and complete Wizard/grass/chest intent.
+An independently assembled neutral reference passes102 negative controls586.
+This does not yet issue a native Body, enlarge resource authority, enable
+tiled-family export or replace either preserved application.

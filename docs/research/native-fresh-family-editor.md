@@ -4,8 +4,11 @@ Status: integrated editor builds, focused neutral UI tests and the complete
 343-step repository regression pass. Actual Window Save/research publication
 also passes using the real saved worker and publisher, followed by separate-
 process whole-disc verification. Separate R07 Mac/Windows packages pass the
-release verifier; exercising the packaged app and its exact CUE are next.
-R06 is preserved; no new gameplay result follows from these checks.
+release verifier. Actual packaged controls/Save/publication583 and independent
+whole-disc verification585 pass. The exact R07 CUE subsequently cold-booted,
+entered LAB65 and demonstrated landing/movement/native damage; this new run
+did not repeat full20/20 collection. R06 and originals are preserved.
+See [the exact R07 runtime record](native-fresh-family-editor-r07-runtime.md).
 
 ## One entry, complete controls
 
@@ -131,6 +134,19 @@ Logs: `_local/research/v6-mixed-export-20260912-r01.jR0oBr`.
   Saved raw/canonical `b7c1513f277a2ced1a1c1ea36d2d668349c9c01f5173c618e76d744c9b7a177b`
   remains unchanged. All runtime/public/persistent-save/dependency-closure
   approval flags remain false.
+- 583: actual packaged app uses isolated R07 project/settings, edits Reward2,
+  verifies immediate raw invalidation, Apply/Undo, Save/Reopen and actual
+  research publication. The final fixture is restored10454 before publication;
+  no R06 output or normal project is touched. App closes normally0.
+- 584: read-only chest observer passes13 offline tests, no source/socket.
+- 585: independent verification of the actual583 output passes complete
+  physical readback/inverse, saved/CUE/receipt and final Original owner checks.
+  Exact artifacts and subsequent limited full-firmware/LAB gameplay are in
+  [the R07 record](native-fresh-family-editor-r07-runtime.md). Emulator settings
+  are restored exactly; normal card and Original/candidate hashes unchanged.
+- 586: a separate new neutral four-tile complete-family reference oracle
+  passes102 negative controls and preserves its pinned prior helper. This is
+  independent next-stage source-free preparation, not tiled-family export.
 
 Pixel references describe the captured macOS/Avalonia12/headless-Skia default-font
 environment. Non-macOS runs explicitly report pixel equivalence as unverified;
