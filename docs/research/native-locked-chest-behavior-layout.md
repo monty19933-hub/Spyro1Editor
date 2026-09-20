@@ -115,3 +115,16 @@ to B6F8 and its delay word. It does not follow/execute the new call, presume its
 return, certify a whole function tail, or compare the current Fresh executable.
 No rootless-state admission, host extension, ROM or gameplay result follows from
 this inventory; it is the source evidence for the next independent state proof.
+
+Original-only helper inspection443 now reports the missing vector helper from
+its actual entry1778C through the first observed JRra and delay SW at177BC:
+34 bytes, SHA6915fb72b182f1d700f2505c7df98ab3bdc03271110b2051c56b21975a4f9e6a.
+It loads both three-word vectors, subtracts, and stores all three components.
+The known17700/28 control is also checked and reported; its executable copy ends
+with JRra and third SW at17718, not the trailing inspection-window bytes.
+`source_fresh_chest_reward_helpers_inspector.py` has SHA256
+`a2ce7274c41850693deba94b4bc1c338eddbb436c4c920e5387a03fc77526f4c`.
+It pins the unchanged441/436 oracles, retains full image/owner identities, and
+checks held/named inode, length and timestamps before/finally/reopen. The report
+does not execute helpers, infer returns, admit Fresh code or certify a function
+tail. It is the input evidence for the separate retained-reward scalar witness.
