@@ -7,8 +7,8 @@ using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Persistence;
 using F = NativeFreshMaterialInspectionUiFixture;
 
-// Real Store capture and actual headless window commands. Schema5 is neutral
-// persistence only until the editor can render/edit the complete family union.
+// Real Store capture and actual headless window commands. Complete schema5
+// admission never upgrades/downgrades content or infers native approval.
 internal static class FamilyDocumentAdmissionCases
 {
     private const string Legacy = "Legacy floor (v1)", Aggregate = "Level aggregate";
@@ -17,7 +17,7 @@ internal static class FamilyDocumentAdmissionCases
 
     internal static void Run(string root)
     {
-        int checks = 0, refused = 0, supported = 0;
+        int checks = 0, admitted = 0, refused = 0, supported = 0;
         foreach (bool tiled in new[] { false, true })
         foreach (bool family in new[] { false, true })
         foreach (bool reopen in new[] { false, true })
@@ -34,24 +34,38 @@ internal static class FamilyDocumentAdmissionCases
                 fixture.Window.DecisionForTesting = _ =>
                 { decisions++; return Task.FromResult(FreshDocumentDecision.Discard); };
                 if (rawDraft) fixture.Set("FreshHeading", "unapplied draft");
-                var before = new WindowState(fixture);
                 if (reopen) fixture.Fire("FreshDocumentReopen");
                 else Switch(fixture, Aggregate);
-
-                string status = fixture.Find<TextBlock>("FreshDocumentStatus").Text ?? "";
-                Check(status.Contains("schema-5", StringComparison.Ordinal) &&
-                    status.Contains("neutral", StringComparison.Ordinal) &&
-                    status.Contains("cannot edit or render", StringComparison.Ordinal),
-                    id + ": unsupported stored schema must be explained, not adopted or partially rendered; " +
-                    $"observed schema={fixture.Window.CurrentAggregateIntent?.SchemaVersion}; status={status}");
-                before.RequireUnchanged(fixture, Check);
-                Check(decisions == (rawDraft ? 1 : 0), id + ": discard permission never discards a draft on admission failure");
+                Check(fixture.Window.CurrentAggregateIntent is { SchemaVersion: 5 } actual &&
+                    NativeFreshLevelDocumentCodec.SerializeCanonical(actual).SequenceEqual(fixture.ExpectedDocument) &&
+                    ReferenceEquals(actual, fixture.Window.Preview.AggregateIntent),
+                    id + ": complete schema5 content and placements admitted to the actual preview");
+                fixture.Fire("FreshDocumentApply"); fixture.Fire("FreshDocumentSave"); fixture.Fire("FreshDocumentReopen");
+                Check(fixture.Window.CurrentAggregateIntent is { SchemaVersion: 5 } saved &&
+                    NativeFreshLevelDocumentCodec.SerializeCanonical(saved).SequenceEqual(fixture.ExpectedDocument) &&
+                    !fixture.Window.HasUnsavedChanges, id + ": no-op apply/save/reopen preserves schema5 exactly");
+                Check(decisions == (rawDraft ? 1 : 0), id + ": explicit discard allows valid target admission");
                 Check(fixture.SourceCalls == 0 && fixture.OwnerAttempts == 0,
                     id + ": no source selection, native capture or research ownership");
                 fixture.RequireProtected();
-                refused++;
+                admitted++;
             });
         }
+
+        foreach (bool reopen in new[] { false, true })
+        WithFixture(("family-admission-malformed-" + reopen).ToLowerInvariant(), fixture =>
+        {
+            if (!reopen) Switch(fixture, Legacy);
+            byte[] malformed = "{\"schemaVersion\":5,\"kind\":\"unrecognized\"}"u8.ToArray();
+            File.WriteAllBytes(fixture.DocumentPath, malformed); fixture.ExpectedDocument = malformed;
+            fixture.Window.DecisionForTesting = _ => Task.FromResult(FreshDocumentDecision.Discard);
+            fixture.Set("FreshHeading", "retained invalid draft");
+            var before = new WindowState(fixture);
+            if (reopen) fixture.Fire("FreshDocumentReopen"); else Switch(fixture, Aggregate);
+            before.RequireUnchanged(fixture, Check);
+            Check(fixture.SourceCalls == 0 && fixture.OwnerAttempts == 0, "malformed target refuses before source access");
+            refused++;
+        });
 
         // Existing versions still enter, apply, save and reopen through the
         // same admission point. A new guard must not disable their workflows.
@@ -77,7 +91,7 @@ internal static class FamilyDocumentAdmissionCases
                         .SequenceEqual(fixture.ExpectedDocument), "schema" + schema + ": complete original aggregate admitted without upgrade or projection");
             });
         }
-        Console.WriteLine($"FRESH_FAMILY_DOCUMENT_ADMISSION_OK checks={checks} refused={refused} legacySchemas={supported} sourceOpened=false nativeOutputWritten=false");
+        Console.WriteLine($"FRESH_FAMILY_DOCUMENT_ADMISSION_OK checks={checks} admitted={admitted} refused={refused} legacySchemas={supported} sourceOpened=false nativeOutputWritten=false");
 
         void Check(bool condition, string message)
         { if (!condition) throw new InvalidDataException(message); checks++; }

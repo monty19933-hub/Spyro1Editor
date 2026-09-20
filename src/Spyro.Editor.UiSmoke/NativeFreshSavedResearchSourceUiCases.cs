@@ -12,15 +12,26 @@ internal static class NativeFreshSavedResearchSourceUiCases
     private const string Image = "2533ee961f13e43db03b08f221921cb60e35465e662e51bf221e6c096eb75b70";
     // Observed whole-source family reference, not an independent image oracle.
     private const string FamilyImage = "408dfdfc577f991e635e4c0b636344333ca4b2654d89afabd88af88cc1a55c98";
+    // Retained R03 native image observed at runtime; the saved UI path still
+    // requires its own actual publication and does not inherit runtime approval.
+    private const string LockedChestImage = "a5b00725388f73e7e6f7b9ed356c4a0d0f55b1c869d6a65f38e97ef2641d6c50";
+    private enum PublicationProfile { Material, WizardGrass, LockedChest }
     internal static void Run(string bin, string cue, string fixtureParent, string output) =>
-        RunCore(bin, cue, fixtureParent, output, family: false);
+        RunCore(bin, cue, fixtureParent, output, PublicationProfile.Material);
     internal static void RunFamily(string bin, string cue, string fixtureParent, string output) =>
-        RunCore(bin, cue, fixtureParent, output, family: true);
+        RunCore(bin, cue, fixtureParent, output, PublicationProfile.WizardGrass);
+    internal static void RunLockedChest(string bin, string cue, string fixtureParent, string output) =>
+        RunCore(bin, cue, fixtureParent, output, PublicationProfile.LockedChest);
 
-    private static void RunCore(string bin, string cue, string fixtureParent, string output, bool family)
+    private static void RunCore(string bin, string cue, string fixtureParent, string output, PublicationProfile profile)
     {
-        string expectedImage = family ? FamilyImage : Image;
-        int expectedSectors = family ? 1292 : 1253;
+        bool family = profile == PublicationProfile.WizardGrass, lockedChest = profile == PublicationProfile.LockedChest;
+        string expectedImage = profile switch
+        {
+            PublicationProfile.Material => Image, PublicationProfile.WizardGrass => FamilyImage,
+            PublicationProfile.LockedChest => LockedChestImage, _ => throw new ArgumentOutOfRangeException(nameof(profile))
+        };
+        int expectedSectors = lockedChest ? 1297 : family ? 1292 : 1253;
         foreach (string path in new[] { bin, cue, fixtureParent, output }) RequireAbsoluteUnlinked(path);
         if (!Directory.Exists(fixtureParent) || !Directory.Exists(Path.GetDirectoryName(output)) ||
             Directory.Exists(output) || File.Exists(output) || new FileInfo(output).LinkTarget != null ||
@@ -35,12 +46,19 @@ internal static class NativeFreshSavedResearchSourceUiCases
         try
         {
             sources.Open();
-            fixture = new Fixture(fixtureParent, family ? "actual-family408d" : "actual-joint2533", output,
-                document: family ? SavedFamilyDocumentFixture.Document() : null,
-                selectedEditorId: family ? SavedFamilyDocumentFixture.GrassId : null);
+            fixture = new Fixture(fixtureParent, lockedChest ? "actual-locked-chest-a5b0" : family ? "actual-family408d" : "actual-joint2533", output,
+                document: lockedChest ? NativeFreshFamilyDocumentSessionCases.Document() : family ? SavedFamilyDocumentFixture.Document() : null,
+                selectedEditorId: lockedChest ? NativeFreshFamilyDocumentSessionCases.FamilyId : family ? SavedFamilyDocumentFixture.GrassId : null);
             fixture.Source = (bin, cue);
             fixture.Window.ResearchOutputPickerForTesting = _ => Task.FromResult<string?>(output);
             var applied = fixture.Window.CurrentAggregateIntent!;
+            if (lockedChest)
+                Check(applied.SchemaVersion == 5 && applied.Placements.Count == 3 &&
+                    NativeFreshLevelDocumentCodec.SerializeCanonical(applied).AsSpan().SequenceEqual(
+                        NativeFreshLevelDocumentCodec.SerializeCanonical(NativeFreshFamilyDocumentSessionCases.Document())) &&
+                    fixture.CurrentSession.SelectedEditorId == NativeFreshFamilyDocumentSessionCases.FamilyId &&
+                    fixture.Window.SavedResearchWorkForTesting == null,
+                    "The actual UI owns the complete independently authored R03 schema5 fixture and real worker, not a schema3 projection or injected publisher.");
             var openedSnapshot = fixture.CurrentSession.Snapshot;
             fixture.Fire("FreshDocumentSave"); // The real unchanged Save→Export boundary.
             var savedSnapshot = fixture.CurrentSession.Snapshot;
@@ -65,6 +83,7 @@ internal static class NativeFreshSavedResearchSourceUiCases
                 "Actual export retains the returned Save Snapshot, not an equal applied object or later recapture.");
             Check(result != null && result.WholeImageReadback && result.ImageSha256 == expectedImage && result.ChangedRawSectors == expectedSectors &&
                 result.OutputDirectory == output && result.RetainedRecoveryDirectory.Length == 0 && !result.RuntimeVerified,
+                lockedChest ? "Actual returned publication matches retained R03 native bytes; saved UI/runtime approval remains separate." :
                 family ? "Actual returned publication matches the source-measured family reference without runtime promotion." :
                     "Actual returned publication preserves the independent joint golden without runtime promotion.");
             Check(ReferenceEquals(applied, fixture.Window.CurrentAggregateIntent) && fixture.Released == 1 && !fixture.Window.ResearchBusyForTesting,
@@ -111,6 +130,7 @@ internal static class NativeFreshSavedResearchSourceUiCases
                     !root.GetProperty("nativePersistentSaveOwnerProven").GetBoolean(),
                     "Resolved family receipt rows retain authored order without normal export, general closure, runtime or durable-save promotion.");
             }
+            if (lockedChest) RequireLockedChestReceipt(savedSnapshot, result!, Check);
         }
         catch (Exception error) { failures.Add(error); }
         finally
@@ -124,10 +144,75 @@ internal static class NativeFreshSavedResearchSourceUiCases
             NativeFreshSavedResearchLifecycleCases.RetainWindowFailure(fixture, failures);
         }
         F.Throw(failures);
-        string marker = family ? "FRESH_SAVED_FAMILY_RESEARCH_SOURCE_UI_OK" : "FRESH_SAVED_RESEARCH_SOURCE_UI_OK";
+        string marker = lockedChest ? "FRESH_SAVED_LOCKED_CHEST_RESEARCH_SOURCE_UI_OK" :
+            family ? "FRESH_SAVED_FAMILY_RESEARCH_SOURCE_UI_OK" : "FRESH_SAVED_RESEARCH_SOURCE_UI_OK";
         Console.WriteLine($"{marker} checks={checks} originalHeldNamedFinalAndClosed=true nativeOutputWritten=true actualPublication=true image={expectedImage} output={output}");
         void Check(bool condition, string message) { if (!condition) throw new InvalidDataException(message); checks++; }
         void Attempt(Action action) { try { action(); } catch (Exception error) { failures.Add(error); } }
+    }
+
+    private static void RequireLockedChestReceipt(NativeFreshLevelDocumentSnapshot snapshot,
+        NativeId65FreshDiscResearchPublication publication, Action<bool, string> check)
+    {
+        var expected = NativeFreshFamilyDocumentSessionCases.Document();
+        byte[] canonicalBytes = NativeFreshLevelDocumentCodec.SerializeCanonical(expected);
+        using var canonical = JsonDocument.Parse(canonicalBytes);
+        RequireAbsoluteUnlinked(publication.ReceiptPath);
+        byte[] receiptBytes;
+        using (var input = new FileStream(publication.ReceiptPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            if (input.Length is < 1 or > 65536) throw new InvalidDataException("Complete physical chest receipt exceeds its bounded owner.");
+            receiptBytes = new byte[checked((int)input.Length)]; input.ReadExactly(receiptBytes);
+            check(input.Position == receiptBytes.Length && input.ReadByte() == -1 && input.Length == receiptBytes.Length,
+                "Read the complete bounded physical receipt through actual EOF without truncation.");
+        }
+        using var receipt = JsonDocument.Parse(receiptBytes);
+        var root = receipt.RootElement; var saved = root.GetProperty("saved"); var lineage = root.GetProperty("lineage");
+        check(snapshot.Intent is { SchemaVersion: 5 } && NativeFreshLevelDocumentCodec.SerializeCanonical(snapshot.Intent)
+                .AsSpan().SequenceEqual(canonicalBytes) &&
+            root.GetProperty("variant").GetString() == "schema5-r03-wizard-grass-locked-chest-p9-n32" &&
+            root.GetProperty("planSha256").GetString() == publication.PlanSha256 &&
+            root.GetProperty("imageSha256").GetString() == LockedChestImage &&
+            root.GetProperty("imageByteLength").GetInt64() == 661547040 && root.GetProperty("changedRawSectors").GetInt32() == 1297 &&
+            root.GetProperty("savedRevisionBound").GetBoolean() && root.GetProperty("wholeImageInverseRequired").GetBoolean() &&
+            saved.GetProperty("projectId").GetString() == snapshot.ProjectId && saved.GetProperty("root").GetString() == snapshot.RootPath &&
+            saved.GetProperty("path").GetString() == snapshot.Path && saved.GetProperty("rawSha256").GetString() == snapshot.ContentSha256 &&
+            saved.GetProperty("manifestSha256").GetString() == snapshot.ManifestSha256 &&
+            saved.GetProperty("canonicalSha256").GetString() == Convert.ToHexStringLower(SHA256.HashData(canonicalBytes)) &&
+            JsonElement.DeepEquals(saved.GetProperty("canonical"), canonical.RootElement),
+            "Physical schema5 receipt binds the exact returned Save revision and complete literal R03 document, never the old schema3 route.");
+        var authored = canonical.RootElement.GetProperty("placements"); var families = lineage.GetProperty("families");
+        check(lineage.GetProperty("authoredPlacementCount").GetInt32() == 3 &&
+            lineage.GetProperty("nativePlacedCount").GetInt32() == 9 && lineage.GetProperty("nativeNominalCapacity").GetInt32() == 32 &&
+            families.GetArrayLength() == 3 && Enumerable.Range(0, 3).All(i =>
+                families[i].GetProperty("EditorId").GetString() == expected.Placements[i].EditorId &&
+                families[i].GetProperty("FirstRowIndex").GetInt32() == i && families[i].GetProperty("RowCount").GetInt32() == (i == 2 ? 7 : 1) &&
+                JsonElement.DeepEquals(families[i].GetProperty("authoredPlacement"), authored[i])),
+            "All three actual authored111/222/333 entries retain full contents/order and expand to1+1+7 native rows, not P2/P0.");
+        int[] classes = [0x11B, 0x1F5, 0xAD, 0xAE, 0xD, 0xD, 0xD, 0xD, 0xD];
+        var owners = lineage.GetProperty("nativeRowOwners"); var selectors = lineage.GetProperty("sourceSelectorRows");
+        check(owners.GetArrayLength() == 9 && selectors.GetArrayLength() == 9 && Enumerable.Range(0, 9).All(i =>
+            owners[i].GetProperty("nativeIndex").GetInt32() == i && owners[i].GetProperty("actorClass").GetInt32() == classes[i] &&
+            selectors[i].GetProperty("PlacedOrdinal").GetInt32() == i && selectors[i].GetProperty("ActorClassId").GetInt32() == classes[i] &&
+            owners[i].GetProperty("finalRowSha256").GetString() == selectors[i].GetProperty("SceneRowSha256").GetString() &&
+            owners[i].GetProperty("sourceRowSha256").GetString() == selectors[i].GetProperty("SourceRowSha256").GetString()),
+            "Physical receipt retains all nine final native classes and corresponding source/final row hashes.");
+        check(JsonElement.DeepEquals(lineage.GetProperty("rewardDestinationOverrides"), JsonSerializer.SerializeToElement(
+                ((NativeFreshLockedChestFamilyPlacementIntent)expected.Placements[2]).RewardDestinations!.Values)) &&
+            lineage.GetProperty("KnownSelectorCount").GetInt32() == 7 &&
+            lineage.GetProperty("KnownDeterministicSelectorSubtotal").GetInt32() == 20 &&
+            lineage.GetProperty("ExperimentalTreasureTarget").GetInt32() == 20 &&
+            lineage.GetProperty("sceneSha256").GetString() == "4f560dcbfa2d997a3f02554cf297d95c1778f67fc5d8fcf8ff47f64d609a89e8" &&
+            lineage.GetProperty("bodySha256").GetString() == "2d8c1bf1af35c8e5522b239c564d36c79c828539d133278c461b6178b53bb504" &&
+            lineage.GetProperty("executableSha256").GetString() == "81501f07ec9ce336089ec5a92f81bf51569aed723ac4f8ba1cf85ba0ef69a431",
+            "The exact Reward2 WORLD override, seven known selectors and experimental20 target preserve retained R03 scene/body/EXE identities.");
+        foreach (string flag in new[] { "runtimeVerified", "normalCreateBinApproved", "completeNativeDependencyClosureProven",
+            "nativePersistentSaveOwnerProven", "publicationApproved", "keyZeroContributionProven", "completeStaticCensusProven", "runtimeDropGuarantee" })
+            check(!root.GetProperty(flag).GetBoolean(), "No saved UI publication promotes pending native authority: " + flag);
+        check(root.GetProperty("experimentalKeyZeroAssumption").GetBoolean() &&
+            lineage.GetProperty("experimentalKeyZeroAssumption").GetBoolean() &&
+            !lineage.GetProperty("footprintAndTrajectoryProven").GetBoolean(),
+            "Key-zero remains an explicit experimental premise, not a complete census or trajectory certificate.");
     }
 
     private static void RequireAbsoluteUnlinked(string path)

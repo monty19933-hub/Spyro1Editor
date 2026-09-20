@@ -1,11 +1,16 @@
 # Fresh family authoring: bounded integration plan
 
-Status: **neutral model/codec/storage complete at5756aaa; saved native
-integration under verification; UI integration pending**. The design below
-was originally reviewed September 20, 2026,
+Status: **neutral model/codec/storage, bounded saved native integration and
+complete schema5 editor integration implemented and tested; full regression578
+passes343 steps with zero failures**. Actual source-backed publication initiated
+from the UI and the separate R07 application package remain pending. See
+[the family editor implementation and test ledger](native-fresh-family-editor.md).
+
+The design below was originally reviewed September 20, 2026,
 against checkpoint `55dd291` and the subsequent working-tree reward-destination
-extension. This document proposes the next saved-document/editor integration;
-it is not an export authorization or a report of completed tests. The R03
+extension. Its proposal wording records the original implementation plan;
+the current status and completed gates below supersede its earlier pending
+status. It is not a general export authorization. The R03
 source-backed and full-regression runs were still running when this plan was
 written. Subsequent exact-candidate R03 gameplay now shows all20 treasure points
 collected and retained through native reset; see
@@ -14,7 +19,7 @@ permits the scoped neutral saved-family integration below, not a general
 lifecycle or release pass. The schema5 implementation and343/0 regression
 checkpoint are recorded in [the schema5 record](native-fresh-family-document-schema5.md).
 The proposed names below are now implemented there; the ordered gates remain
-applicable to the unfinished native/UI work.
+applicable to further native portability, UI publication and packaging work.
 
 ## Current contract and intended outcome
 
@@ -39,17 +44,18 @@ The current internal source extension now provides:
   preimages. The document/UI must not choose raw offsets or independently
   expose these two native representations.
 
-The planned R03 experiment changes only `Reward2` to world
+The originally planned R03 experiment changed only `Reward2` to world
 `(10454, 10503, 9216)`, retaining the R02 floor, key/chest anchors and other four
 destinations. This is not `Reward5`, nor a request to move the entire package.
 See [the source investigation and experiment limits](native-fresh-chest-authored-destinations.md).
 R02 established usable landing/key/chest interaction but left one red gem
 uncollected off the finite floor; see [its runtime record](native-fresh-chest-r02-runtime.md).
 
-The smallest meaningful user-facing outcome is a saved family placement in
+The implemented editor outcome is a saved family placement in
 **Fresh Level → Level aggregate**: edit its supported anchors/destinations,
-Apply, Undo, Save/Reopen and build the same fully represented research level.
-The native saved-candidate path must be verified before exposing the full UI.
+Apply, Undo and Save/Reopen the complete document. The bounded native
+saved-candidate path passed its separate verification before full UI admission;
+the actual source-backed UI publication exercise is still pending.
 Universal Mobys, arbitrary tiled-family composition and normal Create BIN are
 not part of this admission.
 
@@ -111,12 +117,14 @@ Unknown tags, duplicate/unknown fields, malformed roles and raw authority
 payloads fail closed. Keep bounded enumeration, byte/depth limits and defensive
 copies; adjust a limit only with a demonstrated need and regression coverage.
 
-Every content/material/placement edit must preserve schema5 and the entire
-active content variant. In particular, current `WithTiledContent` and
-`CreateTiled` hardcode schema4: they cannot be reused unchanged for a schema5
-family document. Explicitly upgrading a family document to tiled content must
-retain family IDs, parameters and overrides; removing its final family must
-not downgrade it. This is an extension requirement, not a current schema4 bug.
+Every content/material/placement edit preserves schema5 and the entire active
+content variant. At the original planning checkpoint, `WithTiledContent` and
+`CreateTiled` selected schema4, so form reconstruction could not reuse them
+unchanged for a family document. The implemented atomic
+`WithTiledContent(content, placements)` validates the final content and complete
+placement list together while retaining schema5; its one-argument adapter
+shares that invariant. Explicit tiled conversion and removal of the final
+family also retain schema5. The existing schema4 factory remains separate.
 
 ## Ordered implementation and dependency gates
 
@@ -124,19 +132,24 @@ not downgrade it. This is an extension requirement, not a current schema4 bug.
    schema upgrade with source-free tests. Save/Reopen must preserve the full
    authored level, including family defaults versus explicit overrides, without
    needing a ROM or issuing compilation authority.
-2. **Source-path-verified saved candidate before full UI.** Add a closed saved
-   family compilation arm consuming the actual saved snapshot and the exact
+2. **Source-path-verified saved candidate — implemented and verified.** The closed saved
+   family compilation arm consumes the actual saved snapshot and the exact
    source BIN/CUE owners. Bind the complete canonical document to the issued
    Body/Host/Scene/executable/disc chain. Reproduce the validated P9 recipe, then
    prove deterministic reopened compilation, whole-image readback/inverse and
    publication failure behavior. Reuse the existing saved publisher and shared
    transaction; do not wrap a standalone test BIN as though it came from Save.
-3. **Existing-window integration only after that vertical slice passes.** Add
-   family/child selection and typed fields to the existing aggregate/session.
+   See [the separate saved compilation ledger](native-fresh-saved-locked-chest-r03.md).
+3. **Existing-window integration — implemented and tested.** Complete family
+   selection and all five named reward controls use the existing aggregate/session.
    Apply and Undo are atomic family/document operations. Include every new raw
    field, pending add and child selection in asynchronous stale-state checks.
    Show authored-only versus research-buildable status from the complete
    document, not merely a catalogue item, schema number or source class.
+   The editor retains schema5 for both content variants, displays the complete
+   seven-member schematic/legend and uses synchronous authored-text guards plus
+   complete structured family snapshots during asynchronous work. Actual
+   source-backed UI publication and R07 packaging remain separate pending gates.
 4. **Tiled+family composition separately.** Preserve schema4 P0 source capture
    and all standalone Wizard/Grass paths. A new family-bearing tiled producer
    must prove actual terrain/material/resource/scene/Host composition. Do not
@@ -198,6 +211,16 @@ codec/store, a new neutral family-intent file, a new saved-family adapter beside
 `NativeFreshDocumentWindow` partials in that directory. The new arm must be dispatched deliberately by
 `NativeFreshSavedLevelResearchCandidatePlan`; do not depend on today's
 schema3-versus-tiled routing to infer family capability.
+
+## Current editor checkpoint
+
+Current editor verification: logs576/577 pass213 synchronous raw-timing checks
+across45 authored text fields,1366 family async/readiness checks and232 preview
+checks, including all eight retained geometry/pixel references. Full
+regression578 passes343 command steps with zero failures; report:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-c7chmqw2/summary.json`.
+These checks cover complete controls, atomic history, schema retention and
+stale-result refusal, not a new source-backed UI publication or gameplay run.
 
 ## Unknown owners and publication risks remain explicit
 

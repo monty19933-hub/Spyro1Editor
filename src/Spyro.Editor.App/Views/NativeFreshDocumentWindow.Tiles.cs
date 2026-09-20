@@ -43,17 +43,18 @@ internal sealed partial class NativeFreshDocumentWindow
         _tilePanel.Children.Add(new WrapPanel { Children = { _addTile, _removeTile, _tileUp, _tileDown } });
         _tiledSpawnRow.Children.Add(new TextBlock { Text = "Spawn Z · 512 above a supporting tile plane", FontSize = 12 });
         _tiledSpawnRow.Children.Add(_tiledSpawnZ);
-        _tiledSpawnZ.TextChanged += (_, _) => FieldsChanged();
+        _tiledSpawnZ.TextChanging += (_, _) => FieldsChanged();
         return _tilePanel;
     }
 
     private void ChangeTiles(Action change)
     {
-        if (!_aggregateMode || CurrentAggregateIntent == null || AggregateCommandsBlocked || HasUnappliedFields) return;
+        if (!_aggregateMode || CurrentAggregateIntent == null || AggregateCommandsBlocked || HasPendingPlacementAdd || HasUnappliedFields) return;
         try
         {
             RequireCurrentProject(); change(); WriteFields();
-            _status.Text = "Applied tiled geometry change. Save to persist; Undo restores the complete document. " + TiledCapabilityText;
+            _status.Text = "Applied tiled geometry change. Save to persist; Undo restores the complete document. " +
+                (CurrentAggregateIntent?.SchemaVersion == 5 ? FamilyCapabilityText : TiledCapabilityText);
         }
         catch (Exception error) when (error is ArgumentException or InvalidDataException or InvalidOperationException or OverflowException)
         { _status.Text = "Tile change refused: " + error.Message + " The previous document and history are retained."; RefreshChrome(); }
@@ -78,9 +79,10 @@ internal sealed partial class NativeFreshDocumentWindow
         var tiled = CurrentAggregateIntent?.TiledContent;
         _tilePanel.IsVisible = _aggregateMode && CurrentAggregateIntent != null;
         _upgradeTiles.IsVisible = tiled == null;
+        _upgradeTiles.Content = CurrentAggregateIntent?.SchemaVersion == 5 ? "Use tiled geometry (keeps schema 5)" : "Use tiled geometry (schema 4)";
         _tiles.IsVisible = _addTile.IsVisible = _removeTile.IsVisible = _tileUp.IsVisible = _tileDown.IsVisible = tiled != null;
         _tiledSpawnRow.IsVisible = tiled != null;
-        bool canEdit = editable && !HasUnappliedFields && !_addingWizard && _pendingNativeMobyAdd == null;
+        bool canEdit = editable && !HasUnappliedFields && !HasPendingPlacementAdd;
         _upgradeTiles.IsEnabled = canEdit && tiled == null;
         _tiles.IsEnabled = canEdit;
         _addTile.IsEnabled = canEdit && tiled != null && tiled.Tiles.Count < NativeFreshTiledLevelContent.MaximumTiles;
@@ -88,8 +90,11 @@ internal sealed partial class NativeFreshDocumentWindow
         int index = tiled?.Tiles.ToList().FindIndex(t => t.EditorId == _aggregateSession?.SelectedTileId) ?? -1;
         _tileUp.IsEnabled = canEdit && index > 0;
         _tileDown.IsEnabled = canEdit && index >= 0 && index + 1 < tiled!.Tiles.Count;
-        _tiledSpawnZ.IsEnabled = editable && tiled != null && !_addingWizard && _pendingNativeMobyAdd == null;
-        _tileNotice.Text = tiled == null ? "Explicit upgrade preserves this floor and its material choices as the first tile. Tiled research supports all-Base faces or bounded static retail texture selections, optionally mixed with Base. It requires zero placements, complete native data within 0x1000 bytes, validated source/GPU ownership, and a complete report within 64 KiB; other tiled content remains authoring-only."
+        _tiledSpawnZ.IsEnabled = editable && tiled != null && !HasPendingPlacementAdd;
+        _tileNotice.Text = CurrentAggregateIntent?.SchemaVersion == 5 ?
+            (tiled == null ? "Explicit tiled upgrade preserves this floor, its materials and every placement in schema 5. Tiled family documents remain authoring-only. "
+                : $"{tiled.Tiles.Count} ordered tiles. Geometry/color/material fields edit the selected tile; spawn, sky and music belong to the whole level. ") + FamilyCapabilityText
+            : tiled == null ? "Explicit upgrade preserves this floor and its material choices as the first tile. Tiled research supports all-Base faces or bounded static retail texture selections, optionally mixed with Base. It requires zero placements, complete native data within 0x1000 bytes, validated source/GPU ownership, and a complete report within 64 KiB; other tiled content remains authoring-only."
             : $"{tiled.Tiles.Count} ordered tiles. Geometry/color/material fields edit the selected tile; spawn, sky and music belong to the whole level. Shared seams are allowed; overlapping flat interiors are not.";
     }
 
@@ -109,6 +114,6 @@ internal sealed partial class NativeFreshDocumentWindow
         var next = NativeFreshTiledLevelContent.Create(content.Tiles.Select(t => t.EditorId == selected.EditorId ? replacement : t),
             Number("FreshSpawnX"), Number("FreshSpawnY"), spawnZ, Number("FreshHeading"), Rgb("FreshSkyColor"),
             (_music.SelectedItem as MusicTrackEntry)?.TrackId ?? -1);
-        return NativeFreshLevelDocumentIntent.CreateTiled(next, rows);
+        return CurrentAggregateIntent!.WithTiledContent(next, rows);
     }
 }

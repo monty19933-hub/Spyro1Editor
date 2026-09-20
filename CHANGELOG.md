@@ -2,13 +2,20 @@
 
 ## Changes since Spyro Editor Beta V5
 
-Private development preview, internal build `0.1.0-beta.43`. This is not a
+Private development preview, internal build `0.1.0-beta.44`. This is not a
 published release or a claim of universal Moby, texture or new-level support.
 
 - Added Fresh Level authoring to the normal application: floor bounds, spawn,
   heading, colors, native music selection, ordered placements and two floor
   material references. Apply, undo/redo, save and reopen preserve the complete
   document. The preview remains schematic, not game rendering.
+- Added complete locked-chest family authoring: independent key/chest anchors,
+  all five default or explicit WORLD reward destinations, one stable editor ID,
+  and whole-document history/save/reopen. Tiled edits retain family content
+  atomically; only the exact saved legacy-floor R03 profile enables research
+  export. Arbitrary families and tiled Mobys remain authored-only.
+- Fixed raw-field event timing so edits invalidate pending work immediately,
+  while form refreshes do not leave delayed events that disrupt Moby staging.
 - Added source browsing for native Moby donor rows across the inventoried game,
   with source variants kept distinct, explicit placement staging/cancellation,
   and clear separation between saved authoring intent and supported imports.

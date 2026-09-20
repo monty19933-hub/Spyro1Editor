@@ -8,7 +8,7 @@ using Spyro.Editor.Core.Primitives;
 namespace Spyro.Editor.App.Views;
 
 /// <summary>Bounded authored-coordinate diagram, not native rendering or collision evidence.</summary>
-internal sealed class NativeFreshDocumentPreview : Control
+internal sealed partial class NativeFreshDocumentPreview : Control
 {
     private NativeId65FreshDocumentIntent? _intent;
     private bool _aggregatePresentation;
@@ -26,13 +26,14 @@ internal sealed class NativeFreshDocumentPreview : Control
         get
         {
             if (AggregateIntent == null) return "0 placed Mobys";
+            if (HasFamilies) return FamilyPlacementCaption;
             int native = AggregateIntent.Placements.OfType<NativeFreshMobyPlacementIntent>().Count();
             if (native == 0) return $"{AggregateIntent.Placements.Count} authored routes (XY only)";
             int routes = AggregateIntent.Placements.Count - native;
             return $"{routes} authored route{(routes == 1 ? "" : "s")} + {native} native marker{(native == 1 ? "" : "s")} (XY only)";
         }
     }
-    internal double SchematicCaptionTop => Bounds.Height - (MaterialPreviewNotice.Length == 0 ? 34 : 56);
+    internal double SchematicCaptionTop => Bounds.Height - (MaterialPreviewNotice.Length == 0 ? 34 : 56) - FamilyLegendHeight;
     internal Rect? FloorSchematicBounds
     {
         get
@@ -132,6 +133,8 @@ internal sealed class NativeFreshDocumentPreview : Control
             }
         }
 
+        if (HasFamilies) RenderFamilies(context);
+
         context.FillRectangle(new SolidColorBrush(Color.FromArgb(210, 18, 30, 45)), new Rect(0, 0, bounds.Width, 76));
         Text(context, intent.Tiled ? $"{intent.Tiles.Count} ordered tiles · bounds {intent.FloorWidth} × {intent.FloorDepth}"
             : $"{intent.FloorWidth} × {intent.FloorDepth}  ·  floor Z {intent.FloorZ}", new Point(16, 12), Brushes.White, 17);
@@ -140,9 +143,12 @@ internal sealed class NativeFreshDocumentPreview : Control
         bool hasMaterialNotice = MaterialPreviewNotice.Length != 0;
         double captionHeight = hasMaterialNotice ? 56 : 34;
         context.FillRectangle(new SolidColorBrush(Color.FromArgb(210, 18, 30, 45)),
-            new Rect(0, SchematicCaptionTop, bounds.Width, captionHeight));
-        Text(context, $"Heading {intent.Heading}/255 (schematic)  ·  music track {intent.MusicTrackId:00}  ·  {PlacementPreviewCaption}",
-            new Point(16, bounds.Height - captionHeight + 8), Brushes.White, 12);
+            new Rect(0, bounds.Height - captionHeight, bounds.Width, captionHeight));
+        if (HasFamilies)
+            FamilyText(context, FamilySceneCaption(intent), new Point(12, bounds.Height - captionHeight + 8), Brushes.White, 12);
+        else
+            Text(context, $"Heading {intent.Heading}/255 (schematic)  ·  music track {intent.MusicTrackId:00}  ·  {PlacementPreviewCaption}",
+                new Point(16, bounds.Height - captionHeight + 8), Brushes.White, 12);
         if (hasMaterialNotice)
             Text(context, MaterialPreviewNotice, new Point(16, bounds.Height - 26), Brushes.White, 12);
     }
@@ -172,7 +178,7 @@ internal sealed class NativeFreshDocumentPreview : Control
 
     private SchematicProjection CreateProjection(SurfaceView intent)
     {
-        if (intent.Tiled)
+        if (intent.Tiled || HasFamilies)
         {
             // Fit actual projected corners and spawn, including separated heights,
             // between captions. A world-space bounding rectangle alone is not a

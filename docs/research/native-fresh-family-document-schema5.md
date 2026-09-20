@@ -1,9 +1,17 @@
 # Neutral saved family authoring — schema5
 
-This continuation adds saved-document semantics before native or UI admission.
-It does not add a new installed editor, widen the existing research exporters,
-or certify arbitrary family placement. R06 remains preserved. The exact R03
-runtime success is recorded separately in `native-fresh-chest-r03-runtime.md`.
+Current status: schema5 neutral persistence, the bounded saved R03 compiler and
+complete family editor are implemented and tested. Full regression578 passes
+343 command steps with zero failures. Actual source-backed publication initiated
+from the UI and the separate R07 application package remain pending; R06 is
+preserved and no new runtime result is claimed. See
+[the family editor implementation and test ledger](native-fresh-family-editor.md).
+
+The original5756aaa checkpoint deliberately added saved-document semantics
+before native or UI admission. That historical boundary and its tests are
+recorded below. Later integration does not widen the old research profiles or
+certify arbitrary family placement. The exact R03 runtime success remains
+recorded separately in [its runtime record](native-fresh-chest-r03-runtime.md).
 
 ## One complete authoring document
 
@@ -65,29 +73,45 @@ Unknown, missing, duplicate, case-mismatched and malformed fields fail closed;
 native rows, private bytes, hashes and approval flags are not authored payloads.
 
 Existing native saved research arms still require their original exact schemas
-and full supported placement lists. Schema5 must fail before source access;
-neither an empty family list nor projecting old rows permits an old exporter.
-The current window cannot yet render or edit the complete family union. Its
-admission check therefore refuses stored schema5 without replacing a current
-session, preview, source selection or raw draft. Persistence support is not
-presented as a working family UI. This guard also prevents the old tiled-field
-reader from downgrading a newer document to schema4.
+and full supported placement lists. Schema5 cannot enter an old exporter by
+removing its family or projecting old rows. The separately verified saved P9
+arm retains the entire canonical document and actual source/compiled owners;
+only the exact legacy-floor R03 Wizard + Grass + complete locked-chest recipe
+passes its neutral readiness preflight. See
+[the saved compilation record](native-fresh-saved-locked-chest-r03.md).
 
-Before removing that UI guard, implement and verify a saved P9 compilation
-that binds the entire canonical schema5 document, then complete family/child
-editing and a schema-preserving tiled field reader. Do not remove the existing
-zero-placement tiled export guard. Genuine tiled+family source composition,
-ordinary portals, persistent save ownership and universal imports remain
-separate work.
+At5756aaa, the window could not render/edit that complete union and therefore
+refused stored schema5 without replacing its current session, preview, source
+selection or raw draft. That intentional admission guard was removed only after
+the saved native path and complete family editor were implemented and tested.
+The existing window now edits both schema5 content variants, with independent
+key/chest XYZ and five explicit/default reward controls. The seven-member
+schematic/legend preserves exact authored coordinates and does not invent
+default positions or simulate trajectories.
+
+The atomic tiled-content-and-placement reader retains schema5, including after
+the last family is removed. Pending Add, Cancel, Apply, Undo/Redo, no-op Apply
+and Save/Reopen retain whole-document semantics. All45 authored text fields use
+synchronous `TextChanging` invalidation; the21 family coordinates and five modes
+also have complete structured snapshots across catalogue, inspection and saved
+research awaits. Raw A-B-A changes remain stale before a dispatcher pump, and
+owned form refreshes do not enqueue later raw-generation changes.
+
+Edited/unsupported family recipes and schema5 tiled documents remain saveable
+authorship, not native output. The schema4 zero-placement tiled export guard is
+unchanged. Genuine tiled+family source composition, ordinary portals, persistent
+save ownership and universal imports remain separate work.
 
 ## Verification
 
-The integrated Release build-all regression passes **343 command steps, zero
+### Historical neutral checkpoint5756aaa
+
+The integrated Release build-all regression passed **343 command steps, zero
 failures** (`534-family-schema5-full-regression.log`; full report in
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-gwxyu_tc/summary.json`).
-The neutral-document smoke passes1750 checks including1083 expected refusals;
-saved research passes917 checks including600 expected refusals. The focused
-headless UI test passes124 checks,16 schema5 refusals and all four earlier
+The neutral-document smoke passed1750 checks including1083 expected refusals;
+saved research passed917 checks including600 expected refusals. The focused
+headless UI test passed124 checks,16 schema5 refusals and all four earlier
 schema workflows, without source access or native output.
 
 Independent canonical literals cover both content arms and all old schema
@@ -95,7 +119,7 @@ goldens. Tests cover anchor/WORLD-destination semantics, strict parsing,
 Save/Reopen/cancellation/staleness, an eight-case source-admission refusal
 matrix, and actual headless-window admission with old workflow preservation.
 The UI regression first reproduced successful but misleading adoption of a
-schema5 document; the production guard makes the same test pass. The integrated
+schema5 document; the then-required production guard made the same test pass. The integrated
 codec test initially exposed an uppercase test-fixture project ID; that fixture
 was corrected before the successful rerun. Earlier failed logs are retained.
 
@@ -105,3 +129,24 @@ body and executable identities remain unchanged; its full inverse restores
 Original and the final BIN/CUE checks pass. This replay writes no candidate.
 No new runtime or native publication claim follows from these source-free
 document/UI checks, and no application bundle was replaced.
+
+### Implemented editor checkpoint578
+
+Focused current tests pass153 session checks,86 admission checks (16 complete
+schema5 admissions, two malformed-target refusals and all four old schemas),
+49 control checks,1366 family async/readiness checks and232 preview checks.
+The eight old geometry/caption and macOS pixel references remain unchanged.
+
+Timing RED574 failed before the first dispatcher pump on `FreshFloorX`.
+Replacing the seven authored-text `TextChanged` subscriptions with synchronous
+`TextChanging` then passed213 timing checks in576/577, covering45 text fields,
+owned refresh/no-op Apply and native Stage from selected family/native entries.
+The actual queued-reveal owner/generation guards remain unchanged.
+
+The final full build-all regression passes **343 command steps, zero failures**
+(`578-family-editor-final-regression.log`; report
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-c7chmqw2/summary.json`).
+Detailed intermediate failures and reruns are retained in
+[the editor ledger](native-fresh-family-editor.md). These results do not claim
+source-backed publication from the UI, R07 packaging, new gameplay acceptance
+or normal Create BIN support.

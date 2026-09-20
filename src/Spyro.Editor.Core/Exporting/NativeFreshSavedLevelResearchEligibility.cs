@@ -99,6 +99,22 @@ public static class NativeFreshSavedLevelResearchEligibility
         }
     }
 
+    public static bool IsSupportedLockedChestProfile(NativeFreshLevelDocumentIntent? document)
+    {
+        if (document == null) return false;
+        try
+        {
+            // Reuse the saved issuer's whole-document policy. Eligibility is
+            // neutral authorship only, not source or runtime certification.
+            _ = NativeFreshSavedLockedChestFamilyCompilation.ProjectBaseDocument(document);
+            return true;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+    }
+
     public static bool IsSupportedMixedProfile(NativeFreshLevelDocumentIntent? document)
     {
         if (document == null) return false;

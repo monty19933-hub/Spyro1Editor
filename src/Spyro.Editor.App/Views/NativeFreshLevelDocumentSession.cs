@@ -1,4 +1,5 @@
 using Spyro.Editor.Core.Editing;
+using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Persistence;
 
 namespace Spyro.Editor.App.Views;
@@ -96,6 +97,36 @@ internal sealed class NativeFreshLevelDocumentSession
         if (current.Placements.Single(placement => placement.EditorId == editorId) is not NativeFreshMobyPlacementIntent)
             throw new InvalidDataException("The selected editor ID is not an authored native Moby; replacement cannot change its placement tag.");
         var replacement = NativeFreshMobyPlacementIntent.Create(editorId, source, x, y, z, nativeYawByte);
+        var next = current.WithPlacements(
+            current.Placements.Select(placement => placement.EditorId == editorId ? replacement : placement));
+        Apply(next);
+    }
+
+    internal NativeFreshLockedChestFamilyPlacementIntent AddLockedChestFamily(NativeFreshLockedChestFamilyReference source,
+        int keyX, int keyY, int keyZ, int chestX, int chestY, int chestZ,
+        NativeFreshChestRewardDestinationOverrides? overrides = null)
+    {
+        NativeFreshLevelDocumentIntent current = RequireDocument();
+        var added = NativeFreshLockedChestFamilyPlacementIntent.Create(Guid.NewGuid().ToString("N"), source,
+            keyX, keyY, keyZ, chestX, chestY, chestZ, overrides);
+        // The complete neutral family is one authoring entry. Neither its new ID
+        // nor the schema upgrade is installed until whole-document validation succeeds.
+        var next = current.UpgradeForFamilies().WithPlacements(current.Placements.Append(added));
+        Apply(next);
+        SelectedEditorId = added.EditorId;
+        return added;
+    }
+
+    internal void ReplaceLockedChestFamily(string editorId, NativeFreshLockedChestFamilyReference source,
+        int keyX, int keyY, int keyZ, int chestX, int chestY, int chestZ,
+        NativeFreshChestRewardDestinationOverrides? overrides = null)
+    {
+        NativeFreshLevelDocumentIntent current = RequireDocument();
+        RequirePlacement(current, editorId);
+        if (current.Placements.Single(placement => placement.EditorId == editorId) is not NativeFreshLockedChestFamilyPlacementIntent)
+            throw new InvalidDataException("The selected editor ID is not an authored locked-chest family; replacement cannot change its placement tag.");
+        var replacement = NativeFreshLockedChestFamilyPlacementIntent.Create(editorId, source,
+            keyX, keyY, keyZ, chestX, chestY, chestZ, overrides);
         var next = current.WithPlacements(
             current.Placements.Select(placement => placement.EditorId == editorId ? replacement : placement));
         Apply(next);

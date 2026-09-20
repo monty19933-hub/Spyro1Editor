@@ -1,7 +1,7 @@
 # Spyro Editor Beta V6 Known Limitations
 
 - This is a private V6 development preview, not a finished release. The Mac
-  package is ad-hoc signed, not Apple-signed or notarized. Existing V5 and R03–R05
+  package is ad-hoc signed, not Apple-signed or notarized. Existing V5 and R03–R06
   test apps, original game images, and protected projects are not replaced.
 - **Fresh Level…** is integrated into the normal application. Its preview is a
   schematic, with no native model, terrain-texture, collision or gameplay renderer.
@@ -10,12 +10,21 @@
   references. Test export supports only checked saved profiles; the Wizard +
   Grass example requires its exact geometry, placement and materials. Changing
   an authored field does not imply that the new combination exports.
+- Complete locked-chest family controls save independent key/chest anchors and
+  five named default/explicit WORLD reward destinations. Only the exact saved
+  R03 Wizard + Grass + chest profile is admitted to native research export.
+  Other schema5 layouts, including tiled families, remain authored-only.
+- Schema4 tiled research permits zero placed Mobys and bounded supported static
+  retail materials or Base-color faces. Native data is limited to0x1000 bytes,
+  GPU/source checks and a complete64KiB report; animated/HQ/scrolling material
+  support is not implied. R06's exact three-material candidate has separate
+  gameplay observations, not universal composition acceptance.
 - The Moby browser covers placed donors from all inventoried levels. Resources
   are inspect-only, and generic donor placements are authoring-only until their
   dependencies are supported. A catalogue entry is not a working native import.
   All Mobys in all levels remains unfinished.
 - Focused DuckStation testing of the two-material Wizard + Grass example showed
-  its authored background, Wizard attack/charge defeat, a 10-gem reward,
+  its authored background, Wizard attack/charge defeat, a ten-value gem reward,
   fall/respawn and isolated jump/landing. That is not universal runtime acceptance.
   Normal portals, durable save ownership and broader combinations remain pending.
 - **Fly Anywhere Enabled** is not yet a user-testable native V6 capability.

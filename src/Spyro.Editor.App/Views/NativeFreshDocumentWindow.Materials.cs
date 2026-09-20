@@ -66,9 +66,9 @@ internal sealed partial class NativeFreshDocumentWindow
         {
             MaterialSlotEditor slot = _materialSlots[i];
             slot.Kind.SelectionChanged += (_, _) => FieldsChanged();
-            slot.SourceVariant.TextChanged += (_, _) => FieldsChanged();
+            slot.SourceVariant.TextChanging += (_, _) => FieldsChanged();
             slot.SourceLevel.SelectionChanged += (_, _) => FieldsChanged();
-            slot.TextureId.TextChanged += (_, _) => FieldsChanged();
+            slot.TextureId.TextChanging += (_, _) => FieldsChanged();
             _materialFields.Children.Add(new TextBlock
             {
                 Text = i == 0 ? "Triangle 0 · A/B/C" : "Triangle 1 · B/D/C",
@@ -90,7 +90,7 @@ internal sealed partial class NativeFreshDocumentWindow
     private void EnableMaterialIntent()
     {
         if (!_aggregateMode || CurrentAggregateIntent == null || AggregateCommandsBlocked ||
-            _addingWizard || _pendingNativeMobyAdd != null || _materialsEnabled) return;
+            HasPendingPlacementAdd || _materialsEnabled) return;
 
         // Explicit raw upgrade only. No applied history, source WAD or ID is
         // created until the complete form is validated and applied.
@@ -166,13 +166,14 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         bool present = _aggregateMode && CurrentAggregateIntent != null;
         _materialAuthoringNotice.Text = "Material descriptors are authoring intent. Inspect sources explicitly for separate thumbnails. " +
-            (CurrentAggregateIntent?.TiledContent != null ? TiledCapabilityText : CurrentAggregateIntent?.SchemaVersion == 3 ? NativeMobyCapabilityText
+            (CurrentAggregateIntent?.SchemaVersion == 5 ? FamilyCapabilityText : CurrentAggregateIntent?.TiledContent != null ? TiledCapabilityText : CurrentAggregateIntent?.SchemaVersion == 3 ? NativeMobyCapabilityText
                 : "Research currently requires a supported saved schema-2 profile. Actual source eligibility is checked during preparation.");
         _materialFields.IsVisible = present;
         _enableMaterials.IsVisible = present && CurrentAggregateIntent!.TiledContent == null && CurrentAggregateIntent.FloorMaterials == null;
-        _enableMaterials.Content = CurrentAggregateIntent?.SchemaVersion == 3 ? "Add material intent (keeps schema 3)" : "Add material intent (schema 2)";
-        _enableMaterials.IsEnabled = editable && present && !_addingWizard && _pendingNativeMobyAdd == null && !_materialsEnabled;
-        bool canEdit = editable && present && !_addingWizard && _pendingNativeMobyAdd == null && _materialsEnabled;
+        _enableMaterials.Content = CurrentAggregateIntent?.SchemaVersion == 5 ? "Add material intent (keeps schema 5)"
+            : CurrentAggregateIntent?.SchemaVersion == 3 ? "Add material intent (keeps schema 3)" : "Add material intent (schema 2)";
+        _enableMaterials.IsEnabled = editable && present && !HasPendingPlacementAdd && !_materialsEnabled;
+        bool canEdit = editable && present && !HasPendingPlacementAdd && _materialsEnabled;
         foreach (MaterialSlotEditor slot in _materialSlots)
         {
             slot.Kind.IsEnabled = canEdit;

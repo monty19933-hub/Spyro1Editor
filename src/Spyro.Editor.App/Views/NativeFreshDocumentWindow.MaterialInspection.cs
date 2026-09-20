@@ -43,7 +43,8 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private sealed record MaterialInspectionTicket(NativeFreshMaterialInspectionRequest Request,
         NativeFreshLevelDocumentSession Session, NativeFreshLevelDocumentSnapshot Snapshot,
-        string? SelectedId, MaterialFields Fields, NativeMobyFields NativeFields, long Generation, string Image, string Cue);
+        string? SelectedId, MaterialFields Fields, NativeMobyFields NativeFields, FamilyFields Family,
+        long Generation, string Image, string Cue);
 
     internal INativeFreshMaterialInspectionUiWork? MaterialInspectionWorkForTesting
     {
@@ -123,7 +124,7 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         pair = null;
         if (!_aggregateMode || CurrentAggregateIntent == null || !_materialsEnabled ||
-            _addingWizard || _pendingNativeMobyAdd != null || AggregateCommandsBlocked || _materialInspectionCleanupBlocked ||
+            HasPendingPlacementAdd || AggregateCommandsBlocked || _materialInspectionCleanupBlocked ||
             _materialInspectionClosed || _beginResearch == null ||
             (_researchSourceForTesting ?? _researchSourcePaths) == null) return false;
         try
@@ -180,7 +181,7 @@ internal sealed partial class NativeFreshDocumentWindow
             var session = _aggregateSession!;
             var request = NativeFreshMaterialInspectionRequest.Create(session.CurrentIntent!, pair!, paths.Image);
             ticket = new(request, session, session.Snapshot, session.SelectedEditorId,
-                MaterialFieldSignature(), NativeMobyFieldSignature(), _materialInspectionGeneration, paths.Image, paths.Cue);
+                MaterialFieldSignature(), NativeMobyFieldSignature(), FamilyFieldSignature(), _materialInspectionGeneration, paths.Image, paths.Cue);
             _materialInspectionStatus.Text = "Inspecting the two explicit raw slots. No fields are applied or saved.";
             INativeFreshMaterialInspectionUiWork work = _materialInspectionWorkForTesting ?? new ActualMaterialInspectionUiWork();
             result = await work.CaptureAsync(request, token);
@@ -254,10 +255,10 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         token.ThrowIfCancellationRequested();
         RequireCurrentProject();
-        if (_materialInspectionClosed || _materialInspectionCloseRequested || !_aggregateMode ||
+        if (_materialInspectionClosed || _materialInspectionCloseRequested || !_aggregateMode || HasPendingPlacementAdd ||
             !IsMaterialInspectionContextCurrent(ticket.Session, ticket.Snapshot, ticket.Request.Document, _aggregateSession) ||
             ticket.SelectedId != _aggregateSession?.SelectedEditorId || ticket.Generation != _materialInspectionGeneration ||
-            ticket.Fields != MaterialFieldSignature() || ticket.NativeFields != NativeMobyFieldSignature() ||
+            ticket.Fields != MaterialFieldSignature() || ticket.NativeFields != NativeMobyFieldSignature() || ticket.Family != FamilyFieldSignature() ||
             CaptureMaterialInspectionPaths() != (ticket.Image, ticket.Cue))
             throw new InvalidDataException("The inspection's actual document, raw fields, source selection or window state changed. Inspect again explicitly.");
         result.RequireRequest(ticket.Request);

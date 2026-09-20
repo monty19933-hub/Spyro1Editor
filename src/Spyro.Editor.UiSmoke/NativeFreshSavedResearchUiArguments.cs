@@ -4,15 +4,17 @@ internal static class NativeFreshSavedResearchUiArguments
     private const string Free = "--fresh-saved-research-ui";
     private const string Publish = "--fresh-saved-research-publish-reviewed";
     private const string FamilyPublish = "--fresh-saved-research-family-publish-reviewed";
+    private const string LockedChestPublish = "--fresh-saved-research-locked-chest-publish-reviewed";
     internal static bool Handles(string[] args) => args.Any(a => a.StartsWith("--fresh-saved-research", StringComparison.Ordinal));
     internal static bool RequirePublication(string[] args)
     {
         if (args.Length == 1 && args[0] == Free) return false;
-        if (args.Length == 5 && (args[0] is Publish or FamilyPublish) && args.Skip(1).All(a =>
+        if (args.Length == 5 && (args[0] is Publish or FamilyPublish or LockedChestPublish) && args.Skip(1).All(a =>
             !string.IsNullOrWhiteSpace(a) && !a.Contains('\0') && !a.StartsWith('-') && Path.IsPathFullyQualified(a))) return true;
-        throw new ArgumentException("Usage: UiSmoke --fresh-saved-research-ui OR --fresh-saved-research-publish-reviewed|--fresh-saved-research-family-publish-reviewed absolute-original.bin absolute-original.cue existing-absolute-private-fixture-parent absent-absolute-output");
+        throw new ArgumentException("Usage: UiSmoke --fresh-saved-research-ui OR --fresh-saved-research-publish-reviewed|--fresh-saved-research-family-publish-reviewed|--fresh-saved-research-locked-chest-publish-reviewed absolute-original.bin absolute-original.cue existing-absolute-private-fixture-parent absent-absolute-output");
     }
     internal static bool RequireFamilyPublication(string[] args) => RequirePublication(args) && args[0] == FamilyPublish;
+    internal static bool RequireLockedChestPublication(string[] args) => RequirePublication(args) && args[0] == LockedChestPublish;
     internal static void Run()
     {
         int checks = 0;
@@ -23,6 +25,12 @@ internal static class NativeFreshSavedResearchUiArguments
             "Exactly one free or five explicit publication tokens; the old and family arms stay distinct.");
         Check(Handles([Free]) && Handles([Publish]) && Handles([FamilyPublish]) && Handles(["--fresh-saved-research-unknown"]) &&
             !Handles(["--source"]) && !Handles(["--fresh-native-document-only"]) && !Handles(["--fresh-material-inspection-only"]), "New prefix never aliases old or source-only modes.");
+        string[] chest = [LockedChestPublish, "/not-opened.bin", "/not-opened.cue", "/not-inspected-parent", "/not-created-output"];
+        Check(Handles(chest) && RequirePublication(chest) && RequireLockedChestPublication(chest) && !RequireFamilyPublication(chest) &&
+            !RequireLockedChestPublication([Free]) &&
+            !RequireLockedChestPublication([Publish, "/bin", "/cue", "/parent", "/out"]) &&
+            !RequireLockedChestPublication([FamilyPublish, "/bin", "/cue", "/parent", "/out"]),
+            "Only the explicit five-token locked-chest route selects schema5; old material/schema3/free routes cannot alias it.");
         foreach (var bad in new[] { Array.Empty<string>(), new[] { Free, "extra" }, new[] { Free, Free },
             new[] { Publish }, new[] { Publish, "/bin", "/cue", "/parent" }, new[] { Publish, "/bin", "/cue", "/parent", "/out", "extra" },
             new[] { Publish, Publish, "/cue", "/parent", "/out" }, new[] { Publish, "/bin", "/cue", "/parent", Free },
@@ -35,11 +43,18 @@ internal static class NativeFreshSavedResearchUiArguments
             new[] { FamilyPublish, "/bin", "/cue", "/parent", Free },
             new[] { Free, FamilyPublish, "/bin", "/cue", "/parent", "/out" },
             new[] { Publish, FamilyPublish, "/bin", "/cue", "/parent", "/out" },
-            new[] { FamilyPublish + "=/bin", "/cue", "/parent", "/out" } })
+            new[] { FamilyPublish + "=/bin", "/cue", "/parent", "/out" },
+            new[] { LockedChestPublish }, new[] { LockedChestPublish, "/bin", "/cue", "/parent" },
+            new[] { LockedChestPublish, "/bin", "/cue", "/parent", "/out", "extra" },
+            new[] { LockedChestPublish, FamilyPublish, "/cue", "/parent", "/out" },
+            new[] { Free, LockedChestPublish, "/bin", "/cue", "/parent", "/out" },
+            new[] { LockedChestPublish + "=/bin", "/cue", "/parent", "/out" },
+            new[] { LockedChestPublish.ToUpperInvariant(), "/bin", "/cue", "/parent", "/out" },
+            new[] { LockedChestPublish + "-extra", "/bin", "/cue", "/parent", "/out" } })
             Refuse(bad);
-        foreach (string mode in new[] { Publish, FamilyPublish })
+        foreach (string mode in new[] { Publish, FamilyPublish, LockedChestPublish })
         for (int i = 1; i < 5; i++)
-        foreach (string value in new[] { "", " ", "relative", "\0", "/contains\0nul", "--unknown", Free, Publish, FamilyPublish })
+        foreach (string value in new[] { "", " ", "relative", "\0", "/contains\0nul", "--unknown", Free, Publish, FamilyPublish, LockedChestPublish })
         {
             string[] bad = [mode, "/bin", "/cue", "/parent", "/out"]; bad[i] = value; Refuse(bad);
         }

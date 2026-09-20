@@ -56,10 +56,15 @@ public sealed class NativeFreshLevelDocumentIntent
     public NativeFreshLevelDocumentIntent WithPlacements(IEnumerable<NativeFreshPlacementIntent> placements) =>
         CreateContent(Content, placements, SchemaVersion);
 
-    public NativeFreshLevelDocumentIntent WithTiledContent(NativeFreshTiledLevelContent content)
+    public NativeFreshLevelDocumentIntent WithTiledContent(NativeFreshTiledLevelContent content) =>
+        WithTiledContent(content, Placements);
+
+    /// <summary>Validate the final tiled content and placement list together, without requiring either intermediate aggregate to be valid.</summary>
+    public NativeFreshLevelDocumentIntent WithTiledContent(NativeFreshTiledLevelContent content,
+        IEnumerable<NativeFreshPlacementIntent> placements)
     {
         if (TiledContent == null) throw new InvalidDataException("Use an explicit tiled upgrade or factory before editing tiled content.");
-        return CreateContent(content, Placements, SchemaVersion == 5 ? 5 : 4);
+        return CreateContent(content, placements, SchemaVersion == 5 ? 5 : 4);
     }
 
     public NativeFreshLevelDocumentIntent UpgradeToTiled(string tileEditorId)

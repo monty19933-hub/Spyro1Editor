@@ -36,13 +36,13 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         var box = new TextBox { Name = name, MaxLength = 16, MinHeight = 32 };
         _nativeMobyFields.Add(name, box);
-        box.TextChanged += (_, _) => FieldsChanged();
+        box.TextChanging += (_, _) => FieldsChanged();
         return new StackPanel { Spacing = 4, Children = { new TextBlock { Text = label, FontSize = 12 }, box } };
     }
 
     private void WriteNativeMobyFields()
     {
-        var selected = _addingWizard || _pendingNativeMobyAdd != null ? null : _placements.SelectedItem as NativeFreshMobyPlacementIntent;
+        var selected = HasPendingPlacementAdd ? null : _placements.SelectedItem as NativeFreshMobyPlacementIntent;
         SetNativeMoby("FreshNativeMobyX", selected?.X); SetNativeMoby("FreshNativeMobyY", selected?.Y);
         SetNativeMoby("FreshNativeMobyZ", selected?.Z); SetNativeMoby("FreshNativeMobyYaw", selected?.NativeYawByte);
         var source = _pendingNativeMobyAdd?.Source ?? selected?.Source;
@@ -57,10 +57,12 @@ internal sealed partial class NativeFreshDocumentWindow
         {
             case NativeFreshWizardRouteIntent wizard:
                 RequireNativeMobyFieldsUnchanged();
+                RequireFamilyFieldsUnchanged();
                 return NativeFreshWizardRouteIntent.Create(wizard.EditorId,
                     RouteNumber("FreshWizardOriginX"), RouteNumber("FreshWizardOriginY"), RouteNumber("FreshWizardOriginZ"),
                     RouteNumber("FreshWizardEndX"), RouteNumber("FreshWizardEndY"));
             case NativeFreshMobyPlacementIntent moby:
+                RequireFamilyFieldsUnchanged();
                 if (RouteFieldSignature() != _appliedRouteFields)
                     throw new InvalidDataException("Inactive Wizard fields changed. Undo those fields before editing the native Moby; placement types are never converted.");
                 // Retain the actual immutable source tuple. The form does not
@@ -68,6 +70,8 @@ internal sealed partial class NativeFreshDocumentWindow
                 return NativeFreshMobyPlacementIntent.Create(moby.EditorId, moby.Source,
                     NativeMobyNumber("FreshNativeMobyX"), NativeMobyNumber("FreshNativeMobyY"),
                     NativeMobyNumber("FreshNativeMobyZ"), NativeMobyNumber("FreshNativeMobyYaw"));
+            case NativeFreshLockedChestFamilyPlacementIntent family:
+                return ReadFamily(family);
             default:
                 throw new InvalidDataException("Unsupported selected placement type; no conversion or partial Apply was performed.");
         }
@@ -81,7 +85,7 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private void RefreshNativeMobyChrome(bool canEditRows, NativeFreshPlacementIntent? selected)
     {
-        bool native = !_addingWizard && (_pendingNativeMobyAdd != null || selected is NativeFreshMobyPlacementIntent);
+        bool native = !_addingFamily && !_addingWizard && (_pendingNativeMobyAdd != null || selected is NativeFreshMobyPlacementIntent);
         _nativeMobyEditor.IsVisible = _aggregateMode && native;
         foreach (TextBox field in _nativeMobyFields.Values) field.IsEnabled = canEditRows && native;
     }

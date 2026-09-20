@@ -114,7 +114,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
         previewPanel.Children.Add(previewNote);
 
         _fieldsPanel.Children.Add(BuildTileFields());
-        _fieldsPanel.Children.Add(Section("Floor rectangle / selected tile", "Native world units, multiples of 16; each size is 16–2048. Legacy floors must fit one native cell. Schema-4 tiles may cross cells."));
+        _fieldsPanel.Children.Add(Section("Floor rectangle / selected tile", "Native world units, multiples of 16. Each tile size is 16–2048; neutral legacy floors have separate bounds. Research export is limited to the profile described above. Tiles may cross native cells."));
         _fieldsPanel.Children.Add(Row(Field("FreshFloorX", "X"), Field("FreshFloorY", "Y"), Field("FreshFloorZ", "Z")));
         _fieldsPanel.Children.Add(Row(Field("FreshFloorWidth", "Width"), Field("FreshFloorDepth", "Depth")));
         _fieldsPanel.Children.Add(Section("Spawn", "XY must be strictly inside the floor. Change floor and spawn together, then Apply."));
@@ -406,6 +406,9 @@ internal sealed partial class NativeFreshDocumentWindow : Window
 
     private void FieldsChanged()
     {
+        // Authored TextBoxes subscribe to synchronous TextChanging (after Text
+        // is updated), not post-render TextChanged. This keeps raw ABA visible
+        // before async continuations and keeps owner refreshes inside _refreshing.
         if (_refreshing) return;
         InvalidateMobyCatalogue();
         InvalidateMaterialInspection();
@@ -443,7 +446,7 @@ internal sealed partial class NativeFreshDocumentWindow : Window
     {
         var box = new TextBox { Name = name, MinHeight = 32, MaxLength = 16, HorizontalAlignment = HorizontalAlignment.Stretch };
         _fields.Add(name, box);
-        box.TextChanged += (_, _) => FieldsChanged();
+        box.TextChanging += (_, _) => FieldsChanged();
         return new StackPanel { Spacing = 4, Children = { new TextBlock { Text = label, FontSize = 12 }, box } };
     }
 

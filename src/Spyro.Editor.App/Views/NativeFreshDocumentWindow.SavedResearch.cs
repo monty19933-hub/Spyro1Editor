@@ -31,16 +31,17 @@ internal sealed partial class NativeFreshDocumentWindow
     private sealed record SavedResearchTicket(NativeFreshLevelDocumentSession Session,
         NativeFreshLevelDocumentSnapshot Snapshot, NativeFreshLevelDocumentIntent Applied,
         string? Selection, string? TileSelection, string? SpawnZ, string?[] BaseFields, object? Music, string?[] RouteFields,
-        NativeMobyFields NativeFields, MaterialFields Materials, long RawGeneration, string Image, string Cue);
+        NativeMobyFields NativeFields, MaterialFields Materials, FamilyFields Family, long RawGeneration, string Image, string Cue);
 
     private bool IsSavedResearchReady => _aggregateMode && !AggregateCommandsBlocked &&
-        !_addingWizard && !_forkRecoveryPending && !_materialInspectionCleanupBlocked &&
+        !HasPendingPlacementAdd && !_forkRecoveryPending && !_materialInspectionCleanupBlocked &&
         !_materialInspectionClosed && _beginResearch != null &&
         (_researchSourceForTesting ?? _researchSourcePaths) != null &&
         _aggregateSession?.Snapshot is { Exists: true, RetainedRecoveryDirectory.Length: 0 } &&
         (NativeFreshSavedLevelResearchEligibility.IsSupportedMaterialProfile(CurrentAggregateIntent) ||
             NativeFreshSavedLevelResearchEligibility.IsSupportedMixedProfile(CurrentAggregateIntent) ||
             NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(CurrentAggregateIntent) ||
+            NativeFreshSavedLevelResearchEligibility.IsSupportedLockedChestProfile(CurrentAggregateIntent) ||
             NativeFreshSavedLevelResearchEligibility.IsSupportedTiledProfile(CurrentAggregateIntent) ||
             NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(CurrentAggregateIntent)) && !HasUnsavedChanges;
 
@@ -48,7 +49,8 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         if (!IsSavedResearchReady)
         {
-            _status.Text = CurrentAggregateIntent?.TiledContent != null ? TiledCapabilityText
+            _status.Text = CurrentAggregateIntent?.SchemaVersion == 5 ? FamilyCapabilityText
+                : CurrentAggregateIntent?.TiledContent != null ? TiledCapabilityText
                 : CurrentAggregateIntent?.SchemaVersion == 3 ? NativeMobyCapabilityText + " No legacy or partial document was exported."
                 : "Aggregate research requires an explicitly applied and saved schema-2 document with two retail materials and either no placements or the supported one-Wizard mixed profile. Resolve pending fields and recovery first. No legacy or partial document was exported.";
             return;
@@ -74,7 +76,7 @@ internal sealed partial class NativeFreshDocumentWindow
             ticket = new SavedResearchTicket(session, session.Snapshot, session.CurrentIntent!, session.SelectedEditorId,
                 session.SelectedTileId, _tiledSpawnZ.Text,
                 _fields.Values.Select(f => f.Text).ToArray(), _music.SelectedItem,
-                _routeFields.Values.Select(f => f.Text).ToArray(), NativeMobyFieldSignature(), MaterialFieldSignature(),
+                _routeFields.Values.Select(f => f.Text).ToArray(), NativeMobyFieldSignature(), MaterialFieldSignature(), FamilyFieldSignature(),
                 _materialInspectionGeneration, source.Image, source.Cue);
             RequireSavedResearchCurrent(ticket, token);
             _savedResearchSnapshot = ticket.Snapshot;
@@ -135,13 +137,13 @@ internal sealed partial class NativeFreshDocumentWindow
         token.ThrowIfCancellationRequested();
         RequireCurrentProject();
         if (!_aggregateMode || _documentMode.SelectedItem as string != AggregateModeLabel ||
-            _materialInspectionClosed || _addingWizard || _forkRecoveryPending || _materialInspectionBusy ||
+            _materialInspectionClosed || HasPendingPlacementAdd || _forkRecoveryPending || _materialInspectionBusy ||
             !ReferenceEquals(ticket.Session, _aggregateSession) || !ReferenceEquals(ticket.Snapshot, _aggregateSession?.Snapshot) ||
             !ReferenceEquals(ticket.Applied, CurrentAggregateIntent) || ticket.Selection != _aggregateSession?.SelectedEditorId ||
             ticket.TileSelection != _aggregateSession?.SelectedTileId || ticket.SpawnZ != _tiledSpawnZ.Text ||
             !ticket.BaseFields.SequenceEqual(_fields.Values.Select(f => f.Text)) || !ReferenceEquals(ticket.Music, _music.SelectedItem) ||
             !ticket.RouteFields.SequenceEqual(_routeFields.Values.Select(f => f.Text)) || ticket.NativeFields != NativeMobyFieldSignature() ||
-            ticket.Materials != MaterialFieldSignature() ||
+            ticket.Materials != MaterialFieldSignature() || ticket.Family != FamilyFieldSignature() ||
             // Existing generation increments for FieldsChanged and WriteFields,
             // not RefreshChrome: exact raw ABA during an await is still stale.
             ticket.RawGeneration != _materialInspectionGeneration ||

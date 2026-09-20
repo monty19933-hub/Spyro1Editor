@@ -41,7 +41,8 @@ internal sealed partial class NativeFreshDocumentWindow
     private sealed record MobyCatalogueLevel(string Key, string Name) { public override string ToString() => Name; }
     private sealed record MobyCatalogueTicket(NativeFreshLevelDocumentSession Session, NativeFreshLevelDocumentSnapshot Snapshot,
         NativeFreshLevelDocumentIntent Applied, string? Selection, string?[] BaseFields, object? Music, string?[] RouteFields,
-        NativeMobyFields NativeFields, MaterialFields Materials, long RawGeneration, long RequestGeneration, string Image, string Cue);
+        NativeMobyFields NativeFields, MaterialFields Materials, FamilyFields Family,
+        long RawGeneration, long RequestGeneration, string Image, string Cue);
 
     internal INativeFreshMobyCatalogueProvider? MobyCatalogueProviderForTesting
     {
@@ -59,7 +60,7 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private bool CanBrowseMobys => _aggregateMode && CurrentAggregateIntent != null && !AggregateCommandsBlocked &&
         !_forkRecoveryPending && !_materialInspectionCleanupBlocked && !_mobyCatalogueCleanupBlocked && !_mobyCatalogueClosed &&
-        !_addingWizard && _pendingNativeMobyAdd == null && !HasUnappliedFields &&
+        !HasPendingPlacementAdd && !HasUnappliedFields &&
         CurrentAggregateIntent.Placements.Count < NativeFreshLevelDocumentIntent.MaximumPlacements &&
         _mobyCatalogueProvider != null && _beginResearch != null && (_researchSourceForTesting ?? _researchSourcePaths) != null;
 
@@ -180,7 +181,7 @@ internal sealed partial class NativeFreshDocumentWindow
             var session = _aggregateSession!;
             ticket = new(session, session.Snapshot, session.CurrentIntent!, session.SelectedEditorId,
                 _fields.Values.Select(field => field.Text).ToArray(), _music.SelectedItem,
-                _routeFields.Values.Select(field => field.Text).ToArray(), NativeMobyFieldSignature(), MaterialFieldSignature(),
+                _routeFields.Values.Select(field => field.Text).ToArray(), NativeMobyFieldSignature(), MaterialFieldSignature(), FamilyFieldSignature(),
                 _materialInspectionGeneration, _mobyCatalogueGeneration, paths.Image, paths.Cue);
             RequireMobyCatalogueCurrent(ticket);
             _mobyCatalogueStatus.Text = "Reading the selected original source inventory. No fields are applied or saved. Cancel requests wait for the actual capture to finish.";
@@ -264,11 +265,11 @@ internal sealed partial class NativeFreshDocumentWindow
         RequireCurrentProject();
         if (!_aggregateMode || _documentMode.SelectedItem as string != AggregateModeLabel || _mobyCatalogueClosed ||
             _decisionBusy || _modeSwitchBusy || _forkBusy || _forkRecoveryPending || _researchBusy || _materialInspectionBusy ||
-            _addingWizard || _pendingNativeMobyAdd != null || !ReferenceEquals(ticket.Session, _aggregateSession) ||
+            HasPendingPlacementAdd || !ReferenceEquals(ticket.Session, _aggregateSession) ||
             !ReferenceEquals(ticket.Snapshot, _aggregateSession?.Snapshot) || !ReferenceEquals(ticket.Applied, CurrentAggregateIntent) ||
             ticket.Selection != _aggregateSession?.SelectedEditorId || !ticket.BaseFields.SequenceEqual(_fields.Values.Select(field => field.Text)) ||
             !ReferenceEquals(ticket.Music, _music.SelectedItem) || !ticket.RouteFields.SequenceEqual(_routeFields.Values.Select(field => field.Text)) ||
-            ticket.NativeFields != NativeMobyFieldSignature() || ticket.Materials != MaterialFieldSignature() ||
+            ticket.NativeFields != NativeMobyFieldSignature() || ticket.Materials != MaterialFieldSignature() || ticket.Family != FamilyFieldSignature() ||
             ticket.RawGeneration != _materialInspectionGeneration || HasUnappliedFields || CaptureResearchSourcePaths() != (ticket.Image, ticket.Cue))
             throw new InvalidDataException("The catalogue's document, raw fields, selection, mode, project or source changed. Browse again explicitly; no replacement was adopted.");
     }
@@ -288,7 +289,7 @@ internal sealed partial class NativeFreshDocumentWindow
         {
             if (!ReferenceEquals(pending, _pendingNativeMobyAdd) || AggregateCommandsBlocked || !_aggregateMode ||
                 _documentMode.SelectedItem as string != AggregateModeLabel || _mobyCatalogueClosed || _mobyCatalogueCloseRequested ||
-                _mobyCatalogueCancelRequested || _materialInspectionCleanupBlocked || _addingWizard || _forkRecoveryPending ||
+                _mobyCatalogueCancelRequested || _materialInspectionCleanupBlocked || _addingWizard || _addingFamily || _forkRecoveryPending ||
                 ticket.RequestGeneration != _mobyCatalogueGeneration || rawGeneration != _materialInspectionGeneration ||
                 !ReferenceEquals(ticket.Session, _aggregateSession) || !ReferenceEquals(ticket.Snapshot, _aggregateSession?.Snapshot) ||
                 !ReferenceEquals(ticket.Applied, CurrentAggregateIntent) || ticket.Selection != _aggregateSession?.SelectedEditorId)
@@ -350,6 +351,7 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         RequireCurrentProject();
         var pending = _pendingNativeMobyAdd ?? throw new InvalidOperationException("No native Moby Add is pending.");
+        RequireFamilyFieldsUnchanged();
         if (FieldSignature() != _appliedFields || MaterialFieldSignature() != _appliedMaterialFields || RouteFieldSignature() != _appliedRouteFields)
             throw new InvalidDataException("Base, material and Wizard fields are locked during native Add. Cancel before editing them; no raw field changes were discarded.");
         _aggregateSession!.AddNativeMoby(pending.Source, NativeMobyNumber("FreshNativeMobyX"), NativeMobyNumber("FreshNativeMobyY"),

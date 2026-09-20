@@ -53,9 +53,10 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private bool AggregateCommandsBlocked => _decisionBusy || _researchBusy || _materialInspectionBusy || _modeSwitchBusy || _forkBusy ||
         _mobyCatalogueBusy || _mobyCatalogueCleanupBlocked;
-    private bool AggregateHasUnappliedFields => _addingWizard || _pendingNativeMobyAdd != null || CurrentAggregateIntent != null &&
+    private bool AggregateHasUnappliedFields => HasPendingPlacementAdd || CurrentAggregateIntent != null &&
         (FieldSignature() != _appliedFields || RouteFieldSignature() != _appliedRouteFields ||
-            NativeMobyFieldSignature() != _appliedNativeMobyFields || MaterialFieldSignature() != _appliedMaterialFields);
+            NativeMobyFieldSignature() != _appliedNativeMobyFields || FamilyFieldSignature() != _appliedFamilyFields ||
+            MaterialFieldSignature() != _appliedMaterialFields);
 
     private Control BuildAggregateActions()
     {
@@ -85,11 +86,12 @@ internal sealed partial class NativeFreshDocumentWindow
             {
                 NativeFreshWizardRouteIntent route => $"Wizard route · {route.EditorId}\n({route.OriginX}, {route.OriginY}, {route.OriginZ}) → ({route.EndX}, {route.EndY})",
                 NativeFreshMobyPlacementIntent moby => $"Native Moby intent · {moby.EditorId}\nWAD {moby.Source.SourceWadEntry} / true index {moby.Source.SourceTrueIndex} / class {moby.Source.ExpectedNativeClass}\n({moby.X}, {moby.Y}, {moby.Z}) · native yaw {moby.NativeYawByte}",
+                NativeFreshLockedChestFamilyPlacementIntent family => $"Locked-chest family · {family.EditorId}\nKey ({family.KeyX}, {family.KeyY}, {family.KeyZ}) · Chest ({family.ChestX}, {family.ChestY}, {family.ChestZ})\nFive reward members · {family.RewardDestinations?.Values.Count ?? 0} explicit WORLD destinations",
                 _ => "Unsupported placement"
             }, TextWrapping = TextWrapping.Wrap, FontSize = 11
         });
         _placements.SelectionChanged += (_, _) => SelectWizard();
-        _aggregateFields.Children.Add(Section("Authored placements", "Ordered editor IDs are not native ownership. Wizard routes and native Moby markers are XY schematics only, with exact authored Z shown numerically. No model, trajectory, collision or gameplay is certified."));
+        _aggregateFields.Children.Add(Section("Authored placements", "Ordered editor IDs are not native ownership. Routes, Moby markers and complete families are XY schematics only, with exact authored Z shown numerically. No model, trajectory, collision or gameplay is certified."));
         _aggregateFields.Children.Add(_placementSummary);
         _aggregateFields.Children.Add(_placements);
         _aggregateFields.Children.Add(new WrapPanel { Children = { _addWizard, _removeWizard, _moveWizardUp, _moveWizardDown } });
@@ -99,6 +101,7 @@ internal sealed partial class NativeFreshDocumentWindow
         _wizardRouteEditor.Children.Add(_cancelAddWizard);
         _aggregateFields.Children.Add(_wizardRouteEditor);
         _aggregateFields.Children.Add(BuildNativeMobyFields());
+        _aggregateFields.Children.Add(BuildFamilyFields());
         return _aggregateFields;
     }
 
@@ -106,7 +109,7 @@ internal sealed partial class NativeFreshDocumentWindow
     {
         var box = new TextBox { Name = name, MaxLength = 16, MinHeight = 32 };
         _routeFields.Add(name, box);
-        box.TextChanged += (_, _) => FieldsChanged();
+        box.TextChanging += (_, _) => FieldsChanged();
         return new StackPanel { Spacing = 4, Children = { new TextBlock { Text = label, FontSize = 12 }, box } };
     }
 
@@ -151,6 +154,7 @@ internal sealed partial class NativeFreshDocumentWindow
             }
             _addingWizard = false;
             _pendingNativeMobyAdd = null;
+            _addingFamily = false;
             _forkRecoveryPending = false;
             WriteFields();
             _status.Text = _aggregateMode ? AggregateOpenMessage() : $"Opened saved legacy floor: {_snapshot.Path}";
@@ -172,12 +176,9 @@ internal sealed partial class NativeFreshDocumentWindow
     private (NativeFreshLevelDocumentSession Session, NativeId65FreshDocumentSnapshot? Source) CaptureAggregateSession()
     {
         NativeFreshLevelDocumentSnapshot target = NativeFreshLevelDocumentStore.Capture(_project);
-        // Neutral persistence can represent families before this UI can render
-        // or edit them. Reject the whole schema, even with no family rows, so
-        // form reconstruction cannot silently downgrade a stored document.
-        if (target.Intent is { SchemaVersion: > 4 })
-            throw new InvalidDataException($"The stored schema-{target.Intent.SchemaVersion} aggregate is a neutral family authoring document. " +
-                "This editor cannot edit or render it yet. Its saved content has not been adopted or changed.");
+        // Adopt only after Store has parsed the complete supported content and
+        // placement union. Schema5 uses the complete family inspector/preview;
+        // every reconstruction retains that schema, even after its last removal.
         // Fork retains this actual saved source at mode entry/reopen. Never silently
         // recapture it in the Fork command after another writer changes the file.
         NativeId65FreshDocumentSnapshot? source = target.Exists ? null : NativeId65FreshDocumentStore.Capture(_project);
@@ -204,6 +205,7 @@ internal sealed partial class NativeFreshDocumentWindow
             NativeFreshLevelDocumentSnapshot result = _aggregateSession.ForkLegacyFloor(_forkSourceSnapshot);
             _addingWizard = false;
             _pendingNativeMobyAdd = null;
+            _addingFamily = false;
             WriteFields();
             _status.Text = $"Forked and verified a separate aggregate with no placements: {result.Path}. The legacy source was not changed." +
                 (result.RetainedRecoveryDirectory.Length == 0 ? "" : $" Recovery was retained: {result.RetainedRecoveryDirectory}.");
@@ -245,9 +247,11 @@ internal sealed partial class NativeFreshDocumentWindow
         try
         {
             if (_pendingNativeMobyAdd != null) ApplyPendingNativeMoby();
+            else if (_addingFamily) ApplyPendingFamily();
             else if (_addingWizard)
             {
                 RequireNativeMobyFieldsUnchanged();
+                RequireFamilyFieldsUnchanged();
                 if (FieldSignature() != _appliedFields)
                     throw new InvalidDataException("Base fields are locked while adding a route. Cancel the new route before editing the Base.");
                 if (MaterialFieldSignature() != _appliedMaterialFields)
@@ -265,7 +269,10 @@ internal sealed partial class NativeFreshDocumentWindow
                     int index = Array.FindIndex(rows, placement => placement.EditorId == selected);
                     rows[index] = ReadSelectedPlacement(rows[index]);
                 }
-                else RequireNativeMobyFieldsUnchanged();
+                else
+                {
+                    RequireNativeMobyFieldsUnchanged(); RequireFamilyFieldsUnchanged(); RequireWizardFieldsUnchanged();
+                }
                 // Validate the selected Base/placement and every untouched row
                 // together before the Session sees any mutation.
                 NativeFreshLevelDocumentIntent candidate;
@@ -280,7 +287,8 @@ internal sealed partial class NativeFreshDocumentWindow
                 _aggregateSession.Apply(candidate);
             }
             WriteFields();
-            _status.Text = CurrentAggregateIntent?.TiledContent != null ? "Applied the entire tiled document. Save explicitly to persist. " + TiledCapabilityText
+            _status.Text = CurrentAggregateIntent?.SchemaVersion == 5 ? "Applied the entire family document. Save explicitly to persist. " + FamilyCapabilityText
+                : CurrentAggregateIntent?.TiledContent != null ? "Applied the entire tiled document. Save explicitly to persist. " + TiledCapabilityText
                 : CurrentAggregateIntent?.SchemaVersion == 3
                 ? "Applied the entire schema-3 aggregate to the authored schematic. Save explicitly to persist. " + NativeMobyCapabilityText
                 : "Applied the entire aggregate to the authored schematic. Save explicitly before research export; two retail materials with no placements or the supported one-Wizard mixed profile are currently supported.";
@@ -333,6 +341,7 @@ internal sealed partial class NativeFreshDocumentWindow
             _forkSourceSnapshot = source;
             _addingWizard = false;
             _pendingNativeMobyAdd = null;
+            _addingFamily = false;
             _forkRecoveryPending = false;
             WriteFields();
             _status.Text = AggregateOpenMessage() + " Undo history was reset.";
@@ -345,6 +354,7 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private string AggregateOpenMessage() => CurrentAggregateIntent == null
         ? "No aggregate exists. Fork an actual saved legacy floor explicitly to begin; no default or placement was inferred."
+        : CurrentAggregateIntent.SchemaVersion == 5 ? $"Opened saved schema-5 aggregate: {_aggregateSession!.Snapshot.Path}. " + FamilyCapabilityText
         : CurrentAggregateIntent.TiledContent != null ? $"Opened saved tiled aggregate: {_aggregateSession!.Snapshot.Path}. " + TiledCapabilityText
         : CurrentAggregateIntent.SchemaVersion == 3 ? $"Opened saved aggregate: {_aggregateSession!.Snapshot.Path}. " + NativeMobyCapabilityText
         : $"Opened saved aggregate: {_aggregateSession!.Snapshot.Path}. Research export supports clean saved schema-2 documents with two retail materials and either no placements or the supported one-Wizard mixed profile; actual source eligibility is checked during preparation.";
@@ -408,6 +418,7 @@ internal sealed partial class NativeFreshDocumentWindow
         {
             _addingWizard = false;
             _pendingNativeMobyAdd = null;
+            _addingFamily = false;
             WriteFields();
             _status.Text = "Discarded pending raw fields only; the applied aggregate is unchanged.";
             return;
@@ -429,11 +440,15 @@ internal sealed partial class NativeFreshDocumentWindow
         var current = CurrentAggregateIntent;
         _placements.ItemsSource = current?.Placements;
         RestorePlacementSelection();
+        // Retain the selected route's inactive form while another placement is
+        // staged. Unnecessary clears can enqueue late TextChanged events and
+        // invalidate that operation's guarded post-layout reveal.
         var selected = _addingWizard ? null : _placements.SelectedItem as NativeFreshWizardRouteIntent;
         SetRoute("FreshWizardOriginX", selected?.OriginX); SetRoute("FreshWizardOriginY", selected?.OriginY);
         SetRoute("FreshWizardOriginZ", selected?.OriginZ); SetRoute("FreshWizardEndX", selected?.EndX); SetRoute("FreshWizardEndY", selected?.EndY);
         _appliedRouteFields = RouteFieldSignature();
         WriteNativeMobyFields();
+        WriteFamilyFields();
     }
 
     private void RestorePlacementSelection()
@@ -453,11 +468,11 @@ internal sealed partial class NativeFreshDocumentWindow
         _schemaVersion.Text = current == null ? "" : $"Aggregate schema {current.SchemaVersion}";
         _materialSummary.Text = ActiveMaterialPair is { } materials
             ? $"Triangle 0: {MaterialSummary(materials.Triangle0)}\nTriangle 1: {MaterialSummary(materials.Triangle1)}"
-            : current?.SchemaVersion == 3 ? "Materials: implicit base floor color (no material pair)." : "Materials: implicit base floor color (schema 1).";
+            : current?.SchemaVersion is 3 or 5 ? "Materials: implicit base floor color (no material pair)." : "Materials: implicit base floor color (schema 1).";
         _materialPreviewNotice.Text = Preview.MaterialPreviewNotice;
         _materialPreviewNotice.IsVisible = ActiveMaterialPair != null;
         _capability.Text = _aggregateMode
-            ? current?.TiledContent != null ? TiledCapabilityText : current?.SchemaVersion == 3 ? NativeMobyCapabilityText
+            ? current?.SchemaVersion == 5 ? FamilyCapabilityText : current?.TiledContent != null ? TiledCapabilityText : current?.SchemaVersion == 3 ? NativeMobyCapabilityText
                 : "Whole-level authoring document — floor, spawn and ordered placements. Normal Create BIN is unavailable. Research export supports clean saved schema-2 documents with two retail materials and either no placements or the supported one-Wizard mixed profile, subject to actual source validation. The schematic does not certify gameplay."
             : LegacyCapabilityText;
         _documentMode.IsEnabled = editable;
@@ -469,13 +484,14 @@ internal sealed partial class NativeFreshDocumentWindow
         bool canEditRows = editable && _aggregateMode && CurrentAggregateIntent != null;
         bool hasSelection = _aggregateSession?.SelectedEditorId != null;
         var selectedPlacement = current?.Placements.FirstOrDefault(p => p.EditorId == _aggregateSession?.SelectedEditorId);
-        bool addingPlacement = _addingWizard || _pendingNativeMobyAdd != null;
+        bool addingPlacement = HasPendingPlacementAdd;
         foreach (TextBox field in _fields.Values) field.IsEnabled = !_aggregateMode || !addingPlacement;
         _music.IsEnabled = !_aggregateMode || !addingPlacement;
-        bool wizardEditor = _pendingNativeMobyAdd == null && (_addingWizard || selectedPlacement is NativeFreshWizardRouteIntent);
+        bool wizardEditor = !_addingFamily && _pendingNativeMobyAdd == null && (_addingWizard || selectedPlacement is NativeFreshWizardRouteIntent);
         _wizardRouteEditor.IsVisible = _aggregateMode && wizardEditor;
         foreach (TextBox field in _routeFields.Values) field.IsEnabled = canEditRows && wizardEditor;
         RefreshNativeMobyChrome(canEditRows, selectedPlacement);
+        RefreshFamilyChrome(canEditRows, selectedPlacement);
         _placements.IsEnabled = canEditRows && !HasUnappliedFields;
         _addWizard.IsEnabled = canEditRows && !HasUnappliedFields && CurrentAggregateIntent!.Placements.Count < NativeFreshLevelDocumentIntent.MaximumPlacements;
         _cancelAddWizard.IsVisible = _aggregateMode && _addingWizard;
@@ -486,7 +502,7 @@ internal sealed partial class NativeFreshDocumentWindow
         _moveWizardUp.IsEnabled = _removeWizard.IsEnabled && index > 0;
         _moveWizardDown.IsEnabled = _removeWizard.IsEnabled && index >= 0 && index + 1 < CurrentAggregateIntent!.Placements.Count;
         _placementSummary.Text = $"{CurrentAggregateIntent?.Placements.Count ?? 0} authored placements · maximum {NativeFreshLevelDocumentIntent.MaximumPlacements}. " +
-            (current?.TiledContent != null ? TiledCapabilityText : current?.SchemaVersion == 3 ? NativeMobyCapabilityText
+            (current?.SchemaVersion == 5 ? FamilyCapabilityText : current?.TiledContent != null ? TiledCapabilityText : current?.SchemaVersion == 3 ? NativeMobyCapabilityText
                 : "Research supports no placements or the supported one-Wizard mixed profile only, with two retail materials and actual source validation.");
     }
 

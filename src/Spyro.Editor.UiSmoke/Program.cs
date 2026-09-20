@@ -39,7 +39,9 @@ if (NativeFreshSavedResearchUiArguments.Handles(args))
     HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
     if (publish)
     {
-        if (NativeFreshSavedResearchUiArguments.RequireFamilyPublication(args))
+        if (NativeFreshSavedResearchUiArguments.RequireLockedChestPublication(args))
+            NativeFreshSavedResearchSourceUiCases.RunLockedChest(args[1], args[2], args[3], args[4]);
+        else if (NativeFreshSavedResearchUiArguments.RequireFamilyPublication(args))
             NativeFreshSavedResearchSourceUiCases.RunFamily(args[1], args[2], args[3], args[4]);
         else NativeFreshSavedResearchSourceUiCases.Run(args[1], args[2], args[3], args[4]);
     }
@@ -86,6 +88,36 @@ if (args.Contains("--fresh-material-picker-only", StringComparer.Ordinal))
     return 0;
 }
 
+// Raw event timing must be checked before any source or publication setup.
+if (args.Contains("--fresh-raw-field-timing-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --fresh-raw-field-timing-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    string timingArtifacts = Directory.CreateTempSubdirectory("spyro-raw-field-timing-ui-").FullName;
+    NativeFreshRawFieldTimingCases.Run(timingArtifacts);
+    Console.WriteLine($"FRESH_RAW_FIELD_TIMING_ARTIFACTS path={timingArtifacts}");
+    return 0;
+}
+
+// Focused source-free whole-family editing and rendering checks.
+if (args.Contains("--fresh-family-authoring-only", StringComparer.Ordinal) ||
+    args.Contains("--fresh-family-preview-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --fresh-family-authoring-only or --fresh-family-preview-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    string familyArtifacts = Directory.CreateTempSubdirectory("spyro-family-authoring-ui-").FullName;
+    if (args[0] == "--fresh-family-authoring-only")
+    {
+        NativeFreshFamilyDocumentSessionCases.Run();
+        FamilyDocumentAdmissionCases.Run(familyArtifacts);
+        NativeFreshFamilyControlsCases.Run(familyArtifacts);
+        NativeFreshFamilyAsyncReadinessCases.Run(familyArtifacts);
+    }
+    NativeFreshFamilyPreviewCases.Run(familyArtifacts);
+    Console.WriteLine($"FRESH_FAMILY_AUTHORING_ARTIFACTS path={familyArtifacts}");
+    return 0;
+}
+
 // Persistence-only family admission; no source paths or native export setup.
 if (args.Contains("--fresh-family-document-admission-only", StringComparer.Ordinal))
 {
@@ -110,6 +142,11 @@ if (args.Contains("--fresh-native-level-ui-only", StringComparer.Ordinal))
     NativeFreshReadOnlySelectionCases.Run(aggregateArtifacts);
     NativeFreshPreviewLayoutCases.Run(aggregateArtifacts);
     FamilyDocumentAdmissionCases.Run(aggregateArtifacts);
+    NativeFreshFamilyDocumentSessionCases.Run();
+    NativeFreshFamilyControlsCases.Run(aggregateArtifacts);
+    NativeFreshFamilyPreviewCases.Run(aggregateArtifacts);
+    NativeFreshFamilyAsyncReadinessCases.Run(aggregateArtifacts);
+    NativeFreshRawFieldTimingCases.Run(aggregateArtifacts);
     Console.WriteLine($"FRESH_NATIVE_LEVEL_UI_ARTIFACTS path={aggregateArtifacts}");
     return 0;
 }

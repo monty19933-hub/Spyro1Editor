@@ -1,10 +1,13 @@
 # Saved schema5 R03 chest-family compilation
 
-Status: integrated source, full regression, normal saved publication and
-separate-process verification pass. Remaining physical postcommit fault tests
-are still running at this checkpoint. No replacement editor or
-saved-path gameplay acceptance is claimed. R06 remains preserved and the
-existing window still refuses schema5 until complete family editing exists.
+Status: integrated source, full regression, normal saved publication,
+separate-process verification and physical postcommit fault tests pass.
+No replacement editor or saved-path gameplay acceptance is claimed by this
+compiler checkpoint. R06 remains preserved. The subsequent
+[complete family editor](native-fresh-family-editor.md) now admits schema5
+with full controls and343/0 regression. Its actual headless Window publication,
+independent full-disc verifier and separate R07 package checks also pass and
+are tracked there; packaged-app exercise/runtime remain separate gates.
 
 ## Bounded complete-document compiler
 
@@ -62,7 +65,7 @@ native persistent-save ownership, dependency closure and normal/public export
 approval remain false. Inherited detached-disc notes are labeled as upstream
 producer scope, not as a claim that the new saved Candidate supplies no writer.
 
-## Verification in progress
+## Native verification
 
 - Neutral checkpoint5756aaa:343 command steps pass; separate R03 replay535
   passes414 checks with unchanged complete image/plan and Original inverse.
@@ -95,8 +98,12 @@ producer scope, not as a claim that the new saved Candidate supplies no writer.
 - Unconfirmed publication551 retains staging/leases and reports no confirmed
   commit. Guard-release failure552 reports a known commit, attempts final
   artifacts exactly once and retains both marker owners and recovery evidence.
-  Artifact/notification failures553–554 and postcommit cancellation555 are
-  still running. No failure output is a playtest candidate.
+  Artifact/notification failures553–554 pass with a known commit, exactly one
+  final artifact observation, original companion evidence and retained staging.
+  Both primary artifact and notification failures remain visible in554.
+  Postcommit cancellation555 passes as committed-clean-after-cancel, exactly
+  one final artifact observation, no leaked recovery evidence and all source
+  finals intact. No failure output is a playtest candidate.
 - Existing-output attempt556 refuses in location validation before source or
   publication. Exit134 is the deliberately unhandled negative CLI result, not
   a successful publication or a new source failure.
@@ -105,5 +112,5 @@ producer scope, not as a claim that the new saved Candidate supplies no writer.
 
 Existing earlier-schema canonical/image references and the retained R03
 experimental image are regression controls, not new universal native or
-saved-path gameplay proof. Physical tests will use only newly owned projects
+saved-path gameplay proof. Physical tests used only newly owned projects
 and outputs under `_local/native-v6-saved-chest-20260920-r01.OlE9O4`.

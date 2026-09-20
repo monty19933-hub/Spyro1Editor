@@ -1,6 +1,6 @@
 # Spyro Editor Beta V6 User Guide
 
-Private development preview, internal build `0.1.0-beta.43`. V6 is not finished
+Private development preview, internal build `0.1.0-beta.44`. V6 is not finished
 or publicly released. The Mac preview is ad-hoc signed and is not Apple-signed
 or notarized; read the included opening instructions before launching it.
 
@@ -18,8 +18,10 @@ Choose **Fresh Level…** in the normal editor. This window is separate from the
 older Blank-Level Lab below, but belongs to the same application and active
 project. It stores its own document; normal **Create BIN** does not include it.
 
-1. Select **Level aggregate**, then explicitly choose **New starter** if there
-   is no saved document. Existing work is not reset automatically.
+1. Select **Level aggregate** to open the saved example. For an empty project,
+   first use **Legacy floor (v1)** → **New starter** → **Save document**, then
+   **Level aggregate** → **Fork saved legacy floor**. Existing work is never
+   reset automatically.
 2. Edit floor bounds, spawn, heading, colors and music. Add or select placements
    in the list. Their markers and routes are schematic, not rendered game
    models, collision or lighting previews.
@@ -38,11 +40,12 @@ project. It stores its own document; normal **Create BIN** does not include it.
    USA BIN/CUE, and a new output location. It verifies the complete written disc
    before reporting success. Load that exact resulting CUE in DuckStation.
 
-The tested native example contains the Wizard, Artisans Grass, two floor
-materials and an authored background without Town Square's visible terrain.
-Export currently requires the exact supported example's geometry, placements
-and material selection; editing outside the profile can disable export. Other
-donors remain authoring-only. This is not yet general new-level publishing.
+The bounded native examples include Wizard + Artisans Grass and the separate
+R03 Wizard + Grass + locked-chest family, with two floor materials and an
+authored background without Town Square's visible terrain. Their saved export
+requires the exact supported geometry, placements and material selections;
+editing outside those profiles can disable export. Other donors remain
+authoring-only. This is not yet general new-level publishing.
 Portals, durable saves, unrestricted materials/Mobys and **Fly Anywhere Enabled**
 remain unfinished.
 
@@ -50,12 +53,35 @@ For an exported ID65 test, open the in-game inventory and enter:
 **R1, R2, L1, L2, R1, L1, R2, L2, Left, Down**. Use a disposable copied emulator
 memory card. This development entry route is not a finished portal.
 
-### Author a larger tiled floor (not yet exportable)
+### Edit a complete locked-chest family
+
+Select its single entry in the placement list, or choose **Add locked-chest
+family**. Edit independent key/chest XYZ and all five named reward members.
+Each reward has **Source-relative default** or **Explicit WORLD XYZ** mode.
+Defaults are resolved by native source compilation, not invented by the preview.
+Explicit destinations stay fixed when the key or chest moves. Choosing default
+explicitly removes that reward's authored override.
+
+Apply validates the complete document; invalid input is retained. Cancel a new
+family to leave the prior document unchanged. Undo/redo, removal and reordering
+operate on the whole family, preserving one editor ID. Save/Reopen keeps all
+members. The schematic shows anchors and explicit destinations, exact numeric Z,
+and a complete seven-member legend; it does not simulate native trajectories.
+
+Schema5 supports neutral families on legacy or tiled content. Only the exact
+saved legacy-floor R03 profile currently enables its research-export action.
+Changing anchors, reward destinations or supporting content may make the document
+authored-only. No Wizard, Grass or other supporting Moby is silently inserted
+when you add a family. General interchangeable families remain unfinished.
+
+### Author a larger tiled floor
 
 In **Level aggregate**, choose **Use tiled geometry (schema 4)** explicitly.
 The existing floor becomes the first tile, retaining its material choices,
-spawn, settings and placements. Existing documents are never upgraded merely
-by opening them. This upgrade disables the old single-floor test export.
+spawn, settings and placements. Single-tile conversion requires each legacy
+floor side to be at most2048; a wider floor is not silently split. Existing
+documents are never upgraded merely by opening them. Family documents retain
+schema5 instead of downgrading to4.
 
 - Select a tile to edit its position, size, color and two material slots.
   **Add tile to right** copies the selected tile's size and materials into an
@@ -73,8 +99,12 @@ The document permits at most 255 tiles and 128 placements, also subject to its
 64 KiB file-size limit. These are authoring limits, not proven in-game capacity.
 The schematic draws the actual tiles, but does not render their selected
 textures or prove collision, enemy behavior or a safe route between endpoints.
-Schema-4 tiled documents cannot yet produce a BIN/CUE. Keep the original
-single-floor example if you want to test the currently supported native export.
+Schema4 tiled research export supports zero placed Mobys with Base-color faces
+or bounded supported static retail material selections. Native data must fit
+0x1000 bytes, source/GPU ownership must validate, and the complete report must
+fit64KiB. The R06 three-material example has separate gameplay observations;
+that does not certify every combination. Animated/HQ/scrolling materials and
+tiled Moby export remain unavailable. Schema5 tiled documents remain authored-only.
 
 ### Current two-family test recipe
 

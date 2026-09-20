@@ -102,13 +102,13 @@ restored byte-for-byte; the original card and BIN/CUE are unchanged.
 See [the R03 runtime record](research/native-fresh-chest-r03-runtime.md).
 This does not yet add chest-family authoring to R06. See
 [destination editing and evidence](research/native-fresh-chest-authored-destinations.md)
-and [the pending saved-document integration plan](research/native-fresh-family-authoring-integration-plan.md).
+and [the saved-document integration plan](research/native-fresh-family-authoring-integration-plan.md).
 
 The next source checkpoint adds neutral schema5 persistence for a complete
 locked-chest family (one editor identity, independent key/chest anchors and
 optional named WORLD reward destinations) alongside legacy or tiled content.
 Save/Reopen, strict parsing and old document compatibility pass343 integrated
-regression steps. Existing UI and native exporters deliberately refuse schema5
+regression steps. At that checkpoint, UI and native exporters deliberately refused schema5
 until they can preserve and compile the entire family; this is not a new
 user-facing editor feature yet. See [the schema5 record](research/native-fresh-family-document-schema5.md).
 
@@ -117,6 +117,17 @@ schema5 R03 document to the actual Wizard/Grass/chest resource, behavior,
 scene and physical-disc chain. Normal saved publication and a separate-process
 verifier pass full readback plus complete Original inverse; its BIN matches the
 previously playtested R03 image. This is a saved-project export result, not a
-new gameplay test or an installed family editor. Additional publication-fault
-checks are being completed before UI admission. See
+new gameplay test or an installed family editor. All reviewed publication-fault
+checks now pass, including postcommit notification failure and cancellation. See
 [the saved R03 compiler record](research/native-fresh-saved-locked-chest-r03.md).
+
+The next complete family UI checkpoint adds one-entry key/chest and all five
+reward controls, pending Add/Cancel, complete history/persistence, a seven-member
+schematic and source-free eligibility matching the actual compiler. Synchronous
+raw text invalidation fixes an existing asynchronous stale-edit/reveal defect.
+The build-all repository gate passes343/0, including new timing, async, preview
+and complete schema5 controls tests. Internal R07 version is beta.44, distinct
+from preserved R06 beta.43. Actual headless Window source publication579 and
+independent complete-disc verification582 pass. Separate Mac/Windows R07
+packages pass verification581. Packaged-app exercise and its exact-CUE gameplay
+remain separate next gates; see [the family editor record](research/native-fresh-family-editor.md).
