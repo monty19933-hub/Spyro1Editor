@@ -89,3 +89,29 @@ not a proposed or admitted Fresh allocation. Whole-handler reachability,
 rootless-class model/animation validity, aliased scratch, callbacks, singleton
 state and native helper semantics remain unresolved. No Fresh placement, Body,
 executable, disc or UI admission is widened by this witness.
+
+## Original reset-precondition inventory441
+
+`source_fresh_chest_reset_preconditions_oracle.py` is a separate inspection-only
+oracle, SHA256 `8fda30564e5d1ad8f8262a77375dc6bbdc0b846be137ce842e5b90b4d4def6c8`.
+Root441 passed with the original-only `--inspect` mode and final held/named image
+and transitive helper identity checks. The passed436 oracle remains unchanged.
+This reports the entire434-byte reward handler, every direct/computed control
+and owned delay word, all seven58-byte source rows, their complete privateE4,
+integer owner fields versus pointer-fixup fields, and all54 PETE registrations.
+
+ClassD is absent from both the actual PETE registration table and Peace's local
+model registrations. AD is locally absent but is present in PETE slot10: its
+21C-byte package is a SimpleModel, not an animated reset +38 pointer-chain proof.
+53/54 are also shared SimpleModels; AE is the local1008-byte animated package.
+This corrects any inference from an empty *local* slot to global model absence.
+All five retained D private blocks start with +14=0 and +18=1, but initialization
+and all reachable writes have not yet been executed as a state invariant.
+
+The exact reward reset transfers remain E708 (conditional) and E774 (jump).
+The new bounded shared-loader inspection discovers B8AC/C bytes through
+B8B0's conditional loop to B870 and delay s0+=8, then B8B8/8 through the call
+to B6F8 and its delay word. It does not follow/execute the new call, presume its
+return, certify a whole function tail, or compare the current Fresh executable.
+No rootless-state admission, host extension, ROM or gameplay result follows from
+this inventory; it is the source evidence for the next independent state proof.
