@@ -1473,3 +1473,53 @@ modify the successfully published candidate's project. Log316 independently
 hashes the three published artifacts. No DuckStation gameplay has run yet;
 the private session directory contains fresh restore backups, a private card,
 draft test INIs and the runtime checklist. R03 and default project are untouched.
+
+### Tiled saved editor integration and exact-disc gameplay after6f73ded
+
+Regression-first UI increment317 captures6missing-API errors for neutral tiled
+readiness. Build318 passes0warnings/errors. Eligibility now uses the SAME complete
+PrepareDocument/allocation preflight as the saved Candidate, not a tile count,
+selected material or projected legacy floor. Actual data1000 accepts;1004,
+retail on any face including unselected tiles, and both placement tags refuse.
+The async saved ticket also retains actual selected tile ID and raw spawnZ,
+in addition to all previous identity/raw-generation/source/revision fences.
+Direct session selection can change without document/snapshot/generation drift;
+new tests exercise that precise gap. No replacement document is adopted.
+
+Targeted319 passes95argument,1000readiness and3720lifecycle checks, including
+picker/prepare cancellation, stale selection/raw/ABA, busy controls, deferred
+close, all old profiles, owner failure and preserved drafts. Full320 passes
+338steps/0failures; report
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-gjg28qjm/summary.json`.
+UI status states that only clean saved base-color/P0 tiled content fitting
+complete native data1000/N16 can create research output. Normal Create BIN,
+retail-textured tiles, placed Mobys and general gameplay remain unapproved.
+
+Root cold-booted the exact313/314 image in DuckStation PID32883, independently
+identified its open BIN and127.0.0.1:2345 listener, then entered through firmware,
+copied save slot1/Stone Hill and native inventory LAB sequence. The authored
+floor/sky appeared. Initial overlong keyboard holds fell off the Y boundary;
+those three lost test lives are separate from the controlled traversal.
+Native UI frame advance then bounded controls, and read-only paused XYZ checks
+bracketed seams10496/12544 and the independent cell boundary12288 in BOTH
+directions, all3internal diagonals, far-tile jump/landing, and return to tile0
+without life loss. The actual route was not the originally planned centerline.
+Controlled east-edge fall atX14809 then15093 (still occupied cell3) descended
+below floorZ8704, rejecting phantom support. Native reset returned the authored
+spawn8960/8960/9060,heading64 and reduced copied lives1->0. Final normal-speed
+idle showed30game/60videoFPS,100%,expected layout and live companion.
+
+Persistent observer sessions hit the existing32-event bound after repeated UI
+frame-step stop notifications; no safety limit changed. Final samples reconnect,
+read while paused and close before UI advancement. Their runtime/authentication
+booleans remainfalse; this bounded manual record is separate evidence. Labels
+denote attempts; coordinates, not a premature crossing label, establish outcomes.
+Full trajectory,14screenshots, logs and limitations are recorded in
+`_local/native-v6-tiled-runtime-20260919-r01.5OPOBH/RUNTIME-SESSION.md`.
+No texture/placed-Moby gameplay, exhaustive camera/peak memory or audio-quality
+claim is made. Candidate BIN/CUE/receipt remain byte-identical to313/314.
+
+DuckStation exited normally without a resume state. After-test INIs are retained,
+both original INIs restored byte-for-byte; original cardSHA remainsd69b43f8.
+No test card/state is copied back; private state directory is empty. Sealed R03
+app and its authored retail-material/placement example remain untouched.

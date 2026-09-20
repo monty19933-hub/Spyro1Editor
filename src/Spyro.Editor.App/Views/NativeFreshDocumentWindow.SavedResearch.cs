@@ -30,7 +30,7 @@ internal sealed partial class NativeFreshDocumentWindow
 
     private sealed record SavedResearchTicket(NativeFreshLevelDocumentSession Session,
         NativeFreshLevelDocumentSnapshot Snapshot, NativeFreshLevelDocumentIntent Applied,
-        string? Selection, string?[] BaseFields, object? Music, string?[] RouteFields,
+        string? Selection, string? TileSelection, string? SpawnZ, string?[] BaseFields, object? Music, string?[] RouteFields,
         NativeMobyFields NativeFields, MaterialFields Materials, long RawGeneration, string Image, string Cue);
 
     private bool IsSavedResearchReady => _aggregateMode && !AggregateCommandsBlocked &&
@@ -42,7 +42,8 @@ internal sealed partial class NativeFreshDocumentWindow
             FloorMaterials.Triangle0: NativeFreshRetailTerrainMaterialIntent,
             FloorMaterials.Triangle1: NativeFreshRetailTerrainMaterialIntent } ||
             NativeFreshSavedLevelResearchEligibility.IsSupportedMixedProfile(CurrentAggregateIntent) ||
-            NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(CurrentAggregateIntent)) && !HasUnsavedChanges;
+            NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(CurrentAggregateIntent) ||
+            NativeFreshSavedLevelResearchEligibility.IsSupportedTiledProfile(CurrentAggregateIntent)) && !HasUnsavedChanges;
 
     private async Task CreateSavedResearchCandidateAsync()
     {
@@ -72,6 +73,7 @@ internal sealed partial class NativeFreshDocumentWindow
             var source = CaptureResearchSourcePaths();
             var session = _aggregateSession!;
             ticket = new SavedResearchTicket(session, session.Snapshot, session.CurrentIntent!, session.SelectedEditorId,
+                session.SelectedTileId, _tiledSpawnZ.Text,
                 _fields.Values.Select(f => f.Text).ToArray(), _music.SelectedItem,
                 _routeFields.Values.Select(f => f.Text).ToArray(), NativeMobyFieldSignature(), MaterialFieldSignature(),
                 _materialInspectionGeneration, source.Image, source.Cue);
@@ -137,6 +139,7 @@ internal sealed partial class NativeFreshDocumentWindow
             _materialInspectionClosed || _addingWizard || _forkRecoveryPending || _materialInspectionBusy ||
             !ReferenceEquals(ticket.Session, _aggregateSession) || !ReferenceEquals(ticket.Snapshot, _aggregateSession?.Snapshot) ||
             !ReferenceEquals(ticket.Applied, CurrentAggregateIntent) || ticket.Selection != _aggregateSession?.SelectedEditorId ||
+            ticket.TileSelection != _aggregateSession?.SelectedTileId || ticket.SpawnZ != _tiledSpawnZ.Text ||
             !ticket.BaseFields.SequenceEqual(_fields.Values.Select(f => f.Text)) || !ReferenceEquals(ticket.Music, _music.SelectedItem) ||
             !ticket.RouteFields.SequenceEqual(_routeFields.Values.Select(f => f.Text)) || ticket.NativeFields != NativeMobyFieldSignature() ||
             ticket.Materials != MaterialFieldSignature() ||

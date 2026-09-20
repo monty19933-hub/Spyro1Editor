@@ -13,13 +13,15 @@ internal static class NativeFreshSavedResearchLifecycleCases
     internal static void Run(string parent)
     {
         int checks = 0;
-        foreach (bool family in new[] { false, true })
+        foreach (string profile in new[] { "material", "family", "tiled" })
         foreach (string stage in new[] { "picker", "prepare" })
         foreach (string change in new[] { "none", "raw-aba", "raw", "native-raw-aba", "native-raw", "source", "project", "disk", "manifest", "session", "snapshot", "applied", "close", "cancel", "prepare-refusal", "owner-release" }
-            .Concat(family ? new[] { "native-y-aba", "native-z-aba", "native-yaw-aba" } : Array.Empty<string>()))
+            .Concat(profile == "family" ? new[] { "native-y-aba", "native-z-aba", "native-yaw-aba" } :
+                profile == "tiled" ? new[] { "tile-selection", "spawn-z", "spawn-z-aba", "tile-x", "tile-x-aba", "tile-material-aba" } : Array.Empty<string>()))
         {
-            var fixture = new Fixture(parent, (family ? "family-" : "") + stage + "-" + change,
-                document: family ? SavedFamilyDocumentFixture.Document() : null,
+            bool family = profile == "family", tiled = profile == "tiled";
+            var fixture = new Fixture(parent, (profile == "material" ? "" : profile + "-") + stage + "-" + change,
+                document: family ? SavedFamilyDocumentFixture.Document() : tiled ? SavedTiledDocumentFixture.Document() : null,
                 selectedEditorId: family ? SavedFamilyDocumentFixture.GrassId : null);
             List<Exception> failures = [];
             var picker = new TaskCompletionSource<string?>();
@@ -33,12 +35,19 @@ internal static class NativeFreshSavedResearchLifecycleCases
                 "native-yaw-aba" => "FreshNativeMobyYaw", _ => "FreshNativeMobyX"
             };
             string nativeBefore = fixture.Find<TextBox>(nativeField).Text!;
+            string spawnZBefore = tiled ? fixture.Find<TextBox>("FreshSpawnZ").Text! : "";
+            string tileXBefore = tiled ? fixture.Find<TextBox>("FreshFloorX").Text! : "";
+            string? tileBefore = fixture.CurrentSession.SelectedTileId;
             try
             {
                 if (family) Check(fixture.Find<TextBox>(nativeField).IsEnabled && nativeBefore.Length > 0 &&
                     fixture.CurrentSession.SelectedEditorId == SavedFamilyDocumentFixture.GrassId &&
                     original!.Placements[1] is NativeFreshMobyPlacementIntent,
                     "Family lifecycle starts with the actual saved Grass selected and its native fields populated.");
+                if (tiled) Check(original!.TiledContent!.Tiles.Count == 3 && original.LegacyContent == null &&
+                    tileBefore == original.TiledContent.Tiles[0].EditorId && spawnZBefore == "9216" && tileXBefore == "8448" &&
+                    fixture.Find<Button>("FreshDocumentResearch").IsEnabled,
+                    "Tiled lifecycle starts with the complete saved document and actual first-tile/common-spawn fields.");
                 fixture.Window.SavedResearchWorkForTesting = work;
                 fixture.Window.ResearchOutputPickerForTesting = _ => stage == "picker" ? picker.Task : Task.FromResult<string?>(fixture.Output);
                 fixture.Fire("FreshDocumentResearch");
@@ -55,6 +64,28 @@ internal static class NativeFreshSavedResearchLifecycleCases
                 if (family)
                     foreach (string name in new[] { "FreshNativeMobyX", "FreshNativeMobyY", "FreshNativeMobyZ", "FreshNativeMobyYaw" })
                         Check(!fixture.Find<TextBox>(name).IsEnabled, "Busy native field is disabled: " + name);
+                if (tiled)
+                {
+                    foreach (string name in new[] { "FreshTilesUpgrade", "FreshTileAddAdjacent", "FreshTileRemove", "FreshTileMoveUp", "FreshTileMoveDown" })
+                    {
+                        Check(!fixture.Find<Button>(name).IsEnabled, "Busy tile action is disabled: " + name);
+                        fixture.Fire(name);
+                    }
+                    foreach (string name in new[] { "FreshFloorX", "FreshFloorY", "FreshFloorZ", "FreshFloorWidth", "FreshFloorDepth",
+                        "FreshFloorColor", "FreshSpawnX", "FreshSpawnY", "FreshSpawnZ", "FreshHeading", "FreshSkyColor",
+                        "FreshMaterial0TextureId", "FreshMaterial1TextureId", "FreshMaterial0SourceVariant", "FreshMaterial1SourceVariant" })
+                        Check(!fixture.Find<TextBox>(name).IsEffectivelyEnabled, "Busy tile/common/material raw field is disabled: " + name);
+                    foreach (string name in new[] { "FreshDocumentMusic", "FreshMaterial0Kind", "FreshMaterial1Kind", "FreshMaterial0SourceLevel", "FreshMaterial1SourceLevel" })
+                        Check(!fixture.Find<ComboBox>(name).IsEffectivelyEnabled, "Busy tile material selector is disabled: " + name);
+                    var tiles = fixture.Find<ListBox>("FreshLevelTiles");
+                    Check(!tiles.IsEnabled, "Busy tile selector is disabled during both picker and prepare.");
+                    tiles.SelectedItem = original!.TiledContent!.Tiles[1]; F.Pump();
+                    Check(fixture.CurrentSession.SelectedTileId == tileBefore &&
+                        (tiles.SelectedItem as NativeFreshFlatTileIntent)?.EditorId == tileBefore &&
+                        ReferenceEquals(original, fixture.Window.CurrentAggregateIntent) &&
+                        fixture.Find<TextBox>("FreshSpawnZ").Text == spawnZBefore && fixture.Find<TextBox>("FreshFloorX").Text == tileXBefore,
+                        "Direct routed tile actions/selection while busy preserve the actual document, selected ID and raw fields.");
+                }
                 fixture.Find<ComboBox>("FreshDocumentMode").SelectedItem = "Legacy floor (v1)"; F.Pump();
                 Check(fixture.Window.CurrentAggregateIntent == original && fixture.Find<ComboBox>("FreshDocumentMode").SelectedItem as string == "Level aggregate",
                     "Busy direct mode/command calls retain aggregate and raw form.");
@@ -70,15 +101,39 @@ internal static class NativeFreshSavedResearchLifecycleCases
                     case "native-yaw-aba":
                         fixture.Set(nativeField, family ? "0" + nativeBefore : "1"); fixture.Set(nativeField, nativeBefore); break;
                     case "native-raw": fixture.Set("FreshNativeMobyX", "1"); break;
+                    case "spawn-z": fixture.Set("FreshSpawnZ", "09216"); break;
+                    case "spawn-z-aba": fixture.Set("FreshSpawnZ", "0" + spawnZBefore); fixture.Set("FreshSpawnZ", spawnZBefore); break;
+                    case "tile-x": fixture.Set("FreshFloorX", "08448"); break;
+                    case "tile-x-aba": fixture.Set("FreshFloorX", "0" + tileXBefore); fixture.Set("FreshFloorX", tileXBefore); break;
+                    case "tile-material-aba":
+                        fixture.Find<ComboBox>("FreshMaterial0Kind").SelectedItem = "Retail terrain record"; F.Pump();
+                        fixture.Find<ComboBox>("FreshMaterial0Kind").SelectedItem = "Base floor color"; F.Pump(); break;
+                    case "tile-selection":
+                        var generation = fixture.RawGeneration; var snapshot = fixture.CurrentSession.Snapshot;
+                        fixture.CurrentSession.SelectTile(original!.TiledContent!.Tiles[1].EditorId);
+                        Check(fixture.CurrentSession.SelectedTileId != tileBefore && fixture.RawGeneration == generation &&
+                            ReferenceEquals(original, fixture.Window.CurrentAggregateIntent) && ReferenceEquals(snapshot, fixture.CurrentSession.Snapshot) &&
+                            !fixture.Window.HasUnsavedChanges,
+                            "Actual session tile selection can drift without document/snapshot/raw-generation drift; the ticket must bind that selection itself.");
+                        break;
                     case "source": fixture.Source = (fixture.Source.Item1 + ".different", fixture.Source.Item2); break;
                     case "project": fixture.Current = false; break;
                     case "disk": fixture.ChangeSavedRaw(); break;
                     case "manifest": fixture.ChangeManifest(); break;
                     case "session": fixture.ReplaceActualSession(); break;
                     case "snapshot": fixture.CurrentSession.Save(); break;
-                    case "applied": fixture.CurrentSession.Apply(fixture.CurrentSession.CurrentIntent!.WithContent(
-                        Spyro.Editor.Core.Editing.NativeId65FreshDocumentIntent.Create(8448, 8448, 8704, 1024, 1024, 8960, 8960, 129,
-                            new(80, 128, 112), new(128, 96, 64), 20), [])); break;
+                    case "applied":
+                        var current = fixture.CurrentSession.CurrentIntent!;
+                        if (tiled)
+                        {
+                            var content = current.TiledContent!;
+                            fixture.CurrentSession.Apply(current.WithTiledContent(content.WithSettings(content.SpawnX, content.SpawnY,
+                                content.SpawnZ, 65, content.SkyColor, content.MusicTrackId)));
+                        }
+                        else fixture.CurrentSession.Apply(current.WithContent(
+                            NativeId65FreshDocumentIntent.Create(8448, 8448, 8704, 1024, 1024, 8960, 8960, 129,
+                                new(80, 128, 112), new(128, 96, 64), 20), []));
+                        break;
                     case "close": fixture.Window.Close(); F.Pump(); Check(fixture.Window.IsVisible && fixture.Window.ResearchBusyForTesting,
                         "Research close defers to settled work and does not auto-close."); break;
                     case "cancel": fixture.Fire("FreshDocumentCancelResearch"); break;
@@ -94,6 +149,8 @@ internal static class NativeFreshSavedResearchLifecycleCases
                 if (change == "close") Check(fixture.Window.IsVisible, "Research requires a fresh user Close after settlement, preserving old behavior.");
                 bool shouldReachPublish = change is "none" or "owner-release";
                 Check(work.PublishCalls == (shouldReachPublish ? 1 : 0), "Every stale/cancel fence precedes publication.");
+                if (tiled && stage == "picker" && change is not ("none" or "owner-release" or "prepare-refusal"))
+                    Check(work.Snapshot == null, "Tiled drift/cancel while choosing output refuses before preparation receives any saved owner.");
                 if (change == "raw-aba") Check(fixture.Find<TextBox>("FreshHeading").Text == headingBefore && !fixture.Window.HasUnsavedChanges &&
                     fixture.Window.SavedResearchFailureForTesting is InvalidDataException, "Actual A-B-A remains refused via generation despite equal final raw state.");
                 if (change is "native-raw-aba" or "native-y-aba" or "native-z-aba" or "native-yaw-aba")
@@ -101,6 +158,20 @@ internal static class NativeFreshSavedResearchLifecycleCases
                         fixture.Window.SavedResearchFailureForTesting is InvalidDataException,
                         family ? "Actual selected Grass " + nativeField + " A-B-A remains stale despite equal final raw/native intent." :
                             "Inactive native raw A-B-A remains stale across the old schema2 research ticket.");
+                if (change is "spawn-z-aba" or "tile-x-aba" or "tile-material-aba")
+                    Check(fixture.Find<TextBox>("FreshSpawnZ").Text == spawnZBefore && fixture.Find<TextBox>("FreshFloorX").Text == tileXBefore &&
+                        fixture.Find<ComboBox>("FreshMaterial0Kind").SelectedItem as string == "Base floor color" &&
+                        !fixture.Window.HasUnsavedChanges && fixture.Window.SavedResearchFailureForTesting is InvalidDataException,
+                        "Raw tiled/common/material A-B-A is stale even though the complete final form again equals saved content.");
+                if (change is "spawn-z" or "tile-x")
+                    Check(fixture.Find<TextBox>(change == "spawn-z" ? "FreshSpawnZ" : "FreshFloorX").Text ==
+                            (change == "spawn-z" ? "09216" : "08448") && fixture.Window.HasUnappliedFields &&
+                        fixture.Window.SavedResearchFailureForTesting is InvalidDataException,
+                        "Unapplied tiled raw spelling is retained after refusal; no apply/save or field normalization occurs.");
+                if (change == "tile-selection")
+                    Check(fixture.CurrentSession.SelectedTileId == original!.TiledContent!.Tiles[1].EditorId &&
+                        fixture.Window.SavedResearchFailureForTesting is InvalidDataException,
+                        "Direct actual session selection drift refuses before publication and is not silently replaced with captured selection.");
                 if (change == "owner-release")
                 {
                     var leaves = F.Leaves(fixture.Window.SavedResearchFailureForTesting!);
@@ -225,6 +296,8 @@ internal static class NativeFreshSavedResearchLifecycleCases
         // Test mutations below use real session operations and real Store captures.
         internal NativeFreshLevelDocumentSession CurrentSession => (NativeFreshLevelDocumentSession)typeof(NativeFreshDocumentWindow)
             .GetField("_aggregateSession", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(Window)!;
+        internal long RawGeneration => (long)typeof(NativeFreshDocumentWindow)
+            .GetField("_materialInspectionGeneration", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(Window)!;
         internal void ReplaceActualSession() => typeof(NativeFreshDocumentWindow)
             .GetField("_aggregateSession", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
             .SetValue(Window, new NativeFreshLevelDocumentSession(CurrentSession.Snapshot));
