@@ -62,6 +62,7 @@ internal static class FamilyChestSceneCases
         CheckStorageSource(resources,host,oldBody,check);
 
         var result=NativeFreshLockedChestSceneExtension.Compose(resources,host,ChestId);
+        FamilyChestBodyCases.Source(resources,host,result,check);
         byte[] scene=result.CopyScene();
         check(ReferenceEquals(result.ResourceAncestor,resources)&&ReferenceEquals(result.HostAncestor,host)&&
             ReferenceEquals(result.SourceAncestor,source),"Scene binds all three actual resource/Host/source instances.");

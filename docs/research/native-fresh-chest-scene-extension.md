@@ -83,3 +83,40 @@ The producer remains scene-only. A larger Host changes runtime resource
 addresses; an actual combined Body, treasure census, authored chest placement,
 full callback/lifecycle evidence and exact-disc gameplay still require work.
 Neither the old Family executable gate nor the preserved R06 editor is changed.
+
+## Child-relative Body installation
+
+`NativeFreshLockedChestResearchBody` now binds the exact resource/Host/Scene
+tuple and replaces only descriptor3 through the existing growth layout. The
+resource child and result both remain20F000 bytes, with eight unchanged packed
+descriptors. The complete header, roots, GPU/audio/data/models, auxiliaries and
+padding outside the3800-byte scene are unchanged. The inverse recovers the
+complete actual immediate resource child, not a claimed original-disc image.
+
+This leaf's test oracle is deliberately child-relative: a direct bounded copy
+of independent460's verified scene into the separately verified actual resource
+child, compared against the neutral-layout producer and full complement/inverse.
+No new independent GPU/model allocator was invented. The existing original-only
+mixed recipe stops at P1/seven roots;460 supplies rows/private storage, not the
+Grass/AE/debris resource imports. Full original-only composed-image evidence is
+therefore still a separate gate, not inferred from this leaf test.
+
+The enlarged actual Host supplies copy anchor8008CA38. Neutral runtime decoding
+finds used dataA6C (not its1000 CD allocation), model allocation1B000 at8008D4A4,
+scene3800 at800A84A4, and end800ABCA4. Nine placed rows,32 dynamic rows and the
+whole80000 copy-buffer read remain within the separately retained normal lower
+bound80187BB0/PETE801C5BB8. This is parsed accounting, not peak-memory or complete
+native-lifetime proof; the neutral report remains non-source-certified.
+
+The neutral layout exposes mutable payload arrays, so this typed issuer returns
+a new detached layout on each read. A regression mutates the exposed payload
+and verifies the Body, inverse and subsequent layout remain unchanged.
+RED473 produced9 expected missing-type errors with zero warnings. Build474
+passes without warnings/errors; independent review found no actionable issue.
+Source475 reports child-relative Body SHA256
+`2df8db4b2b4c53a23c71e9057905b84e13a451a6bad3b178d17fbce3463e5aed`.
+The complete source suite passes9034 assertions and retains all existing
+source/material/disc goldens and original BIN/CUE guards. Full regression476
+passes343 command steps with zero failures. This Body adds no executable/census patch or output
+image: target10 remains explicitly provisional, and final executable, full
+dependency closure, authored placement, runtime and publication flags stay false.

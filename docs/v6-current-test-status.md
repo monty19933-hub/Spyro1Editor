@@ -45,11 +45,14 @@ code and verify changed dispatch, callback-entry arguments, initializer and
 complete inverse. The full regression passes343 command steps; the final
 source-backed run passes8579 assertions with original BIN/CUE unchanged.
 
-The next scene-only stage now adds the key, chest and five reward rows through
+The scene stage now adds the key, chest and five reward rows through
 the existing scene allocator. It matches the independent nine-row scene bytes,
 passes343 full regression steps and8885 final source assertions, and preserves
-the complete inverse to the previous scene. Placement coordinates, complete behavior/lifecycle, composed
-Body/census, exact-disc export and fresh gameplay checks remain distinct gates.
+the complete inverse to the previous scene. A subsequent Body stage installs
+that scene while preserving every byte outside it, passes9034 source assertions
+and343 full regression steps, and checks the enlarged Host's runtime addresses.
+Placement coordinates, complete behavior/lifecycle, final census/executable,
+exact-disc export and fresh gameplay checks remain distinct gates.
 See [the scene record](research/native-fresh-chest-scene-extension.md) and
 [the behavior record](research/native-locked-chest-behavior-layout.md) for current
 implementation evidence. These source-only changes do not replace R06.
