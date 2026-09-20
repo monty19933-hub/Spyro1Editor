@@ -1,8 +1,8 @@
 # Four-tile family terrain: next source-only resource leaf
 
-Status: **neutral independent reference and complete-document preflight verified;
-source-derived resource issuer remains planned**, reviewed against `46ba3fa`.
-No native resource producer, output or new export admission is implemented.
+Status: **neutral preflight, independent child reference and detached
+source-derived used-data revision verified; full regression passes343/0**.
+No revised Body, output or new export admission is implemented.
 The [current editor ledger](native-fresh-family-editor.md) and
 [saved R03 compiler ledger](native-fresh-saved-locked-chest-r03.md) retain their
 own verification boundaries. The [legacy R03 gameplay result](native-fresh-chest-r03-runtime.md)
@@ -75,6 +75,43 @@ record slices before freezing this reference; the complete data bytes and
 hashes did not change. This reference is explicitly **child-relative**, not an
 independent Original-only reconstruction of installed family/GPU resources.
 It grants no source, resource, Body, native-loader, disc or runtime authority.
+
+## Detached source-derived revision
+
+`NativeFreshTiledFamilyTerrainRevision.Compose(actualIntent, actualR03Placement)`
+now revalidates the complete actual placement/Body/Scene/Host/resource-child/
+parent/material-source chain through existing guards. All three authored IDs
+must match the actual1+1+7 row spans, and the explicit reward override must be
+the actual retained object. The subordinate legacy Wizard input does not
+replace the whole schema5 document or dictate its composed placement IDs.
+
+The shared native material-table codec verifies both installed split LQ/HQ
+records against their actual allocation. The complete five-component surface
+is replaced while preserving every metadata/suffix byte; the complete1000-byte
+inverse also checks all new zero padding. Retained hashes cover the final
+placed child upload/model/Scene/header/complement, not the older Wizard-only
+allocation. Original terrain/material consumer windows remain source-bound.
+
+Only detached used data is returned. Source certification covers that byte
+composition; BodyIssued, peak-memory, runtime, publication and complete native
+dependency closure remain false. Existing saved/UI and P0 admission is unchanged.
+The new source case runs only in explicit read-only `--chest-r03-source`; none
+of the old image writers consumes this revision.
+
+- 594: tests-first missing-type RED, one CS0246 error and zero warnings.
+- 595: Core/authoring-smoke build passes with zero warnings/errors.
+- 596: ordinary source-free authoring mode passes416 checks.
+- 597: actual original-ROM R03 source mode passes847 checks. The new complete
+  used-data hash is the independent `fe754f…`; old complete disc remains
+  `a5b007…` with1297 changed sectors and full inverse `fc866b…`. Original BIN/CUE
+  are unchanged; no output was written. This is not a tiled-disc test.
+- 598: full build-all regression passes343 checks, zero failures, exit0.
+  Report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-dg_a8xvu/summary.json`.
+
+Root and independent review found no unresolved implementation blocker. The
+new code and test hashes are respectively
+`936aa6e288d438e02585f767dee9c6c57dd1c424ba0ab12236c804e12e51a09d`
+and `34e5af50fabf73066053b673589010ce4b29613df1327f5cfc479389270133ae`.
 
 ## Smallest closed fixture
 
@@ -166,13 +203,13 @@ before translating by170. Preserve this old helper's behavior. Any extraction
 needed for the new leaf must share neutral mechanics only, with a separate
 closed family-tail adapter and unchanged old parser/admission tests.
 
-## Proposed next implementation leaf
+## Implemented data-only revision contract
 
-Add one **internal sealed, privately constructed** terrain-data revision over
+The **internal sealed, privately constructed** terrain-data revision is over
 an actual R03 `NativeFreshLockedChestPlacementPlan` and the whole tiled document.
-Suggested name/API, not an existing contract:
+Its entry point retains the complete validated intent:
 
-`NativeFreshTiledFamilyTerrainRevision.Compose(document, actualR03Placement)`.
+`NativeFreshTiledFamilyTerrainRevision.Compose(actualIntent, actualR03Placement)`.
 
 Using the placed R03 owner keeps the existing resource child, Host, complete P9
 Scene, authored family coordinates and override ancestry together. No new
@@ -372,6 +409,22 @@ and keep one shared Wizard/Grass/chest graph/policy. Reuse
 `NativeLevelDataGrowthLayout`, existing scene allocator and shared physical-disc
 source/afterimage/streaming helpers; do not copy another exporter. Prove complete
 Body complement and immediate inverse before a full physical-image comparison.
+
+Independent follow-on design review identifies the existing
+`NativeFreshLockedChestSceneStorageSource` as the shared seam. Its current
+resource entry point must retain exact old behavior/fingerprints. A new closed
+typed terrain-revision arm may share its private graph builder and Original
+read registry, deriving a fresh Final Body/Scene domain from the actual
+revision rather than accepting caller-supplied bytes, domains or callbacks.
+Replace the complete padded1000-byte data allocation with zero physical growth.
+Recapture all three templates into one graph excluding exactly the Scene, keep
+both chest globals, and allocate the same1+1+7 P9/N32/private13C/ten-fixup
+layout. Reuse the existing Scene row/private preservation logic, then require
+the entire reconstructed authored Scene to equal the old placed Scene,
+including Reward2 and every reserve/padding byte. Old graph identities cannot
+certify this new domain. Retained Host/EXE bytes, native model/Scene loading and
+new runtime accounting remain additional checks; no Body implementation is
+included in the current data-only leaf.
 
 For this exact union, strict floor-footprint checks can be justified against the
 proven rectangle; arbitrary tile unions require a different containment proof.
