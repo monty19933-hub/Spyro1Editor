@@ -38,9 +38,43 @@ Logs under `_local/research/v6-mixed-export-20260912-r01.jR0oBr`:
 - 592: complete build-all regression passes343 checks, zero failures, exit0.
   Report: `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-k2mi3nve/summary.json`.
 
-This is only neutral preparation. The child-relative used-data reference,
-actual retained resource ancestry, native parser witness and all later
+This is only neutral preparation. The child-relative reference below is now
+verified; actual retained resource ancestry, native parser witness and all later
 Body/executable/disc/clearance/publication/runtime gates remain separate.
+
+## Independent child-relative data reference
+
+`source_tiled_family_data_child_oracle.py` in the authoring smoke project now
+reads only the exact verified R07 BIN/CUE described in the
+[R07 runtime ledger](native-fresh-family-editor-r07-runtime.md). It locates the
+ISO directory, WAD79/80 and all eight actual Body descriptors; authenticates
+the whole child before/after and through fresh reopened files; retains the
+installed metadata and complete family suffix; and substitutes the independently
+frozen neutral surface. No Original file, Core output or production resource
+issuer is used. It writes no image or other output file.
+
+Root-reviewed replay593 passes60 targeted refusal controls, complete metadata/
+suffix complement and immediate inverse to the original1000-byte data
+allocation. Script SHA256:
+`4f0ddbd810ae40ee10bd96c58d92fd4c46e8af1e094a6c309bc43c6e5e6d7ede`.
+
+| Detached data owner | Hex bytes | SHA256 |
+| --- | ---: | --- |
+| Retained installed metadata |178|`d36546bd44b8816a4b285afe9782dda0d1e46f8adf63f272412cb50cf9c77067`|
+| Retained portal/particle/sound suffix |7B0|`279df31a0ce9b325f2066754f78eda88cdf07a6be00c9d6dc01b240915f14f2c`|
+| New complete used data |CB8|`fe754f8e5e4686fdfe03d7e516dab8f1b52ad605b1541615e98d3f0511e4835e`|
+| New data with zero allocation padding |1000|`83baa79d7b1f9f27eadecb721f1026b0d0aea57cc65f0758b5353eaa0fc36fb6`|
+
+Translated portal/particle/sound starts are508/50C/598; remaining padding348.
+The two installed184-byte records are reassembled from the actual split native
+table: record0 `[8:18]+[28:D0]`, record1 `[18:28]+[D0:178]` (hex offsets).
+Their hashes are `27e844b704fc16372b0006639b0ea57553ece23e89c0ffd56383cddd1377c065`
+and `f25d25b4df2cb6b5a633fb7397fe0d563b4af4601ce446438934edf687167c66`.
+Review corrected the original diagnostic's misleading contiguous184-byte
+record slices before freezing this reference; the complete data bytes and
+hashes did not change. This reference is explicitly **child-relative**, not an
+independent Original-only reconstruction of installed family/GPU resources.
+It grants no source, resource, Body, native-loader, disc or runtime authority.
 
 ## Smallest closed fixture
 
