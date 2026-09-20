@@ -256,6 +256,15 @@ internal sealed class NativeFreshMobyFamilyCompositionPlan
         throw new InvalidDataException("This family composition has no resource ancestor inverse.");
     internal void RequireExactLevelData(ReadOnlySpan<byte> bytes)
     {RequireAncestry(BaseBodyAncestor);if(!bytes.SequenceEqual(_body))throw new InvalidDataException("Family composed body changed an owned byte or complement.");}
+    internal void RequireLockedChestResourceAncestry(NativeFreshMobyFamilyCompositionPlan parent,NativeLockedChestFamilySource source)
+    {
+        ArgumentNullException.ThrowIfNull(parent);ArgumentNullException.ThrowIfNull(source);
+        if(_chestResources is null||!ReferenceEquals(ResourceAncestor,parent)||
+            !ReferenceEquals(_chestResources.Ancestor,parent)||!ReferenceEquals(_chestResources.Source,source))
+            throw new InvalidDataException("Chest resources require their actual parent/source pair, not equal reissued owners.");
+        RequireAncestry(parent.BaseBodyAncestor);
+        parent.RequireExactLevelData(_inverseResource??throw new InvalidDataException("Chest resources lost their complete parent inverse."));
+    }
     internal void RequireAncestry(NativeId65FreshWizardResearchBodyPlan body)
     {
         if(!ReferenceEquals(body,BaseBodyAncestor))throw new InvalidDataException("Family composition belongs to another actual base Body.");

@@ -9,6 +9,7 @@
   <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilySoundResidencyCases.cs" Link="FamilySoundResidencyCases.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilyChestResourceCases.cs" Link="FamilyChestResourceCases.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilyChestHostCases.cs" Link="FamilyChestHostCases.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilyChestSceneCases.cs" Link="FamilyChestSceneCases.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilyParticleResidencyCases.cs" Link="FamilyParticleResidencyCases.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Spyro.Editor.NativeId65FreshWizardBodySmoke/FamilySoundRetargetedPackageCases.cs" Link="FamilySoundRetargetedPackageCases.cs" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="matrix-expectations.json" LogicalName="WizardMatrixExpectations" /></ItemGroup>

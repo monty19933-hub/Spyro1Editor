@@ -16,11 +16,13 @@ internal static class FamilyChestResourceCases
         NativeFreshMobyFamilyCompositionPlan equalAncestor,Action<bool,string> check)
     {
         CheckRetainedDebrisGrammar(source,check);
+        NativeFreshLockedChestResearchHostExtension? sceneHost=null;
         if(ancestor.BaseBodyAncestor.MixedResourceAncestor is not null)
         {
             var current=await NativeId65FreshWizardResearchExecutablePlan.CaptureFamilyComposedAsync(original,ancestor);
             FamilyChestHostCases.Source(current,source,check);
             var extension=NativeFreshLockedChestResearchHostExtension.Compose(current,source);
+            sceneHost=extension;
             var equalCurrent=await NativeId65FreshWizardResearchExecutablePlan.CaptureFamilyComposedAsync(original,ancestor);
             check(equalCurrent.ExecutableSha256==current.ExecutableSha256&&!ReferenceEquals(equalCurrent,current),
                 "A genuinely equal reissued current executable remains another actual owner.");
@@ -59,6 +61,7 @@ internal static class FamilyChestResourceCases
         Reject<InvalidDataException>(()=>NativeFreshMobyFamilyCompositionPlan.ComposeWithLockedChestResources(ancestor,equalSound,fallback),check);
 
         var child=NativeFreshMobyFamilyCompositionPlan.ComposeWithLockedChestResources(ancestor,sound,fallback);
+        if(sceneHost is not null)FamilyChestSceneCases.Source(child,sceneHost,check);
         byte[] after=child.CopyLevelData();var package=child.ChestModelContribution!;var texture=child.ChestTextureMaterialization!;
         var packages=child.ChestModelContributions;var debrisTexture=child.ChestDebrisTextureMaterialization!;
         check(child.HasUnplacedModelResources&&ReferenceEquals(child.ResourceAncestor,ancestor)&&
