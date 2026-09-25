@@ -13,14 +13,11 @@ namespace Spyro.Editor.Core.Exporting;
 internal sealed class NativeFreshSavedLockedChestFamilyCompilation
 {
     private readonly byte[] _canonical;
+    private readonly NativeFreshSavedR03FamilyAssembly _assembly;
     private NativeFreshSavedLockedChestFamilyCompilation(NativeFreshSavedLevelDocumentReadContext saved,
-        NativeFreshLevelDocumentIntent baseDocument,NativeId65FreshWizardResearchBodyPlan baseBody,
-        NativeFreshInitialSpawnClearancePlan wizardClearance,NativeFreshMobyFamilyCompositionPlan composition,
-        NativeFreshLockedChestPlacementPlan placement,NativeFreshLockedChestSpawnClearancePlan clearance,
-        NativeFreshLockedChestResearchDiscPlan disc,string image)
+        NativeFreshSavedR03FamilyAssembly assembly)
     {
-        Saved=saved;BaseDocument=baseDocument;BaseBody=baseBody;WizardClearance=wizardClearance;
-        Composition=composition;Placement=placement;Clearance=clearance;Disc=disc;SourceImagePath=image;
+        Saved=saved;_assembly=assembly;
         _canonical=NativeFreshLevelDocumentCodec.SerializeCanonical(saved.Document);
         CanonicalDocumentSha256=Convert.ToHexStringLower(SHA256.HashData(_canonical));
         RequireAncestry(saved);
@@ -28,20 +25,20 @@ internal sealed class NativeFreshSavedLockedChestFamilyCompilation
 
     internal NativeFreshSavedLevelDocumentReadContext Saved{get;}
     internal NativeFreshLevelDocumentIntent Document=>Saved.Document;
-    internal NativeFreshLevelDocumentIntent BaseDocument{get;}
-    internal NativeId65FreshWizardResearchBodyPlan BaseBody{get;}
-    internal NativeFreshInitialSpawnClearancePlan WizardClearance{get;}
-    internal NativeFreshMobyFamilyCompositionPlan Composition{get;}
+    internal NativeFreshLevelDocumentIntent BaseDocument=>_assembly.BaseDocument;
+    internal NativeId65FreshWizardResearchBodyPlan BaseBody=>_assembly.BaseBody;
+    internal NativeFreshInitialSpawnClearancePlan WizardClearance=>_assembly.WizardClearance;
+    internal NativeFreshMobyFamilyCompositionPlan Composition=>_assembly.Composition;
     internal NativeLockedChestFamilySource ChestSource=>Host.FamilySourceAncestor;
     internal NativeFreshLockedChestResearchHostExtension Host=>Body.HostAncestor;
     internal NativeFreshMobyFamilyCompositionPlan Resources=>Body.ResourceAncestor;
     internal NativeFreshLockedChestSceneExtension Scene=>Body.SceneAncestor;
     internal NativeFreshLockedChestResearchBody Body=>Placement.BodyAncestor;
-    internal NativeFreshLockedChestPlacementPlan Placement{get;}
-    internal NativeFreshLockedChestSpawnClearancePlan Clearance{get;}
+    internal NativeFreshLockedChestPlacementPlan Placement=>_assembly.Placement;
+    internal NativeFreshLockedChestSpawnClearancePlan Clearance=>_assembly.Clearance;
     internal NativeFreshLockedChestExperimentalExecutable Executable=>Disc.ExecutableAncestor;
-    internal NativeFreshLockedChestResearchDiscPlan Disc{get;}
-    internal string SourceImagePath{get;}
+    internal NativeFreshLockedChestResearchDiscPlan Disc=>_assembly.Disc;
+    internal string SourceImagePath=>_assembly.SourceImagePath;
     internal string CanonicalDocumentSha256{get;}
     internal bool RuntimeVerified=>false;
     internal bool PublicationApproved=>false;
@@ -95,48 +92,7 @@ internal sealed class NativeFreshSavedLockedChestFamilyCompilation
             !NativeFreshLevelDocumentCodec.SerializeCanonical(projected).AsSpan().SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(BaseDocument))||
             !_canonical.AsSpan().SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(Document)))
             throw new InvalidDataException("Saved locked-chest subordinate projection lost an actual owner or complete canonical authorship.");
-        var baseHost=BaseBody.HostAncestor;var baseScene=baseHost.SceneAncestor;
-        var mixed=BaseBody.MixedResourceAncestor??throw new InvalidDataException("Saved chest requires its actual mixed material resource owner.");
-        if(baseScene.Producer!=NativeFreshWizardSceneProducer.SameLayoutMaterialAuthored||
-            !ReferenceEquals(baseScene.AuthoringDocumentAncestor,BaseDocument)||mixed.MaterialSources.Count!=2)
-            throw new InvalidDataException("Saved chest requires the separately named actual same-layout Scene and material producer.");
-        _=NativeFreshWizardAuthoringShape.RequireSameLayoutMaterialDocument(BaseDocument,baseScene.CompilationAncestor);
-        BaseBody.RequireAncestry(baseHost);
-        mixed.RequireAncestry(baseHost,BaseDocument,mixed.MaterialSources[0],mixed.MaterialSources[1]);
-        _=WizardClearance.RequireInitialFloorFootprint(BaseDocument,baseScene);
-        Composition.RequireAncestry(BaseBody);
-        if(Composition.Placements.Count!=2||!Composition.Placements.Select(p=>p.EditorId)
-                .SequenceEqual(Document.Placements.Take(2).Select(p=>p.EditorId))||
-            !ReferenceEquals(Composition.Placements[0].WizardAsset,baseScene.FamilyAncestor))
-            throw new InvalidDataException("Saved chest base composition lost actual ordered Wizard/Grass identities.");
-        var grass=(NativeFreshMobyPlacementIntent)Document.Placements[1];var placed=Composition.Placements[1];
-        var asset=placed.PassiveAsset??throw new InvalidDataException("Saved Grass did not resolve to an actual retained asset.");
-        asset.RequireRetainedOwners();placed.Dispatch!.RequireAncestry(baseHost,asset);
-        if(asset.SourceImageSha256!=NativeId65FreshDiscSource.OriginalSha256||asset.DonorWadEntry!=grass.Source.SourceWadEntry||
-            asset.DonorTrueIndex!=grass.Source.SourceTrueIndex||asset.NativeClass!=grass.Source.ExpectedNativeClass||
-            placed.X!=grass.X||placed.Y!=grass.Y||placed.Z!=grass.Z||placed.NativeYawByte!=grass.NativeYawByte)
-            throw new InvalidDataException("Saved Grass source/transform differs from its actual installed owner.");
-        ChestSource.RequireWizardOriginalOwner(baseScene.FamilyAncestor);
-        Host.CurrentExecutableAncestor.RequireFamilyAncestry(Composition);
-        Host.RequireAncestry(Host.CurrentExecutableAncestor,ChestSource);
-        Resources.RequireLockedChestResourceAncestry(Composition,ChestSource);
-        Scene.RequireAncestry(Resources,Host);
-        Body.RequireAncestry(Resources,Host,Scene);
-        if(!ReferenceEquals(Resources.BaseBodyAncestor,BaseBody)||!ReferenceEquals(Scene.SourceAncestor,ChestSource)||
-            !Scene.RowSpans.Placements.Select(p=>p.EditorId).SequenceEqual(Document.Placements.Select(p=>p.EditorId))||
-            !Scene.RowSpans.Placements.Select(p=>p.FirstRowIndex).SequenceEqual(new[]{0,1,2})||
-            !Scene.RowSpans.Placements.Select(p=>p.RowCount).SequenceEqual(new[]{1,1,7})||
-            Scene.Layout.PlacedCount!=9||Scene.Layout.DynamicCapacity!=32||Scene.Allocation.Rows.Count!=9)
-            throw new InvalidDataException("Saved family identities must expand exactly to their actual ordered1+1+7 P9/N32 allocation.");
-        var chest=(NativeFreshLockedChestFamilyPlacementIntent)Document.Placements[2];var anchors=Placement.Intent;
-        Placement.RequireAncestry(Body,anchors);
-        Placement.RequireRewardDestinationsAncestry(chest.RewardDestinations!);
-        if(anchors.KeyX!=chest.KeyX||anchors.KeyY!=chest.KeyY||anchors.KeyZ!=chest.KeyZ||
-            anchors.ChestX!=chest.ChestX||anchors.ChestY!=chest.ChestY||anchors.ChestZ!=chest.ChestZ)
-            throw new InvalidDataException("Saved family anchors differ from the actual placed source-owned rows.");
-        Clearance.RequireStaticLandingClearance(Placement);
-        Executable.RequireAncestry(Placement,Host);
-        Disc.RequireAncestry(Executable);
+        _assembly.RequireAncestry(Document,BaseDocument);
     }
 
     internal static async Task<NativeFreshSavedLockedChestFamilyCompilation> CaptureAsync(string image,
@@ -149,30 +105,8 @@ internal sealed class NativeFreshSavedLockedChestFamilyCompilation
         NativeFreshSavedLockedChestFamilyCompilation? result=null;List<Exception> failures=[];
         try
         {
-            var (baseBody,wizardClearance)=await NativeFreshSavedLevelResearchCandidatePlan.CaptureSameLayoutMixedBodyAsync(path,projected,token);
-            var baseHost=baseBody.HostAncestor;var wizard=baseHost.SceneAncestor.FamilyAncestor;
-            var grass=await NativeMobyFamilyAssetPlan.CaptureArtisansGrassAsync(path,token);
-            var native=(NativeFreshMobyPlacementIntent)document.Placements[1];
-            var composition=NativeFreshMobyFamilyCompositionPlan.Compose(baseBody,[
-                NativeFreshMobyFamilyPlacement.RetainedWizard(document.Placements[0].EditorId,wizard),
-                NativeFreshMobyFamilyPlacement.Passive(native.EditorId,grass,NativeMobyFamilyPassiveHostBinding.Bind(baseHost,grass),
-                    native.X,native.Y,native.Z,native.NativeYawByte)]);
-            var current=await NativeId65FreshWizardResearchExecutablePlan.CaptureFamilyComposedAsync(path,composition,token);
-            var source=await NativeLockedChestFamilySource.CaptureOriginalAsync(path,wizard,token);
-            var host=NativeFreshLockedChestResearchHostExtension.Compose(current,source);
-            var sound=NativeFreshMobySoundResidencyBinding.BindLockedChest(source,composition);
-            var fallback=await NativeId65FreshWizardResearchFallbackResourceSource.CaptureAsync(path,baseHost.SceneAncestor.ResourceAncestor,token);
-            var resources=NativeFreshMobyFamilyCompositionPlan.ComposeWithLockedChestResources(composition,sound,fallback);
-            var chest=(NativeFreshLockedChestFamilyPlacementIntent)document.Placements[2];
-            var scene=NativeFreshLockedChestSceneExtension.Compose(resources,host,chest.EditorId);
-            var body=NativeFreshLockedChestResearchBody.Compose(resources,host,scene);
-            var placement=NativeFreshLockedChestPlacementPlan.ComposeWithRewardDestinations(body,
-                new(chest.KeyX,chest.KeyY,chest.KeyZ,chest.ChestX,chest.ChestY,chest.ChestZ),chest.RewardDestinations!);
-            var clearance=NativeFreshLockedChestSpawnClearancePlan.Compose(placement);
-            clearance.RequireStaticLandingClearance(placement);
-            var executable=NativeFreshLockedChestExperimentalExecutable.Compose(placement,host);
-            var disc=await NativeFreshLockedChestResearchDiscPlan.CaptureAsync(path,executable,token);
-            result=new(saved,projected,baseBody,wizardClearance,composition,placement,clearance,disc,path);
+            var assembly=await NativeFreshSavedR03FamilyAssembly.CaptureAsync(path,document,projected,token);
+            result=new(saved,assembly);
             token.ThrowIfCancellationRequested();
         }
         catch(Exception error){failures.Add(error);}

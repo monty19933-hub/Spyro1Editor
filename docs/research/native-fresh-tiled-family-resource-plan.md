@@ -683,3 +683,30 @@ Private runtime preparation is under
 `_local/native-v6-tiled-family-runtime-20260925-r01.wqwkPe`; its journal records
 fresh ordinary settings/card captures and separate test paths. No preserved
 R06/R07 application, project, card or candidate has been replaced.
+
+## Saved compilation and actual runtime follow-through
+
+Broad638 is now green:345 commands, zero failures. Guarded writer634 also
+completed1257 checks, emitted the exact independent689fcf29 image, read it back
+and inverted the actual complete output to Original before publishing its CUE.
+[The runtime witness](native-fresh-tiled-family-r01-runtime.md) records full
+firmware boot, native LAB20/20, both central seam crossings and healthy
+fall/reset for that exact candidate, plus the observer interruption and all
+preservation checks. It does not promote arbitrary layouts or dependency flags.
+
+Saved schema5 compilation now derives its subordinate3072-square resource
+input from the actual validated four-tile aggregate. A closed shared R03
+assembly retains actual Wizard/material/source/placement parents; the legacy
+compiler uses the same construction with its original preflight/owner guards.
+Full tiled canonical identity, ordered tile/actor IDs, actual saved revision,
+mandatory union clearance and uncancelled final saved-aggregate check remain
+separate from the resource projection. There is no replacement saved context.
+
+Tests preceded implementation (missing-type RED639). Dedicated build passes
+with zero warnings/errors; ROM-free cases46 checks/41 refusals. Source640
+passes63 checks/46 refusals including full689fcf29 image and renamed editor
+identities producing equal native bytes but different authoring fingerprints.
+Legacy source641 passes291 checks/171 refusals, preserving the exact a5b00725
+R03 image and whole actual preserved R07 inverse. Independent review found no
+lost legacy guards. Candidate/publication/UI dispatch for this tiled family is
+still deliberately absent at this compiler checkpoint.

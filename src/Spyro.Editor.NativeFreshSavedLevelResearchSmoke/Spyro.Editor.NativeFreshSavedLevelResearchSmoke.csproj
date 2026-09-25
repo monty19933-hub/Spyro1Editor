@@ -15,6 +15,7 @@
     <Compile Include="FamilySavedCases.cs" /><Compile Include="SavedFamilyDocumentFixture.cs" />
     <Compile Include="NeutralFamilyAdmissionCases.cs" />
     <Compile Include="SavedLockedChestCompilationCases.cs" />
+    <Compile Include="SavedTiledFamilyCompilationCases.cs" />
     <Compile Include="LockedChestSavedCandidateCases.cs" /><Compile Include="SavedLockedChestInverseCases.cs" />
     <Compile Include="TiledSavedCases.cs" /><Compile Include="SavedTiledDocumentFixture.cs" />
     <Compile Include="TiledMaterialSavedCases.cs" /><Compile Include="SavedTiledMaterialDocumentFixture.cs" />
