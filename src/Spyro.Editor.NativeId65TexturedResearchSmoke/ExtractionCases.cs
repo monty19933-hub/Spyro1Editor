@@ -36,14 +36,15 @@ internal static class ExtractionCases
                 typeof(NativeId65FreshDiscPlan), typeof(Stream), typeof(CancellationToken), typeof(Stream), typeof(Action) }),
             "Exact actual-Disc streaming signature, not caller sector generation.");
         var permittedDiscTypes = new[] { typeof(NativeId65FreshDiscPlan),
-            typeof(NativeId65FreshWizardResearchDiscPlan), Type("NativeFreshLockedChestResearchDiscPlan") };
+            typeof(NativeId65FreshWizardResearchDiscPlan), Type("NativeFreshLockedChestResearchDiscPlan"),
+            Type("NativeFreshTiledFamilyDiscPlan") };
         var measures = helper.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
             .Where(m => m.Name == "Measure").ToArray();
         Check(measures.Length == permittedDiscTypes.Length && permittedDiscTypes.All(discType =>
             measures.Count(m => m.IsAssembly && m.ReturnType == typeof(NativeId65FreshDiscVerification) &&
                 m.GetParameters().Select(p => p.ParameterType).SequenceEqual(new[] {
                     discType, typeof(Stream), typeof(CancellationToken), typeof(Stream), typeof(Action) })) == 1),
-            "Exactly three internal concrete issued Disc overloads; no caller sector generation or public writer API.");
+            "Exactly four named internal concrete issued Disc overloads; no caller sector generation or public writer API.");
         using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
         Refuse<OperationCanceledException>(() => InvokeMeasure(null, null, cancelled.Token), "Moved helper cancellation precedence.");
         Refuse<ArgumentNullException>(() => InvokeMeasure(null, null, CancellationToken.None), "Moved helper null source precedence.");

@@ -670,6 +670,14 @@ regression runner, with required success markers preventing empty discovery
 from passing. Root633 passes87 runner tests, including failure-before-build
 and preserved no-I/O list/source-QA semantics.
 
+Broad replay635 completed345 commands with one failure: the old textured
+research extraction test explicitly allowed three `Measure` disc types. It
+correctly detected the fourth new closed tiled-family type. The guard now
+lists all four concrete types and still requires exact internal signatures;
+it was not loosened to arbitrary overloads or callbacks. Focused build636 and
+free637 pass380 checks. Full broad replay638 is pending;635 is not reported
+as green. This correction changes only the regression guard, not native bytes.
+
 Evidence logs are under `_local/research/v6-mixed-export-20260912-r01.jR0oBr`.
 Private runtime preparation is under
 `_local/native-v6-tiled-family-runtime-20260925-r01.wqwkPe`; its journal records
