@@ -4,8 +4,8 @@ using System.Security.Cryptography;
 namespace Spyro.Editor.Core.Analysis;
 
 /// <summary>
-/// One native shader descriptor. RGB is the descriptor's base value, not a
-/// prediction of final lit pixels. The upper byte also controls native lighting.
+/// One descriptor from the pinned STATIC/simple Moby renderer. RGB is its base
+/// value, not a final pixel prediction or an animated F5 appearance selector.
 /// </summary>
 public sealed record NativeMobyShadingProfile(byte Index, uint Descriptor)
 {
@@ -18,8 +18,10 @@ public sealed record NativeMobyShadingProfile(byte Index, uint Descriptor)
 /// <summary>
 /// An exact-revision, source-bound 32-entry observation of the Moby shader table.
 /// This deliberately does not assert the complete table extent or model closure.
-/// The JP dragonfly egg is untextured and uses row+4F=1; these are shader
-/// descriptors, not CLUT entries or editor marker colors.
+/// The table belongs to the static/simple renderer. Animated F5 does not select
+/// this table: its row+4F is an opaque render-mode byte and model-owned packed RGB
+/// arrays feed its colour path. Numeric row/table projections below do not prove
+/// that either identified actor uses this renderer. These are not CLUT entries.
 /// </summary>
 public sealed class NativeJapaneseObjectAppearance
 {
@@ -44,6 +46,7 @@ public sealed class NativeJapaneseObjectAppearance
     public IReadOnlyList<NativeMobyShadingProfile> Profiles { get; }
     public bool NativeImportApproved => false;
     public bool FinalRenderedColorVerified => false;
+    public bool AnimatedEggDescriptorSelectionProven => false;
 
     public static NativeJapaneseObjectAppearance Capture(NativeRegionalSourceSession source)
     {
@@ -68,22 +71,27 @@ public sealed class NativeJapaneseObjectAppearance
         return new(source.Revision, source.SourceImageSha256, japan ? 0x80076E74u : 0x8006E3D8u, tableOffset, table);
     }
 
-    /// <summary>Decode caller-supplied row fields; source provenance remains the caller's responsibility.</summary>
+    /// <summary>
+    /// Decode caller-supplied fields and numerically project the packed value
+    /// into the static table. This is NOT evidence that the actor selects that
+    /// table; source provenance and renderer applicability are separate.
+    /// </summary>
     public NativeJapaneseMobyAppearanceFields DescribeRow(ReadOnlySpan<byte> row)
     {
         RequireRow(row);
         uint packed = BinaryPrimitives.ReadUInt32LittleEndian(row[0x4C..]);
         int byteOffset = unchecked((int)packed) >> 22;
         if (byteOffset < 0 || byteOffset % 4 != 0 || byteOffset >= CapturedProfileCount * 4)
-            throw new InvalidDataException("Packed Moby shade selector is unaligned or outside the captured table window.");
+            throw new InvalidDataException("Packed row numerical projection is unaligned or outside the captured static-table window.");
         return new(BinaryPrimitives.ReadUInt16LittleEndian(row[0x36..]), row[0x3C], row[0x3D],
             row[0x3E], row[0x3F], packed, _profiles[byteOffset / 4]);
     }
 
     /// <summary>
-    /// Produce a detached per-instance row revision. Only the native shade
-    /// selector byte changes; model, animation and the low22bits remain intact.
-    /// This does not materialize a disc or authorize an arbitrary actor import.
+    /// Produce a detached revision changing only opaque native row+4F. The name
+    /// is retained for compatibility; for animated F5 this is NOT a tint/profile
+    /// setter. Model, animation and low22bits remain intact. No renderer, import
+    /// or independently coloured instance approval is conferred.
     /// </summary>
     public byte[] WithProfile(ReadOnlySpan<byte> row, int profileIndex)
     {
@@ -96,7 +104,7 @@ public sealed class NativeJapaneseObjectAppearance
         return output;
     }
 
-    /// <summary>Exact descriptor matching; equal numeric indices are not a regional certificate.</summary>
+    /// <summary>Exact static-table descriptor matching; neither indices nor matches prove renderer applicability.</summary>
     public IReadOnlyList<byte> FindExactProfileMatches(NativeMobyShadingProfile profile) =>
         Array.AsReadOnly(_profiles.Where(p => p.Descriptor == profile.Descriptor).Select(p => p.Index).ToArray());
 
@@ -121,6 +129,7 @@ public sealed class NativeJapaneseObjectAppearance
     private static string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 }
 
+/// <summary>ShadingProfile is a numerical static-table projection, not a proven actor selection.</summary>
 public sealed record NativeJapaneseMobyAppearanceFields(ushort ActorId, byte CurrentAnimation,
     byte NextAnimation, byte CurrentFrame, byte NextFrame, uint PackedRowColorWord,
     NativeMobyShadingProfile ShadingProfile);

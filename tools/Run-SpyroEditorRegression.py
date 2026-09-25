@@ -29,7 +29,9 @@ OBSERVER_PYTHON_CASES = (
     ("python-japanese-font-contracts", ("tools/test_japanese_font.py", "-v"),
      "Ran 7 tests"),
     ("python-japanese-sign-reference-verifier", ("tools/Test-Verify-SpyroJapaneseSignReference.py", "-v"),
-     "Ran 11 tests"),
+     "Ran 12 tests"),
+    ("python-usa-modal-texture-lifetime", ("tools/test_usa_modal_texture_lifetime.py", "-v"),
+     "Ran 9 tests"),
 )
 # Each entry was inspected for independence from disc images and local caches.
 # Source-disc tests remain opt-in below; the existing broader source suite is
@@ -50,7 +52,11 @@ CORE_CASES = (
     ("NativeSimpleMobyGeometrySmoke", "NATIVE_SIMPLE_MOBY_GEOMETRY_SOURCE_FREE_OK"),
     ("NativeJapaneseEggModelAssemblySmoke", "JP_EGG_MODEL_ASSEMBLY_SOURCE_FREE_OK"),
     ("DetachedCollectibleSaveSmoke", "DETACHED_COLLECTIBLE_SAVE_SOURCE_FREE_OK"),
+    ("DetachedCollectibleCompletionSmoke", "DETACHED_COLLECTIBLE_COMPLETION_SOURCE_FREE_OK"),
     ("NativeJapaneseEggVisualBehaviorSmoke", "JP_EGG_VISUAL_BEHAVIOR_SOURCE_FREE_OK"),
+    ("NativeJapaneseEggArtisansIntegrationSmoke", "JP_EGG_ARTISANS_INTEGRATION_SOURCE_FREE_OK"),
+    ("NativeJapaneseEggMemorySmoke", "JP_EGG_MEMORY_SOURCE_FREE_OK"),
+    ("NativeJapaneseEggRenderAdmissionSmoke", "JP_EGG_RENDER_ADMISSION_SOURCE_FREE_OK"),
     ("NativeMobyPersistentOwnerSmoke", "NATIVE_MOBY_PERSISTENT_OWNER_SOURCE_FREE_OK"),
     ("NativeWizardAppendSmoke", "NATIVE_WIZARD_APPEND_SOURCE_FREE_OK"),
     ("NativeWizardAppendPlacementSmoke", "NATIVE_WIZARD_APPEND_PLACEMENT_FREE_OK"),
@@ -302,12 +308,21 @@ def run_owned_command(command, *, cwd, stdout, timeout, termination_grace=1.0):
                                start_new_session=True)
     try:
         returncode = process.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        _stop_owned_process_group(process, termination_grace)
-        raise
-    except KeyboardInterrupt:
-        if process.returncode is None:
+    except subprocess.TimeoutExpired as expired:
+        try:
             _stop_owned_process_group(process, termination_grace)
+        except OSError as cleanup:
+            # A denied final signal can otherwise hide the deadline failure and
+            # accidentally imply that all descendants stopped. Retain both facts.
+            raise OSError(f"timeout={timeout}s; owned process group {process.pid} termination unverified: "
+                          f"{cleanup}; retain interrupted artifacts and inspect the process group") from expired
+        raise
+    except KeyboardInterrupt as interrupted:
+        if process.returncode is None:
+            try:
+                _stop_owned_process_group(process, termination_grace)
+            except OSError as cleanup:
+                interrupted.add_note(f"Owned process group {process.pid} termination unverified: {cleanup}")
         raise
     return subprocess.CompletedProcess(command, returncode)
 
@@ -315,19 +330,29 @@ def run_owned_command(command, *, cwd, stdout, timeout, termination_grace=1.0):
 def _stop_owned_process_group(process, termination_grace):
     # Do not reap the group leader before the final signal. Its reserved PID
     # prevents accidental reuse of this owned PGID while descendants shut down.
-    try:
+    failures = []
+
+    def signal_group(value):
         try:
-            os.killpg(process.pid, signal.SIGTERM)
+            os.killpg(process.pid, value)
         except ProcessLookupError:
             pass
+        except OSError as error:
+            failures.append(f"{value.name}: {error}")
+
+    try:
+        signal_group(signal.SIGTERM)
         time.sleep(termination_grace)
     finally:
+        signal_group(signal.SIGKILL)
         try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        finally:
-            process.wait()
+            # Never wait forever when signaling was denied. The still-reserved
+            # leader PID protects the final signal from PGID reuse as before.
+            process.wait(timeout=max(1.0, termination_grace))
+        except subprocess.TimeoutExpired:
+            failures.append("leader did not exit within the bounded cleanup wait")
+        if failures:
+            raise OSError("; ".join(failures))
 
 
 def parse_options(arguments=None):

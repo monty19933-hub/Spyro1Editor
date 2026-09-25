@@ -202,6 +202,8 @@ unsafe-tests/
 !/tools/test_japanese_collectibles.py
 !/tools/Render-SpyroJapaneseFont.py
 !/tools/test_japanese_font.py
+!/tools/Inspect-SpyroUsaModalTextureLifetime.py
+!/tools/test_usa_modal_texture_lifetime.py
 !/tools/Verify-SpyroJapaneseSignReference.py
 !/tools/Test-Verify-SpyroJapaneseSignReference.py
 !/tools/tests/

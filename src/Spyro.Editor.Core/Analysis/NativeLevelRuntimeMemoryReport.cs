@@ -187,6 +187,32 @@ public sealed class NativeLevelRuntimeMemoryReport
 
     internal static NativeLevelRuntimeMemoryReport DecodeFixture(int id,ReadOnlySpan<byte> data,uint copy)=>
         new(id,data,copy,0x80187BB0,Hash(data),false,"synthetic normal-buffer fixture; no native source certificate");
+
+    // The new regional source issuer owns complete original/final bytes. This
+    // narrow adapter cannot turn a fixture, caller-authored address or receipt
+    // into a native certificate. It retains every normal-only exclusion above.
+    internal static NativeLevelRuntimeMemoryReport AnalyzeJapaneseEggArtisans(NativeJapaneseEggArtisansIntegrationPlan plan,bool original)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if(!plan.SourceCertified)throw new InvalidDataException("Artisans RAM capture requires the actual regional source issuer.");
+        byte[] before=plan.CopyOriginalLevelData(),beforeExe=plan.CopyOriginalExecutable(),data=plan.CopyLevelData(),
+            executable=plan.CopyExecutable(),overlay=plan.CopyOverlay(),originalOverlay=plan.CopyOriginalOverlay();
+        var baseline=CaptureOriginal(10,0x383000,"86cde4f886d97821a3a4b869100b586842dbd4b9fb696558bead274bb547af4f",
+            before,beforeExe,plan.CopyPeteHeader(),plan.CopyPeteRuntime());
+        const int field=NativeJapaneseEggArtisansIntegrationPlan.CopyBufferPatchOffset;
+        if(baseline.CopyBufferAddress!=0x80088620||DecodeCopyBuffer(beforeExe,field)!=baseline.CopyBufferAddress||
+            beforeExe.Length!=executable.Length||!executable.AsSpan(0,field).SequenceEqual(beforeExe.AsSpan(0,field))||
+            !executable.AsSpan(field+8).SequenceEqual(beforeExe.AsSpan(field+8))||originalOverlay.Length!=0xE000||overlay.Length!=0xE800||
+            !overlay.AsSpan(0,0x319C).SequenceEqual(originalOverlay.AsSpan(0,0x319C))||
+            !overlay.AsSpan(0x31A4,0xE000-0x31A4).SequenceEqual(originalOverlay.AsSpan(0x31A4))||
+            Hash(data)!=plan.LevelDataSha256||DecodeCopyBuffer(executable,field)!=plan.FinalCopyBufferAddress||
+            plan.FinalCopyBufferAddress!=0x8007AA38u+overlay.Length||
+            !plan.RevertDataExact(data).AsSpan().SequenceEqual(before))
+            throw new InvalidDataException("Artisans overlay/model/scene and exact copy-buffer ancestry disagree.");
+        plan.RequireFinal(overlay,executable,data);
+        return original?baseline:new(10,data,plan.FinalCopyBufferAddress,baseline.NormalReservedBufferStart,baseline.SourceDataSha256,true,
+            baseline.CopyBufferBinding+"; source-issued detached two-F5 Artisans composition; full padded overlay end (C18 shift)");
+    }
     private static uint DecodeCopyBuffer(ReadOnlySpan<byte> executable,int offset)
     {
         Range(offset,16,executable.Length);

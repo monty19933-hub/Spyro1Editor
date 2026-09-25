@@ -109,7 +109,7 @@ Implemented and tested:
   repeat reading. The failing unterminated R01 remains preserved; corrected
   R02 is independently physically verified and tested. See
   [runtime evidence](japanese-reference-runtime.md).
-- Exact native F5 animated geometry and native appearance-profile selection;
+- Exact native F5 animated geometry and preserved native row appearance bytes;
   detached source-backed model composition in USA Artisans and Town Square,
   through existing tail/relocation/dependency compilers. No pre-rebasing of
   source-relative disk pointers. See [model assembly](japanese-egg-model-assembly.md).
@@ -161,3 +161,49 @@ in-game; pickup/inventory/required-for100%/real-save integration; safe font/moda
 installation; GUI placement/editing/Undo/Redo/Save/Reopen; generalization across
 destinations. The368-class,12,880-cell matrix remains honest about unproved
 dependencies; these new isolated contracts do not promote all classes to portable.
+
+## Two-instance and required-completion checkpoint after df5b4eb
+
+- The required-for100% policy is implemented as a pure, tested consumer of the
+  stable three-slot collectible ledger. Bonus treasure cannot replace a missing
+  required egg. Zero added eggs preserves the original formula. The native game
+  percentage, inventory and card hooks do not yet consume it. See
+  [completion policy](detached-collectible-completion-policy.md).
+- Two appended Artisans F5 rows now have independently allocated private state,
+  one shared model, native scene fixups and an F5-only dispatch guard. All65,536
+  halfword class inputs retain their previous destination/register behavior
+  except the intended F5 target. Existing level content is preserved and exact
+  inverses are verified. See [integration](japanese-egg-artisans-integration.md).
+- Normal transfer extents and the actual synchronous visual stack are now
+  source-bound and tested. The normal gap isE65C and selected stack margin320.
+  Independent review identified PETE's preexisting forward-copy overlap and
+  eight-byte final prefetch; both are recorded, not hidden. Full runtime/IRQ and
+  render peaks remain separate. See [memory](japanese-egg-normal-memory.md).
+- Actual model registration, scene initialization, animation and draw-list
+  consumers execute in bounded instruction tests. This corrected an important
+  earlier attribution: **row4F is not an F5 tint selector**. Native near/far
+  model RGB arrays feed this animated renderer. Independent colors need real
+  model/renderer ownership, not duplicated rows sharing one color array. See
+  [render admission](japanese-egg-render-admission.md).
+- The existing modal backdrop backup restores none of the proposed Japanese
+  font mirror. Dedicated owners and lifecycle hooks are necessary. See
+  [modal lifetime](japanese-sign-modal-texture-lifecycle.md).
+
+Focused checks: completion159,466; integration131,193 source-free/131,188 dual
+source; memory18/158; render22/3,206; modal lifetime9 source-free and an
+authenticated23-span source report. These check counts are not independent
+gameplay scenarios. Root Release completion/integration builds passed without
+warnings/errors. Other focused builds are Debug, also clean.
+
+The default registry includes these source-free gates and keeps dual-regional
+tests explicit. A stale sign-verifier count marker (11 instead of12) was found
+and corrected; a new runner regression executes all the small content suites
+to check their real markers. Timeout cleanup now retains both the original
+deadline failure and any termination-denied error, uses a bounded final wait,
+and never claims descendants stopped when that could not be verified.
+
+Next is a separate, fixed original-mode1 visual research candidate at inspected
+Artisans ground positions, using the existing guarded publication machinery.
+Its gameplay observation is not yet done. A dedicated font/backup resident
+owner is being developed for Dark Hollow, whose larger ordinary memory margin
+supports that first sign experiment. No new editor app has replaced R08.

@@ -158,13 +158,13 @@ near commands and14 untextured far commands per animation. Artisans near
 materials use tpage0x18 andCLUTs0x4E3A/0x4C3A. Geometry/far streams differ
 between the three variants; a marker recolor does not reproduce that selection.
 
-All31 egg rows select animation0/0, native shade selector+0x4F=1. The egg
+All31 egg rows select animation0/0, opaque native render-mode byte+0x4F=1. The egg
 model has one animation with two frames,57 untextured near commands and32
 untextured far commands in all30 registered levels. There is no egg-face CLUT
 to swap. Model roots and face stream bounds are reported independently; adjacent
 roots alone do not prove complete model-package ownership.
 
-JP renderer0x80021E98 loads the entire packed row word at+0x4C. At0x80021EB8
+The STATIC/simple JP renderer0x80021E98 loads the packed row word at+0x4C. At0x80021EB8
 it arithmetic-shifts by22 to form a **byte offset** into the shader descriptor
 table0x80076E74 (EXE0x67674). Bits22/23 must be zero for aligned entries;
 selectors with their sign bit set address before that base. The new source
@@ -172,12 +172,15 @@ certificate captures only the nonnegative32-entry prefix, not a claimed full
 table extent. It guards the renderer0x12698/0x134 preimage and the128-byte
 descriptor window.
 
-Egg source word0x01000000 selects descriptor0x0A606060: base channels96,96,96
-and lighting-control byte0x0A. Descriptor9 is0x0A006000, a different native
-green base. Lighting, normals, view direction and native GTE processing still
-determine final pixels. The descriptor's base RGB is not a rendered color
-certificate. The flat-face branch also receives the packed row word through
-MTLO at0x80022008; the low22 bits are preserved when changing a selector.
+Correction: numerically projecting egg word0x01000000 into that table gives
+descriptor0x0A606060, but **the animated egg does not select that table**.
+Its source row4B=0x94 selects the animated draw list; the positive relocated
+animation count makes the model loader return a negative KSEG model pointer,
+selecting animated initialization. The animated renderer consumes the model's
+70 near and70 far packed RGB words. Row4F instead enters an opaque native
+render-mode prepass (USA8002173C ->800226F8). It is not a proved egg tint control.
+Changing row4F from1 to9 does not establish independently coloured eggs.
+See [F5 render admission](japanese-egg-render-admission.md) for exact consumers.
 
 The USA renderer independently uses the same lookup arithmetic at0x80023104
 with table0x8006E3D8 (EXE0x5EBD8). Equal profile indices are not sufficient:
@@ -209,20 +212,20 @@ codec itself never guesses Unicode from arbitrary bytes.
 
 `NativeJapaneseObjectAppearance.Capture` binds the shader prefix to each
 independently authenticated revision and renderer preimage. `DescribeRow`
-decodes caller-supplied instance fields without claiming their source provenance.
-`WithProfile` returns a detached row with only+0x4F changed and preserves the
-other87 bytes. Two copies can have different native selectors independently.
-`FindExactProfileMatches` compares packed descriptors across revisions.
+decodes fields and a numerical static-table projection without claiming actor
+renderer applicability. The compatibility-named `WithProfile` changes only
+opaque row+4F and preserves87 bytes; it is not an F5 colour API.
+`FindExactProfileMatches` compares static-table descriptors across revisions.
 
 `Spyro.Editor.JapaneseSignMessageSmoke` covers independent messages, controls,
 pointer relocation, exact source private-block readback, duplicate/overlapping
 row references, missing terminators, line-buffer bounds, Unicode/native
-roundtrip, independent per-instance appearance, descriptor immutability,
+roundtrip, independent per-instance byte changes, descriptor immutability,
 regional lookup preimages, invalid selectors and unaligned packed row words.
 Before the terminal-FF runtime correction, the expanded Unicode/appearance/edit-plan/reference-scope
 source-free run passed37,166 checks and the full Japanese source run passed3,075
 checks. Those results did not detect the missing-line semantic defect. They admit all330 sign and31 egg
-appearance rows, checks detached independent profile changes for every row,
+row-field projections, checks detached independent row4F changes for every row,
 and byte-compares all330 private sign blocks to their regenerated native
 encoding. The separate actual USA shader capture passes3 checks. The Python
 inspector passes9 focused malformed/source-layout tests. Final held-handle and

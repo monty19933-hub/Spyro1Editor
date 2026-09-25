@@ -37,6 +37,42 @@ def process_is_running(pid):
 
 @unittest.skipUnless(os.name == "posix", "POSIX process-group implementation; Windows is not exercised")
 class OwnedCommandTests(unittest.TestCase):
+    def test_denied_cleanup_retains_timeout_and_never_claims_stopped(self):
+        process = mock.Mock(pid=123456, returncode=None)
+        expired = subprocess.TimeoutExpired(["fixture"], 0.1)
+        process.wait.side_effect = [expired, 0]
+        with mock.patch.object(RUNNER.subprocess, "Popen", return_value=process), \
+                mock.patch.object(RUNNER.os, "killpg", side_effect=PermissionError(1, "denied")) as signals, \
+                mock.patch.object(RUNNER.time, "sleep"):
+            with self.assertRaisesRegex(OSError, "timeout=0.1s; owned process group 123456 termination unverified") as caught:
+                RUNNER.run_owned_command(["fixture"], cwd=".", stdout=None, timeout=0.1, termination_grace=0)
+        self.assertIs(caught.exception.__cause__, expired)
+        self.assertIn("SIGTERM", str(caught.exception))
+        self.assertIn("SIGKILL", str(caught.exception))
+        self.assertNotIn("group stopped", str(caught.exception))
+        self.assertEqual([mock.call(123456, RUNNER.signal.SIGTERM), mock.call(123456, RUNNER.signal.SIGKILL)], signals.call_args_list)
+        self.assertEqual([mock.call(timeout=0.1), mock.call(timeout=1.0)], process.wait.call_args_list)
+
+    def test_cleanup_wait_is_bounded_even_if_group_signals_do_not_stop_leader(self):
+        process = mock.Mock(pid=123456)
+        process.wait.side_effect = subprocess.TimeoutExpired(["fixture"], 1)
+        with mock.patch.object(RUNNER.os, "killpg"), mock.patch.object(RUNNER.time, "sleep"):
+            with self.assertRaisesRegex(OSError, "leader did not exit"):
+                RUNNER._stop_owned_process_group(process, 0)
+        process.wait.assert_called_once_with(timeout=1.0)
+
+    def test_interrupt_survives_denied_cleanup_with_recovery_note(self):
+        process = mock.Mock(pid=123456, returncode=None)
+        interrupted = KeyboardInterrupt()
+        process.wait.side_effect = [interrupted, 0]
+        with mock.patch.object(RUNNER.subprocess, "Popen", return_value=process), \
+                mock.patch.object(RUNNER.os, "killpg", side_effect=PermissionError(1, "denied")), \
+                mock.patch.object(RUNNER.time, "sleep"):
+            with self.assertRaises(KeyboardInterrupt) as caught:
+                RUNNER.run_owned_command(["fixture"], cwd=".", stdout=None, timeout=1, termination_grace=0)
+        self.assertIs(caught.exception, interrupted)
+        self.assertIn("termination unverified", interrupted.__notes__[0])
+
     def test_success_and_nonzero_preserve_status_and_output(self):
         for status in (0, 7):
             with self.subTest(status=status), tempfile.TemporaryFile(mode="w+") as log:
@@ -162,12 +198,24 @@ class ObserverPrebuildTests(unittest.TestCase):
         ("python-japanese-font-contracts", ("tools/test_japanese_font.py", "-v"),
          "Ran 7 tests"),
         ("python-japanese-sign-reference-verifier", ("tools/Test-Verify-SpyroJapaneseSignReference.py", "-v"),
-         "Ran 11 tests"),
+         "Ran 12 tests"),
+        ("python-usa-modal-texture-lifetime", ("tools/test_usa_modal_texture_lifetime.py", "-v"),
+         "Ran 9 tests"),
     )
 
     def test_exact_mandatory_python_only_observer_registry(self):
         self.assertEqual(self.EXPECTED, RUNNER.OBSERVER_PYTHON_CASES)
         self.assertFalse(any(name in dict(RUNNER.CORE_CASES) for name, _, _ in self.EXPECTED))
+
+    def test_actual_new_content_prebuild_markers_match_registered_counts(self):
+        # An independently copied registry assertion cannot detect two stale
+        # count strings. Execute these small source-free suites as well.
+        for name, arguments, marker in self.EXPECTED[2:]:
+            with self.subTest(name=name):
+                result = subprocess.run([sys.executable, "-B", *arguments], cwd=TOOLS.parent,
+                                        capture_output=True, text=True, timeout=30, check=False)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertEqual(1, (result.stdout + result.stderr).count(marker))
 
     def test_observer_order_markers_failure_gates_and_default_source_isolation(self):
         scenarios = {"success": (0, len(self.EXPECTED) + 1), "runner-failed": (1, 1)}
@@ -1938,6 +1986,17 @@ class NeutralTiledFamilyOracleTests(unittest.TestCase):
 
 
 class RegionalAndMatrixGateTests(unittest.TestCase):
+    def test_required_completion_and_two_egg_gates_are_source_free(self):
+        for name, marker in (
+            ("DetachedCollectibleCompletionSmoke", "DETACHED_COLLECTIBLE_COMPLETION_SOURCE_FREE_OK"),
+            ("NativeJapaneseEggArtisansIntegrationSmoke", "JP_EGG_ARTISANS_INTEGRATION_SOURCE_FREE_OK"),
+            ("NativeJapaneseEggMemorySmoke", "JP_EGG_MEMORY_SOURCE_FREE_OK"),
+            ("NativeJapaneseEggRenderAdmissionSmoke", "JP_EGG_RENDER_ADMISSION_SOURCE_FREE_OK"),
+        ):
+            self.assertEqual(marker, dict(RUNNER.CORE_CASES)[name])
+            self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
+            self.assertFalse(any(case[0] == name for case in RUNNER.SOURCE_QA_CASES))
+
     def test_collectible_save_contract_has_no_native_card_or_source_route(self):
         self.assertEqual("DETACHED_COLLECTIBLE_SAVE_SOURCE_FREE_OK",
                          dict(RUNNER.CORE_CASES)["DetachedCollectibleSaveSmoke"])
