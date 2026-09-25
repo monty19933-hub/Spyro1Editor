@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using Spyro.Editor.Core.Analysis;
 
 namespace Spyro.Editor.Core.Exporting;
@@ -14,7 +13,6 @@ internal static class NativeId65TiledMaterialDataLayout
     private const int MaximumRecordCount = 128; // Direct-LQ indexes, not masked IDs.
     private const int MaximumDataByteLength = 0x1000;
     private const int UntexturedMetadataByteLength = 8;
-    private const int BaseColor = 0xFF;
 
     internal static byte[] Compose(ReadOnlySpan<byte> untexturedData,
         IEnumerable<NativeStaticTerrainTextureLayout> records,
@@ -32,38 +30,25 @@ internal static class NativeId65TiledMaterialDataLayout
         byte[] before = untexturedData.ToArray();
         var input = NativeId65TiledNormalDataLayout.DecodeUntextured(before);
         NativeStaticTerrainTextureLayout[] capturedRecords = CaptureRecords(records);
-        int[] materialIds = CaptureFaces(orderedFaceMaterials, input.Surface.Tiles.Count * 2,
-            capturedRecords.Length);
+        byte[] boundSurface = NativeFlatTileMaterialBinding.Bind(input.Surface.CopyBundle(),
+            orderedFaceMaterials, capturedRecords.Length);
         int growth = capturedRecords.Length * NativeStaticTerrainTextureLayout.RecordByteLength;
         if (before.Length + growth > MaximumDataByteLength)
             throw new InvalidDataException("Complete tiled material data exceeds1000; no geometry, binding or retained tail is omitted.");
 
-        int[] faceOffsets = ReadFaceMaterialOffsets(before, input);
         byte[] metadata = NativeTerrainMaterialTableCodec.Encode(capturedRecords);
         if (metadata.Length != UntexturedMetadataByteLength + growth)
             throw new InvalidDataException("Tiled metadata does not describe the complete ordered static material table.");
         byte[] output = new byte[before.Length + growth];
         metadata.CopyTo(output, 0);
         before.AsSpan(UntexturedMetadataByteLength).CopyTo(output.AsSpan(metadata.Length));
-        for (int i = 0; i < faceOffsets.Length; i++)
-            BinaryPrimitives.WriteInt32LittleEndian(output.AsSpan(faceOffsets[i] + growth), materialIds[i]);
-
-        // Only these four-byte face words may differ in the translated tail.
-        // The following flags, geometry, collision-relative pointers, guards,
-        // visibility, sky, portal, particle and sound bytes remain unchanged.
-        int nextFace = 0;
-        for (int at = UntexturedMetadataByteLength; at < before.Length; at++)
-        {
-            if (nextFace < faceOffsets.Length && at == faceOffsets[nextFace])
-            {
-                at += 3;
-                nextFace++;
-            }
-            else if (output[at + growth] != before[at])
-                throw new InvalidDataException("Tiled material composition changed an unowned translated data byte.");
-        }
-        if (nextFace != materialIds.Length)
-            throw new InvalidDataException("Tiled material composition did not cover every ordered face owner.");
+        boundSurface.CopyTo(output, input.Layout.SurfaceOffset + growth);
+        // The shared binder proves the complete surface complement. Preserve
+        // this P0 owner's actual portal/particle/sound suffix independently;
+        // it is never substituted for a family resource tail.
+        int tail = input.Layout.SurfaceOffset + input.Layout.SurfaceByteLength;
+        if (!output.AsSpan(tail + growth).SequenceEqual(before.AsSpan(tail)))
+            throw new InvalidDataException("Tiled material composition changed an unowned retained data suffix.");
         return output;
     }
 
@@ -82,54 +67,4 @@ internal static class NativeId65TiledMaterialDataLayout
         return captured.ToArray();
     }
 
-    private static int[] CaptureFaces(IEnumerable<int> faces, int expectedCount, int recordCount)
-    {
-        List<int> captured = [];
-        foreach (int face in faces)
-        {
-            if (captured.Count == expectedCount)
-                throw new InvalidDataException("Tiled material bindings exceed the actual complete face count.");
-            if (face != BaseColor && (face < 0 || face >= recordCount))
-                throw new InvalidDataException("Tiled face material is neither an exact ordered table index nor base-color FF.");
-            captured.Add(face);
-        }
-        if (captured.Count != expectedCount)
-            throw new InvalidDataException("Tiled material bindings must name both faces of every actual tile.");
-        return captured.ToArray();
-    }
-
-    private static int[] ReadFaceMaterialOffsets(ReadOnlySpan<byte> data,
-        NativeId65TiledNormalDataLayout input)
-    {
-        var environment = input.Layout.Components[(int)NativeId65SurfaceComponentKind.Environment];
-        ReadOnlySpan<byte> bytes = data.Slice(environment.Offset, environment.ByteLength);
-        int tileCount = input.Surface.Tiles.Count;
-        int[] result = new int[tileCount * 2];
-        // DecodeUntextured validated the WHOLE canonical bundle first, including
-        // directory entries and the last tile. Now use actual pointer spans and
-        // header table counts, never starter-level fixed face offsets98/A8.
-        for (int tile = 0; tile < tileCount; tile++)
-        {
-            int sector = 4 + Word(bytes, 8 + 4 * tile);
-            int end = tile + 1 == tileCount ? bytes.Length : 4 + Word(bytes, 8 + 4 * (tile + 1));
-            var header = Id65EnvironmentSectorHeaderContract.ReadPointerSpan(
-                bytes[sector..end], end - sector, requireExactEnd: false, "tiled material sector");
-            if (header.HighDetailFaceCount != 2 || header.PointerGapByteLength != 4)
-                throw new InvalidDataException("Tiled material faces lost their complete canonical guarded sector owner.");
-            int faceStart = Id65EnvironmentSectorHeaderContract.HeaderByteLength +
-                4 * header.HighDetailVertexWordOffset + 4 * header.HighDetailVertexCount +
-                8 * header.HighDetailColorCount;
-            for (int face = 0; face < header.HighDetailFaceCount; face++)
-            {
-                int material = sector + faceStart + face * 16 + 8;
-                if (Word(bytes, material) != BaseColor || Word(bytes, material + 4) != 0x80)
-                    throw new InvalidDataException("Tiled face requires its complete base-color/direct-primitive preimage.");
-                result[tile * 2 + face] = environment.Offset + material;
-            }
-        }
-        return result;
-    }
-
-    private static int Word(ReadOnlySpan<byte> bytes, int at) =>
-        BinaryPrimitives.ReadInt32LittleEndian(bytes[at..]);
 }

@@ -1,9 +1,10 @@
-# Saved tiled-family editor integration (R08 work in progress)
+# Saved tiled-family editor integration (R08)
 
 September 25, 2026. This extends checkpoint `dcf5dce` through the existing saved
-Candidate/publisher and actual editor controls. Private beta45 packages now
-verify; actual packaged-GUI exercise and the complete physical fault matrix
-are still in progress. R07 remains preserved.
+Candidate/publisher and actual editor controls. Private beta45 packages and
+actual packaged-GUI exercise and independent new-process GUI-output verification
+now pass. The complete physical fault matrix is still in progress.
+R07 remains preserved.
 
 ## Scope
 
@@ -73,6 +74,27 @@ All numbered logs are retained under
 - 710: Mac/Windows beta45 package verification passes, with strict signature,
   archive-roundtrip, assembly-identity and no-game-asset checks. This uses the
   same private community/ad-hoc mode as R07, not Apple notarization or upload.
+- 711: actual packaged GUI passed Reward2 raw edit10454→10455, immediate export
+  blocking, authored-only Apply, Save/Reopen persistence and restoration to
+  the exact original document. Native folder picker explicitly selected R08,
+  then the real research button published BIN/CUE/receipt with full readback.
+  Its complete BIN SHA256 matches689f. Shared PETE resources appear in the
+  1457-entry Resources view with Use source disabled. Catalogue closed without
+  additions. Test app exited0; an unexpected second launch from an AX status
+  check was stopped separately, with no recent ordinary-project/settings
+  writes found. See the private `PACKAGED-UI-SESSION.md` for exact observations.
+- 717/719: isolated read-only verifier builds0/0 and passes1549 free checks /
+  1104 refusals. Only the new verify mode accepts arbitrary valid IDs in the
+  exact tiled profile; it binds actual saved canonical bytes and complete
+  artifacts, never substitutes fixture IDs. Old33 modes retain their gates.
+  Attempt718 lacked the Core dependency in its isolated output and failed
+  before source I/O; copying the current compiled Core fixed that harness.
+  Actual GUI-output verification720 passes: exact saved canonical/manifest,
+  unchanged complete BIN/CUE/receipt, full readback and1297-sector inverse,
+  all held/current Original final checks. Plan SHA256 is
+  `2b836047075c598ccf00a233e7f7c8aabd23055732224b2a47e097d5fdb451b0`.
+  This verifier used the post-extraction shared binder, reproducing the
+  preserved package's complete bytes and receipt without rebuilding that app.
 
 651 is the separately authorized eight-case physical matrix. Its complete pass
 is not claimed until the final success marker and preservation checks exist.
@@ -80,8 +102,10 @@ is not claimed until the final success marker and preservation checks exist.
 ## Prepared private location
 
 `_local/v6-private-preview-20260925-r08.7HLbzh/` contains an isolated test project,
-copied rebuildable cache and a launch-only script expecting beta45. Its notice
-still says preparation in progress pending actual packaged GUI checks. Do not distribute that folder: the
+copied rebuildable cache and `Open V6 Tiled Family.command` expecting beta45.
+Actual GUI output is under
+`native-ui-exports/fresh-native-research-20260925-160932140-fb266093/`.
+Do not distribute that folder: the
 private project contains extracted game caches and will retain native outputs.
 R06/R07 and ordinary user settings/projects are not overwritten.
 
@@ -95,8 +119,10 @@ possible eight-face patterns. One acceptance example changes the final face
 from70 to14; its intended native difference is a material word plus disc parity.
 
 Do not add another parallel Intent/Revision/Body/Executable/Disc hierarchy for
-that experiment. Extract the duplicated source-neutral surface face-binding
-algorithm from the existing tiled P0 and family paths, preserving both goldens.
+that experiment. The duplicated source-neutral surface face-binding algorithm
+has now been extracted from the existing tiled P0 and family paths in a
+source-only follow-up, preserving both goldens. See
+[the shared binding tests and limits](flat-tile-material-binding.md).
 Keep family resources and their particle/audio tail; a P0 resource certificate
 cannot stand in for it. Exhaustive neutral bindings/inverse tests, independent
 source and complete-image comparison, saved/UI fault coverage and exact-disc

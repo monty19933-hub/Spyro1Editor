@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Spyro.Editor.Core.Analysis;
 using Spyro.Editor.Core.Editing;
@@ -51,37 +50,7 @@ internal sealed class NativeFreshTiledFamilyTerrainIntent
             decoded.SkyRgb!=NativeFreshFlatTileIntent.ColorWord(content.SkyColor))
             throw new InvalidDataException("Neutral tiled-family complete surface readback differs from its actual ordered authored geometry.");
         Components=Array.AsReadOnly(decoded.Components.ToArray());
-        _boundSurface=_surface.ToArray();
-        var environment=Components.Single(c=>c.Kind==NativeId65SurfaceComponentKind.Environment);
-        List<int> fields=[];
-        for(int tile=0;tile<content.Tiles.Count;tile++)
-        {
-            int start=checked(environment.BlockOffset+4+Word(_surface,environment.BlockOffset+8+4*tile));
-            int end=tile+1==content.Tiles.Count?environment.BlockOffset+environment.ByteLength:
-                checked(environment.BlockOffset+4+Word(_surface,environment.BlockOffset+8+4*(tile+1)));
-            var header=Id65EnvironmentSectorHeaderContract.ReadPointerSpan(_surface.AsSpan(start,end-start),end-start,
-                requireExactEnd:false,"neutral tiled-family sector");
-            if(header.HighDetailFaceCount!=2||header.PointerGapByteLength!=4)
-                throw new InvalidDataException("Neutral tiled-family sector lost its exact two faces and owned lookahead guard.");
-            int faces=start+Id65EnvironmentSectorHeaderContract.HeaderByteLength+
-                4*header.HighDetailVertexWordOffset+4*header.HighDetailVertexCount+8*header.HighDetailColorCount;
-            for(int face=0;face<2;face++)
-            {
-                int at=faces+face*16+8;
-                if(Word(_surface,at)!=0xFF||Word(_surface,at+4)!=0x80)
-                    throw new InvalidDataException("Neutral tiled-family binding requires its canonical FF material and complete primitive flag preimage.");
-                fields.Add(at);
-                BinaryPrimitives.WriteInt32LittleEndian(_boundSurface.AsSpan(at),bindings[tile*2+face]);
-            }
-        }
-        if(fields.Count!=8||fields.Distinct().Count()!=8)
-            throw new InvalidDataException("Neutral tiled-family binding must cover eight disjoint complete words.");
-        // Normalize only the eight declared material words for exact readback;
-        // this comparison cannot promote caller bytes or change the document.
-        byte[] inverse=_boundSurface.ToArray();
-        foreach(int at in fields)BinaryPrimitives.WriteInt32LittleEndian(inverse.AsSpan(at),0xFF);
-        if(!inverse.AsSpan().SequenceEqual(_surface))
-            throw new InvalidDataException("Neutral tiled-family bindings changed their complete geometry/flag/guard complement.");
+        _boundSurface=NativeFlatTileMaterialBinding.Bind(_surface,bindings,selections.Count);
         CanonicalDocumentSha256=Hash(_canonical);SurfaceSha256=Hash(_surface);BoundSurfaceSha256=Hash(_boundSurface);
     }
 
@@ -151,6 +120,5 @@ internal sealed class NativeFreshTiledFamilyTerrainIntent
         // containment. Do not hardcode fixture IDs or rebuild a legacy/P0 document.
         return content;
     }
-    private static int Word(ReadOnlySpan<byte> bytes,int at)=>BinaryPrimitives.ReadInt32LittleEndian(bytes[at..]);
     private static string Hash(ReadOnlySpan<byte> bytes)=>Convert.ToHexStringLower(SHA256.HashData(bytes));
 }

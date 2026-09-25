@@ -1,8 +1,8 @@
 # V6 development: what you can test
 
-September 25 continuation. **R08 beta45 packages now verify**; actual R08
-packaged-GUI exercise and final fault tests are in progress. R07 remains the
-latest packaged editor exercised here. R06/R07 are unchanged; the new work is
+September 25 continuation. **R08 beta45 packages and actual GUI editing/export
+now pass**, including independent new-process complete output verification.
+Final fault tests are in progress. R08 is the latest packaged editor exercised here. R06/R07 are unchanged; the new work is
 not silently installed into either. Universal Moby/texture interchangeability
 remains the goal, not a completed feature or zero-bug guarantee.
 
@@ -25,8 +25,11 @@ and original BIN/CUE are unchanged. No test emulator is left running.
 That complete saved compiler now connects to the existing guarded
 Candidate/publication/UI path. Actual source650 passes148 checks; headless
 production-worker UI707 publishes the exact complete disc and passes44 checks.
-The new tiled readiness suite passes559 checks. Private beta45 packages verify,
-but packaged-GUI and full fault results are still pending. See the
+The new tiled readiness suite passes559 checks. Private beta45 packages and
+actual editing/Save/Reopen/native-folder-picker export pass. The emitted BIN
+is byte-identical to the gameplay-tested689f candidate above; this is not a
+fresh emulator session for the GUI CUE. Independent verification720 passes;
+the full fault matrix is still pending. See the
 [R08 integration evidence](research/native-fresh-tiled-family-editor-r08.md).
 Full regression638 passed345/0; saved compiler source640 passed63 checks;
 legacy source641 passed291 checks and preserved R07's complete native inverse;
@@ -40,7 +43,23 @@ new inventory and completion accounting are still research work requiring an
 identified Japanese source. No game assets were downloaded. See
 [Japanese objects: findings and next gates](research/japanese-pocketstation-objects.md).
 
-## New R07: complete chest-family editor
+## New R08: tiled terrain and complete chest family together
+
+Open this repository's
+`_local/v6-private-preview-20260925-r08.7HLbzh/Open V6 Tiled Family.command`.
+Use **Fresh Level… → Level aggregate**. The isolated example combines four
+tiles, two retail materials, Wizard, grass, key, chest and five reward members.
+You can test whole-document editing, Apply, Save/Reopen and inspect-only shared
+Moby resources. Only the exact included profile enables native research export;
+other valid edits are saved as authored-only. The preview remains a schematic.
+
+Its actual exported CUE is in
+`native-ui-exports/fresh-native-research-20260925-160932140-fb266093/` inside that
+R08 folder. Read `PRIVATE-PREVIEW.md` for opening, export and LAB-entry steps.
+The beta45 app is preserved at checkpoint`b50874d`; later source refactoring is
+not silently installed. This is not a public V6 release.
+
+## Preserved R07: complete chest-family editor
 
 Open this repository's
 `_local/v6-private-preview-20260920-r07.6brXeJ/Open V6 Chest Family.command`.
@@ -90,10 +109,9 @@ Original emulator settings and memory-card contents were preserved/restored.
 
 ## Still unfinished
 
-- The preserved editor builds still require zero placed Mobys for tiled export.
-  R07 can author/save tiled family documents, but cannot export them natively.
-  New combined source compilation and exact-candidate gameplay now pass as
-  described above; saved publication now passes and packaged UI exercise is next.
+- R08 exports only its exact combined four-tile family profile. R06's broader
+  selected-material tiled route still requires zero placed Mobys; R07 cannot
+  export tiled families. Arbitrary mixed layouts remain authored-only.
 - Static material selection is bounded by native data and GPU capacity.
   Animated/scrolling/HQ materials are not universally supported.
 - The catalogue can show assets without proving that every destination has

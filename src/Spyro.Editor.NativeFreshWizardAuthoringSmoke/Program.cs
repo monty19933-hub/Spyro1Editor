@@ -30,6 +30,7 @@ if (request?.IssuedMatrix != true)
     await MixedDiscCases.Free(Check);
     await FamilyExecutableDiscCases.Free(Check);
     TiledFamilyTerrainIntentCases.Free(Check);
+    FlatTileMaterialBindingCases.Free(Check);
     TiledFamilyTerrainRevisionCases.Free(Check);
     TiledFamilyBodyCases.Free(Check);
     TiledFamilyExecutableCases.Free(Check);
