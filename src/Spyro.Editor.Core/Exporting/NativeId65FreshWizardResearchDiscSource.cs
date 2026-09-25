@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Spyro.Editor.Core.Analysis;
 
 [assembly: InternalsVisibleTo("Spyro.Editor.NativeId65FreshWizardDiscSmoke")]
 
@@ -215,6 +216,37 @@ internal sealed class NativeId65FreshWizardDiscGeometry
         var result=new NativeId65FreshWizardDiscGeometry(level.Length,overlay.Length);
         if(result.BodyByteLength%2048!=0||result.OverlayByteLength%2048!=0||result.FinalExecutableEndExclusive>60000)
             throw new InvalidDataException("Actual chest allocations are not sector aligned or exceed the separately checked Original gap.");
+        return result;
+    }
+    internal static NativeId65FreshWizardDiscGeometry CompileTiledFamily(NativeFreshTiledFamilyExecutablePlan executable)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        var body=executable.BodyAncestor;var host=executable.HostAncestor;
+        executable.RequireAncestry(body,executable.ParentExecutableAncestor);
+        byte[] level=executable.CopyLevelData(),exe=executable.CopyExecutable(),overlay=host.CopyOverlay();
+        executable.RequireExactOutputs(level,exe);
+        host.RequireExactOutputs(overlay,host.CopyInitializer(),host.CopyExecutablePrototype());
+        // Decode the new complete Body here. Captured source-sector ownership
+        // and equal physical lengths cannot carry the parent's old A6C proof.
+        var memory=NativeLevelRuntimeMemoryReport.DecodeFixture(65,level,host.AppendLayout.CopyAnchor);
+        if(!ReferenceEquals(host,body.HostAncestor)||!ReferenceEquals(body.PlacementAncestor,executable.ParentExecutableAncestor.PlacementAncestor)||
+            !executable.SourceCertified||!executable.Experimental||executable.FullNativeLoaderProven||
+            executable.KeyZeroContributionProven||executable.CompleteStaticCensusProven||executable.RuntimeDropGuarantee||
+            executable.CompleteNativeDependencyClosureProven||executable.PeakRuntimeMemoryProven||executable.RuntimeVerified||executable.PublicationApproved||
+            overlay.Length!=0x12000||level.Length!=0x20F000||exe.Length!=0x66000||
+            memory.AnalyzedDataSha256!=executable.LevelDataSha256||host.AppendLayout.CopyAnchor!=0x8008CA38||
+            memory.CopyBufferAddress!=0x8008CA38||memory.UsedLevelDataBytes!=0xCB8||memory.LevelDataSectorPaddingBytes!=0x348||
+            memory.ModelBytesRead!=0x1B000||memory.ModelRamStart!=0x8008D6F0||memory.SceneBytesRead!=0x3800||
+            memory.SceneRamStart!=0x800A86F0||memory.SceneReadEnd!=0x800ABEF0||
+            memory.ParticleComponentDataOffset!=0xE650C||memory.SoundComponentDataOffset!=0xE6598||
+            memory.PlacedMobyCount!=9||memory.DynamicMobyCapacity!=32||memory.NormalReservedBufferStart!=0x80187BB0||
+            body.ResourceAncestor.BaseBodyAncestor.ResidentPeteAddress!=0x801C5BB8||
+            !memory.KnownPostLoadExtentsDisjoint||memory.SceneReadEnd>memory.NormalReservedBufferStart||
+            memory.NativeSourceCertified||memory.RuntimeFitProven||memory.PeakTransientFitProven)
+            throw new InvalidDataException("Tiled physical geometry requires the actual CB8 Body/extended Host relation without inherited loading or runtime authority.");
+        var result=new NativeId65FreshWizardDiscGeometry(level.Length,overlay.Length);
+        if(result.BodyByteLength%2048!=0||result.OverlayByteLength%2048!=0||result.FinalExecutableEndExclusive>60000)
+            throw new InvalidDataException("Actual tiled family allocations are not sector aligned or exceed the separately captured Original gap.");
         return result;
     }
     internal NativeSkyWadRelocationPlan CreateGrowthGeometry()=>new(true,37,0x6927000,FinalWadByteLength,GrowthByteLength,

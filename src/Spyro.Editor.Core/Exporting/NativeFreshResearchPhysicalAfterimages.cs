@@ -48,6 +48,14 @@ internal sealed class NativeFreshResearchPhysicalAfterimages
         return new(owners,geometry,executable.PlacementAncestor.CopyLevelData(),
             executable.HostAncestor.CopyOverlay(),executable.CopyExecutable());
     }
+    internal static NativeFreshResearchPhysicalAfterimages ForTiledFamily(NativeFreshResearchPhysicalSourceOwners owners,
+        NativeFreshTiledFamilyExecutablePlan executable)
+    {
+        ArgumentNullException.ThrowIfNull(owners);ArgumentNullException.ThrowIfNull(executable);
+        var geometry=NativeId65FreshWizardDiscGeometry.CompileTiledFamily(executable);
+        owners.RequireRetainedGeometry(geometry);
+        return new(owners,geometry,executable.CopyLevelData(),executable.HostAncestor.CopyOverlay(),executable.CopyExecutable());
+    }
     internal byte[] CopyBody()=>_body.ToArray();
     internal byte[] CopyOverlay()=>_overlay.ToArray();
     internal byte[] CopyExecutable()=>_executable.ToArray();

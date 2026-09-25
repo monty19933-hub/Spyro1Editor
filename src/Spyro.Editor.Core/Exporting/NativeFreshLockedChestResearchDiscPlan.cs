@@ -80,6 +80,21 @@ internal sealed class NativeFreshLockedChestResearchDiscPlan
         RequireOriginalExecutable(_original,ExecutableAncestor);
         _owners.RequireRetainedOriginalOwners(_original,_geometry);
     }
+    // Share only this actual captured Original/index/physical preimage owner.
+    // The tiled arm independently validates its new native relation; this old
+    // plan's A6C Body certificate supplies no CB8 memory or loading authority.
+    internal NativeFreshResearchPhysicalAfterimages CreateTiledFamilyAfterimages(NativeFreshTiledFamilyExecutablePlan executable)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        if(!ReferenceEquals(executable.ParentExecutableAncestor,ExecutableAncestor))
+            throw new InvalidDataException("Tiled physical composition requires this actual captured parent executable, not equal bytes or hashes.");
+        RequireAncestry(ExecutableAncestor);RequireRetainedOriginalOwners();
+        var geometry=NativeId65FreshWizardDiscGeometry.CompileTiledFamily(executable);
+        if(!executable.RevertExactOriginal(executable.CopyExecutable()).AsSpan().SequenceEqual(_original.CopyExecutable()))
+            throw new InvalidDataException("Tiled executable is not bound to this captured complete Original executable owner.");
+        _owners.RequireRetainedOriginalOwners(_original,geometry);
+        return NativeFreshResearchPhysicalAfterimages.ForTiledFamily(_owners,executable);
+    }
     private static void RequireExecutable(NativeFreshLockedChestExperimentalExecutable executable)
     {
         ArgumentNullException.ThrowIfNull(executable);

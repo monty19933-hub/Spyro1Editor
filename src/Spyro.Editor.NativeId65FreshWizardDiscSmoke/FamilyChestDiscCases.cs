@@ -63,7 +63,7 @@ internal static class FamilyChestDiscCases
         return SourceCore(path,executable,check,"NATIVE_FRESH_CHEST_DISC_SAME_LAYOUT_SOURCE_OK");
     }
 
-    internal static Task SourceAuthoredDestinations(string path,NativeFreshLockedChestExperimentalExecutable executable,Action<bool,string> check)
+    internal static Task<NativeFreshLockedChestResearchDiscPlan> SourceAuthoredDestinations(string path,NativeFreshLockedChestExperimentalExecutable executable,Action<bool,string> check)
     {
         ArgumentNullException.ThrowIfNull(check);
         RequireSameLayoutPlacement(executable,true);
@@ -117,7 +117,7 @@ internal static class FamilyChestDiscCases
         placement.RequireExactScene(placement.CopyScene());
     }
 
-    private static async Task SourceCore(string path,NativeFreshLockedChestExperimentalExecutable executable,
+    private static async Task<NativeFreshLockedChestResearchDiscPlan> SourceCore(string path,NativeFreshLockedChestExperimentalExecutable executable,
         Action<bool,string> check,string successMarker)
     {
         using(var original=File.OpenRead(path))await NativeId65FreshDiscSource.RequireWholeOriginalAsync(original,CancellationToken.None);
@@ -230,6 +230,7 @@ internal static class FamilyChestDiscCases
             check(plan.PlanSha256==identity&&plan.CopyBody().SequenceEqual(expected.Body)&&
                 executable.CopyExecutable().SequenceEqual(expected.Executable),"All refusals leave actual immutable ancestors and physical snapshots intact.");
             Console.WriteLine($"{successMarker} observedImage={measured.OutputSha256} changed={measured.ChangedSectors} inverse={inverseHash} plan={identity} independentPayloadGolden=false outputsWritten=0 completeCensus=false runtime=false");
+            return plan;
         }
         finally
         {

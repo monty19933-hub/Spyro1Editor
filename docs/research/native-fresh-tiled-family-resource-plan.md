@@ -619,3 +619,59 @@ not the full Scene initializer or behavior lifecycle. A separate optional
 request must remain an explicit limitation, never an exhaustion-safety claim.
 Only after these checks should new typed Host/executable/clearance/disc and
 saved-publication owners be added through the existing shared pipeline.
+
+## 2026-09-25 continuation: Scene witness and physical child
+
+The previously planned Scene-storage witness has now run, independently of the
+C# issuer. `source_tiled_family_native_scene_oracle.py` consumes the frozen
+model result and exact source/child files. Root replay613 passed309 instructions,
+57 reads and47 writes (12 Scene,35 global), ten fixups, both sentinels, full
+complement,46 refusal controls and four unseeded-result controls. The relocated
+Scene hash is `eee95aff98549e43738fa76d419e15ca240959fad7d10dc7b7ed4d60ee28fcb9`.
+The explicit post-header/s5=0 cut remains: this is not full initialization,
+placed-actor updating, CD delivery, allocator-exhaustion or runtime proof.
+
+Independent physical-child replay622 passed against the actual preserved R07
+UI image and Original. The complete virtual661547040-byte child hashes to
+`689fcf296e26d635d9c5ce6fc3fc687c2b47decce10ade2a0903f0c6bd877192`.
+Only LBAs54371/54372 differ from that R07 parent:1413 payload bytes and1969 raw
+bytes. All1054 parent Body sectors' Form1 parity were independently reproduced;
+the full unchanged raw complement and immediate child inverse were checked.
+111 physical refusal controls and47 old-Body controls passed. This oracle writes
+no image and does not substitute for actual-output or gameplay verification.
+
+Closed typed executable, physical-disc and strict union-clearance consumers now
+reuse actual retained parent owners and shared streaming/afterimage machinery.
+The executable is unchanged byte-for-byte; the physical owner recaptures CB8
+native accounting rather than borrowing the retired A6C layout certificate.
+The clearance wrapper requires the existing parent assessment and proves the
+four1536-square tiles exactly partition its3072-square rectangle. It preserves
+the radius600 chest disk crossing an internal seam and the radius356 player
+disk, without claiming routes, trajectories or whole-family collision safety.
+
+An explicit smoke-tool-only `--tiled-family-experiment` writer requires those
+actual owners and a never-existing directory. Full actual readback, frozen
+complete-image hash, actual inverse to Original and fresh source guards precede
+CUE creation. Normal editor export and saved tiled-family publication remain
+disabled. Existing R03 writer bytes/receipt branch are unchanged. Build630 has
+zero warnings/errors; free replay631 passes466 checks. Full source replay632
+passes1252 checks, preserves the exact old R03 image, matches the independent
+new image, and verifies the full inverse. Original BIN/CUE final guards pass;
+no output files were written. Artifact/runtime testing remains pending.
+
+The read-only chest observer has a closed `tiled-family-r01` layout with actual
+CB8/model/Scene addresses. Old13 offline checks and nine additional tiled
+tests pass, including literal legacy output/read-sequence hashes and60
+truncated-owner cases. It still sends only bounded memory reads and protocol
+acknowledgements. External exact-disc identity is mandatory; sequential sampled
+memory cannot certify complete lifecycle, peak memory or gameplay success.
+Both offline observer suites are mandatory before .NET builds in the default
+regression runner, with required success markers preventing empty discovery
+from passing. Root633 passes87 runner tests, including failure-before-build
+and preserved no-I/O list/source-QA semantics.
+
+Evidence logs are under `_local/research/v6-mixed-export-20260912-r01.jR0oBr`.
+Private runtime preparation is under
+`_local/native-v6-tiled-family-runtime-20260925-r01.wqwkPe`; its journal records
+fresh ordinary settings/card captures and separate test paths. No preserved
+R06/R07 application, project, card or candidate has been replaced.

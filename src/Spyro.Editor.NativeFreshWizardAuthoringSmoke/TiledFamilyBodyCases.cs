@@ -35,7 +35,7 @@ internal static class TiledFamilyBodyCases
         Console.WriteLine("TILED_FAMILY_BODY_FREE_OK sourceOpened=false finalExecutableIssued=false publication=false");
     }
 
-    internal static void Source(NativeFreshTiledFamilyTerrainRevision revision,Action<bool,string> check)
+    internal static NativeFreshTiledFamilyBodyPlan Source(NativeFreshTiledFamilyTerrainRevision revision,Action<bool,string> check)
     {
         var placement=revision.PlacementAncestor;var oldBody=revision.BodyAncestor;
         var resources=revision.ResourceAncestor;var host=revision.HostAncestor;var priorScene=oldBody.SceneAncestor;
@@ -149,6 +149,7 @@ internal static class TiledFamilyBodyCases
             NativeFreshLockedChestSceneStorageSource.Capture(resources,host).Graph.Fingerprint==oldGraph,
             "Detached mutations/refusals leave the complete old Body certificate, resource graph, Scene, Host and executable unchanged.");
         Console.WriteLine($"TILED_FAMILY_BODY_SOURCE_OK body={body.LevelDataSha256} immediateChildInverse=true finalExecutableIssued=false runtime=false publication=false");
+        return body;
     }
 
     private static void CheckStorage(NativeFreshTiledFamilyBodyPlan body,byte[] expected,

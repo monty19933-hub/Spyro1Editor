@@ -4,9 +4,10 @@
 Independently identify DuckStation and its exact open BIN/CUE before connecting.
 Hashes below are annotations, never loaded-disc authentication. The initial GDB
 connection may pause emulation; resume/pause only in the UI. Use p <label> and q.
---profile defaults to r01; r02/r03 only select floor/destination annotations and
-does not change runtime gates, addresses or read bounds. Unverified r02 payload
-hashes are omitted, not inferred from another candidate or the selected label.
+--profile defaults to r01; r02/r03 only select floor/destination annotations.
+tiled-family-r01 selects a separately pinned actual native layout. Annotations
+never provide addresses or read bounds. Unverified r02/r03 payload hashes are
+omitted, not inferred from another candidate or the selected label.
 Only bounded memory-read packets and protocol acknowledgements are sent. No
 execution, RAM writes, automatic input, file output or gameplay certification.
 --self-test is offline and mutually exclusive with connecting.
@@ -40,8 +41,8 @@ ANNOTATIONS = MappingProxyType({
     "body_sha256": "77fdfded0383af6636ffa991c47d55f113b0f17327584213bb60a72494529d45",
     "executable_sha256": "81501f07ec9ce336089ec5a92f81bf51569aed723ac4f8ba1cf85ba0ef69a431",
 })  # Source483: these are NOT a full-image identity or CLI certificate.
-# Closed, deeply immutable annotations only. Both experiments have the same
-# native memory layout below; no profile supplies a pointer, bound or gate.
+# Closed, deeply immutable annotations only; the separate _LAYOUTS table owns
+# actual native bounds. No annotation supplies a pointer, bound or gate.
 # Preserve R01's original output fields/values by leaving its geometry absent.
 PROFILES = MappingProxyType({
     "r01": MappingProxyType({
@@ -80,6 +81,16 @@ PROFILES = MappingProxyType({
             "annotations_not_sampled_or_authenticated": True,
         }),
     }),
+    "tiled-family-r01": MappingProxyType({
+        "profile": "private-tiled-family-chest-p9-runtime-experiment-v1",
+        "payload": MappingProxyType({
+            "scene_sha256": "4f560dcbfa2d997a3f02554cf297d95c1778f67fc5d8fcf8ff47f64d609a89e8",
+            "body_sha256": "c8c85e71b633e29ce573dddccb04a4a0adcd6696d292658304328e435dfaa9ca",
+            "executable_sha256": "81501f07ec9ce336089ec5a92f81bf51569aed723ac4f8ba1cf85ba0ef69a431",
+            "candidate_sha256": "689fcf296e26d635d9c5ce6fc3fc687c2b47decce10ade2a0903f0c6bd877192",
+        }),  # NativeScene613/physical622 annotations, NOT open-disc authentication.
+        "geometry": None,
+    }),
 })
 COPY, USED, MODEL, SCENE = 0x8008CA38, 0xA6C, 0x8008D4A4, 0x800A84A4
 ROWS, DYNAMIC, ARENA_END = SCENE + 0xD4, SCENE + 0x3EC, SCENE + 0x1244
@@ -114,6 +125,33 @@ GATES = MappingProxyType({
     "callback_spawn": (0x800758CC, "<I", 0x800872A4),
     "callback_effect_spawn": (0x800758E4, "<I", 0x80088F68),
 })
+# Independently verified actual child data/model/Scene endpoints, not inferred
+# from the old allocation size or sampled RAM pointers. The complete 0x3800
+# Scene witness pins P9/N32, every private offset/length, and bucket+0x1390.
+# Pool/PETE are unchanged resident owners, NOT relative to the moved Scene.
+_LEGACY_PROFILES = ("r01", "r02", "r03")
+_LEGACY_LAYOUT = MappingProxyType({
+    "copy": COPY, "used": USED, "model": MODEL,
+    "scene": SCENE, "scene_end": 0x800ABCA4,
+    "rows": ROWS, "dynamic": DYNAMIC, "arena_end": ARENA_END,
+    "pool": POOL, "pete": PETE, "gates": GATES,
+})
+_TILED_GATE_EXPECTATIONS = MappingProxyType({
+    "model_anchor": 0x8008D6F0, "scene_anchor": 0x800A86F0,
+    "scene_disk_offset": 0x102000, "scene_disk_length": 0x3800,
+    "moby_base": 0x800A87C4, "dynamic_base": 0x800A8ADC,
+    "arena_end": 0x800A9934, "bucket_base": 0x800A9A80,
+})
+_TILED_LAYOUT = MappingProxyType({
+    "copy": 0x8008CA38, "used": 0xCB8, "model": 0x8008D6F0,
+    "scene": 0x800A86F0, "scene_end": 0x800ABEF0,
+    "rows": 0x800A87C4, "dynamic": 0x800A8ADC, "arena_end": 0x800A9934,
+    "pool": 0x801C3BB8, "pete": 0x801C5BB8,
+    "gates": MappingProxyType({name: (address, fmt, _TILED_GATE_EXPECTATIONS.get(name, expected))
+                               for name, (address, fmt, expected) in GATES.items()}),
+})
+_LAYOUTS = MappingProxyType({name: _LEGACY_LAYOUT for name in _LEGACY_PROFILES} |
+                          {"tiled-family-r01": _TILED_LAYOUT})
 CURSORS = MappingProxyType({
     "dynamic_count": (0x800756A4, "<I"),
     "dynamic_properties_cursor": (0x80075930, "<I"),
@@ -163,20 +201,23 @@ def read_fields(client, names):
     return result
 
 
-def require_layout(values):
-    for name, (_, _, expected) in GATES.items():
+def require_layout(values, profile="r01"):
+    layout = _LAYOUTS[profile]
+    for name, (_, _, expected) in layout["gates"].items():
         if values[name] != expected:
             raise ValueError("Wrong/uninitialized P9/N32 layout gate: " + name)
     if not 0 <= values["dynamic_count"] <= CAPACITY:
         raise ValueError("Native dynamic count escaped0..32.")
     cursor = values["dynamic_properties_cursor"]
-    if not ARENA_END - CAPACITY * 24 <= cursor <= ARENA_END or (ARENA_END - cursor) % 24:
+    arena_end = layout["arena_end"]
+    if not arena_end - CAPACITY * 24 <= cursor <= arena_end or (arena_end - cursor) % 24:
         raise ValueError("Dynamic properties cursor escaped the exact32-slot grid.")
     # next_free_moby is reported/reread, not an active end or read bound. Do not
     # add an unproven lifecycle equality between it, count and property cursor.
 
 
-def scan_dynamic(rows):
+def scan_dynamic(rows, profile="r01"):
+    dynamic = _LAYOUTS[profile]["dynamic"]
     active, terminal, consumed = [], None, 0
     iterator = iter(rows)
     for slot in range(CAPACITY):
@@ -191,7 +232,7 @@ def scan_dynamic(rows):
             break
         consumed += 1
         if row[0x48] < 0x80:
-            active.append(decode_moby(row, PLACED + slot, DYNAMIC + slot * STRIDE))
+            active.append(decode_moby(row, PLACED + slot, dynamic + slot * STRIDE))
     return {"active": active, "terminal_slot": terminal,
             "high_water_rows_before_terminal": consumed, "no_in_range_terminal": terminal is None}
 
@@ -216,8 +257,9 @@ def scan_particles(pool):
 
 
 def capture(client, label, profile="r01"):
-    if type(profile) is not str or profile not in PROFILES:
-        raise ValueError("Unsupported chest annotation profile; expected r01 or r02.")
+    if type(profile) is not str or profile not in _LAYOUTS:
+        raise ValueError("Unsupported closed chest observation profile.")
+    layout = _LAYOUTS[profile]
     annotations = PROFILES[profile]
     result = dict.fromkeys(AUTHORITY_FLAGS, False)
     result.update(utc=datetime.now(timezone.utc).isoformat(), label=str(label)[:120],
@@ -228,14 +270,14 @@ def capture(client, label, profile="r01"):
         result["expected_geometry_annotations"] = dict(annotations["geometry"])
     try:
         result.update(read_fields(client, FIELDS))
-        require_layout(result)  # No actor, private, particle or model reads before this.
+        require_layout(result, profile)  # No actor, private, particle or model reads before this.
         placed = []
         for index in range(PLACED):
-            address = ROWS + index * STRIDE
+            address = layout["rows"] + index * STRIDE
             row = decode_moby(client.read(address, STRIDE), index, address)
             row["initial_class_annotation"] = INITIAL_CLASSES[index]
             row["active_status_sample"] = row["state_bytes"][0] < 0x80
-            owner, length = SCENE + PRIVATE_OFFSETS[index], PRIVATE_LENGTHS[index]
+            owner, length = layout["scene"] + PRIVATE_OFFSETS[index], PRIVATE_LENGTHS[index]
             if not row["active_status_sample"]:
                 row["private_scan_skipped"] = "Inactive/deleted row; initial class is not a lifecycle gate."
             elif row["properties"] != owner:
@@ -249,9 +291,14 @@ def capture(client, label, profile="r01"):
                 row["private_owner_sample"] = {"address": owner, "length": length,
                     "raw_hex": data.hex(), "words_u32": list(struct.unpack("<" + "I" * (length // 4), data))}
             placed.append(row)
-        dynamic = scan_dynamic(client.read(DYNAMIC + i * STRIDE, STRIDE) for i in range(CAPACITY))
-        particles = scan_particles(b"".join(client.read(POOL + at, 1024) for at in range(0, 0x2000, 1024)))
-        terminal = client.read(PETE, 4).hex()
+        dynamic = scan_dynamic((client.read(layout["dynamic"] + i * STRIDE, STRIDE)
+                                for i in range(CAPACITY)), profile)
+        particles = scan_particles(b"".join(client.read(layout["pool"] + at, 1024)
+                                           for at in range(0, 0x2000, 1024)))
+        terminal_bytes = client.read(layout["pete"], 4)
+        if len(terminal_bytes) != 4:
+            raise ValueError("Partial separate PETE first word.")
+        terminal = terminal_bytes.hex()
         after = read_fields(client, REREAD)
         changed = [name for name in REREAD if result[name] != after[name]]
         if changed:
@@ -408,7 +455,7 @@ def self_test():
 
         def test_each_gate_refuses_before_payload_and_reread_discards_payload(self):
             scalar_reads = {(at, struct.calcsize(fmt)) for at, fmt in FIELDS.values()}
-            for profile in PROFILES:
+            for profile in _LEGACY_PROFILES:
                 for name, (address, _, expected) in GATES.items():
                     with self.subTest(profile=profile, gate=name):
                         memory = fixture(); memory.map(address, struct.pack("<I", expected ^ 1))
@@ -526,7 +573,7 @@ def self_test():
 
         def test_both_scans_stop_at_terminal_and_never_read_one_extra(self):
             expected_reads = None
-            for profile in PROFILES:
+            for profile in _LEGACY_PROFILES:
                 memory = fixture(); memory.map(DYNAMIC + 0x48, b"\x00")
                 memory.map(POOL + 1, b"\x00")
                 sample = capture(memory, "full", profile)
@@ -568,7 +615,7 @@ def self_test():
                     with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit): main(args)
 
         def test_cli_profile_selection_reaches_same_mocked_read_only_client(self):
-            for profile in (None, *PROFILES):
+            for profile in (None, *_LEGACY_PROFILES):
                 memory, output = fixture(), io.StringIO()
                 args = ["--connect-identified-test-session"]
                 if profile is not None: args += ["--profile", profile]
@@ -596,8 +643,8 @@ def main(argv=None):
     mode.add_argument("--self-test", action="store_true", help="Offline bounded fixtures only; never connect.")
     mode.add_argument("--connect-identified-test-session", action="store_true",
                       help="Confirm external identification of the exact private test process/open BIN; localhost2345 only.")
-    parser.add_argument("--profile", choices=tuple(PROFILES), default="r01",
-                        help="Closed annotation profile only (default r01); gates, addresses and read bounds are unchanged.")
+    parser.add_argument("--profile", choices=tuple(_LAYOUTS), default="r01",
+                        help="Closed actual layout (default r01); r02/r03 share r01 bounds, tiled-family-r01 has its own pinned bounds.")
     args = parser.parse_args(argv)
     if args.self_test:
         self_test()

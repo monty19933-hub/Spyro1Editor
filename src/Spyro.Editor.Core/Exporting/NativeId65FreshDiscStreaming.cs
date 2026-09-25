@@ -15,7 +15,7 @@ internal static class NativeId65FreshDiscStreaming
     {
         token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(disc);
-        return VerifyInverseCore(disc, null, candidate, token);
+        return VerifyInverseCore(disc, null, null, candidate, token);
     }
 
     internal static NativeId65FreshDiscVerification VerifyInverse(NativeFreshLockedChestResearchDiscPlan disc,
@@ -24,13 +24,23 @@ internal static class NativeId65FreshDiscStreaming
         token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(disc);
         disc.RequireAncestry(disc.ExecutableAncestor);
-        return VerifyInverseCore(null, disc, candidate, token);
+        return VerifyInverseCore(null, disc, null, candidate, token);
+    }
+
+    internal static NativeId65FreshDiscVerification VerifyInverse(NativeFreshTiledFamilyDiscPlan disc,
+        Stream candidate, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(disc);
+        disc.RequireAncestry(disc.ExecutableAncestor,disc.ParentDiscAncestor);
+        return VerifyInverseCore(null, null, disc, candidate, token);
     }
 
     // Concrete captured owners only; no caller-supplied inverse callback can
     // turn arbitrary bytes into a source-authenticated candidate.
     private static NativeId65FreshDiscVerification VerifyInverseCore(NativeId65FreshDiscPlan? disc,
-        NativeFreshLockedChestResearchDiscPlan? chest, Stream candidate, CancellationToken token)
+        NativeFreshLockedChestResearchDiscPlan? chest, NativeFreshTiledFamilyDiscPlan? tiled,
+        Stream candidate, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(candidate);
         if (!candidate.CanRead || !candidate.CanSeek || candidate.Position != 0 ||
@@ -44,7 +54,8 @@ internal static class NativeId65FreshDiscStreaming
         {
             token.ThrowIfCancellationRequested();
             candidate.ReadExactly(after);
-            byte[] before = chest is null ? disc!.CreateOriginalRawSector(lba, after) :
+            byte[] before = tiled is not null ? tiled.CreateOriginalRawSector(lba, after) :
+                chest is null ? disc!.CreateOriginalRawSector(lba, after) :
                 chest.CreateOriginalRawSector(lba, after);
             restoredHash.AppendData(before); candidateHash.AppendData(after);
             if (!before.AsSpan().SequenceEqual(after)) changed++;
@@ -58,7 +69,7 @@ internal static class NativeId65FreshDiscStreaming
 
     internal static NativeId65FreshDiscVerification Measure(NativeId65FreshDiscPlan disc,
         Stream source, CancellationToken token, Stream? output = null, Action? firstSector = null) =>
-        MeasureCore(disc, null, null, source, token, output, firstSector);
+        MeasureCore(disc, null, null, null, source, token, output, firstSector);
 
     internal static NativeId65FreshDiscVerification Measure(NativeId65FreshWizardResearchDiscPlan disc,
         Stream source, CancellationToken token, Stream? output = null, Action? firstSector = null)
@@ -66,7 +77,7 @@ internal static class NativeId65FreshDiscStreaming
         token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(disc);
         disc.RequireAncestry(disc.ExecutableAncestor);
-        return MeasureCore(null, disc, null, source, token, output, firstSector);
+        return MeasureCore(null, disc, null, null, source, token, output, firstSector);
     }
 
     internal static NativeId65FreshDiscVerification Measure(NativeFreshLockedChestResearchDiscPlan disc,
@@ -75,14 +86,23 @@ internal static class NativeId65FreshDiscStreaming
         token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(disc);
         disc.RequireAncestry(disc.ExecutableAncestor);
-        return MeasureCore(null, null, disc, source, token, output, firstSector);
+        return MeasureCore(null, null, disc, null, source, token, output, firstSector);
+    }
+
+    internal static NativeId65FreshDiscVerification Measure(NativeFreshTiledFamilyDiscPlan disc,
+        Stream source, CancellationToken token, Stream? output = null, Action? firstSector = null)
+    {
+        token.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(disc);
+        disc.RequireAncestry(disc.ExecutableAncestor,disc.ParentDiscAncestor);
+        return MeasureCore(null, null, null, disc, source, token, output, firstSector);
     }
 
     // Only concrete, source-issued plans reach this shared loop. No public
     // interface or caller-provided sector callback can supply native bytes.
     private static NativeId65FreshDiscVerification MeasureCore(NativeId65FreshDiscPlan? disc,
         NativeId65FreshWizardResearchDiscPlan? wizard, NativeFreshLockedChestResearchDiscPlan? chest,
-        Stream source, CancellationToken token,
+        NativeFreshTiledFamilyDiscPlan? tiled, Stream source, CancellationToken token,
         Stream? output, Action? firstSector)
     {
         token.ThrowIfCancellationRequested();
@@ -101,7 +121,8 @@ internal static class NativeId65FreshDiscStreaming
             source.ReadExactly(before);
             // Every sector, including untouched metadata/data, is authenticated
             // against the SAME private index captured with the original SHA.
-            byte[] after = chest is not null ? chest.CreateExpectedRawSector(lba, before) :
+            byte[] after = tiled is not null ? tiled.CreateExpectedRawSector(lba, before) :
+                chest is not null ? chest.CreateExpectedRawSector(lba, before) :
                 wizard is null ? disc!.CreateExpectedRawSector(lba, before) :
                 wizard.CreateExpectedRawSector(lba, before);
             originalHash.AppendData(before);

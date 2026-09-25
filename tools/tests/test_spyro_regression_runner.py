@@ -148,7 +148,101 @@ class SourceOracleHelperPinTests(unittest.TestCase):
                 self.assert_source_hash(helper, self.literal_assignment(tree, hash_name))
 
 
+class ObserverPrebuildTests(unittest.TestCase):
+    EXPECTED = (
+        ("python-fresh-chest-observer", ("tools/Observe-SpyroFreshChest.py", "--self-test"),
+         "FRESH_CHEST_OBSERVER_OFFLINE_OK tests=13 connections=0 romReads=0 runtime=false"),
+        ("python-tiled-family-chest-observer",
+         ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_tiled_family_chest_observer.py", "-v"),
+         "Ran 9 tests"),
+    )
+
+    def test_exact_mandatory_python_only_observer_registry(self):
+        self.assertEqual(self.EXPECTED, RUNNER.OBSERVER_PYTHON_CASES)
+        self.assertFalse(any(name in dict(RUNNER.CORE_CASES) for name, _, _ in self.EXPECTED))
+
+    def test_observer_order_markers_failure_gates_and_default_source_isolation(self):
+        scenarios = {
+            "success": (0, 3), "runner-failed": (1, 1),
+            "legacy-no-marker": (1, 2), "legacy-nonzero": (1, 2),
+            "tiled-zero-discovered": (1, 3), "tiled-nonzero": (1, 3),
+        }
+        for opted_in in (False, True):
+            for scenario, (status, python_count) in scenarios.items():
+                calls = []
+                def fake_run(command, **kwargs):
+                    calls.append((command, kwargs["timeout"]))
+                    if len(calls) == 1 and scenario == "runner-failed":
+                        return subprocess.CompletedProcess(command, 1)
+                    for index, (_, arguments, marker) in enumerate(self.EXPECTED):
+                        if command == [sys.executable, "-B", *arguments]:
+                            if not (index == 0 and scenario == "legacy-no-marker"):
+                                kwargs["stdout"].write("Ran 0 tests\nOK\n" if index == 1 and
+                                                       scenario == "tiled-zero-discovered" else marker + "\n")
+                            if scenario == ("legacy-nonzero" if index == 0 else "tiled-nonzero"):
+                                return subprocess.CompletedProcess(command, 7)
+                    if command[0] == "env": kwargs["stdout"].write("Offline QA passed.\n")
+                    return subprocess.CompletedProcess(command, 0)
+                with self.subTest(opted_in=opted_in, scenario=scenario), \
+                        tempfile.TemporaryDirectory(prefix="spyro-observer-prebuild-") as output:
+                    with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                            mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                            mock.patch.object(RUNNER, "SOURCE_QA_CASES", ()), \
+                            mock.patch.object(RUNNER, "SOURCE_PYTHON_CASES", ()), \
+                            mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                            mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("observer source read")), \
+                            mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("observer CUE read")), \
+                            mock.patch("builtins.input", side_effect=AssertionError("observer requested input")), \
+                            mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                            mock.patch.object(sys, "argv", [str(SPEC.origin), "--timeout", "123",
+                                *(["--with-source-qa", "--source-qa-timeout", "456"] if opted_in else [])]), \
+                            contextlib.redirect_stdout(io.StringIO()):
+                        self.assertEqual(status, RUNNER.main())
+                    summary = json.loads((Path(output) / "summary.json").read_text())
+                self.assertEqual("python-runner-tests", summary[0]["name"])
+                self.assertEqual(["python-runner-tests", *[name for name, _, _ in self.EXPECTED]][:python_count],
+                                 [row["name"] for row in summary[:python_count]])
+                for index, (_, arguments, _) in enumerate(self.EXPECTED[:python_count - 1], 1):
+                    self.assertEqual(([sys.executable, "-B", *arguments], 123), calls[index])
+                self.assertEqual(python_count, sum(command[0] == sys.executable for command, _ in calls))
+                if scenario == "success":
+                    self.assertEqual("build-Spyro.Editor.App", summary[3]["name"])
+                    self.assertEqual(["dotnet", "build"], calls[3][0][:2])
+                    self.assertEqual(123, calls[3][1])
+                    self.assertTrue(all(row["passed"] for row in summary))
+                    if opted_in:
+                        self.assertEqual("source-offline-qa", summary[4]["name"])
+                        self.assertEqual(456, calls[4][1])
+                else:
+                    self.assertEqual(python_count, len(calls))
+                    self.assertFalse(summary[-1]["passed"])
+                    self.assertFalse(any(command[0] in ("dotnet", "env") for command, _ in calls))
+                    if scenario in ("legacy-no-marker", "tiled-zero-discovered"):
+                        self.assertEqual("missing success marker", summary[-1]["detail"])
+
+    def test_list_never_executes_observers_or_resolves_source_or_creates_logs(self):
+        for arguments in (["--list"], ["--list", "--with-source-qa"]):
+            with self.subTest(arguments=arguments), \
+                    mock.patch.object(sys, "argv", [str(SPEC.origin), *arguments]), \
+                    mock.patch.object(RUNNER, "run_owned_command", side_effect=AssertionError("list ran command")), \
+                    mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("list source read")), \
+                    mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("list CUE read")), \
+                    mock.patch.object(RUNNER.tempfile, "mkdtemp", side_effect=AssertionError("list created logs")), \
+                    mock.patch("builtins.input", side_effect=AssertionError("list requested input")), \
+                    contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(0, RUNNER.main())
+            self.assertNotIn("FRESH_CHEST_OBSERVER_OFFLINE_OK", output.getvalue())
+            self.assertNotIn("Ran 9 tests", output.getvalue())
+
+
 class SourcePythonOracleTests(unittest.TestCase):
+    def setUp(self):
+        # Source-only fake commands deliberately omit offline observer output;
+        # ObserverPrebuildTests separately covers the mandatory real registry.
+        patcher = mock.patch.object(RUNNER, "OBSERVER_PYTHON_CASES", ())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     EXPECTED = (
         ("fresh-wizard-audio-audit", "src/Spyro.Editor.NativeWizardFamilyAssetSmoke/source_fresh_wizard_audio_audit.py",
          "FRESH_WIZARD_GLOBAL1F_SOURCE_AUDIT_OK"),
@@ -263,6 +357,9 @@ class RunnerOptionsTests(unittest.TestCase):
         patcher = mock.patch.object(RUNNER, "SOURCE_PYTHON_CASES", ())
         patcher.start()
         self.addCleanup(patcher.stop)
+        observer_patcher = mock.patch.object(RUNNER, "OBSERVER_PYTHON_CASES", ())
+        observer_patcher.start()
+        self.addCleanup(observer_patcher.stop)
 
     def test_aggregate_session_is_a_separate_sourcefree_ui_mode(self):
         name = "UiSmoke"

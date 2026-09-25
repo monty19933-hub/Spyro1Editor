@@ -13,6 +13,16 @@ import time
 
 
 ROOT = Path(__file__).resolve().parent.parent
+# Mandatory offline fake-RAM/transport suites, before any .NET build. These
+# commands have no source image, emulator connection or input mode. Explicit
+# discovery plus its frozen test-count marker must not accept an empty suite.
+OBSERVER_PYTHON_CASES = (
+    ("python-fresh-chest-observer", ("tools/Observe-SpyroFreshChest.py", "--self-test"),
+     "FRESH_CHEST_OBSERVER_OFFLINE_OK tests=13 connections=0 romReads=0 runtime=false"),
+    ("python-tiled-family-chest-observer",
+     ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_tiled_family_chest_observer.py", "-v"),
+     "Ran 9 tests"),
+)
 # Each entry was inspected for independence from disc images and local caches.
 # Source-disc tests remain opt-in below; the existing broader source suite is
 # Run-SpyroEditorOfflineQa.sh. Neither route mode launches the emulator.
@@ -386,6 +396,11 @@ def main():
                     str(ROOT / "tools/tests"), "-p", "test_spyro_regression_runner.py", "-v"]):
         print("Process-runner regression failed; no project builds were started.", flush=True)
         return 1
+
+    for name, arguments, marker in OBSERVER_PYTHON_CASES:
+        if not execute(name, [sys.executable, "-B", *arguments], marker):
+            print("Offline observer regression failed; no project builds were started.", flush=True)
+            return 1
 
     app = ROOT / "src/Spyro.Editor.App/Spyro.Editor.App.csproj"
     required_projects = [app] + [project for project, _, _ in cases]
