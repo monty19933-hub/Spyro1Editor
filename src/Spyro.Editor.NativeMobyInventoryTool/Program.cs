@@ -22,13 +22,15 @@ try
             inventory.SourceImageSha256,
             inventory.Scope,
             Target = LevelCatalog.NormalizeKey(args[3]),
-            Classes = inventory.Classes.Select(c => inventory.DescribeDestination(c.ActorId, args[3])).ToArray()
+            Classes = inventory.Classes.Select(c => c.ActorId).Concat(inventory.SharedModels.Registrations.Select(r => r.ActorId))
+                .Distinct().Order().Select(id => inventory.DescribeDestination(id, args[3])).ToArray()
         }, json));
     else
     {
         Console.WriteLine($"Native source discovery: {inventory.Levels.Count} levels, {inventory.Levels.Sum(l => l.Rows.Count)} placed rows, " +
             $"{inventory.Classes.Count} placed/locally registered classes.");
         Console.WriteLine($"{inventory.Classes.Count(c => c.PlacedRowCount == 0)} classes have a local registration but no placed donor row.");
+        Console.WriteLine($"{inventory.SharedModels.Registrations.Count} shared PETE model roots are also available for inspection; none are placed templates.");
         Console.WriteLine(inventory.Scope);
         foreach (var level in inventory.Levels)
             Console.WriteLine($"{level.LevelKey}: {level.Rows.Count} rows, {level.Registrations.Count} local roots, " +

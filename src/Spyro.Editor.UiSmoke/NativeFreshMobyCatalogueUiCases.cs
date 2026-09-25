@@ -73,7 +73,7 @@ internal static class NativeFreshMobyCatalogueUiCases
         NativeFreshMobyCatalogueItem[] supplied = Items();
         var listing = new NativeFreshMobyCatalogueListing(NativeMobySourceInventory.OriginalImageSha256, supplied);
         var first = supplied[0]; supplied[0] = supplied[^1];
-        Check(ReferenceEquals(listing.Entries[0], first) && listing.Entries.Count == 6,
+        Check(ReferenceEquals(listing.Entries[0], first) && listing.Entries.Count == 7,
             "Neutral listing detaches its ordered collection from a caller's mutable array.");
         Check(listing.Search().Select(x => x.SourceVariantId).SequenceEqual(new[]
             { Wizard, Chest, "fixture-row-alpine-ridge-6", "fixture-row-artisans-121" }),
@@ -81,8 +81,8 @@ internal static class NativeFreshMobyCatalogueUiCases
         Check(listing.Search("  cHeSt\t0x0095 ").Count == 2 && listing.Search("Chest T6").Single().SourceWadEntry == 14 &&
             listing.Search(null, "Alpine Ridge").Count == 2 && listing.Search("grass", "Alpine_Ridge").Count == 0,
             "Search retains catalogue AND-term, case-insensitive class/true-index and normalized source-level semantics.");
-        Check(listing.Search(view: NativeMobyCatalogueView.Resources).Count == 2 &&
-            listing.Search(view: NativeMobyCatalogueView.All).Count == 6,
+        Check(listing.Search(view: NativeMobyCatalogueView.Resources).Count == 3 &&
+            listing.Search(view: NativeMobyCatalogueView.All).Count == 7,
             "Resources are visible metadata, not silently turned into placed donors.");
         Refuse(() => listing.Search(new string('x', 257)), "Catalogue query retains the existing 256-character bound.");
         Refuse(() => listing.Search(view: (NativeMobyCatalogueView)99), "Unknown catalogue view refuses.");
@@ -98,12 +98,15 @@ internal static class NativeFreshMobyCatalogueUiCases
             "0" + NativeMobySourceInventory.OriginalImageSha256[1..], new string('0', 64) })
         {
             var changed = Listing(hash);
-            Check(changed.Search(view: NativeMobyCatalogueView.All).Count == 6 && changed.Entries.All(x => changed.GetAuthoringSource(x) == null),
+            Check(changed.Search(view: NativeMobyCatalogueView.All).Count == 7 && changed.Entries.All(x => changed.GetAuthoringSource(x) == null),
                 "Incomplete or different full-image identity retains every item inspect-only, never relabels it original retail.");
         }
         var invalid = donor with { SourceVariantId = "fixture-invalid-wad", SourceWadEntry = 11 };
         var invalidListing = new NativeFreshMobyCatalogueListing(NativeMobySourceInventory.OriginalImageSha256, [invalid]);
         Check(invalidListing.GetAuthoringSource(invalid) == null, "Invalid neutral source tuple remains inspect-only.");
+        var shared = listing.Search("0x0022", NativeMobyCatalogue.SharedSourceKey, NativeMobyCatalogueView.Resources).Single();
+        Check(shared.SourceLevelId == null && shared.SourceWadEntry == null && shared.TrueIndex == null &&
+            listing.GetAuthoringSource(shared) == null, "Shared resource has no fabricated level, WAD entry or placed-row authority.");
     }
 
     private static void Defaults((F Fixture, MetadataProvider? Provider) item)
@@ -142,6 +145,14 @@ internal static class NativeFreshMobyCatalogueUiCases
         f.Fire("FreshMobyCatalogueStage");
         Check(!task.IsCompleted && !f.Window.HasUnappliedFields && ReferenceEquals(appliedBase, f.Window.CurrentAggregateIntent),
             "Direct resource Add cannot bypass the placed-row guard or alter history.");
+        SelectDonor(f, "fixture-shared-egg");
+        Check(!f.Find<Button>("FreshMobyCatalogueStage").IsEnabled &&
+            f.Find<TextBlock>("FreshMobyCatalogueDetails").Text!.Contains("Shared PETE (not a level)", StringComparison.Ordinal),
+            "Shared egg details do not imply a donor level or editable native instance.");
+        f.Fire("FreshMobyCatalogueStage");
+        Check(!task.IsCompleted && !f.Window.HasUnappliedFields && ReferenceEquals(appliedBase, f.Window.CurrentAggregateIntent),
+            "Direct shared resource Add cannot create a placement or history entry.");
+        CaptureWindow(f, artifacts, "FreshMobyCatalogueEntries", "fresh-moby-catalogue-shared-egg.png");
         SelectDonor(f, Wizard);
         Check(f.Find<TextBlock>("FreshMobyCatalogueDetails").Text!.Contains("Authoring reference only", StringComparison.OrdinalIgnoreCase),
             "A Wizard-shaped native donor is authoring-only, not the independently supported Wizard-route recipe.");
@@ -485,6 +496,8 @@ internal static class NativeFreshMobyCatalogueUiCases
         new(hash ?? NativeMobySourceInventory.OriginalImageSha256, Items());
     private static NativeFreshMobyCatalogueItem[] Items() =>
     [
+        new("fixture-shared-egg", NativeMobyCatalogue.SharedSourceKey, "Shared PETE models", null, null, null, 3, 0x22,
+            NativeMobyCatalogueEntryKind.SharedRegistration, "Retail dragon egg model", "Shared model registration", "Synthetic metadata; not Japanese dragonfly eggs."),
         new("fixture-player-artisans-0", "artisans", "Artisans", 10, 10, null, 0, 0,
             NativeMobyCatalogueEntryKind.PlayerAnimationStream, "Spyro animation stream", "Special player resource", "Synthetic metadata; no placed row."),
         new(Wizard, "alpineridge", "Alpine Ridge", 12, 14, 7, null, 51,

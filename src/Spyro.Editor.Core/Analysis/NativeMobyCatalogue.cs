@@ -6,7 +6,7 @@ using Spyro.Editor.Core.Scene;
 namespace Spyro.Editor.Core.Analysis;
 
 public enum NativeMobyCatalogueView { PlacedRows, Resources, All }
-public enum NativeMobyCatalogueEntryKind { PlacedRow, LocalRegistration, PlayerAnimationStream }
+public enum NativeMobyCatalogueEntryKind { PlacedRow, LocalRegistration, PlayerAnimationStream, SharedRegistration }
 
 /// <summary>Detached source metadata. Classification and template matching never grant export authority.</summary>
 public sealed class NativeMobyCatalogueEntry
@@ -16,6 +16,7 @@ public sealed class NativeMobyCatalogueEntry
         NativeMobySourceRegistration? registration)
     {
         SourceLevelKey = level.LevelKey; SourceLevelName = level.DisplayName; SourceLevelId = level.LevelId;
+        SourceWadEntry = level.DataWadEntry;
         SourceDataSha256 = level.SourceDataSha256;
         ActorId = row?.ActorId ?? registration!.ActorId;
         TrueIndex = row?.TrueIndex;
@@ -51,10 +52,28 @@ public sealed class NativeMobyCatalogueEntry
             ClassificationEvidence = "A registration is not a placed object or an owned importable package schema.";
         }
     }
+    internal NativeMobyCatalogueEntry(NativeSharedMobySourceInventory shared, NativeSharedMobySourceRegistration registration)
+    {
+        SourceLevelKey = NativeMobyCatalogue.SharedSourceKey; SourceLevelName = "Shared PETE models";
+        // This source is not a level. Never fabricate a level ID or data entry
+        // that a downstream authoring provider could mistake for a donor row.
+        SourceLevelId = null; SourceWadEntry = null;
+        SourceDataSha256 = shared.RuntimeModelDataSha256;
+        ActorId = registration.ActorId; RegistrationSlot = registration.Slot;
+        SharedRootPeteOffset = registration.RootPeteOffset;
+        Kind = NativeMobyCatalogueEntryKind.SharedRegistration;
+        SourceVariantId = $"{NativeMobySourceInventory.OriginalImageSha256}:shared-pete:header-{shared.HeaderSha256}:data-{shared.RuntimeModelDataSha256}:root-{registration.Slot}:{registration.RootPeteOffset:X8}:{registration.ActorId:X4}";
+        Label = ActorId switch { 0 => "Shared Spyro model", 0x22 => "Retail dragon egg model", _ => $"Shared resource 0x{ActorId:X4}" };
+        Category = "Shared model registration";
+        ClassificationEvidence = "Original USA shared PETE registration; not a placed row or portable dependency package. " +
+            (ActorId == 0x22 ? "This is the ordinary retail egg, not an identified Japanese dragonfly egg." : "No beta/Japanese identity is inferred.");
+    }
     public string SourceVariantId { get; }
     public string SourceLevelKey { get; }
     public string SourceLevelName { get; }
-    public int SourceLevelId { get; }
+    public int? SourceLevelId { get; }
+    public int? SourceWadEntry { get; }
+    public uint? SharedRootPeteOffset { get; }
     public string SourceDataSha256 { get; }
     public string? SourceRecordSha256 { get; }
     public ushort ActorId { get; }
@@ -66,6 +85,7 @@ public sealed class NativeMobyCatalogueEntry
     public string ClassificationEvidence { get; }
     public NativeMobyPropertiesLocation? PropertiesLocation { get; }
     public bool IsSpecialPlayerStream => Kind == NativeMobyCatalogueEntryKind.PlayerAnimationStream;
+    public bool IsSharedResource => Kind == NativeMobyCatalogueEntryKind.SharedRegistration;
     public bool NativeImportApproved => false;
     public string SourceLabel => TrueIndex is int index ? $"{SourceLevelName} · T{index}" : $"{SourceLevelName} · root {RegistrationSlot}";
     public override string ToString() => $"{Label} · 0x{ActorId:X4} · {SourceLabel}";
@@ -84,12 +104,14 @@ public sealed class NativeMobyCatalogueEntry
 public sealed record NativeMobyCatalogueTargetStatus(string TargetLevelKey, bool RetailTargetInspected,
     NativeMobyLocalModelStatus? LocalModelStatus, int? NativePlacedRowCount, int? GenericRegistrationTailSlots)
 {
+    public bool SharedModelRegistered { get; init; }
     public bool NativeImportApproved => false;
     public bool DependencyClosureEvaluated => false;
     public bool MemoryFitEvaluated => false;
     public string Description => !RetailTargetInspected
         ? "This destination is not certified by the retail inventory. No donor level's residency or capacity is borrowed."
         : $"Local registration: {LocalModelStatus}; {NativePlacedRowCount} native placed row(s) of this class. " +
+          $"Shared model registration: {(SharedModelRegistered ? "present" : "not found")}. " +
           $"{GenericRegistrationTailSlots} generic header tail slot(s). " +
           "Behavior, animation, sound/effects, private/shared state and RAM/VRAM/SPU fit are not evaluated by discovery. " +
           "A present root does not prove equivalent dependencies; an absent root may use global or special rendering.";
@@ -98,6 +120,8 @@ public sealed record NativeMobyCatalogueTargetStatus(string TargetLevelKey, bool
 /// <summary>Usable, immutable source-variant catalogue over an exact-source inventory; no scene or file writes.</summary>
 public sealed class NativeMobyCatalogue
 {
+    // A source-filter key only, never an entry in the retail level catalogue.
+    public const string SharedSourceKey = "sharedpete";
     private readonly NativeMobySourceInventory _inventory;
     private readonly IReadOnlyList<NativeMobyCatalogueEntry> _entries;
     private readonly Dictionary<string, NativeMobyCatalogueEntry> _byId;
@@ -106,6 +130,7 @@ public sealed class NativeMobyCatalogue
         ArgumentNullException.ThrowIfNull(inventory);
         _inventory = inventory;
         _entries = Array.AsReadOnly(inventory.Levels.SelectMany(DescribeLevel)
+            .Concat(inventory.SharedModels.Registrations.Select(root => new NativeMobyCatalogueEntry(inventory.SharedModels, root)))
             .OrderBy(e => e.ActorId).ThenBy(e => e.SourceLevelId).ThenBy(e => e.TrueIndex ?? int.MaxValue)
             .ThenBy(e => e.RegistrationSlot).ToArray());
         _byId = _entries.ToDictionary(e => e.SourceVariantId, StringComparer.Ordinal);
@@ -124,7 +149,7 @@ public sealed class NativeMobyCatalogue
         if (target == null) return new(key, false, null, null, null);
         var found = _inventory.DescribeDestination(entry.ActorId, key);
         return new(key, true, found.LocalModelStatus, found.NativePlacedRowCount,
-            63 - target.Registrations.Count(r => r.Slot > 0));
+            63 - target.Registrations.Count(r => r.Slot > 0)) { SharedModelRegistered = found.SharedRootPeteOffset.HasValue };
     }
 
     internal static IReadOnlyList<NativeMobyCatalogueEntry> DescribeLevel(NativeMobySourceLevel level)

@@ -7,6 +7,7 @@ int checks = 0;
 if (args.Length == 3 && args[0] == "--source")
 {
     var inventory = NativeMobySourceInventory.Capture(args[1], LevelCatalog.Load(args[2]));
+    SharedModelCases.VerifySource(inventory.SharedModels, Check);
     Check(inventory.Levels.Count == 35, "all retail levels");
     Check(inventory.Levels.Sum(l => l.Rows.Count) == 4877, "every placed native row retained");
     Check(inventory.Levels.Sum(l => l.Registrations.Count) == 1403, "all local registrations retained");
@@ -34,7 +35,7 @@ if (args.Length == 3 && args[0] == "--source")
     ExpectInvalid(() => inventory.DescribeDestination(0xAE, "unused65"));
     var catalogue = new NativeMobyCatalogue(inventory);
     Check(catalogue.Search().Count == 4877, "usable catalogue retains every placed source variant");
-    Check(catalogue.Search(view: NativeMobyCatalogueView.Resources).Count == 1403, "resource browsing is separate from placed templates");
+    Check(catalogue.Search(view: NativeMobyCatalogueView.Resources).Count == 1457, "local and shared resource browsing is separate from placed templates");
     Check(catalogue.Search(view: NativeMobyCatalogueView.Resources).Count(e => e.IsSpecialPlayerStream) == 35,
         "all special player streams explicitly labelled");
     Check(catalogue.Search().Select(e => e.SourceVariantId).Distinct().Count() == 4877, "catalogue never deduplicates display names");
@@ -47,12 +48,29 @@ if (args.Length == 3 && args[0] == "--source")
     Check(catalogue.DescribeTarget(wizard, "townsquare").GenericRegistrationTailSlots == 27, "physical tail capacity excludes special slot zero");
     Check(catalogue.Search("a definitely nonexistent actor phrase").Count == 0, "search has meaningful no-result state");
     Check(catalogue.Search("wizard", "wizardpeak").All(e => e.SourceLevelKey == "wizardpeak"), "source filter remains independent from destination");
+    var shared = catalogue.Search(sourceLevelKey: NativeMobyCatalogue.SharedSourceKey, view: NativeMobyCatalogueView.Resources);
+    Check(shared.Count == 54 && shared.All(e => e.IsSharedResource && e.SourceLevelId == null && e.SourceWadEntry == null &&
+        e.TrueIndex == null && !e.NativeImportApproved), "shared resources never pretend to belong to a level or placed row");
+    Check(catalogue.Search(sourceLevelKey: NativeMobyCatalogue.SharedSourceKey).Count == 0,
+        "shared models are never placed donor templates");
+    var egg = shared.Single(e => e.ActorId == 0x22);
+    Check(egg.SharedRootPeteOffset == 0x3382C && egg.RegistrationSlot == 3 &&
+        egg.Label == "Retail dragon egg model" && !egg.Label.Contains("dragonfly", StringComparison.OrdinalIgnoreCase),
+        "ordinary retail egg identity stays distinct from unverified Japanese dragonfly eggs");
+    var eggTarget = catalogue.DescribeTarget(egg, "townsquare");
+    Check(eggTarget.SharedModelRegistered && eggTarget.LocalModelStatus == NativeMobyLocalModelStatus.Absent &&
+        !eggTarget.DependencyClosureEvaluated && !eggTarget.NativeImportApproved,
+        "shared discovery is reported independently of local residency, behavior and import approval");
+    Check(!egg.MatchesExistingTemplate("townsquare", 0, 0, 0, 0x22, 0, 0, 0, 0) &&
+        catalogue.Search(view: NativeMobyCatalogueView.All).Select(e => e.SourceVariantId).Distinct().Count() == 6334,
+        "all distinct observations retained; a shared root cannot select an existing template");
     var otherCatalogue = new NativeMobyCatalogue(inventory);
     ExpectInvalid(() => otherCatalogue.DescribeTarget(wizard, "magiccrafters"));
     Console.WriteLine($"NATIVE_MOBY_INVENTORY_SOURCE_SMOKE_OK checks={checks} levels=35 rows=4877 classes=321");
     return;
 }
 if (args.Length != 0) throw new ArgumentException("Use no arguments or --source <original.bin> <catalog-workspace>.");
+SharedModelCases.Run(Check);
 
 byte[] data = Fixture();
 var level = Parse(data);

@@ -7,7 +7,7 @@ namespace Spyro.Editor.App.Views;
 // Presentation metadata only. Neither these records nor a listing can issue a
 // source Inventory, native asset/dependency package or compilation capability.
 internal sealed record NativeFreshMobyCatalogueItem(string SourceVariantId, string SourceLevelKey,
-    string SourceLevelName, int SourceLevelId, int SourceWadEntry, int? TrueIndex, int? RegistrationSlot,
+    string SourceLevelName, int? SourceLevelId, int? SourceWadEntry, int? TrueIndex, int? RegistrationSlot,
     ushort ActorId, NativeMobyCatalogueEntryKind Kind, string Label, string Category, string ClassificationEvidence);
 
 internal sealed class NativeFreshMobyCatalogueListing
@@ -37,10 +37,9 @@ internal sealed class NativeFreshMobyCatalogueListing
     {
         ArgumentNullException.ThrowIfNull(inventory);
         var catalogue = new NativeMobyCatalogue(inventory);
-        var levels = catalogue.Levels.ToDictionary(level => level.LevelKey, StringComparer.Ordinal);
         var items = catalogue.Search(view: NativeMobyCatalogueView.All).Select(entry => new NativeFreshMobyCatalogueItem(
             entry.SourceVariantId, entry.SourceLevelKey, entry.SourceLevelName, entry.SourceLevelId,
-            levels[entry.SourceLevelKey].DataWadEntry, entry.TrueIndex, entry.RegistrationSlot, entry.ActorId,
+            entry.SourceWadEntry, entry.TrueIndex, entry.RegistrationSlot, entry.ActorId,
             entry.Kind, entry.Label, entry.Category, entry.ClassificationEvidence)).ToArray();
         var byId = items.ToDictionary(e => e.SourceVariantId, StringComparer.Ordinal);
         // Carry the ACTUAL issued Inventory's full image identity. Do not replace
@@ -71,9 +70,10 @@ internal sealed class NativeFreshMobyCatalogueListing
     {
         if (!string.Equals(_sourceImageSha256, NativeMobySourceInventory.OriginalImageSha256, StringComparison.OrdinalIgnoreCase) ||
             entry == null || !_byId.TryGetValue(entry.SourceVariantId, out var owned) || !ReferenceEquals(entry, owned) ||
-            entry.Kind != NativeMobyCatalogueEntryKind.PlacedRow || entry.TrueIndex is not int index)
+            entry.Kind != NativeMobyCatalogueEntryKind.PlacedRow || entry.TrueIndex is not int index ||
+            entry.SourceLevelId == null || entry.SourceWadEntry is not int sourceWadEntry)
             return null;
-        try { return NativeFreshRetailMobyReference.Create(OriginalRetailVariant, entry.SourceWadEntry, index, entry.ActorId); }
+        try { return NativeFreshRetailMobyReference.Create(OriginalRetailVariant, sourceWadEntry, index, entry.ActorId); }
         catch (InvalidDataException) { return null; }
     }
 }

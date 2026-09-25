@@ -127,7 +127,7 @@ public sealed partial class MainWindow
             list.ItemsSource = found;
             list.SelectedItem = found.FirstOrDefault(e => e.SourceVariantId == selectedId);
             summary.Text = $"{found.Count:N0} matching {(view.SelectedIndex == 1 ? "resource registrations" : "source variants")} · " +
-                "35 retail levels · source names and variants are not collapsed · discovery is not native import approval";
+                "35 retail levels + shared PETE models · source variants are not collapsed · discovery is not native import approval";
             RefreshDetails();
         }
         search.TextChanged += (_, _) => RefreshList();
@@ -165,7 +165,8 @@ public sealed partial class MainWindow
                 else
                 {
                     catalogue = capturedCatalogue;
-                    sources.ItemsSource = new[] { new NativeLibrarySourceChoice("", "All retail levels") }
+                    sources.ItemsSource = new[] { new NativeLibrarySourceChoice("", "All sources"),
+                            new NativeLibrarySourceChoice(NativeMobyCatalogue.SharedSourceKey, "Shared PETE models") }
                         .Concat(catalogue.Levels.Select(l => new NativeLibrarySourceChoice(l.LevelKey, l.DisplayName))).ToArray();
                     sources.SelectedIndex = 0; sources.IsEnabled = true;
                     RefreshList();

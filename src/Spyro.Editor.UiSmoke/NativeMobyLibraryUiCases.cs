@@ -43,9 +43,21 @@ internal static class NativeMobyLibraryUiCases
             Pump();
             ComboBox view = Find<ComboBox>(library, "NativeMobyLibraryView");
             view.SelectedIndex = 1;
-            Check(Items(list).Length == 1403, "resources are separate");
+            Check(Items(list).Length == 1457, "local and shared resources are separate from placed rows");
             list.SelectedItem = Items(list).First(e => e.IsSpecialPlayerStream);
             Check(!use.IsEnabled && Find<TextBlock>(library, "NativeMobyLibraryDetails").Text!.Contains("not a placed object", StringComparison.Ordinal), "player stream cannot become Moby");
+            source.SelectedItem = source.ItemsSource!.Cast<object>().Single(x => x.ToString() == "Shared PETE models");
+            Pump();
+            Check(Items(list).Length == 54 && Items(list).All(e => e.IsSharedResource && e.SourceLevelId == null),
+                "shared source filter does not invent a level");
+            search.Text = "0x0022";
+            Pump();
+            list.SelectedItem = Items(list).Single();
+            Check(!use.IsEnabled && Find<TextBlock>(library, "NativeMobyLibraryDetails").Text!.Contains("Shared model registration: present", StringComparison.Ordinal),
+                "ordinary shared egg is inspect-only even in a retail destination");
+            Snapshot(library, Path.Combine(outputDirectory, "native-moby-library-shared.png"));
+            search.Text = ""; source.SelectedIndex = 0;
+            Pump();
             view.SelectedIndex = 0;
             source.SelectedItem = source.ItemsSource!.Cast<object>().Single(x => x.ToString() == before.CurrentLevel!.DisplayName);
             bool foundApproved = false;

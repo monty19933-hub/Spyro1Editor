@@ -150,7 +150,8 @@ internal sealed partial class NativeFreshDocumentWindow
         var source = _mobyCatalogueListing?.GetAuthoringSource(entry);
         _stageCatalogueMoby.IsEnabled = _mobyCatalogueBusy && !_mobyCatalogueCancelRequested && source != null;
         _mobyCatalogueDetails.Text = entry == null ? "Select an entry to inspect its source identity and authoring status." :
-            $"{entry.Label}\n{entry.SourceLevelName} · WAD {entry.SourceWadEntry} · " +
+            $"{entry.Label}\n{entry.SourceLevelName} · " +
+            (entry.SourceWadEntry is int wad ? $"WAD {wad}" : "Shared PETE (not a level)") + " · " +
             (entry.TrueIndex is int index ? $"true index {index}" : $"registration slot {entry.RegistrationSlot}") +
             $" · class {entry.ActorId} (0x{entry.ActorId:X4})\n{entry.ClassificationEvidence}\n" +
             (source == null ? "Inspect-only — no original-retail placed-row reference is available for this entry." : MobyAuthoringStatus);
@@ -197,7 +198,7 @@ internal sealed partial class NativeFreshDocumentWindow
             {
                 _mobyCatalogueSearch.Text = "";
                 _mobyCatalogueView.SelectedItem = NativeMobyCatalogueView.PlacedRows;
-                MobyCatalogueLevel[] levels = [new("", "All source levels"), .. listing.Entries
+                MobyCatalogueLevel[] levels = [new("", "All sources"), .. listing.Entries
                     .GroupBy(entry => entry.SourceLevelKey, StringComparer.Ordinal)
                     .OrderBy(group => group.First().SourceLevelId)
                     .Select(group => new MobyCatalogueLevel(group.Key, group.First().SourceLevelName))];

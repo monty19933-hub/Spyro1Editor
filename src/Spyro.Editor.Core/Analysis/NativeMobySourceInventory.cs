@@ -77,6 +77,7 @@ public sealed record NativeMobySourceClass(ushort ActorId, int PlacedRowCount, i
 public sealed record NativeMobyDestinationDiscovery(ushort ActorId, string TargetLevelKey,
     NativeMobyLocalModelStatus LocalModelStatus, uint? LocalRootDataOffset, int NativePlacedRowCount)
 {
+    public uint? SharedRootPeteOffset { get; init; }
     public bool NativeImportApproved => false;
     public string Meaning => "Discovery only. A local root is not proof of equivalent models, behavior, animation, textures, sound, " +
         "player dependencies, properties ownership, routes, persistence or memory capacity. An absent root is not proof " +
@@ -84,7 +85,7 @@ public sealed record NativeMobyDestinationDiscovery(ushort ActorId, string Targe
 }
 
 /// <summary>
-/// Read-only, complete placed-row/local-registration discovery for the exact original USA image.
+/// Read-only placed-row/local-registration and shared PETE discovery for the exact original USA image.
 /// This intentionally includes controllers, unknown classes and resources without placed rows.
 /// It does not discover every dynamically emitted/global actor or grant export authority.
 /// Only the public Capture route issues source-bound inventories; synthetic decoding stays internal.
@@ -94,8 +95,9 @@ public sealed class NativeMobySourceInventory
     public const string OriginalImageSha256 = "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37";
     public const long OriginalImageByteLength = 661547040;
     private const int RecordBytes = 0x58, MaximumEntryBytes = 0x800000;
-    private NativeMobySourceInventory(IEnumerable<NativeMobySourceLevel> levels)
+    private NativeMobySourceInventory(IEnumerable<NativeMobySourceLevel> levels, NativeSharedMobySourceInventory sharedModels)
     {
+        SharedModels = sharedModels;
         Levels = Array.AsReadOnly(levels.OrderBy(l => l.LevelId).ToArray());
         ushort[] classes = Levels.SelectMany(l => l.Rows.Select(r => r.ActorId)
             .Concat(l.Registrations.Select(r => r.ActorId))).Distinct().Order().ToArray();
@@ -105,19 +107,22 @@ public sealed class NativeMobySourceInventory
             Array.AsReadOnly(Levels.Where(l => l.Registrations.Any(r => r.ActorId == id)).Select(l => l.LevelKey).ToArray()))).ToArray());
     }
     public string SourceImageSha256 => OriginalImageSha256;
-    public string Scope => "All 35 retail level placed-row tables and local model registrations in the original USA disc; not a universal import approval or exhaustive global/dynamic actor inventory.";
+    public string Scope => "All 35 retail level placed-row tables, local model registrations and the shared PETE registration table in the original USA disc; not a universal import approval or exhaustive global/dynamic actor inventory.";
     public IReadOnlyList<NativeMobySourceLevel> Levels { get; }
+    // Preserve the placed/local class census independently from shared discovery.
     public IReadOnlyList<NativeMobySourceClass> Classes { get; }
+    public NativeSharedMobySourceInventory SharedModels { get; }
 
     public NativeMobyDestinationDiscovery DescribeDestination(ushort actorId, string targetKey)
     {
-        if (!Classes.Any(c => c.ActorId == actorId))
+        var shared = SharedModels.Registrations.SingleOrDefault(r => r.ActorId == actorId);
+        if (!Classes.Any(c => c.ActorId == actorId) && shared == null)
             throw new InvalidDataException($"Class 0x{actorId:X4} has not been discovered in these native source tables.");
         var target = Levels.SingleOrDefault(l => l.LevelKey == LevelCatalog.NormalizeKey(targetKey))
             ?? throw new InvalidDataException("Destination is not an inspected retail level; new slots require independent native ownership.");
         var root = target.Registrations.SingleOrDefault(r => r.ActorId == actorId);
         return new(actorId, target.LevelKey, root == null ? NativeMobyLocalModelStatus.Absent : NativeMobyLocalModelStatus.Present,
-            root?.RootDataOffset, target.Rows.Count(r => r.ActorId == actorId));
+            root?.RootDataOffset, target.Rows.Count(r => r.ActorId == actorId)) { SharedRootPeteOffset = shared?.RootPeteOffset };
     }
 
     public static NativeMobySourceInventory Capture(string sourceImagePath, LevelCatalog catalog)
@@ -141,6 +146,17 @@ public sealed class NativeMobySourceInventory
         if (wad.Lba != 37 || wad.Size != 0x6927000)
             throw new InvalidDataException("Native inventory WAD ISO ownership differs from its source certificate.");
         byte[] header = DiscImage.ReadFileBytes(image, layout, wad.Lba, 0, 2048);
+        if (Word(header, 8 * 8) != 0x7B8800 || Word(header, 8 * 8 + 4) != 0x3A000)
+            throw new InvalidDataException("Shared PETE directory owner differs from the original USA source.");
+        // The native copy size is 0x39C48 after the 0x800 header, extending
+        // 0x448 beyond the directory entry. Retain the actual native read owner;
+        // do not shorten it to the ISO/WAD allocation or infer model extents.
+        byte[] sharedHeader = DiscImage.ReadFileBytes(image, layout, wad.Lba, 0x7B8800, 0x800);
+        byte[] sharedData = DiscImage.ReadFileBytes(image, layout, wad.Lba, 0x7B9000, 0x39C48);
+        if (Hash(sharedHeader) != "b9a4de193b5cf0bd9592de15c57aa5daa3713c3575026154b45402f3aceef6f1" ||
+            Hash(sharedData) != "1703ac37e59e480909b6f66dc856d4e5f3ce80551f18cbc8c06129c3b54dd35d")
+            throw new InvalidDataException("Shared PETE complete native source owners changed.");
+        var sharedModels = NativeSharedMobySourceInventory.Decode(sharedHeader, sharedData);
         List<NativeMobySourceLevel> levels = [];
         foreach (var definition in definitions)
         {
@@ -153,7 +169,7 @@ public sealed class NativeMobySourceInventory
             levels.Add(DecodeLevel(data, definition, offset));
         }
         RequireOriginal(image); // No source identity borrowed across a changed read session.
-        return new(levels);
+        return new(levels, sharedModels);
     }
 
     internal static NativeMobySourceLevel DecodeLevel(ReadOnlySpan<byte> data, LevelDefinition definition, long dataWadOffset)
