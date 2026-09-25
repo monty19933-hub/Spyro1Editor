@@ -55,6 +55,15 @@ placement/export approval. R08 remains unchanged. See the
 No game assets were downloaded. See
 [Japanese objects: findings and next gates](research/japanese-pocketstation-objects.md).
 
+Later on September25, a separate source-checkpoint37ffa24 research disc was
+independently verified and tested through full firmware: two Japanese eggs now
+visibly animate together in USA Artisans. They are still bright green at close
+range; color editing, pickup, new inventory counters and save/completion hooks
+are not installed. The ordinary inventory can open and return to gameplay.
+This disc is **not a new editor build** or a universal-placement approval. See
+[the exact visual experiment](research/japanese-egg-visual-research-publication.md).
+DuckStation's normal settings/card are preserved, and the test session is closed.
+
 ## New R08: tiled terrain and complete chest family together
 
 Open this repository's

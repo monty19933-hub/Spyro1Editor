@@ -29,6 +29,7 @@ JP = ImageProfile(727179600, "1bcf4353d6a4d4d0db152d2ebd60879ef85516feaf170f364f
 USA = ImageProfile(661547040, "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37",
                    53875, 0x66000, "a533d75cab8afaae6107ec35a02a9a5fe979a92c7c955f9cf1ee50f693a1b998")
 EXE_FILE_BASE = 0x8000F800
+USA_CARD_BASE = 0x8007AA38
 EGG_TABLE_BYTES, EGG_BANK_BYTES, AUXILIARY_BYTES = 64, 32, 512
 
 
@@ -36,6 +37,13 @@ class ObservedEggState(IntEnum):
     ABSENT = 0
     NORMALIZED = 1
     PENDING = 0x69
+
+
+def usa_card_runtime_address(offset: int) -> int:
+    """Whole overlay is loaded at AA38; B0E8 is only state-table target zero."""
+    if type(offset) is not int or offset < 0 or offset >= 0x3800 or offset % 4:
+        raise ValueError("Aligned instruction/word offset must remain inside the card overlay")
+    return USA_CARD_BASE + offset
 
 
 def require_bytes(value: bytes, size: int) -> bytes:
@@ -234,11 +242,12 @@ def capture(path: Path, profile: ImageProfile, disasm: tuple[int, int] | None = 
             if hashlib.sha256(card).hexdigest() != "8ee66fe644407bf15f93af1615045fbaca17fe3daa9f3b67f38bee2277a94c7c":
                 raise ValueError("USA memory-card overlay identity changed")
             result["cardOverlay"] = {"sha256": hashlib.sha256(card).hexdigest(), "wadOffset": 0x5B800,
-                "byteLength": len(card), "headerRuntimeBase": "0x8007AA38", "codeRuntimeBaseAtOffset9C": "0x8007B0E8",
-                "sizeLiteralCandidates": [{"offset": at, "pc": f"0x{0x8007B04C + at:08X}", "word": f"{word:08X}"}
+                "byteLength": len(card), "headerRuntimeBase": "0x8007AA38", "codeRuntimeBaseAtOffset9C": "0x8007AAD4",
+                "stateZeroHandlerRuntimeAddress": "0x8007B0E8", "stateZeroHandlerOffset": 0x6B0,
+                "sizeLiteralCandidates": [{"offset": at, "pc": f"0x{usa_card_runtime_address(at):08X}", "word": f"{word:08X}"}
                     for at in range(0x9C, len(card), 4) if (word := struct.unpack_from("<I", card, at)[0]) >> 26 == 9
                     and word & 0xFFFF in (0x200, 0x600, 0x1400, 0x2000)]}
-            result["cardOverlay"]["ioCallSites"] = [{"offset": at, "pc": f"0x{0x8007B04C + at:08X}",
+            result["cardOverlay"]["ioCallSites"] = [{"offset": at, "pc": f"0x{usa_card_runtime_address(at):08X}",
                     "target": f"0x{((word & 0x3FFFFFF) << 2) | 0x80000000:08X}"}
                 for at in range(0x9C, len(card), 4) if (word := struct.unpack_from("<I", card, at)[0])
                 in (0x0C019BD4, 0x0C019B8A, 0x0C019C39, 0x0C019DC6)]
@@ -246,9 +255,9 @@ def capture(path: Path, profile: ImageProfile, disasm: tuple[int, int] | None = 
                 "sha256": hashlib.sha256(exe[0x5FC94:0x5FE94]).hexdigest()}
             if card_disasm:
                 if card_disasm[0] < 0x9C:
-                    raise ValueError("The overlay header has a distinct runtime address domain")
-                disasm = (0x8007B04C + card_disasm[0], card_disasm[1])
-                exe, disasm_base = card, 0x8007B04C
+                    raise ValueError("The requested card span starts in the non-code header")
+                disasm = (usa_card_runtime_address(card_disasm[0]), card_disasm[1])
+                exe, disasm_base = card, USA_CARD_BASE
             else:
                 disasm_base = EXE_FILE_BASE
         if disasm:

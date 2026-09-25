@@ -102,6 +102,26 @@ colors must be explicit authored variants of these native RGB owners, not
 mislabelled recovered native presets. Their near/far/CODE semantics and ability
 to coexist remain separate implementation requirements.
 
+### Source palette versus the bright-green gameplay observation
+
+The exact native-color USA visual candidate now renders both eggs together,
+bright green with purple/yellow appendage regions. A separate read-only regional
+consumer probe explains why the first color word alone was misleading: all41
+near flag0 faces use indices29..69, all green-dominant; six entries are exactly
+RGB(0,255,0). The16 flag1 faces use indices0..28. Corresponding far flag0 faces
+use yellow/gold colors; the two arrays are not interchangeable. The pinned
+ordinary-face consumers differ only in15 relocated jump targets, and original
+JP row4F is also1. No renderer-mode palette substitution was found.
+
+The complete direct Japanese F5 handler, generic model relocation and examined
+complete animated initialization path do not write these RGB arrays. This is
+bounded source evidence, not closure of every indirect/startup/device-state
+consumer. The actual final original-JP appearance remains unobserved; do not
+label an invented gold palette a recovered native preset. The read-only probe
+and full evidence are `egg-rgb-consumer-probe.py` and
+`egg-rgb-consumer-report.md` under the research root above. The exact USA runtime
+scope is in [the publication record](japanese-egg-visual-research-publication.md).
+
 ## Checks and remaining gates
 
 `Spyro.Editor.NativeJapaneseEggRenderAdmissionSmoke` is a separate project; it

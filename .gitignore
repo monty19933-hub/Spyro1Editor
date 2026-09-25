@@ -219,6 +219,8 @@ unsafe-tests/
 !/tools/Observe-SpyroNativeWizard.py
 !/tools/Observe-SpyroJapaneseEggs.py
 !/tools/tests/test_japanese_egg_observer.py
+!/tools/Verify-SpyroJapaneseEggResearch.py
+!/tools/tests/test_japanese_egg_research.py
 !/tools/Observe-SpyroFreshId65.py
 !/tools/Capture-SpyroId65V3RuntimeSession.py
 !/tools/Test-Capture-SpyroId65V3RuntimeSession.py

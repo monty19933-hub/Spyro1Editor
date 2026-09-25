@@ -25,7 +25,7 @@ OBSERVER_PYTHON_CASES = (
     ("python-japanese-object-contracts", ("tools/Test-Inspect-SpyroJapaneseObjects.py", "-v"),
      "Ran 9 tests"),
     ("python-japanese-collectible-contracts", ("tools/test_japanese_collectibles.py", "-v"),
-     "Ran 11 tests"),
+     "Ran 12 tests"),
     ("python-japanese-font-contracts", ("tools/test_japanese_font.py", "-v"),
      "Ran 7 tests"),
     ("python-japanese-sign-reference-verifier", ("tools/Test-Verify-SpyroJapaneseSignReference.py", "-v"),
@@ -34,6 +34,8 @@ OBSERVER_PYTHON_CASES = (
      "Ran 9 tests"),
     ("python-japanese-egg-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_observer.py", "-v"),
      "Ran 10 tests"),
+    ("python-japanese-egg-physical-verifier", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_research.py", "-v"),
+     "Ran 22 tests"),
 )
 # Each entry was inspected for independence from disc images and local caches.
 # Source-disc tests remain opt-in below; the existing broader source suite is
@@ -59,8 +61,11 @@ CORE_CASES = (
     ("NativeJapaneseEggArtisansIntegrationSmoke", "JP_EGG_ARTISANS_INTEGRATION_SOURCE_FREE_OK"),
     ("NativeJapaneseEggMemorySmoke", "JP_EGG_MEMORY_SOURCE_FREE_OK"),
     ("NativeJapaneseEggRenderAdmissionSmoke", "JP_EGG_RENDER_ADMISSION_SOURCE_FREE_OK"),
+    ("NativeJapaneseEggRgbEditSmoke", "JP_EGG_RGB_EDIT_SOURCE_FREE_OK"),
+    ("NativeJapaneseEggInstanceRootSmoke", "JP_EGG_INSTANCE_ROOT_SOURCE_FREE_OK"),
     ("NativeJapaneseEggPlacementSmoke", "JP_EGG_PLACEMENT_SOURCE_FREE_OK"),
     ("NativeJapaneseSignFontResidentSmoke", "JP_SIGN_FONT_RESIDENT_SOURCE_FREE_OK"),
+    ("NativeJapaneseSignModalHookSmoke", "JAPANESE_SIGN_MODAL_HOOK_SOURCE_FREE_OK"),
     ("NativeJapaneseEggResearchSmoke", "NATIVE_JP_EGG_RESEARCH_SOURCE_FREE_OK"),
     ("NativeMobyPersistentOwnerSmoke", "NATIVE_MOBY_PERSISTENT_OWNER_SOURCE_FREE_OK"),
     ("NativeWizardAppendSmoke", "NATIVE_WIZARD_APPEND_SOURCE_FREE_OK"),

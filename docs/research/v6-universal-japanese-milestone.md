@@ -242,3 +242,34 @@ need authored native RGB variants, not invented recovered palette names.
 The new read-only egg observer passes10 offline boundary/transition fixtures;
 the registered runner passes98 tests. The preserved R08 app has not been rebuilt
 or replaced. The new source work is not yet exposed in a packaged editor.
+
+## Two eggs observed in USA gameplay after37ffa24
+
+The new fixed visual BIN was independently verified over every raw byte, then
+cold-booted through full firmware. Both eggs visibly animate together in
+Artisans; normal movement and ordinary inventory return were observed. They
+remain bright green at close range. The original source near palette contains
+that green; final original-JP appearance is still a separate unobserved gate.
+See [exact candidate, screenshots and limitations](japanese-egg-visual-research-publication.md).
+The emulator/observer exited cleanly, normal settings were restored byte-exact,
+and the normal card and per-game settings are unchanged.
+
+The new [RGB edit kernel](japanese-egg-rgb-edit.md) supports exact native no-op
+and explicitly authored70+70 RGB arrays while preserving every other model
+byte. It does not yet install colors into gameplay. The native renderer uses
+one shared class root, confirmed by actual-instruction probes; the
+[root-resolution record](japanese-egg-instance-root-resolution.md) distinguishes
+the required per-instance binding from a mere prescribed test register value.
+
+For signs, [exact modal boundaries](japanese-sign-modal-hook-boundaries.md)
+now show where dispatch, first-frame capture, later UI queue sealing and
+restoration must be composed. Native DrawSync can fail; calling it is not
+proof of completed backup/restore. These are source-bound requirements and a
+tested detached ordering protocol, not installed hooks.
+
+Parent focused Release builds and checks pass for RGB editing, root resolution
+and modal boundaries. The independent physical verifier has22 offline tests;
+the runner has98. No broad monolithic rerun is claimed by these focused checks.
+Pickup, new inventory counters, required100% native accounting, actual save
+integration, color bindings, USA signs and their editor UI remain open. R08
+continues to be the latest packaged editor; no preserved app was rebuilt.

@@ -96,3 +96,77 @@ Logs are in `_local/research/japanese-content-20260925-r01.RCmBCn/`, with prefix
 `egg-publication-wizard-before`, `egg-publication-wizard-after`,
 `egg-publication-build`, `egg-publication-sourcefree`, `egg-publication-source`
 and `egg-publication-faults-r02` (r01 is retained as diagnostic evidence).
+
+## Actual private candidate R01
+
+After parent code review, the separately implemented Python verifier reproduced
+the entire expected disc from authenticated originals, without an editor DLL,
+candidate payload or receipt flags supplying expected bytes. Its22 source-free
+fixtures pass. It independently checks scene append/fixups, model registration,
+visual-fragment relocation and adapter emission, EXE anchor, complete packed WAD
+inverse, both-endian ISO fields, XA end flags and every raw-sector complement.
+Original touched Form1 sectors must reproduce their own EDC/ECC; the three
+new sectors are authenticated zero Form2 padding before conversion.
+
+Source checkpoint37ffa24 was then used to publish a **new** private candidate:
+`_local/japanese-egg-usa-visual-candidate-20260925-r01/`.
+The actual BIN matches0cce5b7f... above. Independent actual-candidate verification
+passed every raw byte, the exact CUE and receipt, with49,516 changed sectors and
+102,402,700 changed physical bytes. Receipt SHA256:
+`790e4f23f17bc0df5e5022da3fd57f8215f8977e765e68f1ceecd47fd0a8a7b3`.
+Both held/named originals and source CUE remained unchanged.
+
+Actual data SHA256:
+`fe2365c87d1be55984a1e06a320a59041b5a09617e3fe4b7e9496a89923ea8e0`.
+Actual overlay SHA256:
+`9b33824cf59231e501e0fe47187bd326aeab6471b023d3c50766e6a821bfbaca`.
+Actual EXE SHA256:
+`c131b171d4365fc5f4075b39d0f16c5492b1fb962df928a991d4ea5a5b09dc31`.
+
+Logs: `egg-publication-actual-r01.log`, `egg-independent-actual-r01.json`,
+`egg-independent-parent-tests.log`, all under the research root above.
+The verifier is `tools/Verify-SpyroJapaneseEggResearch.py`; it writes only JSON
+to stdout. Its optional `--candidate-directory` selects verification, not export.
+The registered regression runner passes98 tests after adding the new gates.
+
+### Full-firmware visual observation, 2026-09-25
+
+The exact candidate was run in installed DuckStation0.1-11826-gfe2306b1f,
+using full SCPH1001 firmware, slow boot, Vulkan1x and PGXP/enhancements off.
+The Sony firmware screen, title, fresh isolated card creation and playable
+Artisans were observed. The running PID48649 and held candidate BIN were
+verified externally before connecting the bounded read-only observer. No HLE,
+direct EXE, resume state, debugger execution control or RAM/register writes
+were used. Movement used the isolated DigitalController keyboard preset.
+
+Both appended eggs were visibly present together near the waterfalls. They
+bobbed, turned and animated with separate private state. Spyro moved, jumped,
+glided and charged around them. The ordinary pause menu and inventory opened;
+inventory returned to normal gameplay with an egg still visibly rendering.
+Ordinary inventory remains unchanged: this is not a custom-collectible counter
+or completion test. Native neighboring scenery, dragon statue and gems remained
+visible; that is not a complete ordinary-actor regression certificate.
+
+The near eggs are **bright green**, with purple/yellow appendage regions. This
+is a recorded unresolved appearance result, not a claimed color correction.
+Both loaded near/far arrays retained their exact native hashes at every sample.
+The close screenshot is `screenshots/Spyro the Dragon 2026-09-25-14-20-22.png`;
+the ordinary inventory screenshot is `...14-24-28.png`, under
+`_local/japanese-egg-usa-runtime-20260925-r01.BfmrHD/`.
+The accompanying `observations.jsonl` records source-derived fixed owner gates,
+both row identities, animation/private values, player movement and palette
+hashes. All successful samples had renderer-exhaustion0, but sampled free
+primitive space is not peak usage, atomic observation or general safety proof.
+
+The session was closed without a resume state; emulator and observer exited0.
+Global settings were restored byte-exact to SHA256
+`c07823d8de99c88b560fb5dc356fd1247aa391b88ff91284d7ef1354c10fb854`.
+Ordinary SCUS settings and the USA memory card kept their pre-session hashes.
+All new card/cache/screenshots and after-session settings remain isolated in
+the runtime folder. The preserved R08 app/candidate was not rebuilt or replaced.
+
+This establishes a narrow visual/animation and ordinary-menu-return observation
+for this exact disc, not universal portability. Death/reentry/reset, full
+transient/interrupt peaks, original-JP final-color comparison, independent
+authored colors, pickup, native inventory counters, save/reload and required
+100% completion remain unverified or unimplemented.

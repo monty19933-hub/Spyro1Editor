@@ -13,6 +13,16 @@ spec.loader.exec_module(model)
 
 
 class JapaneseCollectibleCases(unittest.TestCase):
+    def test_usa_card_code_uses_whole_overlay_base_not_state_zero_target(self):
+        # Native table's first handler is at file +0x6B0, NOT first code +0x9C.
+        for offset, pc in ((0, 0x8007AA38), (0x9C, 0x8007AAD4),
+                           (0x680, 0x8007B0B8), (0x6B0, 0x8007B0E8),
+                           (0x1FFC, 0x8007CA34)):
+            self.assertEqual(pc, model.usa_card_runtime_address(offset))
+        for offset in (-4, 1, 0x3800, True):
+            with self.assertRaises(ValueError):
+                model.usa_card_runtime_address(offset)
+
     def test_thirty_level_owners_two_banks(self):
         levels = [world * 10 + level for world in range(1, 7) for level in range(5)]
         self.assertEqual(list(range(30)), [model.native_level_slot(level) for level in levels])
