@@ -1931,5 +1931,17 @@ class NeutralTiledFamilyOracleTests(unittest.TestCase):
                         program.index("if (request == null) return;"))
 
 
+class RegionalAndMatrixGateTests(unittest.TestCase):
+    def test_regional_source_free_gate_has_no_disc_or_publication_arguments(self):
+        self.assertEqual("NATIVE_REGIONAL_SOURCE_FREE_OK", dict(RUNNER.CORE_CASES)["NativeRegionalSourceSmoke"])
+        self.assertEqual([], RUNNER.CASE_ARGUMENTS.get("NativeRegionalSourceSmoke", []))
+        self.assertFalse(any(name == "NativeRegionalSourceSmoke" for name, _, _ in RUNNER.SOURCE_QA_CASES))
+
+    def test_inventory_gates_require_the_new_matrix_checks(self):
+        self.assertEqual("NATIVE_MOBY_PORTABILITY_MATRIX_SMOKE_OK", dict(RUNNER.CORE_CASES)["NativeMobyInventorySmoke"])
+        self.assertEqual([("NativeMobyInventorySmoke", "NATIVE_MOBY_PORTABILITY_MATRIX_SOURCE_OK", ["--source"])],
+                         [case for case in RUNNER.SOURCE_QA_CASES if case[0] == "NativeMobyInventorySmoke"])
+
+
 if __name__ == "__main__":
     unittest.main()

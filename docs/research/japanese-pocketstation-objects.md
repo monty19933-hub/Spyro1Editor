@@ -1,18 +1,23 @@
 # Japanese dragonfly eggs and editable signs
 
-Status: investigation and shared-resource discovery, 2026-09-25. No Japanese
+Status: Japanese source supplied and authenticated, 2026-09-25. No Japanese
 object import, color correction, message patch, save extension or percent change
 has been implemented. The user identified the requested objects as probably the
 Japanese/PocketStation objects, not the ordinary retail egg or flight arrows.
 
-## Evidence and missing source
+## Source availability and prior evidence
 
 The available authenticated source is USA SCUS-94228, full BIN SHA256
 `fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37`.
 The known original-ROM folder contains USA and CLEAN-ORIGINAL CUEs; no Japanese
 image was found there. This is not evidence that Japanese assets are absent from
 every local folder, or that every corresponding asset is absent from USA data.
-An optional request for the user's Japanese BIN/CUE path is pending.
+That earlier source-availability blocker is now resolved: the user supplied
+`/Users/john/Desktop/Spyro the Dragon (Japan)/`. The exact SCPS_100.83 revision
+and its separate archive ownership are documented in the
+[active full milestone](v6-universal-japanese-milestone.md). Its new read-only
+regional session passes both Japanese and USA exact-source checks. This does
+not yet certify Japanese placement, text, appearance or save integration.
 
 Primary references establish the intended feature, not a portable PS1 package:
 
@@ -22,10 +27,12 @@ Primary references establish the intended feature, not a portable PS1 package:
   describes restored Japanese egg placements and translated signs. A PC-port
   restoration is not native PS1 implementation evidence.
 
-Targeted primary-code searches did not identify the Japanese egg/sign class IDs,
+Earlier targeted primary-code searches did not identify the Japanese egg/sign class IDs,
 native rows, message codec, render setup, pickup handlers or save consumers.
 Do not invent those mappings or infer that USA class `0x22` is a dragonfly egg.
-No ROM or third-party game assets were downloaded.
+No ROM or third-party game assets were downloaded. New native-ROM evidence is
+being recorded separately; the former lack of source must not be treated as a
+continuing blocker now that the original Japanese disc is available.
 
 ## Implemented discovery correction
 

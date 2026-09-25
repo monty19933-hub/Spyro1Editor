@@ -45,8 +45,14 @@ The current source also exposes54 shared PETE model registrations in both Moby
 browsers. They are inspect-only: discovery does not grant safe placement.
 This includes the ordinary retail dragon egg, **not a verified Japanese
 dragonfly egg implementation**. Japanese editable signs, egg color correction,
-new inventory and completion accounting are still research work requiring an
-identified Japanese source. No game assets were downloaded. See
+new inventory and completion accounting are still implementation work. The user
+has now supplied Japanese SCPS_100.83; its source identity and regional archive
+reads pass the new isolated source checks. The new deterministic USA matrix
+covers368 known classes and12,880 retail destination cells, without widening
+placement/export approval. R08 remains unchanged. See the
+[active full milestone](research/v6-universal-japanese-milestone.md) and
+[machine-readable matrix work](research/universal-moby-matrix.md).
+No game assets were downloaded. See
 [Japanese objects: findings and next gates](research/japanese-pocketstation-objects.md).
 
 ## New R08: tiled terrain and complete chest family together

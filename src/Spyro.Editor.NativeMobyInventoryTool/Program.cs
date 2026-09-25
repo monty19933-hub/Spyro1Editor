@@ -5,17 +5,19 @@ using Spyro.Editor.Core.Levels;
 
 // Read-only. Output goes to stdout; this tool cannot create a BIN, alter a cache,
 // update an approval or infer an instance template from an unplaced resource.
-if (args.Length is < 2 or > 4 || args.Length == 3 && args[2] != "--json" ||
+if (args.Length is < 2 or > 4 || args.Length == 3 && args[2] is not ("--json" or "--matrix") ||
     args.Length == 4 && args[2] != "--target")
 {
-    Console.Error.WriteLine("Usage: NativeMobyInventoryTool <original.bin> <catalog-workspace> [--json | --target <level-key>]");
+    Console.Error.WriteLine("Usage: NativeMobyInventoryTool <original.bin> <catalog-workspace> [--json | --matrix | --target <level-key>]");
     return 2;
 }
 try
 {
     var inventory = NativeMobySourceInventory.Capture(args[0], LevelCatalog.Load(args[1]));
     var json = new JsonSerializerOptions { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
-    if (args.Length == 3) Console.WriteLine(JsonSerializer.Serialize(inventory, json));
+    if (args.Length == 3 && args[2] == "--matrix")
+        Console.WriteLine(JsonSerializer.Serialize(NativeMobyPortabilityMatrix.Create(inventory), json));
+    else if (args.Length == 3) Console.WriteLine(JsonSerializer.Serialize(inventory, json));
     else if (args.Length == 4)
         Console.WriteLine(JsonSerializer.Serialize(new
         {
@@ -38,7 +40,7 @@ try
     }
     return 0;
 }
-catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
+catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or ArgumentException)
 {
     Console.Error.WriteLine($"Native inventory refused: {error.Message}");
     return 1;
