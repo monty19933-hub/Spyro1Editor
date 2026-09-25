@@ -217,6 +217,8 @@ unsafe-tests/
 !/tools/SpyroEditor.macOS.community.entitlements
 !/tools/Watch-SpyroId65RuntimeState.py
 !/tools/Observe-SpyroNativeWizard.py
+!/tools/Observe-SpyroJapaneseEggs.py
+!/tools/tests/test_japanese_egg_observer.py
 !/tools/Observe-SpyroFreshId65.py
 !/tools/Capture-SpyroId65V3RuntimeSession.py
 !/tools/Test-Capture-SpyroId65V3RuntimeSession.py

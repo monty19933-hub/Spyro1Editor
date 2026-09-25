@@ -33,27 +33,32 @@ internal sealed class NativeWizardResearchPublicationBinding
 {
     private readonly NativeDarkHollowWizardResearchCandidatePlan? _legacy;
     private readonly NativeDarkHollowTwoWizardResearchCandidatePlan? _two;
+    private readonly NativeJapaneseEggResearchCandidatePlan? _egg;
     private NativeWizardResearchPublicationBinding(NativeDarkHollowWizardResearchCandidatePlan plan)=>_legacy=plan;
     private NativeWizardResearchPublicationBinding(NativeDarkHollowTwoWizardResearchCandidatePlan plan)=>_two=plan;
+    private NativeWizardResearchPublicationBinding(NativeJapaneseEggResearchCandidatePlan plan)=>_egg=plan;
+    internal static NativeWizardResearchPublicationBinding FromJapaneseEgg(NativeJapaneseEggResearchCandidatePlan plan)
+    {ArgumentNullException.ThrowIfNull(plan);return new(plan);}
+    internal string? JapaneseSourceImagePath=>_egg?.JapaneseSourceImagePath;
     internal static NativeWizardResearchPublicationBinding FromLegacy(NativeDarkHollowWizardResearchCandidatePlan plan)
     {ArgumentNullException.ThrowIfNull(plan);return new(plan);}
     internal static NativeWizardResearchPublicationBinding FromTwo(NativeDarkHollowTwoWizardResearchCandidatePlan plan)
     {ArgumentNullException.ThrowIfNull(plan);return new(plan);}
-    internal string SourceImagePath=>_legacy?.SourceImagePath??_two!.SourceImagePath;
-    internal string SourceCuePath=>_legacy?.SourceCuePath??_two!.SourceCuePath;
-    internal string PlanSha256=>_legacy?.PlanSha256??_two!.PlanSha256;
-    internal string ImageName=>_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.ImageName:NativeDarkHollowTwoWizardResearchCandidatePlan.ImageName;
-    internal string CueName=>_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.CueName:NativeDarkHollowTwoWizardResearchCandidatePlan.CueName;
-    internal string ReceiptName=>_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.ReceiptName:NativeDarkHollowTwoWizardResearchCandidatePlan.ReceiptName;
-    internal string[] OutputNames=>_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.OutputNames:NativeDarkHollowTwoWizardResearchCandidatePlan.OutputNames;
-    internal string LeaseName=>_legacy!=null?".native-wizard.writer.lock":".native-two-wizards.writer.lock";
-    internal string StagePrefix=>_legacy!=null?".native-wizard-stage-":".native-two-wizards-stage-";
-    internal Task RequireFreshAsync(CancellationToken token=default)=>_legacy?.RequireFreshAsync(token)??_two!.RequireFreshAsync(token);
-    internal void RequireStageReversion(){if(_legacy!=null)_legacy.RequireStageReversion();else _two!.RequireStageReversion();}
-    internal void WriteNewImage(string path,CancellationToken token){if(_legacy!=null)_legacy.WriteNewImage(path,token);else _two!.WriteNewImage(path,token);}
-    internal (string Hash,int Changed) VerifyImage(string path)=>_legacy?.VerifyImage(path)??_two!.VerifyImage(path);
-    internal byte[] BuildReceipt((string Hash,int Changed) result)=>_legacy?.BuildReceipt(result)??_two!.BuildReceipt(result);
-    internal byte[] CopyCueBytes()=>_legacy?.CopyCueBytes()??_two!.CopyCueBytes();
+    internal string SourceImagePath=>_egg?.SourceImagePath??_legacy?.SourceImagePath??_two!.SourceImagePath;
+    internal string SourceCuePath=>_egg?.SourceCuePath??_legacy?.SourceCuePath??_two!.SourceCuePath;
+    internal string PlanSha256=>_egg?.PlanSha256??_legacy?.PlanSha256??_two!.PlanSha256;
+    internal string ImageName=>_egg!=null?NativeJapaneseEggResearchCandidatePlan.ImageName:_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.ImageName:NativeDarkHollowTwoWizardResearchCandidatePlan.ImageName;
+    internal string CueName=>_egg!=null?NativeJapaneseEggResearchCandidatePlan.CueName:_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.CueName:NativeDarkHollowTwoWizardResearchCandidatePlan.CueName;
+    internal string ReceiptName=>_egg!=null?NativeJapaneseEggResearchCandidatePlan.ReceiptName:_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.ReceiptName:NativeDarkHollowTwoWizardResearchCandidatePlan.ReceiptName;
+    internal string[] OutputNames=>_egg!=null?NativeJapaneseEggResearchCandidatePlan.OutputNames:_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.OutputNames:NativeDarkHollowTwoWizardResearchCandidatePlan.OutputNames;
+    internal string LeaseName=>_egg!=null?".native-japanese-eggs.writer.lock":_legacy!=null?".native-wizard.writer.lock":".native-two-wizards.writer.lock";
+    internal string StagePrefix=>_egg!=null?".native-japanese-eggs-stage-":_legacy!=null?".native-wizard-stage-":".native-two-wizards-stage-";
+    internal Task RequireFreshAsync(CancellationToken token=default)=>_egg?.RequireFreshAsync(token)??_legacy?.RequireFreshAsync(token)??_two!.RequireFreshAsync(token);
+    internal void RequireStageReversion(){if(_egg!=null)_egg.RequireStageReversion();else if(_legacy!=null)_legacy.RequireStageReversion();else _two!.RequireStageReversion();}
+    internal void WriteNewImage(string path,CancellationToken token){if(_egg!=null)_egg.WriteNewImage(path,token);else if(_legacy!=null)_legacy.WriteNewImage(path,token);else _two!.WriteNewImage(path,token);}
+    internal (string Hash,int Changed) VerifyImage(string path)=>_egg?.VerifyImage(path)??_legacy?.VerifyImage(path)??_two!.VerifyImage(path);
+    internal byte[] BuildReceipt((string Hash,int Changed) result)=>_egg?.BuildReceipt(result)??_legacy?.BuildReceipt(result)??_two!.BuildReceipt(result);
+    internal byte[] CopyCueBytes()=>_egg?.CopyCueBytes()??_legacy?.CopyCueBytes()??_two!.CopyCueBytes();
 }
 
 internal static class NativeWizardResearchPublicationEngine
@@ -154,6 +159,8 @@ internal static class NativeWizardResearchPublicationEngine
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);string root=Path.GetFullPath(directory);
         PersistencePathSafety.EnsureTreesDoNotOverlap(plan.SourceImagePath,root,"Research output overlaps source BIN.");
         PersistencePathSafety.EnsureTreesDoNotOverlap(plan.SourceCuePath,root,"Research output overlaps source CUE.");
+        if(plan.JapaneseSourceImagePath is string japanese)
+            PersistencePathSafety.EnsureTreesDoNotOverlap(japanese,root,"Research output overlaps Japanese donor BIN.");
         RequireNoLink(root);if(File.Exists(root))throw new InvalidDataException("Research output directory is a file.");return root;
     }
     private static bool CompleteSet(NativeWizardResearchPublicationBinding plan,string root)

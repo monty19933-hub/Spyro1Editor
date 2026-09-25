@@ -83,6 +83,25 @@ F5 root: they require independently bound model roots/classes, or a separately
 proved per-instance renderer selection hook. No such new hook or variant writer
 is introduced here.
 
+### Whole Japanese level color census
+
+A subsequent read-only exact-source scan of all35 Japanese level resources
+found F5 registrations in30. Each registration was parsed with the existing
+complete bounded model parser (never a next-root size). All30 packages are
+byte-identical to the Artisans2056-byte package above, including both RGB arrays.
+There is **one native source palette**, not a set of hidden per-level egg color
+variants. Near SHA256 is
+`1c5666756ee77c12a6459b637cc470367a0ffdd6eaf8e4ed4a9ae6587bca1fe0`;
+far SHA256 is
+`30ce95dee693707b2d769c14fa4217d9a66d405a77858f120679a839ec60f308`.
+The private source report and reproducible probe are
+`_local/research/japanese-content-20260925-r01.RCmBCn/egg-color-census.json`
+and sibling `egg-color-census/`. The original held/named image was reverified.
+This census supplies no additional placement or runtime authority. User-chosen
+colors must be explicit authored variants of these native RGB owners, not
+mislabelled recovered native presets. Their near/far/CODE semantics and ability
+to coexist remain separate implementation requirements.
+
 ## Checks and remaining gates
 
 `Spyro.Editor.NativeJapaneseEggRenderAdmissionSmoke` is a separate project; it

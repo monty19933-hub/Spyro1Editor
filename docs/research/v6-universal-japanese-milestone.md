@@ -207,3 +207,38 @@ Artisans ground positions, using the existing guarded publication machinery.
 Its gameplay observation is not yet done. A dedicated font/backup resident
 owner is being developed for Dark Hollow, whose larger ordinary memory margin
 supports that first sign experiment. No new editor app has replaced R08.
+
+## Fixed research publication and font residency after 2a08290
+
+The complete milestone and required-for100% choice remain active. A fixed
+two-mode1 egg recipe now has source-issued continuous dry-ground support and
+original-actor center separation. Release17 source-free and24 actual-source
+placement checks pass; no spawn is moved. See
+[placement and observer](japanese-egg-artisans-placement.md).
+
+The old bounded Wizard packed-WAD/ISO machinery has been extracted behind
+closed Wizard and F5 factories, retaining the old signatures and both existing
+whole-image goldens. The existing publisher now has a closed F5 role, not a
+second raw serializer or caller-controlled callback publisher. New tests pass13
+source-free,227,559 actual-source and30 fault checks; seven disposable staging
+copies were cleaned and no candidate was committed by those tests. Both
+originals and source CUE remain unchanged. See
+[exact scope and expected physical hash](japanese-egg-visual-research-publication.md).
+Independent whole-image verification and actual gameplay remain the next gates.
+
+Dark Hollow now has explicit immutable-atlas and mutable-backup initialization
+owners, eachA000, appended using the existing level-growth layout without a
+fake Moby registration. Every original model, registration and other subfile is
+preserved, with a complete inverse. The final normal gap is39ECC; this is not
+yet a full composed sign/overlay/runtime budget. Parent Release and agent Debug
+runs both pass83 source-free/159 dual-source checks. See
+[font allocation](japanese-sign-font-resident-allocation.md). Native reference
+closure, GPU lifetime, hooks, every exit and publication remain closed.
+
+An exact-source census of all30 registered Japanese egg models found one
+identical native package/palette across all levels. User-chosen colors will
+need authored native RGB variants, not invented recovered palette names.
+
+The new read-only egg observer passes10 offline boundary/transition fixtures;
+the registered runner passes98 tests. The preserved R08 app has not been rebuilt
+or replaced. The new source work is not yet exposed in a packaged editor.
