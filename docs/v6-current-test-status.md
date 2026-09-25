@@ -1,8 +1,8 @@
 # V6 development: what you can test
 
 September 25 continuation. **R08 beta45 packages and actual GUI editing/export
-now pass**, including independent new-process complete output verification.
-Final fault tests are in progress. R08 is the latest packaged editor exercised here. R06/R07 are unchanged; the new work is
+now pass**, including independent new-process complete output verification and
+all eight physical publication/failure cases. R08 is the latest packaged editor exercised here. R06/R07 are unchanged; the new work is
 not silently installed into either. Universal Moby/texture interchangeability
 remains the goal, not a completed feature or zero-bug guarantee.
 
@@ -28,10 +28,16 @@ production-worker UI707 publishes the exact complete disc and passes44 checks.
 The new tiled readiness suite passes559 checks. Private beta45 packages and
 actual editing/Save/Reopen/native-folder-picker export pass. The emitted BIN
 is byte-identical to the gameplay-tested689f candidate above; this is not a
-fresh emulator session for the GUI CUE. Independent verification720 passes;
-the full fault matrix is still pending. See the
+fresh emulator session for the GUI CUE. Independent verification720 and the
+full eight-case fault matrix651 pass. See the
 [R08 integration evidence](research/native-fresh-tiled-family-editor-r08.md).
-Full regression638 passed345/0; saved compiler source640 passed63 checks;
+Latest full regression725 passes345/0. The source-only shared face-binding
+refactor preserves the existing complete native output and passes127 material
+patterns without enabling them for export. New ordinary-chest evidence tests
+pass in source724; they prove a byte-identical control, not portable placement.
+See [the binding work](research/flat-tile-material-binding.md) and
+[C2 dependency evidence](research/c2-artisans-source-access-audit-2026-09-25.md).
+Earlier full regression638 passed345/0; saved compiler source640 passed63 checks;
 legacy source641 passed291 checks and preserved R07's complete native inverse;
 the updated saved-level source-free suite643 passed1357 checks/937 refusals.
 

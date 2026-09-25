@@ -27,5 +27,7 @@ suite721 passes132,825 source checks (152,094 total), with final Original
 preservation. Independent new-process readback720 reproduced the packaged
 R08 complete BIN689f,1297 changed sectors and exact saved receipt using this
 refactor; every byte inversed to Original and all final source guards passed.
-Broader regression remains pending. Generalized face painting remains disabled until
-those gates and its own exact-disc gameplay test are complete.
+Broader all-project regression725 passes345 steps with zero failures. The
+source-only refactor is checkpointed as`81e78a1`. Generalized face painting
+remains disabled pending broader source-bound profile admission, saved/UI
+coverage for changed patterns and its own exact-disc gameplay test.

@@ -2,8 +2,8 @@
 
 September 25, 2026. This extends checkpoint `dcf5dce` through the existing saved
 Candidate/publisher and actual editor controls. Private beta45 packages and
-actual packaged-GUI exercise and independent new-process GUI-output verification
-now pass. The complete physical fault matrix is still in progress.
+actual packaged-GUI exercise, independent new-process GUI-output verification
+and all eight physical fault cases now pass.
 R07 remains preserved.
 
 ## Scope
@@ -96,8 +96,21 @@ All numbered logs are retained under
   This verifier used the post-extraction shared binder, reproducing the
   preserved package's complete bytes and receipt without rebuilding that app.
 
-651 is the separately authorized eight-case physical matrix. Its complete pass
-is not claimed until the final success marker and preservation checks exist.
+651 is the separately authorized eight-case physical matrix: **8/8 pass**,
+exit0, final40 checks/17 refusals and all outer Original guards complete. Clean
+publication commits; partial-write and stale-document cases do not invoke the
+transaction; unknown transaction result stays unconfirmed; guard-release,
+artifact and notification failures remain committed-with-failure; late cancel
+retains committed-clean success. No recovery evidence was manually removed.
+Six complete BIN/CUE/receipt sets plus five evidence locks remain (23 files,
+3,969,470,698 bytes). Executed DLLs stayed frozen until final exit.
+Log SHA256:`284e503021673a617aa2d2b52c8f62c756cb4599c111894e5a72191673dbd4c0`.
+
+Source follow-up checkpoint`81e78a1` includes shared binding and the independent
+GUI-output verifier. Broader all-project regression725 passes **345 steps,
+zero failures**, including all project builds and source-free tests. Its report
+is `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-v81d_3n6/summary.json`.
+The preserved beta45 package is not rebuilt by this follow-up.
 
 ## Prepared private location
 

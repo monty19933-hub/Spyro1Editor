@@ -238,7 +238,11 @@ if(args.Length>0)
     NativeMobySceneAppendCases.Source(nativeSource,Check,Reject);
     NativeMipsBehaviorFragmentCases.Source(nativeSource,Check);
     await NativeWizardOverlayCases.Source(nativeSource,Check,Reject);
-    if(mode=="--source")await NativeGrassFamilyAssetCases.Source(nativeSource,Check);
+    if(mode=="--source")
+    {
+        await NativeGrassFamilyAssetCases.Source(nativeSource,Check);
+        await NativeC2ArtisansEvidenceCases.Source(nativeSource,Check,Reject);
+    }
     Check(native.Graph.Fingerprint=="d484fc13504ac0afc0b7a63e81dd4a6a3a3a7672dd7959654b02fd6103a3edcc","Default V2 graph regression golden changed.");
     Check(Hash(native.Data)=="e442a02d3aa899dca0d5ddac4392f4b602aabb7ac6dc5dd1e4616c00fab6908d","Default V2 data regression golden changed.");
     Check(native.Graph.Nodes.Count>100,"Source-bound graph did not enumerate native imports.");
