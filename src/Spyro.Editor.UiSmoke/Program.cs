@@ -39,7 +39,9 @@ if (NativeFreshSavedResearchUiArguments.Handles(args))
     HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
     if (publish)
     {
-        if (NativeFreshSavedResearchUiArguments.RequireLockedChestPublication(args))
+        if (NativeFreshSavedResearchUiArguments.RequireTiledFamilyPublication(args))
+            NativeFreshSavedResearchSourceUiCases.RunTiledFamily(args[1], args[2], args[3], args[4]);
+        else if (NativeFreshSavedResearchUiArguments.RequireLockedChestPublication(args))
             NativeFreshSavedResearchSourceUiCases.RunLockedChest(args[1], args[2], args[3], args[4]);
         else if (NativeFreshSavedResearchUiArguments.RequireFamilyPublication(args))
             NativeFreshSavedResearchSourceUiCases.RunFamily(args[1], args[2], args[3], args[4]);
@@ -112,6 +114,7 @@ if (args.Contains("--fresh-family-authoring-only", StringComparer.Ordinal) ||
         FamilyDocumentAdmissionCases.Run(familyArtifacts);
         NativeFreshFamilyControlsCases.Run(familyArtifacts);
         NativeFreshFamilyAsyncReadinessCases.Run(familyArtifacts);
+        NativeFreshTiledFamilyReadinessCases.Run(familyArtifacts);
     }
     NativeFreshFamilyPreviewCases.Run(familyArtifacts);
     Console.WriteLine($"FRESH_FAMILY_AUTHORING_ARTIFACTS path={familyArtifacts}");
@@ -146,6 +149,7 @@ if (args.Contains("--fresh-native-level-ui-only", StringComparer.Ordinal))
     NativeFreshFamilyControlsCases.Run(aggregateArtifacts);
     NativeFreshFamilyPreviewCases.Run(aggregateArtifacts);
     NativeFreshFamilyAsyncReadinessCases.Run(aggregateArtifacts);
+    NativeFreshTiledFamilyReadinessCases.Run(aggregateArtifacts);
     NativeFreshRawFieldTimingCases.Run(aggregateArtifacts);
     Console.WriteLine($"FRESH_NATIVE_LEVEL_UI_ARTIFACTS path={aggregateArtifacts}");
     return 0;

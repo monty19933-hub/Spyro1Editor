@@ -201,6 +201,9 @@ SOURCE_QA_CASES = (
     ("NativeId65TexturedResearchSmoke", "NATIVE_ID65_TEXTURED_RESEARCH_BASELINE_SOURCE_OK", ["--source"]),
     ("NativeFreshSavedMaterialSmoke", "NATIVE_FRESH_SAVED_MATERIAL_SOURCE_OK", ["--source"]),
     ("NativeFreshSavedLevelResearchSmoke", "NATIVE_FRESH_SAVED_LEVEL_RESEARCH_SOURCE_OK", ["--source"]),
+    # Complete saved-family source/receipt checks only; no physical/fault mode.
+    ("NativeFreshSavedLevelResearchSmoke", "NATIVE_FRESH_SAVED_CHEST_SOURCE_FINAL_OK", ["--locked-chest-source"]),
+    ("NativeFreshSavedLevelResearchSmoke", "NATIVE_FRESH_SAVED_TILED_FAMILY_CANDIDATE_FINAL_OK", ["--tiled-family-candidate-source"]),
     ("NativeFreshSavedLevelPublicSmoke", "SAVED_LEVEL_PUBLIC_SOURCE_OK", ["--source"]),
     ("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC_SOURCE_OK", []),
     ("NativeId65FreshDiscStreamSmoke", "NATIVE_ID65_FRESH_DISC_STREAM_SOURCE_OK", []),
@@ -458,6 +461,8 @@ def main():
                 suffix = {
                     ("--source-backed-route-surfaces",): "-route-surfaces",
                     ("--fresh-material-inspection-source",): "-fresh-material-inspection",
+                    ("--locked-chest-source",): "-locked-chest",
+                    ("--tiled-family-candidate-source",): "-tiled-family-candidate",
                 }.get(tuple(arguments), "")
                 if not execute("source-" + name + suffix,
                         lambda project=project, arguments=arguments, name=name: [

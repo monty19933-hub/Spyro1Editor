@@ -118,6 +118,8 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
     {
         token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(saved);
+        if (saved.Document.SchemaVersion == 5 && saved.Document.TiledContent != null)
+            return await CaptureTiledFamilyAsync(originalBin, sourceCue, saved, token);
         if (saved.Document.SchemaVersion == 5)
             return await CaptureLockedChestAsync(originalBin, sourceCue, saved, token);
         if (saved.Document.TiledContent != null)
@@ -157,7 +159,7 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
         ArgumentNullException.ThrowIfNull(saved); ArgumentNullException.ThrowIfNull(material);
         if (!ReferenceEquals(saved, Saved) || !ReferenceEquals(material, MaterialCompilation) ||
             _lockedChestCompilation != null || _mixedDisc != null || _mixedClearance != null ||
-            _familyCompilation != null || _tiledCompilation != null)
+            _familyCompilation != null || _tiledCompilation != null || _tiledFamilyCompilation != null)
             throw new InvalidDataException("Saved-level Candidate belongs to its actual saved context and compiled arm, not equal hashes.");
         RequireProfile(saved.Document); saved.RequireDocument(material.Document);
         material.RequireAncestry(saved, material.BaseCompilation, material.Material0, material.Material1,
@@ -189,11 +191,17 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
         {
             RequireCurrentAncestry(); owners.Open(token);
             owners.Output = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            result = _lockedChestCompilation is { } chest ? chest.Disc.VerifyImage(owners.Bin!, owners.Output, token) :
+            result = _tiledFamilyCompilation is { } family ? family.Disc.VerifyImage(owners.Bin!, owners.Output, token) :
+                _lockedChestCompilation is { } chest ? chest.Disc.VerifyImage(owners.Bin!, owners.Output, token) :
                 _mixedDisc is { } mixed ? mixed.VerifyImage(owners.Bin!, owners.Output, token) :
                 NormalDisc.VerifyImage(owners.Bin!, owners.Output, token);
             RequireVerification(result);
-            if (_lockedChestCompilation is { } placedChest)
+            if (_tiledFamilyCompilation is { } tiledFamily)
+            {
+                owners.Output.Position = 0;
+                RequireVerification(NativeId65FreshDiscStreaming.VerifyInverse(tiledFamily.Disc, owners.Output, token));
+            }
+            else if (_lockedChestCompilation is { } placedChest)
             {
                 owners.Output.Position = 0;
                 RequireVerification(NativeId65FreshDiscStreaming.VerifyInverse(placedChest.Disc, owners.Output, token));
@@ -218,7 +226,9 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
         {
             RequireCurrentAncestry(); owners.Open(token);
             owners.Output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-            RequireVerification(_lockedChestCompilation is { } chest
+            RequireVerification(_tiledFamilyCompilation is { } family
+                ? NativeId65FreshDiscStreaming.Measure(family.Disc, owners.Bin!, token, owners.Output, firstSector)
+                : _lockedChestCompilation is { } chest
                 ? NativeId65FreshDiscStreaming.Measure(chest.Disc, owners.Bin!, token, owners.Output, firstSector)
                 : _mixedDisc is { } mixed
                 ? NativeId65FreshDiscStreaming.Measure(mixed, owners.Bin!, token, owners.Output, firstSector)

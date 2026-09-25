@@ -1,6 +1,6 @@
 # Spyro Editor Beta V6 Guide
 
-Internal diagnostic build: `0.1.0-beta.44`.
+Internal diagnostic build: `0.1.0-beta.45`.
 
 V6 is a private development preview. The normal application includes Fresh
 Level authoring and bounded saved-level test export. Follow the

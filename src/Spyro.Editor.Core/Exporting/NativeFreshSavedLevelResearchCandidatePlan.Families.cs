@@ -80,7 +80,7 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
     internal void RequireFamilyAncestry(NativeFreshSavedLevelDocumentReadContext saved,NativeFreshSavedMobyFamilyCompilation family)
     {
         if(!ReferenceEquals(saved,Saved)||family is null||!ReferenceEquals(family,_familyCompilation)||
-            _material!=null||_mixedClearance!=null||_tiledCompilation!=null||_lockedChestCompilation!=null||!ReferenceEquals(_mixedDisc,family.Disc))
+            _material!=null||_mixedClearance!=null||_tiledCompilation!=null||_lockedChestCompilation!=null||_tiledFamilyCompilation!=null||!ReferenceEquals(_mixedDisc,family.Disc))
             throw new InvalidDataException("Saved-family Candidate requires its actual saved context and full family compilation, not an equal or projected substitute.");
         family.RequireAncestry(saved);
         if(family.SourceImagePath!=SourceImagePath||!_canonical.AsSpan().SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(saved.Document)))

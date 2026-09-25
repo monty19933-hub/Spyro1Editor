@@ -10,7 +10,7 @@ or copied game asset. Users must provide their own legally obtained disc image.
 ## Releases
 
 This checkout targets **Spyro Editor Beta V6**, internal build
-`0.1.0-beta.44`. It is a private development preview, not a published V6 release
+`0.1.0-beta.45`. It is a private development preview, not a published V6 release
 or a claim that every Moby or texture works in every level. The normal editor
 includes **Fresh Level…**; a separate research application is not required.
 See the [tester guide](docs/public-user-guide.md) and

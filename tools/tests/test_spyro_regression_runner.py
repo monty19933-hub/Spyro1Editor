@@ -479,6 +479,55 @@ class RunnerOptionsTests(unittest.TestCase):
             self.assertEqual(present, summary[-1]["passed"])
             if not present: self.assertEqual("missing success marker", summary[-1]["detail"])
 
+    def test_saved_family_source_modes_keep_independent_markers_and_never_publish(self):
+        name = "NativeFreshSavedLevelResearchSmoke"
+        expected = (
+            (name, "NATIVE_FRESH_SAVED_LEVEL_RESEARCH_SOURCE_OK", ["--source"]),
+            (name, "NATIVE_FRESH_SAVED_CHEST_SOURCE_FINAL_OK", ["--locked-chest-source"]),
+            (name, "NATIVE_FRESH_SAVED_TILED_FAMILY_CANDIDATE_FINAL_OK", ["--tiled-family-candidate-source"]),
+        )
+        self.assertEqual(list(expected), [c for c in RUNNER.SOURCE_QA_CASES if c[0] == name])
+        self.assertIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        for _, _, arguments in (*RUNNER.ADDITIONAL_CORE_CASES, *RUNNER.SOURCE_QA_CASES):
+            self.assertFalse(any("physical" in arg or "publish-reviewed" in arg for arg in arguments))
+        for opted_in, missing in ((False, None), (True, None), *((True, c[1]) for c in expected)):
+            calls = []
+
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                kwargs["stdout"].write("Offline QA passed.\n")
+                if command[:2] == ["dotnet", "run"]:
+                    selected = next(marker for _, marker, flags in expected if flags[0] in command)
+                    kwargs["stdout"].write("\n".join(marker for _, marker, _ in expected
+                                                     if marker != missing or marker != selected))
+                return subprocess.CompletedProcess(command, 0)
+
+            with self.subTest(opted_in=opted_in, missing=missing), tempfile.TemporaryDirectory(prefix="spyro-family-source-runner-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "SOURCE_QA_CASES", expected), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", return_value="/selected original.bin") as source, \
+                        mock.patch.object(RUNNER, "configured_source_cue", return_value="/selected original.cue") as cue, \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin), *(["--with-source-qa"] if opted_in else [])]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0 if missing is None else 1, RUNNER.main())
+                summary = json.loads((Path(output) / "summary.json").read_text())
+            count = 0 if not opted_in else next((i + 1 for i, c in enumerate(expected) if c[1] == missing), len(expected))
+            self.assertEqual(count, source.call_count)
+            self.assertEqual(count, cue.call_count)
+            runs = [c for c in calls if c[:2] == ["dotnet", "run"]]
+            self.assertEqual([[*flags, "/selected original.bin", "/selected original.cue"]
+                              for _, _, flags in expected[:count]], [c[c.index("--") + 1:] for c in runs])
+            self.assertEqual(["source-" + name + suffix for suffix in
+                              ("", "-locked-chest", "-tiled-family-candidate")[:count]],
+                             [row["name"] for row in summary if row["name"].startswith("source-" + name)])
+            self.assertEqual(len(summary), len({row["log"] for row in summary}))
+            if missing is not None:
+                self.assertEqual("missing success marker", summary[-1]["detail"])
+
     def test_material_inspection_worker_has_isolated_free_and_opt_in_source_modes(self):
         name, legacy = "UiSmoke", "FRESH_NATIVE_DOCUMENT_UI_OK"
         free, free_flag = "FRESH_MATERIAL_INSPECTION_WORKER_FREE_OK", "--fresh-material-inspection-worker-only"
@@ -1041,7 +1090,11 @@ class RunnerOptionsTests(unittest.TestCase):
 
     def test_saved_level_candidate_is_explicit_source_only_without_native_publication(self):
         name = "NativeFreshSavedLevelResearchSmoke"
-        self.assert_texture_modes(name, "NATIVE_FRESH_SAVED_LEVEL_RESEARCH", needs_cue=True)
+        # Keep this legacy-mode test isolated. The complete family registry,
+        # exact independent markers and commands have their own test above.
+        with mock.patch.object(RUNNER, "SOURCE_QA_CASES", tuple(c for c in RUNNER.SOURCE_QA_CASES
+                               if c[0] != name or c[2] == ["--source"])):
+            self.assert_texture_modes(name, "NATIVE_FRESH_SAVED_LEVEL_RESEARCH", needs_cue=True)
         self.assertEqual([(name, "SELECTED_TILED_MATERIAL_SAVED_FREE_OK", ["--selected-tiled-material-saved-free"])],
                          [row for row in RUNNER.ADDITIONAL_CORE_CASES if row[0] == name])
         with mock.patch.object(sys, "argv", [str(SPEC.origin), "--list"]), \
@@ -1661,7 +1714,12 @@ class RunnerOptionsTests(unittest.TestCase):
         self.assertEqual(len(cases), len(runs))
         for command in runs:
             name = Path(command[command.index("--project") + 1]).stem.removeprefix("Spyro.Editor.")
-            self.assertEqual(expected[name], command[command.index("--") + 1:])
+            arguments = command[command.index("--") + 1:]
+            if name == "NativeFreshSavedLevelResearchSmoke" and arguments[0] in (
+                    "--locked-chest-source", "--tiled-family-candidate-source"):
+                self.assertEqual([arguments[0], "/selected original.bin", "/selected original.cue"], arguments)
+            else:
+                self.assertEqual(expected[name], arguments)
             self.assertNotIn("--publish", command)
             self.assertNotIn("--faults", command)
             self.assertNotIn("--exercise-staging", command)

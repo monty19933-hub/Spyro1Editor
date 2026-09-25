@@ -1,6 +1,6 @@
 # Spyro Editor Beta V6 User Guide
 
-Private development preview, internal build `0.1.0-beta.44`. V6 is not finished
+Private development preview, internal build `0.1.0-beta.45`. V6 is not finished
 or publicly released. The Mac preview is ad-hoc signed and is not Apple-signed
 or notarized; read the included opening instructions before launching it.
 
@@ -28,7 +28,8 @@ project. It stores its own document; normal **Create BIN** does not include it.
 3. Use **Browse native Moby sources…** to search placed donors across the game.
    Choose a donor, enter position and rotation, then apply it. **Cancel new native
    Moby** leaves the document unchanged. A source reference can be saved before
-   its native import is supported; browsing does not make it playable.
+   its native import is supported; browsing does not make it playable. Shared
+   PETE model registrations are inspect-only and have no placed-donor row.
 4. The two floor-material slots can reference retail textures. Inspect sources
    explicitly for donor thumbnails. Selected art is not painted onto the
    schematic. Material references and native export support are separate.
@@ -41,7 +42,8 @@ project. It stores its own document; normal **Create BIN** does not include it.
    before reporting success. Load that exact resulting CUE in DuckStation.
 
 The bounded native examples include Wizard + Artisans Grass and the separate
-R03 Wizard + Grass + locked-chest family, with two floor materials and an
+R03 Wizard + Grass + locked-chest family on its legacy floor or exact four-tile
+layout, with two floor materials and an
 authored background without Town Square's visible terrain. Their saved export
 requires the exact supported geometry, placements and material selections;
 editing outside those profiles can disable export. Other donors remain
@@ -69,7 +71,7 @@ members. The schematic shows anchors and explicit destinations, exact numeric Z,
 and a complete seven-member legend; it does not simulate native trajectories.
 
 Schema5 supports neutral families on legacy or tiled content. Only the exact
-saved legacy-floor R03 profile currently enables its research-export action.
+saved legacy-floor or four-tile R03 profiles enable its research-export action.
 Changing anchors, reward destinations or supporting content may make the document
 authored-only. No Wizard, Grass or other supporting Moby is silently inserted
 when you add a family. General interchangeable families remain unfinished.
@@ -104,7 +106,10 @@ or bounded supported static retail material selections. Native data must fit
 0x1000 bytes, source/GPU ownership must validate, and the complete report must
 fit64KiB. The R06 three-material example has separate gameplay observations;
 that does not certify every combination. Animated/HQ/scrolling materials and
-tiled Moby export remain unavailable. Schema5 tiled documents remain authored-only.
+general tiled Moby export remain unavailable. The exact saved four-tile schema5
+R03 Wizard/Grass/chest example is a separate guarded exception; other tiled
+families remain authored-only. Editing a face, tile or actor outside that exact
+recipe disables its research export, but still permits saving the document.
 
 ### Current two-family test recipe
 

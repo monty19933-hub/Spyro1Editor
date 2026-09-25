@@ -25,9 +25,11 @@ internal sealed partial class NativeFreshDocumentWindow
     private Button _addFamily = null!;
     private Button _cancelAddFamily = null!;
 
-    private string FamilyCapabilityText => NativeFreshSavedLevelResearchEligibility.IsSupportedLockedChestProfile(CurrentAggregateIntent)
+    private string FamilyCapabilityText => NativeFreshSavedLevelResearchEligibility.IsSupportedTiledFamilyProfile(CurrentAggregateIntent)
+        ? "Schema-5 family authoring. Research supports this exact saved four-tile, two-material Wizard + Grass + locked-chest R03 profile after Apply and Save and actual original BIN/CUE validation. The complete tiled document is exported; three authored entries produce nine native rows. Normal Create BIN is unavailable; arbitrary layouts, other Moby families and persistent save ownership are not certified."
+        : NativeFreshSavedLevelResearchEligibility.IsSupportedLockedChestProfile(CurrentAggregateIntent)
         ? "Schema-5 family authoring. Research supports this exact saved Wizard + Grass + locked-chest R03 profile after Apply and Save and actual original BIN/CUE validation. Three authored entries produce nine native rows. Normal Create BIN is unavailable; arbitrary family layouts and persistent save ownership are not certified."
-        : "Schema-5 family authoring is editable and saved, including tiled content. This layout is authored-only: research export supports only the exact legacy-floor Wizard + Grass + locked-chest R03 profile. Normal Create BIN is unavailable. Default rewards are resolved during source compilation; schematic markers do not prove native dependency, collision or gameplay support.";
+        : "Schema-5 family authoring is editable and saved, including tiled content. This layout is authored-only: research export supports the exact legacy-floor or four-tile Wizard + Grass + locked-chest R03 profiles. Normal Create BIN is unavailable. Default rewards are resolved during source compilation; schematic markers do not prove native dependency, collision or gameplay support.";
 
     private Control BuildFamilyFields()
     {

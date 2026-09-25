@@ -124,7 +124,7 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
     {
         if (!ReferenceEquals(saved, Saved) || tiled is null || !ReferenceEquals(tiled, _tiledCompilation) ||
             _material != null || _mixedDisc != null || _mixedClearance != null || _familyCompilation != null ||
-            _lockedChestCompilation != null)
+            _lockedChestCompilation != null || _tiledFamilyCompilation != null)
             throw new InvalidDataException("Saved-tiled Candidate requires its actual saved context and complete compilation, not equal hashes or a projected document.");
         saved.RequireDocument(tiled.Document);
         var fresh = tiled.FreshResourceAncestor; var body = tiled.DiscPlan.BodyAncestor;

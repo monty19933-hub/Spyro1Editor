@@ -1,7 +1,7 @@
 # Spyro Editor Beta V6 Known Limitations
 
 - This is a private V6 development preview, not a finished release. The Mac
-  package is ad-hoc signed, not Apple-signed or notarized. Existing V5 and R03–R06
+  package is ad-hoc signed, not Apple-signed or notarized. Existing V5 and R03–R07
   test apps, original game images, and protected projects are not replaced.
 - **Fresh Level…** is integrated into the normal application. Its preview is a
   schematic, with no native model, terrain-texture, collision or gameplay renderer.
@@ -12,8 +12,8 @@
   an authored field does not imply that the new combination exports.
 - Complete locked-chest family controls save independent key/chest anchors and
   five named default/explicit WORLD reward destinations. Only the exact saved
-  R03 Wizard + Grass + chest profile is admitted to native research export.
-  Other schema5 layouts, including tiled families, remain authored-only.
+  legacy-floor or four-tile R03 Wizard + Grass + chest profiles are admitted to
+  native research export. Other schema5 layouts remain authored-only.
 - Schema4 tiled research permits zero placed Mobys and bounded supported static
   retail materials or Base-color faces. Native data is limited to0x1000 bytes,
   GPU/source checks and a complete64KiB report; animated/HQ/scrolling material
@@ -23,6 +23,9 @@
   are inspect-only, and generic donor placements are authoring-only until their
   dependencies are supported. A catalogue entry is not a working native import.
   All Mobys in all levels remains unfinished.
+- Shared PETE models are inspect-only. Japanese editable signs, correctly
+  rendered dragonfly eggs and new inventory/completion/save handling are not
+  implemented. The ordinary retail egg is not a verified Japanese egg.
 - Focused DuckStation testing of the two-material Wizard + Grass example showed
   its authored background, Wizard attack/charge defeat, a ten-value gem reward,
   fall/respawn and isolated jump/landing. That is not universal runtime acceptance.

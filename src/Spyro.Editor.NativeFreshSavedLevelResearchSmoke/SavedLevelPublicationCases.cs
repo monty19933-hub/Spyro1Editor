@@ -267,6 +267,21 @@ internal static class SavedLevelPublicationCases
     }
     private static (string Image, int Sectors) ExpectedRecipe(NativeFreshSavedLevelResearchCandidatePlan plan)
     {
+        if (plan.TiledFamilyCompilation is { } tiledFamily)
+        {
+            plan.RequireTiledFamilyAncestry(plan.Saved, tiledFamily);
+            Check(plan.CopyCanonicalDocument().SequenceEqual(NativeFreshLevelDocumentCodec.SerializeCanonical(
+                    SavedTiledFamilyCompilationCases.Document())) &&
+                plan.LockedChestCompilation == null && plan.MixedDisc == null && plan.FamilyCompilation == null &&
+                plan.TiledCompilation == null && ReferenceEquals(tiledFamily.Document, plan.Saved.Document) &&
+                ReferenceEquals(tiledFamily.Disc.ExecutableAncestor, tiledFamily.Executable) &&
+                ReferenceEquals(tiledFamily.Disc.ParentDiscAncestor, tiledFamily.ParentDisc) &&
+                tiledFamily.Body.RowSpans.Placements.Select(s => (s.FirstRowIndex, s.RowCount))
+                    .SequenceEqual(new[] { (0, 1), (1, 1), (2, 7) }),
+                "Exact whole saved tiled-family fixture and actual typed parent/child owners select the independent physical recipe.");
+            tiledFamily.Clearance.RequireStaticLandingClearance(tiledFamily.Executable, tiledFamily.ParentClearance);
+            return (SavedTiledFamilyCompilationCases.ExpectedImage, 1297);
+        }
         if (plan.LockedChestCompilation is { } chest)
         {
             plan.RequireLockedChestAncestry(plan.Saved, chest);

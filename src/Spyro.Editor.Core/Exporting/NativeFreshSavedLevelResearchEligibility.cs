@@ -115,6 +115,23 @@ public static class NativeFreshSavedLevelResearchEligibility
         }
     }
 
+    public static bool IsSupportedTiledFamilyProfile(NativeFreshLevelDocumentIntent? document)
+    {
+        if (document == null) return false;
+        try
+        {
+            // Share the saved compiler's complete closed-profile preflight.
+            // This grants UI readiness only; source, revision, lineage and
+            // publication authority still come from the actual Candidate.
+            _ = NativeFreshSavedTiledFamilyCompilation.ProjectBaseDocument(document);
+            return true;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+    }
+
     public static bool IsSupportedMixedProfile(NativeFreshLevelDocumentIntent? document)
     {
         if (document == null) return false;

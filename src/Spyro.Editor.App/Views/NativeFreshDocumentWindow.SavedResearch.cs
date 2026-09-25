@@ -42,6 +42,7 @@ internal sealed partial class NativeFreshDocumentWindow
             NativeFreshSavedLevelResearchEligibility.IsSupportedMixedProfile(CurrentAggregateIntent) ||
             NativeFreshSavedLevelResearchEligibility.IsSupportedFamilyProfile(CurrentAggregateIntent) ||
             NativeFreshSavedLevelResearchEligibility.IsSupportedLockedChestProfile(CurrentAggregateIntent) ||
+            NativeFreshSavedLevelResearchEligibility.IsSupportedTiledFamilyProfile(CurrentAggregateIntent) ||
             NativeFreshSavedLevelResearchEligibility.IsSupportedTiledProfile(CurrentAggregateIntent) ||
             NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(CurrentAggregateIntent)) && !HasUnsavedChanges;
 

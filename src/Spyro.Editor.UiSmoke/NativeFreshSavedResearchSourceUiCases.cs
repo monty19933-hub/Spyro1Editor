@@ -7,7 +7,7 @@ using Fixture = NativeFreshSavedResearchLifecycleCases.Fixture;
 
 // PRIVATE explicit actual publication proposal. Never called by default/source-only.
 // Root must select the existing private fixture parent and absent native output.
-internal static class NativeFreshSavedResearchSourceUiCases
+internal static partial class NativeFreshSavedResearchSourceUiCases
 {
     private const string Image = "2533ee961f13e43db03b08f221921cb60e35465e662e51bf221e6c096eb75b70";
     // Observed whole-source family reference, not an independent image oracle.

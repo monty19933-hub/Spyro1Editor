@@ -2,6 +2,54 @@ using Spyro.Editor.Core.Exporting;
 using static Cases;
 
 if (SavedLevelPublicationCases.IsMode(args)) { await SavedLevelPublicationCases.RunAsync(args); return; }
+if (args.Length != 0 && args[0] is ("--tiled-family-candidate-free" or "--tiled-family-candidate-source" or "--tiled-family-candidate-physical"))
+{
+    bool source = args[0] != "--tiled-family-candidate-free";
+    bool physical = args[0] == "--tiled-family-candidate-physical";
+    if (args.Length != (physical ? 4 : source ? 3 : 1) || args.Skip(1).Any(v =>
+        string.IsNullOrWhiteSpace(v) || v.StartsWith("--", StringComparison.Ordinal) || v.Contains('\0')))
+        throw new ArgumentException("Usage: --tiled-family-candidate-free, or --tiled-family-candidate-source ORIGINAL_BIN ORIGINAL_CUE (read-only native), or --tiled-family-candidate-physical ORIGINAL_BIN ORIGINAL_CUE ABSOLUTE_NEW_ROOT (new isolated scratch artifacts only).");
+    if (physical)
+    {
+        if (!Path.IsPathFullyQualified(args[3])) throw new ArgumentException("Physical evidence root must be absolute and new.");
+        Root = Path.GetFullPath(args[3]);
+        SavedLevelPublicationCases.Unlinked(Root); SavedLevelPublicationCases.Absent(Root);
+        foreach (string sourcePath in new[] { args[1], args[2] })
+            Spyro.Editor.Core.Persistence.PersistencePathSafety.EnsureTreesDoNotOverlap(
+                Path.GetFullPath(sourcePath), Root, "Physical evidence root overlaps a source owner.");
+        Directory.CreateDirectory(Root);
+    }
+    else
+    {
+        Root = Directory.CreateTempSubdirectory("spyro-saved-tiled-family-candidate-").FullName;
+        // Resolve only observed links in our newly created temporary owner;
+        // the physical publication helper's unlinked-path guard stays strict.
+        for (var parent = Directory.GetParent(Root); parent != null; parent = parent.Parent)
+            if (parent.LinkTarget != null)
+                Root = Path.Combine(parent.ResolveLinkTarget(true)!.FullName, Path.GetRelativePath(parent.FullName, Root));
+    }
+    try
+    {
+        await TiledFamilySavedCandidateCases.FreeAsync();
+        if (source)
+        {
+            var owners = new NativeFreshResearchSourceOwners(Path.GetFullPath(args[1]), Path.GetFullPath(args[2]));
+            Exception? primary = null;
+            try
+            {
+                owners.Open(CancellationToken.None);
+                await NativeId65FreshDiscSource.RequireWholeOriginalAsync(owners.Bin!, CancellationToken.None);
+                if (physical) await TiledFamilySavedCandidateCases.PhysicalAsync(owners.ImagePath, owners.CuePath);
+                else await TiledFamilySavedCandidateCases.SourceAsync(owners.ImagePath, owners.CuePath);
+            }
+            catch (Exception error) { primary = error; }
+            owners.Complete(primary);
+        }
+        Console.WriteLine($"NATIVE_FRESH_SAVED_TILED_FAMILY_CANDIDATE_FINAL_OK checks={Checks} refusals={Refusals} source={source} physical={physical} nativeImageWritten={physical}");
+    }
+    finally { Console.Error.WriteLine("Retained new tiny tiled Candidate fixtures: " + Root); }
+    return;
+}
 if (args.Length != 0 && args[0] is ("--tiled-family-compilation-free" or "--tiled-family-compilation-source"))
 {
     bool source = args[0] == "--tiled-family-compilation-source";
@@ -81,6 +129,7 @@ try
     await NeutralFamilyAdmissionCases.Free();
     await SavedLockedChestCompilationCases.FreeAsync();
     await SavedTiledFamilyCompilationCases.FreeAsync();
+    await TiledFamilySavedCandidateCases.FreeAsync();
     await LockedChestSavedCandidateCases.FreeAsync(); await SavedLockedChestInverseCases.FreeAsync();
     Console.WriteLine($"NATIVE_FRESH_SAVED_LEVEL_RESEARCH_FREE_OK checks={Checks} refusals={Refusals} originalOpened=false nativeImageWritten=false tinyTransactionInvoked=true");
     if (args.Length != 0)

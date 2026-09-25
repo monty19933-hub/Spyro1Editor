@@ -1,9 +1,44 @@
 # V6 development: what you can test
 
-September 20 continuation. **R07 private preview, beta44**, is now the latest
-editor build exercised here. R06 remains available and unchanged. Newer source
-work is not silently installed into either. Universal Moby/texture
-interchangeability remains the goal, not a completed feature or zero-bug guarantee.
+September 25 continuation. **R08 beta45 packages now verify**; actual R08
+packaged-GUI exercise and final fault tests are in progress. R07 remains the
+latest packaged editor exercised here. R06/R07 are unchanged; the new work is
+not silently installed into either. Universal Moby/texture interchangeability
+remains the goal, not a completed feature or zero-bug guarantee.
+
+## Latest source and gameplay checkpoint
+
+Checkpoint `dcf5dce` adds saved-project compilation of the exact four-tile,
+two-material Wizard/Grass/key/chest layout. Its independent full-disc identity
+matches the actual research candidate tested in DuckStation. The full firmware
+boot, native LAB **20/20** inventory, both central tile seam crossings and a
+healthy fall/reset have now been observed for that exact candidate. Collected
+treasure stays20 and the chest stays retired after reset. This is a single
+tested layout, not unrestricted new-level export or all-Moby compatibility.
+
+The test files and screenshots are in this repository's
+`_local/native-v6-tiled-family-runtime-20260925-r01.wqwkPe/`.
+See [the exact runtime result and limitations](research/native-fresh-tiled-family-r01-runtime.md).
+DuckStation settings were restored byte-for-byte and the ordinary memory card
+and original BIN/CUE are unchanged. No test emulator is left running.
+
+That complete saved compiler now connects to the existing guarded
+Candidate/publication/UI path. Actual source650 passes148 checks; headless
+production-worker UI707 publishes the exact complete disc and passes44 checks.
+The new tiled readiness suite passes559 checks. Private beta45 packages verify,
+but packaged-GUI and full fault results are still pending. See the
+[R08 integration evidence](research/native-fresh-tiled-family-editor-r08.md).
+Full regression638 passed345/0; saved compiler source640 passed63 checks;
+legacy source641 passed291 checks and preserved R07's complete native inverse;
+the updated saved-level source-free suite643 passed1357 checks/937 refusals.
+
+The current source also exposes54 shared PETE model registrations in both Moby
+browsers. They are inspect-only: discovery does not grant safe placement.
+This includes the ordinary retail dragon egg, **not a verified Japanese
+dragonfly egg implementation**. Japanese editable signs, egg color correction,
+new inventory and completion accounting are still research work requiring an
+identified Japanese source. No game assets were downloaded. See
+[Japanese objects: findings and next gates](research/japanese-pocketstation-objects.md).
 
 ## New R07: complete chest-family editor
 
@@ -55,14 +90,10 @@ Original emulator settings and memory-card contents were preserved/restored.
 
 ## Still unfinished
 
-- Tiled new-level export still requires zero placed Mobys. R07 can author/save
-  tiled family documents, but they are not native-export eligible yet.
-  The new source-only four-tile Body retains the complete family document,
-  resources and Scene in freshly checked address domains and matches an
-  independent whole-Body reference; actual-source checks pass961. Independent
-  native shared/local model-loading checks also pass. The complete build-all
-  regression passes343/0. This has not enabled combined tiled-family export, proved its
-  gameplay, or changed either app.
+- The preserved editor builds still require zero placed Mobys for tiled export.
+  R07 can author/save tiled family documents, but cannot export them natively.
+  New combined source compilation and exact-candidate gameplay now pass as
+  described above; saved publication now passes and packaged UI exercise is next.
 - Static material selection is bounded by native data and GPU capacity.
   Animated/scrolling/HQ materials are not universally supported.
 - The catalogue can show assets without proving that every destination has
@@ -70,7 +101,7 @@ Original emulator settings and memory-card contents were preserved/restored.
 - Full portal/save ownership, arbitrary new levels and universal import remain
   unfinished. No public V6 release was made.
 
-## Source work after R06
+## Earlier source work after R06 (chronological history)
 
 Checkpoint `72ace6f` adds a detached chest-code extension bound to the actual
 mixed Wizard/Grass executable. Its independent source tests preserve the old
@@ -178,7 +209,7 @@ executable/disc, saved publication and exact-CUE gameplay are still next gates.
 Neither preserved application has been replaced. See the complete
 [tiled-family implementation and restart plan](research/native-fresh-tiled-family-resource-plan.md).
 
-## Safe usage checkpoint
+## Earlier safe usage checkpoint — September 20
 
 The September20 continuation stops after full regression610 (343/0), source609
 (961 assertions), and independent native-model witness603. All subagent work

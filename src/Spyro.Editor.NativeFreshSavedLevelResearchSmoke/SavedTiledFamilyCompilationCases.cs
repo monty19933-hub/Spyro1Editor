@@ -56,11 +56,11 @@ internal static class SavedTiledFamilyCompilationCases
         {cancel.Cancel();await Throws<OperationCanceledException>(()=>NativeFreshSavedTiledFamilyCompilation.CaptureAsync("\0",null!,cancel.Token));}
         var (_,valid)=Save("tiled-family-preflight-valid",document);
         await Throws<ArgumentException>(()=>NativeFreshSavedTiledFamilyCompilation.CaptureAsync("\0",valid));
-        await Throws<InvalidDataException>(()=>NativeFreshSavedLevelResearchCandidatePlan.CaptureAsync("\0","\0",valid));
+        await Throws<ArgumentException>(()=>NativeFreshSavedLevelResearchCandidatePlan.CaptureAsync("\0","\0",valid));
         Check(!NativeFreshSavedLevelResearchEligibility.IsSupportedLockedChestProfile(document)&&
             !NativeFreshSavedLevelResearchEligibility.IsSupportedTiledProfile(document)&&
             !NativeFreshSavedLevelResearchEligibility.IsSupportedTiledMaterialProfile(document),
-            "Compiler issuance alone does not admit a Candidate, saved/UI profile or normal export.");
+            "Exact Candidate source issuance does not change saved/UI profile eligibility or normal export.");
         foreach(var (name,invalid) in Unsupported())
         {
             await Throws<InvalidDataException>(()=>{NativeFreshSavedTiledFamilyCompilation.ProjectBaseDocument(invalid);return Task.CompletedTask;});

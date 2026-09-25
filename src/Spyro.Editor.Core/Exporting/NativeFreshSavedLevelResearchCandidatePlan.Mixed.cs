@@ -156,7 +156,7 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
     {
         if (!ReferenceEquals(saved, Saved) || !ReferenceEquals(disc, _mixedDisc) ||
             !ReferenceEquals(clearance, _mixedClearance) || _material != null || _familyCompilation != null ||
-            _tiledCompilation != null || _lockedChestCompilation != null || disc is null || clearance is null)
+            _tiledCompilation != null || _lockedChestCompilation != null || _tiledFamilyCompilation != null || disc is null || clearance is null)
             throw new InvalidDataException("Saved mixed Candidate belongs to its actual saved context, Disc and initial clearance, not equal hashes.");
         disc.RequireAncestry(disc.ExecutableAncestor);
         if (!disc.IsMaterialAuthored)
@@ -173,7 +173,8 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
 
     private void RequireCurrentAncestry()
     {
-        if (_lockedChestCompilation is { } chest) RequireLockedChestAncestry(Saved, chest);
+        if (_tiledFamilyCompilation is { } tiledFamily) RequireTiledFamilyAncestry(Saved, tiledFamily);
+        else if (_lockedChestCompilation is { } chest) RequireLockedChestAncestry(Saved, chest);
         else if (_tiledCompilation is { } tiled) RequireTiledAncestry(Saved, tiled);
         else if (_familyCompilation is { } family) RequireFamilyAncestry(Saved, family);
         else if (_mixedDisc is { } mixed) RequireMixedAncestry(Saved, mixed, _mixedClearance!);

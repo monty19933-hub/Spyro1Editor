@@ -139,7 +139,7 @@ public sealed partial class NativeFreshSavedLevelResearchCandidatePlan
     {
         if (!ReferenceEquals(saved, Saved) || family is null || !ReferenceEquals(family, _lockedChestCompilation) ||
             _material != null || _mixedDisc != null || _mixedClearance != null ||
-            _familyCompilation != null || _tiledCompilation != null)
+            _familyCompilation != null || _tiledCompilation != null || _tiledFamilyCompilation != null)
             throw new InvalidDataException("Saved chest Candidate requires its actual complete saved family compilation, not an equal or projected arm.");
         family.RequireAncestry(saved);
         if (family.SourceImagePath != SourceImagePath ||
