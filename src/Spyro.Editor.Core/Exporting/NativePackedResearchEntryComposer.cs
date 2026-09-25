@@ -17,6 +17,16 @@ internal static class NativePackedResearchEntryComposer
             new(9,checked((int)U32(header,72)),originalOverlay.Length,Hash(originalOverlay),integration.CopyOverlay()),
             new(10,checked((int)U32(header,80)),originalData.Length,Hash(originalData),integration.CopyLevelData())],read,9,10);
     }
+    internal static NativeWizardResearchPackedWad ComposeAuthoredArtisans(ReadOnlySpan<byte> header,int originalLength,
+        NativeJapaneseEggAuthoredClassesPlan plan,Func<int,int,byte[]> read)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if(!plan.SourceCertified||header.Length!=0x800)throw new InvalidDataException("Authored Artisans packing requires the actual source-issued composition.");
+        byte[] overlay=plan.Integration.CopyOriginalOverlay(),data=plan.Integration.CopyOriginalLevelData();
+        return Compose(header,originalLength,[
+            new(9,checked((int)U32(header,72)),overlay.Length,Hash(overlay),plan.CopyOverlay()),
+            new(10,checked((int)U32(header,80)),data.Length,Hash(data),plan.CopyLevelData())],read,9,10);
+    }
     private static NativeWizardResearchPackedWad Compose(ReadOnlySpan<byte> header,int originalLength,
         IEnumerable<NativeWizardResearchReplacement> replacements,Func<int,int,byte[]> read,int first,int second)
     {

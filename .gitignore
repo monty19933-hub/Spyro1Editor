@@ -206,6 +206,8 @@ unsafe-tests/
 !/tools/test_usa_modal_texture_lifetime.py
 !/tools/Inspect-SpyroUsaSaveBufferOwnership.py
 !/tools/test_usa_save_buffer_ownership.py
+!/tools/Inspect-SpyroUsaPeteLifetime.py
+!/tools/test_usa_pete_lifetime.py
 !/tools/Verify-SpyroJapaneseSignReference.py
 !/tools/Test-Verify-SpyroJapaneseSignReference.py
 !/tools/tests/

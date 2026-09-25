@@ -71,7 +71,29 @@ internal sealed class NativePackedResearchImageOwner
             _=>new(){{9,integration.CopyOriginalOverlay()},{10,integration.CopyOriginalLevelData()}});
     }
 
-    // Only the two closed typed factories above can choose these payloads.
+    internal static NativePackedResearchImageOwner CaptureAuthoredEgg(string source,NativeJapaneseEggAuthoredClassesPlan plan,
+        NativeJapaneseEggRenderAdmissionPlan render,NativeJapaneseEggAuthoredMemoryReport memory)
+    {
+        ArgumentNullException.ThrowIfNull(plan);ArgumentNullException.ThrowIfNull(render);ArgumentNullException.ThrowIfNull(memory);
+        var integration=plan.Integration;
+        if(!plan.SourceCertified||!render.SourceCertified||!ReferenceEquals(render.Integration,integration)||
+            !render.AnimatedListAndModelOwnersProven||memory.PlanSha256!=plan.PlanSha256||
+            memory.FinalDataSha256!=plan.FinalDataSha256||memory.FinalOverlaySha256!=plan.FinalOverlaySha256||
+            !memory.ModeledLoadExtentsFitProven||!memory.SynchronousVisualStackFitProven||
+            memory.Values.SceneEnd!=plan.Projection.ProjectedSceneReadEnd||memory.Values.NormalGap!=plan.Projection.ProjectedNormalGap||
+            integration.Rows.Count!=2||integration.Rows.Any(r=>r.Placement.ProfileIndex!=1)||
+            !plan.Bindings.Select(b=>b.AuthoredDestinationClass).SequenceEqual(new ushort[]{0x1E9,0x1F2}))
+            throw new InvalidDataException("Authored egg physical owner requires the actual final class/render/memory ancestry, not the smaller ancestor gap.");
+        if(!integration.RevertDataExact(plan.RevertDataExact(plan.CopyLevelData())).AsSpan().SequenceEqual(integration.CopyOriginalLevelData())||
+            !integration.RevertOverlayExact(plan.RevertOverlayExact(plan.CopyOverlay())).AsSpan().SequenceEqual(integration.CopyOriginalOverlay())||
+            !integration.RevertExecutableExact(plan.CopyExecutable()).AsSpan().SequenceEqual(integration.CopyOriginalExecutable()))
+            throw new InvalidDataException("Authored egg inverse does not reach the complete original resource/overlay/executable.");
+        return Capture(source,plan.CopyExecutable(),0x3000,new Dictionary<int,int>{{9,0x800},{10,0x2800}},
+            (header,read)=>NativePackedResearchEntryComposer.ComposeAuthoredArtisans(header,0x6927000,plan,read),
+            _=>new(){{9,integration.CopyOriginalOverlay()},{10,integration.CopyOriginalLevelData()}});
+    }
+
+    // Only the closed typed factories above can choose these payloads.
     private static NativePackedResearchImageOwner Capture(string source,byte[] executable,int expectedGrowth,
         Dictionary<int,int> expectedChanges,Func<byte[],Func<int,int,byte[]>,NativeWizardResearchPackedWad> compose,
         Func<Func<int,int,byte[]>,Dictionary<int,byte[]>> originals)

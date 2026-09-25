@@ -203,6 +203,8 @@ class ObserverPrebuildTests(unittest.TestCase):
          "Ran 9 tests"),
         ("python-usa-save-buffer-ownership", ("tools/test_usa_save_buffer_ownership.py", "-v"),
          "Ran 10 tests"),
+        ("python-usa-pete-lifetime", ("tools/test_usa_pete_lifetime.py", "-v"),
+         "Ran 11 tests"),
         ("python-japanese-egg-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_observer.py", "-v"),
          "Ran 10 tests"),
         ("python-japanese-egg-physical-verifier", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_research.py", "-v"),
@@ -2008,6 +2010,7 @@ class RegionalAndMatrixGateTests(unittest.TestCase):
             ("NativeJapaneseSignFontResidentSmoke", "JP_SIGN_FONT_RESIDENT_SOURCE_FREE_OK"),
             ("NativeJapaneseSignModalHookSmoke", "JAPANESE_SIGN_MODAL_HOOK_SOURCE_FREE_OK"),
             ("NativeJapaneseEggResearchSmoke", "NATIVE_JP_EGG_RESEARCH_SOURCE_FREE_OK"),
+            ("NativeJapaneseEggAuthoredResearchSmoke", "NATIVE_JP_EGG_AUTHORED_RESEARCH_SOURCE_FREE_OK"),
         ):
             self.assertEqual(marker, dict(RUNNER.CORE_CASES)[name])
             self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
