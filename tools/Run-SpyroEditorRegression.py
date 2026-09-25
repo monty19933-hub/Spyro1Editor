@@ -22,6 +22,14 @@ OBSERVER_PYTHON_CASES = (
     ("python-tiled-family-chest-observer",
      ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_tiled_family_chest_observer.py", "-v"),
      "Ran 9 tests"),
+    ("python-japanese-object-contracts", ("tools/Test-Inspect-SpyroJapaneseObjects.py", "-v"),
+     "Ran 9 tests"),
+    ("python-japanese-collectible-contracts", ("tools/test_japanese_collectibles.py", "-v"),
+     "Ran 11 tests"),
+    ("python-japanese-font-contracts", ("tools/test_japanese_font.py", "-v"),
+     "Ran 7 tests"),
+    ("python-japanese-sign-reference-verifier", ("tools/Test-Verify-SpyroJapaneseSignReference.py", "-v"),
+     "Ran 11 tests"),
 )
 # Each entry was inspected for independence from disc images and local caches.
 # Source-disc tests remain opt-in below; the existing broader source suite is
@@ -38,6 +46,11 @@ CORE_CASES = (
     ("NativeMobyDependencyClosureSmoke", "NATIVE_MOBY_DEPENDENCY_CLOSURE_SMOKE_OK"),
     ("NativeMobyInventorySmoke", "NATIVE_MOBY_PORTABILITY_MATRIX_SMOKE_OK"),
     ("NativeRegionalSourceSmoke", "NATIVE_REGIONAL_SOURCE_FREE_OK"),
+    ("JapaneseSignMessageSmoke", "JAPANESE_SIGN_MESSAGE_SOURCE_FREE_OK"),
+    ("NativeSimpleMobyGeometrySmoke", "NATIVE_SIMPLE_MOBY_GEOMETRY_SOURCE_FREE_OK"),
+    ("NativeJapaneseEggModelAssemblySmoke", "JP_EGG_MODEL_ASSEMBLY_SOURCE_FREE_OK"),
+    ("DetachedCollectibleSaveSmoke", "DETACHED_COLLECTIBLE_SAVE_SOURCE_FREE_OK"),
+    ("NativeJapaneseEggVisualBehaviorSmoke", "JP_EGG_VISUAL_BEHAVIOR_SOURCE_FREE_OK"),
     ("NativeMobyPersistentOwnerSmoke", "NATIVE_MOBY_PERSISTENT_OWNER_SOURCE_FREE_OK"),
     ("NativeWizardAppendSmoke", "NATIVE_WIZARD_APPEND_SOURCE_FREE_OK"),
     ("NativeWizardAppendPlacementSmoke", "NATIVE_WIZARD_APPEND_PLACEMENT_FREE_OK"),
@@ -158,6 +171,7 @@ ADDITIONAL_CORE_CASES = (
      ["--fresh-saved-research-ui"]),
 )
 SOURCE_QA_CASES = (
+    ("NativeSimpleMobyGeometrySmoke", "NATIVE_SIMPLE_MOBY_GEOMETRY_DISC_OK", ["--source"]),
     # This read-only mode checks both preserved V2 and V3 native closure goldens;
     # publication/fault modes must never be substituted here.
     ("NativeMobyDependencyClosureSmoke", "NATIVE_TOWNSQUARE_V3_OCCUPIED_SITE_REFUSED_AND_COORDINATE_ONLY_SOURCE_OK",

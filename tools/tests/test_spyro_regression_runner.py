@@ -155,6 +155,14 @@ class ObserverPrebuildTests(unittest.TestCase):
         ("python-tiled-family-chest-observer",
          ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_tiled_family_chest_observer.py", "-v"),
          "Ran 9 tests"),
+        ("python-japanese-object-contracts", ("tools/Test-Inspect-SpyroJapaneseObjects.py", "-v"),
+         "Ran 9 tests"),
+        ("python-japanese-collectible-contracts", ("tools/test_japanese_collectibles.py", "-v"),
+         "Ran 11 tests"),
+        ("python-japanese-font-contracts", ("tools/test_japanese_font.py", "-v"),
+         "Ran 7 tests"),
+        ("python-japanese-sign-reference-verifier", ("tools/Test-Verify-SpyroJapaneseSignReference.py", "-v"),
+         "Ran 11 tests"),
     )
 
     def test_exact_mandatory_python_only_observer_registry(self):
@@ -162,11 +170,10 @@ class ObserverPrebuildTests(unittest.TestCase):
         self.assertFalse(any(name in dict(RUNNER.CORE_CASES) for name, _, _ in self.EXPECTED))
 
     def test_observer_order_markers_failure_gates_and_default_source_isolation(self):
-        scenarios = {
-            "success": (0, 3), "runner-failed": (1, 1),
-            "legacy-no-marker": (1, 2), "legacy-nonzero": (1, 2),
-            "tiled-zero-discovered": (1, 3), "tiled-nonzero": (1, 3),
-        }
+        scenarios = {"success": (0, len(self.EXPECTED) + 1), "runner-failed": (1, 1)}
+        for index in range(len(self.EXPECTED)):
+            scenarios[f"missing-marker-{index}"] = (1, index + 2)
+            scenarios[f"nonzero-{index}"] = (1, index + 2)
         for opted_in in (False, True):
             for scenario, (status, python_count) in scenarios.items():
                 calls = []
@@ -176,10 +183,8 @@ class ObserverPrebuildTests(unittest.TestCase):
                         return subprocess.CompletedProcess(command, 1)
                     for index, (_, arguments, marker) in enumerate(self.EXPECTED):
                         if command == [sys.executable, "-B", *arguments]:
-                            if not (index == 0 and scenario == "legacy-no-marker"):
-                                kwargs["stdout"].write("Ran 0 tests\nOK\n" if index == 1 and
-                                                       scenario == "tiled-zero-discovered" else marker + "\n")
-                            if scenario == ("legacy-nonzero" if index == 0 else "tiled-nonzero"):
+                            kwargs["stdout"].write("Ran 0 tests\nOK\n" if scenario == f"missing-marker-{index}" else marker + "\n")
+                            if scenario == f"nonzero-{index}":
                                 return subprocess.CompletedProcess(command, 7)
                     if command[0] == "env": kwargs["stdout"].write("Offline QA passed.\n")
                     return subprocess.CompletedProcess(command, 0)
@@ -206,18 +211,18 @@ class ObserverPrebuildTests(unittest.TestCase):
                     self.assertEqual(([sys.executable, "-B", *arguments], 123), calls[index])
                 self.assertEqual(python_count, sum(command[0] == sys.executable for command, _ in calls))
                 if scenario == "success":
-                    self.assertEqual("build-Spyro.Editor.App", summary[3]["name"])
-                    self.assertEqual(["dotnet", "build"], calls[3][0][:2])
-                    self.assertEqual(123, calls[3][1])
+                    self.assertEqual("build-Spyro.Editor.App", summary[python_count]["name"])
+                    self.assertEqual(["dotnet", "build"], calls[python_count][0][:2])
+                    self.assertEqual(123, calls[python_count][1])
                     self.assertTrue(all(row["passed"] for row in summary))
                     if opted_in:
-                        self.assertEqual("source-offline-qa", summary[4]["name"])
-                        self.assertEqual(456, calls[4][1])
+                        self.assertEqual("source-offline-qa", summary[python_count + 1]["name"])
+                        self.assertEqual(456, calls[python_count + 1][1])
                 else:
                     self.assertEqual(python_count, len(calls))
                     self.assertFalse(summary[-1]["passed"])
                     self.assertFalse(any(command[0] in ("dotnet", "env") for command, _ in calls))
-                    if scenario in ("legacy-no-marker", "tiled-zero-discovered"):
+                    if scenario.startswith("missing-marker-"):
                         self.assertEqual("missing success marker", summary[-1]["detail"])
 
     def test_list_never_executes_observers_or_resolves_source_or_creates_logs(self):
@@ -1639,6 +1644,7 @@ class RunnerOptionsTests(unittest.TestCase):
     def test_native_source_checks_use_read_only_modes_and_distinct_logs(self):
         cases = tuple(c for c in RUNNER.SOURCE_QA_CASES if c[0].startswith("Native"))
         expected = {
+            "NativeSimpleMobyGeometrySmoke": ["--source", "/selected original.bin"],
             "NativeMobyDependencyClosureSmoke": ["--source-v3", "/selected original.bin"],
             "NativeMobyInventorySmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeMobyPersistentOwnerSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
@@ -1932,6 +1938,32 @@ class NeutralTiledFamilyOracleTests(unittest.TestCase):
 
 
 class RegionalAndMatrixGateTests(unittest.TestCase):
+    def test_collectible_save_contract_has_no_native_card_or_source_route(self):
+        self.assertEqual("DETACHED_COLLECTIBLE_SAVE_SOURCE_FREE_OK",
+                         dict(RUNNER.CORE_CASES)["DetachedCollectibleSaveSmoke"])
+        self.assertEqual([], RUNNER.CASE_ARGUMENTS.get("DetachedCollectibleSaveSmoke", []))
+        self.assertFalse(any(name == "DetachedCollectibleSaveSmoke" for name, _, _ in RUNNER.SOURCE_QA_CASES))
+
+    def test_regional_model_gates_keep_two_source_cases_explicit(self):
+        self.assertEqual("JP_EGG_VISUAL_BEHAVIOR_SOURCE_FREE_OK",
+                         dict(RUNNER.CORE_CASES)["NativeJapaneseEggVisualBehaviorSmoke"])
+        self.assertEqual([], RUNNER.CASE_ARGUMENTS.get("NativeJapaneseEggVisualBehaviorSmoke", []))
+        self.assertFalse(any(name == "NativeJapaneseEggVisualBehaviorSmoke" for name, _, _ in RUNNER.SOURCE_QA_CASES))
+        self.assertEqual("NATIVE_SIMPLE_MOBY_GEOMETRY_SOURCE_FREE_OK",
+                         dict(RUNNER.CORE_CASES)["NativeSimpleMobyGeometrySmoke"])
+        self.assertEqual("JP_EGG_MODEL_ASSEMBLY_SOURCE_FREE_OK",
+                         dict(RUNNER.CORE_CASES)["NativeJapaneseEggModelAssemblySmoke"])
+        for name in ("NativeSimpleMobyGeometrySmoke", "NativeJapaneseEggModelAssemblySmoke"):
+            self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
+        self.assertEqual([("NativeSimpleMobyGeometrySmoke", "NATIVE_SIMPLE_MOBY_GEOMETRY_DISC_OK", ["--source"])],
+                         [case for case in RUNNER.SOURCE_QA_CASES if case[0] == "NativeSimpleMobyGeometrySmoke"])
+        self.assertFalse(any(name == "NativeJapaneseEggModelAssemblySmoke" for name, _, _ in RUNNER.SOURCE_QA_CASES))
+
+    def test_japanese_sign_gate_is_source_free_and_does_not_reuse_usa_source_arguments(self):
+        self.assertEqual("JAPANESE_SIGN_MESSAGE_SOURCE_FREE_OK", dict(RUNNER.CORE_CASES)["JapaneseSignMessageSmoke"])
+        self.assertEqual([], RUNNER.CASE_ARGUMENTS.get("JapaneseSignMessageSmoke", []))
+        self.assertFalse(any(name == "JapaneseSignMessageSmoke" for name, _, _ in RUNNER.SOURCE_QA_CASES))
+
     def test_regional_source_free_gate_has_no_disc_or_publication_arguments(self):
         self.assertEqual("NATIVE_REGIONAL_SOURCE_FREE_OK", dict(RUNNER.CORE_CASES)["NativeRegionalSourceSmoke"])
         self.assertEqual([], RUNNER.CASE_ARGUMENTS.get("NativeRegionalSourceSmoke", []))

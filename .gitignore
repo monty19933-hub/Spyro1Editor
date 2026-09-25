@@ -23,6 +23,7 @@
 duckstation-*
 *-mainram*
 *-vram*
+!/docs/research/japanese-sign-font-vram-lifetime.md
 *-before-clean.bin
 *-live-capture-*.bin
 
@@ -195,6 +196,14 @@ unsafe-tests/
 !/tools/Build-SpyroEditorRelease.sh
 !/tools/Run-SpyroEditorOfflineQa.sh
 !/tools/Run-SpyroEditorRegression.py
+!/tools/Inspect-SpyroJapaneseObjects.py
+!/tools/Test-Inspect-SpyroJapaneseObjects.py
+!/tools/Inspect-SpyroJapaneseCollectibles.py
+!/tools/test_japanese_collectibles.py
+!/tools/Render-SpyroJapaneseFont.py
+!/tools/test_japanese_font.py
+!/tools/Verify-SpyroJapaneseSignReference.py
+!/tools/Test-Verify-SpyroJapaneseSignReference.py
 !/tools/tests/
 /tools/tests/*
 !/tools/tests/test_spyro_regression_runner.py

@@ -1,0 +1,126 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+
+namespace Spyro.Editor.Core.Analysis;
+
+/// <summary>
+/// One native shader descriptor. RGB is the descriptor's base value, not a
+/// prediction of final lit pixels. The upper byte also controls native lighting.
+/// </summary>
+public sealed record NativeMobyShadingProfile(byte Index, uint Descriptor)
+{
+    public byte Red => (byte)Descriptor;
+    public byte Green => (byte)(Descriptor >> 8);
+    public byte Blue => (byte)(Descriptor >> 16);
+    public byte LightingControl => (byte)(Descriptor >> 24);
+}
+
+/// <summary>
+/// An exact-revision, source-bound 32-entry observation of the Moby shader table.
+/// This deliberately does not assert the complete table extent or model closure.
+/// The JP dragonfly egg is untextured and uses row+4F=1; these are shader
+/// descriptors, not CLUT entries or editor marker colors.
+/// </summary>
+public sealed class NativeJapaneseObjectAppearance
+{
+    public const int CapturedProfileCount = 32;
+    private readonly NativeMobyShadingProfile[] _profiles;
+    private NativeJapaneseObjectAppearance(NativeDiscRevision revision, string imageHash, uint tablePc,
+        int tableOffset, ReadOnlySpan<byte> bytes)
+    {
+        Revision = revision; SourceImageSha256 = imageHash; TableRuntimeAddress = tablePc;
+        TableExecutableOffset = tableOffset; TableWindowSha256 = Hash(bytes);
+        _profiles = Enumerable.Range(0, CapturedProfileCount)
+            .Select(i => new NativeMobyShadingProfile((byte)i, 0)).ToArray();
+        for (int i = 0; i < _profiles.Length; i++)
+            _profiles[i] = new((byte)i, BinaryPrimitives.ReadUInt32LittleEndian(bytes[(i * 4)..]));
+        Profiles = Array.AsReadOnly(_profiles);
+    }
+    public NativeDiscRevision Revision { get; }
+    public string SourceImageSha256 { get; }
+    public uint TableRuntimeAddress { get; }
+    public int TableExecutableOffset { get; }
+    public string TableWindowSha256 { get; }
+    public IReadOnlyList<NativeMobyShadingProfile> Profiles { get; }
+    public bool NativeImportApproved => false;
+    public bool FinalRenderedColorVerified => false;
+
+    public static NativeJapaneseObjectAppearance Capture(NativeRegionalSourceSession source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        bool japan = source.Revision == NativeDiscRevision.JapanScps10083;
+        int renderer = japan ? 0x12698 : 0x13904;
+        string rendererHash = japan ? "4f894553f8ea16ac0b39e5d1147de06e522e2c74383167c09acf2c0ad30cdfa5" :
+            "66c82cfa7abbb5923cab63cc59f4b78d55900fd2a4dcaa6c8504e663c11d4d47";
+        Require(source.ReadExecutableRange(renderer, 0x134), rendererHash);
+        // Both paths load row+4C then ASR by22. ASR produces a byte offset;
+        // bits22/23 must be zero for aligned words, and selectors>=128 become
+        // negative. Admission below is only the observed nonnegative prefix.
+        byte[] instructions = source.ReadExecutableRange(renderer, 0x2C);
+        if (BinaryPrimitives.ReadUInt32LittleEndian(instructions) != 0x8FD1004C ||
+            BinaryPrimitives.ReadUInt32LittleEndian(instructions.AsSpan(0x20)) != 0x00118D83)
+            throw new InvalidDataException("Native per-instance shading lookup changed.");
+        int tableOffset = japan ? 0x67674 : 0x5EBD8;
+        byte[] table = source.ReadExecutableRange(tableOffset, CapturedProfileCount * 4);
+        Require(table, japan ? "8436afe7fe544b2ff21e65754706f712ce9185f8f1369c5258426fb80ce32909" :
+            "7cf8206c8ac05f3b0acfd9209a45c866ca29a459b5142294702ecfb24f7d52a3");
+        source.VerifyUnchanged();
+        return new(source.Revision, source.SourceImageSha256, japan ? 0x80076E74u : 0x8006E3D8u, tableOffset, table);
+    }
+
+    /// <summary>Decode caller-supplied row fields; source provenance remains the caller's responsibility.</summary>
+    public NativeJapaneseMobyAppearanceFields DescribeRow(ReadOnlySpan<byte> row)
+    {
+        RequireRow(row);
+        uint packed = BinaryPrimitives.ReadUInt32LittleEndian(row[0x4C..]);
+        int byteOffset = unchecked((int)packed) >> 22;
+        if (byteOffset < 0 || byteOffset % 4 != 0 || byteOffset >= CapturedProfileCount * 4)
+            throw new InvalidDataException("Packed Moby shade selector is unaligned or outside the captured table window.");
+        return new(BinaryPrimitives.ReadUInt16LittleEndian(row[0x36..]), row[0x3C], row[0x3D],
+            row[0x3E], row[0x3F], packed, _profiles[byteOffset / 4]);
+    }
+
+    /// <summary>
+    /// Produce a detached per-instance row revision. Only the native shade
+    /// selector byte changes; model, animation and the low22bits remain intact.
+    /// This does not materialize a disc or authorize an arbitrary actor import.
+    /// </summary>
+    public byte[] WithProfile(ReadOnlySpan<byte> row, int profileIndex)
+    {
+        _ = DescribeRow(row);
+        if (profileIndex is < 0 or >= CapturedProfileCount)
+            throw new InvalidDataException("Native shade profile has not been captured from this revision.");
+        byte[] output = row.ToArray();
+        output[0x4F] = (byte)profileIndex;
+        _ = DescribeRow(output);
+        return output;
+    }
+
+    /// <summary>Exact descriptor matching; equal numeric indices are not a regional certificate.</summary>
+    public IReadOnlyList<byte> FindExactProfileMatches(NativeMobyShadingProfile profile) =>
+        Array.AsReadOnly(_profiles.Where(p => p.Descriptor == profile.Descriptor).Select(p => p.Index).ToArray());
+
+    internal static NativeJapaneseObjectAppearance DecodeFixture(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length != CapturedProfileCount * 4)
+            throw new InvalidDataException("Fixture shader window must contain32 complete words.");
+        return new(NativeDiscRevision.JapanScps10083, "fixture-no-source-certificate", 0, 0, bytes);
+    }
+    private static void RequireRow(ReadOnlySpan<byte> row)
+    {
+        if (row.Length != 0x58)
+            throw new InvalidDataException("Native Moby appearance needs one complete row.");
+        ushort actor = BinaryPrimitives.ReadUInt16LittleEndian(row[0x36..]);
+        if (actor is not (0x47 or 0xF5))
+            throw new InvalidDataException("This appearance contract covers identified Japanese signs and dragonfly eggs only.");
+        if (row[0x3C] != row[0x3D] || row[0x3C] > (actor == 0x47 ? 2 : 0))
+            throw new InvalidDataException("Unsupported native source animation variant.");
+    }
+    private static void Require(byte[] bytes, string expected)
+    { if (Hash(bytes) != expected) throw new InvalidDataException("Native shader source preimage changed."); }
+    private static string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+}
+
+public sealed record NativeJapaneseMobyAppearanceFields(ushort ActorId, byte CurrentAnimation,
+    byte NextAnimation, byte CurrentFrame, byte NextFrame, uint PackedRowColorWord,
+    NativeMobyShadingProfile ShadingProfile);
