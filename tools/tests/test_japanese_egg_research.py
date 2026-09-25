@@ -6,6 +6,7 @@ import struct
 import sys
 from types import SimpleNamespace
 import unittest
+from unittest import mock
 
 sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location("independent_egg_verifier", Path(__file__).parents[1] / "Verify-SpyroJapaneseEggResearch.py")
@@ -280,6 +281,127 @@ class ReceiptTests(unittest.TestCase):
         for data in (b'{"x": 1, "x": 2}', b'{"nested": {"a": 1, "a": 2}}', b'[]'):
             with self.assertRaises(ValueError):
                 v.unique_json(data)
+
+
+class AuthoredColorTests(unittest.TestCase):
+    def package(self):
+        p = bytearray(0x808)
+        for i in range(70):
+            v.put(p, 0x45C + i * 4, 0xFF123456)
+            v.put(p, 0x574 + i * 4, 0x00654321)
+        return p
+
+    def level(self):
+        data = bytearray(0x384000)
+        for at, value in ((0x10, 0x17C000), (0x14, 0x4E800), (0x18, 0x1CA800),
+                          (0x1C, 0x14800), (0x20, 0x1DF000), (0x24, 0x1000),
+                          (0x50 + 35 * 4, 0x1C9800)):
+            v.put(data, at, value)
+        data[0x1C9800:0x1CA008] = self.package()
+        rows = []
+        for i in range(2):
+            at = 0x100 + i * 88
+            struct.pack_into("<H", data, 0x1CA800 + at + 0x36, 0xF5)
+            rows.append({"NativeIndex": 174 + i, "RowSceneOffset": at, "PrivateSceneOffset": 0x300 + i * 12,
+                         "Placement": {"Id": "egg-a" if i == 0 else "egg-b"}})
+        return data, rows
+
+    def test_palette_is_low24_only_and_preserves_complete_complement(self):
+        p = self.package()
+        final = v.authored_palette(p, 0x332211, 0xCCBBAA)
+        allowed = {start + 4 * i + j for start in (0x45C, 0x574) for i in range(70) for j in range(3)}
+        self.assertTrue(all(final[i] == p[i] for i in range(len(p)) if i not in allowed))
+        self.assertEqual(final[0x45C:0x460], bytes.fromhex("112233ff"))
+        self.assertEqual(final[0x574:0x578], bytes.fromhex("aabbcc00"))
+        self.assertEqual(v.u32(p, 0x45C), 0xFF123456)
+        self.assertEqual(final, v.authored_palette(bytes(p), 0x332211, 0xCCBBAA))
+
+    def test_palette_rejects_wrong_width_length_and_code(self):
+        p = self.package()
+        for color in (-1, 0x1000000, True, "green"):
+            with self.assertRaises(ValueError):
+                v.authored_palette(p, color, 0)
+        with self.assertRaises(ValueError):
+            v.authored_palette(p[:-1], 0, 0)
+        for at in (0x45F, 0x577):
+            bad = bytearray(p); bad[at] ^= 1
+            with self.assertRaises(ValueError):
+                v.authored_palette(bad, 0, 0)
+
+    def test_two_native_registrations_row_classes_and_full_inverse(self):
+        data, rows = self.level()
+        with mock.patch.object(v, "level_afterimage", return_value=(bytes(data), rows)):
+            final, revised, bindings = v.authored_level_afterimage(b"", b"")
+        self.assertEqual(len(final), len(data) + 0x1800)
+        self.assertEqual(v.u32(final, 0x14), 0x50000)
+        self.assertEqual(v.u32(final, 0x18), 0x1CC000)
+        self.assertEqual(v.u32(final, 0x20), 0x1E0800)
+        self.assertEqual([b["ProjectedRoot"] for b in bindings], [0x80164D54, 0x8016555C])
+        for i, (cls, _, _) in enumerate(v.AUTHORED_COLORS):
+            self.assertEqual(v.u32(final, 0xE0 + i * 4), 0x1CA800 + i * 0x808)
+            self.assertEqual(struct.unpack_from("<H", final, 0x198 + i * 2)[0], cls)
+            self.assertEqual(struct.unpack_from("<H", final, 0x1CC000 + rows[i]["RowSceneOffset"] + 0x36)[0], cls)
+            self.assertEqual(revised[i]["AuthoredDestinationClass"], cls)
+        self.assertEqual(final[0x800:0x1CA800], data[0x800:0x1CA800])
+
+    def test_occupied_registration_and_wrong_row_ancestry_refused(self):
+        for offset in (0xE0, 0xE4, 0x198, 0x19A, 0x1CA800 + 0x136):
+            data, rows = self.level(); data[offset] ^= 1
+            with mock.patch.object(v, "level_afterimage", return_value=(bytes(data), rows)), self.assertRaises(ValueError):
+                v.authored_level_afterimage(b"", b"")
+
+    def test_second_dispatch_leaf_is_owned_and_only_guard_changes(self):
+        current = bytearray(0xE800)
+        current[0x32C4:0x32CC] = v.words((v.jump(0x80085780), 0))
+        at = 0x80088C44 - 0x8007AA38
+        current[at:at + 0x1C] = v.words((0x2463FF0B, 0x10600003, 0x246300F5, v.jump(0x80085780), 0, v.jump(0x80088BAC), 0))
+        with mock.patch.object(v, "overlay_afterimage", return_value=bytes(current)):
+            final = v.authored_overlay_afterimage(b"", b"")
+        self.assertEqual(v.u32(final, 0x32C4), v.jump(0x80088C44))
+        allowed = set(range(0x32C4, 0x32C8)) | set(range(at, at + 0x34))
+        self.assertTrue(all(final[i] == current[i] for i in range(len(current)) if i not in allowed))
+        for offset in (0x32C4, 0x32C8, at + 0x20):
+            bad = bytearray(current); bad[offset] ^= 1
+            with mock.patch.object(v, "overlay_afterimage", return_value=bytes(bad)), self.assertRaises(ValueError):
+                v.authored_overlay_afterimage(b"", b"")
+
+    def test_authored_iso_owner_keeps_legacy_profile_closed(self):
+        root = bytearray(2048)
+        at = 0
+        for name, lba, size in (("WAD.WAD", 37, 0x6927000), ("SCUS_942.28", 53875, 0x66000), ("NEXT", 55000, 2048)):
+            row = iso_record(name, lba, size); root[at:at + len(row)] = row; at += len(row)
+        records = v.iso_directory(root)
+        final = v.root_afterimage(root, records, 0x692A000, True)
+        self.assertEqual(v.iso_directory(final)["SCUS_942.28"][:2], (53881, 0x66000))
+        for size, authored in ((0x692A000, False), (0x6928800, True), (0x692A000, 1)):
+            with self.assertRaises(ValueError):
+                v.root_afterimage(root, records, size, authored)
+
+    def test_authored_receipt_rejects_old_gap_shared_palette_and_pickup_claims(self):
+        report, _, receipt = ReceiptTests().fixture()
+        data, rows = self.level()
+        with mock.patch.object(v, "level_afterimage", return_value=(bytes(data), rows)):
+            _, rows, bindings = v.authored_level_afterimage(b"", b"")
+        receipt.update(profile=v.AUTHORED_PROFILE, GrowthBytes=0x3000, RelocatedExecutableLba=53881,
+                       FinalExecutableEndLba=54085, Rows=rows, bindings=bindings, IndependentColorVariants=True,
+                       sharedModelColors=False, memory={"SceneEnd": 0x8017AD54, "NormalReservedStart": 0x80187BB0,
+                       "NormalGap": 0xCE5C, "TransferPeakEnd": 0x8017AD54, "VisualTickStackLow": 0x801FFB20, "StackMargin": 0x320})
+        for field in ("LitPixelsVerified", "GenericEffectsApproved", "DynamicSpawnApproved", "GlobalUnusedNamespaceProven"):
+            receipt[field] = False
+        def check(value):
+            return v.verify_receipt(json.dumps(value).encode(), report, [], rows, "cue", "source-cue", True, bindings)
+        check(receipt)
+        mutations = (("memory", "NormalGap", 0xE65C), ("bindings", "AuthoredDestinationClass", 0xF5),
+                     ("bindings", "nearRgb", True), ("bindings", "PackageSha256", "wrong"))
+        for owner, field, value in mutations:
+            bad = json.loads(json.dumps(receipt))
+            (bad[owner][0] if owner == "bindings" else bad[owner])[field] = value
+            with self.assertRaises(ValueError): check(bad)
+        for field, value in (("sharedModelColors", True), ("IndependentColorVariants", False),
+                             ("PickupEnabled", True), ("PersistentSaveChanges", True), ("RuntimeVerified", True),
+                             ("LitPixelsVerified", True), ("GenericEffectsApproved", True), ("DynamicSpawnApproved", True)):
+            bad = dict(receipt); bad[field] = value
+            with self.assertRaises(ValueError): check(bad)
 
 
 if __name__ == "__main__":

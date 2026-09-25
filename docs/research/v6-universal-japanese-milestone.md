@@ -7,6 +7,18 @@ this is not permission to replace the game with its Japanese version.
 
 ## Execution order and acceptance
 
+Latest source checkpoint: detached independent authored RGB registrations now
+pass exact-USA clear/load/animation/render-routing tests and exhaustive class
+dispatch comparison. The actual larger normal-load footprint passes separately.
+The native pickup predicate also passes source/relocated instruction equivalence,
+but is not yet installed as a collector. Save-menu/gameplay RAM ownership is now
+documented; a prior card-overlay address/dispatch error was corrected and its
+unsupported closure withdrawn. See [authored colors](japanese-egg-authored-classes.md),
+[pickup](japanese-egg-pickup-predicate.md), and
+[save ownership](usa-save-buffer-ownership.md). These source checks do not
+replace the still-required color gameplay, persistent inventory, sign integration
+and editor authoring milestones. R08 and all published test discs are unchanged.
+
 1. Authenticate the supplied Japanese revision read-only. Keep regional source
    identity, directory ownership and exact byte evidence separate from USA.
 2. Identify egg/sign models, rendering/material variants, handlers, message

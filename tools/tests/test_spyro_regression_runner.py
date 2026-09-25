@@ -201,10 +201,12 @@ class ObserverPrebuildTests(unittest.TestCase):
          "Ran 12 tests"),
         ("python-usa-modal-texture-lifetime", ("tools/test_usa_modal_texture_lifetime.py", "-v"),
          "Ran 9 tests"),
+        ("python-usa-save-buffer-ownership", ("tools/test_usa_save_buffer_ownership.py", "-v"),
+         "Ran 10 tests"),
         ("python-japanese-egg-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_observer.py", "-v"),
          "Ran 10 tests"),
         ("python-japanese-egg-physical-verifier", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_research.py", "-v"),
-         "Ran 22 tests"),
+         "Ran 29 tests"),
     )
 
     def test_exact_mandatory_python_only_observer_registry(self):
@@ -1998,6 +2000,10 @@ class RegionalAndMatrixGateTests(unittest.TestCase):
             ("NativeJapaneseEggRenderAdmissionSmoke", "JP_EGG_RENDER_ADMISSION_SOURCE_FREE_OK"),
             ("NativeJapaneseEggRgbEditSmoke", "JP_EGG_RGB_EDIT_SOURCE_FREE_OK"),
             ("NativeJapaneseEggInstanceRootSmoke", "JP_EGG_INSTANCE_ROOT_SOURCE_FREE_OK"),
+            ("NativeJapaneseEggRgbVariantTailSmoke", "JP_EGG_RGB_VARIANT_TAIL_SOURCE_FREE_OK"),
+            ("NativeJapaneseEggPickupPredicateSmoke", "JP_EGG_PICKUP_PREDICATE_SOURCE_FREE_OK"),
+            ("NativeJapaneseEggAuthoredClassesSmoke", "JP_EGG_AUTHORED_CLASSES_SOURCE_FREE_OK"),
+            ("NativeJapaneseEggAuthoredMemorySmoke", "JP_EGG_AUTHORED_MEMORY_SOURCE_FREE_OK"),
             ("NativeJapaneseEggPlacementSmoke", "JP_EGG_PLACEMENT_SOURCE_FREE_OK"),
             ("NativeJapaneseSignFontResidentSmoke", "JP_SIGN_FONT_RESIDENT_SOURCE_FREE_OK"),
             ("NativeJapaneseSignModalHookSmoke", "JAPANESE_SIGN_MODAL_HOOK_SOURCE_FREE_OK"),

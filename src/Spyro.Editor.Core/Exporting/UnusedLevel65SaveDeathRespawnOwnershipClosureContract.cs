@@ -38,9 +38,10 @@ internal sealed record UnusedLevel65MemoryCardDeserializeDispatchProof(
     uint MainMenuStateRuntimeAddress,
     int StateCount,
     UnusedLevel65SaveDeathRespawnRegion IndirectDispatcher,
-    int SelectedLoadState,
-    uint SelectedLoadHandlerRuntimeAddress,
-    UnusedLevel65SaveDeathRespawnRegion SelectedLoadHandler,
+    int? SelectedLoadPointerTableState,
+    string SelectedLoadDispatchBoundary,
+    uint SelectedLoadWindowRuntimeAddress,
+    UnusedLevel65SaveDeathRespawnRegion SelectedLoadContainingWindow,
     uint SelectedSlotIndexRuntimeAddress,
     UnusedLevel65SaveDeathRespawnRegion SelectedSlotCallWindow,
     UnusedLevel65SaveDeathRespawnCallEdge DeserializeCall,
@@ -208,7 +209,7 @@ internal sealed record UnusedLevel65SaveDeathRespawnOwnershipClosureContract(
     bool RuntimePromotionAuthorized);
 
 /// <summary>
-/// Read-only closure of the ID65 memory-card deserialize dispatch, the exact
+/// Read-only evidence for the ID65 memory-card deserialize call, the exact
 /// non-egg index-35 save rows, the first pinned passive-Moby witness, and the
 /// common death/respawn call graph. It deliberately records the failed remote
 /// spawn/death run and cannot write or promote any disc artifact.
@@ -216,7 +217,7 @@ internal sealed record UnusedLevel65SaveDeathRespawnOwnershipClosureContract(
 internal static class UnusedLevel65SaveDeathRespawnOwnershipClosure
 {
     public const string ProfileId =
-        "unused-level-65-save-death-respawn-no-egg-passive-static-closure-v1";
+        "unused-level-65-save-death-respawn-source-map-corrected-v2";
     public const string LockedDisplayNameImageSha256 =
         "9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8";
     public const string RemoteBlankImageSha256 =
@@ -256,9 +257,9 @@ internal static class UnusedLevel65SaveDeathRespawnOwnershipClosure
     private const int StatePointerCount = 16;
     private const int DispatcherRelativeOffset = 0x680;
     private const int DispatcherByteLength = 0x30;
-    private const uint OverlayCodeRuntimeBase = 0x8007B0E8;
-    private const int SelectedLoadState = 14;
-    private const uint SelectedLoadHandlerRuntimeAddress = 0x8007CC48;
+    // The whole overlay is contiguous at AA38. B0E8 is state-table target 0,
+    // not the first code byte (file +9C is the sound helper at AAD4).
+    private const uint SelectedLoadWindowRuntimeAddress = 0x8007C634;
     private const int SelectedLoadHandlerRelativeOffset = 0x1BFC;
     private const int SelectedLoadHandlerByteLength = 0x704;
     private const int SelectedSlotCallWindowRelativeOffset = 0x1FC4;
@@ -369,7 +370,8 @@ internal static class UnusedLevel65SaveDeathRespawnOwnershipClosure
             "No captured RAM value proves the initial lives count, and no death counter distinguishes first-death state 5 from repeated state-4 exhaustion.",
             "Fresh, existing, full, corrupt, and removed memory-card save/load behavior remains physically untested for ID65.",
             "Cold reset and death/respawn persistence remain physically unaccepted on the remote construction.",
-            "Only the pinned passive Artisans Grass witness is statically closed; eggs, rewards, collectibles, and arbitrary game Mobys are excluded."
+            "Only the pinned passive Artisans Grass witness fits the observed save schema; complete save dispatch is not closed, and eggs, rewards, collectibles, and arbitrary game Mobys are excluded.",
+            "The former state-14 deserialize closure was invalid: table entry 14 is the common epilogue. The real outer-mode-two/substate load route requires a complete bounded traversal before dispatch closure can be reissued."
         ];
 
         return new(
@@ -435,6 +437,12 @@ internal static class UnusedLevel65SaveDeathRespawnOwnershipClosure
         if (!pointers.SequenceEqual(expectedPointers))
             throw new InvalidDataException("The exact memory-card state target table changed.");
 
+        RequireWord(executable, 0x1BA0, MemoryCardHeaderRuntimeBase, "whole-overlay loader destination");
+        RequireWord(overlay, 0x9C, 0x27BDFFE8, "sound helper begins at AAD4");
+        RequireWord(overlay, 0x6B0, 0x24040001, "state-zero body begins at B0E8");
+        RequireWord(overlay, 0x31C, 0x106205BF, "outer mode-two branch to C454");
+        RequireWord(overlay, 0x2210, 0x0C016330, "state-fourteen target is common epilogue");
+
         UnusedLevel65SaveDeathRespawnRegion dispatcher = OverlayRegion(
             overlay,
             layout,
@@ -449,8 +457,8 @@ internal static class UnusedLevel65SaveDeathRespawnOwnershipClosure
             layout,
             SelectedLoadHandlerRelativeOffset,
             SelectedLoadHandlerByteLength,
-            "state-14 selected-slot load handler",
-            SelectedLoadHandlerRuntimeAddress,
+            "bounded containing window; not a table-selected function entry",
+            SelectedLoadWindowRuntimeAddress,
             expectedSha256: "c23198765beacadbee0c4d88d2f30aab061aa66c06fa3fdb285c8599a5bdf060");
         UnusedLevel65SaveDeathRespawnRegion callWindow = OverlayRegion(
             overlay,
@@ -465,7 +473,7 @@ internal static class UnusedLevel65SaveDeathRespawnOwnershipClosure
         long[] residentCallers = FindDirectJalOffsets(
             executable, 0x800, ExecutableRuntimeBias, DeserializeRuntimeAddress);
         long[] overlayCallers = FindDirectJalOffsets(
-            overlay, MemoryCardHeaderByteLength, OverlayCodeRuntimeBase - MemoryCardHeaderByteLength,
+            overlay, MemoryCardHeaderByteLength, MemoryCardHeaderRuntimeBase,
             DeserializeRuntimeAddress);
         if (residentCallers.Length != 0 ||
             !overlayCallers.SequenceEqual(new long[] { DeserializeCallRelativeOffset }))
@@ -478,7 +486,7 @@ internal static class UnusedLevel65SaveDeathRespawnOwnershipClosure
             layout,
             DeserializeCallRelativeOffset,
             DeserializeRuntimeAddress,
-            "state-14 selected-slot deserialize");
+            "selected-slot deserialize call within outer-mode-two body");
 
         return new(
             MemoryCardOverlayEntry,
@@ -516,8 +524,9 @@ internal static class UnusedLevel65SaveDeathRespawnOwnershipClosure
             MainMenuStateRuntimeAddress,
             StatePointerCount,
             dispatcher,
-            SelectedLoadState,
-            pointers[SelectedLoadState],
+            null,
+            "The 16-entry table dispatches outer mode 1. Its entry 14 is the common epilogue at 8007CC48, not load. Outer mode 2 branches to 8007C454; this report pins the actual deserialize call and containing bytes but does not issue complete outer/substate callgraph closure.",
+            SelectedLoadWindowRuntimeAddress,
             handler,
             SelectedSlotIndexRuntimeAddress,
             callWindow,
@@ -529,7 +538,7 @@ internal static class UnusedLevel65SaveDeathRespawnOwnershipClosure
             DispatcherUsesHeaderPointerTable: true,
             DispatcherJumpsThroughSelectedPointer: true,
             SelectedSlotBufferPointerLoadedBeforeCall: true,
-            IndirectDeserializeClosureResolved: true);
+            IndirectDeserializeClosureResolved: false);
     }
 
     private static UnusedLevel65SaveSchemaClosureProof BuildSaveSchema(
@@ -660,7 +669,7 @@ internal static class UnusedLevel65SaveDeathRespawnOwnershipClosure
             DynamicNativeLinkRequired: moby.BehaviorClosure.DynamicNativeLinkDependencyRequired,
             WitnessFitsRetirementBitmap: true,
             WholePinnedAppendRowAllocatorFitsRetirementBitmap: true,
-            NoEggPassiveSaveProfileStaticallyClosed: true,
+            NoEggPassiveSaveProfileStaticallyClosed: save.MemoryCardDeserializeCallgraphClosed,
             SupportsOnlyPinnedPassiveWitness: true,
             SupportsEggs: false,
             SupportsCollectiblesOrRewards: false,
@@ -1035,7 +1044,7 @@ internal static class UnusedLevel65SaveDeathRespawnOwnershipClosure
     }
 
     private static uint OverlayRuntimeAddress(int relativeOffset) =>
-        OverlayCodeRuntimeBase + checked((uint)(relativeOffset - MemoryCardHeaderByteLength));
+        MemoryCardHeaderRuntimeBase + checked((uint)relativeOffset);
 
     private static void ValidateRegion(
         byte[] bytes,

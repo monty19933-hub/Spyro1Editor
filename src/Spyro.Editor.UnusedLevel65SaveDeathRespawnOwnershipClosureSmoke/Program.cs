@@ -4,7 +4,7 @@ using System.Text.Json;
 using Spyro.Editor.Core.Exporting;
 
 const string ExpectedContractJsonSha256 =
-    "f924ad745a09e4530f7694b0a6cd522f789ee1acee8cf685edb1aab0f3626060";
+    "6c8595ee5b62826053354aa6df478cbe749f7cd58d3471ddc806057af4926bf0";
 
 string root = FindRoot(args.ElementAtOrDefault(0));
 string locked = Path.Combine(
@@ -58,7 +58,6 @@ string firstJson = JsonSerializer.Serialize(first, json);
 string secondJson = JsonSerializer.Serialize(second, json);
 Require(firstJson == secondJson, "Two read-only ownership inspections were not deterministic.");
 string contractHash = Hash(Encoding.UTF8.GetBytes(firstJson));
-Require(contractHash == ExpectedContractJsonSha256, "The complete closure-contract JSON hash changed.");
 
 Require(
     first.ProfileId == UnusedLevel65SaveDeathRespawnOwnershipClosure.ProfileId &&
@@ -107,22 +106,24 @@ Require(dispatch.StateTargets.SequenceEqual(expectedTargets), "The exact 16-stat
 Require(
     dispatch.IndirectDispatcher.LogicalOffset == 0x5BE80 &&
     dispatch.IndirectDispatcher.ImageOffset == 0x7EBD8 &&
-    dispatch.IndirectDispatcher.RuntimeAddress == 0x8007B6CC &&
+    dispatch.IndirectDispatcher.RuntimeAddress == 0x8007B0B8 &&
     dispatch.IndirectDispatcher.Sha256 ==
         "21adc7ed8b750d5e61a24d098b5e0e10ffcae4fbed1e6d0917fc12541ff5c421" &&
-    dispatch.SelectedLoadState == 14 && dispatch.SelectedLoadHandlerRuntimeAddress == 0x8007CC48 &&
-    dispatch.SelectedLoadHandler.LogicalOffset == 0x5D3FC &&
-    dispatch.SelectedLoadHandler.ByteLength == 0x704 &&
-    dispatch.SelectedLoadHandler.Sha256 ==
+    dispatch.SelectedLoadPointerTableState is null && dispatch.SelectedLoadWindowRuntimeAddress == 0x8007C634 &&
+    dispatch.SelectedLoadDispatchBoundary.Contains("not load", StringComparison.Ordinal) &&
+    dispatch.SelectedLoadContainingWindow.RuntimeAddress == 0x8007C634 &&
+    dispatch.SelectedLoadContainingWindow.LogicalOffset == 0x5D3FC &&
+    dispatch.SelectedLoadContainingWindow.ByteLength == 0x704 &&
+    dispatch.SelectedLoadContainingWindow.Sha256 ==
         "c23198765beacadbee0c4d88d2f30aab061aa66c06fa3fdb285c8599a5bdf060" &&
     dispatch.SelectedSlotIndexRuntimeAddress == 0x80078D8C &&
     dispatch.SelectedSlotCallWindow.LogicalOffset == 0x5D7C4 &&
-    dispatch.SelectedSlotCallWindow.RuntimeAddress == 0x8007D010 &&
+    dispatch.SelectedSlotCallWindow.RuntimeAddress == 0x8007C9FC &&
     dispatch.SelectedSlotCallWindow.Sha256 ==
         "ac1d42cb6d9de6a930823ba5fdf1017cb81aa769001e04351cb68eaefdc1a07d" &&
     dispatch.DeserializeCall.LogicalOffset == 0x5D7FC &&
     dispatch.DeserializeCall.ImageOffset == 0x808E4 &&
-    dispatch.DeserializeCall.CallerRuntimeAddress == 0x8007D048 &&
+    dispatch.DeserializeCall.CallerRuntimeAddress == 0x8007CA34 &&
     dispatch.DeserializeCall.CalleeRuntimeAddress == 0x80059594 &&
     dispatch.DeserializeCall.InstructionHex == "6565010C" && dispatch.DeserializeCall.DirectJal &&
     dispatch.ResidentDeserializeDirectCallerCount == 0 &&
@@ -130,8 +131,8 @@ Require(
     dispatch.ExactRemoteRawJalBytePatternCount == 1 &&
     dispatch.DispatcherBoundsStateBelow16 && dispatch.DispatcherUsesHeaderPointerTable &&
     dispatch.DispatcherJumpsThroughSelectedPointer && dispatch.SelectedSlotBufferPointerLoadedBeforeCall &&
-    dispatch.IndirectDeserializeClosureResolved,
-    "The selected-slot indirect deserialize callgraph changed.");
+    !dispatch.IndirectDeserializeClosureResolved,
+    "The corrected byte-owner addresses or unresolved outer-mode load boundary changed.");
 
 UnusedLevel65SaveSchemaClosureProof save = first.SaveSchema;
 Require(
@@ -157,7 +158,7 @@ Require(
     save.AllIndex35NonEggRowsRoundTrip && !save.EggIndex35RowPresent &&
     save.OpaqueSecondPerLevelBytePreservedWithoutSemanticClaim &&
     save.DeserializeRestoresAtLeastFourLives && save.SerializePersistsLivesByte &&
-    save.NewGamePathInitializesFourLives && save.MemoryCardDeserializeCallgraphClosed &&
+    save.NewGamePathInitializesFourLives && !save.MemoryCardDeserializeCallgraphClosed &&
     !save.PhysicalMemoryCardRuntimeAccepted,
     "The exact save/lives static closure changed.");
 RequireSaveField(save, "current-level-id", 0x000, 1, 1, 0x000, 0x8007596C, true);
@@ -190,7 +191,7 @@ Require(
     !passive.ClassControllerRequired && !passive.SoundRequired && !passive.ParticleRequired &&
     !passive.DynamicSpawnRequired && !passive.DynamicNativeLinkRequired &&
     passive.WitnessFitsRetirementBitmap && passive.WholePinnedAppendRowAllocatorFitsRetirementBitmap &&
-    passive.NoEggPassiveSaveProfileStaticallyClosed && passive.SupportsOnlyPinnedPassiveWitness &&
+    !passive.NoEggPassiveSaveProfileStaticallyClosed && passive.SupportsOnlyPinnedPassiveWitness &&
     !passive.SupportsEggs && !passive.SupportsCollectiblesOrRewards &&
     !passive.SupportsAllGameMobys && !passive.PassiveMobyRuntimeAccepted,
     "The narrow no-egg/passive-Moby save profile changed.");
@@ -252,11 +253,12 @@ Require(
     "The immutable failure-only runtime observation changed or became an acceptance claim.");
 
 Require(
-    first.RemainingRuntimeBlockers.Count == 5 &&
+    first.RemainingRuntimeBlockers.Count == 6 &&
     first.RemainingRuntimeBlockers.Any(value => value.Contains("failed to land", StringComparison.Ordinal)) &&
     first.RemainingRuntimeBlockers.Any(value => value.Contains("RAM", StringComparison.Ordinal)) &&
     first.RemainingRuntimeBlockers.Any(value => value.Contains("memory-card", StringComparison.Ordinal)) &&
     first.RemainingRuntimeBlockers.Any(value => value.Contains("arbitrary game Mobys", StringComparison.Ordinal)) &&
+    first.RemainingRuntimeBlockers.Any(value => value.Contains("state-14 deserialize closure was invalid", StringComparison.Ordinal)) &&
     first.StaticReadbackOnly && !first.WritesBin && !first.WritesCue && !first.WriterAuthorized &&
     !first.AppIntegrated && !first.NormalCreateBinEnabled && !first.ReleasePublicationAuthorized &&
     !first.RuntimePromotionAuthorized,
@@ -297,9 +299,11 @@ Require(before.OrderBy(pair => pair.Key).SequenceEqual(after.OrderBy(pair => pai
 Require(directoriesBefore.OrderBy(pair => pair.Key).SequenceEqual(directoriesAfter.OrderBy(pair => pair.Key)),
     "The read-only smoke changed an input/evidence directory.");
 
-Console.WriteLine("PASS: ID65 save/death/respawn ownership is statically closed for one strict no-egg/passive witness.");
+Require(contractHash == ExpectedContractJsonSha256, $"The complete corrected diagnostic JSON hash changed: {contractHash}.");
+
+Console.WriteLine("PASS: ID65 save/death/respawn source evidence verified; complete save dispatch remains unproved.");
 Console.WriteLine($"Contract JSON SHA-256: {contractHash}");
-Console.WriteLine("Memory card: entry-2 state 14 indirectly dispatches exactly one direct JAL to deserialize 0x80059594.");
+Console.WriteLine("Memory card: contiguous overlay base 0x8007AA38; JAL at 0x8007CA34 targets deserialize 0x80059594. Table state 14 is the common epilogue, not load.");
 Console.WriteLine("Lives: save+0x0B round-trips; deserialize and new game establish >=4, while death state 5 requires zero.");
 Console.WriteLine("Runtime rejection: the exact remote BIN never landed and exhausted into GAME OVER; mechanism remains inferred.");
 Console.WriteLine("Runtime/App/Create BIN/release/promotion: false; artifacts written: 0 BIN, 0 CUE, 0 evidence files.");

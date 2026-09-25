@@ -42,6 +42,11 @@ PROFILE = "native-artisans-two-japanese-eggs-visual-research-v1"
 IMAGE_NAME = "artisans-native-japanese-eggs-visual-r01.bin"
 CUE_NAME = "artisans-native-japanese-eggs-visual-r01.cue"
 RECEIPT_NAME = "native-japanese-eggs-visual.receipt.json"
+AUTHORED_PROFILE = "native-artisans-two-japanese-eggs-authored-colors-research-v1"
+AUTHORED_IMAGE_NAME = "artisans-native-japanese-eggs-authored-colors-r01.bin"
+AUTHORED_CUE_NAME = "artisans-native-japanese-eggs-authored-colors-r01.cue"
+AUTHORED_RECEIPT_NAME = "native-japanese-eggs-authored-colors.receipt.json"
+AUTHORED_COLORS = ((0x1E9, 0x332211, 0x665544), (0x1F2, 0xCCBBAA, 0xFFEEDD))
 POSITIONS = ((72704, 47104, 6656, 32), (72704, 49152, 6656, 96))
 FRAGMENTS = (
     (0x8008DE1C, 0x10, "489e0bafad1196885277e64e10780f34ae57b59867bedd92dbfc38a54ac999ca"),
@@ -186,6 +191,78 @@ def level_afterimage(original, donor):
     inverse[old_scene:old_scene + scene_length] = scene
     require(inverse == original and result[0x800:old_scene] == original[0x800:old_scene], "Complete level/model inverse failed")
     return bytes(result), rows
+
+
+def authored_palette(package, near, far):
+    """Neutral fixed-layout RGB edit; source authority belongs to its caller."""
+    require(len(package) == 0x808 and all(type(c) is int and 0 <= c <= 0xFFFFFF for c in (near, far)),
+            "Invalid bounded diagnostic RGB package")
+    result = bytearray(package)
+    for start, color, code in ((0x45C, near, 0xFF), (0x574, far, 0)):
+        for index in range(70):
+            at = start + 4 * index
+            require(package[at + 3] == code, "Native RGB CODE byte differs")
+            result[at:at + 3] = color.to_bytes(3, "little")
+    return bytes(result)
+
+
+def authored_level_afterimage(original, donor):
+    current, rows = level_afterimage(original, donor)
+    scene_at = u32(current, 0x18)
+    require(scene_at == 0x1CA800 and len(current) == 0x384000, "Authored ancestor layout differs")
+    package = bounded(current, u32(current, 0x50 + 35 * 4), 0x808)
+    variants = [authored_palette(package, near, far) for _, near, far in AUTHORED_COLORS]
+    result = bytearray(current[:scene_at] + b"".join(variants) + bytes(0x1800 - 0x1010) + current[scene_at:])
+    put(result, 0x14, u32(current, 0x14) + 0x1800)
+    for index in range(3, 10):
+        at, size = u32(current, index * 8), u32(current, index * 8 + 4)
+        if at or size:
+            require(at >= scene_at and at + size <= len(current), "Authored shifted descriptor is unowned")
+            put(result, index * 8, at + 0x1800)
+    final_rows, bindings = [], []
+    model_base, scene_base = 0x80116554, 0x80166554
+    for index, ((cls, near, far), variant, row) in enumerate(zip(AUTHORED_COLORS, variants, rows)):
+        slot, offset = 36 + index, scene_at + index * 0x808
+        require(u32(current, 0x50 + slot * 4) == 0 and current[0x150 + slot * 2:0x152 + slot * 2] == bytes(2),
+                "Authored native registration slot is occupied")
+        put(result, 0x50 + slot * 4, offset)
+        struct.pack_into("<H", result, 0x150 + slot * 2, cls)
+        row_at = u32(result, 0x18) + row["RowSceneOffset"]
+        require(result[row_at + 0x36:row_at + 0x38] == b"\xf5\0", "Authored row lost F5 ancestry")
+        struct.pack_into("<H", result, row_at + 0x36, cls)
+        final_rows.append(dict(row, AuthoredDestinationClass=cls, FinalRowSha256=sha(bounded(result, row_at, 88))))
+        bindings.append({"RowId": row["Placement"]["Id"], "SourceActorId": 0xF5, "AuthoredDestinationClass": cls,
+                         "RegistrationSlot": slot, "RootFieldOffset": 0x50 + slot * 4, "ClassFieldOffset": 0x150 + slot * 2,
+                         "PackageDataOffset": offset, "ByteLength": 0x808,
+                         "ProjectedRoot": model_base + offset - u32(result, 0x10), "RowSceneOffset": row["RowSceneOffset"],
+                         "ProjectedRowAddress": scene_base + row["RowSceneOffset"],
+                         "ProjectedPrivateAddress": scene_base + row["PrivateSceneOffset"],
+                         "PaletteOrigin": "authored-rgb", "PackageSha256": sha(variant),
+                         "VariantIdentity": sha(("jp-f5-rgb-v1\n" + sha(package) + "\n" + sha(variant) + "\n").encode()),
+                         "nearRgb": near, "farRgb": far})
+    inverse = bytearray(result[:scene_at] + result[scene_at + 0x1800:])
+    inverse[:0x800] = current[:0x800]
+    for row in rows:
+        struct.pack_into("<H", inverse, scene_at + row["RowSceneOffset"] + 0x36, 0xF5)
+    require(inverse == current, "Authored complete data complement/inverse differs")
+    return bytes(result), final_rows, bindings
+
+
+def authored_overlay_afterimage(original, donor):
+    current = overlay_afterimage(original, donor)
+    result = bytearray(current)
+    guard = words((0x2463FF0B, 0x10600009, 0x246300F5, 0x2463FE17, 0x10600006, 0x246301E9,
+                   0x2463FE0E, 0x10600003, 0x246301F2, jump(0x80085780), 0, jump(0x80088BAC), 0))
+    at = 0x80088C44 - 0x8007AA38
+    require(current[0x32C4:0x32CC] == words((jump(0x80085780), 0)) and
+            not any(current[at + 0x1C:at + len(guard)]), "Authored guard/default-leaf owner differs")
+    result[at:at + len(guard)] = guard
+    put(result, 0x32C4, jump(0x80088C44))
+    inverse = bytearray(result)
+    inverse[at:at + len(guard)] = current[at:at + len(guard)]
+    inverse[0x32C4:0x32C8] = current[0x32C4:0x32C8]
+    require(inverse == current, "Authored overlay complement differs")
+    return bytes(result)
 
 
 def runtime_owners(data, rows):
@@ -346,11 +423,12 @@ def packed_wad(original, replacements):
     return bytes(result), reports
 
 
-def root_afterimage(original, records, final_wad_size):
+def root_afterimage(original, records, final_wad_size, authored=False):
     result = bytearray(original)
     new_exe_lba = 37 + final_wad_size // USER
     next_lba = min(lba for lba, _, _ in records.values() if lba > 53875)
-    require(new_exe_lba == 53878 and new_exe_lba + 0x66000 // USER <= next_lba, "Relocated executable exceeds proved ISO padding")
+    require(type(authored) is bool and new_exe_lba == (53881 if authored else 53878) and
+            new_exe_lba + 0x66000 // USER <= next_lba, "Relocated executable exceeds proved ISO padding")
     for name, lba, size in (("WAD.WAD", 37, final_wad_size), ("SCUS_942.28", new_exe_lba, 0x66000)):
         at = records[name][2]
         struct.pack_into("<I", result, at + 2, lba)
@@ -431,24 +509,43 @@ def unique_json(data):
     return value
 
 
-def verify_receipt(data, report, entries, rows, cue_hash, source_cue_hash):
+def verify_receipt(data, report, entries, rows, cue_hash, source_cue_hash, authored=False, bindings=()):
     receipt = unique_json(data)
-    expected = {"profile": PROFILE, "sourceUsaSha256": USA_SHA, "sourceJapanSha256": JP_SHA,
+    expected = {"profile": AUTHORED_PROFILE if authored else PROFILE, "sourceUsaSha256": USA_SHA, "sourceJapanSha256": JP_SHA,
                 "outputImageSha256": report["expectedCandidateSha256"], "changedRawSectors": report["changedRawSectors"],
                 "outputCueSha256": cue_hash, "sourceCueSha256": source_cue_hash, "OriginalWadSha256": report["originalWadSha256"],
-                "WadSha256": report["wadSha256"], "RootSha256": report["rootSha256"], "GrowthBytes": 0x1800,
-                "RelocatedExecutableLba": 53878, "FinalExecutableEndLba": 54082, "Entries": entries,
+                "WadSha256": report["wadSha256"], "RootSha256": report["rootSha256"], "GrowthBytes": 0x3000 if authored else 0x1800,
+                "RelocatedExecutableLba": 53881 if authored else 53878, "FinalExecutableEndLba": 54085 if authored else 54082, "Entries": entries,
                 "LevelDataSha256": report["levelDataSha256"], "OverlaySha256": report["overlaySha256"],
                 "ExecutableSha256": report["executableSha256"], "opaqueRenderMode": 1}
     require(all(type(receipt.get(k)) is type(v) and receipt[k] == v for k, v in expected.items()), "Receipt byte ownership/hash description differs from reconstruction")
     actual_rows = receipt.get("Rows")
+    if authored:
+        require(len(bindings) == 2, "Missing independent authored binding owners")
+        rows = [{k: row[k] for k in ("NativeIndex", "RowSceneOffset", "PrivateSceneOffset", "Placement", "AuthoredDestinationClass")} for row in rows]
+        actual_bindings = receipt.get("bindings")
+        require(isinstance(actual_bindings, list) and len(actual_bindings) == 2 and
+                all(all(type(actual.get(k)) is type(value) and actual[k] == value for k, value in b.items())
+                    for actual, b in zip(actual_bindings, bindings)), "Authored receipt binding/palette differs")
+        memory = receipt.get("memory")
+        require(isinstance(memory, dict) and
+                all(type(memory.get(k)) is int and memory[k] == value for k, value in
+                    {"SceneEnd": 0x8017AD54, "NormalReservedStart": 0x80187BB0, "NormalGap": 0xCE5C,
+                     "TransferPeakEnd": 0x8017AD54, "VisualTickStackLow": 0x801FFB20, "StackMargin": 0x320}.items()),
+                "Authored receipt reused a smaller ancestor memory footprint")
     require(isinstance(actual_rows, list) and len(actual_rows) == 2 and
             all(all(actual.get(key) == value for key, value in row.items()) for actual, row in zip(actual_rows, rows)),
             "Receipt fixed row/private/placement description differs")
     require(receipt.get("ResearchOnly") is True and all(receipt.get(key) is False for key in
             ("RuntimeVerified", "NormalCreateBinApproved", "CompleteNativeClosureProven", "PickupEnabled", "PersistentSaveChanges",
-             "IndependentColorVariants", "TestLevelSelectorEnabled", "acceptedProjectHistory", "FullRuntimePeakProven")),
+             "TestLevelSelectorEnabled", "acceptedProjectHistory", "FullRuntimePeakProven")) and
+            receipt.get("IndependentColorVariants") is authored,
             "Receipt exceeds bounded visual-research authority")
+    if authored:
+        require(receipt.get("sharedModelColors") is False, "Authored colors cannot share one model palette")
+        require(all(receipt.get(k) is False for k in
+                    ("LitPixelsVerified", "GenericEffectsApproved", "DynamicSpawnApproved", "GlobalUnusedNamespaceProven")),
+                "Authored receipt promotes untested pixel/effect/spawn/namespace behavior")
     # Never consume any positive readback/closure/pass flag as proof.
     return sha(data)
 
@@ -468,16 +565,18 @@ def source_alias(path):
     return resolved, stable
 
 
-def expected_cue(source_bytes, cue_path, original_path):
+def expected_cue(source_bytes, cue_path, original_path, authored=False):
     lines = [line.strip() for line in source_bytes.decode("utf-8-sig").splitlines() if line.strip()]
     match = re.fullmatch(r'FILE\s+"([^"\r\n]+)"\s+BINARY', lines[0], re.IGNORECASE) if lines else None
     require(len(lines) == 3 and match is not None and lines[1].upper() == "TRACK 01 MODE2/2352" and lines[2].upper() == "INDEX 01 00:00:00",
             "Source CUE is not the bounded single-track raw layout")
     require((Path(cue_path).parent / match.group(1)).resolve(strict=True) == Path(original_path).resolve(strict=True), "Source CUE does not bind original USA BIN")
-    return (f'FILE "{IMAGE_NAME}" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n').encode()
+    return (f'FILE "{AUTHORED_IMAGE_NAME if authored else IMAGE_NAME}" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n').encode()
 
 
 def verify(args):
+    authored = getattr(args, "authored_colors", False)
+    require(type(authored) is bool, "Only the two closed verifier profiles are supported")
     aliases = [source_alias(path) for path in (args.usa, args.japan, args.usa_cue)]
     with contextlib.ExitStack() as stack:
         usa, japan, cue = [stack.enter_context(ReadOnlyFile(path)) for path, _ in aliases]
@@ -485,7 +584,7 @@ def verify(args):
         require(japan.initial.st_size == JP_SIZE and japan.digest() == JP_SHA, "Requires complete exact original Japanese disc")
         require(cue.initial.st_size <= 65536, "Oversized source CUE")
         cue_before = cue.read(0, cue.initial.st_size)
-        cue_after = expected_cue(cue_before, args.usa_cue, args.usa)
+        cue_after = expected_cue(cue_before, args.usa_cue, args.usa, authored)
         root_lba, root, records = iso_source(usa, (37, 0x6927000), (53875, 0x66000), "SCUS_942.28")
         iso_source(japan, (500, 112793600), (24, 0x70000), "SCPS_100.83")
         original_wad = logical(usa, 37, 0x6927000, 0, 0x6927000)
@@ -497,21 +596,27 @@ def verify(args):
         def us_entry(index):
             return bounded(original_wad, u32(original_wad, index * 8), u32(original_wad, index * 8 + 4))
         pinned(logical(japan, 24, 0x70000, 0, 0x70000), JP_EXE_SHA, "JP executable")
-        final_data, rows = level_afterimage(us_entry(10), jp_entry(23))
-        final_overlay = overlay_afterimage(us_entry(9), jp_entry(22))
+        bindings = []
+        if authored:
+            final_data, rows, bindings = authored_level_afterimage(us_entry(10), jp_entry(23))
+            final_overlay = authored_overlay_afterimage(us_entry(9), jp_entry(22))
+        else:
+            final_data, rows = level_afterimage(us_entry(10), jp_entry(23))
+            final_overlay = overlay_afterimage(us_entry(9), jp_entry(22))
         final_exe = executable_afterimage(logical(usa, 53875, 0x66000, 0, 0x66000))
         wad, entries = packed_wad(original_wad, {9: final_overlay, 10: final_data})
-        require(len(wad) - len(original_wad) == 0x1800 and len(final_data) == 0x384000, "Fixed owner growth differs")
-        final_root = root_afterimage(root, records, len(wad))
+        require(len(wad) - len(original_wad) == (0x3000 if authored else 0x1800) and
+                len(final_data) == (0x385800 if authored else 0x384000), "Fixed owner growth differs")
+        final_root = root_afterimage(root, records, len(wad), authored)
         wad_flags = usa.read(53874 * RAW + 18, 1)[0] & 0x81
         exe_flags = usa.read(54078 * RAW + 18, 1)[0] & 0x81
         candidate = None
         if args.candidate_directory:
             directory = Path(os.path.abspath(args.candidate_directory))
-            candidate = stack.enter_context(ReadOnlyFile(directory / IMAGE_NAME))
+            candidate = stack.enter_context(ReadOnlyFile(directory / (AUTHORED_IMAGE_NAME if authored else IMAGE_NAME)))
         transform = lambda raw, lba: expected_sector(raw, lba, wad, final_exe, final_root, root_lba, wad_flags, exe_flags)
         digest, changed, changed_bytes = verify_complement(usa, candidate, transform, not args.quiet)
-        result = {"schemaVersion": 1, "profile": PROFILE, "sourceUsaSha256": USA_SHA, "sourceJapanSha256": JP_SHA,
+        result = {"schemaVersion": 1, "profile": AUTHORED_PROFILE if authored else PROFILE, "sourceUsaSha256": USA_SHA, "sourceJapanSha256": JP_SHA,
                   "mode": "independent-candidate-verification" if candidate else "original-only-preview",
                   "expectedCandidateSha256": digest, "changedRawSectors": changed, "changedRawBytes": changed_bytes,
                   "originalWadSha256": sha(original_wad), "wadSha256": sha(wad), "rootSha256": sha(final_root),
@@ -521,11 +626,14 @@ def verify(args):
                   "candidateVerified": candidate is not None, "completeOriginalWadInverseVerified": True,
                   "runtimeVerified": False, "normalExportApproved": False, "pickupVerified": False, "saveVerified": False,
                   "outputImageWrites": 0, "hostileFilesystemRaceSafe": False}
+        if authored:
+            result["authoredBindings"] = bindings
+            result["normalLoadOwners"]["authored_roots"] = [b["ProjectedRoot"] for b in bindings]
         if candidate is not None:
-            output_cue = stack.enter_context(ReadOnlyFile(directory / CUE_NAME, 65536))
-            receipt = stack.enter_context(ReadOnlyFile(directory / RECEIPT_NAME, 4 * 1024 * 1024))
+            output_cue = stack.enter_context(ReadOnlyFile(directory / (AUTHORED_CUE_NAME if authored else CUE_NAME), 65536))
+            receipt = stack.enter_context(ReadOnlyFile(directory / (AUTHORED_RECEIPT_NAME if authored else RECEIPT_NAME), 4 * 1024 * 1024))
             require(output_cue.read(0, output_cue.initial.st_size) == cue_after, "Candidate CUE differs from preserved track geometry")
-            receipt_hash = verify_receipt(receipt.read(0, receipt.initial.st_size), result, entries, rows, sha(cue_after), sha(cue_before))
+            receipt_hash = verify_receipt(receipt.read(0, receipt.initial.st_size), result, entries, rows, sha(cue_after), sha(cue_before), authored, bindings)
             result["receiptSha256"] = receipt_hash
             candidate.stable(digest)
             output_cue.stable(sha(cue_after))
@@ -545,6 +653,7 @@ def main():
     parser.add_argument("--usa-cue", required=True)
     parser.add_argument("--candidate-directory", help="Omit to predict the afterimage from originals without writing any candidate")
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument("--authored-colors", action="store_true", help="Verify only the fixed two diagnostic RGB classes; default retains the original F5 visual profile")
     print(json.dumps(verify(parser.parse_args()), indent=2))
 
 

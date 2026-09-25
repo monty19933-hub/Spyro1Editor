@@ -117,20 +117,25 @@ but provides no reusable registered package or source instance for either.
 
 USA memory-card overlay2, WAD0x5B800/0x3800, SHA256
 `8ee66fe644407bf15f93af1615045fbaca17fe3daa9f3b67f38bee2277a94c7c`,
-uses `BASCUS-94228SPYRO`. Header bytes and code have distinct runtime bases:
-header0x8007AA38; code offset0x9C loads at0x8007B0E8.
+uses `BASCUS-94228SPYRO`. The whole overlay loads contiguously at
+`0x8007AA38`: code offset `0x9C` is `0x8007AAD4`. Correction: an earlier
+diagnostic mistook the first state-table target `0x8007B0E8` (file `0x6B0`)
+for the first code byte, shifting reported code PCs upward by `0x614`.
+Byte offsets/hashes were unaffected. See
+[native save-buffer ownership](usa-save-buffer-ownership.md) for loader and
+control-flow evidence; do not use the older shifted PCs as hook addresses.
 
 The header template at EXE PC0x8006F494 starts `53 43 13 01` (SC, icon mode,
 one-block count). Its512-byte SHA is
 `bb38831d747ed2a6dd322aa74cbd10b82f7f7b79600610718ea22891a232f332`.
-The new-file call0x8007C404 passes block count1 to0x80067718, whose0x800677E4
+The new-file call0x8007BDF0 passes block count1 to0x80067718, whose0x800677E4
 forms `(count<<16)|0x200` create flags. Native code constructs a0x200 header and
-three0x600 slots, then writes exactly file `[0,0x1400)` at0x8007C4A4. Reads at
-0x8007B980 and0x8007C514 use that same prefix. These are the only direct calls
+three0x600 slots, then writes exactly file `[0,0x1400)` at0x8007BE90. Reads at
+0x8007B36C and0x8007BF00 use that same prefix. These are the only direct calls
 to those read/write APIs in this complete overlay.
 
 Within the one0x2000-byte block, `[0x1400,0x2000)` is a **candidate extension
-owner of3072 bytes** beyond the observed native prefix. It is not presently
+extent of3072 bytes**, not an established owner, beyond the observed native prefix. It is not presently
 initialized, checksummed, preserved by a new extension reader, or declared
 free by an application-wide certificate. The ordinary per-slot unchecked tail
 `[0x590,0x600)` is unsuitable for persistent extension data: the native serializer
@@ -168,11 +173,12 @@ python3 tools/Inspect-SpyroJapaneseCollectibles.py '<Japanese.bin>'
 python3 tools/Inspect-SpyroJapaneseCollectibles.py '<USA.bin>' --usa
 ```
 
-Eleven source-free test cases pass, covering exact byte owners, immutable
+Twelve source-free test cases pass, covering exact byte owners, immutable
 snapshots, pending normalization/merge, unknown-state preservation, two banks
 and thirty owner slots, unsupported IDs, ordinary checksum boundaries,
 18-byte ordinary egg accounting, percentage goldens, stale instruction pins
-and wrong-image refusal. Actual Japanese and USA captures pass all pinned
+and wrong-image refusal, plus the corrected contiguous USA overlay mapping.
+Actual Japanese and USA captures pass all pinned
 owners/windows and held/named complete-image final checks.
 
 Evidence is under `_local/research/japanese-content-20260925-r01.RCmBCn/`:

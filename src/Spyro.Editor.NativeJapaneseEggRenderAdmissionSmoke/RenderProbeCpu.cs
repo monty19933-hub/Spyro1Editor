@@ -1,5 +1,12 @@
 using System.Buffers.Binary;
 
+// Test-bound arithmetic stop, not execution of the PS1 exception handler.
+internal sealed class RenderProbeArithmeticOverflow(uint pc,bool branchDelaySlot) : ArithmeticException("R3000 signed arithmetic overflow at "+pc.ToString("X8"))
+{
+    internal uint Pc { get; }=pc;
+    internal bool BranchDelaySlot { get; }=branchDelaySlot;
+}
+
 // Independent bounded test interpreter: branch delay AND one-instruction load
 // delay. It runs only this package's generated code and exact helper windows;
 // it is not a PS1 emulator or renderer/runtime acceptance.
@@ -8,6 +15,9 @@ internal sealed class RenderProbeCpu
     private readonly byte[] _ram=new byte[0x200400];
     internal uint[] Regs { get; }=new uint[32];
     internal uint Hi,Lo;
+    // Off by default to preserve all prior bounded probes. The pickup tests
+    // opt in because the source XY leaf uses trapping ADD/SUB, not ADDU/SUBU.
+    internal bool StrictSignedArithmetic { get; set; }
     internal List<uint> Reads { get; }=[];
     internal List<uint> Writes { get; }=[];
     internal List<uint> Calls { get; }=[];
@@ -32,6 +42,18 @@ internal sealed class RenderProbeCpu
             (int Reg,uint Value)? write=null;
             void Set(int r,uint v)=>write=(r,v);
             void Branch(bool take){pendingJump=take?unchecked(pc+4+(uint)(imm*4)):pc+8;}
+            uint Signed(uint left,uint right,bool subtract)
+            {
+                long result=subtract?(long)(int)left-(int)right:(long)(int)left+(int)right;
+                if(StrictSignedArithmetic&&(result<int.MinValue||result>int.MaxValue))
+                {
+                    // The preceding load retires; this trapping instruction
+                    // does not write its destination or execute a later word.
+                    if(oldLoad is {} prior)Regs[prior.Reg]=prior.Value;
+                    Regs[0]=0;throw new RenderProbeArithmeticOverflow(pc,oldJump!=null);
+                }
+                return unchecked((uint)result);
+            }
             switch(op)
             {
                 case 0:switch(w&63)
@@ -41,7 +63,8 @@ internal sealed class RenderProbeCpu
                     case 8:pendingJump=a;break;case 16:Set(rd,Hi);break;case 18:Set(rd,Lo);break;case 17:Hi=a;break;case 19:Lo=a;break;
                     case 24:long product=(long)(int)a*(int)b;Lo=(uint)product;Hi=(uint)(product>>32);break;
                     case 25:ulong unsignedProduct=(ulong)a*b;Lo=(uint)unsignedProduct;Hi=(uint)(unsignedProduct>>32);break;
-                    case 32:case 33:Set(rd,unchecked(a+b));break;case 34:case 35:Set(rd,unchecked(a-b));break;
+                    case 32:Set(rd,Signed(a,b,false));break;case 33:Set(rd,unchecked(a+b));break;
+                    case 34:Set(rd,Signed(a,b,true));break;case 35:Set(rd,unchecked(a-b));break;
                     case 36:Set(rd,a&b);break;case 37:Set(rd,a|b);break;case 38:Set(rd,a^b);break;
                     case 42:Set(rd,(int)a<(int)b?1u:0);break;case 43:Set(rd,a<b?1u:0);break;
                     default:throw new Exception("Unknown SPECIAL "+w.ToString("X8"));
@@ -49,7 +72,7 @@ internal sealed class RenderProbeCpu
                 case 1:if(rt is not 0 and not 1)throw new Exception("Unsupported REGIMM");Branch(rt==0?(int)a<0:(int)a>=0);break;
                 case 2:case 3:pendingJump=((pc+4)&0xF0000000)|((w&0x3FFFFFF)<<2);if(op==3){Set(31,pc+8);Calls.Add(pendingJump.Value);}break;
                 case 4:Branch(a==b);break;case 5:Branch(a!=b);break;case 6:Branch((int)a<=0);break;case 7:Branch((int)a>0);break;
-                case 8:case 9:Set(rt,unchecked(a+(uint)imm));break;case 10:Set(rt,(int)a<imm?1u:0);break;
+                case 8:Set(rt,Signed(a,unchecked((uint)imm),false));break;case 9:Set(rt,unchecked(a+(uint)imm));break;case 10:Set(rt,(int)a<imm?1u:0);break;
                 case 11:Set(rt,a<unchecked((uint)imm)?1u:0);break;case 12:Set(rt,a&(w&65535));break;case 13:Set(rt,a|(w&65535));break;case 15:Set(rt,w<<16);break;
                 case 0x20:case 0x21:case 0x23:case 0x24:case 0x25:
                     int size=op is 0x20 or 0x24?1:op is 0x21 or 0x25?2:4;uint readAddress=unchecked(a+(uint)imm);Reads.Add(readAddress);uint value=Get(readAddress,size);

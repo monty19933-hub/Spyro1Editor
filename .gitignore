@@ -204,6 +204,8 @@ unsafe-tests/
 !/tools/test_japanese_font.py
 !/tools/Inspect-SpyroUsaModalTextureLifetime.py
 !/tools/test_usa_modal_texture_lifetime.py
+!/tools/Inspect-SpyroUsaSaveBufferOwnership.py
+!/tools/test_usa_save_buffer_ownership.py
 !/tools/Verify-SpyroJapaneseSignReference.py
 !/tools/Test-Verify-SpyroJapaneseSignReference.py
 !/tools/tests/
