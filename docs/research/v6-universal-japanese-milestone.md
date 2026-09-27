@@ -42,8 +42,13 @@ the signed-low copy initializer. Its246 fixture +246 original-ROM checks include
 the real native callback and same-frame draw/update-list behavior. The integrated
 default Release gate passes254/0; report
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-6cck7768/summary.json`.
-Next compose the paired A00 reserve/bootstrap through their exact common EXE,
-then native selected-save admission and card/inventory/percentage consumers.
+The paired A00 reserve/bootstrap now composes through the exact common EXE,
+preserving all four patch owners and recomputing final load/stack geometry.
+The updated source route passes 571 cumulative checks (248 fixture + 323 source),
+including the real combined boot/BSS/copy-anchor instruction path. Next implement
+native selected-save admission and card/inventory/percentage consumers.
+The full Release gate was repeated after this startup integration:254/0,
+report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-s7seb6p_/summary.json`.
 No native Ready state, game publication or new gameplay result is claimed.
 
 September 27: [independent authored colors now pass a fresh full-firmware

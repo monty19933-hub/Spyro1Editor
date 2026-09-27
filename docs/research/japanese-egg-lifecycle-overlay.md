@@ -84,15 +84,51 @@ Run `dotnet run --project src/Spyro.Editor.NativeJapaneseEggLifecycleOverlaySmok
 -c Release`; append `-- --source <JP-BIN> <USA-BIN>` for exact source checks.
 The source-free gate is registered in the default regression runner.
 
+## Paired startup composition
+
+`NativeJapaneseEggLifecycleStartupPlan` is a separate source-only composition
+of this overlay and the existing A00 reservation/ephemeral bootstrap. It
+requires the same complete original USA executable, canonical manifest and
+ordinary slot. It copies only the 4-byte entry, 4-byte reserve and complete
+0x1C0-byte ephemeral tail into the lifecycle EXE. The final 8-byte copy anchor and every other
+complement byte remain unchanged. Complete exact inverses recover either the
+lifecycle predecessor or the common original executable. It cannot promote a
+synthetic fixture, overwrite another owner or manufacture a Ready state.
+
+For the exercised source layout, the normal floor becomes `801879B0` and the
+gap becomes `BC5C`, exactly 0x200 bytes (512 decimal) below the previous
+floor/gap. Full transfer and PETE phase endpoints are recomputed from the final
+anchor/data and changed reserve. The actual adapter remains 0x2B0 bytes; the
+sequential visual (0x28) and lifecycle (0x60) nested stacks take a maximum, not
+a sum or an invented larger adapter. The worst synchronous SP is `801FFAE8`, leaving 0x2E8 bytes above the
+ledger end `801FF800`. These are bounded normal-load/synchronous calculations,
+not an IRQ, alternate-mode, full renderer peak or transition-lifetime proof.
+
+The combined EXE is tested through its declared text transfer, real startup
+entry, exact 512-byte zeroing, original BSS erasure and heap-service call seam.
+The actual patched Artisans copy-initializer instructions publish the final
+anchor. Then the actual linked query and collector both refuse that cold
+NOT-LOADED ledger without writes. Overlay loading at that test phase boundary
+is supplied by the harness; no BIOS/CD/native save operation is simulated as a
+successful service.
+
+The startup-composition test first failed with nine missing-type errors before
+implementation. Release then built with zero warnings/errors. The updated
+source-free route passes 248 checks; the complete original-ROM route passes 571
+cumulative checks (248 fixture + 323 source), including two combined startup
+entry-state cases. Exact-source final rehashes pass. Source-only composition
+refusals cover another manifest/slot, fixture promotion, stale complete inverse
+inputs, and mutations in every patch owner and the untouched complement.
+The integrated default Release regression then passed 254 checks with zero
+failures, including the normal and fresh-level UI routes. Final report:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-s7seb6p_/summary.json`.
+
 ## Next integration boundary
 
-This EXE still retains the original 800 reserve; it must not be published as
-collector-enabled. Compose the final copy-anchor change with the existing
-source-bound A00 reservation and ephemeral NOT-LOADED bootstrap using their
-common complete original executable. Recalculate the final transfer geometry
-and lower normal floor, preserving the independent stack origin. The largest
-new synchronous call chain adds60 below the existing adapter; IRQ/transition
-lifetime remains a separate obligation.
+The overlay-only EXE still retains the original 0x800-byte reserve; consumers must
+use the paired startup composition if they need the proposed ledger range.
+Neither artifact is approved for publication or collector-enabled gameplay.
+No packaged editor, research disc or emulator was changed for this work.
 
 Native selected-save admission must then initialize validated state, not infer
 fresh custom progress from new-game intent or a repaired native save. No

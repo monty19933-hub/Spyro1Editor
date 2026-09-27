@@ -15,7 +15,8 @@ var manifest = F.Manifest(257);
 NativeJapaneseEggCollectibleIdentity[] mappings = [new("egg-a", F.Id(257)), new("egg-b", F.Id(256))];
 
 void Verify(NativeJapaneseEggAuthoredClassesPlan authored, bool source,
-    Func<DetachedCollectibleManifest, int, NativeJapaneseEggCollectibleIdentity[], NativeJapaneseEggLifecycleOverlayPlan> build)
+    Func<DetachedCollectibleManifest, int, NativeJapaneseEggCollectibleIdentity[], NativeJapaneseEggLifecycleOverlayPlan> build,
+    Action<NativeJapaneseEggLifecycleOverlayPlan>? startupChecks = null)
 {
     byte[] predecessorOverlay = authored.CopyOverlay(), predecessorExe = authored.CopyExecutable(), predecessorData = authored.CopyLevelData();
     byte[] predecessorScene = authored.CopyScene(), manifestBytes = manifest.SerializeCanonical();
@@ -133,6 +134,7 @@ void Verify(NativeJapaneseEggAuthoredClassesPlan authored, bool source,
     Refuse(() => build(manifest.Advance([], [F.Id(257)]), 1, mappings));
     OverlayCpuProbe.Verify(plan, authored, manifest, Check);
     OverlayCpuProbe.VerifyLedgerAncestry(plan, differentManifest, differentSlot, authored, manifest, Check);
+    startupChecks?.Invoke(plan);
     Check(authored.CopyOverlay().SequenceEqual(predecessorOverlay) && authored.CopyExecutable().SequenceEqual(predecessorExe) &&
         authored.CopyLevelData().SequenceEqual(predecessorData) && manifest.SerializeCanonical().SequenceEqual(manifestBytes), "No operation mutates authored ancestors or the supplied manifest.");
     Console.WriteLine($"LIFECYCLE_OVERLAY source={source} bytes={overlay.Length:X} delta={delta:X} anchor={anchor:X8} scene={plan.Projection.SceneAddress:X8} checks={checks}");
@@ -148,6 +150,7 @@ Refuse(() => NativeJapaneseEggCollectibleBinding.CreateProjected(movedFixture, m
 var movedPlan = NativeJapaneseEggLifecycleOverlayPlan.Fixture(movedFixture, manifest, 1, mappings, F.Predicate());
 Check(movedPlan.Projection.PlanSha256 != fixturePlan.Projection.PlanSha256 && movedPlan.CopyLevelData().SequenceEqual(movedFixture.CopyLevelData()),
     "Moved authored data requires a fresh exact projection and retains the new disk-form ancestor.");
+StartupCompositionChecks.SourceFree(Check);
 var maximumManifest = F.Manifest(1408);
 var maximum = NativeJapaneseEggLifecycleOverlayPlan.Fixture(fixture, maximumManifest, 0,
     [new("egg-a", F.Id(1408)), new("egg-b", F.Id(1407))], F.Predicate());
@@ -171,7 +174,8 @@ try
     Refuse(() => NativeJapaneseEggLifecycleOverlayPlan.Capture(jp, usa, fixture, manifest, 1, mappings));
     Refuse(() => NativeJapaneseEggLifecycleOverlayPlan.Fixture(authored, manifest, 1, mappings, F.Predicate()));
     Refuse(() => NativeJapaneseEggLifecycleOverlayPlan.Fixture(fixture, manifest, 1, mappings, NativeJapaneseEggPickupPredicateSource.Capture(jp, usa)));
-    Verify(authored, true, (m, s, ids) => NativeJapaneseEggLifecycleOverlayPlan.Capture(jp, usa, authored, m, s, ids));
+    Verify(authored, true, (m, s, ids) => NativeJapaneseEggLifecycleOverlayPlan.Capture(jp, usa, authored, m, s, ids),
+        plan => StartupCompositionChecks.Verify(usa, authored, plan, manifest, Check));
     Console.WriteLine($"JP_EGG_LIFECYCLE_OVERLAY_SOURCE_OK checks={checks} detached=true nativeResidence=false dispatchActivated=false publication=false");
 }
 finally { try { jp.VerifyUnchanged(); } finally { usa.VerifyUnchanged(); } }

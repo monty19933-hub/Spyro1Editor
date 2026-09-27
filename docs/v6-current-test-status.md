@@ -25,9 +25,15 @@ recalculated model/scene addresses and canonical F5 visual preservation.
 Its 246 fixture +246 original-ROM checks also execute the native callback and
 same-frame draw-list removal. Native memory/save admission and publication
 remain pending; this is not an in-game collectible result.
+The follow-up source-only startup composition joins that overlay to the paired
+512-byte reservation and boot initializer. Its updated suite passes 248 fixture
+and 323 original-ROM checks (571 cumulative), including execution of the combined
+entry/BSS/copy-anchor code and rejection of cold NOT-LOADED state. This does
+not authenticate or initialize a native selected save.
 The integrated default Release gate passes **254 checks, zero failures**,
-report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-6cck7768/summary.json`.
-The preceding `e9d0091` checkpoint passed252/0.
+report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-s7seb6p_/summary.json`.
+The preceding overlay-only `fed7d49` gate also passed254/0 (`spyro-regression-6cck7768`);
+the earlier `e9d0091` checkpoint passed252/0.
 R08's App/Core assemblies, both normal DuckStation INIs and the ordinary USA
 memory card still match their preserved hashes. No emulator was launched for
 this source/UI checkpoint, and no new playable collectible result is claimed.
