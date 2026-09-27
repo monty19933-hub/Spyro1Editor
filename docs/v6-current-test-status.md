@@ -19,9 +19,15 @@ New [egg lifecycle callables](research/japanese-egg-lifecycle-callables.md)
 pass367 fixture +367 original-ROM checks, including both-instance pickup and
 earned-state suppression after a simulated row reload. These functions are not
 installed in a game and do not yet add inventory, card saving or completion.
-The integrated source checkpoint `e9d0091` passes the default Release gate:
-**252 checks, zero failures**, report
-`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-g_xx7rat/summary.json`.
+The new [successor egg overlay](research/japanese-egg-lifecycle-overlay.md)
+now owns and links those routines in a complete detached afterimage, with
+recalculated model/scene addresses and canonical F5 visual preservation.
+Its 246 fixture +246 original-ROM checks also execute the native callback and
+same-frame draw-list removal. Native memory/save admission and publication
+remain pending; this is not an in-game collectible result.
+The integrated default Release gate passes **254 checks, zero failures**,
+report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-6cck7768/summary.json`.
+The preceding `e9d0091` checkpoint passed252/0.
 R08's App/Core assemblies, both normal DuckStation INIs and the ordinary USA
 memory card still match their preserved hashes. No emulator was launched for
 this source/UI checkpoint, and no new playable collectible result is claimed.
@@ -77,9 +83,9 @@ After that full246/0 checkpoint, focused source work added
 [native scheduling tests](research/japanese-egg-pickup-scheduling.md) now pass
 77 source checks, including the earned-outside-proximity respawn counterexample
 and test-only previsual suppression. Pickup-caller384 and runner-contract104
-checks also passed after integration. The full suite has not been repeated for
-these last source-only components; no new packaged app or installed collector
-is claimed. Native selected-save admission/card transactions remain next.
+checks also passed after integration. These components are now included in the
+newer full254/0 gate above; no new packaged app or installed collector is claimed.
+Native selected-save admission/card transactions remain next.
 
 Checkpoint `dcf5dce` adds saved-project compilation of the exact four-tile,
 two-material Wizard/Grass/key/chest layout. Its independent full-disc identity

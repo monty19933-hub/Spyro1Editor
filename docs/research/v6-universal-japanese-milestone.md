@@ -34,10 +34,17 @@ It is still detached: final scheduling/code ownership, Ready/save admission,
 native card/inventory/percentage consumers and gameplay acceptance remain.
 Integrated default Release at `e9d0091`:252 checks, zero failures, report
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-g_xx7rat/summary.json`.
-The old E800 overlay ceiling is not sufficient for all new callable bodies;
-do not enable these by borrowing its padding or leaving test RAM addresses in
-a native output. Continue with a separately owned successor overlay and final
-copy-anchor/model/scene reprojection, preserving the existing E800 producer.
+The [successor overlay](japanese-egg-lifecycle-overlay.md) now owns the complete
+appended callable bodies and links the two original adapter edges, preserving
+the entire E800 predecessor elsewhere, including canonical unbound F5 visuals.
+The tested F800 successor recalculates every model/loader/scene/row address and
+the signed-low copy initializer. Its246 fixture +246 original-ROM checks include
+the real native callback and same-frame draw/update-list behavior. The integrated
+default Release gate passes254/0; report
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-6cck7768/summary.json`.
+Next compose the paired A00 reserve/bootstrap through their exact common EXE,
+then native selected-save admission and card/inventory/percentage consumers.
+No native Ready state, game publication or new gameplay result is claimed.
 
 September 27: [independent authored colors now pass a fresh full-firmware
 Artisans visual test](japanese-egg-authored-colors-runtime.md), including normal

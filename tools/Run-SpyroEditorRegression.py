@@ -78,6 +78,7 @@ CORE_CASES = (
     ("NativeCollectibleStartupResearchSmoke", "COLLECTIBLE_STARTUP_RESEARCH_SOURCE_FREE_OK"),
     ("NativeJapaneseEggCollectionAttemptSmoke", "JP_EGG_COLLECTION_ATTEMPT_SOURCE_FREE_OK"),
     ("NativeJapaneseEggLifecycleSmoke", "JP_EGG_LIFECYCLE_SOURCE_FREE_OK"),
+    ("NativeJapaneseEggLifecycleOverlaySmoke", "JP_EGG_LIFECYCLE_OVERLAY_SOURCE_FREE_OK"),
     ("NativeJapaneseEggVisualBehaviorSmoke", "JP_EGG_VISUAL_BEHAVIOR_SOURCE_FREE_OK"),
     ("NativeJapaneseEggArtisansIntegrationSmoke", "JP_EGG_ARTISANS_INTEGRATION_SOURCE_FREE_OK"),
     ("NativeJapaneseEggMemorySmoke", "JP_EGG_MEMORY_SOURCE_FREE_OK"),
