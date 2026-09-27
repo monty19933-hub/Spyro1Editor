@@ -27,6 +27,10 @@ preservation and self-erasure by original startup. Its BIOS load/cache/handoff
 and runtime gates remain false. The next composition gates are native cold-boot not-loaded state,
 authenticated selected-slot initialization, exclusive update/retirement and
 render scheduling, followed by native inventory and crash-safe card integration.
+The [selected-save observation boundary](collectible-selected-save-admission-boundary.md)
+now distinguishes new/load/overwrite paths and documents why native repair or
+stale selection cannot grant fresh custom-state authority (12 offline tests,
+38 source spans). It does not yet initialize the ledger.
 
 September 25 source checkpoint: detached independent authored RGB registrations now
 pass exact-USA clear/load/animation/render-routing tests and exhaustive class

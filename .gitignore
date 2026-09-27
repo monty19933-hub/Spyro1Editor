@@ -206,6 +206,8 @@ unsafe-tests/
 !/tools/test_usa_modal_texture_lifetime.py
 !/tools/Inspect-SpyroUsaSaveBufferOwnership.py
 !/tools/test_usa_save_buffer_ownership.py
+!/tools/Inspect-SpyroUsaSelectedSaveAdmission.py
+!/tools/test_usa_selected_save_admission.py
 !/tools/Inspect-SpyroUsaPeteLifetime.py
 !/tools/test_usa_pete_lifetime.py
 !/tools/Verify-SpyroJapaneseSignReference.py
@@ -223,6 +225,9 @@ unsafe-tests/
 !/tools/Observe-SpyroNativeWizard.py
 !/tools/Observe-SpyroJapaneseEggs.py
 !/tools/tests/test_japanese_egg_observer.py
+!/tools/tests/test_japanese_egg_authored_observer.py
+!/tools/Observe-SpyroCollectibleStartup.py
+!/tools/tests/test_collectible_startup_observer.py
 !/tools/Verify-SpyroJapaneseEggResearch.py
 !/tools/tests/test_japanese_egg_research.py
 !/tools/Observe-SpyroFreshId65.py

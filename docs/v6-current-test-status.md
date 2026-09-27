@@ -43,6 +43,9 @@ has not yet been observed for this prototype.
 These units are not yet installed together in a game: native boot initialization,
 selected-slot identity, safe dispatch/lifetime, inventory and card transactions
 remain required before a usable collectible-enabled editor build.
+The [selected-save boundary](research/collectible-selected-save-admission-boundary.md)
+is now source-pinned, including repaired-save and stale-selection counterexamples.
+Native new-game intent alone cannot safely reset or initialize custom progress.
 
 Checkpoint `dcf5dce` adds saved-project compilation of the exact four-tile,
 two-material Wizard/Grass/key/chest layout. Its independent full-disc identity
