@@ -86,5 +86,6 @@ internal static class NativeCases
             }
         }
         check(cpu.Get(p.Bindings[0].ProjectedRoot+(uint)p.Bindings[0].Edit.Source.NearRange.PackageOffset)!=cpu.Get(p.Bindings[1].ProjectedRoot+(uint)p.Bindings[1].Edit.Source.NearRange.PackageOffset),"Two actual native roots retain different RGB bytes without a global per-frame rewrite.");
+        NativeRetirementCases.Run(cpu,p,check);
     }
 }

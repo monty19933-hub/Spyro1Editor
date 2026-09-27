@@ -1,5 +1,10 @@
 # Detached authored RGB classes in USA Artisans
 
+September 27 follow-up: the existing native placed-row deletion path now has
+[exact authored-egg source tests](japanese-egg-placed-retirement.md). It removes
+the two initialized non-grid rows from the next rebuilt render list without
+generic kill/effect dispatch. This is not an installed collector or persistence.
+
 2026-09-25. `NativeJapaneseEggAuthoredClassesPlan` is a functioning detached
 model-registration, row-class and visual-dispatch composition. It uses the
 existing source-backed F5 geometry/RGB kernel and native class-table consumers.
