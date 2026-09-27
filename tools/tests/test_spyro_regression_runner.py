@@ -1705,6 +1705,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeSimpleMobyGeometrySmoke": ["--source", "/selected original.bin"],
             "NativeCollectibleSelectedSlotResidenceSmoke": ["--source", "/selected original.bin"],
             "NativeCollectibleReservationMechanicsSmoke": ["--source", "/selected original.bin"],
+            "NativeCollectibleColdBootBootstrapSmoke": ["--source", "/selected original.bin"],
             "NativeMobyDependencyClosureSmoke": ["--source-v3", "/selected original.bin"],
             "NativeMobyInventorySmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeMobyPersistentOwnerSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
@@ -1998,6 +1999,14 @@ class NeutralTiledFamilyOracleTests(unittest.TestCase):
 
 
 class RegionalAndMatrixGateTests(unittest.TestCase):
+    def test_cold_boot_prototype_cannot_implicitly_open_source_or_publish(self):
+        name = "NativeCollectibleColdBootBootstrapSmoke"
+        self.assertEqual("COLLECTIBLE_COLD_BOOT_BOOTSTRAP_SOURCE_FREE_OK", dict(RUNNER.CORE_CASES)[name])
+        self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
+        self.assertEqual([(name, "COLLECTIBLE_COLD_BOOT_BOOTSTRAP_SOURCE_OK", ["--source"])],
+                         [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+
     def test_reservation_mechanics_default_is_neutral_and_source_mode_explicit(self):
         name = "NativeCollectibleReservationMechanicsSmoke"
         self.assertEqual("COLLECTIBLE_RESERVATION_MECHANICS_SOURCE_FREE_OK", dict(RUNNER.CORE_CASES)[name])

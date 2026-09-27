@@ -35,7 +35,12 @@ not transfer collected state between identities. The separate
 541 source checks and proves removal on the next native render-list rebuild.
 [Reservation mechanics](research/collectible-reservation-mechanics.md) pass
 12 offline / 107 source checks, including native allocator/sentinel/copy writes.
-These units are not yet installed together in a game: boot initialization,
+The [ephemeral boot initializer](research/collectible-ephemeral-cold-boot-bootstrap.md)
+passes 16 offline / 121 source checks: it clears the proposed ledger to
+NOT-LOADED, then original startup erases the temporary code. Those CPU checks
+simulate the declared executable transfer; actual BIOS loading/cache behavior
+has not yet been observed for this prototype.
+These units are not yet installed together in a game: native boot initialization,
 selected-slot identity, safe dispatch/lifetime, inventory and card transactions
 remain required before a usable collectible-enabled editor build.
 

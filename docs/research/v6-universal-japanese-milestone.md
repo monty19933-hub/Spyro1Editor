@@ -21,7 +21,10 @@ The source continuation now includes a [GUID-bound pickup caller](japanese-egg-d
 (541 source checks), and [paired reserve-word mechanics](collectible-reservation-mechanics.md)
 (12 offline / 107 source checks). Latest default Release gate: 239/0. These
 close bounded code/geometry questions, not installed gameplay collection or
-persistent saving. The next composition gates are cold-boot not-loaded state,
+persistent saving. An [ephemeral cold-boot prototype](collectible-ephemeral-cold-boot-bootstrap.md)
+now passes 16 offline / 121 source checks, with exact clearing, entry-state
+preservation and self-erasure by original startup. Its BIOS load/cache/handoff
+and runtime gates remain false. The next composition gates are native cold-boot not-loaded state,
 authenticated selected-slot initialization, exclusive update/retirement and
 render scheduling, followed by native inventory and crash-safe card integration.
 
