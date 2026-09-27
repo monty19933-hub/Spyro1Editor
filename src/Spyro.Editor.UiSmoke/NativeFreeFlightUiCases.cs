@@ -43,7 +43,14 @@ internal static class NativeFreeFlightUiCases
                 !NativeFreeFlightSettingsStore.Capture(first).Exists &&
                 !window.TryGetFreeFlightSettingsExportBlockReason(out _),
                 "Missing settings render Off without writing intent or blocking otherwise unchanged retail export.");
+            Check((Find<TextBlock>(window, "FreeFlightDetails").Text ?? "").Contains("default: Off", StringComparison.Ordinal),
+                "A never-saved default Off is identified as default, not a saved player ability.");
+            string tooltip = ToolTip.GetTip(Find<CheckBox>(window, "FreeFlightEnabled"))?.ToString() ?? "";
+            Check(tooltip.Contains("Spyro", StringComparison.Ordinal) && tooltip.Contains("exported game", StringComparison.Ordinal) &&
+                tooltip.Contains("Free Camera", StringComparison.Ordinal),
+                "The existing checkbox distinguishes native Spyro flight in exported gameplay from the editor camera.");
             DraftAndPersistence(window, first, second);
+            window = ReopenSavedChoice(window, first);
             UnsupportedTargets(window, first);
             BusyRefusal(window, first);
             CreateBinBusyUi(window, first);
@@ -70,12 +77,59 @@ internal static class NativeFreeFlightUiCases
         }
     }
 
+    private static MainWindow ReopenSavedChoice(MainWindow window, string root)
+    {
+        Bind(window, root, 14);
+        Find<CheckBox>(window, "FreeFlightEnabled").IsChecked = true; Pump();
+        Fire(window, "FreeFlightSave");
+        Wait(() => NativeFreeFlightSettingsStore.Capture(root).IsEnabled(14) && !Busy(window), "saved On before closing editor");
+        byte[] savedOn = File.ReadAllBytes(SettingsPath(root));
+        Find<CheckBox>(window, "FreeFlightEnabled").IsChecked = false; Pump();
+        Check(window.TryGetFreeFlightSettingsExportBlockReason(out _), "An unsaved Off draft cannot replace the saved starting choice.");
+        window.Close(); Pump();
+
+        window = new MainWindow { Width = 1200, Height = 760 };
+        Get<TabControl>(window, "_modernWorkspaceTabs").SelectedItem = Get<TabItem>(window, "_modernLevelWorkspaceTab");
+        Bind(window, root, 14);
+        Check(Find<CheckBox>(window, "FreeFlightEnabled").IsChecked == true &&
+            File.ReadAllBytes(SettingsPath(root)).SequenceEqual(savedOn) &&
+            NativeFreeFlightProjectExportIntent.Capture(root).EnabledLevelId == 14 &&
+            !window.TryGetFreeFlightSettingsExportBlockReason(out _),
+            "A fresh editor instance reloads saved On into both the control and export intent; a closed unsaved draft cannot leak.");
+        string details = Find<TextBlock>(window, "FreeFlightDetails").Text ?? "";
+        Check(details.Contains("saved: On", StringComparison.Ordinal) &&
+            details.Contains("flight ability", StringComparison.OrdinalIgnoreCase) &&
+            details.Contains("Cross", StringComparison.Ordinal) &&
+            details.Contains("memory card", StringComparison.OrdinalIgnoreCase),
+            "Saved On describes starting flight availability, its native entry control and the separate memory-card boundary.");
+        Find<CheckBox>(window, "FreeFlightEnabled").IsChecked = false; Pump();
+        Fire(window, "FreeFlightSave");
+        Wait(() => !NativeFreeFlightSettingsStore.Capture(root).IsEnabled(14) && !Busy(window), "saved Off before closing editor");
+        byte[] savedOff = File.ReadAllBytes(SettingsPath(root));
+        window.Close(); Pump();
+
+        window = new MainWindow { Width = 1200, Height = 760 };
+        Get<TabControl>(window, "_modernWorkspaceTabs").SelectedItem = Get<TabItem>(window, "_modernLevelWorkspaceTab");
+        Bind(window, root, 14);
+        var intent = NativeFreeFlightProjectExportIntent.Capture(root);
+        Check(Find<CheckBox>(window, "FreeFlightEnabled").IsChecked == false &&
+            File.ReadAllBytes(SettingsPath(root)).SequenceEqual(savedOff) &&
+            intent.HasExplicitSelection(14) && intent.RequiresRebuild && intent.EnabledLevelId == null &&
+            !window.TryGetFreeFlightSettingsExportBlockReason(out _),
+            "A second fresh editor instance reloads explicit Off and still requires the original-source rebuild.");
+        Check((Find<TextBlock>(window, "FreeFlightDetails").Text ?? "").Contains("saved: Off", StringComparison.Ordinal),
+            "Reopened explicit Off remains visibly saved, distinct from a never-saved default.");
+        return window;
+    }
+
     private static void DraftAndPersistence(MainWindow window, string first, string second)
     {
         var enabled = Find<CheckBox>(window, "FreeFlightEnabled");
         enabled.IsChecked = true; Pump();
         Check(!NativeFreeFlightSettingsStore.Capture(first).Exists,
             "Checking the draft alone never writes settings or native output.");
+        Check((Find<TextBlock>(window, "FreeFlightDetails").Text ?? "").Contains("default: Off. Draft: On.", StringComparison.Ordinal),
+            "A changed draft displays the desired On separately from the untouched default Off.");
         Check(window.TryGetFreeFlightSettingsExportBlockReason(out string dirtyReason) &&
             dirtyReason.Contains("Save", StringComparison.OrdinalIgnoreCase) && dirtyReason.Contains("Revert", StringComparison.OrdinalIgnoreCase),
             "An unsaved On draft explicitly blocks export until Save or Revert.");

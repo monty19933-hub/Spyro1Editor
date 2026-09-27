@@ -21,6 +21,8 @@ public sealed partial class MainWindow
 
     private Control BuildFreeFlightSettingsPanel()
     {
+        ToolTip.SetTip(_freeFlightEnabled,
+            "Controls Spyro's native flight ability in the exported game. The editor's Free Camera is separate.");
         _freeFlightEnabled.PropertyChanged += (_, change) =>
         {
             if (_syncingFreeFlight || change.Property != ToggleButton.IsCheckedProperty) return;
@@ -105,7 +107,7 @@ public sealed partial class MainWindow
             // owner; no await separates the last current check from publication.
             var saved = NativeFreeFlightSettingsStore.Save(expected, level.LevelId, enabled);
             _freeFlightSnapshot = saved;
-            _statusText.Text = $"Saved Fly Anywhere {(enabled ? "On" : "Off")} for {level.DisplayName}. Create BIN will rebuild from the original source.";
+            _statusText.Text = $"Saved Fly Anywhere {(enabled ? "On" : "Off")} for {level.DisplayName} in this project. Create BIN will rebuild from the original source.";
             if (saved.RetainedRecoveryDirectory.Length != 0)
                 _statusText.Text += " Previous-settings recovery files: " + saved.RetainedRecoveryDirectory;
         }
@@ -175,10 +177,14 @@ public sealed partial class MainWindow
         else
         {
             string state = _freeFlightSnapshot?.IsEnabled(_freeFlightLevel!.LevelId) == true ? "On" : "Off";
+            string selection = _freeFlightSnapshot?.HasExplicitSelection(_freeFlightLevel!.LevelId) == true ? "saved" : "default";
             bool dirty = _freeFlightSnapshot != null && _freeFlightDraft != _freeFlightSnapshot.IsEnabled(_freeFlightLevel!.LevelId);
-            _freeFlightDetails.Text = $"{_freeFlightLevel!.DisplayName} — saved: {state}. " +
-                (dirty ? "Draft changed: Save or Revert before Create BIN. " : "") +
-                "On currently supports Toasty only. Off remains an explicit original-source rebuild choice. Settings alone do not verify gameplay.";
+            _freeFlightDetails.Text = $"{_freeFlightLevel!.DisplayName} — {selection}: {state}. " +
+                (dirty ? $"Draft: {(_freeFlightDraft ? "On" : "Off")}. Save or Revert before Create BIN. " : "") +
+                "On starts Toasty with the flight ability available: jump, then press Cross again to fly. " +
+                "On currently supports Toasty only. Off rebuilds the original retail movement. " +
+                "Save Flight keeps this project's export choice; it does not save an ability to the game's memory card. " +
+                "Native game save/reload remains unverified.";
         }
     }
 }
