@@ -32,6 +32,12 @@ passes367 fixture +367 exact-source checks, connecting previsual earned-state
 suppression and postvisual collection to guarded native placed-row removal.
 It is still detached: final scheduling/code ownership, Ready/save admission,
 native card/inventory/percentage consumers and gameplay acceptance remain.
+Integrated default Release at `e9d0091`:252 checks, zero failures, report
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-g_xx7rat/summary.json`.
+The old E800 overlay ceiling is not sufficient for all new callable bodies;
+do not enable these by borrowing its padding or leaving test RAM addresses in
+a native output. Continue with a separately owned successor overlay and final
+copy-anchor/model/scene reprojection, preserving the existing E800 producer.
 
 September 27: [independent authored colors now pass a fresh full-firmware
 Artisans visual test](japanese-egg-authored-colors-runtime.md), including normal

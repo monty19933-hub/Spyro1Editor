@@ -19,6 +19,12 @@ New [egg lifecycle callables](research/japanese-egg-lifecycle-callables.md)
 pass367 fixture +367 original-ROM checks, including both-instance pickup and
 earned-state suppression after a simulated row reload. These functions are not
 installed in a game and do not yet add inventory, card saving or completion.
+The integrated source checkpoint `e9d0091` passes the default Release gate:
+**252 checks, zero failures**, report
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-g_xx7rat/summary.json`.
+R08's App/Core assemblies, both normal DuckStation INIs and the ordinary USA
+memory card still match their preserved hashes. No emulator was launched for
+this source/UI checkpoint, and no new playable collectible result is claimed.
 
 September 27 continuation: a separate research disc now demonstrates **two
 independently colored Japanese eggs animating together in USA Artisans** after
@@ -32,7 +38,7 @@ checks). Neither is installed or grants persistent-save approval. R08 remains
 the latest packaged editor, unchanged; normal DuckStation settings/card are
 restored and no test emulator remains running.
 
-The latest September 27 default Release regression completed **246 checks,
+The preceding September 27 default Release regression completed **246 checks,
 0 failed**, including the observer, collection-state suites, reservation
 mechanics and the combined pickup caller. Its report is
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-8lcvdcpv/summary.json`.

@@ -77,6 +77,11 @@ Run `dotnet run --project src/Spyro.Editor.NativeJapaneseEggLifecycleSmoke -c
 Release` for the source-free gate. Append `-- --source <JP-BIN> <USA-BIN>` for
 the explicit regional source route. The default regression runner now requires
 the source-free success marker; its104 contract tests pass.
+The integrated default Release run then passed252 checks with zero failures;
+its report is
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-g_xx7rat/summary.json`.
+This gate includes the changed browser and free-flight UI routes. It does not
+launch a packaged editor or emulator.
 
 ## Remaining installation gates
 
