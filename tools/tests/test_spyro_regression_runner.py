@@ -2065,6 +2065,7 @@ class RegionalAndMatrixGateTests(unittest.TestCase):
             ("NativeJapaneseEggRgbVariantTailSmoke", "JP_EGG_RGB_VARIANT_TAIL_SOURCE_FREE_OK"),
             ("NativeJapaneseEggPickupPredicateSmoke", "JP_EGG_PICKUP_PREDICATE_SOURCE_FREE_OK"),
             ("NativeJapaneseEggCollectionAttemptSmoke", "JP_EGG_COLLECTION_ATTEMPT_SOURCE_FREE_OK"),
+            ("NativeJapaneseEggLifecycleSmoke", "JP_EGG_LIFECYCLE_SOURCE_FREE_OK"),
             ("NativeJapaneseEggAuthoredClassesSmoke", "JP_EGG_AUTHORED_CLASSES_SOURCE_FREE_OK"),
             ("NativeJapaneseEggAuthoredMemorySmoke", "JP_EGG_AUTHORED_MEMORY_SOURCE_FREE_OK"),
             ("NativeJapaneseEggPlacementSmoke", "JP_EGG_PLACEMENT_SOURCE_FREE_OK"),

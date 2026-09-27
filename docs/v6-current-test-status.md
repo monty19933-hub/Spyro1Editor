@@ -8,6 +8,18 @@ remains the goal, not a completed feature or zero-bug guarantee.
 
 ## Latest source and gameplay checkpoint
 
+September27 source continuation (not a replacement of R08): the two Moby
+browsers now default to all368 identified classes/6,334 observations, including
+shared resources, with categories and expandable exact-donor dependency
+evidence. Existing placement restrictions remain unchanged. Starting-flight
+details distinguish saved project ON/OFF from a game memory-card ability;
+fresh-window reload tests passed. See [catalogue](native-moby-library.md) and
+[flight](research/native-free-flight-starting-choice-20260927.md).
+New [egg lifecycle callables](research/japanese-egg-lifecycle-callables.md)
+pass367 fixture +367 original-ROM checks, including both-instance pickup and
+earned-state suppression after a simulated row reload. These functions are not
+installed in a game and do not yet add inventory, card saving or completion.
+
 September 27 continuation: a separate research disc now demonstrates **two
 independently colored Japanese eggs animating together in USA Artisans** after
 full-firmware cold boot. Ordinary inventory and return to gameplay also passed.

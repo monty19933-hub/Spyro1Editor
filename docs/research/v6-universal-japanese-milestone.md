@@ -7,6 +7,32 @@ this is not permission to replace the game with its Japanese version.
 
 ## Execution order and acceptance
 
+September 27 updated user goal: the full494-line attachment
+`1d8a5d09-c8ae-4496-8004-3cc7690b01b1/Pasted text.txt` is now the active scope.
+It retains the verified architecture and asks for all-known-Moby browsing and
+dependency-backed cross-level placement; Japanese eggs/signs with editable
+native appearance/messages; stable per-instance collection, level X/X,
+persistent inventory and eggs required for100%; deterministic default-OFF
+Spyro starting flight; nearby UI improvements; packaged-editor/runtime tests;
+and a final whole-game editability audit. It is not permission to substitute
+catalogue discovery, detached models or reports for functioning native features.
+Use narrow efficient Astra XHigh subagents, regression-first integration and
+safe checkpoints. Preserve R06/R07/R08, originals and normal saves/settings;
+the standing pause near5% remaining usage applies.
+
+Source checkpoints `a9ec73c` and `5d44924` respectively clarify flight project
+versus memory-card ownership with fresh-window ON/OFF tests, and expose all368
+known classes/6,334 observations plus exact-variant dependency evidence in
+both existing browsers. These changes retain existing native export gates.
+See [flight](native-free-flight-starting-choice-20260927.md) and
+[catalogue](../native-moby-library.md). No new app package is installed.
+
+The next [lifecycle callable composition](japanese-egg-lifecycle-callables.md)
+passes367 fixture +367 exact-source checks, connecting previsual earned-state
+suppression and postvisual collection to guarded native placed-row removal.
+It is still detached: final scheduling/code ownership, Ready/save admission,
+native card/inventory/percentage consumers and gameplay acceptance remain.
+
 September 27: [independent authored colors now pass a fresh full-firmware
 Artisans visual test](japanese-egg-authored-colors-runtime.md), including normal
 inventory open/return. No collector or new inventory/save/% consumer is installed.
