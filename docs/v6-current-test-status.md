@@ -20,12 +20,13 @@ checks). Neither is installed or grants persistent-save approval. R08 remains
 the latest packaged editor, unchanged; normal DuckStation settings/card are
 restored and no test emulator remains running.
 
-The latest September 27 default Release regression completed **239 checks,
+The latest September 27 default Release regression completed **246 checks,
 0 failed**, including the observer, collection-state suites, reservation
 mechanics and the combined pickup caller. Its report is
-`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-pjvgr70q/summary.json`.
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-8lcvdcpv/summary.json`.
 This is the default source-free gate, not the larger optional source-QA run.
-The preceding 235/0 report remains preserved as `spyro-regression-asd6fdwc`.
+The preceding 239/0 and 235/0 reports remain preserved as
+`spyro-regression-pjvgr70q` and `spyro-regression-asd6fdwc`.
 
 The [combined pickup caller](research/japanese-egg-detached-collection-attempt.md)
 now joins actual source proximity checks with stable GUID-based collectible
@@ -37,9 +38,13 @@ not transfer collected state between identities. The separate
 12 offline / 107 source checks, including native allocator/sentinel/copy writes.
 The [ephemeral boot initializer](research/collectible-ephemeral-cold-boot-bootstrap.md)
 passes 16 offline / 121 source checks: it clears the proposed ledger to
-NOT-LOADED, then original startup erases the temporary code. Those CPU checks
-simulate the declared executable transfer; actual BIOS loading/cache behavior
-has not yet been observed for this prototype.
+NOT-LOADED, then original startup erases the temporary code. A separately
+published two-sector startup-only disc now also passes a bounded full-firmware
+Artisans movement/jump/native inventory-open-return check. Three read-only
+samples retain zero reservation bytes and no renderer exhaustion. See the
+[exact startup runtime and limits](research/collectible-startup-runtime-r01.md).
+This does not prove every cache/IRQ/lifetime property or clearing execution
+from zero bytes alone, and no collectible or save hook is installed.
 These units are not yet installed together in a game: native boot initialization,
 selected-slot identity, safe dispatch/lifetime, inventory and card transactions
 remain required before a usable collectible-enabled editor build.

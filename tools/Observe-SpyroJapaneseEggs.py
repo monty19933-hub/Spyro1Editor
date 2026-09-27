@@ -242,17 +242,26 @@ def _identity(value):
     return (value.st_dev, value.st_ino, value.st_mode, value.st_size, value.st_mtime_ns, value.st_ctime_ns)
 
 
-class AuthoredSession:
+class FixedCandidateSession:
     """Held-file and named-process evidence, not atomic loaded-disc/GPU proof.
 
     No caller hash, receipt or override can authorize a different candidate.
     The fixed file is hashed on entry AND close; stable identity plus fresh
     ps/lsof evidence is checked around each sequential sample. No CPU control.
     """
+    # Closed subclasses supply these bindings; no CLI hash/profile override.
+    image_name = None
+    image_sha256 = None
+    image_size = None
+
     def __init__(self, candidate, pid):
         self.path, self.pid, self.file = Path(os.path.abspath(candidate)), pid, None
-        if self.path.name != AUTHORED_IMAGE_NAME or "\n" in str(self.path):
-            raise ValueError("Only the exact authored candidate filename is admitted.")
+        if self.path.name != self.image_name or "\n" in str(self.path):
+            raise ValueError("Only the exact closed candidate filename is admitted.")
+        if (type(self.image_sha256) is not str or len(self.image_sha256) != 64 or
+                any(c not in "0123456789abcdef" for c in self.image_sha256) or
+                type(self.image_size) is not int or self.image_size <= 0):
+            raise ValueError("Closed candidate identity has not been issued.")
 
     def _require_file(self):
         if any(p.is_symlink() for p in (self.path, *self.path.parents)):
@@ -264,8 +273,8 @@ class AuthoredSession:
         self.file.seek(0)
         digest = hashlib.file_digest(self.file, "sha256").hexdigest()
         self._require_file()
-        if digest != AUTHORED_IMAGE_SHA256:
-            raise ValueError("Candidate is not the exact authored full-image hash.")
+        if digest != self.image_sha256:
+            raise ValueError("Candidate is not the exact closed full-image hash.")
 
     def __enter__(self):
         if any(p.is_symlink() for p in (self.path, *self.path.parents)):
@@ -274,7 +283,7 @@ class AuthoredSession:
         self.file = os.fdopen(fd, "rb")
         try:
             info = os.fstat(self.file.fileno()); self.identity = _identity(info)
-            if not stat.S_ISREG(info.st_mode) or info.st_size != AUTHORED_IMAGE_SIZE:
+            if not stat.S_ISREG(info.st_mode) or info.st_size != self.image_size:
                 raise ValueError("Candidate has a different complete image extent.")
             self._hash()
             self.signature = _require_process(self.pid, self.path, info.st_ino, info.st_dev)
@@ -294,6 +303,12 @@ class AuthoredSession:
             self._hash()
         finally:
             self.file.close()
+
+
+class AuthoredSession(FixedCandidateSession):
+    image_name = AUTHORED_IMAGE_NAME
+    image_sha256 = AUTHORED_IMAGE_SHA256
+    image_size = AUTHORED_IMAGE_SIZE
 
 
 def main():

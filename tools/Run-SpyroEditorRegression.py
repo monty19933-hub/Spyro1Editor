@@ -34,12 +34,18 @@ OBSERVER_PYTHON_CASES = (
      "Ran 9 tests"),
     ("python-usa-save-buffer-ownership", ("tools/test_usa_save_buffer_ownership.py", "-v"),
      "Ran 10 tests"),
+    ("python-usa-selected-save-admission", ("tools/test_usa_selected_save_admission.py", "-v"),
+     "Ran 12 tests"),
     ("python-usa-pete-lifetime", ("tools/test_usa_pete_lifetime.py", "-v"),
      "Ran 11 tests"),
     ("python-japanese-egg-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_observer.py", "-v"),
      "Ran 10 tests"),
     ("python-japanese-egg-authored-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_authored_observer.py", "-v"),
      "Ran 16 tests"),
+    ("python-collectible-startup-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_collectible_startup_observer.py", "-v"),
+     "Ran 8 tests"),
+    ("python-collectible-startup-physical", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_collectible_startup_physical.py", "-v"),
+     "Ran 14 tests"),
     ("python-japanese-egg-physical-verifier", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_research.py", "-v"),
      "Ran 29 tests"),
 )
@@ -67,6 +73,7 @@ CORE_CASES = (
     ("NativeCollectibleCollectionKernelSmoke", "NATIVE_COLLECTIBLE_COLLECTION_KERNEL_OK"),
     ("NativeCollectibleReservationMechanicsSmoke", "COLLECTIBLE_RESERVATION_MECHANICS_SOURCE_FREE_OK"),
     ("NativeCollectibleColdBootBootstrapSmoke", "COLLECTIBLE_COLD_BOOT_BOOTSTRAP_SOURCE_FREE_OK"),
+    ("NativeCollectibleStartupResearchSmoke", "COLLECTIBLE_STARTUP_RESEARCH_SOURCE_FREE_OK"),
     ("NativeJapaneseEggCollectionAttemptSmoke", "JP_EGG_COLLECTION_ATTEMPT_SOURCE_FREE_OK"),
     ("NativeJapaneseEggVisualBehaviorSmoke", "JP_EGG_VISUAL_BEHAVIOR_SOURCE_FREE_OK"),
     ("NativeJapaneseEggArtisansIntegrationSmoke", "JP_EGG_ARTISANS_INTEGRATION_SOURCE_FREE_OK"),
@@ -203,6 +210,7 @@ ADDITIONAL_CORE_CASES = (
      ["--fresh-saved-research-ui"]),
 )
 SOURCE_QA_CASES = (
+    ("NativeCollectibleStartupResearchSmoke", "COLLECTIBLE_STARTUP_RESEARCH_SOURCE_OK", ["--source"]),
     ("NativeCollectibleColdBootBootstrapSmoke", "COLLECTIBLE_COLD_BOOT_BOOTSTRAP_SOURCE_OK", ["--source"]),
     ("NativeCollectibleReservationMechanicsSmoke", "COLLECTIBLE_RESERVATION_MECHANICS_SOURCE_OK", ["--source"]),
     ("NativeCollectibleSelectedSlotResidenceSmoke", "COLLECTIBLE_SELECTED_SLOT_RESIDENCE_SOURCE_OK", ["--source"]),
@@ -275,7 +283,7 @@ SOURCE_QA_CASES = (
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
 SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
-SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke", "NativeFreshSavedLevelResearchSmoke", "NativeFreshSavedLevelPublicSmoke", "UiSmoke"})
+SOURCE_QA_CUE_CASES = frozenset({"NativeCollectibleStartupResearchSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke", "NativeFreshSavedLevelResearchSmoke", "NativeFreshSavedLevelPublicSmoke", "UiSmoke"})
 # These raw-source checks have no project/build or default invocation. Each
 # accepts only the selected original BIN and shares the source-suite deadline.
 SOURCE_PYTHON_CASES = (

@@ -19,12 +19,15 @@ still the preserved latest packaged app.
 The source continuation now includes a [GUID-bound pickup caller](japanese-egg-detached-collection-attempt.md)
 (384 offline / 441 source checks), [native placed-row retirement evidence](japanese-egg-placed-retirement.md)
 (541 source checks), and [paired reserve-word mechanics](collectible-reservation-mechanics.md)
-(12 offline / 107 source checks). Latest default Release gate: 239/0. These
+(12 offline / 107 source checks). Latest default Release gate: 246/0. These
 close bounded code/geometry questions, not installed gameplay collection or
 persistent saving. An [ephemeral cold-boot prototype](collectible-ephemeral-cold-boot-bootstrap.md)
 now passes 16 offline / 121 source checks, with exact clearing, entry-state
-preservation and self-erasure by original startup. Its BIOS load/cache/handoff
-and runtime gates remain false. The next composition gates are native cold-boot not-loaded state,
+preservation and self-erasure by original startup. A separate two-sector
+[startup-only disc now reaches real Artisans gameplay through full firmware](collectible-startup-runtime-r01.md),
+including movement/jump and ordinary inventory open/return. Its three sampled
+reservations remain zero. This bounded observation does not grant complete
+cache/handoff/IRQ/lifetime or native Ready authority. The next composition gates are native cold-boot not-loaded state,
 authenticated selected-slot initialization, exclusive update/retirement and
 render scheduling, followed by native inventory and crash-safe card integration.
 The [selected-save observation boundary](collectible-selected-save-admission-boundary.md)

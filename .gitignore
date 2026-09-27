@@ -228,6 +228,8 @@ unsafe-tests/
 !/tools/tests/test_japanese_egg_authored_observer.py
 !/tools/Observe-SpyroCollectibleStartup.py
 !/tools/tests/test_collectible_startup_observer.py
+!/tools/Verify-SpyroCollectibleStartup.py
+!/tools/tests/test_collectible_startup_physical.py
 !/tools/Verify-SpyroJapaneseEggResearch.py
 !/tools/tests/test_japanese_egg_research.py
 !/tools/Observe-SpyroFreshId65.py

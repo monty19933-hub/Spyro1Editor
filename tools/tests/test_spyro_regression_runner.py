@@ -203,12 +203,18 @@ class ObserverPrebuildTests(unittest.TestCase):
          "Ran 9 tests"),
         ("python-usa-save-buffer-ownership", ("tools/test_usa_save_buffer_ownership.py", "-v"),
          "Ran 10 tests"),
+        ("python-usa-selected-save-admission", ("tools/test_usa_selected_save_admission.py", "-v"),
+         "Ran 12 tests"),
         ("python-usa-pete-lifetime", ("tools/test_usa_pete_lifetime.py", "-v"),
          "Ran 11 tests"),
         ("python-japanese-egg-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_observer.py", "-v"),
          "Ran 10 tests"),
         ("python-japanese-egg-authored-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_authored_observer.py", "-v"),
          "Ran 16 tests"),
+        ("python-collectible-startup-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_collectible_startup_observer.py", "-v"),
+         "Ran 8 tests"),
+        ("python-collectible-startup-physical", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_collectible_startup_physical.py", "-v"),
+         "Ran 14 tests"),
         ("python-japanese-egg-physical-verifier", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_research.py", "-v"),
          "Ran 29 tests"),
     )
@@ -1510,7 +1516,7 @@ class RunnerOptionsTests(unittest.TestCase):
             self.assertEqual(free_marker, dict(RUNNER.CORE_CASES).get(name))
             self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
             self.assertEqual([(name, source_marker, arguments)], [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
-        self.assertEqual(frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke", "NativeFreshSavedLevelResearchSmoke", "NativeFreshSavedLevelPublicSmoke", "UiSmoke"}), RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertEqual(frozenset({"NativeCollectibleStartupResearchSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke", "NativeFreshSavedLevelResearchSmoke", "NativeFreshSavedLevelPublicSmoke", "UiSmoke"}), RUNNER.SOURCE_QA_CUE_CASES)
         self.assertEqual({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"},
                          RUNNER.SOURCE_QA_CUE_CASES & RUNNER.SOURCE_QA_WORKSPACE_CASES,
                          "Only these CUE consumers also inspect the configured workspace; new detached candidates must not inherit it.")
@@ -1706,6 +1712,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeCollectibleSelectedSlotResidenceSmoke": ["--source", "/selected original.bin"],
             "NativeCollectibleReservationMechanicsSmoke": ["--source", "/selected original.bin"],
             "NativeCollectibleColdBootBootstrapSmoke": ["--source", "/selected original.bin"],
+            "NativeCollectibleStartupResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],
             "NativeMobyDependencyClosureSmoke": ["--source-v3", "/selected original.bin"],
             "NativeMobyInventorySmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeMobyPersistentOwnerSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
@@ -1999,6 +2006,14 @@ class NeutralTiledFamilyOracleTests(unittest.TestCase):
 
 
 class RegionalAndMatrixGateTests(unittest.TestCase):
+    def test_startup_research_publication_and_faults_never_implicit_in_runner(self):
+        name = "NativeCollectibleStartupResearchSmoke"
+        self.assertEqual("COLLECTIBLE_STARTUP_RESEARCH_SOURCE_FREE_OK", dict(RUNNER.CORE_CASES)[name])
+        self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
+        self.assertEqual([(name, "COLLECTIBLE_STARTUP_RESEARCH_SOURCE_OK", ["--source"])],
+                         [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
+        self.assertIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+
     def test_cold_boot_prototype_cannot_implicitly_open_source_or_publish(self):
         name = "NativeCollectibleColdBootBootstrapSmoke"
         self.assertEqual("COLLECTIBLE_COLD_BOOT_BOOTSTRAP_SOURCE_FREE_OK", dict(RUNNER.CORE_CASES)[name])
