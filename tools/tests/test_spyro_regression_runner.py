@@ -1704,6 +1704,7 @@ class RunnerOptionsTests(unittest.TestCase):
         expected = {
             "NativeSimpleMobyGeometrySmoke": ["--source", "/selected original.bin"],
             "NativeCollectibleSelectedSlotResidenceSmoke": ["--source", "/selected original.bin"],
+            "NativeCollectibleReservationMechanicsSmoke": ["--source", "/selected original.bin"],
             "NativeMobyDependencyClosureSmoke": ["--source-v3", "/selected original.bin"],
             "NativeMobyInventorySmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeMobyPersistentOwnerSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
@@ -1997,6 +1998,14 @@ class NeutralTiledFamilyOracleTests(unittest.TestCase):
 
 
 class RegionalAndMatrixGateTests(unittest.TestCase):
+    def test_reservation_mechanics_default_is_neutral_and_source_mode_explicit(self):
+        name = "NativeCollectibleReservationMechanicsSmoke"
+        self.assertEqual("COLLECTIBLE_RESERVATION_MECHANICS_SOURCE_FREE_OK", dict(RUNNER.CORE_CASES)[name])
+        self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
+        self.assertEqual([(name, "COLLECTIBLE_RESERVATION_MECHANICS_SOURCE_OK", ["--source"])],
+                         [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+
     def test_selected_slot_residence_has_only_explicit_read_only_source_mode(self):
         name = "NativeCollectibleSelectedSlotResidenceSmoke"
         self.assertEqual("COLLECTIBLE_SELECTED_SLOT_RESIDENCE_SOURCE_FREE_OK", dict(RUNNER.CORE_CASES)[name])
@@ -2021,6 +2030,7 @@ class RegionalAndMatrixGateTests(unittest.TestCase):
             ("NativeJapaneseEggInstanceRootSmoke", "JP_EGG_INSTANCE_ROOT_SOURCE_FREE_OK"),
             ("NativeJapaneseEggRgbVariantTailSmoke", "JP_EGG_RGB_VARIANT_TAIL_SOURCE_FREE_OK"),
             ("NativeJapaneseEggPickupPredicateSmoke", "JP_EGG_PICKUP_PREDICATE_SOURCE_FREE_OK"),
+            ("NativeJapaneseEggCollectionAttemptSmoke", "JP_EGG_COLLECTION_ATTEMPT_SOURCE_FREE_OK"),
             ("NativeJapaneseEggAuthoredClassesSmoke", "JP_EGG_AUTHORED_CLASSES_SOURCE_FREE_OK"),
             ("NativeJapaneseEggAuthoredMemorySmoke", "JP_EGG_AUTHORED_MEMORY_SOURCE_FREE_OK"),
             ("NativeJapaneseEggPlacementSmoke", "JP_EGG_PLACEMENT_SOURCE_FREE_OK"),

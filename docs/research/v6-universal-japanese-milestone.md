@@ -16,6 +16,15 @@ pass focused source/CPU tests. Native memory ownership, initialization, safe
 row retirement and card transaction/lifetime remain separate gates. R08 is
 still the preserved latest packaged app.
 
+The source continuation now includes a [GUID-bound pickup caller](japanese-egg-detached-collection-attempt.md)
+(384 offline / 441 source checks), [native placed-row retirement evidence](japanese-egg-placed-retirement.md)
+(541 source checks), and [paired reserve-word mechanics](collectible-reservation-mechanics.md)
+(12 offline / 107 source checks). Latest default Release gate: 239/0. These
+close bounded code/geometry questions, not installed gameplay collection or
+persistent saving. The next composition gates are cold-boot not-loaded state,
+authenticated selected-slot initialization, exclusive update/retirement and
+render scheduling, followed by native inventory and crash-safe card integration.
+
 September 25 source checkpoint: detached independent authored RGB registrations now
 pass exact-USA clear/load/animation/render-routing tests and exhaustive class
 dispatch comparison. The actual larger normal-load footprint passes separately.

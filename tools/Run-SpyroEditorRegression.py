@@ -65,6 +65,8 @@ CORE_CASES = (
     ("DetachedCollectibleCompletionSmoke", "DETACHED_COLLECTIBLE_COMPLETION_SOURCE_FREE_OK"),
     ("NativeCollectibleSelectedSlotResidenceSmoke", "COLLECTIBLE_SELECTED_SLOT_RESIDENCE_SOURCE_FREE_OK"),
     ("NativeCollectibleCollectionKernelSmoke", "NATIVE_COLLECTIBLE_COLLECTION_KERNEL_OK"),
+    ("NativeCollectibleReservationMechanicsSmoke", "COLLECTIBLE_RESERVATION_MECHANICS_SOURCE_FREE_OK"),
+    ("NativeJapaneseEggCollectionAttemptSmoke", "JP_EGG_COLLECTION_ATTEMPT_SOURCE_FREE_OK"),
     ("NativeJapaneseEggVisualBehaviorSmoke", "JP_EGG_VISUAL_BEHAVIOR_SOURCE_FREE_OK"),
     ("NativeJapaneseEggArtisansIntegrationSmoke", "JP_EGG_ARTISANS_INTEGRATION_SOURCE_FREE_OK"),
     ("NativeJapaneseEggMemorySmoke", "JP_EGG_MEMORY_SOURCE_FREE_OK"),
@@ -200,6 +202,7 @@ ADDITIONAL_CORE_CASES = (
      ["--fresh-saved-research-ui"]),
 )
 SOURCE_QA_CASES = (
+    ("NativeCollectibleReservationMechanicsSmoke", "COLLECTIBLE_RESERVATION_MECHANICS_SOURCE_OK", ["--source"]),
     ("NativeCollectibleSelectedSlotResidenceSmoke", "COLLECTIBLE_SELECTED_SLOT_RESIDENCE_SOURCE_OK", ["--source"]),
     ("NativeSimpleMobyGeometrySmoke", "NATIVE_SIMPLE_MOBY_GEOMETRY_DISC_OK", ["--source"]),
     # This read-only mode checks both preserved V2 and V3 native closure goldens;

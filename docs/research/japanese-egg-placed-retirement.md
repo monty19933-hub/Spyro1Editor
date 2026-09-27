@@ -3,7 +3,7 @@
 September 27, 2026. Test-only extension of the exact-source authored-class smoke;
 no runtime hook, ROM change, collector activation or save approval.
 
-The existing [Town Square persistence contract](native-town-square-persistence-contract.md)
+The existing [Town Square runtime observation contract](native-town-square-chest-runtime-observation-contract.md)
 already identifies USA `80052568..800525CC` (EXE `42D68/64`, SHA256
 `602fc31b1351212e5d5c72c39ac59cc86a9afd0226a9a0549192855588498505`)
 as native **placed-row deletion**. This is not generic kill `8003B9D4`; it
