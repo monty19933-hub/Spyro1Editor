@@ -35,6 +35,16 @@ now distinguishes new/load/overwrite paths and documents why native repair or
 stale selection cannot grant fresh custom-state authority (12 offline tests,
 38 source spans). It does not yet initialize the ledger.
 
+Following the startup checkpoint, [detached validated hydration](collectible-detached-ledger-hydration.md)
+passes896 checks without native Ready authority. The
+[shared-validation read-only query](collectible-read-only-state-query.md) passes
+3461 combined checks and resolves the need to recognize earned state before
+proximity handling. [Scheduling evidence](japanese-egg-pickup-scheduling.md)
+passes77 source checks: postvisual pickup/FD removal has a precise ordinary
+callback seam, while earned-out-of-range reload requires previsual suppression.
+Test-only query/native-retirement orchestration proves that local sequence;
+no composed runtime hook, selected-save/card admission or UI is enabled yet.
+
 September 25 source checkpoint: detached independent authored RGB registrations now
 pass exact-USA clear/load/animation/render-routing tests and exhaustive class
 dispatch comparison. The actual larger normal-load footprint passes separately.

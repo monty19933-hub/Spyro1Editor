@@ -29,8 +29,48 @@ static byte[] Initial(DetachedCollectibleSave save,int slot,uint generation=0,by
     foreach(var entry in m.Entries.Where(e=>!e.Retired))b[0x90+aligned+entry.BitIndex/8]|=(byte)(1<<(entry.BitIndex%8));
     return b;
 }
-NativeCollectibleCollectionKernel Kernel(DetachedCollectibleManifest m,int slot=0)=>
-    NativeCollectibleCollectionKernel.Compile(m,slot,capacity,Code,Ledger);
+var queries=new Dictionary<NativeCollectibleCollectionKernel,NativeCollectibleStateQueryKernel>();
+int queryCases=0;
+Check((uint)NativeCollectibleQueryResult.Available==0&&(uint)NativeCollectibleQueryResult.AlreadyEarned==1&&
+    (uint)NativeCollectibleQueryResult.Retired==2&&(uint)NativeCollectibleQueryResult.OutOfRange==3&&
+    (uint)NativeCollectibleQueryResult.InvalidLedger==4,"Query result ABI explicitly distinguishes available from collected.");
+Check(typeof(NativeCollectibleStateQueryKernel).GetConstructors(System.Reflection.BindingFlags.Instance|
+    System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic).All(c=>c.IsPrivate),
+    "Query type cannot wrap caller-supplied collecting bytes through a nonprivate constructor.");
+NativeCollectibleCollectionKernel Kernel(DetachedCollectibleManifest m,int slot=0)
+{
+    var result=NativeCollectibleCollectionKernel.Compile(m,slot,capacity,Code,Ledger);
+    queries.Add(result,NativeCollectibleStateQueryKernel.Compile(m,slot,capacity,Code,Ledger));
+    return result;
+}
+void VerifyQuery(NativeCollectibleCollectionKernel collector,byte[] ledger,uint bit,
+    NativeCollectibleCollectionResult collectionResult,uint pointer)
+{
+    var query=queries[collector];var cpu=new RenderProbeCpu{StrictSignedArithmetic=true};
+    cpu.Copy(Code,query.CopyBytes());cpu.Copy(Ledger,ledger);
+    for(int i=1;i<32;i++)cpu.Regs[i]=0xB0000000u+(uint)i;
+    cpu.Regs[4]=pointer;cpu.Regs[5]=bit;cpu.Regs[29]=0x801D0000;cpu.Regs[31]=Stop;
+    cpu.Hi=0x10203040;cpu.Lo=0x50607080;uint[] before=cpu.Regs.ToArray();
+    cpu.Run(query.EntryPc,Stop);
+    var expected=collectionResult is NativeCollectibleCollectionResult.Collected or NativeCollectibleCollectionResult.GenerationOverflow
+        ? NativeCollectibleQueryResult.Available : (NativeCollectibleQueryResult)(uint)collectionResult;
+    Check(cpu.Regs[2]==(uint)expected,"Read-only state query outcome independent of proximity and mutation overflow.");
+    Check(cpu.Writes.Count==0&&Enumerable.Range(0,0x200).All(i=>cpu.Get(Ledger+(uint)i,1)==ledger[i]),
+        "Every query preserves the full ledger without even an idempotent write.");
+    Check(cpu.Reads.All(p=>p>=Ledger+0x10&&p<Ledger+(uint)query.LiveFootprintBytes),
+        "Query never reads player proximity, row state, native file globals, guard or unowned tail.");
+    Check(Enumerable.Range(1,31).Where(r=>r!=2&&r is not(>=8 and <=15)&&r is not(24 or 25)).All(r=>before[r]==cpu.Regs[r])&&
+        cpu.Hi==0x10203040&&cpu.Lo==0x50607080,"Query preserves input/saved registers, stack and HI/LO.");
+    Check(cpu.Calls.Count==0&&query.StackByteLength==0,"Query has no callbacks or nested stack.");
+    Check(query.ManifestSha256==collector.ManifestSha256&&query.OrdinarySlot==collector.OrdinarySlot&&
+        query.CallerLedgerAddress==Ledger&&query.Owner.ByteLength==query.CopyBytes().Length,
+        "Query owns exact emitted bytes and identical manifest/slot/pointer binding.");
+    Check(!query.NativeResidenceIssued&&!query.DispatchActivated&&!query.PublicationApproved&&!query.PersistentSaveChanges&&
+        !query.ConcurrentMutationSafe,"Read-only query grants no live admission, retirement, concurrency or save authority.");
+    if(pointer!=Ledger||collectionResult==NativeCollectibleCollectionResult.OutOfRange)
+        Check(cpu.Reads.Count==0,"Invalid query pointer or unsigned ID refuses before memory access.");
+    queryCases++;
+}
 RenderProbeCpu Execute(NativeCollectibleCollectionKernel kernel,byte[] ledger,uint bit,
     NativeCollectibleCollectionResult expected,uint pointer=Ledger)
 {
@@ -62,6 +102,7 @@ RenderProbeCpu Execute(NativeCollectibleCollectionKernel kernel,byte[] ledger,ui
         Check(cpu.Get(Ledger+0x90+bit/8,1)==(uint)(ledger[0x90+bit/8]|1<<((int)bit%8)),
             "The exact stable ID bit is set without altering its byte neighbours or narrowing high IDs.");
     }
+    VerifyQuery(kernel,ledger,bit,expected,pointer);
     return cpu;
 }
 
@@ -148,3 +189,10 @@ Refuse(()=>NativeCollectibleCollectionKernel.Compile(m,0,new(space,1,0x2000),Cod
 Refuse(()=>NativeCollectibleCollectionKernel.Compile(m,0,new(space,0,4),Code,Ledger),"capacity");
 Refuse(()=>NativeCollectibleCollectionKernel.Compile(m,0,new(new(NativeAddressKind.Scene,"wrong",NativeAddressRevision.Original,0x2000),0,0x2000),Code,Ledger),"final code");
 Console.WriteLine($"NATIVE_COLLECTIBLE_COLLECTION_KERNEL_OK checks={checks} codeBytes={kernel.CopyBytes().Length:X} maximumCodeBytes={maximumKernel.CopyBytes().Length:X} sourceIo=0 runtime=false save=false");
+byte[] queryCopy=queries[kernel].CopyBytes();queryCopy[0]^=1;
+Check(!queryCopy.SequenceEqual(queries[kernel].CopyBytes()),"Query bytes remain immutable.");
+Refuse(()=>NativeCollectibleStateQueryKernel.Compile(m,3,capacity,Code,Ledger),"slot");
+Refuse(()=>NativeCollectibleStateQueryKernel.Compile(m,0,capacity,Code,Code),"overlap");
+Refuse(()=>NativeCollectibleStateQueryKernel.Compile(Manifest(1409),0,capacity,Code,Ledger),"residence");
+Refuse(()=>NativeCollectibleStateQueryKernel.Compile(m,0,new(space,0,4),Code,Ledger),"capacity");
+Console.WriteLine($"NATIVE_COLLECTIBLE_STATE_QUERY_OK cases={queryCases} checks={checks} codeBytes={queries[kernel].CopyBytes().Length:X} maximumCodeBytes={queries[maximumKernel].CopyBytes().Length:X} writes=0 nativeAuthority=false");

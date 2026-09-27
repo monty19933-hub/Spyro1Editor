@@ -2040,9 +2040,19 @@ class RegionalAndMatrixGateTests(unittest.TestCase):
 
     def test_collection_kernel_has_no_source_card_or_publication_route(self):
         name = "NativeCollectibleCollectionKernelSmoke"
-        self.assertEqual("NATIVE_COLLECTIBLE_COLLECTION_KERNEL_OK", dict(RUNNER.CORE_CASES)[name])
+        self.assertEqual("NATIVE_COLLECTIBLE_STATE_QUERY_OK", dict(RUNNER.CORE_CASES)[name])
         self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
         self.assertFalse(any(case[0] == name for case in RUNNER.SOURCE_QA_CASES))
+
+    def test_ledger_hydration_and_scheduling_defaults_have_no_source_or_publication(self):
+        for name, marker in (
+            ("DetachedCollectibleLedgerImageSmoke", "DETACHED_COLLECTIBLE_LEDGER_IMAGE_OK"),
+            ("NativeJapaneseEggSchedulingSmoke", "JP_EGG_SCHEDULING_SOURCE_FREE_OK"),
+        ):
+            self.assertEqual(marker, dict(RUNNER.CORE_CASES)[name])
+            self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
+            self.assertFalse(any(case[0] == name for case in RUNNER.SOURCE_QA_CASES))
+            self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
 
     def test_required_completion_and_two_egg_gates_are_source_free(self):
         for name, marker in (

@@ -45,6 +45,19 @@ internal sealed class NativeCollectibleCollectionKernel
 
     internal static NativeCollectibleCollectionKernel Compile(DetachedCollectibleManifest manifest, int ordinarySlot,
         NativeByteExtent codeCapacity, uint codeAddress, uint callerLedgerAddress)
+        => CompileCore(manifest, ordinarySlot, codeCapacity, codeAddress, callerLedgerAddress, readOnlyQuery: false);
+
+    internal static (byte[] Bytes, NativeByteExtent Owner, uint EntryPc, uint LedgerAddress,
+        string ManifestSha256, int OrdinarySlot, int LiveFootprintBytes) CompileStateQuery(DetachedCollectibleManifest manifest, int ordinarySlot,
+        NativeByteExtent codeCapacity, uint codeAddress, uint callerLedgerAddress)
+    {
+        var body = CompileCore(manifest, ordinarySlot, codeCapacity, codeAddress, callerLedgerAddress, readOnlyQuery: true);
+        return (body.CopyBytes(), body.Owner, body.EntryPc, body.CallerLedgerAddress,
+            body.ManifestSha256, body.OrdinarySlot, body.LiveFootprintBytes);
+    }
+
+    private static NativeCollectibleCollectionKernel CompileCore(DetachedCollectibleManifest manifest, int ordinarySlot,
+        NativeByteExtent codeCapacity, uint codeAddress, uint callerLedgerAddress, bool readOnlyQuery)
     {
         ArgumentNullException.ThrowIfNull(manifest); ArgumentNullException.ThrowIfNull(codeCapacity);
         if (ordinarySlot < 0 || ordinarySlot >= DetachedCollectibleSave.OrdinarySlotCount)
@@ -137,23 +150,33 @@ internal sealed class NativeCollectibleCollectionKernel
             e.I(0x0C, a1, t1, 7); e.Constant(t2, 1); e.R(4, t1, t2, t2);
             e.R(0x24, t5, t2, t6); e.Branch(4, t6, zero, "retired");
             e.R(0x24, t4, t2, t6); e.Branch(5, t6, zero, "duplicate");
-            e.Load(0x23, t7, a0, Abi.MutationGenerationOffset);
-            e.Constant(t1, uint.MaxValue); e.Branch(4, t7, t1, "overflow");
+            if (readOnlyQuery)
+            {
+                // A query must not turn checking an unearned ID into collection,
+                // nor confuse mutation overflow with an earned/retired identity.
+                // It has no player/row input: reload suppression precedes proximity.
+                ReturnValue((uint)NativeCollectibleQueryResult.Available);
+            }
+            else
+            {
+                e.Load(0x23, t7, a0, Abi.MutationGenerationOffset);
+                e.Constant(t1, uint.MaxValue); e.Branch(4, t7, t1, "overflow");
 
-            // All possible refusals precede all stores. Caller exclusivity is
-            // required: this leaf does not claim atomicity against interruption.
-            e.R(0x25, t4, t2, t4); e.I(9, t3, t3, 1); e.I(9, t7, t7, 1);
-            e.I(0x28, t0, t4, Abi.BitmapOffset);
-            e.I(0x29, a0, t3, Abi.EarnedActiveCountOffset);
-            e.I(0x2B, a0, t7, Abi.MutationGenerationOffset);
-            e.Constant(t6, 1); e.I(0x28, a0, t6, Abi.DirtyOffset);
-            Return(NativeCollectibleCollectionResult.Collected);
+                // All possible refusals precede all stores. Caller exclusivity is
+                // required: this leaf does not claim atomicity against interruption.
+                e.R(0x25, t4, t2, t4); e.I(9, t3, t3, 1); e.I(9, t7, t7, 1);
+                e.I(0x28, t0, t4, Abi.BitmapOffset);
+                e.I(0x29, a0, t3, Abi.EarnedActiveCountOffset);
+                e.I(0x2B, a0, t7, Abi.MutationGenerationOffset);
+                e.Constant(t6, 1); e.I(0x28, a0, t6, Abi.DirtyOffset);
+                Return(NativeCollectibleCollectionResult.Collected);
+            }
         }
         foreach (var (label, result) in new[] {
             ("invalid", NativeCollectibleCollectionResult.InvalidLedger), ("range", NativeCollectibleCollectionResult.OutOfRange),
-            ("retired", NativeCollectibleCollectionResult.Retired), ("duplicate", NativeCollectibleCollectionResult.AlreadyEarned),
-            ("overflow", NativeCollectibleCollectionResult.GenerationOverflow) })
+            ("retired", NativeCollectibleCollectionResult.Retired), ("duplicate", NativeCollectibleCollectionResult.AlreadyEarned) })
         { e.Label(label); Return(result); }
+        if (!readOnlyQuery) { e.Label("overflow"); Return(NativeCollectibleCollectionResult.GenerationOverflow); }
 
         byte[] code = e.Finish();
         if (code.Length > codeCapacity.ByteLength)
@@ -172,7 +195,9 @@ internal sealed class NativeCollectibleCollectionKernel
             e.Branch(5, t0, t1, "invalid");
         }
         void Return(NativeCollectibleCollectionResult result)
-        { e.Constant(v0, (uint)result); e.R(8, ra, zero, zero); e.Word(0); }
+            => ReturnValue((uint)result);
+        void ReturnValue(uint result)
+        { e.Constant(v0, result); e.R(8, ra, zero, zero); e.Word(0); }
     }
 
     // Deliberately local, restricted assembler. Every branch/load gets an

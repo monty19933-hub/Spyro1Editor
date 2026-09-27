@@ -76,3 +76,9 @@ NATIVE_COLLECTIBLE_COLLECTION_KERNEL_OK checks=1812 codeBytes=3CC maximumCodeByt
 ```
 
 No ROM, emulator, memory-card, app or publication write is needed for this test.
+
+Later September27: the same compiler now also emits a distinct
+[read-only state query](collectible-read-only-state-query.md) for suppression
+before proximity testing. The collection instruction sequence remains unchanged;
+its original1812-check result above is historical. The expanded combined suite
+passes3461 checks, including233 no-write query cases. No runtime hook is enabled.

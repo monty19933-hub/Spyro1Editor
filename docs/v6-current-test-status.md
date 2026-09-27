@@ -52,6 +52,17 @@ The [selected-save boundary](research/collectible-selected-save-admission-bounda
 is now source-pinned, including repaired-save and stale-selection counterexamples.
 Native new-game intent alone cannot safely reset or initialize custom progress.
 
+After that full246/0 checkpoint, focused source work added
+[validated detached save-to-ledger preparation](research/collectible-detached-ledger-hydration.md)
+(896 checks) and a [read-only collectible query](research/collectible-read-only-state-query.md)
+(3461 combined checks/233 query cases). The
+[native scheduling tests](research/japanese-egg-pickup-scheduling.md) now pass
+77 source checks, including the earned-outside-proximity respawn counterexample
+and test-only previsual suppression. Pickup-caller384 and runner-contract104
+checks also passed after integration. The full suite has not been repeated for
+these last source-only components; no new packaged app or installed collector
+is claimed. Native selected-save admission/card transactions remain next.
+
 Checkpoint `dcf5dce` adds saved-project compilation of the exact four-tile,
 two-material Wizard/Grass/key/chest layout. Its independent full-disc identity
 matches the actual research candidate tested in DuckStation. The full firmware
