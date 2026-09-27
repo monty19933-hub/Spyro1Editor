@@ -38,6 +38,8 @@ OBSERVER_PYTHON_CASES = (
      "Ran 11 tests"),
     ("python-japanese-egg-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_observer.py", "-v"),
      "Ran 10 tests"),
+    ("python-japanese-egg-authored-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_authored_observer.py", "-v"),
+     "Ran 16 tests"),
     ("python-japanese-egg-physical-verifier", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_research.py", "-v"),
      "Ran 29 tests"),
 )
@@ -61,6 +63,8 @@ CORE_CASES = (
     ("NativeJapaneseEggModelAssemblySmoke", "JP_EGG_MODEL_ASSEMBLY_SOURCE_FREE_OK"),
     ("DetachedCollectibleSaveSmoke", "DETACHED_COLLECTIBLE_SAVE_SOURCE_FREE_OK"),
     ("DetachedCollectibleCompletionSmoke", "DETACHED_COLLECTIBLE_COMPLETION_SOURCE_FREE_OK"),
+    ("NativeCollectibleSelectedSlotResidenceSmoke", "COLLECTIBLE_SELECTED_SLOT_RESIDENCE_SOURCE_FREE_OK"),
+    ("NativeCollectibleCollectionKernelSmoke", "NATIVE_COLLECTIBLE_COLLECTION_KERNEL_OK"),
     ("NativeJapaneseEggVisualBehaviorSmoke", "JP_EGG_VISUAL_BEHAVIOR_SOURCE_FREE_OK"),
     ("NativeJapaneseEggArtisansIntegrationSmoke", "JP_EGG_ARTISANS_INTEGRATION_SOURCE_FREE_OK"),
     ("NativeJapaneseEggMemorySmoke", "JP_EGG_MEMORY_SOURCE_FREE_OK"),
@@ -196,6 +200,7 @@ ADDITIONAL_CORE_CASES = (
      ["--fresh-saved-research-ui"]),
 )
 SOURCE_QA_CASES = (
+    ("NativeCollectibleSelectedSlotResidenceSmoke", "COLLECTIBLE_SELECTED_SLOT_RESIDENCE_SOURCE_OK", ["--source"]),
     ("NativeSimpleMobyGeometrySmoke", "NATIVE_SIMPLE_MOBY_GEOMETRY_DISC_OK", ["--source"]),
     # This read-only mode checks both preserved V2 and V3 native closure goldens;
     # publication/fault modes must never be substituted here.

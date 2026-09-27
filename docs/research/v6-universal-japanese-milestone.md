@@ -7,7 +7,16 @@ this is not permission to replace the game with its Japanese version.
 
 ## Execution order and acceptance
 
-Latest source checkpoint: detached independent authored RGB registrations now
+September 27: [independent authored colors now pass a fresh full-firmware
+Artisans visual test](japanese-egg-authored-colors-runtime.md), including normal
+inventory open/return. No collector or new inventory/save/% consumer is installed.
+A [selected-slot residence descriptor](collectible-selected-slot-residence-descriptor.md)
+and [detached collection leaf](collectible-detached-collection-kernel.md) now
+pass focused source/CPU tests. Native memory ownership, initialization, safe
+row retirement and card transaction/lifetime remain separate gates. R08 is
+still the preserved latest packaged app.
+
+September 25 source checkpoint: detached independent authored RGB registrations now
 pass exact-USA clear/load/animation/render-routing tests and exhaustive class
 dispatch comparison. The actual larger normal-load footprint passes separately.
 The native pickup predicate also passes source/relocated instruction equivalence,
@@ -16,7 +25,7 @@ documented; a prior card-overlay address/dispatch error was corrected and its
 unsupported closure withdrawn. See [authored colors](japanese-egg-authored-classes.md),
 [pickup](japanese-egg-pickup-predicate.md), and
 [save ownership](usa-save-buffer-ownership.md). These source checks do not
-replace the still-required color gameplay, persistent inventory, sign integration
+replace the separately required color gameplay, persistent inventory, sign integration
 and editor authoring milestones. R08 and all published test discs are unchanged.
 
 1. Authenticate the supplied Japanese revision read-only. Keep regional source

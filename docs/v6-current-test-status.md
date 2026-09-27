@@ -8,6 +8,23 @@ remains the goal, not a completed feature or zero-bug guarantee.
 
 ## Latest source and gameplay checkpoint
 
+September 27 continuation: a separate research disc now demonstrates **two
+independently colored Japanese eggs animating together in USA Artisans** after
+full-firmware cold boot. Ordinary inventory and return to gameplay also passed.
+These are diagnostic authored colors, not final presets or a new editor build.
+Custom pickup, inventory, memory-card and percentage hooks are not installed.
+See [the exact runtime evidence](research/japanese-egg-authored-colors-runtime.md).
+New source-only work adds a bounded selected-slot memory descriptor (90 offline,
+133 exact-source checks) and collection bookkeeping machine code (1812 CPU
+checks). Neither is installed or grants persistent-save approval. R08 remains
+the latest packaged editor, unchanged; normal DuckStation settings/card are
+restored and no test emulator remains running.
+
+The September 27 default Release regression completed **235 checks, 0 failed**,
+including the new observer and both collection-state suites. Its report is
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-asd6fdwc/summary.json`.
+This is the default source-free gate, not the larger optional source-QA run.
+
 Checkpoint `dcf5dce` adds saved-project compilation of the exact four-tile,
 two-material Wizard/Grass/key/chest layout. Its independent full-disc identity
 matches the actual research candidate tested in DuckStation. The full firmware

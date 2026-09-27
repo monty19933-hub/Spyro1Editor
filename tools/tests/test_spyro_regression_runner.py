@@ -207,6 +207,8 @@ class ObserverPrebuildTests(unittest.TestCase):
          "Ran 11 tests"),
         ("python-japanese-egg-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_observer.py", "-v"),
          "Ran 10 tests"),
+        ("python-japanese-egg-authored-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_authored_observer.py", "-v"),
+         "Ran 16 tests"),
         ("python-japanese-egg-physical-verifier", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_research.py", "-v"),
          "Ran 29 tests"),
     )
@@ -1701,6 +1703,7 @@ class RunnerOptionsTests(unittest.TestCase):
         cases = tuple(c for c in RUNNER.SOURCE_QA_CASES if c[0].startswith("Native"))
         expected = {
             "NativeSimpleMobyGeometrySmoke": ["--source", "/selected original.bin"],
+            "NativeCollectibleSelectedSlotResidenceSmoke": ["--source", "/selected original.bin"],
             "NativeMobyDependencyClosureSmoke": ["--source-v3", "/selected original.bin"],
             "NativeMobyInventorySmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeMobyPersistentOwnerSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
@@ -1994,6 +1997,20 @@ class NeutralTiledFamilyOracleTests(unittest.TestCase):
 
 
 class RegionalAndMatrixGateTests(unittest.TestCase):
+    def test_selected_slot_residence_has_only_explicit_read_only_source_mode(self):
+        name = "NativeCollectibleSelectedSlotResidenceSmoke"
+        self.assertEqual("COLLECTIBLE_SELECTED_SLOT_RESIDENCE_SOURCE_FREE_OK", dict(RUNNER.CORE_CASES)[name])
+        self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
+        self.assertEqual([(name, "COLLECTIBLE_SELECTED_SLOT_RESIDENCE_SOURCE_OK", ["--source"])],
+                         [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+
+    def test_collection_kernel_has_no_source_card_or_publication_route(self):
+        name = "NativeCollectibleCollectionKernelSmoke"
+        self.assertEqual("NATIVE_COLLECTIBLE_COLLECTION_KERNEL_OK", dict(RUNNER.CORE_CASES)[name])
+        self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
+        self.assertFalse(any(case[0] == name for case in RUNNER.SOURCE_QA_CASES))
+
     def test_required_completion_and_two_egg_gates_are_source_free(self):
         for name, marker in (
             ("DetachedCollectibleCompletionSmoke", "DETACHED_COLLECTIBLE_COMPLETION_SOURCE_FREE_OK"),
