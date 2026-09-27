@@ -8,7 +8,10 @@ namespace Spyro.Editor.App.Views;
 // source Inventory, native asset/dependency package or compilation capability.
 internal sealed record NativeFreshMobyCatalogueItem(string SourceVariantId, string SourceLevelKey,
     string SourceLevelName, int? SourceLevelId, int? SourceWadEntry, int? TrueIndex, int? RegistrationSlot,
-    ushort ActorId, NativeMobyCatalogueEntryKind Kind, string Label, string Category, string ClassificationEvidence);
+    ushort ActorId, NativeMobyCatalogueEntryKind Kind, string Label, string Category, string ClassificationEvidence)
+{
+    internal IReadOnlyList<string> RelatedPlacedNames { get; init; } = Array.Empty<string>();
+}
 
 internal sealed class NativeFreshMobyCatalogueListing
 {
@@ -16,12 +19,14 @@ internal sealed class NativeFreshMobyCatalogueListing
     private readonly string _sourceImageSha256;
     private readonly Dictionary<string, NativeFreshMobyCatalogueItem> _byId;
     private readonly Func<string?, string?, NativeMobyCatalogueView, IReadOnlyList<NativeFreshMobyCatalogueItem>>? _actualSearch;
+    private readonly Func<NativeFreshMobyCatalogueItem, NativeMobyCatalogueDependencyStatus>? _actualDependencies;
 
     internal NativeFreshMobyCatalogueListing(string sourceImageSha256, IEnumerable<NativeFreshMobyCatalogueItem> entries)
-        : this(sourceImageSha256, entries, null) { }
+        : this(sourceImageSha256, entries, null, null) { }
 
     private NativeFreshMobyCatalogueListing(string sourceImageSha256, IEnumerable<NativeFreshMobyCatalogueItem> entries,
-        Func<string?, string?, NativeMobyCatalogueView, IReadOnlyList<NativeFreshMobyCatalogueItem>>? actualSearch)
+        Func<string?, string?, NativeMobyCatalogueView, IReadOnlyList<NativeFreshMobyCatalogueItem>>? actualSearch,
+        Func<NativeFreshMobyCatalogueItem, NativeMobyCatalogueDependencyStatus>? actualDependencies)
     {
         ArgumentNullException.ThrowIfNull(sourceImageSha256);
         ArgumentNullException.ThrowIfNull(entries);
@@ -29,6 +34,7 @@ internal sealed class NativeFreshMobyCatalogueListing
         Entries = Array.AsReadOnly(entries.ToArray());
         _byId = Entries.ToDictionary(e => e.SourceVariantId, StringComparer.Ordinal);
         _actualSearch = actualSearch;
+        _actualDependencies = actualDependencies;
     }
 
     internal IReadOnlyList<NativeFreshMobyCatalogueItem> Entries { get; }
@@ -37,16 +43,19 @@ internal sealed class NativeFreshMobyCatalogueListing
     {
         ArgumentNullException.ThrowIfNull(inventory);
         var catalogue = new NativeMobyCatalogue(inventory);
-        var items = catalogue.Search(view: NativeMobyCatalogueView.All).Select(entry => new NativeFreshMobyCatalogueItem(
+        var orderedEntries = catalogue.Search(view: NativeMobyCatalogueView.All);
+        var sourceEntries = orderedEntries.ToDictionary(entry => entry.SourceVariantId, StringComparer.Ordinal);
+        var items = orderedEntries.Select(entry => new NativeFreshMobyCatalogueItem(
             entry.SourceVariantId, entry.SourceLevelKey, entry.SourceLevelName, entry.SourceLevelId,
             entry.SourceWadEntry, entry.TrueIndex, entry.RegistrationSlot, entry.ActorId,
-            entry.Kind, entry.Label, entry.Category, entry.ClassificationEvidence)).ToArray();
+            entry.Kind, entry.Label, entry.Category, entry.ClassificationEvidence) { RelatedPlacedNames = entry.RelatedPlacedNames }).ToArray();
         var byId = items.ToDictionary(e => e.SourceVariantId, StringComparer.Ordinal);
         // Carry the ACTUAL issued Inventory's full image identity. Do not replace
         // it with a known-original constant, a row hash or a selected source path.
         // GetAuthoringSource keeps any non-original future inventory inspect-only.
         return new(inventory.SourceImageSha256, items, (query, key, view) =>
-            Array.AsReadOnly(catalogue.Search(query, key, view).Select(entry => byId[entry.SourceVariantId]).ToArray()));
+            Array.AsReadOnly(catalogue.Search(query, key, view).Select(entry => byId[entry.SourceVariantId]).ToArray()),
+            entry => catalogue.DescribeDependencies(sourceEntries[entry.SourceVariantId]));
     }
 
     internal IReadOnlyList<NativeFreshMobyCatalogueItem> Search(string? query = null, string? sourceLevelKey = null,
@@ -62,8 +71,16 @@ internal sealed class NativeFreshMobyCatalogueListing
         return Array.AsReadOnly(Entries.Where(entry =>
             (view == NativeMobyCatalogueView.All || (view == NativeMobyCatalogueView.PlacedRows) == (entry.Kind == NativeMobyCatalogueEntryKind.PlacedRow)) &&
             (key.Length == 0 || entry.SourceLevelKey == key) &&
-            terms.All(term => $"{entry.Label} {entry.Category} {entry.SourceLevelName} {entry.SourceLevelKey} 0x{entry.ActorId:X4} T{entry.TrueIndex}"
+            terms.All(term => $"{entry.Label} {entry.Category} {string.Join(" ", entry.RelatedPlacedNames)} {entry.SourceLevelName} {entry.SourceLevelKey} 0x{entry.ActorId:X4} T{entry.TrueIndex}"
                 .Contains(term, StringComparison.OrdinalIgnoreCase))).ToArray());
+    }
+
+    internal NativeMobyCatalogueDependencyStatus? DescribeDependencies(NativeFreshMobyCatalogueItem entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (!_byId.TryGetValue(entry.SourceVariantId, out var owned) || !ReferenceEquals(entry, owned))
+            throw new InvalidDataException("Catalogue dependency selection is not owned by this listing.");
+        return _actualDependencies?.Invoke(entry);
     }
 
     internal NativeFreshRetailMobyReference? GetAuthoringSource(NativeFreshMobyCatalogueItem? entry)

@@ -84,6 +84,8 @@ internal static class NativeFreshMobyCatalogueUiCases
         Check(listing.Search(view: NativeMobyCatalogueView.Resources).Count == 3 &&
             listing.Search(view: NativeMobyCatalogueView.All).Count == 7,
             "Resources are visible metadata, not silently turned into placed donors.");
+        Check(listing.Search("Chest", view: NativeMobyCatalogueView.Resources).Single().SourceVariantId == Resource,
+            "Associated placed names are searchable on their resource entries without creating donor rows.");
         Refuse(() => listing.Search(new string('x', 257)), "Catalogue query retains the existing 256-character bound.");
         Refuse(() => listing.Search(view: (NativeMobyCatalogueView)99), "Unknown catalogue view refuses.");
         var donor = listing.Entries.Single(x => x.SourceVariantId == Wizard);
@@ -94,6 +96,8 @@ internal static class NativeFreshMobyCatalogueUiCases
         Check(listing.GetAuthoringSource(donor with { }) == null &&
             listing.Entries.Where(x => x.Kind != NativeMobyCatalogueEntryKind.PlacedRow).All(x => listing.GetAuthoringSource(x) == null),
             "Unowned equal-value entries and registration/player resources cannot stage a placement.");
+        Check(listing.DescribeDependencies(donor) == null, "Neutral presentation metadata has no captured matrix evidence.");
+        Refuse(() => listing.DescribeDependencies(donor with { }), "Equal-value foreign entries cannot borrow dependency evidence.");
         foreach (string hash in new[] { "", NativeMobySourceInventory.OriginalImageSha256[..63],
             "0" + NativeMobySourceInventory.OriginalImageSha256[1..], new string('0', 64) })
         {
@@ -130,18 +134,24 @@ internal static class NativeFreshMobyCatalogueUiCases
         Check(f.Window.HasUnsavedChanges && !f.Window.HasUnappliedFields && f.Find<Button>("FreshNativeMobyBrowse").IsEnabled,
             "Applied-but-unsaved authoring may open the catalogue without an implicit Save.");
         Task task = Start(f);
+        Check(f.Find<ComboBox>("FreshMobyCatalogueView").SelectedItem is NativeMobyCatalogueView.All &&
+            Rows(f).Count == 7 && Rows(f).Select(x => x.ActorId).Distinct().Count() == 5,
+            "The actual catalogue opens on every known class, including resources and shared-only classes.");
         Check(f.Window.MobyCatalogueBusyForTesting && provider!.Calls == 1 && provider.Image == f.SelectedSource.Image &&
             f.AcquiredOwners == 1 && f.ReleaseAttempts == 0 && f.Find<StackPanel>("FreshMobyCataloguePanel").IsVisible,
             "Actual window catalogue holds one real UI owner through source capture and donor choice.");
         RequireVisibleWithoutScrolling(f, ["FreshMobyCatalogueSearch", "FreshMobyCatalogueEntries"],
             "Browse automatically reveals its actual search and populated rows without test-assisted scrolling.");
         f.Set("FreshMobyCatalogueSearch", "chest");
-        Check(Rows(f).Count == 2 && Rows(f).Select(x => x.SourceVariantId).Distinct().Count() == 2,
-            "Visible search does not collapse same-class source variants.");
+        Check(Rows(f).Count == 3 && Rows(f).Count(x => x.Kind == NativeMobyCatalogueEntryKind.PlacedRow) == 2 &&
+            Rows(f).Select(x => x.SourceVariantId).Distinct().Count() == 3,
+            "Visible search includes the related resource and keeps both same-class source rows distinct.");
         f.Set("FreshMobyCatalogueSearch", "");
         f.Find<ComboBox>("FreshMobyCatalogueView").SelectedItem = NativeMobyCatalogueView.All; F.Pump();
         SelectDonor(f, Resource);
         Check(!f.Find<Button>("FreshMobyCatalogueStage").IsEnabled, "Registration details remain selectable but cannot be added.");
+        Check(f.Find<TextBlock>("FreshMobyCatalogueDependencies").Text!.Contains("not captured", StringComparison.Ordinal),
+            "A detached metadata listing cannot pretend to carry source-bound dependency evidence.");
         f.Fire("FreshMobyCatalogueStage");
         Check(!task.IsCompleted && !f.Window.HasUnappliedFields && ReferenceEquals(appliedBase, f.Window.CurrentAggregateIntent),
             "Direct resource Add cannot bypass the placed-row guard or alter history.");
@@ -254,7 +264,7 @@ internal static class NativeFreshMobyCatalogueUiCases
         var (f, _) = item;
         var initial = f.Window.CurrentAggregateIntent;
         Task task = Start(f); SelectDonor(f, Chest);
-        Check(Rows(f).Count == 4 && !f.Find<Button>("FreshMobyCatalogueStage").IsEnabled &&
+        Check(Rows(f).Count == 7 && !f.Find<Button>("FreshMobyCatalogueStage").IsEnabled &&
             f.Find<TextBlock>("FreshMobyCatalogueDetails").Text!.Contains("inspect-only", StringComparison.OrdinalIgnoreCase),
             "Different-image catalogue remains browsable but no modified tuple is presented as original retail.");
         f.Fire("FreshMobyCatalogueStage");
@@ -505,7 +515,8 @@ internal static class NativeFreshMobyCatalogueUiCases
         new(Chest, "artisans", "Artisans", 10, 10, 4, null, 149,
             NativeMobyCatalogueEntryKind.PlacedRow, "Chest fixture", "Container", "Synthetic classification fixture; no dependency closure."),
         new(Resource, "artisans", "Artisans", 10, 10, null, 5, 149,
-            NativeMobyCatalogueEntryKind.LocalRegistration, "Registered resource 0x0095", "Local model registration", "A registration is not a placement."),
+            NativeMobyCatalogueEntryKind.LocalRegistration, "Registered resource 0x0095", "Local model registration", "A registration is not a placement.")
+            { RelatedPlacedNames = Array.AsReadOnly(new[] { "Chest fixture" }) },
         new("fixture-row-alpine-ridge-6", "alpineridge", "Alpine Ridge", 12, 14, 6, null, 149,
             NativeMobyCatalogueEntryKind.PlacedRow, "Chest fixture", "Container", "Distinct same-class donor fixture."),
         new("fixture-row-artisans-121", "artisans", "Artisans", 10, 10, 121, null, 501,

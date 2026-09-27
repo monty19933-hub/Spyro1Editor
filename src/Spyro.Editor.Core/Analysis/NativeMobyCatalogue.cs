@@ -13,8 +13,9 @@ public sealed class NativeMobyCatalogueEntry
 {
     private readonly byte[]? _row;
     internal NativeMobyCatalogueEntry(NativeMobySourceLevel level, NativeMobySourceRow? row,
-        NativeMobySourceRegistration? registration)
+        NativeMobySourceRegistration? registration, IEnumerable<string>? relatedPlacedNames = null)
     {
+        RelatedPlacedNames = Array.AsReadOnly((relatedPlacedNames ?? []).ToArray());
         SourceLevelKey = level.LevelKey; SourceLevelName = level.DisplayName; SourceLevelId = level.LevelId;
         SourceWadEntry = level.DataWadEntry;
         SourceDataSha256 = level.SourceDataSha256;
@@ -52,8 +53,10 @@ public sealed class NativeMobyCatalogueEntry
             ClassificationEvidence = "A registration is not a placed object or an owned importable package schema.";
         }
     }
-    internal NativeMobyCatalogueEntry(NativeSharedMobySourceInventory shared, NativeSharedMobySourceRegistration registration)
+    internal NativeMobyCatalogueEntry(NativeSharedMobySourceInventory shared, NativeSharedMobySourceRegistration registration,
+        IEnumerable<string>? relatedPlacedNames = null)
     {
+        RelatedPlacedNames = Array.AsReadOnly((relatedPlacedNames ?? []).ToArray());
         SourceLevelKey = NativeMobyCatalogue.SharedSourceKey; SourceLevelName = "Shared PETE models";
         // This source is not a level. Never fabricate a level ID or data entry
         // that a downstream authoring provider could mistake for a donor row.
@@ -83,6 +86,9 @@ public sealed class NativeMobyCatalogueEntry
     public string Label { get; }
     public string Category { get; }
     public string ClassificationEvidence { get; }
+    // Search associations only. Same-class placements do not establish that a
+    // registration is an equivalent model, behavior or importable package.
+    public IReadOnlyList<string> RelatedPlacedNames { get; }
     public NativeMobyPropertiesLocation? PropertiesLocation { get; }
     public bool IsSpecialPlayerStream => Kind == NativeMobyCatalogueEntryKind.PlayerAnimationStream;
     public bool IsSharedResource => Kind == NativeMobyCatalogueEntryKind.SharedRegistration;
@@ -99,6 +105,14 @@ public sealed class NativeMobyCatalogueEntry
         _row[0x50] == renderRadius && _row[0x51] == initialState &&
         _row[0x36] == classLow && _row[0x37] == classHigh && _row[0x4F] == byte4F &&
         _row[0x52] == byte52 && _row[0x53] == byte53;
+}
+
+/// <summary>Read-only matrix evidence for one exact variant; existing factories retain all import authority.</summary>
+public sealed record NativeMobyCatalogueDependencyStatus(
+    IReadOnlyList<NativeMobyDependencyObligation> UnresolvedDependencies,
+    IReadOnlyList<NativeMobyScopedCapability> ExactSourceCapabilities)
+{
+    public bool NativeImportApproved => false;
 }
 
 public sealed record NativeMobyCatalogueTargetStatus(string TargetLevelKey, bool RetailTargetInspected,
@@ -125,25 +139,39 @@ public sealed class NativeMobyCatalogue
     private readonly NativeMobySourceInventory _inventory;
     private readonly IReadOnlyList<NativeMobyCatalogueEntry> _entries;
     private readonly Dictionary<string, NativeMobyCatalogueEntry> _byId;
+    private readonly NativeMobyCatalogueDependencyStatus _unresolvedDependencies;
+    private readonly Dictionary<string, NativeMobyCatalogueDependencyStatus> _exactSourceDependencies;
     public NativeMobyCatalogue(NativeMobySourceInventory inventory)
     {
         ArgumentNullException.ThrowIfNull(inventory);
         _inventory = inventory;
-        _entries = Array.AsReadOnly(inventory.Levels.SelectMany(DescribeLevel)
-            .Concat(inventory.SharedModels.Registrations.Select(root => new NativeMobyCatalogueEntry(inventory.SharedModels, root)))
+        var localEntries = inventory.Levels.SelectMany(DescribeLevel).ToArray();
+        _entries = Array.AsReadOnly(localEntries
+            .Concat(inventory.SharedModels.Registrations.Select(root => new NativeMobyCatalogueEntry(inventory.SharedModels, root,
+                RelatedNames(localEntries, root.ActorId))))
             .OrderBy(e => e.ActorId).ThenBy(e => e.SourceLevelId).ThenBy(e => e.TrueIndex ?? int.MaxValue)
             .ThenBy(e => e.RegistrationSlot).ToArray());
         _byId = _entries.ToDictionary(e => e.SourceVariantId, StringComparer.Ordinal);
+        // Build once during the caller's background capture, then retain only
+        // the immutable evidence summary needed by selection. Searches/repaints
+        // never regenerate the destination matrix or read the source disc.
+        var matrix = NativeMobyPortabilityMatrix.Create(inventory);
+        ObservedClassCount = matrix.Counts.UnionClasses;
+        _unresolvedDependencies = new(matrix.DependencyObligations, Array.Empty<NativeMobyScopedCapability>());
+        _exactSourceDependencies = matrix.KnownScopedCapabilities
+            .SelectMany(capability => capability.ObservedDonorVariantIds.Select(id => (Id: id, Capability: capability)))
+            .GroupBy(pair => pair.Id, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => new NativeMobyCatalogueDependencyStatus(matrix.DependencyObligations,
+                Array.AsReadOnly(group.Select(pair => pair.Capability).ToArray())), StringComparer.Ordinal);
     }
     public IReadOnlyList<NativeMobySourceLevel> Levels => _inventory.Levels;
+    public int ObservedClassCount { get; }
     public IReadOnlyList<NativeMobyCatalogueEntry> Search(string? query = null, string? sourceLevelKey = null,
         NativeMobyCatalogueView view = NativeMobyCatalogueView.PlacedRows) => SearchEntries(_entries, query, sourceLevelKey, view);
 
     public NativeMobyCatalogueTargetStatus DescribeTarget(NativeMobyCatalogueEntry entry, string targetLevelKey)
     {
-        ArgumentNullException.ThrowIfNull(entry);
-        if (!_byId.TryGetValue(entry.SourceVariantId, out var owned) || !ReferenceEquals(owned, entry))
-            throw new InvalidDataException("Catalogue selection is not owned by this captured source snapshot.");
+        RequireOwnedEntry(entry);
         string key = LevelCatalog.NormalizeKey(targetLevelKey);
         var target = Levels.SingleOrDefault(l => l.LevelKey == key);
         if (target == null) return new(key, false, null, null, null);
@@ -152,12 +180,30 @@ public sealed class NativeMobyCatalogue
             63 - target.Registrations.Count(r => r.Slot > 0)) { SharedModelRegistered = found.SharedRootPeteOffset.HasValue };
     }
 
+    public NativeMobyCatalogueDependencyStatus DescribeDependencies(NativeMobyCatalogueEntry entry)
+    {
+        RequireOwnedEntry(entry);
+        return _exactSourceDependencies.GetValueOrDefault(entry.SourceVariantId) ?? _unresolvedDependencies;
+    }
+
+    private void RequireOwnedEntry(NativeMobyCatalogueEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (!_byId.TryGetValue(entry.SourceVariantId, out var owned) || !ReferenceEquals(owned, entry))
+            throw new InvalidDataException("Catalogue selection is not owned by this captured source snapshot.");
+    }
+
     internal static IReadOnlyList<NativeMobyCatalogueEntry> DescribeLevel(NativeMobySourceLevel level)
     {
         ArgumentNullException.ThrowIfNull(level);
-        return Array.AsReadOnly(level.Rows.Select(r => new NativeMobyCatalogueEntry(level, r, null))
-            .Concat(level.Registrations.Select(r => new NativeMobyCatalogueEntry(level, null, r))).ToArray());
+        var placed = level.Rows.Select(r => new NativeMobyCatalogueEntry(level, r, null)).ToArray();
+        return Array.AsReadOnly(placed.Concat(level.Registrations.Select(r => new NativeMobyCatalogueEntry(level, null, r,
+            r.Slot == 0 ? [] : RelatedNames(placed, r.ActorId)))).ToArray());
     }
+
+    private static IEnumerable<string> RelatedNames(IEnumerable<NativeMobyCatalogueEntry> entries, ushort actorId) =>
+        entries.Where(e => e.Kind == NativeMobyCatalogueEntryKind.PlacedRow && e.ActorId == actorId &&
+            e.Category != "Unclassified placed object").Select(e => e.Label).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
 
     internal static IReadOnlyList<NativeMobyCatalogueEntry> SearchEntries(IReadOnlyList<NativeMobyCatalogueEntry> entries,
         string? query, string? sourceLevelKey, NativeMobyCatalogueView view)
@@ -170,7 +216,7 @@ public sealed class NativeMobyCatalogue
         return Array.AsReadOnly(entries.Where(e =>
             (view == NativeMobyCatalogueView.All || (view == NativeMobyCatalogueView.PlacedRows) == (e.Kind == NativeMobyCatalogueEntryKind.PlacedRow)) &&
             (key.Length == 0 || e.SourceLevelKey == key) &&
-            terms.All(term => $"{e.Label} {e.Category} {e.SourceLevelName} {e.SourceLevelKey} 0x{e.ActorId:X4} T{e.TrueIndex}"
+            terms.All(term => $"{e.Label} {e.Category} {string.Join(" ", e.RelatedPlacedNames)} {e.SourceLevelName} {e.SourceLevelKey} 0x{e.ActorId:X4} T{e.TrueIndex}"
                 .Contains(term, StringComparison.OrdinalIgnoreCase))).ToArray());
     }
 }

@@ -7,7 +7,9 @@ using Spyro.Editor.Core.Levels;
 int checks = 0;
 if (args.Length == 3 && args[0] == "--source")
 {
+    var captureTimer = System.Diagnostics.Stopwatch.StartNew();
     var inventory = NativeMobySourceInventory.Capture(args[1], LevelCatalog.Load(args[2]));
+    long sourceCaptureMilliseconds = captureTimer.ElapsedMilliseconds;
     SharedModelCases.VerifySource(inventory.SharedModels, Check);
     Check(inventory.Levels.Count == 35, "all retail levels");
     Check(inventory.Levels.Sum(l => l.Rows.Count) == 4877, "every placed native row retained");
@@ -34,13 +36,39 @@ if (args.Length == 3 && args[0] == "--source")
         "every donor instance has a separate source identity");
     ExpectInvalid(() => inventory.DescribeDestination(ushort.MaxValue, "townsquare"));
     ExpectInvalid(() => inventory.DescribeDestination(0xAE, "unused65"));
+    captureTimer.Restart();
     var catalogue = new NativeMobyCatalogue(inventory);
+    Console.WriteLine($"NATIVE_MOBY_CATALOGUE_TIMING sourceCaptureMs={sourceCaptureMilliseconds} catalogueSummaryMs={captureTimer.ElapsedMilliseconds}");
+    Check(catalogue.ObservedClassCount == 368, "catalogue counts the complete observed class union");
     Check(catalogue.Search().Count == 4877, "usable catalogue retains every placed source variant");
     Check(catalogue.Search(view: NativeMobyCatalogueView.Resources).Count == 1457, "local and shared resource browsing is separate from placed templates");
     Check(catalogue.Search(view: NativeMobyCatalogueView.Resources).Count(e => e.IsSpecialPlayerStream) == 35,
         "all special player streams explicitly labelled");
     Check(catalogue.Search().Select(e => e.SourceVariantId).Distinct().Count() == 4877, "catalogue never deduplicates display names");
     var wizard = catalogue.Search("0x011B", "wizardpeak").First();
+    var wizardResource = catalogue.Search("0x011B", "wizardpeak", NativeMobyCatalogueView.Resources).Single();
+    Check(wizardResource.RelatedPlacedNames.Contains(wizard.Label) &&
+        catalogue.Search(wizard.Label, "wizardpeak", NativeMobyCatalogueView.Resources).Contains(wizardResource),
+        "Resource name search finds associated placed names without turning the resource into a placed row");
+    Check(wizardResource.RelatedPlacedNames.SequenceEqual(catalogue.Search("0x011B", "wizardpeak")
+            .Where(e => e.Category != "Unclassified placed object").Select(e => e.Label).Distinct().Order(StringComparer.Ordinal)),
+        "Local resource name associations stay within the same source level and class");
+    var wizardT6 = catalogue.Search("0x011B T6", "wizardpeak").Single(e => e.TrueIndex == 6);
+    var dependencyDetails = catalogue.DescribeDependencies(wizardT6);
+    Check(dependencyDetails.UnresolvedDependencies.Count == 11 &&
+        dependencyDetails.ExactSourceCapabilities.Any(c => c.Id == "wizard-source-assets") && !dependencyDetails.NativeImportApproved,
+        "Catalogue exposes the matrix obligations and exact source evidence without issuing import authority");
+    Check(catalogue.Search("0x011B").Where(e => e.SourceVariantId != wizardT6.SourceVariantId)
+        .All(e => !catalogue.DescribeDependencies(e).ExactSourceCapabilities.Any(c => c.Id == "wizard-source-assets")),
+        "Same-class variants cannot inherit the source-bound Wizard T6 capability");
+    Check(catalogue.DescribeDependencies(wizardResource).ExactSourceCapabilities.Count == 0,
+        "Related resource names cannot inherit a placed donor capability");
+    Check(ReferenceEquals(dependencyDetails, catalogue.DescribeDependencies(wizardT6)),
+        "Repeated selection reuses the immutable source-bound dependency summary");
+    bool immutableDependencies = false;
+    try { ((IList<NativeMobyDependencyObligation>)dependencyDetails.UnresolvedDependencies).Clear(); }
+    catch (NotSupportedException) { immutableDependencies = true; }
+    Check(immutableDependencies, "Dependency requirements cannot be edited through the catalogue presentation");
     Check(catalogue.DescribeTarget(wizard, "magiccrafters").LocalModelStatus == NativeMobyLocalModelStatus.Present,
         "catalogue can inspect a different retail destination");
     Check(!catalogue.DescribeTarget(wizard, "magiccrafters").NativeImportApproved, "residency is never approval");
@@ -67,6 +95,7 @@ if (args.Length == 3 && args[0] == "--source")
         "all distinct observations retained; a shared root cannot select an existing template");
     var otherCatalogue = new NativeMobyCatalogue(inventory);
     ExpectInvalid(() => otherCatalogue.DescribeTarget(wizard, "magiccrafters"));
+    ExpectInvalid(() => otherCatalogue.DescribeDependencies(wizard));
     var matrix = NativeMobyPortabilityMatrix.Create(inventory);
     VerifyMatrix(matrix);
     ushort[] union = inventory.Classes.Select(c => c.ActorId).Concat(inventory.SharedModels.Registrations.Select(r => r.ActorId))

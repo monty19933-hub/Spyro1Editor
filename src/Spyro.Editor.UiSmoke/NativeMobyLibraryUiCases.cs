@@ -25,8 +25,9 @@ internal static class NativeMobyLibraryUiCases
             Click(Find<Button>(window, "RetailNativeMobyLibraryButton"));
             Window library = Library(window);
             ListBox list = Find<ListBox>(library, "NativeMobyLibraryList");
-            Wait(() => Items(list).Length == 4877, "all native rows");
-            Check(Items(list).Select(e => e.SourceVariantId).Distinct().Count() == 4877, "distinct source rows");
+            Wait(() => Items(list).Length == 6334, "all native observations");
+            Check(Items(list).Select(e => e.SourceVariantId).Distinct().Count() == 6334 &&
+                Items(list).Select(e => e.ActorId).Distinct().Count() == 368, "every observed class opens by default");
             ComboBox source = Find<ComboBox>(library, "NativeMobyLibrarySource");
             TextBox search = Find<TextBox>(library, "NativeMobyLibrarySearch");
             source.SelectedItem = source.ItemsSource!.Cast<object>().Single(x => x.ToString() == "Wizard Peak");
@@ -36,13 +37,23 @@ internal static class NativeMobyLibraryUiCases
             list.SelectedIndex = 0;
             Button use = Find<Button>(library, "NativeMobyLibraryUseTemplate");
             Check(!use.IsEnabled, "unproved Wizard cannot borrow a template");
+            Check(Find<TextBlock>(library, "NativeMobyLibraryDependencies").Text!.Contains("Models and animation", StringComparison.Ordinal),
+                "Actual browser exposes native dependency requirements for the selected source");
+            var dependencyPanel = Find<Expander>(library, "NativeMobyLibraryDependencyPanel");
+            dependencyPanel.IsExpanded = true;
+            Pump();
+            Check(Find<TextBlock>(library, "NativeMobyLibraryDependencies").IsEffectivelyVisible,
+                "Dependency requirements are reachable in the actual details pane");
+            Snapshot(library, Path.Combine(outputDirectory, "native-moby-library-dependencies.png"));
+            dependencyPanel.IsExpanded = false;
+            Pump();
             search.Text = "no-such-native-object";
             Pump();
             Check(Items(list).Length == 0 && !use.IsEnabled, "no-result selection cleared");
             search.Text = ""; source.SelectedIndex = 0;
             Pump();
             ComboBox view = Find<ComboBox>(library, "NativeMobyLibraryView");
-            view.SelectedIndex = 1;
+            view.SelectedItem = NativeMobyCatalogueView.Resources;
             Check(Items(list).Length == 1457, "local and shared resources are separate from placed rows");
             list.SelectedItem = Items(list).First(e => e.IsSpecialPlayerStream);
             Check(!use.IsEnabled && Find<TextBlock>(library, "NativeMobyLibraryDetails").Text!.Contains("not a placed object", StringComparison.Ordinal), "player stream cannot become Moby");
@@ -58,7 +69,7 @@ internal static class NativeMobyLibraryUiCases
             Snapshot(library, Path.Combine(outputDirectory, "native-moby-library-shared.png"));
             search.Text = ""; source.SelectedIndex = 0;
             Pump();
-            view.SelectedIndex = 0;
+            view.SelectedItem = NativeMobyCatalogueView.PlacedRows;
             source.SelectedItem = source.ItemsSource!.Cast<object>().Single(x => x.ToString() == before.CurrentLevel!.DisplayName);
             bool foundApproved = false;
             foreach (var entry in Items(list))
@@ -92,7 +103,7 @@ internal static class NativeMobyLibraryUiCases
             add.Close(false); Pump();
             NoMutation(window, before, files);
             AssertInvalidSourceRefused(window, before, files);
-            Console.WriteLine("NATIVE_MOBY_LIBRARY_UI_OK: 4877 exact variants, search/source/resources, special/unsupported/stale refusal, approved-template handoff and no-write/cancel checks passed.");
+            Console.WriteLine("NATIVE_MOBY_LIBRARY_UI_OK: 368 classes/6334 observations, search/source/resources/dependencies, special/unsupported/stale refusal, approved-template handoff and no-write/cancel checks passed.");
         }
         finally { window.Close(); Pump(); }
     }
@@ -127,7 +138,7 @@ internal static class NativeMobyLibraryUiCases
         Click(Find<Button>(window, "Id65NativeMobyLibraryButton"));
         Window library = Library(window);
         ListBox list = Find<ListBox>(library, "NativeMobyLibraryList");
-        Wait(() => Items(list).Length == 4877, "blank editor native catalogue");
+        Wait(() => Items(list).Length == 6334, "blank editor native catalogue includes all observations");
         list.SelectedIndex = 0;
         Check(!Find<Button>(library, "NativeMobyLibraryUseTemplate").IsEnabled, "lab unsupported source row does not enable Apply");
         Check(Find<TextBlock>(library, "NativeMobyLibraryDetails").Text!.Contains("not certified by the retail inventory", StringComparison.Ordinal), "lab residency not borrowed");

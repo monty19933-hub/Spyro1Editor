@@ -64,12 +64,16 @@ public sealed partial class MainWindow
         bool closed = false;
         dialog.Closed += (_, _) => closed = true;
         NativeMobyCatalogue? catalogue = null;
-        TextBox search = new() { Name = "NativeMobyLibrarySearch", PlaceholderText = "Search name, class (0x011B), level or T index", MaxLength = 256, MinHeight = 34 };
+        TextBox search = new() { Name = "NativeMobyLibrarySearch", PlaceholderText = "Search name, category, class (0x011B), level or T index", MaxLength = 256, MinHeight = 34 };
         ComboBox sources = new() { Name = "NativeMobyLibrarySource", MinWidth = 200, IsEnabled = false };
         ComboBox view = new()
         {
-            Name = "NativeMobyLibraryView", ItemsSource = new[] { "Placed objects", "Registered resources" },
-            SelectedIndex = 0, MinWidth = 170
+            Name = "NativeMobyLibraryView", ItemsSource = new[] { NativeMobyCatalogueView.All, NativeMobyCatalogueView.PlacedRows, NativeMobyCatalogueView.Resources },
+            SelectedItem = NativeMobyCatalogueView.All, MinWidth = 170,
+            ItemTemplate = new FuncDataTemplate<NativeMobyCatalogueView>((choice, _) => new TextBlock
+            {
+                Text = choice switch { NativeMobyCatalogueView.PlacedRows => "Placed objects", NativeMobyCatalogueView.Resources => "Registered resources", _ => "All observed objects/resources" }
+            })
         };
         ListBox list = new()
         {
@@ -80,7 +84,10 @@ public sealed partial class MainWindow
                 Children =
                 {
                     new TextBlock { Text = entry?.Label ?? "", FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis },
-                    new TextBlock { Text = entry == null ? "" : $"0x{entry.ActorId:X4} · {entry.SourceLabel}", FontSize = 11, Foreground = new SolidColorBrush(ModernMutedInk) }
+                    new TextBlock { Text = entry == null ? "" : $"0x{entry.ActorId:X4} · {entry.SourceLabel}", FontSize = 11, Foreground = new SolidColorBrush(ModernMutedInk) },
+                    new TextBlock { Text = entry?.Category ?? "", FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis },
+                    new TextBlock { Text = entry == null || entry.RelatedPlacedNames.Count == 0 ? "" : "Related: " + string.Join("; ", entry.RelatedPlacedNames),
+                        FontSize = 11, TextWrapping = TextWrapping.Wrap, IsVisible = entry?.RelatedPlacedNames.Count > 0 }
                 }
             })
         };
@@ -91,6 +98,7 @@ public sealed partial class MainWindow
             Name = "NativeMobyLibraryDetails", Text = "Source capture is read-only; your scene and saved files are unchanged.",
             TextWrapping = TextWrapping.Wrap, FontSize = 12, LineHeight = 18
         };
+        TextBlock dependencies = new() { Name = "NativeMobyLibraryDependencies", TextWrapping = TextWrapping.Wrap, FontSize = 12, LineHeight = 18 };
         Button use = NewButton("Use existing approved template");
         use.Name = "NativeMobyLibraryUseTemplate"; use.IsEnabled = false;
         StyleModernPrimaryButton(use, Color.FromRgb(35, 112, 165));
@@ -102,7 +110,11 @@ public sealed partial class MainWindow
         {
             use.IsEnabled = false;
             if (catalogue == null || list.SelectedItem is not NativeMobyCatalogueEntry entry)
-            { if (catalogue != null) details.Text = "Select a native source variant to inspect its identity and destination status."; return; }
+            {
+                if (catalogue != null) details.Text = "Select a native source variant to inspect its identity and destination status.";
+                dependencies.Text = "Select an entry to inspect its dependency requirements and exact source evidence.";
+                return;
+            }
             var target = catalogue.DescribeTarget(entry, targetKey);
             AddMobyTemplate? matching = Current() && target.RetailTargetInspected
                 ? FindExistingNativeCatalogueTemplate(entry, approvedTemplates) : null;
@@ -112,22 +124,24 @@ public sealed partial class MainWindow
                 : "An existing approved Add template matches this exact source row. Use it to open the normal Add workflow; nothing is inserted by browsing.";
             if (!Current()) action = "The source, scene or edits changed while browsing. Close and reopen the library before selecting a template.";
             details.Text = $"{entry.Label}\n{entry.SourceLabel} · class 0x{entry.ActorId:X4}\n{entry.Category}\n\n" +
+                (entry.RelatedPlacedNames.Count == 0 ? "" : NativeMobyCataloguePresentation.RelatedNames(entry.RelatedPlacedNames, entry.Kind) + "\n\n") +
                 (entry.Kind == NativeMobyCatalogueEntryKind.PlacedRow
                     ? $"Properties location: {entry.PropertiesLocation}. This is not a private payload schema.\n\n"
                     : "This is not a placed object. A resource registration cannot be added as a Moby.\n\n") +
                 $"Destination: {targetName}\n{target.Description}\n\n{action}\n\n" +
                 $"Classification only: {entry.ClassificationEvidence}\n\nSource identity:\n{entry.SourceVariantId}";
+            dependencies.Text = NativeMobyCataloguePresentation.Dependencies(catalogue.DescribeDependencies(entry));
         }
         void RefreshList()
         {
             if (catalogue == null) return;
             string? selectedId = (list.SelectedItem as NativeMobyCatalogueEntry)?.SourceVariantId;
             var found = catalogue.Search(search.Text, (sources.SelectedItem as NativeLibrarySourceChoice)?.Key,
-                view.SelectedIndex == 1 ? NativeMobyCatalogueView.Resources : NativeMobyCatalogueView.PlacedRows);
+                view.SelectedItem is NativeMobyCatalogueView selectedView ? selectedView : NativeMobyCatalogueView.All);
             list.ItemsSource = found;
             list.SelectedItem = found.FirstOrDefault(e => e.SourceVariantId == selectedId);
-            summary.Text = $"{found.Count:N0} matching {(view.SelectedIndex == 1 ? "resource registrations" : "source variants")} · " +
-                "35 retail levels + shared PETE models · source variants are not collapsed · discovery is not native import approval";
+            summary.Text = $"{found.Count:N0} matching entries · {found.Select(entry => entry.ActorId).Distinct().Count()} of {catalogue.ObservedClassCount} observed classes · " +
+                "all retail sources + shared models · browsing does not approve imports";
             RefreshDetails();
         }
         search.TextChanged += (_, _) => RefreshList();
@@ -147,7 +161,18 @@ public sealed partial class MainWindow
         filters.Children.Add(search); Grid.SetColumn(sources, 1); filters.Children.Add(sources); Grid.SetColumn(view, 2); filters.Children.Add(view);
         Grid content = new() { ColumnDefinitions = { new ColumnDefinition(new GridLength(3, GridUnitType.Star)), new ColumnDefinition(new GridLength(2, GridUnitType.Star)) }, ColumnSpacing = 14, Height = 455 };
         content.Children.Add(list);
-        Border detailPanel = new() { Padding = new Thickness(12), Background = new SolidColorBrush(ModernSurface), Child = new ScrollViewer { Content = details } };
+        Border detailPanel = new()
+        {
+            Padding = new Thickness(12), Background = new SolidColorBrush(ModernSurface),
+            Child = new ScrollViewer { Content = new StackPanel
+            {
+                Spacing = 12, Margin = new Thickness(0, 0, 12, 0), Children = { new Expander
+                {
+                    Name = "NativeMobyLibraryDependencyPanel", Header = "Dependencies and existing evidence",
+                    HorizontalAlignment = HorizontalAlignment.Stretch, Content = dependencies
+                }, details }
+            } }
+        };
         Grid.SetColumn(detailPanel, 1); content.Children.Add(detailPanel);
         StackPanel body = new()
         {

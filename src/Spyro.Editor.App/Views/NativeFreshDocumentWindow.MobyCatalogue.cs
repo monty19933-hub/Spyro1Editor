@@ -15,15 +15,16 @@ internal sealed partial class NativeFreshDocumentWindow
     private readonly Button _browseMobys = Button("FreshNativeMobyBrowse", "Browse native Moby sources…", null);
     private readonly Button _cancelNativeMobyAdd = Button("FreshNativeMobyCancelAdd", "Cancel new native Moby", null);
     private readonly StackPanel _mobyCataloguePanel = new() { Name = "FreshMobyCataloguePanel", Spacing = 8, IsVisible = false };
-    private readonly TextBox _mobyCatalogueSearch = new() { Name = "FreshMobyCatalogueSearch", PlaceholderText = "Search name, class, level or true index", MaxLength = 256 };
+    private readonly TextBox _mobyCatalogueSearch = new() { Name = "FreshMobyCatalogueSearch", PlaceholderText = "Search name, category, class, level or true index", MaxLength = 256 };
     private readonly ComboBox _mobyCatalogueLevel = new ReadOnlySelectionComboBox { Name = "FreshMobyCatalogueLevel", HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly ComboBox _mobyCatalogueView = new ReadOnlySelectionComboBox
     {
-        Name = "FreshMobyCatalogueView", ItemsSource = Enum.GetValues<NativeMobyCatalogueView>(), SelectedItem = NativeMobyCatalogueView.PlacedRows,
+        Name = "FreshMobyCatalogueView", ItemsSource = Enum.GetValues<NativeMobyCatalogueView>(), SelectedItem = NativeMobyCatalogueView.All,
         HorizontalAlignment = HorizontalAlignment.Stretch
     };
     private readonly ListBox _mobyCatalogueEntries = new() { Name = "FreshMobyCatalogueEntries", Height = 220 };
     private readonly TextBlock _mobyCatalogueDetails = new() { Name = "FreshMobyCatalogueDetails", TextWrapping = TextWrapping.Wrap, FontSize = 11 };
+    private readonly TextBlock _mobyCatalogueDependencies = new() { Name = "FreshMobyCatalogueDependencies", TextWrapping = TextWrapping.Wrap, FontSize = 11 };
     private readonly TextBlock _mobyCatalogueStatus = new() { Name = "FreshMobyCatalogueStatus", TextWrapping = TextWrapping.Wrap, FontSize = 11 };
     private readonly Button _stageCatalogueMoby = Button("FreshMobyCatalogueStage", "Use source for new placement", null);
     private readonly Button _cancelMobyCatalogue = Button("FreshMobyCatalogueCancel", "Cancel catalogue", null);
@@ -93,16 +94,22 @@ internal sealed partial class NativeFreshDocumentWindow
         _mobyCatalogueEntries.ItemTemplate = new FuncDataTemplate<NativeFreshMobyCatalogueItem>((entry, _) => new TextBlock
         {
             Text = entry == null ? "" : $"{entry.Label} · 0x{entry.ActorId:X4}\n{entry.SourceLevelName} · " +
-                (entry.TrueIndex is int index ? $"T{index}" : $"root {entry.RegistrationSlot}") + "\n" +
+                (entry.TrueIndex is int index ? $"T{index}" : $"root {entry.RegistrationSlot}") + $" · {entry.Category}\n" +
+                (entry.RelatedPlacedNames.Count == 0 ? "" : "Related: " + string.Join("; ", entry.RelatedPlacedNames) + "\n") +
                 (_mobyCatalogueListing?.GetAuthoringSource(entry) == null ? "Inspect-only" : "Authoring reference only"),
             TextWrapping = TextWrapping.Wrap, FontSize = 11
         });
-        _mobyCataloguePanel.Children.Add(Section("Native source catalogue", "Browse placed donors from all inventoried levels. Resources remain inspect-only. Choosing a row does not import a model, behavior or dependency package."));
+        _mobyCataloguePanel.Children.Add(Section("Native source catalogue", "All observed classes across retail levels and shared models are visible. Source filters are optional. Choosing a placed row records an authoring reference; resources remain inspect-only."));
         _mobyCataloguePanel.Children.Add(_mobyCatalogueSearch);
         _mobyCataloguePanel.Children.Add(_mobyCatalogueLevel);
         _mobyCataloguePanel.Children.Add(_mobyCatalogueView);
         _mobyCataloguePanel.Children.Add(_mobyCatalogueEntries);
         _mobyCataloguePanel.Children.Add(_mobyCatalogueDetails);
+        _mobyCataloguePanel.Children.Add(new Expander
+        {
+            Header = "Dependencies and existing evidence", HorizontalAlignment = HorizontalAlignment.Stretch,
+            Content = _mobyCatalogueDependencies
+        });
         _mobyCataloguePanel.Children.Add(new WrapPanel { Children = { _stageCatalogueMoby, _cancelMobyCatalogue } });
         _mobyCataloguePanel.Children.Add(_mobyCatalogueStatus);
         Closed += (_, _) => { _mobyCatalogueClosed = true; InvalidateMobyCatalogue(); };
@@ -134,7 +141,8 @@ internal sealed partial class NativeFreshDocumentWindow
                 (_mobyCatalogueLevel.SelectedItem as MobyCatalogueLevel)?.Key, view);
             _mobyCatalogueEntries.ItemsSource = entries;
             _mobyCatalogueEntries.SelectedItem = entries.FirstOrDefault(entry => entry.SourceVariantId == selected);
-            _mobyCatalogueStatus.Text = $"{entries.Count} matching entries. Source variants stay distinct. Discovery grants no native import or runtime approval.";
+            _mobyCatalogueStatus.Text = $"{entries.Count} matching entries · {entries.Select(entry => entry.ActorId).Distinct().Count()} classes. " +
+                "Source variants stay distinct. Discovery grants no native import or runtime approval.";
         }
         catch (Exception error) when (error is InvalidDataException or ArgumentException)
         {
@@ -150,11 +158,14 @@ internal sealed partial class NativeFreshDocumentWindow
         var source = _mobyCatalogueListing?.GetAuthoringSource(entry);
         _stageCatalogueMoby.IsEnabled = _mobyCatalogueBusy && !_mobyCatalogueCancelRequested && source != null;
         _mobyCatalogueDetails.Text = entry == null ? "Select an entry to inspect its source identity and authoring status." :
-            $"{entry.Label}\n{entry.SourceLevelName} · " +
+            $"{entry.Label}\n{entry.Category}\n{entry.SourceLevelName} · " +
             (entry.SourceWadEntry is int wad ? $"WAD {wad}" : "Shared PETE (not a level)") + " · " +
             (entry.TrueIndex is int index ? $"true index {index}" : $"registration slot {entry.RegistrationSlot}") +
             $" · class {entry.ActorId} (0x{entry.ActorId:X4})\n{entry.ClassificationEvidence}\n" +
+            (entry.RelatedPlacedNames.Count == 0 ? "" : NativeMobyCataloguePresentation.RelatedNames(entry.RelatedPlacedNames, entry.Kind) + "\n") +
             (source == null ? "Inspect-only — no original-retail placed-row reference is available for this entry." : MobyAuthoringStatus);
+        _mobyCatalogueDependencies.Text = entry == null ? "Select an entry to inspect dependency requirements and exact source evidence." :
+            NativeMobyCataloguePresentation.Dependencies(_mobyCatalogueListing?.DescribeDependencies(entry));
     }
 
     private async Task BrowseMobySourcesAsync()
@@ -197,7 +208,7 @@ internal sealed partial class NativeFreshDocumentWindow
             try
             {
                 _mobyCatalogueSearch.Text = "";
-                _mobyCatalogueView.SelectedItem = NativeMobyCatalogueView.PlacedRows;
+                _mobyCatalogueView.SelectedItem = NativeMobyCatalogueView.All;
                 MobyCatalogueLevel[] levels = [new("", "All sources"), .. listing.Entries
                     .GroupBy(entry => entry.SourceLevelKey, StringComparer.Ordinal)
                     .OrderBy(group => group.First().SourceLevelId)
