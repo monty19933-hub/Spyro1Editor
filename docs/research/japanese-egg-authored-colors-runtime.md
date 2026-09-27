@@ -73,6 +73,7 @@ running. Normal settings were restored byte-for-byte **after** confirmed exit:
 - Ordinary USA card: `d69b43f8be2585f7b5e7fd1b07f85217ba74c01f102c01d7a22928ee0e9e8ae2`.
 
 R08 app/Core DLLs and its gameplay-tested candidate retain their recorded
-hashes. Original USA/Japan images were authenticated unchanged. No app was
-rebuilt or promoted. The new collection kernel and selected-slot residence
+hashes. Original USA/Japan images were authenticated unchanged. No preserved
+packaged app was rebuilt, replaced or promoted. The regression gate separately
+built the worktree sources. The new collection kernel and selected-slot residence
 descriptor are separate CPU/source-only work and are not on this disc.
