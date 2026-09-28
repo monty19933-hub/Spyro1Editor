@@ -63,6 +63,16 @@ def replacements(original, jp_overlay, jp_data):
 
 
 class AdmittedEggPhysicalCases(unittest.TestCase):
+    def test_prepublication_source_compiled_append_is_frozen(self):
+        blocks=model.frozen_blocks()
+        self.assertEqual(9,len(blocks))
+        self.assertEqual('d340afef978b0c8e30bf9a69a40129dd532103bd43c8e2341add87e42d103ad4',
+                         model.sha(b''.join(data for _,_,data,_ in blocks)))
+        self.assertEqual((0x8008A030,0x8008A060),(model.BEFORE_PC,model.AFTER_PC))
+        self.assertEqual((0xFDF8,0x208,True),(blocks[-1][1],len(blocks[-1][2]),blocks[-1][3]))
+        before=authored();after=model.append_authored(before)
+        self.assertEqual(before,model.inverse_authored(before,after))
+
     def test_unfrozen_recipe_fails_closed(self):
         with patch.object(model, "BLOCKS", ()), self.assertRaisesRegex(ValueError, "not frozen"):
             model.append_authored(authored())

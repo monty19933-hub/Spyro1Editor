@@ -3,8 +3,8 @@
 
 Static bounds come from source-owned final geometry, not a receipt or RAM
 pointer. Sequential samples cannot establish atomicity, gameplay causation,
-persistence, inventory or completion. Candidate connection remains disabled
-until the independently verified complete BIN hash is frozen below.
+persistence, inventory or completion. Connection requires the independently
+predicted and physically verified complete BIN hash frozen below.
 """
 import argparse
 from datetime import datetime, timezone
@@ -40,11 +40,12 @@ SCENE_GATES = {
     0x80076B1C: 0x80166554, 0x80076B40: 0x80166D5C,
 }
 ROWS, PRIVATE, CLASSES = (0x80175BD0, 0x80175C28), (0x80179C20, 0x80179C2C), (489, 498)
+PLAYER_POSITION, PLAYER_STATE = 0x80078A58, 0x80078AD0
 
 
 class AdmittedEggSession(admission.reader.shared.FixedCandidateSession):
     image_name = "artisans-native-japanese-eggs-admitted-lifecycle-r01.bin"
-    image_sha256 = ""  # Freeze only after independent prediction/publication agreement.
+    image_sha256 = "d77ac18c17a2bd0a06ab2cf4efd5a1eb2912e8634836db1105dbb32a7f65b4f1"
     image_size = 661547040
 
 
@@ -111,6 +112,10 @@ def capture(client, label):
                             row[0x48] != (0xFD if bits & (1 << index) else 0)):
                         raise ValueError("Native egg identity/retirement disagrees with ledger")
                 result["rows"] = [dict(address=at, bytes=row.hex()) for at, row in zip(ROWS, rows)]
+                # Navigation evidence only; position is allowed to advance
+                # during the sequential sample and is not an acceptance gate.
+                result["player_xyz"] = struct.unpack("<iii", read(client, PLAYER_POSITION, 12))
+                result["player_state"] = struct.unpack("<I", read(client, PLAYER_STATE, 4))[0]
         if read(client, LEDGER, 512) != ledger: raise ValueError("Ledger changed during sequential sample")
         if any(struct.unpack("<I", read(client, at, 4))[0] != fields[name] for name, at in FIELDS.items()):
             raise ValueError("Native binding/scene changed during sequential sample")

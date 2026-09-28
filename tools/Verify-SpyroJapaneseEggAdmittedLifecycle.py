@@ -43,11 +43,56 @@ CUE_NAME = "artisans-native-japanese-eggs-admitted-lifecycle-r01.cue"
 ARTISANS_SIZE = 0x10000
 ARTISANS_HOOKS = ((0xE204, 0x80088A38), (0xE0AC, 0x80088B14))
 EXE_EDITS = admission.EXE_EDITS + ((0x4AF18, 8),)
-# Closed until reviewed source-only --describe has been issued and source-tested.
+# Frozen September 27 from source-only --describe after source573 checks.
+# No candidate was published at freeze. This pins emitted bytes, not a second
+# semantic implementation. The authored E800 ancestor remains reconstructed.
+SOURCE_DESCRIPTION_SHA = "5c41b6b72e993bef314952d685aa6bba33243c9ab058f9d608f0e7a3049fba79"
 # Each tuple: id, original-relative offset, full capacity, SHA256, zlib/base85,
 # zero-initialized. No production CLI option can replace any of these pins.
-BLOCKS = ()
-BEFORE_PC = AFTER_PC = 0
+BLOCKS = (
+    ('pickup-predicate', 0xe800, 0x154, 'a9450ad10d4760f6fc23d07666d5f19c1abc04e5bd701faf29cb1a2d2bc901ec',
+     'c-l>my-tKc6ot<Y2vd+a1u+!Hz(9n;f|7!QVCw@|Zrptk{D}pbEUizlmK4^j?l#+6n3!y$+4ULh^$w1Sx4CCdzH>4cxKuW-6fmcK'
+     'uVlUi!_t<;CuHuB-r1m$g$v2oa1ageiaQ92T@k~vwL-Bb&qY}5up;))^DsT0CCrPmXX|TJXD6tH&KH>6`nZ_!#xBS0jf#U)#A1p)'
+     'RDtGPRKDik62|q8#Wl2lX!5*a<(aCL)(GqTfcSl|gf~|C(oP1S`u!*yGtIuXzpQ6^H>P*{y+{QfdLNH{fTupXYpDCEJa0eJxnV%P'
+     '??#XQY07n!>nPU^f6_N&k^TT^BSVe', False),
+    ('collect-state', 0xe954, 0x3d0, '73298610c23900127b02ec087c600eb9699a2aebe081e5ff887dec3eef31948d',
+     'c-mdkK}b|V7zglgcD44)5?vIOf)w6^rc8upsKXpy6tTpLVPKbt4I%<V_7JgXhYg~hTW%|P$cQp9Ftfl@mx9PkmpTN2hluJH9fF`v'
+     ';%nY}e{^s!^Ud#l^F7{wc5gLj=wD9%ps<7NFGD$Xps+ySsi!^Ow^4W}UW>zQP9KwcmAEtBcfbX)5hV2|co&6@bPgZ<fEnG6y@&0='
+     'c_LOTINJjosj$f_so%i8E&d9=51v<S8hNRg;eGH2ui1=Lq<#(`fPYzJ^Kn_~r*H*7^q0;0nADHqN8lHj&COY<XW<6^GGG&Zmiit%'
+     'fM2@Irgc*4Dfn^txkqe@Hp5%+0{q2SHY=-AUxydrzt-6V{ZdcB%bS_2tFSB1J!I@Xl;IT$XOOuXh23y6zX%H*I}e+KWv!is%{zT('
+     'U<-~7!<HNygf(DM#AYp$+6!2mAWELiIQ>V_f8Q|!d+6BVjkz_Cs71BWkZ)6)PXDii$?BD+#5St7r|+%%Ua2kwjrwa*wKL7@r2i)x'
+     'O6qZB)k`hO{#~J&dV@(jf9G_X$F5}EPR|Ae?NCjp_6x7PD0b7^WWHCf#dUJ_8r|La*2sQq7yV3n{8BA>zo6f~o%>{*ZqM7^B|)vK'
+     'o9c7+rc{o;W#ir^r_MTc#;Ju<H#_xz9Y3J#', False),
+    ('query-state', 0xed24, 0x38c, '2e4505b688d69161cb75dd0cb3f9e3437c5095997a1342994f460f546945ab63',
+     'c-mdkPe@cj90%~<>}u^VGjwyIAjse?G-)C@10Du?kcTZcl?3Txh;$GtS<u7kr9D(Utz;L3{!kI<L8TNAUPMUBlZP%Uc!==sP0*A0'
+     'e1E>^(7ViUK5ynXkMF$erIew=l-?q*fr2MNDb<vlrA=zA59f8{y$#3wLpD8krQRUUg!2ZtAU1-eUWZ>HuN?Q`+dt9cs%0y%YuHc3'
+     'Y8iVQVZB8*X(ja{-1*Pv;5XrE#ipE=dK%sg|Fp`cw<z@&cq{zxJexmDQon~Qc-sM+;~}Xl@OJnUX7l=^)NkMhzTmR)x21jscj1H2'
+     '*jyTy`USiL{`f1Ke30QNJO}^rkInBLsfXct_}(!aw?*pb@WNT<Y7jPJ-9sX{hXHtzyeVX^`d}}u%pbu#%X(nnV9CHbVKdgcd$3u{'
+     'I$+-|y8|o3e4ovcFSX;cXeWx^O<C*Pu>ON(EwIm)$<w|Q4pEJ&qpoa_S|$EpA4H?m|4y8vQhj{xWY+1Q6oQ^+kNi?5&g*`5-|vd*'
+     'F=Ta_YNGkCTs7Tr$AkVCD{&sR(RiNbS_NHDRo%CQQ<xXEv=;Su3KL<SiN7zQQnZ^4t17EbT6Myzg;k#b>>!P|', False),
+    ('pickup-attempt', 0xf0b0, 0x158, '3e2cd95d22d19b0f2759f5773d3a9630d25008b2e444d2fec953d49d0b430b34',
+     'c-oV1;ILu%#$oEkutJ0Z2*iQ>3(*{=91I--Fuq0%hp8Bp&&I%H!ol!>nE?zsdLU{zZ4~Bcn%XdMih}rN3>{NI^h-ug6LYAT2SdjM'
+     'h#Z3`L@$SlFav`Cx;Z*PbF|RR`2;ja70nzKs5y*4a~PrKJovv?U4UW#dJ%>t>m?YLu9sn0vHqM26Aws^lfeP3MuK5UKZurLSPG^e'
+     'L*<#EW^e-iCjwO?0aXJu6HJ5rt-!EXodqcj*pb*ANNfPp?lA5', False),
+    ('egg-lifecycle', 0xf208, 0x398, '134e07f0a5ecf019ab414fac2a3b7a2720c58b128ef30e2db35af41fe9e5f7dc',
+     'c-oV1;ILu%#$lSputJ0Z2*iQ>3(*{=91I--Fuq0%hp94@&&I%H!ol!>nE?zsdLU{zZ4~Bcn#M42ih}rN3>{NI^h-uglW?e*2SdjM'
+     '5FN(A0Op%O)%^d@Y2pV}!w$4-LIj5?0|Q4d%-n_;O;b0hJW$+3fq_8)-EJMA-L`0Ue*)TVfo8Wk7Q6Kc*sTtgX9U{K2(|mc|Gnx0'
+     '4ExuMFf3Uw!LW2a1H%#(1_oBu>#9sVAbCCp2LYHK9tIC^xN-x-O@?6+NKZeAALYpiRtppZ^O>M#a{<-C)Bw!}(?GkxG$`B^81|~O'
+     'AjJVY5}N~wEf0;?6e`4P7?yYqL<`#hEMe<GAZ#6oh*xtg@oI!-w;>k0H3`_QNJPBuQiH@N6N85i7XyPJG`?`gA<P_V#2)~xONWI', False),
+    ('pre-visual-bridge', 0xf5a0, 0x3c, '0e77ad56e2ac9bb79dad3eb387ddf009a91e1021e84eea71eae0520ab51b909b',
+     'c-m7`NMMq0V6|cRw$wyGor#A52)GzHOxPGa1VC&yAe$M=KB~mT0iye$GywLI27~', False),
+    ('post-visual-bridge', 0xf5dc, 0x1c, '1359033b4dfb9c34e69fbedfb20e4457d7ff867dddd81af6170f3ee9fcf4e69f',
+     'c-m7`NMMq0V6|cRw$!9eor#A52#zW-ae!z5SjPna', False),
+    ('live-consumer-guard', 0xf5f8, 0x800, '04ccb42bf627100bec0ff9614dd987dc16f55ae0cf9bbdb0ba647eb543e9d8fd',
+     'c-rG=;J3Lk|GlYr1BcCpXbw|hh72JFAOP_-VmM6sq5M82CJqqI0aP!t0HK~8O+7P|e-x^ooneLXY6b>T5L+IoCgBH%skX-o=4A{D'
+     'aIt{jATe3Sg-|i}25y@rq1mPk3>m!)V8Cg^z@=$AlYtX1pA(5H&&8l=IuS|!MmU;&pnNBi{Dd$}`9>sp6D0lY4V*S7ZfcrVBAefe'
+     'kmmr(TddMFEku%kfFv&nln<%ZG|fbke}W`029-}llGlhp$cqEz85A^4Baz*YCf^XFX&Q(mFO!XCeyXOaCz8AantV*Irl}*6yhtx<'
+     '_%H&)#}e86Ud-?_gv!eU<;A{%<tHNR*F=&RN0SHXS45JRK$2%-;MA33P!I$wb>slsF9Ehc6KuaQl0GSjzNs*GDj=!jL{iuD4dH%f'
+     'U=)Glk>LR&#63(lEDTO2urxdhM!_f;1;Y^l00u#Vlm', False),
+    ('alignment', 0xfdf8, 0x208, '20aa497d9bd4c19e851e3df6e386700faada213db38acf7679f6365832830b3d',
+     "", True),
+)
+BEFORE_PC, AFTER_PC = 0x8008A030, 0x8008A060
 
 
 def growth():
@@ -284,6 +329,7 @@ def verify(usa, japan, candidate=None, cue=None, quiet=False):
                     originalAndNamedInputsStable=True,completeOriginalWadInverseVerified=True,
                     finalNormalLoadOwners=final_geometry(data,rows,bindings),
                     generatedCodeAuthority='immutable prepublication source-compiled lifecycle blocks and frozen card predecessor',
+                    prepublicationSourceDescriptionSha256=SOURCE_DESCRIPTION_SHA,
                     generatedCodeSemanticsIndependentlyReconstructed=False,
                     lifecycleBlocks=[dict(id=n,offset=a,length=len(b),sha256=sha(b),allZero=not any(b)) for n,a,b,_ in blocks],
                     cueVerified=cue is not None,cueSha256=cue_hash,

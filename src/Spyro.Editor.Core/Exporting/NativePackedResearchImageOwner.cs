@@ -115,6 +115,25 @@ internal sealed class NativePackedResearchImageOwner
             _=>new(){{2,original}});
     }
 
+    internal static NativePackedResearchImageOwner CaptureAdmittedEgg(string source,NativeJapaneseEggAdmittedLifecyclePlan composition,
+        NativeJapaneseEggAdmittedLifecycleResearchRenderBinding render)
+    {
+        ArgumentNullException.ThrowIfNull(composition);ArgumentNullException.ThrowIfNull(render);render.RequireCurrent(composition);
+        if(!composition.EntryOwners.Select(e=>e.Index).SequenceEqual(new[]{2,9,10})||
+            !composition.RevertExecutableExact(composition.CopyExecutable()).AsSpan().SequenceEqual(composition.CopyOriginalExecutable()))
+            throw new InvalidDataException("Admitted physical owner lost exact three-entry/common original EXE ancestry.");
+        var originals=new Dictionary<int,byte[]>{{2,composition.RevertCardOverlayExact(composition.CopyCardOverlay())},
+            {9,composition.RevertArtisansOverlayExact(composition.CopyArtisansOverlay())},{10,composition.RevertLevelDataExact(composition.CopyLevelData())}};
+        var changes=composition.EntryOwners.ToDictionary(e=>e.Index,e=>checked(e.FinalLength-e.OriginalLength));
+        foreach(var owner in composition.EntryOwners)
+            if(owner.OriginalLength!=originals[owner.Index].Length||owner.OriginalSha256!=Hash(originals[owner.Index])||
+                changes[owner.Index]<=0||changes[owner.Index]%0x800!=0)
+                throw new InvalidDataException("Admitted source owner has inconsistent complete preimage or aligned growth.");
+        int growth=checked(changes.Values.Sum());
+        return Capture(source,composition.CopyExecutable(),growth,changes,
+            (header,read)=>NativePackedResearchEntryComposer.ComposeAdmittedArtisans(header,0x6927000,composition,render,read),_=>originals);
+    }
+
     // Only the closed typed factories above can choose these payloads.
     private static NativePackedResearchImageOwner Capture(string source,byte[] executable,int expectedGrowth,
         Dictionary<int,int> expectedChanges,Func<byte[],Func<int,int,byte[]>,NativeWizardResearchPackedWad> compose,

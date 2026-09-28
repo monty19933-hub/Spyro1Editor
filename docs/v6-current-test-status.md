@@ -12,8 +12,10 @@ September27 latest source: [guarded admission plus Artisans pickup](research/jap
 now composes in a closed source plan. Actual CPU admission precedes seeded-egg
 suppression and second-egg pickup;342 cumulative checks pass. Existing lifecycle
 571/admission677 compatibility checks also pass, with unchanged old export bytes.
-The new combined disc is not yet published or tested in DuckStation; this adds
-no custom writer, inventory or completion hooks and does not replace R08.
+The new combined research disc is now published and independently verified
+against its original-only whole-disc prediction. Full Release278/0, publisher
+source577/fault25 pass. It is not yet tested in DuckStation; this adds no custom
+writer, inventory or completion hooks and does not replace R08.
 
 September27 latest: a separate [guarded admission research disc](research/collectible-card-admission-research-r01.md)
 is published and independently verified byte-for-byte against an original-only

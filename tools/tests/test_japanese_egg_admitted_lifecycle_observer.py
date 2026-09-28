@@ -21,6 +21,7 @@ def memory(bits=1, level=10, phase=1):
     for at, value in model.SCENE_GATES.items(): m.word(at, value)
     for at, data in model.SCENE_CODE_GATES.items(): m.map(at, data)
     m.map(model.GUARD_PC, GUARD)
+    m.map(model.PLAYER_POSITION, struct.pack("<iii", 72704, 49152, 6144)); m.word(model.PLAYER_STATE, 0)
     for index, at in enumerate(model.ROWS):
         row = bytearray(0x58)
         struct.pack_into("<I", row, 0, model.PRIVATE[index])
@@ -44,6 +45,7 @@ class AdmittedEggObserverCases(unittest.TestCase):
             self.assertEqual(bits == 1, result["seeded_state_observed"])
             self.assertEqual(bits == 3, result["pickup_state_observed"])
             self.assertTrue(result["egg_rows_observed"])
+            self.assertEqual((72704, 49152, 6144), result["player_xyz"])
             self.assertEqual(1 if bits == 1 else 2, result["selected_earned"])
             for name in ("collection_verified", "native_save_reload_verified", "inventory_verified",
                          "completion_percentage_verified", "all_transition_lifetime_verified", "runtime_pass"):
@@ -63,7 +65,8 @@ class AdmittedEggObserverCases(unittest.TestCase):
         self.assertNotIn("sample_refused", result)
         self.assertFalse(result["egg_rows_observed"])
         self.assertNotIn((model.GUARD_PC, 1024), m.reads)
-        forbidden = {*model.SCENE_GATES, *model.SCENE_CODE_GATES, *model.ROWS, model.GUARD_PC, model.GUARD_PC + 1024}
+        forbidden = {*model.SCENE_GATES, *model.SCENE_CODE_GATES, *model.ROWS, model.GUARD_PC, model.GUARD_PC + 1024,
+                     model.PLAYER_POSITION, model.PLAYER_STATE}
         self.assertTrue(all(at not in forbidden for at, _ in m.reads))
 
     def test_non_artisans_or_pause_never_reads_discarded_overlay(self):
@@ -73,7 +76,8 @@ class AdmittedEggObserverCases(unittest.TestCase):
             self.assertNotIn("sample_refused", result)
             self.assertFalse(result["egg_rows_observed"])
             self.assertNotIn((model.GUARD_PC, 1024), m.reads)
-            forbidden = {*model.SCENE_GATES, *model.SCENE_CODE_GATES, *model.ROWS, model.GUARD_PC, model.GUARD_PC + 1024}
+            forbidden = {*model.SCENE_GATES, *model.SCENE_CODE_GATES, *model.ROWS, model.GUARD_PC, model.GUARD_PC + 1024,
+                         model.PLAYER_POSITION, model.PLAYER_STATE}
             self.assertTrue(all(at not in forbidden for at, _ in m.reads))
 
     def test_resident_scene_and_code_changes_refused(self):
@@ -106,7 +110,7 @@ class AdmittedEggObserverCases(unittest.TestCase):
             self.assertIn("sample_refused", model.capture(m, "unstable"), hex(at))
 
     def test_short_reads_refused(self):
-        for at in (model.LEDGER, *model.FIELDS.values(), model.GUARD_PC, *model.ROWS):
+        for at in (model.LEDGER, *model.FIELDS.values(), model.GUARD_PC, *model.ROWS, model.PLAYER_POSITION, model.PLAYER_STATE):
             m = memory(); m.short = at
             self.assertIn("sample_refused", model.capture(m, "short"))
 

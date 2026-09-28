@@ -41,6 +41,18 @@ internal static class NativePackedResearchEntryComposer
             new(9,checked((int)U32(header,72)),overlay.Length,Hash(overlay),plan.CopyOverlay()),
             new(10,checked((int)U32(header,80)),data.Length,Hash(data),plan.CopyLevelData())],read,[9,10]);
     }
+    internal static NativeWizardResearchPackedWad ComposeAdmittedArtisans(ReadOnlySpan<byte> header,int originalLength,
+        NativeJapaneseEggAdmittedLifecyclePlan composition,NativeJapaneseEggAdmittedLifecycleResearchRenderBinding render,Func<int,int,byte[]> read)
+    {
+        ArgumentNullException.ThrowIfNull(composition);ArgumentNullException.ThrowIfNull(render);render.RequireCurrent(composition);
+        if(header.Length!=0x800)throw new InvalidDataException("Admitted packing requires the complete original WAD directory.");
+        byte[] card=composition.CopyCardOverlay(),artisans=composition.CopyArtisansOverlay(),data=composition.CopyLevelData();
+        byte[] oldCard=composition.RevertCardOverlayExact(card),oldArtisans=composition.RevertArtisansOverlayExact(artisans),oldData=composition.RevertLevelDataExact(data);
+        return Compose(header,originalLength,[
+            new(2,checked((int)U32(header,16)),oldCard.Length,Hash(oldCard),card),
+            new(9,checked((int)U32(header,72)),oldArtisans.Length,Hash(oldArtisans),artisans),
+            new(10,checked((int)U32(header,80)),oldData.Length,Hash(oldData),data)],read,[2,9,10]);
+    }
     private static NativeWizardResearchPackedWad Compose(ReadOnlySpan<byte> header,int originalLength,
         IEnumerable<NativeWizardResearchReplacement> replacements,Func<int,int,byte[]> read,int[] allowed)
     {

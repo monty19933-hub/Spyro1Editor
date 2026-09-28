@@ -11,8 +11,10 @@ Latest source composition: [guarded admitted egg lifecycle](japanese-egg-admitte
 joins actual native admission to Artisans suppression/pickup with final owner
 projection and full original inverses.342 cumulative source/CPU checks and
 571/677 predecessor compatibility checks pass; independent source review found
-no blocker. The combined disc is still unpublished/untested. Custom native
-save, inventory and required-for100% remain pending; R08 remains preserved.
+no blocker. The combined research disc is now published and independently
+verified against original-only prediction; full Release278/0 and publisher
+source577/fault25 pass. DuckStation testing, custom native save, inventory and
+required-for100% remain pending; R08 remains preserved.
 
 Latest source/publication checkpoint: [guarded admission R01](collectible-card-admission-research-r01.md)
 adds source-tested phase-last admission and resident warm-reset invalidation.
