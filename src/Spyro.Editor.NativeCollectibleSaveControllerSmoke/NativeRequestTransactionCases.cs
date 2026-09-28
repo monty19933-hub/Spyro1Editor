@@ -42,11 +42,14 @@ internal static class NativeRequestTransactionCases
                 Check(new[]{4,5,6,7,16,17,18,19,20,21,22,23,26,27,28,29,30,31}.All(r=>cpu.Regs[r]==saved[r])&&
                     cpu.Hi==0x12345678&&cpu.Lo==0x87654321,"Complete real request/poll plus controller ABI preserved");
                 Check(cpu.Writes.All(a=>In(a,kernel.Preparation.OldTailAddress,0xB90)||In(a,kernel.ExpectedOrdinaryAddress,0x1100)||
-                    In(a,kernel.StateAddress,0x30)||In(a,ControllerFixture.Stack-0xE0,0xE0)||In(a,0x80075B50,0x110)||a>=0x800751B0&&a<0x800751B4),
+                    In(a,kernel.StateAddress,0x30)||In(a,ControllerFixture.Stack-(uint)kernel.MaximumStackByteLength,kernel.MaximumStackByteLength)||
+                    kernel.IrqWindowsEmitted&&In(a,ControllerFixture.Mock+0x80,4)||In(a,0x80075B50,0x110)||a>=0x800751B0&&a<0x800751B4),
                     "Combined controller/native closure stores only declared buffers, globals, queue and bounded stack");
                 Check(cpu.Visited.All(a=>In(a,kernel.BeginPc,kernel.CodeByteLength)||
-                    In(a,kernel.Preparation.EntryPc,NativeCollectibleSaveTailKernel.CodeCapacityBytes)||Sources.Take(7).Any(s=>In(a,s.Pc,s.Size))),
-                    "No mock, asynchronous callback, dispatcher, diagnostic or BIOS instruction executes");
+                    In(a,kernel.Preparation.EntryPc,NativeCollectibleSaveTailKernel.CodeCapacityBytes)||Sources.Take(7).Any(s=>In(a,s.Pc,s.Size))||
+                    kernel.IrqWindowsEmitted&&(In(a,NativeCollectibleSaveControllerKernel.EnterCriticalPc,8)||In(a,NativeCollectibleSaveControllerKernel.ExitCriticalPc,8)||
+                    In(a,ControllerFixture.Mock+0x100,0x1C)||In(a,ControllerFixture.Mock+0x140,0x1C))),
+                    "Only declared source/controller code and opt-in modeled IRQ veneers; no asynchronous callback, dispatcher, diagnostic or BIOS");
                 Check(f.Game.Ledger().SequenceEqual(live),"Controller never commits over actual live progress");
                 issued+=cpu.Calls.Count(a=>a==0x80066E28||a==0x800670E4);
                 return cpu.Regs[2];
@@ -89,6 +92,7 @@ internal static class NativeRequestTransactionCases
             Check(Sources.Select((s,i)=>f.Bytes(s.Pc,s.Size).SequenceEqual(original[i])).All(same=>same),"Complete pinned source closure remains unchanged");
         }
         source.VerifyUnchanged();
-        Console.WriteLine($"NATIVE_REQUEST_TRANSACTION_SOURCE_OK checks={checks} synchronousSourceWrappers=true emittedController=true hostTransfers=true asyncCallbacks=false nativeIo=false cardWrites=0 runtime=false");
+        string marker=kernel.IrqWindowsEmitted?"NATIVE_REQUEST_TRANSACTION_IRQ_SOURCE_OK":"NATIVE_REQUEST_TRANSACTION_SOURCE_OK";
+        Console.WriteLine($"{marker} checks={checks} synchronousSourceWrappers=true emittedController=true irqServicesMocked={kernel.IrqWindowsEmitted} hostTransfers=true asyncCallbacks=false nativeIo=false cardWrites=0 runtime=false");
     }
 }

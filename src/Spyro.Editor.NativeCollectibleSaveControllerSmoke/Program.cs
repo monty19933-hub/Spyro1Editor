@@ -216,10 +216,12 @@ Console.WriteLine("SAVE_CONTROLLER_LAYOUT "+JsonSerializer.Serialize(new{
     nestedStackBytes=NativeCollectibleSaveControllerKernel.MaximumStackBytes,excludedCallerBytes=NativeCollectibleSaveControllerKernel.NativeCallerBytes,
     regions=k.Regions.Select(r=>new{r.Role,address=r.Address.ToString("X8"),r.ByteLength})}));
 InstructionCountCases.Run(k); // Separate measurement checks preserve established public smoke totals.
+IrqWindowCases.Run(); // Separate opt-in profile; no legacy count/hash promotion.
 if(args.Length==0)return;
 if(args.Length!=2||args[0]!="--source")throw new ArgumentException("Only --source original-USA-BIN; no publication/I/O mode.");
 using var source=NativeRegionalSourceSession.Open(args[1],NativeDiscRevision.UsaScus94228);
 var certified=NativeCollectibleSaveControllerKernel.Capture(source,k.ArenaAddress);certified.RequireSourceEvidence();
+var irqCertified=NativeCollectibleSaveControllerKernel.CaptureIrqWindowed(source,k.ArenaAddress);IrqWindowCases.Run(irqCertified);
 Check(certified.SourceCertified&&certified.CopyBytes().SequenceEqual(k.CopyBytes()),"Source certification pins existing native ABI, never different code or installation");
 var sourceFixture=new ControllerFixture(certified);sourceFixture.Reach(NativeCollectibleSaveControllerStage.Committed);VerifySuccess(sourceFixture);source.VerifyUnchanged();
 SerializerSnapshotCases.Run(source,certified,Check);
@@ -227,4 +229,5 @@ PendingReceiptCases.Source(source,Check);
 int beforeAcceptedWrappers=checks;
 AcceptedRequestWrapperCases.Run(source,Check);
 NativeRequestTransactionCases.Run(source,certified);
+NativeRequestTransactionCases.Run(source,irqCertified);
 Console.WriteLine($"NATIVE_COLLECTIBLE_SAVE_CONTROLLER_SOURCE_OK checks={checks} acceptedWrapperChecks={checks-beforeAcceptedWrappers} sourceUnchanged=true acceptedWrappersExecuted=true asyncCallbacksExecuted=false nativeIoExecuted=false cardWrites=0 runtime=false");

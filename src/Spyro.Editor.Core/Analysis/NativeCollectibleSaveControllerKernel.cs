@@ -28,8 +28,9 @@ internal enum NativeCollectibleSaveDrainResult : uint
 /// return into its retained overlay before considering any owner release.
 ///
 /// Code, state, input/expected buffers and filename require external exclusive
-/// owners. Mutations/IRQ/DMA during an entry must be excluded except a completed
-/// service's declared writes. Caller MUST signal Revoke before session changes,
+/// owners. The legacy profile requires external whole-entry IRQ exclusion;
+/// every profile still requires exclusion of unrelated mutation/DMA except a
+/// completed service's declared writes. Caller MUST signal Revoke before session changes,
 /// even when opaque epoch/tuple/ledger bytes repeat. No native hook authenticates
 /// that lifetime. Retain every pending I/O buffer after failure/revocation.
 /// Successful service semantics must supply the full old100 transfer: native
@@ -43,30 +44,39 @@ internal enum NativeCollectibleSaveDrainResult : uint
 /// not prove enqueue/completion, cancellation or release of an outstanding owner.
 /// Every request also rechecks all18 source-fixed filename bytes including NUL;
 /// the separate filename owner does not grant caller-selected file authority.
+/// The opt-in IRQ-windowed successor masks only finite native snapshot/request/
+/// receipt sections. Bulk validation/preparation/copies are outside its owned
+/// windows (an already-disabled caller stays disabled). Foreground entry/session
+/// serialization and exclusive/DMA ownership remain external requirements;
+/// emitting the source Enter/Exit protocol does not prove BIOS or IRQ runtime.
 /// </summary>
 internal sealed class NativeCollectibleSaveControllerKernel
 {
     internal const uint ReadPc=0x80066E28,WritePc=0x800670E4,PollPc=0x80067628,ProposalMagic=0x53564331;
+    internal const uint EnterCriticalPc=0x8005DBA4,ExitCriticalPc=0x8005DBB4;
     internal const int CodeCapacityBytes=0x2000,ArenaBytes=0x7300,StateBytes=0x30,
         FrameBytes=0x40,MaximumStackBytes=0xE0,NativeCallerBytes=0x48;
     private const uint Live=0x801FF600,Busy=0x80075B50,Latch=0x80075B58;
     internal static IReadOnlyList<NativeCollectibleSaveTailKernel.SourceSpan> QueueSourceSpans { get; }=Array.AsReadOnly(new[]{
         new NativeCollectibleSaveTailKernel.SourceSpan(0x80068F30,0x14,"b81ac71035cb2a71c2c7a316c0c11bc2c00233f882df5e6301aa4e315ffdd1e0"),
         new NativeCollectibleSaveTailKernel.SourceSpan(0x80068F44,0x80,"7b25bd5394d6eb44fbe836882eb7bb866ec7c917813ebdd6e17b7037cc9e06ce")});
+    internal static IReadOnlyList<NativeCollectibleSaveTailKernel.SourceSpan> CriticalSourceSpans { get; }=Array.AsReadOnly(new[]{
+        new NativeCollectibleSaveTailKernel.SourceSpan(EnterCriticalPc,0x10,"505f018057cab576fce3e80a248467f5c8ad5e14c7d2289869e453ad092ef931"),
+        new NativeCollectibleSaveTailKernel.SourceSpan(ExitCriticalPc,0x10,"6e003f701ca622421a42bea9b13f252e5325ecafcb0e85216766a154e060e578")});
     // State: stage0, poll operation4/result8, observed generationC/bitmap10,
     // external revocation14, failure18, proposal marker1C; receipt20, fixed
     // request kind24 (1..5, same order as active stages), raw request return28,
     // raw poll return2C. Intent is published before JAL, results before checks.
     private readonly byte[] bytes;
     internal sealed record Region(string Role,uint Address,uint ByteLength);
-    private NativeCollectibleSaveControllerKernel(uint arena,NativeRegionalSourceSession? source)
+    private NativeCollectibleSaveControllerKernel(uint arena,NativeRegionalSourceSession? source,bool irqWindows=false)
     {
         if(arena%16!=0||arena<0x80090000||(ulong)arena+ArenaBytes>0x801F0000)
             throw new InvalidDataException("Complete detached controller owners require aligned bounded cached RAM.");
-        ArenaAddress=arena;
+        ArenaAddress=arena;IrqWindowsEmitted=irqWindows;
         Preparation=source is null?NativeCollectibleSaveTailKernel.CreateFixture(checked(arena+CodeCapacityBytes)):
             NativeCollectibleSaveTailKernel.Capture(source,checked(arena+CodeCapacityBytes));
-        if(FrameBytes+NativeCollectibleSaveTailKernel.MaximumStackBytes!=MaximumStackBytes)
+        if(FrameByteLength+NativeCollectibleSaveTailKernel.MaximumStackBytes!=MaximumStackByteLength)
             throw new InvalidDataException("Generated nested stack contract changed.");
         uint cursor=arena;List<Region> regions=[];
         void Own(string role,int n){regions.Add(new(role,cursor,(uint)n));cursor=checked(cursor+(uint)n);}
@@ -75,13 +85,19 @@ internal sealed class NativeCollectibleSaveControllerKernel
         Own("begin-ledger",0x200);Own("commit-proposal",0x200);Own("controller-state",StateBytes);Own("fixed-filename",0x20);Own("alignment",0x10);
         if(cursor!=arena+ArenaBytes)throw new InvalidDataException("Complete measured controller partition changed.");
         Regions=regions.AsReadOnly();bytes=Emit();
-        if(bytes.Length>CodeCapacityBytes)throw new InvalidDataException("Measured controller exceeds its explicit new code capacity.");
+        if(bytes.Length>CodeCapacityBytes)throw new InvalidDataException($"Measured controller {bytes.Length:X} exceeds explicit2000 code owner by{bytes.Length-CodeCapacityBytes:X}; no growth authorized.");
     }
     internal uint ArenaAddress { get; }
     internal uint BeginPc { get; private set; }
     internal uint PumpPc { get; private set; }
     internal uint RevokePc { get; private set; }
     internal uint DrainPc { get; private set; }
+    internal bool IrqWindowsEmitted { get; }
+    internal int FrameByteLength=>IrqWindowsEmitted?0x50:FrameBytes;
+    internal int MaximumStackByteLength=>IrqWindowsEmitted?0xF0:MaximumStackBytes;
+    internal uint IrqEnterHelperPc { get; private set; }
+    internal uint IrqLeaveHelperPc { get; private set; }
+    internal uint IrqLeaveReturnPc { get; private set; }
     internal uint OrdinaryInputAddress=>ArenaAddress+0x5BA0;
     internal uint ExpectedOrdinaryAddress=>ArenaAddress+0x61A0;
     internal uint OrdinaryReadbackAddress=>ArenaAddress+0x67A0;
@@ -111,7 +127,10 @@ internal sealed class NativeCollectibleSaveControllerKernel
     internal void RequireNativeInstallation()=>throw new InvalidDataException(
         "Detached controller: native hooks, session revocation, lease/drain, IRQ/cache/full-stack safety and real I/O remain unproved.");
     internal static NativeCollectibleSaveControllerKernel CreateFixture(uint arena)=>new(arena,null);
-    internal static NativeCollectibleSaveControllerKernel Capture(NativeRegionalSourceSession source,uint arena)
+    internal static NativeCollectibleSaveControllerKernel CreateIrqWindowedFixture(uint arena)=>new(arena,null,true);
+    internal static NativeCollectibleSaveControllerKernel Capture(NativeRegionalSourceSession source,uint arena)=>CaptureProfile(source,arena,false);
+    internal static NativeCollectibleSaveControllerKernel CaptureIrqWindowed(NativeRegionalSourceSession source,uint arena)=>CaptureProfile(source,arena,true);
+    private static NativeCollectibleSaveControllerKernel CaptureProfile(NativeRegionalSourceSession source,uint arena,bool irqWindows)
     {
         ArgumentNullException.ThrowIfNull(source);
         try
@@ -119,16 +138,18 @@ internal sealed class NativeCollectibleSaveControllerKernel
             if(source.Revision!=NativeDiscRevision.UsaScus94228||
                 !source.ReadExecutableRange(0x15B8,18).AsSpan().SequenceEqual("BASCUS-94228SPYRO\0"u8))
                 throw new InvalidDataException("Exact source native filename at80010DB8 required.");
-            foreach(var span in QueueSourceSpans)
+            foreach(var span in QueueSourceSpans.Concat(irqWindows?CriticalSourceSpans:[]))
                 if(Convert.ToHexStringLower(SHA256.HashData(source.ReadExecutableRange((int)(span.Pc-0x8000F800),span.ByteLength)))!=span.Sha256)
                     throw new InvalidDataException("Source queue initializer/enqueue body changed.");
-            return new(arena,source);
+            return new(arena,source,irqWindows);
         }
         finally{source.VerifyUnchanged();}
     }
     private byte[] Emit()
     {
-        var e=new Emitter(ArenaAddress);const int v0=2,a0=4,a1=5,a2=6,a3=7,t0=8,t1=9,t2=10,t3=11,t4=12,sp=29,ra=31;
+        var e=new Emitter(ArenaAddress,IrqWindowsEmitted);const int v0=2,a0=4,a1=5,a2=6,a3=7,t0=8,t1=9,t2=10,t3=11,t4=12,sp=29,ra=31;
+        void Enter(){if(IrqWindowsEmitted)e.CallLabel("irq-enter");}
+        void Leave(){if(IrqWindowsEmitted)e.CallLabel("irq-leave");}
         void Read(int r,uint at,int op=0x23){e.C(t4,at);e.L(op,r,t4,0);}
         void Write(int r,uint at,int op=0x2B){e.C(t4,at);e.I(op,t4,r,0);}
         void Set(uint at,uint value){e.C(t0,value);Write(t0,at);}
@@ -138,14 +159,15 @@ internal sealed class NativeCollectibleSaveControllerKernel
         void Stack()
         {
             e.I(12,sp,t0,7);e.B(5,t0,0,"preflight");
-            e.C(t0,0x801FF800+MaximumStackBytes);e.R(0x2B,sp,t0,t1);e.B(5,t1,0,"preflight");
+            e.C(t0,0x801FF800+(uint)MaximumStackByteLength);e.R(0x2B,sp,t0,t1);e.B(5,t1,0,"preflight");
             e.C(t0,0x80200000-NativeCallerBytes);e.R(0x2B,t0,sp,t1);e.B(5,t1,0,"preflight");
         }
         int[] saved=[a0,a1,a2,a3,ra];
         void Save()
         {
-            e.I(9,sp,sp,-FrameBytes);for(int i=0;i<saved.Length;i++)e.I(0x2B,sp,saved[i],0x20+i*4);
+            e.I(9,sp,sp,-FrameByteLength);for(int i=0;i<saved.Length;i++)e.I(0x2B,sp,saved[i],0x20+i*4);
             e.R(16,0,0,t0);e.I(0x2B,sp,t0,0x34);e.R(18,0,0,t0);e.I(0x2B,sp,t0,0x38);
+            if(IrqWindowsEmitted)e.I(0x2B,sp,0,0x44);
         }
         void Copy(uint from,uint to,int length,bool complement=false)
         {
@@ -198,6 +220,7 @@ internal sealed class NativeCollectibleSaveControllerKernel
         }
         void Request(uint op,uint buffer,int offset,int length,NativeCollectibleSaveControllerStage next)
         {
+            Enter();
             Unrevoked();Expect(Busy,0,"failure");Expect(Latch,0,"failure");
             // Source signed last-enqueued index has the explicit empty value -1.
             // Normalize with nontrapping ADDIU and compare unsigned: exactly
@@ -212,13 +235,15 @@ internal sealed class NativeCollectibleSaveControllerKernel
             e.C(t0,(uint)length);e.I(0x2B,sp,t0,0x10);e.Call(op==3?ReadPc:WritePc);
             e.CallLabel("record-request");
             // A synchronous external revocation cannot be overwritten on return.
-            Unrevoked();Equal(v0,1,"failure");Expect(Busy,op,"failure");Expect(Latch,0,"failure");Validate(true);
-            Set(StateAddress,(uint)next);e.B(4,0,0,"finish");
+            Unrevoked();Equal(v0,1,"failure");Expect(Busy,op,"failure");Expect(Latch,0,"failure");
+            if(IrqWindowsEmitted){Set(StateAddress,(uint)next);Leave();Validate(true);}
+            else{Validate(true);Set(StateAddress,(uint)next);}
+            e.B(4,0,0,"finish");
         }
 
         BeginPc=e.Pc;Equal(a0,OrdinaryInputAddress,"preflight");Equal(a1,0x600,"preflight");Equal(a2,Live,"preflight");Equal(a3,0,"preflight");Stack();
         Read(t0,StateAddress+0x14);e.B(5,t0,0,"unframed-revoked");Read(v0,StateAddress);e.B(5,v0,0,"return");
-        Save();AllZero(StateAddress,StateBytes);Expect(Busy,0,"failure");Expect(Latch,0,"failure");Validate(false);
+        Save();AllZero(StateAddress,StateBytes);Enter();Expect(Busy,0,"failure");Expect(Latch,0,"failure");Leave();Validate(false);
         Copy(Live,BeginLedgerAddress,512);Copy(OrdinaryInputAddress,ExpectedOrdinaryAddress,0x600);
         Read(t0,Live+0x7C);Write(t0,StateAddress+0xC);Read(t0,Live+0x90,0x24);Write(t0,StateAddress+0x10);
         Zero(Preparation.OldTailAddress,0x100);Request(3,Preparation.OldTailAddress,0x1400,0x100,NativeCollectibleSaveControllerStage.ReadingOldTail);
@@ -227,13 +252,14 @@ internal sealed class NativeCollectibleSaveControllerKernel
         Read(t0,StateAddress+0x14);e.B(5,t0,0,"unframed-revoked");Read(v0,StateAddress);e.B(4,v0,0,"return");
         e.I(11,v0,t0,6);e.B(4,t0,0,"return");Save();Validate(true);PendingReceipt("failure");
         Read(t0,StateAddress);Read(t1,StateAddress+0x24);e.B(5,t0,t1,"failure");
+        Enter();
         Set(StateAddress+4,uint.MaxValue);Set(StateAddress+8,uint.MaxValue);
         e.C(a0,1);e.C(a1,StateAddress+4);e.C(a2,StateAddress+8);e.Call(PollPc);e.CallLabel("record-poll");Unrevoked();
         e.B(4,v0,0,"pending");Equal(v0,1,"failure");Expect(StateAddress+0x20,(uint)NativeCollectibleSavePendingReceipt.Consumed,"failure");
         Expect(Busy,0,"failure");Expect(Latch,0,"failure");Expect(StateAddress+8,0,"failure");
         Read(t0,StateAddress);e.C(t1,2);e.B(4,t0,t1,"write-complete");e.C(t1,4);e.B(4,t0,t1,"write-complete");
         Expect(StateAddress+4,3,"failure");e.B(4,0,0,"completed-operation");
-        e.Label("write-complete");Expect(StateAddress+4,4,"failure");e.Label("completed-operation");Validate(true);
+        e.Label("write-complete");Expect(StateAddress+4,4,"failure");e.Label("completed-operation");Leave();Validate(true);
         for(uint stage=1;stage<=5;stage++){Read(t0,StateAddress);e.C(t1,stage);e.B(4,t0,t1,"complete-"+stage);}
         e.B(4,0,0,"failure");
 
@@ -262,15 +288,16 @@ internal sealed class NativeCollectibleSaveControllerKernel
         e.Label("pending");Expect(StateAddress+0x20,(uint)NativeCollectibleSavePendingReceipt.Accepted,"failure");
         Expect(Latch,0,"failure");Read(t0,StateAddress);e.C(t1,2);e.B(4,t0,t1,"pending-write");
         e.C(t1,4);e.B(4,t0,t1,"pending-write");Expect(Busy,3,"failure");e.B(4,0,0,"pending-valid");
-        e.Label("pending-write");Expect(Busy,4,"failure");e.Label("pending-valid");Validate(true);e.B(4,0,0,"finish");
+        e.Label("pending-write");Expect(Busy,4,"failure");e.Label("pending-valid");Leave();Validate(true);e.B(4,0,0,"finish");
         e.Label("failure");Read(t0,StateAddress+0x14);e.B(5,t0,0,"revoked");Set(StateAddress+0x18,1);Set(StateAddress+0x1C,0);
         Set(StateAddress,(uint)NativeCollectibleSaveControllerStage.Failed);e.B(4,0,0,"finish");
         e.Label("revoked");Set(StateAddress+0x1C,0);Set(StateAddress,(uint)NativeCollectibleSaveControllerStage.Revoked);
         e.Label("finish");Read(v0,StateAddress);
         e.Label("restore");
+        Leave();
         e.L(0x23,t0,sp,0x34);e.R(17,t0,0,0);e.L(0x23,t0,sp,0x38);e.R(19,t0,0,0);
         for(int i=0;i<saved.Length;i++)e.L(0x23,saved[i],sp,0x20+i*4);
-        e.I(9,sp,sp,FrameBytes);e.B(4,0,0,"return");
+        e.I(9,sp,sp,FrameByteLength);e.B(4,0,0,"return");
 
         RevokePc=e.Pc;Equal(a0,StateAddress,"preflight");Equal(a1,0,"preflight");Equal(a2,0,"preflight");Equal(a3,0,"preflight");
         Set(StateAddress+0x14,1);Set(StateAddress+0x1C,0);Set(StateAddress,(uint)NativeCollectibleSaveControllerStage.Revoked);
@@ -280,7 +307,7 @@ internal sealed class NativeCollectibleSaveControllerKernel
 
         DrainPc=e.Pc;Equal(a0,StateAddress,"preflight");Equal(a1,0,"preflight");Equal(a2,0,"preflight");Equal(a3,0,"preflight");Stack();
         Read(t0,StateAddress);e.B(4,t0,0,"drain-entry");e.I(9,t0,t1,-6);e.I(11,t1,t2,3);e.B(4,t2,0,"preflight");
-        e.Label("drain-entry");Save();Read(t0,StateAddress+0x20);e.B(4,t0,0,"drain-none");
+        e.Label("drain-entry");Save();Enter();Read(t0,StateAddress+0x20);e.B(4,t0,0,"drain-none");
         ExpectedOperation("drain-uncertain");Read(t0,StateAddress+0x20);
         e.C(t1,(uint)NativeCollectibleSavePendingReceipt.Rejected);e.B(4,t0,t1,"drain-rejected");
         e.C(t1,(uint)NativeCollectibleSavePendingReceipt.Consumed);e.B(4,t0,t1,"drain-consumed");
@@ -331,9 +358,26 @@ internal sealed class NativeCollectibleSaveControllerKernel
         for(int at=0;at<16;at+=4)Expect(FilenameAddress+(uint)at,BinaryPrimitives.ReadUInt32LittleEndian(filename.AsSpan(at)),"failure");
         Read(t0,FilenameAddress+16,0x25);Equal(t0,BinaryPrimitives.ReadUInt16LittleEndian(filename.AsSpan(16)),"failure");
         e.R(8,ra,0,0);e.W(0);
+        if(IrqWindowsEmitted)
+        {
+            // Private successor frame words: token40, held44, helperRA48,
+            // v0save4C. No native argument home/fifth-argument word is borrowed.
+            // The source protocol exits only for Enter's exact token1; an
+            // already-disabled caller stays disabled. No BIOS model is claimed.
+            e.Label("irq-enter");IrqEnterHelperPc=e.Pc;
+            e.I(0x2B,sp,ra,0x48);e.I(0x2B,sp,v0,0x4C);e.Call(EnterCriticalPc);
+            e.I(0x2B,sp,v0,0x40);e.C(t0,1);e.I(0x2B,sp,t0,0x44);
+            e.I(0x23,sp,v0,0x4C);e.I(0x23,sp,ra,0x48);e.W(0);e.R(8,ra,0,0);e.W(0);
+            e.Label("irq-leave");IrqLeaveHelperPc=e.Pc;
+            e.L(0x23,t0,sp,0x44);e.B(4,t0,0,"irq-return");
+            e.I(0x2B,sp,ra,0x48);e.I(0x2B,sp,v0,0x4C);e.I(0x2B,sp,0,0x44);
+            e.L(0x23,t0,sp,0x40);e.C(t1,1);e.B(5,t0,t1,"irq-restored");e.Call(ExitCriticalPc);
+            e.Label("irq-restored");e.I(0x23,sp,v0,0x4C);e.I(0x23,sp,ra,0x48);e.W(0);
+            e.Label("irq-return");IrqLeaveReturnPc=e.Pc;e.R(8,ra,0,0);e.W(0);
+        }
         return e.Finish();
     }
-    private sealed class Emitter(uint start)
+    private sealed class Emitter(uint start,bool compact)
     {
         private readonly List<uint> words=[];private readonly Dictionary<string,int> labels=[];private readonly List<(int,string)> branches=[],calls=[];
         internal uint Pc=>checked(start+(uint)words.Count*4);
@@ -341,7 +385,7 @@ internal sealed class NativeCollectibleSaveControllerKernel
         internal void W(uint v)=>words.Add(v);
         internal void I(int op,int rs,int rt,int value)=>W((uint)(op<<26|rs<<21|rt<<16)|(ushort)value);
         internal void R(int fn,int rs,int rt,int rd,int shift=0)=>W((uint)(rs<<21|rt<<16|rd<<11|shift<<6|fn));
-        internal void C(int r,uint v){I(15,0,r,(int)(v>>16));I(13,r,r,(int)v);}
+        internal void C(int r,uint v){if(compact&&(v<=0x7FFF||v>=0xFFFF8000))I(9,0,r,unchecked((int)v));else{I(15,0,r,(int)(v>>16));I(13,r,r,(int)v);}}
         internal void L(int op,int r,int p,int at){I(op,p,r,at);W(0);}
         internal void B(int op,int rs,int rt,string target){branches.Add((words.Count,target));I(op,rs,rt,0);W(0);}
         internal void Call(uint pc){W(0x0C000000|((pc>>2)&0x3FFFFFF));W(0);}

@@ -33,6 +33,15 @@ internal sealed class ControllerFixture
         Cpu.Copy(NativeCollectibleSaveControllerKernel.ReadPc,RequestStub(3));
         Cpu.Copy(NativeCollectibleSaveControllerKernel.WritePc,RequestStub(4));
         Cpu.Copy(NativeCollectibleSaveControllerKernel.PollPc,PollStub());
+        if(Kernel.IrqWindowsEmitted)
+        {
+            // Explicit IRQ-state simulation, not the native syscall handler.
+            Cpu.Put(Mock+0x80,1);
+            Cpu.Copy(NativeCollectibleSaveControllerKernel.EnterCriticalPc,Words(new uint[]{0x08000000|(((Mock+0x100)>>2)&0x3FFFFFF),0}));
+            Cpu.Copy(NativeCollectibleSaveControllerKernel.ExitCriticalPc,Words(new uint[]{0x08000000|(((Mock+0x140)>>2)&0x3FFFFFF),0}));
+            Cpu.Copy(Mock+0x100,Words(new uint[]{0x3C08801E,0x8D020080,0,0xAD000080,0x24040001,0x03E00008,0}));
+            Cpu.Copy(Mock+0x140,Words(new uint[]{0x3C08801E,0x24090001,0xAD090080,0x24020BAD,0x24040002,0x03E00008,0}));
+        }
         Cpu.Put(0x800751B0,uint.MaxValue); // Exact source initializer: empty index.
     }
     internal byte[] Bytes(uint at,int count)=>SaveCpuFixture.Bytes(Cpu,at,count);
@@ -55,12 +64,13 @@ internal sealed class ControllerFixture
         bool In(uint at,uint first,int length)=>(ulong)at>=first&&(ulong)at<(ulong)first+(uint)length;
         bool Owned(uint at)=>In(at,Kernel.Preparation.OldTailAddress,0xB90)||
             In(at,Kernel.ExpectedOrdinaryAddress,0x1100)||In(at,Kernel.StateAddress,NativeCollectibleSaveControllerKernel.StateBytes)||
-            In(at,unchecked(regs[29]-NativeCollectibleSaveControllerKernel.MaximumStackBytes),NativeCollectibleSaveControllerKernel.MaximumStackBytes)||
-            In(at,Mock+4,0x1C)||In(at,0x80075B50,4)||In(at,0x80075B58,4);
+            In(at,unchecked(regs[29]-(uint)Kernel.MaximumStackByteLength),Kernel.MaximumStackByteLength)||
+            In(at,Mock+4,0x1C)||Kernel.IrqWindowsEmitted&&In(at,Mock+0x80,4)||In(at,0x80075B50,4)||In(at,0x80075B58,4);
         if(Cpu.Writes.Any(a=>!Owned(a)))throw new Exception("Controller/mock store escaped the full declared write complement: "+Cpu.Writes.First(a=>!Owned(a)).ToString("X8"));
         if(Cpu.Calls.Any(a=>!In(a,Kernel.BeginPc,Kernel.CodeByteLength)&&a!=Kernel.Preparation.EntryPc&&a!=Kernel.Preparation.Query.EntryPc&&
             a!=Kernel.Preparation.Loader.EntryPc&&a!=Kernel.Preparation.Sha256.EntryPc&&a!=NativeCollectibleSaveControllerKernel.ReadPc&&
-            a!=NativeCollectibleSaveControllerKernel.WritePc&&a!=NativeCollectibleSaveControllerKernel.PollPc))throw new Exception("Undeclared emitted call.");
+            a!=NativeCollectibleSaveControllerKernel.WritePc&&a!=NativeCollectibleSaveControllerKernel.PollPc&&
+            !(Kernel.IrqWindowsEmitted&&a is NativeCollectibleSaveControllerKernel.EnterCriticalPc or NativeCollectibleSaveControllerKernel.ExitCriticalPc)))throw new Exception("Undeclared emitted call.");
         if(new[]{4,5,6,7,16,17,18,19,20,21,22,23,26,27,28,29,30,31}.Any(r=>Cpu.Regs[r]!=regs[r])||
             Cpu.Hi!=0x12345678||Cpu.Lo!=0x87654321)throw new Exception("Controller ABI was not preserved.");
         if(Cpu.Get(Mock+4)!=0)

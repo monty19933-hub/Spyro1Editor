@@ -621,3 +621,40 @@ bits. Use the exact verified CUE and full firmware, Interpreter from cold boot,
 no card swaps or savestates, and protect/restore ordinary settings/cards. This
 experiment would not certify general card identity, crash atomicity, repeat
 saving or normal-editor export; those remain separate release gates.
+
+### Opt-in short IRQ windows, September28
+
+The closed IRQ-windowed controller successor now emits source-pinned native
+Enter/Exit veneers around finite Begin snapshots, native request/receipt/stage
+publication, mode1 poll/postchecks and terminal Drain. The original profile
+remains byte-exact. Small-immediate emission is compact only in the successor:
+code1DE8 within the same2000 owner; arena7300, state30 and every buffer address
+are unchanged. The private frame is50/max nestedF0 (legacy40/E0); this is not a
+claim about the complete firmware stack. Exact token1 enables matching Exit;
+token0 preserves the caller-disabled state. Refusal/revocation cleanup retains
+the return value and RA and closes any owned window.
+
+Validation, SHA and bulk copies are outside owned windows. The unchanged
+preparer's two Busy/Latch read sites remain unmasked only after consumed op3
+result0, zero Busy/Latch and no outstanding request. This explicitly depends
+on exclusive native service ownership; it is not an atomic/session claim.
+Every next request independently rechecks native state and revocation.
+
+Instruction-level modeled IRQ tests reproduce the legacy Busy/Latch race and
+defer completion correctly in the successor.450 measured windows have a
+maximum269 dispatched instructions with mocked native services, not a timing,
+cycle or actual BIOS bound. Default-null CPU observation leaves previous
+instruction semantics unchanged. Release and Debug each pass1152 fixture and
+1152 USA-source checks; reused actual synchronous native request/poll closures
+pass a separately labeled308 checks with modeled Enter/Exit. Legacy4636/4845,
+217 measurements and308 native-wrapper checks remain. Scheduler723 source
+compatibility checks retain all old hashes. Independent review found no scoped
+blocker. Successor code SHA256:
+`2c3c9e158efd6f0ecb03041eba32bafd4c7266ef7b4fee8ea20385c5dc367046`.
+
+No scheduler uses this successor yet. Next compose it through a closed
+workspace/scheduler profile with the correct F0 stack contract, protect the
+scheduler's own precheck/header receipt sections, and prove exact geometry and
+native call arguments. Foreground/session serialization, native service/DMA
+ownership, cache/lifetime, actual firmware stack and installation remain
+separate gates before the disposable one-shot experiment described above.
