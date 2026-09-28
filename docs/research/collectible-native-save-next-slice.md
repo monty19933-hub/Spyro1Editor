@@ -1,7 +1,8 @@
 # Native collectible saving: next bounded slice
 
-September 27 source evidence only. No native writer is implemented or enabled. Complete
-admitted Artisans pickup runtime testing before promoting a save candidate.
+September 27. No native custom writer is installed or enabled. Admitted Artisans
+pickup and native Quit Game have passed the narrow exact-disc R02 check; the
+disposable card retained its seed, so that run does not prove saving the pickup.
 Keep `DetachedCollectibleSaveCodec` as the format oracle and reuse native SHA
 and envelope validation; do not add a streaming SHA abstraction for this tail.
 
@@ -10,8 +11,9 @@ and envelope validation; do not add a streaming SHA abstraction for this tail.
 Capture the exact ordinary slot0 bytes after serializer return800321FC, along
 with the live bitmap, native tuple, epoch and mutation generation. Native
 success7 at8003231C/32324 must wait for the complete custom transaction. The
-shared80032320 instruction is also an error-path target;8003232C clears native
-completion state. Replacing only the success pair is insufficient. The shared
+shared80032320 instruction is also an error-path target;8003232C clears the
+native UI timer g78D04, not the card completion latch g75B58. Replacing only
+the success pair is insufficient. The shared
 epilogue800324B8 restores registers and SP+48.800320C0 is an internal driver
 body, not a proven standalone callable entry.
 
@@ -48,7 +50,8 @@ an equally strict alias schedule: current SHA accepts at most400 input bytes,
 so it cannot silently substitute a hash of the600-byte ordinary slot.
 
 The detached preparation and non-I/O reference transaction slice below now
-exists; native controller, lifetime ownership and hook integration do not.
+exists. A successor emitted controller is under detached CPU regression;
+lifetime ownership, native hook integration and real card execution do not exist.
 Tests execute admission→pickup→snapshot, equal-checksum but
 different ordinary bytes, every padding byte, other-slot preservation, rejected
 and stale completions, wrong operations, partial writes/readbacks, selection/
@@ -188,3 +191,70 @@ prevent invalidation until completion. A later guard cannot repair DMA into
 reused memory. Native callback/IRQ stack, complete caller48 frame, cache
 visibility and transfer peaks remain separate blockers. A source-only
 preparer or a reference transaction model cannot issue those guarantees.
+
+## Detached controller and integration boundary
+
+`NativeCollectibleSaveControllerKernel` emits Begin, Pump and Revoke entries.
+It calls the source-pinned read/write/poll ABI; current tests substitute emitted
+service stubs and a host byte-array card. Begin snapshots the exact supplied
+0x600 ordinary image and live ledger. One Pump performs at most one nonblocking
+poll and one subsequent request. The sequence is old-tail read, ordinary write,
+ordinary readback, tail write and tail readback. Both readbacks are full byte
+comparisons; known readback buffers are complement-prefilled. Old-tail receipt
+semantics still must guarantee the complete transfer because unknown padding
+cannot independently detect a lying partial-success receipt.
+
+Success produces a detached ledger proposal only. It does not update live RAM,
+publish native UI success7, install a hook or grant a lease. An actual ordinary
+serializer-produced snapshot remains an integration requirement. Early pickup
+before preparation conservatively refuses before writing; later pickup remains
+dirty. Per-observation generation/bitmap high-water and external terminal Revoke
+prevent replay of previously observed state, but native hooks must actually
+signal revocation before reset/reselection/unload. Revoke does not cancel or
+drain an accepted request; all pending buffers must remain owned.
+
+Final focused controller results: Release and Debug each pass3,881 source-free
+checks with zero build warnings/errors; explicit USA source mode passes3,890
+checks and unchanged-source verification. Existing preparation smoke still
+passes4,494. Independent source/ABI review found and fixed an unchecked filename:
+all18 bytes, including the terminator, are now checked before every request,
+with90 byte/stage corruption cases. These counts include queue refusal,
+high-water/revocation, register/stack and complete write-complement checks.
+Runner contracts pass111 tests after mandatory source-free and opt-in USA-only
+registration. Actual controller code is0x166C (5,740 bytes), below its0x2000 cap.
+No native I/O or emulator save is implied by these CPU-service simulations.
+
+The source queue index at g800751B0 is a signed last-enqueued index, initialized
+to -1 at80068F30. Helper80068F44 fails to enqueue when the next index reaches4,
+but read/write wrappers can still return accepted1. The controller guards every
+new request with unsigned `(index+1)<4`, admitting only -1/0/1/2. This avoids the
+known false-accepted full-queue path under exclusive ownership; it is not atomic
+queue admission or proof against IRQ mutation. Source pins cover the initializer
+and complete helper. Existing pending requests are not released merely because
+the queue subsequently becomes full.
+
+The complete controller arena is0x7300, including its own0x2000 code capacity,
+the complete0x3BA0 preparation arena, three separate0x600 ordinary buffers,
+0x100 tail readback, two0x200 ledger images,0x30 state and fixed filename owner.
+Its0x40 frame plus preparer's0xA0 nested stack totals0xE0, excluding the native
+caller's0x48 frame. Accepted native request paths add at most0x50 below the
+controller frame; diagnostic/BIOS/IRQ/asynchronous stack paths remain unproved.
+The prior0x5000 workspace projection cannot contain this arena. No existing
+published candidate is silently expanded or rebound.
+
+The next source scheduling candidate is an Artisans-owned overlay gate reached
+from callback80086134's restored epilogue800873D8/873DC. It must check the exact
+mode11 caller return31E08 and final loaded geometry before touching model-tail
+code or state. Level setter5A718 installs the callback before overlay/model
+loads; callback presence alone does not authenticate loaded geometry. A typed
+successor must explicitly reassign an existing alignment owner, not treat zero
+bytes as free memory. Native state2 takeover must precede the header completion
+poll and original serializer59864; state3 is too late because ordinary writing
+has already started. Once owned, no path may fall back into the retail writer.
+
+Before publishing any save disc, execute the actual callback/enclosing0x48-frame
+path and prove before-unload/reset/reselection barriers retain all I/O buffers
+until drained. Native shutdown6631C spins on busy and is not bounded cancellation.
+Real completion/commit, cache visibility, card replacement and full stack safety
+remain separate gates. In-place ordinary and custom-tail writes are still not
+crash-atomic.

@@ -12,9 +12,14 @@ joins actual native admission to Artisans suppression/pickup with final owner
 projection and full original inverses.342 cumulative source/CPU checks and
 571/677 predecessor compatibility checks pass; independent source review found
 no blocker. The combined research disc is now published and independently
-verified against original-only prediction; full Release278/0 and publisher
-source577/fault25 pass. DuckStation testing, custom native save, inventory and
-required-for100% remain pending; R08 remains preserved.
+verified against original-only prediction; full Release282/0 and publisher
+source577/fault25 pass. Checkpoint01699f7 records exact-disc DuckStation seed
+admission, normal-speed second-egg pickup (1/2→2/2, dirty1, both rows retired),
+and native Quit Game revocation. R02 used25% for initial navigation before
+returning to100%; its temporary card remains at the original seeded1/2 state.
+Detached emitted save preparation, a reviewed non-I/O transaction model and
+workspace projection now pass focused regression; no native writer is installed.
+Custom native save, inventory and required-for100% remain pending; R08 is preserved.
 
 Latest source/publication checkpoint: [guarded admission R01](collectible-card-admission-research-r01.md)
 adds source-tested phase-last admission and resident warm-reset invalidation.

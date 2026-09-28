@@ -1,0 +1,280 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+using Spyro.Editor.Core.Exporting;
+
+namespace Spyro.Editor.Core.Analysis;
+
+internal enum NativeCollectibleSaveControllerStage : uint
+{ Idle,ReadingOldTail,WritingOrdinary,ReadingOrdinary,WritingTail,ReadingTail,Committed,Failed,Revoked,PreflightRefused }
+
+/// <summary>
+/// DETACHED fixed-two-ID/slot0 MIPS transaction experiment. Begin takes
+/// a0=OrdinaryInputAddress,a1=600(hex),a2=801FF600,a3=0. Pump/Revoke take
+/// a0=StateAddress,a1=a2=a3=0. v0 is a stage; PreflightRefused changes nothing.
+/// One zero-initialized state has ONE lifetime; no reset/reuse entry exists.
+/// Pump makes at most one nonblocking poll and one subsequent native request.
+/// Success publishes only a detached proposal, never live RAM/native success7.
+/// Revoke is an unframed, fixed three-word state write, even if SP aliases state.
+/// It neither cancels/drains I/O nor permits buffers/code to be reclaimed.
+///
+/// Code, state, input/expected buffers and filename require external exclusive
+/// owners. Mutations/IRQ/DMA during an entry must be excluded except a completed
+/// service's declared writes. Caller MUST signal Revoke before session changes,
+/// even when opaque epoch/tuple/ledger bytes repeat. No native hook authenticates
+/// that lifetime. Retain every pending I/O buffer after failure/revocation.
+/// Successful service semantics must supply the full old100 transfer: native
+/// poll exposes no byte count; unknown suffix bytes cannot detect lying short
+/// success. Known readbacks are complement-prefilled and compared byte-for-byte.
+/// The native request50 stack bound covers accepted non-diagnostic paths only;
+/// error diagnostics, BIOS, IRQ and asynchronous callbacks remain unproved.
+/// Source queue index -1 is empty. The pre-request unsigned(index+1)&lt;4 guard
+/// admits only -1/0/1/2, preventing the known full-queue false-accepted route.
+/// This non-atomic check still needs external exclusive/IRQ ownership; it does
+/// not prove enqueue/completion, cancellation or release of an outstanding owner.
+/// Every request also rechecks all18 source-fixed filename bytes including NUL;
+/// the separate filename owner does not grant caller-selected file authority.
+/// </summary>
+internal sealed class NativeCollectibleSaveControllerKernel
+{
+    internal const uint ReadPc=0x80066E28,WritePc=0x800670E4,PollPc=0x80067628,ProposalMagic=0x53564331;
+    internal const int CodeCapacityBytes=0x2000,ArenaBytes=0x7300,StateBytes=0x30,
+        FrameBytes=0x40,MaximumStackBytes=0xE0,NativeCallerBytes=0x48;
+    private const uint Live=0x801FF600,Busy=0x80075B50,Latch=0x80075B58;
+    internal static IReadOnlyList<NativeCollectibleSaveTailKernel.SourceSpan> QueueSourceSpans { get; }=Array.AsReadOnly(new[]{
+        new NativeCollectibleSaveTailKernel.SourceSpan(0x80068F30,0x14,"b81ac71035cb2a71c2c7a316c0c11bc2c00233f882df5e6301aa4e315ffdd1e0"),
+        new NativeCollectibleSaveTailKernel.SourceSpan(0x80068F44,0x80,"7b25bd5394d6eb44fbe836882eb7bb866ec7c917813ebdd6e17b7037cc9e06ce")});
+    // State: stage0, poll operation4/result8, observed generationC/bitmap10,
+    // external revocation14, failure18, proposal marker1C;20..30 reserved zero.
+    private readonly byte[] bytes;
+    internal sealed record Region(string Role,uint Address,uint ByteLength);
+    private NativeCollectibleSaveControllerKernel(uint arena,NativeRegionalSourceSession? source)
+    {
+        if(arena%16!=0||arena<0x80090000||(ulong)arena+ArenaBytes>0x801F0000)
+            throw new InvalidDataException("Complete detached controller owners require aligned bounded cached RAM.");
+        ArenaAddress=arena;
+        Preparation=source is null?NativeCollectibleSaveTailKernel.CreateFixture(checked(arena+CodeCapacityBytes)):
+            NativeCollectibleSaveTailKernel.Capture(source,checked(arena+CodeCapacityBytes));
+        if(FrameBytes+NativeCollectibleSaveTailKernel.MaximumStackBytes!=MaximumStackBytes)
+            throw new InvalidDataException("Generated nested stack contract changed.");
+        uint cursor=arena;List<Region> regions=[];
+        void Own(string role,int n){regions.Add(new(role,cursor,(uint)n));cursor=checked(cursor+(uint)n);}
+        Own("controller-code",CodeCapacityBytes);Own("preparation-arena",NativeCollectibleSaveTailKernel.ArenaBytes);
+        Own("ordinary-input",0x600);Own("expected-ordinary",0x600);Own("ordinary-readback",0x600);Own("tail-readback",0x100);
+        Own("begin-ledger",0x200);Own("commit-proposal",0x200);Own("controller-state",StateBytes);Own("fixed-filename",0x20);Own("alignment",0x10);
+        if(cursor!=arena+ArenaBytes)throw new InvalidDataException("Complete measured controller partition changed.");
+        Regions=regions.AsReadOnly();bytes=Emit();
+        if(bytes.Length>CodeCapacityBytes)throw new InvalidDataException("Measured controller exceeds its explicit new code capacity.");
+    }
+    internal uint ArenaAddress { get; }
+    internal uint BeginPc { get; private set; }
+    internal uint PumpPc { get; private set; }
+    internal uint RevokePc { get; private set; }
+    internal uint OrdinaryInputAddress=>ArenaAddress+0x5BA0;
+    internal uint ExpectedOrdinaryAddress=>ArenaAddress+0x61A0;
+    internal uint OrdinaryReadbackAddress=>ArenaAddress+0x67A0;
+    internal uint TailReadbackAddress=>ArenaAddress+0x6DA0;
+    internal uint BeginLedgerAddress=>ArenaAddress+0x6EA0;
+    internal uint ProposalAddress=>ArenaAddress+0x70A0;
+    internal uint StateAddress=>ArenaAddress+0x72A0;
+    internal uint FilenameAddress=>ArenaAddress+0x72D0;
+    internal NativeCollectibleSaveTailKernel Preparation { get; }
+    internal IReadOnlyList<Region> Regions { get; }
+    internal int CodeByteLength=>bytes.Length;
+    internal bool SourceCertified=>Preparation.SourceCertified;
+    internal bool NativeIoCallsEmitted=>true;
+    internal bool NativeIoExecuted=>false;
+    internal bool RuntimeVerified=>false;
+    internal bool HooksInstalled=>false;
+    internal bool NativeResidenceIssued=>false;
+    internal bool NativeSessionIdentityAuthenticated=>false;
+    internal bool CancellationApproved=>false;
+    internal bool NativeFullStackProven=>false;
+    internal bool PublicationApproved=>false;
+    internal bool CardWrites=>false;
+    internal bool NormalCreateBinApproved=>false;
+    internal byte[] CopyBytes()=>bytes.ToArray();
+    internal byte[] CopyFilename()=>"BASCUS-94228SPYRO\0"u8.ToArray();
+    internal void RequireSourceEvidence()=>Preparation.RequireSourceEvidence();
+    internal void RequireNativeInstallation()=>throw new InvalidDataException(
+        "Detached controller: native hooks, session revocation, lease/drain, IRQ/cache/full-stack safety and real I/O remain unproved.");
+    internal static NativeCollectibleSaveControllerKernel CreateFixture(uint arena)=>new(arena,null);
+    internal static NativeCollectibleSaveControllerKernel Capture(NativeRegionalSourceSession source,uint arena)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        try
+        {
+            if(source.Revision!=NativeDiscRevision.UsaScus94228||
+                !source.ReadExecutableRange(0x15B8,18).AsSpan().SequenceEqual("BASCUS-94228SPYRO\0"u8))
+                throw new InvalidDataException("Exact source native filename at80010DB8 required.");
+            foreach(var span in QueueSourceSpans)
+                if(Convert.ToHexStringLower(SHA256.HashData(source.ReadExecutableRange((int)(span.Pc-0x8000F800),span.ByteLength)))!=span.Sha256)
+                    throw new InvalidDataException("Source queue initializer/enqueue body changed.");
+            return new(arena,source);
+        }
+        finally{source.VerifyUnchanged();}
+    }
+    private byte[] Emit()
+    {
+        var e=new Emitter(ArenaAddress);const int v0=2,a0=4,a1=5,a2=6,a3=7,t0=8,t1=9,t2=10,t3=11,t4=12,sp=29,ra=31;
+        void Read(int r,uint at,int op=0x23){e.C(t4,at);e.L(op,r,t4,0);}
+        void Write(int r,uint at,int op=0x2B){e.C(t4,at);e.I(op,t4,r,0);}
+        void Set(uint at,uint value){e.C(t0,value);Write(t0,at);}
+        void Equal(int r,uint value,string fail){e.C(t1,value);e.B(5,r,t1,fail);}
+        void Expect(uint at,uint value,string fail){Read(t0,at);Equal(t0,value,fail);}
+        void Unrevoked(){Expect(StateAddress+0x14,0,"revoked");}
+        void Stack()
+        {
+            e.I(12,sp,t0,7);e.B(5,t0,0,"preflight");
+            e.C(t0,0x801FF800+MaximumStackBytes);e.R(0x2B,sp,t0,t1);e.B(5,t1,0,"preflight");
+            e.C(t0,0x80200000-NativeCallerBytes);e.R(0x2B,t0,sp,t1);e.B(5,t1,0,"preflight");
+        }
+        int[] saved=[a0,a1,a2,a3,ra];
+        void Save()
+        {
+            e.I(9,sp,sp,-FrameBytes);for(int i=0;i<saved.Length;i++)e.I(0x2B,sp,saved[i],0x20+i*4);
+            e.R(16,0,0,t0);e.I(0x2B,sp,t0,0x34);e.R(18,0,0,t0);e.I(0x2B,sp,t0,0x38);
+        }
+        void Copy(uint from,uint to,int length,bool complement=false)
+        {
+            string loop=e.Unique();e.C(t0,from);e.C(t1,to);e.C(t2,from+(uint)length);e.Label(loop);
+            e.L(0x24,t3,t0,0);if(complement){e.C(t4,0xFF);e.R(0x26,t3,t4,t3);}
+            e.I(0x28,t1,t3,0);e.I(9,t0,t0,1);e.I(9,t1,t1,1);e.B(5,t0,t2,loop);
+        }
+        void Compare(uint from,uint to,int length)
+        {
+            string loop=e.Unique();e.C(t0,from);e.C(t1,to);e.C(t2,from+(uint)length);e.Label(loop);
+            e.L(0x24,t3,t0,0);e.L(0x24,t4,t1,0);e.B(5,t3,t4,"failure");
+            e.I(9,t0,t0,1);e.I(9,t1,t1,1);e.B(5,t0,t2,loop);
+        }
+        void Zero(uint from,int length)
+        {string loop=e.Unique();e.C(t0,from);e.C(t1,from+(uint)length);e.Label(loop);e.I(0x2B,t0,0,0);e.I(9,t0,t0,4);e.B(5,t0,t1,loop);}
+        void AllZero(uint from,int length)
+        {string loop=e.Unique();e.C(t0,from);e.C(t1,from+(uint)length);e.Label(loop);e.L(0x23,t2,t0,0);e.B(5,t2,0,"failure");e.I(9,t0,t0,4);e.B(5,t0,t1,loop);}
+        void Validate(bool captured)=>e.CallLabel(captured?"validate-current":"validate-initial");
+        void ValidateBody(bool captured)
+        {
+            Unrevoked();Expect(0x800755A4,0xA00,"failure");Expect(0x80078D14,1,"failure");Expect(0x80078D1C,0,"failure");
+            Read(t0,Live+0x18,0x24);e.I(11,t0,t1,2);e.B(4,t1,0,"failure");e.R(0,0,t0,t0,4);
+            Read(t1,0x80078D18);e.B(5,t0,t1,"failure");
+            Read(t0,Live+0x1A,0x25);Read(t1,0x80078D20);e.B(5,t0,t1,"failure");
+            Read(t0,Live+0x19,0x24);Equal(t0,1,"failure");Read(t0,Live+0x8C);e.B(4,t0,0,"failure");
+            Read(t0,Live+0x7C);e.B(4,t0,0,"failure");Read(t1,Live+0x80);e.R(0x2B,t0,t1,t2);e.B(5,t2,0,"failure");
+            AllZero(Live+0xB0,0x150);
+            e.C(a0,Live);e.C(a1,0);e.Call(Preparation.Query.EntryPc);e.I(11,v0,t0,2);e.B(4,t0,0,"failure");
+            if(captured)
+            {
+                Compare(Live+0x18,BeginLedgerAddress+0x18,4);Compare(Live+0x50,BeginLedgerAddress+0x50,32);
+                Compare(Live+0x80,BeginLedgerAddress+0x80,4);Compare(Live+0x8C,BeginLedgerAddress+0x8C,4);
+                Read(t0,Live+0x7C);Read(t1,StateAddress+0xC);e.R(0x2B,t0,t1,t2);e.B(5,t2,0,"failure");
+                Read(t2,Live+0x90,0x24);Read(t3,StateAddress+0x10);e.R(0x24,t2,t3,t4);e.B(5,t4,t3,"failure");
+                string newer=e.Unique();e.B(5,t0,t1,newer);e.B(5,t2,t3,"failure");e.Label(newer);
+                Write(t0,StateAddress+0xC);Write(t2,StateAddress+0x10);
+            }
+        }
+        void Request(uint op,uint buffer,int offset,int length,NativeCollectibleSaveControllerStage next)
+        {
+            Unrevoked();Expect(Busy,0,"failure");Expect(Latch,0,"failure");
+            // Source signed last-enqueued index has the explicit empty value -1.
+            // Normalize with nontrapping ADDIU and compare unsigned: exactly
+            // FFFFFFFF/0/1/2 pass; all underflow/overflow/full values refuse.
+            Read(t0,0x800751B0);e.I(9,t0,t0,1);e.I(11,t0,t1,4);e.B(4,t1,0,"failure");
+            e.CallLabel("validate-filename");
+            Read(a0,0x80078D18);e.C(a1,FilenameAddress);e.C(a2,buffer);e.C(a3,(uint)offset);
+            e.C(t0,(uint)length);e.I(0x2B,sp,t0,0x10);e.Call(op==3?ReadPc:WritePc);
+            // A synchronous external revocation cannot be overwritten on return.
+            Unrevoked();Equal(v0,1,"failure");Expect(Busy,op,"failure");Expect(Latch,0,"failure");Validate(true);
+            Set(StateAddress,(uint)next);e.B(4,0,0,"finish");
+        }
+
+        BeginPc=e.Pc;Equal(a0,OrdinaryInputAddress,"preflight");Equal(a1,0x600,"preflight");Equal(a2,Live,"preflight");Equal(a3,0,"preflight");Stack();
+        Read(t0,StateAddress+0x14);e.B(5,t0,0,"unframed-revoked");Read(v0,StateAddress);e.B(5,v0,0,"return");
+        Save();AllZero(StateAddress,StateBytes);Expect(Busy,0,"failure");Expect(Latch,0,"failure");Validate(false);
+        Copy(Live,BeginLedgerAddress,512);Copy(OrdinaryInputAddress,ExpectedOrdinaryAddress,0x600);
+        Read(t0,Live+0x7C);Write(t0,StateAddress+0xC);Read(t0,Live+0x90,0x24);Write(t0,StateAddress+0x10);
+        Zero(Preparation.OldTailAddress,0x100);Request(3,Preparation.OldTailAddress,0x1400,0x100,NativeCollectibleSaveControllerStage.ReadingOldTail);
+
+        PumpPc=e.Pc;Equal(a0,StateAddress,"preflight");Equal(a1,0,"preflight");Equal(a2,0,"preflight");Equal(a3,0,"preflight");Stack();
+        Read(t0,StateAddress+0x14);e.B(5,t0,0,"unframed-revoked");Read(v0,StateAddress);e.B(4,v0,0,"return");
+        e.I(11,v0,t0,6);e.B(4,t0,0,"return");Save();Validate(true);
+        Set(StateAddress+4,uint.MaxValue);Set(StateAddress+8,uint.MaxValue);
+        e.C(a0,1);e.C(a1,StateAddress+4);e.C(a2,StateAddress+8);e.Call(PollPc);Unrevoked();
+        e.B(4,v0,0,"pending");Equal(v0,1,"failure");Expect(Busy,0,"failure");Expect(Latch,0,"failure");Expect(StateAddress+8,0,"failure");
+        Read(t0,StateAddress);e.C(t1,2);e.B(4,t0,t1,"write-complete");e.C(t1,4);e.B(4,t0,t1,"write-complete");
+        Expect(StateAddress+4,3,"failure");e.B(4,0,0,"completed-operation");
+        e.Label("write-complete");Expect(StateAddress+4,4,"failure");e.Label("completed-operation");Validate(true);
+        for(uint stage=1;stage<=5;stage++){Read(t0,StateAddress);e.C(t1,stage);e.B(4,t0,t1,"complete-"+stage);}
+        e.B(4,0,0,"failure");
+
+        e.Label("complete-1");
+        // This unchanged preparer reads actual live, not the earlier Begin copy.
+        // Refuse early mutations before any write rather than transiently replacing live.
+        Compare(Live+0x10,BeginLedgerAddress+0x10,0x1F0);
+        e.C(a0,Preparation.OldTailAddress);e.C(a1,0x100);e.C(a2,Live);e.C(a3,0);e.Call(Preparation.EntryPc);
+        Unrevoked();e.B(5,v0,0,"failure");Validate(true);
+        Expect(Preparation.OutputAddress+0x320,NativeCollectibleSaveTailKernel.PreparedMagic,"failure");
+        Compare(Preparation.OutputAddress+0x10,BeginLedgerAddress+0x10,0x1F0);
+        Request(4,ExpectedOrdinaryAddress,0x200,0x600,NativeCollectibleSaveControllerStage.WritingOrdinary);
+        e.Label("complete-2");Copy(ExpectedOrdinaryAddress,OrdinaryReadbackAddress,0x600,true);
+        Request(3,OrdinaryReadbackAddress,0x200,0x600,NativeCollectibleSaveControllerStage.ReadingOrdinary);
+        e.Label("complete-3");Compare(ExpectedOrdinaryAddress,OrdinaryReadbackAddress,0x600);
+        Request(4,Preparation.OutputAddress+0x200,0x1400,0x100,NativeCollectibleSaveControllerStage.WritingTail);
+        e.Label("complete-4");Copy(Preparation.OutputAddress+0x200,TailReadbackAddress,0x100,true);
+        Request(3,TailReadbackAddress,0x1400,0x100,NativeCollectibleSaveControllerStage.ReadingTail);
+        e.Label("complete-5");Compare(Preparation.OutputAddress+0x200,TailReadbackAddress,0x100);Validate(true);
+        Copy(Live,ProposalAddress,512);Copy(Preparation.OutputAddress+0x300,ProposalAddress+0x50,32);
+        Read(t0,BeginLedgerAddress+0x7C);Write(t0,ProposalAddress+0x80);Read(t1,Live+0x7C);e.B(5,t0,t1,"retain-dirty");
+        Read(t0,BeginLedgerAddress+0x90,0x24);Read(t1,Live+0x90,0x24);e.B(5,t0,t1,"retain-dirty");
+        Write(0,ProposalAddress+0x19,0x28);e.Label("retain-dirty");Unrevoked();
+        Set(StateAddress+0x1C,ProposalMagic);Set(StateAddress,(uint)NativeCollectibleSaveControllerStage.Committed);e.B(4,0,0,"finish");
+
+        e.Label("pending");Expect(Latch,0,"failure");Read(t0,StateAddress);e.C(t1,2);e.B(4,t0,t1,"pending-write");
+        e.C(t1,4);e.B(4,t0,t1,"pending-write");Expect(Busy,3,"failure");e.B(4,0,0,"pending-valid");
+        e.Label("pending-write");Expect(Busy,4,"failure");e.Label("pending-valid");Validate(true);e.B(4,0,0,"finish");
+        e.Label("failure");Read(t0,StateAddress+0x14);e.B(5,t0,0,"revoked");Set(StateAddress+0x18,1);Set(StateAddress+0x1C,0);
+        Set(StateAddress,(uint)NativeCollectibleSaveControllerStage.Failed);e.B(4,0,0,"finish");
+        e.Label("revoked");Set(StateAddress+0x1C,0);Set(StateAddress,(uint)NativeCollectibleSaveControllerStage.Revoked);
+        e.Label("finish");Read(v0,StateAddress);
+        e.L(0x23,t0,sp,0x34);e.R(17,t0,0,0);e.L(0x23,t0,sp,0x38);e.R(19,t0,0,0);
+        for(int i=0;i<saved.Length;i++)e.L(0x23,saved[i],sp,0x20+i*4);
+        e.I(9,sp,sp,FrameBytes);e.B(4,0,0,"return");
+
+        RevokePc=e.Pc;Equal(a0,StateAddress,"preflight");Equal(a1,0,"preflight");Equal(a2,0,"preflight");Equal(a3,0,"preflight");
+        Set(StateAddress+0x14,1);Set(StateAddress+0x1C,0);Set(StateAddress,(uint)NativeCollectibleSaveControllerStage.Revoked);
+        e.Label("unframed-revoked");e.C(v0,(uint)NativeCollectibleSaveControllerStage.Revoked);e.B(4,0,0,"return");
+        e.Label("preflight");e.C(v0,(uint)NativeCollectibleSaveControllerStage.PreflightRefused);
+        e.Label("return");e.R(8,ra,0,0);e.W(0);
+        // Shared validation keeps its return in the controller's final owned
+        // frame word. Its only child is the stack-free query; no hidden push.
+        foreach(bool captured in new[]{false,true})
+        {
+            e.Label(captured?"validate-current":"validate-initial");e.I(0x2B,sp,ra,0x3C);ValidateBody(captured);
+            e.L(0x23,ra,sp,0x3C);e.R(8,ra,0,0);e.W(0);
+        }
+        e.Label("validate-filename");byte[] filename=CopyFilename();
+        for(int at=0;at<16;at+=4)Expect(FilenameAddress+(uint)at,BinaryPrimitives.ReadUInt32LittleEndian(filename.AsSpan(at)),"failure");
+        Read(t0,FilenameAddress+16,0x25);Equal(t0,BinaryPrimitives.ReadUInt16LittleEndian(filename.AsSpan(16)),"failure");
+        e.R(8,ra,0,0);e.W(0);
+        return e.Finish();
+    }
+    private sealed class Emitter(uint start)
+    {
+        private readonly List<uint> words=[];private readonly Dictionary<string,int> labels=[];private readonly List<(int,string)> branches=[],calls=[];
+        internal uint Pc=>checked(start+(uint)words.Count*4);
+        internal string Unique()=>"local-"+words.Count;
+        internal void W(uint v)=>words.Add(v);
+        internal void I(int op,int rs,int rt,int value)=>W((uint)(op<<26|rs<<21|rt<<16)|(ushort)value);
+        internal void R(int fn,int rs,int rt,int rd,int shift=0)=>W((uint)(rs<<21|rt<<16|rd<<11|shift<<6|fn));
+        internal void C(int r,uint v){I(15,0,r,(int)(v>>16));I(13,r,r,(int)v);}
+        internal void L(int op,int r,int p,int at){I(op,p,r,at);W(0);}
+        internal void B(int op,int rs,int rt,string target){branches.Add((words.Count,target));I(op,rs,rt,0);W(0);}
+        internal void Call(uint pc){W(0x0C000000|((pc>>2)&0x3FFFFFF));W(0);}
+        internal void CallLabel(string name){calls.Add((words.Count,name));W(0);W(0);}
+        internal void Label(string name)=>labels.Add(name,words.Count);
+        internal byte[] Finish()
+        {
+            foreach(var (at,name)in branches){int n=labels[name]-at-1;if(n<short.MinValue||n>short.MaxValue)throw new InvalidDataException("Controller branch overflow.");words[at]|=(ushort)(short)n;}
+            foreach(var (at,name)in calls)words[at]=0x0C000000|(((start+(uint)labels[name]*4)>>2)&0x3FFFFFF);
+            byte[] bytes=new byte[words.Count*4];for(int i=0;i<words.Count;i++)BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(i*4),words[i]);return bytes;
+        }
+    }
+}
