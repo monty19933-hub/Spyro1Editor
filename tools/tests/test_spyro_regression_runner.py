@@ -205,6 +205,8 @@ class ObserverPrebuildTests(unittest.TestCase):
          "Ran 10 tests"),
         ("python-usa-selected-save-admission", ("tools/test_usa_selected_save_admission.py", "-v"),
          "Ran 12 tests"),
+        ("python-usa-card-read-completion", ("tools/test_usa_card_read_completion.py", "-v"),
+         "Ran 14 tests"),
         ("python-usa-pete-lifetime", ("tools/test_usa_pete_lifetime.py", "-v"),
          "Ran 11 tests"),
         ("python-japanese-egg-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_observer.py", "-v"),
@@ -2049,6 +2051,7 @@ class RegionalAndMatrixGateTests(unittest.TestCase):
             ("DetachedCollectibleLedgerImageSmoke", "DETACHED_COLLECTIBLE_LEDGER_IMAGE_OK"),
             ("NativeSha256Smoke", "NATIVE_SHA256_OK"),
             ("NativeCollectibleEnvelopeLoadSmoke", "NATIVE_COLLECTIBLE_ENVELOPE_LOAD_OK"),
+            ("NativeCollectibleCardLoadSmoke", "NATIVE_COLLECTIBLE_CARD_LOAD_OK"),
             ("NativeJapaneseEggSchedulingSmoke", "JP_EGG_SCHEDULING_SOURCE_FREE_OK"),
         ):
             self.assertEqual(marker, dict(RUNNER.CORE_CASES)[name])

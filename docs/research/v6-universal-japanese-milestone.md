@@ -62,6 +62,19 @@ Native asynchronous card-buffer ownership, selected-save provenance and live
 admission remain next. No card I/O, new package, inventory or completion
 consumer is enabled by this source checkpoint.
 
+The [detached native card-menu integration](collectible-native-card-load.md)
+now connects the validator to the selected-tail and pre-shutdown call sites.
+It uses a separate full-file read, successful-read completion checks and a
+three-way comparison of the complete native prefix before shadow preparation.
+Source investigation found that original boot/reload copy anchors overwrite
+an appended card overlay; all three exact EXE pairs are now relocated in the
+detached afterimage, with complete inverse/complement and actual native-clear
+tests. Focused Release passes 1,363 source-free / 1,827 cumulative checks with
+the original-ROM route. Ready, new-file initialization, durable custom saving,
+inventory/completion and actual disc/runtime publication remain unfinished.
+The integrated default Release regression passes **261 checks, zero failures**,
+report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-41fou6r2/summary.json`.
+
 September 27: [independent authored colors now pass a fresh full-firmware
 Artisans visual test](japanese-egg-authored-colors-runtime.md), including normal
 inventory open/return. No collector or new inventory/save/% consumer is installed.

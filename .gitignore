@@ -208,6 +208,8 @@ unsafe-tests/
 !/tools/test_usa_save_buffer_ownership.py
 !/tools/Inspect-SpyroUsaSelectedSaveAdmission.py
 !/tools/test_usa_selected_save_admission.py
+!/tools/Inspect-SpyroUsaCardReadCompletion.py
+!/tools/test_usa_card_read_completion.py
 !/tools/Inspect-SpyroUsaPeteLifetime.py
 !/tools/test_usa_pete_lifetime.py
 !/tools/Verify-SpyroJapaneseSignReference.py

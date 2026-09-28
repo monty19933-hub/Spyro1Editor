@@ -35,10 +35,21 @@ executes SHA-256 and the existing save-format checks in MIPS-I, then prepares a
 separate 512-byte candidate state. Its Release suites pass **611 SHA checks and
 3,797 loader checks**, including all three slots, retired identities, corrupt
 saves and complete nested-stack guards. Refusals leave the previous candidate
-and protected live ledger unchanged. This is not yet connected to the game's
-asynchronous card read or selected-save authentication; it cannot issue live
-Ready state, display X/X, save progress or change completion percentage.
-The latest integrated default Release gate passes **258 checks, zero failures**,
+and protected live ledger unchanged. The standalone validator cannot authenticate
+a native card read, issue live Ready state, display X/X, save progress or change
+completion percentage.
+The following [card-menu integration](research/collectible-native-card-load.md)
+now links that validator into a detached original-USA overlay/executable pair:
+it queues a full-block read, waits for the actual native poll's successful-read
+status, rechecks selection and the complete native prefix, then prepares only
+the separate shadow. Three card-menu copy anchors are relocated because the
+original boot clear would erase appended code. Focused checks pass 1,363
+source-free and 1,827 cumulatively with the original-ROM route. Stack/old-buffer
+regressions and an independent review pass. No disc is published, no card is
+written, and no live Ready, inventory or percentage consumer is enabled.
+The latest integrated default Release gate passes **261 checks, zero failures**,
+report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-41fou6r2/summary.json`.
+The preceding integrated default Release gate passed **258 checks, zero failures**,
 report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-4p7l38fn/summary.json`.
 The preceding startup-composition gate passed **254 checks, zero failures**,
 report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-s7seb6p_/summary.json`.
