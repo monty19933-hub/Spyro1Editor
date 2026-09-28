@@ -502,3 +502,46 @@ Primary source: [block reads](https://github.com/stenzek/duckstation/blob/fe2306
 [mode change](https://github.com/stenzek/duckstation/blob/fe2306b1f0f7dd64cbc9aa8eb12269715ba799b5/src/core/cpu_core.cpp#L2178),
 [fallback bypass](https://github.com/stenzek/duckstation/blob/fe2306b1f0f7dd64cbc9aa8eb12269715ba799b5/src/core/cpu_core.cpp#L3087),
 [stale-invalid recovery](https://github.com/stenzek/duckstation/blob/fe2306b1f0f7dd64cbc9aa8eb12269715ba799b5/src/core/cpu_core.cpp#L2084).
+
+### Detached normal-save scheduler
+
+The new source-bound scheduler joins the retained Artisans particle epilogue
+to the original save serializer and emitted controller. It is not installed in
+any disc. The two existing typed padding owners E240/5C0 and FDF8/208 contain
+main5C0, helpers/table1C8 and state40, with zero spare bytes. No overlay/model
+growth or copy-anchor shift occurs in this slice. The full parent EXE and
+workspace data remain exact; all unassigned overlay bytes and the complete
+inverse are checked. Fixed slot0 and two authored eggs remain the only profile.
+
+Only the expected31E08 return, mode11/handler2, complete source-projected
+globals and bounded restored stack may enter. Unarmed refusal—including a
+clean seed dirty0/gen0—retains the original native path. After fresh state0
+ownership, every return skips the retail writer at32230. The scheduler owns
+SDK initialization, accepted operation2 precheck, accepted80-byte header read
+and matching file marker, then invokes actual59864 into the full owned600-byte
+buffer and calls Begin/Pump. Raw request acceptance precedes subsequent checks;
+precheck result0-or3 and header result0 are the only successful completions.
+Unobserved native state1/2 is never adopted.
+
+Success deliberately remains terminal HELD with a detached proposal. Flow4
+calls the controller's bounded Drain; flow5 after failed precheck/header keeps
+its receipt and buffers permanently, without drain/cancel/release. It cannot
+claim Saved, copy the proposal over live state, rearm or authorize an unload.
+Later actual pickups retain their live dirty state. Tests include equal-checksum
+but different600-byte readback, foreign completion, stale queue, hostile stack,
+source-global mismatch, marker mismatch, return interleaving and native ports0/16.
+
+Focused Release and Debug each pass157 source-free/336 explicit JP+USA checks.
+Source mode executes the exact composed overlay and original serializer; native
+I/O services and the card are mocked. Independent review found no blocker in
+this detached scope. The mandatory runner adds this source-free gate and keeps
+the dual-region route out of single-USA source QA; its113 contract tests pass.
+
+Detached overlay SHA256:
+`b79a2fac3bd08fa0bf80e726b198084ec3d7b3ee967e569fb1f7e1afad86a57d`.
+Unchanged workspace data SHA256:
+`700e0f54859f0a2759595d2b69e7f91ebeea720ef096de1910a7b6ba3196dd3a`.
+Next use an explicitly allocated scheduler owner for IRQ exclusion, header
+draining, live commit and repeat-save lifecycle—not additional unidentified
+padding. Cache, native session/retention, full stack and exact-disc gameplay
+remain required before installation/publication. R08 is unchanged.

@@ -7,12 +7,15 @@ this is not permission to replace the game with its Japanese version.
 
 ## Execution order and acceptance
 
-Latest source gate: **Release286/0** after the detached save controller, typed
-controller workspace and nonuniform model/scene rebinding. Existing lifecycle
-goldens survive; source serializer output passes full ordinary-byte comparison.
-The next reviewed pending-request receipt/terminal Drain increment also passes
-Release286/0, with4,398 source-free/4,439 USA controller checks in Release and
-Debug. It preserves memory geometry and cannot publish a native Saved result.
+Latest source gate: **Release288/0** after the detached normal-save scheduler,
+typed controller workspace and nonuniform model/scene rebinding. Existing
+lifecycle goldens survive; source serializer output passes full ordinary-byte
+comparison. Actual accepted native request wrappers now pass in the bounded
+test CPU:4,636 source-free/4,845 USA controller checks in Release and Debug.
+The new scheduler passes157 source-free/336 JP+USA checks in each configuration,
+stopping at a held proposal with mocked card services. It preserves memory
+geometry and cannot publish a native Saved result. Full report:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-r2svw3zv/summary.json`.
 See [the save implementation and remaining native gates](collectible-native-save-next-slice.md).
 No new save disc or editor package was published; runtime remains the admitted
 pickup/quit result below, without custom durable saving, X/X or percentage.
