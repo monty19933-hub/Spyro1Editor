@@ -2,9 +2,11 @@
 
 ## Changes since Spyro Editor Beta V5
 
-Private development preview, internal build `0.1.0-beta.47`. This is not a
+Private development preview, internal build `0.1.0-beta.48`. This is not a
 published release or a claim of universal Moby, texture or new-level support.
 
+- Fixed an accessibility value-write crash in the main level picker. Its value
+  remains read-only; ordinary selection and the existing export gates are unchanged.
 - Fixed Fly Anywhere controls remaining disabled after switching retail levels.
   Actual picker/load regression covers both busy fences and keeps export gates
   unchanged. Native ON/OFF/save-reload acceptance remains separate.

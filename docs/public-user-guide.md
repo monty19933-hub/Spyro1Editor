@@ -1,6 +1,6 @@
 # Spyro Editor Beta V6 User Guide
 
-Private development preview, internal build `0.1.0-beta.47`. V6 is not finished
+Private development preview, internal build `0.1.0-beta.48`. V6 is not finished
 or publicly released. The Mac preview is ad-hoc signed and is not Apple-signed
 or notarized; read the included opening instructions before launching it.
 
