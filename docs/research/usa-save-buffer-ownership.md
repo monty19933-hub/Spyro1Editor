@@ -175,3 +175,46 @@ dispatch remains unproved; the invalid state-14 closure is not a green gate.
 dotnet build src/Spyro.Editor.UnusedLevel65SaveDeathRespawnOwnershipClosureSmoke -c Debug --no-restore
 dotnet src/Spyro.Editor.UnusedLevel65SaveDeathRespawnOwnershipClosureSmoke/bin/Debug/net10.0/Spyro.Editor.UnusedLevel65SaveDeathRespawnOwnershipClosureSmoke.dll .
 ```
+
+## September 27: exact writer and success handoff
+
+The existing read-completion inspector now also pins the complete gameplay
+save driver `800320C0/278`, write callback table `80012144/7C`, write veneer
+`80062FC4/10`, and the relevant instructions inside the previously pinned
+write API/callback. Source capture still opens **only the original BIN**;
+neither it nor its scalar models execute a card service.
+
+The write request at `80067168/16C` publishes operation **4** (read is3).
+Accepted return1 is separate from a consumed poll completion1 with operation4,
+result0 and drained busy/latch. The API clears an earlier completion latch,
+checks only busy/count alignment, and accepts zero count; an extension must
+add its own positive-length, owned-buffer and exclusive-operation checks.
+The callback opens with8001, seeks, starts write, retries some failures up to
+16 attempts and closes. Seek/start loops remain potentially unbounded; a
+numeric model is not BIOS/card-removal recovery evidence.
+
+The gameplay state is `g80078D08`; result is `g80078D0C`. State0 starts the
+card service/check, state1 reads the80-byte identity header, state2 compares
+header+7E and serializes/writes the selected600-byte ordinary slot, state3
+reads that slot back, and state4 checks the returned slot's internal sum.
+`8003231C` sets result7, stored at`80032324`, only on that checksum path.
+This is the native success handoff to gate, not evidence of an extension save.
+
+Native calls do **not** check accepted-request returns, completed-operation
+identity, or exact poll return1: the poll branches wait only on zero, so idle
+minus-one can fall through using stale output fields. Native readback compares
+the checksum inside the returned bytes, not the bytes originally written.
+A regression demonstrates two different600-byte slots with the same sum both
+pass the native decision; trailing590..600 bytes are outside that checksum.
+Do not inherit these weaker decisions in a new extension transaction.
+
+Required next writer integration remains: own resident code/scratch across
+all asynchronous operations; validate the full old extension and selected
+session; preserve other slots; couple ordinary/custom persistence; read back
+the exact expected transaction; and delay success7 until both parts succeed.
+The live-admission work and manually seeded R01 fixture do not implement this.
+
+Validation: nineteen source-free completion tests pass (the new contracts
+failed before implementation); exact original capture passes54 span pins
+and both31-entry callback-table checks. Original identity is verified again
+at capture exit. No card, candidate or emulator settings were changed.

@@ -60,7 +60,39 @@ class CardReadCompletionCases(unittest.TestCase):
                 model.poll_snapshot(invalid, 0, 0, 0, 0, 0)
 
     def test_source_windows_extend_existing_selection_and_ownership_pins(self):
-        self.assertEqual((30, 8, 13), tuple(len(x) for x in (model.OWNERSHIP.SPANS, model.SELECTED.SPANS, model.SPANS)))
+        self.assertEqual((30, 8, 16), tuple(len(x) for x in (model.OWNERSHIP.SPANS, model.SELECTED.SPANS, model.SPANS)))
+
+    def test_write_request_requires_idle_and_aligned_count_but_not_positive_count(self):
+        for active, count, expected in ((0, 0x100, True), (3, 0x100, False),
+                                        (4, 0x100, False), (0, 0x83, False), (0, 0, True)):
+            self.assertEqual(expected, model.native_write_accepts(active, count))
+
+    def test_write_completion_operation_is_four_not_three(self):
+        self.assertEqual((1, 4, 0), tuple(model.poll_snapshot(1, 0, 0, 1, 4, 0)[key]
+                         for key in ("returnValue", "operation", "result")))
+
+    def test_native_readback_checks_only_its_internal_checksum_not_expected_save(self):
+        import struct
+        first = bytearray(0x600)
+        first[0x44:0x46] = bytes((1, 2))
+        struct.pack_into("<I", first, 0x58C, 3)
+        different = bytearray(first)
+        different[0x44:0x46] = bytes((2, 1))
+        self.assertNotEqual(first, different)
+        self.assertTrue(model.native_save_readback_accepts(bytes(first)))
+        self.assertTrue(model.native_save_readback_accepts(bytes(different)))
+
+    def test_native_readback_excludes_trailing_bytes_and_rejects_wrong_checksum(self):
+        data = bytearray(0x600)
+        data[-1] = 255
+        self.assertTrue(model.native_save_readback_accepts(bytes(data)))
+        data[0] = 1
+        self.assertFalse(model.native_save_readback_accepts(bytes(data)))
+
+    def test_native_readback_requires_an_entire_selected_slot(self):
+        for data in (b"", bytes(0x58C), bytes(0x601)):
+            with self.assertRaises(ValueError):
+                model.native_save_readback_accepts(data)
 
     def test_wrong_source_refused(self):
         with self.assertRaises(ValueError):

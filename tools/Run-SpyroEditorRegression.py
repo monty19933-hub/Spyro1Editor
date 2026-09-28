@@ -37,7 +37,7 @@ OBSERVER_PYTHON_CASES = (
     ("python-usa-selected-save-admission", ("tools/test_usa_selected_save_admission.py", "-v"),
      "Ran 12 tests"),
     ("python-usa-card-read-completion", ("tools/test_usa_card_read_completion.py", "-v"),
-     "Ran 14 tests"),
+     "Ran 19 tests"),
     ("python-usa-pete-lifetime", ("tools/test_usa_pete_lifetime.py", "-v"),
      "Ran 11 tests"),
     ("python-japanese-egg-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_observer.py", "-v"),

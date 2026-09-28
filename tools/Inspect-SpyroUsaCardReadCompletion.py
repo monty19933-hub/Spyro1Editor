@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exact-USA read-only card completion evidence; no card services or MIPS run.
+"""Exact-USA read-only card I/O completion evidence; no services or MIPS run.
 
 The snapshot model describes scalar semantics without concurrent interrupts.
 It deliberately reports a blocking poll as wouldBlock instead of executing it.
@@ -34,6 +34,9 @@ SPANS = (
     ("exe", "read-filename-length", 0x8006276C, 0x30, "67eba1fda7d9cdea44c7e0341d218d166b95f8baf32341890895a84f25308943"),
     ("card", "native-read-result-gate", 0x8007B388, 0x20, "c8d71730850e115acea0edaed04b1493fb82df2bd212a47bb7a870af09c6be41"),
     ("card", "selected-poll-output-base", 0x8007C554, 8, "8021f7897c66e5711fcbce0e73bea21b8ee63b05a6c4309c6da8080afb8a6688"),
+    ("exe", "game-save-driver", 0x800320C0, 0x278, "5fe4e29fa389cfcde8f45d21b8235a38a5faf7e5efbdfde295285861827efa6c"),
+    ("exe", "write-state-table", 0x80012144, 0x7C, "0b7a38835e4e0ac02ec9354e0919cb613f24ca799b764bcd7502a505a1701a4a"),
+    ("exe", "write-veneer", 0x80062FC4, 0x10, "5c075aa8a7ebe5be8018a52058b763faffa0d2351ecfbaa38289a4676649642d"),
 )
 
 INSTRUCTIONS = {
@@ -57,6 +60,23 @@ INSTRUCTIONS = {
         (0x80067D3C, 0xAC600000), (0x80067D44, 0xAC205B54),
         (0x80066334, 0x1440FFFD), (0x800662D4, 0xAC400000),
         (0x800662E8, 0xAC205B58), (0x80066308, 0x24040007),
+        (0x80067128, 0x10400005), (0x8006712C, 0x32C2007F), (0x80067140, 0x1440001B),
+        (0x80067168, 0x24020004), (0x8006716C, 0xAE220000),
+        (0x80067174, 0xAC205B54), (0x8006717C, 0xAC205B58),
+        (0x80067184, 0xAC345B64), (0x8006718C, 0xAC355B6C),
+        (0x80067194, 0xAC365B68), (0x8006719C, 0xAC335B5C),
+        (0x800671AC, 0x24020001), (0x800671C0, 0x00001021),
+        (0x80067274, 0x34058001), (0x80067288, 0xAE020000),
+        (0x800672B4, 0x1443FFF9), (0x800672E0, 0x0C018BF1), (0x800672E8, 0x1440FFFA),
+        (0x80067338, 0x28420010), (0x80067364, 0xAC225B54), (0x80067378, 0xAC235B60),
+        (0x8003210C, 0x0C019D8A), (0x80032114, 0x104000E8),
+        (0x800321A4, 0x0C019D8A), (0x800321AC, 0x104000C2),
+        (0x800321D0, 0x9443FA7E), (0x800321E0, 0x1443004F),
+        (0x800321F4, 0x0C016619), (0x80032230, 0x0C019C39),
+        (0x80032260, 0x0C019D8A), (0x80032268, 0x10400093),
+        (0x800322B8, 0x0C019B8A), (0x800322D0, 0x0C019D8A), (0x800322D8, 0x10400077),
+        (0x800322F8, 0x0C01655B), (0x8003230C, 0x8C63FF8C),
+        (0x80032314, 0x14430002), (0x8003231C, 0x24020007), (0x80032324, 0xAC228D0C),
     ),
     "card": (
         (0x8007B390, 0x8E050004), (0x8007B398, 0x14A0006B),
@@ -99,6 +119,21 @@ def native_read_accepts(active, count):
     return u32(active) == 0 and (u32(count) & 0x7F) == 0
 
 
+def native_write_accepts(active, count):
+    """Same two admission tests at 80067128/140; not a safe extension policy."""
+    return u32(active) == 0 and (u32(count) & 0x7F) == 0
+
+
+def native_save_readback_accepts(slot):
+    """800322F0..32324 checksum decision only, not expected-byte equality.
+
+    This assumes the native I/O branch already fell through with result zero;
+    it does not validate a poll return/operation, card identity or extension.
+    """
+    slot = SOURCE.require_bytes(slot, 0x600)
+    return SOURCE.ordinary_save_checksum(slot) == struct.unpack_from("<I", slot, 0x58C)[0]
+
+
 def mapped_event_result(raw):
     """80067C7C numeric mapping; does not guess unverified symbolic errors."""
     u32(raw)
@@ -132,6 +167,13 @@ def capture(path):
             expected[state] = target
         if tuple(expected) != table:
             raise ValueError("Read callback state targets changed")
+        write_table = struct.unpack_from("<31I", exe, 0x80012144 - OWNERSHIP.BASE)
+        expected_write = [0x80067384] * 31
+        for state, target in ((0, 0x80067230), (10, 0x80067254), (11, 0x80067294),
+                              (20, 0x800672C4), (30, 0x800672F8)):
+            expected_write[state] = target
+        if tuple(expected_write) != write_table:
+            raise ValueError("Write callback state targets changed")
         probes = {"idle": poll_snapshot(1, 0, 0, 0, 3, 0),
                   "busyNonblocking": poll_snapshot(1, 3, 0, 0, 99, 99),
                   "busyBlocking": poll_snapshot(0, 3, 0, 0, 99, 99),
@@ -142,7 +184,8 @@ def capture(path):
                       cardOverlaySha256=OWNERSHIP.CARD_SHA, inheritedPins=len(OWNERSHIP.SPANS) + len(SELECTED.SPANS),
                       additionalPins=len(SPANS), evidence=evidence, instructions=instructions,
                       readCallbackTable=[dict(state=i, target=t) for i, t in enumerate(table)],
-                      snapshotProbes=probes, readOperationCode=3, resultSuccessCode=0,
+                      writeCallbackTable=[dict(state=i, target=t) for i, t in enumerate(write_table)],
+                      snapshotProbes=probes, readOperationCode=3, writeOperationCode=4, resultSuccessCode=0,
                       acceptedRequestReturn=1, completionPollReturn=1, busyPollReturn=0, idlePollReturn=-1,
                       blockingPollMode=0, nativeSelectionPollMode=0,
                       nativeSelectionPollOutputs=[0x80078DB8, 0x80078DBC],
@@ -151,6 +194,15 @@ def capture(path):
                       stackDepthExcludesInterruptBiosAndDiagnostics=True,
                       nativeReadChecksPositiveCount=False, nativeReadChecksBufferExtent=False,
                       nativeReadPreservesUnconsumedCompletion=False, **evidence_limits())
+        result["nativeGameplaySave"] = dict(stateAddress=0x80078D08, resultAddress=0x80078D0C,
+                    successValue=7, successInstruction=0x8003231C, resultStoreInstruction=0x80032324,
+                    checksExactCompletionReturn=False, checksCompletedOperation=False,
+                    checksRequestAcceptedReturn=False, readbackComparesExpectedBytes=False,
+                    checksExtension=False, nativePrefixBytes=0x1400, tailOffset=0x1400,
+                    writeOperationCode=4, readOperationCode=3,
+                    nativeWriteChecksPositiveCount=False, nativeWriteChecksBufferExtent=False,
+                    nativeWritePreservesUnconsumedCompletion=False,
+                    extensionWriterImplemented=False, extensionSuccessUiGateImplemented=False)
     finally:
         image.close()
     return dict(heldAndNamedOriginalFinal=True, **result)
