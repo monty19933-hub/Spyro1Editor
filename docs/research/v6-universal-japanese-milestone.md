@@ -10,6 +10,9 @@ this is not permission to replace the game with its Japanese version.
 Latest source gate: **Release286/0** after the detached save controller, typed
 controller workspace and nonuniform model/scene rebinding. Existing lifecycle
 goldens survive; source serializer output passes full ordinary-byte comparison.
+The next reviewed pending-request receipt/terminal Drain increment also passes
+Release286/0, with4,398 source-free/4,439 USA controller checks in Release and
+Debug. It preserves memory geometry and cannot publish a native Saved result.
 See [the save implementation and remaining native gates](collectible-native-save-next-slice.md).
 No new save disc or editor package was published; runtime remains the admitted
 pickup/quit result below, without custom durable saving, X/X or percentage.

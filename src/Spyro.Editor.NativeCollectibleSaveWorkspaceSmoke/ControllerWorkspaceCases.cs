@@ -40,7 +40,7 @@ internal static class ControllerWorkspaceCases
         check(plan.Profile==NativeCollectibleSaveWorkspacePlan.WorkspaceProfile.Controller&&ReferenceEquals(plan.Preparation,k.Preparation)&&
             plan.SourceCertified&&k.SourceCertified&&plan.MeasuredAllocationFits,"Source-certified controller shares exact nested preparer and reports geometry only");
         check(plan.GrowthBytes==0x7800&&after.Length==0x38D000&&W(after,0x14)==0x57800&&W(after,0x18)==0x1D3800&&
-            plan.FinalDataSha256=="a27e8e5848f6cb99cdb0ea5c60aa93e4571b4721db665d48a8877f898a525b7e",
+            plan.FinalDataSha256=="700e0f54859f0a2759595d2b69e7f91ebeea720ef096de1910a7b6ba3196dd3a",
             "Minimum growth starts from admitted parent, not previous workspace; exact emitted-data golden");
         check(plan.Memory.CopyAnchor==0x8008AA38&&plan.Memory.ModelStart==0x80117D54&&plan.Memory.FinalSceneStart==0x8016F554&&
             plan.Memory.FinalSceneEnd==0x80183D54&&plan.Memory.TransferPeakEnd==0x80183D54&&plan.Memory.FinalNormalGap==0x3C5C&&

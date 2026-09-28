@@ -45,6 +45,19 @@ Release gate: **286 checks, zero failures**, report
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-awrs4fah/summary.json`.
 R08 App/Core and normal DuckStation settings/card hashes remain unchanged.
 
+The next source-only save-controller increment records accepted request
+ownership even if validation or revocation fails immediately afterward. Its
+bounded terminal Drain consumes at most one matching completion and never
+submits another write; ambiguous ownership remains pinned. Review caught and
+regression-tested a later-unrelated-completion edge case. Release and Debug
+each pass4,398 source-free/4,439 USA controller checks, plus unchanged workspace
+70/328 and lifecycle162/417 checks. It fits the existing arena without further
+level growth. This still does not connect a game save-menu hook, publish live
+success, persist eggs in a real card or update inventory/percentage. R08 and
+your normal settings/card remain hash-identical. The actual scheduler is next.
+The integrated default Release run after this increment also passes286/0:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-fvgf0ulx/summary.json`.
+
 September27 latest: a separate [guarded admission research disc](research/collectible-card-admission-research-r01.md)
 is published and independently verified byte-for-byte against an original-only
 prediction. It adds phase-last live-state admission and a native warm-reset

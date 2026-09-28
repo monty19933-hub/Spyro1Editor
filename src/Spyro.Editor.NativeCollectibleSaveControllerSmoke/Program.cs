@@ -204,9 +204,10 @@ foreach(var stage in new[]{NativeCollectibleSaveControllerStage.Idle,NativeColle
         f.Cpu.Calls.All(pc=>pc!=NativeCollectibleSaveControllerKernel.ReadPc&&pc!=NativeCollectibleSaveControllerKernel.WritePc),
         "Every filename byte, including NUL, is source-fixed before all five requests");
 }
-Console.WriteLine($"NATIVE_COLLECTIBLE_SAVE_CONTROLLER_OK checks={checks} codeBytes={k.CodeByteLength} arenaBytes={NativeCollectibleSaveControllerKernel.ArenaBytes} stateBytes={NativeCollectibleSaveControllerKernel.StateBytes} stackBytes={NativeCollectibleSaveControllerKernel.MaximumStackBytes} emittedControllerExecuted=true nativeIoExecuted=false cardWrites=0 runtime=false");
+int previousChecks=checks;PendingReceiptCases.Run(k,Check);
+Console.WriteLine($"NATIVE_COLLECTIBLE_SAVE_CONTROLLER_OK checks={checks} previousChecks={previousChecks} receiptChecks={checks-previousChecks} codeBytes={k.CodeByteLength} arenaBytes={NativeCollectibleSaveControllerKernel.ArenaBytes} stateBytes={NativeCollectibleSaveControllerKernel.StateBytes} stackBytes={NativeCollectibleSaveControllerKernel.MaximumStackBytes} emittedControllerExecuted=true nativeIoExecuted=false cardWrites=0 runtime=false");
 Console.WriteLine("SAVE_CONTROLLER_LAYOUT "+JsonSerializer.Serialize(new{
-    beginPc=k.BeginPc.ToString("X8"),pumpPc=k.PumpPc.ToString("X8"),revokePc=k.RevokePc.ToString("X8"),
+    beginPc=k.BeginPc.ToString("X8"),pumpPc=k.PumpPc.ToString("X8"),revokePc=k.RevokePc.ToString("X8"),drainPc=k.DrainPc.ToString("X8"),
     codeSha256=Convert.ToHexStringLower(SHA256.HashData(k.CopyBytes())),codeBytes=k.CodeByteLength,
     codeCapacity=NativeCollectibleSaveControllerKernel.CodeCapacityBytes,frameBytes=NativeCollectibleSaveControllerKernel.FrameBytes,
     nestedStackBytes=NativeCollectibleSaveControllerKernel.MaximumStackBytes,excludedCallerBytes=NativeCollectibleSaveControllerKernel.NativeCallerBytes,
@@ -218,4 +219,5 @@ var certified=NativeCollectibleSaveControllerKernel.Capture(source,k.ArenaAddres
 Check(certified.SourceCertified&&certified.CopyBytes().SequenceEqual(k.CopyBytes()),"Source certification pins existing native ABI, never different code or installation");
 var sourceFixture=new ControllerFixture(certified);sourceFixture.Reach(NativeCollectibleSaveControllerStage.Committed);VerifySuccess(sourceFixture);source.VerifyUnchanged();
 SerializerSnapshotCases.Run(source,certified,Check);
+PendingReceiptCases.Source(source,Check);
 Console.WriteLine($"NATIVE_COLLECTIBLE_SAVE_CONTROLLER_SOURCE_OK checks={checks} sourceUnchanged=true nativeIoExecuted=false cardWrites=0 runtime=false");

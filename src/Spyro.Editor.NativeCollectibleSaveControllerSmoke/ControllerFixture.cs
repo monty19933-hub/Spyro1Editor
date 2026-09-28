@@ -17,6 +17,7 @@ internal sealed class ControllerFixture
     internal (uint Op,uint Buffer,int Offset,int Count)? Pending { get; private set; }
     internal int RequestReturn { get; set; }=1;
     internal Action<ControllerFixture>? BeforeServiceReturn { get; set; }
+    internal uint? BeforeServicePc { get; set; }
     internal NativeCollectibleSaveControllerStage Stage=>(NativeCollectibleSaveControllerStage)Cpu.Get(Kernel.StateAddress);
     internal ControllerFixture(NativeCollectibleSaveControllerKernel? kernel=null)
     {
@@ -47,13 +48,13 @@ internal sealed class ControllerFixture
         // test mutation, not a concurrent runtime/session ownership proof.
         if(BeforeServiceReturn is {} action)
         {
-            uint target=entry==Kernel.BeginPc?NativeCollectibleSaveControllerKernel.ReadPc:NativeCollectibleSaveControllerKernel.PollPc;
-            Cpu.Run(entry,target);action(this);BeforeServiceReturn=null;Cpu.Run(target,Stop);
+            uint target=BeforeServicePc??(entry==Kernel.BeginPc?NativeCollectibleSaveControllerKernel.ReadPc:NativeCollectibleSaveControllerKernel.PollPc);
+            Cpu.Run(entry,target);action(this);BeforeServiceReturn=null;BeforeServicePc=null;Cpu.Run(target,Stop);
         }
         else Cpu.Run(entry,Stop);
         bool In(uint at,uint first,int length)=>(ulong)at>=first&&(ulong)at<(ulong)first+(uint)length;
         bool Owned(uint at)=>In(at,Kernel.Preparation.OldTailAddress,0xB90)||
-            In(at,Kernel.ExpectedOrdinaryAddress,0x1100)||In(at,Kernel.StateAddress,0x20)||
+            In(at,Kernel.ExpectedOrdinaryAddress,0x1100)||In(at,Kernel.StateAddress,NativeCollectibleSaveControllerKernel.StateBytes)||
             In(at,unchecked(regs[29]-NativeCollectibleSaveControllerKernel.MaximumStackBytes),NativeCollectibleSaveControllerKernel.MaximumStackBytes)||
             In(at,Mock+4,0x1C)||In(at,0x80075B50,4)||In(at,0x80075B58,4);
         if(Cpu.Writes.Any(a=>!Owned(a)))throw new Exception("Controller/mock store escaped the full declared write complement: "+Cpu.Writes.First(a=>!Owned(a)).ToString("X8"));
@@ -73,7 +74,7 @@ internal sealed class ControllerFixture
         return Cpu.Regs[2];
     }
     internal void PendingPoll(uint? busy=null,uint latch=0)
-    {ConfigurePoll(0,0xBAD,0xBAD,busy??Pending!.Value.Op,latch);}
+    {uint op=busy??Pending!.Value.Op;ConfigurePoll(0,op,0,op,latch);}
     internal void Complete(int? copyBytes=null,Action<byte[]>? mutate=null,uint? op=null,uint result=0,int returned=1,uint busy=0,uint latch=0)
     {
         var request=Pending??throw new Exception("No simulated accepted request.");

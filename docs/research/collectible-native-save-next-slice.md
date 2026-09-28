@@ -307,15 +307,67 @@ The runner's112 source-free contracts pass, including mandatory registration of
 both new smokes and explicit exclusion of the dual-region lifecycle route from
 the single-USA source registry. This does not rebuild a preserved app package.
 
+## Pending-request receipts and bounded terminal drain
+
+The controller now records a fixed request kind, intent, raw request return and
+raw poll return in its previously reserved state20..2F. Intent precedes the
+native call; accepted/rejected/indeterminate receipt publication precedes live
+validation or revocation checks. Matching consumed completion is likewise
+recorded before later validation can fail. Failed/Revoked no longer loses the
+identity of an accepted outstanding transfer. These bytes remain private
+exclusive-owner state, not authenticated session or card identities.
+
+The new Drain entry accepts only Idle/Committed/Failed/Revoked, returns a
+separate drain result, performs at most one mode1 nonblocking poll and never
+issues a request. It bypasses invalidated live/session data, preserves terminal
+stage and proposal marker, and cannot publish native success. Error completion
+can prove that a transfer was consumed without proving that saving succeeded.
+None/Rejected/Consumed receipts do not consume foreign busy/latch state. Intent,
+unknown return, wrong operation or lost completion remain pinned; no timeout is
+treated as cancellation. The caller must return from tail code into its retained
+overlay before considering any release. No rearm entry exists.
+
+Independent review and root review identified the same two-call defect: a
+pre-poll contradiction initially returned Indeterminate without poisoning its
+Accepted receipt. A later matching foreign completion could then appear owned.
+New regressions demonstrate the RED case and require permanent Indeterminate
+receipt after that contradiction, including idle/no-latch and foreign operation
+followed by a matching latch. Clean None/Rejected/Consumed observations retain
+their receipt but still cannot grant release while foreign activity exists.
+
+The complete pinned retail poll67628/F0 executes in the CPU tests, including
+pending, success and error completions for all five fixed request kinds. Card
+transfer services remain mocked; this is not native I/O or interrupt execution.
+Focused Release and Debug each pass4,398 source-free checks (3,881 existing
++517 receipt) and4,439 explicit USA checks including the original serializer.
+Workspace70/328 and rebinding162/417 source-free/source checks pass in both
+configurations. Code is now1FB4, leaving4C bytes inside the
+unchanged2000 capacity; arena7300, state30, frame40 and nestedE0 are unchanged.
+Default-fixture code SHA-256:
+`9a523808f739324211d576def64a81f9932440196abaa941da105b220a378a52`.
+Controller-workspace WAD10 SHA-256 now is
+`700e0f54859f0a2759595d2b69e7f91ebeea720ef096de1910a7b6ba3196dd3a`;
+the earlier a27e... golden above belongs to checkpointcd0e7c3. Only emitted
+controller bytes changed; loader geometry, old preparation profile and the
+recompiled lifecycle overlay5e5d... stay unchanged. Nothing is installed into
+a disc or packaged editor by this slice.
+
+Integrated default Release after receipt/Drain: **286 checks, zero failures**;
+report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-fvgf0ulx/summary.json`.
+The normal DuckStation settings, per-game settings and USA card, plus both R08
+App/Core assemblies, still match their protected hashes. DuckStation remains
+closed; no save writer is active.
+
 The next source scheduling candidate is an Artisans-owned overlay gate reached
 from callback80086134's restored epilogue800873D8/873DC. It must check the exact
 mode11 caller return31E08 and final loaded geometry before touching model-tail
 code or state. Level setter5A718 installs the callback before overlay/model
 loads; callback presence alone does not authenticate loaded geometry. A typed
 successor must explicitly reassign an existing alignment owner, not treat zero
-bytes as free memory. Native state2 takeover must precede the header completion
-poll and original serializer59864; state3 is too late because ordinary writing
-has already started. Once owned, no path may fall back into the retail writer.
+bytes as free memory. The earlier state2-only proposal is superseded below:
+fresh state0 ancestry and owned header submission are required. State3 is too
+late because ordinary writing has already started. Once owned, no path may fall
+back into the retail writer.
 
 Before publishing any save disc, execute the actual callback/enclosing0x48-frame
 path and prove before-unload/reset/reselection barriers retain all I/O buffers
@@ -326,11 +378,43 @@ crash-atomic.
 
 Normal-mode retention audit narrows the next hook: use the same Artisans
 particle epilogue, not an unconditional EXE321FC jump into level memory. The
-snapshot semantics remain post-serializer, but the gate should intercept
-native I/O state2 before321A4, perform its own strict header poll/marker checks,
-then call59864 and capture the complete ordinary image. Retail state1 ignores
-the header enqueue return, so state2 alone is not acceptance evidence; cover
-the header queue-capacity/ownership case before any extension writes.
+snapshot semantics remain post-serializer. The final bounded source review
+requires observing/owning native state0 rather than adopting an already-running
+state1/2. State0 calls662BC (queue initialization and native busy/result/latch
+reset), then665B8 submits precheck operation2. Retail ignores that submission
+return too. State1 accepts precheck completion1/op2/result0-or3; an extension
+must record fresh intent/acceptance and require drained native state before
+submitting its own header read. These observations are not an installed gate.
+
+The exact header request is66E28(controller, fixed filename, owned buffer,0),
+with length80 at callerSP+10. The proposed buffer is the controller's existing
+OrdinaryInput[0..80), not borrowed retail frame scratch. Only after completed
+1/op3/result0, busy0/latch0 and matching marker at+7E may the gate call original
+59864 into the same complete600 owner, then Begin. This avoids a second host-like
+copy and prevents serialization while the header transfer remains outstanding.
+Retail32158 ignores header acceptance and unconditionally advances to state2;
+neither a native state number nor a repeated selection tuple authenticates a
+fresh request. All active custom paths must return to324B8, skipping the retail
+ordinary write at32230. Terminal live commit, UI result and repeat-save rearm
+remain separate implementation work.
+
+Independently checked USA source pins (addresses/lengths in hex):
+
+| Owner | SHA-256 |
+| --- | --- |
+| 662BC+60 initialization | `e23d1f4697a7870a5e1e16faef2d1f384818bd3771c69619b2388bdf1ef9fed9` |
+| 665B8+7C precheck | `40b72a2bba8ce136e0b4fa5516b6c19bc54495fecd5339e04c9de30d7e011a32` |
+| 66E28+10C read submission | `87ba1be6dead52b5b297e0587aad7c37f99b5676e497988c0846859e802f9b6d` |
+| 67628+F0 poll | `19553c82e1ac2ff3a3089e3c8b101ade63a08c9620216785f79df4a2d2da3e21` |
+| 320C0+DC retail states0/1 | `7e080f0b172aa16b0507420b318a62464533b72d74b34c170259a5e78c292162` |
+| 3219C+60 retail header verification/serialization | `12bf74e81aa25da733a13d7b3919c589ecd8afaad0d417c69c25d0d1871342b0` |
+
+Instruction visibility is also explicit unfinished work. The source BIOS
+A0/44 stub is626E8; its four direct executable callers are SDK initialization
+paths, not a demonstrated normal-level-load flush. A flush called from the
+new gate could precede model-tail execution, but cannot by itself establish
+initial visibility of that newly loaded overlay gate. Neither loader CPU tests
+nor the existence of this stub grants cache/BIOS/full-stack certification.
 
 All inspected normal save UI, retry, error, shutdown and success branches are
 after the31E00 callback. The registered controller callback53C68/+67C, CD
@@ -343,14 +427,6 @@ and new wrapper frame=W, require `[S-W-E0,S+88)` inside `[801FF800,80200000)`:
 main20+update20+save48 is88 above S, not just the controller's assumed48.
 ParticleA0 and controllerE0 execute sequentially, so their depths take a maximum.
 
-An additional ownership receipt is required before the scheduler can safely
-handle errors: controller Stage can become Failed/Revoked after native
-acceptance but before next-stage publication. The planned fixed-state receipt
-must publish request intent before the native call, record its raw return and
-accepted ownership before validation, and record consumed completion before
-later validation can fail. Failure/revocation cannot erase it. A terminal-only,
-single-poll Drain may consume the matching outstanding operation but never
-submit another request or claim cancellation. Ambiguous receipts stay pinned.
-Even drained code cannot release its own model-tail lease until returning to
-the retained overlay gate. Repeated-save entry2CCC8 resets retail fields only;
-one-shot controller rearm needs a separate proven post-drain/commit boundary.
+The receipt/Drain implementation above is a prerequisite, not the scheduler
+itself. Repeated-save entry2CCC8 resets retail fields only; one-shot controller
+rearm still needs a separate proven post-drain/commit boundary.
