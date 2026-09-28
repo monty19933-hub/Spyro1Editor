@@ -216,9 +216,13 @@ def wad_entries(data):
 
 
 def packed_wad(original, overlay_after):
+    return _packed_card_wad(original, overlay_after, sys.modules[__name__])
+
+
+def _packed_card_wad(original, overlay_after, recipe):
     entries = wad_entries(original)
     card_at, card_size, _ = next(entry for entry in entries if entry[2] == 2)
-    require(card_size == OLD_OVERLAY_SIZE and overlay_after == fixed_overlay(bounded(original, card_at, card_size)),
+    require(card_size == OLD_OVERLAY_SIZE and overlay_after == recipe.fixed_overlay(bounded(original, card_at, card_size)),
             "Only the fixed entry-two card replacement is admitted")
     result, reports = bytearray(original[:USER]), []
     for at, size, index in entries:
@@ -230,21 +234,25 @@ def packed_wad(original, overlay_after):
         reports.append({"index": index, "originalOffset": at, "finalOffset": new_at,
                         "originalLength": size, "finalLength": len(after),
                         "originalSha256": sha(before), "finalSha256": sha(after)})
-    require(len(result) == len(original) + GROWTH, "Fixed packed WAD growth differs")
+    require(len(result) == len(original) + recipe.GROWTH, "Fixed packed WAD growth differs")
     wad_entries(bytes(result))
     return bytes(result), reports
 
 
 def inverse_wad(original, after):
+    return _inverse_card_wad(original, after, sys.modules[__name__])
+
+
+def _inverse_card_wad(original, after, recipe):
     old_entries, final_entries = wad_entries(original), wad_entries(after)
-    require(len(after) == len(original) + GROWTH and len(old_entries) == len(final_entries), "Inverse WAD owner count/growth differs")
+    require(len(after) == len(original) + recipe.GROWTH and len(old_entries) == len(final_entries), "Inverse WAD owner count/growth differs")
     inverse_header = bytearray(after[:USER])
     inverse = bytearray()
     for (old_at, old_size, index), (new_at, new_size, new_index) in zip(old_entries, final_entries):
-        require(index == new_index and new_size == old_size + (GROWTH if index == 2 else 0), "Inverse WAD entry mapping differs")
+        require(index == new_index and new_size == old_size + (recipe.GROWTH if index == 2 else 0), "Inverse WAD entry mapping differs")
         before, current = bounded(original, old_at, old_size), bounded(after, new_at, new_size)
         if index == 2:
-            current = inverse_overlay(before, current)
+            current = recipe.inverse_overlay(before, current)
         else:
             require(current == before, "Unrelated complete WAD entry payload changed")
         inverse.extend(current)
@@ -275,10 +283,14 @@ def iso_directory(root):
 
 
 def fixed_root(original, new_wad_size):
+    return _fixed_card_root(original, new_wad_size, GROWTH)
+
+
+def _fixed_card_root(original, new_wad_size, growth):
     records = iso_directory(original)
     require(records.get("WAD.WAD", ())[:2] == (WAD_LBA, WAD_SIZE) and
             records.get("SCUS_942.28", ())[:2] == (EXE_LBA, EXE_SIZE), "Original ISO WAD/EXE owners differ")
-    require(new_wad_size == WAD_SIZE + GROWTH and WAD_LBA + WAD_SIZE // USER == EXE_LBA,
+    require(new_wad_size == WAD_SIZE + growth and WAD_LBA + WAD_SIZE // USER == EXE_LBA,
             "Exact adjacent WAD/EXE relocation geometry differs")
     final_exe_lba = WAD_LBA + new_wad_size // USER
     final_end = final_exe_lba + EXE_SIZE // USER
@@ -423,10 +435,19 @@ def source_alias(path):
 
 
 def verify(usa, candidate=None, cue=None, quiet=False):
+    return _verify_fixed_recipe(usa, candidate, cue, quiet, sys.modules[__name__])
+
+
+def _verify_fixed_recipe(usa, candidate, cue, quiet, recipe):
+    """Shared physical traversal for in-code closed recipes, never a CLI payload.
+
+    Each entrypoint supplies its own frozen module; no globals are replaced and
+    R01 remains independently callable in the same process as its successor.
+    """
     require(usa is not None, "An explicit original USA BIN is required")
     require(cue is None or candidate is not None, "A candidate CUE requires an explicit candidate BIN")
     if candidate is not None:
-        require(Path(candidate).name == IMAGE_NAME, "Candidate filename is outside the fixed research profile")
+        require(Path(candidate).name == recipe.IMAGE_NAME, "Candidate filename is outside the fixed research profile")
     if cue is not None:
         require(Path(os.path.abspath(cue)).parent == Path(os.path.abspath(candidate)).parent,
                 "Candidate BIN and CUE must share their explicit directory")
@@ -445,43 +466,43 @@ def verify(usa, candidate=None, cue=None, quiet=False):
         require((u32(original_wad, 16), u32(original_wad, 20)) == (0x5B800, OLD_OVERLAY_SIZE), "Exact source card owner differs")
         original_overlay = bounded(original_wad, u32(original_wad, 16), u32(original_wad, 20))
         require(sha(original_overlay) == CARD_SHA, "Complete original card allocation identity differs")
-        overlay_after = fixed_overlay(original_overlay)
-        wad_after, entry_reports = packed_wad(original_wad, overlay_after)
-        exe_after = fixed_executable(original_exe)
-        root_after = fixed_root(root, len(wad_after))
-        inverse_wad_bytes = inverse_wad(original_wad, wad_after)
-        inverse_exe_bytes = inverse_executable(original_exe, exe_after)
-        inverse_root_bytes = inverse_root(root, root_after)
+        overlay_after = recipe.fixed_overlay(original_overlay)
+        wad_after, entry_reports = recipe.packed_wad(original_wad, overlay_after)
+        exe_after = recipe.fixed_executable(original_exe)
+        root_after = recipe.fixed_root(root, len(wad_after))
+        inverse_wad_bytes = recipe.inverse_wad(original_wad, wad_after)
+        inverse_exe_bytes = recipe.inverse_executable(original_exe, exe_after)
+        inverse_root_bytes = recipe.inverse_root(root, root_after)
         final_exe_lba = WAD_LBA + len(wad_after) // USER
         final_end = final_exe_lba + len(exe_after) // USER
         wad_flags = source.read((EXE_LBA - 1) * RAW + 18, 1)[0] & 0x81
         exe_flags = source.read((EXE_LBA + EXE_SIZE // USER - 1) * RAW + 18, 1)[0] & 0x81
         output = stack.enter_context(ReadOnlyFile(candidate, USA_SIZE)) if candidate is not None else None
         transform = lambda raw, lba: expected_sector(raw, lba, wad_after, exe_after, root_after, root_lba, wad_flags, exe_flags)
-        invert = lambda raw, lba, old: inverse_sector(raw, lba, old, inverse_wad_bytes, inverse_exe_bytes, inverse_root_bytes, root_lba)
+        invert = lambda raw, lba, old: recipe.inverse_sector(raw, lba, old, inverse_wad_bytes, inverse_exe_bytes, inverse_root_bytes, root_lba)
         result = verify_raw(source, output, transform, invert, USA_SHA, not quiet)
         if output is not None:
             require(logical(output, 16, USER, 0, USER) == pvd, "Candidate PVD changed")
             require(logical(output, root_lba, USER, 0, USER) == root_after, "Complete candidate ISO root differs")
             # Parse and reverse the actual candidate logical owners too.
             actual_wad = logical(output, WAD_LBA, len(wad_after), 0, len(wad_after))
-            require(inverse_wad(original_wad, actual_wad) == original_wad, "Actual candidate WAD inverse differs")
+            require(recipe.inverse_wad(original_wad, actual_wad) == original_wad, "Actual candidate WAD inverse differs")
             actual_exe = logical(output, final_exe_lba, EXE_SIZE, 0, EXE_SIZE)
-            require(inverse_executable(original_exe, actual_exe) == original_exe, "Actual candidate EXE inverse differs")
+            require(recipe.inverse_executable(original_exe, actual_exe) == original_exe, "Actual candidate EXE inverse differs")
         cue_hash = None
         if cue is not None:
             cue_file = stack.enter_context(ReadOnlyFile(cue, 65536))
             cue_bytes = cue_file.read(0, cue_file.initial.st_size)
-            require_cue(cue_bytes)
+            recipe.require_cue(cue_bytes)
             cue_hash = sha(cue_bytes)
             cue_file.stable(cue_hash)
         if output is not None:
             output.stable(result["expectedCandidateSha256"])
         source.stable(USA_SHA)
         alias_stable()
-        return dict(result, schemaVersion=1, profile=PROFILE,
+        return dict(result, schemaVersion=1, profile=recipe.PROFILE,
                     mode="fixed-recipe-independent-physical-verification" if output is not None else "original-only-fixed-recipe-prediction",
-                    sourceUsaSha256=USA_SHA, candidateImageName=IMAGE_NAME,
+                    sourceUsaSha256=USA_SHA, candidateImageName=recipe.IMAGE_NAME,
                     originalWadSha256=WAD_SHA, expectedWadSha256=sha(wad_after),
                     originalExecutableSha256=EXE_SHA, expectedExecutableSha256=sha(exe_after),
                     originalOverlaySha256=CARD_SHA, expectedOverlaySha256=sha(overlay_after),
@@ -489,12 +510,14 @@ def verify(usa, candidate=None, cue=None, quiet=False):
                     finalExecutableLba=final_exe_lba, finalEndLbaExclusive=final_end,
                     consumedPaddingLbas=list(range(EXE_LBA + EXE_SIZE // USER, final_end)),
                     originalAndNamedInputsStable=True, completeOriginalWadInverseVerified=True,
-                    originalOverlayPrefixPreservedExceptTwoHooks=True, allOtherWadEntryPayloadsPreserved=True,
+                    originalOverlayPrefixPreservedExceptTwoHooks=len(recipe.OVERLAY_EDITS) == 2,
+                    originalOverlayPrefixPreservedExceptOwnedHooks=True,
+                    overlayHookCount=len(recipe.OVERLAY_EDITS), allOtherWadEntryPayloadsPreserved=True,
                     generatedCodeAuthority="immutable prepublication source-compiled block literals and SHA256 pins",
                     generatedCodeSemanticsIndependentlyReconstructed=False,
                     appendedBlocks=[{"id": name, "offset": at, "length": size,
                                      "sha256": sha(overlay_after[at:at + size]), "allZero": not any(overlay_after[at:at + size])}
-                                    for name, at, size in append_layout()],
+                                    for name, at, size in recipe.append_layout()],
                     entries=entry_reports, cueVerified=cue is not None, cueSha256=cue_hash,
                     runtimeVerified=False, biosLoaderVerified=False, nativeResidenceIssued=False,
                     lifetimeProven=False, readyAdmissionAuthorized=False, saveVerified=False,

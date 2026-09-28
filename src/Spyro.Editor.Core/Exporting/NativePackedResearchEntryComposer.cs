@@ -14,6 +14,13 @@ internal static class NativePackedResearchEntryComposer
         byte[] original=composition.Card.CopyOriginalOverlay();
         return Compose(header,originalLength,[new(2,0x5B800,0x3800,Hash(original),composition.Card.CopyOverlay())],read,[2]);
     }
+    internal static NativeWizardResearchPackedWad ComposeCardAdmission(ReadOnlySpan<byte> header,int originalLength,
+        NativeCollectibleCardAdmissionPlan composition,Func<int,int,byte[]> read)
+    {
+        ArgumentNullException.ThrowIfNull(composition);composition.RequireSourceComposition();
+        byte[] original=composition.CopyOriginalOverlay();
+        return Compose(header,originalLength,[new(2,0x5B800,0x3800,Hash(original),composition.CopyOverlay())],read,[2]);
+    }
     internal static NativeWizardResearchPackedWad ComposeArtisans(ReadOnlySpan<byte> header,int originalLength,
         NativeJapaneseEggArtisansIntegrationPlan integration,Func<int,int,byte[]> read)
     {

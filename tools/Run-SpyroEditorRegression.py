@@ -54,6 +54,10 @@ OBSERVER_PYTHON_CASES = (
      "Ran 20 tests"),
     ("python-collectible-card-load-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_collectible_card_load_observer.py", "-v"),
      "Ran 9 tests"),
+    ("python-collectible-card-admission-physical", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_collectible_card_admission_physical.py", "-v"),
+     "Ran 17 tests"),
+    ("python-collectible-card-admission-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_collectible_card_admission_observer.py", "-v"),
+     "Ran 9 tests"),
     ("python-japanese-egg-physical-verifier", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_research.py", "-v"),
      "Ran 29 tests"),
 )
@@ -84,6 +88,8 @@ CORE_CASES = (
     ("NativeCollectibleEnvelopeLoadSmoke", "NATIVE_COLLECTIBLE_ENVELOPE_LOAD_OK"),
     ("NativeCollectibleCardLoadSmoke", "NATIVE_COLLECTIBLE_CARD_LOAD_OK"),
     ("NativeCollectibleCardLoadResearchSmoke", "COLLECTIBLE_CARD_LOAD_RESEARCH_SOURCE_FREE_OK"),
+    ("NativeCollectibleLiveAdmissionSmoke", "NATIVE_COLLECTIBLE_LIVE_ADMISSION_OK"),
+    ("NativeCollectibleCardAdmissionResearchSmoke", "COLLECTIBLE_CARD_ADMISSION_RESEARCH_SOURCE_FREE_OK"),
     ("NativeJapaneseEggSchedulingSmoke", "JP_EGG_SCHEDULING_SOURCE_FREE_OK"),
     ("NativeCollectibleReservationMechanicsSmoke", "COLLECTIBLE_RESERVATION_MECHANICS_SOURCE_FREE_OK"),
     ("NativeCollectibleColdBootBootstrapSmoke", "COLLECTIBLE_COLD_BOOT_BOOTSTRAP_SOURCE_FREE_OK"),
@@ -227,6 +233,7 @@ ADDITIONAL_CORE_CASES = (
 )
 SOURCE_QA_CASES = (
     ("NativeCollectibleCardLoadResearchSmoke", "COLLECTIBLE_CARD_LOAD_RESEARCH_SOURCE_OK", ["--source"]),
+    ("NativeCollectibleCardAdmissionResearchSmoke", "COLLECTIBLE_CARD_ADMISSION_RESEARCH_SOURCE_OK", ["--source"]),
     ("NativeCollectibleStartupResearchSmoke", "COLLECTIBLE_STARTUP_RESEARCH_SOURCE_OK", ["--source"]),
     ("NativeCollectibleColdBootBootstrapSmoke", "COLLECTIBLE_COLD_BOOT_BOOTSTRAP_SOURCE_OK", ["--source"]),
     ("NativeCollectibleReservationMechanicsSmoke", "COLLECTIBLE_RESERVATION_MECHANICS_SOURCE_OK", ["--source"]),
@@ -300,7 +307,7 @@ SOURCE_QA_CASES = (
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
 SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
-SOURCE_QA_CUE_CASES = frozenset({"NativeCollectibleCardLoadResearchSmoke", "NativeCollectibleStartupResearchSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke", "NativeFreshSavedLevelResearchSmoke", "NativeFreshSavedLevelPublicSmoke", "UiSmoke"})
+SOURCE_QA_CUE_CASES = frozenset({"NativeCollectibleCardAdmissionResearchSmoke", "NativeCollectibleCardLoadResearchSmoke", "NativeCollectibleStartupResearchSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke", "NativeFreshSavedLevelResearchSmoke", "NativeFreshSavedLevelPublicSmoke", "UiSmoke"})
 # These raw-source checks have no project/build or default invocation. Each
 # accepts only the selected original BIN and shares the source-suite deadline.
 SOURCE_PYTHON_CASES = (

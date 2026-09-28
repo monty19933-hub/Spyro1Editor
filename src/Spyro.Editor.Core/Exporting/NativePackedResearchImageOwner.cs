@@ -104,6 +104,17 @@ internal sealed class NativePackedResearchImageOwner
             _=>new(){{2,original}});
     }
 
+    internal static NativePackedResearchImageOwner CaptureCardAdmission(string source,NativeCollectibleCardAdmissionPlan composition)
+    {
+        ArgumentNullException.ThrowIfNull(composition);composition.RequireSourceComposition();
+        if(!composition.RevertExecutableExact(composition.CopyExecutable()).AsSpan().SequenceEqual(composition.CopyOriginalExecutable()))
+            throw new InvalidDataException("Card-admission physical owner lost complete original executable ancestry.");
+        byte[] original=composition.CopyOriginalOverlay();
+        return Capture(source,composition.CopyExecutable(),0x9800,new Dictionary<int,int>{{2,0x9800}},
+            (header,read)=>NativePackedResearchEntryComposer.ComposeCardAdmission(header,0x6927000,composition,read),
+            _=>new(){{2,original}});
+    }
+
     // Only the closed typed factories above can choose these payloads.
     private static NativePackedResearchImageOwner Capture(string source,byte[] executable,int expectedGrowth,
         Dictionary<int,int> expectedChanges,Func<byte[],Func<int,int,byte[]>,NativeWizardResearchPackedWad> compose,

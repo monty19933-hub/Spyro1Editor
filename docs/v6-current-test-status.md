@@ -8,7 +8,14 @@ remains the goal, not a completed feature or zero-bug guarantee.
 
 ## Latest source and gameplay checkpoint
 
-September27 latest: a separate [native card-load research disc](research/collectible-card-load-research-r01.md)
+September27 latest: a separate [guarded admission research disc](research/collectible-card-admission-research-r01.md)
+is published and independently verified byte-for-byte against an original-only
+prediction. It adds phase-last live-state admission and a native warm-reset
+guard. Source/CPU checks and the272/0 Release gate pass. This publication
+checkpoint has not yet been exercised in DuckStation and installs no egg
+collector, inventory, custom save writer or percentage hooks. R08 is unchanged.
+
+Preceding runtime: a separate [native card-load research disc](research/collectible-card-load-research-r01.md)
 passes full raw-disc/CUE verification and full-firmware DuckStation saved-game
 loading, movement/jumping and the native pause menu. The added read transitions
 Waiting→Prepared with operation3/result0/no failure; the complete shadow was
