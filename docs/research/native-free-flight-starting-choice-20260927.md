@@ -90,5 +90,10 @@ Test-first RED used the actual picker and loader, not direct settings binding.
 Release GREEN passes55 UI checks (previous46 plus9 real-selection checks),
 including direct-inner and outer-picker held-load fences, repeated selection,
 no saved preference/source/output writes and unchanged supported-target rules.
-R09 remains preserved with its observed bug. A separate beta47 package and
-native ON/OFF/save-reload remain next; source tests do not certify either.
+R09 remains preserved with its observed bug. The separate
+[beta47 packaged check](v6-beta47-packaged-checkpoint.md) subsequently verified
+enabled Toasty controls, unsaved-draft refusal, saved ON across reopen and normal
+ON/OFF exports. OFF's BIN equals the original USA image. The normal ON CUE loaded
+Stone Hill and exited to Artisans through full firmware, but Toasty was not
+reached: native ON/OFF flight and Save Game/cold-reload remain next. A separate
+AX ComboBox setter crash interrupted the third fresh-instance OFF visual check.

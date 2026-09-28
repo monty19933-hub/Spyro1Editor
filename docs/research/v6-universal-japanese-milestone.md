@@ -7,6 +7,20 @@ this is not permission to replace the game with its Japanese version.
 
 ## Execution order and acceptance
 
+September28 packaged checkpoint: [R10/beta47](v6-beta47-packaged-checkpoint.md)
+from clean462b6c5 passed Mac/Windows package verification and actual Mac
+flight-control enablement, draft refusal, saved-ON reopen and normal ON/OFF
+Create BIN. Explicit OFF rebuilt the exact original USA BIN. Normal ON CUE
+full-firmware boot/native slot0 Stone Hill load/Exit Level to Artisans and
+movement passed; Toasty flight and native save/cold-reload did not get exercised.
+DuckStation is closed and normal settings/card are hash-exact restored.
+The third fresh editor instance crashed on AX value-setting of the level
+ComboBox (Avalonia NotSupportedException); R10 is preserved, source repair is
+in progress, and the third-instance explicit-OFF visual check remains pending.
+The [IRQ scheduler successor plan](collectible-irq-scheduler-successor-plan.md)
+records the required larger stack exclusion and cleanup routing; it is
+unimplemented, not an installed native writer.
+
 September28 integrated checkpoint01955c7: full Release288/0 after the opt-in
 short-IRQ-window controller and the real-picker flight availability fix.
 Report:`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-dh_7ytiz/summary.json`.
@@ -16,11 +30,12 @@ the new profile. UI55 includes9 real picker/load regressions. Separate R09/beta4
 from d60e620 passed package verification and Mac all-known browsing, fresh-level
 edit/undo/save/reopen and exact-profile GUI export plus independent new-process
 readback. It exposed disabled flight controls after selecting Toasty;96f6f2a
-fixes that refresh in source. R09 and R08 remain preserved. A separate beta47
-package is being prepared; no new native saving or flight runtime is claimed.
+fixes that refresh in source. R09 and R08 remain preserved. The subsequent
+beta47 package and its bounded results are recorded above; no new custom native
+saving or normal-output flight runtime is claimed.
 R09 evidence:`_local/v6-private-preview-20260928-r09.z9GTPX/PACKAGED-UI-SESSION.md`.
 
-Latest source gate: **Release288/0** after the named resident scheduler allocation,
+Preceding source gate: **Release288/0** after the named resident scheduler allocation,
 typed controller workspace and nonuniform model/scene rebinding. Existing
 lifecycle goldens survive; source serializer output passes full ordinary-byte
 comparison. Actual accepted native request wrappers now pass in the bounded
@@ -31,7 +46,7 @@ adds a dedicated1000-byte body owner while preserving old profiles and hashes;
 it cannot publish a native Saved result. Full report:
 `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-q_xktqdw/summary.json`.
 See [the save implementation and remaining native gates](collectible-native-save-next-slice.md).
-No new save disc or editor package was published; runtime remains the admitted
+No new save disc or editor package was published by that source gate; egg runtime remains the admitted
 pickup/quit result below, without custom durable saving, X/X or percentage.
 
 Latest source composition: [guarded admitted egg lifecycle](japanese-egg-admitted-lifecycle.md)
