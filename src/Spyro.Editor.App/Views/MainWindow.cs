@@ -106,7 +106,7 @@ public sealed partial class MainWindow : Window
     private readonly TextTargetCatalog _textTargets = TextTargetCatalog.CreateDefault();
     private readonly EditorViewport _viewport = new();
     private readonly List<Button> _mapOrientationButtons = new();
-    private readonly ComboBox _levelJumpBox = new();
+    private readonly ComboBox _levelJumpBox = new LevelPickerComboBox();
     private readonly ListBox _levelList = new();
     private readonly TextBlock _statusText = new();
     private readonly TextBlock _levelTitle = new();

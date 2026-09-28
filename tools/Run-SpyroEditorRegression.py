@@ -213,6 +213,8 @@ ADDITIONAL_CORE_CASES = (
      ["--behavior-free"]),
     ("UiSmoke", "FREE_FLIGHT_UI_OK",
      ["--free-flight-ui-only"]),
+    ("UiSmoke", "LEVEL_PICKER_AUTOMATION_OK",
+     ["--level-picker-automation-only"]),
     ("Id65AuthoringMobyDependencyBundleCompilerSmoke", "NATIVE_ROUTE_SURFACE_SMOKE_OK",
      ["--source-free-route-surfaces"]),
     ("NativeId65FreshDocumentSmoke", "NATIVE_ID65_VARIABLE_DATA_FREE_OK",
@@ -543,6 +545,7 @@ def main():
         suffix = {
             ("--behavior-free",): "-behavior",
             ("--free-flight-ui-only",): "-free-flight-ui",
+            ("--level-picker-automation-only",): "-level-picker-automation",
             ("--source-free-route-surfaces",): "-route-surfaces",
             ("--variable-data-free",): "-variable-data",
             ("--tiled-resource-free",): "-tiled-resource",

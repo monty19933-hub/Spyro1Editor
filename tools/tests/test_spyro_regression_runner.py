@@ -460,12 +460,13 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
-        self.assertEqual(8, len(lines))
+        self.assertEqual(9, len(lines))
         self.assertTrue(any(flag + " | " + marker in line for line in lines))
 
     def test_aggregate_ui_is_an_additional_isolated_mode_not_a_source_or_default_alias(self):
         name = "UiSmoke"
         expected = [(name, "FREE_FLIGHT_UI_OK", ["--free-flight-ui-only"]),
+                    (name, "LEVEL_PICKER_AUTOMATION_OK", ["--level-picker-automation-only"]),
                     (name, "FRESH_LEVEL_DOCUMENT_SESSION_OK", ["--fresh-native-level-session-only"]),
                     (name, "FRESH_NATIVE_LEVEL_UI_OK", ["--fresh-native-level-ui-only"]),
                     (name, "FRESH_MATERIAL_PICKER_UI_OK", ["--fresh-material-picker-only"]),
@@ -483,9 +484,51 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
-        self.assertEqual(8, len(lines))
+        self.assertEqual(9, len(lines))
         for _, marker, arguments in expected:
             self.assertTrue(any(arguments[0] + " | " + marker in line for line in lines))
+
+    def test_level_picker_automation_is_a_distinct_sourcefree_gate_with_required_marker(self):
+        name, old_marker = "UiSmoke", "FRESH_NATIVE_DOCUMENT_UI_OK"
+        marker, flag = "LEVEL_PICKER_AUTOMATION_OK", "--level-picker-automation-only"
+        self.assertEqual([(name, marker, [flag])],
+                         [case for case in RUNNER.ADDITIONAL_CORE_CASES if case[2] == [flag]])
+        self.assertEqual(["--fresh-native-document-only"], RUNNER.CASE_ARGUMENTS[name])
+        self.assertFalse(any(case[2] == [flag] for case in RUNNER.SOURCE_QA_CASES))
+        for emit_marker in (False, True):
+            calls = []
+
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                if command[:2] == ["dotnet", "run"]:
+                    kwargs["stdout"].write(marker if flag in command and emit_marker else old_marker)
+                return subprocess.CompletedProcess(command, 0)
+
+            with self.subTest(emit_marker=emit_marker), tempfile.TemporaryDirectory(prefix="spyro-picker-automation-runner-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", ((name, old_marker),)), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ((name, marker, [flag]),)), \
+                        mock.patch.object(RUNNER, "SOURCE_QA_CASES", ()), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("source read")), \
+                        mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("CUE read")), \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin)]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0 if emit_marker else 1, RUNNER.main())
+                summary = json.loads((Path(output) / "summary.json").read_text())
+            self.assertEqual(2, sum(command[:2] == ["dotnet", "build"] for command in calls), "App and UiSmoke build once each")
+            runs = [command for command in calls if command[:2] == ["dotnet", "run"]]
+            self.assertEqual([["--fresh-native-document-only"], [flag]],
+                             [command[command.index("--") + 1:] for command in runs])
+            self.assertTrue(all("--no-build" in command and "--no-restore" in command for command in runs))
+            self.assertEqual(["run-Spyro.Editor.UiSmoke", "run-Spyro.Editor.UiSmoke-level-picker-automation"],
+                             [row["name"] for row in summary[-2:]])
+            self.assertEqual(len(summary), len({row["name"] for row in summary}))
+            self.assertEqual(len(summary), len({row["log"] for row in summary}))
+            self.assertTrue(all(row["passed"] for row in summary[:-1]))
+            self.assertEqual(emit_marker, summary[-1]["passed"])
+            if not emit_marker:
+                self.assertEqual("missing success marker", summary[-1]["detail"])
 
     def test_material_picker_has_its_own_sourcefree_marker_and_result(self):
         name, old_marker = "UiSmoke", "FRESH_NATIVE_DOCUMENT_UI_OK"

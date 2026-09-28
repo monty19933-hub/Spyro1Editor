@@ -23,6 +23,15 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+// Actual main level picker automation; no native window or source image is opened.
+if (args.Contains("--level-picker-automation-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --level-picker-automation-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    LevelPickerAutomationCases.Run();
+    return 0;
+}
+
 // Actual flight settings controls and isolated tiny project files only.
 if (args.Contains("--free-flight-ui-only", StringComparer.Ordinal))
 {
