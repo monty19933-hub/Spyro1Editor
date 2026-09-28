@@ -215,6 +215,7 @@ Console.WriteLine("SAVE_CONTROLLER_LAYOUT "+JsonSerializer.Serialize(new{
     codeCapacity=NativeCollectibleSaveControllerKernel.CodeCapacityBytes,frameBytes=NativeCollectibleSaveControllerKernel.FrameBytes,
     nestedStackBytes=NativeCollectibleSaveControllerKernel.MaximumStackBytes,excludedCallerBytes=NativeCollectibleSaveControllerKernel.NativeCallerBytes,
     regions=k.Regions.Select(r=>new{r.Role,address=r.Address.ToString("X8"),r.ByteLength})}));
+InstructionCountCases.Run(k); // Separate measurement checks preserve established public smoke totals.
 if(args.Length==0)return;
 if(args.Length!=2||args[0]!="--source")throw new ArgumentException("Only --source original-USA-BIN; no publication/I/O mode.");
 using var source=NativeRegionalSourceSession.Open(args[1],NativeDiscRevision.UsaScus94228);
@@ -225,4 +226,5 @@ SerializerSnapshotCases.Run(source,certified,Check);
 PendingReceiptCases.Source(source,Check);
 int beforeAcceptedWrappers=checks;
 AcceptedRequestWrapperCases.Run(source,Check);
+NativeRequestTransactionCases.Run(source,certified);
 Console.WriteLine($"NATIVE_COLLECTIBLE_SAVE_CONTROLLER_SOURCE_OK checks={checks} acceptedWrapperChecks={checks-beforeAcceptedWrappers} sourceUnchanged=true acceptedWrappersExecuted=true asyncCallbacksExecuted=false nativeIoExecuted=false cardWrites=0 runtime=false");

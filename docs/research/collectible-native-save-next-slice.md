@@ -545,3 +545,25 @@ Next use an explicitly allocated scheduler owner for IRQ exclusion, header
 draining, live commit and repeat-save lifecycle—not additional unidentified
 padding. Cache, native session/retention, full stack and exact-disc gameplay
 remain required before installation/publication. R08 is unchanged.
+
+### Instruction measurements and combined native request closure
+
+The test CPU now counts dispatched instructions monotonically across split
+Run calls. A separate217-check,32-case repeatable measurement set records exact
+state/receipt identities without changing the established controller totals.
+For the current fixture, Begin executes17,609 instructions; completed Pump
+stages1–5 execute98,670/20,520/20,534/7,740/11,417. Drain pending/complete are
+255/312. These include emitted mock-service instructions and exclude host
+transfers; they are not cycles, latency, worst-case bounds or approval to mask
+an entire entry. Stage1 calls SHA four times. Use short internally revalidated
+poll/request/Drain windows, leaving bulk preparation/copies outside the mask.
+Preserve the caller's Enter token and never enable an already-disabled caller.
+
+A separate308-check USA-source test executes all five controller transfers
+through the actual pinned synchronous read/write wrappers, filename/queue
+helpers and nonblocking poll, including both native ports0/16 and a later real
+emitted pickup. It compares native request globals/queue entries, full ordinary
+and tail images, retained card/source/live complements and ABI/write bounds.
+Transfer bytes, queue retirement and interrupt-completion globals are explicitly
+simulated by the host; no asynchronous native callback, BIOS or card I/O runs.
+This closes the combined synchronous ABI test gap without promoting runtime.

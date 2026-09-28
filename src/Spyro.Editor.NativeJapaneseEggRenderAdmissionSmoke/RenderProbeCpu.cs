@@ -22,6 +22,10 @@ internal sealed class RenderProbeCpu
     internal List<uint> Writes { get; }=[];
     internal List<uint> Calls { get; }=[];
     internal HashSet<uint> Visited { get; }=[];
+    // Monotonic across Run segments: count fetched words dispatched, including
+    // delay slots and a decoded word that refuses. Stop PCs are not fetched.
+    // Per-invocation observations use deltas; this is not cycles or latency.
+    internal ulong ExecutedInstructionCount { get; private set; }
     private static int At(uint a,int n)
     {if((ulong)a+(uint)n<=0x200000)return (int)a; // Native null-list branch delay speculatively reads physical RAM+40.
      if(a>=0x1F800000 && (ulong)a+(uint)n<=0x1F800400)return (int)(a-0x1F800000)+0x200000;if(a<0x80000000||(ulong)a+(uint)n>0x80200000)throw new Exception("Unowned test address "+a.ToString("X8"));return (int)(a-0x80000000);}
@@ -37,7 +41,7 @@ internal sealed class RenderProbeCpu
         {
             if(pc==stop){if(pendingJump!=null||load!=null&&!allowPendingLoad)throw new Exception("Unretired test delay at "+pc.ToString("X8"));BoundaryLoad=load;return;}
             Visited.Add(pc);if(pc is 0x80016C58 or 0x8006272C or 0x80038EE0)Calls.Add(pc);
-            uint w=Get(pc),op=w>>26;int rs=(int)(w>>21)&31,rt=(int)(w>>16)&31,rd=(int)(w>>11)&31,shift=(int)(w>>6)&31;
+            uint w=Get(pc);ExecutedInstructionCount++;uint op=w>>26;int rs=(int)(w>>21)&31,rt=(int)(w>>16)&31,rd=(int)(w>>11)&31,shift=(int)(w>>6)&31;
             int imm=(short)w;uint a=Regs[rs],b=Regs[rt],next=pc+4;var oldLoad=load;load=null;var oldJump=pendingJump;pendingJump=null;
             (int Reg,uint Value)? write=null;
             void Set(int r,uint v)=>write=(r,v);
