@@ -28,8 +28,11 @@ var exact=NativeCollectibleSaveWorkspacePlan.Measure(0x80167D54,0x8016CD54);
 Check(exact.TailGapToFloor==0&&exact.LeadingBytes==12&&exact.TrailingBytes==0x654,"Exact half-open floor and every padding byte accounted");
 Refuse(()=>NativeCollectibleSaveWorkspacePlan.Measure(0x80167D54,0x8016CD53),"One-byte short floor");
 Refuse(()=>NativeCollectibleSaveWorkspacePlan.Capture(null!,null!),"No caller-byte/synthetic source authority");
+int preparationSourceFreeChecks=checks;
+ControllerWorkspaceCases.Geometry(Check,Refuse);
+int controllerSourceFreeChecks=checks-preparationSourceFreeChecks;
 if(args.Length==0)
-{Console.WriteLine($"COLLECTIBLE_SAVE_WORKSPACE_SOURCE_FREE_OK checks={checks} sourceReads=0 residence=false cardWrites=false publication=false");return;}
+{Console.WriteLine($"COLLECTIBLE_SAVE_WORKSPACE_SOURCE_FREE_OK checks={checks} preparationChecks={preparationSourceFreeChecks} controllerChecks={controllerSourceFreeChecks} sourceReads=0 residence=false cardWrites=false publication=false");return;}
 if(args.Length!=3||args[0]!="--source")throw new ArgumentException("Usage: no arguments or --source <JP-BIN> <USA-BIN>");
 using var jp=NativeRegionalSourceSession.Open(args[1],NativeDiscRevision.JapanScps10083);
 using var usa=NativeRegionalSourceSession.Open(args[2],NativeDiscRevision.UsaScus94228);
@@ -87,5 +90,9 @@ Check(plan.RequiredGlobalRebindings.Count==3&&plan.RequiredGlobalRebindings.All(
 Refuse(plan.RequireNativeInstallation,"Detached insertion is not a publishable or installed composition");
 Refuse(()=>NativeCollectibleSaveWorkspacePlan.Capture(jp,ancestry),"Wrong regional source");
 NativeLoaderCases.Run(plan,Check);
+int preparationSourceChecks=checks-controllerSourceFreeChecks;
+var controllerPlan=NativeCollectibleSaveWorkspacePlan.CaptureController(usa,ancestry);
+ControllerWorkspaceCases.Source(plan,controllerPlan,usa,jp,Check,Refuse);
+NativeLoaderCases.Run(controllerPlan,Check);
 jp.VerifyUnchanged();usa.VerifyUnchanged();
-Console.WriteLine($"COLLECTIBLE_SAVE_WORKSPACE_SOURCE_OK checks={checks} growth={plan.GrowthBytes:X} normalGap={plan.Memory.FinalNormalGap:X} finalSha256={plan.FinalDataSha256} hooks=false cardWrites=false publication=false");
+Console.WriteLine($"COLLECTIBLE_SAVE_WORKSPACE_SOURCE_OK checks={checks} preparationChecks={preparationSourceChecks} controllerChecks={checks-preparationSourceChecks} growth={plan.GrowthBytes:X} normalGap={plan.Memory.FinalNormalGap:X} finalSha256={plan.FinalDataSha256} controllerGrowth={controllerPlan.GrowthBytes:X} controllerGap={controllerPlan.Memory.FinalNormalGap:X} controllerSha256={controllerPlan.FinalDataSha256} hooks=false cardWrites=false publication=false");

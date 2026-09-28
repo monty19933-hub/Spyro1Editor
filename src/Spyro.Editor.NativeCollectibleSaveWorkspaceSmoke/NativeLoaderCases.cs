@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using Spyro.Editor.Core.Analysis;
 using Spyro.Editor.Core.Exporting;
 
 internal static class NativeLoaderCases
@@ -16,8 +17,8 @@ internal static class NativeLoaderCases
         // not actual CD completion, physical WAD relocation or loader lifetime.
         cpu.Put(0x80076B90,17);cpu.Put(0x80075964,0);cpu.Put(0x8007A720,0);
         cpu.Run(0x800159FC,0x80016698);
-        check(cpu.Regs[4]==17&&cpu.Regs[5]==plan.Memory.ModelStart&&cpu.Regs[6]==0x55000&&cpu.Regs[7]==W(0x10)&&
-            cpu.Get(cpu.Regs[29]+0x10)==600,"Original model CD setup requests the entire55000 descriptor, including explicit new owners");
+        check(cpu.Regs[4]==17&&cpu.Regs[5]==plan.Memory.ModelStart&&cpu.Regs[6]==plan.Memory.FinalModelBytes&&cpu.Regs[7]==W(0x10)&&
+            cpu.Get(cpu.Regs[29]+0x10)==600,"Original model CD setup requests the entire measured descriptor, including explicit new owners");
         // Model the completed transfer with the exact complete descriptor body,
         // then execute the unchanged actual registration/helper instructions.
         cpu.Copy(plan.Memory.ModelStart,data.AsSpan((int)W(0x10),(int)W(0x14)).ToArray());
@@ -58,5 +59,27 @@ internal static class NativeLoaderCases
         cpu.Regs[4]=plan.Preparation.OldTailAddress;cpu.Regs[5]=0x100;cpu.Regs[6]=0x801FF600;cpu.Regs[7]=0;
         cpu.Regs[29]=0x801FFB00;cpu.Regs[31]=0x80010000;cpu.Writes.Clear();cpu.Run(plan.Preparation.EntryPc,0x80010000);
         check(cpu.Regs[2]!=0&&cpu.Writes.Count==0,"Relocated emitted code remains fail-closed with an unadmitted ledger; no card call");
+        if(plan.Controller is{} controller)
+        {
+            // The actual materialized Begin entry is also executable after the
+            // original loader windows. A zero ledger never grants admission.
+            // Framed refusal may change only controller state and its stack.
+            cpu.Put(0x80078D14,1);cpu.Put(0x80078D18,0);cpu.Put(0x80078D1C,0);cpu.Put(0x80078D20,0);
+            cpu.Regs[4]=controller.OrdinaryInputAddress;cpu.Regs[5]=0x600;cpu.Regs[6]=0x801FF600;cpu.Regs[7]=0;
+            cpu.Regs[29]=0x801FFB00;cpu.Regs[31]=0x80010000;cpu.Hi=0x11223344;cpu.Lo=0x55667788;
+            cpu.Writes.Clear();cpu.Calls.Clear();cpu.Run(controller.BeginPc,0x80010000);
+            check(cpu.Regs[2]==(uint)NativeCollectibleSaveControllerStage.Failed&&
+                cpu.Get(controller.StateAddress)==(uint)NativeCollectibleSaveControllerStage.Failed,
+                "Actual loaded controller refuses unadmitted ledger with terminal failure");
+            check(!cpu.Calls.Any(p=>p is NativeCollectibleSaveControllerKernel.ReadPc or NativeCollectibleSaveControllerKernel.WritePc or NativeCollectibleSaveControllerKernel.PollPc)&&
+                cpu.Writes.All(a=>a>=controller.StateAddress&&a<controller.StateAddress+NativeCollectibleSaveControllerKernel.StateBytes||a>=0x801FFAC0&&a<0x801FFB00),
+                "Loaded refusal reaches no native card entry and writes only owned state/current frame");
+            byte[] refused=Bytes(plan.Geometry.TailAddress,plan.GrowthBytes);
+            check(Enumerable.Range(0,refused.Length).All(i=>plan.Geometry.TailAddress+i>=controller.StateAddress&&
+                plan.Geometry.TailAddress+i<controller.StateAddress+NativeCollectibleSaveControllerKernel.StateBytes||refused[i]==tail[i]),
+                "Loaded refusal preserves all code, filename, buffers and padding outside terminal state");
+            check(cpu.Regs[29]==0x801FFB00&&cpu.Regs[31]==0x80010000&&cpu.Hi==0x11223344&&cpu.Lo==0x55667788,
+                "Loaded controller refusal restores caller SP/RA and HI/LO");
+        }
     }
 }

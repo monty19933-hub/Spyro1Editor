@@ -16,6 +16,7 @@ namespace Spyro.Editor.Core.Exporting;
 /// </summary>
 internal sealed class NativeCollectibleSaveWorkspacePlan
 {
+    internal enum WorkspaceProfile { Preparation, Controller }
     internal const int OrdinaryBytes=0x600, TailReadbackBytes=0x100, ProposedTransactionStateBytes=0x100;
     internal sealed record GeometryMeasurement(uint TailAddress,uint ArenaAddress,int LeadingBytes,int SemanticBytes,
         int GrowthBytes,uint ExpectedOrdinaryAddress,uint OrdinaryReadbackAddress,uint TailReadbackAddress,
@@ -47,7 +48,7 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
         new SourceSpan(0x8005B6F8,0xE0,"d0b4cf5a7cf9ee407ff413f7261bd5f92f4880d7cee8467852f4d757e6b84295")});
     private readonly byte[] before,after;
     private readonly NativeLevelDataGrowthLayout growth;
-    private NativeCollectibleSaveWorkspacePlan(NativeRegionalSourceSession source,NativeJapaneseEggAdmittedLifecyclePlan ancestry)
+    private NativeCollectibleSaveWorkspacePlan(NativeRegionalSourceSession source,NativeJapaneseEggAdmittedLifecyclePlan ancestry,WorkspaceProfile profile)
     {
         ancestry.RequireSourceComposition();
         byte[] original=source.ReadExecutableRange(0,source.ExecutableByteLength),exe=ancestry.CopyExecutable();
@@ -64,7 +65,7 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
                 !original.AsSpan(at,span.ByteLength).SequenceEqual(exe.AsSpan(at,span.ByteLength)))
                 throw new InvalidDataException("The admitted composition changed a normal model/scene loader owner.");
         }
-        Ancestry=ancestry;before=ancestry.CopyLevelData();OriginalDataSha256=Hash(before);
+        Profile=profile;Ancestry=ancestry;before=ancestry.CopyLevelData();OriginalDataSha256=Hash(before);
         OriginalDomain=new(NativeAddressKind.LevelData,"admitted-parent:"+OriginalDataSha256,NativeAddressRevision.Original,before.Length);
         var registration=NativeMobyModelRegistrationSource.DecodeFixture(OriginalDomain,before);
         Registrations=Array.AsReadOnly(registration.Registrations.ToArray());
@@ -73,20 +74,34 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
         if(old.SceneRamStart!=ancestry.Lifecycle.Projection.SceneAddress||old.ModelRamStart!=ancestry.Lifecycle.Projection.ModelAddress||
             old.SceneReadEnd!=ancestry.Startup.FinalMemory.SceneEnd||old.UsedLevelDataBytes!=ancestry.Authored.Integration.RuntimeMemory.UsedLevelDataBytes)
             throw new InvalidDataException("Actual admitted bytes disagree with their current-final normal projection.");
-        Geometry=Measure(old.SceneRamStart,ancestry.Startup.FinalMemory.NormalReservedStart);
-        Preparation=NativeCollectibleSaveTailKernel.Capture(source,Geometry.ArenaAddress);Preparation.RequireSourceEvidence();
+        Geometry=profile==WorkspaceProfile.Controller?MeasureController(old.SceneRamStart,ancestry.Startup.FinalMemory.NormalReservedStart):
+            Measure(old.SceneRamStart,ancestry.Startup.FinalMemory.NormalReservedStart);
+        Controller=profile==WorkspaceProfile.Controller?NativeCollectibleSaveControllerKernel.Capture(source,Geometry.ArenaAddress):null;
+        Preparation=Controller?.Preparation??NativeCollectibleSaveTailKernel.Capture(source,Geometry.ArenaAddress);Preparation.RequireSourceEvidence();
         if(Preparation.WorkspaceAddress+NativeSha256Kernel.RequiredWorkspaceByteLength>Geometry.ExpectedOrdinaryAddress||
             Preparation.Query.EntryPc+Preparation.Query.CopyBytes().Length>Preparation.ArenaAddress+NativeCollectibleSaveTailKernel.CodeCapacityBytes)
             throw new InvalidDataException("Measured preparation code/scratch exceeds its explicit complete arena.");
         byte[] insertion=new byte[Geometry.GrowthBytes];
-        (string Role,int At,int Capacity,byte[] Bytes)[] code=[
-            ("prepare",0,0x1000,Preparation.CopyBytes()),("sha256",0x1000,0x800,Preparation.Sha256.CopyBytes()),
-            ("envelope-validation",0x1800,0x1000,Preparation.Loader.CopyBytes()),("state-query",0x2800,0x800,Preparation.Query.CopyBytes())];
+        int prepareOffset=checked((int)(Preparation.ArenaAddress-Geometry.ArenaAddress));
+        List<(string Role,int At,int Capacity,byte[] Bytes)> code=[];
+        if(Controller is not null)code.Add(("controller",0,NativeCollectibleSaveControllerKernel.CodeCapacityBytes,Controller.CopyBytes()));
+        code.AddRange(new (string,int,int,byte[])[]{
+            ("prepare",prepareOffset,0x1000,Preparation.CopyBytes()),("sha256",prepareOffset+0x1000,0x800,Preparation.Sha256.CopyBytes()),
+            ("envelope-validation",prepareOffset+0x1800,0x1000,Preparation.Loader.CopyBytes()),("state-query",prepareOffset+0x2800,0x800,Preparation.Query.CopyBytes())});
         foreach(var block in code)
         {
-            if(block.Bytes.Length>block.Capacity||block.At+block.Capacity>NativeCollectibleSaveTailKernel.CodeCapacityBytes)
-                throw new InvalidDataException("Measured emitted code exceeds its closed preparation capacity.");
+            if(block.Bytes.Length>block.Capacity||block.At+block.Capacity>prepareOffset+NativeCollectibleSaveTailKernel.CodeCapacityBytes)
+                throw new InvalidDataException("Measured emitted code exceeds its closed workspace capacity.");
             block.Bytes.CopyTo(insertion,Geometry.LeadingBytes+block.At);
+        }
+        if(Controller is not null)
+        {
+            byte[] filename=Controller.CopyFilename();
+            if(!original.AsSpan(0x15B8,filename.Length).SequenceEqual(filename)||
+                Controller.ExpectedOrdinaryAddress!=Geometry.ExpectedOrdinaryAddress||Controller.OrdinaryReadbackAddress!=Geometry.OrdinaryReadbackAddress||
+                Controller.TailReadbackAddress!=Geometry.TailReadbackAddress||Controller.StateAddress!=Geometry.TransactionStateAddress)
+                throw new InvalidDataException("Actual controller filename or closed region geometry differs from its measured source profile.");
+            filename.CopyTo(insertion,checked(Geometry.LeadingBytes+(int)(Controller.FilenameAddress-Geometry.ArenaAddress)));
         }
         growth=new(before.AsSpan(0,0x800),before.Length,
             [new(0,0,0,0,registration.ModelLength,0,insertion,2,false)]);
@@ -124,16 +139,40 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
                 Hash(after.AsSpan(tail+cursor,n))));cursor+=n;
         }
         Own("leading-alignment",Geometry.LeadingBytes,padding:true);
-        Own("preparation-code",NativeCollectibleSaveTailKernel.CodeCapacityBytes);
-        Own("preparation-scratch",NativeCollectibleSaveTailKernel.ArenaBytes-NativeCollectibleSaveTailKernel.CodeCapacityBytes,true);
-        Own("expected-ordinary",OrdinaryBytes,true);Own("ordinary-readback",OrdinaryBytes,true);
-        Own("tail-readback",TailReadbackBytes,true);Own("proposed-transaction-state",ProposedTransactionStateBytes,true);
+        void OwnPreparation()
+        {
+            Own("preparation-code",NativeCollectibleSaveTailKernel.CodeCapacityBytes);
+            Own("preparation-scratch",NativeCollectibleSaveTailKernel.ArenaBytes-NativeCollectibleSaveTailKernel.CodeCapacityBytes,true);
+        }
+        if(Controller is null)
+        {
+            OwnPreparation();Own("expected-ordinary",OrdinaryBytes,true);Own("ordinary-readback",OrdinaryBytes,true);
+            Own("tail-readback",TailReadbackBytes,true);Own("proposed-transaction-state",ProposedTransactionStateBytes,true);
+        }
+        else
+        {
+            foreach(var region in Controller.Regions)
+            {
+                if(region.Address!=Geometry.TailAddress+cursor)
+                    throw new InvalidDataException("Actual controller regions are not one contiguous explicit arena.");
+                if(region.Role=="preparation-arena")
+                {
+                    if(region.Address!=Preparation.ArenaAddress||region.ByteLength!=NativeCollectibleSaveTailKernel.ArenaBytes)
+                        throw new InvalidDataException("Nested preparation region differs from its actual emitted owner.");
+                    OwnPreparation();
+                }
+                else Own(region.Role,checked((int)region.ByteLength),region.Role is not("controller-code" or "fixed-filename" or "alignment"),region.Role=="alignment");
+            }
+            if(cursor!=Geometry.LeadingBytes+NativeCollectibleSaveControllerKernel.ArenaBytes)
+                throw new InvalidDataException("Actual controller region partition exceeds its full measured arena.");
+        }
         Own("trailing-alignment",Geometry.TrailingBytes,padding:true);
         if(cursor!=Geometry.GrowthBytes||tail+cursor!=Word(after,0x18)||
-            owners.Where(o=>o.Role!="preparation-code").Any(o=>after.AsSpan((int)o.Extent.Offset,(int)o.Extent.ByteLength).ContainsAnyExcept((byte)0)))
+            owners.Where(o=>o.Role is not("preparation-code" or "controller-code" or "fixed-filename"))
+                .Any(o=>after.AsSpan((int)o.Extent.Offset,(int)o.Extent.ByteLength).ContainsAnyExcept((byte)0)))
             throw new InvalidDataException("All new code, zero-initialization and padding owners must exactly partition the inserted model tail.");
         Owners=owners.AsReadOnly();CodeBlocks=Array.AsReadOnly(code.Select(b=>new CodeBlock(b.Role,
-            new(FinalDomain,tail+Geometry.LeadingBytes+b.At,b.Bytes.Length),checked(Preparation.ArenaAddress+(uint)b.At),b.Bytes)).ToArray());
+            new(FinalDomain,tail+Geometry.LeadingBytes+b.At,b.Bytes.Length),checked(Geometry.ArenaAddress+(uint)b.At),b.Bytes)).ToArray());
         List<NativeRelocationRegion> regions=[new("header",new(OriginalDomain,0,0x800),new(FinalDomain,0,0x800),0x800)];
         foreach(var subfile in growth.Subfiles)
         {
@@ -150,14 +189,17 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
         RequiredGlobalRebindings=Array.AsReadOnly(new[]{new GlobalRebinding(0x800785E4,Memory.OriginalSceneStart,Memory.FinalSceneStart),
             new GlobalRebinding(0x80075828,Memory.OriginalMobyTable,Memory.FinalMobyTable),
             new GlobalRebinding(0x80075890,ancestry.Lifecycle.Lifecycle.DynamicBase,checked(ancestry.Lifecycle.Lifecycle.DynamicBase+(uint)GrowthBytes))});
-        PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{profile="detached-admitted-artisans-save-workspace-v1",
+        PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{profile=profile==WorkspaceProfile.Preparation?
+            "detached-admitted-artisans-save-workspace-v1":"detached-admitted-artisans-save-controller-workspace-v1",
             ancestry.ExecutableSha256,ancestor=ancestry.Lifecycle.PlanSha256,OriginalDataSha256,FinalDataSha256,Geometry,Memory,
             owners=Owners.Select(o=>new{o.Role,o.Extent.Offset,o.Extent.ByteLength,o.Address,o.Mutable,o.Padding,o.InitialSha256}),
             code=CodeBlocks.Select(c=>new{c.Role,c.Address,c.Sha256}),RequiredRowRebindings,RequiredGlobalRebindings}));
         _=RevertExact(after);_=RevertToOriginalSourceExact(after);
     }
+    internal WorkspaceProfile Profile{get;}
     internal NativeJapaneseEggAdmittedLifecyclePlan Ancestry{get;}
     internal NativeCollectibleSaveTailKernel Preparation{get;}
+    internal NativeCollectibleSaveControllerKernel? Controller{get;}
     internal GeometryMeasurement Geometry{get;}
     internal MemoryProjection Memory{get;}
     internal int GrowthBytes=>Geometry.GrowthBytes;
@@ -174,6 +216,9 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
     internal IReadOnlyList<RowRebinding> RequiredRowRebindings{get;}
     internal IReadOnlyList<GlobalRebinding> RequiredGlobalRebindings{get;}
     internal bool SourceCertified=>true;
+    // Constructor checks complete normal transfer geometry and actual emitted
+    // capacities. This does not certify stack, lifetime, hooks or I/O execution.
+    internal bool MeasuredAllocationFits=>Memory.FinalNormalGap>=0&&Memory.TransferPeakEnd<=Memory.NormalReservedStart;
     internal bool CurrentGuardMatchesProjection=>false;
     internal bool NativeResidenceIssued=>false;
     internal bool HooksInstalled=>false;
@@ -212,32 +257,50 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
     }
     internal byte[] RevertToOriginalSourceExact(ReadOnlySpan<byte> bytes)=>Ancestry.RevertLevelDataExact(RevertExact(bytes));
     internal void RequireNativeInstallation()=>throw new InvalidDataException(
-        "Detached workspace only: row/callable/live-guard rebinding and save hooks are absent; code cache, model-reference closure, stack/IRQ, transitions and asynchronous card lease are unproved. Transaction-state100 is proposed capacity, not native controller fit.");
-    internal static NativeCollectibleSaveWorkspacePlan Capture(NativeRegionalSourceSession source,NativeJapaneseEggAdmittedLifecyclePlan ancestry)
+        "Detached workspace only: row/callable/live-guard rebinding and save hooks are absent; code cache, model-reference closure, stack/IRQ, transitions and asynchronous card lease are unproved. Measured code/buffer allocation is not native integration fit.");
+    internal static NativeCollectibleSaveWorkspacePlan Capture(NativeRegionalSourceSession source,NativeJapaneseEggAdmittedLifecyclePlan ancestry)=>
+        CaptureProfile(source,ancestry,WorkspaceProfile.Preparation);
+    internal static NativeCollectibleSaveWorkspacePlan CaptureController(NativeRegionalSourceSession source,NativeJapaneseEggAdmittedLifecyclePlan ancestry)=>
+        CaptureProfile(source,ancestry,WorkspaceProfile.Controller);
+    private static NativeCollectibleSaveWorkspacePlan CaptureProfile(NativeRegionalSourceSession source,NativeJapaneseEggAdmittedLifecyclePlan ancestry,WorkspaceProfile profile)
     {
         ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(ancestry);
         try
         {
             if(source.Revision!=NativeDiscRevision.UsaScus94228)throw new InvalidDataException("Exact original USA required.");
-            return new(source,ancestry);
+            return new(source,ancestry,profile);
         }
         finally{source.VerifyUnchanged();}
     }
     // Neutral range arithmetic only: TailGapToFloor excludes the following
     // scene; only the source constructor measures the complete resource. This
     // method cannot create bytes, a source plan, lease or installed composition.
-    internal static GeometryMeasurement Measure(uint tailAddress,uint normalFloor)
+    internal static GeometryMeasurement Measure(uint tailAddress,uint normalFloor)=>MeasureProfile(tailAddress,normalFloor,WorkspaceProfile.Preparation);
+    internal static GeometryMeasurement MeasureController(uint tailAddress,uint normalFloor)=>MeasureProfile(tailAddress,normalFloor,WorkspaceProfile.Controller);
+    private static GeometryMeasurement MeasureProfile(uint tailAddress,uint normalFloor,WorkspaceProfile profile)
     {
         if(tailAddress<0x80090000||tailAddress%4!=0||normalFloor>0x801FF600||normalFloor<=tailAddress)
             throw new InvalidDataException("Bounded aligned cached-RAM model tail and explicit normal floor required.");
         int leading=(int)((16-tailAddress%16)%16);
-        int semantic=checked(NativeCollectibleSaveTailKernel.ArenaBytes+2*OrdinaryBytes+TailReadbackBytes+ProposedTransactionStateBytes);
+        int semantic=profile==WorkspaceProfile.Controller?NativeCollectibleSaveControllerKernel.ArenaBytes:
+            checked(NativeCollectibleSaveTailKernel.ArenaBytes+2*OrdinaryBytes+TailReadbackBytes+ProposedTransactionStateBytes);
         int growth=checked((leading+semantic+0x7FF)/0x800*0x800);
         ulong end=(ulong)tailAddress+(uint)growth,arena=(ulong)tailAddress+(uint)leading;
-        if(end>normalFloor||arena+NativeCollectibleSaveTailKernel.ArenaBytes>0x801F0000)
+        int kernelArena=profile==WorkspaceProfile.Controller?NativeCollectibleSaveControllerKernel.ArenaBytes:NativeCollectibleSaveTailKernel.ArenaBytes;
+        if(end>normalFloor||arena+(uint)kernelArena>0x801F0000)
             throw new InvalidDataException("Complete workspace owner exceeds its bounded arena or declared normal floor.");
         uint expected=checked((uint)arena+NativeCollectibleSaveTailKernel.ArenaBytes),readback=checked(expected+OrdinaryBytes),
             tailReadback=checked(readback+OrdinaryBytes),state=checked(tailReadback+TailReadbackBytes);
+        if(profile==WorkspaceProfile.Controller)
+        {
+            // Neutral emitter geometry only; this fixture cannot issue source
+            // ownership, bytes for installation, or an asynchronous lease.
+            var controller=NativeCollectibleSaveControllerKernel.CreateFixture((uint)arena);
+            expected=controller.ExpectedOrdinaryAddress;readback=controller.OrdinaryReadbackAddress;
+            tailReadback=controller.TailReadbackAddress;state=controller.StateAddress;
+            if(controller.Regions.Sum(r=>(long)r.ByteLength)!=semantic)
+                throw new InvalidDataException("Actual controller regions disagree with the declared complete arena.");
+        }
         return new(tailAddress,(uint)arena,leading,semantic,growth,expected,readback,tailReadback,state,growth-leading-semantic,(uint)end,(long)normalFloor-(long)end);
     }
     private static uint Word(ReadOnlySpan<byte> bytes,int at)=>BinaryPrimitives.ReadUInt32LittleEndian(bytes[at..]);

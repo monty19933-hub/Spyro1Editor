@@ -242,6 +242,26 @@ controller frame; diagnostic/BIOS/IRQ/asynchronous stack paths remain unproved.
 The prior0x5000 workspace projection cannot contain this arena. No existing
 published candidate is silently expanded or rebound.
 
+The existing workspace plan now has a closed `CaptureController` profile,
+sharing its descriptor, ownership, inverse and loader implementation with the
+unchanged preparation profile. Minimum controller growth is0x7800 **from the
+admitted parent**, not appended after the prior0x5000 experiment. Model start
+stays80117D54; model length becomes57800. Arena80167D60..8016F060 is preceded by
+0xC alignment bytes and followed by0x4F4. Scene becomes8016F554..80183D54, leaving
+0x3C5C below the unchanged normal0xA00 floor801879B0. Every code-capacity gap,
+buffer and padding byte has an explicit owner; the fixed filename is initialized
+from the pinned source. Actual model/scene loader windows preserve the complete
+tail, and its loaded Begin refuses an unadmitted ledger without a card call.
+
+Release and Debug each pass70 source-free checks (preparation35/controller35)
+and328 explicit JP+USA source checks (preparation149/controller179). The original
+preparation data hash remains unchanged. Controller-profile WAD10 SHA-256:
+`a27e8e5848f6cb99cdb0ea5c60aa93e4571b4721db665d48a8877f898a525b7e`.
+Both complete original images remain unchanged. This proves the detached
+allocation and loader contract, not current pickup-guard bindings, native cache,
+asynchronous lease, real card I/O or publication. The same plan still refuses
+installation; corrected nonuniform model/scene rebinding is the next slice.
+
 The next source scheduling candidate is an Artisans-owned overlay gate reached
 from callback80086134's restored epilogue800873D8/873DC. It must check the exact
 mode11 caller return31E08 and final loaded geometry before touching model-tail
