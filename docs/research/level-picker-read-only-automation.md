@@ -51,6 +51,12 @@ first failed on the missing mode, then all 114 runner unit tests passed, includi
 missing-marker refusal and no source/CUE resolution. The expected default full
 gate is now 289 results (previously 288); that complete gate was not rerun here.
 
+Integrated default Release at b8634c8 passed **289 checks, zero failures**,
+including the newly registered automation mode. Report:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-8v63b11t/summary.json`.
+The source gate retained beta47 identity; beta48 is a separate subsequent
+package identity for native AX retesting. No Core/export logic changed.
+
 These checks do not exercise the macOS native AX bridge or certify popup behavior
 in a packaged app. R10 is preserved and was not rebuilt or controlled. A new
 package and native AX retest remain separate acceptance steps; the interrupted

@@ -7,6 +7,14 @@ this is not permission to replace the game with its Japanese version.
 
 ## Execution order and acceptance
 
+Latest source checkpoint b8634c8 fixes the main level picker's read-only
+accessibility setter crash without changing selection/export policy. Regression
+RED reproduced the packaged exception; GREEN26 automation checks,55 flight UI
+checks and114 runner tests pass. Independent review found no blocker, and the
+integrated default Release gate passes **289/0**. See
+[the fix and evidence](level-picker-read-only-automation.md). A separate beta48
+identity is prepared for native packaged retesting; R10 stays unchanged.
+
 September28 packaged checkpoint: [R10/beta47](v6-beta47-packaged-checkpoint.md)
 from clean462b6c5 passed Mac/Windows package verification and actual Mac
 flight-control enablement, draft refusal, saved-ON reopen and normal ON/OFF
