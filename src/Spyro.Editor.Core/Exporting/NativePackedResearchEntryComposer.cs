@@ -6,7 +6,14 @@ namespace Spyro.Editor.Core.Exporting;
 internal static class NativePackedResearchEntryComposer
 {
     internal static NativeWizardResearchPackedWad ComposeDark(ReadOnlySpan<byte> header,int originalLength,
-        IEnumerable<NativeWizardResearchReplacement> replacements,Func<int,int,byte[]> read)=>Compose(header,originalLength,replacements,read,13,14);
+        IEnumerable<NativeWizardResearchReplacement> replacements,Func<int,int,byte[]> read)=>Compose(header,originalLength,replacements,read,[13,14]);
+    internal static NativeWizardResearchPackedWad ComposeCardLoad(ReadOnlySpan<byte> header,int originalLength,
+        NativeCollectibleCardLoadResearchComposition composition,Func<int,int,byte[]> read)
+    {
+        ArgumentNullException.ThrowIfNull(composition);composition.RequireAncestry();
+        byte[] original=composition.Card.CopyOriginalOverlay();
+        return Compose(header,originalLength,[new(2,0x5B800,0x3800,Hash(original),composition.Card.CopyOverlay())],read,[2]);
+    }
     internal static NativeWizardResearchPackedWad ComposeArtisans(ReadOnlySpan<byte> header,int originalLength,
         NativeJapaneseEggArtisansIntegrationPlan integration,Func<int,int,byte[]> read)
     {
@@ -15,7 +22,7 @@ internal static class NativePackedResearchEntryComposer
         byte[] originalOverlay=integration.CopyOriginalOverlay(),originalData=integration.CopyOriginalLevelData();
         return Compose(header,originalLength,[
             new(9,checked((int)U32(header,72)),originalOverlay.Length,Hash(originalOverlay),integration.CopyOverlay()),
-            new(10,checked((int)U32(header,80)),originalData.Length,Hash(originalData),integration.CopyLevelData())],read,9,10);
+            new(10,checked((int)U32(header,80)),originalData.Length,Hash(originalData),integration.CopyLevelData())],read,[9,10]);
     }
     internal static NativeWizardResearchPackedWad ComposeAuthoredArtisans(ReadOnlySpan<byte> header,int originalLength,
         NativeJapaneseEggAuthoredClassesPlan plan,Func<int,int,byte[]> read)
@@ -25,10 +32,10 @@ internal static class NativePackedResearchEntryComposer
         byte[] overlay=plan.Integration.CopyOriginalOverlay(),data=plan.Integration.CopyOriginalLevelData();
         return Compose(header,originalLength,[
             new(9,checked((int)U32(header,72)),overlay.Length,Hash(overlay),plan.CopyOverlay()),
-            new(10,checked((int)U32(header,80)),data.Length,Hash(data),plan.CopyLevelData())],read,9,10);
+            new(10,checked((int)U32(header,80)),data.Length,Hash(data),plan.CopyLevelData())],read,[9,10]);
     }
     private static NativeWizardResearchPackedWad Compose(ReadOnlySpan<byte> header,int originalLength,
-        IEnumerable<NativeWizardResearchReplacement> replacements,Func<int,int,byte[]> read,int first,int second)
+        IEnumerable<NativeWizardResearchReplacement> replacements,Func<int,int,byte[]> read,int[] allowed)
     {
         ArgumentNullException.ThrowIfNull(replacements);ArgumentNullException.ThrowIfNull(read);
         if(header.Length!=0x800)throw new InvalidDataException("Research WAD header owner must be exactly one sector.");
@@ -37,8 +44,8 @@ internal static class NativePackedResearchEntryComposer
         int raw=0;
         foreach(var replacement in replacements)
         {
-            if(++raw>2)throw new InvalidDataException("Research replacement enumeration exceeds its two-owner budget.");
-            if(replacement==null||replacement.Index!=first&&replacement.Index!=second||replacement.Bytes==null)
+            if(++raw>allowed.Length)throw new InvalidDataException("Research replacement enumeration exceeds its closed owner budget.");
+            if(replacement==null||!allowed.Contains(replacement.Index)||replacement.Bytes==null)
                 throw new InvalidDataException("Research replacement is not a recognized Dark entry owner.");
             if(replacement.Bytes.Length<replacement.OriginalLength||replacement.Bytes.Length>0x10000000||replacement.Bytes.Length%0x800!=0)
                 throw new InvalidDataException("Research replacement alignment/length exceeds its bounded owner.");
@@ -48,7 +55,7 @@ internal static class NativePackedResearchEntryComposer
             if(!installed.TryAdd(replacement.Index,replacement))
                 throw new InvalidDataException("Research replacement contains a duplicate owner.");
         }
-        if(installed.Count!=2)throw new InvalidDataException("Research requires exactly both Dark owners.");
+        if(installed.Count!=allowed.Length)throw new InvalidDataException("Research requires exactly all closed profile owners.");
         List<(int Index,int Offset,int Length)> entries=[];
         for(int index=0;index<256;index++)
         {

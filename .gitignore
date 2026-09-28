@@ -232,6 +232,12 @@ unsafe-tests/
 !/tools/tests/test_collectible_startup_observer.py
 !/tools/Verify-SpyroCollectibleStartup.py
 !/tools/tests/test_collectible_startup_physical.py
+!/tools/Verify-SpyroCollectibleCardLoad.py
+!/tools/tests/test_collectible_card_load_physical.py
+!/tools/Create-SpyroCollectibleCardFixture.py
+!/tools/tests/test_collectible_card_fixture.py
+!/tools/Observe-SpyroCollectibleCardLoad.py
+!/tools/tests/test_collectible_card_load_observer.py
 !/tools/Verify-SpyroJapaneseEggResearch.py
 !/tools/tests/test_japanese_egg_research.py
 !/tools/Observe-SpyroFreshId65.py

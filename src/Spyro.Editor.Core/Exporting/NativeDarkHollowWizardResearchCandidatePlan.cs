@@ -15,6 +15,9 @@ internal sealed record NativeWizardResearchPackedWad(byte[] Bytes,IReadOnlyList<
 
 internal static class NativeWizardResearchPackedEntryComposer
 {
+    internal static NativeWizardResearchPackedWad ComposeCardLoad(ReadOnlySpan<byte> header,int originalLength,
+        NativeCollectibleCardLoadResearchComposition composition,Func<int,int,byte[]> read)=>
+        NativePackedResearchEntryComposer.ComposeCardLoad(header,originalLength,composition,read);
     internal static NativeWizardResearchPackedWad Compose(ReadOnlySpan<byte> header,int originalLength,
         IEnumerable<NativeWizardResearchReplacement> replacements,Func<int,int,byte[]> read)=>
         NativePackedResearchEntryComposer.ComposeDark(header,originalLength,replacements,read);

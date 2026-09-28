@@ -7,6 +7,14 @@ this is not permission to replace the game with its Japanese version.
 
 ## Execution order and acceptance
 
+Latest September27 checkpoint: [card-load research R01](collectible-card-load-research-r01.md)
+now runs the native additional read in DuckStation and reaches saved Artisans.
+Whole-disc/CUE verification, source492/fault35 checks and full Release266/0 pass.
+Waiting→Prepared operation3/result0 was observed; complete pre-transition shadow
+acceptance was not captured. Live admission, custom collection, durable writes,
+inventory and required-for100% integration remain pending. Original saves,
+settings and R08 are preserved; this is not a replacement packaged editor.
+
 September 27 updated user goal: the full494-line attachment
 `1d8a5d09-c8ae-4496-8004-3cc7690b01b1/Pasted text.txt` is now the active scope.
 It retains the verified architecture and asks for all-known-Moby browsing and

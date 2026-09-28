@@ -35,10 +35,14 @@ internal sealed class NativeWizardResearchPublicationBinding
     private readonly NativeDarkHollowTwoWizardResearchCandidatePlan? _two;
     private readonly NativeJapaneseEggResearchCandidatePlan? _egg;
     private readonly NativeJapaneseEggAuthoredResearchCandidatePlan? _authoredEgg;
+    private readonly NativeCollectibleCardLoadResearchPlan? _cardLoad;
     private NativeWizardResearchPublicationBinding(NativeDarkHollowWizardResearchCandidatePlan plan)=>_legacy=plan;
     private NativeWizardResearchPublicationBinding(NativeDarkHollowTwoWizardResearchCandidatePlan plan)=>_two=plan;
     private NativeWizardResearchPublicationBinding(NativeJapaneseEggResearchCandidatePlan plan)=>_egg=plan;
     private NativeWizardResearchPublicationBinding(NativeJapaneseEggAuthoredResearchCandidatePlan plan)=>_authoredEgg=plan;
+    private NativeWizardResearchPublicationBinding(NativeCollectibleCardLoadResearchPlan plan)=>_cardLoad=plan;
+    internal static NativeWizardResearchPublicationBinding FromCardLoad(NativeCollectibleCardLoadResearchPlan plan)
+    {ArgumentNullException.ThrowIfNull(plan);return new(plan);}
     internal static NativeWizardResearchPublicationBinding FromJapaneseEgg(NativeJapaneseEggResearchCandidatePlan plan)
     {ArgumentNullException.ThrowIfNull(plan);return new(plan);}
     internal static NativeWizardResearchPublicationBinding FromAuthoredJapaneseEgg(NativeJapaneseEggAuthoredResearchCandidatePlan plan)
@@ -48,21 +52,21 @@ internal sealed class NativeWizardResearchPublicationBinding
     {ArgumentNullException.ThrowIfNull(plan);return new(plan);}
     internal static NativeWizardResearchPublicationBinding FromTwo(NativeDarkHollowTwoWizardResearchCandidatePlan plan)
     {ArgumentNullException.ThrowIfNull(plan);return new(plan);}
-    internal string SourceImagePath=>_authoredEgg?.SourceImagePath??_egg?.SourceImagePath??_legacy?.SourceImagePath??_two!.SourceImagePath;
-    internal string SourceCuePath=>_authoredEgg?.SourceCuePath??_egg?.SourceCuePath??_legacy?.SourceCuePath??_two!.SourceCuePath;
-    internal string PlanSha256=>_authoredEgg?.PlanSha256??_egg?.PlanSha256??_legacy?.PlanSha256??_two!.PlanSha256;
-    internal string ImageName=>_authoredEgg!=null?NativeJapaneseEggAuthoredResearchCandidatePlan.ImageName:_egg!=null?NativeJapaneseEggResearchCandidatePlan.ImageName:_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.ImageName:NativeDarkHollowTwoWizardResearchCandidatePlan.ImageName;
-    internal string CueName=>_authoredEgg!=null?NativeJapaneseEggAuthoredResearchCandidatePlan.CueName:_egg!=null?NativeJapaneseEggResearchCandidatePlan.CueName:_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.CueName:NativeDarkHollowTwoWizardResearchCandidatePlan.CueName;
-    internal string ReceiptName=>_authoredEgg!=null?NativeJapaneseEggAuthoredResearchCandidatePlan.ReceiptName:_egg!=null?NativeJapaneseEggResearchCandidatePlan.ReceiptName:_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.ReceiptName:NativeDarkHollowTwoWizardResearchCandidatePlan.ReceiptName;
-    internal string[] OutputNames=>_authoredEgg!=null?NativeJapaneseEggAuthoredResearchCandidatePlan.OutputNames:_egg!=null?NativeJapaneseEggResearchCandidatePlan.OutputNames:_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.OutputNames:NativeDarkHollowTwoWizardResearchCandidatePlan.OutputNames;
-    internal string LeaseName=>_authoredEgg!=null?".native-japanese-eggs-authored-colors.writer.lock":_egg!=null?".native-japanese-eggs.writer.lock":_legacy!=null?".native-wizard.writer.lock":".native-two-wizards.writer.lock";
-    internal string StagePrefix=>_authoredEgg!=null?".native-japanese-eggs-authored-colors-stage-":_egg!=null?".native-japanese-eggs-stage-":_legacy!=null?".native-wizard-stage-":".native-two-wizards-stage-";
-    internal Task RequireFreshAsync(CancellationToken token=default)=>_authoredEgg?.RequireFreshAsync(token)??_egg?.RequireFreshAsync(token)??_legacy?.RequireFreshAsync(token)??_two!.RequireFreshAsync(token);
-    internal void RequireStageReversion(){if(_authoredEgg!=null)_authoredEgg.RequireStageReversion();else if(_egg!=null)_egg.RequireStageReversion();else if(_legacy!=null)_legacy.RequireStageReversion();else _two!.RequireStageReversion();}
-    internal void WriteNewImage(string path,CancellationToken token){if(_authoredEgg!=null)_authoredEgg.WriteNewImage(path,token);else if(_egg!=null)_egg.WriteNewImage(path,token);else if(_legacy!=null)_legacy.WriteNewImage(path,token);else _two!.WriteNewImage(path,token);}
-    internal (string Hash,int Changed) VerifyImage(string path)=>_authoredEgg?.VerifyImage(path)??_egg?.VerifyImage(path)??_legacy?.VerifyImage(path)??_two!.VerifyImage(path);
-    internal byte[] BuildReceipt((string Hash,int Changed) result)=>_authoredEgg?.BuildReceipt(result)??_egg?.BuildReceipt(result)??_legacy?.BuildReceipt(result)??_two!.BuildReceipt(result);
-    internal byte[] CopyCueBytes()=>_authoredEgg?.CopyCueBytes()??_egg?.CopyCueBytes()??_legacy?.CopyCueBytes()??_two!.CopyCueBytes();
+    internal string SourceImagePath=>_cardLoad?.SourceImagePath??_authoredEgg?.SourceImagePath??_egg?.SourceImagePath??_legacy?.SourceImagePath??_two!.SourceImagePath;
+    internal string SourceCuePath=>_cardLoad?.SourceCuePath??_authoredEgg?.SourceCuePath??_egg?.SourceCuePath??_legacy?.SourceCuePath??_two!.SourceCuePath;
+    internal string PlanSha256=>_cardLoad?.PlanSha256??_authoredEgg?.PlanSha256??_egg?.PlanSha256??_legacy?.PlanSha256??_two!.PlanSha256;
+    internal string ImageName=>_cardLoad!=null?NativeCollectibleCardLoadResearchPlan.ImageName:_authoredEgg!=null?NativeJapaneseEggAuthoredResearchCandidatePlan.ImageName:_egg!=null?NativeJapaneseEggResearchCandidatePlan.ImageName:_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.ImageName:NativeDarkHollowTwoWizardResearchCandidatePlan.ImageName;
+    internal string CueName=>_cardLoad!=null?NativeCollectibleCardLoadResearchPlan.CueName:_authoredEgg!=null?NativeJapaneseEggAuthoredResearchCandidatePlan.CueName:_egg!=null?NativeJapaneseEggResearchCandidatePlan.CueName:_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.CueName:NativeDarkHollowTwoWizardResearchCandidatePlan.CueName;
+    internal string ReceiptName=>_cardLoad!=null?NativeCollectibleCardLoadResearchPlan.ReceiptName:_authoredEgg!=null?NativeJapaneseEggAuthoredResearchCandidatePlan.ReceiptName:_egg!=null?NativeJapaneseEggResearchCandidatePlan.ReceiptName:_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.ReceiptName:NativeDarkHollowTwoWizardResearchCandidatePlan.ReceiptName;
+    internal string[] OutputNames=>_cardLoad!=null?NativeCollectibleCardLoadResearchPlan.OutputNames:_authoredEgg!=null?NativeJapaneseEggAuthoredResearchCandidatePlan.OutputNames:_egg!=null?NativeJapaneseEggResearchCandidatePlan.OutputNames:_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.OutputNames:NativeDarkHollowTwoWizardResearchCandidatePlan.OutputNames;
+    internal string LeaseName=>_cardLoad!=null?".native-collectible-card-load.writer.lock":_authoredEgg!=null?".native-japanese-eggs-authored-colors.writer.lock":_egg!=null?".native-japanese-eggs.writer.lock":_legacy!=null?".native-wizard.writer.lock":".native-two-wizards.writer.lock";
+    internal string StagePrefix=>_cardLoad!=null?".native-collectible-card-load-stage-":_authoredEgg!=null?".native-japanese-eggs-authored-colors-stage-":_egg!=null?".native-japanese-eggs-stage-":_legacy!=null?".native-wizard-stage-":".native-two-wizards-stage-";
+    internal Task RequireFreshAsync(CancellationToken token=default)=>_cardLoad?.RequireFreshAsync(token)??_authoredEgg?.RequireFreshAsync(token)??_egg?.RequireFreshAsync(token)??_legacy?.RequireFreshAsync(token)??_two!.RequireFreshAsync(token);
+    internal void RequireStageReversion(){if(_cardLoad!=null)_cardLoad.RequireStageReversion();else if(_authoredEgg!=null)_authoredEgg.RequireStageReversion();else if(_egg!=null)_egg.RequireStageReversion();else if(_legacy!=null)_legacy.RequireStageReversion();else _two!.RequireStageReversion();}
+    internal void WriteNewImage(string path,CancellationToken token){if(_cardLoad!=null)_cardLoad.WriteNewImage(path,token);else if(_authoredEgg!=null)_authoredEgg.WriteNewImage(path,token);else if(_egg!=null)_egg.WriteNewImage(path,token);else if(_legacy!=null)_legacy.WriteNewImage(path,token);else _two!.WriteNewImage(path,token);}
+    internal (string Hash,int Changed) VerifyImage(string path)=>_cardLoad?.VerifyImage(path)??_authoredEgg?.VerifyImage(path)??_egg?.VerifyImage(path)??_legacy?.VerifyImage(path)??_two!.VerifyImage(path);
+    internal byte[] BuildReceipt((string Hash,int Changed) result)=>_cardLoad?.BuildReceipt(result)??_authoredEgg?.BuildReceipt(result)??_egg?.BuildReceipt(result)??_legacy?.BuildReceipt(result)??_two!.BuildReceipt(result);
+    internal byte[] CopyCueBytes()=>_cardLoad?.CopyCueBytes()??_authoredEgg?.CopyCueBytes()??_egg?.CopyCueBytes()??_legacy?.CopyCueBytes()??_two!.CopyCueBytes();
 }
 
 internal static class NativeWizardResearchPublicationEngine

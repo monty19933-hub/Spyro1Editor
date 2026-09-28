@@ -8,6 +8,15 @@ remains the goal, not a completed feature or zero-bug guarantee.
 
 ## Latest source and gameplay checkpoint
 
+September27 latest: a separate [native card-load research disc](research/collectible-card-load-research-r01.md)
+passes full raw-disc/CUE verification and full-firmware DuckStation saved-game
+loading, movement/jumping and the native pause menu. The added read transitions
+Waiting→Prepared with operation3/result0/no failure; the complete shadow was
+not captured before its phase transition, so custom data acceptance remains
+unverified. No live Ready, collection, inventory or completion consumer is
+enabled. Normal settings/card and R08 are preserved. Full Release: **266/0**,
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-dp7js14z/summary.json`.
+
 September27 source continuation (not a replacement of R08): the two Moby
 browsers now default to all368 identified classes/6,334 observations, including
 shared resources, with categories and expandable exact-donor dependency
@@ -45,9 +54,10 @@ status, rechecks selection and the complete native prefix, then prepares only
 the separate shadow. Three card-menu copy anchors are relocated because the
 original boot clear would erase appended code. Focused checks pass 1,363
 source-free and 1,827 cumulatively with the original-ROM route. Stack/old-buffer
-regressions and an independent review pass. No disc is published, no card is
-written, and no live Ready, inventory or percentage consumer is enabled.
-The latest integrated default Release gate passes **261 checks, zero failures**,
+regressions and an independent review pass. That detached checkpoint did not
+publish a disc; the subsequent research publication/runtime is described above.
+No custom card writer or live Ready/inventory/percentage consumer is enabled.
+The preceding integrated default Release gate passed **261 checks, zero failures**,
 report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-41fou6r2/summary.json`.
 The preceding integrated default Release gate passed **258 checks, zero failures**,
 report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-4p7l38fn/summary.json`.
@@ -56,8 +66,9 @@ report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-s7seb6
 The preceding overlay-only `fed7d49` gate also passed254/0 (`spyro-regression-6cck7768`);
 the earlier `e9d0091` checkpoint passed252/0.
 R08's App/Core assemblies, both normal DuckStation INIs and the ordinary USA
-memory card still match their preserved hashes. No emulator was launched for
-this source/UI checkpoint, and no new playable collectible result is claimed.
+memory card still match their preserved hashes. The earlier source/UI checkpoint
+did not launch an emulator; current card-load runtime is separately reported above.
+No new playable collectible result is claimed.
 
 September 27 continuation: a separate research disc now demonstrates **two
 independently colored Japanese eggs animating together in USA Artisans** after
