@@ -227,6 +227,10 @@ class ObserverPrebuildTests(unittest.TestCase):
          "Ran 17 tests"),
         ("python-collectible-card-admission-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_collectible_card_admission_observer.py", "-v"),
          "Ran 9 tests"),
+        ("python-admitted-egg-lifecycle-physical", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_admitted_lifecycle_physical.py", "-v"),
+         "Ran 13 tests"),
+        ("python-admitted-egg-lifecycle-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_admitted_lifecycle_observer.py", "-v"),
+         "Ran 12 tests"),
         ("python-japanese-egg-physical-verifier", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_research.py", "-v"),
          "Ran 29 tests"),
     )
@@ -2112,6 +2116,13 @@ class RegionalAndMatrixGateTests(unittest.TestCase):
             self.assertEqual(marker, dict(RUNNER.CORE_CASES)[name])
             self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
             self.assertFalse(any(case[0] == name for case in RUNNER.SOURCE_QA_CASES))
+
+    def test_admitted_egg_lifecycle_is_mandatory_but_never_receives_one_region_source(self):
+        name = "NativeJapaneseEggAdmittedLifecycleSmoke"
+        self.assertEqual("JP_EGG_ADMITTED_LIFECYCLE_SOURCE_FREE_OK", dict(RUNNER.CORE_CASES)[name])
+        self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
+        self.assertFalse(any(case[0] == name for case in RUNNER.SOURCE_QA_CASES))
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
 
     def test_collectible_save_contract_has_no_native_card_or_source_route(self):
         self.assertEqual("DETACHED_COLLECTIBLE_SAVE_SOURCE_FREE_OK",

@@ -27,7 +27,7 @@ internal sealed class NativeJapaneseEggLifecycleOverlayPlan
 
     private NativeJapaneseEggLifecycleOverlayPlan(NativeJapaneseEggAuthoredClassesPlan authored,
         DetachedCollectibleManifest manifest, int ordinarySlot, IEnumerable<NativeJapaneseEggCollectibleIdentity> mappings,
-        NativeJapaneseEggPickupPredicateSource predicateSource, bool source)
+        NativeJapaneseEggPickupPredicateSource predicateSource, bool source, bool guarded = false)
     {
         ArgumentNullException.ThrowIfNull(authored); ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(mappings); ArgumentNullException.ThrowIfNull(predicateSource);
@@ -47,24 +47,27 @@ internal sealed class NativeJapaneseEggLifecycleOverlayPlan
         // output. Re-measure after projection, because literal address encoding
         // may change length. A bounded fixed point prevents accidental cycles.
         var binding = NativeJapaneseEggCollectibleBinding.Create(authored, manifest, identities);
-        int[] sizes = Measure(binding).Bytes.Select(b => b.Length).Concat(new[] { 0x3C, 0x1C }).ToArray();
+        var names=guarded?Names.Concat(new[]{"live-consumer-guard"}).ToArray():Names;
+        int[] Sizes(NativeJapaneseEggCollectibleBinding b)=>Measure(b).Bytes.Select(x=>x.Length).Concat(
+            guarded?new[]{0x3C,0x1C,NativeJapaneseEggLiveGuardKernel.CapacityBytes}:new[]{0x3C,0x1C}).ToArray();
+        int[] sizes = Sizes(binding);
         NativeOwnedOverlayAppendLayout? layout = null;
         NativeJapaneseEggOverlayProjection? projection = null;
         bool settled = false;
         for (int pass = 0; pass < 8; pass++)
         {
             layout = NativeOwnedOverlayAppendLayout.Create("egg-lifecycle-successor:" + authored.PlanSha256 + ":" + manifest.Sha256 + ":" + ordinarySlot,
-                beforeOverlay, OverlayBase, 0x10000, Names.Select((id, i) => new NativeOwnedOverlayBlockSize(id, sizes[i])), "alignment");
+                beforeOverlay, OverlayBase, 0x10000, names.Select((id, i) => new NativeOwnedOverlayBlockSize(id, sizes[i])), "alignment");
             projection = NativeJapaneseEggOverlayProjection.Create(authored, layout);
             binding = NativeJapaneseEggCollectibleBinding.CreateProjected(authored, manifest, identities, projection);
-            int[] next = Measure(binding).Bytes.Select(b => b.Length).Concat(new[] { 0x3C, 0x1C }).ToArray();
+            int[] next = Sizes(binding);
             if (next.SequenceEqual(sizes)) { settled = true; break; }
             sizes = next;
         }
         if (!settled || layout is null || projection is null)
             throw new InvalidDataException("Final lifecycle code sizing/projection did not converge within its bounded layout budget.");
         Layout = layout; Projection = projection; Binding = binding;
-        NativeByteExtent Owner(int i) => layout.Blocks.Single(b => b.Id == Names[i]).Owner;
+        NativeByteExtent Owner(int i) => layout.Blocks.Single(b => b.Id == names[i]).Owner;
         uint Pc(int i) => checked(OverlayBase + (uint)Owner(i).Offset);
         var kernels = Compile(binding, Owner, Pc);
         var bodies = kernels.Bytes;
@@ -84,15 +87,25 @@ internal sealed class NativeJapaneseEggLifecycleOverlayPlan
             Jump(Restore), 0, Jump(Visual), 0)));
         blocks.Add(new(Names[6], Owner(6), Words(0x02602021, 0x3C05801F, 0x34A5F600,
             Call(Lifecycle.AfterVisualEntryPc), 0, Jump(Restore), 0)));
+        if(guarded)
+        {
+            LiveGuard=NativeJapaneseEggLiveGuardKernel.Compile(authored,binding,projection,Lifecycle,Owner(7),Pc(7),PreBridgePc,PostBridgePc);
+            blocks.Add(new(names[7],Owner(7),LiveGuard.CopyBytes()));
+        }
         var entries = new List<NativeOwnedOverlayEntry>();
         foreach (int i in Enumerable.Range(0, Names.Length))
             entries.Add(new(Names[i], Names[i], new(layout.Domain, Owner(i).Offset + (i == 0 ? 0x100 : 0), 4)));
         entries.Add(new("after-visual", Names[4], new(layout.Domain, Lifecycle.AfterVisualEntryPc - OverlayBase, 4)));
+        if(LiveGuard is not null)
+        {
+            entries.Add(new("guard-before",names[7],new(layout.Domain,LiveGuard.BeforeEntryPc-OverlayBase,4)));
+            entries.Add(new("guard-after",names[7],new(layout.Domain,LiveGuard.AfterEntryPc-OverlayBase,4)));
+        }
         // All linker destinations must be owned entries, including both
         // lifecycle entries and the predicate's wrapper rather than raw helper.
         overlay = layout.Materialize(blocks, entries, entries.Select(e => e.Owner));
-        Put(overlay, checked((int)(PreEdge - OverlayBase)), Jump(PreBridgePc));
-        Put(overlay, checked((int)(PostEdge - OverlayBase)), Jump(PostBridgePc));
+        Put(overlay, checked((int)(PreEdge - OverlayBase)), Jump(LiveGuard?.BeforeEntryPc??PreBridgePc));
+        Put(overlay, checked((int)(PostEdge - OverlayBase)), Jump(LiveGuard?.AfterEntryPc??PostBridgePc));
         executable = beforeExecutable.ToArray();
         short low = unchecked((short)projection.CopyAnchor);
         uint high = checked((uint)(((long)projection.CopyAnchor - low) >> 16));
@@ -141,6 +154,7 @@ internal sealed class NativeJapaneseEggLifecycleOverlayPlan
     internal NativeCollectibleStateQueryKernel Query { get; }
     internal NativeJapaneseEggCollectionAttempt Attempt { get; }
     internal NativeJapaneseEggLifecycleCallables Lifecycle { get; }
+    internal NativeJapaneseEggLiveGuardKernel? LiveGuard { get; }
     internal uint PreBridgePc { get; }
     internal uint PostBridgePc { get; }
     internal string FinalOverlaySha256 { get; }
@@ -174,6 +188,20 @@ internal sealed class NativeJapaneseEggLifecycleOverlayPlan
             return new(authored, manifest, ordinarySlot, mappings, NativeJapaneseEggPickupPredicateSource.Capture(japan, usa), true);
         }
         finally { try { japan.VerifyUnchanged(); } finally { usa.VerifyUnchanged(); } }
+    }
+    internal static NativeJapaneseEggLifecycleOverlayPlan FixtureGuarded(NativeJapaneseEggAuthoredClassesPlan authored,
+        DetachedCollectibleManifest manifest,int ordinarySlot,IEnumerable<NativeJapaneseEggCollectibleIdentity> mappings,
+        NativeJapaneseEggPickupPredicateSource predicateSource)=>new(authored,manifest,ordinarySlot,mappings,predicateSource,false,true);
+    internal static NativeJapaneseEggLifecycleOverlayPlan CaptureGuarded(NativeRegionalSourceSession japan,NativeRegionalSourceSession usa,
+        NativeJapaneseEggAuthoredClassesPlan authored,DetachedCollectibleManifest manifest,int ordinarySlot,
+        IEnumerable<NativeJapaneseEggCollectibleIdentity> mappings)
+    {
+        try
+        {
+            _=NativeJapaneseEggAuthoredMemoryReport.Capture(usa,authored);
+            return new(authored,manifest,ordinarySlot,mappings,NativeJapaneseEggPickupPredicateSource.Capture(japan,usa),true,true);
+        }
+        finally{try{japan.VerifyUnchanged();}finally{usa.VerifyUnchanged();}}
     }
     private static uint DecodeAnchor(byte[] exe)
     {

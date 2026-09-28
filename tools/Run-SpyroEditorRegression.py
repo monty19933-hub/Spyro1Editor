@@ -58,6 +58,10 @@ OBSERVER_PYTHON_CASES = (
      "Ran 17 tests"),
     ("python-collectible-card-admission-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_collectible_card_admission_observer.py", "-v"),
      "Ran 9 tests"),
+    ("python-admitted-egg-lifecycle-physical", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_admitted_lifecycle_physical.py", "-v"),
+     "Ran 13 tests"),
+    ("python-admitted-egg-lifecycle-observer", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_admitted_lifecycle_observer.py", "-v"),
+     "Ran 12 tests"),
     ("python-japanese-egg-physical-verifier", ("-m", "unittest", "discover", "-s", "tools/tests", "-p", "test_japanese_egg_research.py", "-v"),
      "Ran 29 tests"),
 )
@@ -97,6 +101,7 @@ CORE_CASES = (
     ("NativeJapaneseEggCollectionAttemptSmoke", "JP_EGG_COLLECTION_ATTEMPT_SOURCE_FREE_OK"),
     ("NativeJapaneseEggLifecycleSmoke", "JP_EGG_LIFECYCLE_SOURCE_FREE_OK"),
     ("NativeJapaneseEggLifecycleOverlaySmoke", "JP_EGG_LIFECYCLE_OVERLAY_SOURCE_FREE_OK"),
+    ("NativeJapaneseEggAdmittedLifecycleSmoke", "JP_EGG_ADMITTED_LIFECYCLE_SOURCE_FREE_OK"),
     ("NativeJapaneseEggVisualBehaviorSmoke", "JP_EGG_VISUAL_BEHAVIOR_SOURCE_FREE_OK"),
     ("NativeJapaneseEggArtisansIntegrationSmoke", "JP_EGG_ARTISANS_INTEGRATION_SOURCE_FREE_OK"),
     ("NativeJapaneseEggMemorySmoke", "JP_EGG_MEMORY_SOURCE_FREE_OK"),

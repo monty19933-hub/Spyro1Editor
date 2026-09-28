@@ -242,6 +242,10 @@ unsafe-tests/
 !/tools/tests/test_collectible_card_admission_physical.py
 !/tools/Observe-SpyroCollectibleCardAdmission.py
 !/tools/tests/test_collectible_card_admission_observer.py
+!/tools/Verify-SpyroJapaneseEggAdmittedLifecycle.py
+!/tools/tests/test_japanese_egg_admitted_lifecycle_physical.py
+!/tools/Observe-SpyroJapaneseEggAdmittedLifecycle.py
+!/tools/tests/test_japanese_egg_admitted_lifecycle_observer.py
 !/tools/Verify-SpyroJapaneseEggResearch.py
 !/tools/tests/test_japanese_egg_research.py
 !/tools/Observe-SpyroFreshId65.py

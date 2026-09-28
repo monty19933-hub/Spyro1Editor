@@ -8,6 +8,13 @@ remains the goal, not a completed feature or zero-bug guarantee.
 
 ## Latest source and gameplay checkpoint
 
+September27 latest source: [guarded admission plus Artisans pickup](research/japanese-egg-admitted-lifecycle.md)
+now composes in a closed source plan. Actual CPU admission precedes seeded-egg
+suppression and second-egg pickup;342 cumulative checks pass. Existing lifecycle
+571/admission677 compatibility checks also pass, with unchanged old export bytes.
+The new combined disc is not yet published or tested in DuckStation; this adds
+no custom writer, inventory or completion hooks and does not replace R08.
+
 September27 latest: a separate [guarded admission research disc](research/collectible-card-admission-research-r01.md)
 is published and independently verified byte-for-byte against an original-only
 prediction. It adds phase-last live-state admission and a native warm-reset

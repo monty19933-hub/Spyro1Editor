@@ -7,6 +7,13 @@ this is not permission to replace the game with its Japanese version.
 
 ## Execution order and acceptance
 
+Latest source composition: [guarded admitted egg lifecycle](japanese-egg-admitted-lifecycle.md)
+joins actual native admission to Artisans suppression/pickup with final owner
+projection and full original inverses.342 cumulative source/CPU checks and
+571/677 predecessor compatibility checks pass; independent source review found
+no blocker. The combined disc is still unpublished/untested. Custom native
+save, inventory and required-for100% remain pending; R08 remains preserved.
+
 Latest source/publication checkpoint: [guarded admission R01](collectible-card-admission-research-r01.md)
 adds source-tested phase-last admission and resident warm-reset invalidation.
 The new isolated disc matches independent original-only whole-disc prediction;
