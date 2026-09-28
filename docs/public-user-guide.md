@@ -1,6 +1,6 @@
 # Spyro Editor Beta V6 User Guide
 
-Private development preview, internal build `0.1.0-beta.45`. V6 is not finished
+Private development preview, internal build `0.1.0-beta.46`. V6 is not finished
 or publicly released. The Mac preview is ad-hoc signed and is not Apple-signed
 or notarized; read the included opening instructions before launching it.
 
@@ -30,6 +30,10 @@ project. It stores its own document; normal **Create BIN** does not include it.
    Moby** leaves the document unchanged. A source reference can be saved before
    its native import is supported; browsing does not make it playable. Shared
    PETE model registrations are inspect-only and have no placed-donor row.
+   Both browsers also expose all 368 identified classes, including 6,334 native
+   observations and entries with unresolved dependencies. Use their search and
+   source/resource filters; read the selected variant's compatibility reason
+   before placing it. A visible entry does not imply supported native export.
 4. The two floor-material slots can reference retail textures. Inspect sources
    explicitly for donor thumbnails. Selected art is not painted onto the
    schematic. Material references and native export support are separate.
@@ -48,8 +52,8 @@ authored background without Town Square's visible terrain. Their saved export
 requires the exact supported geometry, placements and material selections;
 editing outside those profiles can disable export. Other donors remain
 authoring-only. This is not yet general new-level publishing.
-Portals, durable saves, unrestricted materials/Mobys and **Fly Anywhere Enabled**
-remain unfinished.
+Portals, durable saves, unrestricted materials/Mobys and fresh-level gameplay
+flight remain unfinished. The separate retail Toasty flight option is below.
 
 For an exported ID65 test, open the in-game inventory and enter:
 **R1, R2, L1, L2, R1, L1, R2, L2, Left, Down**. Use a disposable copied emulator
@@ -208,6 +212,11 @@ The Level tab now has **Fly Anywhere Enabled**, **Save Flight**, and **Revert**.
 The initial choice is OFF. Save stores the choice in the current project for
 the selected level; Revert discards the checkbox draft. A draft must be saved
 or reverted before Create BIN.
+
+This controls Spyro in the exported game, not **Editor Free Camera**. Default
+OFF and explicitly saved OFF are shown separately. Save Flight does not change
+a memory-card save. In a supported enabled export, jump and press Cross while
+airborne to enter flight; the option does not make Spyro spawn in midair.
 
 ON currently supports **Toasty only**, in a project without other saved edits.
 Other levels and independent ID65 are not enabled by this initial native recipe.

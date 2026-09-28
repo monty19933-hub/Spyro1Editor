@@ -2,9 +2,21 @@
 
 ## Changes since Spyro Editor Beta V5
 
-Private development preview, internal build `0.1.0-beta.45`. This is not a
+Private development preview, internal build `0.1.0-beta.46`. This is not a
 published release or a claim of universal Moby, texture or new-level support.
 
+- Expanded both Moby browsers to expose all 368 identified classes and 6,334
+  native observations, including resources without placed donor rows. Exact
+  source variants and dependency/refusal reasons remain distinct. Browsing an
+  object does not bypass the existing native import checks.
+- Clarified that Save Flight stores an editor-project export preference, not
+  a memory-card ability. Default OFF, saved OFF and an unsaved ON/OFF draft are
+  distinguished; Spyro's gameplay flight is separate from Editor Free Camera.
+- Continued native Japanese-egg research: a separate fixed Artisans candidate
+  has observed pickup and earned-state suppression. New save-controller work
+  remains detached/source-tested, not enabled in normal editor exports. Native
+  durable saving, level X/X, completion percentage and sign placement are not
+  shipped features of this preview.
 - Added Fresh Level authoring to the normal application: floor bounds, spawn,
   heading, colors, native music selection, ordered placements and two floor
   material references. Apply, undo/redo, save and reopen preserve the complete

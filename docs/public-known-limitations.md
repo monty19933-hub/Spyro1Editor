@@ -1,7 +1,7 @@
 # Spyro Editor Beta V6 Known Limitations
 
 - This is a private V6 development preview, not a finished release. The Mac
-  package is ad-hoc signed, not Apple-signed or notarized. Existing V5 and R03–R07
+  package is ad-hoc signed, not Apple-signed or notarized. Existing V5 and R03–R08
   test apps, original game images, and protected projects are not replaced.
 - **Fresh Level…** is integrated into the normal application. Its preview is a
   schematic, with no native model, terrain-texture, collision or gameplay renderer.
@@ -19,18 +19,24 @@
   GPU/source checks and a complete64KiB report; animated/HQ/scrolling material
   support is not implied. R06's exact three-material candidate has separate
   gameplay observations, not universal composition acceptance.
-- The Moby browser covers placed donors from all inventoried levels. Resources
+- The Moby browsers expose all 368 identified classes and 6,334 observations,
+  including placed donors and resources without placed donor rows. Resources
   are inspect-only, and generic donor placements are authoring-only until their
   dependencies are supported. A catalogue entry is not a working native import.
   All Mobys in all levels remains unfinished.
-- Shared PETE models are inspect-only. Japanese editable signs, correctly
-  rendered dragonfly eggs and new inventory/completion/save handling are not
-  implemented. The ordinary retail egg is not a verified Japanese egg.
+- Shared PETE models are inspect-only. Japanese eggs and signs are not enabled
+  as normal GUI placement/export features. Separate fixed research candidates
+  have displayed and collected eggs; this does not ship durable egg saving,
+  level X/X counters or required-for-100% accounting. The ordinary retail egg
+  is not a verified Japanese egg.
 - Focused DuckStation testing of the two-material Wizard + Grass example showed
   its authored background, Wizard attack/charge defeat, a ten-value gem reward,
   fall/respawn and isolated jump/landing. That is not universal runtime acceptance.
   Normal portals, durable save ownership and broader combinations remain pending.
-- **Fly Anywhere Enabled** is not yet a user-testable native V6 capability.
+- **Fly Anywhere Enabled** has a guarded normal-export option for Toasty only,
+  without other saved edits. It stores a project preference, not a memory-card
+  ability; normal ON/OFF native gameplay and save/reload acceptance are pending.
+  It does not enable flight in arbitrary retail or fresh levels.
 - Fresh-level test export is separate from normal retail **Create BIN**.
   The original 35-level retail catalogue remains unchanged.
 
