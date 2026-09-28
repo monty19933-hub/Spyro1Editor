@@ -47,6 +47,7 @@ internal static class SourceCases
             Console.WriteLine("SCHEDULER_SOURCE_LAYOUT "+JsonSerializer.Serialize(new{plan.OverlaySha256,plan.OriginalOverlaySha256,workspace.FinalDataSha256,
                 k.MainCodeByteLength,k.FinalCodeByteLength,state=NativeCollectibleSaveSchedulerKernel.StateAddress,globals=k.ExpectedGlobals.Select(g=>new{g.Address,g.Value}),
                 mainSha256=Hash(k.CopyMainBytes()),finalSha256=Hash(k.CopyFinalBytes()),workspace.Memory.FinalSceneStart,workspace.Memory.FinalNormalGap}));
+            ResidentCases.Source(usa,ancestry,check,refuse);
         }
         finally{try{japan.VerifyUnchanged();}finally{usa.VerifyUnchanged();}}
     }

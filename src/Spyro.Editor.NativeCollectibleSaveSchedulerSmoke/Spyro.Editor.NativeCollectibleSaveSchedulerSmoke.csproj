@@ -6,5 +6,7 @@
     <Compile Include="../Spyro.Editor.NativeJapaneseEggCollectionAttemptSmoke/AttemptFixtures.cs" Link="AttemptFixtures.cs" />
     <Compile Include="../Spyro.Editor.NativeJapaneseEggRenderAdmissionSmoke/RenderProbeCpu.cs" Link="RenderProbeCpu.cs" />
     <Compile Include="../Spyro.Editor.NativeCollectibleSaveTailSmoke/SaveCpuFixture.cs" Link="SaveCpuFixture.cs" />
+    <Compile Include="../Spyro.Editor.NativeCollectibleSaveWorkspaceSmoke/NativeLoaderCases.cs" Link="NativeLoaderCases.cs" />
+    <Compile Include="../Spyro.Editor.NativeJapaneseEggWorkspaceLifecycleSmoke/WorkspaceCpuCases.cs" Link="WorkspaceCpuCases.cs" />
   </ItemGroup>
 </Project>

@@ -567,3 +567,57 @@ and tail images, retained card/source/live complements and ABI/write bounds.
 Transfer bytes, queue retirement and interrupt-completion globals are explicitly
 simulated by the host; no asynchronous native callback, BIOS or card I/O runs.
 This closes the combined synchronous ABI test gap without promoting runtime.
+
+### Named resident scheduler allocation
+
+The closed ControllerScheduler workspace adds one explicit1000-byte immutable
+body/table owner at8016F060, immediately after the unchanged controller arena.
+Total model-tail insertion is8800: leadingC, controller7300, scheduler1000 and
+trailing4F4 zero padding. Model bytes become58800; final data length38E000;
+scene is80170554..80184D54 and the normal A00 floor remains801879B0, leaving2C5C.
+No model root, registration, controller/buffer address or overlay copy anchor
+moves. Existing preparation/controller profiles and overlay-only scheduler
+retain their exact previous hashes.
+
+The regenerated resident body is4B4 bytes inside that1000 owner. A344-byte
+overlay guard/context/table plus40-byte mutable state uses only the existing
+E240/5C0 owner; state is800891F8 (offsetE7C0). The former second owner FDF8/208
+is retained byte-exact. Absolute jump bridges cross between the separated code
+regions; no emitted instruction bytes are blindly rebased. Source globals,
+RA/stack, live context and fresh native state0 are checked before any resident
+instruction fetch, read or write. Held/blocked ownership routing remains in
+the executing overlay, so an invalid projection cannot fetch discarded code.
+
+Construction is source validation and geometry, then regeneration, then complete
+final hashing. A private geometry receipt binds exact parent/controller/memory
+and rebindings; callers cannot supply code payloads or provisional hashes.
+The resident plan subsequently checks the exact workspace kernel instance,
+immutable full1000-byte owner and final recompiled lifecycle globals. Original
+loaders and lifecycle probes exercise the changed descriptor/scene addresses.
+Tests cover exact-floor/one-word overflow, complete inverses and tampering,
+issuer substitution, zero-tail refusals, original reset invalidation and
+retained overlay state after a completed transaction's simulated model reload.
+That final case does not certify reclamation while a transfer is pending.
+
+Resident overlay SHA256:
+`dcec8e77395614fa63b056f52760813fb95cbb9d3ee64abe83cdb1091c52c02b`.
+Final data SHA256:
+`e10ecf779e248dfa30980af7acca46227162f1fa21a7de2964f5a6874d4c3f5a`.
+Full scheduler owner SHA256:
+`979a6492876e55784cf5d1e1f0bdbe86b1ecb665fa91c1fe53118f1b4cde4554`.
+Independent source review found no structural blocker. This allocation does
+not add interrupt exclusion, header draining, commit, rearm or installation.
+Focused Release and Debug each pass318 source-free/723 original JP+USA checks.
+The old workspace still passes70/328 with both previous data hashes unchanged.
+Integrated Release passes288 checks, zero failures; report:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-q_xktqdw/summary.json`.
+
+The next runtime target is deliberately narrower than production saving: after
+the short internal IRQ windows are implemented and tested, one isolated writer
+experiment may remain terminal HELD on a disposable card, with no UI Saved/live
+commit/rearm. Verify actual native transfer/readback and complete closed-card
+contents, then cold-load through the existing admission path to check persisted
+bits. Use the exact verified CUE and full firmware, Interpreter from cold boot,
+no card swaps or savestates, and protect/restore ordinary settings/cards. This
+experiment would not certify general card identity, crash atomicity, repeat
+saving or normal-editor export; those remain separate release gates.

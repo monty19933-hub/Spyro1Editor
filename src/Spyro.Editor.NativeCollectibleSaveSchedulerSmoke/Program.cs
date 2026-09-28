@@ -10,6 +10,7 @@ Check(kernel.ExternalExclusionRequired&&!kernel.CacheCoherenceProven&&!kernel.Na
     !kernel.PublicationApproved&&!kernel.LiveCommitEmitted&&!kernel.RearmEmitted,"No runtime/cache/IRQ/commit/rearm authority");
 Refuse(()=>NativeCollectibleSaveSchedulerPlan.Capture(null!,null!,null!),"No arbitrary fixture publication authority");
 SchedulerCases.Run(kernel,null,Check);
+ResidentCases.Free(Check);
 if(args.Length!=0)SourceCases.Run(args,Check,Refuse);
 Console.WriteLine($"SCHEDULER_LAYOUT main={kernel.MainCodeByteLength:X} final={kernel.FinalCodeByteLength:X} state=40");
 Console.WriteLine($"NATIVE_COLLECTIBLE_SAVE_SCHEDULER_OK checks={checks} source={args.Length!=0} nativeIo=false imageWrites=0 cardWrites=0 runtimeVerified=false");

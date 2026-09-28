@@ -2,11 +2,12 @@ using Spyro.Editor.Core.Analysis;
 
 internal static class SchedulerCases
 {
-    private const uint Live=0x801FF600,State=NativeCollectibleSaveSchedulerKernel.StateAddress;
+    private const uint Live=0x801FF600;
     internal static void Run(NativeCollectibleSaveSchedulerKernel kernel,NativeRegionalSourceSession? source,Action<bool,string> check)
     {
+        uint State=kernel.StateBase;
         SchedulerFixture New(bool dirty=true)=>new(kernel,dirty,source);
-        bool NoTail(SchedulerFixture f)=>!f.Cpu.Reads.Any(a=>a>=f.Controller.ArenaAddress&&a<f.Controller.ArenaAddress+0x7300);
+        bool NoTail(SchedulerFixture f)=>!f.Cpu.Reads.Concat(f.Cpu.Writes).Concat(f.Cpu.Visited).Any(a=>a>=f.Controller.ArenaAddress&&a<f.Controller.ArenaAddress+0x7300+(kernel.IsResident?0x1000:0));
         void NoServices(SchedulerFixture f,string why)=>check(!f.Cpu.Calls.Any(a=>a is 0x800662BC or 0x800665B8 or 0x80066E28 or 0x800670E4 or 0x80067628 or 0x80059864),why);
         var done=New();done.ReachHeld();
         check(done.Requests[0].Op==2&&done.Requests.Skip(1).Select(r=>(r.Op,r.Offset,r.Count)).SequenceEqual(new(uint,uint,uint)[]{
@@ -21,7 +22,7 @@ internal static class SchedulerCases
         var clean=New(false);clean.Frame(false);check(clean.Flow==0&&clean.Stage==0&&clean.Requests.Count==0&&NoTail(clean),"Seeded Ready dirty0/gen0 ordinary save passes through without custom tail access");
         NoServices(clean,"Clean save calls no custom-owned native service");
         foreach(uint state in new uint[]{1,2,3,uint.MaxValue})
-        {var f=New();f.Cpu.Put(0x80078D08,state);f.Frame(false);check(f.Flow==0&&f.Requests.Count==0,"Never adopt unobserved retail state1/2 or arbitrary state");NoServices(f,"Unarmed retail state retains original driver");}
+        {var f=New();f.Cpu.Put(0x80078D08,state);f.Frame(false);check(f.Flow==0&&f.Requests.Count==0&&NoTail(f),"Never adopt or fetch tail for unobserved retail state1/2 or arbitrary state");NoServices(f,"Unarmed retail state retains original driver");}
         foreach(var(at,value)in kernel.ExpectedGlobals.Concat(new(uint,uint)[]{(0x800757D8,11),(0x80078D0C,2)}))
         {
             var f=New();f.Cpu.Put(at,value^1);f.Frame(false);check(f.Flow==0&&f.Cpu.Writes.Count==0&&NoTail(f),"Unarmed nonapplicable source global returns native: "+at.ToString("X8"));
@@ -35,9 +36,9 @@ internal static class SchedulerCases
         foreach(var(at,value,width)in new(uint,uint,int)[]{(Live+0x16,0,1),(Live+0x17,1,1),(Live+0x18,2,1),(Live+0x19,0,1),
             (Live+0x8C,0,4),(Live+0x7C,0,4),(0x80078D18,16,4),(0x80078D20,0x1000ABCD,4)})
         {
-            var f=New();f.Cpu.Put(at,value,width);f.Frame(false);check(f.Flow==0&&f.Requests.Count==0,"Fresh invalid ledger/tuple never arms");
+            var f=New();f.Cpu.Put(at,value,width);f.Frame(false);check(f.Flow==0&&f.Requests.Count==0&&NoTail(f),"Fresh invalid ledger/tuple never arms or fetches tail");
             var owned=New();owned.Frame();byte[] buffer=owned.Bytes(owned.Controller.OrdinaryInputAddress,0x600);owned.Cpu.Put(at,value,width);owned.Frame();
-            check(owned.Flow==5&&owned.Receipt==2&&owned.Requests.Count==1&&owned.Bytes(owned.Controller.OrdinaryInputAddress,0x600).SequenceEqual(buffer),"Owned mismatch is sticky HELD, retains header buffer; not cancellation/drain");
+            check(owned.Flow==5&&owned.Receipt==2&&owned.Requests.Count==1&&NoTail(owned)&&owned.Bytes(owned.Controller.OrdinaryInputAddress,0x600).SequenceEqual(buffer),"Owned mismatch is sticky HELD, no tail fetch/access, retains header buffer; not cancellation/drain");
             owned.ConfigureGlobals();owned.Frame();NoServices(owned,"Blocked scheduler does not reissue or manufacture empty state");
         }
         foreach(bool header in new[]{false,true})foreach(int returned in new[]{0,-1,2})

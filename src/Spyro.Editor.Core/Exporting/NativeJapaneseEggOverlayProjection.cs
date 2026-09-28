@@ -26,7 +26,7 @@ internal sealed class NativeJapaneseEggOverlayProjection
         if (workspace is not null)
         {
             workspace.RequireCurrent(workspace.Ancestry);
-            if (workspace.Profile != NativeCollectibleSaveWorkspacePlan.WorkspaceProfile.Controller || workspace.Controller is null ||
+            if (workspace.Profile is not (NativeCollectibleSaveWorkspacePlan.WorkspaceProfile.Controller or NativeCollectibleSaveWorkspacePlan.WorkspaceProfile.ControllerScheduler) || workspace.Controller is null ||
                 !ReferenceEquals(workspace.Ancestry.Authored, authored) || !ReferenceEquals(workspace.Ancestry.Lifecycle.Layout, layout))
                 throw new InvalidDataException("Workspace projection requires the exact source-issued controller ancestry and unchanged overlay owner.");
         }

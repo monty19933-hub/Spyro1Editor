@@ -16,7 +16,8 @@ namespace Spyro.Editor.Core.Exporting;
 /// </summary>
 internal sealed class NativeCollectibleSaveWorkspacePlan
 {
-    internal enum WorkspaceProfile { Preparation, Controller }
+    internal enum WorkspaceProfile { Preparation, Controller, ControllerScheduler }
+    internal const int SchedulerOwnerBytes=0x1000;
     internal const int OrdinaryBytes=0x600, TailReadbackBytes=0x100, ProposedTransactionStateBytes=0x100;
     internal sealed record GeometryMeasurement(uint TailAddress,uint ArenaAddress,int LeadingBytes,int SemanticBytes,
         int GrowthBytes,uint ExpectedOrdinaryAddress,uint OrdinaryReadbackAddress,uint TailReadbackAddress,
@@ -48,6 +49,12 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
         new SourceSpan(0x8005B6F8,0xE0,"d0b4cf5a7cf9ee407ff413f7261bd5f92f4880d7cee8467852f4d757e6b84295")});
     private readonly byte[] before,after;
     private readonly NativeLevelDataGrowthLayout growth;
+    // Privately minted after source/descriptor validation, before emission and
+    // final hashing. No caller array, completed-plan mutation or lifecycle hash
+    // participates in this geometry stage.
+    private sealed record SchedulerGeometryReceipt(NativeJapaneseEggAdmittedLifecyclePlan Parent,
+        NativeCollectibleSaveControllerKernel Controller,MemoryProjection Memory,IReadOnlyList<GlobalRebinding> Rebindings,uint Address);
+    private readonly SchedulerGeometryReceipt? schedulerGeometry;
     private NativeCollectibleSaveWorkspacePlan(NativeRegionalSourceSession source,NativeJapaneseEggAdmittedLifecyclePlan ancestry,WorkspaceProfile profile)
     {
         ancestry.RequireSourceComposition();
@@ -74,9 +81,8 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
         if(old.SceneRamStart!=ancestry.Lifecycle.Projection.SceneAddress||old.ModelRamStart!=ancestry.Lifecycle.Projection.ModelAddress||
             old.SceneReadEnd!=ancestry.Startup.FinalMemory.SceneEnd||old.UsedLevelDataBytes!=ancestry.Authored.Integration.RuntimeMemory.UsedLevelDataBytes)
             throw new InvalidDataException("Actual admitted bytes disagree with their current-final normal projection.");
-        Geometry=profile==WorkspaceProfile.Controller?MeasureController(old.SceneRamStart,ancestry.Startup.FinalMemory.NormalReservedStart):
-            Measure(old.SceneRamStart,ancestry.Startup.FinalMemory.NormalReservedStart);
-        Controller=profile==WorkspaceProfile.Controller?NativeCollectibleSaveControllerKernel.Capture(source,Geometry.ArenaAddress):null;
+        Geometry=MeasureProfile(old.SceneRamStart,ancestry.Startup.FinalMemory.NormalReservedStart,profile);
+        Controller=profile!=WorkspaceProfile.Preparation?NativeCollectibleSaveControllerKernel.Capture(source,Geometry.ArenaAddress):null;
         Preparation=Controller?.Preparation??NativeCollectibleSaveTailKernel.Capture(source,Geometry.ArenaAddress);Preparation.RequireSourceEvidence();
         if(Preparation.WorkspaceAddress+NativeSha256Kernel.RequiredWorkspaceByteLength>Geometry.ExpectedOrdinaryAddress||
             Preparation.Query.EntryPc+Preparation.Query.CopyBytes().Length>Preparation.ArenaAddress+NativeCollectibleSaveTailKernel.CodeCapacityBytes)
@@ -108,8 +114,7 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
         if(growth.Growth!=Geometry.GrowthBytes||growth.Subfiles[2].Growth!=Geometry.GrowthBytes||
             growth.Subfiles[2].FinalOffset!=registration.ModelOffset)
             throw new InvalidDataException("Normal packed growth disagrees with the full explicit tail insertion.");
-        after=growth.Expand(before);FinalDataSha256=Hash(after);
-        FinalDomain=new(NativeAddressKind.LevelData,"detached-save-workspace:"+FinalDataSha256,NativeAddressRevision.Final,after.Length);
+        after=growth.Expand(before);
         var newRegistration=NativeMobyModelRegistrationSource.DecodeFixture(
             new(NativeAddressKind.LevelData,"neutral-workspace-grammar",NativeAddressRevision.Original,after.Length),after);
         if(!newRegistration.Registrations.SequenceEqual(Registrations)||!after.AsSpan(0x50,0x180).SequenceEqual(before.AsSpan(0x50,0x180)))
@@ -130,6 +135,24 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
             old.SceneRamStart,projected.SceneRamStart,old.SceneReadEnd,projected.SceneReadEnd,measured.NormalReservedStart,
             ancestry.Startup.FinalMemory.NormalGap,measured.NormalGap,measured.TransferPeakEnd,old.MobyTableRamStart,projected.MobyTableRamStart);
         int tail=checked(registration.ModelOffset+registration.ModelLength);
+        RequiredGlobalRebindings=Array.AsReadOnly(new[]{new GlobalRebinding(0x800785E4,Memory.OriginalSceneStart,Memory.FinalSceneStart),
+            new GlobalRebinding(0x80075828,Memory.OriginalMobyTable,Memory.FinalMobyTable),
+            new GlobalRebinding(0x80075890,ancestry.Lifecycle.Lifecycle.DynamicBase,checked(ancestry.Lifecycle.Lifecycle.DynamicBase+(uint)GrowthBytes))});
+        if(profile==WorkspaceProfile.ControllerScheduler)
+        {
+            uint address=checked(Controller!.ArenaAddress+NativeCollectibleSaveControllerKernel.ArenaBytes);
+            schedulerGeometry=new(ancestry,Controller,Memory,RequiredGlobalRebindings,address);
+            Scheduler=NativeCollectibleSaveSchedulerKernel.CompileResidentGeometry(this);
+            byte[] body=Scheduler.CopyResidentBytes();
+            if(body.Length!=SchedulerOwnerBytes||Scheduler.ResidentAddress!=address||
+                (ulong)address+SchedulerOwnerBytes>Memory.FinalSceneStart)
+                throw new InvalidDataException("Regenerated scheduler exceeds its exact named model-tail owner.");
+            body.CopyTo(after,checked(tail+Geometry.LeadingBytes+NativeCollectibleSaveControllerKernel.ArenaBytes));
+            code.Add(("resident-scheduler",NativeCollectibleSaveControllerKernel.ArenaBytes,SchedulerOwnerBytes,
+                body.AsSpan(0,Scheduler.ResidentCodeByteLength).ToArray()));
+        }
+        FinalDataSha256=Hash(after);
+        FinalDomain=new(NativeAddressKind.LevelData,"detached-save-workspace:"+FinalDataSha256,NativeAddressRevision.Final,after.Length);
         TailExtent=new(FinalDomain,tail,Geometry.GrowthBytes);
         List<Owner> owners=[];int cursor=0;
         void Own(string role,int n,bool mutable=false,bool padding=false)
@@ -165,10 +188,11 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
             }
             if(cursor!=Geometry.LeadingBytes+NativeCollectibleSaveControllerKernel.ArenaBytes)
                 throw new InvalidDataException("Actual controller region partition exceeds its full measured arena.");
+            if(Scheduler is not null)Own("resident-scheduler-code",SchedulerOwnerBytes);
         }
         Own("trailing-alignment",Geometry.TrailingBytes,padding:true);
         if(cursor!=Geometry.GrowthBytes||tail+cursor!=Word(after,0x18)||
-            owners.Where(o=>o.Role is not("preparation-code" or "controller-code" or "fixed-filename"))
+            owners.Where(o=>o.Role is not("preparation-code" or "controller-code" or "fixed-filename" or "resident-scheduler-code"))
                 .Any(o=>after.AsSpan((int)o.Extent.Offset,(int)o.Extent.ByteLength).ContainsAnyExcept((byte)0)))
             throw new InvalidDataException("All new code, zero-initialization and padding owners must exactly partition the inserted model tail.");
         Owners=owners.AsReadOnly();CodeBlocks=Array.AsReadOnly(code.Select(b=>new CodeBlock(b.Role,
@@ -186,11 +210,9 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
         RequiredRowRebindings=Array.AsReadOnly(ancestry.Lifecycle.Binding.Rows.Select(row=>new RowRebinding(row.RowId,row.InstanceId,row.BitIndex,row.AuthoredClass,
             ancestry.Lifecycle.Projection.Models.Single(m=>m.RowId==row.RowId).RootAddress,row.RowAddress,checked(row.RowAddress+(uint)GrowthBytes),
             row.PrivateAddress,checked(row.PrivateAddress+(uint)GrowthBytes))).ToArray());
-        RequiredGlobalRebindings=Array.AsReadOnly(new[]{new GlobalRebinding(0x800785E4,Memory.OriginalSceneStart,Memory.FinalSceneStart),
-            new GlobalRebinding(0x80075828,Memory.OriginalMobyTable,Memory.FinalMobyTable),
-            new GlobalRebinding(0x80075890,ancestry.Lifecycle.Lifecycle.DynamicBase,checked(ancestry.Lifecycle.Lifecycle.DynamicBase+(uint)GrowthBytes))});
         PlanSha256=Hash(JsonSerializer.SerializeToUtf8Bytes(new{profile=profile==WorkspaceProfile.Preparation?
-            "detached-admitted-artisans-save-workspace-v1":"detached-admitted-artisans-save-controller-workspace-v1",
+            "detached-admitted-artisans-save-workspace-v1":profile==WorkspaceProfile.Controller?
+            "detached-admitted-artisans-save-controller-workspace-v1":"detached-admitted-artisans-save-controller-scheduler-workspace-v1",
             ancestry.ExecutableSha256,ancestor=ancestry.Lifecycle.PlanSha256,OriginalDataSha256,FinalDataSha256,Geometry,Memory,
             owners=Owners.Select(o=>new{o.Role,o.Extent.Offset,o.Extent.ByteLength,o.Address,o.Mutable,o.Padding,o.InitialSha256}),
             code=CodeBlocks.Select(c=>new{c.Role,c.Address,c.Sha256}),RequiredRowRebindings,RequiredGlobalRebindings}));
@@ -200,6 +222,7 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
     internal NativeJapaneseEggAdmittedLifecyclePlan Ancestry{get;}
     internal NativeCollectibleSaveTailKernel Preparation{get;}
     internal NativeCollectibleSaveControllerKernel? Controller{get;}
+    internal NativeCollectibleSaveSchedulerKernel? Scheduler{get;}
     internal GeometryMeasurement Geometry{get;}
     internal MemoryProjection Memory{get;}
     internal int GrowthBytes=>Geometry.GrowthBytes;
@@ -262,6 +285,23 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
         CaptureProfile(source,ancestry,WorkspaceProfile.Preparation);
     internal static NativeCollectibleSaveWorkspacePlan CaptureController(NativeRegionalSourceSession source,NativeJapaneseEggAdmittedLifecyclePlan ancestry)=>
         CaptureProfile(source,ancestry,WorkspaceProfile.Controller);
+    internal static NativeCollectibleSaveWorkspacePlan CaptureControllerScheduler(NativeRegionalSourceSession source,NativeJapaneseEggAdmittedLifecyclePlan ancestry)=>
+        CaptureProfile(source,ancestry,WorkspaceProfile.ControllerScheduler);
+    internal uint SchedulerEmissionAddress=>RequireSchedulerGeometry().Address;
+    internal IReadOnlyList<(uint Address,uint Value)> ReadSchedulerEmissionGlobals()
+    {
+        var receipt=RequireSchedulerGeometry();
+        return Array.AsReadOnly(receipt.Parent.Lifecycle.LiveGuard!.ExpectedSceneGlobals.Where(g=>g.Address!=0x800757D8)
+            .Select(g=>receipt.Rebindings.SingleOrDefault(r=>r.Address==g.Address) is{} r?(g.Address,r.NewValue):g)
+            .Concat(new(uint,uint)[]{(0x80078D00,1),(0x800755A4,0xA00),(0x80078D14,1),(0x80078D1C,0),(0x800756BC,0x80086134)}).ToArray());
+    }
+    private SchedulerGeometryReceipt RequireSchedulerGeometry()
+    {
+        if(Profile!=WorkspaceProfile.ControllerScheduler||schedulerGeometry is not{} r||!ReferenceEquals(r.Parent,Ancestry)||
+            !ReferenceEquals(r.Controller,Controller)||!ReferenceEquals(r.Memory,Memory)||!ReferenceEquals(r.Rebindings,RequiredGlobalRebindings))
+            throw new InvalidDataException("Source-validated privately minted scheduler geometry required.");
+        RequireCurrent(Ancestry);r.Controller.RequireSourceEvidence();return r;
+    }
     private static NativeCollectibleSaveWorkspacePlan CaptureProfile(NativeRegionalSourceSession source,NativeJapaneseEggAdmittedLifecyclePlan ancestry,WorkspaceProfile profile)
     {
         ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(ancestry);
@@ -277,28 +317,29 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
     // method cannot create bytes, a source plan, lease or installed composition.
     internal static GeometryMeasurement Measure(uint tailAddress,uint normalFloor)=>MeasureProfile(tailAddress,normalFloor,WorkspaceProfile.Preparation);
     internal static GeometryMeasurement MeasureController(uint tailAddress,uint normalFloor)=>MeasureProfile(tailAddress,normalFloor,WorkspaceProfile.Controller);
+    internal static GeometryMeasurement MeasureControllerScheduler(uint tailAddress,uint normalFloor)=>MeasureProfile(tailAddress,normalFloor,WorkspaceProfile.ControllerScheduler);
     private static GeometryMeasurement MeasureProfile(uint tailAddress,uint normalFloor,WorkspaceProfile profile)
     {
         if(tailAddress<0x80090000||tailAddress%4!=0||normalFloor>0x801FF600||normalFloor<=tailAddress)
             throw new InvalidDataException("Bounded aligned cached-RAM model tail and explicit normal floor required.");
         int leading=(int)((16-tailAddress%16)%16);
-        int semantic=profile==WorkspaceProfile.Controller?NativeCollectibleSaveControllerKernel.ArenaBytes:
+        int semantic=profile!=WorkspaceProfile.Preparation?NativeCollectibleSaveControllerKernel.ArenaBytes+(profile==WorkspaceProfile.ControllerScheduler?SchedulerOwnerBytes:0):
             checked(NativeCollectibleSaveTailKernel.ArenaBytes+2*OrdinaryBytes+TailReadbackBytes+ProposedTransactionStateBytes);
         int growth=checked((leading+semantic+0x7FF)/0x800*0x800);
         ulong end=(ulong)tailAddress+(uint)growth,arena=(ulong)tailAddress+(uint)leading;
-        int kernelArena=profile==WorkspaceProfile.Controller?NativeCollectibleSaveControllerKernel.ArenaBytes:NativeCollectibleSaveTailKernel.ArenaBytes;
+        int kernelArena=profile!=WorkspaceProfile.Preparation?semantic:NativeCollectibleSaveTailKernel.ArenaBytes;
         if(end>normalFloor||arena+(uint)kernelArena>0x801F0000)
             throw new InvalidDataException("Complete workspace owner exceeds its bounded arena or declared normal floor.");
         uint expected=checked((uint)arena+NativeCollectibleSaveTailKernel.ArenaBytes),readback=checked(expected+OrdinaryBytes),
             tailReadback=checked(readback+OrdinaryBytes),state=checked(tailReadback+TailReadbackBytes);
-        if(profile==WorkspaceProfile.Controller)
+        if(profile!=WorkspaceProfile.Preparation)
         {
             // Neutral emitter geometry only; this fixture cannot issue source
             // ownership, bytes for installation, or an asynchronous lease.
             var controller=NativeCollectibleSaveControllerKernel.CreateFixture((uint)arena);
             expected=controller.ExpectedOrdinaryAddress;readback=controller.OrdinaryReadbackAddress;
             tailReadback=controller.TailReadbackAddress;state=controller.StateAddress;
-            if(controller.Regions.Sum(r=>(long)r.ByteLength)!=semantic)
+            if(controller.Regions.Sum(r=>(long)r.ByteLength)+(profile==WorkspaceProfile.ControllerScheduler?SchedulerOwnerBytes:0)!=semantic)
                 throw new InvalidDataException("Actual controller regions disagree with the declared complete arena.");
         }
         return new(tailAddress,(uint)arena,leading,semantic,growth,expected,readback,tailReadback,state,growth-leading-semantic,(uint)end,(long)normalFloor-(long)end);

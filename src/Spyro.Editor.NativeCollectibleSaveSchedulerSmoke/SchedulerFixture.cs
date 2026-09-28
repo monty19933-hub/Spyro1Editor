@@ -19,8 +19,8 @@ internal sealed class SchedulerFixture
     internal int RequestReturn{get;set;}=1;
     internal uint? InterleavePc{get;set;}
     internal Action<SchedulerFixture>? AfterService{get;set;}
-    internal uint Flow=>Cpu.Get(NativeCollectibleSaveSchedulerKernel.StateAddress);
-    internal uint Receipt=>Cpu.Get(NativeCollectibleSaveSchedulerKernel.StateAddress+4);
+    internal uint Flow=>Cpu.Get(Kernel.StateBase);
+    internal uint Receipt=>Cpu.Get(Kernel.StateBase+4);
     internal uint Stage=>Cpu.Get(Controller.StateAddress);
     internal SchedulerFixture(NativeCollectibleSaveSchedulerKernel? kernel=null,bool dirty=true,NativeRegionalSourceSession? source=null,byte firstBits=1,int pickup=1)
     {
@@ -29,7 +29,7 @@ internal sealed class SchedulerFixture
         Cpu.Copy(Controller.BeginPc,Controller.CopyBytes());var p=Controller.Preparation;
         Cpu.Copy(p.EntryPc,p.CopyBytes());Cpu.Copy(p.Sha256.EntryPc,p.Sha256.CopyBytes());Cpu.Copy(p.Loader.EntryPc,p.Loader.CopyBytes());Cpu.Copy(p.Query.EntryPc,p.Query.CopyBytes());
         Cpu.Copy(Controller.FilenameAddress,Controller.CopyFilename());
-        Cpu.Copy(NativeCollectibleSaveSchedulerKernel.EntryPc,Kernel.CopyMainBytes());Cpu.Copy(NativeCollectibleSaveSchedulerKernel.FinalPc,Kernel.CopyFinalBytes());
+        Cpu.Copy(NativeCollectibleSaveSchedulerKernel.EntryPc,Kernel.CopyMainBytes());if(Kernel.IsResident)Cpu.Copy(Kernel.ResidentAddress,Kernel.CopyResidentBytes());else Cpu.Copy(NativeCollectibleSaveSchedulerKernel.FinalPc,Kernel.CopyFinalBytes());
         Cpu.Copy(0x800873D8,Words(0x08000000|((NativeCollectibleSaveSchedulerKernel.EntryPc>>2)&0x3FFFFFF),0));
         ConfigureGlobals();Cpu.Put(0x80078D08,0);Cpu.Put(0x800751B0,uint.MaxValue);Cpu.Put(0x80075B50,0);Cpu.Put(0x80075B58,0);
         new Random(276).NextBytes(Card);Game.Envelope.CopyTo(Card,0x1400);Card[0x7E]=0xCD;Card[0x7F]=0xAB;OriginalCard=Card.ToArray();
@@ -59,7 +59,7 @@ internal sealed class SchedulerFixture
         if(new[]{16,17,18,19,20,21,22,23,26,27,28,29,30,31}.Any(r=>Cpu.Regs[r]!=saved[r])||Cpu.Hi!=0x12345678||Cpu.Lo!=0x87654321)
             throw new Exception("Scheduler disturbed native callback callee state/frame/HI/LO.");
         bool In(uint a,uint lo,uint n)=>(ulong)a>=lo&&(ulong)a<(ulong)lo+n;
-        bool Owned(uint a)=>In(a,NativeCollectibleSaveSchedulerKernel.StateAddress,0x40)||In(a,unchecked(stack-0x110),0x110)||
+        bool Owned(uint a)=>In(a,Kernel.StateBase,0x40)||In(a,unchecked(stack-0x110),0x110)||
             In(a,Mock,0x800)||In(a,0x80075B50,0x50)||In(a,0x800751B0,4)||
             In(a,Controller.Preparation.OldTailAddress,0xBA0)||In(a,Controller.OrdinaryInputAddress,0x1740);
         if(Cpu.Writes.Any(a=>!Owned(a)))throw new Exception("Scheduler store escaped full write complement: "+Cpu.Writes.First(a=>!Owned(a)).ToString("X8"));
@@ -67,7 +67,7 @@ internal sealed class SchedulerFixture
         if(Cpu.Get(Mock+4)!=0)
         {
             var request=(Cpu.Get(Mock+8),Cpu.Get(Mock+16),Cpu.Get(Mock+20),Cpu.Get(Mock+24));
-            if(Cpu.Get(Mock+28)!=Cpu.Get(NativeCollectibleSaveSchedulerKernel.StateAddress+0x18))throw new Exception("Captured controller differs from armed native tuple.");
+            if(Cpu.Get(Mock+28)!=Cpu.Get(Kernel.StateBase+0x18))throw new Exception("Captured controller differs from armed native tuple.");
             if(request.Item1!=2)
             {
                 uint file=Cpu.Get(Mock+12);
@@ -95,6 +95,15 @@ internal sealed class SchedulerFixture
     {
         foreach(var(at,value)in Game.Lifecycle.LiveGuard!.ExpectedSceneGlobals)Cpu.Put(at,value);
         Game.Pickup(1);ConfigureGlobals();
+    }
+    internal void LoadCompleteWorkspace(NativeCollectibleSaveSchedulerPlan plan,bool reloadOverlay=true)
+    {
+        byte[] data=plan.CopyLevelData();
+        uint W(int at)=>BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(at));
+        Cpu.Copy(plan.Lifecycle.Projection.ModelAddress,data.AsSpan((int)W(0x10),(int)W(0x14)).ToArray());
+        Cpu.Copy(plan.Lifecycle.Projection.SceneAddress,data.AsSpan((int)W(0x18),(int)W(0x1C)).ToArray());
+        if(reloadOverlay)Cpu.Copy(NativeCollectibleSaveSchedulerPlan.OverlayBase,plan.CopyOverlay());
+        ConfigureGlobals();
     }
     private void ConfigureOrdinarySource()
     {
