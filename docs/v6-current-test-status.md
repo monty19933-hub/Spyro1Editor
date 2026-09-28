@@ -13,9 +13,24 @@ now composes in a closed source plan. Actual CPU admission precedes seeded-egg
 suppression and second-egg pickup;342 cumulative checks pass. Existing lifecycle
 571/admission677 compatibility checks also pass, with unchanged old export bytes.
 The new combined research disc is now published and independently verified
-against its original-only whole-disc prediction. Full Release278/0, publisher
-source577/fault25 pass. It is not yet tested in DuckStation; this adds no custom
-writer, inventory or completion hooks and does not replace R08.
+against its original-only whole-disc prediction. Latest full Release282/0,
+publisher source577/fault25 pass. The exact-CUE full-firmware tests confirm
+native selected-save admission, Stone Hill-to-Artisans travel and suppression
+of the already-earned first egg. R02 then confirms normal-speed second-egg
+pickup:1/2→2/2, dirty1/generation1 and both rows retired; native Quit Game clears
+Ready. R02 started with25% navigation, then returned to100% before pickup.
+Its23-sample log has no refusals; R01's140 samples also had none. The temporary
+card still contains only the manually seeded first egg: custom saving,
+inventory X/X and completion remain unimplemented/unverified. Normal settings,
+card and R08 were hash-verified protected. This does not replace R08.
+
+The [next save slice](research/collectible-native-save-next-slice.md) now has
+executed MIPS tail preparation plus a non-I/O C# transaction reference model
+(4494 fixture/4505 USA-source checks), and a detached Artisans memory layout
+(35 fixture/149 JP+USA-source checks). Reviewed regressions reject observed
+progress rollback and explicitly invalidated sessions. Native save-controller
+code, asynchronous buffer lifetime, hooks, real writes/readbacks and durable
+reload remain next gates; these source tests do not enable a game save writer.
 
 September27 latest: a separate [guarded admission research disc](research/collectible-card-admission-research-r01.md)
 is published and independently verified byte-for-byte against an original-only

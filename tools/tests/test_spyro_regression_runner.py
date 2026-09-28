@@ -1731,6 +1731,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeCollectibleStartupResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],
             "NativeCollectibleCardLoadResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],
             "NativeCollectibleCardAdmissionResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],
+            "NativeCollectibleSaveTailSmoke": ["--source", "/selected original.bin"],
             "NativeMobyDependencyClosureSmoke": ["--source-v3", "/selected original.bin"],
             "NativeMobyInventorySmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeMobyPersistentOwnerSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
@@ -2116,6 +2117,23 @@ class RegionalAndMatrixGateTests(unittest.TestCase):
             self.assertEqual(marker, dict(RUNNER.CORE_CASES)[name])
             self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
             self.assertFalse(any(case[0] == name for case in RUNNER.SOURCE_QA_CASES))
+
+    def test_detached_native_save_tail_is_mandatory_with_explicit_usa_source_mode(self):
+        name = "NativeCollectibleSaveTailSmoke"
+        self.assertEqual("NATIVE_COLLECTIBLE_SAVE_TAIL_OK", dict(RUNNER.CORE_CASES)[name])
+        self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
+        self.assertEqual([(name, "NATIVE_COLLECTIBLE_SAVE_TAIL_SOURCE_OK", ["--source"])],
+                         [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+
+    def test_detached_save_workspace_is_mandatory_but_never_receives_one_region_source(self):
+        name = "NativeCollectibleSaveWorkspaceSmoke"
+        self.assertEqual("COLLECTIBLE_SAVE_WORKSPACE_SOURCE_FREE_OK", dict(RUNNER.CORE_CASES)[name])
+        self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
+        self.assertFalse(any(case[0] == name for case in RUNNER.SOURCE_QA_CASES))
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
 
     def test_admitted_egg_lifecycle_is_mandatory_but_never_receives_one_region_source(self):
         name = "NativeJapaneseEggAdmittedLifecycleSmoke"

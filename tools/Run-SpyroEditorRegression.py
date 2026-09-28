@@ -94,6 +94,8 @@ CORE_CASES = (
     ("NativeCollectibleCardLoadResearchSmoke", "COLLECTIBLE_CARD_LOAD_RESEARCH_SOURCE_FREE_OK"),
     ("NativeCollectibleLiveAdmissionSmoke", "NATIVE_COLLECTIBLE_LIVE_ADMISSION_OK"),
     ("NativeCollectibleCardAdmissionResearchSmoke", "COLLECTIBLE_CARD_ADMISSION_RESEARCH_SOURCE_FREE_OK"),
+    ("NativeCollectibleSaveTailSmoke", "NATIVE_COLLECTIBLE_SAVE_TAIL_OK"),
+    ("NativeCollectibleSaveWorkspaceSmoke", "COLLECTIBLE_SAVE_WORKSPACE_SOURCE_FREE_OK"),
     ("NativeJapaneseEggSchedulingSmoke", "JP_EGG_SCHEDULING_SOURCE_FREE_OK"),
     ("NativeCollectibleReservationMechanicsSmoke", "COLLECTIBLE_RESERVATION_MECHANICS_SOURCE_FREE_OK"),
     ("NativeCollectibleColdBootBootstrapSmoke", "COLLECTIBLE_COLD_BOOT_BOOTSTRAP_SOURCE_FREE_OK"),
@@ -240,6 +242,7 @@ ADDITIONAL_CORE_CASES = (
 SOURCE_QA_CASES = (
     ("NativeCollectibleCardLoadResearchSmoke", "COLLECTIBLE_CARD_LOAD_RESEARCH_SOURCE_OK", ["--source"]),
     ("NativeCollectibleCardAdmissionResearchSmoke", "COLLECTIBLE_CARD_ADMISSION_RESEARCH_SOURCE_OK", ["--source"]),
+    ("NativeCollectibleSaveTailSmoke", "NATIVE_COLLECTIBLE_SAVE_TAIL_SOURCE_OK", ["--source"]),
     ("NativeCollectibleStartupResearchSmoke", "COLLECTIBLE_STARTUP_RESEARCH_SOURCE_OK", ["--source"]),
     ("NativeCollectibleColdBootBootstrapSmoke", "COLLECTIBLE_COLD_BOOT_BOOTSTRAP_SOURCE_OK", ["--source"]),
     ("NativeCollectibleReservationMechanicsSmoke", "COLLECTIBLE_RESERVATION_MECHANICS_SOURCE_OK", ["--source"]),
