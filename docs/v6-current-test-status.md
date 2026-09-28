@@ -26,11 +26,24 @@ card and R08 were hash-verified protected. This does not replace R08.
 
 The [next save slice](research/collectible-native-save-next-slice.md) now has
 executed MIPS tail preparation plus a non-I/O C# transaction reference model
-(4494 fixture/4505 USA-source checks), and a detached Artisans memory layout
-(35 fixture/149 JP+USA-source checks). Reviewed regressions reject observed
-progress rollback and explicitly invalidated sessions. Native save-controller
-code, asynchronous buffer lifetime, hooks, real writes/readbacks and durable
-reload remain next gates; these source tests do not enable a game save writer.
+(4494 fixture/4505 USA-source checks). Checkpoint20430af adds the emitted
+Begin/Pump/Revoke controller:3881 source-free and3921 USA-source checks, including
+full readback, queue-capacity and filename guards. Card services are mocked and
+success returns only a detached proposal, not a live commit. Checkpoint3f1e10a
+extends the existing Artisans workspace with a controller profile (70 fixture/
+328 JP+USA-source checks), preserving the original preparation profile and
+loader results. The controller needs7800 model growth and leaves3C5C below the
+normal reserved floor. The next source-only geometry fix now rebuilds the
+pickup/guard routines at unchanged code addresses while keeping model roots
+fixed and moving the scene. It passes162 source-free/417 JP+USA checks and
+preserves old lifecycle goldens. Asynchronous buffer lifetime, save-menu hooks,
+real writes/readbacks and durable reload remain next gates; these source tests
+do not enable a game save writer. Neither checkpoint replaces the R08 package.
+
+The combined controller/workspace/rebinding source now passes the full default
+Release gate: **286 checks, zero failures**, report
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-awrs4fah/summary.json`.
+R08 App/Core and normal DuckStation settings/card hashes remain unchanged.
 
 September27 latest: a separate [guarded admission research disc](research/collectible-card-admission-research-r01.md)
 is published and independently verified byte-for-byte against an original-only

@@ -76,36 +76,9 @@ internal sealed class NativeJapaneseEggLifecycleOverlayPlan
         Predicate = kernels.Predicate; Collector = kernels.Collector; Query = kernels.Query;
         Attempt = kernels.Attempt; Lifecycle = kernels.Lifecycle;
         PreBridgePc = Pc(5); PostBridgePc = Pc(6);
-        List<NativeOwnedOverlayBlock> blocks = bodies.Select((b, i) => new NativeOwnedOverlayBlock(Names[i], Owner(i), b)).ToList();
-        // Both bridges execute inside the existing full-register adapter. They
-        // allocate no frame and preserve s3. Available enters visual work, as
-        // does UnboundRow: the predecessor also admits canonical F5 and its
-        // unrelated visual behavior must remain unchanged. Suppression and
-        // bound-row refusals restore the original dispatcher frame.
-        blocks.Add(new(Names[5], Owner(5), Words(0x02602021, 0x3C05801F, 0x34A5F600,
-            Call(Lifecycle.BeforeVisualEntryPc), 0, 0x3408000A, 0x10480006, 0, 0x34080006, 0x10480003, 0,
-            Jump(Restore), 0, Jump(Visual), 0)));
-        blocks.Add(new(Names[6], Owner(6), Words(0x02602021, 0x3C05801F, 0x34A5F600,
-            Call(Lifecycle.AfterVisualEntryPc), 0, Jump(Restore), 0)));
         if(guarded)
-        {
             LiveGuard=NativeJapaneseEggLiveGuardKernel.Compile(authored,binding,projection,Lifecycle,Owner(7),Pc(7),PreBridgePc,PostBridgePc);
-            blocks.Add(new(names[7],Owner(7),LiveGuard.CopyBytes()));
-        }
-        var entries = new List<NativeOwnedOverlayEntry>();
-        foreach (int i in Enumerable.Range(0, Names.Length))
-            entries.Add(new(Names[i], Names[i], new(layout.Domain, Owner(i).Offset + (i == 0 ? 0x100 : 0), 4)));
-        entries.Add(new("after-visual", Names[4], new(layout.Domain, Lifecycle.AfterVisualEntryPc - OverlayBase, 4)));
-        if(LiveGuard is not null)
-        {
-            entries.Add(new("guard-before",names[7],new(layout.Domain,LiveGuard.BeforeEntryPc-OverlayBase,4)));
-            entries.Add(new("guard-after",names[7],new(layout.Domain,LiveGuard.AfterEntryPc-OverlayBase,4)));
-        }
-        // All linker destinations must be owned entries, including both
-        // lifecycle entries and the predicate's wrapper rather than raw helper.
-        overlay = layout.Materialize(blocks, entries, entries.Select(e => e.Owner));
-        Put(overlay, checked((int)(PreEdge - OverlayBase)), Jump(LiveGuard?.BeforeEntryPc??PreBridgePc));
-        Put(overlay, checked((int)(PostEdge - OverlayBase)), Jump(LiveGuard?.AfterEntryPc??PostBridgePc));
+        overlay = Materialize(layout, kernels, LiveGuard, PreBridgePc, PostBridgePc);
         executable = beforeExecutable.ToArray();
         short low = unchecked((short)projection.CopyAnchor);
         uint high = checked((uint)(((long)projection.CopyAnchor - low) >> 16));
@@ -145,6 +118,87 @@ internal sealed class NativeJapaneseEggLifecycleOverlayPlan
             return new(predicate, collector, query, attempt, lifecycle);
         }
     }
+
+    // Closed recompile of an existing guarded allocation, not a new layout or
+    // caller-supplied payload route. Immediate inverse is the admitted parent's
+    // lifecycle overlay/EXE, not the earlier E800 authored predecessor. Startup
+    // and publication composers intentionally do not accept this successor.
+    private NativeJapaneseEggLifecycleOverlayPlan(NativeCollectibleSaveWorkspacePlan workspace)
+    {
+        Projection = NativeJapaneseEggOverlayProjection.CreateForWorkspace(workspace);
+        var parent = workspace.Ancestry.Lifecycle;
+        var authored = workspace.Ancestry.Authored;
+        var manifest = NativeCollectibleCardLoadResearchComposition.FixedManifest();
+        if (parent.LiveGuard is not { SourceBound: true } || parent.Collector.OrdinarySlot != 0 ||
+            parent.Collector.ManifestSha256 != manifest.Sha256 || parent.Collector.CallerLedgerAddress != Ledger)
+            throw new InvalidDataException("Workspace lifecycle requires the unchanged source-bound guarded fixed-slot parent.");
+        SourceCertified = true; Layout = parent.Layout;
+        beforeOverlay = parent.CopyOverlay(); beforeExecutable = parent.CopyExecutable(); data = workspace.CopyLevelData();
+        Binding = NativeJapaneseEggCollectibleBinding.CreateProjected(authored, manifest,
+            parent.Binding.Rows.Select(r => new NativeJapaneseEggCollectibleIdentity(r.RowId, r.InstanceId)), Projection);
+        Predicate = parent.Predicate; Collector = parent.Collector; Query = parent.Query;
+        Attempt = NativeJapaneseEggCollectionAttempt.Compile(Binding, authored, manifest, Predicate, Collector,
+            parent.Attempt.Owner, parent.Attempt.EntryPc);
+        Lifecycle = NativeJapaneseEggLifecycleCallables.Compile(authored, manifest, Attempt, Predicate, Collector, Query,
+            parent.Lifecycle.Owner, parent.Lifecycle.BeforeVisualEntryPc);
+        PreBridgePc = parent.PreBridgePc; PostBridgePc = parent.PostBridgePc;
+        var guardOwner = Layout.Blocks.Single(b => b.Id == "live-consumer-guard").Owner;
+        LiveGuard = NativeJapaneseEggLiveGuardKernel.Compile(authored, Binding, Projection, Lifecycle,
+            guardOwner, parent.LiveGuard.BeforeEntryPc, PreBridgePc, PostBridgePc);
+        if (Attempt.CopyBytes().Length != parent.Attempt.CopyBytes().Length ||
+            Lifecycle.CopyBytes().Length != parent.Lifecycle.CopyBytes().Length ||
+            Lifecycle.AfterVisualEntryPc != parent.Lifecycle.AfterVisualEntryPc ||
+            LiveGuard.CodeByteLength != parent.LiveGuard.CodeByteLength ||
+            LiveGuard.BeforeEntryPc != parent.LiveGuard.BeforeEntryPc || LiveGuard.AfterEntryPc != parent.LiveGuard.AfterEntryPc ||
+            LiveGuard.ValidatePc != parent.LiveGuard.ValidatePc)
+            throw new InvalidDataException("Workspace recompilation cannot resize or move any existing owned callable entry.");
+        overlay = Materialize(Layout, new(Predicate, Collector, Query, Attempt, Lifecycle), LiveGuard, PreBridgePc, PostBridgePc);
+        var changed = new[] { Attempt.Owner, Lifecycle.Owner, guardOwner };
+        if (overlay.Length != beforeOverlay.Length || DecodeAnchor(beforeExecutable) != Projection.CopyAnchor)
+            throw new InvalidDataException("Workspace recompilation cannot change the overlay or executable copy-anchor allocation.");
+        for (int i = 0; i < overlay.Length; i++)
+            if (!changed.Any(o => i >= o.Offset && i < o.EndExclusive) && overlay[i] != beforeOverlay[i])
+                throw new InvalidDataException("Workspace recompilation changed another complete overlay owner.");
+        executable = beforeExecutable.ToArray();
+        FinalOverlaySha256 = Hash(overlay); FinalExecutableSha256 = Hash(executable);
+        PlanSha256 = Hash(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            profile = "authored-egg-controller-workspace-lifecycle-v1", SourceCertified,
+            workspace = workspace.PlanSha256, parent = parent.PlanSha256, projection = Projection.PlanSha256,
+            Projection.FinalDataSha256, FinalOverlaySha256, FinalExecutableSha256
+        }));
+        RequireWorkspaceCurrent(workspace);
+        _ = RevertOverlayExact(overlay); _ = RevertExecutableExact(executable);
+    }
+
+    // Shared owner/linker path. No route hand-patches individual literal
+    // addresses: the existing typed emitters regenerate each complete body.
+    private static byte[] Materialize(NativeOwnedOverlayAppendLayout layout, Kernels kernels,
+        NativeJapaneseEggLiveGuardKernel? guard, uint preBridgePc, uint postBridgePc)
+    {
+        NativeByteExtent Owner(string id) => layout.Blocks.Single(b => b.Id == id).Owner;
+        var bodies = kernels.Bytes;
+        List<NativeOwnedOverlayBlock> blocks = bodies.Select((b, i) => new NativeOwnedOverlayBlock(Names[i], Owner(Names[i]), b)).ToList();
+        // No bridge frame; preserve canonical UnboundRow visual behavior.
+        blocks.Add(new(Names[5], Owner(Names[5]), Words(0x02602021, 0x3C05801F, 0x34A5F600,
+            Call(kernels.Lifecycle.BeforeVisualEntryPc), 0, 0x3408000A, 0x10480006, 0, 0x34080006, 0x10480003, 0,
+            Jump(Restore), 0, Jump(Visual), 0)));
+        blocks.Add(new(Names[6], Owner(Names[6]), Words(0x02602021, 0x3C05801F, 0x34A5F600,
+            Call(kernels.Lifecycle.AfterVisualEntryPc), 0, Jump(Restore), 0)));
+        if (guard is not null) blocks.Add(new("live-consumer-guard", Owner("live-consumer-guard"), guard.CopyBytes()));
+        var entries = Names.Select((id, i) => new NativeOwnedOverlayEntry(id, id,
+            new(layout.Domain, Owner(id).Offset + (i == 0 ? 0x100 : 0), 4))).ToList();
+        entries.Add(new("after-visual", Names[4], new(layout.Domain, kernels.Lifecycle.AfterVisualEntryPc - OverlayBase, 4)));
+        if (guard is not null)
+        {
+            entries.Add(new("guard-before", "live-consumer-guard", new(layout.Domain, guard.BeforeEntryPc - OverlayBase, 4)));
+            entries.Add(new("guard-after", "live-consumer-guard", new(layout.Domain, guard.AfterEntryPc - OverlayBase, 4)));
+        }
+        byte[] result = layout.Materialize(blocks, entries, entries.Select(e => e.Owner));
+        Put(result, checked((int)(PreEdge - OverlayBase)), Jump(guard?.BeforeEntryPc ?? preBridgePc));
+        Put(result, checked((int)(PostEdge - OverlayBase)), Jump(guard?.AfterEntryPc ?? postBridgePc));
+        return result;
+    }
     internal bool SourceCertified { get; }
     internal NativeOwnedOverlayAppendLayout Layout { get; }
     internal NativeJapaneseEggOverlayProjection Projection { get; }
@@ -172,6 +226,19 @@ internal sealed class NativeJapaneseEggLifecycleOverlayPlan
     { if (!after.SequenceEqual(overlay)) throw new InvalidDataException("Lifecycle inverse requires the complete exact successor overlay."); return beforeOverlay.ToArray(); }
     internal byte[] RevertExecutableExact(ReadOnlySpan<byte> after)
     { if (!after.SequenceEqual(executable)) throw new InvalidDataException("Lifecycle inverse requires the complete exact successor executable."); return beforeExecutable.ToArray(); }
+    internal static NativeJapaneseEggLifecycleOverlayPlan CreateForWorkspace(NativeCollectibleSaveWorkspacePlan workspace)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+        return new(workspace);
+    }
+    internal void RequireWorkspaceCurrent(NativeCollectibleSaveWorkspacePlan workspace)
+    {
+        Projection.RequireWorkspaceCurrent(workspace);
+        if (!workspace.Ancestry.Lifecycle.CopyOverlay().AsSpan().SequenceEqual(beforeOverlay) ||
+            !workspace.Ancestry.Lifecycle.CopyExecutable().AsSpan().SequenceEqual(beforeExecutable) ||
+            !workspace.CopyLevelData().AsSpan().SequenceEqual(data))
+            throw new InvalidDataException("Lifecycle recompilation requires its exact controller workspace and complete immediate parent.");
+    }
     internal static NativeJapaneseEggLifecycleOverlayPlan Fixture(NativeJapaneseEggAuthoredClassesPlan authored,
         DetachedCollectibleManifest manifest, int ordinarySlot, IEnumerable<NativeJapaneseEggCollectibleIdentity> mappings,
         NativeJapaneseEggPickupPredicateSource predicateSource) => new(authored, manifest, ordinarySlot, mappings, predicateSource, false);

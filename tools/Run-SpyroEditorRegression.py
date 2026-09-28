@@ -97,6 +97,7 @@ CORE_CASES = (
     ("NativeCollectibleSaveTailSmoke", "NATIVE_COLLECTIBLE_SAVE_TAIL_OK"),
     ("NativeCollectibleSaveControllerSmoke", "NATIVE_COLLECTIBLE_SAVE_CONTROLLER_OK"),
     ("NativeCollectibleSaveWorkspaceSmoke", "COLLECTIBLE_SAVE_WORKSPACE_SOURCE_FREE_OK"),
+    ("NativeJapaneseEggWorkspaceLifecycleSmoke", "NATIVE_JAPANESE_EGG_WORKSPACE_LIFECYCLE_OK"),
     ("NativeJapaneseEggSchedulingSmoke", "JP_EGG_SCHEDULING_SOURCE_FREE_OK"),
     ("NativeCollectibleReservationMechanicsSmoke", "COLLECTIBLE_RESERVATION_MECHANICS_SOURCE_FREE_OK"),
     ("NativeCollectibleColdBootBootstrapSmoke", "COLLECTIBLE_COLD_BOOT_BOOTSTRAP_SOURCE_FREE_OK"),

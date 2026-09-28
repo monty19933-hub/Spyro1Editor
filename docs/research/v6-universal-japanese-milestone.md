@@ -7,6 +7,13 @@ this is not permission to replace the game with its Japanese version.
 
 ## Execution order and acceptance
 
+Latest source gate: **Release286/0** after the detached save controller, typed
+controller workspace and nonuniform model/scene rebinding. Existing lifecycle
+goldens survive; source serializer output passes full ordinary-byte comparison.
+See [the save implementation and remaining native gates](collectible-native-save-next-slice.md).
+No new save disc or editor package was published; runtime remains the admitted
+pickup/quit result below, without custom durable saving, X/X or percentage.
+
 Latest source composition: [guarded admitted egg lifecycle](japanese-egg-admitted-lifecycle.md)
 joins actual native admission to Artisans suppression/pickup with final owner
 projection and full original inverses.342 cumulative source/CPU checks and

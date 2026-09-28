@@ -16,7 +16,7 @@ internal sealed class NativeJapaneseEggCollectibleBinding
 {
     internal sealed record Row(string RowId, Guid InstanceId, uint BitIndex, ushort AuthoredClass,
         uint RowAddress, uint PrivateAddress, NativeByteExtent RowOwner, NativeByteExtent PrivateOwner);
-    private readonly byte[] data, overlay, manifestBytes;
+    private readonly byte[] authoredData, data, overlay, manifestBytes;
 
     private NativeJapaneseEggCollectibleBinding(NativeJapaneseEggAuthoredClassesPlan authored,
         DetachedCollectibleManifest manifest, NativeJapaneseEggCollectibleIdentity[] mappings, NativeJapaneseEggOverlayProjection? projection = null)
@@ -29,18 +29,23 @@ internal sealed class NativeJapaneseEggCollectibleBinding
             throw new InvalidDataException("Every exact authored row requires one explicit mapping and no extra row mapping.");
         if (mappings.Any(m => m.InstanceId == Guid.Empty) || mappings.Select(m => m.InstanceId).Distinct().Count() != mappings.Length)
             throw new InvalidDataException("Each authored row requires a distinct nonempty persistent instance identity.");
+        if (projection?.Workspace is { } workspace &&
+            (manifest.Sha256 != workspace.Ancestry.Lifecycle.Binding.ManifestSha256 || mappings.Any(m =>
+                workspace.Ancestry.Lifecycle.Binding.Rows.Single(r => r.RowId == m.RowId).InstanceId != m.InstanceId)))
+            throw new InvalidDataException("Controller-workspace binding retains the exact fixed manifest and row identities.");
         if (authored.SourceCertified != authored.Reservation.SourceCertified || authored.SourceCertified != authored.Projection.SourceCertified ||
             authored.SourceCertified != authored.Integration.SourceCertified)
             throw new InvalidDataException("Authored row source ancestry is inconsistent.");
 
-        data = authored.CopyLevelData(); overlay = authored.CopyOverlay(); manifestBytes = manifest.SerializeCanonical();
+        authoredData = authored.CopyLevelData(); data = projection?.CopyLevelData() ?? authoredData.ToArray();
+        overlay = authored.CopyOverlay(); manifestBytes = manifest.SerializeCanonical();
         byte[] scene = authored.CopyScene();
         int sceneOffset = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(0x18)));
         SceneAddress = projection?.SceneAddress ?? authored.Projection.ProjectedSceneRamStart; SceneByteLength = scene.Length;
         ModelAddress = projection?.ModelAddress ?? authored.Projection.ProjectedModelRamStart;
         ModelByteLength = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(0x14)));
         SourceCertified = authored.SourceCertified; ManifestSha256 = manifest.Sha256;
-        AuthoredPlanSha256 = authored.PlanSha256; FinalDataSha256 = authored.FinalDataSha256; AuthoredOverlaySha256 = authored.FinalOverlaySha256;
+        AuthoredPlanSha256 = authored.PlanSha256; FinalDataSha256 = projection?.FinalDataSha256 ?? authored.FinalDataSha256; AuthoredOverlaySha256 = authored.FinalOverlaySha256;
         List<Row> rows = [];
         foreach (var b in authored.Bindings)
         {
@@ -51,15 +56,15 @@ internal sealed class NativeJapaneseEggCollectibleBinding
                 throw new InvalidDataException("Authored row leaves its final scene owner.");
             uint privateOffset = BinaryPrimitives.ReadUInt32LittleEndian(scene.AsSpan(b.RowSceneOffset));
             if ((ulong)privateOffset + 12 > (ulong)scene.Length ||
-                (ulong)SceneAddress + (uint)b.RowSceneOffset != (ulong)b.ProjectedRowAddress + (projection?.Delta ?? 0) ||
-                (ulong)SceneAddress + privateOffset != (ulong)b.ProjectedPrivateAddress + (projection?.Delta ?? 0) ||
+                (ulong)SceneAddress + (uint)b.RowSceneOffset != (ulong)b.ProjectedRowAddress + (projection?.SceneDelta ?? 0) ||
+                (ulong)SceneAddress + privateOffset != (ulong)b.ProjectedPrivateAddress + (projection?.SceneDelta ?? 0) ||
                 BinaryPrimitives.ReadUInt16LittleEndian(scene.AsSpan(b.RowSceneOffset + 0x36)) != b.AuthoredDestinationClass ||
                 scene[b.RowSceneOffset + 0x48] != 0)
                 throw new InvalidDataException("Exact final authored row/class/private/live preimage changed.");
             rows.Add(new(b.RowId, identity.InstanceId, checked((uint)entry.BitIndex), b.AuthoredDestinationClass,
-                checked(b.ProjectedRowAddress + (projection?.Delta ?? 0)), checked(b.ProjectedPrivateAddress + (projection?.Delta ?? 0)),
-                new(authored.FinalDomain, sceneOffset + b.RowSceneOffset, 0x58),
-                new(authored.FinalDomain, sceneOffset + privateOffset, 12)));
+                checked(b.ProjectedRowAddress + (projection?.SceneDelta ?? 0)), checked(b.ProjectedPrivateAddress + (projection?.SceneDelta ?? 0)),
+                new(projection?.FinalDomain ?? authored.FinalDomain, sceneOffset + b.RowSceneOffset, 0x58),
+                new(projection?.FinalDomain ?? authored.FinalDomain, sceneOffset + privateOffset, 12)));
         }
         if (rows.Count != 2 || rows.Select(r => r.RowAddress).Distinct().Count() != rows.Count ||
             rows.Select(r => r.PrivateAddress).Distinct().Count() != rows.Count || rows.Select(r => r.BitIndex).Distinct().Count() != rows.Count)
@@ -107,8 +112,9 @@ internal sealed class NativeJapaneseEggCollectibleBinding
         if (manifest.Sha256 != ManifestSha256 || !manifest.SerializeCanonical().AsSpan().SequenceEqual(manifestBytes))
             throw new InvalidDataException("Row binding requires its exact manifest; successor rebinding is explicit.");
         if (authored.SourceCertified != SourceCertified || authored.PlanSha256 != AuthoredPlanSha256 ||
-            authored.FinalDataSha256 != FinalDataSha256 || authored.FinalOverlaySha256 != AuthoredOverlaySha256 ||
-            !authored.CopyLevelData().AsSpan().SequenceEqual(data) || !authored.CopyOverlay().AsSpan().SequenceEqual(overlay))
+            (Projection?.FinalDataSha256 ?? authored.FinalDataSha256) != FinalDataSha256 || authored.FinalOverlaySha256 != AuthoredOverlaySha256 ||
+            !authored.CopyLevelData().AsSpan().SequenceEqual(authoredData) || !authored.CopyOverlay().AsSpan().SequenceEqual(overlay) ||
+            !(Projection?.CopyLevelData() ?? authored.CopyLevelData()).AsSpan().SequenceEqual(data))
             throw new InvalidDataException("Row binding is stale for this exact authored scene/model/overlay composition.");
     }
 }

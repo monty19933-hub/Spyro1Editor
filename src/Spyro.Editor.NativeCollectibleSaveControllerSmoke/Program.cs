@@ -217,4 +217,5 @@ using var source=NativeRegionalSourceSession.Open(args[1],NativeDiscRevision.Usa
 var certified=NativeCollectibleSaveControllerKernel.Capture(source,k.ArenaAddress);certified.RequireSourceEvidence();
 Check(certified.SourceCertified&&certified.CopyBytes().SequenceEqual(k.CopyBytes()),"Source certification pins existing native ABI, never different code or installation");
 var sourceFixture=new ControllerFixture(certified);sourceFixture.Reach(NativeCollectibleSaveControllerStage.Committed);VerifySuccess(sourceFixture);source.VerifyUnchanged();
+SerializerSnapshotCases.Run(source,certified,Check);
 Console.WriteLine($"NATIVE_COLLECTIBLE_SAVE_CONTROLLER_SOURCE_OK checks={checks} sourceUnchanged=true nativeIoExecuted=false cardWrites=0 runtime=false");

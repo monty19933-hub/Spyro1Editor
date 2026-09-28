@@ -224,6 +224,16 @@ Runner contracts pass111 tests after mandatory source-free and opt-in USA-only
 registration. Actual controller code is0x166C (5,740 bytes), below its0x2000 cap.
 No native I/O or emulator save is implied by these CPU-service simulations.
 
+An additional source-only serializer test now executes original59864 and its
+exact16914/16958 clear/copy and5956C checksum helpers for four seeded ordinary
+states. All0x600 bytes match an independent format model, including retail
+overlapping egg fields, checksum at58C and zero padding590..600. Only the owned
+buffer and original0x20 frame are written. A clearly marked host capture feeds
+that exact image into the emitted controller's simulated transaction; no native
+adapter performs the copy yet. This adds31 checks, bringing the explicit USA
+controller route to3,921; its source-free count remains3,881. Independent source
+review confirmed the serializer mapping and original-image verification passed.
+
 The source queue index at g800751B0 is a signed last-enqueued index, initialized
 to -1 at80068F30. Helper80068F44 fails to enqueue when the next index reaches4,
 but read/write wrappers can still return accepted1. The controller guards every
@@ -262,6 +272,41 @@ allocation and loader contract, not current pickup-guard bindings, native cache,
 asynchronous lease, real card I/O or publication. The same plan still refuses
 installation; corrected nonuniform model/scene rebinding is the next slice.
 
+The following three-file geometry correction now exists in the shared
+`NativeJapaneseEggOverlayProjection`, `NativeJapaneseEggCollectibleBinding` and
+`NativeJapaneseEggLifecycleOverlayPlan`. A closed controller-workspace factory
+consumes the exact workspace/ancestor instance. Model displacement relative to
+the authored E800 baseline stays1800; scene displacement becomes9000. Legacy
+uniform `Delta` refuses this nonuniform route rather than moving model roots
+incorrectly. Binding now uses the final data domain/hash, model descriptor
+length and shifted row/private extents. Existing emitters regenerate only
+attempt, lifecycle and live-guard bodies in their same owned capacities and PCs.
+All other overlay bytes, old factories/hashes and existing publication guards
+remain unchanged. This is still detached; old startup/admitted/publisher routes
+deliberately reject it rather than inheriting new authority.
+
+New lifecycle smoke passes162 source-free and417 explicit JP+USA checks in
+both Release and Debug. Existing LifecycleOverlay248/571 and AdmittedLifecycle
+156/342 Release checks pass with old goldens unchanged. One CPU image executes
+actual admission, then loads the complete model/workspace/scene bytes and
+executes native callback suppression and pickup plus simulated row reload;
+the entire registered model,
+controller tail, overlay and other rows survive unchanged. All three stale
+parent globals refuse before calls/writes. Independent review found no scoped
+blocker. New overlay SHA-256:
+`5e5d06273e0c0bbdc393e12fbf11e64544eb5cf4800e275e1933429fecb6926e`.
+Data remains the controller workspace hash above. Guard entries stay8008A030,
+8008A060 and8008A090; dynamic rows move to8017D480. Projection's retail0x800
+reserve gap3E5C is not the workspace's stronger0xA00 gap3C5C. No new disc was
+published and no emulator or card was opened by these checks.
+
+Integrated default Release regression after controller/workspace/rebinding and
+serializer integration: **286 checks, zero failures**. Report:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-awrs4fah/summary.json`.
+The runner's112 source-free contracts pass, including mandatory registration of
+both new smokes and explicit exclusion of the dual-region lifecycle route from
+the single-USA source registry. This does not rebuild a preserved app package.
+
 The next source scheduling candidate is an Artisans-owned overlay gate reached
 from callback80086134's restored epilogue800873D8/873DC. It must check the exact
 mode11 caller return31E08 and final loaded geometry before touching model-tail
@@ -278,3 +323,34 @@ until drained. Native shutdown6631C spins on busy and is not bounded cancellatio
 Real completion/commit, cache visibility, card replacement and full stack safety
 remain separate gates. In-place ordinary and custom-tail writes are still not
 crash-atomic.
+
+Normal-mode retention audit narrows the next hook: use the same Artisans
+particle epilogue, not an unconditional EXE321FC jump into level memory. The
+snapshot semantics remain post-serializer, but the gate should intercept
+native I/O state2 before321A4, perform its own strict header poll/marker checks,
+then call59864 and capture the complete ordinary image. Retail state1 ignores
+the header enqueue return, so state2 alone is not acceptance evidence; cover
+the header queue-capacity/ownership case before any extension writes.
+
+All inspected normal save UI, retry, error, shutdown and success branches are
+after the31E00 callback. The registered controller callback53C68/+67C, CD
+callback16490/+70, exact Artisans tick86134/+12AC and its81-entry dispatch table
+showed no legitimate pending-save mode escape. This is support for a bounded
+normal-game barrier, not arbitrary RAM-mutation or all-BIOS/IRQ proof. Other-mode
+reload handlers existing elsewhere are not themselves a reachable counterexample.
+The original particle callback has restored SP before873D8. With that SP=S
+and new wrapper frame=W, require `[S-W-E0,S+88)` inside `[801FF800,80200000)`:
+main20+update20+save48 is88 above S, not just the controller's assumed48.
+ParticleA0 and controllerE0 execute sequentially, so their depths take a maximum.
+
+An additional ownership receipt is required before the scheduler can safely
+handle errors: controller Stage can become Failed/Revoked after native
+acceptance but before next-stage publication. The planned fixed-state receipt
+must publish request intent before the native call, record its raw return and
+accepted ownership before validation, and record consumed completion before
+later validation can fail. Failure/revocation cannot erase it. A terminal-only,
+single-poll Drain may consume the matching outstanding operation but never
+submit another request or claim cancellation. Ambiguous receipts stay pinned.
+Even drained code cannot release its own model-tail lease until returning to
+the retained overlay gate. Repeated-save entry2CCC8 resets retail fields only;
+one-shot controller rearm needs a separate proven post-drain/commit boundary.

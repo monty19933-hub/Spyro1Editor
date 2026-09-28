@@ -2145,6 +2145,14 @@ class RegionalAndMatrixGateTests(unittest.TestCase):
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
 
+    def test_workspace_egg_lifecycle_is_mandatory_but_never_receives_one_region_source(self):
+        name = "NativeJapaneseEggWorkspaceLifecycleSmoke"
+        self.assertEqual("NATIVE_JAPANESE_EGG_WORKSPACE_LIFECYCLE_OK", dict(RUNNER.CORE_CASES)[name])
+        self.assertEqual([], RUNNER.CASE_ARGUMENTS.get(name, []))
+        self.assertFalse(any(case[0] == name for case in RUNNER.SOURCE_QA_CASES))
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+
     def test_admitted_egg_lifecycle_is_mandatory_but_never_receives_one_region_source(self):
         name = "NativeJapaneseEggAdmittedLifecycleSmoke"
         self.assertEqual("JP_EGG_ADMITTED_LIFECYCLE_SOURCE_FREE_OK", dict(RUNNER.CORE_CASES)[name])
