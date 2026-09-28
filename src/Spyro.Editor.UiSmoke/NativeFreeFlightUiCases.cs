@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Spyro.Editor.App.Views;
+using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Persistence;
 using Spyro.Editor.Core.Workspace;
@@ -49,6 +50,7 @@ internal static class NativeFreeFlightUiCases
             Check(tooltip.Contains("Spyro", StringComparison.Ordinal) && tooltip.Contains("exported game", StringComparison.Ordinal) &&
                 tooltip.Contains("Free Camera", StringComparison.Ordinal),
                 "The existing checkbox distinguishes native Spyro flight in exported gameplay from the editor camera.");
+            ActualLevelSelection(window, first);
             DraftAndPersistence(window, first, second);
             window = ReopenSavedChoice(window, first);
             UnsupportedTargets(window, first);
@@ -69,12 +71,84 @@ internal static class NativeFreeFlightUiCases
             if (window != null)
             {
                 window.RegularEditorPersistenceDelayOverrideForTesting = null;
+                window.LevelSelectionDelayOverrideForTesting = null;
                 window.Close(); Pump();
             }
             Environment.CurrentDirectory = previousDirectory;
             Environment.SetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE", previousWorkspace);
             Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", previousRelease);
         }
+    }
+
+    private static void ActualLevelSelection(MainWindow window, string root)
+    {
+        int beforeChecks = checks;
+        Bind(window, root, 11); // Initial source-free fixture only; transitions below use the actual loaders.
+        Check(!File.Exists(DiscImageLocator.FindImage(Get<EditorWorkspace>(window, "_workspace"))),
+            "Real selection regression has no source disc available to discover or open.");
+        var catalog = Get<LevelCatalog>(window, "_catalog");
+        LevelDefinition stone = catalog.Levels.Single(l => l.LevelId == 11), toasty = catalog.Levels.Single(l => l.LevelId == 14);
+        var picker = Get<ComboBox>(window, "_levelJumpBox");
+        Set(window, "_syncingLevelSelection", true);
+        try
+        {
+            picker.ItemsSource = catalog.Levels;
+            Get<ListBox>(window, "_levelList").ItemsSource = catalog.Levels;
+            picker.SelectedItem = stone;
+        }
+        finally { Set(window, "_syncingLevelSelection", false); }
+        bool Selecting() => Get<bool>(window, "_loadingLevel") || Get<int>(window, "_levelSelectionAsyncInFlight") != 0;
+        bool ControlsEnabled() => Find<CheckBox>(window, "FreeFlightEnabled").IsEnabled &&
+            Find<Button>(window, "FreeFlightSave").IsEnabled && Find<Button>(window, "FreeFlightRevert").IsEnabled;
+        bool ControlsDisabled() => !Find<CheckBox>(window, "FreeFlightEnabled").IsEnabled &&
+            !Find<Button>(window, "FreeFlightSave").IsEnabled && !Find<Button>(window, "FreeFlightRevert").IsEnabled;
+        void WaitSelected(LevelDefinition target)
+        {
+            Wait(() => !Selecting() && ReferenceEquals(Get<LevelDefinition>(window, "_currentLevel"), target), "real selection of " + target.DisplayName);
+        }
+        Task LoadDirect(LevelDefinition target) => (Task)typeof(MainWindow).GetMethod("SelectLevelAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(window, new object?[] { target, null })!;
+
+        picker.SelectedItem = toasty; WaitSelected(toasty);
+        Check(ControlsEnabled(), "Completed actual Stone Hill-to-Toasty picker load releases all three Fly Anywhere controls without manual refresh.");
+        Check((Find<TextBlock>(window, "FreeFlightDetails").Text ?? "").Contains("Toasty — default: Off", StringComparison.Ordinal) &&
+            !window.TryGetFreeFlightSettingsExportBlockReason(out _), "Actual loaded Toasty owns current default-Off binding and unchanged export gates.");
+
+        // Direct awaited loads own only the async counter. Picker loads also
+        // own the outer loading flag; neither release may refresh too early.
+        foreach (bool viaPicker in new[] { false, true })
+        {
+            LevelDefinition target = viaPicker ? stone : toasty;
+            TaskCompletionSource entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            window.LevelSelectionDelayOverrideForTesting = stage =>
+            {
+                if (stage != "level-load-work-completed") return Task.CompletedTask;
+                entered.TrySetResult(); return release.Task;
+            };
+            Task? direct = null;
+            try
+            {
+                if (viaPicker) picker.SelectedItem = target; else direct = LoadDirect(target);
+                Wait(() => entered.Task.IsCompleted, "deferred actual level loader");
+                Check(Get<int>(window, "_levelSelectionAsyncInFlight") == 1 && Get<bool>(window, "_loadingLevel") == viaPicker && ControlsDisabled(),
+                    "Fly Anywhere remains disabled while the real " + (viaPicker ? "picker and inner load" : "direct awaited load") + " owns its busy fences.");
+            }
+            finally
+            {
+                release.TrySetResult();
+                if (direct != null) { Wait(() => direct.IsCompleted, "direct level load completion"); direct.GetAwaiter().GetResult(); }
+                else WaitSelected(target);
+                window.LevelSelectionDelayOverrideForTesting = null;
+            }
+            WaitSelected(target);
+            Check(ControlsEnabled(), "Actual " + (viaPicker ? "outer picker" : "inner load") + " finalizer restores current Fly Anywhere availability.");
+        }
+        picker.SelectedItem = toasty; WaitSelected(toasty);
+        Check(ControlsEnabled(), "Repeated actual picker transitions keep the supported Toasty controls usable.");
+        Check(!NativeFreeFlightSettingsStore.Capture(root).Exists && !window.TryGetFreeFlightSettingsExportBlockReason(out _),
+            "Level selection and availability refresh never save a flight choice or broaden export support.");
+        Console.WriteLine($"FREE_FLIGHT_SELECTION_UI_OK checks={checks-beforeChecks} actualPickerAndLoader=true sourceOpened=false nativeOutputWritten=false");
     }
 
     private static MainWindow ReopenSavedChoice(MainWindow window, string root)

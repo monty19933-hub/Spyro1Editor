@@ -2392,6 +2392,9 @@ public sealed partial class MainWindow : Window
         if (_openWorkspaceButton != null)
             _openWorkspaceButton.IsEnabled = enabled;
         RefreshId65BlankLabUi();
+        // Loaded settings are bound before the inner/outer level-load fences
+        // release. Reflect each fence transition without resetting the draft.
+        RefreshFreeFlightSettingsAvailability();
     }
 
     private static Control BuildUnsavedTerrainDialogContent(Window dialog, string heading, string message)
