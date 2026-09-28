@@ -11,9 +11,13 @@ remains the goal, not a completed feature or zero-bug guarantee.
 September27 latest: a separate [guarded admission research disc](research/collectible-card-admission-research-r01.md)
 is published and independently verified byte-for-byte against an original-only
 prediction. It adds phase-last live-state admission and a native warm-reset
-guard. Source/CPU checks and the272/0 Release gate pass. This publication
-checkpoint has not yet been exercised in DuckStation and installs no egg
-collector, inventory, custom save writer or percentage hooks. R08 is unchanged.
+guard. Source/CPU checks and the272/0 Release gate pass. The exact CUE now also
+passes a narrow full-firmware DuckStation check: seeded slot0 state becomes
+Ready, survives Stone Hill gameplay and its native exit to Artisans, then is
+invalidated after native Quit Game. The260-sample read-only log has155 Ready
+samples/no refusals. This installs no egg collector, inventory, custom save
+writer or percentage hooks; manually seeded state is not collection/save proof.
+Normal settings/card were hash-verified restored. R08 is unchanged.
 
 Preceding runtime: a separate [native card-load research disc](research/collectible-card-load-research-r01.md)
 passes full raw-disc/CUE verification and full-firmware DuckStation saved-game

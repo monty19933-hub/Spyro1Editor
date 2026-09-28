@@ -10,9 +10,12 @@ this is not permission to replace the game with its Japanese version.
 Latest source/publication checkpoint: [guarded admission R01](collectible-card-admission-research-r01.md)
 adds source-tested phase-last admission and resident warm-reset invalidation.
 The new isolated disc matches independent original-only whole-disc prediction;
-Release272/0 and source/fault/inverse checks pass. Runtime is the next gate;
-collection, native save/inventory and required-for100% remain pending. No
-preserved editor package or ordinary save has been replaced.
+Release272/0 and source/fault/inverse checks pass. Exact-CUE/full-firmware
+DuckStation now observes complete seeded Ready state after native slot0 load,
+through Stone Hill gameplay and native exit to Artisans, then phase0 after
+native Quit Game. Collection, native save/inventory and required-for100% remain
+pending; the next slice joins this loader to guarded native egg pickup. Normal
+settings/card were hash-verified restored. No preserved editor was replaced.
 
 Preceding runtime checkpoint: [card-load research R01](collectible-card-load-research-r01.md)
 now runs the native additional read in DuckStation and reaches saved Artisans.

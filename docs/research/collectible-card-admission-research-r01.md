@@ -95,3 +95,57 @@ Full Release passed272 checks, zero failures:
 The final frozen-control regression and updated runner contracts were also
 rerun separately (17/106 passing). This publication checkpoint does not claim
 a DuckStation run; runtime checks follow separately with a disposable card.
+
+## Exact-disc runtime follow-up
+
+The same published CUE was exercised September27 with full firmware, slowboot,
+normal2MB, Vulkan1x and a digital controller. Firmware was the existing
+SCPH-1001/DTLH-3000 v2.2 US image, SHA256
+`71af94d1e47a68c11e8fdb9f8368040601514a42a5a399cda48c7d3bff1e99d3`.
+The Sony boot diamond, native title/menu and gameplay were observed. No HLE,
+direct EXE, resume state or host RAM/register writes were used.
+
+Evidence directory:`_local/collectible-card-admission-runtime-20260927-r01.f53AyZ/`.
+Attempt1 reached the native menu, but was closed without selecting a saved game
+after navigation/tap timing difficulties. Attempt2 used the same isolated card,
+added held Triangle on5 and input display, and successfully loaded native slot0.
+The actual loaded scene is **Stone Hill (native11)**, not Artisans as an early
+observation label/commentary mistakenly said. Native Exit Level subsequently
+returned to **Artisans (native10)**. The misleading immutable observer label
+`artisans-before-input` is retained, with this explicit correction.
+
+`observer-attempt2.jsonl` contains260 complete samples,155 Ready and no refused
+samples. Its SHA256 is
+`e28a10623dbfc18e0dd39df0efd7f122e7d4fa0ae8dbff43cac2cdaa05854e55`.
+Complete Ready bytes match the fixed ABI with slot0/controller0/marker50076,
+epoch1, selected bits01, active mask03, earned1/active2, dirty0/generation0.
+The Ready ledger SHA256 is
+`be7fe7458abf754e29dc3f7f3745c1a0b497279bf6adca5629deb2d1384665b1`.
+It remains identical during Stone Hill gameplay, after movement/jump/pause,
+and after the native transition to Artisans. The native pause display retained
+59 Stone Hill gems, two dragons and four lives. Movement and an airborne jump
+were visually observed; saved screenshots retain firmware, menu, gameplay,
+pause, Artisans and return-to-title evidence. A visible ordinary pink egg icon
+is not a custom egg-inventory result: no inventory hook is installed here.
+
+Native Artisans Quit Game returned to the title; the following sample has
+phase0, with the former metadata otherwise retained (intentionally invalid).
+This observes invalidation after that native route, not every reset/death or
+an instruction-level trace proving which reset call performed it. The sampled
+epoch remains unauthenticated independently after overlay unload. The source
+and sampler retain all broader runtime flags false: this is seeded-load,
+selected scene-lifetime and invalidation evidence, not gameplay pickup, native
+custom save/reload, inventory X/X, required100%, or a universal runtime pass.
+
+Both observer processes and DuckStation were closed; Save State For Resume
+was unchecked. Normal settings, game settings and memory-card hashes exactly
+match the pre-run baselines. The disposable card differs only in12 bytes of
+raw system frame63; the entire native save-file block and seeded extension
+remain unchanged. Its final SHA256 is
+`6c90b589543eb67b1cb92df3de0517800e1202281dd6bfb9780907665c4fddff`.
+R08 and earlier candidates were not rebuilt or replaced.
+
+Next bounded slice: compose this admission owner with the existing guarded
+Japanese egg lifecycle in Artisans, retain CardWrites=false, and prove seeded
+identity suppression plus actual second-identity pickup before implementing
+the separate asynchronous native save writer.
