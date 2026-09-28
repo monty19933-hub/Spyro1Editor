@@ -7,6 +7,19 @@ this is not permission to replace the game with its Japanese version.
 
 ## Execution order and acceptance
 
+September28 integrated checkpoint01955c7: full Release288/0 after the opt-in
+short-IRQ-window controller and the real-picker flight availability fix.
+Report:`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-dh_7ytiz/summary.json`.
+Controller1152 fixture/1152 USA source and308 actual synchronous-wrapper checks
+pass Release/Debug; IRQ/transfer services remain modeled and no scheduler adopts
+the new profile. UI55 includes9 real picker/load regressions. Separate R09/beta46
+from d60e620 passed package verification and Mac all-known browsing, fresh-level
+edit/undo/save/reopen and exact-profile GUI export plus independent new-process
+readback. It exposed disabled flight controls after selecting Toasty;96f6f2a
+fixes that refresh in source. R09 and R08 remain preserved. A separate beta47
+package is being prepared; no new native saving or flight runtime is claimed.
+R09 evidence:`_local/v6-private-preview-20260928-r09.z9GTPX/PACKAGED-UI-SESSION.md`.
+
 Latest source gate: **Release288/0** after the named resident scheduler allocation,
 typed controller workspace and nonuniform model/scene rebinding. Existing
 lifecycle goldens survive; source serializer output passes full ordinary-byte

@@ -2,8 +2,12 @@
 
 ## Changes since Spyro Editor Beta V5
 
-Private development preview, internal build `0.1.0-beta.46`. This is not a
+Private development preview, internal build `0.1.0-beta.47`. This is not a
 published release or a claim of universal Moby, texture or new-level support.
+
+- Fixed Fly Anywhere controls remaining disabled after switching retail levels.
+  Actual picker/load regression covers both busy fences and keeps export gates
+  unchanged. Native ON/OFF/save-reload acceptance remains separate.
 
 - Expanded both Moby browsers to expose all 368 identified classes and 6,334
   native observations, including resources without placed donor rows. Exact

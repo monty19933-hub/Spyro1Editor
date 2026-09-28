@@ -76,3 +76,19 @@ separate policy. No new destination or compound ON export is admitted here.
 Original ROMs/CUEs, cards, emulator settings, sealed packages and previous
 candidates were not written or launched by this focused change. No new native
 runtime verification is claimed.
+
+## September28 actual packaged picker regression
+
+Separate R09/beta46, clean source d60e620, exposed a real missing refresh after
+Stone Hill→Toasty through the ordinary level picker: the correct default-Off
+binding was present, but checkbox/Save/Revert stayed disabled after loading.
+Settings are bound inside both load fences; their finalizers called the central
+availability refresh without updating flight. Source96f6f2a adds that one
+availability refresh without rebinding drafts or widening any export gate.
+
+Test-first RED used the actual picker and loader, not direct settings binding.
+Release GREEN passes55 UI checks (previous46 plus9 real-selection checks),
+including direct-inner and outer-picker held-load fences, repeated selection,
+no saved preference/source/output writes and unchanged supported-target rules.
+R09 remains preserved with its observed bug. A separate beta47 package and
+native ON/OFF/save-reload remain next; source tests do not certify either.
