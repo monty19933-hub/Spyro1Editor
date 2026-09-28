@@ -7,13 +7,21 @@ this is not permission to replace the game with its Japanese version.
 
 ## Execution order and acceptance
 
-Latest source checkpoint b8634c8 fixes the main level picker's read-only
+Latest packaged checkpoint: [R11/beta48](v6-beta48-packaged-checkpoint.md), built
+from clean79f6ec5, passes Mac/Windows package verification. The actual Mac app
+now survives the formerly crashing AX SetValue("Toasty") without changing
+selection. Ordinary keyboard selection loads Toasty and the fresh instance
+shows saved OFF unchecked with enabled flight controls. It closed with exit0;
+no R11 project edit/export or new emulator acceptance is claimed. Its isolated
+launcher and test copy are preserved separately from R10 and earlier builds.
+
+Source checkpoint b8634c8 fixes the main level picker's read-only
 accessibility setter crash without changing selection/export policy. Regression
 RED reproduced the packaged exception; GREEN26 automation checks,55 flight UI
 checks and114 runner tests pass. Independent review found no blocker, and the
 integrated default Release gate passes **289/0**. See
-[the fix and evidence](level-picker-read-only-automation.md). A separate beta48
-identity is prepared for native packaged retesting; R10 stays unchanged.
+[the fix and evidence](level-picker-read-only-automation.md). The subsequent
+beta48 packaging and native checks above complete the narrow crash-fix gate.
 
 September28 packaged checkpoint: [R10/beta47](v6-beta47-packaged-checkpoint.md)
 from clean462b6c5 passed Mac/Windows package verification and actual Mac
@@ -23,8 +31,8 @@ full-firmware boot/native slot0 Stone Hill load/Exit Level to Artisans and
 movement passed; Toasty flight and native save/cold-reload did not get exercised.
 DuckStation is closed and normal settings/card are hash-exact restored.
 The third fresh editor instance crashed on AX value-setting of the level
-ComboBox (Avalonia NotSupportedException); R10 is preserved, source repair is
-in progress, and the third-instance explicit-OFF visual check remains pending.
+ComboBox (Avalonia NotSupportedException); R10 is preserved. R11 verifies the
+repair and the previously interrupted fresh-instance explicit-OFF visual check.
 The [IRQ scheduler successor plan](collectible-irq-scheduler-successor-plan.md)
 records the required larger stack exclusion and cleanup routing; it is
 unimplemented, not an installed native writer.

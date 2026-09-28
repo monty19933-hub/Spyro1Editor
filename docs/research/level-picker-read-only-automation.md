@@ -57,7 +57,10 @@ including the newly registered automation mode. Report:
 The source gate retained beta47 identity; beta48 is a separate subsequent
 package identity for native AX retesting. No Core/export logic changed.
 
-These checks do not exercise the macOS native AX bridge or certify popup behavior
-in a packaged app. R10 is preserved and was not rebuilt or controlled. A new
-package and native AX retest remain separate acceptance steps; the interrupted
-fresh-Off GUI persistence check is not promoted by this source-only regression.
+These source checks do not exercise the macOS native AX bridge or certify popup
+behavior in a packaged app. The separate [R11/beta48 packaged check](v6-beta48-packaged-checkpoint.md)
+now passes the exact native AX SetValue("Toasty") reproducer: the editor stays
+alive and Stone Hill stays selected. Ordinary keyboard selection then loads
+Toasty; Level -> Fly Anywhere shows the copied saved OFF choice unchecked with
+Save/Revert enabled. No new edits or exports were made in R11. The app quit
+normally with exit0. R10 remains the unchanged diagnostic package.
