@@ -2047,6 +2047,8 @@ class RegionalAndMatrixGateTests(unittest.TestCase):
     def test_ledger_hydration_and_scheduling_defaults_have_no_source_or_publication(self):
         for name, marker in (
             ("DetachedCollectibleLedgerImageSmoke", "DETACHED_COLLECTIBLE_LEDGER_IMAGE_OK"),
+            ("NativeSha256Smoke", "NATIVE_SHA256_OK"),
+            ("NativeCollectibleEnvelopeLoadSmoke", "NATIVE_COLLECTIBLE_ENVELOPE_LOAD_OK"),
             ("NativeJapaneseEggSchedulingSmoke", "JP_EGG_SCHEDULING_SOURCE_FREE_OK"),
         ):
             self.assertEqual(marker, dict(RUNNER.CORE_CASES)[name])

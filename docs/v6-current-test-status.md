@@ -30,7 +30,17 @@ The follow-up source-only startup composition joins that overlay to the paired
 and 323 original-ROM checks (571 cumulative), including execution of the combined
 entry/BSS/copy-anchor code and rejection of cold NOT-LOADED state. This does
 not authenticate or initialize a native selected save.
-The integrated default Release gate passes **254 checks, zero failures**,
+The next [native envelope validator](research/collectible-native-envelope-load.md)
+executes SHA-256 and the existing save-format checks in MIPS-I, then prepares a
+separate 512-byte candidate state. Its Release suites pass **611 SHA checks and
+3,797 loader checks**, including all three slots, retired identities, corrupt
+saves and complete nested-stack guards. Refusals leave the previous candidate
+and protected live ledger unchanged. This is not yet connected to the game's
+asynchronous card read or selected-save authentication; it cannot issue live
+Ready state, display X/X, save progress or change completion percentage.
+The latest integrated default Release gate passes **258 checks, zero failures**,
+report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-4p7l38fn/summary.json`.
+The preceding startup-composition gate passed **254 checks, zero failures**,
 report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-s7seb6p_/summary.json`.
 The preceding overlay-only `fed7d49` gate also passed254/0 (`spyro-regression-6cck7768`);
 the earlier `e9d0091` checkpoint passed252/0.

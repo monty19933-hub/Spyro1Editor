@@ -51,6 +51,17 @@ The full Release gate was repeated after this startup integration:254/0,
 report `/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-s7seb6p_/summary.json`.
 No native Ready state, game publication or new gameplay result is claimed.
 
+The following [native envelope loader](collectible-native-envelope-load.md)
+now validates the existing save format with actual MIPS-I SHA-256, checks all
+three slot bitmaps and prepares a separate shadow ledger. Focused Release
+checks pass 611 for SHA and 3,797 for loading; the integrated default Release
+gate passes 258/0, report
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-4p7l38fn/summary.json`.
+It preserves existing state on every refusal and does not reset unknown data.
+Native asynchronous card-buffer ownership, selected-save provenance and live
+admission remain next. No card I/O, new package, inventory or completion
+consumer is enabled by this source checkpoint.
+
 September 27: [independent authored colors now pass a fresh full-firmware
 Artisans visual test](japanese-egg-authored-colors-runtime.md), including normal
 inventory open/return. No collector or new inventory/save/% consumer is installed.

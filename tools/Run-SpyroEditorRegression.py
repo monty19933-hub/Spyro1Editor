@@ -72,6 +72,8 @@ CORE_CASES = (
     ("NativeCollectibleSelectedSlotResidenceSmoke", "COLLECTIBLE_SELECTED_SLOT_RESIDENCE_SOURCE_FREE_OK"),
     ("NativeCollectibleCollectionKernelSmoke", "NATIVE_COLLECTIBLE_STATE_QUERY_OK"),
     ("DetachedCollectibleLedgerImageSmoke", "DETACHED_COLLECTIBLE_LEDGER_IMAGE_OK"),
+    ("NativeSha256Smoke", "NATIVE_SHA256_OK"),
+    ("NativeCollectibleEnvelopeLoadSmoke", "NATIVE_COLLECTIBLE_ENVELOPE_LOAD_OK"),
     ("NativeJapaneseEggSchedulingSmoke", "JP_EGG_SCHEDULING_SOURCE_FREE_OK"),
     ("NativeCollectibleReservationMechanicsSmoke", "COLLECTIBLE_RESERVATION_MECHANICS_SOURCE_FREE_OK"),
     ("NativeCollectibleColdBootBootstrapSmoke", "COLLECTIBLE_COLD_BOOT_BOOTSTRAP_SOURCE_FREE_OK"),
