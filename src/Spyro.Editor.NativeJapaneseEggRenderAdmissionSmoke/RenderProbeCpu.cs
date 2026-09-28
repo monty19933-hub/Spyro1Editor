@@ -41,6 +41,7 @@ internal sealed class RenderProbeCpu
             int imm=(short)w;uint a=Regs[rs],b=Regs[rt],next=pc+4;var oldLoad=load;load=null;var oldJump=pendingJump;pendingJump=null;
             (int Reg,uint Value)? write=null;
             void Set(int r,uint v)=>write=(r,v);
+            void Load(int r,uint v){if(r!=0)load=(r,v);}
             void Branch(bool take){pendingJump=take?unchecked(pc+4+(uint)(imm*4)):pc+8;}
             uint Signed(uint left,uint right,bool subtract)
             {
@@ -76,13 +77,33 @@ internal sealed class RenderProbeCpu
                 case 11:Set(rt,a<unchecked((uint)imm)?1u:0);break;case 12:Set(rt,a&(w&65535));break;case 13:Set(rt,a|(w&65535));break;case 15:Set(rt,w<<16);break;
                 case 0x20:case 0x21:case 0x23:case 0x24:case 0x25:
                     int size=op is 0x20 or 0x24?1:op is 0x21 or 0x25?2:4;uint readAddress=unchecked(a+(uint)imm);Reads.Add(readAddress);uint value=Get(readAddress,size);
-                    if(op==0x20)value=unchecked((uint)(sbyte)value);if(op==0x21)value=unchecked((uint)(short)value);load=(rt,value);break;
+                    if(op==0x20)value=unchecked((uint)(sbyte)value);if(op==0x21)value=unchecked((uint)(short)value);Load(rt,value);break;
+                case 0x22:case 0x26:
+                {
+                    uint effective=unchecked(a+(uint)imm),aligned=effective&~3u;int lane=(int)(effective&3);
+                    Reads.Add(aligned);uint memory=Get(aligned);
+                    // Merge operands alone forward a matching pending load.
+                    uint prior=oldLoad is {} pending&&pending.Reg==rt?pending.Value:b;
+                    int bits=(op==0x22?3-lane:lane)*8;
+                    uint mask=op==0x22?uint.MaxValue<<bits:uint.MaxValue>>bits;
+                    Load(rt,(prior&~mask)|(op==0x22?memory<<bits:memory>>bits));break;
+                }
                 case 0x28:case 0x29:case 0x2B:
                     int width=op==0x28?1:op==0x29?2:4;uint address=unchecked(a+(uint)imm);Put(address,b,width);
                     for(int i=0;i<width;i++)Writes.Add(address+(uint)i);break;
+                case 0x2A:case 0x2E:
+                {
+                    uint effective=unchecked(a+(uint)imm),aligned=effective&~3u;int lane=(int)(effective&3);
+                    _=At(aligned,4); // Validate complete owner without inventing a semantic read.
+                    uint selected=op==0x2A?b>>((3-lane)*8):b<<(lane*8);
+                    int first=op==0x2A?0:lane,last=op==0x2A?lane:3;
+                    for(int i=first;i<=last;i++){Put(aligned+(uint)i,selected>>(i*8),1);Writes.Add(aligned+(uint)i);}break;
+                }
                 default:throw new Exception("Unknown test opcode "+w.ToString("X8")+" at "+pc.ToString("X8"));
             }
-            if(oldLoad is {} l)Regs[l.Reg]=l.Value;if(write is {} r)Regs[r.Reg]=r.Value;Regs[0]=0;
+            // A second delayed load to the same register cancels the first
+            // retirement (ordinary loads too); its own one-slot delay remains.
+            if(oldLoad is {} l&&load?.Reg!=l.Reg)Regs[l.Reg]=l.Value;if(write is {} r)Regs[r.Reg]=r.Value;Regs[0]=0;
             if(oldJump is uint destination){if(pendingJump!=null)throw new Exception("Transfer in delay slot");next=destination;}
             pc=next;
         }

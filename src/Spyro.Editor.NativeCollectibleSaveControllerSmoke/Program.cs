@@ -6,6 +6,8 @@ using Spyro.Editor.Core.Exporting;
 
 int checks=0;
 void Check(bool ok,string why){checks++;if(!ok)throw new Exception(why);}
+MergeMemoryCases.Run(Check);
+int mergeMemoryChecks=checks;checks=0;
 void Refuse(Action action,string why)
 {try{action();}catch(Exception e)when(e is InvalidDataException or ArgumentException){checks++;return;}throw new Exception("Expected refusal: "+why);}
 var k=NativeCollectibleSaveControllerKernel.CreateFixture(0x800C0000);
@@ -205,7 +207,8 @@ foreach(var stage in new[]{NativeCollectibleSaveControllerStage.Idle,NativeColle
         "Every filename byte, including NUL, is source-fixed before all five requests");
 }
 int previousChecks=checks;PendingReceiptCases.Run(k,Check);
-Console.WriteLine($"NATIVE_COLLECTIBLE_SAVE_CONTROLLER_OK checks={checks} previousChecks={previousChecks} receiptChecks={checks-previousChecks} codeBytes={k.CodeByteLength} arenaBytes={NativeCollectibleSaveControllerKernel.ArenaBytes} stateBytes={NativeCollectibleSaveControllerKernel.StateBytes} stackBytes={NativeCollectibleSaveControllerKernel.MaximumStackBytes} emittedControllerExecuted=true nativeIoExecuted=false cardWrites=0 runtime=false");
+int receiptChecks=checks-previousChecks;checks+=mergeMemoryChecks;
+Console.WriteLine($"NATIVE_COLLECTIBLE_SAVE_CONTROLLER_OK checks={checks} previousChecks={previousChecks} receiptChecks={receiptChecks} mergeMemoryChecks={mergeMemoryChecks} codeBytes={k.CodeByteLength} arenaBytes={NativeCollectibleSaveControllerKernel.ArenaBytes} stateBytes={NativeCollectibleSaveControllerKernel.StateBytes} stackBytes={NativeCollectibleSaveControllerKernel.MaximumStackBytes} emittedControllerExecuted=true nativeIoExecuted=false cardWrites=0 runtime=false");
 Console.WriteLine("SAVE_CONTROLLER_LAYOUT "+JsonSerializer.Serialize(new{
     beginPc=k.BeginPc.ToString("X8"),pumpPc=k.PumpPc.ToString("X8"),revokePc=k.RevokePc.ToString("X8"),drainPc=k.DrainPc.ToString("X8"),
     codeSha256=Convert.ToHexStringLower(SHA256.HashData(k.CopyBytes())),codeBytes=k.CodeByteLength,
@@ -220,4 +223,6 @@ Check(certified.SourceCertified&&certified.CopyBytes().SequenceEqual(k.CopyBytes
 var sourceFixture=new ControllerFixture(certified);sourceFixture.Reach(NativeCollectibleSaveControllerStage.Committed);VerifySuccess(sourceFixture);source.VerifyUnchanged();
 SerializerSnapshotCases.Run(source,certified,Check);
 PendingReceiptCases.Source(source,Check);
-Console.WriteLine($"NATIVE_COLLECTIBLE_SAVE_CONTROLLER_SOURCE_OK checks={checks} sourceUnchanged=true nativeIoExecuted=false cardWrites=0 runtime=false");
+int beforeAcceptedWrappers=checks;
+AcceptedRequestWrapperCases.Run(source,Check);
+Console.WriteLine($"NATIVE_COLLECTIBLE_SAVE_CONTROLLER_SOURCE_OK checks={checks} acceptedWrapperChecks={checks-beforeAcceptedWrappers} sourceUnchanged=true acceptedWrappersExecuted=true asyncCallbacksExecuted=false nativeIoExecuted=false cardWrites=0 runtime=false");

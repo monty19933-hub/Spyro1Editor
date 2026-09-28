@@ -416,6 +416,46 @@ new gate could precede model-tail execution, but cannot by itself establish
 initial visibility of that newly loaded overlay gate. Neither loader CPU tests
 nor the existence of this stub grants cache/BIOS/full-stack certification.
 
+### Interrupt exclusion: concrete remaining race
+
+The controller's declared external-exclusion requirement is substantive. A
+foreground Drain can read Busy3, receive the completion interrupt, then read
+Latch1 and correctly refuse its now-contradictory observations even though the
+actual transfer was its own. Pump can similarly poll pending just before that
+interrupt and then fail its post-poll checks. Receipts alone do not make these
+multi-instruction observations atomic.
+
+The source's5DBA4/5DBB4 syscall veneers implement Enter/Exit critical-section
+requests. Native67EA0 saves Enter's v0 token and calls Exit only when that saved
+token equals1; cleanup680A4 does likewise. A future wrapper must preserve its
+arguments, result and token and must not unconditionally enable interrupts.
+This is the game's source protocol, not a BIOS implementation or nesting proof.
+
+On admitted, guarded paths,665B8/66E28/670E4 perform bounded RAM helper work and
+enqueue;67628 mode1 is call-free and nonblocking. A masking interval must cover
+the first Busy/Latch/queue sample through intent, call, receipt and all following
+stage/postcondition checks. Masking just a JAL is insufficient. Current opaque
+Begin/Pump/Drain entries permit a paired outer wrapper, but Pump also performs
+preparation/SHA/copies, so interrupt latency still requires measurement. Native
+completion must be allowed between entries; blocking poll mode0 cannot be used
+inside such a mask. Diagnostic/error paths remain outside the accepted-path
+stack proof.
+
+Do not include initial662BC setup in that claim: its callback registration
+resolves to the source leaf5E5D8, but67EA0 opens/enables BIOS events. Accepted
+request closure is not authority to mask that setup wholesale. CPU interrupt
+exclusion also does not prove DMA exclusion, card identity, cancel safety,
+firmware stack bounds or code visibility.
+
+Source pins:5DBA4/10
+`505f018057cab576fce3e80a248467f5c8ad5e14c7d2289869e453ad092ef931`,
+5DBB4/10
+`6e003f701ca622421a42bea9b13f252e5325ecafcb0e85216766a154e060e578`,
+67EA0/1E4
+`b05c14dbd524a156943c4147bd54f12eb05bb2d005341417f2cfb498d0f330b1`,
+680A4/B8
+`7ce5526e956186a87f3b39c3ab35aa0a5d6383c684deceb10eb98132c452d4ec`.
+
 All inspected normal save UI, retry, error, shutdown and success branches are
 after the31E00 callback. The registered controller callback53C68/+67C, CD
 callback16490/+70, exact Artisans tick86134/+12AC and its81-entry dispatch table
@@ -430,3 +470,35 @@ ParticleA0 and controllerE0 execute sequentially, so their depths take a maximum
 The receipt/Drain implementation above is a prerequisite, not the scheduler
 itself. Repeated-save entry2CCC8 resets retail fields only; one-shot controller
 rearm still needs a separate proven post-drain/commit boundary.
+
+### Actual accepted request wrappers and emulator cache boundary
+
+The source smoke now executes the pinned read66E28 and write670E4 wrappers,
+their filename prefix67D74, strcat687D4, strlen6276C and enqueue68F44 closure.
+Sixteen combinations cover both controller ports, all four admitted queue
+indices, read100 at1400 and write600 at200. Tests compare complete request
+globals, filename, queue record and retained complements, the fifth stack
+argument and restored registers/HI/LO. Synchronous maximum stack is50. This
+does not execute a BIOS service, asynchronous callback or memory-card transfer.
+Release and Debug each pass4,636 source-free/4,845 USA-source checks, including
+238 merge-instruction checks and168 actual-wrapper checks; original3,881 and
+517 receipt checks remain. The shared CPU gained tested MIPS-I little-endian
+LWL/LWR/SWL/SWR and matching pending-load cancellation, not full CPU certification.
+Controller code and workspace data hashes remain unchanged.
+
+Installed DuckStation reports0.1-11826-gfe2306b1f; inspected source is commit
+`fe2306b1f0f7dd64cbc9aa8eb12269715ba799b5`. Its RecompilerICache option models
+cache tags/stall timing, not cached instruction bytes. CachedInterpreter shares
+that block mechanism. R02 used Recompiler/RecompilerICache=false and therefore
+does not establish stale-instruction visibility. A future visibility test must
+use ExecutionMode=Interpreter from a fresh boot, without switching modes at the
+transition (switching clears the cache). Interpreter fetches cached KSEG0 data,
+but can recover certain invalid/reserved stale instructions by retrying RAM;
+it is still not strict hardware cache certification. No settings were changed.
+
+Primary source: [block reads](https://github.com/stenzek/duckstation/blob/fe2306b1f0f7dd64cbc9aa8eb12269715ba799b5/src/core/cpu_code_cache.cpp#L997),
+[ARM64 timing](https://github.com/stenzek/duckstation/blob/fe2306b1f0f7dd64cbc9aa8eb12269715ba799b5/src/core/cpu_recompiler_arm64.cpp#L788),
+[cached fetch](https://github.com/stenzek/duckstation/blob/fe2306b1f0f7dd64cbc9aa8eb12269715ba799b5/src/core/cpu_core.cpp#L3020),
+[mode change](https://github.com/stenzek/duckstation/blob/fe2306b1f0f7dd64cbc9aa8eb12269715ba799b5/src/core/cpu_core.cpp#L2178),
+[fallback bypass](https://github.com/stenzek/duckstation/blob/fe2306b1f0f7dd64cbc9aa8eb12269715ba799b5/src/core/cpu_core.cpp#L3087),
+[stale-invalid recovery](https://github.com/stenzek/duckstation/blob/fe2306b1f0f7dd64cbc9aa8eb12269715ba799b5/src/core/cpu_core.cpp#L2084).
