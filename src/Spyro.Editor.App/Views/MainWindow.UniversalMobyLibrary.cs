@@ -357,7 +357,8 @@ public sealed partial class MainWindow
         categories.ItemTemplate = new FuncDataTemplate<(string, string, int)>((c, _) => new TextBlock
         {
             Text = (c.Item2.Length > 0 ? "    " + c.Item2 : FriendlyCategory(c.Item1)) + $"  ({c.Item3})",
-            FontWeight = c.Item2.Length > 0 ? FontWeight.Normal : FontWeight.SemiBold, Margin = new Thickness(4, 3)
+            FontWeight = c.Item2.Length > 0 ? FontWeight.Normal : FontWeight.SemiBold, Margin = new Thickness(4, 3),
+            TextWrapping = TextWrapping.Wrap, MaxWidth = 200
         });
         variants.ItemTemplate = new FuncDataTemplate<UniversalMobyVariant>((v, _) =>
             v != null && UniversalDragonflyEggs.IsEggClass(v.ClassId)
