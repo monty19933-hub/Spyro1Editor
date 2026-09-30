@@ -5,7 +5,12 @@ namespace Spyro.Editor.Core.Universal;
 
 /// <summary>A placeable source variant: one native row in one source level.</summary>
 public sealed record UniversalMobyVariant(int ClassId, string SourceLevelKey, int SourceRow, int PropertiesBytes,
-    int ModelBytes, int BehaviorBytes, bool HasLocalModel, bool SharedModel, bool HasBehavior);
+    int ModelBytes, int BehaviorBytes, bool HasLocalModel, bool SharedModel, bool HasBehavior)
+{
+    public string? RestrictionReason { get; init; }
+    public int DroppedExternalPointers { get; init; }
+    public bool Extractable => RestrictionReason == null;
+}
 
 public sealed record UniversalMobyCatalogEntry(
     int ClassId,
@@ -40,7 +45,8 @@ public static class UniversalMobyCatalogBuilder
         AllVariants(lib, catalog).GroupBy(v => v.ClassId).Select(g => Pick(g)).OrderBy(v => v.ClassId).ToList();
 
     private static UniversalMobyVariant Pick(IEnumerable<UniversalMobyVariant> g) => g
-        .OrderBy(v => v.HasLocalModel || v.SharedModel ? 0 : 1)
+        .OrderBy(v => v.Extractable ? 0 : 1)
+        .ThenBy(v => v.HasLocalModel || v.SharedModel ? 0 : 1)
         .ThenBy(v => v.HasBehavior ? 0 : 1)
         .ThenBy(v => v.ModelBytes + v.BehaviorBytes)
         .ThenBy(v => v.SourceLevelKey, StringComparer.Ordinal).ThenBy(v => v.SourceRow).First();
@@ -58,28 +64,29 @@ public static class UniversalMobyCatalogBuilder
             var sw = UniversalDispatchAnalysis.FindUpdateSwitch(overlay);
             var sc = data.Scene();
             Dictionary<int, int> behaviorBytes = [];
-            HashSet<int> seenClass = [];
+            Dictionary<int, string> behaviorFailures = [];
             for (int i = 0; i < sc.RowCount; i++)
             {
                 byte[] row = data.Row(i);
                 int c = BinaryPrimitives.ReadUInt16LittleEndian(row.AsSpan(0x36));
-                if (c == 0 || c >= 0x200) continue;
+                string? restriction = c == 0 ? "Spyro's animation stream is not a placeable object."
+                    : c >= 0x200 ? "Class ID is outside the engine's supported class range." : null;
                 if (!behaviorBytes.TryGetValue(c, out int bb))
                 {
                     if (!UniversalDispatchAnalysis.Handles(overlay, sw, c)) bb = 0;
                     else
                     {
                         try { bb = UniversalBehaviorBundleBuilder.BuildPrunedUpdate(overlay, [c], "e").Bytes; }
-                        catch (InvalidDataException) { bb = -1; }
+                        catch (InvalidDataException e) { bb = -1; behaviorFailures[c] = e.Message; }
                     }
                     behaviorBytes[c] = bb;
                 }
-                if (bb < 0) continue; // behavior not extractable from this source
+                if (bb < 0) restriction ??= "Behavior cannot be extracted: " + behaviorFailures[c];
                 bool local = regs.Any(r => r.ClassId == c);
                 int model = local ? data.Package(c).Length : 0;
                 var t = data.CaptureRow(level.Key, i);
-                list.Add(new(c, level.Key, i, t.Properties.Length, model, bb, local, lib.SharedClasses.Contains(c), bb > 0));
-                seenClass.Add(c);
+                list.Add(new(c, level.Key, i, t.Properties.Length, model, Math.Max(0, bb), local, lib.SharedClasses.Contains(c),
+                    UniversalDispatchAnalysis.Handles(overlay, sw, c)) { RestrictionReason = restriction, DroppedExternalPointers = t.DroppedExternalPointers });
             }
         }
         lock (VariantCache) VariantCache[lib.ImagePath] = list;
@@ -102,9 +109,9 @@ public static class UniversalMobyCatalogBuilder
             }
             string name = label?.Name is { Length: > 0 } n ? n : $"Object 0x{g.Key:X3}";
             var (cat, sub) = Categorize(name, label?.Kind ?? "");
-            string? restriction = null;
+            string? restriction = def.RestrictionReason;
             if (!def.HasLocalModel && !def.SharedModel && def.HasBehavior)
-                restriction = null; // model-less controllers import as behavior only
+                restriction = def.RestrictionReason; // model-less controllers import as behavior only
             if (g.Key == 0) restriction = "Spyro's own animation stream is not a placeable object.";
             entries.Add(new(g.Key, name, cat, sub, g.ToList(), def,
                 g.Select(v => v.SourceLevelKey).Distinct().ToList(), restriction));
@@ -147,6 +154,7 @@ public static class UniversalMobyCatalogBuilder
         UniversalMobyVariant v, int alreadyPlannedBytes = 0)
     {
         var (_, data, overlay) = lib.Get(destination.Key);
+        if (v.RestrictionReason != null) return new(false, false, false, 0, 0, false, v.RestrictionReason);
         if (UniversalSpecialCatalog.IsSpecial(v))
         {
             bool have = data.Registrations().Any(r => r.ClassId == v.ClassId);
@@ -198,14 +206,15 @@ public static class UniversalMobyCatalogBuilder
         {
             var d = lib.Get(destination.Key);
             List<(long, int)>? vram;
-            lock (ProtectedCache) ProtectedCache.TryGetValue(destination.Key, out vram);
+            lock (ProtectedCache) ProtectedCache.TryGetValue(lib.ImagePath + "|" + destination.Key, out vram);
             if (vram == null)
             {
                 vram = UniversalMobyExport.DefaultProtectedVram(lib.ImagePath, destination).ToList();
-                lock (ProtectedCache) ProtectedCache[destination.Key] = vram;
+                lock (ProtectedCache) ProtectedCache[lib.ImagePath + "|" + destination.Key] = vram;
             }
             var r = UniversalMobyComposer.Compose(destination, d.Data.Bytes, d.Overlay.Bytes.ToArray(), lib.Disc.Exe,
-                lib.Get, lib.SharedClasses, vram, placements, special, removedRows);
+                lib.Get, lib.SharedClasses, vram, placements, special, removedRows,
+                dropped => UniversalMobyExport.DefaultProtectedVram(lib.ImagePath, destination, dropped));
             return (r, null);
         }
         catch (Exception e) when (e is InvalidDataException or IOException) { return (null, e.Message); }
@@ -217,14 +226,14 @@ public static class UniversalMobyCatalogBuilder
 
     public static bool TexturesFit(UniversalSourceLibrary lib, LevelDefinition destination, UniversalMobyVariant v)
     {
-        var key = (destination.Key, v.ClassId, v.SourceLevelKey);
+        var key = (lib.ImagePath + "|" + destination.Key, v.ClassId, v.SourceLevelKey);
         lock (TextureFit) if (TextureFit.TryGetValue(key, out bool hit)) return hit;
         UniversalVramAllocator? baseAlloc;
-        lock (BaseVram) BaseVram.TryGetValue(destination.Key, out baseAlloc);
+        lock (BaseVram) BaseVram.TryGetValue(lib.ImagePath + "|" + destination.Key, out baseAlloc);
         if (baseAlloc == null)
         {
             baseAlloc = new UniversalVramAllocator(UniversalMobyExport.DefaultProtectedVram(lib.ImagePath, destination));
-            lock (BaseVram) BaseVram[destination.Key] = baseAlloc;
+            lock (BaseVram) BaseVram[lib.ImagePath + "|" + destination.Key] = baseAlloc;
         }
         var src = lib.Get(v.SourceLevelKey).Data;
         byte[] pkg = src.Package(v.ClassId);
@@ -239,10 +248,10 @@ public static class UniversalMobyCatalogBuilder
     private static readonly Dictionary<string, int> InitSize = [];
     private static int EstimateInitBytes(UniversalSourceLibrary lib, string key)
     {
-        lock (InitSize) if (InitSize.TryGetValue(key, out int v)) return v;
+        lock (InitSize) if (InitSize.TryGetValue(lib.ImagePath + "|" + key, out int v)) return v;
         var o = lib.Get(key).Overlay;
         int bytes = UniversalBehaviorBundleBuilder.BuildWholeFunction(o, o.Init, "i").Bytes;
-        lock (InitSize) InitSize[key] = bytes;
+        lock (InitSize) InitSize[lib.ImagePath + "|" + key] = bytes;
         return bytes;
     }
 }

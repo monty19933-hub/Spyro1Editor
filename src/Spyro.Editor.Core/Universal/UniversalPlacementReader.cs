@@ -39,6 +39,9 @@ public static class UniversalPlacementReader
         if (!File.Exists(nativeEditsPath)) return list;
         using var doc = JsonDocument.Parse(File.ReadAllBytes(nativeEditsPath));
         if (!doc.RootElement.TryGetProperty("edits", out var edits) || edits.ValueKind != JsonValueKind.Array) return list;
+        var ledger = UniversalPlacementLedger.Read(doc.RootElement);
+        Dictionary<string, UniversalMobyPlacement> active = new(StringComparer.Ordinal);
+        var slots = ledger.Entries.ToDictionary(e => e.Id, e => e.Slot, StringComparer.Ordinal);
         foreach (var edit in edits.EnumerateArray())
         {
             if (!IsUniversalEdit(edit)) continue;
@@ -61,9 +64,13 @@ public static class UniversalPlacementReader
             Dictionary<int, byte> overrides = [];
             if (edit.TryGetProperty("stateEditedHex", out var st) && st.ValueKind == JsonValueKind.String) overrides[0x51] = (byte)Convert.ToInt32(st.GetString(), 16);
             if (edit.TryGetProperty("typeEditedHex", out var ty) && ty.ValueKind == JsonValueKind.String) overrides[0x50] = (byte)Convert.ToInt32(ty.GetString(), 16);
-            string id = edit.TryGetProperty("trueIndex", out var ti) && ti.ValueKind == JsonValueKind.Number ? $"T{ti.GetInt32()}" : "";
-            list.Add(new(src, row, x, y, z, yaw, overrides, id, special, text));
+            string id = UniversalPlacementLedger.IdentityOf(edit);
+            if (!slots.TryGetValue(id, out int slot) || !active.TryAdd(id, new(src, row, x, y, z, yaw, overrides, id, special, text, PersistentSlot: slot)))
+                throw new InvalidDataException("An imported object has a missing or duplicate placement identity; export stopped to preserve collected state.");
         }
+        foreach (var entry in ledger.Entries)
+            list.Add(active.TryGetValue(entry.Id, out var placement) ? placement :
+                new("", -1, 0, 0, 0, EditorId: entry.Id, PersistentSlot: entry.Slot, Retired: true));
         return list;
     }
 }

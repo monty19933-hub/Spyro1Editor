@@ -460,7 +460,7 @@ void RunFreshNativeShellOnly()
         EditorShellSessionSnapshot before = window.CaptureEditorShellSessionSnapshotForTesting();
         var inputs = CaptureTerrainProjectInputHashes(workspace, before.CurrentLevel!.Key);
         AssertWorkspaceTabHeaders(FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs"),
-            ["Objects", "Terrain", "Level", "Environment"], "retail before separate fresh document");
+            ["Objects", "Terrain", "Game Settings", "Environment"], "retail before separate fresh document");
         AssertNoWholeLevelWipeAction(window);
         AssertWorkspaceTabContrast(window);
         Button open = FindNamedUnique<Button>(window, "FreshNativeDocumentButton");
@@ -557,7 +557,7 @@ void RunWorkspaceShellOnly()
         }
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Level", "Environment"],
+            ["Objects", "Terrain", "Game Settings", "Environment"],
             "existing-level editor");
         AssertNoWholeLevelWipeAction(window);
         if (window.GetLogicalDescendants().OfType<EditorViewport>().Distinct().Count() != 1)
@@ -602,7 +602,7 @@ void RunWorkspaceShellOnly()
         EditorShellSessionSnapshot building = window.CaptureEditorShellSessionSnapshotForTesting();
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Level", "Environment"],
+            ["Objects", "Terrain", "Game Settings", "Environment"],
             "existing-level terrain tools");
         if (building.ActiveExperience != LevelEditorExperience.ExistingLevel ||
             !initial.Viewport.TerrainFocusMode)
@@ -736,7 +736,7 @@ void RunWorkspaceShellOnly()
         EditorShellSessionSnapshot returnedObjects = window.CaptureEditorShellSessionSnapshotForTesting();
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Level", "Environment"],
+            ["Objects", "Terrain", "Game Settings", "Environment"],
             "returned existing-level Objects tab");
         AssertWorkspaceSessionContinuity(dirtyBeforeSwitch, returnedObjects, "retail Environment -> Objects");
 
@@ -1151,7 +1151,7 @@ void RunWorkspaceShellOnly()
         FlushUi();
 
         Console.WriteLine(
-            "Workspace shell smoke passed: one shared existing-level editor with exact Objects/Terrain/Level/Environment tabs, " +
+            "Workspace shell smoke passed: one shared existing-level editor with exact Objects/Terrain/Game Settings/Environment tabs, " +
             "no Object Manager or wipe route, level-load identity, camera/selection, unsaved object and terrain edits, write-free tab changes, " +
             "non-flattening HP-Z controls, actual height-only Undo/Save state, release shortcut refusals, and release-wide " +
             "research-edit Save/Create BIN gates all remained intact.");
@@ -1354,7 +1354,7 @@ void RunId65BlankLabUiOnly()
         }
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Level", "Environment"],
+            ["Objects", "Terrain", "Game Settings", "Environment"],
             "public existing-level editor");
         AssertNoWholeLevelWipeAction(window);
 
@@ -1972,7 +1972,7 @@ void RunId65BlankLabUiOnly()
         }
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Level", "Environment"],
+            ["Objects", "Terrain", "Game Settings", "Environment"],
             "real ID65 round-trip retail editor");
         bool retailTabsContainFreshStart = ReadItemsSource(
                 toolTabs,
@@ -5294,7 +5294,7 @@ void RunResearchWorkspaceTabMemory()
         }
         AssertWorkspaceTabHeaders(
             researchTabs,
-            ["Objects", "Terrain", "Level", "Environment", "Research"],
+            ["Objects", "Terrain", "Game Settings", "Environment", "Research"],
             "non-release existing-level editor");
         TabItem environment = ReadItemsSource(researchTabs, "non-release existing-level tabs")
             .OfType<TabItem>()
@@ -5310,7 +5310,7 @@ void RunResearchWorkspaceTabMemory()
         if (!ReferenceEquals(researchTabs.SelectedItem, research))
             throw new InvalidOperationException("The non-release existing-level editor did not select Research directly.");
         Console.WriteLine(
-            "Research workspace smoke passed: retail kept one unified Objects/Terrain/Level/Environment/Research editor without a mode switch.");
+            "Research workspace smoke passed: retail kept one unified Objects/Terrain/Game Settings/Environment/Research editor without a mode switch.");
     }
     finally
     {

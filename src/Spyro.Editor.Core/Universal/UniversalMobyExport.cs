@@ -70,24 +70,40 @@ public static class UniversalMobyExport
         LevelCatalog catalog, IReadOnlyDictionary<string, IReadOnlyList<UniversalMobyPlacement>> placementsByLevel,
         Func<string, LevelDefinition, IEnumerable<(long Offset, int Length)>>? protectedVram = null,
         UniversalJapaneseSource? japanese = null,
-        IReadOnlyDictionary<string, IReadOnlyCollection<int>>? removedRowsByLevel = null)
+        IReadOnlyDictionary<string, IReadOnlyCollection<int>>? removedRowsByLevel = null,
+        string? identityWorkspace = null)
     {
         if (string.Equals(Path.GetFullPath(sources.ImagePath), Path.GetFullPath(outputImagePath), StringComparison.Ordinal) ||
             string.Equals(Path.GetFullPath(currentImagePath), Path.GetFullPath(outputImagePath), StringComparison.Ordinal))
             throw new InvalidOperationException("Universal Moby export never overwrites its source image.");
+        if (File.Exists(outputImagePath) || Directory.Exists(outputImagePath))
+            throw new IOException("Choose a new output file; universal composition never overwrites an existing image.");
+        var destinationKeys = placementsByLevel.Keys.Select(k => catalog.FindByKey(k)?.Key ?? k).ToArray();
+        if (destinationKeys.Distinct(StringComparer.OrdinalIgnoreCase).Count() != destinationKeys.Length)
+            throw new InvalidDataException("A destination level was supplied more than once under different names.");
         var current = UniversalDiscImage.Read(currentImagePath);
+        bool useNativeOwnershipScan = protectedVram == null;
         protectedVram ??= DefaultProtectedVram;
         byte[] exe = current.Exe.ToArray();
         Dictionary<int, byte[]> replacements = [];
         List<UniversalExportLevelResult> results = [];
+        Dictionary<string, int> nativePrefixes = [];
         foreach (var (key, placements) in placementsByLevel.OrderBy(k => k.Key, StringComparer.Ordinal))
         {
             if (placements.Count == 0) continue;
             var level = catalog.FindByKey(key) ?? throw new InvalidDataException($"Unknown destination level '{key}'.");
-            var composed = UniversalMobyComposer.Compose(level, current.EntryBytes(level.SourceWadEntry),
+            byte[] levelBytes = current.EntryBytes(level.SourceWadEntry);
+            int nativeRows = new UniversalLevelData(levelBytes).Scene().RowCount;
+            if (identityWorkspace != null && placements.Any(p => p.PersistentSlot != null))
+            {
+                UniversalNativeLayoutStore.Validate(identityWorkspace, key, nativeRows);
+                nativePrefixes[key] = nativeRows;
+            }
+            var composed = UniversalMobyComposer.Compose(level, levelBytes,
                 current.EntryBytes(level.SourceWadEntry - 1), exe, k => sources.Get(k), sources.SharedClasses,
                 protectedVram(currentImagePath, level), placements, SpecialProvider(japanese),
-                removedRowsByLevel?.FirstOrDefault(k => string.Equals(catalog.FindByKey(k.Key)?.Key, level.Key, StringComparison.OrdinalIgnoreCase)).Value);
+                removedRowsByLevel?.FirstOrDefault(k => string.Equals(catalog.FindByKey(k.Key)?.Key, level.Key, StringComparison.OrdinalIgnoreCase)).Value,
+                useNativeOwnershipScan ? dropped => DefaultProtectedVram(currentImagePath, level, dropped) : null);
             exe = composed.Executable;
             replacements[level.SourceWadEntry] = composed.LevelData;
             replacements[level.SourceWadEntry - 1] = composed.Overlay;
@@ -100,25 +116,33 @@ public static class UniversalMobyExport
             var placed = placementsByLevel.First(k => string.Equals(catalog.FindByKey(k.Key)?.Key, r.LevelKey, StringComparison.OrdinalIgnoreCase)).Value;
             var level = catalog.FindByKey(r.LevelKey)!;
             for (int i = 0; i < placed.Count; i++)
-                if (placed[i].SpecialId is { } id && UniversalDragonflyEggs.Variants.Any(v => v.Id == id))
+                if (!placed[i].Retired && placed[i].SpecialId is { } id && UniversalDragonflyEggs.Variants.Any(v => v.Id == id))
                     dragonflyEggs.Add((CollectedMaskIndex(level), r.Compose.NewRowIndices[i], UniversalDragonflyEggs.VariantIndex(id)));
         }
-        var signLevels = placementsByLevel.Where(k => k.Value.Any(p => p.SpecialId == UniversalDragonflyEggs.SignId))
+        var signLevels = placementsByLevel.Where(k => k.Value.Any(p => !p.Retired && p.SpecialId == UniversalDragonflyEggs.SignId))
             .Select(k => k.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
         UniversalSpecialBehaviors.PatchExeCave(exe, sources.Disc.Exe, signLevels.Count > 0, dragonflyEggs);
         if (signLevels.Count > 0)
             RequireSignMarkersOnlyIn(exe, catalog, signLevels, i => replacements.TryGetValue(i, out var r) ? r : current.EntryBytes(i));
         byte[] wad = current.RebuildWad(replacements);
-        current.WriteImage(outputImagePath, wad, exe);
-        string sha;
-        using (var fs = File.OpenRead(outputImagePath)) sha = Convert.ToHexStringLower(SHA256.HashData(fs));
-        // Independent readback: the written image must reproduce the composed entries exactly.
-        var readback = UniversalDiscImage.Read(outputImagePath);
-        foreach (var (idx, bytes) in replacements)
-            if (!readback.EntryBytes(idx).AsSpan().SequenceEqual(bytes))
-                throw new InvalidDataException($"Readback of WAD entry {idx} does not match the composed bytes.");
-        if (!readback.Exe.AsSpan().SequenceEqual(exe)) throw new InvalidDataException("Readback of the executable does not match.");
-        return new(outputImagePath, sha, results, wad.Length - current.Wad.Length);
+        string staging = outputImagePath + ".pending-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            current.WriteImage(staging, wad, exe);
+            string sha;
+            using (var fs = File.OpenRead(staging)) sha = Convert.ToHexStringLower(SHA256.HashData(fs));
+            // Read back the private staged image before making a successful output visible.
+            var readback = UniversalDiscImage.Read(staging);
+            foreach (var (idx, bytes) in replacements)
+                if (!readback.EntryBytes(idx).AsSpan().SequenceEqual(bytes))
+                    throw new InvalidDataException($"Readback of WAD entry {idx} does not match the composed bytes.");
+            if (!readback.Exe.AsSpan().SequenceEqual(exe)) throw new InvalidDataException("Readback of the executable does not match.");
+            if (identityWorkspace != null)
+                foreach (var (key, rows) in nativePrefixes) UniversalNativeLayoutStore.Bind(identityWorkspace, key, rows);
+            File.Move(staging, outputImagePath); // refuse a destination created during export
+            return new(outputImagePath, sha, results, wad.Length - current.Wad.Length);
+        }
+        finally { if (File.Exists(staging)) File.Delete(staging); }
     }
 
     /// <summary>The sign render hook calls a level's stub only when its update function is preceded by the
@@ -150,5 +174,11 @@ public static class UniversalMobyExport
 
 
     public static IEnumerable<(long Offset, int Length)> DefaultProtectedVram(string imagePath, LevelDefinition level) =>
-        NativeTexturePageOwnershipScanner.Scan(imagePath, level).ProtectedRanges.Select(r => (r.Offset, r.Length));
+        DefaultProtectedVram(imagePath, level, new HashSet<int>());
+
+    /// <summary>Ownership-qualified free space after fully dropped resident models; every retained
+    /// consumer and unclassified nonzero byte remains protected.</summary>
+    public static IEnumerable<(long Offset, int Length)> DefaultProtectedVram(string imagePath, LevelDefinition level,
+        IReadOnlySet<int> droppedClasses) => NativeTexturePageOwnershipScanner.ScanExcludingResidentClasses(imagePath, level, droppedClasses)
+            .ProtectedRanges.Select(r => (r.Offset, r.Length));
 }

@@ -14060,7 +14060,7 @@ public sealed partial class MainWindow : Window
                     japanese = new UniversalJapaneseSource(japaneseImage);
                 }
                 return UniversalMobyExport.Apply(library, currentImage, universalImage, _retailCatalog, universalPlacements, japanese: japanese,
-                    removedRowsByLevel: universalRemoved);
+                    removedRowsByLevel: universalRemoved, identityWorkspace: _workspace.RootPath);
             });
             await File.WriteAllTextAsync(Path.ChangeExtension(universalImage, ".cue"),
                 BuildCueText(currentCue, currentImage, Path.GetFileName(universalImage)), DiscCueSheet.TextEncoding);
@@ -25359,7 +25359,7 @@ public sealed partial class MainWindow : Window
             .ToHashSet();
         foreach (Moby member in removalGroup)
         {
-            if (member.IsAdded)
+            if (member.IsAdded && member.CrossLevelRequiredExporterFeature != UniversalMobyExport.RequiredExporterFeature)
                 _currentMobys.Remove(member);
             else
                 member.IsRemoved = true;
@@ -25435,7 +25435,10 @@ public sealed partial class MainWindow : Window
             foreach (Moby row in rowsToRemove)
             {
                 _detachedGemLinksForUndo.Remove(row);
-                _currentMobys.Remove(row);
+                if (row.CrossLevelRequiredExporterFeature == UniversalMobyExport.RequiredExporterFeature)
+                    row.IsRemoved = true;
+                else
+                    _currentMobys.Remove(row);
             }
             foreach (Moby remaining in _currentMobys)
             {

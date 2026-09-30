@@ -124,7 +124,7 @@ public sealed class UniversalJapaneseSource
     public IReadOnlyList<UniversalSpecialAsset> Assets()
     {
         List<UniversalSpecialAsset> list = [];
-        byte[] eggPkg = UniversalEggEyes.AddEyes(_artisans.Package(UniversalDragonflyEggs.JapaneseEggClass));
+        byte[] eggPkg = _artisans.Package(UniversalDragonflyEggs.JapaneseEggClass);
         byte[] eggRow = _artisans.Row(UniversalDragonflyEggs.JapaneseEggRow);
         byte[] vram = _artisans.Vram().ToArray();
         foreach (var v in UniversalDragonflyEggs.Variants)

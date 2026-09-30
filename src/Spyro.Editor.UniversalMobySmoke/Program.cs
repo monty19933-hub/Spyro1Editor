@@ -13,6 +13,7 @@ void Check(bool ok, string what) { checks++; if (!ok) { failures++; Console.Writ
 if (args.Length == 0)
 {
     SourceFreeChecks();
+    UniversalImportSafetyChecks.Run(Check);
     Console.WriteLine($"{checks} checks, {failures} failures");
     if (failures == 0) Console.WriteLine("UNIVERSAL_MOBY_SOURCE_FREE_OK");
     return failures == 0 ? 0 : 1;
@@ -39,6 +40,51 @@ if (args[0] == "--egg-bbox")
     return 0;
 }
 var catalog = LevelCatalog.Load(args[2]);
+if (args[0] is "--coverage" or "--catalog-coverage")
+{
+    var lib = new UniversalSourceLibrary(args[1], catalog);
+    int japanIndex = Array.IndexOf(args, "--japan");
+    var destinationArgs = args.Skip(4).Where((a, i) => i + 4 != japanIndex && i + 4 != japanIndex + 1).ToList();
+    IReadOnlySet<string>? destinations = destinationArgs.Count > 0 ? destinationArgs.ToHashSet(StringComparer.OrdinalIgnoreCase) : null;
+    var japanese = japanIndex >= 0 ? new UniversalJapaneseSource(args[japanIndex + 1]) : null;
+    string? codeFingerprint = null;
+    string coreSource = Path.Combine(args[2], "src", "Spyro.Editor.Core");
+    if (Directory.Exists(coreSource))
+    {
+        using var hash = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256);
+        foreach (string path in Directory.EnumerateFiles(coreSource, "*.cs", SearchOption.AllDirectories)
+            .Where(p => !p.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar) &&
+                !p.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar)).Order(StringComparer.Ordinal))
+        {
+            hash.AppendData(System.Text.Encoding.UTF8.GetBytes(Path.GetRelativePath(coreSource, path).Replace('\\', '/') + "\0"));
+            hash.AppendData(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
+        }
+        codeFingerprint = Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+    var coverage = UniversalMobyCoverage.Run(lib, catalog, args[0] == "--coverage", Console.WriteLine, destinations,
+        UniversalMobyExport.SpecialProvider(japanese)) with { SourceCodeFingerprint = codeFingerprint };
+    using (var file = File.Create(args[3]))
+    {
+        if (args[3].EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
+        {
+            using var compressed = new System.IO.Compression.GZipStream(file, System.IO.Compression.CompressionLevel.SmallestSize);
+            JsonSerializer.Serialize(compressed, coverage, new JsonSerializerOptions { WriteIndented = true });
+        }
+        else JsonSerializer.Serialize(file, coverage, new JsonSerializerOptions { WriteIndented = true });
+    }
+    Console.WriteLine($"rows={coverage.Variants.Sum(v => v.EquivalentSourceRows.Count)} variants={coverage.Variants.Count} destinations={coverage.Destinations.Count} cells={coverage.Cells.Count}");
+    foreach (var g in coverage.Cells.GroupBy(c => c.FailureKind ?? c.DependencyExportStatus)) Console.WriteLine($"{g.Key}: {g.Count()}");
+    return 0;
+}
+if (args[0] == "--ownership")
+{
+    var level = catalog.FindByKey(args[3])!;
+    var omitted = args.Skip(4).Select(x => Convert.ToInt32(x, 16)).ToHashSet();
+    var report = Spyro.Editor.Core.Analysis.NativeTexturePageOwnershipScanner.ScanExcludingResidentClasses(args[1], level, omitted);
+    Console.WriteLine(JsonSerializer.Serialize(new { report.LevelKey, report.AllConsumerClosureComplete, report.ProtectedByteCount,
+        report.ProvablyPrivateByteCount, report.SafetyBlockers, report.Scopes }, new JsonSerializerOptions { WriteIndented = true }));
+    return 0;
+}
 if (args[0] == "--compose")
 {
     var lib = new UniversalSourceLibrary(args[1], catalog);
@@ -81,7 +127,7 @@ if (args[0] == "--compose")
     var c = result.Levels[0].Compose;
     Console.WriteLine(JsonSerializer.Serialize(new
     {
-        c.DestinationKey, c.Ram, c.ArenaSlotsRemaining, DroppedModelClasses = c.DroppedModelClasses.Select(x => $"0x{x:X3}"), c.DroppedModelBytes, c.VramBytesUsed, c.NewRowIndices, c.Warnings,
+        c.DestinationKey, c.Ram, c.ArenaSlotsRemaining, DroppedModelClasses = c.DroppedModelClasses.Select(x => $"0x{x:X3}"), c.DroppedModelBytes, c.ReclaimedVramBytes, c.ParticleDependencies, c.VramBytesUsed, c.NewRowIndices, c.Warnings,
         Classes = c.Classes.Select(x => new { Class = $"0x{x.ClassId:X3}", x.SourceLevelKey, x.ModelImported, x.BehaviorImported, x.ModelBytes, x.Textures, x.Sounds, x.DependencyOnly }),
         c.Behavior, result.OutputImageSha256, result.WadGrowthBytes
     }, new JsonSerializerOptions { WriteIndented = true }));
@@ -131,6 +177,14 @@ if (args[0] == "--spawn")
         var l = Spyro.Editor.Core.Exporting.FlyInLandingLocator.Locate(args[1], lvl);
         Console.WriteLine(JsonSerializer.Serialize(new { key, l }));
     }
+    return 0;
+}
+if (args[0] == "--texture-depths")
+{
+    var lib = new UniversalSourceLibrary(args[1], catalog);
+    var pkg = lib.Get(args[3]).Data.Package(Convert.ToInt32(args[4], 16));
+    foreach (int f in UniversalAssetImport.TextureDescriptorOffsets(pkg))
+        Console.WriteLine($"{f:X4} prefix={Convert.ToHexString(pkg.AsSpan(f - 12, 12))} tex={Convert.ToHexString(pkg.AsSpan(f, 12))} depth={(BinaryPrimitives.ReadUInt16LittleEndian(pkg.AsSpan(f + 6)) >> 7) & 3}");
     return 0;
 }
 if (args[0] == "--debug-class")
@@ -206,6 +260,14 @@ void SyntheticOverlayChecks()
         [UniversalExeBindings.CopyBufferGlobal] = new(UniversalExeBindings.CopyBufferGlobal, 0, 0, B + (uint)ov.Length),
     };
     var o = new UniversalOverlay(ov, bindings);
+    byte[] peerBytes = ov.ToArray();
+    var peer = new UniversalOverlay(peerBytes, bindings);
+    var identityA = new UniversalLevelData(new byte[0x800]); var identityB = new UniversalLevelData(new byte[0x800]);
+    Check(UniversalSourceIdentity.Equivalent(identityA, o, identityB, peer, 0x22, new HashSet<int>(), out _),
+        "source identity accepts identical class-specific behavior");
+    BinaryPrimitives.WriteUInt32LittleEndian(peerBytes.AsSpan(15 * 4), UniversalMips.EncodeI(9, 0, 5, 0x333));
+    Check(!UniversalSourceIdentity.Equivalent(identityA, o, identityB, peer, 0x22, new HashSet<int>(), out _),
+        "source identity cache observes mutated overlay content instead of a stale equivalence");
     var sw = UniversalDispatchAnalysis.FindUpdateSwitch(o);
     Check(sw.TreeStart == B + 20 && sw.ClassRegister == 3, "synthetic switch located after class load");
     Check(UniversalDispatchAnalysis.Handles(o, sw, 0x10) && UniversalDispatchAnalysis.Handles(o, sw, 0x22), "short inlined cases are recognised as handled");
@@ -251,8 +313,8 @@ void SyntheticOverlayChecks()
     Check(encodeOk, "egg eye vertices encode within a few units in the native absolute vertex format");
     var (slotCode, slotData) = UniversalSpecialBehaviors.DragonflyEggInventoryRoutine([(4, 59, 0), (4, 60, 1), (12, 200, 6)]);
     Check(slotCode.Contains(UniversalMips.EncodeJ(2, 0x8001844C)) && slotCode.Contains(UniversalMips.EncodeJ(3, 0x8001919C)) &&
-          slotCode.Contains(UniversalMips.EncodeJ(3, 0x800168DC)) && slotData[2] == (6u << 24 | 12u << 16 | 200) && slotData[0] == (4u << 16 | 59),
-          "egg row draws coloured still eggs with eyes, keeps the divider line, and stores level/row/colour per egg");
+          !slotCode.Contains(UniversalMips.EncodeJ(3, 0x800168DC)) && slotData[2] == (6u << 24 | 12u << 16 | 200) && slotData[0] == (4u << 16 | 59),
+          "egg row draws coloured still eggs without eye primitives, keeps the divider line, and stores level/row/colour per egg");
     Check(slotData.Length == 3 + UniversalDragonflyEggs.Variants.Length + 2 && slotData[^2] == 0x252F6425, "egg data holds the tint table and K/Y format");
     var many = Enumerable.Range(0, UniversalSpecialBehaviors.MaxDragonflyEggs).Select(i => (i % 30, i, i % 7)).ToList();
     var (countCode, countData) = UniversalSpecialBehaviors.DragonflyEggInventoryRoutine(many);

@@ -2,91 +2,52 @@
 
 ## Changes since Spyro Editor Beta V5
 
-Private development preview, internal build `0.1.0-beta.52`. This is not a
-published release or a claim of texture or new-level support.
+Local release candidate, internal build `0.1.0-beta.53`. Full release acceptance
+remains open; see the accompanying coverage and verification report.
 
-- Added **Add object…** (plus **Add dragonfly egg** / **Add sign** shortcuts) in
-  the Objects tab: a game-wide object browser (search,
-  categories, source-level filter, per-level fit check) that places any of the
-  205 placed Spyro 1 object classes into any level. Create BIN copies the
-  object's model, textures, sounds, animations, native behavior code and any
-  helper objects it spawns from the unchanged original USA disc, chains that
-  behavior onto the destination level, and refuses (with the reason) only when
-  the level's game RAM, texture memory, object slots or row limit would be
-  exceeded. Placements save/reopen, duplicate, move, rotate, delete and undo
-  like other added objects.
-- Added recovered **Dragonfly Eggs** (seven colours) and **Signs** from the
-  Japanese release. Select your unchanged Japanese disc once with
-  **Choose Japanese disc…**. Eggs sparkle and are removed for good when collected
-  (saved); they are counted separately from the 12 stolen dragon eggs, in their
-  own row in the Inventory (still eggs in their own colour with little eyes).
-  Placed eggs have cartoon eyes between their wings and blink now and then.
-  Signs show up to three lines of your own text in the
-  game's letters while Spyro stands near them (edit in the object's Edit dialog).
-- Removing every copy of one of a level's own object types now frees that
-  object's model memory at Create BIN (the rows stay as invisible placeholders,
-  so saves are unaffected), letting larger objects from other levels fit.
+- Removed the added eyes and blinking from dragonfly eggs. Export now uses the
+  original Japanese egg model, with independently selectable colors. The native
+  inventory icons also have no added eyes.
+- Added persistent placement identities and an append-only slot ledger. Duplicate
+  objects receive new identities; recoloring and reordering keep their identities;
+  deleted placements retain inactive slots so later objects cannot inherit their
+  collected state. Portable projects retain the native layout binding. Changing
+  the ordinary row prefix after an export is refused rather than shifting save bits.
+- Added a native check that retires a collected egg before animation or pickup
+  after actor reconstruction. The original save bitmap is reused; no extra card
+  fields are allocated. Native serializer and instruction-level checks pass;
+  normal memory-card save and cold-load acceptance remain open.
+- Added required-egg weighting to the native live inventory percentage. Each
+  dragonfly egg has the same score weight as an ordinary egg, with an expanded
+  denominator and integer rounding down. With no custom eggs the original
+  percentage function is unchanged. Save-menu percentage, bonus-entry rules and
+  the requested per-level X/Y interface still need integration and runtime tests.
+- Improved the game-wide object browser with real locally rendered model previews,
+  global search, labeled egg color swatches, and a live sign-text preview. Signs
+  support three lines of normalized native text; the preview shows export limits.
+- Strengthened cross-level import checks for source model/behavior collisions,
+  sound availability, texture ownership and shared dependencies. Added support
+  for 8-bit and 16-bit texture relocation and missing particle texture records.
+  Dependency equality is checked before sharing; unresolved behavior is reported.
+- Removing every instance of a resident class can reclaim its proven exclusive
+  texture allocation as well as its model memory. Shared terrain, particles and
+  retained object resources remain protected. Capacity refusals identify the
+  actual resource rather than treating every failure as a memory shortage.
+- Added reproducible identity, import and native instruction tests, plus a
+  machine-readable type/variant by destination matrix. Static composition does
+  not certify enemy AI, collision, sound, links or other gameplay dependencies.
+- Placed the existing flight preference under Game Settings > Starting Abilities.
+  Fly Anywhere ON still supports Toasty alone without other saved edits; OFF
+  rebuilds from the original disc. All-level flight and normal save/load, death
+  and transition acceptance are not complete.
+- Preserved the existing retail editor, fresh-document authoring and ID65 research
+  workflows. File > New Level in the same complete retail editor is not finished;
+  the current fresh workflow retains its documented narrow export profiles.
 
-- Fixed an accessibility value-write crash in the main level picker. Its value
-  remains read-only; ordinary selection and the existing export gates are unchanged.
-- Fixed Fly Anywhere controls remaining disabled after switching retail levels.
-  Actual picker/load regression covers both busy fences and keeps export gates
-  unchanged. Native ON/OFF/save-reload acceptance remains separate.
+Supported export source: exact USA SCUS_942.28. Japanese egg/sign extraction:
+SCPS_100.83, supplied locally by the user. No game images, BIOS, extracted native
+assets, emulator cards or save states belong in the application packages.
 
-- Expanded both Moby browsers to expose all 368 identified classes and 6,334
-  native observations, including resources without placed donor rows. Exact
-  source variants and dependency/refusal reasons remain distinct. Browsing an
-  object does not bypass the existing native import checks.
-- Clarified that Save Flight stores an editor-project export preference, not
-  a memory-card ability. Default OFF, saved OFF and an unsaved ON/OFF draft are
-  distinguished; Spyro's gameplay flight is separate from Editor Free Camera.
-- Continued native Japanese-egg research: a separate fixed Artisans candidate
-  has observed pickup and earned-state suppression. New save-controller work
-  remains detached/source-tested, not enabled in normal editor exports. Native
-  durable saving, level X/X, completion percentage and sign placement are not
-  shipped features of this preview.
-- Added Fresh Level authoring to the normal application: floor bounds, spawn,
-  heading, colors, native music selection, ordered placements and two floor
-  material references. Apply, undo/redo, save and reopen preserve the complete
-  document. The preview remains schematic, not game rendering.
-- Added complete locked-chest family authoring: independent key/chest anchors,
-  all five default or explicit WORLD reward destinations, one stable editor ID,
-  and whole-document history/save/reopen. Tiled edits retain family content
-  atomically; exact saved legacy-floor and four-tile R03 profiles enable
-  research export. Arbitrary families and tiled Mobys remain authored-only.
-- Connected the exact four-tile, two-material Wizard/Grass/chest document to
-  saved research export with complete tile/actor/material provenance, actual
-  whole-disc inverse and stale-edit guards. The exact native disc separately
-  reached LAB20/20, both central seams and a healthy fall/reset in DuckStation;
-  this does not certify arbitrary edited layouts or durable saving.
-- Fixed raw-field event timing so edits invalidate pending work immediately,
-  while form refreshes do not leave delayed events that disrupt Moby staging.
-- Added source browsing for native Moby donor rows across the inventoried game,
-  with source variants kept distinct, explicit placement staging/cancellation,
-  and clear separation between saved authoring intent and supported imports.
-- Exposed54 shared PETE model registrations in both Moby browsers as inspect-only
-  resources, separate from placed donors. This does not implement the Japanese
-  dragonfly eggs/signs or grant generic placement of shared models.
-- Connected supported saved fresh-level profiles to the existing checked
-  candidate/publisher path, with separate BIN/CUE output, exact source checks,
-  stale-save refusal, complete disc readback and retained recovery evidence.
-- Added the bounded Wizard + Grass, two-material example. Focused native tests
-  observed its authored background, Wizard attack/charge defeat and gem reward,
-  fall/respawn and isolated jump/landing. Other combinations, portals and
-  durable native save ownership are not implied by those observations.
-- Strengthened shared Moby source/dependency handling and regression coverage
-  while retaining historical locked-chest outputs and the original retail
-  editor's guarded export behavior. Native family portability remains ongoing.
-- Added default-OFF Fly Anywhere settings with Save/Revert in the Level tab.
-  The initial ON export supports Toasty without other edits; explicit OFF
-  rebuilds the complete original ROM through normal Create BIN. Stale settings,
-  unsaved drafts and source/output aliases are refused. ON/OFF physical export
-  checks pass; native gameplay acceptance of this integrated path is pending.
-- Replaced the family composer's single-model append with shared ordered batch
-  storage while preserving existing output bytes and native admission limits.
-- Preserved the legacy ID65 Blank-Level Lab separately from fresh documents.
-  Normal retail Create BIN does not consume fresh-level documents; the separate
-  fresh-level action reports its supported profiles and refusals explicitly.
-- The private Mac preview uses disclosed ad-hoc signing, not Apple signing or
-  notarization. No game images, BIOS, extracted assets, emulator cards or states
-  are bundled. Existing apps and protected projects are not replaced.
+macOS arm64 candidates use local ad-hoc signing and are not Apple notarized.
+Windows x64 packaging remains supported; Windows runtime acceptance is separate.
+Original source images, projects, saves and prior release packages are preserved.

@@ -196,6 +196,10 @@ unsafe-tests/
 !/tools/Build-SpyroEditorRelease.sh
 !/tools/Run-SpyroEditorOfflineQa.sh
 !/tools/Run-SpyroEditorRegression.py
+!/tools/SpyroEggScalarMips.py
+!/tools/Test-UniversalEggProgress.py
+!/tools/Test-UniversalEggUpdate.py
+!/tools/Verify-SpyroNativeEggSave.py
 !/tools/Inspect-SpyroJapaneseObjects.py
 !/tools/Test-Inspect-SpyroJapaneseObjects.py
 !/tools/Inspect-SpyroJapaneseCollectibles.py

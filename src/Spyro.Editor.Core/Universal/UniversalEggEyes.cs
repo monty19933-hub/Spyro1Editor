@@ -161,6 +161,7 @@ public static class UniversalEggEyes
         nearOut.Write(p, nearFace + 4, nearLen);
         var fr0 = newVerts[0];
         (int X, int Y, int Z) V(int idx) => idx < vcount ? f0[idx] : fr0[idx - vcount];
+        Span<byte> t = stackalloc byte[8];
         foreach (var (a0, b0, c0, s) in eyeTris)
         {
             int a = a0, b = b0, c = c0;
@@ -171,7 +172,6 @@ public static class UniversalEggEyes
             uint word = triWord & ~((511u << 22) | (511u << 13) | (511u << 4)) | ((uint)a << 22) | ((uint)b << 13) | ((uint)c << 4);
             int si = shading + s;
             uint col = triColour & ~((511u << 19) | (511u << 10) | (511u << 1)) | ((uint)si << 19) | ((uint)si << 10) | ((uint)si << 1);
-            Span<byte> t = stackalloc byte[8];
             BinaryPrimitives.WriteUInt32LittleEndian(t, word); BinaryPrimitives.WriteUInt32LittleEndian(t[4..], col);
             nearOut.Write(t);
         }

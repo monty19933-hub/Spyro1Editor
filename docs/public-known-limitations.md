@@ -1,6 +1,6 @@
 # Spyro Editor Beta V6 Known Limitations
 
-- This is a private V6 development preview, not a finished release. The Mac
+- This is V6 beta53, a local release candidate with incomplete acceptance. The Mac
   package is ad-hoc signed, not Apple-signed or notarized. Existing V5 and R03–R08
   test apps, original game images, and protected projects are not replaced.
 - **Fresh Level…** is integrated into the normal application. Its preview is a
@@ -24,11 +24,15 @@
   are inspect-only, and generic donor placements are authoring-only until their
   dependencies are supported. A catalogue entry is not a working native import.
   All Mobys in all levels remains unfinished.
-- Shared PETE models are inspect-only. Japanese eggs and signs are not enabled
-  as normal GUI placement/export features. Separate fixed research candidates
-  have displayed and collected eggs; this does not ship durable egg saving,
-  level X/X counters or required-for-100% accounting. The ordinary retail egg
-  is not a verified Japanese egg.
+- Japanese dragonfly eggs and editable signs are available through the regular
+  object browser and normal combined export, using the user's unchanged Japanese
+  disc. Eyes are removed from game models and native inventory icons. Stable
+  lifetime slots and durable-bit suppression are implemented. Native save-byte
+  and instruction tests do not replace normal memory-card save/cold-load tests.
+  Per-level X/Y, save-menu percentage and bonus-level entry remain incomplete.
+- Some cross-level imports have unresolved particle behavior or class/variant
+  collisions. The capacity check and static matrix identify these separately.
+  A composed image is not proof of working enemy AI, collision, links or sound.
 - Focused DuckStation testing of the two-material Wizard + Grass example showed
   its authored background, Wizard attack/charge defeat, a ten-value gem reward,
   fall/respawn and isolated jump/landing. That is not universal runtime acceptance.

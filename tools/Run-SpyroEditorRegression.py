@@ -193,6 +193,7 @@ CORE_CASES = (
     ("NativeTerrainBaseProjectionSmoke", "Native terrain base-projection smoke passed."),
     ("UpdateSmoke", "PASS: whole-number and incremental prerelease discovery"),
     ("UniversalMobySmoke", "UNIVERSAL_MOBY_SOURCE_FREE_OK"),
+    ("UniversalIdentitySmoke", "UNIVERSAL_IDENTITY_OK"),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
@@ -481,6 +482,8 @@ def main():
             try:
                 # Deferred source arguments are resolved inside the logged
                 # failure boundary, never during a default or --list run.
+                if deadline is not None and time.monotonic() >= deadline:
+                    raise TimeoutError("Source QA deadline exhausted; no command was started.")
                 resolved_command = command() if callable(command) else command
                 stream.write(json.dumps(resolved_command) + "\n")
                 stream.flush()
@@ -566,6 +569,27 @@ def main():
                 ["dotnet", "run", "--project", str(project), "--configuration",
                  options.configuration, "--no-build", "--no-restore"] +
                 (["--"] + arguments if arguments else []), marker)
+    identity_project = ROOT / "src/Spyro.Editor.UniversalIdentitySmoke/Spyro.Editor.UniversalIdentitySmoke.csproj"
+    if identity_project in build_results:
+        if build_results[identity_project]:
+            execute("python-required-egg-native-words", [sys.executable, "-B",
+                str(ROOT / "tools/Test-UniversalEggProgress.py"), "--dll",
+                str(identity_project.parent / "bin" / options.configuration / "net10.0" / "Spyro.Editor.UniversalIdentitySmoke.dll")],
+                "NATIVE_REQUIRED_EGG_PERCENT_SCALAR_OK")
+
+    if build_results.get(identity_project, False):
+        execute("universal-egg-update-scalar", [sys.executable,
+                str(ROOT / "tools/Test-UniversalEggUpdate.py"), "--dll",
+                str(ROOT / "src/Spyro.Editor.UniversalIdentitySmoke/bin" / options.configuration /
+                    "net10.0/Spyro.Editor.UniversalIdentitySmoke.dll")],
+                "UNIVERSAL_EGG_UPDATE_SCALAR_OK")
+
+    def source_image_before(deadline):
+        image = configured_source_image()
+        if time.monotonic() >= deadline:
+            raise TimeoutError("Source QA deadline exhausted; no command was started.")
+        return image
+
     if options.with_source_qa and all(result["passed"] for result in results):
         # All opted-in source checks share the existing aggregate deadline.
         source_deadline = time.monotonic() + options.source_qa_timeout
@@ -586,7 +610,7 @@ def main():
                         lambda project=project, arguments=arguments, name=name: [
                             "dotnet", "run", "--project", str(project), "--configuration",
                             options.configuration, "--no-build", "--no-restore", "--",
-                            *arguments, configured_source_image(),
+                            *arguments, source_image_before(source_deadline),
                             *([configured_source_cue()] if name in SOURCE_QA_CUE_CASES else []),
                             *([str(ROOT)] if name in SOURCE_QA_WORKSPACE_CASES else [])], marker,
                         timeout=options.source_qa_timeout, deadline=source_deadline):
@@ -595,7 +619,7 @@ def main():
                 for name, relative_path, marker in SOURCE_PYTHON_CASES:
                     if not execute("source-" + name,
                             lambda relative_path=relative_path: [sys.executable, "-B",
-                                str(ROOT / relative_path), configured_source_image()], marker,
+                                str(ROOT / relative_path), source_image_before(source_deadline)], marker,
                             timeout=options.source_qa_timeout, deadline=source_deadline):
                         break
     failed = sum(not result["passed"] for result in results)

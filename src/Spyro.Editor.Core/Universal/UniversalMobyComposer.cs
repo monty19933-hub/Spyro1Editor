@@ -8,7 +8,7 @@ namespace Spyro.Editor.Core.Universal;
 /// <summary>One Moby placed in a destination level from any source level's native row.</summary>
 public sealed record UniversalMobyPlacement(string SourceLevelKey, int SourceRowIndex, int X, int Y, int Z,
     int? Yaw = null, IReadOnlyDictionary<int, byte>? RowByteOverrides = null, string? EditorId = null, string? SpecialId = null,
-    IReadOnlyList<string>? Text = null);
+    IReadOnlyList<string>? Text = null, int? PersistentSlot = null, bool Retired = false);
 
 public sealed record UniversalClassImport(int ClassId, string SourceLevelKey, bool ModelImported, bool BehaviorImported,
     int ModelBytes, UniversalTextureReport? Textures, UniversalSoundReport? Sounds, bool DependencyOnly);
@@ -33,6 +33,8 @@ public sealed record UniversalComposeResult(
     /// <summary>Native models dropped because every placed copy was removed; with the bytes freed.</summary>
     public IReadOnlyList<int> DroppedModelClasses { get; init; } = [];
     public int DroppedModelBytes { get; init; }
+    public int ReclaimedVramBytes { get; init; }
+    public IReadOnlyList<UniversalParticleDependency> ParticleDependencies { get; init; } = [];
 }
 
 /// <summary>
@@ -80,9 +82,20 @@ public static class UniversalMobyComposer
         IEnumerable<(long Offset, int Length)> protectedVram,
         IReadOnlyList<UniversalMobyPlacement> placements,
         Func<string, UniversalSpecialAsset?>? special = null,
-        IReadOnlyCollection<int>? removedRows = null)
+        IReadOnlyCollection<int>? removedRows = null,
+        Func<IReadOnlySet<int>, IEnumerable<(long Offset, int Length)>>? protectedVramAfterDrop = null)
     {
         if (placements.Count == 0) throw new ArgumentException("No universal placements were supplied.");
+        int[] incomingOrder = Enumerable.Range(0, placements.Count).ToArray();
+        if (placements.Any(p => p.PersistentSlot != null))
+        {
+            if (placements.Any(p => p.PersistentSlot == null || string.IsNullOrWhiteSpace(p.EditorId)) ||
+                placements.Select(p => p.EditorId).Distinct(StringComparer.Ordinal).Count() != placements.Count ||
+                !placements.Select(p => p.PersistentSlot!.Value).Order().SequenceEqual(Enumerable.Range(0, placements.Count)))
+                throw new InvalidDataException("Persistent placement ledger requires unique IDs and contiguous lifetime slots starting at zero.");
+            incomingOrder = incomingOrder.OrderBy(i => placements[i].PersistentSlot).ToArray();
+            placements = incomingOrder.Select(i => placements[i]).ToArray();
+        }
         UniversalLevelData dest = new(destinationData.ToArray());
         byte[] exe = executable.ToArray();
         var bindings = UniversalExeBindings.Read(exe, destination.LevelId);
@@ -95,11 +108,36 @@ public static class UniversalMobyComposer
 
         // 1. Resolve classes and dependency closure (spawned child classes come from the same source level).
         Dictionary<int, (string Source, bool Dependency)> classes = [];
+        var originalDestination = source(destination.Key);
+        bool originalDestinationAssets = destinationData.AsSpan().SequenceEqual(originalDestination.Data.Bytes) &&
+            destinationOverlay.AsSpan().SequenceEqual(originalDestination.Overlay.Bytes);
+        bool EquivalentDestination(int c, string sk, out string reason)
+        {
+            if (originalDestinationAssets || string.Equals(sk, destination.Key, StringComparison.OrdinalIgnoreCase))
+                return EquivalentSources(c, destination.Key, sk, out reason);
+            var donor = source(sk);
+            return UniversalSourceIdentity.Equivalent(dest, destOverlay, donor.Data, donor.Overlay, c, shared, out reason);
+        }
+        bool EquivalentSources(int c, string a, string b, out string reason)
+        {
+            if (string.Equals(a, b, StringComparison.OrdinalIgnoreCase)) { reason = "same source level"; return true; }
+            var sa = source(a); var sb = source(b);
+            return UniversalSourceIdentity.Equivalent(sa.Data, sa.Overlay, sb.Data, sb.Overlay, c, shared, out reason);
+        }
         Queue<(int Class, string Source, bool Dependency)> work = new();
         List<UniversalRowTemplate> templates = [];
+        Dictionary<(string Source, int Type), UniversalParticleDependency> particleDependencies = [];
         Dictionary<int, UniversalSpecialAsset> specialClasses = [];
         foreach (var p in placements)
         {
+            if (p.Retired)
+            {
+                byte[] inert = new byte[UniversalLevelData.RowStride];
+                BinaryPrimitives.WriteUInt16LittleEndian(inert.AsSpan(0x36), InertClass);
+                inert[0x53] = 0xFF;
+                templates.Add(new UniversalRowTemplate("", -1, inert, [], [], 0));
+                continue;
+            }
             if (p.SpecialId != null)
             {
                 var asset = special?.Invoke(p.SpecialId) ?? throw new InvalidDataException(
@@ -124,22 +162,46 @@ public static class UniversalMobyComposer
         while (work.Count > 0)
         {
             var (c, sk, dep) = work.Dequeue();
+            if (c <= 0 || c >= 0x200)
+                throw new InvalidDataException($"Class 0x{c:X3} from {sk} is outside the supported placement range.");
             if (classes.TryGetValue(c, out var existing))
             {
-                if (existing.Source != sk && !existing.Dependency && !dep)
-                    warnings.Add($"Class 0x{c:X3} requested from both {existing.Source} and {sk}; using {existing.Source}.");
+                if (!EquivalentSources(c, existing.Source, sk, out string reason))
+                    throw new UniversalSourceCollisionException($"Class 0x{c:X3} conflicts between {existing.Source} and {sk}: {reason}. This variant needs a separately remapped class; no source is silently substituted.");
+                if (existing.Dependency && !dep) classes[c] = (existing.Source, false);
                 continue;
             }
             classes[c] = (sk, dep);
-            if (DestHandles(c)) continue;
+            if ((DestHandles(c) || destRegistered.Contains(c)) &&
+                !EquivalentDestination(c, sk, out string nativeReason))
+                throw new UniversalSourceCollisionException($"Class 0x{c:X3} from {sk} conflicts with the resident class in {destination.Key}: {nativeReason}. This variant needs a separately remapped class; destination assets are not substituted.");
             var s = source(sk);
             var sw = UniversalDispatchAnalysis.FindUpdateSwitch(s.Overlay);
-            if (!UniversalDispatchAnalysis.Handles(s.Overlay, sw, c)) continue;
+            if (!UniversalDispatchAnalysis.Handles(s.Overlay, sw, c))
+            {
+                if (!s.Data.Registrations().Any(r => r.ClassId == c) && !shared.Contains(c))
+                    throw new InvalidDataException($"Class 0x{c:X3} from {sk} has neither a model nor an extractable handler; its dependency is unresolved.");
+                continue;
+            }
             var tr = UniversalDispatchAnalysis.Trace(s.Overlay, sw.TreeStart, c, sw.Seeds, sw.ClassRegister);
             var (closure, _) = UniversalDispatchAnalysis.Closure(s.Overlay, sw.Function, [tr.Stop], new HashSet<uint> { sw.TreeStart });
-            var (spawns, _) = UniversalDispatchAnalysis.Dependencies(s.Overlay, closure);
+            var (spawns, particles) = UniversalDispatchAnalysis.Dependencies(s.Overlay, closure);
+            foreach (int particle in particles)
+            {
+                var key = (sk, particle);
+                if (!particleDependencies.ContainsKey(key))
+                    particleDependencies[key] = UniversalParticleDependencies.Inspect(sk, particle, s.Data, dest,
+                        string.Equals(sk, destination.Key, StringComparison.OrdinalIgnoreCase));
+            }
             foreach (int k in spawns) if (!classes.ContainsKey(k)) work.Enqueue((k, sk, true));
         }
+
+        foreach (int c in specialClasses.Keys)
+            if (classes.ContainsKey(c) || destRegistered.Contains(c) || shared.Contains(c) || DestHandles(c))
+                throw new UniversalSourceCollisionException($"Special class 0x{c:X3} collides with a native or imported class in {destination.Key}.");
+
+        foreach (var particle in particleDependencies.Values.Where(p => p.Status == "dependency-unverified"))
+            warnings.Add($"Particle 0x{particle.TypeId:X2} from {particle.SourceLevelKey}: {particle.Detail}");
 
         // 1b. Free the models of native object types the user removed completely (see DroppableClasses).
         var (dropped, inertRows) = DroppableClasses(dest, destOverlay, exe, shared, removedRows,
@@ -153,7 +215,11 @@ public static class UniversalMobyComposer
         }
 
         // 2. Models, textures and sounds.
-        UniversalVramAllocator vram = new(protectedVram);
+        UniversalVramAllocator baselineVram = new(protectedVram);
+        UniversalVramAllocator vram = dropped.Count > 0 && protectedVramAfterDrop != null
+            ? new(protectedVramAfterDrop(dropped.ToHashSet())) : baselineVram;
+        int reclaimedVram = vram.FreeBytes - baselineVram.FreeBytes;
+        if (reclaimedVram < 0) throw new InvalidDataException("Dropped-model ownership scan unexpectedly reduced free texture space.");
         int freeBefore = vram.FreeBytes;
         List<UniversalClassImport> imports = [];
         int modelGrowth = 0;
@@ -164,9 +230,32 @@ public static class UniversalMobyComposer
         foreach (var (c, asset) in specialClasses.OrderBy(k => k.Key))
             if (!destRegistered.Contains(c))
                 modelJobs.Add((c, "japan", false, asset.Package.ToArray(), asset.SourceVram, asset.SourceData));
+        var particleJobs = particleDependencies.Values.Where(p => p.Status == "texture-import-required")
+            .GroupBy(p => p.TypeId).Select(g =>
+            {
+                var first = g.First(); var donor = source(first.SourceLevelKey).Data;
+                byte[] tile = UniversalParticleDependencies.Records(donor)[first.TypeId];
+                foreach (var other in g.Skip(1))
+                {
+                    var od = source(other.SourceLevelKey).Data;
+                    if (!UniversalParticleDependencies.EquivalentTexture(tile, donor.Vram(), UniversalParticleDependencies.Records(od)[other.TypeId], od.Vram()))
+                        throw new InvalidDataException($"Particle dependency 0x{first.TypeId:X2} conflicts between {first.SourceLevelKey} and {other.SourceLevelKey}; particle ID remapping is required.");
+                }
+                return (Type: first.TypeId, Source: first.SourceLevelKey, Package: UniversalParticleDependencies.TexturePackage(tile), Vram: donor.Vram().ToArray());
+            }).ToList();
         var textured = modelJobs.Where(j => BinaryPrimitives.ReadInt32LittleEndian(j.Pkg) >= 0).ToList();
         var texReports = UniversalAssetImport.ImportTexturesBatch(textured.Select(j => (j.Pkg, j.Vram,
-            $"class 0x{j.Class:X3} from {j.Source}{(j.Dependency ? ", a helper object it spawns" : "")}")).ToList(), dest.Vram(), vram);
+            $"class 0x{j.Class:X3} from {j.Source}{(j.Dependency ? ", a helper object it spawns" : "")}"))
+            .Concat(particleJobs.Select(j => (j.Package, j.Vram, $"particle 0x{j.Type:X2} from {j.Source}"))).ToList(), dest.Vram(), vram);
+        foreach (var particle in particleJobs)
+            UniversalParticleDependencies.AppendTexture(dest, particle.Type, particle.Package);
+        foreach (var key in particleDependencies.Keys.ToArray())
+            if (particleDependencies[key].Status == "texture-import-required")
+            {
+                particleDependencies[key] = particleDependencies[key] with { Status = "dependency-unverified",
+                    Detail = "Missing source texture record/pixels/palette imported; per-ID spawn/update semantics remain unverified." };
+                warnings.Add($"Particle 0x{key.Type:X2} from {key.Source}: {particleDependencies[key].Detail}");
+            }
         List<(int, byte[])> pendingModels = [];
         foreach (var (c, asset) in specialClasses.OrderBy(k => k.Key))
         {
@@ -183,7 +272,8 @@ public static class UniversalMobyComposer
         foreach (var (c, sk, dep) in ordered)
         {
             var s = source(sk);
-            bool needBehavior = !DestHandles(c);
+            var sourceSwitch = UniversalDispatchAnalysis.FindUpdateSwitch(s.Overlay);
+            bool needBehavior = !DestHandles(c) && UniversalDispatchAnalysis.Handles(s.Overlay, sourceSwitch, c);
             var job = modelJobs.FirstOrDefault(j => j.Class == c);
             bool needModel = job.Pkg != null;
             if (!needModel && !destRegistered.Contains(c) && !shared.Contains(c) && !dep)
@@ -191,7 +281,7 @@ public static class UniversalMobyComposer
             UniversalTextureReport? tex = null; UniversalSoundReport? snd = null; int size = 0;
             if (needModel)
             {
-                byte[] pkg = job.Pkg;
+                byte[] pkg = job.Pkg!;
                 int ti = textured.FindIndex(j => j.Class == c);
                 if (ti >= 0) { tex = texReports[ti]; snd = UniversalAssetImport.ImportSounds(pkg, s.Data, dest); }
                 size = pkg.Length;
@@ -214,12 +304,19 @@ public static class UniversalMobyComposer
         {
             var p = placements[i]; var t = templates[i];
             byte[] r = t.Row.ToArray();
+            if (p.Retired) { rows.Add((r, t)); continue; }
             BinaryPrimitives.WriteInt32LittleEndian(r.AsSpan(0x0C), p.X);
             BinaryPrimitives.WriteInt32LittleEndian(r.AsSpan(0x10), p.Y);
             BinaryPrimitives.WriteInt32LittleEndian(r.AsSpan(0x14), p.Z);
             if (p.Yaw is int yaw) r[0x46] = (byte)yaw;
             r[0x43] = 0xFF; // detach from the source level's pod/group activation table
-            if (p.RowByteOverrides != null) foreach (var (o, b) in p.RowByteOverrides) if (o is > 3 and < 0x58) r[o] = b;
+            if (p.RowByteOverrides != null)
+                foreach (var (o, b) in p.RowByteOverrides)
+                {
+                    if (o is 0x36 or 0x37 && b != r[o])
+                        throw new InvalidDataException("Row overrides cannot change the imported class identity.");
+                    if (o is > 3 and < 0x58) r[o] = b;
+                }
             rows.Add((r, t));
         }
         // Gem rewards carried by imported rows raise the level's in-game treasure target.
@@ -276,8 +373,10 @@ public static class UniversalMobyComposer
             throw new UniversalBudgetException(
                 $"{destination.DisplayName} does not have enough game RAM for these objects: they need {(finalEnd - originalEnd) / 1024.0:0.0} KB " +
                 $"but the level has {Math.Max(0, (int)(limit - originalEnd)) / 1024.0:0.0} KB available.", ram);
-        return new(destination.Key, imports, newRows, ram, arena, freeBefore - vram.FreeBytes, behavior, warnings,
-            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes };
+        int[] mappedRows = new int[newRows.Count];
+        for (int i = 0; i < newRows.Count; i++) mappedRows[incomingOrder[i]] = newRows[i];
+        return new(destination.Key, imports, mappedRows, ram, arena, freeBefore - vram.FreeBytes, behavior, warnings,
+            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ParticleDependencies = particleDependencies.Values.ToList() };
     }
 
     /// <summary>Class a fully removed native row is switched to: no model, no behavior in any level, never

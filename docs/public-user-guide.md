@@ -1,7 +1,7 @@
 # Spyro Editor Beta V6 User Guide
 
-Private development preview, internal build `0.1.0-beta.52`. V6 is not finished
-or publicly released. The Mac preview is ad-hoc signed and is not Apple-signed
+Local release candidate, internal build `0.1.0-beta.53`. Full acceptance is
+not complete and this build has not been publicly released. The Mac preview is ad-hoc signed and is not Apple-signed
 or notarized; read the included opening instructions before launching it.
 
 ## Start a project
@@ -11,6 +11,42 @@ or notarized; read the included opening instructions before launching it.
 3. Pick a level from the level menu.
 
 The editor keeps projects and saved edits outside the application folder. Installing a newer beta does not replace your work.
+
+## Add objects, dragonfly eggs and signs
+
+In an existing level, open **Objects** and choose **Add object…**. Search across
+source levels or choose a category. The preview is rendered from locally supplied
+native data. Entries without a decoded model say so. Review the fit/dependency
+result before placement; the full catalog includes unresolved imports.
+
+Use **Add dragonfly egg** or **Add sign** for the recovered Japanese content.
+Choose your unchanged Japanese disc when prompted. Egg colors have named swatches;
+the original white appearance and additional editor color variants share the
+same eye-free native shape. Select an egg and use **Edit** to change its color.
+Use **Edit** on a sign for up to three lines of text; its preview shows the native
+capitalization, character limits and any removed symbols.
+
+Save the project, run **Build Safety**, and choose **Create BIN** to export a
+separate game image. Reopen the resulting CUE in your emulator. Existing exported
+games retain their previous models until you create a new export.
+
+Copies receive new collection identities. Recoloring and reordering preserve
+identities; removed objects leave inactive lifetime slots, which still consume
+row capacity. If an ordinary object edit would move those slots, export stops
+with an explanation. Keep each edited game with its own copied test memory card.
+
+The native inventory currently shows a separate global egg row: individual
+colored icons for up to six eggs, or a numeric collected/total for larger sets.
+The eyes have been removed from both the model and icons. The requested per-level
+X/Y interface, normal cold save/load and bonus-entry integration remain open.
+
+The live inventory percentage for N > 0 active custom eggs is rounded down from
+`(50*min(gems,12000) + 6000*dragons + 10000*(ordinaryEggs+collectedCustomEggs)) /
+(12000+100*N)`. An egg therefore has the same score weight as an ordinary egg.
+After all required categories are complete, bonus gems use the original
+`100 + floor((gems-12000)/100)` rule. No custom eggs means no percentage patch.
+This describes the implemented live counter; save-menu and unlock logic are
+separate pending work.
 
 ## Make a fresh level
 
@@ -170,7 +206,8 @@ the editor never silently omits ID65 research edits from a retail build.
 - Choose **Add Object**, open the picture gallery, and select an available object to place.
 - Use **Undo** if a placement is not right.
 
-Only objects that the editor can safely export are shown in the normal gallery and replacement lists.
+The older gallery retains its established export gates. The game-wide browser below
+also exposes unresolved entries with their dependency or capacity reasons.
 
 ### Add objects from any level
 
@@ -183,13 +220,14 @@ In the **Objects** tab on the right, under **Add or edit objects**:
 
 In the window, pick a category on the left or type in the search box, choose an
 object, then press **Place it (click in the level)** and click where it should
-go. Each object says **Can be added**, **Already in this level**, or why it
-won't fit (the level has run out of memory or texture space). **Only what fits
-here** hides the ones that won't fit.
+go. Each object reports its current composition result, dependency restriction or
+capacity reason. **Only what fits here** filters the current static fit results;
+it does not certify native gameplay.
 
 Placed objects can be moved, rotated, copied, removed, undone and saved like any
-other object. When you **Create BIN**, everything they need is copied in from
-your original disc automatically; your disc is never changed.
+other object. **Create BIN** imports the dependencies the composer can resolve
+from your original disc. It refuses conflicting resource identities and reports
+unresolved behavior; your source disc is never changed.
 
 **Dragonfly eggs and signs** come from the Japanese version of Spyro. The first
 time, press **Choose Japanese disc…** at the top of the window and pick your
@@ -198,7 +236,7 @@ time, press **Choose Japanese disc…** at the top of the window and pick your
 sign and press **Edit** → **Sign message**: up to three lines of 24 letters
 (A–Z, 0–9, space and ! ? . ,). In the game the message appears when Spyro walks
 up to the sign. Collected dragonfly eggs appear at the right end of the egg row
-in the pause menu's Inventory, as still eggs in their own colour with little
+in the pause menu's Inventory, as still eggs in their own colour without added
 eyes (separate from the 12 dragon eggs).
 
 **Need more room?** If an object says it won't fit because the level is out of
@@ -245,7 +283,8 @@ Create BIN writes a new output and does not modify the source disc image.
 
 ### Fly Anywhere (initial Toasty support)
 
-The Level tab now has **Fly Anywhere Enabled**, **Save Flight**, and **Revert**.
+**Game Settings → Starting Abilities** contains **Fly Anywhere Enabled**,
+**Save Flight**, and **Revert**.
 The initial choice is OFF. Save stores the choice in the current project for
 the selected level; Revert discards the checkbox draft. A draft must be saved
 or reverted before Create BIN.

@@ -166,7 +166,14 @@ public static class NativeTexturePageOwnershipScanner
         [ 1,  0,  0, -1]
     ];
 
-    public static NativeTexturePageOwnershipReport Scan(string sourceImagePath, LevelDefinition level)
+    public static NativeTexturePageOwnershipReport Scan(string sourceImagePath, LevelDefinition level) =>
+        ScanExcludingResidentClasses(sourceImagePath, level, new HashSet<int>());
+
+    /// <summary>Releases only bytes exclusively owned by fully dropped resident models. Unknown bytes,
+    /// retained models, terrain, particles, shared models and cutscenes stay protected. Incomplete
+    /// decoding protects the entire image; exclusion is never an ownership shortcut.</summary>
+    public static NativeTexturePageOwnershipReport ScanExcludingResidentClasses(string sourceImagePath,
+        LevelDefinition level, IReadOnlySet<int> excludedClasses)
     {
         ArgumentNullException.ThrowIfNull(level);
         if (!File.Exists(sourceImagePath))
@@ -197,7 +204,11 @@ public static class NativeTexturePageOwnershipScanner
             terrainNormal,
             terrainClose);
         DecodeParticles(asset.LevelData, ownership, particles);
-        DecodeResidentModels(asset, ownership, residents);
+        DecodeResidentModels(asset, ownership, residents, excludedClasses);
+        ushort[] excludedOwnership = new ushort[AddressableTexturePageBytes];
+        ScopeState excludedResidents = new("resident-actors-and-scenery");
+        if (excludedClasses.Count > 0)
+            DecodeResidentModels(asset, excludedOwnership, excludedResidents, null, excludedClasses);
         DecodeSharedPeteModels(asset, stream, layout, ownership, player, hudGlobal);
         DecodeSceneTiledefs(asset.Scene, ownership, player, hudGlobal);
         DecodeDragonCutsceneModels(asset, stream, layout, ownership, other);
@@ -223,8 +234,19 @@ public static class NativeTexturePageOwnershipScanner
             other
         ];
 
+        // Only positively enumerated excluded bytes can cease to be unknown nonzero. A failure
+        // anywhere disables reclamation, including failure to enumerate a dropped package.
+        if (excludedClasses.Count > 0 && !excludedResidents.IsComplete)
+            residents.Block("Dropped resident models could not be completely decoded; texture reclamation is refused.");
+        bool reclaim = excludedClasses.Count > 0 && excludedResidents.IsComplete && scopeStates.All(scope => scope.IsComplete);
+        byte[] allocationPages = asset.TexturePages.ToArray();
+        int released = 0;
+        if (reclaim)
+            for (int offset = 0; offset < allocationPages.Length; offset++)
+                if (excludedOwnership[offset] != 0 && ownership[offset] == 0) { allocationPages[offset] = 0; released++; }
+        residents.Note($"Exclusively dropped-model bytes released: {released}; retained-owner overlap stays protected.");
         int knownOwned = ownership.Count(value => value != 0);
-        UnknownSummary unknown = BuildUnknownSummary(asset.TexturePages, ownership);
+        UnknownSummary unknown = BuildUnknownSummary(allocationPages, ownership);
         bool closureComplete = scopeStates.All(scope => scope.IsComplete);
         List<string> blockers = scopeStates
             .SelectMany(scope => scope.Blockers.Select(blocker => $"{scope.Name}: {blocker}"))
@@ -267,7 +289,8 @@ public static class NativeTexturePageOwnershipScanner
         // report's blocker and ProtectedByteCount; they are not an allocation
         // proof until every consumer scope closes.
         IReadOnlyList<NativeTexturePageOwnedRange> protectedRanges =
-            BuildProtectedRanges(asset.TexturePages, ownership);
+            closureComplete ? BuildProtectedRanges(allocationPages, ownership)
+                : [new NativeTexturePageOwnedRange(0, AddressableTexturePageBytes, "incomplete-consumer-closure")];
         return new NativeTexturePageOwnershipReport(
             LevelKey: level.Key,
             LevelName: level.DisplayName,
@@ -1515,7 +1538,8 @@ public static class NativeTexturePageOwnershipScanner
         return true;
     }
 
-    private static void DecodeResidentModels(LevelAsset asset, ushort[] ownership, ScopeState scope)
+    private static void DecodeResidentModels(LevelAsset asset, ushort[] ownership, ScopeState scope,
+        IReadOnlySet<int>? excludedClasses = null, IReadOnlySet<int>? includedClasses = null)
     {
         HashSet<int> parsedRoots = [];
         for (int slot = 1; slot < asset.ModelOffsets.Length; slot++)
@@ -1523,6 +1547,8 @@ public static class NativeTexturePageOwnershipScanner
             int absoluteOffset = asset.ModelOffsets[slot];
             if (absoluteOffset <= 0)
                 break;
+            if (excludedClasses?.Contains(asset.ModelIndices[slot]) == true ||
+                (includedClasses != null && !includedClasses.Contains(asset.ModelIndices[slot]))) continue;
             int localOffset = absoluteOffset - asset.ModelDataOffset;
             scope.ModelCount++;
             if (localOffset < 0 || localOffset + 16 > asset.Models.Length)

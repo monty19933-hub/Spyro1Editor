@@ -215,7 +215,10 @@ public sealed partial class MainWindow
         _toolbarOpenDiscImageButton = NewAsyncButton("Open BIN/CUE", ChooseSourceDiscImageAsync);
         StyleModernToolbarButton(_toolbarOpenDiscImageButton, 118);
         fileActions.Children.Add(_toolbarOpenDiscImageButton);
-        fileActions.Children.Add(BuildNativeFreshDocumentButton());
+        Button freshResearch = BuildNativeFreshDocumentButton();
+        freshResearch.Content = "Fresh research…";
+        ToolTip.SetTip(freshResearch, "Experimental fresh document with a separate research export. Full fresh-level editing in this main editor is still in development.");
+        fileActions.Children.Add(freshResearch);
 
         _toolbarCreateBinButton = NewAsyncButton("Create BIN", CreateObjectTestBinAsync);
         StyleModernPrimaryButton(_toolbarCreateBinButton, ModernBlue, 110);
@@ -370,7 +373,7 @@ public sealed partial class MainWindow
         };
         ToolTip.SetTip(
             _editorWorkspaceIndicator,
-            "Fresh blank-level authoring: manage verified objects, terrain, textures, level settings, and environment in one dedicated editor.");
+            "Experimental blank-level research. The full regular editor for fresh levels is still in development.");
         return _editorWorkspaceIndicator;
     }
 
@@ -495,7 +498,7 @@ public sealed partial class MainWindow
         _modernTerrainWorkspaceTab = NewModernWorkspaceTab(
             "Terrain",
             _releaseMode ? BuildReleaseTerrainTextureWorkspace() : BuildTerrainTabControls());
-        _modernLevelWorkspaceTab = NewModernWorkspaceTab("Level", BuildModernLevelWorkspace());
+        _modernLevelWorkspaceTab = NewModernWorkspaceTab("Game Settings", BuildModernLevelWorkspace());
         _modernEnvironmentWorkspaceTab = NewModernWorkspaceTab(
             "Environment",
             BuildModernEnvironmentWorkspace());
@@ -931,7 +934,11 @@ public sealed partial class MainWindow
         panel.Children.Add(ModernSectionHeading("Level settings"));
         panel.Children.Add(BuildModernDisclosure("Level name", BuildLevelTextPanel(), true));
         panel.Children.Add(BuildModernDisclosure("Music", BuildLevelMusicPanel(), false));
-        panel.Children.Add(BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), false));
+        panel.Children.Add(BuildModernDisclosure("Starting Abilities", new StackPanel
+        {
+            Name = "StartingAbilitiesPanel", Spacing = 8,
+            Children = { BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), true) }
+        }, false));
         _homeworldTextGroup = BuildModernDisclosure("Portal location", BuildPortalControlPanel(), false);
         panel.Children.Add(_homeworldTextGroup);
 
@@ -1112,11 +1119,15 @@ public sealed partial class MainWindow
         body.Children.Add(transform);
 
         if (eggColourBox != null)
+        {
             body.Children.Add(BuildModernDialogField("Egg colour", eggColourBox));
+            body.Children.Add(BuildUniversalEggEditPreview(eggColourBox));
+        }
 
         if (signTextBox != null)
         {
             body.Children.Add(BuildModernDialogField("Sign message", signTextBox));
+            body.Children.Add(BuildUniversalSignPreview(signTextBox));
             body.Children.Add(NewSmallNote($"Up to {UniversalSpecialBehaviors.SignLines} lines of {UniversalSpecialBehaviors.SignLineMaxChars} characters. The game's letters support A-Z, 0-9, space and ! ? . , (lowercase is shown in capitals)."));
         }
 

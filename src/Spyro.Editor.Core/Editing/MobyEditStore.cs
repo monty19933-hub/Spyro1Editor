@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Globalization;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
+using Spyro.Editor.Core.Universal;
 
 namespace Spyro.Editor.Core.Editing;
 
@@ -93,6 +94,8 @@ public static class MobyEditStore
             if (moby == null)
                 continue;
 
+            if (UniversalPlacementReader.IsUniversalEdit(edit))
+                moby.UniversalPlacementId = UniversalPlacementLedger.IdentityOf(edit);
             bool changed = ApplyPositionEdit(edit, moby);
             changed = ApplyMetadataEdit(edit, moby) || changed;
             if (JsonValue.GetBoolean(edit, "removed"))
@@ -121,6 +124,7 @@ public static class MobyEditStore
     public static async Task<int> SaveAsync(string path, IEnumerable<Moby> mobys, string levelName, CancellationToken cancellationToken = default)
     {
         List<Moby> mobyList = mobys.ToList();
+        UniversalPlacementLedger ledger = UniversalPlacementLedger.Reconcile(path, mobyList);
         Dictionary<int, Moby> byTrueIndex = mobyList
             .Where(moby => moby.TrueIndex >= 0)
             .ToDictionary(moby => moby.TrueIndex);
@@ -186,6 +190,7 @@ public static class MobyEditStore
                 ["editorControlKind"] = moby.IsEditorControl ? moby.EditorControlKind : null,
                 ["crossLevelTemplate"] = NewCrossLevelTemplate(moby),
                 ["signText"] = NullIfEmpty(moby.SignText),
+                ["universalPlacementId"] = moby.CrossLevelRequiredExporterFeature == UniversalMobyExport.RequiredExporterFeature ? moby.UniversalPlacementId : null,
                 ["specialChestBundleId"] = NullIfEmpty(moby.SpecialChestBundleId),
                 ["profileId"] = NullIfEmpty(moby.SpecialChestProfileId),
                 ["specialChestVisibleRootTrueIndex"] = moby.SpecialChestVisibleRootTrueIndex >= 0
@@ -215,12 +220,20 @@ public static class MobyEditStore
             editor = "Spyro.Editor.Core",
             levelName = string.IsNullOrWhiteSpace(levelName) ? "Unknown" : levelName,
             note = "Cross-platform editor moby records using the legacy NativeSpyroEditor edit manifest shape.",
+            universalPlacementLedger = ledger.Entries.Count == 0 ? null : ledger,
             editCount = edits.Count,
             edits
         };
 
-        await using FileStream stream = File.Create(path);
-        await JsonSerializer.SerializeAsync(stream, root, cancellationToken: cancellationToken);
+        string temporary = path + ".saving-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            await using (FileStream stream = new(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                await JsonSerializer.SerializeAsync(stream, root, cancellationToken: cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(temporary, path, overwrite: true);
+        }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
         return edits.Count;
     }
 

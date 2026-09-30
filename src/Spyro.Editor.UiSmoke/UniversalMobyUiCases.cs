@@ -69,6 +69,16 @@ internal static class UniversalMobyUiCases
             Check(!sheep.SourceLevels.Contains("toasty"), "sheep is foreign to Toasty");
             list.SelectedItem = sheep; Pump();
             Check(Find<Button>(library, "UniversalMobyAddHere").IsEnabled, "foreign object fits Toasty");
+            Border previewHost = Find<Border>(library, "UniversalMobyModelPreview");
+            Wait(() => previewHost.Tag is UniversalMobyModelPreview.Frame, "source model preview loaded", 120);
+            var previewFrame = (UniversalMobyModelPreview.Frame)previewHost.Tag!;
+            Check(previewFrame.Pixels != null && previewFrame.VertexCount > 20 && previewFrame.FaceCount > 10 && previewFrame.SourceHash?.Length == 64,
+                "foreign sheep preview is decoded from the actual source geometry: " + previewFrame.Description);
+            var previewTask = UniversalMobyModelPreview.LoadAsync(Library(window), sheep.Default, null);
+            Check(ReferenceEquals(previewTask, UniversalMobyModelPreview.LoadAsync(Library(window), sheep.Default, null)), "model preview tasks are cached");
+            // A search remains global after choosing a category that excludes sheep.
+            cats.SelectedItem = cats.ItemsSource!.Cast<(string, string, int)>().First(c => c.Item1 == "Interactive" && c.Item2 == ""); Pump();
+            Check(Items(list).Any(e => e.ClassId == 0x0A), "search covers every category");
             Snapshot(library, Path.Combine(outputDirectory, "universal-moby-library-selected.png"));
             Click(Find<Button>(library, "UniversalMobyAddHere"));
             Wait(() => Mobys(window).Count == nativeCount + 1, "sheep added");
@@ -88,7 +98,8 @@ internal static class UniversalMobyUiCases
                 {
                     var row = Library(window).Get(e.Default.SourceLevelKey).Data.Row(e.Default.SourceRow);
                     return UniversalMobyCatalogBuilder.DryRun(Library(window), toasty, [.. existing,
-                        new UniversalMobyPlacement(e.Default.SourceLevelKey, e.Default.SourceRow, BitConverter.ToInt32(row, 12), BitConverter.ToInt32(row, 16), BitConverter.ToInt32(row, 20))]).Error == null;
+                        new UniversalMobyPlacement(e.Default.SourceLevelKey, e.Default.SourceRow, BitConverter.ToInt32(row, 12), BitConverter.ToInt32(row, 16), BitConverter.ToInt32(row, 20),
+                            EditorId: Guid.NewGuid().ToString("N"), PersistentSlot: existing.Count)]).Error == null;
                 });
             Check(enemy != null, "a later-world enemy that fits Toasty exists");
             list.SelectedItem = enemy; Pump();
@@ -100,7 +111,7 @@ internal static class UniversalMobyUiCases
             Save(window);
             string edits = Path.Combine(root, "toasty-native-edits.json");
             var saved = UniversalPlacementReader.Read(edits);
-            Check(saved.Count == 2 && saved.Any(p => p.SourceLevelKey == sheep.Default.SourceLevelKey && p.SourceRowIndex == sheep.Default.SourceRow),
+            Check(saved.Count(p => !p.Retired) == 2 && saved.Any(p => p.SourceLevelKey == sheep.Default.SourceLevelKey && p.SourceRowIndex == sheep.Default.SourceRow),
                 "native-edits.json records both universal placements");
             Load(window, stone); Load(window, toasty);
             Check(Mobys(window).Count(m => m.IsAdded && m.CrossLevelRequiredExporterFeature == UniversalMobyExport.RequiredExporterFeature) == 2,
@@ -110,14 +121,14 @@ internal static class UniversalMobyUiCases
             Moby enemyRow = Mobys(window).Last(m => m.IsAdded);
             Invoke(window, "UndoMoby", enemyRow);
             Save(window);
-            Check(UniversalPlacementReader.Read(edits).Count == 1, "undo removes the placement from the saved project");
+            Check(UniversalPlacementReader.Read(edits).Count(p => !p.Retired) == 1, "undo removes the placement from the saved project");
             Click(Find<Button>(window, "UniversalMobyLibraryButton"));
             library = Owned(window, "Add object — Toasty");
             list = Find<ListBox>(library, "UniversalMobyList");
             Wait(() => Items(list).Length > 150, "catalogue reopened for re-add");
             list.SelectedItem = Items(list).Single(e => e.ClassId == enemy!.ClassId); Pump();
             Click(Find<Button>(library, "UniversalMobyAddHere"));
-            Wait(() => Mobys(window).Count(m => m.IsAdded) == 2, "enemy re-added");
+            Wait(() => Mobys(window).Count(m => m.IsAdded && !m.IsRemoved) == 2, "enemy re-added");
             Save(window);
 
             // 6. Japanese-release objects: dragonfly egg (colour variant) and an editable sign.
@@ -155,7 +166,8 @@ internal static class UniversalMobyUiCases
                 {
                     var row = Library(window).Get(e.Default.SourceLevelKey).Data.Row(e.Default.SourceRow);
                     return UniversalMobyCatalogBuilder.DryRun(Library(window), stone, [new UniversalMobyPlacement(e.Default.SourceLevelKey, e.Default.SourceRow,
-                        BitConverter.ToInt32(row, 12), BitConverter.ToInt32(row, 16), BitConverter.ToInt32(row, 20))]).Error == null;
+                        BitConverter.ToInt32(row, 12), BitConverter.ToInt32(row, 16), BitConverter.ToInt32(row, 20),
+                            EditorId: Guid.NewGuid().ToString("N"), PersistentSlot: 0)]).Error == null;
                 });
             Check(later != null, "a later-world object fits Stone Hill");
             int laterClass = later!.ClassId;
@@ -167,11 +179,15 @@ internal static class UniversalMobyUiCases
             Save(window);
             Load(window, toasty);
 
+            bool admittedOutputOnly = Environment.GetEnvironmentVariable("SPYRO_UNIVERSAL_ADMITTED_OUTPUT_ONLY") == "1";
+            if (!admittedOutputOnly)
+            {
             // 8. Make room: remove every copy of Toasty's own class 0x15D; a 73 KB Ice Cavern object then fits.
             int[] freedRows = [1, 3, 5, 8, 9, 14, 26];
             var bigRow = Library(window).Get("icecavern").Data.Row(53);
-            var bigTrial = new UniversalMobyPlacement("icecavern", 53, BitConverter.ToInt32(bigRow, 12), BitConverter.ToInt32(bigRow, 16), BitConverter.ToInt32(bigRow, 20));
             var before = (List<UniversalMobyPlacement>)Invoke(window, "CurrentUniversalPlacements")!;
+            var bigTrial = new UniversalMobyPlacement("icecavern", 53, BitConverter.ToInt32(bigRow, 12), BitConverter.ToInt32(bigRow, 16), BitConverter.ToInt32(bigRow, 20),
+                EditorId: Guid.NewGuid().ToString("N"), PersistentSlot: before.Count);
             var provider = specials > 0 ? UniversalMobyExport.SpecialProvider(new UniversalJapaneseSource(japan!)) : null;
             var beforeRemoval = UniversalMobyCatalogBuilder.DryRun(Library(window), toasty, [.. before, bigTrial], provider);
             Check(beforeRemoval.Error?.Contains("RAM") == true, "the Ice Cavern object does not fit Toasty before removing anything: " + beforeRemoval.Error);
@@ -201,6 +217,9 @@ internal static class UniversalMobyUiCases
             Save(window);
             Check(UniversalPlacementReader.ReadRemovedNativeRows(Path.Combine(root, "toasty-native-edits.json")).Count(freedRows.Contains) == freedRows.Length, "removals saved");
 
+            }
+            else Console.WriteLine("ADMITTED_OUTPUT_ONLY: large Ice Cavern dependency fixture is separate from this runtime candidate.");
+
             // 9. Create BIN through the normal combined export and read the output back.
             string source = Get<TextBox>(window, "_discImagePathBox").Text!;
             string cue = Path.ChangeExtension(source, ".cue");
@@ -217,9 +236,11 @@ internal static class UniversalMobyUiCases
             var disc = UniversalDiscImage.Read(output);
             var data = new UniversalLevelData(disc.EntryBytes(toasty.SourceWadEntry));
             Check(data.Registrations().Any(r => r.ClassId == 0x0A), "exported Toasty registers the sheep model");
-            Check(data.Scene().RowCount == toasty.SourceRecordCount + 3 + specials, "exported Toasty has every placed row");
+            Check(data.Scene().RowCount == toasty.SourceRecordCount + UniversalPlacementReader.Read(edits).Count,
+                "exported Toasty retains every active and retired placement slot");
+            if (!admittedOutputOnly)
             Check(!data.Registrations().Any(r => r.ClassId == 0x15D) && data.Registrations().Any(r => r.ClassId == 0xD4) &&
-                  freedRows.All(r => BitConverter.ToUInt16(data.Row(r), 0x36) == UniversalMobyComposer.InertClass),
+                  new[] { 1, 3, 5, 8, 9, 14, 26 }.All(r => BitConverter.ToUInt16(data.Row(r), 0x36) == UniversalMobyComposer.InertClass),
                 "removed 0x15D rows became inert placeholders and their model was dropped; the Ice Cavern model was added");
             var stoneData = new UniversalLevelData(disc.EntryBytes(stone.SourceWadEntry));
             Check(BitConverter.ToUInt16(stoneData.Row(stoneData.Scene().RowCount - 1), 0x36) == laterClass &&
@@ -254,7 +275,8 @@ internal static class UniversalMobyUiCases
             {
                 Directory.CreateDirectory(keep);
                 File.Copy(output, Path.Combine(keep, "ui-toasty.bin"), true);
-                File.WriteAllText(Path.Combine(keep, "ui-toasty.cue"), "FILE \"ui-toasty.bin\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n");
+                File.WriteAllLines(Path.Combine(keep, "ui-toasty.cue"), ["FILE \"ui-toasty.bin\" BINARY", "  TRACK 01 MODE2/2352", "    INDEX 01 00:00:00"]);
+                Check(File.ReadAllLines(Path.Combine(keep, "ui-toasty.cue")).SequenceEqual(["FILE \"ui-toasty.bin\" BINARY", "  TRACK 01 MODE2/2352", "    INDEX 01 00:00:00"]), "preserved runtime CUE has three real lines");
                 File.Copy(Path.Combine(root, "toasty-native-edits.json"), Path.Combine(keep, "ui-toasty-native-edits.json"), true);
             }
             Directory.Delete(outDir, true);
@@ -288,6 +310,22 @@ internal static class UniversalMobyUiCases
         Wait(() => Mobys(window).Count(m => m.IsAdded && !m.IsRemoved) == before + 1, "egg added");
         Moby eggRow = Mobys(window).Last(m => m.IsAdded);
         Check(eggRow.CrossLevelTemplateId == "special:dragonfly-egg-blue", "egg keeps its colour identity");
+        Task eggEdit = (Task)Invoke(window, "EditMobyAsync", eggRow)!;
+        Window eggDialog = Owned(window, "Edit " + eggRow.DisplayLabel);
+        Border eggModel = Find<Border>(eggDialog, "UniversalMobyModelPreview");
+        Wait(() => eggModel.Tag is UniversalMobyModelPreview.Frame, "egg edit source preview loaded", 120);
+        var blueModel = (UniversalMobyModelPreview.Frame)eggModel.Tag!;
+        Check(blueModel.Pixels != null && blueModel.VertexCount > 20, "egg Edit dialog shows actual no-eyes source model");
+        eggDialog.GetLogicalDescendants().OfType<ScrollViewer>().First().ScrollToEnd(); Pump();
+        Snapshot(eggDialog, Path.Combine(outputDirectory, "universal-egg-edit-preview.png"));
+        ComboBox editColours = Find<ComboBox>(eggDialog, "UniversalEggColourBox");
+        editColours.SelectedItem = editColours.ItemsSource!.Cast<object>().Single(c => c.ToString() == "Dragonfly Egg (gold)"); Pump();
+        Border changedModel = Find<Border>(eggDialog, "UniversalMobyModelPreview");
+        Wait(() => changedModel.Tag is UniversalMobyModelPreview.Frame, "changed egg colour preview loaded", 120);
+        Check(((UniversalMobyModelPreview.Frame)changedModel.Tag!).SourceHash != blueModel.SourceHash, "egg colour preview uses the chosen variant's actual palette");
+        Click(eggDialog.GetLogicalDescendants().OfType<Button>().Single(b => b.Content?.ToString() == "Cancel"));
+        Wait(() => eggEdit.IsCompleted, "egg edit canceled");
+        Check(eggRow.CrossLevelTemplateId == "special:dragonfly-egg-blue", "canceling colour preview preserves the saved egg identity");
 
         Click(Find<Button>(window, "UniversalMobyLibraryButton"));
         library = Owned(window, "Add object — Toasty");
@@ -299,7 +337,21 @@ internal static class UniversalMobyUiCases
         Wait(() => Mobys(window).Count(m => m.IsAdded && !m.IsRemoved) == before + 2, "sign added");
         Moby sign = Mobys(window).Last(m => m.IsAdded);
         Check(sign.SignText == "HELLO!", "new sign starts with a default message");
-        Invoke(window, "SetUniversalSignText", sign, "Welcome to\nToasty!");
+        var liveInput = (TextBox)Invoke(window, "BuildUniversalSignTextBox", sign)!;
+        Control livePanel = (Control)Invoke(window, "BuildUniversalSignPreview", liveInput)!;
+        liveInput.Text = "hello @ there\nsecond!\nthird?\nfourth"; Pump();
+        Check(Find<TextBlock>(livePanel, "UniversalSignLivePreview").Text == "HELLO  THERE\nSECOND!\nTHIRD?", "sign live preview reflects glyph and line constraints");
+        Check((Find<TextBlock>(livePanel, "UniversalSignConstraintStatus").Text ?? "").Contains("removed"), "sign constraints disclose normalization");
+        var swatches = (ComboBox)Invoke(window, "BuildUniversalEggColourBox", eggRow)!;
+        Check(swatches.ItemTemplate != null && swatches.ItemsSource!.Cast<object>().Count() == 7, "egg edit choices use labeled colour swatches");
+        Task signEdit = (Task)Invoke(window, "EditMobyAsync", sign)!;
+        Window signDialog = Owned(window, "Edit " + sign.DisplayLabel);
+        Find<TextBox>(signDialog, "UniversalSignTextBox").Text = "Welcome to\nToasty!"; Pump();
+        Check(Find<TextBlock>(signDialog, "UniversalSignLivePreview").Text == "WELCOME TO\nTOASTY!", "actual sign Edit dialog previews normalized message");
+        signDialog.GetLogicalDescendants().OfType<ScrollViewer>().First().ScrollToEnd(); Pump();
+        Snapshot(signDialog, Path.Combine(outputDirectory, "universal-sign-edit-preview.png"));
+        Click(signDialog.GetLogicalDescendants().OfType<Button>().Single(b => b.Content?.ToString() == "Apply changes"));
+        Wait(() => signEdit.IsCompleted, "sign edit accepted");
         Check(sign.SignText == "WELCOME TO\nTOASTY!", "sign text normalised to the game's letters");
 
         // Duplicate the egg, move/rotate the copy, then delete it.

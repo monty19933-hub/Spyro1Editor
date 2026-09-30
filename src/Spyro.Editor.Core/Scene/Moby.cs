@@ -57,6 +57,9 @@ public sealed class Moby
     public string CrossLevelTemplateId { get; set; } = "";
     /// <summary>Message lines ('\n' separated) shown by a universal sign.</summary>
     public string SignText { get; set; } = "";
+    /// <summary>Stable placement identity; copies receive a new identity, colour changes retain it.</summary>
+    [JsonIgnore]
+    public string UniversalPlacementId { get; set; } = Guid.NewGuid().ToString("N");
     public string CrossLevelFamily { get; set; } = "";
     public string CrossLevelSourceLevelKey { get; set; } = "";
     public string CrossLevelSourceLevelName { get; set; } = "";

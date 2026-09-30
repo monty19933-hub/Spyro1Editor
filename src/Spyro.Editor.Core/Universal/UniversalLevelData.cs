@@ -87,6 +87,21 @@ public sealed class UniversalLevelData
         return insert;
     }
 
+    /// <summary>Inserts a component record within a subfile, preserving every following byte. Only
+    /// verified zero tail padding is consumed; otherwise the subfile grows by a sector.</summary>
+    public void InsertWithinSubfile(int index, int relativeOffset, ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length == 0) return;
+        var sf = Subfiles()[index];
+        if (relativeOffset < 0 || relativeOffset > sf.Length) throw new ArgumentOutOfRangeException(nameof(relativeOffset));
+        int padding = Math.Min(bytes.Length, sf.Length - relativeOffset);
+        bool usePadding = padding == bytes.Length && _data.AsSpan(sf.Offset + sf.Length - padding, padding).IndexOfAnyExcept((byte)0) < 0;
+        int move = sf.Length - relativeOffset - (usePadding ? bytes.Length : 0);
+        if (!usePadding) GrowSubfile(index, Align(bytes.Length, 0x800));
+        _data.AsSpan(sf.Offset + relativeOffset, move).CopyTo(_data.AsSpan(sf.Offset + relativeOffset + bytes.Length));
+        bytes.CopyTo(_data.AsSpan(sf.Offset + relativeOffset));
+    }
+
     public int AppendModel(int classId, ReadOnlySpan<byte> package)
     {
         var regs = Registrations();
@@ -106,6 +121,10 @@ public sealed class UniversalLevelData
     public IReadOnlyList<int> AppendModels(IReadOnlyList<(int ClassId, byte[] Package)> packages)
     {
         var regs = Registrations();
+        if (packages.Select(p => p.ClassId).Distinct().Count() != packages.Count)
+            throw new InvalidDataException("An import batch contains duplicate model class identities.");
+        if (packages.Any(p => p.ClassId <= 0 || p.ClassId >= 0x200))
+            throw new InvalidDataException("An imported model class is outside the supported class range.");
         if (regs.Count + packages.Count > 63) throw new InvalidDataException("The level has no free model registration slots left (63 max).");
         foreach (var (c, _) in packages)
             if (regs.Any(r => r.ClassId == c)) throw new InvalidDataException($"Class 0x{c:X3} is already registered.");

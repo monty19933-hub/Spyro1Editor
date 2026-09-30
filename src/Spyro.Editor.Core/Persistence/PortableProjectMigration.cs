@@ -48,6 +48,7 @@ public static class PortableProjectMigration
     private static readonly string[] ProjectEditSuffixes =
     [
         "-native-edits.json",
+        "-universal-layout-v1.json",
         "-native-moby-path-edits.json",
         "-native-level-replacement-intent.json",
         "-native-level-replacement.json",

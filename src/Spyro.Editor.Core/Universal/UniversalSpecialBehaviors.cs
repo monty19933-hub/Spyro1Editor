@@ -10,7 +10,6 @@ public static class UniversalSpecialBehaviors
     private const uint MarkCollected = 0x8003B854;   // (gemValue, moby): adds gems and sets the durable collected bit
     private const uint FreeMoby = 0x80052568;
     private const int SparkleParticle = 0x4D;
-    private const uint FrameCounter = 0x800758C8;
     private const int PickupRadius = 0x280, PickupHeight = 0x380;
 
     private sealed class Asm
@@ -79,15 +78,15 @@ public static class UniversalSpecialBehaviors
     // The inventory draws its divider line right after the 12-slot egg row; the row is drawn first.
     public const uint EggInventoryCallSite = 0x8001BA04, EggInventoryCallPreimage = 0x0C006113; // jal 0x8001844c
     public const int EggInventoryMaxSlots = 6;
-    private const uint DrawLine = 0x8001844C, DrawSprite = 0x8001919C, DrawStatText = 0x80017FE4, Sprintf = 0x80062FD4, AddPrim = 0x800168DC;
-    private const uint EggSprites = 0x80078514, CrossText = 0x80075618, CollectedMasks = 0x80077908, PrimCursor = 0x800757B0;
+    private const uint DrawLine = 0x8001844C, DrawSprite = 0x8001919C, DrawStatText = 0x80017FE4, Sprintf = 0x80062FD4;
+    private const uint EggSprites = 0x80078514, CrossText = 0x80075618, CollectedMasks = 0x80077908;
     // Right end of the native egg row (its 12 slots end at x=0x15C), same height as that row.
     public const int EggRowY = 0x33, EggRowX = 0x168, EggSlotStep = 0x15, EggSlotW = 0x14, EggSlotH = 0x0E;
 
     /// <summary>Inventory row for dragonfly eggs. Each entry is (level index, placed row, colour variant); an
     /// egg counts as collected when its durable collected bit (0x80077908 + level*32, bit row) is set, so the
     /// row survives saving and loading without new save data. Up to 6 eggs get one slot each: a still egg
-    /// picture in that egg's own colour with two small cartoon eyes when found, dark with an x when not.
+    /// picture in that egg's own colour when found, dark with an x when not.
     /// More eggs are shown as one egg picture and "K/Y".</summary>
     public static (uint[] Code, uint[] Data) DragonflyEggInventoryRoutine(IReadOnlyList<(int LevelIndex, int Row, int Colour)> eggs)
     {
@@ -97,7 +96,7 @@ public static class UniversalSpecialBehaviors
         List<uint> data = [];
         foreach (var (lvl, row, colour) in eggs)
         {
-            if (lvl is < 0 or > 0xFF || row is < 0 or > 0xFF || colour is < 0 or > 0xFF) throw new InvalidDataException("Dragonfly egg level/row/colour out of range.");
+            if (lvl is < 0 or >= 36 || row is < 0 or > 0xFF || colour < 0 || colour >= UniversalDragonflyEggs.Variants.Length) throw new InvalidDataException("Dragonfly egg level/row/colour out of range.");
             data.Add((uint)(colour << 24 | lvl << 16 | row));
         }
         uint tintTable = EggInventoryData + (uint)data.Count * 4;
@@ -106,7 +105,7 @@ public static class UniversalSpecialBehaviors
         data.Add(0x252F6425); data.Add(0x00000064); // "%d/%d"
 
         var a = new Asm();
-        const int S2 = 18, S3 = 19, S4 = 20, T5 = 13, T6 = 14, T7 = 15;
+        const int S2 = 18, S3 = 19, S4 = 20, T7 = 15;
         void Tint()
         {   // sp+0x34.. = unpacked tint of the entry in s4
             a.R(0, S4, T0, 24, 0x02); a.R(0, T0, T0, 2, 0x00); a.La(T1, tintTable); a.R(T1, T0, T1, 0, 0x21); a.I(35, T1, T1, 0); a.Nop();
@@ -114,16 +113,10 @@ public static class UniversalSpecialBehaviors
             a.R(0, T1, T2, 16, 0x02); a.I(12, T2, T2, 0xFF); a.I(43, Sp, T2, 0x3C);
         }
         void Rect() => a.I(41, Sp, S3, 0x20);                                      // y/w/h are set once
-        void Dot(int dx, int dy, int size, uint rgb)
-        {
-            a.I(9, S3, A0, dx); a.I(9, Zero, A1, EggRowY + dy); a.I(9, Zero, A2, size);
-            a.I(15, 0, A3, (int)(rgb >> 16)); a.Part.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: "dot")); a.I(13, A3, A3, (int)(rgb & 0xFFFF));
-        }
         void FoundEgg()
-        {   // still egg picture in the egg's colour, then two eyes on top (the draw list is in order)
+        {   // Still native egg silhouette in the chosen colour; no added eyes.
             Rect(); Tint();
             a.La(A1, EggSprites); a.I(9, Sp, A0, 0x20); a.Jal(DrawSprite); a.I(9, Sp, A2, 0x34);
-            Dot(5, 3, 3, 0xF0F0F0); Dot(11, 3, 3, 0xF0F0F0); Dot(6, 4, 2, 0x101010); Dot(12, 4, 2, 0x101010);
         }
         a.I(9, Sp, Sp, -0x80); a.I(43, Sp, Ra, 0x7C);
         a.I(43, Sp, S0, 0x10); a.I(43, Sp, S1, 0x14); a.I(43, Sp, S2, 0x18); a.I(43, Sp, S3, 0x1C); a.I(43, Sp, S4, 0x5C);
@@ -177,22 +170,6 @@ public static class UniversalSpecialBehaviors
         a.I(35, Sp, S0, 0x10); a.I(35, Sp, S1, 0x14); a.I(35, Sp, S2, 0x18); a.I(35, Sp, S3, 0x1C); a.I(35, Sp, S4, 0x5C);
         a.I(35, Sp, Ra, 0x7C); a.Nop();
         a.Part.Emit(UniversalMips.EncodeJ(2, DrawLine)); a.I(9, Sp, Sp, 0x80);
-        // dot(a0 x, a1 y, a2 size, a3 rgb): one flat opaque square appended to this frame's draw list.
-        a.L("dot");
-        a.I(9, Sp, Sp, -0x18); a.I(43, Sp, Ra, 0x10);
-        a.I(15, 0, T0, (int)(PrimCursor >> 16)); a.I(35, T0, T1, (int)(PrimCursor & 0xFFFF)); a.Nop();
-        a.I(15, 0, T2, 0x0500); a.I(43, T1, T2, 0);
-        a.I(15, 0, T2, 0x2800); a.R(T2, A3, T2, 0, 0x25); a.I(43, T1, T2, 4);
-        // corners (x, y positive and small): v0 = y<<16 | x, v1 = v0 + s, v2 = v0 + (s<<16), v3 = v2 + s
-        a.R(0, A1, T3, 16, 0x00); a.R(T3, A0, T3, 0, 0x21); a.I(43, T1, T3, 8);
-        a.R(T3, A2, T4, 0, 0x21); a.I(43, T1, T4, 12);
-        a.R(0, A2, T5, 16, 0x00); a.R(T3, T5, T3, 0, 0x21); a.I(43, T1, T3, 16);
-        a.R(T3, A2, T4, 0, 0x21); a.I(43, T1, T4, 20);
-        a.I(9, T1, T2, 0x18); a.I(43, T0, T2, (int)(PrimCursor & 0xFFFF));
-        a.Jal(AddPrim); a.R(T1, 0, A0, 0, 0x21);
-        a.I(35, Sp, Ra, 0x10); a.Nop();
-        a.Part.Emit(UniversalMips.JrRa); a.I(9, Sp, Sp, 0x18);
-
         var (code, _) = UniversalBehaviorBundleBuilder.Assemble([a.Part], EggInventoryHost);
         var words = new uint[code.Length / 4];
         for (int k = 0; k < words.Length; k++) words[k] = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(code.AsSpan(4 * k));
@@ -245,6 +222,7 @@ public static class UniversalSpecialBehaviors
             Write(EggInventoryHost, code);
             Write(EggInventoryData, data);
             Site(EggInventoryCallSite, EggInventoryCallPreimage, EggInventoryHost);
+            UniversalEggProgress.Patch(exe, original, eggs.Count, code.Length * 4);
         }
     }
 
@@ -352,13 +330,16 @@ public static class UniversalSpecialBehaviors
         return new string(chars.ToArray()).TrimEnd();
     }
 
+    public static byte[] DragonflyEggUpdateCode(IReadOnlyCollection<int> eggClasses, uint baseAddress) =>
+        UniversalBehaviorBundleBuilder.Assemble([DragonflyEggUpdate(eggClasses, "egg_update")], baseAddress).Code;
+
     /// <summary>Per-frame dragonfly egg update: spin, pick up near Spyro, persist and count.</summary>
     internal static UniversalAsmPart DragonflyEggUpdate(IReadOnlyCollection<int> eggClasses, string tag)
     {
         int min = eggClasses.Min(), span = eggClasses.Max() - min + 1;
-        if (span > 32) throw new InvalidOperationException("Dragonfly egg classes must span at most 32 IDs.");
-        uint mask = 0;
-        foreach (int c in eggClasses) mask |= 1u << (c - min);
+        if (span > 64) throw new InvalidOperationException("Dragonfly egg classes must span at most 64 IDs.");
+        ulong mask = 0;
+        foreach (int c in eggClasses) mask |= 1UL << (c - min);
         var a = new Asm();
         a.L(tag);
         a.I(9, Sp, Sp, -0x20); a.I(43, Sp, Ra, 0x18); a.I(43, Sp, S0, 0x10); a.I(43, Sp, S1, 0x14);
@@ -370,22 +351,41 @@ public static class UniversalSpecialBehaviors
         a.I(9, V0, V0, -min);
         a.I(11, V0, V1, span);                                 // sltiu v1, v0, span
         a.Br(4, V1, Zero, tag + "_loop"); a.Nop();
-        a.I(15, 0, V1, (int)(mask >> 16)); a.I(13, V1, V1, (int)(mask & 0xFFFF));
+        if (span > 32)
+        {
+            a.I(11, V0, V1, 32); a.Br(5, V1, Zero, tag + "_mask_low"); a.Nop();
+            a.I(15, 0, V1, (int)(mask >> 48)); a.I(13, V1, V1, (int)((mask >> 32) & 0xFFFF));
+            a.J(tag + "_mask_test"); a.I(9, V0, V0, -32);
+            a.L(tag + "_mask_low");
+        }
+        a.I(15, 0, V1, (int)((mask >> 16) & 0xFFFF)); a.I(13, V1, V1, (int)(mask & 0xFFFF));
+        a.L(tag + "_mask_test");
         a.R(V0, V1, V1, 0, 0x06);                              // srlv v1, v1, v0
         a.I(12, V1, V1, 1);
         a.Br(4, V1, Zero, tag + "_loop"); a.Nop();
         a.I(36, S1, V0, 0x48); a.Nop();                        // lbu state
         a.I(11, V0, V0, 0x80);
         a.Br(4, V0, Zero, tag + "_loop"); a.Nop();
+        // The Japanese template's native reload kind is 0x7F, so the USA loader does not
+        // retire it using its durable bit. Suppress it explicitly before any spin/pickup.
+        // Source MarkCollected uses [g75828,g75890), stride 0x58, and level index g75964.
+        a.I(15, Zero, T0, 0x8007); a.I(35, T0, T1, 0x5828); a.I(35, T0, T2, 0x5890);
+        a.R(S1, T1, T3, 0, 0x2B); a.Br(5, T3, Zero, tag + "_loop"); a.Nop();
+        a.R(S1, T2, T3, 0, 0x2B); a.Br(4, T3, Zero, tag + "_loop"); a.Nop();
+        a.R(S1, T1, T3, 0, 0x23); a.I(9, Zero, T4, 0x58); a.R(T3, T4, 0, 0, 0x1B);
+        a.R(0, 0, T3, 0, 0x12); a.R(0, 0, T4, 0, 0x10);
+        a.Br(5, T4, Zero, tag + "_loop"); a.Nop();
+        a.I(11, T3, T4, 256); a.Br(4, T4, Zero, tag + "_loop"); a.Nop();
+        a.I(35, T0, T1, 0x5964); a.Nop(); a.I(11, T1, T2, 36);
+        a.Br(4, T2, Zero, tag + "_loop"); a.R(0, T1, T1, 5, 0);
+        a.R(0, T3, T2, 5, 2); a.R(0, T2, T2, 2, 0); a.R(T1, T2, T1, 0, 0x21);
+        a.La(T0, CollectedMasks); a.R(T0, T1, T0, 0, 0x21); a.I(35, T0, T1, 0);
+        a.I(12, T3, T3, 31); a.R(T3, T1, T1, 0, 6); a.I(12, T1, T1, 1);
+        a.Br(4, T1, Zero, tag + "_uncollected"); a.Nop();
+        a.Jal(FreeMoby); a.R(S1, 0, A0, 0, 0x21);
+        a.J(tag + "_loop"); a.Nop();
+        a.L(tag + "_uncollected");
         a.I(36, S1, V0, 0x46); a.Nop(); a.I(9, V0, V0, 3); a.I(40, S1, V0, 0x46);   // spin
-        // Blink: the egg model has frames 0,1 (eyes open) and 2,3 (same poses, eyes closed). The engine
-        // advances +0x3E/+0x3F (current/next frame); keep the pose bit and pick open or closed. Each egg
-        // closes its eyes for 6 of every 128 frames, offset by its own address so eggs blink independently.
-        a.La(T0, FrameCounter); a.I(35, T0, T0, 0); a.R(0, S1, T1, 3, 0x02); a.R(T0, T1, T0, 0, 0x21);
-        a.I(12, T0, T0, 0x7F); a.I(11, T0, T0, 6); a.R(0, T0, T0, 1, 0x00);        // t0 = blinking ? 2 : 0
-        a.I(36, S1, T1, 0x3E); a.I(36, S1, T2, 0x3F); a.I(12, T1, T1, 1);
-        a.I(12, T2, T2, 1); a.R(T1, T0, T1, 0, 0x25); a.R(T2, T0, T2, 0, 0x25);
-        a.I(40, S1, T1, 0x3E); a.I(40, S1, T2, 0x3F);
         a.La(T0, SpyroPosition);
         a.I(35, T0, T1, 0); a.I(35, T0, T2, 4); a.I(35, T0, T3, 8);
         a.I(35, S1, T4, 0xC); a.I(35, S1, T5, 0x10); a.I(35, S1, T6, 0x14); a.Nop();

@@ -14,3 +14,6 @@
 *.bmp binary
 *.ico binary
 *.icns binary
+
+# Source oracle pins this complete helper using its authored LF representation.
+src/Spyro.Editor.NativeId65NormalBodySmoke/NativeBodySourceWindows.cs text eol=lf
