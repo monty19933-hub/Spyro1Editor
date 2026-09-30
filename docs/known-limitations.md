@@ -167,6 +167,37 @@ their exact native load-initialized appearance. Adding controller-aware animated
 or frozen-target editing requires separate runtime proof and is not silently
 approximated.
 
+## Universal Moby Placement
+
+Every placed Spyro 1 object class (205) can be chosen in every level. A choice
+is refused, with the reason, only when the destination cannot hold it:
+
+- **Game RAM.** Level data, models and behavior must end below the game's
+  normal buffer. Tight levels (for example Twilight Harbor, under 1 KB free)
+  accept few or no large imports. The browser shows exact headroom.
+- **Texture memory.** Imported textures need free VRAM; levels with little free
+  space (Artisans, Lofty Castle, Gnorc Cove, Metalhead, Town Square, Jacques)
+  refuse some textured objects. Non-4-bit texture groups are not relocated.
+- **Object limits.** At most 256 placed rows, 63 model slots, and at least 16
+  free dynamic slots must remain.
+- Spyro's own animation stream (class 0x000) is not a placeable object.
+- An offline survey of all 7,175 class × level pairs: 4,627 fit alone,
+  1,990 exceed RAM, 558 exceed free texture memory.
+
+Dragonfly eggs are their own collectible: collecting one does not change the
+stolen dragon egg count, the 12-slot egg row or completion %. The inventory
+shows them at the right end of the egg row (up to 6 as separate still eggs in
+their own colour, more as one egg and a count). The game can track at most 116
+dragonfly eggs in one project.
+
+Freeing memory by removing objects applies only when every copy of a type is
+removed, and only for types that nothing else can create (the level's code, the
+game's code, imported objects, or another object's data); texture memory of the
+dropped model is not reclaimed yet.
+Signs: one message is shown at a time (the nearest sign in the object list
+order); text uses the USA HUD letters, so lowercase appears in capitals and
+other punctuation is dropped. Both need the unchanged Japanese disc.
+
 ## Object Editing
 
 ### Native Movement Controls

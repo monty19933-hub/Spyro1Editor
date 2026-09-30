@@ -21,6 +21,7 @@ using Spyro.Editor.Core.Cache;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Diagnostics;
 using Spyro.Editor.Core.Exporting;
+using Spyro.Editor.Core.Universal;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Music;
 using Spyro.Editor.Core.Persistence;
@@ -11539,6 +11540,8 @@ public sealed partial class MainWindow : Window
                 .Append('|')
                 .Append(moby.CrossLevelTemplateId)
                 .Append('|')
+                .Append(moby.SignText)
+                .Append('|')
                 .Append(moby.CrossLevelSourceLevelKey)
                 .Append('|')
                 .Append(moby.CrossLevelSourceTrueIndex)
@@ -14022,6 +14025,67 @@ public sealed partial class MainWindow : Window
                         patchedLevelNames.Add(levelName);
                 }
             }
+        }
+
+        // Universal cross-level Moby imports run last: they may grow level data and overlay WAD
+        // entries and move the executable, and they read donors from the unchanged source disc.
+        Dictionary<string, IReadOnlyList<UniversalMobyPlacement>> universalPlacements = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, IReadOnlyCollection<int>> universalRemoved = new(StringComparer.OrdinalIgnoreCase);
+        foreach (EditedLevelExportTarget target in targets)
+        {
+            string editsFile = Path.Combine(_workspace.RootPath, $"{target.Level.Key}-native-edits.json");
+            var placed = UniversalPlacementReader.Read(editsFile);
+            if (placed.Count > 0)
+            {
+                universalPlacements[target.Level.Key] = placed;
+                universalRemoved[target.Level.Key] = UniversalPlacementReader.ReadRemovedNativeRows(editsFile);
+            }
+        }
+        if (universalPlacements.Count > 0)
+        {
+            ReportCreateBinProgress("Importing objects...", "Create BIN: importing models, textures, sounds and behavior for objects from other levels...");
+            string universalImage = Path.Combine(tempDir, $"{++step:00}-universal-mobys.bin");
+            string donorImage = sourceImage;
+            bool needsJapanese = universalPlacements.Values.Any(list => list.Any(p => p.SpecialId != null));
+            string japaneseImage = needsJapanese ? UniversalJapaneseDiscLocator.Find(_workspace) : "";
+            UniversalExportResult universal = await Task.Run(() =>
+            {
+                UniversalSourceLibrary.RequireOriginal(donorImage);
+                var library = new UniversalSourceLibrary(donorImage, _retailCatalog);
+                UniversalJapaneseSource? japanese = null;
+                if (needsJapanese)
+                {
+                    if (!UniversalJapaneseDiscLocator.IsOriginal(japaneseImage))
+                        throw new InvalidDataException("Dragonfly eggs and signs are copied from the unchanged original Spyro the Dragon (Japan) disc. Choose it with \"Japanese disc…\" in the Add Moby browser.");
+                    japanese = new UniversalJapaneseSource(japaneseImage);
+                }
+                return UniversalMobyExport.Apply(library, currentImage, universalImage, _retailCatalog, universalPlacements, japanese: japanese,
+                    removedRowsByLevel: universalRemoved);
+            });
+            await File.WriteAllTextAsync(Path.ChangeExtension(universalImage, ".cue"),
+                BuildCueText(currentCue, currentImage, Path.GetFileName(universalImage)), DiscCueSheet.TextEncoding);
+            foreach (var level in universal.Levels)
+            {
+                objectPatches += level.Compose.NewRowIndices.Count;
+                if (!patchedLevelNames.Contains(level.LevelName, StringComparer.OrdinalIgnoreCase))
+                    patchedLevelNames.Add(level.LevelName);
+                skippedEditDetails.AddRange(level.Compose.Warnings.Select(w => $"{level.LevelName}: {w}"));
+                stepSummaries.Add(new
+                {
+                    level = level.LevelName,
+                    kind = "universal-moby-import",
+                    placements = level.Compose.NewRowIndices.Count,
+                    classes = level.Compose.Classes.Select(c => new { classId = $"0x{c.ClassId:X3}", c.SourceLevelKey, c.ModelImported, c.BehaviorImported, c.DependencyOnly }),
+                    ramHeadroomBefore = level.Compose.Ram.OriginalHeadroom,
+                    ramHeadroomAfter = level.Compose.Ram.FinalHeadroom,
+                    droppedModels = level.Compose.DroppedModelClasses.Select(c => $"0x{c:X3}"),
+                    droppedModelBytes = level.Compose.DroppedModelBytes,
+                    level.Compose.ArenaSlotsRemaining,
+                    level.Compose.VramBytesUsed
+                });
+            }
+            currentImage = universalImage;
+            currentCue = Path.ChangeExtension(universalImage, ".cue");
         }
 
         if (objectPatches + terrainPatches + environmentGradePatches + skyboxPatches + levelNamePatches + musicLevelPatches == 0 && flightStage == null || !File.Exists(currentImage))
@@ -17528,6 +17592,7 @@ public sealed partial class MainWindow : Window
         StyleRestoreLevelButton(_objectRestoreLevelButton);
 
         objectActions.Children.Add(_objectAddButton);
+        objectActions.Children.Add(BuildUniversalMobyLibraryButton("ClassicUniversalMobyLibraryButton"));
         objectActions.Children.Add(_objectRemoveButton);
         objectActions.Children.Add(_objectEditButton);
         objectActions.Children.Add(_objectSwapCatalogButton);
@@ -23997,6 +24062,7 @@ public sealed partial class MainWindow : Window
             SourceCloneLevelKey = patchStatus == "native-clone" ? clipboard.SourceCloneLevelKey : "",
             SourceCloneLevelName = patchStatus == "native-clone" ? clipboard.SourceCloneLevelName : "",
             SourceCloneTrueIndex = patchStatus == "native-clone" ? clipboard.SourceCloneTrueIndex : -1,
+            SignText = pasteGemAsLooseGem ? "" : clipboard.SignText,
             IsAdded = true
         };
     }
@@ -24116,6 +24182,7 @@ public sealed partial class MainWindow : Window
             SourceCloneLevelKey = template.FromLevelTemplate ? _currentLevel?.Key ?? "" : "",
             SourceCloneLevelName = template.FromLevelTemplate ? _currentLevel?.DisplayName ?? "" : "",
             SourceCloneTrueIndex = template.FromLevelTemplate ? template.SourceTrueIndex : -1,
+            SignText = template.SignText,
             IsAdded = true
         };
     }
@@ -25648,7 +25715,9 @@ public sealed partial class MainWindow : Window
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = true
         };
-        dialog.Content = BuildModernMobyEditDialogContent(dialog, moby, nameBox, typeBox, stateBox, xBox, yBox, zBox, yawBox, gemBox, editsRewardGem, rewardRows, chestRows, transformBox, transformNote);
+        TextBox? signTextBox = IsUniversalSign(moby) ? BuildUniversalSignTextBox(moby) : null;
+        ComboBox? eggColourBox = IsUniversalEgg(moby) ? BuildUniversalEggColourBox(moby) : null;
+        dialog.Content = BuildModernMobyEditDialogContent(dialog, moby, nameBox, typeBox, stateBox, xBox, yBox, zBox, yawBox, gemBox, editsRewardGem, rewardRows, chestRows, transformBox, transformNote, signTextBox, eggColourBox);
 
         bool accepted = MobyEditDialogOverrideForTesting != null
             ? await MobyEditDialogOverrideForTesting(moby, nameBox)
@@ -25721,6 +25790,10 @@ public sealed partial class MainWindow : Window
             }
         }
         moby.Label = string.IsNullOrWhiteSpace(nameBox.Text) ? Moby.FallbackLabel(moby.Type) : nameBox.Text.Trim();
+        if (signTextBox != null)
+            SetUniversalSignText(moby, signTextBox.Text);
+        if (eggColourBox?.SelectedItem is UniversalEggColourChoice colour)
+            SetUniversalEggColour(moby, colour.Id);
         int removedChestContents = 0;
         if (keepsChestGemRows)
         {
@@ -32188,7 +32261,8 @@ public sealed partial class MainWindow : Window
         bool CopiedGemLike,
         bool CopiedVisibleGem,
         GemValue CopiedGem,
-        float? TerrainGroundOffset)
+        float? TerrainGroundOffset,
+        string SignText = "")
     {
         public static MobyClipboard From(Moby moby, LevelDefinition? currentLevel, float? terrainGroundOffset)
         {
@@ -32238,7 +32312,8 @@ public sealed partial class MainWindow : Window
                 moby.IsGemLike,
                 moby.IsVisibleGem,
                 moby.Gem,
-                terrainGroundOffset);
+                terrainGroundOffset,
+                moby.SignText);
         }
     }
 
@@ -32291,7 +32366,8 @@ public sealed partial class MainWindow : Window
         string CompanionTemplateId = "",
         int YawByte = 0,
         float? TerrainGroundOffset = null,
-        int SafeExportSlots = -1)
+        int SafeExportSlots = -1,
+        string SignText = "")
     {
         public static IReadOnlyList<AddMobyTemplate> Known { get; } =
         [

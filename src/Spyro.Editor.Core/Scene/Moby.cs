@@ -55,6 +55,8 @@ public sealed class Moby
     [JsonIgnore]
     public string OriginalPatchLead { get; set; } = "";
     public string CrossLevelTemplateId { get; set; } = "";
+    /// <summary>Message lines ('\n' separated) shown by a universal sign.</summary>
+    public string SignText { get; set; } = "";
     public string CrossLevelFamily { get; set; } = "";
     public string CrossLevelSourceLevelKey { get; set; } = "";
     public string CrossLevelSourceLevelName { get; set; } = "";

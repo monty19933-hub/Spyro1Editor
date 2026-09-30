@@ -219,6 +219,10 @@ public static class MobySourcePatchExporter
 
         foreach (JsonElement edit in editsElement.EnumerateArray())
         {
+            // Universal cross-level Moby imports are composed by the dedicated
+            // UniversalMobyExport stage after this per-level source patch.
+            if (Spyro.Editor.Core.Universal.UniversalPlacementReader.IsUniversalEdit(edit))
+                continue;
             bool isDragonRunToEdit = IsDragonRunToEdit(edit);
             int trueIndex = isDragonRunToEdit
                 ? GetDragonRunToOwnerTrueIndex(edit)

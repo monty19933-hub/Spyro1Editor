@@ -7,6 +7,9 @@ this is not permission to replace the game with its Japanese version.
 
 ## Execution order and acceptance
 
+Newest packaged checkpoint: R12/beta49 with universal Moby placement, dragonfly
+eggs and signs — see [v6-universal-moby-placement.md](v6-universal-moby-placement.md).
+
 Latest packaged checkpoint: [R11/beta48](v6-beta48-packaged-checkpoint.md), built
 from clean79f6ec5, passes Mac/Windows package verification. The actual Mac app
 now survives the formerly crashing AX SetValue("Toasty") without changing

@@ -567,6 +567,16 @@ dotnet run \
     --id65-blank-lab-ui-only
 
 echo
+echo "Running universal Moby library UI smoke (every level's objects, eggs/signs when SPYRO_UNIVERSAL_JAPAN_IMAGE is set)..."
+dotnet run \
+    --project "$UI_SMOKE_PROJECT" \
+    --configuration "$CONFIGURATION" \
+    --no-build \
+    -- \
+    "$ROOT_DIR" \
+    --universal-moby-ui-only
+
+echo
 echo "Running shared retail native Moby library UI smoke..."
 dotnet run \
     --project "$UI_SMOKE_PROJECT" \

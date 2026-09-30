@@ -2,8 +2,30 @@
 
 ## Changes since Spyro Editor Beta V5
 
-Private development preview, internal build `0.1.0-beta.48`. This is not a
-published release or a claim of universal Moby, texture or new-level support.
+Private development preview, internal build `0.1.0-beta.52`. This is not a
+published release or a claim of texture or new-level support.
+
+- Added **Add object…** (plus **Add dragonfly egg** / **Add sign** shortcuts) in
+  the Objects tab: a game-wide object browser (search,
+  categories, source-level filter, per-level fit check) that places any of the
+  205 placed Spyro 1 object classes into any level. Create BIN copies the
+  object's model, textures, sounds, animations, native behavior code and any
+  helper objects it spawns from the unchanged original USA disc, chains that
+  behavior onto the destination level, and refuses (with the reason) only when
+  the level's game RAM, texture memory, object slots or row limit would be
+  exceeded. Placements save/reopen, duplicate, move, rotate, delete and undo
+  like other added objects.
+- Added recovered **Dragonfly Eggs** (seven colours) and **Signs** from the
+  Japanese release. Select your unchanged Japanese disc once with
+  **Choose Japanese disc…**. Eggs sparkle and are removed for good when collected
+  (saved); they are counted separately from the 12 stolen dragon eggs, in their
+  own row in the Inventory (still eggs in their own colour with little eyes).
+  Placed eggs have cartoon eyes between their wings and blink now and then.
+  Signs show up to three lines of your own text in the
+  game's letters while Spyro stands near them (edit in the object's Edit dialog).
+- Removing every copy of one of a level's own object types now frees that
+  object's model memory at Create BIN (the rows stay as invisible placeholders,
+  so saves are unaffected), letting larger objects from other levels fit.
 
 - Fixed an accessibility value-write crash in the main level picker. Its value
   remains read-only; ordinary selection and the existing export gates are unchanged.

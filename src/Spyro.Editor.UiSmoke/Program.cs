@@ -302,6 +302,11 @@ try
         RunObjectGalleryOnly();
         return 0;
     }
+    if (args.Contains("--universal-moby-ui-only", StringComparer.OrdinalIgnoreCase))
+    {
+        UniversalMobyUiCases.Run(outputDirectory);
+        return 0;
+    }
     if (args.Contains("--native-moby-library-only", StringComparer.OrdinalIgnoreCase))
     {
         NativeMobyLibraryUiCases.Run(outputDirectory);
@@ -10679,7 +10684,7 @@ void RenderWorkspaceTab(double width, double height, int selectedIndex, string f
 
 void RenderObjectDialogs(MainWindow owner)
 {
-    Button add = FindButton(owner, "Add");
+    Button add = FindButton(owner, "More…");
     Window addDialog = OpenDialog(owner, add, "add object window");
     AssertText(addDialog, "Add object");
     Expander addTechnical = addDialog.GetLogicalDescendants()

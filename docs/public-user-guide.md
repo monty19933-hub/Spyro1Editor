@@ -1,6 +1,6 @@
 # Spyro Editor Beta V6 User Guide
 
-Private development preview, internal build `0.1.0-beta.48`. V6 is not finished
+Private development preview, internal build `0.1.0-beta.52`. V6 is not finished
 or publicly released. The Mac preview is ad-hoc signed and is not Apple-signed
 or notarized; read the included opening instructions before launching it.
 
@@ -171,6 +171,43 @@ the editor never silently omits ID65 research edits from a retail build.
 - Use **Undo** if a placement is not right.
 
 Only objects that the editor can safely export are shown in the normal gallery and replacement lists.
+
+### Add objects from any level
+
+In the **Objects** tab on the right, under **Add or edit objects**:
+
+- **Add object…** opens a window with every object in the game (enemies,
+  NPCs, gems, dragons, chests, props and more), from every level.
+- **Add dragonfly egg** and **Add sign** open that window straight on the egg
+  or the sign.
+
+In the window, pick a category on the left or type in the search box, choose an
+object, then press **Place it (click in the level)** and click where it should
+go. Each object says **Can be added**, **Already in this level**, or why it
+won't fit (the level has run out of memory or texture space). **Only what fits
+here** hides the ones that won't fit.
+
+Placed objects can be moved, rotated, copied, removed, undone and saved like any
+other object. When you **Create BIN**, everything they need is copied in from
+your original disc automatically; your disc is never changed.
+
+**Dragonfly eggs and signs** come from the Japanese version of Spyro. The first
+time, press **Choose Japanese disc…** at the top of the window and pick your
+*Spyro the Dragon (Japan)* disc image. Choose the egg's colour before placing it
+(or later with **Edit** → **Egg colour**). To write a sign's message, select the
+sign and press **Edit** → **Sign message**: up to three lines of 24 letters
+(A–Z, 0–9, space and ! ? . ,). In the game the message appears when Spyro walks
+up to the sign. Collected dragonfly eggs appear at the right end of the egg row
+in the pause menu's Inventory, as still eggs in their own colour with little
+eyes (separate from the 12 dragon eggs).
+
+**Need more room?** If an object says it won't fit because the level is out of
+memory, remove every copy of one of the level's own objects you don't need
+(for example all of one enemy type). At Create BIN the editor then leaves that
+object's model out, freeing its memory; the add window counts this right away.
+
+**More…** opens the previous Add window (gems with a chosen value, copies of
+objects already in the level).
 
 ## Paint terrain textures
 

@@ -1,6 +1,6 @@
 # Spyro Editor Beta V6 Guide
 
-Internal diagnostic build: `0.1.0-beta.48`.
+Internal diagnostic build: `0.1.0-beta.52`.
 
 V6 is a private development preview. The normal application includes Fresh
 Level authoring and bounded saved-level test export. Follow the
@@ -191,6 +191,13 @@ short clips, logs, and editor-generated JSON reports are okay when they do not
 contain copied disc data.
 
 ## What Is Enabled
+
+- **Add object…**, **Add dragonfly egg**, **Add sign** (Objects tab, beta49): places any of the 205 placed object
+  classes in any level, importing model, textures, sounds, behavior and spawned
+  helper objects from the unchanged original USA disc at Create BIN. Dragonfly
+  eggs (seven colours) and editable signs need the unchanged Japanese disc,
+  selected with **Choose Japanese disc…**. See Known Limitations → Universal Moby
+  placement for the per-level limits.
 
 - Level browsing from the bundled Spyro level catalog.
 - **Edit Map** and **Game Camera** viewing. Every captured editable source-terrain

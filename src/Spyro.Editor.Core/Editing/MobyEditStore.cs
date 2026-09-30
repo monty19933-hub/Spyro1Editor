@@ -185,6 +185,7 @@ public static class MobyEditStore
                 ["zoneLabel"] = moby.ZoneLabel,
                 ["editorControlKind"] = moby.IsEditorControl ? moby.EditorControlKind : null,
                 ["crossLevelTemplate"] = NewCrossLevelTemplate(moby),
+                ["signText"] = NullIfEmpty(moby.SignText),
                 ["specialChestBundleId"] = NullIfEmpty(moby.SpecialChestBundleId),
                 ["profileId"] = NullIfEmpty(moby.SpecialChestProfileId),
                 ["specialChestVisibleRootTrueIndex"] = moby.SpecialChestVisibleRootTrueIndex >= 0
@@ -328,6 +329,7 @@ public static class MobyEditStore
             CrossLevelRecipeId = crossLevelTemplate is JsonElement crossLevelRecipe ? JsonValue.GetString(crossLevelRecipe, "recipeId", JsonValue.GetString(crossLevelRecipe, "preferredRecipeId")) : "",
             IsAdded = true
         };
+        added.SignText = JsonValue.GetString(edit, "signText");
         ApplySpecialChestBundle(edit, added);
         ApplyGemColor(added);
         if (ColorRgba.TryParseHex(JsonValue.GetString(edit, "displayColor"), out ColorRgba addedColor))

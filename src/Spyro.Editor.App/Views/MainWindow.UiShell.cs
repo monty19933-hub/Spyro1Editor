@@ -9,6 +9,8 @@ using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Workspace;
 
+using Spyro.Editor.Core.Universal;
+
 namespace Spyro.Editor.App.Views;
 
 public sealed partial class MainWindow
@@ -742,23 +744,25 @@ public sealed partial class MainWindow
     private Control BuildModernPrimaryObjectControls()
     {
         StackPanel panel = new() { Spacing = 9 };
-        panel.Children.Add(ModernSectionHeading("Edit object"));
+        panel.Children.Add(ModernSectionHeading("Add or edit objects"));
 
-        _objectAddButton = NewAsyncButton("Add", AddMobyNearSelectionAsync);
+        _objectAddButton = NewAsyncButton("More…", AddMobyNearSelectionAsync);
         _objectEditButton = NewAsyncButton("Edit", async () =>
         {
             if (_selectedMoby != null)
                 await EditMobyAsync(_selectedMoby);
         });
         _objectSwapCatalogButton = NewAsyncButton("Replace", ShowCrossLevelSwapCatalogAsync);
-        StyleModernPrimaryButton(_objectAddButton, ModernGreen);
+        StyleModernSecondaryButton(_objectAddButton);
+        ToolTip.SetTip(_objectAddButton, "The previous Add window: gems with a chosen value and copies of objects already in this level.");
         StyleModernPrimaryButton(_objectEditButton, ModernBlue);
         StyleModernPrimaryButton(_objectSwapCatalogButton, ModernTeal);
 
+        panel.Children.Add(BuildUniversalAddButtons());
         Grid primary = NewEqualButtonGrid(3);
-        AddModernGridButton(primary, _objectAddButton, 0);
-        AddModernGridButton(primary, _objectEditButton, 1);
-        AddModernGridButton(primary, _objectSwapCatalogButton, 2);
+        AddModernGridButton(primary, _objectEditButton, 0);
+        AddModernGridButton(primary, _objectSwapCatalogButton, 1);
+        AddModernGridButton(primary, _objectAddButton, 2);
         panel.Children.Add(primary);
 
         _objectNativeMovementButton = NewAsyncButton("Edit Native Movement", EditSelectedNativeMovementAsync);
@@ -1076,7 +1080,9 @@ public sealed partial class MainWindow
         IReadOnlyList<RewardTriggerEditorRow> rewardRows,
         IReadOnlyList<ChestContentEditorRow> chestRows,
         ComboBox? transformBox,
-        TextBlock? transformNote)
+        TextBlock? transformNote,
+        TextBox? signTextBox = null,
+        ComboBox? eggColourBox = null)
     {
         StackPanel body = new()
         {
@@ -1104,6 +1110,15 @@ public sealed partial class MainWindow
         Grid.SetColumn(rotation, 1);
         transform.Children.Add(rotation);
         body.Children.Add(transform);
+
+        if (eggColourBox != null)
+            body.Children.Add(BuildModernDialogField("Egg colour", eggColourBox));
+
+        if (signTextBox != null)
+        {
+            body.Children.Add(BuildModernDialogField("Sign message", signTextBox));
+            body.Children.Add(NewSmallNote($"Up to {UniversalSpecialBehaviors.SignLines} lines of {UniversalSpecialBehaviors.SignLineMaxChars} characters. The game's letters support A-Z, 0-9, space and ! ? . , (lowercase is shown in capitals)."));
+        }
 
         if (gemBox != null)
         {
@@ -1278,6 +1293,15 @@ public sealed partial class MainWindow
             if (chosen != null) kindBox.SelectedItem = chosen;
         };
         body.Children.Add(nativeLibraryButton);
+        Button universalButton = NewButton("Any object from any level…");
+        universalButton.Name = "AddUniversalMobyLibraryButton";
+        StyleModernPrimaryButton(universalButton, Color.FromRgb(124, 77, 181));
+        universalButton.Click += async (_, _) =>
+        {
+            dialog.Close(false);
+            await ShowUniversalMobyLibraryAsync(this);
+        };
+        body.Children.Add(universalButton);
 
         Control gemField = BuildModernDialogField("Gem value", gemBox);
         gemField.IsVisible = (kindBox.SelectedItem as AddMobyTemplate)?.UsesGem == true;

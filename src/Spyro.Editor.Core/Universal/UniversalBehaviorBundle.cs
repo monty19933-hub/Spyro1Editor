@@ -1,0 +1,257 @@
+using System.Buffers.Binary;
+
+namespace Spyro.Editor.Core.Universal;
+
+internal enum UniversalFixKind { None, Branch, BranchLabel, Jump, JumpLabel, JalLabel, AddrHi, AddrLo, TableHi, TableLo }
+
+internal readonly record struct UniversalFix(UniversalFixKind Kind, uint Orig = 0, string? Label = null);
+
+internal sealed class UniversalAsmPart
+{
+    public List<(uint? Word, UniversalFix Fix, uint? Orig, string? Label)> Items { get; } = [];
+    public Dictionary<string, IReadOnlyList<uint>> Tables { get; } = [];
+    public bool LenientTables { get; set; }
+    public void Emit(uint w, UniversalFix fix = default, uint? orig = null) => Items.Add((w, fix, orig, null));
+    public void Label(string name) => Items.Add((null, default, null, name));
+}
+
+/// <summary>Per-source-level behavior extracted for a destination.</summary>
+public sealed record UniversalBehaviorSourceReport(string SourceLevelKey, IReadOnlyList<int> Classes,
+    int UpdateBytes, int InitBytes, int JumpTables);
+
+public sealed record UniversalBehaviorBundle(uint Base, byte[] Code, uint UpdateWrapper, uint InitWrapper,
+    IReadOnlyList<UniversalBehaviorSourceReport> Sources);
+
+/// <summary>
+/// Builds the relocatable behavior bundle appended to a destination overlay: a pruned copy of each
+/// source level's update function (class switch replaced by a chain for the imported classes), a
+/// copy of each source init function, and wrappers that chain onto the destination's own callbacks.
+/// </summary>
+public static class UniversalBehaviorBundleBuilder
+{
+    // Engine routines called at the top of every update function: build the active list and advance
+    // animations. A chained source update must not run them a second time in the same frame.
+    private static readonly HashSet<uint> PerFrameOnceRoutines = [0x80051FEC, 0x800522C0];
+
+    public static UniversalBehaviorBundle Build(UniversalOverlay destination,
+        IReadOnlyList<(string SourceKey, UniversalOverlay Source, IReadOnlyList<int> Classes)> sources, uint baseAddress,
+        IReadOnlyList<int>? dragonflyEggClasses = null, IReadOnlyList<int>? signClasses = null)
+    {
+        if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
+        List<UniversalAsmPart> parts = [UniversalSpecialBehaviors.SignHookPreamble(signClasses is { Count: > 0 })];
+        UniversalAsmPart w = new();
+        w.Label("wrap_upd");
+        w.Emit(UniversalMips.EncodeI(9, 29, 29, -0x18));
+        w.Emit(UniversalMips.EncodeI(43, 29, 31, 0x10));
+        w.Emit(UniversalMips.EncodeJ(3, destination.Update));
+        w.Emit(UniversalMips.Nop);
+        foreach (var s in sources)
+        {
+            w.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: "u_" + s.SourceKey));
+            w.Emit(UniversalMips.Nop);
+        }
+        if (dragonflyEggClasses is { Count: > 0 })
+        {
+            w.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: "egg_upd"));
+            w.Emit(UniversalMips.Nop);
+        }
+        w.Emit(UniversalMips.EncodeI(35, 29, 31, 0x10));
+        w.Emit(UniversalMips.Nop); // load delay before jr ra
+        w.Emit(UniversalMips.JrRa);
+        w.Emit(UniversalMips.EncodeI(9, 29, 29, 0x18));
+        w.Label("wrap_init");
+        foreach (var s in sources)
+            foreach (int c in s.Classes)
+            {
+                w.Emit(UniversalMips.EncodeI(9, 0, 1, c));
+                w.Emit(UniversalMips.EncodeI(4, 4, 1, 0), new(UniversalFixKind.BranchLabel, Label: "i_" + s.SourceKey));
+                w.Emit(UniversalMips.Nop);
+            }
+        w.Emit(UniversalMips.EncodeJ(2, destination.Init));
+        w.Emit(UniversalMips.Nop);
+        parts.Add(w);
+
+        List<UniversalBehaviorSourceReport> reports = [];
+        foreach (var s in sources)
+        {
+            var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey);
+            UniversalAsmPart init; int initBytes, jt2;
+            try { (init, initBytes, jt2) = BuildSpecializedInit(s.Source, s.Classes, "i_" + s.SourceKey); }
+            catch (InvalidDataException) { (init, initBytes, jt2) = BuildWholeFunction(s.Source, s.Source.Init, "i_" + s.SourceKey); }
+            parts.Add(upd); parts.Add(init);
+            reports.Add(new(s.SourceKey, s.Classes.ToArray(), updBytes, initBytes, jt1 + jt2));
+        }
+        if (dragonflyEggClasses is { Count: > 0 })
+            parts.Add(UniversalSpecialBehaviors.DragonflyEggUpdate(dragonflyEggClasses, "egg_upd"));
+        if (signClasses is { Count: > 0 })
+            parts.Add(UniversalSpecialBehaviors.SignDraw(signClasses, "sign_draw"));
+        var (code, labels) = Assemble(parts, baseAddress);
+        return new(baseAddress, code, labels["wrap_upd"], labels["wrap_init"], reports);
+    }
+
+    private static void EmitReplay(UniversalAsmPart a, UniversalOverlay o, IReadOnlyList<UniversalReplayed> seq)
+    {
+        foreach (var r in seq)
+        {
+            if (r.IsConstant)
+            {
+                if (o.Contains(r.ConstantValue) && r.ConstantValue >= o.CodeStart)
+                {
+                    a.Emit(UniversalMips.EncodeI(15, 0, r.ConstantRegister, 0), new(UniversalFixKind.AddrHi, r.ConstantValue));
+                    a.Emit(UniversalMips.EncodeI(9, r.ConstantRegister, r.ConstantRegister, 0), new(UniversalFixKind.AddrLo, r.ConstantValue));
+                }
+                else
+                {
+                    a.Emit(UniversalMips.EncodeI(15, 0, r.ConstantRegister, UniversalMips.Hi(r.ConstantValue)));
+                    a.Emit(UniversalMips.EncodeI(9, r.ConstantRegister, r.ConstantRegister, UniversalMips.Lo(r.ConstantValue)));
+                }
+                continue;
+            }
+            a.Emit(r.Word);
+            // A replayed load may now be adjacent to its consumer; preserve R3000 load-delay semantics.
+            if (UniversalMips.IsLoad(r.Word)) a.Emit(UniversalMips.Nop);
+        }
+    }
+
+    internal static (UniversalAsmPart Part, int Bytes, int Tables) BuildPrunedUpdate(UniversalOverlay o, IReadOnlyList<int> classes, string tag)
+    {
+        var sw = UniversalDispatchAnalysis.FindUpdateSwitch(o);
+        List<(int Class, UniversalTrace Trace)> entries = classes
+            .Select(c => (c, UniversalDispatchAnalysis.Trace(o, sw.TreeStart, c, sw.Seeds, sw.ClassRegister))).ToList();
+        var def = UniversalDispatchAnalysis.Trace(o, sw.TreeStart, UniversalDispatchAnalysis.SentinelClass, sw.Seeds, sw.ClassRegister);
+        List<uint> starts = [sw.Function, def.Stop, .. entries.Select(e => e.Trace.Stop)];
+        uint fEnd = o.FunctionEnd(sw.Function);
+        // Materialized code addresses (jump-table targets) must stay addressable in the copy.
+        foreach (var r in entries.SelectMany(e => e.Trace.Sequence).Concat(def.Sequence))
+            if (r.IsConstant && r.ConstantValue >= sw.Function && r.ConstantValue < fEnd && r.ConstantValue % 4 == 0) starts.Add(r.ConstantValue);
+        var (closure, tables) = UniversalDispatchAnalysis.Closure(o, sw.Function, starts, new HashSet<uint> { sw.TreeStart });
+        var part = Relayout(o, closure, tables, tag, sw.TreeStart, a =>
+        {
+            for (int i = 0; i < entries.Count; i++)
+            {
+                a.Emit(UniversalMips.EncodeI(9, 0, 1, entries[i].Class));
+                a.Emit(UniversalMips.EncodeI(5, sw.ClassRegister, 1, 0), new(UniversalFixKind.BranchLabel, Label: $"{tag}_n{i}"));
+                a.Emit(UniversalMips.Nop);
+                EmitReplay(a, o, entries[i].Trace.Sequence);
+                a.Emit(UniversalMips.EncodeJ(2, 0), new(UniversalFixKind.Jump, entries[i].Trace.Stop));
+                a.Emit(UniversalMips.Nop);
+                a.Label($"{tag}_n{i}");
+            }
+            EmitReplay(a, o, def.Sequence);
+            a.Emit(UniversalMips.EncodeJ(2, 0), new(UniversalFixKind.Jump, def.Stop));
+            a.Emit(UniversalMips.Nop);
+        }, nopJalsBefore: sw.TreeStart);
+        return (part, part.Items.Count(i => i.Word != null) * 4, tables.Count);
+    }
+
+    internal static (UniversalAsmPart Part, int Bytes, int Tables) BuildSpecializedInit(UniversalOverlay o, IReadOnlyList<int> classes, string tag)
+    {
+        var spec = UniversalSpecializer.Specialize(o, o.Init, 4, classes);
+        var part = Relayout(o, spec.Instructions, spec.Tables, tag, null, null, null, spec.Branches);
+        part.LenientTables = true;
+        return (part, part.Items.Count(i => i.Word != null) * 4, spec.Tables.Count);
+    }
+
+    internal static (UniversalAsmPart Part, int Bytes, int Tables) BuildWholeFunction(UniversalOverlay o, uint f, string tag)
+    {
+        var (closure, tables) = UniversalDispatchAnalysis.Closure(o, f, [f], new HashSet<uint>());
+        var part = Relayout(o, closure, tables, tag, null, null, null);
+        return (part, part.Items.Count(i => i.Word != null) * 4, tables.Count);
+    }
+
+    private static UniversalAsmPart Relayout(UniversalOverlay o, SortedSet<uint> closure, List<UniversalJumpTable> tables,
+        string tag, uint? chainAt, Action<UniversalAsmPart>? emitChain, uint? nopJalsBefore,
+        IReadOnlyDictionary<uint, (bool Taken, bool NotTaken)>? decided = null)
+    {
+        Dictionary<uint, UniversalFix> tableFix = [];
+        UniversalAsmPart a = new();
+        foreach (var t in tables)
+        {
+            string name = $"{tag}_jt_{t.JumpRegisterPc:X8}";
+            tableFix[t.LuiPc] = new(UniversalFixKind.TableHi, Label: name);
+            tableFix[t.LoadPc] = new(UniversalFixKind.TableLo, Label: name);
+            a.Tables[name] = t.Targets;
+        }
+        foreach (var (lui, use, target) in UniversalDispatchAnalysis.OverlayReferences(o, closure))
+            if (!tableFix.ContainsKey(lui))
+                throw new InvalidDataException($"{tag}: overlay-local data reference 0x{target:X8} at 0x{use:X8} is not relocatable yet.");
+        a.Label(tag);
+        IEnumerable<uint> keys = chainAt is uint c ? closure.Append(c).Order() : closure;
+        foreach (uint addr in keys)
+        {
+            if (chainAt == addr) { a.Label(tag + "_chain"); emitChain!(a); continue; }
+            uint w = o.Word(addr);
+            if (nopJalsBefore is uint limit && addr < limit && UniversalMips.IsJal(w) &&
+                PerFrameOnceRoutines.Contains(UniversalMips.BranchTarget(w, addr)))
+            { a.Emit(UniversalMips.Nop, orig: addr); continue; }
+            UniversalFix fix = default;
+            if (decided != null && UniversalMips.IsPcRelative(w) && !UniversalMips.IsUnconditionalBranch(w) &&
+                (UniversalMips.Op(w) != 1 || UniversalMips.Rt(w) is 0 or 1) && decided.TryGetValue(addr, out var outcome))
+            {
+                // Branch decided by the specialized class value: keep only the reachable side.
+                if (outcome.Taken && !outcome.NotTaken) { a.Emit(UniversalMips.EncodeI(4, 0, 0, 0), new(UniversalFixKind.Branch, UniversalMips.BranchTarget(w, addr)), addr); continue; }
+                if (!outcome.Taken && outcome.NotTaken) { a.Emit(UniversalMips.Nop, orig: addr); continue; }
+            }
+            if (tableFix.TryGetValue(addr, out var tf)) fix = tf;
+            else if (UniversalMips.IsPcRelative(w)) fix = new(UniversalFixKind.Branch, UniversalMips.BranchTarget(w, addr));
+            else if (UniversalMips.Op(w) == 2) fix = new(UniversalFixKind.Jump, UniversalMips.BranchTarget(w, addr));
+            else if (UniversalMips.IsJal(w) && o.Contains(UniversalMips.BranchTarget(w, addr)))
+                throw new InvalidDataException($"{tag}: call into an overlay helper at 0x{addr:X8} is not relocatable yet.");
+            a.Emit(w, fix, addr);
+        }
+        return a;
+    }
+
+    internal static (byte[] Code, Dictionary<string, uint> Labels) Assemble(IReadOnlyList<UniversalAsmPart> parts, uint baseAddress)
+    {
+        Dictionary<string, uint> labels = [];
+        Dictionary<UniversalAsmPart, Dictionary<uint, uint>> orig = [];
+        List<(UniversalAsmPart Part, uint Word, UniversalFix Fix, uint At)> seq = [];
+        uint pc = baseAddress;
+        foreach (var p in parts)
+        {
+            orig[p] = [];
+            foreach (var it in p.Items)
+            {
+                if (it.Word == null) { labels[it.Label!] = pc; continue; }
+                if (it.Orig is uint o) orig[p][o] = pc;
+                seq.Add((p, it.Word.Value, it.Fix, pc)); pc += 4;
+            }
+        }
+        Dictionary<string, uint> tableAddr = [];
+        List<(UniversalAsmPart Part, IReadOnlyList<uint> Targets)> tableData = [];
+        foreach (var p in parts)
+            foreach (var (name, targets) in p.Tables) { tableAddr[name] = pc; tableData.Add((p, targets)); pc += (uint)(4 * targets.Count); }
+
+        byte[] code = new byte[pc - baseAddress];
+        int offset = 0;
+        foreach (var (p, word, fix, at) in seq)
+        {
+            uint w = word;
+            uint Orig(uint o) => orig[p].TryGetValue(o, out uint n) ? n
+                : throw new InvalidDataException($"Relocated target 0x{o:X8} is outside the extracted behavior closure.");
+            switch (fix.Kind)
+            {
+                case UniversalFixKind.Branch: w = UniversalMips.WithBranchTarget(w, at, Orig(fix.Orig)); break;
+                case UniversalFixKind.BranchLabel: w = UniversalMips.WithBranchTarget(w, at, labels[fix.Label!]); break;
+                case UniversalFixKind.Jump: w = UniversalMips.WithJumpTarget(w, Orig(fix.Orig)); break;
+                case UniversalFixKind.JumpLabel: w = UniversalMips.WithJumpTarget(w, labels[fix.Label!]); break;
+                case UniversalFixKind.JalLabel: w = UniversalMips.EncodeJ(3, labels[fix.Label!]); break;
+                case UniversalFixKind.AddrHi: w = UniversalMips.WithImm(w, UniversalMips.Hi(Orig(fix.Orig))); break;
+                case UniversalFixKind.AddrLo: w = UniversalMips.WithImm(w, UniversalMips.Lo(Orig(fix.Orig))); break;
+                case UniversalFixKind.TableHi: w = UniversalMips.WithImm(w, UniversalMips.Hi(tableAddr[fix.Label!])); break;
+                case UniversalFixKind.TableLo: w = UniversalMips.WithImm(w, UniversalMips.Lo(tableAddr[fix.Label!])); break;
+            }
+            BinaryPrimitives.WriteUInt32LittleEndian(code.AsSpan(offset), w); offset += 4;
+        }
+        foreach (var (p, targets) in tableData)
+            foreach (uint t in targets)
+            {
+                uint n = orig[p].TryGetValue(t, out uint m) ? m
+                    : p.LenientTables ? orig[p].Values.Min() // unreachable for the specialized classes
+                    : throw new InvalidDataException($"Jump table target 0x{t:X8} is outside the extracted behavior closure.");
+                BinaryPrimitives.WriteUInt32LittleEndian(code.AsSpan(offset), n); offset += 4;
+            }
+        return (code, labels);
+    }
+}

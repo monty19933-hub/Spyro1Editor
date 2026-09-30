@@ -192,6 +192,7 @@ CORE_CASES = (
     ("GteProjectionSmoke", "PS1 GTE RTPS/RTPT smoke passed."),
     ("NativeTerrainBaseProjectionSmoke", "Native terrain base-projection smoke passed."),
     ("UpdateSmoke", "PASS: whole-number and incremental prerelease discovery"),
+    ("UniversalMobySmoke", "UNIVERSAL_MOBY_SOURCE_FREE_OK"),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
