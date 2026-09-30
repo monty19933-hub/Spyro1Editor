@@ -179,6 +179,25 @@ if (args[0] == "--spawn")
     }
     return 0;
 }
+if (args[0] == "--dependency-audit")
+{
+    var lib = new UniversalSourceLibrary(args[1], catalog);
+    var audit = UniversalMobyCatalogBuilder.AllVariants(lib, catalog).GroupBy(v => (v.SourceLevelKey, v.ClassId)).Select(g =>
+    {
+        var v = g.First(); var o = lib.Get(v.SourceLevelKey).Overlay; var sw = UniversalDispatchAnalysis.FindUpdateSwitch(o);
+        var trace = UniversalDispatchAnalysis.Trace(o, sw.TreeStart, v.ClassId, sw.Seeds, sw.ClassRegister);
+        var closure = UniversalDispatchAnalysis.Closure(o, sw.Function, [trace.Stop], new HashSet<uint> { sw.TreeStart }).Instructions;
+        var update = UniversalDispatchAnalysis.Dependencies(o, closure);
+        var init = UniversalDispatchAnalysis.Dependencies(o, UniversalSpecializer.Specialize(o, o.Init, 4, [v.ClassId]).Instructions);
+        return new { v.SourceLevelKey, v.ClassId, UpdateClasses = update.SpawnedClasses, InitClasses = init.SpawnedClasses,
+            InitOnlyClasses = init.SpawnedClasses.Except(update.SpawnedClasses).ToArray(),
+            UpdateParticles = update.ParticleTypes, InitParticles = init.ParticleTypes,
+            InitOnlyParticles = init.ParticleTypes.Except(update.ParticleTypes).ToArray() };
+    }).ToList();
+    File.WriteAllText(args[3], JsonSerializer.Serialize(audit, new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine($"source/class={audit.Count} initOnlyClass={audit.Count(a => a.InitOnlyClasses.Length > 0)} initOnlyParticles={audit.Count(a => a.InitOnlyParticles.Length > 0)}");
+    return 0;
+}
 if (args[0] == "--texture-depths")
 {
     var lib = new UniversalSourceLibrary(args[1], catalog);
