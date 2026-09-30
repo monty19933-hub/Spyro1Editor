@@ -179,6 +179,14 @@ if (args[0] == "--spawn")
     }
     return 0;
 }
+if (args[0] == "--catalog-defaults")
+{
+    var lib = new UniversalSourceLibrary(args[1], catalog);
+    var defaults = UniversalMobyCatalogBuilder.DefaultVariants(lib, catalog);
+    File.WriteAllText(args[3], JsonSerializer.Serialize(defaults, new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine($"default types: {defaults.Count}");
+    return 0;
+}
 if (args[0] == "--dependency-audit")
 {
     var lib = new UniversalSourceLibrary(args[1], catalog);
