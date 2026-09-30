@@ -197,6 +197,8 @@ unsafe-tests/
 !/tools/Run-SpyroEditorOfflineQa.sh
 !/tools/Run-SpyroEditorRegression.py
 !/tools/SpyroEggScalarMips.py
+!/tools/Test-NativeFreeFlightLoader.py
+!/tools/Test-NativeFreeFlightEffects.py
 !/tools/Test-UniversalEggProgress.py
 !/tools/Test-UniversalEggUpdate.py
 !/tools/Verify-SpyroNativeEggSave.py

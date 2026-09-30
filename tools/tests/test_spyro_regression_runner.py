@@ -446,6 +446,32 @@ class RunnerOptionsTests(unittest.TestCase):
         observer_patcher.start()
         self.addCleanup(observer_patcher.stop)
 
+    def test_global_flight_loader_uses_built_configuration_and_requires_scalar_marker(self):
+        for marker_present in (True, False):
+            calls = []
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                kwargs["stdout"].write("NATIVE_FREE_FLIGHT_SOURCE_FREE_OK\n")
+                if any("Test-NativeFreeFlightLoader.py" in item for item in command) and marker_present:
+                    kwargs["stdout"].write("NATIVE_FREE_FLIGHT_LOADER_SOURCE_FREE_OK checks=40261 cases=732\n")
+                return subprocess.CompletedProcess(command, 0)
+            with self.subTest(marker_present=marker_present), tempfile.TemporaryDirectory(prefix="spyro-global-flight-runner-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", (("NativeFreeFlightSmoke", "NATIVE_FREE_FLIGHT_SOURCE_FREE_OK"),)), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("source read")), \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin), "--configuration", "Debug"]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0 if marker_present else 1, RUNNER.main())
+                command = next(c for c in calls if any("Test-NativeFreeFlightLoader.py" in item for item in c))
+                self.assertIn("--source-free", command)
+                self.assertIn("--dll", command)
+                self.assertIn("/bin/Debug/net10.0/Spyro.Editor.NativeFreeFlightSmoke.dll", command[-1])
+                self.assertFalse(any("--source" == item for item in command))
+                summary = json.loads((Path(output) / "summary.json").read_text())
+                self.assertEqual(marker_present, summary[-1]["passed"])
+
     def test_aggregate_session_is_a_separate_sourcefree_ui_mode(self):
         name = "UiSmoke"
         marker, flag = "FRESH_LEVEL_DOCUMENT_SESSION_OK", "--fresh-native-level-session-only"

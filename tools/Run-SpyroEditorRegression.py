@@ -584,6 +584,14 @@ def main():
                     "net10.0/Spyro.Editor.UniversalIdentitySmoke.dll")],
                 "UNIVERSAL_EGG_UPDATE_SCALAR_OK")
 
+    flight_project = ROOT / "src/Spyro.Editor.NativeFreeFlightSmoke/Spyro.Editor.NativeFreeFlightSmoke.csproj"
+    if any(project == flight_project for project, _, _ in cases) and build_results.get(flight_project, False):
+        execute("native-free-flight-loader-scalar", [sys.executable, "-B",
+                str(ROOT / "tools/Test-NativeFreeFlightLoader.py"), "--source-free", "--dll",
+                str(flight_project.parent / "bin" / options.configuration / "net10.0" /
+                    "Spyro.Editor.NativeFreeFlightSmoke.dll")],
+                "NATIVE_FREE_FLIGHT_LOADER_SOURCE_FREE_OK")
+
     def source_image_before(deadline):
         image = configured_source_image()
         if time.monotonic() >= deadline:

@@ -1,9 +1,33 @@
 using System.Buffers.Binary;
 using Spyro.Editor.Core.Exporting;
 
+if (args.Length == 4 && args[0] == "--verify-global")
+{
+    await GlobalFreeFlightOutput.VerifyAsync(args[1], args[2], args[3]);
+    return;
+}
+
+if (args.Length is 3 or 4 && args[0] == "--audit-effects")
+{
+    await GlobalFreeFlightEffectAudit.RunAsync(args[1], args[2], args.Length == 4 ? args[3] : null);
+    return;
+}
+
+if (args.Length == 4 && args[0] == "--apply-global")
+{
+    await GlobalFreeFlightOutput.ApplyAsync(args[1], args[2], args[3]);
+    return;
+}
+
+if (args.Length == 1 && args[0] == "--emit-global")
+{
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(NativeFreeFlightPatchBuilder.BuildGlobalNormal().Select(w => new { w.Name, address = w.Address, before = Convert.ToHexStringLower(w.Before), after = Convert.ToHexStringLower(w.After) })));
+    return;
+}
+
 int checks = 0;
-if (args.Length > 1)
-    throw new ArgumentException("Usage: NativeFreeFlightSmoke [original.bin]");
+if (args.Length > 2)
+    throw new ArgumentException("Usage: NativeFreeFlightSmoke [original.bin] [global-report.json]");
 
 const int target = 14;
 var windows = NativeFreeFlightPatchBuilder.Build(target);
@@ -94,7 +118,9 @@ foreach (int angle in new[] { int.MinValue, -801, -800, -1, 0, 1, 76, 77, 799, 8
 foreach (int invalid in new[] { -1, 0, 5, 9, 15, 25, 35, 45, 55, 65, 99, int.MaxValue })
     Reject(() => NativeFreeFlightPatchBuilder.Build(invalid), "unsupported destination");
 
-if (args.Length == 1)
+checks += GlobalFreeFlightCases.Run();
+
+if (args.Length >= 1)
 {
     var plan = await NativeFreeFlightPatchPlan.CaptureAsync(args[0], target, enabled: true);
     var disabled = await NativeFreeFlightPatchPlan.CaptureAsync(args[0], target, enabled: false);
@@ -130,6 +156,7 @@ if (args.Length == 1)
     unrelated[0x200] ^= 1;
     Require(plan.RevertExecutable(plan.ApplyToExecutable(unrelated)).SequenceEqual(unrelated),
         "unrelated composed bytes retained through exact inverse");
+    checks += await GlobalFreeFlightCases.RunSourceAsync(args[0], args.Length == 2 ? args[1] : null);
     AuditIncomingReferences(args[0], original);
     AuditExitLiveness(original);
     Console.WriteLine($"NATIVE_FREE_FLIGHT_SOURCE_OK checks={checks} plan={plan.PlanSha256}");

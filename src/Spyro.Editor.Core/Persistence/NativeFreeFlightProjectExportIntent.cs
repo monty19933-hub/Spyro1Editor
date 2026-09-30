@@ -1,3 +1,5 @@
+using Spyro.Editor.Core.Exporting;
+
 namespace Spyro.Editor.Core.Persistence;
 
 /// <summary>
@@ -14,19 +16,21 @@ public sealed class NativeFreeFlightProjectExportIntent
     { _workspaceRoot = workspaceRoot; _snapshot = snapshot; EnabledLevelId = enabledLevelId; }
 
     public bool RequiresRebuild => _snapshot.Preferences.Count != 0;
+    // Legacy stage callers use this only as an ON marker. New combined
+    // exports consume Enabled and the global composition contract.
     public int? EnabledLevelId { get; }
+    public bool Enabled => _snapshot.GlobalEnabled;
+    public IReadOnlyList<int> EnabledLevelIds => Array.AsReadOnly(Enabled
+        ? Enumerable.Range(10, 55).Where(NativeFreeFlightCompositionPlan.IsNormalLevel).ToArray() : []);
     public bool HasExplicitSelection(int levelId) => _snapshot.HasExplicitSelection(levelId);
 
     public static NativeFreeFlightProjectExportIntent Capture(string workspaceRoot)
     {
         string root = Normalize(workspaceRoot);
         var snapshot = NativeFreeFlightSettingsStore.Capture(root);
-        var enabled = snapshot.Preferences.Where(p => p.EnableFreeFlight).ToArray();
-        if (enabled.Length > 1)
-            throw new InvalidDataException("Fly Anywhere currently supports one enabled target per exported project; turn other targets OFF before exporting.");
-        if (enabled.Length == 1 && enabled[0].LevelId != SupportedEnabledLevelId)
-            throw new InvalidDataException("Fly Anywhere ON currently supports Toasty (level 14) only. This setting was not substituted with another level.");
-        return new(root, snapshot, enabled.Length == 0 ? null : enabled[0].LevelId);
+        // An older explicit per-level ON is retained as an enabled choice and
+        // upgraded to the global normal-player policy; it is never silently OFF.
+        return new(root, snapshot, snapshot.GlobalEnabled ? SupportedEnabledLevelId : null);
     }
 
     public void RequireCurrent(string workspaceRoot)
@@ -40,8 +44,10 @@ public sealed class NativeFreeFlightProjectExportIntent
 
     public void RequireOrdinaryEditCompatibility(bool hasOrdinaryEdits)
     {
-        if (EnabledLevelId != null && hasOrdinaryEdits)
-            throw new InvalidDataException("Fly Anywhere ON currently requires a project without other saved edits; combined native behavior has not been validated. OFF can rebuild with ordinary saved edits.");
+        // Flight player-stream validation joins the ordinary data composer before
+        // final allocation. The final composer, not intent, proves byte owners
+        // and capacity. This method grants no native/runtime certificate.
+        _ = hasOrdinaryEdits;
     }
 
     private static string Normalize(string workspaceRoot)

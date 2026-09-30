@@ -19,6 +19,7 @@ public sealed class NativeFreeFlightSettingsSnapshot
     public string RetainedRecoveryDirectory { get; }
     public bool IsEnabled(int levelId) => Preferences.Any(p => p.LevelId == levelId && p.EnableFreeFlight);
     public bool HasExplicitSelection(int levelId) => Preferences.Any(p => p.LevelId == levelId);
+    public bool GlobalEnabled => Preferences.Any(p => p.EnableFreeFlight);
     public bool NativeExportApproved => false;
 }
 
@@ -57,10 +58,21 @@ public static class NativeFreeFlightSettingsStore
     /// The returned preference is never proof that any BIN was exported or tested.
     /// </summary>
     public static NativeFreeFlightSettingsSnapshot Save(NativeFreeFlightSettingsSnapshot expected, int levelId,
-        bool enabled, CancellationToken cancellationToken = default)
+        bool enabled, CancellationToken cancellationToken = default) =>
+        SaveCore(expected, levelId, enabled, cancellationToken);
+
+    /// <summary>One atomic global choice, represented in the existing v1
+    /// project schema as all thirty normal-level preferences. No game save
+    /// fields or schema migration are introduced.</summary>
+    public static NativeFreeFlightSettingsSnapshot SaveGlobal(NativeFreeFlightSettingsSnapshot expected,
+        bool enabled, CancellationToken cancellationToken = default) =>
+        SaveCore(expected, null, enabled, cancellationToken);
+
+    private static NativeFreeFlightSettingsSnapshot SaveCore(NativeFreeFlightSettingsSnapshot expected, int? levelId,
+        bool enabled, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(expected);
-        RequireLevel(levelId);
+        if (levelId is int selected) RequireLevel(selected);
         cancellationToken.ThrowIfCancellationRequested();
         string root = System.IO.Path.GetDirectoryName(expected.Path)!;
         if (ResolvePath(root) != expected.Path)
@@ -73,8 +85,11 @@ public static class NativeFreeFlightSettingsStore
         try
         {
             RequireCurrent(expected);
-            var values = expected.Preferences.Where(p => p.LevelId != levelId)
-                .Append(new NativeFreeFlightLevelPreference(levelId, enabled)).OrderBy(p => p.LevelId).ToArray();
+            var values = levelId is int selectedLevel
+                ? expected.Preferences.Where(p => p.LevelId != selectedLevel)
+                    .Append(new NativeFreeFlightLevelPreference(selectedLevel, enabled)).OrderBy(p => p.LevelId).ToArray()
+                : Enumerable.Range(10, 55).Where(NativeFreeFlightCompositionPlan.IsNormalLevel)
+                    .Select(id => new NativeFreeFlightLevelPreference(id, enabled)).ToArray();
             byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(new
             {
                 format = Format, version = 1,

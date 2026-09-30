@@ -121,6 +121,9 @@ class Scalar:
                 take = signed(a) < 0 if rt == 0 else signed(a) >= 0
                 branch(pc + 4 + imm * 4 if take else pc + 8)
             elif op in (4, 5): branch(pc + 4 + imm * 4 if (a == b) == (op == 4) else pc + 8)
+            elif op in (6, 7):
+                take = signed(a) <= 0 if op == 6 else signed(a) > 0
+                branch(pc + 4 + imm * 4 if take else pc + 8)
             elif op in (8, 9): put(rt, a + imm)
             elif op == 10: put(rt, int(signed(a) < imm))
             elif op == 11: put(rt, int(a < (imm & 0xFFFFFFFF)))

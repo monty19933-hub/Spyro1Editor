@@ -108,6 +108,53 @@ internal static class NativeFreeFlightPatchBuilder
         }
     }
 
+    // The original classifier sets g75690 only for native flight courses. A
+    // zero value identifies a normal-loaded player, including an issued fresh
+    // normal level. Native flight courses keep their own permission/ceilings.
+    internal static IReadOnlyList<NativeFreeFlightWindow> BuildGlobalNormal()
+    {
+        List<NativeFreeFlightWindow> windows = [];
+        foreach (var window in Build(14))
+        {
+            uint[] words = Enumerable.Range(0, window.After.Length / 4)
+                .Select(i => BinaryPrimitives.ReadUInt32LittleEndian(window.After.AsSpan(i * 4, 4))).ToArray();
+            if (window.Name == "permission")
+            {
+                // Native64 first, otherwise normal classifier; retain ground
+                // guard and the native existing permission field. The ground
+                // load is separated from its consumer on both branch paths.
+                words = [Lui(3, 0x8007), Lw(2, 3, 0x596C), Lw(3, 3, 0x5690), Li(1, 64),
+                    Beq(2, 1, 4, 7), Lui(1, 0x8008), Bne(3, 0, 6, 12), Lw(2, 1, -0x750C),
+                    0, Bne(2, 0, 9, 12), Li(2, 1), Sw(2, 1, -0x735C)];
+            }
+            else if (window.Name == "enter-cross")
+            {
+                // The native flight/global and level64 branches run first.
+                // All remaining classifier-normal entries can now fly.
+                words[7] = BranchTo(5, 0, 0, window.Address + 28, 0x80041FE0);
+            }
+            else if (window.Name.StartsWith("enter-", StringComparison.Ordinal))
+                words[8] = BranchTo(4, 0, 0, window.Address + 32, 0x80043FC0);
+            else if (window.Name.StartsWith("height-", StringComparison.Ordinal))
+            {
+                bool pointer = window.Name is "height-rise" or "height-dive";
+                words[pointer ? 5 : 4] = Lw(3, 3, 0x5690);
+                words[8] = 0; // v1 now contains the native classifier itself.
+            }
+            else if (window.Name == "pitch-ceiling")
+            {
+                words[5] = Lw(2, 2, 0x5690);
+                words[6] = Li(3, 0);
+            }
+            byte[] after = new byte[window.After.Length];
+            for (int i = 0; i < words.Length; i++)
+                BinaryPrimitives.WriteUInt32LittleEndian(after.AsSpan(i * 4, 4), words[i]);
+            windows.Add(window with { After = after });
+        }
+        windows.Add(NativeFreeFlightAirborneLoader.Build());
+        return windows.AsReadOnly();
+    }
+
     private static uint I(int op, int rs, int rt, int immediate) =>
         ((uint)op << 26) | ((uint)rs << 21) | ((uint)rt << 16) | unchecked((ushort)immediate);
     private static uint R(int rs, int rt, int rd, int shift, int fn) =>

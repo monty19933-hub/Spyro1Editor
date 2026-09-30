@@ -8,8 +8,9 @@ public sealed record NativeFreeFlightInstructionEvidence(string Name, uint Runti
 
 /// <summary>
 /// Exact-USA, detached executable stage. This is not a BIN publisher or a
-/// dependency/memory certificate. Callers must merge player animations 33..35
-/// into the target and prove runtime fit before composing/publishing an output.
+/// dependency/memory certificate. The legacy per-target profile requires local
+///33..35; the global profile reuses source-resident airborne16 for missing
+/// normal slots and requires final actual-body memory closure.
 /// </summary>
 public sealed class NativeFreeFlightPatchPlan
 {
@@ -19,26 +20,36 @@ public sealed class NativeFreeFlightPatchPlan
     private const int ExecutableLength = 0x66000;
     private readonly byte[] _sourceExecutable;
     private readonly IReadOnlyList<NativeFreeFlightWindow> _windows;
+    private readonly bool _globalNormalPolicy;
 
-    private NativeFreeFlightPatchPlan(byte[] executable, int target, bool enabled)
+    private NativeFreeFlightPatchPlan(byte[] executable, int target, bool enabled, bool global = false)
     {
         _sourceExecutable = executable.ToArray();
-        _windows = NativeFreeFlightPatchBuilder.Build(target);
+        _windows = global ? NativeFreeFlightPatchBuilder.BuildGlobalNormal() : NativeFreeFlightPatchBuilder.Build(target);
+        GlobalNormalLevelsEnabled = global && enabled;
+        _globalNormalPolicy = global;
         TargetLevelId = target;
         Enabled = enabled;
-        RequiredPlayerAnimationIds = Array.AsReadOnly(enabled ? new[] { 33, 34, 35 } : []);
+        RequiredPlayerAnimationIds = Array.AsReadOnly(enabled ? (global ? new[] { 16 } : new[] { 33, 34, 35 }) : []);
         Instructions = Array.AsReadOnly((enabled ? _windows : [])
             .Select(w => new NativeFreeFlightInstructionEvidence(w.Name, w.Address, w.Offset,
                 w.Before.Length, Convert.ToHexStringLower(w.Before), Convert.ToHexStringLower(w.After))).ToArray());
-        PlanSha256 = Hash(JsonSerializer.SerializeToUtf8Bytes(new
-        {
-            Profile, SourceImageSha256, SourceExecutableSha256, TargetLevelId, Enabled,
-            Instructions, RequiredPlayerAnimationIds, PublicationAuthorized, RuntimeVerified
-        }));
+        PlanSha256 = global
+            ? Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                Profile, SourceImageSha256, SourceExecutableSha256, TargetLevelId, Enabled,
+                Instructions, RequiredPlayerAnimationIds, GlobalNormalLevelsEnabled, PublicationAuthorized, RuntimeVerified
+            }))
+            : Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                Profile, SourceImageSha256, SourceExecutableSha256, TargetLevelId, Enabled,
+                Instructions, RequiredPlayerAnimationIds, PublicationAuthorized, RuntimeVerified
+            }));
     }
 
     public int TargetLevelId { get; }
     public bool Enabled { get; }
+    public bool GlobalNormalLevelsEnabled { get; }
     public string PlanSha256 { get; }
     public IReadOnlyList<NativeFreeFlightInstructionEvidence> Instructions { get; }
     public IReadOnlyList<int> RequiredPlayerAnimationIds { get; }
@@ -65,6 +76,16 @@ public sealed class NativeFreeFlightPatchPlan
         return new(bytes, targetLevelId, enabled);
     }
 
+    /// <summary>Global normal-player policy. Native flight classification and
+    /// flight-course rules are unchanged. The local stream loader resolves
+    /// missing normal slots33..35 to resident16 without growing level data.</summary>
+    public static async Task<NativeFreeFlightPatchPlan> CaptureGlobalAsync(string originalImagePath,
+        bool enabled, CancellationToken cancellationToken = default)
+    {
+        var original = await CaptureAsync(originalImagePath, 14, enabled, cancellationToken);
+        return new(original.CopySourceExecutable(), 14, enabled, global: true);
+    }
+
     public byte[] ApplyToExecutable(ReadOnlySpan<byte> composedExecutable)
     {
         if (composedExecutable.Length != ExecutableLength)
@@ -72,7 +93,7 @@ public sealed class NativeFreeFlightPatchPlan
         byte[] result = composedExecutable.ToArray();
         // Disabled exports rebuild from source; they do not silently accept a
         // previously patched movement engine as a retail-default preimage.
-        RequireConsumers(result);
+        RequireConsumers(result, _globalNormalPolicy);
         foreach (var window in _windows)
             RequireBytes(result, window, window.Before, "preimage");
         if (Enabled)
@@ -92,7 +113,7 @@ public sealed class NativeFreeFlightPatchPlan
             RequireBytes(result, window, window.After, "afterimage");
         foreach (var window in _windows)
             window.Before.CopyTo(result, window.Offset);
-        RequireConsumers(result);
+        RequireConsumers(result, _globalNormalPolicy);
         return result;
     }
 
@@ -112,12 +133,27 @@ public sealed class NativeFreeFlightPatchPlan
             throw new InvalidDataException($"Free Flight {window.Name} {role} changed.");
     }
 
-    private static void RequireConsumers(ReadOnlySpan<byte> executable)
+    private static void RequireConsumers(ReadOnlySpan<byte> executable, bool allowFreshNormalClassifier = false)
     {
         foreach (var (offset, length, hash, name) in ConsumerBindings)
         {
-            if (executable.Length != ExecutableLength || Hash(executable.Slice(offset, length)) != hash)
+            if (executable.Length != ExecutableLength)
                 throw new InvalidDataException("Free Flight native consumer changed: " + name);
+            ReadOnlySpan<byte> consumer = executable.Slice(offset, length);
+            if (Hash(consumer) == hash) continue;
+            // The issued fresh normal bootstrap owns exactly this LUI change
+            // (NativeId65FreshExecutablePlan conditional-normal classifier).
+            // Admit only its exact afterword; every remaining classifier byte
+            // must still match the complete original certificate. Single-target
+            // research plans do not acquire this composition compatibility.
+            if (allowFreshNormalClassifier && offset == 0x40C0 &&
+                consumer[..4].SequenceEqual(Convert.FromHexString("005E023C")))
+            {
+                byte[] canonical = consumer.ToArray();
+                Convert.FromHexString("6666023C").CopyTo(canonical, 0);
+                if (Hash(canonical) == hash) continue;
+            }
+            throw new InvalidDataException("Free Flight native consumer changed: " + name);
         }
     }
 
@@ -127,6 +163,10 @@ public sealed class NativeFreeFlightPatchPlan
     // consumer spans and the vector helper reached by permission's fallback.
     private static readonly (int Offset, int Length, string Hash, string Name)[] ConsumerBindings =
     [
+        (0x4BEF8, 0xE0, "d0b4cf5a7cf9ee407ff413f7261bd5f92f4880d7cee8467852f4d757e6b84295", "native reserved-buffer allocator"),
+        (0x65DA4, 4, "cbfd218787df784c39fbc4f4fad92a8f28e2a880430c210b6d0d8dc133c07e66", "resident-buffer prefix size"),
+        (0x3BE0, 0x26C, "fede3c414aea2dce0372fce574549d961123cf6456a7a291acef48b9c4af8598", "resident shared player loader"),
+        (0x5CCA2, 0xB8, "ce23eaa790a6e1d9b646bb8b8811efc8cf4facb39903d2ab2a2657ea514b7ca2", "player animation frame metadata"),
         (0x40C0, 0x1C8, "e2f73855211aeae760cc766e3e4ff40910c048c64a7ae3f86477cf139d923624", "retail classifier"),
         (0x5CC70, 0x2D, "9f502dce2b68cb8497072c5c9c92d3f914710cdbbcbc9c25c86cbe29a4241e0b", "state animation map"),
         (0x31E70, 0x2974, "51bc8b945b30f188e5d8b48a51c7148c504a453da28ba204622dcd564d1d6121", "state transitions"),
