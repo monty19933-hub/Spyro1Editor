@@ -35,6 +35,36 @@ internal static class UniversalDestinationGemCollectionAdapter
     {
         if (actor is < 16 or > 23)
             throw new InvalidDataException("Destination collection needs a native callee-saved current-actor register.");
+        var predecessors = Predecessors(owner, code, tables);
+        List<OwnedCall> calls = [];
+        foreach (uint pc in code.Order())
+        {
+            if (owner.Word(pc) != UniversalMips.EncodeJ(3, UniversalGemCollectionAdapter.CollectItem)) continue;
+            uint delay = owner.Word(pc + 4);
+            string? role = null;
+            bool MoveActor(uint w) => UniversalMips.Op(w) == 0 && UniversalMips.Fn(w) is 0x21 or 0x25 &&
+                UniversalMips.Rd(w) == 4 && ((UniversalMips.Rs(w) == actor && UniversalMips.Rt(w) == 0) ||
+                (UniversalMips.Rt(w) == actor && UniversalMips.Rs(w) == 0));
+            if (MoveActor(delay)) role = "current-native-actor";
+            else if (!Writes(delay, 4) && code.Contains(pc - 4) && predecessors.TryGetValue(pc, out var incoming) &&
+                incoming.SetEquals([pc - 4]))
+            {
+                uint argument = owner.Word(pc - 4);
+                if (MoveActor(argument)) role = "current-native-actor";
+                else if (UniversalMips.Op(argument) == 35 && UniversalMips.Rt(argument) == 4 &&
+                    UniversalMips.SImm(argument) == 0 && PropertyRegister(owner, predecessors, pc - 8, UniversalMips.Rs(argument), actor))
+                    role = "native-actor-property-linked-actor";
+            }
+            if (role == null || (code.Contains(pc - 4) && UniversalMips.IsBranch(owner.Word(pc - 4))))
+                throw new InvalidDataException($"Destination gem collection call at 0x{pc:X8} lacks a proved native actor argument.");
+            calls.Add(new(pc, delay, role));
+        }
+        return calls;
+    }
+
+    internal static Dictionary<uint, HashSet<uint>> Predecessors(UniversalOverlay owner, IReadOnlySet<uint> code,
+        IReadOnlyList<UniversalJumpTable> tables)
+    {
         Dictionary<uint, HashSet<uint>> predecessors = [];
         void Edge(uint from, uint to)
         {
@@ -64,54 +94,31 @@ internal static class UniversalDestinationGemCollectionAdapter
                 if (!UniversalMips.IsUnconditionalBranch(word)) Edge(pc + 4, pc + 8);
             }
         }
-        bool PropertyRegister(uint before, int register)
+        return predecessors;
+    }
+
+    internal static bool PropertyRegister(UniversalOverlay owner, IReadOnlyDictionary<uint, HashSet<uint>> predecessors, uint before, int register, int actor)
+    {
+        // Calls preserve native s-registers. Volatile pointers cannot establish this owner.
+        if (register is < 16 or > 23) return false;
+        HashSet<uint> seen = [];
+        Stack<uint> pending = new(); pending.Push(before);
+        bool defined = false;
+        while (pending.Count != 0)
         {
-            // Calls preserve native s-registers. Volatile input/loaded-pointer registers do not
-            // establish a linked-actor owner across an intervening call.
-            if (register is < 16 or > 23) return false;
-            HashSet<uint> seen = [];
-            Stack<uint> pending = new(); pending.Push(before);
-            bool defined = false;
-            while (pending.Count != 0)
+            uint pc = pending.Pop();
+            if (!seen.Add(pc)) continue;
+            uint word = owner.Word(pc);
+            if (Writes(word, register))
             {
-                uint pc = pending.Pop();
-                if (!seen.Add(pc)) continue;
-                uint word = owner.Word(pc);
-                if (Writes(word, register))
-                {
-                    if (pc == before || UniversalMips.Op(word) != 35 || UniversalMips.Rs(word) != actor || UniversalMips.SImm(word) != 0)
-                        return false;
-                    defined = true; continue;
-                }
-                if (!predecessors.TryGetValue(pc, out var incoming) || incoming.Count == 0) return false;
-                foreach (uint p in incoming) pending.Push(p);
+                if (pc == before || UniversalMips.Op(word) != 35 || UniversalMips.Rs(word) != actor || UniversalMips.SImm(word) != 0)
+                    return false;
+                defined = true; continue;
             }
-            return defined;
+            if (!predecessors.TryGetValue(pc, out var incoming) || incoming.Count == 0) return false;
+            foreach (uint p in incoming) pending.Push(p);
         }
-        List<OwnedCall> calls = [];
-        foreach (uint pc in code.Order())
-        {
-            if (owner.Word(pc) != UniversalMips.EncodeJ(3, UniversalGemCollectionAdapter.CollectItem)) continue;
-            uint delay = owner.Word(pc + 4);
-            string? role = null;
-            bool MoveActor(uint w) => UniversalMips.Op(w) == 0 && UniversalMips.Fn(w) is 0x21 or 0x25 &&
-                UniversalMips.Rd(w) == 4 && ((UniversalMips.Rs(w) == actor && UniversalMips.Rt(w) == 0) ||
-                (UniversalMips.Rt(w) == actor && UniversalMips.Rs(w) == 0));
-            if (MoveActor(delay)) role = "current-native-actor";
-            else if (!Writes(delay, 4) && code.Contains(pc - 4) && predecessors.TryGetValue(pc, out var incoming) &&
-                incoming.SetEquals([pc - 4]))
-            {
-                uint argument = owner.Word(pc - 4);
-                if (MoveActor(argument)) role = "current-native-actor";
-                else if (UniversalMips.Op(argument) == 35 && UniversalMips.Rt(argument) == 4 &&
-                    UniversalMips.SImm(argument) == 0 && PropertyRegister(pc - 8, UniversalMips.Rs(argument)))
-                    role = "native-actor-property-linked-actor";
-            }
-            if (role == null || (code.Contains(pc - 4) && UniversalMips.IsBranch(owner.Word(pc - 4))))
-                throw new InvalidDataException($"Destination gem collection call at 0x{pc:X8} lacks a proved native actor argument.");
-            calls.Add(new(pc, delay, role));
-        }
-        return calls;
+        return defined;
     }
 
     internal static void RequireCurrentOwner(UniversalOverlay current, UniversalOverlay source, IEnumerable<OwnedCall> calls)
@@ -150,7 +157,7 @@ internal static class UniversalDestinationGemCollectionAdapter
             BinaryPrimitives.WriteUInt32LittleEndian(overlay.AsSpan((int)(call.CallPc - UniversalOverlay.Base)), UniversalMips.EncodeJ(3, call.Adapter));
     }
 
-    private static bool Writes(uint w, int register)
+    internal static bool Writes(uint w, int register)
     {
         int op = UniversalMips.Op(w);
         if (op == 0) return UniversalMips.Fn(w) is not (8 or 0x18 or 0x19 or 0x1A or 0x1B) && UniversalMips.Rd(w) == register;

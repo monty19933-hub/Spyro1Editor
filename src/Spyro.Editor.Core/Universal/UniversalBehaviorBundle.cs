@@ -34,6 +34,9 @@ public sealed record UniversalBehaviorBundle(uint Base, byte[] Code, uint Update
 {
     public IReadOnlyList<UniversalDestinationGemCall> DestinationGemCollectionCalls { get; init; } = [];
     public int DestinationGemCollectionExtraBytes { get; init; }
+    public IReadOnlyList<UniversalDestinationGemColourLoad> DestinationGemColourLoads { get; init; } = [];
+    public int DestinationGemColourExtraBytes { get; init; }
+    public IReadOnlyList<UniversalNativeParticleNoOpProof> NativeParticleNoOpProofs { get; init; } = [];
 }
 
 /// <summary>
@@ -70,6 +73,16 @@ public static class UniversalBehaviorBundleBuilder
             UniversalGemCollectionAdapter.RequireNativeOwner(nativeExecutable);
             destinationGemCalls = UniversalDestinationGemCollectionAdapter.Analyze(destinationOwner);
             UniversalDestinationGemCollectionAdapter.RequireCurrentOwner(destination, destinationOwner, destinationGemCalls);
+        }
+        IReadOnlyList<UniversalDestinationGemColourAdapter.OwnedLoad> destinationColourLoads = [];
+        if (destinationGems.Length != 0)
+        {
+            destinationColourLoads = UniversalDestinationGemColourAdapter.Analyze(destinationOwner);
+            if (destinationColourLoads.Count != 0)
+            {
+                UniversalGemCollectionAdapter.RequireNativeOwner(nativeExecutable);
+                UniversalDestinationGemCollectionAdapter.RequireCurrentOwner(destination, destinationOwner, destinationGemCalls);
+            }
         }
         string? destinationGemLabel = null;
         UniversalAsmPart w = new();
@@ -112,6 +125,7 @@ public static class UniversalBehaviorBundleBuilder
         parts.Add(w);
 
         List<UniversalBehaviorSourceReport> reports = [];
+        List<UniversalNativeParticleNoOpProof> particleNoOpProofs = [];
         foreach (var s in sources)
         {
             var map = s.Classes.ToDictionary(c => c, c => Mapped(s.SourceKey, c));
@@ -119,6 +133,8 @@ public static class UniversalBehaviorBundleBuilder
             var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey, map);
             if (map.Any(k => k.Key != k.Value))
             {
+                UniversalNativeModelTailOwnership.MarkOwned(upd, s.Source, nativeExecutable);
+                particleNoOpProofs.AddRange(UniversalNativeParticleNoOpOwnership.MarkOwned(upd, s.Source, destination, nativeExecutable ?? []));
                 UniversalClassRemapping.PatchOwnedClassReads(upd, s.Source, map, s.Classes);
                 UniversalClassRemapping.RequireNoUnownedClassMemory(upd, false, s.Source);
                 UniversalClassRemapping.PatchConstantSpawns(upd, s.Source, map);
@@ -166,6 +182,12 @@ public static class UniversalBehaviorBundleBuilder
             var adapter = UniversalGemCollectionAdapter.BuildMappings(destinationGems, destinationGemLabel);
             parts.Add(adapter); destinationGemBytes = adapter.Items.Count(i => i.Word != null) * 4;
         }
+        int destinationColourBytes = 0;
+        foreach (var site in destinationColourLoads)
+        {
+            var adapter = UniversalDestinationGemColourAdapter.Build(destinationGems, site, $"gem_colour_destination_{site.Pc:X8}");
+            parts.Add(adapter); destinationColourBytes += adapter.Items.Count(i => i.Word != null) * 4;
+        }
         if (dragonflyEggClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.DragonflyEggUpdate(dragonflyEggClasses, "egg_upd", remapSaveRows));
         if (signClasses is { Count: > 0 })
@@ -174,7 +196,10 @@ public static class UniversalBehaviorBundleBuilder
         return new(baseAddress, code, labels["wrap_upd"], labels["wrap_init"], reports)
         {
             DestinationGemCollectionCalls = destinationGemCalls.Select(c => new UniversalDestinationGemCall(c.Pc, c.Delay, c.Role, labels[destinationGemLabel!])).ToArray(),
-            DestinationGemCollectionExtraBytes = destinationGemBytes
+            DestinationGemCollectionExtraBytes = destinationGemBytes,
+            DestinationGemColourLoads = destinationColourLoads.Select(c => new UniversalDestinationGemColourLoad(c.Pc, c.PatchWord, c.Delay, c.AddWord, c.LoadWord, c.LoadPc, c.ClassRegister, c.Role, labels[$"gem_colour_destination_{c.Pc:X8}"])).ToArray(),
+            DestinationGemColourExtraBytes = destinationColourBytes,
+            NativeParticleNoOpProofs = particleNoOpProofs
         };
     }
 

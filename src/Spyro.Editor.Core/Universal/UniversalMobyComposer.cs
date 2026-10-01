@@ -53,6 +53,9 @@ public sealed record UniversalComposeResult(
     public IReadOnlyList<UniversalPlayerAnimationImport> PlayerAnimationImports { get; init; } = [];
     public IReadOnlyList<UniversalDestinationGemCall> DestinationGemCollectionCalls { get; init; } = [];
     public int DestinationGemCollectionExtraBytes { get; init; }
+    public IReadOnlyList<UniversalDestinationGemColourLoad> DestinationGemColourLoads { get; init; } = [];
+    public int DestinationGemColourExtraBytes { get; init; }
+    public IReadOnlyList<UniversalNativeParticleNoOpProof> NativeParticleNoOpProofs { get; init; } = [];
 }
 
 /// <summary>
@@ -445,6 +448,9 @@ public static class UniversalMobyComposer
         List<UniversalBehaviorSourceReport> behavior = [];
         IReadOnlyList<UniversalDestinationGemCall> destinationGemCalls = [];
         int destinationGemBytes = 0;
+        IReadOnlyList<UniversalDestinationGemColourLoad> destinationColourLoads = [];
+        int destinationColourBytes = 0;
+        IReadOnlyList<UniversalNativeParticleNoOpProof> particleNoOpProofs = [];
         byte[] overlay = destinationOverlay.ToArray();
         uint copyBuffer = destOverlay.CopyBuffer;
         var byBehaviorSource = imports.Where(i => i.BehaviorImported && i.SourceLevelKey != "japan").GroupBy(i => i.SourceLevelKey)
@@ -465,6 +471,10 @@ public static class UniversalMobyComposer
             destinationOverlay.AsSpan(0, keep).CopyTo(ov);
             bundle.Code.CopyTo(ov, (int)(baseAddress - UniversalOverlay.Base));
             UniversalDestinationGemCollectionAdapter.Apply(ov, bundle.DestinationGemCollectionCalls);
+            UniversalDestinationGemColourAdapter.Apply(ov, bundle.DestinationGemColourLoads);
+            destinationColourLoads = bundle.DestinationGemColourLoads;
+            destinationColourBytes = bundle.DestinationGemColourExtraBytes;
+            particleNoOpProofs = bundle.NativeParticleNoOpProofs;
             destinationGemCalls = bundle.DestinationGemCollectionCalls;
             destinationGemBytes = bundle.DestinationGemCollectionExtraBytes;
             overlay = ov;
@@ -507,6 +517,8 @@ public static class UniversalMobyComposer
             playerAnimationImports.Add(merged.Report);
         }
 
+        UniversalNativeParticleNoOpOwnership.RequireFinalDestination(particleNoOpProofs,
+            new UniversalOverlay(overlay, UniversalExeBindings.Read(exe, destination.LevelId)), exe);
         uint finalEnd = RuntimeEnd(dest, copyBuffer);
         uint limit = NormalBufferFloor - RamSafetyMargin;
         var ram = new UniversalRamBudget(originalEnd, finalEnd, NormalBufferFloor,
@@ -524,7 +536,7 @@ public static class UniversalMobyComposer
         int[] mappedRows = Enumerable.Repeat(-1, incomingCount).ToArray(), mappedSaveRows = Enumerable.Repeat(-1, incomingCount).ToArray();
         for (int i = 0; i < newRows.Count; i++) { mappedRows[incomingOrder[i]] = newRows[i]; mappedSaveRows[incomingOrder[i]] = saveRows[i]; }
         return new(destination.Key, imports, mappedRows, ram, arena, freeBefore - vram.FreeBytes, behavior, warnings,
-            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports, DestinationGemCollectionCalls = destinationGemCalls, DestinationGemCollectionExtraBytes = destinationGemBytes };
+            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports, DestinationGemCollectionCalls = destinationGemCalls, DestinationGemCollectionExtraBytes = destinationGemBytes, DestinationGemColourLoads = destinationColourLoads, DestinationGemColourExtraBytes = destinationColourBytes, NativeParticleNoOpProofs = particleNoOpProofs };
     }
 
     /// <summary>Class a fully removed native row is switched to: no model, no behavior in any level, never
