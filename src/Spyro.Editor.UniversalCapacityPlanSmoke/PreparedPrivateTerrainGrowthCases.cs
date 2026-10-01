@@ -60,6 +60,14 @@ internal static class PreparedPrivateTerrainGrowthCases
             check(BitConverter.ToInt32(data.Bytes,data.Subfiles()[1].Offset+4)==original.ExpectedSourceTextureCount+1,
                 "Real growing terrain retains appended private record");
             check(TextureId(data,213,37)==edit.TargetTextureId,"Final private append and sourceSheep composition preserve assigned sculpt face material");
+            int originalEnvironment=source.Data.Subfiles()[1].Offset+BitConverter.ToInt32(source.Data.Bytes,source.Data.Subfiles()[1].Offset);
+            int finalEnvironment=data.Subfiles()[1].Offset+BitConverter.ToInt32(data.Bytes,data.Subfiles()[1].Offset);
+            int originalSectors=BitConverter.ToInt32(source.Data.Bytes,originalEnvironment+4), finalSectors=BitConverter.ToInt32(data.Bytes,finalEnvironment+4);
+            check(finalSectors>originalSectors && Enumerable.Range(originalSectors,finalSectors-originalSectors).All(i=>
+            {
+                int sector=finalEnvironment+4+BitConverter.ToInt32(data.Bytes,finalEnvironment+8+i*4);
+                return data.Bytes[sector+20]==0 && (BitConverter.ToUInt16(data.Bytes,sector+4)&0xC000)==0xC000;
+            }),"Joint grown/private/model composition preserves verified LP-only radius flags and excludes empty HP rendering");
             check(result.Result.NewRowIndices.Count==1 &&
                 result.Result.PlacementSaveRows.Single()==source.Data.Scene().RowCount,"SourceSheep emitted once with stable native save identity");
             check(result.Result.Ram.FinalHeadroom>=UniversalMobyComposer.RamSafetyMargin && data.Subfiles()[1].Length>=source.Data.Subfiles()[1].Length+0x800,
