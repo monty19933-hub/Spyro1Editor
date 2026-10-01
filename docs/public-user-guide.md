@@ -1,4 +1,4 @@
-# Spyro Editor Beta V6 — build 54
+# Spyro Editor V1.0
 
 ## Start editing
 
@@ -12,8 +12,16 @@ remove or edit it. **Undo** and **Redo** let you revise changes. **Save Level**
 stores the current edits; **Create BIN** combines the project's saved changes
 into a separate game image. Open that exported CUE in your emulator.
 
-In existing retail levels, terrain export supports height changes and texture
-painting. General terrain addition and removal currently belong to fresh levels.
+Existing levels and fresh levels share the terrain controls. In an existing
+level, select a face to move it, edit a point, copy it with **Add Terrain**, remove
+it, or paint it. The exporter updates the visible surface, distant geometry,
+visibility and collision together. A shared corner moves with every face that
+uses it. Save before creating the BIN/CUE.
+
+The game has limits on coordinates, collision encoding and memory. If a shape
+cannot be represented safely, the editor explains why. Try a smaller change or
+a simpler face; an unsupported edit does not produce a partially patched game.
+Translucent source faces cannot currently be copied or removed by these tools.
 
 ## Create a fresh level
 
@@ -84,4 +92,4 @@ Fly Anywhere is deferred from this release. Earlier research preferences are
 preserved but do not enable flight in normal release exports.
 
 This package contains no game image, BIOS, emulator, memory card or extracted
-game assets. See `known-limitations.md` for supported scope and verification.
+game assets. See `public-known-limitations.md` for supported scope and verification.

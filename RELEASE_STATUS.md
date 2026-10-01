@@ -29,13 +29,15 @@ and authored-gameplay evidence. `docs/research/v1-terrain-runtime-20260930.md`
 records native raised-floor and added-floor checks and their assistance/version
 boundaries. Early topology readbacks compared raw face slots; review caught the
 native HP/LP corner-order difference and physical far-colour table selection.
-Final output uses corrected packet ordering and needs its own acceptance; earlier
-close-up collision proof does not establish the revised distant visuals.
+Final v23 output passes independent native packet-order/colour verification. Its
+raised Artisans floor also passed controller-only native walking, jumping and
+landing with the exact final HP/LP sector and all fourteen changed collision rows
+verified in RAM. Added/removed final terrain and combined-project tests continue.
 
 ## Preserved beta54 baseline
 
-Application packages were built from `6a2d98e`. Subsequent commits change tests
-and evidence documentation only. The release candidate prioritizes the shared editor workflow and usable capacity reclamation.
+The preserved beta54 application packages were built from `6a2d98e`. The V1.0
+continuation above includes later product changes and needs separate packages. The release candidate prioritizes the shared editor workflow and usable capacity reclamation.
 Fly Anywhere is deferred at the user's request. Broader universal gameplay
 coverage remains open; catalog/static results are not runtime acceptance.
 

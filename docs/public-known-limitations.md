@@ -1,4 +1,4 @@
-# Spyro Editor Beta V6 — build 54 limitations
+# Spyro Editor V1.0 — supported scope and limitations
 
 - Cross-level imports have broader class remapping and dependency support, but
   **all Mobys working in all levels is not complete**. Static composition does
@@ -11,21 +11,30 @@
   must stay within the native relative-coordinate range. Split larger faces if
   the exporter requests it.
   A fresh level does not automatically receive a portal network or campaign.
-- Retail terrain export supports guarded height changes and texture painting.
-  General terrain addition, removal and topology growth in retail levels remain
-  unfinished. Fresh levels provide those authoring tools in the same main editor.
-  Unsafe geometry, collision or texture combinations stop with an explanation.
-- Removed objects free reusable physical slots. Stable collected-state identities
-  are retained and are finite: deleting an object does not recycle its saved
-  identity. Shared or unresolved resources cannot safely be reclaimed.
+- Existing-level terrain supports guarded XYZ edits, face copying, face removal
+  and texture painting through the shared editor controls. Close and distant
+  geometry, visibility and native collision are updated together. Native
+  coordinate, collision, memory and ownership checks can refuse a particular
+  edit. Translucent source faces and ambiguous collision ownership are not
+  supported by structural terrain editing. These limits are separate from the
+  fresh-level triangle limit.
+- Removed objects free reusable physical slots. Models and textures are shared:
+  deleting one copy will not free artwork still used by other copies or linked
+  objects. **Find space for this object…** names proposed removals and checks
+  the resulting composition; you choose which objects to remove. Saved
+  collected-state identities remain finite and are not recycled. A successful
+  capacity check does not certify every enemy's AI or linked behavior.
 - Eye-free eggs, per-level/global inventory, collection and normal card save and
   cold-load were observed in Stone Hill. Checkpoint navigation for that save test
   used position-only assistance. Endgame bonus predicates have source and
   instruction tests; a complete endgame playthrough and every egg/level lifecycle
   combination have not been verified.
-- Normal New Game was observed entering a fresh authored level with textured
-  terrain, collision and an imported sheep; native walking passed. This is one
-  tested scene, not blanket acceptance of every authored combination.
+- Normal Create BIN includes saved retail edits and the saved fresh level.
+  Its dialog chooses where New Game starts. Both choices passed complete
+  readback with the existing Artisans project, including its eight imported
+  objects and private terrain texture. The saved fresh level also passed native
+  New Game, walking, jumping and egg collection with its 1/1 inventory count.
+  This does not certify every authored scene or a complete campaign.
 - Fly Anywhere is deferred. Its earlier research settings are ignored by normal
   release exports and its controls are hidden from the normal release UI.
 - The macOS arm64 release is Developer ID signed, but is not notarized. Windows

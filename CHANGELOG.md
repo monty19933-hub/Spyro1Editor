@@ -1,27 +1,26 @@
-# Spyro Editor Beta V6
+# Spyro Editor V1.0
 
-## Changes since Spyro Editor Beta V5
+## Changes since Spyro Editor Beta V6
 
-Internal build `0.1.0-beta.54`.
+- Restored terrain controls in existing levels: move faces and points in all
+  three axes, copy faces, remove faces and paint textures. Export keeps close and
+  distant surfaces, visibility and collision synchronized, with explicit checks
+  for shapes the original game cannot represent.
+- Added **Find space for this object…** to the object browser. It compares source
+  variants and names objects whose removal would reclaim enough resources.
+  Removing objects frees physical slots and reclaims models and textures when
+  their last proven user is removed.
+- Fixed the editor camera snapping when removing, restoring or undoing an object.
+- Fixed normal BIN/CUE creation when older experimental drafts coexist with the
+  current project. The export dialog now chooses Artisans or the saved fresh
+  level as the New Game start, while including both sets of saved edits.
+- Made terrain texture allocation account for saved foreign objects, including
+  their palette space, so the capacity check and export share the same constraints.
+- Added full, copyable status details and simplified the normal editing controls.
+- Added the V1.0 stable release and updater identity. Earlier beta packages and
+  their update compatibility remain preserved.
 
-- Fresh levels now use the regular editor viewport, terrain tools, object browser,
-  material previews, undo/redo and Save Level. Normal Create BIN includes saved
-  retail edits and the authored level. New Game enters the fresh level directly.
-- Removed research controls from the normal workflow and added a preview-based
-  material chooser for fresh terrain. Fixed saving while edits are still being
-  made, repeated terrain addition and native rotation export.
-- Object removal now reuses vacated physical slots, omits retired imported rows
-  and trims unused trailing rows. Native save mapping preserves collected-state
-  identities when new objects occupy old physical positions.
-- Expanded cross-level Moby class remapping and shared dependency support.
-  Unresolved imports remain explicit; universal gameplay coverage is unfinished.
-- Removed added eyes from dragonfly eggs in both game models and inventory.
-  Added per-level/global counts, native collection persistence and required-egg
-  completion and bonus checks. Native card save and cold-load passed in Stone Hill.
-- Editable Japanese signs retain native in-game text rendering.
-- Fly Anywhere is deferred to prioritize this release; normal exports ignore
-  earlier research flight preferences without deleting them.
-
-See the included user guide and limitations for supported scope. The macOS build
-is Developer ID signed and not notarized. Windows execution remains unverified.
-No game data, firmware, emulator or save files are included.
+Dragonfly eggs retain their eye-free game and inventory appearance. Fly Anywhere
+remains deferred. See the included user guide and supported-scope document for
+native limits and verification boundaries. No game image, firmware, emulator,
+memory card or extracted game assets are included.

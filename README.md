@@ -9,50 +9,36 @@ or copied game asset. Users must provide their own legally obtained disc image.
 
 ## Releases
 
-This checkout targets **Spyro Editor Beta V6**, internal build
-`0.1.0-beta.54`. Fresh levels use the regular editor and normal Create BIN;
-Fly Anywhere is deferred. Cross-level import coverage is broader, but not every
-Moby behavior is verified in every level. See the [user guide](docs/public-user-guide.md) and
-[limitations](docs/public-known-limitations.md) before testing.
+The current release target is **Spyro Editor V1.0**. Existing and fresh levels
+share terrain and object controls. Create BIN/CUE includes both saved scenes and
+lets you choose the New Game starting level. Cross-level objects have a capacity
+planner that names removals which would make an import fit. Fly Anywhere is
+deferred. See the [user guide](docs/public-user-guide.md),
+[supported scope](docs/public-known-limitations.md) and
+[current verification status](RELEASE_STATUS.md).
 
-GitHub Releases remain the intended place for public builds, but creating a
-local package does not authorize publishing, tagging or replacing old assets.
+The self-contained release packages are named:
 
-The release packages are self-contained:
+- `SpyroEditor-V1.0-osx-arm64.zip`
+- `SpyroEditor-V1.0-win-x64.zip`
 
-- `SpyroEditor-Beta-V6-osx-arm64.zip`
-- `SpyroEditor-Beta-V6-win-x64.zip`
+Stable builds use the `v1.0` identity, schema-3 package manifests and the stable
+update channel. They do not select beta releases as updates. Earlier numbered
+and dotted beta packages retain their existing compatibility rules and must not
+be replaced or retagged. Source builds default to the preserved beta identity;
+the release script explicitly selects the stable identity:
 
-The public release name is independent of internal build iterations. Publish
-only intentional bundled releases after separate approval: tag `beta-v6`, use the exact GitHub title
-`Spyro Editor Beta V6`, mark it as a prerelease, attach the two exact package
-names above, and paste `CHANGELOG.md` unchanged into the GitHub release body.
-Ordinary commits and fixes do not create update prompts.
+```sh
+SPYRO_EDITOR_RELEASE_CHANNEL=stable \
+SPYRO_EDITOR_STABLE_VERSION=1.0 \
+SPYRO_EDITOR_STABLE_INTERNAL_VERSION=1.0.0 \
+tools/Build-SpyroEditorRelease.sh SpyroEditor-V1.0
+```
 
-V6 uses the whole-number compatibility-bridge format. Its tag, title, asset
-names, schema-1 manifest, `publicBeta: 6`, and legacy integer assembly identity
-retain the exact numbered-beta contract understood by older installed clients.
-Existing V3/V4/V5 artifacts remain immutable and must not be retagged or replaced.
-
-After that bridge, incremental public updates use canonical dotted identities:
-`beta-v6.1`, `Spyro Editor Beta V6.1`, and matching `Beta-V6.1` assets. Those
-packages use manifest schema 2, carry `publicVersion: "6.1"`, and retain legacy
-integer beta metadata only for compatibility. Each `CHANGELOG.md` is solely the
-delta from the immediately previous public release, not accumulated history.
-
-The frozen V2 updater scans only the newest 30 prereleases and ignores dotted
-identities. The release checklist therefore keeps a whole-number schema-1 bridge
-inside that window, publishing a later bridge such as V5 before the previous one
-ages out. Dotted increments between those bridges continue to use schema 2.
-
-The updater rejects a mismatched tag, title, public beta, platform, archive
-manifest, packaged changelog, embedded app identity/internal build, asset name,
-or GitHub SHA-256 digest. Google Drive is not an update authority; supporting it
-safely would require a separate signed manifest and stable direct-download
-endpoint.
-
-Use `docs/beta-release-checklist.md` for the exact build, verification, draft
-release, asset, changelog, compatibility, and project-persistence gates.
+The updater checks release identity, platform, packaged application and manifest,
+changelog, asset name and archive hash. GitHub Releases are the intended public
+update authority. Creating local packages does not authorize publishing a
+release, creating a remote tag or replacing older assets.
 
 Unzip the package, open `Spyro Editor.app` directly on macOS (there is no
 separate `.command` launcher), or open `Launch Spyro Editor.bat` on Windows.
@@ -71,9 +57,8 @@ be replaced by the normal notarized asset as soon as possible.
 When the release owner explicitly approves an accept-the-risk package because
 no Developer ID identity is installed, `SPYRO_EDITOR_MAC_BUILD_MODE=community`
 produces a hardened ad-hoc-signed ZIP with the same opening instructions and
-published SHA-256 digests. The private V6 development package uses this explicit
-local ad-hoc mode; it is not Apple-signed or notarized. This does not change the
-normal public-release requirements or replace preserved V5 test apps.
+published SHA-256 digests. Earlier private development packages used this explicit local ad-hoc mode.
+Their signing status does not describe a later package; check its manifest.
 
 ## Current Editor
 

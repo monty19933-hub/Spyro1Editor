@@ -124,3 +124,68 @@ The copied-floor RAM receipt `runtime/topology-copy-loaded.json` found the new
 0–243 differed at runtime; the whole collision array was therefore not reported
 as an exact match. The added rows were exact. RAM SHA-256:
 `045ca964a61a7133c9fd0053c189d0056769d7d99483ce007695c3e6b746c50a`.
+
+## Final v23 raised floor and corrected distant geometry
+
+Candidate: `work/v1-continuation/terrain-topology-native-v23/artisans-reachable-floor.cue`.
+BIN SHA-256: `e7710d1298f9a6f0e44755d52483b426d51ffac7b6b6e131b0601e81b77b5d89`.
+Unlike the earlier granular candidate, this version rebuilds the affected distant
+surface with the independently authenticated native renderer corner order and
+physical far-colour table. The source renderer's instructions were matched to the
+USA executable by the independent packet verifier; source HP strip triangles and
+resulting LP strip triangles agree, including winding and render flags.
+
+A cold real-BIOS New Game in `Spyro V1 TerrainFinal Runtime.app` reached Artisans.
+Controller input alone walked onto the changed floor and rescued Nestor. After
+Continue closed the fairy menu, the final measurements were:
+
+| Observation | Editor X | Editor Y | Editor Z |
+| --- | ---: | ---: | ---: |
+| Returned to changed floor | 5287.625 | 3262.625 | 596.5625 |
+| Settled | 5282.125 | 3312.4375 | 596.4375 |
+| Native Cross jump, airborne | 5282.0625 | 3312.5 | 663.6875 |
+| Landed | 5282.0625 | 3312.5 | 596.5625 |
+
+No runtime writes, position assists or save states were used. Read-only RAM
+inspection found the exact final 2,076-byte sector 90 at `0x800AC278`, including
+its HP and corrected LP geometry. All fourteen changed collision rows were
+byte-exact in RAM, as were complete assignment and flag arrays. The original
+runtime-mutated collision prefix prevents claiming the entire collision table is
+byte-identical. RAM SHA-256:
+`ef28ef41b3b4e11a5b87c170a6314626ddc4397a2917e3435710c1f65d4225fa`.
+
+Receipts: `runtime/terrain-final-floor-launch.json`,
+`runtime/terrain-final-floor-observations.jsonl`,
+`runtime/terrain-final-floor.jsonl`, `runtime/terrain-final-floor-loaded.json`,
+`runtime/terrain-final-floor-changed-collision.json`, all under
+`work/v1-continuation`. A label `final-jump` at Z596.5625 records a press during
+fairy dismissal; the subsequent `final-airborne` measurement is the successful
+jump. The packet verifier establishes distant-face construction; this close-floor
+gameplay run does not separately demonstrate a naturally selected distant LOD.
+
+## Final v23 copied floor
+
+Candidate `terrain-topology-native-v23/artisans-floor-copy.cue`, BIN SHA-256
+`9df565cba641c82558cbea80f3561da92667e68266b5e2fab1339df9751ae8f3`,
+was cold-booted in `Spyro V1 TerrainFinalCopy Runtime.app` using the same real BIOS
+and a private empty card. One explicitly recorded position-only assist placed
+Spyro above the copied floor at (5472,3264,700). Normal gravity landed at
+(5472,3262.1875,588.4375); native Right input walked to
+(5493.8125,3254.25,588.3125), then settled at (5531.375,3233.75,588.3125).
+A native Cross jump reached Z655.4375 and landed at Z588.5 with the same XY.
+The original surface there is far below the copied Z566 floor.
+
+The exact final 136-byte sector 178 (including corrected LP corners/colours) was
+found in RAM at 0x800C0908; both appended collision rows 7209/7210 were byte-exact
+at 0x800DF09C. Complete assignments and flags were also exact. Original
+runtime-mutated collision rows are excluded from any whole-table claim.
+RAM SHA-256: `e89b7f8a8448648433611bc4fa338ce5057a90353b3e60de86d483b6163d3acc`.
+
+Receipts under `work/v1-continuation/runtime`: `terrain-final-copy-launch.json`,
+`terrain-final-copy-position-assist.json`, `terrain-final-copy.jsonl`,
+`terrain-final-copy-loaded.json`. Screenshots are in the isolated app's
+`Contents/MacOS/screenshots` directory (22:37:26 and 22:38:27 local time).
+This proves the final added surface supports native gravity, movement and jump
+collision after position assistance; no code, physics or collision writes and no
+save states were used. Native packet readback separately validates distant
+geometry construction.
