@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("Spyro.Editor.UniversalMobySmoke")]
+[assembly: InternalsVisibleTo("Spyro.Editor.UniversalClassOwnershipSmoke")]
 
 namespace Spyro.Editor.Core.Universal;
 
@@ -137,7 +138,12 @@ public static class UniversalClassRemapping
     public static bool FeedsModelTable(UniversalOverlay source, uint pc)
     {
         uint load = source.Word(pc); int r = UniversalMips.Rt(load);
-        if (UniversalMips.Op(load) is not (33 or 37) || UniversalMips.SImm(load) != 0x36) return false;
+        if (UniversalMips.Op(load) is not (33 or 37) || UniversalMips.SImm(load) != 0x36 || r == 0) return false;
+        // A class read in a control-transfer delay slot has another possible successor;
+        // the following straight-line lookup alone cannot prove its complete use.
+        if (source.Contains(pc - 4) && UniversalMips.IsBranch(source.Word(pc - 4))) return false;
+        // The R3000 class load is not visible to its immediately following instruction.
+        if (!source.Contains(pc + 4) || Reads(source.Word(pc + 4), r)) return false;
         Dictionary<int, uint> bases = []; HashSet<int> indices = []; HashSet<int> addresses = [];
         bool shifted = false;
         for (uint q = pc + 4; q <= pc + 40 && source.Contains(q); q += 4)
@@ -145,16 +151,27 @@ public static class UniversalClassRemapping
             uint w = source.Word(q); int op = UniversalMips.Op(w), rs = UniversalMips.Rs(w), rt = UniversalMips.Rt(w), rd = UniversalMips.Rd(w);
             if (UniversalMips.IsBranch(w)) return false;
             if (op == 0 && UniversalMips.Fn(w) == 0 && UniversalMips.Rt(w) == r && UniversalMips.Rd(w) == r && UniversalMips.Sh(w) == 2)
-            { indices.Add(r); shifted = true; continue; }
+            { if (shifted) return false; indices.Add(r); shifted = true; continue; }
             if (!shifted && Reads(w, r)) return false;
-            if (op == 15) { if (rt == r) return false; addresses.Remove(rt); indices.Remove(rt); bases[rt] = (uint)UniversalMips.Imm(w) << 16; continue; }
-            if (op == 0 && UniversalMips.Fn(w) == 33 && (indices.Contains(rs) && bases.ContainsKey(rt) || indices.Contains(rt) && bases.ContainsKey(rs)))
+            if (op == 15) { if (rt == r || rt == 0) return false; addresses.Remove(rt); indices.Remove(rt); bases[rt] = (uint)UniversalMips.Imm(w) << 16; continue; }
+            // Some native overlays materialize the complete model-table address before
+            // adding the shifted class, rather than putting its low half in the final lw.
+            // Carry only a literal base: an indexed address or class alias cannot qualify.
+            if (op == 9 && bases.TryGetValue(rs, out uint literal) && !addresses.Contains(rs) && !indices.Contains(rs))
+            {
+                if (rt == r || rt == 0) return false;
+                bases[rt] = unchecked(literal + (uint)UniversalMips.SImm(w));
+                addresses.Remove(rt); indices.Remove(rt); continue;
+            }
+            if (op == 0 && UniversalMips.Fn(w) == 33 &&
+                (indices.Contains(rs) && !addresses.Contains(rs) && bases.ContainsKey(rt) && !indices.Contains(rt) && !addresses.Contains(rt) && (rd == r || rd == rt) ||
+                 indices.Contains(rt) && !addresses.Contains(rt) && bases.ContainsKey(rs) && !indices.Contains(rs) && !addresses.Contains(rs) && (rd == r || rd == rs)))
             {
                 uint basis = bases.TryGetValue(rs, out uint a) ? a : bases[rt]; bases[rd] = basis; addresses.Add(rd); continue;
             }
             if (op == 35 && addresses.Contains(rs) && bases.TryGetValue(rs, out uint baseAddress) && unchecked(baseAddress + (uint)UniversalMips.SImm(w)) == 0x80076378 && rt == r)
                 return true;
-            if (Reads(w, r) || Writes(w, r)) return false;
+            if (Reads(w, r) || Writes(w, r) || addresses.Any(a => Reads(w, a))) return false;
             int written = op == 0 ? rd : rt;
             if (Writes(w, written)) { bases.Remove(written); indices.Remove(written); addresses.Remove(written); }
         }
