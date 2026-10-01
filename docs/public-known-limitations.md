@@ -1,4 +1,4 @@
-# Spyro Editor V1.0 — supported scope and limitations
+# Spyro Editor 1.0 — supported scope and limitations
 
 - Cross-level imports have broader class remapping and dependency support, but
   **all Mobys working in all levels is not complete**. Static composition does

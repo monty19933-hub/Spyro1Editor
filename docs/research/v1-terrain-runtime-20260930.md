@@ -273,5 +273,6 @@ MAC3 test authenticated at 0x8004E140..0x8004E170: the apparent lower ramp rows
 6170/6171 face the opposite way. At the first settled XY the original admitted
 surface is Z601.7158203125; the final disc and captured RAM agree on Z438.8607610887,
 row 6244, consistent with Spyro's settled Z462.1875. Whole-table byte equality is
-not claimed: 244 loaded rows have runtime differences in their third word.
+not claimed: the first 244 loaded rows differ from the disc. Every subsequent
+row (244..7208), including the removed rows and nearby ground, is byte-exact.
 Receipt: `verification/plain-removal-fixed-ground-offline.json`.
