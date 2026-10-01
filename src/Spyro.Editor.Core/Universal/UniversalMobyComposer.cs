@@ -51,6 +51,8 @@ public sealed record UniversalComposeResult(
     public int ReusedPhysicalRows { get; init; }
     public int DroppedPropertyBytes { get; init; }
     public IReadOnlyList<UniversalPlayerAnimationImport> PlayerAnimationImports { get; init; } = [];
+    public IReadOnlyList<UniversalDestinationGemCall> DestinationGemCollectionCalls { get; init; } = [];
+    public int DestinationGemCollectionExtraBytes { get; init; }
 }
 
 /// <summary>
@@ -74,11 +76,7 @@ public static class UniversalMobyComposer
         finalEnd <= originalEnd && finalEnd <= NormalBufferFloor;
 
     /// <summary>Gem value a native row contributes: a visible gem (type 0x18) or its reward gem ID (+0x53).</summary>
-    public static int TreasureValue(byte[] row)
-    {
-        if (row[0x50] == 0x18 && GemValue.TryFromEncoding(row[0x36], row[0x4F], out GemValue visible)) return visible.Value;
-        return GemValue.TryFromIdByte(row[0x53], out GemValue reward) ? reward.Value : 0;
-    }
+    public static int TreasureValue(byte[] row) => UniversalTreasureAccounting.KnownValue(row);
 
     public static uint RuntimeEnd(UniversalLevelData d, uint copyBuffer)
     {
@@ -95,6 +93,8 @@ public static class UniversalMobyComposer
 
     /// <param name="sources">Original-image source level data and overlays keyed by level key.</param>
     /// <param name="shared">Classes resident in the shared PETE model table.</param>
+    /// <param name="removedTreasureAlreadyApplied">True only when the ordinary source-row writer
+    /// already applied removedRows treasure to this executable. Direct composition owns it by default.</param>
     public static UniversalComposeResult Compose(
         LevelDefinition destination,
         byte[] destinationData,
@@ -108,7 +108,8 @@ public static class UniversalMobyComposer
         IReadOnlyCollection<int>? removedRows = null,
         Func<IReadOnlySet<int>, IEnumerable<(long Offset, int Length)>>? protectedVramAfterDrop = null,
         Func<int, byte[]>? sharedModelPackage = null,
-        Func<NativePlayerAnimationSource>? playerAnimationSource = null)
+        Func<NativePlayerAnimationSource>? playerAnimationSource = null,
+        bool removedTreasureAlreadyApplied = false)
     {
         if (placements.Count == 0 && removedRows is not { Count: > 0 }) throw new ArgumentException("No placements or permanent removals were supplied.");
         int incomingCount = placements.Count;
@@ -129,6 +130,8 @@ public static class UniversalMobyComposer
         UniversalLevelData dest = new(destinationData.ToArray());
         int nativeRowsBefore = dest.Scene().RowCount;
         var permanentlyRemoved = UniversalRowRemoval.Normalize(nativeRowsBefore, removedRows);
+        // Capture before dropped classes become inert and packages/rows move.
+        int removedKnownTreasure = permanentlyRemoved.Sum(row => TreasureValue(dest.Row(row)));
         int[] saveRows = placements.Select((p, i) => checked(nativeRowsBefore + (p.PersistentSlot ?? incomingOrder[i]))).ToArray();
         if (saveRows.Any(i => i > 255)) throw new InvalidDataException("An active placement's lifetime save identity exceeds the native 256-bit level bitmap; retired identities cannot be reused on existing cards.");
         byte[] exe = executable.ToArray();
@@ -397,6 +400,9 @@ public static class UniversalMobyComposer
 
         // 3. Placed rows.
         List<(byte[], UniversalRowTemplate)> rows = [];
+        // Direct composition owns removal accounting. A caller that completed
+        // the ordinary source-row writer must explicitly retain its prior delta.
+        int treasure = removedTreasureAlreadyApplied ? 0 : -removedKnownTreasure;
         for (int i = 0; i < placements.Count; i++)
         {
             var p = placements[i]; var t = templates[i];
@@ -414,19 +420,16 @@ public static class UniversalMobyComposer
                     if (o is > 3 and < 0x58) r[o] = b;
                 }
             if (p.SpecialId == null)
+            {
+                // Count the actual authored bytes while class still identifies
+                // the donor's native gem. Namespace aliases are renderer/behavior
+                // identities, not treasure-value encodings.
+                treasure = checked(treasure + TreasureValue(r));
                 BinaryPrimitives.WriteUInt16LittleEndian(r.AsSpan(0x36), (ushort)classes[(p.SourceLevelKey.ToLowerInvariant(), t.ClassId)].DestinationClass);
+            }
             rows.Add((r, t));
         }
-        // Gem rewards carried by imported rows raise the level's in-game treasure target.
-        int treasure = rows.Where(r => r.Item2.SourceLevelKey != "japan").Sum(r => TreasureValue(r.Item1));
-        if (treasure != 0)
-        {
-            int realm = destination.LevelId / 10 - 1, slot = destination.LevelId % 10;
-            int o = (int)(TreasureTableAddress - UniversalExeBindings.ExeBase) + (realm * 6 + slot) * 2;
-            int total = BinaryPrimitives.ReadUInt16LittleEndian(exe.AsSpan(o)) + treasure;
-            if (total > ushort.MaxValue) throw new InvalidDataException("The level's treasure total would overflow.");
-            BinaryPrimitives.WriteUInt16LittleEndian(exe.AsSpan(o), (ushort)total);
-        }
+        UniversalTreasureAccounting.ApplyDelta(exe, destination.LevelId, treasure);
         int sceneBefore = dest.Subfiles()[3].Length;
         var allocation = UniversalRowRemoval.Allocate(dest, permanentlyRemoved, rows.Count);
         int droppedProperties = UniversalRowRemoval.RemoveOwnedPropertiesAndClearRows(dest, permanentlyRemoved);
@@ -440,6 +443,8 @@ public static class UniversalMobyComposer
 
         // 4. Behavior bundle chained onto the destination's own callbacks.
         List<UniversalBehaviorSourceReport> behavior = [];
+        IReadOnlyList<UniversalDestinationGemCall> destinationGemCalls = [];
+        int destinationGemBytes = 0;
         byte[] overlay = destinationOverlay.ToArray();
         uint copyBuffer = destOverlay.CopyBuffer;
         var byBehaviorSource = imports.Where(i => i.BehaviorImported && i.SourceLevelKey != "japan").GroupBy(i => i.SourceLevelKey)
@@ -452,12 +457,16 @@ public static class UniversalMobyComposer
             uint baseAddress = (copyBuffer + 7) & ~7u;
             var classMaps = classes.GroupBy(k => k.Key.Source).ToDictionary(g => g.Key,
                 g => (IReadOnlyDictionary<int, int>)g.ToDictionary(k => k.Key.Class, k => k.Value.DestinationClass));
-            var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps, remapSaveRows, nativeExecutable: exe);
+            var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps, remapSaveRows, nativeExecutable: exe,
+                nativeDestinationOwner: originalDestination.Overlay);
             uint newCopy = (uint)((baseAddress + bundle.Code.Length + 15) & ~15);
             int keep = (int)(copyBuffer - UniversalOverlay.Base);
             byte[] ov = new byte[UniversalLevelData.Align((int)(newCopy - UniversalOverlay.Base), 0x800)];
             destinationOverlay.AsSpan(0, keep).CopyTo(ov);
             bundle.Code.CopyTo(ov, (int)(baseAddress - UniversalOverlay.Base));
+            UniversalDestinationGemCollectionAdapter.Apply(ov, bundle.DestinationGemCollectionCalls);
+            destinationGemCalls = bundle.DestinationGemCollectionCalls;
+            destinationGemBytes = bundle.DestinationGemCollectionExtraBytes;
             overlay = ov;
             UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.UpdateGlobal], bundle.UpdateWrapper);
             UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.InitGlobal], bundle.InitWrapper);
@@ -515,7 +524,7 @@ public static class UniversalMobyComposer
         int[] mappedRows = Enumerable.Repeat(-1, incomingCount).ToArray(), mappedSaveRows = Enumerable.Repeat(-1, incomingCount).ToArray();
         for (int i = 0; i < newRows.Count; i++) { mappedRows[incomingOrder[i]] = newRows[i]; mappedSaveRows[incomingOrder[i]] = saveRows[i]; }
         return new(destination.Key, imports, mappedRows, ram, arena, freeBefore - vram.FreeBytes, behavior, warnings,
-            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports };
+            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports, DestinationGemCollectionCalls = destinationGemCalls, DestinationGemCollectionExtraBytes = destinationGemBytes };
     }
 
     /// <summary>Class a fully removed native row is switched to: no model, no behavior in any level, never

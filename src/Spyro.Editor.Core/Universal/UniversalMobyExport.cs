@@ -79,13 +79,16 @@ public static class UniversalMobyExport
 {
     public const string RequiredExporterFeature = "universal-moby-import";
 
+    /// <param name="removedTreasureAlreadyApplied">True only for a staged image whose ordinary
+    /// source-row writer already applied all supplied native removal treasure deltas.</param>
     public static UniversalExportResult Apply(UniversalSourceLibrary sources, string currentImagePath, string outputImagePath,
         LevelCatalog catalog, IReadOnlyDictionary<string, IReadOnlyList<UniversalMobyPlacement>> placementsByLevel,
         Func<string, LevelDefinition, IEnumerable<(long Offset, int Length)>>? protectedVram = null,
         UniversalJapaneseSource? japanese = null,
         IReadOnlyDictionary<string, IReadOnlyCollection<int>>? removedRowsByLevel = null,
         string? identityWorkspace = null,
-        bool deferSpecialHooks = false)
+        bool deferSpecialHooks = false,
+        bool removedTreasureAlreadyApplied = false)
     {
         if (string.Equals(Path.GetFullPath(sources.ImagePath), Path.GetFullPath(outputImagePath), StringComparison.Ordinal) ||
             string.Equals(Path.GetFullPath(currentImagePath), Path.GetFullPath(outputImagePath), StringComparison.Ordinal))
@@ -121,7 +124,8 @@ public static class UniversalMobyExport
                 current.EntryBytes(level.SourceWadEntry - 1), exe, k => sources.Get(k), sources.SharedClasses,
                 protectedVram(currentImagePath, level), placements, SpecialProvider(japanese),
                 removed,
-                useNativeOwnershipScan ? dropped => DefaultProtectedVram(currentImagePath, level, dropped) : null, sources.SharedModelPackage, sources.PlayerAnimations);
+                useNativeOwnershipScan ? dropped => DefaultProtectedVram(currentImagePath, level, dropped) : null, sources.SharedModelPackage, sources.PlayerAnimations,
+                removedTreasureAlreadyApplied);
             exe = composed.Executable;
             replacements[level.SourceWadEntry] = composed.LevelData;
             replacements[level.SourceWadEntry - 1] = composed.Overlay;

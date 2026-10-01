@@ -101,6 +101,7 @@ public sealed class NativeFreshMainCompilation
     private UniversalComposeResult ComposeWithExecutable(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements,
         byte[] actualExecutable,Func<string,UniversalSpecialAsset?>? special)
     {
+        NativeFreshTreasureTarget.RequireZeroBaseline(donors.Disc.Exe, actualExecutable);
         // The canonical zero-actor scene includes only one spare placed row.
         // Size its owned empty arena before imports consume further placed rows;
         // the ordinary composer still checks the final dynamic reserve and RAM.
@@ -123,6 +124,7 @@ public sealed class NativeFreshMainCompilation
         UniversalNativeLayoutStore.Validate(identityWorkspace,Target.Key,0);
         var baseline=UniversalDiscImage.Read(stagedRetailImage??_baseline);
         byte[] stagedExe=stagedRetailImage==null?_exe.ToArray():MergeAuthoredExecutable(donors.Disc.Exe,baseline.Exe);
+        NativeFreshTreasureTarget.RequireZeroBaseline(donors.Disc.Exe,stagedExe);
         NativeFreshNewGameEntry.Apply(donors.Disc.Exe,stagedExe,startInAuthoredLevel);
         var compose=placements.Count == 0 ? null : ComposeWithExecutable(donors,placements,stagedExe,UniversalMobyExport.SpecialProvider(japanese));
         byte[] levelData=compose?.LevelData ?? _body.ToArray(), overlayData=compose?.Overlay ?? _overlay.ToArray();
