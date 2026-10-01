@@ -189,3 +189,77 @@ This proves the final added surface supports native gravity, movement and jump
 collision after position assistance; no code, physics or collision writes and no
 save states were used. Native packet readback separately validates distant
 geometry construction.
+
+## Final v23 removed face: loaded geometry and collision ownership
+
+Candidate `terrain-topology-native-v23/artisans-floor-remove.cue`, BIN SHA-256
+`25682d7273c87da919d7878963ea7bd2b9bc8a286496505c5c2416f269d41cd0`,
+was cold-booted through normal New Game. Native Nestor rescue still worked.
+The exact final 2,068-byte sector 90 was found at RAM 0x800AC278, with complete
+collision assignments/flags exact. The independent lookup audit confirms only
+the matched face's collision rows are retired and all neighbors remain.
+
+The attempted drop test is **not a fall-through acceptance pass**. The first
+position-only assist above (5312,3232) drifted toward an unchanged neighbor and
+landed at (5313,3204.3125,590.75). Its observation label
+`below-removed-surface` is misleading; the recorded height is above the former
+Z566 terrain. A second assist after rescuing Nestor reached
+(5280,3264,594.75), within the still-present dragon platform. Removing a terrain
+face does not remove overlapping Mobys. These measurements do not isolate the
+removed terrain's physical support and must not be reported as a successful fall
+through a hole.
+
+Receipts: `runtime/terrain-final-remove-launch.json`,
+`runtime/terrain-final-remove-position-assist.json`,
+`runtime/terrain-final-remove-position-assist-2.json`,
+`runtime/terrain-final-remove.jsonl`, `runtime/terrain-final-remove-loaded.json`,
+`runtime/terrain-final-remove-height-comparison.json`, under
+`work/v1-continuation`. RAM SHA-256:
+`9a445fa91a6eb722a24695beabe7e71ce370e45e07a6471bb2657e6eff1c72a9`.
+The normal editor Copy/Remove, save and Create BIN flows passed independently;
+final native raised and copied floors have the separate movement evidence above.
+
+
+## Plain-ramp removal and native allocation growth (October 1 final retake)
+
+A separate plain ramp face `58:43` behind the spawn avoids Nestor and other solid
+Mobys. It covers X5260..5364, Y2723..2851, with Z610..593. Only source collision
+rows 6132/6133 are removed; other rows and lookup membership/order are independently
+checked. This case grows the native model allocation by 2,048 bytes.
+
+The first candidate, SHA-256
+`2ae32b82077dc8c849118e3bba69302d1204bd871d1e03d7ceb97c7581ffcf48`,
+failed during Artisans loading. The new LP-only overflow sector 178 had zero HP
+geometry but was admitted to the native HP render queue. Runtime capture identified
+the sector at 0x800C0A48 and invalid geometry accesses. This is a failed candidate,
+not evidence that relocation or gameplay passed.
+
+Commit `1d31023` gives LP-only overflow sectors the original game's `0xC000`
+admission flags. The corrected candidate changes only those two flag bytes in
+sectors 178 and 179; geometry, collision, pointers and the real 2,048-byte growth
+are unchanged. All 254 original zero-HP sectors have an LP-only flag; ten Stone
+Hill sectors use this same 0xC000 combination. Independent execution of 450
+scalar cases from the authenticated native selector confirms HP is skipped and
+LP selected. The native packet verifier checks 143 resulting triangles.
+
+Final candidate: `terrain-native-plain-removal-fixed/artisans-plain-ramp-remove.cue`.
+BIN SHA-256:
+`834b1b1574b69f4266e79f571d881ba843a67ce4bcd6d5288a01ac2df9792511`.
+A cold real-BIOS New Game reached level 10 and rendered Artisans normally at
+30 game FPS. The initial controller-only approach overshot the test patch, so a
+single explicitly recorded position-only assist placed Spyro at (5312,2800,660).
+Native gravity then settled at (5307.3125,2785.375,462.1875), well below the
+removed Z~601 ramp. Normal Cross input jumped to
+(5311.875,2789.625,533.625) and landed at (5307.25,2787.5625,462.375).
+Screenshots show the ground beneath the ramp and continued intact rendering.
+No code, physics, terrain or collision memory writes and no save states were used.
+This is an assisted-approach physical removal pass, not controller-only navigation.
+The earlier two-sided geometric estimate of a 32-unit drop is not a native
+collision-admission prediction and is not used as the acceptance result.
+
+Receipts under `work/v1-continuation/runtime`:
+`plain-removal-fixed-launch.json`, `plain-removal-fixed-position-assist.json`,
+`plain-removal-fixed-observations.jsonl`, and `plain-removal-fixed.ram`.
+Captured RAM SHA-256:
+`b70f54382285cc77b82141756f3002dcfcea55d3b7e0a23f864d2bbacc4b06b5`.
+The isolated test app was closed without a resume save state.

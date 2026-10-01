@@ -10,6 +10,11 @@
   variants and names objects whose removal would reclaim enough resources.
   Removing objects frees physical slots and reclaims models and textures when
   their last proven user is removed.
+- Verified the Wizard Peak Armored Druid in Artisans through native attack, flame
+  resistance and charge defeat. The specific Alpine Ridge variant that failed a
+  native interaction is refused with an explanation.
+- Fixed LP-only terrain overflow sectors entering the wrong native render queue,
+  including removal exports that grow the level allocation.
 - Fixed the editor camera snapping when removing, restoring or undoing an object.
 - Fixed normal BIN/CUE creation when older experimental drafts coexist with the
   current project. The export dialog now chooses Artisans or the saved fresh

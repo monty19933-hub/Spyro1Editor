@@ -4,6 +4,11 @@
   **all Mobys working in all levels is not complete**. Static composition does
   not certify AI, sound, collision, triggers or linked behavior. The browser and
   exporter report unresolved dependencies and native resource limits.
+- The Wizard Peak Armored Druid source variant has passed appearance, enemy
+  attack, flame resistance and charge defeat in the edited Artisans test project.
+  One Alpine Ridge source variant failed a native interaction test and is refused
+  for Artisans; choose another source variant. Fitting into memory is separate
+  from passing the game's behavior checks.
 - Fresh levels use the regular editor and normal Create BIN, with authored
   geometry, collision, static native materials and Mobys. This build supports
   one fresh level in slot 65, at most 255 triangles, and the native coordinate,

@@ -25,8 +25,8 @@ The self-contained release packages are named:
 Stable builds use the `v1.0` identity, schema-3 package manifests and the stable
 update channel. They do not select beta releases as updates. Earlier numbered
 and dotted beta packages retain their existing compatibility rules and must not
-be replaced or retagged. Source builds default to the preserved beta identity;
-the release script explicitly selects the stable identity:
+be replaced or retagged. Source builds default to V1.0 stable; the release script accepts an explicit
+identity for reproducible packaging:
 
 ```sh
 SPYRO_EDITOR_RELEASE_CHANNEL=stable \
@@ -48,17 +48,11 @@ project under the user's Documents folder instead of inside the replaceable app
 folder. Generated output stays on the user's machine and should not be uploaded
 to GitHub.
 
-Normal public macOS builds are notarized and stapled. An explicit
-`SPYRO_EDITOR_MAC_BUILD_MODE=signed-only` build is reserved for a notarization
-service outage: it remains Developer ID signed, hardened, and securely
-timestamped, but includes `MACOS-OPEN-INSTRUCTIONS.txt` because testers may need
-System Settings > Privacy & Security > Open Anyway. This emergency fallback must
-be replaced by the normal notarized asset as soon as possible.
-When the release owner explicitly approves an accept-the-risk package because
-no Developer ID identity is installed, `SPYRO_EDITOR_MAC_BUILD_MODE=community`
-produces a hardened ad-hoc-signed ZIP with the same opening instructions and
-published SHA-256 digests. Earlier private development packages used this explicit local ad-hoc mode.
-Their signing status does not describe a later package; check its manifest.
+This local V1.0 macOS build uses Developer ID signing with hardened runtime and
+a secure timestamp. It is not notarized; the package records that limitation
+and includes `MACOS-OPEN-INSTRUCTIONS.txt`. A notarized public package requires
+the configured Apple notarization credentials. Windows x64 packaging is checked,
+but Windows execution must be verified on Windows.
 
 ## Current Editor
 

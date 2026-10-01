@@ -42,7 +42,9 @@ save games keep their saved level. One fresh level per project uses native slot
 
 Choose **Objects → Add object…** and search across the game. Select a source
 variant and inspect its model preview and compatibility result before placement.
-Some objects require dependencies or resources that a destination cannot provide;
+Different source levels may reuse an object number for different appearances or
+behaviors. Check the selected source name and preview; a source variant is not
+a promise of an identical enemy. Some objects require dependencies or resources that a destination cannot provide;
 the exporter explains these cases. A visible catalog entry is not a guarantee
 that every enemy behavior works in every level.
 
