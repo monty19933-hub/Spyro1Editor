@@ -1,5 +1,17 @@
 using Spyro.Editor.Core.Updates;
 
+if(args.Length==3&&args[1].StartsWith("stable:",StringComparison.Ordinal))
+{
+    try
+    {
+        if(!EditorStableReleaseVersion.TryParse(args[1][7..],out var expected))throw new InvalidDataException("Invalid stable version.");
+        await using var file=File.OpenRead(args[0]);var identity=EditorStableAssemblyReleaseIdentityReader.Read(file,args[0]);
+        if(identity.AssemblyName!=EditorStableAssemblyReleaseIdentityReader.ExpectedAssemblyName||identity.PublicVersion!=expected||identity.ReleaseManifestSchema!=3||identity.InternalVersion!=args[2])throw new InvalidDataException("Stable release assembly identity mismatch.");
+        Console.WriteLine($"Verified stable assembly identity: {identity.PublicVersion.DisplayName}; schema3; {identity.InternalVersion}; {args[0]}");return 0;
+    }
+    catch(Exception e)when(e is IOException or InvalidDataException or UnauthorizedAccessException){Console.Error.WriteLine(e.Message);return 1;}
+}
+
 if (args.Length != 3 ||
     !EditorBetaReleaseVersion.TryParse(args[1], out EditorBetaReleaseVersion expectedVersion) ||
     string.IsNullOrWhiteSpace(args[2]))

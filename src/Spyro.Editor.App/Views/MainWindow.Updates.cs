@@ -114,6 +114,7 @@ public sealed partial class MainWindow
 
     private async Task CheckForUpdatesQuietlyAsync()
     {
+        if(AppReleaseIdentity.IsStable){await CheckStableUpdatesAsync(quiet:true);return;}
         ReleaseProjectContext? context = ReleaseProjectBootstrap.Current;
         if (context == null)
             return;
@@ -190,6 +191,7 @@ public sealed partial class MainWindow
 
     private async Task ShowUpdatesAsync()
     {
+        if(AppReleaseIdentity.IsStable){await CheckStableUpdatesAsync(quiet:false);return;}
         ReleaseProjectContext? context = ReleaseProjectBootstrap.Current;
         if (!_releaseMode || context == null)
         {
@@ -345,7 +347,7 @@ public sealed partial class MainWindow
         ProgressBar progress = new() { Minimum = 0, Maximum = 100, Value = 0, IsVisible = false };
         TextBlock result = new()
         {
-            Text = "The package is accepted only when its name, public beta identity, changelog, archive manifest, and SHA-256 digest all agree.",
+            Text = "The package is accepted only when its name, release channel and public identity, changelog, archive manifest, and SHA-256 digest all agree.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(ModernMutedInk)
         };
@@ -383,13 +385,18 @@ public sealed partial class MainWindow
                 ProjectSnapshotResult snapshot = await ProjectSnapshotService.CreateAsync(
                     context.Project,
                     context.UserData.BackupsPath,
-                    $"pre-update-beta-v{GitHubReleaseUpdateClient.RequireUpdateVersion(update).CanonicalVersion}");
+                    update.Channel=="stable"?$"pre-update-stable-v{update.PublicVersion}":$"pre-update-beta-v{GitHubReleaseUpdateClient.RequireUpdateVersion(update).CanonicalVersion}");
                 result.Text = $"Snapshot verified ({snapshot.FileCount} project file(s)). Downloading update...";
                 Progress<double> report = new(value => progress.Value = value * 100);
                 GitHubReleaseUpdateClient client = new(UpdateHttpClient);
-                string packagePath = await client.DownloadVerifiedAsync(update, context.UserData.UpdatesPath, report);
-                string changelogPath = await GitHubReleaseUpdateClient.WriteChangelogAsync(update, context.UserData.UpdatesPath);
-                await RememberDownloadedUpdateAsync(context, update);
+                string packagePath = update.Channel=="stable"
+                    ? await new GitHubStableReleaseUpdateClient(UpdateHttpClient).DownloadVerifiedAsync(update,context.UserData.UpdatesPath,report)
+                    : await client.DownloadVerifiedAsync(update, context.UserData.UpdatesPath, report);
+                string changelogPath = update.Channel=="stable"
+                    ? await GitHubStableReleaseUpdateClient.WriteChangelogAsync(update,context.UserData.UpdatesPath)
+                    : await GitHubReleaseUpdateClient.WriteChangelogAsync(update, context.UserData.UpdatesPath);
+                if(update.Channel=="stable")await RememberStableDownloadAsync(context,update);
+                else await RememberDownloadedUpdateAsync(context, update);
                 result.Text =
                     $"Downloaded and verified: {packagePath}\nChangelog: {changelogPath}\nSnapshot: {snapshot.SnapshotPath}\n\n" +
                     "Your project remains untouched. Automatic in-place replacement stays disabled until the Mac and Windows packages are production-signed; install this release normally.";

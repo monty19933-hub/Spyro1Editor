@@ -1,0 +1,1 @@
+namespace StableFixture; public sealed class Fixture {}

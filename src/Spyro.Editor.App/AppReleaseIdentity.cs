@@ -8,7 +8,21 @@ internal static class AppReleaseIdentity
     private static readonly Lazy<EditorBetaReleaseVersion> PublicVersion = new(ReadPublicVersion);
 
     public static EditorBetaReleaseVersion BetaVersion => PublicVersion.Value;
-    public static string DisplayName => BetaVersion.DisplayName;
+    public static EditorStableReleaseVersion? StableVersion { get; } = ReadStableVersion();
+    public static bool IsStable => StableVersion != null;
+    public static string DisplayName => StableVersion?.DisplayName ?? BetaVersion.DisplayName;
+    private static EditorStableReleaseVersion? ReadStableVersion()
+    {
+        var metadata=typeof(AppReleaseIdentity).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().ToArray();
+        var channel=metadata.Where(a=>a.Key==EditorStableAssemblyReleaseIdentityReader.ChannelMetadataKey).ToArray();
+        var stable=metadata.Where(a=>a.Key==EditorStableAssemblyReleaseIdentityReader.PublicReleaseMetadataKey).ToArray();
+        var schema=metadata.Where(a=>a.Key==EditorStableAssemblyReleaseIdentityReader.ReleaseManifestSchemaMetadataKey).ToArray();
+        if(channel.Length==0&&stable.Length==0&&schema.Length==0)return null;
+        if(channel.Length!=1||channel[0].Value!="stable"||stable.Length!=1||!EditorStableReleaseVersion.TryParse(stable[0].Value,out var version)||schema.Length!=1||schema[0].Value!="3")throw new InvalidOperationException("Invalid stable-channel assembly metadata.");
+        string info=typeof(AppReleaseIdentity).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion??"";
+        if(!EditorSemanticVersion.TryParse(info,out var build)||build.IsPrerelease||build.Major!=version.Major||build.Minor!=version.Minor||build.Patch!=version.Patch)throw new InvalidOperationException("Stable internal identity must match without beta/prerelease identifiers.");
+        return version;
+    }
     public static string InternalVersion => typeof(AppReleaseIdentity).Assembly
         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
         .InformationalVersion ?? "unknown";

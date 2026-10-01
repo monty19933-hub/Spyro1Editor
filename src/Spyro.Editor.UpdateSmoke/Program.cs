@@ -5,6 +5,8 @@ using System.Text;
 using System.Text.Json;
 using Spyro.Editor.Core.Updates;
 
+await StableReleaseCases.RunAsync();
+
 Assert(EditorBetaReleaseVersion.TryParseDisplayName("Spyro Editor Beta V2", out EditorBetaReleaseVersion beta2), "Could not parse public Beta V2 name.");
 Assert(EditorBetaReleaseVersion.TryParseReleaseTag("beta-v3", out EditorBetaReleaseVersion beta3), "Could not parse public beta-v3 tag.");
 Assert(EditorBetaReleaseVersion.TryParseDisplayName("Spyro Editor Beta V3.1", out EditorBetaReleaseVersion beta31), "Could not parse public Beta V3.1 name.");

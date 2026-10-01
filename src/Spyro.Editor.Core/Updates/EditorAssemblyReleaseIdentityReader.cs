@@ -43,6 +43,7 @@ public static class EditorAssemblyReleaseIdentityReader
             AssemblyDefinition assembly = metadata.GetAssemblyDefinition();
             string assemblyName = metadata.GetString(assembly.Name);
             List<string> betaValues = [];
+            List<string> channels = [];
             List<string> publicVersionValues = [];
             List<string> releaseManifestSchemaValues = [];
             List<string> informationalVersions = [];
@@ -53,6 +54,7 @@ public static class EditorAssemblyReleaseIdentityReader
                 if (string.Equals(attributeName, AssemblyMetadataAttributeName, StringComparison.Ordinal))
                 {
                     string[] values = ReadFixedStringArguments(metadata, attribute, expectedCount: 2, source);
+                    if(values[0]==EditorStableAssemblyReleaseIdentityReader.ChannelMetadataKey)channels.Add(values[1]);
                     if (string.Equals(values[0], BetaReleaseMetadataKey, StringComparison.Ordinal))
                         betaValues.Add(values[1]);
                     else if (string.Equals(values[0], PublicReleaseMetadataKey, StringComparison.Ordinal))
@@ -67,6 +69,7 @@ public static class EditorAssemblyReleaseIdentityReader
                 }
             }
 
+            if(channels.Count>0&&(channels.Count!=1||channels[0]!="beta"))throw new InvalidDataException("A beta assembly reader cannot accept another channel.");
             if (betaValues.Count != 1)
             {
                 throw new InvalidDataException(

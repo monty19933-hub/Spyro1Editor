@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <Compile Remove="IncrementalFixture/**/*.cs" />
+    <Compile Remove="StableFixture/**/*.cs" />
+    <ProjectReference Include="StableFixture/Spyro.Editor.UpdateSmoke.StableFixture.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../Spyro.Editor.App/Spyro.Editor.App.csproj" />
     <ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" />
     <ProjectReference Include="IncrementalFixture/Spyro.Editor.UpdateSmoke.IncrementalFixture.csproj"
@@ -20,5 +22,6 @@
     <Copy
       SourceFiles="$(MSBuildThisFileDirectory)IncrementalFixture/bin/$(Configuration)/net10.0/Spyro.Editor.App.dll"
       DestinationFiles="$(TargetDir)Spyro.Editor.App.IncrementalFixture.dll" />
+      <Copy SourceFiles="$(MSBuildThisFileDirectory)StableFixture/bin/$(Configuration)/net10.0/Spyro.Editor.App.dll" DestinationFiles="$(TargetDir)Spyro.Editor.App.StableFixture.dll" />
   </Target>
 </Project>

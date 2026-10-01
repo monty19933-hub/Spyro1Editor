@@ -17,6 +17,7 @@
       clients can discover them. Incremental releases use schema 2 and dotted
       values such as "5.1" while retaining the bridge's legacy major.
     -->
+    <ReleaseChannel Condition="'$(ReleaseChannel)' == ''">beta</ReleaseChannel>
     <BetaReleaseNumber>6</BetaReleaseNumber>
     <PublicReleaseVersion>6</PublicReleaseVersion>
     <ReleaseManifestSchemaVersion>1</ReleaseManifestSchemaVersion>
@@ -29,6 +30,22 @@
     <Product>Spyro Editor Beta V$(PublicReleaseVersion)</Product>
     <Description>Spyro Editor Beta V$(PublicReleaseVersion)</Description>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(ReleaseChannel)' == 'stable'">
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+    <Product>Spyro Editor $(StableReleaseVersion)</Product>
+    <Description>Spyro Editor $(StableReleaseVersion)</Description>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(ReleaseChannel)' == 'stable'">
+    <AssemblyMetadata Include="SpyroEditorReleaseChannel" Value="stable" />
+    <AssemblyMetadata Include="SpyroEditorStableReleaseVersion" Value="$(StableReleaseVersion)" />
+    <AssemblyMetadata Include="SpyroEditorStableManifestSchema" Value="3" />
+  </ItemGroup>
+  <Target Name="ValidateReleaseChannel" BeforeTargets="GenerateAssemblyInfo">
+    <Error Condition="'$(ReleaseChannel)' != 'beta' and '$(ReleaseChannel)' != 'stable'" Text="ReleaseChannel must be beta or stable." />
+    <Error Condition="'$(ReleaseChannel)' == 'stable' and '$(StableReleaseVersion)' == ''" Text="StableReleaseVersion must be explicitly supplied for a stable build." />
+  </Target>
 
   <ItemGroup>
     <AssemblyMetadata Include="SpyroEditorBetaRelease" Value="$(BetaReleaseNumber)" />

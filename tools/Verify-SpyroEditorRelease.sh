@@ -113,6 +113,7 @@ if [[ "$PUBLIC_RELEASE_VERSION" == *.* ]]; then
 else
     MAC_BUNDLE_SHORT_VERSION="$PUBLIC_RELEASE_VERSION.0"
 fi
+source "$ROOT_DIR/tools/ReleaseChannel.sh"
 [[ "$RELEASE_NAME" == "$EXPECTED_RELEASE_NAME" ]] || \
     fail "Release name '$RELEASE_NAME' must be '$EXPECTED_RELEASE_NAME'."
 
@@ -122,7 +123,7 @@ fi
     fail "CHANGELOG.md must contain a blank line after its release heading."
 [[ "$(sed -n '3p' "$ROOT_DIR/CHANGELOG.md")" == "## Changes since $PREVIOUS_PUBLIC_RELEASE_NAME" ]] || \
     fail "CHANGELOG.md must be the exact delta headed 'Changes since $PREVIOUS_PUBLIC_RELEASE_NAME'."
-[[ "$(grep -Ec '^# Spyro Editor Beta V' "$ROOT_DIR/CHANGELOG.md" || true)" == "1" ]] || \
+[[ "$(grep -Ec '^# Spyro Editor ' "$ROOT_DIR/CHANGELOG.md" || true)" == "1" ]] || \
     fail "CHANGELOG.md must contain exactly one public release heading."
 awk 'NR > 3 && NF { found = 1 } END { exit(found ? 0 : 1) }' "$ROOT_DIR/CHANGELOG.md" || \
     fail "CHANGELOG.md must describe at least one change after its previous-release heading."
@@ -565,10 +566,10 @@ rg -F "$PROJECT_VERSION" "$ROOT_DIR/docs/release-user-guide.md" >/dev/null || \
 strings "$MAC_APP_DIR/Spyro.Editor.App.dll" | rg -F "$PROJECT_VERSION" >/dev/null || fail "macOS app DLL version is stale."
 strings "$WIN_APP_DIR/Spyro.Editor.App.dll" | rg -F "$PROJECT_VERSION" >/dev/null || fail "Windows app DLL version is stale."
 dotnet run --project "$RELEASE_IDENTITY_TOOL" --configuration Release -- \
-    "$MAC_APP_DIR/Spyro.Editor.App.dll" "$PUBLIC_RELEASE_VERSION" "$PROJECT_VERSION" || \
+    "$MAC_APP_DIR/Spyro.Editor.App.dll" "$RELEASE_IDENTITY_VERSION" "$PROJECT_VERSION" || \
     fail "macOS app DLL assembly metadata does not match the numbered release."
 dotnet run --project "$RELEASE_IDENTITY_TOOL" --configuration Release -- \
-    "$WIN_APP_DIR/Spyro.Editor.App.dll" "$PUBLIC_RELEASE_VERSION" "$PROJECT_VERSION" || \
+    "$WIN_APP_DIR/Spyro.Editor.App.dll" "$RELEASE_IDENTITY_VERSION" "$PROJECT_VERSION" || \
     fail "Windows app DLL assembly metadata does not match the numbered release."
 cmp "$MAC_APP_DIR/Spyro.Editor.Core.dll" "$WIN_APP_DIR/Spyro.Editor.Core.dll" >/dev/null || \
     fail "Mac and Windows packages contain different Spyro.Editor.Core.dll bytes."
@@ -611,6 +612,10 @@ expected = {
     "platform": platform,
 }
 if schema == "2":
+    expected["publicVersion"] = public_version
+elif schema == "3":
+    del expected["publicBeta"]
+    expected["channel"] = "stable"
     expected["publicVersion"] = public_version
 if manifest != expected:
     raise SystemExit(f"Release manifest mismatch in {path}: {manifest!r} != {expected!r}")

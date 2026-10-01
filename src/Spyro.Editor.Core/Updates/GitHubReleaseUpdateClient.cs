@@ -20,7 +20,8 @@ public sealed record EditorUpdateInfo(
     Uri ReleasePage,
     bool Prerelease,
     EditorUpdateAsset Asset,
-    string PublicVersion = "");
+    string PublicVersion = "",
+    string Channel = "beta");
 
 public sealed class GitHubReleaseUpdateClient
 {
@@ -277,6 +278,7 @@ public sealed class GitHubReleaseUpdateClient
     public static EditorBetaReleaseVersion RequireUpdateVersion(EditorUpdateInfo update)
     {
         ArgumentNullException.ThrowIfNull(update);
+        if(update.Channel!="beta")throw new InvalidDataException("A beta updater cannot accept another release channel.");
         EditorBetaReleaseVersion version;
         if (string.IsNullOrEmpty(update.PublicVersion))
         {

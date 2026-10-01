@@ -76,6 +76,7 @@ if [[ "$PUBLIC_RELEASE_VERSION" == *.* ]]; then
 else
     MAC_BUNDLE_SHORT_VERSION="$PUBLIC_RELEASE_VERSION.0"
 fi
+source "$ROOT_DIR/tools/ReleaseChannel.sh"
 RELEASE_NAME="${1:-$PUBLIC_RELEASE_SLUG}"
 
 mkdir -p "$DIST_DIR"
@@ -419,7 +420,7 @@ validate_public_changelog_contract() {
         echo "CHANGELOG.md line 3 must be '$expected_delta_heading'." >&2
         return 1
     }
-    release_heading_count="$(grep -Ec '^# Spyro Editor Beta V' "$changelog" || true)"
+    release_heading_count="$(grep -Ec '^# Spyro Editor ' "$changelog" || true)"
     [[ "$release_heading_count" == "1" ]] || {
         echo "CHANGELOG.md must contain exactly one public release heading; it is the delta from the immediately previous release, not accumulated history." >&2
         return 1
@@ -580,7 +581,18 @@ write_release_manifest() {
     if is_research_build; then
         return
     fi
-    if [[ "$RELEASE_MANIFEST_SCHEMA_VERSION" == "1" ]]; then
+    if [[ "$RELEASE_MANIFEST_SCHEMA_VERSION" == "3" ]]; then
+        cat > "$package_dir/release-manifest.json" <<JSON
+{
+  "schemaVersion": 3,
+  "channel": "stable",
+  "publicVersion": "$PUBLIC_RELEASE_VERSION",
+  "displayName": "$PUBLIC_RELEASE_NAME",
+  "internalVersion": "$PROJECT_VERSION",
+  "platform": "$rid"
+}
+JSON
+    elif [[ "$RELEASE_MANIFEST_SCHEMA_VERSION" == "1" ]]; then
         # Whole-number compatibility bridges intentionally keep the exact
         # schema-1 shape consumed by already installed V2 clients. Do not add
         # even optional fields to this branch.
@@ -872,7 +884,7 @@ publish_release_package() {
     rm -f "$zip_path"
     mkdir -p "$package_dir/support/app"
 
-    dotnet publish "$APP_PROJECT" \
+    dotnet publish "$APP_PROJECT" "${RELEASE_PUBLISH_PROPERTIES[@]}" \
         --configuration "$CONFIGURATION" \
         --runtime "$rid" \
         --self-contained true \
