@@ -1,4 +1,4 @@
-# Spyro Editor 1.0 — supported scope and limitations
+# Spyro Editor 1.0.1 — supported scope and limitations
 
 - Cross-level imports have broader class remapping and dependency support, but
   **all Mobys working in all levels is not complete**. Static composition does
@@ -6,9 +6,10 @@
   exporter report unresolved dependencies and native resource limits.
 - The Wizard Peak Armored Druid source variant has passed appearance, enemy
   attack, flame resistance and charge defeat in the edited Artisans test project.
-  One Alpine Ridge source variant failed a native interaction test and is refused
-  for Artisans; choose another source variant. Fitting into memory is separate
-  from passing the game's behavior checks.
+  The Alpine Ridge row-1 variant now imports its missing player reaction
+  animation and has passed native contact damage and recovery in Artisans.
+  Enemy defeat and card reload were not exercised in that specific retest.
+  Fitting into memory is separate from passing the game's behavior checks.
 - Fresh levels use the regular editor and normal Create BIN, with authored
   geometry, collision, static native materials and Mobys. This build supports
   one fresh level in slot 65, at most 255 triangles, and the native coordinate,

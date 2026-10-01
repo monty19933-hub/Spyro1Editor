@@ -62,3 +62,32 @@ sound selectors and incompatible shared texture/geometry headers are rejected
 rather than imported without dependencies. The animation parser's certificate
 is scoped to primary collider damage and the direct-write helper's strict native
 patterns; neither asserts that arbitrary behavior dependencies are complete.
+
+## Normal exporter native retake
+
+The actual current `UniversalMobyExport.Apply` path exported a fresh original
+Artisans with Alpine row 1 and nine explicitly requested native removals. This
+exposed an independent empty-slot bug: cleared unused rows retained group zero,
+so native `KillMoby` searched a group list the row had never joined. The new
+`UniversalRowRemoval` writes the original constructor's signed group sentinel -1.
+See `docs/research/universal-unoccupied-row-group-20261001.md` for the
+source-bound routine checks and the deliberate old-zero-group failure control.
+
+Normal repaired candidate BIN SHA-256:
+`04b94657ce92c8fbf34c567c9439d1ee01540115ea160b6e05d4a586a3fd985c`.
+Cold New Game reached Artisans at 30 FPS. Read-only RAM confirms rows
+30,32,33,94,109,113,121,124 are class1FE/group-1/stateFD; the Druid occupies reused
+physical row29 while retaining its separate lifetime save identity. Its actual
+state22/animation23 hit was captured with pointer `80122040`, RAM SHA-256
+`35889d8083b8da5e8458af415f2a66c7c81b09478677a6d0e2eb7aaa523438e9`.
+Spyro recovered normally and ordinary walking/charging continued. Recovered RAM
+SHA-256: `1c23df92fb3d7f4cb813173036a549c7490a051b40b85ab8abd31e97279e2e34`.
+The normal export has 44,296 bytes final headroom. It copies dependencies 10F and
+13B, adds animation23, reuses shared13/15, and retains the native safety margin.
+
+Private receipt: `runtime/normal-druid-fixed-native-receipt.json` under the same
+work root. This retake used real USA BIOS, a separate initially blank card,
+ordinary controller input and read-only sampling; no RAM writes or savestates.
+Enemy defeat and a later card reload were not exercised in this particular run.
+The earlier normal candidate `2d2a7e7f...` is preserved as the empty-slot failure,
+not an accepted release artifact.

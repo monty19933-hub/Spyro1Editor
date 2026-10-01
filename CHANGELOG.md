@@ -1,3 +1,17 @@
+# Spyro Editor 1.0.1
+
+- Expanded cross-level object support through verified native class lookups,
+  initializer roles and dependency recovery.
+- Imported missing player reaction animations with foreign enemies. The Alpine
+  Ridge Druid now damages Spyro and allows normal recovery in the Artisans test;
+  its animation memory is included in fit checks and removal suggestions.
+- Fixed a game hang caused by unused slots left after permanent object removal.
+- Made **Only what fits here** show completed successful checks and refresh
+  compatibility details after checking a source variant.
+
+Universal gameplay coverage remains incomplete. See the supported-scope document
+for tested interactions and the game's resource limits.
+
 # Spyro Editor 1.0
 
 ## Changes since Spyro Editor Beta V6

@@ -193,6 +193,12 @@ CORE_CASES = (
     ("NativeTerrainBaseProjectionSmoke", "Native terrain base-projection smoke passed."),
     ("UpdateSmoke", "PASS: whole-number and incremental prerelease discovery"),
     ("UniversalMobySmoke", "UNIVERSAL_MOBY_SOURCE_FREE_OK"),
+    ("UniversalDependencySmoke", "UNIVERSAL_DEPENDENCY_CHECKS_OK"),
+    ("UniversalClassOwnershipSmoke", "UNIVERSAL_CLASS_OWNERSHIP_FREE_OK"),
+    ("UniversalPlayerDamageSmoke", "UNIVERSAL_PLAYER_DAMAGE_SMOKE_OK"),
+    ("UniversalPlayerDamageWritesSmoke", "UNIVERSAL_PLAYER_DAMAGE_WRITES_OK"),
+    ("UniversalRowRemovalSmoke", "UNIVERSAL_ROW_REMOVAL_CHECKS_OK"),
+    ("UniversalCapacityPlanSmoke", "UNIVERSAL_CAPACITY_PLAN_OK"),
     ("UniversalIdentitySmoke", "UNIVERSAL_IDENTITY_OK"),
     ("NativeMobySaveMapSmoke", "NATIVE_MOBY_SAVE_MAP_SOURCE_FREE_OK"),
 )

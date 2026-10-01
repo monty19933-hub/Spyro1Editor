@@ -1,4 +1,4 @@
-# Spyro Editor 1.0
+# Spyro Editor 1.0.1
 
 ## Start editing
 
@@ -54,6 +54,10 @@ objects and terrain textures. A successful plan names the objects to inspect,
 explains the effect of removing them, and reports the remaining capacity.
 Nothing is removed automatically. Use the normal Remove button for the objects
 you choose, then reopen the browser to check the resulting scene.
+
+**Only what fits here** includes only objects with a completed successful
+compatibility check. Imported enemies can need additional player reaction
+animations; these count toward the displayed memory use and removal plan.
 
 Removing one copy frees an object slot. Its model and textures may still be
 needed by other copies or linked objects. For example, removing one Gnorc while

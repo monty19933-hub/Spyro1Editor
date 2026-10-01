@@ -1,4 +1,43 @@
-# V1.0 release completion checklist
+# V1.0.1 universal Moby continuation
+
+Active branch: `release/universal-coverage-20261001`, preserved V1.0 source
+checkpoint `2bc4b1be560dfce89bea1bae8e0c9c6bcdc9346c`.
+Original discs, the user's project, immutable project snapshot and earlier
+packages remain separate from the new fixtures. Fly Anywhere remains deferred.
+
+- [x] Prove source model-table class lookups and initializer actor/parent roles
+  instead of refusing those exact native patterns.
+- [x] Recover bounded native particle/spawn arguments and direct player damage
+  writes while retaining ambiguous dependency refusals.
+- [x] Import missing original player reaction records, share resident records,
+  and include aligned growth in retail/fresh capacity checks.
+- [x] Retake Alpine Ridge row 1 in Artisans through normal export: native
+  contact damage, valid animation 23, recovery and continued gameplay passed.
+  The earlier source-variant refusal is resolved. This retest does not claim
+  enemy defeat or card reload for that variant.
+- [x] Correct permanently removed empty rows to the original unlinked group
+  sentinel, preventing a native list-search hang. Normal export with eight
+  unused removed slots cold-loaded and passed the Druid contact retest.
+- [x] Make the browser's fit-only filter require a completed exact check and
+  refresh the selected variant's result. Fresh-level advice uses its own controls.
+- [ ] Repair and natively retest remapped gem collection. A cold export exposed
+  the shared collection helper's implicit original-class dependency; the failed
+  fixture is retained and is not runtime acceptance.
+- [ ] Complete the next bounded child-spawn provenance expansion and refresh
+  affected coverage, final prepared-project capacity, regressions and packages.
+
+The first integrated continuation matrix composes 104,837 of 145,285 retail
+variant/destination cells: 39,177 static-only and 65,660 with unverified behavior
+dependencies. The default fresh document composes 3,828 of 4,151 variants.
+These reports precede the gem-helper correction and final child-spawn change;
+their source/module fingerprints are recorded with the reports. Every matrix
+runtime cell remains not-tested. Full universal gameplay coverage is unfinished.
+
+Current native receipts are described in
+`docs/research/universal-player-reaction-runtime-20261001.md` and
+`docs/research/universal-unoccupied-row-group-20261001.md`.
+
+## Preserved V1.0 release history
 
 Active continuation: `release/v1-artisans-20260930`, checkpoint `7573728`.
 The beta54 packages and the user's original project are preserved. Tests use
