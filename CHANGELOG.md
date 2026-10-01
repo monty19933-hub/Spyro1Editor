@@ -1,4 +1,4 @@
-# Spyro Editor V1.0
+# Spyro Editor 1.0
 
 ## Changes since Spyro Editor Beta V6
 

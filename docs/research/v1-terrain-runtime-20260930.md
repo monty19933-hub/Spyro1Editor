@@ -263,3 +263,15 @@ Receipts under `work/v1-continuation/runtime`:
 Captured RAM SHA-256:
 `b70f54382285cc77b82141756f3002dcfcea55d3b7e0a23f864d2bbacc4b06b5`.
 The isolated test app was closed without a resume save state.
+
+
+The final offline native readback locates exact corrected sectors 178 and 179 at
+0x800C0A48 and 0x800C0D2C, the 7,209-byte assignment array at 0x800DF5AC, and
+903-byte packed flags at 0x800E11D8. Removed rows 6132/6133 are exact degenerate
+records in the loaded collision table. Native ground admission uses the signed
+MAC3 test authenticated at 0x8004E140..0x8004E170: the apparent lower ramp rows
+6170/6171 face the opposite way. At the first settled XY the original admitted
+surface is Z601.7158203125; the final disc and captured RAM agree on Z438.8607610887,
+row 6244, consistent with Spyro's settled Z462.1875. Whole-table byte equality is
+not claimed: 244 loaded rows have runtime differences in their third word.
+Receipt: `verification/plain-removal-fixed-ground-offline.json`.
