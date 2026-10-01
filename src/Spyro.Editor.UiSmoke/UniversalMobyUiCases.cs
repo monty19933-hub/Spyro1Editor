@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using Spyro.Editor.App.Views;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Scene;
+using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Universal;
 
 /// <summary>End-to-end editor flow for universal Moby placement in a real headless MainWindow:
@@ -119,6 +120,8 @@ internal static class UniversalMobyUiCases
 
             // 5. Undo removes an added object and the save reflects it; re-add afterwards.
             Moby enemyRow = Mobys(window).Last(m => m.IsAdded);
+            string retiredEnemyId = enemyRow.UniversalPlacementId;
+            int retiredEnemySlot = saved.Single(p => p.EditorId == retiredEnemyId).PersistentSlot!.Value;
             Invoke(window, "UndoMoby", enemyRow);
             Save(window);
             Check(UniversalPlacementReader.Read(edits).Count(p => !p.Retired) == 1, "undo removes the placement from the saved project");
@@ -236,12 +239,34 @@ internal static class UniversalMobyUiCases
             var disc = UniversalDiscImage.Read(output);
             var data = new UniversalLevelData(disc.EntryBytes(toasty.SourceWadEntry));
             Check(data.Registrations().Any(r => r.ClassId == 0x0A), "exported Toasty registers the sheep model");
-            Check(data.Scene().RowCount == toasty.SourceRecordCount + UniversalPlacementReader.Read(edits).Count,
-                "exported Toasty retains every active and retired placement slot");
+            var finalPlacements = UniversalPlacementReader.Read(edits);
+            var activePlacements = finalPlacements.Where(p => !p.Retired).ToArray();
+            var removedNative = UniversalPlacementReader.ReadRemovedNativeRows(edits).Order().ToArray();
+            int[] placedPhysicalRows = activePlacements.Select((_, i) => i < removedNative.Length ? removedNative[i] : toasty.SourceRecordCount + i - removedNative.Length).ToArray();
+            int expectedPhysicalCount = Enumerable.Range(0, toasty.SourceRecordCount).Except(removedNative).Concat(placedPhysicalRows).Max() + 1;
+            Check(data.Scene().RowCount == expectedPhysicalCount,
+                "exported Toasty reuses removed native rows and emits only active placement rows");
+            Check(finalPlacements.Single(p => p.EditorId == retiredEnemyId) is { Retired: true } retired && retired.PersistentSlot == retiredEnemySlot,
+                "export preserves the retired enemy's lifetime identity and original logical slot");
+            byte[] toastyOverlay = disc.EntryBytes(toasty.SourceWadEntry - 1);
+            int updateAt = checked((int)(UniversalExeBindings.Read(disc.Exe, toasty.LevelId)[UniversalExeBindings.UpdateGlobal].Value - UniversalOverlay.Base));
+            Check(BitConverter.ToUInt32(toastyOverlay, updateAt + 8) == NativeMobySaveMap.Tag,
+                "exported Toasty carries its native physical-to-logical saved row map");
+            int[] saveRows = Enumerable.Range(0, data.Scene().RowCount).Select(i => (int)BitConverter.ToInt16(toastyOverlay, updateAt + 64 + i * 2)).ToArray();
+            Check(!saveRows.Contains(toasty.SourceRecordCount + retiredEnemySlot),
+                "retired enemy has no active physical actor or saved-row mapping");
+            for (int i = 0; i < activePlacements.Length; i++)
+            {
+                var placement = activePlacements[i];int physical = placedPhysicalRows[i];var row = data.Row(physical);
+                Check(saveRows[physical] == toasty.SourceRecordCount + placement.PersistentSlot &&
+                    BitConverter.ToInt32(row, 12) == placement.X && BitConverter.ToInt32(row, 16) == placement.Y && BitConverter.ToInt32(row, 20) == placement.Z,
+                    "active native actor position and logical saved identity match the durable placement");
+            }
             if (!admittedOutputOnly)
             Check(!data.Registrations().Any(r => r.ClassId == 0x15D) && data.Registrations().Any(r => r.ClassId == 0xD4) &&
-                  new[] { 1, 3, 5, 8, 9, 14, 26 }.All(r => BitConverter.ToUInt16(data.Row(r), 0x36) == UniversalMobyComposer.InertClass),
-                "removed 0x15D rows became inert placeholders and their model was dropped; the Ice Cavern model was added");
+                  removedNative.Except(placedPhysicalRows).All(r => r >= data.Scene().RowCount ||
+                      saveRows[r] == -1 && BitConverter.ToUInt16(data.Row(r), 0x36) == UniversalMobyComposer.InertClass),
+                "unreused removed rows remain inert and unbound; their model was dropped and the Ice Cavern model was added");
             var stoneData = new UniversalLevelData(disc.EntryBytes(stone.SourceWadEntry));
             Check(BitConverter.ToUInt16(stoneData.Row(stoneData.Scene().RowCount - 1), 0x36) == laterClass &&
                   (stoneData.Registrations().Any(r => r.ClassId == laterClass) || Library(window).SharedClasses.Contains(laterClass) || !laterHasModel),
@@ -264,7 +289,9 @@ internal static class UniversalMobyUiCases
                     "dragonfly egg inventory row installed; the 12-slot dragon egg row is unchanged");
                 var readPlacements = UniversalPlacementReader.Read(Path.Combine(root, "toasty-native-edits.json"));
                 Check(readPlacements.Single(p => p.SpecialId == UniversalDragonflyEggs.SignId).Text!.SequenceEqual(["WELCOME TO", "TOASTY!"]), "sign text exported from the project");
-                Check(signRow >= toasty.SourceRecordCount, "sign row appended");
+                var signPlacement = finalPlacements.Single(p => !p.Retired && p.SpecialId == UniversalDragonflyEggs.SignId);
+                Check(saveRows[signRow] == toasty.SourceRecordCount + signPlacement.PersistentSlot,
+                    "physical sign row retains its lifetime logical saved identity");
             }
             var bindings = UniversalExeBindings.Read(disc.Exe, toasty.LevelId);
             Check(bindings[UniversalExeBindings.UpdateGlobal].Value != 0x8007AF94 &&
