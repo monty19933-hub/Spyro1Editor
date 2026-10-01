@@ -33,7 +33,7 @@ public static class UniversalSpecialCatalog
         return
         [
             new(eggs[0].ClassId, "Dragonfly Egg", "Collectibles", "Dragonfly Eggs", eggs, eggs[0], [SourceKey], restriction,
-                "Choose its colour above. Collection adds it to the separate global dragonfly-egg inventory and live completion score. Collected eggs are suppressed using the game's saved bitmap. Normal memory-card save/load and the per-level counter are still awaiting verification and integration."),
+                "Choose its colour above. Collection updates the level and global dragonfly-egg counters and completion score. The game's memory-card save preserves collected eggs. Newly earned bonus access also requires every placed dragonfly egg."),
             new(sign.ClassId, "Sign", "Interactive", "Signs", [sign], sign, [SourceKey], restriction,
                 "When Spyro stands next to it, your message (up to three short lines) appears on screen. After placing it, select it and press Edit to type the message."),
         ];

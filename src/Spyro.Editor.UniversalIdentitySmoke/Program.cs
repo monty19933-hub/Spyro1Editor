@@ -18,6 +18,13 @@ if (args.Length == 2 && args[0] == "--emit-progress")
     Console.WriteLine(JsonSerializer.Serialize(new {
         countAddress = UniversalEggProgress.CountAddress,
         percentAddress = UniversalEggProgress.PercentageAddress,
+        dataAddress = UniversalSpecialBehaviors.EggInventoryData,
+        bonusAddress = UniversalEggProgress.BonusAddress,
+        portalAddress = UniversalEggUnlocks.PortalAddress,
+        endingAddress = UniversalEggUnlocks.EndingAddress,
+        bonus = Convert.ToHexString(UniversalEggProgress.BonusRoutine()),
+        portal = Convert.ToHexString(UniversalEggUnlocks.PortalGate()),
+        ending = Convert.ToHexString(UniversalEggUnlocks.EndingGate()),
         count = Convert.ToHexString(UniversalEggProgress.CountRoutine(total)),
         percent = Convert.ToHexString(UniversalEggProgress.PercentageRoutine(total))
     }));

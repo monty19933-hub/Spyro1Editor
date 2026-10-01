@@ -83,100 +83,85 @@ public static class UniversalSpecialBehaviors
     // Right end of the native egg row (its 12 slots end at x=0x15C), same height as that row.
     public const int EggRowY = 0x33, EggRowX = 0x168, EggSlotStep = 0x15, EggSlotW = 0x14, EggSlotH = 0x0E;
 
-    /// <summary>Inventory row for dragonfly eggs. Each entry is (level index, placed row, colour variant); an
-    /// egg counts as collected when its durable collected bit (0x80077908 + level*32, bit row) is set, so the
-    /// row survives saving and loading without new save data. Up to 6 eggs get one slot each: a still egg
-    /// picture in that egg's own colour when found, dark with an x when not.
-    /// More eggs are shown as one egg picture and "K/Y".</summary>
+    /// <summary>Native project total and one X/Y count beside each visible level. The
+    /// same saved bitmap and active identity table drive both views and completion.</summary>
     public static (uint[] Code, uint[] Data) DragonflyEggInventoryRoutine(IReadOnlyList<(int LevelIndex, int Row, int Colour)> eggs)
     {
+        var result = BuildEggInventory(eggs);
+        return (result.Code, result.Data);
+    }
+
+    private static (uint[] Code, uint[] Data, Dictionary<string, uint> Labels) BuildEggInventory(IReadOnlyList<(int LevelIndex, int Row, int Colour)> eggs)
+    {
         if (eggs.Count == 0) throw new ArgumentException("No dragonfly eggs.");
-        bool slots = eggs.Count <= EggInventoryMaxSlots;
-        // Data: eggs, then 7 packed tints, then "%d/%d".
         List<uint> data = [];
         foreach (var (lvl, row, colour) in eggs)
         {
-            if (lvl is < 0 or >= 36 || row is < 0 or > 0xFF || colour < 0 || colour >= UniversalDragonflyEggs.Variants.Length) throw new InvalidDataException("Dragonfly egg level/row/colour out of range.");
+            if (lvl is < 0 or >= 36 || row is < 0 or > 0xFF || colour < 0 || colour >= UniversalDragonflyEggs.Variants.Length)
+                throw new InvalidDataException("Dragonfly egg level/row/colour out of range.");
             data.Add((uint)(colour << 24 | lvl << 16 | row));
         }
         uint tintTable = EggInventoryData + (uint)data.Count * 4;
-        for (int v = 0; v < UniversalDragonflyEggs.Variants.Length; v++) { var t = UniversalDragonflyEggs.IconTint(v); data.Add((uint)(t.R | t.G << 8 | t.B << 16)); }
+        // Reuse the former seven-word tint table for an explicit column label.
+        // The chosen tint is embedded in the draw code; the data capacity is unchanged.
+        byte[] caption = new byte[UniversalDragonflyEggs.Variants.Length * 4];
+        System.Text.Encoding.ASCII.GetBytes("DRAGONFLY EGGS").CopyTo(caption, 0);
+        for (int i = 0; i < caption.Length; i += 4)
+            data.Add(System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(caption.AsSpan(i)));
         uint fmt = EggInventoryData + (uint)data.Count * 4;
-        data.Add(0x252F6425); data.Add(0x00000064); // "%d/%d"
-
+        data.Add(0x252F6425); data.Add(0x00000064);
         var a = new Asm();
-        const int S2 = 18, S3 = 19, S4 = 20, T7 = 15;
-        void Tint()
-        {   // sp+0x34.. = unpacked tint of the entry in s4
-            a.R(0, S4, T0, 24, 0x02); a.R(0, T0, T0, 2, 0x00); a.La(T1, tintTable); a.R(T1, T0, T1, 0, 0x21); a.I(35, T1, T1, 0); a.Nop();
-            a.I(12, T1, T2, 0xFF); a.I(43, Sp, T2, 0x34); a.R(0, T1, T2, 8, 0x02); a.I(12, T2, T2, 0xFF); a.I(43, Sp, T2, 0x38);
-            a.R(0, T1, T2, 16, 0x02); a.I(12, T2, T2, 0xFF); a.I(43, Sp, T2, 0x3C);
-        }
-        void Rect() => a.I(41, Sp, S3, 0x20);                                      // y/w/h are set once
-        void FoundEgg()
-        {   // Still native egg silhouette in the chosen colour; no added eyes.
-            Rect(); Tint();
-            a.La(A1, EggSprites); a.I(9, Sp, A0, 0x20); a.Jal(DrawSprite); a.I(9, Sp, A2, 0x34);
-        }
-        a.I(9, Sp, Sp, -0x80); a.I(43, Sp, Ra, 0x7C);
-        a.I(43, Sp, S0, 0x10); a.I(43, Sp, S1, 0x14); a.I(43, Sp, S2, 0x18); a.I(43, Sp, S3, 0x1C); a.I(43, Sp, S4, 0x5C);
-        a.I(9, Zero, V0, EggRowY); a.I(41, Sp, V0, 0x22);
+        const int S2 = 18, S3 = 19, S5 = 21;
+        a.I(9, Zero, A0, -1); a.I(9, Zero, A1, EggRowX + 24); a.I(9, Zero, A2, EggRowY + 7);
+        a.J("counts"); a.I(9, Zero, A3, 0);
+        a.L("level");
+        // The replaced row increment executes in the JAL delay slot. Hidden rows
+        // branch directly to that increment and intentionally do not draw a count.
+        a.I(15, Zero, T0, 0x8007); a.I(35, T0, A0, 0x5744); a.I(35, T0, A1, 0x57CC);
+        a.R(Zero, A0, T1, 1, 0); a.R(T1, A0, A0, 0, 0x21); a.R(Zero, A0, A0, 1, 0);
+        a.R(A0, S3, A0, 0, 0x21); a.I(9, A0, A0, -1); a.I(9, A1, A1, 232);
+        a.R(S5, Zero, A2, 0, 0x21); a.J("counts"); a.I(9, Zero, A3, 1);
+        a.L("name");
+        // Compact only level names. Restore the caller's depth for its gem fields,
+        // and forward the native fifth argument through our own stack frame.
+        a.I(9, Sp, Sp, -32); a.I(43, Sp, Ra, 28); a.I(43, Sp, A1, 24); a.I(35, Sp, T0, 48);
+        a.I(9, Zero, T1, 0x1C00); a.I(43, Sp, T0, 16); a.I(43, A1, T1, 8); a.Jal(SpawnText); a.Nop();
+        a.I(35, Sp, T0, 24); a.I(9, Zero, T1, 0x1100); a.I(43, T0, T1, 8); a.I(35, Sp, Ra, 28); a.Nop();
+        a.Part.Emit(UniversalMips.JrRa); a.I(9, Sp, Sp, 32);
+        a.L("counts");
+        a.I(9, Sp, Sp, -0x60); a.I(43, Sp, Ra, 0x5C); a.I(43, Sp, S0, 0x50);
+        a.I(43, Sp, S1, 0x54); a.I(43, Sp, S2, 0x58);
+        a.R(A3, Zero, S0, 0, 0x21); a.R(A1, Zero, S1, 0, 0x21); a.R(A2, Zero, S2, 0, 0x21);
+        a.Jal(UniversalEggProgress.CountAddress); a.Nop();
+        a.R(V0, Zero, A2, 0, 0x21);
+        a.R(V1, Zero, A3, 0, 0x21); a.I(9, Sp, A0, 0x40); a.La(A1, fmt); a.Jal(Sprintf); a.Nop();
+        a.I(43, Sp, S1, 0x28); a.I(43, Sp, S2, 0x2C); a.I(9, Zero, V0, 0x2600); a.I(43, Sp, V0, 0x30);
+        a.I(9, Sp, A0, 0x40); a.I(9, Sp, A1, 0x28); a.I(9, Zero, A2, 7); a.Jal(DrawStatText); a.I(9, Zero, A3, 2);
+        a.Br(5, S0, Zero, "done"); a.Nop();
+        // Use the first authored colour for the column legend and project total.
+        // This is the unmodified egg sprite silhouette, with no eye primitives.
+        var tint = UniversalDragonflyEggs.IconTint(eggs[0].Colour);
+        a.I(9, Zero, V0, tint.R); a.I(43, Sp, V0, 0x34); a.I(9, Zero, V0, tint.G); a.I(43, Sp, V0, 0x38);
+        a.I(9, Zero, V0, tint.B); a.I(43, Sp, V0, 0x3C);
+        a.I(9, Zero, V0, EggRowX); a.I(41, Sp, V0, 0x20); a.I(9, Zero, V0, EggRowY); a.I(41, Sp, V0, 0x22);
         a.I(9, Zero, V0, EggSlotW); a.I(41, Sp, V0, 0x24); a.I(9, Zero, V0, EggSlotH); a.I(41, Sp, V0, 0x26);
-        if (slots) { a.I(9, Zero, V0, 0x20); a.I(43, Sp, V0, 0x40); a.I(43, Sp, V0, 0x44); a.I(43, Sp, V0, 0x48); }
-        a.La(S0, EggInventoryData); a.I(9, Zero, S1, eggs.Count); a.I(9, Zero, S2, 0); a.I(9, Zero, S3, EggRowX);
-        a.I(9, Zero, T7, 0); a.I(43, Sp, Zero, 0x60);
-        a.L("loop");
-        a.Br(4, S2, S1, "done"); a.Nop();
-        a.I(35, S0, S4, 0); a.Nop();
-        a.R(0, S4, T1, 16, 0x02); a.I(12, T1, T1, 0xFF); a.I(12, S4, T2, 0xFFFF);   // t1 = level, t2 = row
-        a.R(0, T1, T1, 5, 0x00); a.R(0, T2, T3, 5, 0x02); a.R(0, T3, T3, 2, 0x00); a.R(T1, T3, T1, 0, 0x21);
-        a.La(T4, CollectedMasks); a.R(T1, T4, T1, 0, 0x21); a.I(35, T1, T1, 0);
-        a.I(12, T2, T2, 31); a.Nop();
-        a.R(T2, T1, T1, 0, 0x06); a.I(12, T1, T1, 1);
-        if (slots)
-        {
-            a.Br(4, T1, Zero, "missing"); a.Nop();
-            FoundEgg();
-            a.Br(4, Zero, Zero, "next"); a.Nop();
-            a.L("missing");
-            Rect();
-            a.I(9, S3, V0, 0xA); a.I(43, Sp, V0, 0x28); a.I(9, Zero, V0, EggRowY + 7); a.I(43, Sp, V0, 0x2C);
-            a.I(9, Zero, V0, 0x1C00); a.I(43, Sp, V0, 0x30);
-            a.La(A0, CrossText); a.I(9, Sp, A1, 0x28); a.I(9, Zero, A2, 0); a.Jal(DrawStatText); a.I(9, Zero, A3, 2);
-            a.I(9, Sp, A0, 0x20); a.La(A1, EggSprites); a.Jal(DrawSprite); a.I(9, Sp, A2, 0x40);
-            a.L("next");
-            a.I(9, S0, S0, 4); a.I(9, S2, S2, 1);
-            a.Br(4, Zero, Zero, "loop"); a.I(9, S3, S3, EggSlotStep);
-        }
-        else
-        {
-            a.I(35, Sp, T7, 0x60); a.Nop(); a.R(T7, T1, T7, 0, 0x21); a.I(43, Sp, T7, 0x60);
-            a.I(9, S0, S0, 4);
-            a.Br(4, Zero, Zero, "loop"); a.I(9, S2, S2, 1);
-        }
+        void Sprite() { a.I(9, Sp, A0, 0x20); a.La(A1, EggSprites); a.Jal(DrawSprite); a.I(9, Sp, A2, 0x34); }
+        Sprite();
+        a.I(15, Zero, T0, 0x8007); a.I(35, T0, V0, 0x57CC); a.Nop(); a.I(9, V0, V0, 210); a.I(43, Sp, V0, 0x28);
+        a.I(9, Zero, V0, 106); a.I(43, Sp, V0, 0x2C); a.I(9, Zero, V0, 0x3000); a.I(43, Sp, V0, 0x30);
+        a.La(A0, tintTable); a.I(9, Sp, A1, 0x28); a.I(9, Zero, A2, 5); a.Jal(DrawStatText); a.I(9, Zero, A3, 2);
         a.L("done");
-        if (!slots)
-        {
-            a.La(S0, EggInventoryData); a.I(35, S0, S4, 0); a.Nop();          // icon in the first egg's colour
-            FoundEgg();
-            a.I(35, Sp, A2, 0x60); a.I(9, Zero, A3, eggs.Count);
-            a.I(9, Sp, A0, 0x64); a.La(A1, fmt); a.Jal(Sprintf); a.Nop();
-            a.I(9, Zero, V0, EggRowX + 0x20); a.I(43, Sp, V0, 0x28); a.I(9, Zero, V0, EggRowY + 7); a.I(43, Sp, V0, 0x2C);
-            a.I(9, Zero, V0, 0x1400); a.I(43, Sp, V0, 0x30);
-            a.I(9, Sp, A0, 0x64); a.I(9, Sp, A1, 0x28); a.I(9, Zero, A2, 0x11); a.Jal(DrawStatText); a.I(9, Zero, A3, 2);
-        }
-        // The replaced call's own arguments: line (0x40,0x45)-(0x1C0,0x45).
+        a.R(S0, Zero, T0, 0, 0x21); a.I(35, Sp, Ra, 0x5C); a.I(35, Sp, S0, 0x50); a.I(35, Sp, S1, 0x54); a.I(35, Sp, S2, 0x58);
+        a.Br(5, T0, Zero, "row_done"); a.I(9, Sp, Sp, 0x60);
         a.I(9, Zero, A0, 0x40); a.I(9, Zero, A1, 0x45); a.I(9, Zero, A2, 0x1C0); a.I(9, Zero, A3, 0x45);
-        a.I(35, Sp, S0, 0x10); a.I(35, Sp, S1, 0x14); a.I(35, Sp, S2, 0x18); a.I(35, Sp, S3, 0x1C); a.I(35, Sp, S4, 0x5C);
-        a.I(35, Sp, Ra, 0x7C); a.Nop();
-        a.Part.Emit(UniversalMips.EncodeJ(2, DrawLine)); a.I(9, Sp, Sp, 0x80);
-        var (code, _) = UniversalBehaviorBundleBuilder.Assemble([a.Part], EggInventoryHost);
-        var words = new uint[code.Length / 4];
-        for (int k = 0; k < words.Length; k++) words[k] = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(code.AsSpan(4 * k));
-        if (EggInventoryHost + words.Length * 4 > EggInventoryHostEnd) throw new InvalidOperationException($"Egg inventory routine ({words.Length} words) does not fit its host.");
+        a.Part.Emit(UniversalMips.EncodeJ(2, DrawLine)); a.Nop();
+        a.L("row_done"); a.Part.Emit(UniversalMips.JrRa); a.I(9, S5, S5, 19);
+        var (code, labels) = UniversalBehaviorBundleBuilder.Assemble([a.Part], EggInventoryHost);
+        if (EggInventoryHost + code.Length > UniversalEggProgress.BonusAddress)
+            throw new InvalidDataException($"Egg inventory code needs {code.Length} bytes; its code owner has {UniversalEggProgress.BonusAddress - EggInventoryHost}.");
         if (EggInventoryData + data.Count * 4 > CaveEnd)
             throw new InvalidDataException($"This project has {eggs.Count} dragonfly eggs, but the game can track at most {MaxDragonflyEggs}.");
-        return (words, [.. data]);
+        return (Enumerable.Range(0, code.Length / 4).Select(i => System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(code.AsSpan(4 * i))).ToArray(), [.. data], labels);
     }
 
     public static int MaxDragonflyEggs => (int)((CaveEnd - EggInventoryData) / 4) - UniversalDragonflyEggs.Variants.Length - 2;
@@ -218,10 +203,24 @@ public static class UniversalSpecialBehaviors
             if (eggs.Count > MaxDragonflyEggs)
                 throw new InvalidDataException($"This project has {eggs.Count} dragonfly eggs, but the game can track at most {MaxDragonflyEggs}. Remove {eggs.Count - MaxDragonflyEggs} and Create BIN again.");
             Retail(EggInventoryHost, EggInventoryHostEnd, "egg row host function");
-            var (code, data) = DragonflyEggInventoryRoutine(eggs);
+            var (code, data, labels) = BuildEggInventory(eggs);
             Write(EggInventoryHost, code);
             Write(EggInventoryData, data);
             Site(EggInventoryCallSite, EggInventoryCallPreimage, EggInventoryHost);
+            Site(0x8001C4D4, 0x26B50013, labels["level"]);
+            Site(0x8001BFA8, 0x0C00606B, labels["name"]);
+            // Source-guarded layout changes leave all original collectible columns.
+            void Word(uint address, uint before, uint after)
+            {
+                int o = (int)(address - UniversalExeBindings.ExeBase);
+                if (System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(exe.AsSpan(o)) != before)
+                    throw new InvalidDataException($"The inventory layout at 0x{address:X8} differs from the verified USA version.");
+                Write(address, [after]);
+            }
+            Word(0x8001BF48, 0x24020010, 0x24020009); // name spacing
+            Word(0x8001BF58, 0x24021400, 0x24021C00); // name depth
+            Word(0x8001BFAC, 0x24070012, 0x24070009);
+            Word(0x8001C378, 0x244200E8, 0x244200B0); // move full-size retail egg icons left
             UniversalEggProgress.Patch(exe, original, eggs.Count, code.Length * 4);
         }
     }
