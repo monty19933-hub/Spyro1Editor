@@ -11,9 +11,10 @@
   must stay within the native relative-coordinate range. Split larger faces if
   the exporter requests it.
   A fresh level does not automatically receive a portal network or campaign.
-- Retail terrain changes still depend on correctly mapped native geometry and
-  collision. A toolbar tool being available does not make every retail face or
-  texture combination exportable. Unsafe combinations stop with an explanation.
+- Retail terrain export supports guarded height changes and texture painting.
+  General terrain addition, removal and topology growth in retail levels remain
+  unfinished. Fresh levels provide those authoring tools in the same main editor.
+  Unsafe geometry, collision or texture combinations stop with an explanation.
 - Removed objects free reusable physical slots. Stable collected-state identities
   are retained and are finite: deleting an object does not recycle its saved
   identity. Shared or unresolved resources cannot safely be reclaimed.

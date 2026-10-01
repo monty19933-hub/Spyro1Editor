@@ -12,6 +12,9 @@ remove or edit it. **Undo** and **Redo** let you revise changes. **Save Level**
 stores the current edits; **Create BIN** combines the project's saved changes
 into a separate game image. Open that exported CUE in your emulator.
 
+In existing retail levels, terrain export supports height changes and texture
+painting. General terrain addition and removal currently belong to fresh levels.
+
 ## Create a fresh level
 
 Choose **File → New Level**. Your level opens in the same viewport and inspector
