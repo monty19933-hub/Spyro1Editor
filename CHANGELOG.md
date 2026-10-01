@@ -1,5 +1,7 @@
 # Spyro Editor Beta V6
 
+## Changes since Spyro Editor Beta V5
+
 Internal build `0.1.0-beta.54`.
 
 - Fresh levels now use the regular editor viewport, terrain tools, object browser,

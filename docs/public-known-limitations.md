@@ -7,8 +7,9 @@
 - Fresh levels use the regular editor and normal Create BIN, with authored
   geometry, collision, static native materials and Mobys. This build supports
   one fresh level in slot 65, at most 255 triangles, and the native coordinate,
-  collision and memory limits. Vertices use whole editor units; each collision
-  triangle spans at most 256 units per axis. Split larger faces before export.
+  collision and memory limits. Vertices use whole editor units; collision vertices
+  must stay within the native relative-coordinate range. Split larger faces if
+  the exporter requests it.
   A fresh level does not automatically receive a portal network or campaign.
 - Retail terrain changes still depend on correctly mapped native geometry and
   collision. A toolbar tool being available does not make every retail face or

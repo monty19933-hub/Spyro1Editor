@@ -10,10 +10,9 @@ or copied game asset. Users must provide their own legally obtained disc image.
 ## Releases
 
 This checkout targets **Spyro Editor Beta V6**, internal build
-`0.1.0-beta.45`. It is a private development preview, not a published V6 release
-or a claim that every Moby or texture works in every level. The normal editor
-includes **Fresh Level…**; a separate research application is not required.
-See the [tester guide](docs/public-user-guide.md) and
+`0.1.0-beta.54`. Fresh levels use the regular editor and normal Create BIN;
+Fly Anywhere is deferred. Cross-level import coverage is broader, but not every
+Moby behavior is verified in every level. See the [user guide](docs/public-user-guide.md) and
 [limitations](docs/public-known-limitations.md) before testing.
 
 GitHub Releases remain the intended place for public builds, but creating a

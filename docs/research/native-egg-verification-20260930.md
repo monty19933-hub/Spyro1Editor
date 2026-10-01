@@ -67,3 +67,32 @@ writes. Separately, private original-overlay source guards, zero-egg no-op and
 modified-owner refusal passed; 808 additional private scalar gate cases passed.
 These are instruction/source tests. A natural endgame unlock playthrough and
 all-color/all-level lifecycle coverage are not implied by the Stone Hill test.
+
+## Completion weighting
+
+For N active custom eggs and K collected, ordinary progress is the integer floor
+of `(50*min(gems,12000) + 6000*dragons + 10000*(retailEggs+K)) / (12000+100*N)`.
+Every custom egg has the same score weight as an original thief egg. Once K=N,
+dragons=80, retailEggs=12 and gems>=12000, the native bonus scale is
+`100 + floor((gems-12000)/100)`. With N=0 the original native percentage owner is
+left unchanged. The separate portal and ending predicates are described above.
+
+## Reused physical row and cold card load
+
+A later Stone Hill export removed original row 0, then reused that physical slot
+for a green egg with logical save identity 195. The five eggs occupied physical
+rows 0, 195, 196, 197 and 198, while retaining logical identities 195–199. The
+sign occupied physical 199, logical 200. The exported image SHA-256 was
+`2fbc74db415f536d2762548c407e41ecdfb538a521adc98e0617484de90b8fa3`.
+
+A new native process loaded a copy of the previously written card using ordinary
+Load Game, with real firmware, no save state and no debugger writes. The red egg
+at physical 196 remained suppressed by logical saved bit 197; the gold egg now at
+physical 197 remained visible because its own identity was 198. The replacement
+green egg at physical 0 remained visible. Independent read-only RAM checks
+confirmed all five states and the native bitmap. The saved card slot was unchanged.
+
+This proves the exact nonempty mapped Stone Hill cold-load case, not all level
+lifecycles or every possible Moby deletion. The later empty-level branch repair
+has its own instruction-level evidence; it does not change this nonempty path.
+Private receipt: `work/egg-continuation/native-deletion-cold-load.json`.

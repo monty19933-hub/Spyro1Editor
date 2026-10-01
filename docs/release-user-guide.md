@@ -1,12 +1,16 @@
 # Spyro Editor Beta V6 Guide
 
-Internal diagnostic build: `0.1.0-beta.53`.
+Internal build: `0.1.0-beta.54`.
 
-V6 is a private development preview. The normal application includes Fresh
-Level authoring and bounded saved-level test export. Follow the
-[tester guide](public-user-guide.md) and [current limitations](public-known-limitations.md).
-The V5-era sections below describe retained retail and legacy Lab behavior;
-they do not grant new-level or arbitrary Moby export approval.
+For the normal release workflow, use the [user guide](public-user-guide.md) and
+[current limitations](public-known-limitations.md). File > New Level now uses the
+regular editor and normal Create BIN.
+
+## Retained historical research reference
+
+The sections below document earlier retail and laboratory workflows. They are
+retained for source/research continuity and do not describe the current fresh-level
+interface or current cross-level import coverage.
 
 This beta build uses three everyday workspaces around the unchanged level view:
 `Objects`, `Level`, and `Environment`. Internal research probes stay hidden.
