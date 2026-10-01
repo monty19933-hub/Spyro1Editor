@@ -23,6 +23,20 @@ PY
     PUBLIC_RELEASE_SLUG="SpyroEditor-V$STABLE_PUBLIC_VERSION"
     EXPECTED_RELEASE_NAME="$PUBLIC_RELEASE_SLUG"
     PREVIOUS_PUBLIC_RELEASE_NAME="Spyro Editor Beta V$BETA_RELEASE_NUMBER"
+    if [[ -n "${SOURCE_PREVIOUS_STABLE_VERSION:-}" ]]; then
+        python3 - "$SOURCE_PREVIOUS_STABLE_VERSION" "$STABLE_PUBLIC_VERSION" <<'PY'
+import re,sys
+previous,current=sys.argv[1:]
+if not re.fullmatch(r'[1-9][0-9]*\.(0|[1-9][0-9]*)(\.[1-9][0-9]*)?',previous):
+    raise SystemExit('Previous stable version must be canonical.')
+def parts(value):
+    result=tuple(map(int,value.split('.')))
+    return result+(0,)*(3-len(result))
+if parts(previous)>=parts(current):
+    raise SystemExit('Previous stable version must be older than the current stable version.')
+PY
+        PREVIOUS_PUBLIC_RELEASE_NAME="Spyro Editor $SOURCE_PREVIOUS_STABLE_VERSION"
+    fi
     MAC_BUNDLE_SHORT_VERSION="$STABLE_INTERNAL_VERSION"
     RELEASE_IDENTITY_VERSION="stable:$STABLE_PUBLIC_VERSION"
     RELEASE_PUBLISH_PROPERTIES=("-p:ReleaseChannel=stable" "-p:StableReleaseVersion=$STABLE_PUBLIC_VERSION" "-p:Version=$STABLE_INTERNAL_VERSION" "-p:InformationalVersion=$STABLE_INTERNAL_VERSION")

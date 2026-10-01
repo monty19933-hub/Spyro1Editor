@@ -8,13 +8,14 @@ def first(name):
         node=group.find(name)
         if node is not None and node.text and '$(' not in node.text:return node.text
     return ''
-print('\n'.join(first(n) for n in ('ReleaseChannel','StableReleaseVersion','Version','LegacyBetaInternalVersion')))
+print('\n'.join(first(n) for n in ('ReleaseChannel','StableReleaseVersion','Version','LegacyBetaInternalVersion','PreviousStableReleaseVersion')))
 PY
 )"
 SOURCE_RELEASE_CHANNEL="$(printf '%s\n' "$SOURCE_RELEASE_VALUES" | sed -n '1p')"
 SOURCE_STABLE_VERSION="$(printf '%s\n' "$SOURCE_RELEASE_VALUES" | sed -n '2p')"
 SOURCE_STABLE_INTERNAL_VERSION="$(printf '%s\n' "$SOURCE_RELEASE_VALUES" | sed -n '3p')"
 SOURCE_BETA_INTERNAL_VERSION="$(printf '%s\n' "$SOURCE_RELEASE_VALUES" | sed -n '4p')"
+SOURCE_PREVIOUS_STABLE_VERSION="$(printf '%s\n' "$SOURCE_RELEASE_VALUES" | sed -n '5p')"
 RELEASE_CHANNEL="${SPYRO_EDITOR_RELEASE_CHANNEL:-${SOURCE_RELEASE_CHANNEL:-beta}}"
 if [[ "$RELEASE_CHANNEL" == stable ]]; then
     PROJECT_VERSION="${SPYRO_EDITOR_STABLE_INTERNAL_VERSION:-$SOURCE_STABLE_INTERNAL_VERSION}"

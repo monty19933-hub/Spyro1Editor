@@ -24,6 +24,7 @@
     <ReleaseManifestSchemaVersion>1</ReleaseManifestSchemaVersion>
     <PreviousPublicReleaseVersion>5</PreviousPublicReleaseVersion>
     <StableReleaseVersion Condition="'$(StableReleaseVersion)' == ''">1.0.1</StableReleaseVersion>
+    <PreviousStableReleaseVersion>1.0</PreviousStableReleaseVersion>
     <LegacyBetaInternalVersion>0.1.0-beta.54</LegacyBetaInternalVersion>
     <Version>1.0.1</Version>
     <AssemblyVersion>0.1.0.0</AssemblyVersion>
