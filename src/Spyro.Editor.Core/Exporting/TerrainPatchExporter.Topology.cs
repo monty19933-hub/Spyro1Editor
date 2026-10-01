@@ -358,7 +358,13 @@ public static partial class TerrainPatchExporter
             int x=points.Min(p=>p.X),y=points.Min(p=>p.Y),z=points.Min(p=>p.Z),mx=points.Max(p=>p.X),my=points.Max(p=>p.Y),mz=points.Max(p=>p.Z);
             int radius=mx-x+my-y+mz-z;
             if(radius<=0||radius>4095)throw new InvalidOperationException("Remaining terrain exceeds the native LP sector bound.");
-            Put(sector,0,(uint)(((x+mx)/2<<16)|((y+my)/2)));Put(sector,4,(uint)(((z+mz)/2<<16)|radius));Put(sector,8,(uint)(x<<16|y));Put(sector,12,(uint)(z<<16));
+            Put(sector,0,(uint)(((x+mx)/2<<16)|((y+my)/2)));
+            // Native selector80025B50..25BA8: bit14 suppresses the HP queue;
+            // bit15 keeps this generated LP-only surface visible at close range.
+            // Original Stone Hill LP-only sectors37/50 use the same0xC000 issuer.
+            // Without bit14 the HP renderer enters an empty table layout which
+            // its vertex/colour passes do not guard (8002686C..80026B34).
+            Put(sector,4,(uint)(((z+mz)/2<<16)|radius|0xC000));Put(sector,8,(uint)(x<<16|y));Put(sector,12,(uint)(z<<16));
             new byte[]{(byte)n,(byte)c,(byte)batch.Length,0,0,0,0,0}.CopyTo(sector,16);Put(sector,24,uint.MaxValue);
             for(int i=0;i<n;i++)
             {

@@ -248,6 +248,7 @@ async Task VerifyStableFixtureAsync(StableFixture fixture)
         {
             var replacement=finalPlan.NativeLevelReplacement;
             Assert(replacement.After.Length>replacement.Before.Length&&(replacement.After.Length-replacement.Before.Length)%0x800==0,"Growth must use whole native disc sectors");
+            AssertNativeEnvironmentQueueAdmission(replacement.Before,replacement.After);
             Assert(replacement.FinalRuntimeEnd<=Spyro.Editor.Core.Universal.UniversalMobyComposer.NormalBufferFloor-Spyro.Editor.Core.Universal.UniversalMobyComposer.RamSafetyMargin,"Growth escapes native RAM owner");
             string? keep=Environment.GetEnvironmentVariable("SPYRO_TERRAIN_V1_KEEP_OUTPUT");
             if(!string.IsNullOrWhiteSpace(keep))
@@ -428,8 +429,47 @@ async Task VerifyPlainArtisansRemovalAsync()
     string prefix=Path.Combine(root,"artisans-plain-ramp-remove");
     var result=await TerrainPatchExporter.ExportAsync(new TerrainPatchRequest(sourceImagePath,sourceCuePath,prefix,context.Level,"",context.SourceSearchPath,edits,"",true));
     Assert(result.WroteImage&&result.Plan.SkippedEdits.Count==0,"Plain terrain removal was not emitted by the normal native exporter");
+    var replacement=result.Plan.NativeLevelReplacement??throw new InvalidOperationException("Plain removal must exercise the growing native body.");
+    AssertNativeEnvironmentQueueAdmission(replacement.Before,replacement.After);
+    Console.WriteLine("TERRAIN_LP_ONLY_NATIVE_QUEUE_ADMISSION_OK");
     File.Copy(edits,prefix+"-edits.json",true);
     Console.WriteLine($"TERRAIN_PLAIN_REMOVAL_CANDIDATE {result.OutputCuePath}; source58:43; probe5312,2800; native Mobys unchanged");
+}
+
+void AssertNativeEnvironmentQueueAdmission(byte[] before,byte[] after)
+{
+    static byte[] EnvironmentComponent(byte[] body)
+    {
+        int model=BinaryPrimitives.ReadInt32LittleEndian(body.AsSpan(8));
+        int textures=BinaryPrimitives.ReadInt32LittleEndian(body.AsSpan(model));
+        int at=model+textures,n=BinaryPrimitives.ReadInt32LittleEndian(body.AsSpan(at));
+        return body.AsSpan(at,n).ToArray();
+    }
+    static bool SafeHeader(ReadOnlySpan<byte> header,bool appended)
+    {
+        if(header[20]!=0)return true;
+        ushort flags=BinaryPrimitives.ReadUInt16LittleEndian(header[4..]);
+        // Native selector skips HP iff0x4000 is set. Generated overflow has no
+        // HP owner at any distance, so0x8000 must also force its LP queue.
+        return(flags&0x4000)!=0&&(!appended||(flags&0x8000)!=0)&&(flags&0x2000)==0;
+    }
+    byte[] oldEnvironment=EnvironmentComponent(before),environment=EnvironmentComponent(after);
+    int originalCount=BinaryPrimitives.ReadInt32LittleEndian(oldEnvironment.AsSpan(4));
+    int count=BinaryPrimitives.ReadInt32LittleEndian(environment.AsSpan(4));
+    int appendedLpOnly=0;
+    for(int i=0;i<count;i++)
+    {
+        int at=4+BinaryPrimitives.ReadInt32LittleEndian(environment.AsSpan(8+4*i));
+        var header=environment.AsSpan(at,28);
+        Assert(SafeHeader(header,i>=originalCount),$"Sector{i} admits an empty HP vertex table to the native renderer or suppresses its LP owner");
+        if(i<originalCount||header[20]!=0)continue;
+        appendedLpOnly++;
+        byte[] malformed=header.ToArray();malformed[5]&=0xBF;
+        Assert(!SafeHeader(malformed,true),"Native queue guard must reject the original missing-HP-disable crash header");
+        malformed=header.ToArray();malformed[5]&=0x7F;
+        Assert(!SafeHeader(malformed,true),"Generated LP overflow must stay visible within the close HP range");
+    }
+    Assert(appendedLpOnly>0,"Growing native fixture must exercise at least one LP-only overflow queue");
 }
 
 async Task VerifyReachableArtisansFloorAsync()
