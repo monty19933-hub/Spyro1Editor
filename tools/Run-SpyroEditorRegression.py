@@ -194,6 +194,8 @@ CORE_CASES = (
     ("UpdateSmoke", "PASS: whole-number and incremental prerelease discovery"),
     ("UniversalMobySmoke", "UNIVERSAL_MOBY_SOURCE_FREE_OK"),
     ("UniversalDependencySmoke", "UNIVERSAL_DEPENDENCY_CHECKS_OK"),
+    ("UniversalSpawnProducerSmoke", "UNIVERSAL_SPAWN_PRODUCER_CHECKS_OK"),
+    ("UniversalGemCollectionSmoke", "UNIVERSAL_GEM_ADAPTER_FREE_OK"),
     ("UniversalClassOwnershipSmoke", "UNIVERSAL_CLASS_OWNERSHIP_FREE_OK"),
     ("UniversalPlayerDamageSmoke", "UNIVERSAL_PLAYER_DAMAGE_SMOKE_OK"),
     ("UniversalPlayerDamageWritesSmoke", "UNIVERSAL_PLAYER_DAMAGE_WRITES_OK"),
