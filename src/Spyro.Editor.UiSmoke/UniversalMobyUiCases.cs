@@ -17,8 +17,10 @@ using Spyro.Editor.Core.Universal;
 /// open Toasty, browse the game-wide library, place foreign objects, save, reopen, undo, Create BIN.</summary>
 internal static class UniversalMobyUiCases
 {
+    private static int _checks;
     internal static void Run(string outputDirectory)
     {
+        _checks = 0;
         MainWindow window = new() { Width = 1440, Height = 900 };
         window.Show();
         try
@@ -62,6 +64,13 @@ internal static class UniversalMobyUiCases
             var categoryNames = cats.ItemsSource!.Cast<(string, string, int)>().Select(c => c.Item1).Distinct().ToList();
             Check(categoryNames.Contains("Enemies") && categoryNames.Contains("Collectibles") && categoryNames.Contains("Interactive"), "category hierarchy");
             Snapshot(library, Path.Combine(outputDirectory, "universal-moby-library.png"));
+            ComboBox fitOnly = Find<ComboBox>(library, "UniversalMobyFit");
+            fitOnly.SelectedIndex = 1; Pump();
+            Snapshot(library, Path.Combine(outputDirectory, "universal-moby-fit-only.png"));
+            Check(!list.GetLogicalDescendants().OfType<TextBlock>().Any(t =>
+                (t.Text ?? "").Contains("Checking whether it fits", StringComparison.Ordinal)),
+                "fit-only list never presents an unverified estimate as a fitting object");
+            fitOnly.SelectedIndex = 0; Pump();
 
             // 2. Search by class and place a foreign object (Stone Hill sheep 0x0A) near the selection.
             TextBox search = Find<TextBox>(library, "UniversalMobySearch");
@@ -81,6 +90,19 @@ internal static class UniversalMobyUiCases
             cats.SelectedItem = cats.ItemsSource!.Cast<(string, string, int)>().First(c => c.Item1 == "Interactive" && c.Item2 == ""); Pump();
             Check(Items(list).Any(e => e.ClassId == 0x0A), "search covers every category");
             Snapshot(library, Path.Combine(outputDirectory, "universal-moby-library-selected.png"));
+            fitOnly.SelectedIndex = 1; Pump();
+            Snapshot(library, Path.Combine(outputDirectory, "universal-moby-fit-only-selected.png"));
+            Check(Items(list).Contains(sheep), "selected exact-checked object remains in the fit-only list");
+            Check(!list.GetLogicalDescendants().OfType<TextBlock>().Any(t =>
+                (t.Text ?? "").Contains("Checking whether it fits", StringComparison.Ordinal)),
+                "fit-only results contain completed checks after selecting a source object");
+            fitOnly.SelectedIndex = 0; Pump();
+            if (Environment.GetEnvironmentVariable("SPYRO_UNIVERSAL_FIT_REVIEW_ONLY") == "1")
+            {
+                library.Close(); Pump();
+                Console.WriteLine($"UNIVERSAL_FIT_REVIEW_UI_OK checks={_checks}");
+                return;
+            }
             Click(Find<Button>(library, "UniversalMobyAddHere"));
             Wait(() => Mobys(window).Count == nativeCount + 1, "sheep added");
             Moby added = Mobys(window).Last();
@@ -444,7 +466,7 @@ internal static class UniversalMobyUiCases
     private static void Pump() => Dispatcher.UIThread.RunJobs();
     private static void Wait(Func<bool> predicate, string label, int seconds = 60)
     { var clock = Stopwatch.StartNew(); while (!predicate() && clock.Elapsed < TimeSpan.FromSeconds(seconds)) { Pump(); Thread.Sleep(10); } Check(predicate(), label); Pump(); }
-    private static void Check(bool condition, string label) { if (!condition) throw new InvalidOperationException("Universal Moby UI: " + label); }
+    private static void Check(bool condition, string label) { _checks++; if (!condition) throw new InvalidOperationException("Universal Moby UI: " + label); }
     private static string Sha(string path) { using var fs = File.OpenRead(path); return Convert.ToHexStringLower(SHA256.HashData(fs)); }
     private static void Snapshot(Window window, string path) { window.InvalidateVisual(); Pump(); using var image = window.CaptureRenderedFrame(); image?.Save(path); }
 }

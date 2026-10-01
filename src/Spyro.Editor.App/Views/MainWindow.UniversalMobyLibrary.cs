@@ -261,7 +261,6 @@ public sealed partial class MainWindow
 
     private static string UniversalFitFailureSummary(string error, string levelName, bool compact)
     {
-        if (error == UniversalRuntimeInteractionGuards.AlpineArtisansFailure) return error;
         bool textureCapacity = error.Contains("texture", StringComparison.OrdinalIgnoreCase) &&
             (error.Contains("space", StringComparison.OrdinalIgnoreCase) || error.Contains("memory", StringComparison.OrdinalIgnoreCase) || error.Contains("allocate", StringComparison.OrdinalIgnoreCase) || error.Contains("fit", StringComparison.OrdinalIgnoreCase));
         bool memory = error.Contains("RAM", StringComparison.OrdinalIgnoreCase) || error.Contains("memory", StringComparison.OrdinalIgnoreCase);
@@ -570,9 +569,12 @@ public sealed partial class MainWindow
             var shown = entries.Where(e => (q.Length > 0 || MatchesCategory(e)) &&
                 (q.Length == 0 || q.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(e.SearchText.Contains)) &&
                 (src == null || e.SourceLevels.Contains(src)) &&
-                (fitFilter.SelectedIndex switch { 1 => e.RestrictionReason == null && (fittingVariants.ContainsKey(e) || (listDry.TryGetValue(e.Default, out var d) ? d.Error == null : Est(e.Default).Fits)), 2 => Est(e.Default).Native, _ => true }))
+                (fitFilter.SelectedIndex switch { 1 => e.RestrictionReason == null && (fittingVariants.ContainsKey(e) || (listDry.TryGetValue(e.Default, out var d) && d.Error == null)), 2 => Est(e.Default).Native, _ => true }))
                 .OrderBy(e => UniversalSpecialCatalog.IsSpecial(e.Default) ? 0 : 1).ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
             var selected = list.SelectedItem;
+            // Fit results are cached outside the entries; rebuild visible status rows
+            // so recycled controls cannot retain their earlier checking message.
+            list.ItemsSource = null;
             list.ItemsSource = shown;
             if (selected != null && shown.Contains(selected)) list.SelectedItem = selected;
             summary.Text = $"Showing {shown.Count} of {entries.Count} objects{(q.Length > 0 ? " · search across all categories" : "")}. Pick one, then press Place it." + (checking ? " (Checking which objects fit this level…)" : "");
@@ -624,10 +626,16 @@ public sealed partial class MainWindow
             if (restriction != null) { fit.Text = restriction; fit.Foreground = new SolidColorBrush(ModernRed); return; }
             var trial = existing.Append(TrialFor(v)).ToList();
             if (!dryRuns.TryGetValue(v, out var dry)) dryRuns[v] = dry = CheckPlacement(lib, trial);
+            listDry[v] = (null, dry.Error);
+            if (dry.Error == null) fittingVariants[entry] = v;
             if (dry.Error != null)
             {
                 fit.Text = UniversalFitFailureSummary(dry.Error, destination.DisplayName, compact: false) +
-                    (UniversalCapacityPlanner.IsCapacityFailure(dry.Error) ? "\nUse Find space for this object to compare versions and removal plans." : "");
+                    (UniversalCapacityPlanner.IsCapacityFailure(dry.Error)
+                        ? freshCompilation == null
+                            ? "\nUse Find space for this object to compare versions and removal plans."
+                            : "\nRemove other objects or choose a different source version to make room."
+                        : "");
                 technical.Text += "\nExport check: " + dry.Error;
                 fit.Foreground = new SolidColorBrush(ModernRed);
                 return;
@@ -638,6 +646,9 @@ public sealed partial class MainWindow
             if (dry.Result.ParticleDependencies.Any(p => p.Status == "dependency-unverified"))
                 fit.Text += "\nParticle behavior dependencies are not yet verified.";
             technical.Text += $"\nGame RAM left after import: {ram.FinalHeadroom / 1024.0:0.0} KB";
+            int reactionBytes = dry.Result.PlayerAnimationImports.Sum(p => p.ModelGrowthBytes);
+            if (reactionBytes > 0)
+                fit.Text += $"\nIncludes Spyro's reaction animations ({reactionBytes / 1024.0:0.0} KB).";
             fit.Foreground = new SolidColorBrush(ModernGreen);
             place.IsEnabled = addHere.IsEnabled = true;
         }
