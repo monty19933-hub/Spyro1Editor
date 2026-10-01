@@ -491,7 +491,7 @@ class RunnerOptionsTests(unittest.TestCase):
 
     def test_aggregate_ui_is_an_additional_isolated_mode_not_a_source_or_default_alias(self):
         name = "UiSmoke"
-        expected = [(name, "START_BLANK_UI_OK checks=25", ["--start-blank-ui-only"]),
+        expected = [(name, "START_BLANK_UI_OK checks=27", ["--start-blank-ui-only"]),
                     (name, "FREE_FLIGHT_UI_OK", ["--free-flight-ui-only"]),
                     (name, "LEVEL_PICKER_AUTOMATION_OK", ["--level-picker-automation-only"]),
                     (name, "AUTHORED_MESH_CHECKS_OK", ["--authored-mesh-only"]),

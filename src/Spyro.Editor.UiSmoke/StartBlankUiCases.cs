@@ -83,6 +83,7 @@ internal static class StartBlankUiCases
             Check(Get<LevelDefinition>(window,"_currentLevel") is{Key:"artisans",LevelId:10,SourceWadEntry:10,SourceRecordCount:0},"normal retail picker loader resolves same-slot authored override before native cache");
             Check(window.FreshSceneForTesting!.Id==replacement.Id&&Get<ComboBox>(window,"_levelJumpBox").Items.OfType<LevelDefinition>().Count(l=>l.Key=="artisans")==1,"replacement retains real slot and does not duplicate picker rows");
             Check(ReferenceEquals(viewport,Get<object>(window,"_viewport")),"retail override uses same shared viewport");
+            Check(Get<TextBlock>(window,"_statusText").Text=="Opened New Artisans: 2 authored faces, 0 objects.","reopened replacement finishes its loading status");
             // These loaded identities are copies of their catalog records; reference-only
             // navigation would remain at Artisans on the first forward step.
             foreach(var step in new[]{(Delta:1,Level:stoneHill,Scene:second),(Delta:1,Level:darkHollow,Scene:third),
@@ -102,6 +103,11 @@ internal static class StartBlankUiCases
                 !Find<TextBlock>(reloadDialog,"RestoreLevelExplanation").Text!.Contains("clears saved object edits"),
                 "cleared-scene reload confirmation describes saved scene recovery, not deletion of original sidecars");
             Click(reloadDialog.GetLogicalDescendants().OfType<Button>().Single(b=>b.Content?.ToString()=="Cancel"));Complete(reload);
+            File.Delete(SceneDocumentStore.PathForTarget(root,"artisans"));
+            Complete((Task)Invoke(window,"SelectLevelAsync",retail,null!)!);
+            Check(Get<ComboBox>(window,"_levelJumpBox").SelectedItem is LevelDefinition {Key:"artisans"} &&
+                Get<ListBox>(window,"_levelList").SelectedItem is LevelDefinition {Key:"artisans"},
+                "returning from a replacement to original retail data keeps both level pickers selected");
             Check(File.ReadAllText(Path.Combine(root,"protected.txt"))=="unrelated"&&!Directory.EnumerateFiles(root,"*.bin",SearchOption.AllDirectories).Any(),"unrelated file unchanged and no native image authored");
             Console.WriteLine($"START_BLANK_UI_OK checks={checks} sourceOpened=false nativeOutputWritten=false fixtures={root}");
         }

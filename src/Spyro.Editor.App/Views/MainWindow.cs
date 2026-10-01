@@ -3159,6 +3159,7 @@ public sealed partial class MainWindow : Window
         _viewport.SetAuthoredSkyColor(null);
         RefreshFreshDocumentPanels();
         _currentLevel = level;
+        SyncLevelPickers(level);
         _id65FreshAuthoringDocument = exactId65BlankLab
             ? loaded.Id65AuthoringDocument
             : null;

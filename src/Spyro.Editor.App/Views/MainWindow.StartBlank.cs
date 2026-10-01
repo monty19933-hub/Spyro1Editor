@@ -19,7 +19,9 @@ public sealed partial class MainWindow
         if(document==null)return false;
         string key=document.TargetBinding?.LevelKey??"authored65";
         document=document with{Ledger=StartBlankRecoveryStore.ReconcileLifetime(_workspace.RootPath,key,document.Ledger,document.TargetBinding?.NativePrefixRows??0)};
-        ApplyFreshScene(document);return true;
+        ApplyFreshScene(document);
+        _statusText.Text=$"Opened {document.Name}: {document.Surfaces.Count} authored faces, {document.Objects.Count} objects.";
+        return true;
     }
     private bool CanStartBlankCurrentLevel() => _currentLevel!=null&&
         (_freshSceneDocument!=null || _currentLevel.LevelId is >=10 and <=64&&_currentLevel.LevelId%10<=4);

@@ -1,3 +1,56 @@
+# V1.0.2 Start Blank checkpoint
+
+Branch: `feature/start-blank-level-20261001`. The completed universal continuation
+was checkpointed first at `0f0cdb623446e2f36720ac4b6fbd60f03601e879`
+(`checkpoint/universal-1.0.1-20261001`). Fly Anywhere remains deferred.
+
+- File > **Start Blank in Current Level…** confirms the clear, saves current
+  work, creates a verified recovery snapshot and opens a safe player start with
+  a removable floor in the same editor. **Restore Before Clear…** survives
+  reopening and preserves the replacement before restoring the prior scene.
+- Terrain, collision, placed objects and unused object assets are rebuilt in
+  normal BIN/CUE export. The measured blank Artisans fixture removes 174 rows
+  and frees **891,216 resident bytes**. Retired collectible identities remain
+  protected independently of reusable physical storage.
+- Native full-firmware New Game runs passed for final blank Artisans, a small
+  flat replacement with one gem, and a sloped replacement with one gem.
+  Walking, jumping, landing and visible floor rendering passed; inventories
+  showed 0/0 for blank and 1/1 for the replacements. Exact CUEs, screenshots,
+  source hashes and read-only RAM observations are in the research report.
+- Frozen Release regression at `aabe94d`: **335 checks passed, zero failed**.
+  Final UI polish passed **27 Start Blank checks in Release and Debug**,
+  26 level-picker checks and 115 regression-runner tests. Builds had zero
+  warnings/errors. No native compilation logic changed during the UI polish.
+- Geometry tests passed 1,158 checks in both configurations; exact source-backed
+  batch/readback and initializer ownership results retain their separate
+  identities in the [verification report](docs/research/start-blank-level-20261001.md).
+- Packaged macOS UI confirmed cancellation, clear, removable floor/undo, save,
+  normal BIN/CUE creation, reopen and recovery of the original 174 objects and
+  terrain. Reopening status and the restored level-picker label were corrected
+  during that pass. Recovery preserves the replacement scene on disk.
+- Final local macOS arm64 and Windows x64 packages passed full package
+  verification. The Mac is Developer ID signed but **not notarized**; Windows
+  runtime is **not tested**. Nothing has been published remotely.
+- Original USA/Japan disc hashes and all 173 protected user-project files match
+  their preserved inputs. The user's running beta and earlier packages remain
+  separate from the verification project.
+
+Start Blank currently supports **10 retail levels**: Artisans, Stone Hill, Town
+Square, Peace Keepers, Dry Canyon, Cliff Town, Magic Crafters, Beast Makers,
+Dream Weavers and Gnasty's World. Twenty other normal levels remain guarded
+until their shorter initializers' transition callbacks are proved. Cleared Town
+Square and fresh level 65 cannot be exported together because of shared native
+storage. The retained sound/particle kernel is not proved to be the absolute
+smallest possible footprint. Full universal Moby gameplay coverage remains
+unfinished; the prior static matrix is 105,559/145,285 cells.
+
+Final artifacts are in `outputs/SpyroEditor-V1.0.2-release` relative to the task
+workspace. The machine-readable checkpoint receipt is
+`work/start-blank-level-20261001/final-checkpoint.json`. The research report
+records exact evidence paths and remaining work.
+
+---
+
 # V1.0.1 universal Moby continuation
 
 Active branch: `release/universal-coverage-20261001`, preserved V1.0 source

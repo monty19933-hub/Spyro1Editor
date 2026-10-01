@@ -229,7 +229,7 @@ CASE_ARGUMENTS = {
 # Additional modes retain their own arguments/markers without replacing the
 # established mode of the same executable. Project builds remain deduplicated.
 ADDITIONAL_CORE_CASES = (
-    ("UiSmoke", "START_BLANK_UI_OK checks=25",
+    ("UiSmoke", "START_BLANK_UI_OK checks=27",
      ["--start-blank-ui-only"]),
     ("TownSquareLockedChestSmoke", "LOCKED_CHEST_BEHAVIOR_FREE_OK",
      ["--behavior-free"]),
