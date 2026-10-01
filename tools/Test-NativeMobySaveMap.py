@@ -6,11 +6,13 @@ import argparse,hashlib,json,struct,subprocess
 from pathlib import Path
 from SpyroEggScalarMips import Scalar,require
 ROOT=Path(__file__).resolve().parent.parent
-p=argparse.ArgumentParser(description=__doc__);p.add_argument('--dll',type=Path,default=ROOT/'src/Spyro.Editor.NativeMobySaveMapSmoke/bin/Release/net10.0/Spyro.Editor.NativeMobySaveMapSmoke.dll');p.add_argument('--dotnet',default='dotnet');p.add_argument('--report',type=Path);p.add_argument('--source-image',type=Path);a=p.parse_args()
+p=argparse.ArgumentParser(description=__doc__);p.add_argument('--dll',type=Path,default=ROOT/'src/Spyro.Editor.NativeMobySaveMapSmoke/bin/Release/net10.0/Spyro.Editor.NativeMobySaveMapSmoke.dll');p.add_argument('--dotnet',default='dotnet');p.add_argument('--report',type=Path);p.add_argument('--source-image',type=Path);p.add_argument('--packaged-core',type=Path);p.add_argument('--candidate-image',type=Path);a=p.parse_args()
 f=json.loads(subprocess.run([a.dotnet,str(a.dll),'--emit'],capture_output=True,text=True,check=True,timeout=30).stdout)
 PREINIT=f['preInitAddress'];QUERY=f['queryAddress'];DELETE=f['deleteAddress'];MARK=f['markAddress'];RELOAD=f['reloadAddress'];GATE=f['mapAddress'];BASE=0x80100000;DYNAMIC=0x80120000;STOP=0xDEADBEE0;UPDATE=f['update'];OVBASE=f['overlayBase']
 checks=0;cases=0
 sourceVerified=False
+packageReceipt=None
+candidateReceipt=None
 if a.source_image:
  h=hashlib.sha256()
  with a.source_image.open('rb') as stream:
@@ -21,7 +23,7 @@ if a.source_image:
    while len(data)<length:
     at=start+len(data);size=min(length-len(data),2048-at%2048);stream.seek(at//2048*2352+24+at%2048);data.extend(stream.read(size))
    return bytes(data)
-  for address,key in [(MARK,'originalMark'),(RELOAD,'originalReload'),(DELETE,'originalDelete'),(PREINIT,'originalPreInit'),(QUERY,'originalQuery')]:
+  for address,key in [(MARK,'originalMark'),(RELOAD,'originalReload'),(DELETE,'originalDelete'),(PREINIT,'originalPreInit'),(QUERY,'originalQuery'),(f['emptySetupAddress'],'originalEmptySetup')]:
    expected=bytes.fromhex(f[key]);require(logical(53875*2048+address-0x8000F800,len(expected))==expected,'actual original native owner '+hex(address))
  sourceVerified=True
 
@@ -31,8 +33,8 @@ def check(b,message):
  require(b,message);checks+=1
 
 def words(address,data):return {address+i:struct.unpack_from('<I',data,i)[0]for i in range(0,len(data),4)}
-old=words(PREINIT,bytes.fromhex(f['originalPreInit']))|words(QUERY,bytes.fromhex(f['originalQuery']))|words(DELETE,bytes.fromhex(f['originalDelete']))|words(MARK,bytes.fromhex(f['originalMark']))|words(RELOAD,bytes.fromhex(f['originalReload']))
-new=words(PREINIT,bytes.fromhex(f['preInit']))|words(QUERY,bytes.fromhex(f['query']))|words(DELETE,bytes.fromhex(f['delete']))|words(MARK,bytes.fromhex(f['mark']))|words(RELOAD,bytes.fromhex(f['reload']))|words(OVBASE,bytes.fromhex(f['overlay']))
+old=words(f['emptySetupAddress'],bytes.fromhex(f['originalEmptySetup']))|words(PREINIT,bytes.fromhex(f['originalPreInit']))|words(QUERY,bytes.fromhex(f['originalQuery']))|words(DELETE,bytes.fromhex(f['originalDelete']))|words(MARK,bytes.fromhex(f['originalMark']))|words(RELOAD,bytes.fromhex(f['originalReload']))
+new=words(f['emptySetupAddress'],bytes.fromhex(f['originalEmptySetup']))|words(f['emptyBranchAddress'],bytes.fromhex(f['emptyBranch']))|words(PREINIT,bytes.fromhex(f['preInit']))|words(QUERY,bytes.fromhex(f['query']))|words(DELETE,bytes.fromhex(f['delete']))|words(MARK,bytes.fromhex(f['mark']))|words(RELOAD,bytes.fromhex(f['reload']))|words(OVBASE,bytes.fromhex(f['overlay']))
 copy=words(0x80016958,bytes.fromhex(f['wordCopy']));old|=copy;new|=copy
 
 def fixture(code,mapped=False,count=256,overlay=None,update=None):
@@ -177,6 +179,17 @@ for physical,logical in enumerate(f['map']):
   if checkpoint and logical>=0:m.poke(0x80077898+(logical>>5)*4,1<<(logical&31))
   run(m,QUERY);check(m.r[2]==int(checkpoint and logical>=0),'mapped checkpoint query consumes logical bit, holes false');cases+=1
 
+# The original external empty-table branch enters the exact relocated copy block.
+for checkpointFill in [0,0xFF,0xA5,0x5A]:
+ snapshots=[]
+ for code in [old,new]:
+  m=fixture(code,True,count=0);m.poke(BASE+0x48,255,1)
+  for i in range(32):m.poke(0x80077898+i,checkpointFill,1)
+  effects=run(m,f['emptySetupAddress'],0x80014404)
+  check(not effects,'empty table never invokes actor helpers')
+  snapshots.append((m.bytes(0x800778B8,32),m.r[17]))
+ check(snapshots[0]==snapshots[1]==(bytes([checkpointFill])*32,9),'empty native reload preserves exact checkpoint copy and next phase index');cases+=1
+
 # Optional mapped egg update executes both the emitted gateway and native collected hook.
 EGG=f['eggAddress'];PARTICLE=0x800D0000
 mappedEgg=new|words(EGG,bytes.fromhex(f['eggCode']))|words(OVBASE,bytes.fromhex(f['eggOverlay']))
@@ -204,6 +217,34 @@ for cls in f['classes']:
      check([t for t,_ in second]==[0x80052568],'mapped egg reconstructed after collection retires once')
     cases+=1
 
-report=dict(marker='NATIVE_MOBY_SAVE_MAP_SCALAR_OK',checks=checks,cases=cases,markBytes=len(bytes.fromhex(f['mark'])),reloadBytes=len(bytes.fromhex(f['reload'])),moduleSha256=hashlib.sha256(a.dll.read_bytes()).hexdigest(),helperEffectsMocked=['native award','audio','unlink','constructor','position copy','collision query','row preparation'],nativeWordCopyExecuted=True,nativeRuntime=False,cardIO=False,sourceVerified=sourceVerified)
+if a.packaged_core:
+ packageReceipt=json.loads(subprocess.run([a.dotnet,str(a.dll),'--emit-packaged-core',str(a.packaged_core.resolve())],capture_output=True,text=True,check=True,timeout=30).stdout)
+ expected={MARK:bytes.fromhex(f['mark']),RELOAD:bytes.fromhex(f['reload']),DELETE:bytes.fromhex(f['delete']),PREINIT:bytes.fromhex(f['preInit']),QUERY:bytes.fromhex(f['query']),f['emptyBranchAddress']:bytes.fromhex(f['emptyBranch'])}
+ actual={w['address']:bytes.fromhex(w['code'])for w in packageReceipt['windows']}
+ check(actual==expected,'exact packaged Core emits all six canonical native owners')
+if a.candidate_image:
+ require(a.packaged_core is not None,'candidate readback requires exact packaged Core identity')
+ with a.candidate_image.open('rb') as stream:
+  def logical(start,length):
+   data=bytearray()
+   while len(data)<length:
+    at=start+len(data);size=min(length-len(data),2048-at%2048);stream.seek(at//2048*2352+24+at%2048);chunk=stream.read(size);require(len(chunk)==size,'candidate raw sector bounds');data.extend(chunk)
+   return bytes(data)
+  pvd=logical(16*2048,2048);require(pvd[1:6]==b'CD001','candidate ISO PVD')
+  rootLba=struct.unpack_from('<I',pvd,158)[0];rootSize=struct.unpack_from('<I',pvd,166)[0];directory=logical(rootLba*2048,rootSize);i=0;matches=[]
+  while i<len(directory):
+   length=directory[i]
+   if not length:i=(i//2048+1)*2048;continue
+   record=directory[i:i+length];name=record[33:33+record[32]]
+   if name.upper().split(b';')[0]==b'PSX.EXE':matches.append((struct.unpack_from('<I',record,2)[0],struct.unpack_from('<I',record,10)[0]))
+   i+=length
+  require(len(matches)==1,'exactly one candidate PSX.EXE owner')
+  lba,size=matches[0];exe=logical(lba*2048,size);require(exe[:8]==b'PS-X EXE','candidate EXE header')
+  for address,code in actual.items():check(exe[address-0x8000F800:address-0x8000F800+len(code)]==code,'candidate six-owner readback '+hex(address))
+  h=hashlib.sha256();stream.seek(0)
+  while chunk:=stream.read(8*1024*1024):h.update(chunk)
+ candidateReceipt=dict(imageSha256=h.hexdigest(),exeSha256=hashlib.sha256(exe).hexdigest(),exeLba=lba,ownerCount=len(actual),readOnly=True)
+
+report=dict(marker='NATIVE_MOBY_SAVE_MAP_SCALAR_OK',checks=checks,cases=cases,markBytes=len(bytes.fromhex(f['mark'])),reloadBytes=len(bytes.fromhex(f['reload'])),moduleSha256=hashlib.sha256(a.dll.read_bytes()).hexdigest(),helperEffectsMocked=['native award','audio','unlink','constructor','position copy','collision query','row preparation'],nativeWordCopyExecuted=True,nativeRuntime=False,cardIO=False,sourceVerified=sourceVerified,packagedCore=packageReceipt,candidate=candidateReceipt)
 if a.report:a.report.write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report,indent=2))

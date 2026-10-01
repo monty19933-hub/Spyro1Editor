@@ -11,6 +11,9 @@ public sealed record NativeMobySaveMapWindow(uint Address, byte[] Code, string S
 /// Code occupies only rescheduled original collected-write/reload owners.</summary>
 public static class NativeMobySaveMap
 {
+    public const uint EmptyReloadBranchAddress = 0x800142B4;
+    public const uint ReloadCopyAddress = 0x800143DC;
+    public const string EmptyReloadBranchSourceSha256 = "295aa92625eb8be9692062d90c652709bb59a0b31b771d05b49d0583cdb2a3b0";
     public const uint PreInitAddress = 0x8001417C;
     public const uint CheckpointQueryAddress = 0x80038494;
     public const string PreInitSourceSha256 = "1db8c2edc34e915fbab076199a90800439ddb0ab475329256e90faa1014cde05";
@@ -78,7 +81,7 @@ public static class NativeMobySaveMap
     }
 
     public static IReadOnlyList<NativeMobySaveMapWindow> Windows()=>
-        [new(MarkAddress,MarkRoutine(),MarkSourceSha256),new(ReloadAddress,ReloadRoutine(),ReloadSourceSha256),new(DeleteAddress,DeleteRoutine(),DeleteSourceSha256),new(PreInitAddress,PreInitRoutine(),PreInitSourceSha256),new(CheckpointQueryAddress,CheckpointQueryRoutine(),CheckpointQuerySourceSha256)];
+        [new(MarkAddress,MarkRoutine(),MarkSourceSha256),new(ReloadAddress,ReloadRoutine(),ReloadSourceSha256),new(DeleteAddress,DeleteRoutine(),DeleteSourceSha256),new(PreInitAddress,PreInitRoutine(),PreInitSourceSha256),new(CheckpointQueryAddress,CheckpointQueryRoutine(),CheckpointQuerySourceSha256),new(EmptyReloadBranchAddress,BitConverter.GetBytes(0x10620049u),EmptyReloadBranchSourceSha256)];
 
     public static void PatchExe(byte[] exe)
     {
@@ -194,6 +197,8 @@ public static class NativeMobySaveMap
         a.L("unlink");a.Jal(0x80052568);a.N();
         a.L("next");a.I(15,0,4,0x8007);a.I(35,4,4,0x5828);a.I(9,16,16,88);a.R(16,4,2,0,0x21);a.I(36,2,2,0x48);a.N();
         a.B(5,2,19,"loop");a.I(9,17,17,1);
+        a.L("copy");
+        if(a.Part.Items.Count(i=>i.Word!=null)*4 != ReloadCopyAddress-ReloadAddress)throw new InvalidDataException("Empty reload branch must target the exact emitted checkpoint copy entry.");
         a.La(4,0x800778B8);a.I(9,4,5,-32);a.Li(6,32);a.Jal(0x80016958);a.Li(17,8);
         a.J(0x80014404);a.Li(17,9);
         // The physical loop re-enters this relocated owner, preserving s1/s0.
