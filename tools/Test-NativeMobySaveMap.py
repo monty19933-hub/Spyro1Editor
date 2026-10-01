@@ -236,9 +236,9 @@ if a.candidate_image:
    length=directory[i]
    if not length:i=(i//2048+1)*2048;continue
    record=directory[i:i+length];name=record[33:33+record[32]]
-   if name.upper().split(b';')[0]==b'PSX.EXE':matches.append((struct.unpack_from('<I',record,2)[0],struct.unpack_from('<I',record,10)[0]))
+   if name.upper().split(b';')[0]==b'SCUS_942.28':matches.append((struct.unpack_from('<I',record,2)[0],struct.unpack_from('<I',record,10)[0]))
    i+=length
-  require(len(matches)==1,'exactly one candidate PSX.EXE owner')
+  require(len(matches)==1,'exactly one candidate USA SCUS_942.28 owner')
   lba,size=matches[0];exe=logical(lba*2048,size);require(exe[:8]==b'PS-X EXE','candidate EXE header')
   for address,code in actual.items():check(exe[address-0x8000F800:address-0x8000F800+len(code)]==code,'candidate six-owner readback '+hex(address))
   h=hashlib.sha256();stream.seek(0)
