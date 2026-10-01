@@ -56,6 +56,8 @@ Supported(seed with {Spawn=new(14000,14000,576),Surfaces=[Rectangle(13968,13968,
 Supported(seed with {Surfaces=[..seed.Surfaces,Rectangle(528,528,656,656)]},"overlapping floor does not manufacture gaps");
 Supported(seed with {Spawn=new(560.249f,560,576),Surfaces=[Rectangle(538,528,620,656)]},"support uses exact native rounded spawn rather than uncompiled coordinates");
 
+MeshFaceCacheCases.Run(Check);
+
 if(args.Length==0) { Console.WriteLine("NATIVE_CLEARED_LEVEL_COMPOSITION_CHECKS_OK checks="+checks);return; }
 if(args.Length is not 3 and not 4 || args.Length==4 && args[3]!="--replacement-only")
     throw new ArgumentException("Source fixture: ORIGINAL_USA CATALOG_WORKSPACE ARTIFACTS_DIRECTORY [--replacement-only]");

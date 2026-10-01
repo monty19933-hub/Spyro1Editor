@@ -30,7 +30,7 @@ internal static class NativeAuthoredMesh
         for (int i=0;i<n;i++)
         {
             int at=8+n*4+i*span; W(environment,8+i*4,(uint)(at-4));
-            EncodeSector(environment.AsSpan(at,span),triangles[i]);
+            EncodeSector(environment.AsSpan(at,span),triangles[i],i+1);
         }
         int list=(n+4)&~3, skyAt=16+list;
         byte[] visibility=new byte[skyAt+12]; W(visibility,0,(uint)visibility.Length);W(visibility,4,(uint)(skyAt-4));W(visibility,8,1);W(visibility,12,12);
@@ -63,7 +63,7 @@ internal static class NativeAuthoredMesh
         if(bundle.Length>0x20000)throw new InvalidDataException("Authored surface exceeds the bounded native surface allocation.");
         return bundle;
     }
-    private static void EncodeSector(Span<byte> s,Triangle t)
+    private static void EncodeSector(Span<byte> s,Triangle t,int faceCacheStart)
     {
         Vector3f[] v=[t.A,t.B,t.C];int x=v.Min(v=>Unit(v.X)),y=v.Min(v=>Unit(v.Y)),z=v.Min(v=>Unit(v.Z));
         int maxX=v.Max(v=>Unit(v.X)),maxY=v.Max(v=>Unit(v.Y)),maxZ=v.Max(v=>Unit(v.Z));
@@ -71,7 +71,10 @@ internal static class NativeAuthoredMesh
         if(radius==0)throw new InvalidDataException("An authored triangle is degenerate.");
         var ab=new Vector3f(t.B.X-t.A.X,t.B.Y-t.A.Y,t.B.Z-t.A.Z);var ac=new Vector3f(t.C.X-t.A.X,t.C.Y-t.A.Y,t.C.Z-t.A.Z);
         if(ab.Y*ac.Z-ab.Z*ac.Y==0 && ab.Z*ac.X-ab.X*ac.Z==0 && ab.X*ac.Y-ab.Y*ac.X==0)throw new InvalidDataException("An authored triangle has zero area.");
-        W(s,0,(uint)(((x+maxX)/2<<16)|((y+maxY)/2)));W(s,4,(uint)(((z+maxZ)/2<<16)|radius));W(s,8,(uint)((x<<16)|y));W(s,12,(uint)(z<<16));
+        // Native 80026810..34 indexes per-face subdivision scratch with the low
+        // halfword. Retail HP ranges partition 1..totalFaces; byte zero is reserved.
+        // Each authored sector has one HP face, so give it a distinct native index.
+        W(s,0,(uint)(((x+maxX)/2<<16)|((y+maxY)/2)));W(s,4,(uint)(((z+maxZ)/2<<16)|radius));W(s,8,(uint)((x<<16)|y));W(s,12,(uint)((z<<16)|faceCacheStart));
         new byte[]{3,3,1,0,3,3,1,8}.CopyTo(s[16..]);W(s,24,uint.MaxValue);
         for(int i=0;i<3;i++)
         {
