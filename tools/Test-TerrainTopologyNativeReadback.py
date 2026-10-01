@@ -57,6 +57,13 @@ for row in range(n,last['n']):
 oldEnv,newEnv=old[1],new[1];sectorCount=word(oldEnv,4);assert word(newEnv,4)==sectorCount+1
 for i in range(sectorCount):
  oldAt=4+word(oldEnv,8+4*i);newAt=4+word(newEnv,8+4*i);oldEnd=4+word(oldEnv,12+4*i) if i+1<sectorCount else len(oldEnv);assert oldEnv[oldAt:oldEnd]==newEnv[newAt:newAt+oldEnd-oldAt],('retained native HP/LP sector',i)
+from terrain_sector_readback import sector as decodeSector,hpFaces,lpFaces,canonical
+oldFace=hpFaces(decodeSector(oldEnv,90))[0];copiedSector=decodeSector(newEnv,sectorCount)
+translated=lambda face:[((xyz[0]+160,xyz[1],xyz[2]),colour) for xyz,colour in face]
+assert canonical(translated(oldFace))==canonical(list(hpFaces(copiedSector)[0])), 'all four copied HP palette1 corners preserved'
+from terrain_renderer_packets import hp as hpPackets,lp as lpPackets
+assert hpPackets(copiedSector)==lpPackets(copiedSector), 'drawn GPU triangle coverage, culling winding, physical FAR RGB, double-sided and OT exact'
+assert canonical(translated(hpFaces(decodeSector(oldEnv,90),near=True)[0]))==canonical(list(hpFaces(copiedSector,near=True)[0])), 'all four native HP palette2 corners preserved'
 sector=4+word(newEnv,8+4*sectorCount);hpLp=tuple(newEnv[sector+16:sector+24]);assert hpLp[:7]==(4,4,1,0,4,4,1) and hpLp[7]==hpLp[0]+hpLp[1]+2*hpLp[2]
 def visibility(b):
  count=word(b,8);end=4+word(b,4);groups=[]
@@ -67,4 +74,4 @@ def visibility(b):
  return groups,b[end:]
 (og,os),(ng,ns)=map(visibility,[old[2],new[2]]);assert len(og)==len(ng) and os==ns
 for prior,final in zip(og,ng):assert [i for i in final if i<sectorCount]==prior;assert (sectorCount in final)==(a.visibility=="all" or 90 in prior)
-receipt={'source':sha(source),'candidate':sha(candidate),'modelAllocationBytes':size,'modelAllocationUnchanged':True,'nativeExeCopyBufferUnchanged':True,'WadEntryHeaderAndOutsideModelUnchanged':True,'componentGrowthBytes':len(suffixOld)-len(suffixNew),'trailingZeroBytesMeasured':len(suffixNew)-len(suffixNew.rstrip(b'\0')),'oldRows':n,'newRows':last['n'],'flagPrefix':last['flags'],'newSector':sectorCount,'hpLpCounts':hpLp,'appended':appended,'originalSectorPayloadsPreserved':True,'originalCollisionRowsAssignmentsFlagsPreserved':True,'allOriginalMembershipsAndQueryOrderPreserved':True,'newRationalMembershipExact':True,'nativeVisibilityMode':a.visibility,'immutableComponentAndOpaqueSuffixContentPreserved':True,'runtime':False,'scope':'exact Artisans floor90:0 copy +X160; no general structural acceptance'};a.report.parent.mkdir(parents=True,exist_ok=True);a.report.write_text(json.dumps(receipt,indent=2));print('TERRAIN_TOPOLOGY_NATIVE_READBACK_OK rows7209to7211 flags903 HP4 LP4 copiedSector='+str(sectorCount)+' nativeRuntime=false')
+receipt={'source':sha(source),'candidate':sha(candidate),'modelAllocationBytes':size,'modelAllocationUnchanged':True,'nativeExeCopyBufferUnchanged':True,'WadEntryHeaderAndOutsideModelUnchanged':True,'componentGrowthBytes':len(suffixOld)-len(suffixNew),'trailingZeroBytesMeasured':len(suffixNew)-len(suffixNew.rstrip(b'\0')),'oldRows':n,'newRows':last['n'],'flagPrefix':last['flags'],'newSector':sectorCount,'hpLpCounts':hpLp,'appended':appended,'originalSectorPayloadsPreserved':True,'copiedAllFourNativePalette1Palette2CornersPreserved':True,'drawnGpuTriangleCoverageWindingFarRgbExact':True,'originalCollisionRowsAssignmentsFlagsPreserved':True,'allOriginalMembershipsAndQueryOrderPreserved':True,'newRationalMembershipExact':True,'nativeVisibilityMode':a.visibility,'immutableComponentAndOpaqueSuffixContentPreserved':True,'runtime':False,'scope':'exact Artisans floor90:0 copy +X160; no general structural acceptance'};a.report.parent.mkdir(parents=True,exist_ok=True);a.report.write_text(json.dumps(receipt,indent=2));print('TERRAIN_TOPOLOGY_NATIVE_READBACK_OK rows7209to7211 flags903 HP4 LP4 copiedSector='+str(sectorCount)+' nativeRuntime=false')

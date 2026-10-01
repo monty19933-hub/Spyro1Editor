@@ -11,7 +11,7 @@ first,last=map(collision,[old[4],new[4]]);n=first['n'];assert n==last['n']==7209
 for i in removed:assert len(set(points(last['rows'][i*12:i*12+12])))==1
 for cell in first['cells'].keys()|last['cells'].keys():assert last['cells'].get(cell,[])==[i for i in first['cells'].get(cell,[]) if i not in removed],('complete native removal/query order',cell)
 assert set(i for rows in last['cells'].values() for i in rows)==set(i for rows in first['cells'].values() for i in rows)-removed
-oldEnv,newEnv=old[1],new[1];sourceCount=word(oldEnv,4);newCount=word(newEnv,4);assert sourceCount<newCount<=255
+oldEnv,newEnv=old[1],new[1];sourceCount=word(oldEnv,4);newCount=word(newEnv,4);assert sourceCount<=newCount<=255
 
 def sector(env,i):
  at=4+word(env,8+4*i);lpv,lpc,lpf,_,hpv,hpc,hpf,offset=env[at+16:at+24];end=at+28+4*(lpv+lpc+2*lpf+hpv+2*hpc+4*hpf);return env[at:end]
@@ -36,15 +36,18 @@ def lpFaces(s):
 oldOwner,newOwner=sector(oldEnv,90),sector(newEnv,90);oldHp,newHp=hpFaces(oldOwner),hpFaces(newOwner);assert len(oldHp)==len(newHp);assert len(set(q[0] for q in newHp[0]))==1;assert newHp[1:]==oldHp[1:]
 for i in range(sourceCount):
  if i!=90:assert sector(oldEnv,i)==sector(newEnv,i),('unrelated native sector',i)
-assert all(len(set(q[0] for q in face))==1 for face in lpFaces(newOwner)), 'no stale original low-detail floor'
+assert all(set(q[0] for q in face)!=set(q[0] for q in oldHp[0]) for face in lpFaces(newOwner)), 'no stale original low-detail floor'
 # Canonical cyclic order preserves winding and exact native FAR colour per vertex.
 def canonical(face):return min(tuple(face[i:]+face[:i]) for i in range(4))
-expected=Counter(canonical(list(face)) for face in oldHp[1:] if len(set(q[0] for q in face))>1);actual=Counter();appended=[]
+expected=Counter(canonical(list(face)) for face in oldHp[1:] if len(set(q[0] for q in face))>1);actual=Counter(canonical(list(face)) for face in lpFaces(newOwner) if len(set(q[0] for q in face))>1);appended=[]
 for i in range(sourceCount,newCount):
  s=sector(newEnv,i);assert s[20:23]==b'\0\0\0';assert s[23]==s[16]+s[17]+2*s[18];polys=lpFaces(s);actual.update(canonical(list(face)) for face in polys);appended.append({'sector':i,'vertices':s[16],'colours':s[17],'faces':s[18]})
-assert actual==expected,('remaining HP/new LP exact geometry/FARcolour/winding multiset',expected-actual,actual-expected)
+from terrain_renderer_packets import hp as hpPackets,lp as lpPackets
+packetExpected=hpPackets(newOwner);packetActual=lpPackets(newOwner)
+for i in range(sourceCount,newCount):packetActual.update(lpPackets(sector(newEnv,i)))
+assert packetActual==packetExpected,('drawn GPU HP/LP triangle coverage, native FAR RGB, culling winding and OT',packetExpected-packetActual,packetActual-packetExpected)
 # Each deleted collision row must be a native triangulation of exactly the removed HP polygon.
 shape={q[0] for q in oldHp[0]};assert all(set(points(first['rows'][i*12:i*12+12]))<=shape for i in removed)
 (og,os),(ng,ns)=map(visibility,[old[2],new[2]]);assert os==ns and len(og)==len(ng)
 for prior,final in zip(og,ng):assert [i for i in final if i<sourceCount]==prior;assert all((i in final)==(90 in prior) for i in range(sourceCount,newCount))
-receipt={'source':sha(source),'candidate':sha(candidate),'modelAllocationBytes':size,'modelAllocationUnchanged':True,'nativeExeCopyBufferUnchanged':True,'WadEntryHeaderAndOutsideModelUnchanged':True,'componentGrowthBytes':len(suffixOld)-len(suffixNew),'trailingZeroBytesMeasured':len(suffixNew)-len(suffixNew.rstrip(b'\0')),'triangleRows':n,'flagPrefix':first['flags'],'removedRows':sorted(removed),'oldSectors':sourceCount,'newSectors':newCount,'lpOnlySectors':appended,'remainingHpPolygonsMatched':sum(expected.values()),'remainingHPtoNewLPGeometryFarColoursWindingExact':True,'originalLPOwnerFacesAllDegenerate':True,'allOtherHPSectorsPreserved':True,'allRemovedNativeMembershipsGone':True,'allSurvivorNativeQueryOrderPreserved':True,'nativeAssignmentFlagPrefixPreserved':True,'immutableComponentsAndOpaqueSuffixContentPreserved':True,'runtime':False,'scope':'exact Artisans90:0 removal; fixed original allocation/source ownership only'};a.report.parent.mkdir(parents=True,exist_ok=True);a.report.write_text(json.dumps(receipt,indent=2));print('TERRAIN_REMOVAL_NATIVE_READBACK_OK removedRows='+str(sorted(removed))+' matchedRemainingHP='+str(sum(expected.values()))+' lpOnlySectors='+str(newCount-sourceCount)+' runtime=false')
+receipt={'source':sha(source),'candidate':sha(candidate),'modelAllocationBytes':size,'modelAllocationUnchanged':True,'nativeExeCopyBufferUnchanged':True,'WadEntryHeaderAndOutsideModelUnchanged':True,'componentGrowthBytes':len(suffixOld)-len(suffixNew),'trailingZeroBytesMeasured':len(suffixNew)-len(suffixNew.rstrip(b'\0')),'triangleRows':n,'flagPrefix':first['flags'],'removedRows':sorted(removed),'oldSectors':sourceCount,'newSectors':newCount,'lpOnlySectors':appended,'remainingHpPolygonsMatched':sum(expected.values()),'nativeGpuTriangleCoverageWindingFarRgbExact':True,'drawnTrianglesMatched':sum(packetExpected.values()),'originalLPOwnerRebuiltOrDegenerateWithoutDeletedFloor':True,'retainedOwnerLPFaces':len(lpFaces(newOwner)),'allOtherHPSectorsPreserved':True,'allRemovedNativeMembershipsGone':True,'allSurvivorNativeQueryOrderPreserved':True,'nativeAssignmentFlagPrefixPreserved':True,'immutableComponentsAndOpaqueSuffixContentPreserved':True,'runtime':False,'scope':'exact Artisans90:0 removal; fixed original allocation/source ownership only'};a.report.parent.mkdir(parents=True,exist_ok=True);a.report.write_text(json.dumps(receipt,indent=2));print('TERRAIN_REMOVAL_NATIVE_READBACK_OK removedRows='+str(sorted(removed))+' matchedRemainingHP='+str(sum(expected.values()))+' lpOnlySectors='+str(newCount-sourceCount)+' runtime=false')

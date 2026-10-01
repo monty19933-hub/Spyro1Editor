@@ -13,6 +13,8 @@ using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Universal;
 using Spyro.Editor.Core.Exporting;
+using Spyro.Editor.Core.Scene;
+using Spyro.Editor.Core.Primitives;
 
 /// <summary>Exact saved user-project regression. All mutations are confined to a new copied project.</summary>
 internal static class V1UserProjectUiCases
@@ -23,18 +25,29 @@ internal static class V1UserProjectUiCases
         Check(!artifacts.StartsWith(snapshotRoot+Path.DirectorySeparatorChar,StringComparison.Ordinal),"artifacts are outside the preserved snapshot");
         Directory.CreateDirectory(artifacts);
         var sourceHashes=Hashes(snapshotRoot);
-        string clone=Path.Combine(artifacts,"project-"+Guid.NewGuid().ToString("N"));CopyTree(snapshotRoot,clone);
+        string? resume=Environment.GetEnvironmentVariable("SPYRO_V1_RESUME_CLONE");
+        string clone=resume==null?Path.Combine(artifacts,"project-"+Guid.NewGuid().ToString("N")):Path.GetFullPath(resume);
+        Check(resume==null||clone.StartsWith(Path.GetDirectoryName(artifacts)!+Path.DirectorySeparatorChar,StringComparison.Ordinal)&&!clone.StartsWith(snapshotRoot+Path.DirectorySeparatorChar,StringComparison.Ordinal),"resume uses an existing isolated fixture clone");
+        if(resume==null)CopyTree(snapshotRoot,clone);
         foreach(string name in new[]{"spyro-level-catalog.json","spyro-object-templates.json"})
             if(!File.Exists(Path.Combine(clone,name)))File.Copy(Path.Combine(sourceWorkspace,name),Path.Combine(clone,name));
+        bool retryDruid=Environment.GetEnvironmentVariable("SPYRO_V1_RETRY_DRUID")=="1";
+        Check(!retryDruid||resume!=null,"Druid-only retry requires the isolated copied fixture clone");
         var before=UniversalPlacementReader.Read(Path.Combine(clone,"artisans-native-edits.json"));
-        Check(before.Count(p=>!p.Retired)==8,"exact eight saved universal placements");
-        Check(UniversalPlacementReader.ReadRemovedNativeRows(Path.Combine(clone,"artisans-native-edits.json")).Order().SequenceEqual(new[]{29,30,113,121,124}),"exact five native removals");
+        Check(before.Count(p=>!p.Retired)==(retryDruid?9:8),"exact saved universal placements");
+        Check(UniversalPlacementReader.ReadRemovedNativeRows(Path.Combine(clone,"artisans-native-edits.json")).Order().SequenceEqual(retryDruid?new[]{29,30,32,33,113,121,124}:new[]{29,30,113,121,124}),"exact native removal scope");
         using var terrain=JsonDocument.Parse(File.ReadAllBytes(Path.Combine(clone,"artisans-terrain-edits.json")));
         var terrainRows=terrain.RootElement.GetProperty("edits").EnumerateArray().Select(e=>e.Clone()).ToArray();
         Check(terrainRows.Length==8&&terrainRows.All(e=>e.GetProperty("deltaZ").GetSingle()==0),"eight saved texture-only terrain edits");
         var savedScene=SceneDocument.Read(Path.Combine(clone,SceneDocument.FileName));
         Check(savedScene.Surfaces.Count==2&&savedScene.Objects.Count==1,"current fresh two-face egg scene");
         var research=Hashes(Path.Combine(clone,"_research"));
+        if(resume!=null&&!retryDruid)
+        {
+            var stored=UniversalDiscImage.Read(Path.Combine(clone,"output","Spyro Editor - Authored Level.bin"));
+            CheckStart(stored,0x2402000A);CheckNativeContents(stored,LevelCatalog.Load(clone).FindByKey("artisans")!,before,terrainRows,clone);
+            Console.WriteLine("V1_EXISTING_ARTISANS_READBACK_OK");
+        }
         string oldDirectory=Environment.CurrentDirectory;var oldWorkspace=Environment.GetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE");var oldRelease=Environment.GetEnvironmentVariable("SPYRO_EDITOR_RELEASE");
         MainWindow? window=null;
         try
@@ -47,13 +60,19 @@ internal static class V1UserProjectUiCases
             var artisans=Get<LevelCatalog>(window,"_retailCatalog").FindByKey("artisans")!;
             RunTask((Task)Invoke(window,"SelectLevelAsync",artisans,null)!);
             string? jp=Environment.GetEnvironmentVariable("SPYRO_UNIVERSAL_JAPAN_IMAGE");if(!string.IsNullOrWhiteSpace(jp))UniversalJapaneseDiscLocator.Configure(state.Workspace,jp);
-            Check(((List<UniversalMobyPlacement>)Invoke(window,"CurrentUniversalPlacements")!).Count(p=>!p.Retired)==8,"legacy in-prefix sign plus seven other imports load once");
+            Check(((List<UniversalMobyPlacement>)Invoke(window,"CurrentUniversalPlacements")!).Count(p=>!p.Retired)==(retryDruid?9:8),"saved imports load once");
+            if(retryDruid){AddDruid(window,artisans,terrainRows,clone,artifacts,research,true);return;}
             string output=Path.Combine(clone,"output","Spyro Editor - Authored Level.bin");
-            Directory.CreateDirectory(Path.GetDirectoryName(output)!);byte[] sentinel={1,8,3,9};File.WriteAllBytes(output,sentinel);File.WriteAllText(Path.ChangeExtension(output,".cue"),"prior fixture output");
-            var previousOutput=Hashes(Path.Combine(clone,"output"));
-            Scope(window,null,0,artifacts,"cancel-1024",1024,720);
-            AssertHashes(Path.Combine(clone,"output"),previousOutput,"cancel preserves every previous output");AssertHashes(Path.Combine(clone,"_research"),research,"cancel preserves experimental documents");
-            Scope(window,0,0,artifacts,"artisans-1440",1440,900);
+            Directory.CreateDirectory(Path.GetDirectoryName(output)!);byte[] sentinel={1,8,3,9};
+            if(resume==null)
+            {
+                File.WriteAllBytes(output,sentinel);File.WriteAllText(Path.ChangeExtension(output,".cue"),"prior fixture output");
+                var previousOutput=Hashes(Path.Combine(clone,"output"));
+                Scope(window,null,0,artifacts,"cancel-1024",1024,720);
+                AssertHashes(Path.Combine(clone,"output"),previousOutput,"cancel preserves every previous output");AssertHashes(Path.Combine(clone,"_research"),research,"cancel preserves experimental documents");
+                Scope(window,0,0,artifacts,"artisans-1440",1440,900);
+            }
+            else Console.WriteLine("V1_RESUME_EXISTING_ARTISANS_EXPORT "+output);
             Check(File.Exists(output)&&!File.ReadAllBytes(output).SequenceEqual(sentinel),"normal Create BIN produces the copied project");
             var originalStart=UniversalDiscImage.Read(output);CheckStart(originalStart,0x2402000Au);
             CheckNativeContents(originalStart,artisans,before,terrainRows,clone);
@@ -69,6 +88,7 @@ internal static class V1UserProjectUiCases
             Check(SceneDocument.Read(Path.Combine(clone,SceneDocument.FileName)).Fingerprint()==savedScene.Fingerprint(),"current authored scene persisted without semantic loss");
             AssertHashes(Path.Combine(clone,"_research"),research,"both exports preserve experimental documents");
             Console.WriteLine("V1_USER_PROJECT_UI_OK removals=5 imports=8 terrainPaints=8 privateTexture=68 freshFaces=2 freshEggs=1 startChoices=2 cancellationPreserved=true nativeRuntime=false clone="+clone);
+            if(Environment.GetEnvironmentVariable("SPYRO_V1_ADD_DRUID")=="1") AddDruid(window,artisans,terrainRows,clone,artifacts,research);
         }
         finally
         {
@@ -91,7 +111,7 @@ internal static class V1UserProjectUiCases
         RunTask(task);
         Console.WriteLine("V1_SCOPE_RESULT "+label+" "+Get<TextBlock>(w,"_statusText").Text);
     }
-    private static void CheckNativeContents(UniversalDiscImage disc,LevelDefinition level,IReadOnlyList<UniversalMobyPlacement> expected,JsonElement[] terrainRows,string clone)
+    private static void CheckNativeContents(UniversalDiscImage disc,LevelDefinition level,IReadOnlyList<UniversalMobyPlacement> expected,JsonElement[] terrainRows,string clone,int removalCount=5)
     {
         var data=new UniversalLevelData(disc.EntryBytes(level.SourceWadEntry));byte[] overlay=disc.EntryBytes(level.SourceWadEntry-1);
         int update=checked((int)(UniversalExeBindings.Read(disc.Exe,level.LevelId)[UniversalExeBindings.UpdateGlobal].Value-UniversalOverlay.Base));
@@ -103,22 +123,56 @@ internal static class V1UserProjectUiCases
             var row=data.Row(physical);Check(BitConverter.ToInt32(row,12)==p.X&&BitConverter.ToInt32(row,16)==p.Y&&BitConverter.ToInt32(row,20)==p.Z,"actual actor XYZ matches saved project: "+p.EditorId);
             if(p.Yaw.HasValue)Check(row[0x46]==p.Yaw.Value,"native yaw preserved: "+p.EditorId);
         }
-        Check(data.Scene().RowCount==level.SourceRecordCount-5+8,"physical holes reused; only active rows emitted");
+        Check(data.Scene().RowCount==level.SourceRecordCount-removalCount+expected.Count(p=>!p.Retired),"physical holes reused; only active rows emitted");
         var texture=data.Subfiles()[1];Check(BitConverter.ToInt32(data.Bytes,texture.Offset+4)>=69,"private terrain record68 included");
         string sourcePath=GetSource(clone);var source=UniversalDiscImage.Read(sourcePath);var originalData=new UniversalLevelData(source.EntryBytes(level.SourceWadEntry));
-        int oldEnvironment=originalData.Subfiles()[3].Offset,newEnvironment=data.Subfiles()[3].Offset;
+        int oldModel=originalData.Subfiles()[1].Offset,newModel=data.Subfiles()[1].Offset;
+        int oldEnvironment=oldModel+BitConverter.ToInt32(originalData.Bytes,oldModel),newEnvironment=newModel+BitConverter.ToInt32(data.Bytes,newModel);
         foreach(var e in terrainRows)
         {
             int oldWadOffset=Convert.ToInt32(e.GetProperty("faceOffset").GetString()![2..],16);
             int relative=oldWadOffset-source.Entry(level.SourceWadEntry).Offset-oldEnvironment;
-            Check(relative>=0&&relative+12<=originalData.Subfiles()[3].Length,"cached HP face is source-bound");
+            Check(relative>=0&&relative+16<=BitConverter.ToInt32(originalData.Bytes,oldEnvironment),"cached HP face is source-bound");
             Check((BitConverter.ToUInt32(originalData.Bytes,oldEnvironment+relative+8)&0x7F)==e.GetProperty("textureIdOriginal").GetInt32(),"original native face texture preimage");
             int actual=newEnvironment+relative;uint word3=BitConverter.ToUInt32(data.Bytes,actual+8);
             Check((word3&0x7F)==e.GetProperty("textureIdEdited").GetInt32(),"actual HP texture assignment retained: "+e.GetProperty("runtimeKey").GetString());
         }
-        var fresh=new UniversalLevelData(disc.EntryBytes(80));Check(fresh.Scene().RowCount==1&&BitConverter.ToUInt16(fresh.Row(0),0x36)==0xF5,"fresh native-colour egg actor preserved");
+        var fresh=new UniversalLevelData(disc.EntryBytes(80));Check(fresh.Scene().RowCount==1&&BitConverter.ToUInt16(fresh.Row(0),0x36)==UniversalDragonflyEggs.Variants.Single(v=>v.Id=="dragonfly-egg-native").Class,"fresh native-colour egg actor preserved");
         foreach(var patch in NativeMobySaveMap.Windows())Check(disc.Exe.AsSpan((int)(patch.Address-UniversalExeBindings.ExeBase),patch.Code.Length).SequenceEqual(patch.Code),"native save owner preserved: "+patch.Address.ToString("X8"));
         Console.WriteLine("V1_SAVED_PROJECT_READBACK_OK rows="+data.Scene().RowCount+" originalNative159Class="+BitConverter.ToUInt16(data.Row(159),0x36).ToString("X3"));
+    }
+    private static void AddDruid(MainWindow window,LevelDefinition artisans,JsonElement[] terrainRows,string clone,string artifacts,Dictionary<string,string> research,bool retry=false)
+    {
+        RunTask((Task)Invoke(window,"SelectLevelAsync",artisans,null)!);
+        if(!retry)
+        {
+        foreach(int index in new[]{32,33})
+        {
+            var moby=window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys.Single(m=>!m.IsAdded&&m.TrueIndex==index);
+            window.GetType().GetField("_selectedMoby",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(window,moby);
+            Invoke(window,"RemoveSelectedMoby");
+        }
+        var task=(Task)Invoke(window,"EnsureUniversalCatalogAsync")!;RunTask(task);
+        object result=task.GetType().GetProperty("Result")!.GetValue(task)!;
+        var lib=(UniversalSourceLibrary)result.GetType().GetField("Item2")!.GetValue(result)!;
+        var entries=(IReadOnlyList<UniversalMobyCatalogEntry>)result.GetType().GetField("Item3")!.GetValue(result)!;
+        var entry=entries.Single(e=>e.ClassId==0x10F);var variant=entry.Variants.Single(v=>v.SourceLevelKey=="alpineridge"&&v.SourceRow==1);
+        RunTask((Task)Invoke(window,"AddUniversalMobyAsync",lib,entry,variant,true,null)!);
+        object pending=window.GetType().GetField("_pendingMobyAdd",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(window)!;
+        var ground=(Vector3f)Invoke(window,"SnapOrNearestTerrain",new Vector3f(5312,3060,576),-1,false)!;
+        Check(ground.X==5312&&ground.Y==3060,"Druid uses exact requested terrain XY");
+        var lifted=(Vector3f)window.GetType().GetMethods(BindingFlags.Instance|BindingFlags.NonPublic).Single(m=>m.Name=="ApplyTerrainPlacementLift"&&m.GetParameters().Length==2&&m.GetParameters()[1].ParameterType==pending.GetType()).Invoke(window,new object[]{ground,pending})!;
+        RunTask((Task)Invoke(window,"AddPendingMobyAtPositionAsync",pending,lifted)!);
+        File.WriteAllText(Path.Combine(artifacts,"druid-placement.json"),JsonSerializer.Serialize(new{source="alpineridge",sourceRow=1,ground,lifted,extraRemoved=new[]{32,33},logicalSaveRow=182,nativeRuntime=false}));
+        }
+        Scope(window,0,0,artifacts,"druid-artisans-1440",1440,900);
+        Check((Get<TextBlock>(window,"_statusText").Text??"").StartsWith("Created ",StringComparison.Ordinal),"Druid ordinary export succeeded: "+Get<TextBlock>(window,"_statusText").Text);
+        var rows=UniversalPlacementReader.Read(Path.Combine(clone,"artisans-native-edits.json"));
+        Check(rows.Count(p=>!p.Retired)==9&&rows.Single(p=>p.SourceLevelKey=="alpineridge"&&p.SourceRowIndex==1).PersistentSlot==8,"Druid adds one source-correct stable ledger slot");
+        Check(UniversalPlacementReader.ReadRemovedNativeRows(Path.Combine(clone,"artisans-native-edits.json")).Order().SequenceEqual(new[]{29,30,32,33,113,121,124}),"exact two advised extra removals");
+        string output=Path.Combine(clone,"output","Spyro Editor - Authored Level.bin");var disc=UniversalDiscImage.Read(output);CheckStart(disc,0x2402000A);CheckNativeContents(disc,artisans,rows,terrainRows,clone,7);
+        Keep(output,artifacts,"v1-artisans-druid-start");AssertHashes(Path.Combine(clone,"_research"),research,"Druid export preserves experimental documents");
+        Console.WriteLine("V1_USER_PROJECT_DRUID_UI_OK nativeRuntime=false");
     }
     private static string GetSource(string root){using var d=JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root,"_local","settings","source-disc.json")));return d.RootElement.GetProperty("imagePath").GetString()!;}
     private static IEnumerable<string> Signatures(IEnumerable<UniversalMobyPlacement> rows)=>rows.OrderBy(p=>p.EditorId,StringComparer.Ordinal).Select(p=>JsonSerializer.Serialize(new{p.EditorId,p.PersistentSlot,p.SourceLevelKey,p.SourceRowIndex,p.X,p.Y,p.Z,p.Yaw,p.SpecialId,p.Text,p.Retired,Overrides=p.RowByteOverrides?.OrderBy(q=>q.Key).ToArray()}));
