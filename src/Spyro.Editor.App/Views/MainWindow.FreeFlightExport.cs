@@ -10,10 +10,10 @@ public partial class MainWindow
         target.HasObjectEdits || target.HasTerrainEdits || target.HasCustomTerrainTextures ||
         target.HasNativeTerrainTextureRelocations || target.HasLevelTextEdit || target.HasLevelMusicEdit || target.HasSkyboxEdit;
 
-    private void RequireFreeFlightExportOwner(NativeFreeFlightProjectExportIntent intent,
+    private void RequireFreeFlightExportOwner(NativeFreeFlightProjectExportIntent? intent,
         SourceDiscOperationIdentity owner, string? selectedImage, string? selectedSkyImage)
     {
-        intent.RequireCurrent(_workspace.RootPath);
+        intent?.RequireCurrent(_workspace.RootPath);
         if (TryGetFreeFlightSettingsExportBlockReason(out string reason))
             throw new InvalidOperationException(reason);
         // Captured AFTER the command's normal Save and Build Safety, whose

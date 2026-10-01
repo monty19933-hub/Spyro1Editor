@@ -131,13 +131,20 @@ public sealed partial class MainWindow
     {
         if (_currentLevel == null) return [];
         string path = Path.Combine(_workspace.RootPath, $"{_currentLevel.Key}-native-edits.json");
-        var ledger = UniversalPlacementLedger.Reconcile(path, _currentMobys);
-        var active = _currentMobys.Where(m => m.IsAdded && !m.IsRemoved &&
+        var ledger = _freshSceneDocument?.ReconcileLedger(_currentMobys) ?? UniversalPlacementLedger.Reconcile(path, _currentMobys);
+        return PlacementsFor(ledger,_currentMobys);
+    }
+
+    private static List<UniversalMobyPlacement> PlacementsFor(UniversalPlacementLedger ledger,IReadOnlyList<Moby> mobys)
+    {
+        var active = mobys.Where(m => m.IsAdded && !m.IsRemoved &&
                 m.CrossLevelRequiredExporterFeature == UniversalMobyExport.RequiredExporterFeature)
             .ToDictionary(m => m.UniversalPlacementId, StringComparer.Ordinal);
         return ledger.Entries.Select(identity => active.TryGetValue(identity.Id, out var m)
             ? new UniversalMobyPlacement(m.CrossLevelSourceLevelKey, m.CrossLevelSourceTrueIndex,
                 (int)MathF.Round(m.Position.X * 16), (int)MathF.Round(m.Position.Y * 16), (int)MathF.Round(m.Position.Z * 16),
+                Yaw:m.YawByte>=0?m.YawByte:null,
+                RowByteOverrides:new Dictionary<int,byte>{{0x50,checked((byte)m.Type)},{0x51,checked((byte)m.State)}},
                 EditorId: identity.Id, PersistentSlot: identity.Slot,
                 SpecialId: UniversalSpecialIdOf(m), Text: IsUniversalSign(m) ? UniversalPlacementReader.SplitSignText(m.SignText) : null)
             : new UniversalMobyPlacement("", -1, 0, 0, 0, EditorId: identity.Id, PersistentSlot: identity.Slot, Retired: true)).ToList();
@@ -224,8 +231,10 @@ public sealed partial class MainWindow
                 : UniversalMobyCatalogBuilder.AllVariants(lib, _retailCatalog)
                 .FirstOrDefault(x => x.SourceLevelKey == m.CrossLevelSourceLevelKey && x.SourceRow == m.CrossLevelSourceTrueIndex);
             if (v == null) continue;
-            var est = UniversalMobyCatalogBuilder.Estimate(lib, _currentLevel, v);
-            total += counted.Add((v.ClassId, v.SourceLevelKey)) ? est.EstimatedRamBytes : UniversalLevelData.Align(v.PropertiesBytes, 4) + 8;
+            var estimatedBytes = _freshSceneDocument == null
+                ? UniversalMobyCatalogBuilder.Estimate(lib, _currentLevel, v).EstimatedRamBytes
+                : v.ModelBytes + v.BehaviorBytes + UniversalLevelData.Align(v.PropertiesBytes,4) + 112;
+            total += counted.Add((v.ClassId, v.SourceLevelKey)) ? estimatedBytes : UniversalLevelData.Align(v.PropertiesBytes, 4) + 8;
         }
         return total;
     }
@@ -303,6 +312,7 @@ public sealed partial class MainWindow
 
         UniversalSourceLibrary? lib = null;
         IReadOnlyList<UniversalMobyCatalogEntry> entries = [];
+        NativeFreshMainCompilation? freshCompilation = null;
         int planned = 0;
         Dictionary<UniversalMobyVariant, UniversalDestinationEstimate> estimates = [];
         System.Collections.Concurrent.ConcurrentDictionary<UniversalMobyVariant, (UniversalComposeResult? Result, string? Error)> dryRuns = new();
@@ -311,9 +321,12 @@ public sealed partial class MainWindow
         System.Collections.Concurrent.ConcurrentDictionary<UniversalMobyVariant, (UniversalComposeResult? Result, string? Error)> listDry = new();
         UniversalDestinationEstimate Est(UniversalMobyVariant v)
         {
-            if (!estimates.TryGetValue(v, out var e)) estimates[v] = e = UniversalMobyCatalogBuilder.Estimate(lib!, destination, v, planned);
+            if (!estimates.TryGetValue(v, out var e)) estimates[v] = e = freshCompilation == null ? UniversalMobyCatalogBuilder.Estimate(lib!, destination, v, planned) : new(false, v.HasLocalModel, v.HasBehavior, v.ModelBytes + v.BehaviorBytes, 0, true, "Exact authored-scene composition is checked below.");
             return e;
         }
+
+        (UniversalComposeResult? Result, string? Error) CheckPlacement(UniversalSourceLibrary library, IReadOnlyList<UniversalMobyPlacement> trial) =>
+            freshCompilation == null ? UniversalMobyCatalogBuilder.DryRun(library, destination, trial, special, removedRows) : DryRunFresh(freshCompilation, library, trial, special);
 
         UniversalMobyPlacement TrialFor(UniversalMobyVariant v)
         {
@@ -441,7 +454,7 @@ public sealed partial class MainWindow
                 details.Text += $"\nThis copy has {v.DroppedExternalPointers} relationship link(s) outside its source object. Those links are cleared during import; objects it originally referenced are not automatically recreated.";
             if (restriction != null) { fit.Text = restriction; fit.Foreground = new SolidColorBrush(ModernRed); return; }
             var trial = existing.Append(TrialFor(v)).ToList();
-            if (!dryRuns.TryGetValue(v, out var dry)) dryRuns[v] = dry = UniversalMobyCatalogBuilder.DryRun(lib, destination, trial, special, removedRows);
+            if (!dryRuns.TryGetValue(v, out var dry)) dryRuns[v] = dry = CheckPlacement(lib, trial);
             if (dry.Error != null)
             {
                 fit.Text = UniversalFitFailureSummary(dry.Error, destination.DisplayName, compact: false) +
@@ -524,7 +537,7 @@ public sealed partial class MainWindow
                 foreach (var e in specials) listDry.TryRemove(e.Default, out _);
                 if (lib != null)
                     foreach (var e in specials.Where(e => e.RestrictionReason == null))
-                        listDry[e.Default] = (null, UniversalMobyCatalogBuilder.DryRun(lib, destination, existing.Append(TrialFor(e.Default)).ToList(), special, removedRows).Error);
+                        listDry[e.Default] = (null, CheckPlacement(lib, existing.Append(TrialFor(e.Default)).ToList()).Error);
                 previewVariant = null;
                 RefreshList(); RefreshDetails();
                 summary.Text = "Japanese disc found — dragonfly eggs and signs are ready to use.";
@@ -546,6 +559,7 @@ public sealed partial class MainWindow
                 special = UniversalMobyExport.SpecialProvider(japanese);
                 var es = entries = [.. usa, .. UniversalSpecialCatalog.Entries(japanese != null)];
                 lib = l;
+                if (_freshSceneDocument != null) freshCompilation = await CaptureFreshNativeAsync();
                 planned = await Task.Run(() => PlannedUniversalBytes(l));
                 await Task.Run(() => { foreach (var e in es) Est(e.Default); });
                 var cats = UniversalCategoryOrder.Select(c => (c.Category, c.Sub,
@@ -567,7 +581,7 @@ public sealed partial class MainWindow
                     new ParallelOptions { MaxDegreeOfParallelism = Math.Max(2, Environment.ProcessorCount / 2) }, x =>
                     {
                         var trial = existing.Append(TrialFor(x.Default)).ToList();
-                        var r = UniversalMobyCatalogBuilder.DryRun(l, destination, trial, special, removedRows);
+                        var r = CheckPlacement(l, trial);
                         listDry[x.Default] = (null, r.Error);
                         if (r.Error == null) dryRuns[x.Default] = r;
                     }));

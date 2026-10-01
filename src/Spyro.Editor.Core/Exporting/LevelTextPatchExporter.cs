@@ -15,6 +15,39 @@ public static class LevelTextPatchExporter
     private static readonly byte[] ReturnHomeBytes = Encoding.ASCII.GetBytes("RETURN HOME\0");
     private static readonly byte[] NativeHomeworldNameLengths = [8, 12, 13, 11, 12, 10, 12];
 
+    /// <summary>Reuses the guarded native name-pool allocator on an actual staged executable.
+    /// All pointers outside its declared name owners and protected strings remain unchanged.</summary>
+    public static byte[] ComposeStagedExecutable(string sourceImagePath, ReadOnlySpan<byte> stagedExecutable,
+        IReadOnlyList<LevelTextReplacement> replacements)
+    {
+        byte[] current = stagedExecutable.ToArray();
+        var edits = replacements.Select(e => e with { ReplacementText = ValidateReplacement(e.Target, e.ReplacementText) }).ToArray();
+        DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
+        using FileStream source = File.OpenRead(sourceImagePath);
+        DiscFileRecord executable = DiscImage.FindRootFileRecord(source, layout, IsExecutableName);
+        if (current.Length != executable.Size)
+            throw new InvalidDataException("The staged name owner has a different executable extent from its bound source.");
+        var plan = BuildExpandedBatchPlan(sourceImagePath, "", "", layout, executable, current, edits);
+        foreach (var patch in plan.BinaryPatches)
+        {
+            byte[] before = Convert.FromHexString(patch.BeforeHexPreview.Replace(" ", ""));
+            byte[] after = Convert.FromHexString(patch.AfterHexPreview.Replace(" ", ""));
+            if (before.Length != patch.ByteLength || after.Length != patch.ByteLength ||
+                !current.AsSpan(patch.ExeFileOffset, before.Length).SequenceEqual(before))
+                throw new InvalidDataException("Staged name-pool preimage changed before composition.");
+            after.CopyTo(current, patch.ExeFileOffset);
+        }
+        var tables = LocateNameTables(current);
+        foreach (var edit in edits)
+        {
+            int table = edit.Target.TableKind == LevelTextTableKind.LevelNames ? tables.LevelNamesTableOffset : tables.HomeworldNamesTableOffset;
+            uint pointer = ReadUInt32(current, table + edit.Target.TableIndex * 4);
+            if (!TryReadName(current, pointer, tables.LoadAddress, out string read) || read != edit.ReplacementText)
+                throw new InvalidDataException("Staged native title readback differs from its saved name.");
+        }
+        return current;
+    }
+
     public static async Task<LevelTextPatchResult> ExportAsync(LevelTextPatchRequest request, CancellationToken cancellationToken = default)
     {
         if (!File.Exists(request.SourceImagePath))

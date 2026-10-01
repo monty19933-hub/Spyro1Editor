@@ -32,7 +32,8 @@ internal static class NativeFreeFlightUiCases
         {
             Environment.CurrentDirectory = first;
             Environment.SetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE", first);
-            Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "1");
+            // Deferred controls remain testable only in the internal research profile.
+            Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "0");
             window = new MainWindow { Width = 1200, Height = 760 };
             Check(!window.TryGetFreeFlightSettingsExportBlockReason(out _),
                 "An unshown Window with no flight-editor refresh does not block an absent-store combined export caller.");
@@ -222,8 +223,8 @@ internal static class NativeFreeFlightUiCases
         Check(enabled.IsChecked == true && File.ReadAllBytes(SettingsPath(first)).SequenceEqual(saved),
             "Revert restores saved On and leaves its persisted bytes exact.");
         Bind(window, first, 11);
-        Check(enabled.IsChecked == false && NativeFreeFlightSettingsStore.Capture(first).IsEnabled(14),
-            "Another retail LevelId starts Off without changing Toasty's choice.");
+        Check(enabled.IsChecked == true && NativeFreeFlightSettingsStore.Capture(first).Preferences.All(p=>p.EnableFreeFlight),
+            "Another normal retail level shows the same saved global On choice.");
         Bind(window, second, 14);
         Check(enabled.IsChecked == false && !NativeFreeFlightSettingsStore.Capture(second).Exists,
             "The same retail LevelId in another actual project cannot inherit the first project's On intent.");
@@ -242,9 +243,10 @@ internal static class NativeFreeFlightUiCases
         byte[] before = File.ReadAllBytes(SettingsPath(root));
         Find<CheckBox>(window, "FreeFlightEnabled").IsChecked = true; Pump();
         Drain(window.SaveFreeFlightSettingsAsync());
-        Check(File.ReadAllBytes(SettingsPath(root)).SequenceEqual(before) &&
-            !NativeFreeFlightSettingsStore.Capture(root).IsEnabled(14),
-            "Unsupported On cannot be saved or silently redirected to the supported Toasty14 target.");
+        Check(!File.ReadAllBytes(SettingsPath(root)).SequenceEqual(before) &&
+            NativeFreeFlightSettingsStore.Capture(root).Preferences.All(p=>p.EnableFreeFlight) &&
+            !window.TryGetFreeFlightSettingsExportBlockReason(out _),
+            "Normal-level On saves one global choice for all30 normal levels and is exportable.");
         Find<CheckBox>(window, "FreeFlightEnabled").IsChecked = false; Pump();
         Drain(window.SaveFreeFlightSettingsAsync());
         Check(NativeFreeFlightSettingsStore.Capture(root).HasExplicitSelection(11) &&
@@ -255,8 +257,8 @@ internal static class NativeFreeFlightUiCases
         var unsupportedOn = NativeFreeFlightSettingsStore.Save(expected, 11, true);
         Bind(window, root, 11);
         Check(Find<CheckBox>(window, "FreeFlightEnabled").IsChecked == true &&
-            window.TryGetFreeFlightSettingsExportBlockReason(out string reason) && !string.IsNullOrWhiteSpace(reason),
-            "Existing unsupported On remains visibly On and blocks export, instead of silently becoming Off or another target.");
+            !window.TryGetFreeFlightSettingsExportBlockReason(out _),
+            "A legacy per-level On migrates visibly into the global export intent without becoming Off.");
         NativeFreeFlightSettingsStore.Save(unsupportedOn, 11, false);
         Bind(window, root, 65);
         before = File.ReadAllBytes(SettingsPath(root));
@@ -307,7 +309,9 @@ internal static class NativeFreeFlightUiCases
             else if (drift == "level") Bind(window, first, 11);
             else
             {
-                NativeFreeFlightSettingsStore.Save(NativeFreeFlightSettingsStore.Capture(first), 12, false);
+                // The global Off fixture already contains all thirty Off rows.
+                // Change an actual value so the independent writer changes the CAS hash.
+                NativeFreeFlightSettingsStore.Save(NativeFreeFlightSettingsStore.Capture(first), 12, true);
                 before = File.ReadAllBytes(SettingsPath(first));
             }
             release.TrySetResult(); Drain(pending);

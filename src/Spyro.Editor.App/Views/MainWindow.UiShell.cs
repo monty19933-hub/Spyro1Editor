@@ -214,11 +214,14 @@ public sealed partial class MainWindow
         };
         _toolbarOpenDiscImageButton = NewAsyncButton("Open BIN/CUE", ChooseSourceDiscImageAsync);
         StyleModernToolbarButton(_toolbarOpenDiscImageButton, 118);
+        fileActions.Children.Add(BuildToolMenu("File", new ToolbarAction("New Level", NewMainLevelAsync),
+            new ToolbarAction("Open Authored Level", OpenMainFreshLevelAsync),
+            new ToolbarAction("Save Level", async () => { await SaveCurrentEditsAsync(); })));
         fileActions.Children.Add(_toolbarOpenDiscImageButton);
         Button freshResearch = BuildNativeFreshDocumentButton();
         freshResearch.Content = "Fresh research…";
-        ToolTip.SetTip(freshResearch, "Experimental fresh document with a separate research export. Full fresh-level editing in this main editor is still in development.");
-        fileActions.Children.Add(freshResearch);
+        ToolTip.SetTip(freshResearch, "Earlier experimental document and its separate research export. Use File > New Level to author a neutral level in this main editor.");
+        if (!_releaseMode) fileActions.Children.Add(freshResearch);
 
         _toolbarCreateBinButton = NewAsyncButton("Create BIN", CreateObjectTestBinAsync);
         StyleModernPrimaryButton(_toolbarCreateBinButton, ModernBlue, 110);
@@ -373,7 +376,7 @@ public sealed partial class MainWindow
         };
         ToolTip.SetTip(
             _editorWorkspaceIndicator,
-            "Experimental blank-level research. The full regular editor for fresh levels is still in development.");
+            "Build your level with the main editor's terrain and object tools. Create BIN makes it playable from New Game.");
         return _editorWorkspaceIndicator;
     }
 
@@ -495,9 +498,11 @@ public sealed partial class MainWindow
             "Object Manager",
             BuildId65LevelBuildingObjectManager());
 
+        _retailTerrainWorkspace=_releaseMode ? BuildReleaseTerrainTextureWorkspace() : BuildTerrainTabControls();
         _modernTerrainWorkspaceTab = NewModernWorkspaceTab(
             "Terrain",
-            _releaseMode ? BuildReleaseTerrainTextureWorkspace() : BuildTerrainTabControls());
+            new StackPanel { Spacing = 8, Children = { BuildFreshTerrainTools(),
+                _retailTerrainWorkspace } });
         _modernLevelWorkspaceTab = NewModernWorkspaceTab("Game Settings", BuildModernLevelWorkspace());
         _modernEnvironmentWorkspaceTab = NewModernWorkspaceTab(
             "Environment",
@@ -932,9 +937,12 @@ public sealed partial class MainWindow
     {
         StackPanel panel = new() { Spacing = 8 };
         panel.Children.Add(ModernSectionHeading("Level settings"));
-        panel.Children.Add(BuildModernDisclosure("Level name", BuildLevelTextPanel(), true));
-        panel.Children.Add(BuildModernDisclosure("Music", BuildLevelMusicPanel(), false));
-        panel.Children.Add(BuildModernDisclosure("Starting Abilities", new StackPanel
+        panel.Children.Add(BuildFreshDocumentSettings());
+        _retailNameDisclosure=BuildModernDisclosure("Level name", BuildLevelTextPanel(), true);
+        _retailMusicDisclosure=BuildModernDisclosure("Music", BuildLevelMusicPanel(), false);
+        panel.Children.Add(_retailNameDisclosure);panel.Children.Add(_retailMusicDisclosure);
+        // Preserve the internal settings/backend workflow; the release omits the flight control.
+        if (!_releaseMode) panel.Children.Add(BuildModernDisclosure("Starting Abilities", new StackPanel
         {
             Name = "StartingAbilitiesPanel", Spacing = 8,
             Children = { BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), true) }
@@ -944,13 +952,13 @@ public sealed partial class MainWindow
 
         // V5 whole-level replacement is deliberately a separate, guarded research
         // workflow. It never enters the normal Create BIN dispatcher.
-        panel.Children.Add(BuildNativeLevelReplacementDisclosure());
+        if (!_releaseMode) panel.Children.Add(BuildNativeLevelReplacementDisclosure());
 
         // The evidence-bound ID65 lab is intentionally narrower than the full
         // Research workspace and therefore remains reachable from the public V5
         // shell. Its own disclosure owns the locked-base and disposable-output
         // guards; it never enters normal Create BIN.
-        panel.Children.Add(BuildId65BlankLevelLabDisclosure());
+        if (!_releaseMode) panel.Children.Add(BuildId65BlankLevelLabDisclosure());
 
         _levelDetails.TextWrapping = TextWrapping.Wrap;
         _levelDetails.Foreground = new SolidColorBrush(ModernMutedInk);

@@ -33,6 +33,13 @@ if (args.Contains("--level-picker-automation-only", StringComparer.Ordinal))
 }
 
 // Actual flight settings controls and isolated tiny project files only.
+if (args.Contains("--authored-mesh-only", StringComparer.Ordinal))
+{
+    if(args.Length!=1)throw new ArgumentException("Usage: UiSmoke --authored-mesh-only");
+    FreshMainUiCases.RunAuthoredMeshChecks();
+    return 0;
+}
+
 if (args.Contains("--free-flight-ui-only", StringComparer.Ordinal))
 {
     if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --free-flight-ui-only");
@@ -300,6 +307,11 @@ try
     if (args.Contains("--object-gallery-only", StringComparer.OrdinalIgnoreCase))
     {
         RunObjectGalleryOnly();
+        return 0;
+    }
+    if (args.Contains("--fresh-main-ui-only", StringComparer.OrdinalIgnoreCase))
+    {
+        FreshMainUiCases.Run(outputDirectory);
         return 0;
     }
     if (args.Contains("--universal-moby-ui-only", StringComparer.OrdinalIgnoreCase))

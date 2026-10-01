@@ -1899,6 +1899,13 @@ public sealed partial class MainWindow : Window
 
     private void ClearLoadedSceneForWorkspaceCommit()
     {
+        _freshSceneDocument = null;
+        _freshNativeCompilation = null;
+        _freshNativeCompilationKey = null;
+        BindFreshLevelPickerOption(null);
+        _viewport.SetAuthoredTerrainTextureFiles(null);
+        _viewport.SetAuthoredSkyColor(null);
+        RefreshFreshDocumentPanels();
         StopTerrainTexturePaintMode(announce: false);
         ClearTerrainBrushUndoHistory();
         _terrainTexturePaintHistory.Clear();
@@ -2027,6 +2034,7 @@ public sealed partial class MainWindow : Window
             if (level == null)
                 return;
 
+            if (level.Key == "authored65") { await OpenMainFreshLevelAsync(); return; }
             if (IsId65BlankLabKey(level.Key) &&
                 !UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level))
             {
@@ -2197,6 +2205,7 @@ public sealed partial class MainWindow : Window
         string actionLabel,
         WorkspaceTransitionOperation? owningWorkspaceTransition = null)
     {
+        if (_freshSceneDocument != null) return await SaveFreshSceneAsync();
         if (_currentLevel == null || !HasUnsavedMobyEdits())
             return true;
 
@@ -3155,6 +3164,10 @@ public sealed partial class MainWindow : Window
         StopTerrainTexturePaintMode(announce: false);
         ClearTerrainTextureCatalogPreviewCache(rebindActivePreview: false);
         AdvancePrivateTexturePreflightOperationGeneration();
+        _freshSceneDocument = null;
+        _viewport.SetAuthoredTerrainTextureFiles(null);
+        _viewport.SetAuthoredSkyColor(null);
+        RefreshFreshDocumentPanels();
         _currentLevel = level;
         _id65FreshAuthoringDocument = exactId65BlankLab
             ? loaded.Id65AuthoringDocument
@@ -4089,6 +4102,7 @@ public sealed partial class MainWindow : Window
     private async Task<bool> SaveCurrentEditsAsync(
         RegularEditorPersistenceOperation? existingOperation = null)
     {
+        if (_freshSceneDocument != null) return await SaveFreshSceneAsync();
         if (TryBlockTerrainMutationDuringId65BlankLabManualOperation("saving regular level edits"))
             return false;
 
@@ -4387,6 +4401,7 @@ public sealed partial class MainWindow : Window
     private async Task<bool> TrySaveCurrentTerrainEditsAsync(
         WorkspaceTransitionOperation? owningWorkspaceTransition = null)
     {
+        if (_freshSceneDocument != null) return await SaveFreshSceneAsync();
         if (TryBlockTerrainMutationDuringId65BlankLabManualOperation(
                 "saving terrain changes",
                 owningWorkspaceTransition))
@@ -4422,6 +4437,11 @@ public sealed partial class MainWindow : Window
         RegularEditorPersistenceOperation? existingOperation = null,
         WorkspaceTransitionOperation? owningWorkspaceTransition = null)
     {
+        if(_freshSceneDocument!=null)
+        {
+            if(!await SaveFreshSceneAsync())throw new IOException(_statusText.Text);
+            return _currentGeometry?.Polygons.Count(p=>p.IsTerrainEdited)??0;
+        }
         if (TryBlockTerrainMutationDuringId65BlankLabManualOperation(
                 "persisting terrain changes",
                 owningWorkspaceTransition))
@@ -4533,6 +4553,12 @@ public sealed partial class MainWindow : Window
             return;
         if (TryBlockTerrainMutationDuringId65BlankLabManualOperation("restoring the current level"))
             return;
+        if (_freshSceneDocument != null)
+        {
+            ApplyFreshScene(File.Exists(FreshScenePath) ? SceneDocument.Read(FreshScenePath) : SceneDocument.New(_freshSceneDocument.Name));
+            _statusText.Text = "Restored the authored document's saved geometry and objects.";
+            return;
+        }
         if (IsCurrentId65BlankLab())
         {
             await RestoreId65BlankLabTerrainAsync("level");
@@ -4627,6 +4653,14 @@ public sealed partial class MainWindow : Window
             return;
         if (TryBlockTerrainMutationDuringId65BlankLabManualOperation("restoring terrain"))
             return;
+        if (_freshSceneDocument != null)
+        {
+            var objects = _currentMobys;
+            ApplyFreshScene(File.Exists(FreshScenePath) ? SceneDocument.Read(FreshScenePath) : SceneDocument.New(_freshSceneDocument.Name));
+            _currentMobys = objects; _viewport.Mobys = objects; RefreshMobyList();
+            _statusText.Text = "Restored authored terrain from its saved document.";
+            return;
+        }
         if (IsCurrentId65BlankLab())
         {
             await RestoreId65BlankLabTerrainAsync("terrain");
@@ -10580,7 +10614,7 @@ public sealed partial class MainWindow : Window
         SetButtonEnabled(_terrainTaskSinglePointButton, hasTerrainPoint && !id65TerrainZOnly);
         SetButtonEnabled(
             _terrainTaskPaintFaceButton,
-            !id65FreshProjectionTerrainLocked &&
+            _freshSceneDocument!=null ? hasTerrain && !_selectedTerrain!.IsTerrainRemoved : !id65FreshProjectionTerrainLocked &&
             _currentLevel != null &&
             _currentGeometry?.Polygons.Any(face =>
                 !face.IsTerrainRemoved &&
@@ -10733,6 +10767,7 @@ public sealed partial class MainWindow : Window
 
     private bool CanStageTerrainAddCopy(TerrainPolygon terrain)
     {
+        if (_freshSceneDocument != null) return !terrain.IsTerrainRemoved;
         if (!CanUseTerrainAddCopyInCurrentLevel())
             return false;
         if (terrain.IsTerrainRemoved)
@@ -10742,6 +10777,7 @@ public sealed partial class MainWindow : Window
 
     private bool CanStageTerrainRemoval(TerrainPolygon terrain)
     {
+        if (_freshSceneDocument != null) return !terrain.IsTerrainRemoved && _currentGeometry!.Polygons.Count(p => !p.IsTerrainRemoved) > 1;
         if (!CanUseTerrainRemoveInCurrentLevel())
             return false;
         if (terrain.IsTerrainRemoved)
@@ -10757,6 +10793,7 @@ public sealed partial class MainWindow : Window
 
     private bool CanUseTerrainRemoveInCurrentLevel()
     {
+        if (_freshSceneDocument != null) return true;
         if (_currentGeometry != null &&
             IsSourceDerivedGeometry(_currentGeometry) &&
             _currentGeometry.Polygons.Any(IsSourceDerivedVisibleTerrainFace))
@@ -10770,6 +10807,7 @@ public sealed partial class MainWindow : Window
 
     private bool CanUseTerrainAddCopyInCurrentLevel()
     {
+        if (_freshSceneDocument != null) return true;
         TerrainStructureReadiness? readiness = LoadCurrentTerrainStructureReadiness();
         if (readiness == null || TerrainStructureStatusBlocksWriteback(readiness.Status))
             return false;
@@ -10908,6 +10946,10 @@ public sealed partial class MainWindow : Window
 
     private string BuildTerrainActionHint(bool hasLevel, bool hasTerrain, bool terrainHasEdits, bool hasUnsavedTerrainEdits, bool canUseTerrainRemoveInLevel, bool canRemoveSelectedTerrain)
     {
+        if(_freshSceneDocument!=null)
+            return !hasTerrain ? "Select a face to move, paint, add or remove terrain. Use the brush to sculpt the ground."
+                : _selectedTerrain!.IsTerrainRemoved ? "This face is removed. Undo Terrain restores it."
+                : "Move Face and Edit Point change its shape; Paint Face chooses its material. Save Level records your work.";
         if (!hasLevel)
             return "Open a level before editing terrain.";
         if (!hasTerrain)
@@ -11012,6 +11054,7 @@ public sealed partial class MainWindow : Window
 
     private string BuildTerrainRemoveGameplayBlockedHint(TerrainPolygon terrain)
     {
+        if(_freshSceneDocument!=null)return "Keep at least one ground face. Add a new face before removing the last one.";
         if (!CanUseTerrainRemoveInCurrentLevel())
             return BuildTerrainRemoveUnavailableHint();
 
@@ -11036,14 +11079,15 @@ public sealed partial class MainWindow : Window
 
     private bool HasUnsavedTerrainEdits()
     {
-        return _currentGeometry != null
-            && !string.Equals(BuildTerrainEditSignature(_currentGeometry), _savedTerrainEditSignature, StringComparison.Ordinal);
+        return _currentGeometry != null &&
+            (!string.Equals(BuildTerrainEditSignature(_currentGeometry), _savedTerrainEditSignature, StringComparison.Ordinal) ||
+             _freshSceneDocument != null && !string.Equals(FreshSettingsSignature(), _savedFreshSettingsSignature, StringComparison.Ordinal));
     }
 
     private bool TryGetCurrentReleaseTerrainEditBlockReason(out string reason)
     {
         reason = "";
-        if (!_releaseMode || IsCurrentId65BlankLab() || _currentGeometry == null)
+        if (_freshSceneDocument != null || !_releaseMode || IsCurrentId65BlankLab() || _currentGeometry == null)
             return false;
 
         foreach (TerrainPolygon terrain in _currentGeometry.Polygons.Where(polygon => polygon.IsTerrainEdited))
@@ -11604,6 +11648,16 @@ public sealed partial class MainWindow : Window
 
     private void RefreshLevelTextTargetEditor()
     {
+        if (_freshSceneDocument != null)
+        {
+            _levelTextTargetBox.IsEnabled = false;
+            _levelTextReplacementBox.IsEnabled = false;
+            if (_levelTextSaveButton != null) _levelTextSaveButton.IsEnabled = false;
+            _levelTextDetails.Text = "Set the authored level name above; Save Level and Create BIN include its native ID65 name.";
+            return;
+        }
+        _levelTextTargetBox.IsEnabled = true; _levelTextReplacementBox.IsEnabled = true;
+        if (_levelTextSaveButton != null) _levelTextSaveButton.IsEnabled = true;
         if (IsCurrentId65BlankLab())
         {
             _levelTextDetails.Text = IsExactFreshId65SceneProjection(_currentLevel)
@@ -11636,6 +11690,14 @@ public sealed partial class MainWindow : Window
 
     private void RefreshLevelMusicEditor(LevelDefinition level)
     {
+        if (_freshSceneDocument is { } authored)
+        {
+            _levelMusicTrackBox.IsEnabled = true;
+            if (_levelMusicSaveButton != null) _levelMusicSaveButton.IsEnabled = true;
+            if (_levelMusicResetButton != null) _levelMusicResetButton.IsEnabled = true;
+            _levelMusicTrackBox.SelectedItem = MusicTrackCatalog.Find(authored.MusicTrack);
+            RefreshLevelMusicDetails(); return;
+        }
         bool id65Unavailable = UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level);
         bool freshProjection = IsExactFreshId65SceneProjection(level);
         bool enabled = !id65Unavailable &&
@@ -11666,6 +11728,11 @@ public sealed partial class MainWindow : Window
 
     private void RefreshLevelMusicDetails()
     {
+        if (_freshSceneDocument is { } authored)
+        {
+            _levelMusicDetails.Text = "Authored music: " + (MusicTrackCatalog.Find(authored.MusicTrack)?.DisplayName ?? authored.MusicTrack.ToString()) + "\nSave Music records the selected built-in track in this document; Create BIN compiles its native playback.";
+            return;
+        }
         if (IsCurrentId65BlankLab())
         {
             _levelMusicDetails.Text = IsExactFreshId65SceneProjection(_currentLevel)
@@ -12555,6 +12622,11 @@ public sealed partial class MainWindow : Window
 
     private async Task<bool> SaveSkyboxPlanAsync()
     {
+        if(_freshSceneDocument!=null)
+        {
+            _statusText.Text="The authored native sky currently supports the flat RGB color above. Imported sky meshes and environment grading require a verified native compiler before export.";
+            return false;
+        }
         if (TryBlockId65SkyMutation("save"))
             return false;
 
@@ -12747,6 +12819,11 @@ public sealed partial class MainWindow : Window
 
     private void ResetSkyboxPlan()
     {
+        if(_freshSceneDocument!=null)
+        {
+            _freshSceneDocument=_freshSceneDocument with{SkyColor=new(80,128,112)};
+            RefreshFreshDocumentPanels();_statusText.Text="Authored sky reset; Save Level records it.";return;
+        }
         if (TryBlockId65SkyMutation("reset"))
             return;
 
@@ -12867,6 +12944,7 @@ public sealed partial class MainWindow : Window
 
     private async Task SaveLevelTextPlanAsync()
     {
+        if (_freshSceneDocument != null) { await SaveFreshSceneAsync(); return; }
         if (TryBlockId65LevelNameMutation("save"))
             return;
 
@@ -12897,6 +12975,7 @@ public sealed partial class MainWindow : Window
 
     private void ResetLevelTextPlan()
     {
+        if (_freshSceneDocument != null) return;
         if (TryBlockId65LevelNameMutation("reset"))
             return;
 
@@ -12913,6 +12992,11 @@ public sealed partial class MainWindow : Window
 
     private async Task SaveLevelMusicPlanAsync()
     {
+        if (_freshSceneDocument != null && _levelMusicTrackBox.SelectedItem is MusicTrackEntry authoredTrack)
+        {
+            _freshSceneDocument = _freshSceneDocument with { MusicTrack = authoredTrack.TrackId };
+            await SaveFreshSceneAsync(); RefreshLevelMusicDetails(); return;
+        }
         if (TryBlockEditorMutationDuringId65BlankLabManualOperation("saving level music"))
             return;
 
@@ -12944,6 +13028,11 @@ public sealed partial class MainWindow : Window
 
     private void ResetLevelMusicPlan()
     {
+        if (_freshSceneDocument != null)
+        {
+            _freshSceneDocument = _freshSceneDocument with { MusicTrack = 19 };
+            RefreshLevelMusicEditor(_currentLevel!); _statusText.Text = "Authored music reset to track 19; Save Level records it."; return;
+        }
         if (TryBlockEditorMutationDuringId65BlankLabManualOperation("resetting level music"))
             return;
 
@@ -13119,6 +13208,7 @@ public sealed partial class MainWindow : Window
 
     private async Task CreateObjectTestBinCoreAsync()
     {
+        if (_freshSceneDocument != null) { await CreateFreshMainBinAsync(); return; }
         if (TryGetId65BlankLabNormalCreateBinBlockReason(out string id65BlockReason))
         {
             _statusText.Text = id65BlockReason;
@@ -13136,7 +13226,7 @@ public sealed partial class MainWindow : Window
             _statusText.Text = flightBlockReason;
             return;
         }
-        var flightIntent = NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
+        var flightIntent = _releaseMode ? null : NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
         var flightWorkspace = _workspace;
         int flightWorkspaceGeneration = _workspaceTransitionGeneration;
         var flightLevel = _currentLevel;
@@ -13156,6 +13246,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if(File.Exists(FreshScenePath)) { await CreateFreshMainBinAsync(); return; }
+
         RefreshDiagnosticContext(includeSavedEdits: true);
         EditorDiagnostics.RecordAction("Create BIN requested", $"Current level: {_currentLevel.DisplayName}; source: {sourceImage}");
         ReportCreateBinProgress(
@@ -13172,8 +13264,8 @@ public sealed partial class MainWindow : Window
             return;
         }
         IReadOnlyList<EditedLevelExportTarget> targets = FindEditedLevelExportTargets();
-        flightIntent.RequireOrdinaryEditCompatibility(targets.Any(HasOrdinarySavedEdits));
-        if (targets.Count == 0 && !flightIntent.RequiresRebuild)
+        flightIntent?.RequireOrdinaryEditCompatibility(targets.Any(HasOrdinarySavedEdits));
+        if (targets.Count == 0 && flightIntent?.RequiresRebuild!=true)
         {
             _statusText.Text = "No saved edits were found. Change a level name, music track, skybox, object, or terrain first.";
             return;
@@ -13244,7 +13336,7 @@ public sealed partial class MainWindow : Window
         CombinedTestBinResult result;
         try
         {
-            flightIntent.RequireCurrent(_workspace.RootPath);
+            flightIntent?.RequireCurrent(_workspace.RootPath);
             if (!ReferenceEquals(flightWorkspace, _workspace) || flightWorkspaceGeneration != _workspaceTransitionGeneration ||
                 !ReferenceEquals(flightLevel, _currentLevel) || flightImageSelection != _discImagePathBox.Text ||
                 flightSkyImageSelection != _skyboxDiscImagePathBox.Text)
@@ -13355,7 +13447,7 @@ public sealed partial class MainWindow : Window
 
     private IReadOnlyList<EditedLevelExportTarget> FindEditedLevelExportTargets()
     {
-        var flightIntent = NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
+        var flightIntent = _releaseMode ? null : NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
         List<EditedLevelExportTarget> targets = [];
         foreach (LevelDefinition level in _catalog.Levels)
         {
@@ -13393,7 +13485,7 @@ public sealed partial class MainWindow : Window
             bool hasLevelTextEdit = textTarget != null && LevelTextEditStore.Load(_workspace.RootPath, textTarget) != null;
             bool hasLevelMusicEdit = LevelMusicEditStore.Load(_workspace.RootPath, level) != null;
             bool hasSkyboxEdit = NativeSkyEditStore.Load(_workspace.RootPath, level) != null;
-            bool hasFlightSelection = flightIntent.HasExplicitSelection(level.LevelId);
+            bool hasFlightSelection = flightIntent?.HasExplicitSelection(level.LevelId)==true;
             if (hasObjectEdits || hasTerrainEdits || hasCustomTerrainTextures || hasNativeTerrainTextureRelocations || hasLevelTextEdit || hasLevelMusicEdit || hasSkyboxEdit || hasFlightSelection)
             {
                 targets.Add(new EditedLevelExportTarget(
@@ -13435,22 +13527,27 @@ public sealed partial class MainWindow : Window
     }
 
     private async Task<CombinedTestBinResult> CreateAllSavedEditsTestAsync(
+        string sourceImage,string sourceCue,string outputDir,IReadOnlyList<EditedLevelExportTarget> targets)
+        => await CreateSavedEditsStageAsync(sourceImage,sourceCue,outputDir,targets,false);
+
+    private async Task<CombinedTestBinResult> CreateSavedEditsStageAsync(
         string sourceImage,
         string sourceCue,
         string outputDir,
-        IReadOnlyList<EditedLevelExportTarget> targets)
+        IReadOnlyList<EditedLevelExportTarget> targets,
+        bool deferSharedRuntimeHooks = false)
     {
         if (TryGetId65BlankLabNormalCreateBinBlockReason(out string id65BlockReason))
             throw new InvalidOperationException(id65BlockReason);
 
         if (TryGetFreeFlightSettingsExportBlockReason(out string flightBlockReason))
             throw new InvalidOperationException(flightBlockReason);
-        var flightIntent = NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
+        var flightIntent = _releaseMode ? null : NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
         var flightOwner = CaptureSourceDiscOperationIdentity();
         string? flightImageSelection = _discImagePathBox.Text;
         string? flightSkyImageSelection = _skyboxDiscImagePathBox.Text;
-        flightIntent.RequireOrdinaryEditCompatibility(targets.Any(HasOrdinarySavedEdits) ||
-            flightIntent.RequiresRebuild && FindEditedLevelExportTargets().Any(HasOrdinarySavedEdits));
+        flightIntent?.RequireOrdinaryEditCompatibility(targets.Any(HasOrdinarySavedEdits) ||
+            flightIntent?.RequiresRebuild==true && FindEditedLevelExportTargets().Any(HasOrdinarySavedEdits));
 
         string tempDir = Path.Combine(outputDir, "_combined-build", $"run-{Guid.NewGuid():N}");
         string finalPrefix = Path.Combine(outputDir, "Spyro Editor - All Saved Edits");
@@ -13488,20 +13585,11 @@ public sealed partial class MainWindow : Window
         List<NativeEnvironmentGradeBatchEdit> environmentGradeEdits = [];
         List<object> stepSummaries = [];
         NativeFreeFlightExportStageResult? flightStage = null;
-        if (flightIntent.RequiresRebuild)
-        {
-            ReportCreateBinProgress("Preparing flight...", flightIntent.EnabledLevelId == null
-                ? "Create BIN: rebuilding Fly Anywhere OFF from the original disc before ordinary saved edits..."
-                : "Create BIN: composing Toasty Fly Anywhere ON from the original disc...");
-            flightStage = await NativeFreeFlightExportStage.CreateAsync(flightIntent, _workspace.RootPath,
-                sourceImage, sourceCue, Path.Combine(tempDir, $"{++step:00}-free-flight"));
-            RequireFreeFlightExportOwner(flightIntent, flightOwner, flightImageSelection, flightSkyImageSelection);
-            currentImage = flightStage.OutputImagePath;
-            currentCue = flightStage.OutputCuePath;
-            stepSummaries.Add(new { kind = "free-flight", enabledLevelId = flightStage.EnabledLevelId,
-                rebuiltFromOriginal = true, flightStage.SourceImageSha256, flightStage.OutputImageSha256,
-                flightStage.ChangedRawSectors, nativeGameplayAcceptance = false });
-        }
+        IReadOnlyList<(int LevelIndex, int Row, int Colour)> activeDragonflyEggs = [];
+        IReadOnlySet<string> signLevelKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        NativeFreeFlightCompositionPlan? globalFlight = flightIntent?.RequiresRebuild==true
+            ? await NativeFreeFlightCompositionPlan.CaptureAsync(sourceImage, flightIntent?.Enabled==true)
+            : null;
         List<(LockedChestRuntimeBundleDestinationProfile Profile, LockedChestRuntimeBundleIntent Intent, string LevelName)>
             lockedChestRuntimeBundles = [];
         bool incompatibleStructuralWadRelocationApplied = false;
@@ -13963,7 +14051,14 @@ public sealed partial class MainWindow : Window
             currentCue = bundleResult.OutputCuePath;
         }
 
-        if (levelTextEdits.Count > 0)
+        if(deferSharedRuntimeHooks&&levelTextEdits.Count>0)
+        {
+            levelNamePatches=levelTextEdits.Count;
+            foreach(var edit in levelTextEdits)
+                if(!patchedLevelNames.Contains(edit.Target.DisplayName,StringComparer.OrdinalIgnoreCase))patchedLevelNames.Add(edit.Target.DisplayName);
+            stepSummaries.Add(new{kind="level-names-deferred",count=levelTextEdits.Count,completed=false});
+        }
+        if (levelTextEdits.Count > 0 && !deferSharedRuntimeHooks)
         {
             string outputPrefix = Path.Combine(tempDir, $"{++step:00}-level-names");
             LevelTextBatchPatchResult textResult = await LevelTextPatchExporter.ExportBatchAsync(new LevelTextBatchPatchRequest(
@@ -14027,6 +14122,16 @@ public sealed partial class MainWindow : Window
             }
         }
 
+        if (globalFlight != null)
+        {
+            ReportCreateBinProgress("Preparing flight…", "Create BIN: merging global flight animations into the actual edited level bodies…");
+            (currentImage, currentCue) = await MergeGlobalFlightAnimationsAsync(globalFlight, currentImage,
+                Path.Combine(tempDir, $"{++step:00}-global-flight-animations.bin"));
+            RequireFreeFlightExportOwner(flightIntent, flightOwner, flightImageSelection, flightSkyImageSelection);
+            stepSummaries.Add(new { kind = "global-free-flight", enabled = flightIntent?.Enabled==true,
+                levels = "30 normal retail levels; native flight courses unchanged", nativeGameplayAcceptance = false });
+        }
+
         // Universal cross-level Moby imports run last: they may grow level data and overlay WAD
         // entries and move the executable, and they read donors from the unchanged source disc.
         Dictionary<string, IReadOnlyList<UniversalMobyPlacement>> universalPlacements = new(StringComparer.OrdinalIgnoreCase);
@@ -14035,10 +14140,11 @@ public sealed partial class MainWindow : Window
         {
             string editsFile = Path.Combine(_workspace.RootPath, $"{target.Level.Key}-native-edits.json");
             var placed = UniversalPlacementReader.Read(editsFile);
-            if (placed.Count > 0)
+            var removed=UniversalPlacementReader.ReadRemovedNativeRows(editsFile);
+            if (placed.Count > 0 || removed.Count > 0)
             {
                 universalPlacements[target.Level.Key] = placed;
-                universalRemoved[target.Level.Key] = UniversalPlacementReader.ReadRemovedNativeRows(editsFile);
+                universalRemoved[target.Level.Key] = removed;
             }
         }
         if (universalPlacements.Count > 0)
@@ -14060,8 +14166,11 @@ public sealed partial class MainWindow : Window
                     japanese = new UniversalJapaneseSource(japaneseImage);
                 }
                 return UniversalMobyExport.Apply(library, currentImage, universalImage, _retailCatalog, universalPlacements, japanese: japanese,
-                    removedRowsByLevel: universalRemoved, identityWorkspace: _workspace.RootPath);
+                    removedRowsByLevel: universalRemoved, identityWorkspace: _workspace.RootPath,
+                    deferSpecialHooks: deferSharedRuntimeHooks);
             });
+            activeDragonflyEggs = universal.ActiveDragonflyEggs;
+            signLevelKeys = universal.SignLevelKeys;
             await File.WriteAllTextAsync(Path.ChangeExtension(universalImage, ".cue"),
                 BuildCueText(currentCue, currentImage, Path.GetFileName(universalImage)), DiscCueSheet.TextEncoding);
             foreach (var level in universal.Levels)
@@ -14088,7 +14197,13 @@ public sealed partial class MainWindow : Window
             currentCue = Path.ChangeExtension(universalImage, ".cue");
         }
 
-        if (objectPatches + terrainPatches + environmentGradePatches + skyboxPatches + levelNamePatches + musicLevelPatches == 0 && flightStage == null || !File.Exists(currentImage))
+        if (globalFlight != null && !deferSharedRuntimeHooks)
+        {
+            await ApplyGlobalFlightExecutableAsync(globalFlight, currentImage);
+            RequireFreeFlightExportOwner(flightIntent, flightOwner, flightImageSelection, flightSkyImageSelection);
+        }
+
+        if (objectPatches + terrainPatches + environmentGradePatches + skyboxPatches + levelNamePatches + musicLevelPatches == 0 && flightStage == null && globalFlight == null || !File.Exists(currentImage))
             return new CombinedTestBinResult("", "", objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, false);
 
         string stagedPrefix = Path.Combine(tempDir, Path.GetFileName(finalPrefix));
@@ -14110,6 +14225,7 @@ public sealed partial class MainWindow : Window
         await File.WriteAllTextAsync(stagedSummary, JsonSerializer.Serialize(new
         {
             generatedAt = DateTime.Now.ToString("s"),
+            sharedRuntimeHooksDeferred = deferSharedRuntimeHooks,
             sourceImage,
             outputImage = finalImage,
             outputCue = finalCue,
@@ -14136,11 +14252,11 @@ public sealed partial class MainWindow : Window
                 throw new InvalidDataException("The complete staged flight export changed before publication.");
             await flightStage.RequireCurrentAsync(_workspace.RootPath);
             RequireFreeFlightExportOwner(flightIntent, flightOwner, flightImageSelection, flightSkyImageSelection);
-            flightIntent.RequireOrdinaryEditCompatibility(FindEditedLevelExportTargets().Any(HasOrdinarySavedEdits));
+            flightIntent?.RequireOrdinaryEditCompatibility(FindEditedLevelExportTargets().Any(HasOrdinarySavedEdits));
         }
         // Absence is also a captured choice. A new saved ON setting or dirty
         // draft must not arrive unnoticed during an ordinary async export.
-        flightIntent.RequireCurrent(_workspace.RootPath);
+        flightIntent?.RequireCurrent(_workspace.RootPath);
         if (TryGetFreeFlightSettingsExportBlockReason(out string finalFlightBlockReason))
             throw new InvalidOperationException(finalFlightBlockReason);
         ExportArtifactTransaction.RequireSourceSeparation(sourceImage, sourceCue,
@@ -14163,9 +14279,11 @@ public sealed partial class MainWindow : Window
         }
 
         return new CombinedTestBinResult(finalImage, finalCue, objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, true, tempDir)
-        { FreeFlightSummary = flightStage == null ? "" : flightStage.EnabledLevelId == null
-            ? " Fly Anywhere OFF: rebuilt from the original disc."
-            : " Fly Anywhere ON: Toasty only; gameplay validation pending." };
+        { FreeFlightSummary = globalFlight == null ? "" : flightIntent?.Enabled==true
+            ? " Fly Anywhere ON: all normal levels; gameplay validation pending."
+            : " Fly Anywhere OFF: original normal movement restored.",
+            ActiveDragonflyEggs = activeDragonflyEggs, SignLevelKeys = signLevelKeys,
+            DeferredLevelNames = deferSharedRuntimeHooks ? levelTextEdits.ToArray() : [] };
     }
 
     private static bool IsDisposableCombinedBuildImage(
@@ -17850,7 +17968,11 @@ public sealed partial class MainWindow : Window
         };
         _terrainTaskMoveFaceButton = NewAsyncButton("Move Face", MoveSelectedTerrainFaceAsync);
         _terrainTaskSinglePointButton = NewAsyncButton("Edit Point", EditSelectedTerrainPointAsync);
-        _terrainTaskPaintFaceButton = NewAsyncButton("Paint Face", ChooseTerrainTexturePaintBrushAsync);
+        _terrainTaskPaintFaceButton = NewAsyncButton("Paint Face", async()=>
+        {
+            if(_freshSceneDocument!=null)await ChooseFreshMaterialAsync();
+            else await ChooseTerrainTexturePaintBrushAsync();
+        });
         _terrainTaskAddCopyButton = NewAsyncButton("Add Terrain", StageAddCloneSelectedTerrainAsync);
         _terrainTaskRemoveFaceButton = NewAsyncButton("Remove Terrain", StageRemoveSelectedTerrainAsync);
         _terrainUndoButton = NewAsyncButton("Undo Terrain", UndoSelectedTerrainAsync);
@@ -19071,6 +19193,8 @@ public sealed partial class MainWindow : Window
 
     private TerrainCollisionCoverage GetTerrainCollisionCoverage(TerrainPolygon terrain)
     {
+        if(_freshSceneDocument != null && !terrain.IsTerrainRemoved)
+            return new(Math.Max(0,terrain.Points.Count-2),Math.Max(0,terrain.Points.Count-2),Enumerable.Range(0,terrain.Points.Count).ToHashSet());
         return GetTerrainCollisionCoverage(terrain, _terrainCollisionTriangleKeys);
     }
 
@@ -20034,6 +20158,7 @@ public sealed partial class MainWindow : Window
 
     private TerrainPatchSafetyKind ClassifyTerrainPatchSafety(TerrainPolygon terrain)
     {
+        if (_freshSceneDocument != null) return terrain.HasStructureEdit ? TerrainPatchSafetyKind.Structural : terrain.IsTerrainEdited ? TerrainPatchSafetyKind.PlayableHeight : TerrainPatchSafetyKind.None;
         if (!terrain.IsTerrainEdited)
             return TerrainPatchSafetyKind.None;
         if (terrain.HasStructureEdit)
@@ -20719,6 +20844,13 @@ public sealed partial class MainWindow : Window
 
         if (terrain.IsTerrainAddClone)
             return true;
+
+        if(_freshSceneDocument!=null && !terrain.IsTerrainRemoved)
+        {
+            AddFreshTerrainCopy(terrain,0,0,0);
+            _viewport.ContinueTerrainDragOnCopy(_selectedTerrainIndex);
+            return true;
+        }
 
         if (terrain.IsTerrainRemoved)
         {
@@ -21461,7 +21593,12 @@ public sealed partial class MainWindow : Window
 
             if (!editsXY)
                 RecordTerrainBrushUndo(polygon, originalDeltas);
+            if(_freshSceneDocument!=null)
+                for(int nativePoint=0;nativePoint<deltas.Length;nativePoint++)
+                    deltas[nativePoint]=MathF.Round(polygon.OriginalZValues[nativePoint]+deltas[nativePoint])-polygon.OriginalZValues[nativePoint];
             polygon.ApplyTerrainVertexDeltas(deltas);
+            if(_freshSceneDocument!=null)
+                xyDeltas=xyDeltas.Select((v,i)=>new Vector2f(MathF.Round(polygon.OriginalPoints[i].X+v.X)-polygon.OriginalPoints[i].X,MathF.Round(polygon.OriginalPoints[i].Y+v.Y)-polygon.OriginalPoints[i].Y)).ToArray();
             polygon.ApplyTerrainVertexXYDeltas(xyDeltas);
         }
         if (!editsXY)
@@ -21618,6 +21755,12 @@ public sealed partial class MainWindow : Window
         if (TryBlockId65UnsupportedTerrainMutation(_selectedTerrain, "Terrain removal", structural: true))
             return;
 
+        if(_freshSceneDocument!=null && _selectedTerrain!=null)
+        {
+            StageTerrainRemoval(_selectedTerrainIndex,_selectedTerrain,"Removed");
+            return;
+        }
+
         if (_selectedTerrain == null)
         {
             _statusText.Text = "Select a terrain face before staging removal.";
@@ -21715,7 +21858,9 @@ public sealed partial class MainWindow : Window
         RefreshCurrentLevelDetails();
         RefreshTerrainReadinessHint();
         RefreshTerrainSurfaceQuickState();
-        _statusText.Text = $"{verb} terrain face {terrainIndex} for removal. {BuildTerrainRemoveFaceReadinessText(terrain)}. Save Terrain records the edit; Create BIN removes the visible face and matched gameplay collision. Use Undo Terrain to restore it.";
+        _statusText.Text = _freshSceneDocument!=null
+            ? "Removed the selected terrain face and its collision. Undo Terrain restores it; Save Level records the change."
+            : $"{verb} terrain face {terrainIndex} for removal. {BuildTerrainRemoveFaceReadinessText(terrain)}. Save Terrain records the edit; Create BIN removes the visible face and matched gameplay collision. Use Undo Terrain to restore it.";
     }
 
     private string BuildTerrainRemoveDetailsText(TerrainPolygon terrain)
@@ -21874,7 +22019,7 @@ public sealed partial class MainWindow : Window
         };
         TextBlock details = new()
         {
-            Text = autoSelectedSource
+            Text = _freshSceneDocument!=null ? "Copy the selected face, including its shape, colors and material. The original stays in place." : autoSelectedSource
                 ? $"Auto-selected source: {autoSelectedSourceReason}\n\n{BuildTerrainAddCopyDetailsText(terrain)}"
                 : BuildTerrainAddCopyDetailsText(terrain),
             TextWrapping = TextWrapping.Wrap,
@@ -21901,6 +22046,11 @@ public sealed partial class MainWindow : Window
         bool hasXOffset = TryParseFloat(xOffsetBox.Text, out float nextXOffset);
         bool hasYOffset = TryParseFloat(yOffsetBox.Text, out float nextYOffset);
         bool hasZOffset = TryParseFloat(zOffsetBox.Text, out float nextZOffset);
+        if(_freshSceneDocument!=null)
+        {
+            AddFreshTerrainCopy(terrain,hasXOffset?nextXOffset:0,hasYOffset?nextYOffset:0,hasZOffset?nextZOffset:0);
+            return;
+        }
         if (!hasXOffset && !hasYOffset && !terrain.HasPositionEdit)
         {
             nextXOffset = DefaultTerrainAddCopyOffset;
@@ -22027,8 +22177,11 @@ public sealed partial class MainWindow : Window
         AddLabeledField(fields, "X offset", xOffsetBox, 2);
         AddLabeledField(fields, "Y offset", yOffsetBox, 3);
         AddLabeledField(fields, "Z offset", zOffsetBox, 4);
-        AddLabeledField(fields, "Texture ID", textureBox, 5);
-        AddLabeledField(fields, "Material label", surfaceBox, 6);
+        if(_freshSceneDocument==null)
+        {
+            AddLabeledField(fields, "Texture ID", textureBox, 5);
+            AddLabeledField(fields, "Material label", surfaceBox, 6);
+        }
 
         StackPanel panel = new()
         {
@@ -22157,6 +22310,9 @@ public sealed partial class MainWindow : Window
         foreach ((TerrainPolygon polygon, float[] deltas) in pendingDeltas)
         {
             RecordTerrainBrushUndo(polygon, originalDeltasByPolygon[polygon]);
+            if(_freshSceneDocument!=null)
+                for(int nativePoint=0;nativePoint<deltas.Length;nativePoint++)
+                    deltas[nativePoint]=MathF.Round(polygon.OriginalZValues[nativePoint]+deltas[nativePoint])-polygon.OriginalZValues[nativePoint];
             polygon.ApplyTerrainVertexDeltas(deltas);
         }
 
@@ -22527,6 +22683,29 @@ public sealed partial class MainWindow : Window
         if (_selectedTerrain == null || _currentLevel == null || _currentGeometry == null)
         {
             _statusText.Text = "Select a terrain face before undoing face edits.";
+            return;
+        }
+
+        if(_freshSceneDocument!=null)
+        {
+            ClearTerrainBrushUndoHistory();
+            if(!_selectedTerrain.IsTerrainRemoved && _freshAddedFaces.Remove(_selectedTerrain))
+                _selectedTerrain.StageTerrainRemoval();
+            else
+            {
+                _selectedTerrain.ResetTerrainEdit();
+                if(_freshSceneDocument.OriginalSurfaces is { } original && _selectedTerrain.SectorIndex<original.Count)
+                {
+                    var surfaces=_freshSceneDocument.Surfaces.ToArray();int index=_selectedTerrain.SectorIndex;
+                    surfaces[index]=surfaces[index] with { Material=original[index].Material };
+                    _freshSceneDocument=_freshSceneDocument with { Surfaces=surfaces };
+                }
+                _ = RefreshFreshMaterialPreviewAsync();
+            }
+            _viewport.NotifyTerrainPresentationDataChanged();
+            await SaveFreshSceneAsync();
+            ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex,_selectedTerrain));
+            RefreshCurrentLevelDetails();
             return;
         }
 
@@ -23527,6 +23706,7 @@ public sealed partial class MainWindow : Window
 
     private async Task AddMobyNearSelectionAsync(AddMobyTemplate? preferredTemplate)
     {
+        if (_freshSceneDocument != null && preferredTemplate == null) { await ShowUniversalMobyLibraryAsync(this); return; }
         if (TryBlockId65ObjectMutation("Add Object"))
             return;
         if (_currentLevel == null)
@@ -31964,6 +32144,9 @@ public sealed partial class MainWindow : Window
         string BuildDirectory = "")
     {
         public string FreeFlightSummary { get; init; } = "";
+        public IReadOnlyList<(int LevelIndex, int Row, int Colour)> ActiveDragonflyEggs { get; init; } = [];
+        public IReadOnlySet<string> SignLevelKeys { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public IReadOnlyList<LevelTextReplacement> DeferredLevelNames { get; init; } = [];
     }
 
     private sealed record ExportedTreasureTarget(string LevelName, int Before, int After);

@@ -54,7 +54,7 @@ public sealed partial class MainWindow
             try
             {
                 _freeFlightSnapshot = NativeFreeFlightSettingsStore.Capture(_workspace.RootPath);
-                _freeFlightDraft = _freeFlightSnapshot.IsEnabled(level!.LevelId);
+                _freeFlightDraft = _freeFlightSnapshot.GlobalEnabled;
             }
             catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
             { _freeFlightError = error.Message; }
@@ -85,11 +85,6 @@ public sealed partial class MainWindow
         }
         if (_freeFlightError.Length != 0)
         { _statusText.Text = "Fly Anywhere settings unavailable: " + _freeFlightError; return; }
-        if (_freeFlightDraft && _freeFlightLevel!.LevelId != NativeFreeFlightProjectExportIntent.SupportedEnabledLevelId)
-        {
-            _statusText.Text = "Fly Anywhere On currently supports Toasty only. No other level or saved choice was substituted.";
-            RefreshFreeFlightSettingsAvailability(); return;
-        }
         NativeFreeFlightSettingsSnapshot expected = _freeFlightSnapshot;
         LevelDefinition level = _freeFlightLevel!;
         int generation = _freeFlightGeneration;
@@ -105,9 +100,9 @@ public sealed partial class MainWindow
                 throw new OperationCanceledException("The flight draft or its actual project/level owner changed before Save.");
             // The bounded synchronous CAS remains inside the UI persistence
             // owner; no await separates the last current check from publication.
-            var saved = NativeFreeFlightSettingsStore.Save(expected, level.LevelId, enabled);
+            var saved = NativeFreeFlightSettingsStore.SaveGlobal(expected, enabled);
             _freeFlightSnapshot = saved;
-            _statusText.Text = $"Saved Fly Anywhere {(enabled ? "On" : "Off")} for {level.DisplayName} in this project. Create BIN will rebuild from the original source.";
+            _statusText.Text = $"Saved Fly Anywhere {(enabled ? "On" : "Off")} for all normal levels in this project. Create BIN will rebuild from the original source.";
             if (saved.RetainedRecoveryDirectory.Length != 0)
                 _statusText.Text += " Previous-settings recovery files: " + saved.RetainedRecoveryDirectory;
         }
@@ -129,12 +124,13 @@ public sealed partial class MainWindow
     internal bool TryGetFreeFlightSettingsExportBlockReason(out string reason)
     {
         reason = "";
+        if (_releaseMode) return false;
         if (_freeFlightError.Length != 0)
             reason = "Fly Anywhere settings unavailable: " + _freeFlightError;
         else if (_freeFlightLevel != null && !IsCurrentFreeFlightBinding())
             reason = "Fly Anywhere settings belong to a stale project/level selection. Reload before Create BIN.";
         else if (IsCurrentFreeFlightBinding() && _freeFlightSnapshot != null &&
-            _freeFlightDraft != _freeFlightSnapshot.IsEnabled(_freeFlightLevel!.LevelId))
+            _freeFlightDraft != _freeFlightSnapshot.GlobalEnabled)
             reason = "Save or Revert the Fly Anywhere draft before Create BIN; unsaved flight choices are not exported.";
         if (reason.Length != 0) return true;
         try
@@ -155,9 +151,10 @@ public sealed partial class MainWindow
         (_freeFlightSnapshot == null || PathsEqual(_freeFlightSnapshot.Path, Path.Combine(_workspace.RootPath, NativeFreeFlightSettingsStore.FileName)));
 
     private bool IsRetailFreeFlightLevel(LevelDefinition? level) => level != null &&
+        (level.Key=="authored65" && _freshSceneDocument!=null ||
         level.LevelId is >= 10 and <= 64 && level.LevelId % 10 <= 4 &&
         _retailCatalog.Levels.Any(retail => retail.LevelId == level.LevelId &&
-            LevelCatalog.NormalizeKey(retail.Key) == LevelCatalog.NormalizeKey(level.Key));
+            LevelCatalog.NormalizeKey(retail.Key) == LevelCatalog.NormalizeKey(level.Key)));
 
     private bool FreeFlightOperationBusy() => _createBinBusy || _freshNativeResearchBusy || _workspaceTransitionBusy ||
         _regularEditorPersistenceBusy || _buildSafetyBusy || _buildingPortableCache || _projectDataImportBusy ||
@@ -168,21 +165,20 @@ public sealed partial class MainWindow
         bool retail = IsCurrentFreeFlightBinding() && IsRetailFreeFlightLevel(_freeFlightLevel);
         bool usable = retail && _freeFlightSnapshot != null && _freeFlightError.Length == 0;
         bool busy = FreeFlightOperationBusy();
-        bool supported = !_freeFlightDraft || _freeFlightLevel?.LevelId == NativeFreeFlightProjectExportIntent.SupportedEnabledLevelId;
         _freeFlightEnabled.IsEnabled = usable && !busy;
-        if (_freeFlightSave != null) _freeFlightSave.IsEnabled = usable && !busy && supported;
+        if (_freeFlightSave != null) _freeFlightSave.IsEnabled = usable && !busy;
         if (_freeFlightRevert != null) _freeFlightRevert.IsEnabled = retail && !busy;
         if (_freeFlightError.Length != 0) _freeFlightDetails.Text = "Fly Anywhere settings unavailable: " + _freeFlightError;
-        else if (!retail) _freeFlightDetails.Text = "Fly Anywhere is unavailable for independent ID65 and flight-course profiles.";
+        else if (!retail) _freeFlightDetails.Text = "Open an ordinary level or the authored main-editor level to change this project setting. Native flight courses retain their own rules.";
         else
         {
-            string state = _freeFlightSnapshot?.IsEnabled(_freeFlightLevel!.LevelId) == true ? "On" : "Off";
+            string state = _freeFlightSnapshot?.GlobalEnabled == true ? "On" : "Off";
             string selection = _freeFlightSnapshot?.HasExplicitSelection(_freeFlightLevel!.LevelId) == true ? "saved" : "default";
-            bool dirty = _freeFlightSnapshot != null && _freeFlightDraft != _freeFlightSnapshot.IsEnabled(_freeFlightLevel!.LevelId);
+            bool dirty = _freeFlightSnapshot != null && _freeFlightDraft != _freeFlightSnapshot.GlobalEnabled;
             _freeFlightDetails.Text = $"{_freeFlightLevel!.DisplayName} — {selection}: {state}. " +
                 (dirty ? $"Draft: {(_freeFlightDraft ? "On" : "Off")}. Save or Revert before Create BIN. " : "") +
-                "On starts Toasty with the flight ability available: jump, then press Cross again to fly. " +
-                "On currently supports Toasty only. Off rebuilds the original retail movement. " +
+                "On enables the native flight ability in all thirty normal retail levels and the authored slot 65 level: jump, then press Cross again to fly. " +
+                "Native flight courses stay unchanged. Off rebuilds normal movement from the original source. Gameplay validation remains pending. " +
                 "Save Flight keeps this project's export choice; it does not save an ability to the game's memory card. " +
                 "Native game save/reload remains unverified.";
         }

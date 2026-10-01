@@ -7252,6 +7252,8 @@ public sealed partial class MainWindow
     {
         if (TryBlockTerrainMutationDuringId65BlankLabManualOperation(action))
             return true;
+        // The authored main document compiles HP, LP, collision and visibility together.
+        if (_freshSceneDocument != null) return false;
 
         if (!IsCurrentId65BlankLab())
         {

@@ -168,6 +168,12 @@ public sealed partial class EditorViewport : Control
     public event EventHandler<Moby>? MobyUndoRequested;
     public event EventHandler<ViewportTerrainEditRequestedEventArgs>? TerrainEditRequested;
     public event EventHandler<ViewportTerrainMoveRequestedEventArgs>? TerrainMoveRequested;
+    internal void ContinueTerrainDragOnCopy(int index)
+    {
+        if(!_isDraggingTerrainFace)return;
+        _draggingTerrainFaceIndex=index;
+        _draggingTerrainAsAddCopy=false;
+    }
     public event EventHandler<ViewportTerrainRemoveRequestedEventArgs>? TerrainRemoveRequested;
     public event EventHandler<ViewportTerrainLookRequestedEventArgs>? TerrainLookCopyRequested;
     public event EventHandler<ViewportTerrainLookRequestedEventArgs>? TerrainLookPasteRequested;
@@ -564,6 +570,21 @@ public sealed partial class EditorViewport : Control
             descriptor?.RawDescriptorSha256 ?? "",
             descriptor?.PackedIndicesSha256 ?? "",
             descriptor?.PaletteWordsSha256 ?? "");
+    }
+
+    private Color? _authoredSkyColor;
+    public void SetAuthoredSkyColor(Spyro.Editor.Core.Primitives.ColorRgba? color)
+    {
+        _authoredSkyColor=color is { } c?Color.FromRgb(c.R,c.G,c.B):null;InvalidateVisual();
+    }
+    private readonly Dictionary<string,Bitmap> _authoredTerrainTextureImages = new(StringComparer.Ordinal);
+    public void SetAuthoredTerrainTextureFiles(IReadOnlyDictionary<string,string>? files)
+    {
+        foreach(var image in _authoredTerrainTextureImages.Values) image.Dispose();
+        _authoredTerrainTextureImages.Clear();
+        if(files != null) foreach(var (face,path) in files)
+            if(File.Exists(path)) _authoredTerrainTextureImages[face] = new Bitmap(path);
+        InvalidateVisual();
     }
 
     public void SetTerrainTextureImageFiles(
@@ -2906,7 +2927,7 @@ public sealed partial class EditorViewport : Control
                 : "Game Camera keeps every source sector on native HP/LP distance queues; near HP stays textured, distant source LP remains Gouraud-colored, and source geometry is unchanged.");
     }
 
-    private static void DrawFlyBackground(DrawingContext context, Rect bounds)
+    private void DrawFlyBackground(DrawingContext context, Rect bounds)
     {
         const int bandCount = 18;
 
@@ -2922,8 +2943,9 @@ public sealed partial class EditorViewport : Control
         }
     }
 
-    private static Color FlyBackgroundColor(double normalizedY)
+    private Color FlyBackgroundColor(double normalizedY)
     {
+        if (_authoredSkyColor is { } authored) return authored;
         Color top = Color.FromRgb(39, 58, 82);
         Color horizon = Color.FromRgb(48, 61, 68);
         Color bottom = Color.FromRgb(34, 45, 50);
@@ -10320,7 +10342,7 @@ public sealed partial class EditorViewport : Control
         int subdivisions = reduceMaterialDetail
             ? 1
             : area >= 7200 ? 3 : 2;
-        if (polygon.IsNativeUntexturedSentinel)
+        if (polygon.IsNativeUntexturedSentinel && !_authoredTerrainTextureImages.ContainsKey(polygon.RuntimeKey))
         {
             Color[] untexturedColors = Enumerable.Range(0, 4)
                 .Select(slot => flyView
@@ -10346,7 +10368,9 @@ public sealed partial class EditorViewport : Control
         }
 
         Bitmap? texture;
-        if (!flyView || _nativeTerrainLodPreviewMode == NativeTerrainLodPreviewMode.EditorOverviewHighDetail)
+        if (_authoredTerrainTextureImages.TryGetValue(polygon.RuntimeKey,out var authoredTexture))
+            texture = authoredTexture;
+        else if (!flyView || _nativeTerrainLodPreviewMode == NativeTerrainLodPreviewMode.EditorOverviewHighDetail)
         {
             // The whole-level Fit camera is an editor-only inspection pose.
             // Draw the normal HP composite regardless of retail distance so
