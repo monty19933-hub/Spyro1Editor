@@ -28,6 +28,16 @@ internal static class UniversalRemappingChecks
         ClassificationOwnership(check);
         SimplePackageBounds(check);
         RowLinkReadback(check);
+        uint tight = UniversalMobyComposer.NormalBufferFloor - 700;
+        check(UniversalMobyComposer.PreservesNativeRemovalBudget(1, 0, 0, tight, tight, tight),
+            "delete-only with unchanged verified native resident end preserves an original sub-margin budget");
+        check(UniversalMobyComposer.PreservesNativeRemovalBudget(1, 0, 0, tight, tight, tight - 2048),
+            "delete-only with reclaimed resident bytes preserves the verified original budget");
+        check(!UniversalMobyComposer.PreservesNativeRemovalBudget(1, 0, 336, tight, tight, tight + 336) &&
+            !UniversalMobyComposer.PreservesNativeRemovalBudget(1, 1, 0, tight, tight, tight) &&
+            !UniversalMobyComposer.PreservesNativeRemovalBudget(0, 0, 0, tight, tight, tight) &&
+            !UniversalMobyComposer.PreservesNativeRemovalBudget(1, 0, 0, tight + 1, tight, tight),
+            "mapped holes, new actors, unchanged scenes and unverified enlarged baselines retain the full RAM guard");
     }
 
     private static void ClassificationOwnership(Action<bool, string> check)
@@ -124,6 +134,32 @@ internal static class UniversalRemappingChecks
         int link = BinaryPrimitives.ReadInt32LittleEndian(data.Bytes.AsSpan(props + 4));
         check(link == scene.RowsOffset + UniversalLevelData.RowStride + 0x0C && scene.Fixups.Contains(props - so + 4),
             "restored source-object links target the appended counterpart and carry a native scene fixup");
+        byte[] before = data.Bytes.ToArray();
+        bool linkedRemoval = false;
+        try { UniversalRowRemoval.RemoveOwnedPropertiesAndClearRows(data, [1]); }
+        catch (InvalidDataException) { linkedRemoval = true; }
+        check(linkedRemoval && data.Bytes.AsSpan().SequenceEqual(before),
+            "a surviving pointer to a deleted actor refuses removal before mutation instead of binding a replacement");
+        byte[] survivor = data.Row(1);
+        int freed = UniversalRowRemoval.RemoveOwnedPropertiesAndClearRows(data, [0]);
+        var (_, _, reused) = data.AppendRows([(row, new("source", 2, row, new byte[4], [], 0))], [0]);
+        check(freed == 4 && reused.SequenceEqual([0]) && data.Scene().RowCount == 2,
+            "permanent deletion frees owned properties and reuses the physical hole before extending the native rows");
+        check(data.Row(1).AsSpan(4).SequenceEqual(survivor.AsSpan(4)) &&
+            BinaryPrimitives.ReadInt32LittleEndian(data.Row(1)) == BinaryPrimitives.ReadInt32LittleEndian(survivor) - 4,
+            "native survivors retain their physical index and every nonrelocated byte");
+        for (int iteration = 0; iteration < 12; iteration++)
+        {
+            UniversalRowRemoval.RemoveOwnedPropertiesAndClearRows(data, [0]);
+            var (_, _, again) = data.AppendRows([(row, new("source", iteration, row, new byte[4], [], 0))], [0]);
+            if (!again.SequenceEqual([0]) || data.Scene().RowCount != 2) throw new InvalidDataException("Repeated delete/add grew physical actor capacity.");
+        }
+        check(data.Scene().RowCount == 2 && data.Scene().PropertiesSize == 12,
+            "repeated delete/add round trips do not accumulate actor rows or private property bytes");
+        UniversalRowRemoval.RemoveOwnedPropertiesAndClearRows(data, [0, 1]);
+        data.AppendRows([], [0, 1]);
+        check(data.Scene().RowCount == 0 && data.Scene().PropertiesSize == 4 && data.Scene().Fixups.Count == 0,
+            "delete-only trailing removal trims every actor row and releases its owned properties/fixups");
     }
 
     public static int DeferredHooks(string original, string output, LevelCatalog catalog, string japanesePath)

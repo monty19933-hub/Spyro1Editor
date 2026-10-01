@@ -42,7 +42,7 @@ public static class UniversalBehaviorBundleBuilder
     public static UniversalBehaviorBundle Build(UniversalOverlay destination,
         IReadOnlyList<(string SourceKey, UniversalOverlay Source, IReadOnlyList<int> Classes)> sources, uint baseAddress,
         IReadOnlyList<int>? dragonflyEggClasses = null, IReadOnlyList<int>? signClasses = null,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<int, int>>? classMaps = null)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<int, int>>? classMaps = null, bool remapSaveRows = false)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
         int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
@@ -122,7 +122,7 @@ public static class UniversalBehaviorBundleBuilder
             reports.Add(new(s.SourceKey, s.Classes.ToArray(), upd.Items.Count(i => i.Word != null) * 4, initTotal, tablesTotal) { ParentClassReadSites = parentClassSites.Distinct().Order().ToArray(), AllocatedClassReadSites = allocatedClassSites.Distinct().Order().ToArray() });
         }
         if (dragonflyEggClasses is { Count: > 0 })
-            parts.Add(UniversalSpecialBehaviors.DragonflyEggUpdate(dragonflyEggClasses, "egg_upd"));
+            parts.Add(UniversalSpecialBehaviors.DragonflyEggUpdate(dragonflyEggClasses, "egg_upd", remapSaveRows));
         if (signClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.SignDraw(signClasses, "sign_draw"));
         var (code, labels) = Assemble(parts, baseAddress);

@@ -42,6 +42,13 @@ public sealed record UniversalComposeResult(
     public IReadOnlyList<UniversalParticleDependency> ParticleDependencies { get; init; } = [];
     public int RestoredObjectLinks { get; init; }
     public int UnresolvedObjectLinks { get; init; }
+    public IReadOnlyList<int> PlacementSaveRows { get; init; } = [];
+    public IReadOnlyList<int> PhysicalToLogicalSaveRows { get; init; } = [];
+    public IReadOnlyList<int> UnoccupiedPhysicalRows { get; init; } = [];
+    public int NativeRowsBefore { get; init; }
+    public int NativeRowsAfter { get; init; }
+    public int ReusedPhysicalRows { get; init; }
+    public int DroppedPropertyBytes { get; init; }
 }
 
 /// <summary>
@@ -56,6 +63,13 @@ public static class UniversalMobyComposer
     public const int MinimumDynamicSlots = 16;
 
     public const uint TreasureTableAddress = 0x8006F438;
+
+    /// <summary>A delete-only operation may retain the verified native resident end when it adds
+    /// no actors or overlay bytes. New content and physical save maps keep the full import margin.</summary>
+    public static bool PreservesNativeRemovalBudget(int removedCount, int activeIncoming, int overlayGrowth,
+        uint originalEnd, uint verifiedSourceEnd, uint finalEnd) =>
+        removedCount > 0 && activeIncoming == 0 && overlayGrowth == 0 && originalEnd <= verifiedSourceEnd &&
+        finalEnd <= originalEnd && finalEnd <= NormalBufferFloor;
 
     /// <summary>Gem value a native row contributes: a visible gem (type 0x18) or its reward gem ID (+0x53).</summary>
     public static int TreasureValue(byte[] row)
@@ -93,7 +107,8 @@ public static class UniversalMobyComposer
         Func<IReadOnlySet<int>, IEnumerable<(long Offset, int Length)>>? protectedVramAfterDrop = null,
         Func<int, byte[]>? sharedModelPackage = null)
     {
-        if (placements.Count == 0) throw new ArgumentException("No universal placements were supplied.");
+        if (placements.Count == 0 && removedRows is not { Count: > 0 }) throw new ArgumentException("No placements or permanent removals were supplied.");
+        int incomingCount = placements.Count;
         int[] incomingOrder = Enumerable.Range(0, placements.Count).ToArray();
         if (placements.Any(p => p.PersistentSlot != null))
         {
@@ -104,7 +119,15 @@ public static class UniversalMobyComposer
             incomingOrder = incomingOrder.OrderBy(i => placements[i].PersistentSlot).ToArray();
             placements = incomingOrder.Select(i => placements[i]).ToArray();
         }
+        // Lifetime ledger entries reserve save identities, never physical actor rows or properties.
+        var activeOrder = Enumerable.Range(0, placements.Count).Where(i => !placements[i].Retired).ToArray();
+        incomingOrder = activeOrder.Select(i => incomingOrder[i]).ToArray();
+        placements = activeOrder.Select(i => placements[i]).ToArray();
         UniversalLevelData dest = new(destinationData.ToArray());
+        int nativeRowsBefore = dest.Scene().RowCount;
+        var permanentlyRemoved = UniversalRowRemoval.Normalize(nativeRowsBefore, removedRows);
+        int[] saveRows = placements.Select((p, i) => checked(nativeRowsBefore + (p.PersistentSlot ?? incomingOrder[i]))).ToArray();
+        if (saveRows.Any(i => i > 255)) throw new InvalidDataException("An active placement's lifetime save identity exceeds the native 256-bit level bitmap; retired identities cannot be reused on existing cards.");
         byte[] exe = executable.ToArray();
         var bindings = UniversalExeBindings.Read(exe, destination.LevelId);
         UniversalOverlay destOverlay = new(destinationOverlay.ToArray(), bindings);
@@ -156,14 +179,6 @@ public static class UniversalMobyComposer
         Dictionary<(string Source, int Type), UniversalParticleDependency> particleDependencies = [];
         foreach (var p in placements)
         {
-            if (p.Retired)
-            {
-                byte[] inert = new byte[UniversalLevelData.RowStride];
-                BinaryPrimitives.WriteUInt16LittleEndian(inert.AsSpan(0x36), InertClass);
-                inert[0x53] = 0xFF;
-                templates.Add(new UniversalRowTemplate("", -1, inert, [], [], 0));
-                continue;
-            }
             if (p.SpecialId != null)
             {
                 var asset = special?.Invoke(p.SpecialId) ?? throw new InvalidDataException(
@@ -383,7 +398,6 @@ public static class UniversalMobyComposer
         {
             var p = placements[i]; var t = templates[i];
             byte[] r = t.Row.ToArray();
-            if (p.Retired) { rows.Add((r, t)); continue; }
             BinaryPrimitives.WriteInt32LittleEndian(r.AsSpan(0x0C), p.X);
             BinaryPrimitives.WriteInt32LittleEndian(r.AsSpan(0x10), p.Y);
             BinaryPrimitives.WriteInt32LittleEndian(r.AsSpan(0x14), p.Z);
@@ -410,10 +424,13 @@ public static class UniversalMobyComposer
             if (total > ushort.MaxValue) throw new InvalidDataException("The level's treasure total would overflow.");
             BinaryPrimitives.WriteUInt16LittleEndian(exe.AsSpan(o), (ushort)total);
         }
-        if (dest.Scene().RowCount + rows.Count > 256)
-            throw new InvalidDataException($"{destination.DisplayName} would exceed the engine's 256 persistent placed-object limit.");
         int sceneBefore = dest.Subfiles()[3].Length;
-        var (_, sceneGrowth, newRows) = dest.AppendRows(rows);
+        var allocation = UniversalRowRemoval.Allocate(dest, permanentlyRemoved, rows.Count);
+        int droppedProperties = UniversalRowRemoval.RemoveOwnedPropertiesAndClearRows(dest, permanentlyRemoved);
+        var (_, sceneGrowth, newRows) = dest.AppendRows(rows, permanentlyRemoved);
+        int[] physicalSaveRows = Enumerable.Range(0, allocation.FinalRowCount).Select(i => permanentlyRemoved.Contains(i) ? -1 : i).ToArray();
+        for (int i = 0; i < newRows.Count; i++) physicalSaveRows[newRows[i]] = saveRows[i];
+        bool remapSaveRows = physicalSaveRows.Where((logical, physical) => logical != physical).Any();
         int arena = ArenaSlots(dest);
         if (arena < MinimumDynamicSlots)
             throw new InvalidDataException($"Only {arena} dynamic object slots would remain in {destination.DisplayName}; at least {MinimumDynamicSlots} are required.");
@@ -432,7 +449,7 @@ public static class UniversalMobyComposer
             uint baseAddress = (copyBuffer + 7) & ~7u;
             var classMaps = classes.GroupBy(k => k.Key.Source).ToDictionary(g => g.Key,
                 g => (IReadOnlyDictionary<int, int>)g.ToDictionary(k => k.Key.Class, k => k.Value.DestinationClass));
-            var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps);
+            var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps, remapSaveRows);
             uint newCopy = (uint)((baseAddress + bundle.Code.Length + 15) & ~15);
             int keep = (int)(copyBuffer - UniversalOverlay.Base);
             byte[] ov = new byte[UniversalLevelData.Align((int)(newCopy - UniversalOverlay.Base), 0x800)];
@@ -446,24 +463,37 @@ public static class UniversalMobyComposer
             behavior.AddRange(bundle.Sources);
         }
 
+        if (remapSaveRows)
+        {
+            var mappedBindings = UniversalExeBindings.Read(exe, destination.LevelId);
+            uint update = mappedBindings[UniversalExeBindings.UpdateGlobal].Value;
+            var mapped = NativeMobySaveMap.Append(destOverlay, overlay, update, copyBuffer, physicalSaveRows);
+            overlay = mapped.Overlay; copyBuffer = mapped.CopyBuffer;
+            UniversalExeBindings.Patch(exe, mappedBindings[UniversalExeBindings.UpdateGlobal], mapped.UpdatePointer);
+            UniversalExeBindings.Patch(exe, mappedBindings[UniversalExeBindings.CopyBufferGlobal], copyBuffer);
+            NativeMobySaveMap.PatchExe(exe);
+        }
+
         uint finalEnd = RuntimeEnd(dest, copyBuffer);
         uint limit = NormalBufferFloor - RamSafetyMargin;
         var ram = new UniversalRamBudget(originalEnd, finalEnd, NormalBufferFloor,
             (int)(NormalBufferFloor - originalEnd), (int)((long)NormalBufferFloor - finalEnd),
             (int)(copyBuffer - destOverlay.CopyBuffer), modelGrowth, dest.Subfiles()[3].Length - sceneBefore,
             (int)(finalEnd - originalEnd) - (int)(copyBuffer - destOverlay.CopyBuffer) - modelGrowth - (dest.Subfiles()[3].Length - sceneBefore));
-        if (finalEnd > limit)
+        bool nativeRemovalBudget = PreservesNativeRemovalBudget(permanentlyRemoved.Count, placements.Count, ram.OverlayGrowth,
+            originalEnd, RuntimeEnd(originalDestination.Data, originalDestination.Overlay.CopyBuffer), finalEnd);
+        if (finalEnd > limit && !nativeRemovalBudget)
             throw new UniversalBudgetException(
                 $"{destination.DisplayName} does not have enough game RAM for these objects: they need {(finalEnd - originalEnd) / 1024.0:0.0} KB " +
                 $"but the level has {Math.Max(0, (int)(limit - originalEnd)) / 1024.0:0.0} KB available.", ram);
-        int[] mappedRows = new int[newRows.Count];
-        for (int i = 0; i < newRows.Count; i++) mappedRows[incomingOrder[i]] = newRows[i];
+        int[] mappedRows = Enumerable.Repeat(-1, incomingCount).ToArray(), mappedSaveRows = Enumerable.Repeat(-1, incomingCount).ToArray();
+        for (int i = 0; i < newRows.Count; i++) { mappedRows[incomingOrder[i]] = newRows[i]; mappedSaveRows[incomingOrder[i]] = saveRows[i]; }
         return new(destination.Key, imports, mappedRows, ram, arena, freeBefore - vram.FreeBytes, behavior, warnings,
-            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ParticleDependencies = particleDependencies.Values.ToList(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers) };
+            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ParticleDependencies = particleDependencies.Values.ToList(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties };
     }
 
     /// <summary>Class a fully removed native row is switched to: no model, no behavior in any level, never
-    /// spawned. The row keeps its index, so pods, links and the saved collected bits are unchanged.</summary>
+    /// spawned. Unfilled interior holes keep their native physical index and carry save-map sentinel −1.</summary>
     public const ushort InertClass = 0x1FE;
 
     /// <summary>Locally registered classes whose every placed row was removed by the user and that nothing can

@@ -88,7 +88,10 @@ public static class UniversalMobyExport
             throw new InvalidOperationException("Universal Moby export never overwrites its source image.");
         if (File.Exists(outputImagePath) || Directory.Exists(outputImagePath))
             throw new IOException("Choose a new output file; universal composition never overwrites an existing image.");
-        var destinationKeys = placementsByLevel.Keys.Select(k => catalog.FindByKey(k)?.Key ?? k).ToArray();
+        Dictionary<string, IReadOnlyList<UniversalMobyPlacement>> allPlacements = new(placementsByLevel, StringComparer.OrdinalIgnoreCase);
+        if (removedRowsByLevel != null)
+            foreach (var (key, removed) in removedRowsByLevel) if (removed.Count > 0) allPlacements.TryAdd(key, []);
+        var destinationKeys = allPlacements.Keys.Select(k => catalog.FindByKey(k)?.Key ?? k).ToArray();
         if (destinationKeys.Distinct(StringComparer.OrdinalIgnoreCase).Count() != destinationKeys.Length)
             throw new InvalidDataException("A destination level was supplied more than once under different names.");
         var current = UniversalDiscImage.Read(currentImagePath);
@@ -98,10 +101,11 @@ public static class UniversalMobyExport
         Dictionary<int, byte[]> replacements = [];
         List<UniversalExportLevelResult> results = [];
         Dictionary<string, int> nativePrefixes = [];
-        foreach (var (key, placements) in placementsByLevel.OrderBy(k => k.Key, StringComparer.Ordinal))
+        foreach (var (key, placements) in allPlacements.OrderBy(k => k.Key, StringComparer.Ordinal))
         {
-            if (placements.Count == 0) continue;
             var level = catalog.FindByKey(key) ?? throw new InvalidDataException($"Unknown destination level '{key}'.");
+            var removed = removedRowsByLevel?.FirstOrDefault(k => string.Equals(catalog.FindByKey(k.Key)?.Key, level.Key, StringComparison.OrdinalIgnoreCase)).Value;
+            if (placements.Count == 0 && removed is not { Count: > 0 }) continue;
             byte[] levelBytes = current.EntryBytes(level.SourceWadEntry);
             int nativeRows = new UniversalLevelData(levelBytes).Scene().RowCount;
             if (identityWorkspace != null && placements.Any(p => p.PersistentSlot != null))
@@ -112,7 +116,7 @@ public static class UniversalMobyExport
             var composed = UniversalMobyComposer.Compose(level, levelBytes,
                 current.EntryBytes(level.SourceWadEntry - 1), exe, k => sources.Get(k), sources.SharedClasses,
                 protectedVram(currentImagePath, level), placements, SpecialProvider(japanese),
-                removedRowsByLevel?.FirstOrDefault(k => string.Equals(catalog.FindByKey(k.Key)?.Key, level.Key, StringComparison.OrdinalIgnoreCase)).Value,
+                removed,
                 useNativeOwnershipScan ? dropped => DefaultProtectedVram(currentImagePath, level, dropped) : null, sources.SharedModelPackage);
             exe = composed.Executable;
             replacements[level.SourceWadEntry] = composed.LevelData;
@@ -123,13 +127,13 @@ public static class UniversalMobyExport
         List<(int LevelIndex, int Row, int Colour)> dragonflyEggs = [];
         foreach (var r in results)
         {
-            var placed = placementsByLevel.First(k => string.Equals(catalog.FindByKey(k.Key)?.Key, r.LevelKey, StringComparison.OrdinalIgnoreCase)).Value;
+            var placed = allPlacements.First(k => string.Equals(catalog.FindByKey(k.Key)?.Key, r.LevelKey, StringComparison.OrdinalIgnoreCase)).Value;
             var level = catalog.FindByKey(r.LevelKey)!;
             for (int i = 0; i < placed.Count; i++)
                 if (!placed[i].Retired && placed[i].SpecialId is { } id && UniversalDragonflyEggs.Variants.Any(v => v.Id == id))
-                    dragonflyEggs.Add((CollectedMaskIndex(level), r.Compose.NewRowIndices[i], UniversalDragonflyEggs.VariantIndex(id)));
+                    dragonflyEggs.Add((CollectedMaskIndex(level), r.Compose.PlacementSaveRows[i], UniversalDragonflyEggs.VariantIndex(id)));
         }
-        var signLevels = placementsByLevel.Where(k => k.Value.Any(p => !p.Retired && p.SpecialId == UniversalDragonflyEggs.SignId))
+        var signLevels = allPlacements.Where(k => k.Value.Any(p => !p.Retired && p.SpecialId == UniversalDragonflyEggs.SignId))
             .Select(k => catalog.FindByKey(k.Key)!.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (!deferSpecialHooks)
         {

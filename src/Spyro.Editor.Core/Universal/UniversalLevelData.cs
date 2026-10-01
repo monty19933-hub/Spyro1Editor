@@ -296,15 +296,25 @@ public sealed class UniversalLevelData
     }
 
     /// <summary>Appends rows into the Moby arena and their properties at the end of the properties component.</summary>
-    public (int PropertiesBytes, int SceneGrowth, IReadOnlyList<int> NewRowIndices) AppendRows(IReadOnlyList<(byte[] Row, UniversalRowTemplate Template)> rows)
+    public (int PropertiesBytes, int SceneGrowth, IReadOnlyList<int> NewRowIndices) AppendRows(IReadOnlyList<(byte[] Row, UniversalRowTemplate Template)> rows,
+        IReadOnlyCollection<int>? removedRows = null)
     {
+        if (rows.Count == 0 && removedRows is not { Count: > 0 }) return (0, 0, []);
         var (so, sl) = Subfiles()[3];
         var sc = Scene();
         byte[] s = _data.AsSpan(so, sl).ToArray();
+        var removed = UniversalRowRemoval.Normalize(sc.RowCount, removedRows);
+        foreach (int row in removed)
+        {
+            int start = sc.RowsOffset + row * RowStride;
+            if (BinaryPrimitives.ReadInt32LittleEndian(s.AsSpan(start)) != 0 ||
+                BinaryPrimitives.ReadUInt16LittleEndian(s.AsSpan(start + 0x36)) != UniversalMobyComposer.InertClass ||
+                sc.Fixups.Any(f => f >= start && f < start + RowStride))
+                throw new InvalidDataException("Deleted rows must pass owned property/link removal before their physical slots can be reused.");
+        }
         int insert = sc.PropertiesEnd;
         int total = rows.Sum(r => Align(r.Template.Properties.Length, 4));
-        if (sc.RowsOffset + (sc.RowCount + rows.Count) * RowStride > sc.ArenaEnd)
-            throw new InvalidDataException("The level's Moby arena has no room for more placed rows.");
+        var allocation = UniversalRowRemoval.Allocate(this, removedRows, rows.Count);
         List<int> newFix = [], newIdx = [];
         using MemoryStream blob = new();
         List<int> propStarts = [];
@@ -322,31 +332,35 @@ public sealed class UniversalLevelData
             {
                 if (placement < 0 || placement >= rows.Count || rowOffset < 0 || rowOffset >= RowStride || off < 0 || off + 4 > p.Length)
                     throw new InvalidDataException("Imported row-link fixup is outside its proved placement/property ownership.");
-                BinaryPrimitives.WriteInt32LittleEndian(p.AsSpan(off), sc.RowsOffset + (sc.RowCount + placement) * RowStride + rowOffset);
+                BinaryPrimitives.WriteInt32LittleEndian(p.AsSpan(off), sc.RowsOffset + allocation.NewRows[placement] * RowStride + rowOffset);
                 newFix.Add(start + off);
             }
             blob.Write(p);
         }
         List<int> fixups = sc.Fixups.Select(f => f >= insert ? f + total : f).ToList();
+        int addedFixupBytes = 4 * (newFix.Count + propStarts.Count(p => p != 0));
         byte[] body = [.. s.AsSpan(0, insert), .. blob.ToArray(), .. s.AsSpan(insert, sc.FixupsOffset - insert)];
         foreach (int f in fixups)
         {
             int v = BinaryPrimitives.ReadInt32LittleEndian(body.AsSpan(f));
-            if (v >= insert) BinaryPrimitives.WriteInt32LittleEndian(body.AsSpan(f), v + total);
+            if (v >= insert) BinaryPrimitives.WriteInt32LittleEndian(body.AsSpan(f), v + total + (removed.Count > 0 && v >= sc.UsedEnd ? addedFixupBytes : 0));
         }
         BinaryPrimitives.WriteInt32LittleEndian(body.AsSpan(sc.PropertiesComponent), sc.PropertiesSize + total);
         for (int i = 0; i < rows.Count; i++)
         {
-            int ro = sc.RowsOffset + (sc.RowCount + i) * RowStride;
-            if (body.AsSpan(ro, RowStride).IndexOfAnyExcept((byte)0) >= 0)
+            int ro = sc.RowsOffset + allocation.NewRows[i] * RowStride;
+            if (allocation.NewRows[i] >= sc.RowCount && body.AsSpan(ro, RowStride).IndexOfAnyExcept((byte)0) >= 0)
                 throw new InvalidDataException("The Moby arena slot for an appended row is not empty.");
             byte[] r = rows[i].Row.ToArray();
             BinaryPrimitives.WriteInt32LittleEndian(r, propStarts[i]);
             r.CopyTo(body, ro);
             if (propStarts[i] != 0) fixups.Add(ro);
-            newIdx.Add(sc.RowCount + i);
+            newIdx.Add(allocation.NewRows[i]);
         }
-        BinaryPrimitives.WriteInt32LittleEndian(body.AsSpan(sc.MobyComponent + 4), sc.RowCount + rows.Count);
+        // Trimmed rows become native dynamic arena space; stale descriptors cannot survive there.
+        if (allocation.FinalRowCount < sc.RowCount)
+            body.AsSpan(sc.RowsOffset + allocation.FinalRowCount * RowStride, (sc.RowCount - allocation.FinalRowCount) * RowStride).Clear();
+        BinaryPrimitives.WriteInt32LittleEndian(body.AsSpan(sc.MobyComponent + 4), allocation.FinalRowCount);
         fixups.AddRange(newFix);
         using MemoryStream outp = new();
         outp.Write(body);
@@ -354,11 +368,34 @@ public sealed class UniversalLevelData
         BinaryPrimitives.WriteInt32LittleEndian(w, fixups.Count); outp.Write(w);
         foreach (int f in fixups) { BinaryPrimitives.WriteInt32LittleEndian(w, f); outp.Write(w); }
         byte[] scene = outp.ToArray();
+        if (removed.Count > 0)
+        {
+            ReplaceScene(scene);
+            return (total, Subfiles()[3].Length - sl, newIdx);
+        }
         int grow = Align(Math.Max(0, scene.Length - sl), 0x800);
         if (grow > 0) GrowSubfile(3, grow);
         Array.Clear(_data, so, sl + grow);
         scene.CopyTo(_data, so);
         return (total, grow, newIdx);
+    }
+
+    internal void ReplaceScene(ReadOnlySpan<byte> scene)
+    {
+        var sf = Subfiles(); var old = sf[3];
+        var layout = Scene(); int used = layout.UsedEnd;
+        if (used > old.Length) throw new InvalidDataException("Permanent removal has an invalid native scene tail.");
+        var oldTail = _data.AsSpan(old.Offset + used, old.Length - used);
+        bool preserveTail = oldTail.IndexOfAnyExcept((byte)0) >= 0 || layout.Fixups.Any(f => U32(old.Offset + f) >= used);
+        int tailBytes = preserveTail ? oldTail.Length : 0;
+        int length = Align(scene.Length + tailBytes, 0x800), delta = length - old.Length;
+        byte[] next = new byte[_data.Length + delta];
+        _data.AsSpan(0, old.Offset).CopyTo(next);
+        scene.CopyTo(next.AsSpan(old.Offset));
+        if (preserveTail) oldTail.CopyTo(next.AsSpan(old.Offset + scene.Length));
+        _data.AsSpan(old.Offset + old.Length).CopyTo(next.AsSpan(old.Offset + length));
+        _data = next; Put32(8 * 3 + 4, length);
+        for (int i = 4; i < sf.Count; i++) Put32(8 * i, sf[i].Offset + delta);
     }
 
     public Span<byte> Vram() { var (o, _) = Subfiles()[0]; return _data.AsSpan(o, 0x80000); }

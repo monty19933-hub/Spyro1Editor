@@ -191,7 +191,7 @@ if (args[0] == "--compose")
     bool demo = args.Contains("--test-demo-level");
     int ji = Array.IndexOf(args, "--japan");
     string? japanPath = ji >= 0 ? args[ji + 1] : null;
-    var flagValues = new HashSet<int> { Array.IndexOf(args, "--japan") + 1, Array.IndexOf(args, "--remove") + 1 };
+    var flagValues = new HashSet<int> { Array.IndexOf(args, "--japan") + 1, Array.IndexOf(args, "--remove") + 1, Array.IndexOf(args, "--retire-slots") + 1 };
     var placements = args.Skip(5).Where((a, i) => !a.StartsWith("--") && !flagValues.Contains(i + 5)).Select(a =>
     {
         var p = a.Split(':');
@@ -202,6 +202,12 @@ if (args[0] == "--compose")
         return new UniversalMobyPlacement(p[0], int.Parse(p[1]), int.Parse(p[2]), int.Parse(p[3]), int.Parse(p[4]),
             p.Length > 5 ? Convert.ToInt32(p[5], 16) : null);
     }).ToList();
+    if (args.Contains("--persistent-ledger"))
+    {
+        int retiredIndex = Array.IndexOf(args, "--retire-slots");
+        var retired = retiredIndex >= 0 ? args[retiredIndex + 1].Split(',').Select(int.Parse).ToHashSet() : [];
+        placements = placements.Select((p, i) => p with { EditorId = i.ToString("x32"), PersistentSlot = i, Retired = retired.Contains(i) }).ToList();
+    }
     var japanese = japanPath != null ? new UniversalJapaneseSource(japanPath) : null;
     int ri = Array.IndexOf(args, "--remove");
     IReadOnlyCollection<int>? removedRows = ri >= 0 ? args[ri + 1].Split(',').Select(int.Parse).ToList() : null;
@@ -226,7 +232,7 @@ if (args[0] == "--compose")
     var c = result.Levels[0].Compose;
     Console.WriteLine(JsonSerializer.Serialize(new
     {
-        c.DestinationKey, c.Ram, c.ArenaSlotsRemaining, DroppedModelClasses = c.DroppedModelClasses.Select(x => $"0x{x:X3}"), c.DroppedModelBytes, c.ReclaimedVramBytes, c.ParticleDependencies, c.RestoredObjectLinks, c.UnresolvedObjectLinks, c.VramBytesUsed, c.NewRowIndices, c.Warnings,
+        c.DestinationKey, c.Ram, c.ArenaSlotsRemaining, DroppedModelClasses = c.DroppedModelClasses.Select(x => $"0x{x:X3}"), c.DroppedModelBytes, c.ReclaimedVramBytes, c.ParticleDependencies, c.RestoredObjectLinks, c.UnresolvedObjectLinks, c.VramBytesUsed, c.NewRowIndices, c.PlacementSaveRows, c.PhysicalToLogicalSaveRows, c.NativeRowsBefore, c.NativeRowsAfter, c.UnoccupiedPhysicalRows, c.ReusedPhysicalRows, c.DroppedPropertyBytes, c.Warnings,
         Classes = c.Classes.Select(x => new { Class = $"0x{x.ClassId:X3}", DestinationClass = $"0x{x.DestinationClassId:X3}", x.SourceLevelKey, x.ModelImported, x.BehaviorImported, x.ModelBytes, x.ModelOrigin, x.Textures, x.Sounds, x.DependencyOnly }),
         c.Behavior, result.OutputImageSha256, result.WadGrowthBytes
     }, new JsonSerializerOptions { WriteIndented = true }));
