@@ -20,6 +20,12 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
     IReadOnlyList<AuthoredObject> Objects, UniversalPlacementLedger Ledger)
 {
     public const string FileName = "fresh-level.scene.json";
+    public SceneTargetBinding? TargetBinding { get; init; }
+    public LevelDefinition ResolveTarget(LevelCatalog catalog) => TargetBinding == null
+        ? NativeTarget(Name) : TargetBinding.Resolve(catalog) with { DisplayName = Name, SourceRecordCount = 0 };
+    public static string PathForTarget(string workspace, string key) => SceneDocumentStore.PathForTarget(workspace, key);
+    public SceneDocument StartBlank() => New(Name) with { TargetBinding = TargetBinding, Ledger = Ledger };
+
     public static LevelDefinition NativeTarget(string name) => new()
     {
         Key = "authored65", ScriptKey = "Authored65", DisplayName = name,
@@ -39,7 +45,7 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
     public GeometryCandidate ProjectGeometry()
     {
         Validate();
-        GeometryCandidate geometry = new() { Name = Name, MinZ = Surfaces.Min(s => s.Vertices.Min(v => v.Z)), MaxZ = Surfaces.Max(s => s.Vertices.Max(v => v.Z)) };
+        GeometryCandidate geometry = new() { Name = Name, MinZ = Surfaces.Count == 0 ? Spawn.Z : Surfaces.Min(s => s.Vertices.Min(v => v.Z)), MaxZ = Surfaces.Count == 0 ? Spawn.Z : Surfaces.Max(s => s.Vertices.Max(v => v.Z)) };
         for (int i = 0; i < Surfaces.Count; i++)
         {
             var s = Surfaces[i];
@@ -54,7 +60,7 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
                 nativeMaterialByte:s.Material?.TextureId??255,nativeUntexturedSentinel:s.Material==null,
                 nativePrimitiveSemiTransparent:false,nativeTextureId:s.Material?.TextureId??-1));
         }
-        geometry.Bounds = Rect2f.FromBounds(Surfaces.Min(s => s.Vertices.Min(v => v.X)), Surfaces.Min(s => s.Vertices.Min(v => v.Y)),
+        geometry.Bounds = Surfaces.Count == 0 ? Rect2f.FromBounds(Spawn.X-64, Spawn.Y-64, Spawn.X+64, Spawn.Y+64) : Rect2f.FromBounds(Surfaces.Min(s => s.Vertices.Min(v => v.X)), Surfaces.Min(s => s.Vertices.Min(v => v.Y)),
             Surfaces.Max(s => s.Vertices.Max(v => v.X)), Surfaces.Max(s => s.Vertices.Max(v => v.Y)));
         return geometry;
     }
@@ -110,10 +116,13 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
     public void Validate()
     {
         if (SchemaVersion != 1 || !Guid.TryParseExact(Id,"N",out _) || string.IsNullOrWhiteSpace(Name) ||
-            Surfaces.Count is < 1 or > 255 || Objects.Count > 256 || Heading is < 0 or > 255 ||
+            Surfaces.Count > 255 || Objects.Count > 256 || Heading is < 0 or > 255 ||
             !TextTargetCatalog.IsSafeReplacement(Name,19))
             throw new InvalidDataException("Fresh scene document identity, surfaces or settings are invalid.");
         Ledger.Validate();
+        TargetBinding?.Validate();
+        if ((TargetBinding?.NativePrefixRows ?? 0) + Ledger.Entries.Count > 256)
+            throw new InvalidDataException("The cleared level's previous collectible identities fill the native save rows. Restore before clear or use a new project.");
         if (Surfaces.Select(s => s.Id).Distinct().Count() != Surfaces.Count || Objects.Select(o => o.Identity).Distinct().Count() != Objects.Count)
             throw new InvalidDataException("Fresh surfaces and objects require unique identities.");
         foreach (var s in Surfaces)

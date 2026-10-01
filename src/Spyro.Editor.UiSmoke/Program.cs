@@ -23,6 +23,14 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+if (args.Contains("--start-blank-ui-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --start-blank-ui-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    StartBlankUiCases.Run();
+    return 0;
+}
+
 // Actual main level picker automation; no native window or source image is opened.
 if (args.Contains("--level-picker-automation-only", StringComparer.Ordinal))
 {

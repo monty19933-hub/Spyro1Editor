@@ -57,6 +57,7 @@ public sealed record UniversalPlacementLedger(int SchemaVersion, IReadOnlyList<U
             using var doc = JsonDocument.Parse(File.ReadAllBytes(path));
             previous = Read(doc.RootElement);
         }
+        previous = Spyro.Editor.Core.Editing.StartBlankRecoveryStore.ReconcileNativeLedger(path, previous);
         List<UniversalPlacementIdentity> entries = [.. previous.Entries];
         HashSet<string> known = entries.Select(e => e.Id).ToHashSet(StringComparer.Ordinal);
         HashSet<string> active = new(StringComparer.Ordinal);
