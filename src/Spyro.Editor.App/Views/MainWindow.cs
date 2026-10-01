@@ -11009,6 +11009,14 @@ public sealed partial class MainWindow : Window
         if (_selectedTerrain == null)
             return "Select a terrain face to enable terrain tasks.";
 
+        if (_freshSceneDocument != null)
+        {
+            if (_selectedTerrain.IsTerrainRemoved)
+                return "Removed terrain face. Use Undo Terrain to restore it, and Save Terrain to keep the removal.";
+            if (_freshAddedFaces.Contains(_selectedTerrain))
+                return "Added terrain face. Move or edit it, use Undo Terrain to remove the copy, and Save Terrain to keep it.";
+        }
+
         if (_selectedTerrain.IsTerrainRemoved)
             return "This face is staged for removal. Review Edits shows the remove-face summary, and Preflight BIN shows the visible mesh and matched collision patches.";
 
