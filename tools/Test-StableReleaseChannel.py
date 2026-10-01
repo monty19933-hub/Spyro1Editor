@@ -17,7 +17,7 @@ class StableChannel(unittest.TestCase):
         command='set -e; PUBLIC_RELEASE_VERSION=6; BETA_RELEASE_NUMBER=6; source "$1" "$2"; source "$3"; printf "%s\\n" "$RELEASE_CHANNEL" "$PUBLIC_RELEASE_NAME" "$PROJECT_VERSION" "${RELEASE_PUBLISH_PROPERTIES[@]}"'
         clean={k:v for k,v in os.environ.items() if not k.startswith('SPYRO_EDITOR_')}
         args=['bash','-c',command,'test',str(ROOT/'tools/Read-ReleaseVersion.sh'),str(project),str(ROOT/'tools/ReleaseChannel.sh')]
-        r=subprocess.run(args,env=clean,capture_output=True,text=True);self.assertEqual(r.returncode,0,r.stderr);self.assertEqual(r.stdout.splitlines()[:3],['stable','Spyro Editor 1.0.1','1.0.1'])
+        r=subprocess.run(args,env=clean,capture_output=True,text=True);self.assertEqual(r.returncode,0,r.stderr);self.assertEqual(r.stdout.splitlines()[:3],['stable','Spyro Editor 1.0.2','1.0.2'])
         r=subprocess.run(args,env={**clean,'SPYRO_EDITOR_RELEASE_CHANNEL':'beta'},capture_output=True,text=True);self.assertEqual(r.returncode,0,r.stderr);self.assertEqual(r.stdout.splitlines()[0],'beta');self.assertIn('0.1.0-beta.54',r.stdout);self.assertIn('-p:ReleaseChannel=beta',r.stdout)
     def test_missing_identity(self):self.assertNotEqual(self.select(SPYRO_EDITOR_RELEASE_CHANNEL='stable').returncode,0)
     def test_stable_changelog_previous_release(self):
@@ -27,7 +27,7 @@ class StableChannel(unittest.TestCase):
         r=subprocess.run(['bash','-c',command,'test',str(ROOT/'tools/Read-ReleaseVersion.sh'),str(project),str(ROOT/'tools/ReleaseChannel.sh')],env=clean,capture_output=True,text=True)
         self.assertEqual(r.returncode,0,r.stderr)
         current,previous=r.stdout.splitlines()
-        self.assertEqual(previous,'Spyro Editor 1.0')
+        self.assertEqual(previous,'Spyro Editor 1.0.1')
         lines=(ROOT/'CHANGELOG.md').read_text().splitlines()
         self.assertEqual(lines[:3],['# '+current,'','## Changes since '+previous])
         self.assertEqual(sum(line.startswith('# Spyro Editor ') for line in lines),1)

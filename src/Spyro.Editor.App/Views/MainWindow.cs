@@ -2119,7 +2119,9 @@ public sealed partial class MainWindow : Window
         {
             for (int i = 0; i < _catalog.Levels.Count; i++)
             {
-                if (ReferenceEquals(_catalog.Levels[i], selected))
+                if (ReferenceEquals(_catalog.Levels[i], selected) ||
+                    _catalog.Levels[i].Key == selected.Key && _catalog.Levels[i].LevelId == selected.LevelId &&
+                    _catalog.Levels[i].SourceWadEntry == selected.SourceWadEntry)
                 {
                     index = i;
                     break;
@@ -2958,6 +2960,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (!exactId65BlankLab && TryLoadReplacementScene(level)) return;
+
         bool ownsId65Operation = false;
         Id65BlankLabManualOperation? id65Operation = existingId65Operation;
         if (exactId65BlankLab && id65Operation == null)
@@ -3149,6 +3153,7 @@ public sealed partial class MainWindow : Window
         StopTerrainTexturePaintMode(announce: false);
         ClearTerrainTextureCatalogPreviewCache(rebindActivePreview: false);
         AdvancePrivateTexturePreflightOperationGeneration();
+        if (_freshLevelPickerOption?.LevelId != 65) BindFreshLevelPickerOption(null);
         _freshSceneDocument = null;
         _viewport.SetAuthoredTerrainTextureFiles(null);
         _viewport.SetAuthoredSkyColor(null);
@@ -4526,13 +4531,14 @@ public sealed partial class MainWindow : Window
 
         Window dialog = new()
         {
-            Title = "Restore Level",
+            Title = _freshSceneDocument == null ? "Restore Level" : File.Exists(FreshScenePath) ? "Reload saved level" : "Reset unsaved level",
+            Name = "RestoreLevelDialog",
             Width = 430,
             Height = 230,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = true
         };
-        dialog.Content = BuildRestoreLevelDialogContent(dialog, _currentLevel);
+        dialog.Content = BuildRestoreLevelDialogContent(dialog, _currentLevel, _freshSceneDocument != null, _freshSceneDocument == null || File.Exists(FreshScenePath));
         bool accepted = await dialog.ShowDialog<bool>(this);
         if (!accepted)
             return;
@@ -5013,7 +5019,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private static Control BuildRestoreLevelDialogContent(Window dialog, LevelDefinition level)
+    private static Control BuildRestoreLevelDialogContent(Window dialog, LevelDefinition level, bool authored = false, bool savedDocument = true)
     {
         StackPanel panel = new()
         {
@@ -5022,14 +5028,19 @@ public sealed partial class MainWindow : Window
         };
         panel.Children.Add(new TextBlock
         {
-            Text = $"Restore {level.DisplayName} to original?",
+            Text = authored ? savedDocument ? $"Reload the saved version of {level.DisplayName}?" : $"Reset {level.DisplayName} to a starting floor?" : $"Restore {level.DisplayName} to original?",
             FontWeight = FontWeight.SemiBold,
             FontSize = 16,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 37, 43))
         });
         panel.Children.Add(new TextBlock
         {
-            Text = "This clears saved object edits, terrain edits, material overrides, custom terrain texture imports, and native cross-level texture swaps for this level, then reloads the original cached level.",
+            Name = "RestoreLevelExplanation",
+            Text = authored
+                ? savedDocument
+                    ? "Unsaved geometry, objects and settings will be discarded. The last saved version of this level will reopen. To recover the level from before clearing, use Restore Before Clear."
+                    : "Unsaved geometry, objects and settings will be discarded and a new starting floor created. Save Level first if you want to keep these changes."
+                : "This clears saved object edits, terrain edits, material overrides, custom terrain texture imports, and native cross-level texture swaps for this level, then reloads the original cached level.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92)),
             LineHeight = 20
@@ -5042,7 +5053,7 @@ public sealed partial class MainWindow : Window
             Spacing = 8
         };
         Button cancel = NewButton("Cancel");
-        Button restore = NewButton("Restore Level");
+        Button restore = NewButton(authored ? savedDocument ? "Reload saved level" : "Reset unsaved level" : "Restore Level");
         cancel.Click += (_, _) => dialog.Close(false);
         restore.Click += (_, _) => dialog.Close(true);
         buttons.Children.Add(cancel);
@@ -10594,6 +10605,8 @@ public sealed partial class MainWindow : Window
         SetButtonEnabled(
             _inspectBuildSafetyButton,
             hasLevel && !editorMutationOperationActive);
+        if (_objectRestoreLevelButton != null)
+            _objectRestoreLevelButton.Content = _freshSceneDocument == null ? "Restore entire level" : File.Exists(FreshScenePath) ? "Reload saved level" : "Reset unsaved level";
         SetButtonEnabled(_objectRestoreLevelButton, hasLevel && !id65ObjectInspectionOnly);
         SetButtonEnabled(_objectSelectedIdTestButton, hasObject && !id65ObjectInspectionOnly && IsQuestionableMoby(_selectedMoby!));
 
@@ -10601,7 +10614,7 @@ public sealed partial class MainWindow : Window
             _terrainUndoButton,
             terrainHasEdits && !id65FreshProjectionTerrainLocked);
         bool canStageSelectedAddCopy = canUseTerrainAddCopyInLevel && hasTerrain && CanStageTerrainAddCopy(_selectedTerrain!);
-        bool canStageAnyAddCopy = canUseTerrainAddCopyInLevel && (canStageSelectedAddCopy || (_currentGeometry?.Polygons.Count > 0 && HasAnyTerrainAddCopySource()));
+        bool canStageAnyAddCopy = canUseTerrainAddCopyInLevel && (_freshSceneDocument != null || canStageSelectedAddCopy || (_currentGeometry?.Polygons.Count > 0 && HasAnyTerrainAddCopySource()));
         SetButtonEnabled(_terrainFindAddSourceButton, canUseTerrainAddCopyInLevel && HasAnyTerrainAddCopySource());
         bool id65SelectedHpPoint = !id65FreshProjectionTerrainLocked &&
             (!id65TerrainZOnly ||
@@ -10785,7 +10798,7 @@ public sealed partial class MainWindow : Window
 
     private bool CanStageTerrainRemoval(TerrainPolygon terrain)
     {
-        if (_freshSceneDocument != null) return !terrain.IsTerrainRemoved && _currentGeometry!.Polygons.Count(p => !p.IsTerrainRemoved) > 1;
+        if (_freshSceneDocument != null) return !terrain.IsTerrainRemoved;
         if (!CanUseTerrainRemoveInCurrentLevel())
             return false;
         if (terrain.IsTerrainRemoved)
@@ -11072,7 +11085,7 @@ public sealed partial class MainWindow : Window
 
     private string BuildTerrainRemoveGameplayBlockedHint(TerrainPolygon terrain)
     {
-        if(_freshSceneDocument!=null)return "Keep at least one ground face. Add a new face before removing the last one.";
+        if(_freshSceneDocument!=null)return "Remove this face; Add Terrain can create new ground beneath the player start.";
         if (!CanUseTerrainRemoveInCurrentLevel())
             return BuildTerrainRemoveUnavailableHint();
 
@@ -13224,7 +13237,7 @@ public sealed partial class MainWindow : Window
 
     private async Task CreateObjectTestBinCoreAsync()
     {
-        if (_freshSceneDocument != null) { await CreateFreshMainBinAsync(); return; }
+        if (_freshSceneDocument != null || SceneDocumentStore.ReadAll(_workspace.RootPath,_retailCatalog).Count>0) { await CreateFreshMainBinAsync(); return; }
         if (TryGetId65BlankLabNormalCreateBinBlockReason(out string id65BlockReason))
         {
             _statusText.Text = id65BlockReason;
@@ -13464,12 +13477,15 @@ public sealed partial class MainWindow : Window
     private IReadOnlyList<EditedLevelExportTarget> FindEditedLevelExportTargets()
     {
         var flightIntent = _releaseMode ? null : NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
+        var replacementKeys=SceneDocumentStore.LoadOverrides(_workspace.RootPath,_retailCatalog)
+            .Select(d=>d.TargetBinding!.LevelKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
         List<EditedLevelExportTarget> targets = [];
         foreach (LevelDefinition level in _catalog.Levels)
         {
             // ID65 owns a separate evidence-bound disposable writer. Never
             // admit it to the retail all-saved-edits dispatcher.
-            if (UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level))
+            if (UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level) ||
+                replacementKeys.Contains(level.Key))
                 continue;
 
             bool hasObjectEdits = level.HasSourceTable &&
@@ -21989,6 +22005,8 @@ public sealed partial class MainWindow : Window
 
     private async Task StageAddCloneSelectedTerrainAsync()
     {
+        if(_freshSceneDocument!=null&&_currentGeometry!=null&&!_currentGeometry.Polygons.Any(p=>!p.IsTerrainRemoved))
+        {AddFreshTerrainFromEmpty();return;}
         if (TryBlockId65UnsupportedTerrainMutation(_selectedTerrain, "Add Terrain Copy", structural: true))
             return;
 

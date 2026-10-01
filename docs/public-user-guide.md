@@ -1,4 +1,4 @@
-# Spyro Editor 1.0.1
+# Spyro Editor 1.0.2
 
 ## Start editing
 
@@ -37,6 +37,41 @@ The export dialog lets you choose whether **New Game** starts in Artisans or
 your authored level. Both current documents are included either way. Existing
 save games keep their saved level. One fresh level per project uses native slot
 65. Older experimental drafts stay separate and are preserved.
+
+## Clear the current level
+
+Choose **File → Start Blank in Current Level…** and review the confirmation.
+The editor saves your current work and a checked recovery snapshot before
+replacing the level with an empty scene and a small starting floor. The level
+keeps its place in the level picker. Other levels remain in the project.
+
+Use the same terrain and object tools to build the replacement. You can remove
+both starter-floor faces, save an empty draft, and use **Add Terrain** to begin
+again. Before export, place the player above a solid floor wide enough for
+Spyro to stand on. Export checks the whole starting footprint.
+
+**Recovery → Restore Before Clear** restores the saved scene from before the
+clear and preserves your replacement scene in the recovery folder. Recovery
+also works after reopening the project. If a recovery file was changed outside
+the editor, restore stops instead of overwriting it.
+
+**Create BIN** rebuilds the cleared level's terrain, collision, object storage
+and asset tables. Removed content frees actual game memory; player and engine
+resources remain. All saved replacements, ordinary level edits and the fresh
+level are included. Choose the New Game starting level in the export dialog.
+Use New Game for the first test; existing saves retain their collected states.
+
+Start Blank currently supports Artisans, Stone Hill, Town Square, Peace Keepers,
+Dry Canyon, Cliff Town, Magic Crafters, Beast Makers, Dream Weavers and Gnasty's
+World, plus the fresh authored level. Other level slots are not yet supported.
+Clearing does not recycle old collectible identities or create a portal network.
+A cleared Town Square and the separate fresh level cannot currently be exported
+together; restore Town Square before combining it with the fresh level.
+
+Untextured terrain is split internally into smaller triangles for reliable
+visibility near Spyro. Your editable faces stay intact. The combined generated
+terrain must fit the game's 255-triangle limit. If an exact split is impossible,
+export explains which geometry needs simplifying.
 
 ## Add or remove Mobys
 

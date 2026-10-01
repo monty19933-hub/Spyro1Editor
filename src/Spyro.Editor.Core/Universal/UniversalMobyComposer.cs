@@ -112,7 +112,9 @@ public static class UniversalMobyComposer
         Func<IReadOnlySet<int>, IEnumerable<(long Offset, int Length)>>? protectedVramAfterDrop = null,
         Func<int, byte[]>? sharedModelPackage = null,
         Func<NativePlayerAnimationSource>? playerAnimationSource = null,
-        bool removedTreasureAlreadyApplied = false)
+        bool removedTreasureAlreadyApplied = false,
+        int? persistentNativePrefixRows = null,
+        UniversalOverlay? nativeDestinationOwner = null)
     {
         if (placements.Count == 0 && removedRows is not { Count: > 0 }) throw new ArgumentException("No placements or permanent removals were supplied.");
         int incomingCount = placements.Count;
@@ -135,11 +137,21 @@ public static class UniversalMobyComposer
         var permanentlyRemoved = UniversalRowRemoval.Normalize(nativeRowsBefore, removedRows);
         // Capture before dropped classes become inert and packages/rows move.
         int removedKnownTreasure = permanentlyRemoved.Sum(row => TreasureValue(dest.Row(row)));
-        int[] saveRows = placements.Select((p, i) => checked(nativeRowsBefore + (p.PersistentSlot ?? incomingOrder[i]))).ToArray();
+        int savePrefix = persistentNativePrefixRows ?? nativeRowsBefore;
+        if (persistentNativePrefixRows != null &&
+            (nativeRowsBefore != 0 || savePrefix is < 0 or > 256 ||
+             savePrefix != source(destination.Key).Data.Scene().RowCount))
+            throw new InvalidDataException("A rebuilt empty level must retain its exact original native save prefix.");
+        int[] saveRows = placements.Select((p, i) => checked(savePrefix + (p.PersistentSlot ?? incomingOrder[i]))).ToArray();
         if (saveRows.Any(i => i > 255)) throw new InvalidDataException("An active placement's lifetime save identity exceeds the native 256-bit level bitmap; retired identities cannot be reused on existing cards.");
         byte[] exe = executable.ToArray();
         var bindings = UniversalExeBindings.Read(exe, destination.LevelId);
         UniversalOverlay destOverlay = new(destinationOverlay.ToArray(), bindings);
+        if (nativeDestinationOwner != null &&
+            (!nativeDestinationOwner.Bytes.SequenceEqual(destinationOverlay) ||
+             nativeDestinationOwner.Update != destOverlay.Update || nativeDestinationOwner.Init != destOverlay.Init ||
+             nativeDestinationOwner.CopyBuffer != destOverlay.CopyBuffer))
+            throw new InvalidDataException("The rebuilt level's native behavior owner differs from its actual prepared host.");
         uint originalEnd = RuntimeEnd(dest, destOverlay.CopyBuffer);
         var destSwitch = UniversalDispatchAnalysis.FindUpdateSwitch(destOverlay);
         bool DestHandles(int c) => UniversalDispatchAnalysis.Handles(destOverlay, destSwitch, c);
@@ -464,7 +476,7 @@ public static class UniversalMobyComposer
             var classMaps = classes.GroupBy(k => k.Key.Source).ToDictionary(g => g.Key,
                 g => (IReadOnlyDictionary<int, int>)g.ToDictionary(k => k.Key.Class, k => k.Value.DestinationClass));
             var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps, remapSaveRows, nativeExecutable: exe,
-                nativeDestinationOwner: originalDestination.Overlay);
+                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay);
             uint newCopy = (uint)((baseAddress + bundle.Code.Length + 15) & ~15);
             int keep = (int)(copyBuffer - UniversalOverlay.Base);
             byte[] ov = new byte[UniversalLevelData.Align((int)(newCopy - UniversalOverlay.Base), 0x800)];
@@ -499,7 +511,7 @@ public static class UniversalMobyComposer
         // Enemy collision masks can select level-local Spyro hurt animations. They are
         // separate from the enemy model and must travel with the dependency closure.
         List<UniversalPlayerAnimationImport> playerAnimationImports = [];
-        foreach (var donorGroup in ordered.Where(o => !string.Equals(o.Source, destination.Key, StringComparison.OrdinalIgnoreCase))
+        foreach (var donorGroup in ordered.Where(o => nativeDestinationOwner != null || !string.Equals(o.Source, destination.Key, StringComparison.OrdinalIgnoreCase))
             .GroupBy(o => o.Source))
         {
             var donor = source(donorGroup.Key);

@@ -1,31 +1,14 @@
-# Spyro Editor 1.0.1
+# Spyro Editor 1.0.2
 
-## Changes since Spyro Editor 1.0
+## Changes since Spyro Editor 1.0.1
 
-- Expanded cross-level object support through verified native class lookups,
-  initializer roles and dependency recovery.
-- Imported missing player reaction animations with foreign enemies. The Alpine
-  Ridge Druid now damages Spyro and allows normal recovery in the Artisans test;
-  its animation memory is included in fit checks and removal suggestions.
-- Fixed a game hang caused by unused slots left after permanent object removal.
-- Fixed imported gems awarding zero and producing incorrect collection effects.
-  All five native values passed collection, ordinary card save and cold Load
-  Game in Artisans, retaining the correct combined total of 43.
-  Final Artisans and fresh-level retakes also confirm that collection sparkles
-  disappear normally and inventory totals match the exported gems.
-- Expanded verified child-spawn argument recovery without admitting ambiguous
-  object or particle dependencies.
-- Made **Only what fits here** show completed successful checks and refresh
-  compatibility details after checking a source variant.
-- Fixed fresh levels refusing their second object. Fresh scenes now allocate
-  storage for each placed object while retaining the required 16 dynamic slots
-  and the normal memory checks.
-- Corrected imported gem treasure targets and permanent-removal accounting.
-  The export summary now reports the final target written into the game.
+- Add **File → Start Blank in Current Level** for ten supported ordinary levels and the fresh authored level. Confirmation saves a checked recovery snapshot before clearing; **Restore Before Clear** works after reopening the project.
+- Keep cleared levels in the ordinary level picker and shared terrain/object editor. Include a safe player start and removable starter floor, allow empty drafts, and verify a complete floor beneath the player before export.
+- Rebuild cleared terrain, collision, object rows and asset tables so removed content releases real capacity. Preserve engine resources and retired collectible identities.
+- Combine saved cleared levels, ordinary edits and the fresh level in normal **Create BIN**. Choose the New Game starting level; read back the completed image before publishing its BIN/CUE pair.
+- Correct authored terrain face-cache ownership, subdivide large untextured faces internally, enable native textured clipping and encode sloped collision with the native Z format. Editable faces remain intact.
+- Keep Previous/Next navigation correct after clearing. Label authored-scene reload accurately and protect source discs from aliased temporary paths.
 
-Universal gameplay coverage remains incomplete. See the supported-scope document
-for tested interactions and the game's resource limits.
+Start Blank supports Artisans, Stone Hill, Town Square, Peace Keepers, Dry Canyon, Cliff Town, Magic Crafters, Beast Makers, Dream Weavers and Gnasty's World. Other ordinary level slots remain unsupported. Cleared Town Square and the separate fresh level cannot share one export. Native geometry, memory and save-identity limits remain.
 
-Terrain editing, normal combined BIN/CUE export, camera-preserving removal and
-eye-free eggs from V1.0 remain included. Fly Anywhere remains deferred. No game
-image, firmware, emulator, memory card or extracted game assets are included.
+Full universal Moby gameplay coverage is unfinished. Fly Anywhere remains deferred. The local macOS package is Developer ID signed but not notarized; Windows packaging does not establish Windows runtime acceptance. See the included user guide and limitations for the current supported scope.

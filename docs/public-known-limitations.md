@@ -1,4 +1,4 @@
-# Spyro Editor 1.0.1 — supported scope and limitations
+# Spyro Editor 1.0.2 — supported scope and limitations
 
 - Cross-level imports have broader class remapping and dependency support, but
   **all Mobys working in all levels is not complete**. Static composition does
@@ -18,13 +18,24 @@
   This verifies those exact variants and destination, not every source/level pair.
 - Fresh levels use the regular editor and normal Create BIN, with authored
   geometry, collision, static native materials and Mobys. This build supports
-  one fresh level in slot 65, at most 255 triangles, and the native coordinate,
+  one fresh level in slot 65, at most 255 generated triangles, and the native coordinate,
   collision and memory limits. Vertices use whole editor units; collision vertices
-  must stay within the native relative-coordinate range. Split larger faces if
-  the exporter requests it.
+  must stay within the native relative-coordinate range. Untextured faces are subdivided
+  internally into whole-unit triangles no wider than 64 units per axis. Exact
+  subdivision can require more triangles than the visible editor faces;
+  unsupported shapes or excessive totals are refused.
   A fresh level does not automatically receive a portal network or campaign.
   Multiple placed objects retain the native dynamic-object reserve. A six-object
   scene passed collection, jumping and landing with 43/43 gems and one egg.
+- **Start Blank in Current Level** saves a recovery snapshot and replaces terrain,
+  collision and placed objects with an editable starter floor. It supports
+  Artisans, Stone Hill, Town Square, Peace Keepers, Dry Canyon, Cliff Town, Magic
+  Crafters, Beast Makers, Dream Weavers and Gnasty's World, plus the fresh level.
+  Other slots remain unsupported. Cleared Town Square and the separate fresh
+  level share game initialization storage and cannot be combined in one export.
+  Player/companion models, the engine overlay, shared sound and particle support
+  remain; this is not a proof of the smallest possible engine footprint.
+  Recovery works after reopening. Old collected-state identities remain retired.
 - Existing-level terrain supports guarded XYZ edits, face copying, face removal
   and texture painting through the shared editor controls. Close and distant
   geometry, visibility and native collision are updated together. Native

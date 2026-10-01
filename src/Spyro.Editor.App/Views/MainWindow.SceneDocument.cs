@@ -17,7 +17,7 @@ namespace Spyro.Editor.App.Views;
 public sealed partial class MainWindow
 {
     private SceneDocument? _freshSceneDocument;
-    private Task<NativeFreshMainCompilation>? _freshNativeCompilation;
+    private Task<INativeAuthoredCompilation>? _freshNativeCompilation;
     private string? _freshNativeCompilationKey;
     private string? _savedFreshSettingsSignature;
     private readonly HashSet<TerrainPolygon> _freshAddedFaces = [];
@@ -32,12 +32,13 @@ public sealed partial class MainWindow
         _syncingLevelSelection=true;
         try
         {
-            var levels=authored==null?_catalog.Levels.ToList():_catalog.Levels.Append(authored).ToList();
+            var levels=_catalog.Levels.Select(l=>authored!=null&&l.Key==authored.Key?authored:l).ToList();
+            if(authored!=null&&!levels.Any(l=>l.Key==authored.Key))levels.Add(authored);
             _levelList.ItemsSource=levels;_levelJumpBox.ItemsSource=levels;
         }
         finally{_syncingLevelSelection=false;}
     }
-    private string FreshScenePath => Path.Combine(_workspace.RootPath,SceneDocument.FileName);
+    private string FreshScenePath => SceneDocumentStore.PathForTarget(_workspace.RootPath,_freshSceneDocument?.TargetBinding?.LevelKey??"authored65");
     internal SceneDocument? FreshSceneForTesting => _freshSceneDocument == null || _currentGeometry == null ? null : CaptureFreshScene();
 
     private async Task NewMainLevelAsync()
@@ -50,9 +51,10 @@ public sealed partial class MainWindow
 
     private async Task OpenMainFreshLevelAsync()
     {
-        if(!File.Exists(FreshScenePath)){_statusText.Text="No authored level is saved in this project. Choose File > New Level.";return;}
+        string path=SceneDocumentStore.PathForTarget(_workspace.RootPath,"authored65");
+        if(!File.Exists(path)){_statusText.Text="No authored level is saved in this project. Choose File > New Level.";return;}
         if ((HasUnsavedTerrainEdits() || HasUnsavedMobyEdits()) && !await SaveCurrentEditsAsync()) return;
-        ApplyFreshScene(SceneDocument.Read(FreshScenePath));
+        ApplyFreshScene(SceneDocument.Read(path));
         _statusText.Text="Opened the saved authored level in the main editor.";
 
     }
@@ -63,7 +65,7 @@ public sealed partial class MainWindow
         _freshSceneDocument=document with { OriginalSurfaces=document.Surfaces,LevelSourceEntry=key=>_retailCatalog.FindByKey(key)?.SourceWadEntry??throw new InvalidDataException("Unknown material source level.") };
         _freshAddedFaces.Clear();
         _freshNativeCompilation=null;_freshNativeCompilationKey=null;
-        _currentLevel=SceneDocument.NativeTarget(document.Name);
+        _currentLevel=document.ResolveTarget(_retailCatalog);
         BindFreshLevelPickerOption(_currentLevel);SyncLevelPickers(_currentLevel);
         _currentGeometry=document.ProjectGeometry();_currentMobys=document.ProjectObjects();
         _savedFreshSettingsSignature=FreshSettingsSignature();
@@ -76,7 +78,7 @@ public sealed partial class MainWindow
         _terrainCollisionMatchedFaces=_currentGeometry.Polygons.Count;
         _terrainCollisionReadinessMessage="Authored triangles: native collision is compiled with their current geometry.";
         ConfigureCompleteTerrainEditing();
-        _viewport.SetLevelEntryPose(new PortableLevelEntryPose(_currentLevel.Key,document.Name,65,80,0,
+        _viewport.SetLevelEntryPose(new PortableLevelEntryPose(_currentLevel.Key,document.Name,_currentLevel.LevelId,_currentLevel.SourceWadEntry,0,
             (int)(document.Spawn.X*16),(int)(document.Spawn.Y*16),(int)(document.Spawn.Z*16),document.Heading,16));
         _viewport.SetViewMode(ViewportViewMode.Fly3D);_viewport.RefreshFlyCameraForLoadedLevel();
         _viewport.EmptyMessage="File > New Level creates an authored floor in this viewport.";
@@ -97,6 +99,9 @@ public sealed partial class MainWindow
         try
         {
             var snapshot=CaptureFreshScene();
+            string targetKey=snapshot.TargetBinding?.LevelKey??"authored65";
+            if(StartBlankRecoveryStore.Read(_workspace.RootPath,targetKey)!=null)
+                snapshot=snapshot with{Ledger=StartBlankRecoveryStore.SaveLifetime(_workspace.RootPath,targetKey,snapshot.Ledger,snapshot.TargetBinding?.NativePrefixRows??0)};
             string path=FreshScenePath;
             string settingsSignature=(_freshSceneDocument! with { Ledger=snapshot.Ledger }).Fingerprint();
             string terrainSignature=BuildTerrainEditSignature(_currentGeometry),mobySignature=BuildMobyEditSignature(_currentMobys);
@@ -109,7 +114,7 @@ public sealed partial class MainWindow
             _statusText.Text=$"Saved {snapshot.Name}: {snapshot.Surfaces.Count} authored faces, {snapshot.Objects.Count(o=>!o.Value.IsRemoved)} objects.";
             RefreshCurrentLevelDetails();return true;
         }
-        catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException)
+        catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException or System.Text.Json.JsonException)
         {_statusText.Text="Authored scene save failed: "+e.Message;return false;}
     }
 
@@ -133,7 +138,20 @@ public sealed partial class MainWindow
         _statusText.Text="Added a terrain face. Move or sculpt it, then Save Level and Create BIN.";
         return face;
     }
-    private Task<NativeFreshMainCompilation> CaptureFreshNativeAsync()
+    private void AddFreshTerrainFromEmpty()
+    {
+        if(_freshSceneDocument==null||_currentGeometry==null)return;
+        float x=Math.Clamp(MathF.Round(_freshSceneDocument.Spawn.X-32),0,16255),y=Math.Clamp(MathF.Round(_freshSceneDocument.Spawn.Y-32),0,16255);
+        float z=MathF.Max(0,MathF.Round(_freshSceneDocument.Spawn.Z-32));
+        var face=new AuthoredSurface(Guid.NewGuid().ToString("N"),[new(x,y,z),new(x+128,y,z),new(x,y+128,z)],new(128,96,64),null);
+        var extended=_freshSceneDocument with{Surfaces=_freshSceneDocument.Surfaces.Append(face).ToArray()};extended.Validate();
+        var projection=extended.ProjectGeometry();var added=projection.Polygons[^1];_freshSceneDocument=extended;
+        _currentGeometry.Polygons.Add(added);_currentGeometry.Bounds=projection.Bounds;_freshAddedFaces.Add(added);
+        _selectedTerrain=added;_selectedTerrainIndex=_currentGeometry.Polygons.Count-1;
+        _viewport.NotifyTerrainPresentationDataChanged();ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex,added));
+        RefreshCurrentLevelDetails();RefreshTerrainReadinessHint();_statusText.Text="Added a terrain face beneath the player start. Move or edit it, then Save Terrain.";
+    }
+    private Task<INativeAuthoredCompilation> CaptureFreshNativeAsync()
     {
         var scene=CaptureFreshScene() with {Objects=[],Ledger=UniversalPlacementLedger.Empty};
         string sourceImage = ResolveUniversalSourceDisc();
@@ -143,15 +161,17 @@ public sealed partial class MainWindow
         {
             _freshNativeCompilationKey=key;
             string baseline=Path.Combine(_workspace.RootPath,"_local","authored-native",scene.Id+"-"+scene.Fingerprint()+".bin");
-            _freshNativeCompilation=Task.Run(async () =>
+            _freshNativeCompilation=Task.Run<INativeAuthoredCompilation>(async () =>
             {
                 var flight = _releaseMode ? null : await NativeFreeFlightCompositionPlan.CaptureAsync(sourceImage, flightEnabled);
-                return await NativeFreshMainCompilation.CaptureAsync(sourceImage,scene,baseline,flight:flight);
+                return scene.TargetBinding==null
+                    ? await NativeFreshMainCompilation.CaptureAsync(sourceImage,scene,baseline,flight:flight)
+                    : await NativeClearedLevelCompilation.CaptureAsync(sourceImage,scene,_retailCatalog,baseline);
             });
         }
         return _freshNativeCompilation;
     }
-    private (UniversalComposeResult? Result,string? Error) DryRunFresh(NativeFreshMainCompilation compilation,UniversalSourceLibrary library,
+    private (UniversalComposeResult? Result,string? Error) DryRunFresh(INativeAuthoredCompilation compilation,UniversalSourceLibrary library,
         IReadOnlyList<UniversalMobyPlacement> placements,Func<string,UniversalSpecialAsset?>? special)
     {try{return(compilation.Compose(library,placements,special),null);}catch(Exception e)when(e is IOException or InvalidDataException){return(null,e.Message);}}
 
@@ -160,57 +180,58 @@ public sealed partial class MainWindow
         bool authoredActive=_freshSceneDocument!=null;
         if(authoredActive?!await SaveFreshSceneAsync():!await SaveCurrentEditsAsync())return;
         var owner=CaptureSourceDiscOperationIdentity();
-        string workspacePath=_workspace.RootPath,scenePath=FreshScenePath;
-        string original=ResolveUniversalSourceDisc();
+        string workspacePath=_workspace.RootPath, original=ResolveUniversalSourceDisc();
         string? imageSelection=_discImagePathBox.Text,skySelection=_skyboxDiscImagePathBox.Text;
         var flightIntent=_releaseMode?null:NativeFreeFlightProjectExportIntent.Capture(workspacePath);
-        var saved=SceneDocument.Read(FreshScenePath);
-        bool? startInAuthoredLevel=await ShowProjectExportScopeAsync(saved,authoredActive);
-        if(startInAuthoredLevel==null){_statusText.Text="BIN creation canceled.";return;}
+        var saved=SceneDocumentStore.ReadAll(workspacePath,_retailCatalog);
+        var fingerprints=saved.ToDictionary(s=>s.ResolveTarget(_retailCatalog).Key,s=>s.Fingerprint());
+        int? startLevelId=await ShowAuthoredProjectExportScopeAsync(saved,authoredActive?_currentLevel!.LevelId:10);
+        if(startLevelId==null){_statusText.Text="BIN creation canceled.";return;}
         void RequireOwner()
         {
             if(!IsCurrentSourceDiscOperationIdentity(owner)||imageSelection!=_discImagePathBox.Text||skySelection!=_skyboxDiscImagePathBox.Text||
-                authoredActive&&CaptureFreshScene().Fingerprint()!=saved.Fingerprint()||SceneDocument.Read(scenePath).Fingerprint()!=saved.Fingerprint())
-                throw new InvalidDataException("The authored project, scene, source selection or saved revision changed during export.");
+                authoredActive&&CaptureFreshScene().Fingerprint()!=fingerprints[_currentLevel!.Key])
+                throw new InvalidDataException("The project, scene or source selection changed during export.");
+            var current=SceneDocumentStore.ReadAll(workspacePath,_retailCatalog);
+            if(current.Count!=saved.Count||current.Any(s=>!fingerprints.TryGetValue(s.ResolveTarget(_retailCatalog).Key,out var hash)||hash!=s.Fingerprint()))
+                throw new InvalidDataException("A saved authored level changed during export. Save and create the BIN again.");
             flightIntent?.RequireCurrent(workspacePath);
             if(TryGetFreeFlightSettingsExportBlockReason(out string reason))throw new InvalidDataException(reason);
             if(TryGetId65BlankLabNormalCreateBinBlockReason(out reason))throw new InvalidDataException(reason);
         }
         RequireOwner();
-        ReportCreateBinProgress("Compiling level…","Create BIN: compiling authored geometry, collision, materials and spawn…");
-        var compilation=authoredActive?await CaptureFreshNativeAsync():await Task.Run(async()=>
-        {
-            var scene=saved with{Objects=[],Ledger=UniversalPlacementLedger.Empty};
-            var flight=_releaseMode?null:await NativeFreeFlightCompositionPlan.CaptureAsync(original,flightIntent?.Enabled==true);
-            return await NativeFreshMainCompilation.CaptureAsync(original,scene,
-                Path.Combine(workspacePath,"_local","authored-native",scene.Id+"-"+scene.Fingerprint()+".bin"),flight:flight);
-        });
-        RequireOwner();
+        foreach(var scene in saved)NativeAuthoredSpawn.RequireSupported(scene);
         var(_,donors,_)=await EnsureUniversalCatalogAsync();var japanese=ResolveUniversalJapaneseSource();
         RequireOwner();
-        var objects=saved.ProjectObjects();
-        var placements=PlacementsFor(saved.ReconcileLedger(objects),objects);
+        var plans=saved.Select(scene=>
+        {
+            var objects=scene.ProjectObjects();
+            return new NativeAuthoredExportScene(scene,PlacementsFor(scene.ReconcileLedger(objects),objects));
+        }).ToArray();
         string outputFolder=Path.Combine(workspacePath,"output");Directory.CreateDirectory(outputFolder);
         CombinedTestBinResult? retail=null;
         var targets=FindEditedLevelExportTargets();
         if(targets.Count>0)
         {
-            ReportCreateBinProgress("Merging saved levels…","Create BIN: composing the project's saved retail edits before the authored level…");
+            ReportCreateBinProgress("Merging saved levels…","Create BIN: composing saved changes from the other levels…");
             retail=await CreateSavedEditsStageAsync(original,DiscImageLocator.FindCueForImage(original),
                 Path.Combine(workspacePath,"_local","authored-aggregate",Guid.NewGuid().ToString("N")),targets,true);
-            if(retail.SkippedEdits>0)throw new InvalidDataException("The authored aggregate refuses saved retail edits without an export route: "+string.Join("; ",retail.SkippedEditDetails));
+            if(retail.SkippedEdits>0)throw new InvalidDataException("Saved changes could not be included: "+string.Join("; ",retail.SkippedEditDetails));
             RequireOwner();
         }
+        ReportCreateBinProgress("Building levels…","Create BIN: rebuilding geometry, collision, objects and assets…");
         string output=Path.Combine(outputFolder,"Spyro Editor - Authored Level.bin");
-        string hash=await Task.Run(()=>compilation.ExportAsync(donors,placements,japanese,output,workspacePath,_retailCatalog,
-            requireDocumentCurrent: () => Dispatcher.UIThread.InvokeAsync(RequireOwner).GetAwaiter().GetResult(),
-            stagedRetailImage:retail?.WroteImage==true?retail.OutputImagePath:null,retailEggs:retail?.ActiveDragonflyEggs,retailSignLevels:retail?.SignLevelKeys,
-            retailNames:retail?.DeferredLevelNames,startInAuthoredLevel:startInAuthoredLevel.Value));
+        string hash=await Task.Run(async()=>
+        {
+            var flight=_releaseMode?null:await NativeFreeFlightCompositionPlan.CaptureAsync(original,flightIntent?.Enabled==true);
+            return await NativeAuthoredProjectExporter.ExportAsync(donors,_retailCatalog,plans,japanese,output,workspacePath,startLevelId.Value,
+                requireCurrent:()=>Dispatcher.UIThread.InvokeAsync(RequireOwner).GetAwaiter().GetResult(),
+                stagedRetailImage:retail?.WroteImage==true?retail.OutputImagePath:null,retailEggs:retail?.ActiveDragonflyEggs,
+                retailSignLevels:retail?.SignLevelKeys,retailNames:retail?.DeferredLevelNames,flight:flight);
+        });
         RequireOwner();
-        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in "+
-            (startInAuthoredLevel.Value?saved.Name:"Artisans")+
-            (retail?.WroteImage==true?$"; saved edits from {retail.PatchedLevelNames.Count} existing levels are included":"")+
-            "."+PreservedResearchExportNote();
+        string startName=saved.FirstOrDefault(s=>s.ResolveTarget(_retailCatalog).LevelId==startLevelId)?.Name??"Artisans";
+        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. All saved level replacements and other saved edits are included."+PreservedResearchExportNote();
     }
 
     private Control BuildFreshDocumentSettings()
@@ -234,17 +255,18 @@ public sealed partial class MainWindow
         if(_homeworldTextGroup!=null)_homeworldTextGroup.IsVisible=_freshSceneDocument==null;
         _terrainPlayableOnlyBox.IsVisible=_terrainBrushSafetyText.IsVisible=_freshSceneDocument==null;
         if(_freshSceneDocument is not { } scene)return;
-        _freshSettingsPanel.Children.Add(NewSmallNote("Your level opens when you choose New Game in the exported game."));
-        TextBox name=new(){Name="FreshMainLevelName",Text=scene.Name,MaxLength=19};
+        _freshSettingsPanel.Children.Add(NewSmallNote(_freshSceneDocument.TargetBinding==null?"Your level opens when you choose New Game in the exported game.":"This blank scene replaces the current level in your exported game."));
+        int maximumNameLength=scene.TargetBinding==null?19:_textTargets.FindForLevel(_currentLevel!)?.MaxLength??19;
+        TextBox name=new(){Name="FreshMainLevelName",Text=scene.Name,MaxLength=maximumNameLength};
         name.TextChanged+=(_,_)=>
         {
-            if(!TextTargetCatalog.IsSafeReplacement(name.Text??"",19))return;
+            if(!TextTargetCatalog.IsSafeReplacement(name.Text??"",maximumNameLength))return;
             bool flightDraft=_freeFlightDraft;
-            _freshSceneDocument=_freshSceneDocument! with{Name=name.Text!};_currentLevel=SceneDocument.NativeTarget(name.Text!);
+            _freshSceneDocument=_freshSceneDocument! with{Name=name.Text!};_currentLevel=_freshSceneDocument.ResolveTarget(_retailCatalog);
             BindFreshLevelPickerOption(_currentLevel);SyncLevelPickers(_currentLevel);RefreshFreeFlightSettingsEditor(_currentLevel);
             _freeFlightEnabled.IsChecked=flightDraft;RefreshCurrentLevelDetails();
         };
-        _freshSettingsPanel.Children.Add(new TextBlock{Text="Level name (up to 19 letters, spaces or apostrophes)"});_freshSettingsPanel.Children.Add(name);
+        _freshSettingsPanel.Children.Add(new TextBlock{Text=$"Level name (up to {maximumNameLength} letters, spaces or apostrophes)"});_freshSettingsPanel.Children.Add(name);
         Grid spawnGrid=new(){ColumnDefinitions=new("*,*,*"),ColumnSpacing=6};
         TextBox[] spawn=new[]{scene.Spawn.X,scene.Spawn.Y,scene.Spawn.Z}.Select((v,i)=>new TextBox{Name="FreshMainSpawn"+"XYZ"[i],Text=v.ToString(CultureInfo.InvariantCulture)}).ToArray();
         for(int i=0;i<3;i++){Grid.SetColumn(spawn[i],i);spawnGrid.Children.Add(spawn[i]);}
@@ -255,7 +277,7 @@ public sealed partial class MainWindow
             { _statusText.Text="Spawn needs whole editor units within 0..16383.";return; }
             _freshSceneDocument=_freshSceneDocument! with{Spawn=new(float.Parse(spawn[0].Text!,CultureInfo.InvariantCulture),float.Parse(spawn[1].Text!,CultureInfo.InvariantCulture),float.Parse(spawn[2].Text!,CultureInfo.InvariantCulture))};
             var point=_freshSceneDocument.Spawn;
-            _viewport.SetLevelEntryPose(new PortableLevelEntryPose(_currentLevel!.Key,_freshSceneDocument.Name,65,80,0,(int)point.X*16,(int)point.Y*16,(int)point.Z*16,_freshSceneDocument.Heading,16));
+            _viewport.SetLevelEntryPose(new PortableLevelEntryPose(_currentLevel!.Key,_freshSceneDocument.Name,_currentLevel.LevelId,_currentLevel.SourceWadEntry,0,(int)point.X*16,(int)point.Y*16,(int)point.Z*16,_freshSceneDocument.Heading,16));
             _statusText.Text="Spawn changed; Save Level records it with the geometry.";
         });
         applySpawn.Name="FreshMainSetSpawn";_freshSettingsPanel.Children.Add(applySpawn);

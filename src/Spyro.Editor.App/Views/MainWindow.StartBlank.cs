@@ -27,7 +27,7 @@ public sealed partial class MainWindow
     {
         if(_startBlankBusy||_createBinBusy||_regularEditorPersistenceBusy||_workspaceTransitionBusy||_loadingLevel)return;
         if(!CanStartBlankCurrentLevel())
-        { _statusText.Text="Start Blank supports normal levels and authored levels. Flight courses use a different native entry.";return; }
+        { _statusText.Text="Flight courses cannot be cleared. Select a normal level or an authored level.";return; }
         var level=_currentLevel!;string root=_workspace.RootPath;
         int faces=_currentGeometry?.Polygons.Count(p=>!p.IsTerrainRemoved)??0,objects=_currentMobys.Count(m=>!m.IsRemoved);
         bool accepted=await ShowStartBlankConfirmationAsync(level.DisplayName,faces,objects,false);
@@ -57,7 +57,7 @@ public sealed partial class MainWindow
                     UniversalSourceLibrary.RequireOriginal(image);
                     var source=new UniversalSourceLibrary(image,_retailCatalog);
                     try{_=NativeClearedRetailBinding.Prepare(source.Disc.Exe,source.Disc.Exe,level);}
-                    catch(InvalidDataException e){throw new InvalidDataException("Start Blank is not available for this level yet. Your saved level is unchanged. "+e.Message,e);}
+                    catch(InvalidDataException e){throw new InvalidDataException("Start Blank is not available for this level yet. Your saved level is unchanged. Try Artisans or another supported level listed in the user guide.",e);}
                     return source.Get(level.Key).Data.Scene().RowCount;
                 });
                 RequireCurrent();UniversalNativeLayoutStore.Validate(root,level.Key,nativeRows);

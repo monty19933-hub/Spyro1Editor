@@ -10,7 +10,7 @@ namespace Spyro.Editor.Core.Exporting;
 
 /// <summary>Source-bound native ID65 bootstrap plus the main editor's actual authored mesh.
 /// The retained player/resources are engine dependencies; no source level terrain or placed actors survive.</summary>
-public sealed class NativeFreshMainCompilation
+public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
 {
     private readonly byte[] _body, _overlay, _exe;
     private readonly string _baseline;
@@ -28,7 +28,8 @@ public sealed class NativeFreshMainCompilation
     public static async Task<NativeFreshMainCompilation> CaptureAsync(string originalUSA, SceneDocument document,
         string scratchBaselinePath, CancellationToken token=default, NativeFreeFlightCompositionPlan? flight=null)
     {
-        document.Validate();
+        ExportArtifactTransaction.RequireSourceSeparation(originalUSA,null,scratchBaselinePath);
+        NativeAuthoredSpawn.RequireSupported(document);
         var materials=document.Surfaces.Where(s=>s.Material!=null).Select(s=>s.Material!).Distinct().ToArray();
         byte[] mesh=NativeAuthoredMesh.Compile(document,materials);
         // Source-issued bootstrap captures the complete player, companion, native audio and zero-actor scene.
@@ -88,6 +89,7 @@ public sealed class NativeFreshMainCompilation
             staged.WriteImage(stage,wad,issued.DiscPlan.CopyExecutable());
             var read=UniversalDiscImage.Read(stage);
             if(!read.EntryBytes(80).AsSpan().SequenceEqual(body.Bytes))throw new InvalidDataException("Fresh native scene readback differs from authored output.");
+            ExportArtifactTransaction.RequireSourceSeparation(originalUSA,null,scratchBaselinePath);
             File.Move(stage,scratchBaselinePath,true);
             return new(document,scratchBaselinePath,body.Bytes,issued.DiscPlan.CopyOverlay(),issued.DiscPlan.CopyExecutable(),flight,issued.DiscPlan.Executable.SequentialStages);
         }
@@ -116,7 +118,7 @@ public sealed class NativeFreshMainCompilation
     public async Task<string> ExportAsync(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements,
         UniversalJapaneseSource? japanese,string outputImage,string identityWorkspace,LevelCatalog nativeCatalog,CancellationToken token=default,Action? requireDocumentCurrent=null,
         string? stagedRetailImage=null,IReadOnlyList<(int LevelIndex,int Row,int Colour)>? retailEggs=null,IReadOnlySet<string>? retailSignLevels=null,
-        IReadOnlyList<LevelTextReplacement>? retailNames=null,bool startInAuthoredLevel=true)
+        IReadOnlyList<LevelTextReplacement>? retailNames=null,bool startInAuthoredLevel=true,int? startLevelId=null)
     {
         if(Path.GetFullPath(outputImage)==Path.GetFullPath(donors.ImagePath))throw new InvalidDataException("Fresh export cannot replace its original source image.");
         ExportArtifactTransaction.RequireSourceSeparation(donors.ImagePath,null,outputImage,Path.ChangeExtension(outputImage,".cue"));
@@ -125,7 +127,8 @@ public sealed class NativeFreshMainCompilation
         var baseline=UniversalDiscImage.Read(stagedRetailImage??_baseline);
         byte[] stagedExe=stagedRetailImage==null?_exe.ToArray():MergeAuthoredExecutable(donors.Disc.Exe,baseline.Exe);
         NativeFreshTreasureTarget.RequireZeroBaseline(donors.Disc.Exe,stagedExe);
-        NativeFreshNewGameEntry.Apply(donors.Disc.Exe,stagedExe,startInAuthoredLevel);
+        if(startLevelId is {} chosen) NativeClearedRetailBinding.ApplyNewGameStart(donors.Disc.Exe,stagedExe,chosen);
+        else NativeFreshNewGameEntry.Apply(donors.Disc.Exe,stagedExe,startInAuthoredLevel);
         var compose=placements.Count == 0 ? null : ComposeWithExecutable(donors,placements,stagedExe,UniversalMobyExport.SpecialProvider(japanese));
         byte[] levelData=compose?.LevelData ?? _body.ToArray(), overlayData=compose?.Overlay ?? _overlay.ToArray();
         List<(int LevelIndex,int Row,int Colour)> eggs=retailEggs?.ToList()??[];

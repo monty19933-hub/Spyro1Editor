@@ -13,16 +13,18 @@ public sealed partial class MainWindow
             ? " Older experimental drafts are preserved separately and are not included."
             : "";
 
-    private async Task<bool?> ShowProjectExportScopeAsync(SceneDocument authored, bool authoredActive)
+    private async Task<int?> ShowAuthoredProjectExportScopeAsync(IReadOnlyList<SceneDocument> scenes, int currentLevelId)
     {
         var targets = FindEditedLevelExportTargets();
         string existing = targets.Count == 0 ? "No saved changes to existing levels." :
             "Saved changes: " + string.Join(", ", targets.Select(t => t.Level.DisplayName)) + ".";
+        var choices = new[] { (Id:10, Name:scenes.FirstOrDefault(s=>s.TargetBinding?.LevelId==10)?.Name??"Artisans") }
+            .Concat(scenes.Where(s=>s.ResolveTarget(_retailCatalog).LevelId!=10).Select(s=>(Id:s.ResolveTarget(_retailCatalog).LevelId,Name:s.Name))).ToArray();
         var start = new ComboBox
         {
             Name = "ExportStartLevel", HorizontalAlignment = HorizontalAlignment.Stretch,
-            ItemsSource = new[] { "Original game — Artisans", authored.Name + " — authored level" },
-            SelectedIndex = authoredActive ? 1 : 0
+            ItemsSource = choices.Select(c=>c.Name).ToArray(),
+            SelectedIndex = Math.Max(0,Array.FindIndex(choices,c=>c.Id==currentLevelId))
         };
         var content = new StackPanel { Spacing = 12, Margin = new Thickness(22) };
         content.Children.Add(new TextBlock
@@ -32,13 +34,13 @@ public sealed partial class MainWindow
         content.Children.Add(new TextBlock
         {
             Name = "ExportIncludedLevels", TextWrapping = TextWrapping.Wrap,
-            Text = existing + "\nYour authored level, " + authored.Name + ", is also included."
+            Text = existing + "\nRebuilt levels: " + string.Join(", ",scenes.Select(s=>s.Name)) + "."
         });
         content.Children.Add(new TextBlock { Text = "New Game starts in" });
         content.Children.Add(start);
         content.Children.Add(new TextBlock
         {
-            Text = "Loading an existing game keeps its saved level. To visit your authored level directly, choose it above and start a New Game.",
+            Text = "Start a New Game to play the rebuilt layout from its safe player start. Loading an existing game keeps its previous collected state.",
             TextWrapping = TextWrapping.Wrap
         });
         string research = PreservedResearchExportNote().Trim();
@@ -55,8 +57,8 @@ public sealed partial class MainWindow
         var create = new Button { Content = "Create BIN/CUE", Name = "ExportCreate" };
         StyleModernPrimaryButton(create, ModernBlue, 132);
         cancel.Click += (_, _) => dialog.Close(null);
-        create.Click += (_, _) => dialog.Close((bool?)(start.SelectedIndex == 1));
+        create.Click += (_, _) => dialog.Close((int?)choices[start.SelectedIndex].Id);
         actions.Children.Add(cancel); actions.Children.Add(create); content.Children.Add(actions);
-        return await dialog.ShowDialog<bool?>(this);
+        return await dialog.ShowDialog<int?>(this);
     }
 }

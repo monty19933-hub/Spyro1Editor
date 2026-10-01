@@ -455,7 +455,7 @@ public sealed partial class MainWindow
 
         UniversalSourceLibrary? lib = null;
         IReadOnlyList<UniversalMobyCatalogEntry> entries = [];
-        NativeFreshMainCompilation? freshCompilation = null;
+        INativeAuthoredCompilation? freshCompilation = null;
         UniversalCompositionHost? retailHost = null;
         NativeTerrainTexturePrivateRecordBatchRequest? retailPrivateRequest = null;
         System.Collections.Concurrent.ConcurrentDictionary<string,Lazy<UniversalCompositionHost>> jointHosts = new();

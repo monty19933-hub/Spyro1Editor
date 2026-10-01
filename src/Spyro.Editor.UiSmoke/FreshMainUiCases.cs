@@ -281,31 +281,65 @@ internal static class FreshMainUiCases
         Check(document.Capture(geometry,[]).Surfaces.Count==1,"remove omits authored visual and collision surface");
         var ramp=document with{Surfaces=[document.Surfaces[0] with{Vertices=[new(528,528,544),new(656,528,560),new(528,656,544)]}]};
         var kernel=typeof(NativeFreshMainCompilation).Assembly.GetType("Spyro.Editor.Core.Exporting.NativeAuthoredMesh")!;
-        byte[] Compile(SceneDocument d)=>(byte[])kernel.GetMethod("Compile",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[d,Array.Empty<AuthoredMaterial>()])!;
-        byte[] bytes=Compile(ramp); int Word(int at)=>checked((int)BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(at)));
-        Check(Word(4)==1,"one actual sector per authored triangle");
-        int sector=Word(8)+4, ox=Word(sector+8)>>16, oy=Word(sector+8)&65535, oz=Word(sector+12)>>16;
-        var vertices=Enumerable.Range(0,3).Select(i=>{uint w=BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(sector+60+i*4));return new Vector3f(ox+(w>>21),oy+((w>>10)&2047),oz+(w&1023));}).ToArray();
-        Check(vertices.SequenceEqual(ramp.Surfaces[0].Vertices),"independent HP decoder retains ramp XYZ");
+        byte[] Compile(SceneDocument d)=>(byte[])kernel.GetMethod("Compile",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,
+            [d,d.Surfaces.Where(f=>f.Material!=null).Select(f=>f.Material!).Distinct().ToArray()])!;
+        int Word(byte[] data,int at)=>checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(at)));
+        Vector3f[] Vertices(byte[] data,int i)
+        {
+            int at=Word(data,8+i*4)+4,ox=Word(data,at+8)>>16,oy=Word(data,at+8)&65535,oz=Word(data,at+12)>>16;
+            return Enumerable.Range(0,3).Select(v=>{uint w=BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(at+60+v*4));
+                return new Vector3f(ox+(w>>21),oy+((w>>10)&2047),oz+(w&1023));}).ToArray();
+        }
+        byte[] bytes=Compile(ramp);int nativeCount=Word(bytes,4);
+        Check(nativeCount==4&&ramp.Surfaces.Count==1,"one editor triangle retains its identity while four bounded native triangles render it");
+        var nativeVertices=Enumerable.Range(0,nativeCount).Select(i=>Vertices(bytes,i)).ToArray();
+        Vector3f[] expected=[new(528,528,544),new(656,528,560),new(528,656,544),new(592,528,552),new(528,592,544),new(592,592,552)];
+        Check(nativeVertices.SelectMany(v=>v).ToHashSet().SetEquals(expected)&&
+            nativeVertices.All(v=>Enumerable.Range(0,3).All(axis=>v.Max(p=>axis==0?p.X:axis==1?p.Y:p.Z)-v.Min(p=>axis==0?p.X:axis==1?p.Y:p.Z)<=64)),
+            "independent HP decoder retains exact ramp corners and midpoint lattice within native direct-packet span");
+        double Area(Vector3f[] v)=>Math.Abs((v[1].X-v[0].X)*(v[2].Y-v[0].Y)-(v[1].Y-v[0].Y)*(v[2].X-v[0].X))/2;
+        Check(nativeVertices.Sum(Area)==8192,"generated triangle areas retain the complete original ramp footprint");
         ColorRgba[] near=[new(11,22,33),new(44,55,66),new(77,88,99)],far=[new(91,81,71),new(61,51,41),new(31,21,11)];
         byte[] shaded=Compile(ramp with{Surfaces=[ramp.Surfaces[0] with{NearColors=near,FarColors=far}]});
         ColorRgba DecodeColor(int at){uint rgb=BinaryPrimitives.ReadUInt32LittleEndian(shaded.AsSpan(at));return new((byte)rgb,(byte)(rgb>>8),(byte)(rgb>>16));}
-        Check(Enumerable.Range(0,3).Select(i=>DecodeColor(sector+84+i*4)).SequenceEqual(near)&&
-            Enumerable.Range(0,3).Select(i=>DecodeColor(sector+72+i*4)).SequenceEqual(far)&&
-            Enumerable.Range(0,3).Select(i=>DecodeColor(sector+40+i*4)).SequenceEqual(far),"native HP near/far and LP far consumers retain each authored vertex colour");
-        int collision=0;for(int i=0;i<3;i++)collision+=Word(collision);
-        int triangles=collision+4+Word(collision+20);
+        ColorRgba ExpectedColor(ColorRgba[] colors,Vector3f point)
+        {
+            double b=(point.X-528)/128,c=(point.Y-528)/128,a=1-b-c;
+            byte Channel(byte x,byte y,byte z)=>(byte)Math.Floor(a*x+b*y+c*z+0.5);
+            return new(Channel(colors[0].R,colors[1].R,colors[2].R),Channel(colors[0].G,colors[1].G,colors[2].G),Channel(colors[0].B,colors[1].B,colors[2].B));
+        }
+        Check(Enumerable.Range(0,nativeCount).All(i=>
+        {
+            int at=Word(shaded,8+i*4)+4;
+            return Enumerable.Range(0,3).All(v=>DecodeColor(at+84+v*4)==ExpectedColor(near,nativeVertices[i][v])&&
+                DecodeColor(at+72+v*4)==ExpectedColor(far,nativeVertices[i][v])&&DecodeColor(at+40+v*4)==ExpectedColor(far,nativeVertices[i][v]));
+        }),"native HP near/far and LP far consumers retain independent affine colour interpolation at all generated vertices");
+        int collision=0;for(int i=0;i<3;i++)collision+=Word(bytes,collision);
+        int triangles=collision+4+Word(bytes,collision+20);
         int Sign(int v)=>(v&256)!=0?v-512:v;
-        var xyz=Enumerable.Range(0,3).Select(axis=>{uint w=BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(triangles+axis*4));int a=(int)(w&16383);return new[]{a,a+Sign((int)(w>>14)&511),a+Sign((int)(w>>23)&511)};}).ToArray();
-        var collisionVertices=Enumerable.Range(0,3).Select(i=>new Vector3f(xyz[0][i],xyz[1][i],xyz[2][i])).ToArray();
-        Check(collisionVertices.ToHashSet().SetEquals(ramp.Surfaces[0].Vertices),"independent collision decoder matches ramp visual triangle");
+        Check(Word(bytes,collision+8)==nativeCount&&Enumerable.Range(0,nativeCount).All(i=>
+        {
+            var xyz=Enumerable.Range(0,3).Select(axis=>
+            {
+                uint w=BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(triangles+i*12+axis*4));int origin=(int)(w&16383);
+                return axis==2?new[]{origin,origin+(int)((w>>16)&255),origin+(int)(w>>24)}:
+                    new[]{origin,origin+Sign((int)(w>>14)&511),origin+Sign((int)(w>>23)&511)};
+            }).ToArray();
+            var vertices=Enumerable.Range(0,3).Select(v=>new Vector3f(xyz[0][v],xyz[1][v],xyz[2][v])).ToArray();
+            return vertices.ToHashSet().SetEquals(nativeVertices[i])&&vertices[0].Z==vertices.Min(v=>v.Z);
+        }),"independent native collision decoder matches every ramp triangle with unsigned Z byte deltas and minimum-Z cyclic origin");
         var quad=document with{Surfaces=[document.Surfaces[0] with{Vertices=[new(528,528,544),new(656,528,544),new(656,656,544),new(528,656,544)]}]};
-        Check(BinaryPrimitives.ReadInt32LittleEndian(Compile(quad).AsSpan(4))==2,"authored quad triangulates into two native sectors");
-        var wide=ramp with{Surfaces=[ramp.Surfaces[0] with{Vertices=[new(1,1,1),new(600,1,1),new(1,100,1)]}]};
+        Check(BinaryPrimitives.ReadInt32LittleEndian(Compile(quad).AsSpan(4))==8&&quad.Surfaces.Count==1,"one editor quad compiles to eight bounded native triangles");
+        var textured=ramp with{Surfaces=[ramp.Surfaces[0] with{Material=new AuthoredMaterial(10,66)}]};
+        byte[] texturedMesh=Compile(textured);int texturedSector=Word(texturedMesh,8)+4;
+        Check(Word(texturedMesh,4)==1&&Word(texturedMesh,texturedSector+108)==0&&Word(bytes,Word(bytes,8)+4+108)==128,
+            "textured terrain keeps native near-clipping flag while direct untextured packets use bounded lattice");
+        var wide=textured with{Surfaces=[textured.Surfaces[0] with{Vertices=[new(1,1,1),new(600,1,1),new(1,100,1)]}]};
         bool refused=false;try{_=Compile(wide);}catch(TargetInvocationException e)when(e.InnerException is InvalidDataException){refused=true;}
-        Check(refused,"collision range overflow refuses rather than truncates authored vertices");
-        Console.WriteLine("AUTHORED_MESH_CHECKS_OK: copy/remove, stable IDs, independent visual/collision ramp decode, near/far colours, quad and overflow");
+        Check(refused,"textured collision range overflow refuses rather than truncates authored vertices");
+        Console.WriteLine("AUTHORED_MESH_CHECKS_OK: copy/remove, stable IDs, exact lattice and ramp area, independent unsigned-Z collision decode, interpolated near/far colours, textured flags, quad and overflow");
     }
+
     private static void CreateBin(MainWindow window)
     {
         var task=(Task)Invoke(window,"CreateObjectTestBinAsync")!;

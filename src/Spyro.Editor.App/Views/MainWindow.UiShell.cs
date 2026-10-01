@@ -218,6 +218,8 @@ public sealed partial class MainWindow
         _toolbarOpenDiscImageButton = NewAsyncButton("Open BIN/CUE", ChooseSourceDiscImageAsync);
         StyleModernToolbarButton(_toolbarOpenDiscImageButton, 118);
         fileActions.Children.Add(BuildToolMenu("File", new ToolbarAction("New Level", NewMainLevelAsync),
+            new ToolbarAction("Start Blank in Current Level…", StartBlankCurrentLevelAsync),
+            new ToolbarAction("Restore Before Clear…", RestoreBeforeClearAsync),
             new ToolbarAction("Open Authored Level", OpenMainFreshLevelAsync),
             new ToolbarAction("Save Level", async () => { await SaveCurrentEditsAsync(); })));
         fileActions.Children.Add(_toolbarOpenDiscImageButton);
@@ -849,6 +851,8 @@ public sealed partial class MainWindow
         StackPanel recovery = new() { Spacing = 6, Margin = new Thickness(0, 6, 0, 0) };
         recovery.Children.Add(_objectUndoRemoveButton);
         recovery.Children.Add(_objectRestoreLevelButton);
+        var beforeClear=NewAsyncButton("Restore Before Clear…",RestoreBeforeClearAsync);beforeClear.Name="RestoreBeforeClear";
+        StyleModernSecondaryButton(beforeClear);recovery.Children.Add(beforeClear);
         panel.Children.Add(new Expander
         {
             Header = "Recovery",
