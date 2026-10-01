@@ -232,3 +232,59 @@ discs. It independently limits destination writes to the original descriptor
 and lettering bytes, checks original bound overlay bytes outside the exact
 class-9 JAL owners, and verifies unrelated callback bindings are retained.
 Its receipt is in `fixtures/portal-owner-matrix-r07/export-matrix.json`.
+
+The latest isolated runner also tests a source-issued fresh ID 65 baseline
+with a normal `UniversalMobyComposer` import of Stone Hill Return Home row
+177. It uses eight contiguous lifetime slots, retires slots 0..6, and retains
+logical slot 7, producing a real SMAP wrapper. Final routing preserves that
+map and independently binds Town Square and ID 65 to their different selected
+return endpoints. Two source-certified packets are patched in the fresh
+overlay: its dormant native Town packet and the imported Stone packet. The
+five distinct original packet signatures come from all 23 bounded class-9
+closures. Damaging a live Toasty packet refuses atomically. No fresh gameplay
+or persistence acceptance is claimed by these composition checks.
+
+This run passed 351 checks; its receipt is
+`fixtures/portal-fresh-integration-r07/fresh-source-integration.json`. The
+source-issued fresh baseline SHA-256 is
+`f1063ce9ce976da5bbe9619b3b60489ec21dfa7af5980ee0af903ef04107c35b`.
+Its final in-memory executable SHA-256 is
+`0b50fc6526bec19eba37642fc5b97db8752a2f643758c06c7c9d9b7c7365af28`.
+Core MVID is `c9a62ce6-03a0-49d3-b443-b3ffe1022e44`, Core SHA-256
+`258e725d624f9a3008c25a1ec98ef3a6bc87cb377861d84286698b9aa7b7df48`.
+The receipt includes the imported class, remapped class ID 509, resource
+report, physical-to-logical save rows, runtime end, packet signatures and
+separate Town/65 callback readbacks. `--fresh private-baseline-BIN` repeats it.
+
+For reachable emulator fixtures, `--near-portal routed-BIN` uses the normal
+source spawn control, saved Moby edits, and `MobySourcePatchExporter`. It
+changes Artisans' three spawn integers from `[84992,47104,9564]` to moved
+Stone's approach node `[99328,51948,9257]`, preserving heading 64. All 256 WAD
+entries and the executable are independently read back: only those 12 scene
+bytes may change. Portal plane/path controls and Toasty's moved vortex remain
+byte-identical. The approach XY is inside ordinary collision triangle 958,
+vertices `[6144,3200,414]`, `[6276,3334,419]`, `[6272,3200,418]`, flag 255.
+Interpolated floor raw Z is 6660.8843; the requested native node starts 162.26
+editor units above it, so this fixture deliberately starts with an ordinary
+fall. This is a source/export assertion, not a runtime landing assertion.
+
+Each convenience export passed 574 checks. Receipts are
+`fixtures/portal-toasty-approach-r01/approach-fixture.json`,
+`fixtures/portal-wizard-approach-r01/approach-fixture.json`, and
+`fixtures/portal-flight-approach-r01/approach-fixture.json`. Their BIN/CUE
+pairs are named `near-stone-portal`. The original r05 images are preserved.
+
+The full `--export` runner now applies the same spawn control before all four
+route fixtures, and passed 1,993 checks. Its receipts and BIN/CUE pairs are in
+`fixtures/portal-production-near-r01/`. Exact BIN SHA-256 values are:
+
+| Fixture | SHA-256 |
+| --- | --- |
+| stone-to-toasty | `06a91f146fcfb92a701756031a1cf4564d53e87c9fe011c33532a23e64b40f1a` |
+| duplicate-toasty-return-stone | `b9c46951861d3729d755656f9617a5344406d8c39edc20054d59849186ffc93d` |
+| stone-to-wizard | `d3d0d2abfc1be71c74a8a172bc87ffec132278f1b0df5f08d2cee258c70d2e22` |
+| stone-to-sunny-flight | `e38c8871102617136aa7901a3600bf8e4188fbe7552864cfb4ea8746a5f3d244` |
+
+The Toasty, Wizard and Sunny Flight hashes match the separately exported
+convenience candidates. Runtime control and gameplay acceptance remain with
+the root worker; this verification worker did not operate an emulator.

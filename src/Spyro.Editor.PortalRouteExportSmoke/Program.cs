@@ -7,7 +7,7 @@ using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Universal;
 
-if(args.Length is <3 or >4)throw new ArgumentException("original-USA catalog-workspace new-artifacts-directory [--matrix|--export]");
+if(args.Length is <3 or >5)throw new ArgumentException("original-USA catalog-workspace new-artifacts-directory [--matrix|--export|--fresh private-baseline-BIN|--near-portal routed-BIN]");
 args[0]=Path.GetFullPath(args[0]);args[1]=Path.GetFullPath(args[1]);args[2]=Path.GetFullPath(args[2]);
 if(Directory.Exists(args[2]))throw new IOException("Choose a new isolated artifact directory.");
 Directory.CreateDirectory(args[2]);
@@ -74,4 +74,5 @@ File.WriteAllText(Path.Combine(args[2],"source-store-checks.json"),JsonSerialize
     CoreModuleVersionId=typeof(UniversalMobyComposer).Module.ModuleVersionId,CoreModuleHash=Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(typeof(UniversalMobyComposer).Assembly.Location))),Portals=sourceReports,RuntimeTested=false},new JsonSerializerOptions{WriteIndented=true}));
 Console.WriteLine("PORTAL_ROUTE_SOURCE_STORE_CHECKS_OK checks="+checks);
 
+if(args.Length==5){if(args[3]=="--fresh")FreshVerification.Run(args[4],args[2],catalog,library,Check);else if(args[3]=="--near-portal")await ApproachVerification.Run(args[4],args[2],catalog,Check);else throw new ArgumentException("Unknown option");Console.WriteLine("PORTAL_ROUTE_EXTENDED_CHECKS_OK checks="+checks);}
 if(args.Length==4){if(args[3] is not ("--matrix" or "--export"))throw new ArgumentException("Unknown option");await ExportVerification.Run(args[0],args[2],catalog,library,Check,args[3]=="--export");Console.WriteLine("PORTAL_ROUTE_PRODUCTION_CHECKS_OK checks="+checks);}

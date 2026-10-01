@@ -128,6 +128,8 @@ static class ExportVerification
         double baryB=((toastyFloor.P3.Y-toastyFloor.P1.Y)*(px-toastyFloor.P3.X)+(toastyFloor.P1.X-toastyFloor.P3.X)*(py-toastyFloor.P3.Y))/den;
         check(baryA>=0&&baryB>=0&&1-baryA-baryB>=0&&15837-990*16==-3,"moved ReturnHome is inside proven floor with original -3raw offset");
         check(toastyFloor.FlagByte==255&&toastyFloor.P1.Z==990&&toastyFloor.P2.Z==990&&toastyFloor.P3.Z==990,"ordinary native Toasty floor proof");
+        string approachDirectory=Path.Combine(directory,"approach-source");Directory.CreateDirectory(approachDirectory);
+        moved=await ApproachVerification.Run(moved,approachDirectory,catalog,check);
         var fixtures=new List<object>();
         foreach(var (name,route) in new[]{("stone-to-toasty",PortalRouteDocument.Empty.WithDestination(stone,14,true)),("duplicate-toasty-return-stone",PortalRouteDocument.Empty.WithDestination(stone,14,true).WithDestination(town,14,false)),("stone-to-wizard",PortalRouteDocument.Empty.WithDestination(stone,33,true)),("stone-to-sunny-flight",PortalRouteDocument.Empty.WithDestination(stone,15,true))})
         {
