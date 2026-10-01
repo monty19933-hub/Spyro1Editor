@@ -1301,7 +1301,9 @@ public static class NativeTexturePageOwnershipScanner
             componentLength = checked((int)ReadUInt32(levelData, 0));
             textureCount = checked((int)ReadUInt32(levelData, 4));
             int expected = checked(8 + textureCount * (TerrainLowRecordBytes + TerrainHighRecordBytes));
-            if (textureCount <= 0 || componentLength != expected || componentLength > levelData.Length)
+            // Authored untextured levels issue the exact empty component: length 8, count 0.
+            // The same complete-record/bounds guards still reject malformed zero-count headers.
+            if (textureCount < 0 || componentLength != expected || componentLength > levelData.Length)
             {
                 failure = $"Terrain component length 0x{componentLength:X} does not match {textureCount} complete LQ/HQ records (expected 0x{expected:X}).";
                 return false;

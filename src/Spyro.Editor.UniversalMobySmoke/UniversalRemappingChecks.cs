@@ -28,6 +28,7 @@ internal static class UniversalRemappingChecks
         ClassificationOwnership(check);
         SimplePackageBounds(check);
         RowLinkReadback(check);
+        TerrainHeaderBounds(check);
         uint tight = UniversalMobyComposer.NormalBufferFloor - 700;
         check(UniversalMobyComposer.PreservesNativeRemovalBudget(1, 0, 0, tight, tight, tight),
             "delete-only with unchanged verified native resident end preserves an original sub-margin budget");
@@ -38,6 +39,31 @@ internal static class UniversalRemappingChecks
             !UniversalMobyComposer.PreservesNativeRemovalBudget(0, 0, 0, tight, tight, tight) &&
             !UniversalMobyComposer.PreservesNativeRemovalBudget(1, 0, 0, tight + 1, tight, tight),
             "mapped holes, new actors, unchanged scenes and unverified enlarged baselines retain the full RAM guard");
+    }
+
+    private static void TerrainHeaderBounds(Action<bool, string> check)
+    {
+        var read = typeof(NativeTexturePageOwnershipScanner).GetMethod("TryReadTerrainHeader",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        (bool Valid, int Count, int HighOffset) Probe(uint length, uint count, int available)
+        {
+            byte[] bytes = new byte[available];
+            if (available >= 4) BinaryPrimitives.WriteUInt32LittleEndian(bytes, length);
+            if (available >= 8) BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), count);
+            object?[] args = [bytes, 0, 0, null];
+            bool valid = (bool)read.Invoke(null, args)!;
+            return (valid, (int)args[1]!, (int)args[2]!);
+        }
+        check(Probe(8, 0, 8) == (true, 0, 8), "exact empty authored terrain component closes zero terrain descriptors");
+        check(Probe(8, 0, 24) == (true, 0, 8), "empty terrain component allows separately bounded following components");
+        check(!Probe(8, 0, 7).Valid, "truncated empty terrain header is refused");
+        check(!Probe(0, 0, 8).Valid && !Probe(4, 0, 8).Valid && !Probe(12, 0, 12).Valid,
+            "zero texture count only admits the exact eight-byte terrain component");
+        check(!Probe(8, uint.MaxValue, 8).Valid, "negative signed terrain count cannot enter empty-component ownership");
+        check(Probe(192, 1, 192) == (true, 1, 24), "one complete positive-count native LQ/HQ record remains accepted");
+        check(!Probe(8, 1, 192).Valid && !Probe(192, 1, 191).Valid,
+            "positive counts still require complete matching component length and available bytes");
+        check(!Probe(192, int.MaxValue, 192).Valid, "overflowing positive terrain record count remains refused");
     }
 
     private static void ClassificationOwnership(Action<bool, string> check)
