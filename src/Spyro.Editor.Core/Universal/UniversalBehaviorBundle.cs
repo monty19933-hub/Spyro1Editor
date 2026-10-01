@@ -25,6 +25,8 @@ public sealed record UniversalBehaviorSourceReport(string SourceLevelKey, IReadO
     public uint PlayerDamageMask { get; init; }
     public IReadOnlyList<UniversalPlayerDamageWrite> PlayerDamageWrites { get; init; } = [];
     public IReadOnlyList<uint> AllocatedClassReadSites { get; init; } = [];
+    public IReadOnlyList<uint> GemCollectionCallSites { get; init; } = [];
+    public int GemCollectionAdapterBytes { get; init; }
 }
 
 public sealed record UniversalBehaviorBundle(uint Base, byte[] Code, uint UpdateWrapper, uint InitWrapper,
@@ -44,7 +46,7 @@ public static class UniversalBehaviorBundleBuilder
     public static UniversalBehaviorBundle Build(UniversalOverlay destination,
         IReadOnlyList<(string SourceKey, UniversalOverlay Source, IReadOnlyList<int> Classes)> sources, uint baseAddress,
         IReadOnlyList<int>? dragonflyEggClasses = null, IReadOnlyList<int>? signClasses = null,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<int, int>>? classMaps = null, bool remapSaveRows = false)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<int, int>>? classMaps = null, bool remapSaveRows = false, byte[]? nativeExecutable = null)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
         int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
@@ -102,6 +104,8 @@ public static class UniversalBehaviorBundleBuilder
                 UniversalClassRemapping.RequireNoUnownedClassMemory(upd, false, s.Source);
                 UniversalClassRemapping.PatchConstantSpawns(upd, s.Source, map);
             }
+            string gemLabel = "gem_collect_" + s.SourceKey;
+            List<uint> gemCalls = [.. UniversalGemCollectionAdapter.PatchCalls(upd, s.Source, map, gemLabel, nativeExecutable)];
             parts.Add(upd);
             List<UniversalPlayerDamageWrite> playerDamageWrites = [.. UniversalPlayerDamageWrites.AnalyzeOverlay(s.Source,
                 new SortedSet<uint>(upd.Items.Where(i => i.Word != null && (i.SourcePc ?? i.Orig) != null).Select(i => (i.SourcePc ?? i.Orig)!.Value))).Writes];
@@ -123,9 +127,16 @@ public static class UniversalBehaviorBundleBuilder
                 UniversalClassRemapping.PatchConstantSpawns(init, s.Source, map);
                 playerDamageWrites.AddRange(UniversalPlayerDamageWrites.AnalyzeOverlay(s.Source,
                     new SortedSet<uint>(init.Items.Where(i => i.Word != null && (i.SourcePc ?? i.Orig) != null).Select(i => (i.SourcePc ?? i.Orig)!.Value))).Writes);
+                gemCalls.AddRange(UniversalGemCollectionAdapter.PatchCalls(init, s.Source, map, gemLabel, nativeExecutable));
                 parts.Add(init); initTotal += init.Items.Count(i => i.Word != null) * 4; tablesTotal += jt2;
             }
-            reports.Add(new(s.SourceKey, s.Classes.ToArray(), upd.Items.Count(i => i.Word != null) * 4, initTotal, tablesTotal) { ParentClassReadSites = parentClassSites.Distinct().Order().ToArray(), AllocatedClassReadSites = allocatedClassSites.Distinct().Order().ToArray(), PlayerDamageMask = playerDamageWrites.Aggregate(0u, (mask, w) => mask | w.DamageMask), PlayerDamageWrites = playerDamageWrites.Distinct().OrderBy(w => w.StorePc).ToArray() });
+            int gemBytes = 0;
+            if (gemCalls.Count != 0)
+            {
+                var adapter = UniversalGemCollectionAdapter.Build(map, gemLabel);
+                parts.Add(adapter); gemBytes = adapter.Items.Count(i => i.Word != null) * 4;
+            }
+            reports.Add(new(s.SourceKey, s.Classes.ToArray(), upd.Items.Count(i => i.Word != null) * 4, initTotal, tablesTotal) { GemCollectionCallSites = gemCalls.Distinct().Order().ToArray(), GemCollectionAdapterBytes = gemBytes, ParentClassReadSites = parentClassSites.Distinct().Order().ToArray(), AllocatedClassReadSites = allocatedClassSites.Distinct().Order().ToArray(), PlayerDamageMask = playerDamageWrites.Aggregate(0u, (mask, w) => mask | w.DamageMask), PlayerDamageWrites = playerDamageWrites.Distinct().OrderBy(w => w.StorePc).ToArray() });
         }
         if (dragonflyEggClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.DragonflyEggUpdate(dragonflyEggClasses, "egg_upd", remapSaveRows));
