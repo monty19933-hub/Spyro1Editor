@@ -18,6 +18,12 @@ internal static class StableReleaseCases
         byte[] stableDll=File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory,"Spyro.Editor.App.StableFixture.dll"));
         using(var input=new MemoryStream(stableDll)){var identity=EditorStableAssemblyReleaseIdentityReader.Read(input);Check(identity.PublicVersion==next&&identity.ReleaseManifestSchema==3,"exact stable PE metadata");}
         using(var input=new MemoryStream(stableDll)){try{EditorAssemblyReleaseIdentityReader.Read(input);throw new Exception("accepted stable DLL as beta");}catch(InvalidDataException){checks++;}}
+        if (typeof(Spyro.Editor.App.App).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false).Cast<System.Reflection.AssemblyMetadataAttribute>().Any(a=>a.Key=="SpyroEditorReleaseChannel" && a.Value=="stable"))
+        {
+            using var activeInput=new MemoryStream(File.ReadAllBytes(typeof(Spyro.Editor.App.App).Assembly.Location));
+            var activeIdentity=EditorStableAssemblyReleaseIdentityReader.Read(activeInput);
+            Check(activeIdentity.ReleaseManifestSchema==3,"active source App has valid stable PE metadata");
+        }
         string platform=OperatingSystem.IsMacOS()?"osx-arm64":"win-x64";
         string appPath=OperatingSystem.IsMacOS()?"Spyro Editor.app/Contents/MacOS/Spyro.Editor.App.dll":"support/app/Spyro.Editor.App.dll";
         string notes="# Spyro Editor 1.1\n\nStable channel test.";
@@ -42,11 +48,11 @@ internal static class StableReleaseCases
             string changelog=await GitHubStableReleaseUpdateClient.WriteChangelogAsync(update!,root);Check(File.ReadAllText(changelog).StartsWith(next.DisplayName),"stable changelog identity");
             async Task Reject(byte[] bytes,string name)
             {using var h=new Handler("[]",bytes);using var c=new HttpClient(h);var u=update! with{Asset=update.Asset with{Size=bytes.Length,Sha256=Convert.ToHexStringLower(SHA256.HashData(bytes))}};string dest=Path.Combine(root,name);try{await new GitHubStableReleaseUpdateClient(c).DownloadVerifiedAsync(u,dest);throw new Exception("accepted "+name);}catch(InvalidDataException){Check(!Directory.Exists(dest)||!Directory.EnumerateFiles(dest).Any(),"rejection leaves no package: "+name);}}
-            await Reject(Package(schema:2),"schema2");await Reject(Package(channel:"beta"),"betaManifest");await Reject(Package(internalVersion:"1.1.0-beta.1"),"betaInternal");await Reject(Package(dll:File.ReadAllBytes(typeof(Spyro.Editor.App.App).Assembly.Location)),"betaDll");await Reject(Package(rogue:"../outside"),"traversal");
+            await Reject(Package(schema:2),"schema2");await Reject(Package(channel:"beta"),"betaManifest");await Reject(Package(internalVersion:"1.1.0-beta.1"),"betaInternal");await Reject(Package(dll:File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory,"Spyro.Editor.App.BetaFixture.dll"))),"betaDll");await Reject(Package(rogue:"../outside"),"traversal");
             try{await client.DownloadVerifiedAsync(update! with{Channel="beta"},Path.Combine(root,"wrongChannel"));throw new Exception("accepted beta update");}catch(InvalidDataException){checks++;}
             try{GitHubReleaseUpdateClient.RequireUpdateVersion(update!);throw new Exception("beta updater accepted stable update");}catch(InvalidDataException){checks++;}
             using var badHandler=new Handler("[]",valid);using var badHttp=new HttpClient(badHandler);try{await new GitHubStableReleaseUpdateClient(badHttp).DownloadVerifiedAsync(update! with{Asset=update.Asset with{Sha256=new string('0',64)}},Path.Combine(root,"digest"));throw new Exception("accepted bad digest");}catch(InvalidDataException){checks++;}
-            Console.WriteLine("STABLE_RELEASE_UPDATE_OK checks="+checks+" network=false activeChannelUnchanged=true");
+            Console.WriteLine("STABLE_RELEASE_UPDATE_OK checks="+checks+" network=false separateChannels=true");
         }
         finally{Directory.Delete(root,true);}
     }

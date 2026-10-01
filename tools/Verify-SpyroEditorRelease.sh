@@ -71,10 +71,7 @@ PUBLIC_RELEASE_VERSION="$(sed -n 's:.*<PublicReleaseVersion>\([^<]*\)</PublicRel
 RELEASE_MANIFEST_SCHEMA_VERSION="$(sed -n 's:.*<ReleaseManifestSchemaVersion>\([^<]*\)</ReleaseManifestSchemaVersion>.*:\1:p' "$PROJECT_FILE" | head -n 1)"
 PREVIOUS_PUBLIC_RELEASE_VERSION="$(sed -n 's:.*<PreviousPublicReleaseVersion>\([^<]*\)</PreviousPublicReleaseVersion>.*:\1:p' "$PROJECT_FILE" | head -n 1)"
 [[ -n "$PROJECT_VERSION" ]] || fail "Could not read the app version from $PROJECT_FILE"
-[[ "$PROJECT_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta\.([0-9]+)$ ]] || \
-    fail "Unsupported app version format '$PROJECT_VERSION'; expected X.Y.Z-beta.N."
-BASE_VERSION="${BASH_REMATCH[1]}"
-BUILD_NUMBER="${BASH_REMATCH[2]}"
+source "$ROOT_DIR/tools/Read-ReleaseVersion.sh" "$PROJECT_FILE"
 [[ "$BETA_RELEASE_NUMBER" =~ ^[1-9][0-9]*$ ]] || \
     fail "Unsupported legacy public beta release '$BETA_RELEASE_NUMBER'; expected a positive integer."
 [[ "$PUBLIC_RELEASE_VERSION" =~ ^[1-9][0-9]*(\.[1-9][0-9]*)?$ ]] || \

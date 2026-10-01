@@ -12,6 +12,13 @@ class StableChannel(unittest.TestCase):
         r=self.select();self.assertEqual(r.returncode,0,r.stderr);self.assertEqual(r.stdout.splitlines()[:5],['Spyro Editor Beta V6','SpyroEditor-Beta-V6','0.1.0-beta.54','1','6'])
     def test_stable_optin(self):
         r=self.select(SPYRO_EDITOR_RELEASE_CHANNEL='stable',SPYRO_EDITOR_STABLE_VERSION='1.0',SPYRO_EDITOR_STABLE_INTERNAL_VERSION='1.0.0');self.assertEqual(r.returncode,0,r.stderr);self.assertEqual(r.stdout.splitlines()[:5],['Spyro Editor 1.0','SpyroEditor-V1.0','1.0.0','3','stable:1.0']);self.assertIn('-p:ReleaseChannel=stable',r.stdout)
+    def test_source_default_and_explicit_beta(self):
+        project=ROOT/'src/Spyro.Editor.App/Spyro.Editor.App.csproj'
+        command='set -e; PUBLIC_RELEASE_VERSION=6; BETA_RELEASE_NUMBER=6; source "$1" "$2"; source "$3"; printf "%s\\n" "$RELEASE_CHANNEL" "$PUBLIC_RELEASE_NAME" "$PROJECT_VERSION" "${RELEASE_PUBLISH_PROPERTIES[@]}"'
+        clean={k:v for k,v in os.environ.items() if not k.startswith('SPYRO_EDITOR_')}
+        args=['bash','-c',command,'test',str(ROOT/'tools/Read-ReleaseVersion.sh'),str(project),str(ROOT/'tools/ReleaseChannel.sh')]
+        r=subprocess.run(args,env=clean,capture_output=True,text=True);self.assertEqual(r.returncode,0,r.stderr);self.assertEqual(r.stdout.splitlines()[:3],['stable','Spyro Editor 1.0','1.0.0'])
+        r=subprocess.run(args,env={**clean,'SPYRO_EDITOR_RELEASE_CHANNEL':'beta'},capture_output=True,text=True);self.assertEqual(r.returncode,0,r.stderr);self.assertEqual(r.stdout.splitlines()[0],'beta');self.assertIn('0.1.0-beta.54',r.stdout);self.assertIn('-p:ReleaseChannel=beta',r.stdout)
     def test_missing_identity(self):self.assertNotEqual(self.select(SPYRO_EDITOR_RELEASE_CHANNEL='stable').returncode,0)
     def test_invalid_channels_and_versions(self):
         for channel,public,internal in [('release','1.0','1.0.0'),('stable','1','1.0.0'),('stable','1.0.0','1.0.0'),('stable','01.0','1.0.0'),('stable','1.0','0.1.0-beta.54'),('stable','1.0','1.1.0')]:

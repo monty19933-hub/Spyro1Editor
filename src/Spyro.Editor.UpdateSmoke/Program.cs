@@ -547,7 +547,7 @@ static object IncrementalRelease(
 
 static byte[] ReadFixtureAppDll()
 {
-    string path = typeof(Spyro.Editor.App.App).Assembly.Location;
+    string path = Path.Combine(AppContext.BaseDirectory, "Spyro.Editor.App.BetaFixture.dll");
     if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         throw new FileNotFoundException("The update smoke could not locate its built Spyro.Editor.App fixture assembly.", path);
     return File.ReadAllBytes(path);

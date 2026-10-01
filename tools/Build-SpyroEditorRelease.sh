@@ -16,12 +16,7 @@ BETA_RELEASE_NUMBER="$(sed -n 's:.*<BetaReleaseNumber>\([^<]*\)</BetaReleaseNumb
 PUBLIC_RELEASE_VERSION="$(sed -n 's:.*<PublicReleaseVersion>\([^<]*\)</PublicReleaseVersion>.*:\1:p' "$APP_PROJECT" | head -n 1)"
 RELEASE_MANIFEST_SCHEMA_VERSION="$(sed -n 's:.*<ReleaseManifestSchemaVersion>\([^<]*\)</ReleaseManifestSchemaVersion>.*:\1:p' "$APP_PROJECT" | head -n 1)"
 PREVIOUS_PUBLIC_RELEASE_VERSION="$(sed -n 's:.*<PreviousPublicReleaseVersion>\([^<]*\)</PreviousPublicReleaseVersion>.*:\1:p' "$APP_PROJECT" | head -n 1)"
-[[ "$PROJECT_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta\.([0-9]+)$ ]] || {
-    echo "Unsupported app version '$PROJECT_VERSION'; expected X.Y.Z-beta.N." >&2
-    exit 1
-}
-BASE_VERSION="${BASH_REMATCH[1]}"
-BUILD_NUMBER="${BASH_REMATCH[2]}"
+source "$ROOT_DIR/tools/Read-ReleaseVersion.sh" "$APP_PROJECT"
 [[ "$BETA_RELEASE_NUMBER" =~ ^[1-9][0-9]*$ ]] || {
     echo "Unsupported legacy public beta release '$BETA_RELEASE_NUMBER'; expected a positive integer." >&2
     exit 1

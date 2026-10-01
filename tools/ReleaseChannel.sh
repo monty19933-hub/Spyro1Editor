@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Sourced after the legacy beta identity checks. Stable identity is opt-in only.
-RELEASE_CHANNEL="${SPYRO_EDITOR_RELEASE_CHANNEL:-beta}"
+# Sourced after validating the selected version and legacy compatibility metadata.
+RELEASE_CHANNEL="${SPYRO_EDITOR_RELEASE_CHANNEL:-${RELEASE_CHANNEL:-beta}}"
 RELEASE_PUBLISH_PROPERTIES=()
 RELEASE_IDENTITY_VERSION="$PUBLIC_RELEASE_VERSION"
 if [[ "$RELEASE_CHANNEL" == stable ]]; then
-    STABLE_PUBLIC_VERSION="${SPYRO_EDITOR_STABLE_VERSION:-}"
-    STABLE_INTERNAL_VERSION="${SPYRO_EDITOR_STABLE_INTERNAL_VERSION:-}"
+    STABLE_PUBLIC_VERSION="${SPYRO_EDITOR_STABLE_VERSION:-${SOURCE_STABLE_VERSION:-}}"
+    STABLE_INTERNAL_VERSION="${SPYRO_EDITOR_STABLE_INTERNAL_VERSION:-${SOURCE_STABLE_INTERNAL_VERSION:-}}"
     python3 - "$STABLE_PUBLIC_VERSION" "$STABLE_INTERNAL_VERSION" <<'PY'
 import re,sys
 public,internal=sys.argv[1:]
@@ -26,7 +26,9 @@ PY
     MAC_BUNDLE_SHORT_VERSION="$STABLE_INTERNAL_VERSION"
     RELEASE_IDENTITY_VERSION="stable:$STABLE_PUBLIC_VERSION"
     RELEASE_PUBLISH_PROPERTIES=("-p:ReleaseChannel=stable" "-p:StableReleaseVersion=$STABLE_PUBLIC_VERSION" "-p:Version=$STABLE_INTERNAL_VERSION" "-p:InformationalVersion=$STABLE_INTERNAL_VERSION")
-elif [[ "$RELEASE_CHANNEL" != beta ]]; then
+elif [[ "$RELEASE_CHANNEL" == beta ]]; then
+    RELEASE_PUBLISH_PROPERTIES=("-p:ReleaseChannel=beta" "-p:Version=$PROJECT_VERSION" "-p:InformationalVersion=$PROJECT_VERSION")
+else
     echo 'SPYRO_EDITOR_RELEASE_CHANNEL must be beta or stable.' >&2
     exit 1
 fi
