@@ -100,11 +100,17 @@ public sealed class NativeFreshMainCompilation
 
     private UniversalComposeResult ComposeWithExecutable(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements,
         byte[] actualExecutable,Func<string,UniversalSpecialAsset?>? special)
-        =>UniversalMobyComposer.Compose(Target,_body,_overlay,actualExecutable,
+    {
+        // The canonical zero-actor scene includes only one spare placed row.
+        // Size its owned empty arena before imports consume further placed rows;
+        // the ordinary composer still checks the final dynamic reserve and RAM.
+        byte[] prepared = NativeFreshPlacementArena.Prepare(_body, placements.Count(p => !p.Retired));
+        return UniversalMobyComposer.Compose(Target,prepared,_overlay,actualExecutable,
             key => string.Equals(key, Target.Key, StringComparison.OrdinalIgnoreCase)
-                ? (Target, new UniversalLevelData(_body), new UniversalOverlay(_overlay, UniversalExeBindings.Read(actualExecutable,65)))
+                ? (Target, new UniversalLevelData(prepared), new UniversalOverlay(_overlay, UniversalExeBindings.Read(actualExecutable,65)))
                 : donors.Get(key), donors.SharedClasses,
             UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,sharedModelPackage: donors.SharedModelPackage, playerAnimationSource: donors.PlayerAnimations);
+    }
 
     public async Task<string> ExportAsync(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements,
         UniversalJapaneseSource? japanese,string outputImage,string identityWorkspace,LevelCatalog nativeCatalog,CancellationToken token=default,Action? requireDocumentCurrent=null,
