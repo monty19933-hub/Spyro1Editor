@@ -22,6 +22,7 @@ public static class UniversalExeBindings
 
     public static IReadOnlyDictionary<uint, UniversalExeBinding> Read(ReadOnlySpan<byte> exe, int levelId)
     {
+        if (Spyro.Editor.Core.Exporting.NativePortalRouteFreshBinding.TryRead(exe, levelId, out var freshBindings)) return freshBindings;
         uint a = Word(exe, LevelInitJumpTable + (uint)levelId * 4);
         Dictionary<uint, UniversalExeBinding> result = [];
         var regs = new (uint Lui, uint Addiu, bool Pair)[32];
@@ -60,6 +61,8 @@ public static class UniversalExeBindings
 
     public static void Patch(byte[] exe, UniversalExeBinding binding, uint value)
     {
+        if (binding.LuiAddress == 0 || binding.AddiuAddress == 0)
+            throw new InvalidDataException("A compact per-level callback requires its source-owned fresh initializer rebinding operation.");
         int o1 = (int)(binding.LuiAddress - ExeBase), o2 = (int)(binding.AddiuAddress - ExeBase);
         uint w1 = BinaryPrimitives.ReadUInt32LittleEndian(exe.AsSpan(o1));
         uint w2 = BinaryPrimitives.ReadUInt32LittleEndian(exe.AsSpan(o2));

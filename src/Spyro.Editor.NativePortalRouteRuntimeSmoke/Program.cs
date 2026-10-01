@@ -177,6 +177,7 @@ Check(nativeSites==23,"all23 authenticated source ReturnHome sites covered");
     var branch=route.Overlay.ToArray();Put(branch,call-48,UniversalMips.EncodeJ(2,call-44));
     Refuse(()=>NativePortalRouteRuntime.PatchReturnHomeCalls(library,branch,route.ReturnStubPointer),"copied source packet in a new delay slot refused");
 }
+await FreshBindingCases.Run(args[1],originalExe,args[2],Check,Refuse);
 string sourceHash;using(var source=File.OpenRead(args[1]))sourceHash=Convert.ToHexStringLower(SHA256.HashData(source));
 Check(sourceHash==UniversalSourceLibrary.OriginalUsaSha256,"original source image remains intact");
 Console.WriteLine($"NATIVE_PORTAL_ROUTE_SOURCE_OK checks={checks} sourceSha256={sourceHash} runtime=not-tested");
