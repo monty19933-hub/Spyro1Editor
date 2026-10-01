@@ -14,6 +14,7 @@ public static class UniversalClassRemapping
     public static IReadOnlyList<SpawnArgument> ConstantSpawns(UniversalOverlay overlay, IReadOnlySet<uint> instructions)
     {
         List<SpawnArgument> result = [];
+        IReadOnlyList<UniversalDependencyCall>? boundedCalls = null;
         foreach (uint pc in instructions.Order())
         {
             uint word = overlay.Word(pc);
@@ -51,6 +52,28 @@ public static class UniversalClassRemapping
                     break;
                 }
                 if (q < pc && UniversalMips.IsBranch(w)) break;
+            }
+            if (constantPc == null)
+            {
+                // The native 1A5 -> 1A6 family sets a0 60 bytes before this call.
+                // Admit a longer direct producer only when the independent basic-block
+                // recovery proves this exact callback and value, including incoming
+                // control targets, call boundaries, ownership gaps and load delays.
+                boundedCalls ??= UniversalDependencyAnalysis.Calls(overlay, new SortedSet<uint>(instructions));
+                var proven = boundedCalls.FirstOrDefault(c => c.CallPc == pc &&
+                    c.Global == UniversalExeBindings.InitGlobal && c.GlobalLoadPc == lp && c.Argument0 != null);
+                if (proven != null)
+                    for (uint q = pc + 4; q + 64 > pc && instructions.Contains(q); q -= 4)
+                    {
+                        uint w = overlay.Word(q);
+                        if (Writes(w, 4))
+                        {
+                            if (UniversalMips.Op(w) is 9 or 13 && UniversalMips.Rs(w) == 0 &&
+                                UniversalMips.Imm(w) == proven.Argument0) constantPc = q;
+                            break;
+                        }
+                        if (q < pc && UniversalMips.IsBranch(w)) break;
+                    }
             }
             if (constantPc is not uint cp)
                 throw new InvalidDataException($"Source class remapping cannot prove dynamic child-spawn argument at 0x{pc:X8}.");
