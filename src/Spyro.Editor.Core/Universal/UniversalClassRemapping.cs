@@ -423,6 +423,7 @@ public static class UniversalClassRemapping
             if (UniversalMips.Op(w) is 33 or 37 && UniversalMips.SImm(w) == 0x36 && UniversalMips.Rt(w) == sw.ClassRegister) break;
         }
         int actorRegister = UniversalMips.Rs(source.Word(classRead));
+        UniversalNativeJumpModelOwnership.MarkOwned(part, source);
         PatchClassificationReads(part, source, map, classes, actorRegister, sw.TreeStart, "current_class");
     }
 
