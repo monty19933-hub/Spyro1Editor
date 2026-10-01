@@ -22,6 +22,7 @@ internal static class FreshMainUiCases
         try
         {
             Wait(()=>window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys.Count>0,"initial retail load");
+            Check(Get<Control>(window,"_retailTerrainDetailsPanel").IsVisible,"retail terrain helpers remain visible in an existing level");
             var toasty=Get<Spyro.Editor.Core.Levels.LevelCatalog>(window,"_retailCatalog").FindByKey("toasty")!;
             RunTask((Task)Invoke(window,"SelectLevelAsync",toasty,null)!);
             var nativeMoby=window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys.First(m=>!m.IsAdded&&m.TrueIndex>=0);
@@ -65,6 +66,21 @@ internal static class FreshMainUiCases
             Check(window.FreshSceneForTesting is {Objects.Count:0,Surfaces.Count:2},"neutral authored floor has no source actors");
             var state=window.CaptureEditorShellSessionSnapshotForTesting();
             Check(state.CurrentMobys.Count==0,"main viewport contains no donor actors");
+            Check(!Get<Control>(window,"_retailTerrainDetailsPanel").IsVisible,"fresh terrain hides retail-only collision/texture capacity helpers");
+            var starterGeometry=Get<GeometryCandidate>(window,"_currentGeometry");
+            Invoke(window,"ShowSelection",ViewportSelectionChangedEventArgs.ForTerrain(0,starterGeometry.Polygons[0]));
+            Click(Get<Button>(window,"_terrainTaskAddCopyButton"));
+            Wait(()=>window.OwnedWindows.Any(w=>w.Title=="Add Terrain Copy"),"fresh add before save");
+            var undoAddDialog=window.OwnedWindows.Single(w=>w.Title=="Add Terrain Copy");
+            Click(undoAddDialog.GetLogicalDescendants().OfType<Button>().Single(b=>b.Content?.ToString()=="Apply"));
+            Wait(()=>window.FreshSceneForTesting!.Surfaces.Count==3,"fresh copy is staged");
+            Check(Get<Button>(window,"_terrainUndoButton").IsEnabled,"normal Undo Terrain is enabled immediately after a fresh copy");
+            Click(Get<Button>(window,"_terrainUndoButton"));
+            Wait(()=>window.FreshSceneForTesting!.Surfaces.Count==2,"normal Undo Terrain removes the added fresh face");
+            string initialFreshPath=Path.Combine(state.Workspace.RootPath,SceneDocument.FileName);
+            Wait(()=>File.Exists(initialFreshPath)&&SceneDocument.Read(initialFreshPath).Surfaces.Count==2,"fresh copy undo persists the restored authored scene");
+            RunTask((Task)Invoke(window,"NewMainLevelAsync")!);
+            Console.WriteLine("FRESH_ADD_UNDO_AND_RETAIL_HELPER_VISIBILITY_OK");
             Directory.CreateDirectory(outputDirectory);Snapshot(window,Path.Combine(outputDirectory,"fresh-main-editor.png"));
             Click(Find<Button>(window,"UniversalMobyLibraryButton"));
             Wait(()=>window.OwnedWindows.Any(w=>w.Title=="Add object — Untitled Level"),"default untextured browser");
@@ -216,6 +232,7 @@ internal static class FreshMainUiCases
             Check(read.Exe.AsSpan(retailTitleOffset,10).SequenceEqual("TWIN TEST\0"u8),"native shared title allocation preserves saved retail rename with authored name");
             Snapshot(window,Path.Combine(outputDirectory,"fresh-main-saved.png"));
             RunTask((Task)Invoke(window,"SelectLevelAsync",toasty,null)!);
+            Check(Get<Control>(window,"_retailTerrainDetailsPanel").IsVisible,"retail terrain helpers return after leaving the fresh level");
             Check(window.FreshSceneForTesting==null,"actual retail selection is active for aggregate export");
             var preservedPreference=Spyro.Editor.Core.Persistence.NativeFreeFlightSettingsStore.SaveGlobal(
                 Spyro.Editor.Core.Persistence.NativeFreeFlightSettingsStore.Capture(root),true);

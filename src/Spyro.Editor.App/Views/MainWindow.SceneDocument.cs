@@ -228,6 +228,7 @@ public sealed partial class MainWindow
         _freshSettingsPanel.Children.Clear();_freshTerrainPanel.Children.Clear();
         _freshSettingsPanel.IsVisible=_freshTerrainPanel.IsVisible=_freshSceneDocument!=null;
         if(_retailTerrainWorkspace!=null)_retailTerrainWorkspace.IsVisible=true;
+        if(_retailTerrainDetailsPanel!=null)_retailTerrainDetailsPanel.IsVisible=_freshSceneDocument==null;
         if(_retailNameDisclosure!=null)_retailNameDisclosure.IsVisible=_freshSceneDocument==null;
         if(_retailMusicDisclosure!=null)_retailMusicDisclosure.IsVisible=_freshSceneDocument==null;
         if(_homeworldTextGroup!=null)_homeworldTextGroup.IsVisible=_freshSceneDocument==null;

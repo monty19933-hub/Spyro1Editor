@@ -237,6 +237,7 @@ public sealed partial class MainWindow : Window
     private Button? _objectRestoreLevelButton;
     private readonly TextBlock _terrainActionHint = new();
     private Button? _terrainUndoButton;
+    private Control? _retailTerrainDetailsPanel;
     private Button? _terrainFindAddSourceButton;
     private Button? _terrainTaskMoveFaceButton;
     private Button? _terrainTaskSinglePointButton;
@@ -10546,7 +10547,8 @@ public sealed partial class MainWindow : Window
         bool hasCrossLevelSwapCandidate = _currentMobys.Any(IsCrossLevelExistingSlotSwapEdit);
         bool clipboardProtectedControl = _mobyClipboard != null && IsReleaseProtectedControlClipboard(_mobyClipboard);
         bool hasTerrain = _selectedTerrain != null && _selectedTerrainIndex >= 0;
-        bool terrainHasEdits = hasTerrain && _selectedTerrain!.IsTerrainEdited;
+        bool terrainHasEdits = hasTerrain && (_selectedTerrain!.IsTerrainEdited ||
+            (_freshSceneDocument != null && _freshAddedFaces.Contains(_selectedTerrain)));
         bool hasUnsavedTerrainEdits = HasUnsavedTerrainEdits();
         bool hasAnyTerrainReviewItem = (_currentGeometry?.Polygons.Any(polygon => polygon.IsTerrainEdited) ?? false) || _customTerrainTextures.Count > 0;
         bool hasTerrainPoint = hasTerrain && !_selectedTerrain!.IsTerrainRemoved && _selectedTerrain.Points.Count > 0 && _selectedTerrain.ZValues.Length > 0;
@@ -17778,6 +17780,10 @@ public sealed partial class MainWindow : Window
         panel.Children.Add(BuildTerrainTaskControls());
         panel.Children.Add(BuildTerrainBrushControls());
         panel.Children.Add(BuildTerrainPointControls());
+        StackPanel sharedTools = panel;
+        panel = new StackPanel { Spacing = 10, Name = "RetailTerrainDetails" };
+        _retailTerrainDetailsPanel = panel;
+        sharedTools.Children.Add(panel);
         panel.Children.Add(new TextBlock
         {
             Text = "Terrain Editing",
@@ -17905,7 +17911,7 @@ public sealed partial class MainWindow : Window
             FontSize = 12,
             LineHeight = 18
         });
-        return panel;
+        return sharedTools;
     }
 
     private Control BuildTerrainReadinessPanel()
