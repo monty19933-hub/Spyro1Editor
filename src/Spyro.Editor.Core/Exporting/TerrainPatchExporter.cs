@@ -12,7 +12,7 @@ using Spyro.Editor.Core.Scene;
 
 namespace Spyro.Editor.Core.Exporting;
 
-public static class TerrainPatchExporter
+public static partial class TerrainPatchExporter
 {
     private const int WadLba = 37;
     private const int TexturePagesSubfileIndex = 0;
@@ -829,6 +829,9 @@ public static class TerrainPatchExporter
                 request.NativeTextureRelocationsPath),
             cancellationToken);
 
+        if(request.WriteImage&&plan.NativeLevelReplacement!=null)
+            return await ExportPreparedPlanAsync(plan,request.ConsumeDisposableSourceImage,cancellationToken);
+
         Directory.CreateDirectory(Path.GetDirectoryName(outputPlanPath) ?? ".");
         await File.WriteAllTextAsync(outputPlanPath, JsonSerializer.Serialize(plan, new JsonSerializerOptions { WriteIndented = true }), cancellationToken);
 
@@ -1074,7 +1077,8 @@ public static class TerrainPatchExporter
         string sourceSearchPath,
         string terrainEditsPath,
         string customTexturesPath = "",
-        string nativeTextureRelocationsPath = "")
+        string nativeTextureRelocationsPath = "",
+        bool deferCoupledTopology = false)
     {
         DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
         bool hasRamCapture = File.Exists(ramPath);
@@ -1108,6 +1112,7 @@ public static class TerrainPatchExporter
         List<TerrainSideWallPatchSummary> sideWallSummaries = new();
         List<long> editedSceneSectorWadOffsets = new();
         TerrainCollisionFanBatch collisionFanBatch = TerrainCollisionFanBatch.Empty;
+        JsonElement topologyEdits = default;
         if (File.Exists(terrainEditsPath))
         {
             using FileStream editStream = File.OpenRead(terrainEditsPath);
@@ -1116,6 +1121,7 @@ public static class TerrainPatchExporter
             if (!editDocument.RootElement.TryGetProperty("edits", out JsonElement editsElement) || editsElement.ValueKind != JsonValueKind.Array)
                 throw new InvalidOperationException("The terrain edit file does not contain an edits array.");
 
+            topologyEdits = editsElement.Clone();
             AddNativeTextureRelocationFaceEditConflicts(
                 editsElement,
                 nativeTextureRelocationsByTarget,
@@ -1203,6 +1209,7 @@ public static class TerrainPatchExporter
                 string detail = JsonValue.GetString(edit, "detail", "hp");
                 if (IsStructuralTerrainEdit(structureEditMode))
                 {
+                    if (usesSourceDerivedSceneBytes) continue; // one coupled subfile transaction below
                     if (IsRemoveFaceEdit(structureEditMode))
                     {
                         AddFaceRemovalPatches(imageStream, layout, ram, collisionContext, sector, sourceSectorWadOffset, sectorOffset, detail, edit, patchesByWadOffset, skippedEdits);
@@ -1252,9 +1259,12 @@ public static class TerrainPatchExporter
                 layout,
                 collisionFanBatch,
                 patchesByWadOffset);
+            AddLowDetailGeometryCompanionPatches(imageStream, layout, ram, sourceSectorHits, collisionFanBatch, patchesByWadOffset);
+            AddTerrainBoundsCompanionPatches(imageStream, layout, ram, sourceSectorHits, collisionFanBatch, patchesByWadOffset);
             AddCollisionFanPatches(
                 imageStream,
                 layout,
+                ram,
                 collisionContext,
                 collisionFanBatch,
                 patchesByWadOffset);
@@ -1292,6 +1302,10 @@ public static class TerrainPatchExporter
         if (!string.IsNullOrWhiteSpace(customTexturesPath) && File.Exists(customTexturesPath))
             customTextureSummaries.AddRange(AddCustomTexturePatches(imageStream, layout, level.Key, textureAssetWadIndex, customTexturesPath, patchesByWadOffset, skippedEdits));
 
+        NativeTerrainLevelReplacement? nativeReplacement=null;
+        if (!deferCoupledTopology && usesSourceDerivedSceneBytes && topologyEdits.ValueKind == JsonValueKind.Array)
+            nativeReplacement=AddCoupledTopologyPatches(imageStream, layout, ram, collisionContext, sourceSectorHits, level, modelSubfileInfo, topologyEdits, patchesByWadOffset);
+
         IReadOnlyList<TerrainPatch> patches = patchesByWadOffset.Values
             .OrderBy(patch => ParseRequiredLong(patch.WadRelativeOffset, "patch.wadRelativeOffset"))
             .ToArray();
@@ -1308,8 +1322,8 @@ public static class TerrainPatchExporter
             CustomTexturesPath: customTexturesPath,
             NativeTextureRelocationsPath: nativeTextureRelocationsPath,
             TextureAssetWadIndex: textureAssetWadIndex,
-            PatchCount: patches.Count,
-            TotalPatchedBytes: patches.Sum(patch => patch.ByteLength),
+            PatchCount: patches.Count+(nativeReplacement==null?0:1),
+            TotalPatchedBytes: patches.Sum(patch => patch.ByteLength)+(nativeReplacement?.After.Length??0),
             CustomTextureImportCount: customTextureSummaries.Count,
             CustomTextureBytePatchCount: patches.Count(patch => patch.Kind.StartsWith("custom-texture-", StringComparison.OrdinalIgnoreCase)),
             CustomTextureImports: customTextureSummaries,
@@ -1327,16 +1341,16 @@ public static class TerrainPatchExporter
                 $"Custom terrain texture patches target WAD asset {textureAssetWadIndex} subfile {TexturePagesSubfileIndex}, using the level-local texture descriptor table in subfile {ModelSubfileIndex}.",
                 collisionContext == null
                     ? "Collision triangle source bytes were not located. Existing terrain geometry edits are rejected atomically instead of emitting visual-only height changes."
-                    : $"Topology-safe existing-terrain collision fan patches are enabled from source WAD offset 0x{collisionContext.SourceTriangleWadOffset:X}; existing HP Z edits update every referenced native triangle touching each physical vertex, preserve cyclic winding, and reject ambiguous aliases, close vertical overlaps, or exact collision-cell changes.",
+                    : $"Topology-safe existing-terrain collision fan patches are enabled from source WAD offset 0x{collisionContext.SourceTriangleWadOffset:X}; existing HP XYZ edits update every referenced native triangle touching each physical vertex, preserve cyclic winding, and reject ambiguous aliases or close vertical overlaps; changed lookup cells rebuild the complete referenced native index within its existing capacity.",
                 collisionFanBatch.HasGeometryEdits
-                    ? "Automatic side-wall generation is deliberately disabled for topology-safe existing HP Z edits; LP, XY, side-wall, add/copy/remove, and component-growth authoring remain separate research gates."
+                    ? "Existing HP XYZ edits synchronize the complete collision fan and exact matching LP points; source-derived copies/removals additionally rebuild native visibility and LP surfaces within verified allocation. Automatic extrusion walls remain separately guarded."
                     : collisionContext == null
                         ? "Terrain side walls need collision triangle source bytes and were not attempted."
                         : collisionContext.SupportsCollisionIndexRebuild
                             ? "Terrain side walls are attempted only by their existing research path when no topology-safe existing-surface geometry edit is present."
                             : "Terrain side-wall and structural collision authoring still needs its separate decoded/rebuilt-index research path.",
                 lowDetailTextureCompanion.Note
-            ]);
+            ]) { NativeLevelReplacement=nativeReplacement };
     }
 
     /// <summary>
@@ -1384,17 +1398,33 @@ public static class TerrainPatchExporter
         byte[] modelBytes = ReadWadBytes(image, layout, model.AbsoluteWadOffset, checked((int)model.SubfileSize));
         Dictionary<string, SourceSectorLocation> sectors = LoadCompletePrivateTextureSourceSectors(
             ordinaryPlan.SourceSearchPath, targetLevel, modelBytes, model.AbsoluteWadOffset);
-        Dictionary<long, TerrainPatch> patches = ordinaryPlan.Patches.ToDictionary(
-            patch => ParseRequiredLong(patch.WadRelativeOffset, "patch.wadRelativeOffset"));
+        bool coupled=ordinaryPlan.NativeLevelReplacement!=null||ordinaryPlan.Patches.Any(p=>p.Kind=="terrain-coupled-topology");
+        NativeTerrainLevelReplacement? nativeReplacement=ordinaryPlan.NativeLevelReplacement;
+        TerrainPatchPlan appearanceBase=coupled ? BuildPlan(ordinaryPlan.SourceImagePath,"",ordinaryPlan.OutputImagePath,ordinaryPlan.OutputCuePath,
+            targetLevel,ordinaryPlan.RamPath,ordinaryPlan.SourceSearchPath,ordinaryPlan.TerrainEditsPath,ordinaryPlan.CustomTexturesPath,"",deferCoupledTopology:true) : ordinaryPlan;
+        Dictionary<long, TerrainPatch> patches = appearanceBase.Patches.ToDictionary(patch=>ParseRequiredLong(patch.WadRelativeOffset,"patch.wadRelativeOffset"));
         NativeTerrainTextureLowDetailCompanionSummary summary = AddNativeTerrainTextureAppearancePatches(
             targetLevel, savedEdits, sectors, image, layout, patches);
+        if(coupled)
+        {
+            using var document=JsonDocument.Parse(File.ReadAllText(ordinaryPlan.TerrainEditsPath));
+            var edits=document.RootElement.GetProperty("edits");
+            byte[] ram=ReadLogicalWad(image,layout);
+            var context=TryBuildSourceDerivedCollisionPatchContext(ram,sectors,model,edits,[]);
+            Dictionary<int,NativeTextureAppearanceAsset> assets=[];
+            var replacements=savedEdits.ToDictionary(e=>e.TargetTextureId,e=>new NativeTerrainTextureLowDetailReplacement(e.TargetTextureId,
+                ReadNativeTextureRepresentativeColor(image,layout,targetLevel.SourceWadEntry,e.UsesAppendedPrivateRecord?e.MaterialTemplateTextureId:e.TargetTextureId,assets),
+                ReadNativeTextureRepresentativeColor(image,layout,e.DonorWadEntry,e.DonorTextureId,assets)));
+            nativeReplacement=AddCoupledTopologyPatches(image,layout,ram,context,sectors,targetLevel,model,edits,patches,replacements);
+        }
         TerrainPatch[] completed = patches.Values
             .OrderBy(patch => ParseRequiredLong(patch.WadRelativeOffset, "patch.wadRelativeOffset"))
             .ToArray();
         return ordinaryPlan with
         {
-            PatchCount = completed.Length,
-            TotalPatchedBytes = completed.Sum(patch => patch.ByteLength),
+            PatchCount = completed.Length+(nativeReplacement==null?0:1),
+            TotalPatchedBytes = completed.Sum(patch => patch.ByteLength)+(nativeReplacement?.After.Length??0),
+            NativeLevelReplacement=nativeReplacement,
             NativeTextureRelocationBytePatchCount = completed.Count(patch => patch.Kind == NativeTextureLowDetailCompanionPatchKind),
             Patches = completed,
             Notes = ordinaryPlan.Notes.Concat([
@@ -7529,13 +7559,6 @@ public static class TerrainPatchExporter
         if (geometryEdits.Length == 0)
             return TerrainCollisionFanBatch.Empty;
 
-        if (editsElement.EnumerateArray().Any(edit =>
-                IsStructuralTerrainEdit(JsonValue.GetString(edit, "structureEditMode"))))
-        {
-            throw new InvalidOperationException(
-                "Existing HP Z edits cannot be composed with research-only add/copy/remove terrain operations in one build. Split the experiments; no terrain BIN was built.");
-        }
-
         ValidateTopologySafeSourceSearchCompleteness(sourceSearchPath, sourceSectorHits);
 
         foreach (JsonElement edit in geometryEdits)
@@ -7545,14 +7568,7 @@ public static class TerrainPatchExporter
             if (!string.Equals(detail, "hp", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
-                    $"{runtimeKey}: topology-safe solid terrain export currently supports existing high-detail (HP) Z edits only. LP edits remain research-only; no terrain BIN was built.");
-            }
-            IReadOnlyList<Vector2f> editedPoints = ReadVector2Array(edit, "editedPoints");
-            IReadOnlyList<Vector2f> originalPoints = ReadVector2Array(edit, "originalPoints");
-            if (HasEditedPointValues(originalPoints, editedPoints))
-            {
-                throw new InvalidOperationException(
-                    $"{runtimeKey}: topology-safe solid terrain export currently supports Z-only movement. XY edits remain research-only; no terrain BIN was built.");
+                    $"{runtimeKey}: solid terrain export requires high-detail (HP) source faces; direct LP edits are not supported; no terrain BIN was built.");
             }
         }
 
@@ -7673,7 +7689,9 @@ public static class TerrainPatchExporter
                 uint newWord;
                 try
                 {
-                    newWord = SetSceneVertexZWord(oldWord, sector, targetZ);
+                    newWord = pointChanged && i < editedPoints.Count
+                        ? SetSceneVertexWord(oldWord, sector, editedPoints[i], targetZ)
+                        : SetSceneVertexZWord(oldWord, sector, targetZ);
                 }
                 catch (InvalidOperationException ex)
                 {
@@ -7820,6 +7838,7 @@ public static class TerrainPatchExporter
 
         Dictionary<string, int> referencedTriangleMatchesByPoint = transforms.Keys
             .ToDictionary(key => key, _ => 0, StringComparer.Ordinal);
+        bool requiresIndexRebuild = false;
         List<TerrainCollisionFanPatch> patches = new();
         foreach (SpyroCollisionTriangle triangle in collisionContext.Table.Triangles)
         {
@@ -7866,13 +7885,7 @@ public static class TerrainPatchExporter
 
             IReadOnlySet<CollisionLookupCell> sourceCells = CollisionTouchedCellsFor(triangle.Points);
             IReadOnlySet<CollisionLookupCell> targetCells = CollisionTouchedCellsFor(targetPoints);
-            if (!sourceCells.SetEquals(targetCells))
-            {
-                throw new InvalidOperationException(
-                    $"{runtimeKeys}: collision triangle {triangle.Index} would move from exact native lookup cells " +
-                    $"[{FormatCollisionCells(sourceCells)}] to [{FormatCollisionCells(targetCells)}]. " +
-                    "Collision-cell-changing edits remain blocked until the rebuilt index has its own runtime gate; no terrain BIN was built.");
-            }
+            requiresIndexRebuild |= !sourceCells.SetEquals(targetCells);
 
             if (!TryBuildCollisionTriangleWordsCyclic(
                     targetPoints,
@@ -7957,7 +7970,8 @@ public static class TerrainPatchExporter
                         .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
                         .ToArray()))
                 .ToArray(),
-            patches);
+            patches,
+            requiresIndexRebuild);
     }
 
     private static void AddTopologySafeVisualPatches(
@@ -7983,9 +7997,72 @@ public static class TerrainPatchExporter
         }
     }
 
+    private static void AddTerrainBoundsCompanionPatches(FileStream image, DiscLayout layout, byte[] ram,
+        IReadOnlyDictionary<string, SourceSectorLocation> locations, TerrainCollisionFanBatch batch,
+        Dictionary<long, TerrainPatch> patches)
+    {
+        foreach(var group in batch.VisualPatches.GroupBy(visual=>locations.Values.First(location=>
+            visual.WadOffset>=location.WadOffset && visual.WadOffset<location.WadOffset+location.SizeBytes).WadOffset))
+        {
+            SourceSectorLocation owner=locations.Values.First(location=>location.WadOffset==group.Key);
+            SceneSectorHeader sector=ReadSceneSectorHeader(ram,checked((int)ParseRequiredLong(owner.SectorOffset,"sector offset")));
+            int movement=checked((int)Math.Ceiling(group.Max(visual=>
+            {
+                Vector3f before=DecodeSceneVertex(visual.OldWord,sector),after=DecodeSceneVertex(visual.NewWord,sector);
+                return Math.Abs(after.X-before.X)+Math.Abs(after.Y-before.Y)+Math.Abs(after.Z-before.Z);
+            })));
+            uint original=ReadUInt32(ram,sector.Offset+4);
+            int radius=(int)(original&0xFFF)+movement;
+            if(radius>0xFFF)throw new InvalidOperationException("Edited terrain exceeds its native visibility radius. No terrain BIN was built.");
+            uint target=(original&0xFFFFF000u)|(uint)radius;
+            AddPatch(image,layout,patches,group.Key+4,BitConverter.GetBytes(original),BitConverter.GetBytes(target),
+                "terrain-sector-bounds","terrain-bounds","Conservatively expand the native sector visibility bound by the maximum point movement; preserve its center and flags.");
+        }
+    }
+
+    private static void AddLowDetailGeometryCompanionPatches(
+        FileStream imageStream, DiscLayout layout, byte[] ram,
+        IReadOnlyDictionary<string, SourceSectorLocation> locations,
+        TerrainCollisionFanBatch batch, Dictionary<long, TerrainPatch> patches)
+    {
+        if (!batch.HasGeometryEdits) return;
+        Dictionary<SpyroCollisionPoint, SpyroCollisionPoint> targets = [];
+        foreach (TerrainVisualVertexFanPatch visual in batch.VisualPatches)
+        {
+            SourceSectorLocation owner = locations.Values.First(location =>
+                visual.WadOffset >= location.WadOffset && visual.WadOffset < location.WadOffset + location.SizeBytes);
+            SceneSectorHeader sector = ReadSceneSectorHeader(ram, checked((int)ParseRequiredLong(owner.SectorOffset, "sectorOffset")));
+            SpyroCollisionPoint source = ToCollisionPoint(DecodeSceneVertex(visual.OldWord, sector));
+            SpyroCollisionPoint target = ToCollisionPoint(DecodeSceneVertex(visual.NewWord, sector));
+            if (targets.TryGetValue(source, out SpyroCollisionPoint? previous) && previous != target)
+                throw new InvalidOperationException("Low-detail terrain companions have conflicting native targets. No terrain BIN was built.");
+            targets[source] = target;
+        }
+        foreach (SourceSectorLocation location in locations.Values.DistinctBy(location => location.WadOffset))
+        {
+            int runtime = checked((int)ParseRequiredLong(location.SectorOffset, "sectorOffset"));
+            SceneSectorHeader sector = ReadSceneSectorHeader(ram, runtime);
+            for (int i = 0; i < sector.NumLpVertices; i++)
+            {
+                int offset = GetSceneVertexOffset(sector, "lp", i);
+                uint before = ReadUInt32(ram, offset);
+                if (!targets.TryGetValue(ToCollisionPoint(DecodeSceneVertex(before, sector)), out SpyroCollisionPoint? target)) continue;
+                uint after;
+                try { after = SetSceneVertexWord(before, sector, new Vector2f(target.X, target.Y), target.Z); }
+                catch (InvalidOperationException ex) { throw new InvalidOperationException($"The exact low-detail companion LP vertex {i} cannot encode the edited terrain: {ex.Message} No terrain BIN was built.", ex); }
+                if (ToCollisionPoint(DecodeSceneVertex(after, sector)) != target)
+                    throw new InvalidOperationException("The exact LP terrain companion rounded to a different target. No terrain BIN was built.");
+                AddPatch(imageStream, layout, patches, location.WadOffset + offset - runtime,
+                    BitConverter.GetBytes(before), BitConverter.GetBytes(after), "visual-lp-topology-safe",
+                    "terrain-lp-companion", $"Move exact native LP companion vertex {i} with its HP terrain and collision fan.");
+            }
+        }
+    }
+
     private static void AddCollisionFanPatches(
         FileStream imageStream,
         DiscLayout layout,
+        byte[] ram,
         CollisionPatchContext? collisionContext,
         TerrainCollisionFanBatch batch,
         Dictionary<long, TerrainPatch> patchesByWadOffset)
@@ -8019,6 +8096,70 @@ public static class TerrainPatchExporter
                 $"[{string.Join(", ", fanPatch.AffectedFaces)}] from {string.Join(", ", fanPatch.RuntimeKeys)} " +
                 $"with cyclic winding preserved: {fanPatch.Description}.");
         }
+        if (batch.RequiresIndexRebuild)
+            AddExistingFanCollisionIndexPatches(imageStream, layout, ram, collisionContext, batch, patchesByWadOffset);
+    }
+
+    private static void AddExistingFanCollisionIndexPatches(
+        FileStream imageStream, DiscLayout layout, byte[] ram,
+        CollisionPatchContext context, TerrainCollisionFanBatch batch,
+        Dictionary<long, TerrainPatch> patches)
+    {
+        int treeLength = context.Table.BlocksOffset - context.Table.BlockTreeOffset;
+        int blockLength = context.Table.TriangleOffset - context.Table.BlocksOffset;
+        byte[] originalTree = ram.AsSpan(context.Table.BlockTreeOffset, treeLength).ToArray();
+        byte[] originalBlocks = ram.AsSpan(context.Table.BlocksOffset, blockLength).ToArray();
+        // The source has an exact terminating marker followed by zero capacity.
+        // Do not register spare nonzero collision triangles or recalculate other
+        // actors' native memberships while rebuilding the edited fan.
+        int usedBlockBytes = originalBlocks.Length;
+        while (usedBlockBytes >= 2 && BinaryPrimitives.ReadUInt16LittleEndian(originalBlocks.AsSpan(usedBlockBytes - 2)) == 0)
+            usedBlockBytes -= 2;
+        NativeCollisionIndexSnapshot original;
+        NativeCollisionIndexSnapshot rebuilt;
+        try
+        {
+            original = NativeCollisionIndexCodec.Decode(originalTree, originalBlocks, usedBlockBytes, context.Table.TriangleCount, requireDescendingOrder: false);
+            Dictionary<NativeCollisionCell, List<int>> desired = original.Cells.ToDictionary(
+                pair => pair.Key, pair => pair.Value.OrderedTriangleIndexes.ToList());
+            foreach (TerrainCollisionFanPatch patch in batch.Patches)
+            {
+                SpyroCollisionTriangle target = BuildCollisionTriangleFromWords(patch.Triangle.Index, patch.Triangle.Offset,
+                    patch.XWord, patch.YWord, patch.ZWord);
+                HashSet<NativeCollisionCell> touchedCells = CollisionTouchedCellsFor(target.Points)
+                    .Select(cell => new NativeCollisionCell(cell.X, cell.Y, cell.Z)).ToHashSet();
+                foreach (var (cell, triangles) in desired)
+                    if (!touchedCells.Contains(cell)) triangles.RemoveAll(index => index == patch.Triangle.Index);
+                foreach (NativeCollisionCell key in touchedCells)
+                {
+                    if (!desired.TryGetValue(key, out List<int>? triangles)) desired[key] = triangles = [];
+                    if (!triangles.Contains(patch.Triangle.Index)) triangles.Add(patch.Triangle.Index);
+                }
+            }
+            Dictionary<NativeCollisionCell, IReadOnlyList<int>> sequences = desired.Where(pair => pair.Value.Count > 0)
+                .ToDictionary(pair => pair.Key, pair => (IReadOnlyList<int>)pair.Value.ToArray());
+            // Create a distinct tree where native sharing would otherwise make
+            // two edited cells aliases. All memberships are explicit and checked.
+            try { rebuilt = NativeCollisionIndexCodec.Rebuild(original, sequences); }
+            catch (InvalidDataException) { rebuilt = NativeCollisionIndexCodec.Create(sequences, original.TriangleCount, requireDescendingOrder: false); }
+            if (rebuilt.CopyTree().Length > treeLength || rebuilt.CopyBlocks().Length > blockLength)
+                throw new InvalidDataException("Edited collision lookup exceeds its fixed native capacity.");
+            HashSet<int> beforeRows = original.Cells.Values.SelectMany(cell => cell.OrderedTriangleIndexes).ToHashSet();
+            HashSet<int> afterRows = rebuilt.Cells.Values.SelectMany(cell => cell.OrderedTriangleIndexes).ToHashSet();
+            if (!beforeRows.SetEquals(afterRows))
+                throw new InvalidDataException("Edited collision lookup changed the set of active native triangle rows.");
+        }
+        catch (InvalidDataException ex)
+        {
+            throw new InvalidOperationException($"The complete native collision index cannot safely fit this terrain movement: {ex.Message} No terrain BIN was built.", ex);
+        }
+        byte[] tree = new byte[treeLength], blocks = new byte[blockLength];
+        rebuilt.CopyTree().CopyTo(tree, 0); rebuilt.CopyBlocks().CopyTo(blocks, 0);
+        _ = NativeCollisionIndexCodec.Decode(tree, blocks, rebuilt.UsedBlockBytes, original.TriangleCount, requireDescendingOrder: false);
+        AddPatch(imageStream, layout, patches, context.SourceBlockTreeWadOffset, originalTree, tree,
+            "collision-index-block-tree", "collision-index", "Rebuild the native lookup tree for the complete edited collision fan without registering spare triangles.");
+        AddPatch(imageStream, layout, patches, context.SourceBlocksWadOffset, originalBlocks, blocks,
+            "collision-index-blocks", "collision-index", "Rebuild native lookup memberships, preserving all unaffected triangle rows and their native query order.");
     }
 
     private static bool TryBuildCollisionTriangleWordsCyclic(
@@ -10285,7 +10426,8 @@ public static class TerrainPatchExporter
         int CollisionBackedPointCount,
         IReadOnlyList<string> AffectedFaces,
         IReadOnlyList<TerrainVisualVertexFanPatch> VisualPatches,
-        IReadOnlyList<TerrainCollisionFanPatch> Patches)
+        IReadOnlyList<TerrainCollisionFanPatch> Patches,
+        bool RequiresIndexRebuild)
     {
         public static TerrainCollisionFanBatch Empty { get; } = new(
             false,
@@ -10293,7 +10435,8 @@ public static class TerrainPatchExporter
             0,
             Array.Empty<string>(),
             Array.Empty<TerrainVisualVertexFanPatch>(),
-            Array.Empty<TerrainCollisionFanPatch>());
+            Array.Empty<TerrainCollisionFanPatch>(),
+            false);
     }
 
     private readonly record struct CollisionLookupCell(int X, int Y, int Z);
@@ -10616,7 +10759,13 @@ public sealed record TerrainPatchPlan(
     IReadOnlyList<TerrainSideWallPatchSummary> TerrainSideWalls,
     IReadOnlyList<TerrainPatch> Patches,
     IReadOnlyList<string> SkippedEdits,
-    IReadOnlyList<string> Notes);
+    IReadOnlyList<string> Notes)
+{
+    public NativeTerrainLevelReplacement? NativeLevelReplacement { get; init; }
+}
+
+public sealed record NativeTerrainLevelReplacement(int WadEntry,byte[] Before,byte[] After,uint OriginalRuntimeEnd,uint FinalRuntimeEnd)
+{ public int LevelId { get; init; } = -1; }
 
 public sealed record NativeTerrainTextureRelocationPatchSummary(
     string Strategy,

@@ -140,7 +140,8 @@ public sealed partial class MainWindow
                 ColumnDefinitions =
                 {
                     new ColumnDefinition(new GridLength(10)),
-                    new ColumnDefinition(GridLength.Star)
+                    new ColumnDefinition(GridLength.Star),
+                    new ColumnDefinition(GridLength.Auto)
                 },
                 ColumnSpacing = 8,
                 Children =
@@ -153,7 +154,8 @@ public sealed partial class MainWindow
                         Background = new SolidColorBrush(ModernTeal),
                         VerticalAlignment = VerticalAlignment.Center
                     },
-                    _statusText
+                    _statusText,
+                    NewAsyncButton("Details", ShowStatusDetailsAsync)
                 }
             }
         };
@@ -163,6 +165,7 @@ public sealed partial class MainWindow
         _statusText.TextWrapping = TextWrapping.NoWrap;
         _statusText.TextTrimming = TextTrimming.CharacterEllipsis;
         Grid.SetColumn(_statusText, 1);
+        Grid.SetColumn(((Grid)status.Child!).Children[^1], 2);
         Grid.SetRow(status, 3);
         root.Children.Add(status);
 

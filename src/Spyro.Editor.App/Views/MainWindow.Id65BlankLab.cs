@@ -7269,21 +7269,20 @@ public sealed partial class MainWindow
             if (textureOrSurface && !releaseViewportGesture)
                 return false;
 
-            if (releaseViewportGesture || structural || movesXy)
+            if (structural && (_currentGeometry == null || !IsSourceDerivedGeometry(_currentGeometry)))
             {
                 _statusText.Text =
-                    $"The editor blocked {action}: release terrain editing uses the visible HP Raise/Lower and guarded texture-paint controls. " +
-                    "XY movement, drag sculpting, full edit dialogs, add/remove, and hidden viewport shortcuts remain research-only.";
+                    $"The editor blocked {action}: this terrain has no complete native source map. " +
+                    "Terrain add/remove needs the coupled native topology compiler; existing high-detail face and point movement is supported.";
                 return true;
             }
 
             if (terrain == null ||
                 !string.Equals(terrain.Detail, "hp", StringComparison.OrdinalIgnoreCase) ||
-                terrain.IsTerrainRemoved ||
-                terrain.IsTerrainAddClone)
+                terrain.IsTerrainRemoved)
             {
                 _statusText.Text =
-                    $"The editor blocked {action}: only existing high-detail (HP) faces may receive Z-height edits.";
+                    $"The editor blocked {action}: select a source high-detail (HP) face before editing terrain.";
                 return true;
             }
 

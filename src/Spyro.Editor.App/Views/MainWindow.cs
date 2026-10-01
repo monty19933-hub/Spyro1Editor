@@ -287,6 +287,9 @@ public sealed partial class MainWindow : Window
     private int _loadedTerrainEdits;
     private string _terrainCacheHealthMessage = "";
     private HashSet<string> _terrainCollisionTriangleKeys = new(StringComparer.Ordinal);
+    private GeometryCandidate? _terrainCoverageGeometry;
+    private HashSet<string>? _terrainCoverageKeys;
+    private readonly Dictionary<TerrainPolygon, TerrainCollisionCoverage> _terrainCoverageCache = new();
     private string _terrainCollisionReadinessMessage = "Playable terrain collision: not checked";
     private int _terrainCollisionMatchedFaces;
     private Dictionary<TerrainPolygon, float[]>? _activeTerrainBrushUndo;
@@ -411,27 +414,8 @@ public sealed partial class MainWindow : Window
         };
         _viewport.TerrainPointMoveRequested += (_, e) => MoveTerrainPointFromViewport(e);
         _viewport.TerrainBrushRequested += (_, e) => ApplyViewportTerrainBrush(e);
-        _viewport.TerrainBrushAdjustmentRequested += (_, e) =>
-        {
-            if (_releaseMode)
-            {
-                _statusText.Text =
-                    "The editor keeps hidden terrain-brush shortcuts disabled. Use the visible HP Raise/Lower controls.";
-                return;
-            }
-            AdjustTerrainBrushFromViewport(e);
-        };
-        _viewport.TerrainBrushModeRequested += (_, e) =>
-        {
-            if (_releaseMode && e.Action != TerrainBrushAction.Off)
-            {
-                _viewport.TerrainBrushAction = TerrainBrushAction.Off;
-                _statusText.Text =
-                    "The editor keeps hidden terrain-brush shortcuts disabled. Use the visible HP Raise/Lower controls.";
-                return;
-            }
-            SelectTerrainBrushMode(e.Action);
-        };
+        _viewport.TerrainBrushAdjustmentRequested += (_, e) => AdjustTerrainBrushFromViewport(e);
+        _viewport.TerrainBrushModeRequested += (_, e) => SelectTerrainBrushMode(e.Action);
         _viewport.TerrainBrushStrokeFinished += (_, _) => FinishTerrainBrushUndo();
         _viewport.TerrainTexturePaintRequested += async (_, e) =>
         {
@@ -6006,8 +5990,13 @@ public sealed partial class MainWindow : Window
 
     private TerrainRemoveFaceReadiness GetTerrainRemoveFaceReadiness(TerrainPolygon terrain)
     {
-        bool hasSourceSearch = TryBuildTerrainSectorAppendSlack(out Dictionary<int, int> sectorSlack);
         bool hasSourceDerivedFace = IsSourceDerivedVisibleTerrainFace(terrain);
+        if (hasSourceDerivedFace)
+        {
+            TerrainCollisionCoverage native = GetTerrainCollisionCoverage(terrain);
+            return new(true,true,true,_terrainCollisionTriangleKeys.Count>0,native.MatchedTriangles,native.TotalTriangles,true,native.MatchedTriangles>0);
+        }
+        bool hasSourceSearch = TryBuildTerrainSectorAppendSlack(out Dictionary<int, int> sectorSlack);
         bool hasSourceSector = (hasSourceSearch && terrain.SectorOffset >= 0 && sectorSlack.ContainsKey(terrain.SectorOffset)) || hasSourceDerivedFace;
         bool hasFaceOffset = terrain.FaceOffset >= 0 && terrain.SectorOffset >= 0;
         bool hasCollisionData = _terrainCollisionTriangleKeys.Count > 0;
@@ -6033,6 +6022,13 @@ public sealed partial class MainWindow : Window
 
     private string BuildTerrainAddCopyFaceReadinessText(TerrainPolygon terrain)
     {
+        if (IsSourceDerivedVisibleTerrainFace(terrain))
+        {
+            TerrainCollisionCoverage coverage = GetTerrainCollisionCoverage(terrain);
+            return coverage.TotalTriangles > 0 && coverage.MatchedTriangles == coverage.TotalTriangles
+                ? "This source face can be copied with its gameplay collision. Move or reshape the copy, then Create BIN checks the final terrain and memory capacity."
+                : "Choose a high-detail face whose complete gameplay collision is matched before copying terrain.";
+        }
         TerrainAddCopyFaceReadiness readiness = GetTerrainAddCopyFaceReadiness(terrain);
         string detail = readiness.IsHighDetail
             ? "high-detail face"
@@ -6064,13 +6060,20 @@ public sealed partial class MainWindow : Window
     private TerrainAddCopyFaceReadiness GetTerrainAddCopyFaceReadiness(TerrainPolygon terrain)
     {
         int requiredSlack = RequiredTerrainAddCopySlack(terrain);
+        if (IsSourceDerivedVisibleTerrainFace(terrain))
+        {
+            TerrainCollisionCoverage native = GetTerrainCollisionCoverage(terrain);
+            bool hp=string.Equals(terrain.Detail,"hp",StringComparison.OrdinalIgnoreCase);
+            return new(hp,true,true,0,requiredSlack,native.MatchedTriangles>0,native.MatchedTriangles,native.TotalTriangles,
+                hp&&native.TotalTriangles>0&&native.MatchedTriangles==native.TotalTriangles);
+        }
         bool hasSourceSearch = TryBuildTerrainSectorAppendSlack(out Dictionary<int, int> sectorSlack);
         int availableSlack = terrain.SectorOffset >= 0 && sectorSlack.TryGetValue(terrain.SectorOffset, out int slack)
             ? slack
             : 0;
         TerrainCollisionCoverage coverage = GetTerrainCollisionCoverage(terrain);
         bool highDetail = string.Equals(terrain.Detail, "hp", StringComparison.OrdinalIgnoreCase);
-        bool sourceMapped = hasSourceSearch && terrain.SectorOffset >= 0 && sectorSlack.ContainsKey(terrain.SectorOffset);
+        bool sourceMapped = (hasSourceSearch && terrain.SectorOffset >= 0 && sectorSlack.ContainsKey(terrain.SectorOffset)) || IsSourceDerivedVisibleTerrainFace(terrain);
         bool enoughSlack = requiredSlack > 0 && requiredSlack != int.MaxValue && availableSlack >= requiredSlack;
         return new TerrainAddCopyFaceReadiness(
             IsHighDetail: highDetail,
@@ -6081,7 +6084,8 @@ public sealed partial class MainWindow : Window
             HasCollisionMatch: coverage.MatchedTriangles > 0,
             MatchedCollisionTriangles: coverage.MatchedTriangles,
             TotalCollisionTriangles: coverage.TotalTriangles,
-            CanAddIndependentVisibleTerrain: highDetail && sourceMapped && enoughSlack);
+            CanAddIndependentVisibleTerrain: highDetail && sourceMapped && (enoughSlack ||
+                _currentGeometry != null && IsSourceDerivedGeometry(_currentGeometry) && coverage.MatchedTriangles == coverage.TotalTriangles && coverage.TotalTriangles > 0));
     }
 
     private bool TryBuildTerrainSectorAppendSlack(out Dictionary<int, int> result)
@@ -10761,6 +10765,8 @@ public sealed partial class MainWindow : Window
         if (!CanUseTerrainAddCopyInCurrentLevel())
             return false;
 
+        if (_currentGeometry != null && IsSourceDerivedGeometry(_currentGeometry))
+            return _currentGeometry.Polygons.Any(face => !face.IsTerrainRemoved && CanStageTerrainAddCopy(face));
         return TryGetBestTerrainAddSource(out _, out _) ||
             TryGetBestTerrainAddSourceByFaceReadiness(out _, out _);
     }
@@ -10808,6 +10814,8 @@ public sealed partial class MainWindow : Window
     private bool CanUseTerrainAddCopyInCurrentLevel()
     {
         if (_freshSceneDocument != null) return true;
+        if (_currentGeometry != null && IsSourceDerivedGeometry(_currentGeometry) &&
+            _currentGeometry.Polygons.Any(IsSourceDerivedVisibleTerrainFace)) return true;
         TerrainStructureReadiness? readiness = LoadCurrentTerrainStructureReadiness();
         if (readiness == null || TerrainStructureStatusBlocksWriteback(readiness.Status))
             return false;
@@ -11024,7 +11032,7 @@ public sealed partial class MainWindow : Window
     private string BuildTerrainAddCopyUnavailableHint()
     {
         if (_currentGeometry != null && IsSourceDerivedGeometry(_currentGeometry))
-            return "Add Terrain is still disabled for source-derived levels until copied-face sector relocation/slack is proven. Move, paint, and edit points can still be used; Remove Terrain enables only when visible mesh and gameplay collision are both mapped.";
+            return "Choose a high-detail source face with complete gameplay collision to add terrain. Create BIN checks the copied geometry, collision, and available memory.";
 
         TerrainStructureReadiness? readiness = LoadCurrentTerrainStructureReadiness();
         if (readiness == null)
@@ -11095,11 +11103,9 @@ public sealed partial class MainWindow : Window
             string face = string.IsNullOrWhiteSpace(terrain.RuntimeKey)
                 ? $"face {terrain.FaceIndex}"
                 : $"face {terrain.RuntimeKey}";
-            string? unsupported = terrain.HasStructureEdit
-                ? "adds or removes terrain topology"
-                : terrain.HasPositionEdit
-                    ? "moves terrain in X/Y"
-                    : terrain.HasHeightEdit && !string.Equals(terrain.Detail, "hp", StringComparison.OrdinalIgnoreCase)
+            string? unsupported = terrain.HasStructureEdit && !IsSourceDerivedGeometry(_currentGeometry)
+                ? "has no complete native terrain source map for topology"
+                : (terrain.HasPositionEdit || terrain.HasHeightEdit) && !string.Equals(terrain.Detail, "hp", StringComparison.OrdinalIgnoreCase)
                         ? "changes non-HP terrain height"
                         : null;
             if (unsupported == null)
@@ -11107,7 +11113,7 @@ public sealed partial class MainWindow : Window
 
             reason =
                 $"The editor refused this terrain operation because {face} {unsupported}. " +
-                "The public beta saves existing HP height plus texture/surface edits only. " +
+                "The editor saves existing high-detail terrain movement plus texture/surface edits. " +
                 "Undo or restore that research edit before Save Terrain Changes or Create BIN.";
             return true;
         }
@@ -11130,7 +11136,7 @@ public sealed partial class MainWindow : Window
 
             reason =
                 $"Create BIN refused saved terrain edits for {level.DisplayName}: {blocker}. " +
-                "Open that level and undo or restore the research edit. The editor exports existing HP height plus texture/surface edits only.";
+                "Open that level and undo or restore the unsupported edit. Existing high-detail terrain movement updates its complete collision fan.";
             return true;
         }
 
@@ -13395,7 +13401,7 @@ public sealed partial class MainWindow : Window
             : $" for {FormatShortList(result.PatchedLevelNames, 4)}";
         string treasureSummary = BuildExportedTreasureStatus(result.ExportedTreasureTargets);
         string skippedSummary = BuildSkippedExportStatus(result.SkippedEdits, result.SkippedEditDetails);
-        string successStatus = $"Created all-edits test {Path.GetFileName(result.OutputCuePath)}{levelSummary}: {result.ObjectPatches} object patch(es), {result.TerrainPatches} terrain patch(es), {result.EnvironmentGradePatches} environment patch(es), {result.SkyboxPatches} sky block patch(es), {result.LevelNamePatches} level name(s), {result.MusicLevelPatches} music level(s).{treasureSummary}{skippedSummary}{result.FreeFlightSummary}";
+        string successStatus = $"Created all-edits test {Path.GetFileName(result.OutputCuePath)}{levelSummary}: {result.ObjectPatches} object patch(es), {result.TerrainPatches} terrain patch(es), {result.EnvironmentGradePatches} environment patch(es), {result.SkyboxPatches} sky block patch(es), {result.LevelNamePatches} level name(s), {result.MusicLevelPatches} music level(s).{treasureSummary}{skippedSummary}{result.FreeFlightSummary}{PreservedResearchExportNote()}";
         _statusText.Text = successStatus;
         try
         {
@@ -14506,11 +14512,13 @@ public sealed partial class MainWindow : Window
                 }
 
                 string structure = structureElement.GetString() ?? "";
-                if (!string.Equals(structure, "none", StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(structure, "none", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(structure, "remove-face", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(structure, "add-clone-face", StringComparison.OrdinalIgnoreCase))
                 {
                     return string.IsNullOrWhiteSpace(structure)
                         ? $"face {runtimeKey} has an empty structureEditMode"
-                        : $"face {runtimeKey} contains the research-only structural edit '{structure}'";
+                        : $"face {runtimeKey} contains the unsupported structural edit '{structure}'";
                 }
 
                 if (!JsonFiniteNumberPropertyIsWellFormed(edit, "deltaZ") ||
@@ -14533,16 +14541,13 @@ public sealed partial class MainWindow : Window
                     return $"face {runtimeKey} has inconsistent geometry array lengths";
                 }
 
-                if (JsonPointDeltaArrayHasNonZero(edit, "vertexDeltaXY") ||
-                    JsonPointArraysDiffer(edit, "originalPoints", "editedPoints"))
-                {
-                    return $"face {runtimeKey} contains research-only X/Y movement";
-                }
+                bool changesPosition = JsonPointDeltaArrayHasNonZero(edit, "vertexDeltaXY") ||
+                    JsonPointArraysDiffer(edit, "originalPoints", "editedPoints");
 
                 bool changesHeight = JsonNumberArrayHasNonZero(edit, "vertexDeltaZ") ||
                     JsonPropertyNumberHasNonZero(edit, "deltaZ") ||
                     JsonNumberArraysDiffer(edit, "originalZ", "editedZ");
-                if (changesHeight && !string.Equals(detail, "hp", StringComparison.OrdinalIgnoreCase))
+                if ((changesHeight || changesPosition || !string.Equals(structure,"none",StringComparison.OrdinalIgnoreCase)) && !string.Equals(detail, "hp", StringComparison.OrdinalIgnoreCase))
                     return $"face {runtimeKey} contains a non-HP height edit";
             }
 
@@ -16286,7 +16291,7 @@ public sealed partial class MainWindow : Window
         });
         panel.Children.Add(new TextBlock
         {
-            Text = "Height risks may appear in the editor or visual mesh while not fully changing where Spyro can stand in game. Remove-face edits neutralize the visible face and matched collision. Add-copy edits can add independent visible terrain vertices when a sector has source slack, and can add copied collision when the source face has matched collision plus a same-cell placeholder.",
+            Text = "Create BIN checks the complete shared collision fan and distant terrain before publishing. Removing terrain deletes its matched gameplay collision; copying terrain adds independent geometry and collision within the native memory limit. An edit that fails these checks leaves your previous export intact.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92)),
             LineHeight = 20
@@ -16436,8 +16441,8 @@ public sealed partial class MainWindow : Window
             TerrainPatchExporter.AddPrivateTextureAppearanceDependencies(
                 ordinaryResult.Plan, target.Level, savedEdits));
         IReadOnlyList<NativeTerrainTextureRecordExistingPatch> ordinaryPatches =
-            NativeTerrainTexturePrivateRecordBatchCompiler.ConvertOrdinaryTerrainPlan(
-                ordinaryPlan);
+            ordinaryPlan.NativeLevelReplacement!=null ? [] :
+                NativeTerrainTexturePrivateRecordBatchCompiler.ConvertOrdinaryTerrainPlan(ordinaryPlan);
         await File.WriteAllTextAsync(
             ordinaryResult.OutputPlanPath,
             JsonSerializer.Serialize(ordinaryPlan, new JsonSerializerOptions { WriteIndented = true }));
@@ -16456,7 +16461,12 @@ public sealed partial class MainWindow : Window
                 AppendedPrivateTerrainTextureResearchGate
                     .ResolveStructuralGrowthPolicy(
                         sourceBinding,
-                        appended.Length));
+                        appended.Length))
+        { AdditionalProtectedRanges = await CapturePrivateTerrainActorReservationsAsync(target.Level),
+            TerrainPreparation=ordinaryPlan.NativeLevelReplacement!=null ? ordinaryPlan : null };
+        var terrainProvenance=await NativeTerrainTexturePreparedSourceCompiler.PrepareAsync(request,
+            Path.Combine(tempDirectory,$"{SafeOutputPart(target.Level.DisplayName)}-private-terrain-prepared"));
+        request=terrainProvenance.Request;
         NativeTerrainTexturePrivateRecordBatchPlan plan;
         if (TryReusePrivateTerrainBuildPlan(request, out plan))
         {
@@ -16471,7 +16481,7 @@ public sealed partial class MainWindow : Window
             CachePrivateTerrainBuildPlan(request, plan);
         }
         if (!AppendedPrivateTerrainTextureResearchGate.TryAllow(
-                plan.SourceBinding,
+                terrainProvenance.AuthorizationBinding??plan.SourceBinding,
                 plan.WriterKind,
                 plan.AppendedPrivateEdits.Count,
                 plan.StructuralGrowthPolicy,
@@ -16550,7 +16560,7 @@ public sealed partial class MainWindow : Window
     {
         byte[] payload = JsonSerializer.SerializeToUtf8Bytes(new
         {
-            version = "private-terrain-build-plan-cache-v1",
+            version = "private-terrain-build-plan-cache-v3-source-prefix-reservations",
             targetLevelKey = LevelCatalog.NormalizeKey(request.TargetLevel.Key),
             targetWadEntry = request.TargetLevel.SourceWadEntry,
             savedEdits = request.SavedEdits
@@ -16561,7 +16571,8 @@ public sealed partial class MainWindow : Window
                 .ThenBy(patch => patch.Before.Length)
                 .ToArray(),
             request.HasCustomImageTexturePatches,
-            request.StructuralGrowthPolicy
+            request.StructuralGrowthPolicy,
+            pendingActorReservations = request.AdditionalProtectedRanges.OrderBy(r=>r.Offset).ThenBy(r=>r.Length).ToArray()
         });
         return Convert.ToHexString(SHA256.HashData(payload));
     }
@@ -17764,18 +17775,21 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(0, 10, 0, 0)
         };
         panel.Children.Add(BuildId65FreshOptionalTerrainControls());
+        panel.Children.Add(BuildTerrainTaskControls());
+        panel.Children.Add(BuildTerrainBrushControls());
+        panel.Children.Add(BuildTerrainPointControls());
         panel.Children.Add(new TextBlock
         {
-            Text = "Terrain Height Editing",
+            Text = "Terrain Editing",
             FontSize = 14,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(42, 61, 79))
         });
         panel.Children.Add(new TextBlock
         {
-            Text = "Select an existing high-detail terrain face in Edit Map or Game Camera, then raise or lower it. " +
-                   "Create BIN updates the complete referenced collision fan and refuses the whole terrain export when the edit is not safe. " +
-                   "XY movement, low-detail geometry, add/remove, and topology growth remain research-only.",
+            Text = "Select high-detail terrain to move a face, edit its points, or sculpt with a brush. " +
+                   "Create BIN updates the complete collision fan and exact low-detail companions together. " +
+                   "Movement that cannot fit safely in the native level is refused before publication.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92)),
             FontSize = 12,
@@ -18067,11 +18081,12 @@ public sealed partial class MainWindow : Window
                 $"{levelName} movement and single-point editing\n" +
                 $"{selection}\n\n" +
                 "Guarded Create BIN boundary:\n" +
-                "- Edit Z on existing high-detail (HP) terrain points, including whole-face height edits.\n" +
+                "- Move high-detail terrain faces or points in X, Y, and Z; preserve the complete shared collision fan.\n" +
                 "- Update every referenced native collision triangle in the complete affected fan with cyclic winding.\n" +
-                "- Reject the whole terrain export atomically when a fan is unsafe, unencodable, or would change collision-cell membership.\n\n" +
-                "Still research-only:\n" +
-                "- XY edits, LP edits, add/copy/remove terrain operations, and structural growth.\n" +
+                "- Rebuild changed collision lookup cells and the affected distant terrain.\n" +
+                "- Copy or remove source faces with matched gameplay collision; grow the native level within its verified memory capacity.\n" +
+                "- Reject the export atomically when source ownership, encoding, collision, or memory checks fail.\n\n" +
+                "Direct editing of low-detail faces remains unavailable.\n" +
                 "- The exact v4 runtime result proves complete edited-surface solidity only for its isolated ID65 control; it is not a broad cross-level runtime pass.\n\n" +
                 (geometry == null
                     ? "No generated readiness row is available yet. Use Preflight BIN after staging a move/point edit, or rerun the terrain smoke/readiness pass."
@@ -19045,8 +19060,8 @@ public sealed partial class MainWindow : Window
             return new TerrainCollisionLoadData(triangleKeys, "Playable terrain collision: no terrain loaded", 0);
 
         LevelDefinition? collisionLevel = _catalog.FindByKey(levelKey);
-        if (UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(collisionLevel) &&
-            Id65FreshLevelSceneProjector.IsProjectionGeometry(geometry) &&
+        if ((IsSourceDerivedGeometry(geometry) ||
+             UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(collisionLevel) && Id65FreshLevelSceneProjector.IsProjectionGeometry(geometry)) &&
             geometry.NativeTerrainOcclusion is NativeTerrainOcclusionData projectionOcclusion)
         {
             foreach (NativeTerrainOcclusionTriangle triangle in projectionOcclusion.CollisionTriangles)
@@ -19059,7 +19074,7 @@ public sealed partial class MainWindow : Window
                 HasTerrainCollisionMatch(polygon, triangleKeys));
             return new TerrainCollisionLoadData(
                 triangleKeys,
-                $"Fresh authoring-scene collision: {matchedFaces}/{geometry.Polygons.Count} faces matched; this is presentation metadata, not runtime acceptance.",
+                $"Source terrain collision: {matchedFaces}/{geometry.Polygons.Count} faces matched.",
                 matchedFaces);
         }
 
@@ -19195,7 +19210,13 @@ public sealed partial class MainWindow : Window
     {
         if(_freshSceneDocument != null && !terrain.IsTerrainRemoved)
             return new(Math.Max(0,terrain.Points.Count-2),Math.Max(0,terrain.Points.Count-2),Enumerable.Range(0,terrain.Points.Count).ToHashSet());
-        return GetTerrainCollisionCoverage(terrain, _terrainCollisionTriangleKeys);
+        if (!ReferenceEquals(_terrainCoverageGeometry,_currentGeometry) || !ReferenceEquals(_terrainCoverageKeys,_terrainCollisionTriangleKeys))
+        {
+            _terrainCoverageGeometry=_currentGeometry;_terrainCoverageKeys=_terrainCollisionTriangleKeys;_terrainCoverageCache.Clear();
+        }
+        if (!_terrainCoverageCache.TryGetValue(terrain,out TerrainCollisionCoverage coverage))
+            _terrainCoverageCache[terrain]=coverage=GetTerrainCollisionCoverage(terrain,_terrainCollisionTriangleKeys);
+        return coverage;
     }
 
     private static TerrainCollisionCoverage GetTerrainCollisionCoverage(TerrainPolygon terrain, IReadOnlySet<string> triangleKeys)
@@ -19204,30 +19225,37 @@ public sealed partial class MainWindow : Window
         if (triangleKeys.Count == 0 || terrain.Points.Count < 3 || terrain.OriginalZValues.Length < terrain.Points.Count)
             return new TerrainCollisionCoverage(0, 0, vertexIndexes);
 
-        int matchedTriangles = 0;
-        int totalTriangles = 0;
-        for (int i = 1; i < terrain.Points.Count - 1; i++)
+        // Native quads may use either diagonal. Admission follows the complete
+        // original collision fan, independently of unsaved vertex movement.
+        int[][][] alternatives = terrain.Points.Count == 4
+            ? new[] { new[] { new[] { 0, 1, 2 }, new[] { 0, 2, 3 } }, new[] { new[] { 0, 1, 3 }, new[] { 1, 2, 3 } } }
+            : new[] { Enumerable.Range(1, terrain.Points.Count - 2).Select(i => new[] { 0, i, i + 1 }).ToArray() };
+        TerrainCollisionCoverage best = new(0, terrain.Points.Count - 2, vertexIndexes);
+        foreach (int[][] triangles in alternatives)
         {
-            totalTriangles++;
-            if (triangleKeys.Contains(VisualTriangleKey(terrain, 0, i, i + 1)))
+            HashSet<int> covered = new();
+            int matched = 0;
+            foreach (int[] triangle in triangles)
             {
-                matchedTriangles++;
-                vertexIndexes.Add(0);
-                vertexIndexes.Add(i);
-                vertexIndexes.Add(i + 1);
+                if (!triangleKeys.Contains(VisualTriangleKey(terrain, triangle[0], triangle[1], triangle[2])))
+                    continue;
+                matched++;
+                covered.UnionWith(triangle);
             }
+            if (matched > best.MatchedTriangles)
+                best = new TerrainCollisionCoverage(matched, triangles.Length, covered);
         }
-
-        return new TerrainCollisionCoverage(matchedTriangles, totalTriangles, vertexIndexes);
+        return best;
     }
 
     private static string VisualTriangleKey(TerrainPolygon terrain, int a, int b, int c)
     {
+        var points = terrain.OriginalPoints.Count == terrain.Points.Count ? terrain.OriginalPoints : terrain.Points;
         return string.Join("|", new[]
             {
-                VisualPointKey(terrain.Points[a].X, terrain.Points[a].Y, terrain.OriginalZValues[a]),
-                VisualPointKey(terrain.Points[b].X, terrain.Points[b].Y, terrain.OriginalZValues[b]),
-                VisualPointKey(terrain.Points[c].X, terrain.Points[c].Y, terrain.OriginalZValues[c])
+                VisualPointKey(points[a].X, points[a].Y, terrain.OriginalZValues[a]),
+                VisualPointKey(points[b].X, points[b].Y, terrain.OriginalZValues[b]),
+                VisualPointKey(points[c].X, points[c].Y, terrain.OriginalZValues[c])
             }
             .OrderBy(value => value, StringComparer.Ordinal));
     }
@@ -21711,7 +21739,7 @@ public sealed partial class MainWindow : Window
     private string BuildSelectedTerrainPointPatchStatus(TerrainPolygon terrain, int pointIndex)
     {
         const string guardedBoundary =
-            "Guarded normal support is limited to existing high-detail (HP) Z edits; XY, LP, add/copy/remove, and structural growth remain research-only.";
+            "High-detail face and point movement updates solid collision. Add/remove also rebuilds distant surfaces and visibility; Create BIN checks the complete native layout and available memory. Direct low-detail editing is unavailable.";
 
         bool isHighDetail = terrain.Detail.Equals("hp", StringComparison.OrdinalIgnoreCase);
         bool hasZEdit =
@@ -21730,7 +21758,7 @@ public sealed partial class MainWindow : Window
             return $"This is a low-detail (LP) point, so its geometry is outside the guarded Create BIN path. {guardedBoundary}";
 
         if (hasXyEdit)
-            return $"This point has an XY edit, so it is outside the guarded Create BIN path even if Z also changed. {guardedBoundary}";
+            return $"This point has an XY edit; Create BIN verifies its full collision fan and lookup cells. {guardedBoundary}";
 
         TerrainCollisionCoverage coverage = GetTerrainCollisionCoverage(terrain);
         bool hasCollision = coverage.VertexIndexes.Contains(pointIndex);
@@ -25559,7 +25587,7 @@ public sealed partial class MainWindow : Window
         RefreshMobyList(next);
         RefreshCurrentLevelDetails();
         if (next != null)
-            _viewport.SelectMoby(next, true);
+            _viewport.SelectMoby(next, focus: false);
         else
             _viewport.ResetSelection();
 
@@ -25597,7 +25625,7 @@ public sealed partial class MainWindow : Window
         _viewport.Mobys = _currentMobys;
         RefreshMobyList(moby);
         RefreshCurrentLevelDetails();
-        _viewport.SelectMoby(moby, true);
+        _viewport.SelectMoby(moby, focus: false);
         _statusText.Text = restoreGroup.Count > 1
             ? $"Restored {moby.DisplayLabel} and {restoreGroup.Count - 1} special-chest companion row(s)."
             : $"Restored {moby.DisplayLabel}.";
@@ -25679,7 +25707,7 @@ public sealed partial class MainWindow : Window
         _viewport.InvalidateVisual();
         RefreshMobyList(moby);
         RefreshCurrentLevelDetails();
-        _viewport.SelectMoby(moby, true);
+        _viewport.SelectMoby(moby, focus: false);
         _statusText.Text = nativePathUndone
             ? $"Undid edits for {moby.DisplayLabel} and reset its complete native run path."
             : linkedMetadataUndos > 0 || restoredLinkRows > 0

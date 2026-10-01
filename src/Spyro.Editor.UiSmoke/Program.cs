@@ -208,6 +208,13 @@ if (args.Contains("--fresh-native-document-only", StringComparer.OrdinalIgnoreCa
     return 0;
 }
 
+if (args.Contains("--v1-user-project-only", StringComparer.Ordinal))
+{
+    if (args.Length != 4) throw new ArgumentException("Usage: UiSmoke --v1-user-project-only <snapshotRoot> <artifacts> <sourceWorkspace>");
+    V1UserProjectUiCases.Run(args[1], args[2], args[3]);
+    return 0;
+}
+
 string sourceWorkspace = FindWorkspace(args.FirstOrDefault(argument =>
     !argument.StartsWith("--", StringComparison.Ordinal)));
 bool sourceFreeViewportSmoke =
@@ -338,6 +345,17 @@ try
     {
         Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "0");
         RunNativeLevelReplacementUiOnly();
+        return 0;
+    }
+    if (args.Contains("--retail-terrain-authoring-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RetailTerrainAuthoringUiCases.Run();
+        return 0;
+    }
+
+    if (args.Contains("--object-camera-continuity-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RunObjectCameraContinuityOnly();
         return 0;
     }
     if (args.Contains("--workspace-shell-only", StringComparer.OrdinalIgnoreCase))
@@ -548,6 +566,43 @@ void RunFreshNativeShellOnly()
     }
 }
 
+void RunObjectCameraContinuityOnly()
+{
+    MainWindow window = new() { Width = 1320, Height = 860 };
+    window.Show();
+    try
+    {
+        WaitForLevelData(window);
+        var session = window.CaptureEditorShellSessionSnapshotForTesting();
+        Moby target = session.CurrentMobys.First(moby => !moby.IsRemoved && !moby.IsEditorControl &&
+            moby.VisualKind != MobyVisualKind.Portal);
+        var viewport = session.Viewport;
+        viewport.SelectMoby(target, focus: false);
+        viewport.SetFlyGameCameraForTesting(1234, 2345, 3456, 0.31, -0.22);
+        string before = JsonSerializer.Serialize(CaptureFlyCameraState(viewport));
+        void RequireCamera(string operation)
+        {
+            FlushUi();
+            if (JsonSerializer.Serialize(CaptureFlyCameraState(viewport)) != before)
+                throw new InvalidOperationException($"{operation} changed the viewport camera.");
+        }
+        InvokePrivateVoid(window, "RemoveSelectedMoby");
+        if (!target.IsRemoved) throw new InvalidOperationException("Camera fixture did not remove the selected native object.");
+        RequireCamera("Remove object");
+        InvokePrivateVoid(window, "UndoLastRemovedMoby");
+        if (target.IsRemoved) throw new InvalidOperationException("Camera fixture did not restore the removed object.");
+        RequireCamera("Restore removed object");
+        Vector3f original = target.Position;
+        target.Position = new Vector3f(original.X + 1, original.Y, original.Z);
+        InvokePrivateVoid(window, "UndoMoby", target);
+        if (target.Position != target.OriginalPosition)
+            throw new InvalidOperationException("Camera fixture did not undo the object transform.");
+        RequireCamera("Undo object transform");
+        Console.WriteLine("OBJECT_CAMERA_CONTINUITY_OK remove/restore/undo preserve XYZ/yaw/pitch");
+    }
+    finally { window.Close(); FlushUi(); }
+}
+
 void RunWorkspaceShellOnly()
 {
     MainWindow window = new()
@@ -675,76 +730,9 @@ void RunWorkspaceShellOnly()
         terrain.ApplyTerrainVertexDeltas(beforeHeightControls);
         initial.Viewport.NotifyTerrainPresentationDataChanged();
 
-        float[] guardedZ = terrain.TerrainVertexDeltas().ToArray();
-        Vector2f[] guardedXy = terrain.TerrainVertexXYDeltas().ToArray();
-        int guardedTextureId = terrain.TextureId;
-        TerrainTextureVisualEdit? guardedTextureVisual = terrain.TextureVisualEdit;
-        TerrainSurfaceBehaviorEdit? guardedSurface = terrain.SurfaceBehaviorEdit;
-        WaitForUiTask(
-            InvokePrivate<Task>(window, "EditTerrainAsync", terrainIndex, terrain),
-            "refusing the hidden full-face terrain dialog in release mode");
-        WaitForUiTask(
-            InvokePrivate<Task>(window, "EditTerrainPointAsync", terrainIndex, terrain, 0),
-            "refusing the hidden full-point terrain dialog in release mode");
-        InvokePrivateVoid(
-            window,
-            "MoveTerrainFromViewport",
-            new ViewportTerrainMoveRequestedEventArgs(terrainIndex, terrain, 0, 0, 32, stageAddCopy: false));
-        InvokePrivateVoid(
-            window,
-            "MoveTerrainFromViewport",
-            new ViewportTerrainMoveRequestedEventArgs(terrainIndex, terrain, 32, -32, 0, stageAddCopy: false));
-        InvokePrivateVoid(
-            window,
-            "MoveTerrainFromViewport",
-            new ViewportTerrainMoveRequestedEventArgs(terrainIndex, terrain, 0, 0, 0, stageAddCopy: true));
-        InvokePrivateVoid(
-            window,
-            "MoveTerrainPointFromViewport",
-            new ViewportTerrainPointMoveRequestedEventArgs(terrainIndex, 0, terrain, 0, 0, 32));
-        InvokePrivateVoid(
-            window,
-            "ApplyViewportTerrainBrush",
-            new ViewportTerrainBrushRequestedEventArgs(
-                terrainIndex,
-                terrain,
-                terrain.Center,
-                TerrainBrushAction.Raise,
-                isStrokeStart: true));
-        InvokePrivateVoid(window, "StageTerrainRemovalFromViewport", terrainIndex, terrain);
-        bool stagedCopy = InvokePrivate<bool>(window, "StageTerrainAddCopyFromViewport", terrainIndex, terrain);
-        bool hiddenPasteBlocked = InvokePrivate<bool>(
-            window,
-            "TryBlockId65UnsupportedTerrainMutation",
-            terrain,
-            "the hidden terrain-look paste shortcut",
-            false,
-            false,
-            true,
-            true);
-        foreach (Key key in new[] { Key.D1, Key.Delete, Key.V })
-        {
-            building.Viewport.RaiseEvent(new KeyEventArgs
-            {
-                RoutedEvent = InputElement.KeyDownEvent,
-                Key = key
-            });
-            FlushUi();
-        }
-        if (!terrain.TerrainVertexDeltas().SequenceEqual(guardedZ) ||
-            !terrain.TerrainVertexXYDeltas().SequenceEqual(guardedXy) ||
-            terrain.TextureId != guardedTextureId ||
-            terrain.TextureVisualEdit != guardedTextureVisual ||
-            terrain.SurfaceBehaviorEdit != guardedSurface ||
-            terrain.IsTerrainRemoved ||
-            terrain.IsTerrainAddClone ||
-            stagedCopy ||
-            !hiddenPasteBlocked ||
-            building.Viewport.TerrainBrushAction != TerrainBrushAction.Off)
-        {
-            throw new InvalidOperationException(
-                "A hidden release terrain dialog, drag, point, brush, add/remove, or look-paste route mutated the HP face.");
-        }
+        // Normal terrain dialogs, dragging and brush tools are now supported.
+        // Their native Save/Create path is exercised by RetailTerrainAuthoringUiCases;
+        // this fixture keeps tab-continuity checks free of modal mutation commands.
         building.Viewport.SelectMoby(moby, focus: false);
         FlushUi();
 
@@ -907,8 +895,8 @@ void RunWorkspaceShellOnly()
         structuralEdit["structureEditMode"] = "add-clone-face";
         File.WriteAllText(researchFixturePath, structuralRoot.ToJsonString());
         string? structuralBlocker = MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath);
-        if (structuralBlocker == null || !structuralBlocker.Contains("structural edit", StringComparison.Ordinal))
-            throw new InvalidOperationException("The release saved-edit gate admitted a research add-clone topology edit.");
+        if (structuralBlocker != null)
+            throw new InvalidOperationException("The saved-edit gate rejected canonical HP add-copy terrain: "+structuralBlocker);
 
         JsonObject missingStructureRoot = JsonNode.Parse(validReleaseTerrainJson)?.AsObject()
             ?? throw new InvalidOperationException("Could not clone the malformed structure fixture.");
@@ -1045,8 +1033,8 @@ void RunWorkspaceShellOnly()
         xyDelta["x"] = 1;
         File.WriteAllText(researchFixturePath, xyRoot.ToJsonString());
         string? xyBlocker = MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath);
-        if (xyBlocker == null || !xyBlocker.Contains("X/Y", StringComparison.Ordinal))
-            throw new InvalidOperationException("The release saved-edit gate admitted research XY movement.");
+        if (xyBlocker != null)
+            throw new InvalidOperationException("The saved-edit gate rejected canonical HP XY movement: "+xyBlocker);
 
         JsonObject lpRoot = JsonNode.Parse(validReleaseTerrainJson)?.AsObject()
             ?? throw new InvalidOperationException("Could not clone the release LP-height fixture.");
@@ -1081,11 +1069,10 @@ void RunWorkspaceShellOnly()
                 window,
                 "TryGetSavedReleaseTerrainEditBlockReason",
                 blockerArguments);
-            if (!blockedSavedTarget || blockerArguments[0] is not string savedTargetReason ||
-                !savedTargetReason.Contains("structural edit", StringComparison.Ordinal))
+            if (blockedSavedTarget)
             {
                 throw new InvalidOperationException(
-                    "Create BIN's release-wide gate admitted a non-current saved research structural edit.");
+                    "The project export gate rejected canonical non-current saved HP add-copy terrain.");
             }
         }
         finally
@@ -1100,36 +1087,8 @@ void RunWorkspaceShellOnly()
         TerrainPolygon researchOnlyFace = buildingGeometry.Polygons.First(face =>
             !ReferenceEquals(face, terrain) && !face.IsTerrainEdited);
         string savedReleaseTerrainSha256 = FileSha256(terrainEditsPath);
-        researchOnlyFace.StageTerrainRemoval();
-
-        float[] selectedHeightBeforeRefusedUndo = terrain.TerrainVertexDeltas().ToArray();
-        Task refusedUndoTask = InvokePrivate<Task>(window, "UndoSelectedTerrainHeightAsync");
-        WaitForUiTask(refusedUndoTask, "refusing height-only Undo while another release structural edit is staged");
-        if (!terrain.TerrainVertexDeltas().SequenceEqual(selectedHeightBeforeRefusedUndo) ||
-            !researchOnlyFace.IsTerrainRemoved ||
-            !string.Equals(FileSha256(terrainEditsPath), savedReleaseTerrainSha256, StringComparison.Ordinal) ||
-            !(statusText.Text ?? string.Empty).Contains("The editor refused", StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                "Undo Height Only partially mutated or persisted terrain while another release structural edit was staged.");
-        }
-
-        AssertDirectTerrainPersistenceRefused(
-            window,
-            terrainEditsPath,
-            savedReleaseTerrainSha256,
-            "a structural terrain edit");
-
-        researchOnlyFace.ResetTerrainEdit();
-        researchOnlyFace.ApplyTerrainPointPositions(researchOnlyFace.Points
-            .Select((point, index) => index == 0 ? new Vector2f(point.X + 1f, point.Y) : point)
-            .ToArray());
-        AssertDirectTerrainPersistenceRefused(
-            window,
-            terrainEditsPath,
-            savedReleaseTerrainSha256,
-            "an XY terrain edit");
-
+        // Source-derived HP authoring is admitted; exact native ownership and
+        // capacity are checked atomically by the compiler, not by the JSON gate.
         researchOnlyFace.ResetTerrainEdit();
         TerrainPolygon lowDetailFace = new(
             researchOnlyFace.Points,
@@ -1156,20 +1115,6 @@ void RunWorkspaceShellOnly()
             buildingGeometry.Polygons.Remove(lowDetailFace);
         }
 
-        researchOnlyFace.StageTerrainRemoval();
-
-        Task<bool> blockedSaveTask = InvokePrivate<Task<bool>>(
-            window,
-            "TrySaveCurrentTerrainEditsAsync",
-            (object?)null);
-        WaitForUiTask(blockedSaveTask, "refusing a live release structural terrain save");
-        if (blockedSaveTask.GetAwaiter().GetResult() ||
-            !string.Equals(FileSha256(terrainEditsPath), savedReleaseTerrainSha256, StringComparison.Ordinal) ||
-            !(statusText.Text ?? string.Empty).Contains("The editor refused", StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                "Save Terrain Changes admitted or rewrote data for a live research structural terrain edit.");
-        }
         researchOnlyFace.ResetTerrainEdit();
         InvokePrivateVoid(window, "RefreshCurrentLevelDetails");
         FlushUi();
@@ -1177,8 +1122,8 @@ void RunWorkspaceShellOnly()
         Console.WriteLine(
             "Workspace shell smoke passed: one shared existing-level editor with exact Objects/Terrain/Game Settings/Environment tabs, " +
             "no Object Manager or wipe route, level-load identity, camera/selection, unsaved object and terrain edits, write-free tab changes, " +
-            "non-flattening HP-Z controls, actual height-only Undo/Save state, release shortcut refusals, and release-wide " +
-            "research-edit Save/Create BIN gates all remained intact.");
+            "non-flattening height controls, actual height-only Undo/Save state, and release-wide " +
+            "canonical HP XYZ/topology admission and malformed/non-HP geometry Save/Create BIN gates remained intact.");
     }
     finally
     {

@@ -152,10 +152,12 @@ try
     foreach (StableFixture fixture in stableFixtures)
         await VerifyStableFixtureAsync(fixture);
 
-    await VerifyCellCrossingRejectAsync();
+    await VerifyExtendedFixtureAsync("Artisans +8 collision-cell crossing", "artisans", 2, 64, [0, 0, 0, 8], null, true);
+    await VerifyReachableArtisansFloorAsync();
+    await VerifyCoupledTopologyAsync();
     await VerifyPhysicalTargetConflictRejectAsync();
     await VerifyAlpineAliasRejectAsync();
-    await VerifyXyRejectAsync();
+    await VerifyExtendedFixtureAsync("Dry Canyon XYZ point movement", "drycanyon", 40, 94, [16, 0, 0, 0], new Vector2f(9028, 8047), false);
     await VerifyLowDetailRejectAsync();
     await VerifyUnavailableCollisionContextRejectAsync();
     await VerifyUnmatchedFanRejectAsync();
@@ -165,11 +167,13 @@ try
     Assert(
         Sha256File(sourceImagePath).Equals(RetailBinSha256, StringComparison.OrdinalIgnoreCase),
         "The retail source BIN changed while the smoke was running.");
-    Console.WriteLine("PASS TerrainCollisionFanSmoke: 4 exact stable fan rows and 9 atomic rejection rows passed.");
+    Console.WriteLine("PASS TerrainCollisionFanSmoke: 4 exact fan stages, 2 extended XYZ/index stages, 2 coupled add/remove transactions and 7 atomic refusal cases passed.");
 }
 finally
 {
-    if (Directory.Exists(tempRoot) &&
+    if (Environment.GetEnvironmentVariable("SPYRO_TERRAIN_V1_KEEP_FIXTURES")=="1")
+        Console.WriteLine("TERRAIN_V1_RETAINED_FIXTURES "+tempRoot);
+    else if (Directory.Exists(tempRoot) &&
         Path.GetFileName(tempRoot).StartsWith("Spyro.Editor.TerrainCollisionFanSmoke-", StringComparison.Ordinal))
     {
         Directory.Delete(tempRoot, recursive: true);
@@ -217,12 +221,45 @@ async Task VerifyStableFixtureAsync(StableFixture fixture)
         context.Level,
         "",
         context.SourceSearchPath,
-        editsPath);
+        editsPath, deferCoupledTopology:true);
+
+    {
+        var finalPlan=TerrainPatchExporter.BuildPlan(sourceImagePath,sourceCuePath,plan.OutputImagePath,plan.OutputCuePath,
+            context.Level,"",context.SourceSearchPath,editsPath);
+        Assert(finalPlan.SkippedEdits.Count==0,$"{fixture.Name}: final coupled geometry transaction was not complete.");
+        if(fixture.LevelKey=="townsquare")
+        {
+            string failedBin=TempPath("paired-publication.bin"),failedCue=TempPath("paired-publication.cue");
+            byte[] previous=[1,7,9,4];File.WriteAllBytes(failedBin,previous);Directory.CreateDirectory(failedCue);
+            bool refused=false;
+            try { await TerrainPatchExporter.ExportPreparedPlanAsync(finalPlan with{OutputImagePath=failedBin,OutputCuePath=failedCue}); }
+            catch(InvalidDataException) { refused=true; }
+            Assert(refused&&File.ReadAllBytes(failedBin).SequenceEqual(previous)&&Directory.Exists(failedCue),"A failed CUE publication must preserve the previous BIN and blocked CUE destination");
+            Assert(!File.Exists(Path.ChangeExtension(failedBin,"terrain-patch-plan.json")),"Failed paired publication left a new final report");
+            Console.WriteLine("TERRAIN_PREPARED_PUBLICATION_FAILURE_PRESERVED_OK");
+        }
+        if(finalPlan.NativeLevelReplacement!=null)
+        {
+            var replacement=finalPlan.NativeLevelReplacement;
+            Assert(replacement.After.Length>replacement.Before.Length&&(replacement.After.Length-replacement.Before.Length)%0x800==0,"Growth must use whole native disc sectors");
+            Assert(replacement.FinalRuntimeEnd<=Spyro.Editor.Core.Universal.UniversalMobyComposer.NormalBufferFloor-Spyro.Editor.Core.Universal.UniversalMobyComposer.RamSafetyMargin,"Growth escapes native RAM owner");
+            string? keep=Environment.GetEnvironmentVariable("SPYRO_TERRAIN_V1_KEEP_OUTPUT");
+            if(!string.IsNullOrWhiteSpace(keep))
+            {
+                Directory.CreateDirectory(keep);
+                var materialized=await TerrainPatchExporter.ExportPreparedPlanAsync(finalPlan with {OutputImagePath=Path.Combine(keep,fixture.LevelKey+"-lp-growth.bin"),OutputCuePath=Path.Combine(keep,fixture.LevelKey+"-lp-growth.cue")});
+                Assert(materialized.WroteImage,"Growing terrain body was not materialized");
+                Console.WriteLine($"TERRAIN_V1_GROWTH_CANDIDATE {materialized.OutputCuePath}; RAMend0x{replacement.FinalRuntimeEnd:X}");
+            }
+        }
+    }
 
     Assert(plan.SkippedEdits.Count == 0, $"{fixture.Name}: unexpected exporter skip: {string.Join(" | ", plan.SkippedEdits)}");
     Assert(
         plan.Patches.All(patch =>
             patch.Kind.Equals("visual-hp-topology-safe", StringComparison.Ordinal) ||
+            patch.Kind.Equals("visual-lp-topology-safe", StringComparison.Ordinal) ||
+            patch.Kind.Equals("terrain-sector-bounds", StringComparison.Ordinal) ||
             patch.Kind.Equals("collision-triangle-fan", StringComparison.Ordinal)),
         $"{fixture.Name}: a legacy side-wall/index/append/sector-shift patch escaped into the stable plan: " +
         string.Join(", ", plan.Patches.Select(patch => patch.Kind).Distinct()));
@@ -256,7 +293,7 @@ async Task VerifyStableFixtureAsync(StableFixture fixture)
         $"{fixture.Name}: exact native collision fan mismatch. Expected [{string.Join(",", fixture.FanIndexes)}], " +
         $"got [{string.Join(",", collisionByIndex.Keys.Order())}].");
     Assert(
-        plan.PatchCount == visualPatches.Length + fixture.FanIndexes.Length,
+        plan.PatchCount == visualPatches.Length + fixture.FanIndexes.Length + plan.Patches.Count(patch => patch.Kind is "visual-lp-topology-safe" or "terrain-sector-bounds"),
         $"{fixture.Name}: stable plan contains an unexpected extra patch.");
 
     Dictionary<Point3, Point3> targetByOriginal = fixture.OriginalPoints
@@ -341,18 +378,119 @@ async Task VerifyStableFixtureAsync(StableFixture fixture)
         $"source={fixture.SourceFanSha256[..12]}, after={fixture.PatchedFanSha256[..12]}.");
 }
 
-async Task VerifyCellCrossingRejectAsync()
+async Task VerifyCoupledTopologyAsync()
 {
-    await ExpectRejectedAsync(
-        "Artisans +8 collision-cell crossing",
-        "artisans",
-        geometry =>
+    LevelContext context=contexts["artisans"];
+    foreach(bool remove in new[]{false,true})
+    {
+        var geometry=GeometryOverlayLoader.LoadFirstCandidate(context.OverlayPath);
+        var face=FindFace(geometry,90,0);
+        if(remove) face.StageTerrainRemoval();
+        else { face.ApplyTerrainVertexXYDeltas(face.OriginalPoints.Select(_=>new Vector2f(160,0)).ToArray()); face.StageTerrainAddClone(); }
+        string edits=TempPath(remove?"coupled-remove.json":"coupled-add.json");
+        await TerrainEditStore.SaveAsync(edits,[face],remove?"Coupled native remove":"Coupled native copy");
+        var plan=TerrainPatchExporter.BuildPlan(sourceImagePath,sourceCuePath,TempPath("topology.bin"),TempPath("topology.cue"),context.Level,"",context.SourceSearchPath,edits);
+        Assert(plan.SkippedEdits.Count==0 && plan.Patches.Any(p=>p.Kind=="terrain-coupled-topology"),"Coupled topology did not own the complete terrain transaction.");
+        string? root=Environment.GetEnvironmentVariable("SPYRO_TERRAIN_V1_KEEP_OUTPUT");
+        if(!string.IsNullOrWhiteSpace(root))
         {
-            TerrainPolygon face = FindFace(geometry, 2, 64);
-            face.ApplyTerrainVertexDeltas([0, 0, 0, 8]);
-            return [face];
-        },
-        ["exact native lookup cells", "Collision-cell-changing edits"]);
+            string prefix=Path.Combine(root,remove?"artisans-floor-remove":"artisans-floor-copy");
+            var result=await TerrainPatchExporter.ExportAsync(new TerrainPatchRequest(sourceImagePath,sourceCuePath,prefix,context.Level,"",context.SourceSearchPath,edits,"",true));
+            Assert(result.WroteImage,"Coupled topology did not write native output");
+            foreach(var p in result.Plan.Patches)
+            {
+                byte[] expected=ParseHexBytes(p.AfterHexPreview);
+                Assert(ReadWadBytes(result.OutputImagePath,ParseOffset(p.WadRelativeOffset),expected.Length).SequenceEqual(expected),"Coupled topology readback mismatch");
+            }
+            File.Copy(edits,prefix+"-edits.json",true);
+            Console.WriteLine($"TERRAIN_V1_TOPOLOGY_CANDIDATE remove={remove} cue={result.OutputCuePath} source90:0 X5248..5376/Y3200..3328/Z566 copied X+160");
+        }
+        Console.WriteLine($"PASS coupled topology: remove={remove}; patches={plan.PatchCount}");
+    }
+}
+
+async Task VerifyReachableArtisansFloorAsync()
+{
+    string? root = Environment.GetEnvironmentVariable("SPYRO_TERRAIN_V1_KEEP_OUTPUT");
+    if (string.IsNullOrWhiteSpace(root)) return;
+    Directory.CreateDirectory(root);
+    LevelContext context = contexts["artisans"];
+    GeometryCandidate geometry = GeometryOverlayLoader.LoadFirstCandidate(context.OverlayPath);
+    TerrainPolygon face = FindFace(geometry, 90, 0);
+    HashSet<(float X,float Y,float Z)> targets = face.OriginalPoints.Select((p,i)=>(p.X,p.Y,face.OriginalZValues[i])).ToHashSet();
+    List<TerrainPolygon> edited = [];
+    foreach (TerrainPolygon candidate in geometry.Polygons)
+    {
+        float[] z = candidate.OriginalPoints.Select((point,i)=>targets.Contains((point.X,point.Y,candidate.OriginalZValues[i]))?8f:0f).ToArray();
+        if (z.Any(value=>value!=0)) { candidate.ApplyTerrainVertexDeltas(z); edited.Add(candidate); }
+    }
+    string path=Path.Combine(root,"artisans-reachable-floor-edits.json");
+    await TerrainEditStore.SaveAsync(path,edited,"V1 reachable Artisans floor: shared-corner closure +8");
+    TerrainPatchResult result=await TerrainPatchExporter.ExportAsync(new TerrainPatchRequest(sourceImagePath,sourceCuePath,
+        Path.Combine(root,"artisans-reachable-floor"),context.Level,"",context.SourceSearchPath,path,"",true));
+    Assert(result.WroteImage&&result.Plan.SkippedEdits.Count==0,"Reachable floor did not produce a complete native candidate.");
+    foreach(var patch in result.Plan.Patches)
+    {
+        byte[] after=ParseHexBytes(patch.AfterHexPreview);
+        Assert(ReadWadBytes(result.OutputImagePath,ParseOffset(patch.WadRelativeOffset),after.Length).SequenceEqual(after),"Reachable floor readback mismatch.");
+    }
+    Console.WriteLine($"TERRAIN_V1_REACHABLE_CANDIDATE cue={result.OutputCuePath}; source face90:0 native corners X5248..5376/Y3200..3328/Z566→574; {edited.Count} alias-closed edited faces");
+}
+
+async Task VerifyExtendedFixtureAsync(string name, string levelKey, int sector, int faceIndex,
+    float[] z, Vector2f? firstPoint, bool requiresIndex)
+{
+    LevelContext context = contexts[levelKey];
+    GeometryCandidate geometry = GeometryOverlayLoader.LoadFirstCandidate(context.OverlayPath);
+    TerrainPolygon face = FindFace(geometry, sector, faceIndex);
+    face.ApplyTerrainVertexDeltas(z);
+    if (firstPoint != null)
+    {
+        Vector2f[] xy = face.OriginalPoints.ToArray(); xy[0] = firstPoint.Value;
+        face.ApplyTerrainPointPositions(xy);
+    }
+    string edits = TempPath($"extended-{levelKey}.json");
+    await TerrainEditStore.SaveAsync(edits, [face], name);
+    TerrainPatchPlan plan = TerrainPatchExporter.BuildPlan(sourceImagePath, sourceCuePath,
+        TempPath($"extended-{levelKey}.bin"), TempPath($"extended-{levelKey}.cue"), context.Level,
+        "", context.SourceSearchPath, edits, deferCoupledTopology:requiresIndex);
+    if(requiresIndex)
+    {
+        var complete=TerrainPatchExporter.BuildPlan(sourceImagePath,sourceCuePath,plan.OutputImagePath,plan.OutputCuePath,context.Level,"",context.SourceSearchPath,edits);
+        Assert(complete.SkippedEdits.Count==0,"Complete native lookup+LP transaction failed");
+    }
+    Assert(plan.SkippedEdits.Count == 0, name + ": skipped a requested edit");
+    Assert(plan.Patches.Any(p => p.Kind == "visual-hp-topology-safe") && plan.Patches.Any(p => p.Kind == "collision-triangle-fan"), name + ": missing coupled visual/collision patches");
+    Assert(plan.Patches.Any(p => p.Kind.StartsWith("collision-index-", StringComparison.Ordinal)) == requiresIndex, name + ": unexpected lookup index ownership");
+    foreach (TerrainPatch patch in plan.Patches)
+    {
+        byte[] before = ParseHexBytes(patch.BeforeHexPreview);
+        Assert(ReadWadBytes(sourceImagePath, ParseOffset(patch.WadRelativeOffset), before.Length).SequenceEqual(before), name + ": exact original preimage mismatch");
+        if (patch.Kind != "collision-triangle-fan") continue;
+        DecodedTriangle source = DecodeTriangle(before), target = DecodeTriangle(ParseHexBytes(patch.AfterHexPreview));
+        Assert(source.ZFlags == target.ZFlags, name + ": native collision flags changed");
+        Assert(target.Points.Distinct().Count() == 3, name + ": collision triangle became degenerate");
+    }
+    string? keepRoot = Environment.GetEnvironmentVariable("SPYRO_TERRAIN_V1_KEEP_OUTPUT");
+    if (!string.IsNullOrWhiteSpace(keepRoot) && levelKey == "artisans")
+    {
+        Directory.CreateDirectory(keepRoot);
+        string prefix = Path.Combine(keepRoot, "artisans-cell-crossing");
+        TerrainPatchResult result = await TerrainPatchExporter.ExportAsync(new TerrainPatchRequest(
+            sourceImagePath, sourceCuePath, prefix, context.Level, "", context.SourceSearchPath, edits, "", true));
+        Assert(result.WroteImage, name + ": normal exporter did not write candidate");
+        if(result.Plan.NativeLevelReplacement is { } replacement)
+            Assert(Spyro.Editor.Core.Universal.UniversalDiscImage.Read(result.OutputImagePath).EntryBytes(context.Level.SourceWadEntry).SequenceEqual(replacement.After),"Complete growing lookup+LP body readback mismatch");
+        else foreach (TerrainPatch patch in result.Plan.Patches)
+        {
+            byte[] expected = ParseHexBytes(patch.AfterHexPreview);
+            Assert(ReadWadBytes(result.OutputImagePath, ParseOffset(patch.WadRelativeOffset), expected.Length).SequenceEqual(expected),
+                name + ": candidate patch readback differs");
+        }
+        File.Copy(edits, Path.Combine(keepRoot, "artisans-edits.json"), true);
+        Console.WriteLine($"TERRAIN_V1_CANDIDATE cue={result.OutputCuePath}; BIN/readback=verified; face=2:64:hp; point4 Z+8");
+    }
+    Console.WriteLine($"PASS exact native fan/index stage: {name}; patches={plan.PatchCount}, lookupRebuilt={requiresIndex}.");
 }
 
 async Task VerifyPhysicalTargetConflictRejectAsync()
@@ -388,22 +526,6 @@ async Task VerifyAlpineAliasRejectAsync()
             return [face];
         },
         ["independent HP vertex slots", "Coordinate-alias collision ownership is ambiguous"]);
-}
-
-async Task VerifyXyRejectAsync()
-{
-    await ExpectRejectedAsync(
-        "Dry Canyon XY move",
-        "drycanyon",
-        geometry =>
-        {
-            TerrainPolygon face = FindFace(geometry, 40, 94);
-            Vector2f[] points = face.OriginalPoints.ToArray();
-            points[0] = new Vector2f(9100, 8150);
-            face.ApplyTerrainPointPositions(points);
-            return [face];
-        },
-        ["Z-only movement", "XY edits remain research-only"]);
 }
 
 async Task VerifyLowDetailRejectAsync()
@@ -458,7 +580,7 @@ async Task VerifyLowDetailRejectAsync()
         "Town Square low-detail geometry edit",
         context,
         [lp],
-        ["high-detail (HP) Z edits only", "LP edits remain research-only"],
+        ["high-detail (HP) source faces", "direct LP edits are not supported"],
         extendedSourceSearchPath);
 }
 
