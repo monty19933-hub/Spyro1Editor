@@ -253,6 +253,13 @@ public static class UniversalDispatchAnalysis
             if (global == UniversalExeBindings.InitGlobal && a0 is int k && k is > 0 and < 0x200) spawns.Add(k);
             if (global == UniversalExeBindings.ParticleSpawnGlobal && a1 is int p && p is >= 0 and < 0x51) particles.Add(p);
         }
+        foreach (var call in UniversalDependencyAnalysis.Calls(o, insns))
+        {
+            if (call.Global == UniversalExeBindings.InitGlobal && call.Argument0 is > 0 and < 0x200)
+                spawns.Add((int)call.Argument0.Value);
+            if (call.Global == UniversalExeBindings.ParticleSpawnGlobal && call.Argument1 is < 0x51)
+                particles.Add((int)call.Argument1.Value);
+        }
         return (spawns, particles);
     }
 
