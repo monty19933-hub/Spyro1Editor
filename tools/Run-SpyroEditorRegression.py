@@ -199,6 +199,7 @@ CORE_CASES = (
     ("UniversalSpawnProducerSmoke", "UNIVERSAL_SPAWN_PRODUCER_CHECKS_OK"),
     ("UniversalGemCollectionSmoke", "UNIVERSAL_GEM_ADAPTER_FREE_OK"),
     ("UniversalClassOwnershipSmoke", "UNIVERSAL_CLASS_OWNERSHIP_FREE_OK"),
+    ("UniversalModelTailSmoke", "UNIVERSAL_MODEL_TAIL_FREE_OK"),
     ("UniversalPlayerDamageSmoke", "UNIVERSAL_PLAYER_DAMAGE_SMOKE_OK"),
     ("UniversalPlayerDamageWritesSmoke", "UNIVERSAL_PLAYER_DAMAGE_WRITES_OK"),
     ("UniversalRowRemovalSmoke", "UNIVERSAL_ROW_REMOVAL_CHECKS_OK"),
