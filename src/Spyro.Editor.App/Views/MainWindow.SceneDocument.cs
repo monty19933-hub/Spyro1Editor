@@ -166,6 +166,8 @@ public sealed partial class MainWindow
         string? imageSelection=_discImagePathBox.Text,skySelection=_skyboxDiscImagePathBox.Text;
         var flightIntent=_releaseMode?null:NativeFreeFlightProjectExportIntent.Capture(workspacePath);
         var saved=SceneDocument.Read(FreshScenePath);
+        bool? startInAuthoredLevel=await ShowProjectExportScopeAsync(saved,authoredActive);
+        if(startInAuthoredLevel==null){_statusText.Text="BIN creation canceled.";return;}
         void RequireOwner()
         {
             if(!IsCurrentSourceDiscOperationIdentity(owner)||imageSelection!=_discImagePathBox.Text||skySelection!=_skyboxDiscImagePathBox.Text||
@@ -173,6 +175,7 @@ public sealed partial class MainWindow
                 throw new InvalidDataException("The authored project, scene, source selection or saved revision changed during export.");
             flightIntent?.RequireCurrent(workspacePath);
             if(TryGetFreeFlightSettingsExportBlockReason(out string reason))throw new InvalidDataException(reason);
+            if(TryGetId65BlankLabNormalCreateBinBlockReason(out reason))throw new InvalidDataException(reason);
         }
         RequireOwner();
         ReportCreateBinProgress("Compiling level…","Create BIN: compiling authored geometry, collision, materials and spawn…");
@@ -203,10 +206,12 @@ public sealed partial class MainWindow
         string hash=await Task.Run(()=>compilation.ExportAsync(donors,placements,japanese,output,workspacePath,_retailCatalog,
             requireDocumentCurrent: () => Dispatcher.UIThread.InvokeAsync(RequireOwner).GetAwaiter().GetResult(),
             stagedRetailImage:retail?.WroteImage==true?retail.OutputImagePath:null,retailEggs:retail?.ActiveDragonflyEggs,retailSignLevels:retail?.SignLevelKeys,
-            retailNames:retail?.DeferredLevelNames));
+            retailNames:retail?.DeferredLevelNames,startInAuthoredLevel:startInAuthoredLevel.Value));
         RequireOwner();
-        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. Choose New Game to play {saved.Name}"+
-            (retail?.WroteImage==true?$"; saved edits from {retail.PatchedLevelNames.Count} existing levels are included":"")+".";
+        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in "+
+            (startInAuthoredLevel.Value?saved.Name:"Artisans")+
+            (retail?.WroteImage==true?$"; saved edits from {retail.PatchedLevelNames.Count} existing levels are included":"")+
+            "."+PreservedResearchExportNote();
     }
 
     private Control BuildFreshDocumentSettings()

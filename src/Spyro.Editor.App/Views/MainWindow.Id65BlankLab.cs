@@ -6817,6 +6817,12 @@ public sealed partial class MainWindow
 
     private bool TryGetId65BlankLabNormalCreateBinBlockReason(out string reason)
     {
+        // Release projects use the regular edit manifests and SceneDocument. Old
+        // _research drafts remain separate documents, not implicit export input.
+        // Keep the donor check: a regular edit must never smuggle a lab owner in.
+        if (_releaseMode && !IsCurrentId65BlankLab())
+            return TryGetInvalidRetailTerrainTextureRelocationDonorBlockReason(out reason);
+
         if (Id65BlankLabHasCanonicalAuthoringDocument())
         {
             if (_id65FreshAuthoringDocument != null)

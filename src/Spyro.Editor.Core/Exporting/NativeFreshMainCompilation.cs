@@ -109,7 +109,7 @@ public sealed class NativeFreshMainCompilation
     public async Task<string> ExportAsync(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements,
         UniversalJapaneseSource? japanese,string outputImage,string identityWorkspace,LevelCatalog nativeCatalog,CancellationToken token=default,Action? requireDocumentCurrent=null,
         string? stagedRetailImage=null,IReadOnlyList<(int LevelIndex,int Row,int Colour)>? retailEggs=null,IReadOnlySet<string>? retailSignLevels=null,
-        IReadOnlyList<LevelTextReplacement>? retailNames=null)
+        IReadOnlyList<LevelTextReplacement>? retailNames=null,bool startInAuthoredLevel=true)
     {
         if(Path.GetFullPath(outputImage)==Path.GetFullPath(donors.ImagePath))throw new InvalidDataException("Fresh export cannot replace its original source image.");
         ExportArtifactTransaction.RequireSourceSeparation(donors.ImagePath,null,outputImage,Path.ChangeExtension(outputImage,".cue"));
@@ -117,7 +117,7 @@ public sealed class NativeFreshMainCompilation
         UniversalNativeLayoutStore.Validate(identityWorkspace,Target.Key,0);
         var baseline=UniversalDiscImage.Read(stagedRetailImage??_baseline);
         byte[] stagedExe=stagedRetailImage==null?_exe.ToArray():MergeAuthoredExecutable(donors.Disc.Exe,baseline.Exe);
-        NativeFreshNewGameEntry.Apply(donors.Disc.Exe,stagedExe);
+        NativeFreshNewGameEntry.Apply(donors.Disc.Exe,stagedExe,startInAuthoredLevel);
         var compose=placements.Count == 0 ? null : ComposeWithExecutable(donors,placements,stagedExe,UniversalMobyExport.SpecialProvider(japanese));
         byte[] levelData=compose?.LevelData ?? _body.ToArray(), overlayData=compose?.Overlay ?? _overlay.ToArray();
         List<(int LevelIndex,int Row,int Colour)> eggs=retailEggs?.ToList()??[];

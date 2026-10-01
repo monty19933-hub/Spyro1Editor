@@ -33,7 +33,7 @@ internal static class FreshMainUiCases
             var removedInterior=window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys.Single(m=>m.TrueIndex==49);
             Set(window,"_selectedMoby",removedInterior);Invoke(window,"RemoveSelectedMoby");
             RunTask((Task)Invoke(window,"SaveCurrentEditsAsync",new object?[]{null})!);
-            RunTask((Task)Invoke(window,"CreateObjectTestBinAsync")!);
+            CreateBin(window);
             string deleteOnlyOutput=Path.Combine(window.CaptureEditorShellSessionSnapshotForTesting().Workspace.RootPath,"output","Spyro Editor - All Saved Edits.bin");
             Check(File.Exists(deleteOnlyOutput),"normal retail delete-only Create BIN produces an image: "+Get<TextBlock>(window,"_statusText").Text);
             var deleteOnly=UniversalDiscImage.Read(deleteOnlyOutput);
@@ -77,7 +77,7 @@ internal static class FreshMainUiCases
             Check(Find<ComboBox>(untexturedBrowser,"UniversalMobyVariant").SelectedItem?.Equals(defaultSheep.Default)==true,"default native sheep version is retained");
             Wait(()=>Find<Button>(untexturedBrowser,"UniversalMobyAddHere").IsEnabled,"untextured fresh scene admits default sheep",180);
             Click(Find<Button>(untexturedBrowser,"UniversalMobyAddHere"));
-            RunTask((Task)Invoke(window,"CreateObjectTestBinAsync")!);
+            CreateBin(window);
             string untexturedOutput=Path.Combine(window.CaptureEditorShellSessionSnapshotForTesting().Workspace.RootPath,"output","Spyro Editor - Authored Level.bin");
             var untexturedRead=UniversalDiscImage.Read(untexturedOutput);var untexturedData=new UniversalLevelData(untexturedRead.EntryBytes(80));
             var untexturedSubfile=untexturedData.Subfiles()[1];
@@ -161,7 +161,7 @@ internal static class FreshMainUiCases
             Console.WriteLine("fresh main: compiled neutral source-bound body");
             RunTask((Task)Invoke(window,"RefreshFreshMaterialPreviewAsync")!);
             Snapshot(window,Path.Combine(outputDirectory,"fresh-main-authored-material.png"));
-            RunTask((Task)Invoke(window,"CreateObjectTestBinAsync")!);
+            CreateBin(window);
             string emptyOutput=Path.Combine(root,"output","Spyro Editor - Authored Level.bin");
             Check(File.Exists(emptyOutput)&&new UniversalLevelData(UniversalDiscImage.Read(emptyOutput).EntryBytes(80)).Scene().RowCount==0,"ordinary Create BIN handles a neutral scene without imported actors: "+Get<TextBlock>(window,"_statusText").Text);
             Click(Find<Button>(window,"UniversalMobyLibraryButton"));
@@ -189,7 +189,7 @@ internal static class FreshMainUiCases
             RunTask((Task)Invoke(window,"OpenMainFreshLevelAsync")!);
             Check(window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys.Single().UniversalPlacementId==id,"normal Save/Open preserves source placement identity");
             Console.WriteLine("fresh main: normal Create BIN with saved flight " + (flightOn?"ON":"OFF"));
-            RunTask((Task)Invoke(window,"CreateObjectTestBinAsync")!);
+            CreateBin(window);
             string output=Path.Combine(root,"output","Spyro Editor - Authored Level.bin");
             Check(File.Exists(output),"ordinary Create BIN emits authored native image: "+Get<TextBlock>(window,"_statusText").Text);
             var read=UniversalDiscImage.Read(output);var level=new UniversalLevelData(read.EntryBytes(80));
@@ -219,7 +219,7 @@ internal static class FreshMainUiCases
             Check(window.FreshSceneForTesting==null,"actual retail selection is active for aggregate export");
             var preservedPreference=Spyro.Editor.Core.Persistence.NativeFreeFlightSettingsStore.SaveGlobal(
                 Spyro.Editor.Core.Persistence.NativeFreeFlightSettingsStore.Capture(root),true);
-            RunTask((Task)Invoke(window,"CreateObjectTestBinAsync")!);
+            CreateBin(window);
             var fromRetail=UniversalDiscImage.Read(output);
             Check(fromRetail.Exe.AsSpan(0x3A30,432).SequenceEqual(originalDisc.Exe.AsSpan(0x3A30,432))&&
                 Spyro.Editor.Core.Persistence.NativeFreeFlightSettingsStore.Capture(root).ContentSha256==preservedPreference.ContentSha256,
@@ -288,6 +288,20 @@ internal static class FreshMainUiCases
         bool refused=false;try{_=Compile(wide);}catch(TargetInvocationException e)when(e.InnerException is InvalidDataException){refused=true;}
         Check(refused,"collision range overflow refuses rather than truncates authored vertices");
         Console.WriteLine("AUTHORED_MESH_CHECKS_OK: copy/remove, stable IDs, independent visual/collision ramp decode, near/far colours, quad and overflow");
+    }
+    private static void CreateBin(MainWindow window)
+    {
+        var task=(Task)Invoke(window,"CreateObjectTestBinAsync")!;
+        Wait(()=>task.IsCompleted||window.OwnedWindows.Any(w=>w.Name=="ProjectExportScope"),"export scope");
+        if(!task.IsCompleted)
+        {
+            var dialog=window.OwnedWindows.Single(w=>w.Name=="ProjectExportScope");
+            var start=Find<ComboBox>(dialog,"ExportStartLevel");
+            Check(start.SelectedIndex==(window.FreshSceneForTesting==null?0:1),"export starts in the selected scene by default");
+            start.SelectedIndex=1;
+            Click(Find<Button>(dialog,"ExportCreate"));
+        }
+        RunTask(task);
     }
     private static void Set(object owner,string field,object value)=>owner.GetType().GetField(field,BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(owner,value);
     private static void RunTask(Task task){Wait(()=>task.IsCompleted,"async operation",600);task.GetAwaiter().GetResult();}
