@@ -124,6 +124,12 @@ public static class UniversalMobyComposer
         var activeOrder = Enumerable.Range(0, placements.Count).Where(i => !placements[i].Retired).ToArray();
         incomingOrder = activeOrder.Select(i => incomingOrder[i]).ToArray();
         placements = activeOrder.Select(i => placements[i]).ToArray();
+        foreach (var placement in placements.Where(p => string.Equals(p.SourceLevelKey, "alpineridge", StringComparison.OrdinalIgnoreCase) && p.SourceRowIndex == 1))
+        {
+            int sourceClass = BinaryPrimitives.ReadUInt16LittleEndian(source(placement.SourceLevelKey).Data.Row(placement.SourceRowIndex).AsSpan(0x36));
+            if (UniversalRuntimeInteractionGuards.ReasonFor(destination.Key, placement.SourceLevelKey, placement.SourceRowIndex, sourceClass) is string failure)
+                throw new InvalidDataException(failure);
+        }
         UniversalLevelData dest = new(destinationData.ToArray());
         int nativeRowsBefore = dest.Scene().RowCount;
         var permanentlyRemoved = UniversalRowRemoval.Normalize(nativeRowsBefore, removedRows);

@@ -19,6 +19,14 @@ Check(allocator.ImportedReservations.Sum(r=>r.Length) == 544, "Reservation inclu
 Check(allocator.Clone().ImportedReservations.SequenceEqual(allocator.ImportedReservations), "Cloned allocator preserves reservation proof");
 allocator.Reserve(2048,32);
 Check(allocator.ImportedReservations[^1].Offset == 2048, "In-place equivalent texture storage is also reserved");
+Check(UniversalRuntimeInteractionGuards.ReasonFor("artisans","alpineridge",1,0x10F)==UniversalRuntimeInteractionGuards.AlpineArtisansFailure,"Observed interaction failure distinct from capacity");
+Check(UniversalRuntimeInteractionGuards.ReasonFor("townsquare","alpineridge",1,0x10F)==null && UniversalRuntimeInteractionGuards.ReasonFor("artisans","alpineridge",2,0x10F)==null,"Runtime guard remains bounded to exact source row/destination");
+Check(UniversalRuntimeInteractionGuards.ReasonFor("artisans","wizardpeak",18,0x11C)==null,"Wizard source independently qualified");
+if(args.FirstOrDefault()=="--runtime-guards")
+{
+    await RuntimeInteractionGuardCases.Run(args[1],args[2],Check);
+    Console.WriteLine($"UNIVERSAL_RUNTIME_GUARD_OK checks={checks}");return;
+}
 if(args.FirstOrDefault()=="--prepared-growth")
 {
     await PreparedPrivateTerrainGrowthCases.Run(args[1],args[2],args[3],args[4],Check);
@@ -38,7 +46,7 @@ if (args.Length >= 4)
     MobyMetadataEnricher.Apply(new EditorWorkspace(snapshot), "artisans", names);
     var labels = names.ToDictionary(m => m.TrueIndex, m => (m.DisplayLabel, m.CandidateKind));
     UniversalMobyPlacement Trial(string key, int row) => new(key,row, 0,0,0, EditorId:"capacity-candidate",PersistentSlot:placed.Count);
-    var trial = placed.Append(Trial("alpineridge",1)).ToList();
+    var trial = placed.Append(Trial("wizardpeak",18)).ToList();
     var baseline = UniversalMobyCatalogBuilder.DryRun(lib,source.Level, placed,special,removed);
     Check(baseline.Error == null && baseline.Result!.Ram.FinalHeadroom == 8444, "Saved project baseline must remain composable");
     var magic = UniversalCapacityPlanner.Analyze(lib,source.Level,placed.Append(Trial("magiccrafters",1)).ToList(),removed,
@@ -46,21 +54,21 @@ if (args.Length >= 4)
     Check(magic.CurrentError?.Contains("0x13B") == true && magic.Checks == 1 && magic.Plans.Count == 0, "Source child dependency is distinct from capacity");
     var advice = UniversalCapacityPlanner.Analyze(lib,source.Level,trial,removed,
         row => labels.GetValueOrDefault(row,($"Object T{row}","unknown")),special);
-    Check(advice.Plans.Count > 0, "Actual Artisans snapshot must get a verified Druid removal plan");
-    var plan = advice.Plans.FirstOrDefault(p => p.AdditionalRows.SequenceEqual(new[]{7,31,32,33,94}));
-    Check(plan != null, "Five-actor ordinary enemy/pickup plan must be found");
+    Check(advice.Plans.Count > 0, "Actual Artisans snapshot must get a verified source row2 capacity plan");
+    var plan = advice.Plans.FirstOrDefault();
+    Check(plan != null, "Ordinary enemy/pickup capacity plan must be found");
     Check(advice.Plans.All(p => p.Groups.All(g => g.EffectPriority <= 2)), "Default plans must avoid progression/transport/controller removals");
     var composed = UniversalMobyCatalogBuilder.DryRun(lib,source.Level,trial,special,removed.Concat(plan!.AdditionalRows).ToArray());
     Check(composed.Error == null, "Every emitted suggestion must pass a repeated real compose");
     var r = composed.Result!; var output = new UniversalLevelData(r.LevelData);
     Check(r.Ram.FinalHeadroom >= UniversalMobyComposer.RamSafetyMargin, "Native RAM margin remains enforced");
     Check(output.Scene().RowCount == r.NativeRowsAfter && r.NewRowIndices.Distinct().Count() == trial.Count, "Physical actors/readback are distinct");
-    Check(r.DroppedModelClasses.Contains(0x72) && r.DroppedModelClasses.Contains(0x153) && r.DroppedModelClasses.Contains(0x1A5), "All three exclusively removed models are actually absent");
-    Check(!output.Registrations().Any(reg => new[]{0x72,0x153,0x1A5}.Contains(reg.ClassId)), "Registration readback confirms actual model reclamation");
+    Check(r.DroppedModelClasses.Contains(0x72) && plan.Groups.All(g=>r.DroppedModelClasses.Contains(g.ClassId)), "Every selected exclusively removed model is actually absent");
+    Check(!output.Registrations().Any(reg => plan.Groups.Any(g=>g.ClassId==reg.ClassId)), "Registration readback confirms actual model reclamation");
     Check(r.PlacementSaveRows.SequenceEqual(Enumerable.Range(source.Data.Scene().RowCount,trial.Count)), "Existing lifetime save identities are unchanged");
     Check(BinaryPrimitives.ReadUInt16LittleEndian(output.Row(159).AsSpan(0x36)) == BinaryPrimitives.ReadUInt16LittleEndian(source.Data.Row(159).AsSpan(0x36)), "Legacy sign proxy T159 must not replace the native row");
-    var imported = r.Classes.Single(c => c.SourceLevelKey == "alpineridge" && c.ClassId == 0x10F && !c.DependencyOnly);
-    Check(BinaryPrimitives.ReadUInt16LittleEndian(output.Row(r.NewRowIndices[^1]).AsSpan(0x36)) == imported.DestinationClassId, "Druid row matches explicit mapped registration");
+    var imported = r.Classes.Single(c => c.SourceLevelKey == "wizardpeak" && c.ClassId == 0x11C && !c.DependencyOnly);
+    Check(BinaryPrimitives.ReadUInt16LittleEndian(output.Row(r.NewRowIndices[^1]).AsSpan(0x36)) == imported.DestinationClassId, "Source row matches explicit mapped registration");
     if (args.Length >= 5)
     {
         var ordinary = JsonSerializer.Deserialize<TerrainPatchPlan>(File.ReadAllText(args[4]))!;
@@ -85,8 +93,8 @@ if (args.Length >= 4)
         var jointPlan = NativeTerrainTexturePrivateRecordBatchCompiler.BuildPlan(request with { AdditionalProtectedRanges=jointReservations });
         var jointHost = UniversalCompositionHost.FromPrivateTerrainPlan(args[0],source.Level,jointPlan);
         var joint = jointHost.DryRun(lib,trial,special,gone);
-        Check(joint.Error == null && joint.Result!.Ram.FinalHeadroom == 11448,"Alpine Druid+all saved imports+private68 fit with four extra removals");
-        Check(joint.Result!.Classes.Single(c=>c.SourceLevelKey=="alpineridge"&&c.ClassId==0x13B).DependencyOnly,"Real source-local Alpine shield/child model retained");
+        Check(joint.Error == null && joint.Result!.Ram.FinalHeadroom == 33852,"Wizard Peak18+all saved imports+private68 fit with four extra removals");
+        Check(!joint.Result!.Classes.Any(c=>c.SourceLevelKey=="wizardpeak"&&c.ClassId==0x13B),"Wizard source has no invented Alpine child dependency");
         Check(joint.Result.PlacementSaveRows.SequenceEqual(Enumerable.Range(174,9)),"Joint packing preserves all lifetime IDs");
         var hosts = new Dictionary<string,UniversalCompositionHost>();
         (UniversalComposeResult? Result,string? Error) ExactCheck(IReadOnlyCollection<int> proposed)
@@ -112,7 +120,7 @@ if (args.Length >= 4)
         var repeated=ExactCheck(removed.Concat(exactAdvice.Plans.First().AdditionalRows).ToArray());
         Check(repeated.Error==null && repeated.Result!.Ram.FinalHeadroom==exactAdvice.Plans.First().FinalRamHeadroom,"Planner reports repeated actual private-terrain compose RAM, not retail estimate");
         var repeatedData=new UniversalLevelData(repeated.Result!.LevelData);
-        Check(repeatedData.Registrations().Any(r=>r.ClassId==0x95) && repeatedData.Registrations().Any(r=>r.ClassId==0x1A5),"Smallest plan preserves other Gnorc and Life Chest registrations");
+        Check(new[]{0x95,0x1A5}.Where(c=>!exactAdvice.Plans.First().DroppedModelClasses.Contains(c)).All(c=>repeatedData.Registrations().Any(r=>r.ClassId==c)),"Unselected Gnorc/LifeChest model owners survive smallest measured plan");
         Console.WriteLine(JsonSerializer.Serialize(new{Scope="repeated smallest prepared-host plan",AdditionalRemoved=exactAdvice.Plans.First().AdditionalRows,
             repeated.Result.NewRowIndices,repeated.Result.PlacementSaveRows,repeated.Result.Ram,repeated.Result.DroppedModelBytes,repeated.Result.ReclaimedVramBytes,
             NativeRowsAfter=repeatedData.Scene().RowCount,Status="exact composed-static/readback; runtime not tested"}));

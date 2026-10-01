@@ -48,7 +48,7 @@ public sealed partial class MainWindow
     private string UniversalSourceObjectName(UniversalMobyCatalogEntry entry, UniversalMobyVariant variant)
     {
         if (UniversalSpecialCatalog.IsSpecial(variant)) return entry.Name;
-        if (variant.SourceLevelKey == "alpineridge" && variant.ClassId == 0x10F) return "Alpine Ridge caster";
+        if (variant.SourceLevelKey == "alpineridge" && variant.ClassId == 0x10F) return "Alpine Ridge source object (identity unverified)";
         if (_universalSourceNames.TryGetValue((variant.SourceLevelKey, variant.SourceRow), out var identity)) return identity.Item1;
         if (variant.SourceLevelKey == "wizardpeak" && variant.ClassId == 0x11C) return "Armored Druid (Wizard Peak; roster identity)";
         if (variant.SourceLevelKey == "magiccrafters" && variant.ClassId == 0x10F) return "Armored Druid (Magic Crafters; roster identity)";
@@ -261,6 +261,7 @@ public sealed partial class MainWindow
 
     private static string UniversalFitFailureSummary(string error, string levelName, bool compact)
     {
+        if (error == UniversalRuntimeInteractionGuards.AlpineArtisansFailure) return error;
         bool textureCapacity = error.Contains("texture", StringComparison.OrdinalIgnoreCase) &&
             (error.Contains("space", StringComparison.OrdinalIgnoreCase) || error.Contains("memory", StringComparison.OrdinalIgnoreCase) || error.Contains("allocate", StringComparison.OrdinalIgnoreCase) || error.Contains("fit", StringComparison.OrdinalIgnoreCase));
         bool memory = error.Contains("RAM", StringComparison.OrdinalIgnoreCase) || error.Contains("memory", StringComparison.OrdinalIgnoreCase);
