@@ -6,6 +6,11 @@
   Ridge Druid now damages Spyro and allows normal recovery in the Artisans test;
   its animation memory is included in fit checks and removal suggestions.
 - Fixed a game hang caused by unused slots left after permanent object removal.
+- Fixed imported gems awarding zero and producing incorrect collection effects.
+  All five native values passed collection, ordinary card save and cold Load
+  Game in Artisans, retaining the correct combined total of 43.
+- Expanded verified child-spawn argument recovery without admitting ambiguous
+  object or particle dependencies.
 - Made **Only what fits here** show completed successful checks and refresh
   compatibility details after checking a source variant.
 

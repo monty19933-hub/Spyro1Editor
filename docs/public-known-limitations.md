@@ -10,6 +10,10 @@
   animation and has passed native contact damage and recovery in Artisans.
   Enemy defeat and card reload were not exercised in that specific retest.
   Fitting into memory is separate from passing the game's behavior checks.
+- Imported red, green, blue, gold and purple gem variants from Jacques passed
+  native collection, ordinary card save and cold Load Game in Artisans. Their
+  values remained 1, 2, 5, 10 and 25; all five stayed collected after reload.
+  This verifies those exact variants and destination, not every source/level pair.
 - Fresh levels use the regular editor and normal Create BIN, with authored
   geometry, collision, static native materials and Mobys. This build supports
   one fresh level in slot 65, at most 255 triangles, and the native coordinate,

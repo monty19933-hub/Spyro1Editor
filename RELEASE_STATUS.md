@@ -20,22 +20,38 @@ packages remain separate from the new fixtures. Fly Anywhere remains deferred.
   unused removed slots cold-loaded and passed the Druid contact retest.
 - [x] Make the browser's fit-only filter require a completed exact check and
   refresh the selected variant's result. Fresh-level advice uses its own controls.
-- [ ] Repair and natively retest remapped gem collection. A cold export exposed
-  the shared collection helper's implicit original-class dependency; the failed
-  fixture is retained and is not runtime acceptance.
-- [ ] Complete the next bounded child-spawn provenance expansion and refresh
-  affected coverage, final prepared-project capacity, regressions and packages.
+- [x] Repair remapped gem collection: native red-gem and all-five-value pickup
+  tests passed. Ordinary fairy save, full process restart and Load Game retained
+  all five collected states and the correct total of 43.
+- [x] Complete bounded child-spawn producer recovery: 345 previously refused
+  affected cells now compose; 239 retain genuine RAM refusals.
+- [x] Refresh exact saved-project capacity with all eight existing imports and
+  private terrain retained. Alpine Ridge row 1 fits with additional native rows
+  7, 31, 32 and 33 removed, leaving 29,880 bytes RAM headroom.
+- [x] Source-free Release regression: 316 checks passed, zero failed, against
+  the byte-verified frozen source at 77490f0. Focused source/Debug checks retain
+  their separate module identities in the verification receipt.
+- [x] Complete final retail/default/fresh matrices with explicit regressions
+  caused by newly accounted native allocation.
+- [ ] Complete signed packages and actual packaged GUI normal-export retake.
 
-The first integrated continuation matrix composes 104,837 of 145,285 retail
-variant/destination cells: 39,177 static-only and 65,660 with unverified behavior
-dependencies. The default fresh document composes 3,828 of 4,151 variants.
-These reports precede the gem-helper correction and final child-spawn change;
-their source/module fingerprints are recorded with the reports. Every matrix
-runtime cell remains not-tested. Full universal gameplay coverage is unfinished.
+The final continuation matrix composes 104,293 of 145,285 retail
+variant/destination cells: 39,215 static-only and 65,078 with unverified behavior
+dependencies. This is a net increase of 41,607 over the preserved 62,686-cell
+baseline (42,339 newly composed; 732 newly refused). Compared with the earlier
+integrated 104,837-cell survey, 399 newly compose and 943 now correctly fail RAM
+because the gem collection adapter's actual allocation is included. The final
+default-type matrix composes 4,215 of 7,175 cells; the exact default fresh scene
+composes 3,864 of 4,151 variants. Every matrix runtime cell remains not-tested.
+Full universal gameplay coverage is unfinished. Final reports and exact source
+fingerprints are in `outputs/Universal-placement-coverage-20261001-final` under
+the task workspace. Retail refusals are 25,876 RAM, 7,225 VRAM, 5,624 ownership,
+1,633 extraction, 340 reserved depth and 294 sound.
 
 Current native receipts are described in
 `docs/research/universal-player-reaction-runtime-20261001.md` and
-`docs/research/universal-unoccupied-row-group-20261001.md`.
+`docs/research/universal-unoccupied-row-group-20261001.md` and
+`docs/research/universal-gem-collection-runtime-20261001.md`.
 
 ## Preserved V1.0 release history
 
