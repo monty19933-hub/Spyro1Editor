@@ -96,15 +96,29 @@ type-12 effects in the earlier Artisans five-gem RAM capture; walking away had
 obscured them. The earlier save/reload and counter evidence remains valid, but
 does not establish correct particle cleanup.
 
-The destination's original behavior contains its own direct calls to CollectItem,
-including a call that collects a linked actor. Those calls can receive imported
-gem aliases and bypass the source-handler adapter. Their colour lookup uses the
-mapped class, producing malformed native particles. The native effect subtracts
+The destination's original behavior contains both direct calls to CollectItem
+and a separate linked-actor colour lookup before collection. Both can receive
+imported gem aliases and bypass the source-handler adapter. A mapped class can
+therefore select unrelated colour-table data. The native effect subtracts
 eight from each nonzero colour channel and deletes the effect when all channels
 reach zero. The malformed colours are not multiples of eight, so their channels
-wrap instead of reaching zero. A separate guarded adapter
-for destination calls and a fresh native effects retake are required before
-claiming complete collection behavior.
+wrap instead of reaching zero.
+
+Commit `d01b500` covered authenticated destination-native collection calls.
+The fresh and retail retakes still contained two malformed live particles, so
+that correction did not establish clean effects. The fresh inventory did pass
+43/43 gems and 1/1 egg after corrected treasure accounting; the retail inventory
+passed 43/143. Both failed particle receipts remain preserved.
+
+`UniversalDestinationGemColourAdapter` now also authenticates the independent
+linked colour producer. A non-linking jump preserves the original LUI delay,
+replays the index/address operations and substitutes canonical gem colours only
+for imported gem aliases. The actor class remains unchanged. The trampoline
+preserves the original return address, stack and scratch registers, and requires
+the exact independent instruction following the native load delay. Final-byte
+preimages are checked before publication. Particle lifetimes and palettes are
+not altered. Source checks cover all 35 native destination owners; fresh and
+retail runtime retakes of this combined correction are tracked separately.
 
 Private evidence is under the task's `work/universal-v1-continuation/runtime`:
 `normal-ice-fixed-native-receipt.json`, `normal-five-gems-native-receipt.json`,
