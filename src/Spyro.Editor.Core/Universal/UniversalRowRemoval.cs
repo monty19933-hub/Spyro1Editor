@@ -101,7 +101,11 @@ public static class UniversalRowRemoval
         foreach (int r in gone)
         {
             var row = body.AsSpan(sc.RowsOffset + r * UniversalLevelData.RowStride, UniversalLevelData.RowStride);
-            row.Clear(); BinaryPrimitives.WriteUInt16LittleEndian(row[0x36..], UniversalMobyComposer.InertClass); row[0x53] = 0xFF;
+            row.Clear();
+            // An unoccupied save-map row skips both native constructors. Keep their
+            // unlinked collision-chain sentinel: KillMoby searches group zero otherwise.
+            BinaryPrimitives.WriteInt16LittleEndian(row[0x34..], -1);
+            BinaryPrimitives.WriteUInt16LittleEndian(row[0x36..], UniversalMobyComposer.InertClass); row[0x53] = 0xFF;
         }
         byte[] packed = new byte[body.Length + 4 + fixups.Count * 4]; body.CopyTo(packed, 0);
         BinaryPrimitives.WriteInt32LittleEndian(packed.AsSpan(body.Length), fixups.Count);
