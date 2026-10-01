@@ -33,6 +33,12 @@ packages remain separate from the new fixtures. Fly Anywhere remains deferred.
   their separate module identities in the verification receipt.
 - [x] Complete final retail/default/fresh matrices with explicit regressions
   caused by newly accounted native allocation.
+- [x] Remove the fresh scene's accidental one-object allocation limit while
+  retaining 16 dynamic slots. Release/Debug focused source checks passed; the
+  separate frozen 3785f22 Release regression passed 318 checks, zero failed.
+- [ ] Correct the native six-object retake's treasure maximum and persistent
+  collection effects, then repeat the fresh-level runtime test. Loading,
+  collection of 43 gems, egg 1/1, walking, jumping and landing already passed.
 - [ ] Complete signed packages and actual packaged GUI normal-export retake.
 
 The final continuation matrix composes 104,293 of 145,285 retail
@@ -51,7 +57,8 @@ the task workspace. Retail refusals are 25,876 RAM, 7,225 VRAM, 5,624 ownership,
 Current native receipts are described in
 `docs/research/universal-player-reaction-runtime-20261001.md` and
 `docs/research/universal-unoccupied-row-group-20261001.md` and
-`docs/research/universal-gem-collection-runtime-20261001.md`.
+`docs/research/universal-gem-collection-runtime-20261001.md` and
+`docs/research/universal-fresh-multiple-objects-20261001.md`.
 
 ## Preserved V1.0 release history
 

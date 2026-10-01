@@ -33,8 +33,9 @@ mapped class 0x1FD. BIN SHA-256:
 Cold New Game, collection and continued gameplay passed at 30 game FPS. The
 native global and Artisans counters became 1, both collection bitmaps were set,
 the actor reached state 0xFD, and its imported class was restored. The pause HUD
-displayed 1; the previous lingering incorrect effects were absent. This single
-red-gem run did not exercise a card reload.
+displayed 1. This single red-gem run did not exercise a card reload or establish
+complete effect-lifetime closure; the later shared-collector diagnosis below
+supersedes its earlier visual-effects acceptance.
 
 ## All five values, ordinary save and full cold load
 
@@ -82,10 +83,28 @@ test targets.
 
 Regeneration with the final Core at `07c4f2c`, DLL SHA-256
 `da35796ed5dc2ca8d8a49c3b54bd035fe60127e7cbfec23dedbb8e3bee820826`,
-produces BIN files byte-identical to both native accepted fixtures. All matrix
+produces BIN files byte-identical to both award/persistence fixtures. All matrix
 runtime fields remain not-tested. These six source variants in Artisans do not
 prove every gem source/destination combination, every spawned collectible, or
 all enemy behavior. Broader universal gameplay coverage remains unfinished.
+
+## Shared destination collector found during the fresh-level retake
+
+The six-object fresh-level test exposed persistent collection sprites despite
+correct awards and collected bits. Read-only comparison found the same malformed
+type-12 effects in the earlier Artisans five-gem RAM capture; walking away had
+obscured them. The earlier save/reload and counter evidence remains valid, but
+does not establish correct particle cleanup.
+
+The destination's original behavior contains its own direct calls to CollectItem,
+including a call that collects a linked actor. Those calls can receive imported
+gem aliases and bypass the source-handler adapter. Their colour lookup uses the
+mapped class, producing malformed native particles. The native effect subtracts
+eight from each nonzero colour channel and deletes the effect when all channels
+reach zero. The malformed colours are not multiples of eight, so their channels
+wrap instead of reaching zero. A separate guarded adapter
+for destination calls and a fresh native effects retake are required before
+claiming complete collection behavior.
 
 Private evidence is under the task's `work/universal-v1-continuation/runtime`:
 `normal-ice-fixed-native-receipt.json`, `normal-five-gems-native-receipt.json`,

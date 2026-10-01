@@ -15,6 +15,11 @@
   object or particle dependencies.
 - Made **Only what fits here** show completed successful checks and refresh
   compatibility details after checking a source variant.
+- Fixed fresh levels refusing their second object. Fresh scenes now allocate
+  storage for each placed object while retaining the required 16 dynamic slots
+  and the normal memory checks.
+- Corrected imported gem treasure targets and permanent-removal accounting.
+  The export summary now reports the final target written into the game.
 
 Universal gameplay coverage remains incomplete. See the supported-scope document
 for tested interactions and the game's resource limits.

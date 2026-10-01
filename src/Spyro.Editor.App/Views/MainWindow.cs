@@ -14183,7 +14183,9 @@ public sealed partial class MainWindow : Window
                 }
                 return UniversalMobyExport.Apply(library, currentImage, universalImage, _retailCatalog, universalPlacements, japanese: japanese,
                     removedRowsByLevel: universalRemoved, identityWorkspace: _workspace.RootPath,
-                    deferSpecialHooks: deferSharedRuntimeHooks);
+                    deferSpecialHooks: deferSharedRuntimeHooks,
+                    // The completed ordinary object stage already adjusted native removal rewards.
+                    removedTreasureAlreadyApplied: true);
             });
             activeDragonflyEggs = universal.ActiveDragonflyEggs;
             signLevelKeys = universal.SignLevelKeys;
@@ -14192,6 +14194,19 @@ public sealed partial class MainWindow : Window
             foreach (var level in universal.Levels)
             {
                 objectPatches += level.Compose.NewRowIndices.Count;
+                if (level.Compose.TreasureDelta != 0)
+                {
+                    var definition = _retailCatalog.FindByKey(level.LevelKey)
+                        ?? throw new InvalidDataException("The exported object's destination is missing from the level catalog.");
+                    int offset = checked((int)(UniversalMobyComposer.TreasureTableAddress - UniversalExeBindings.ExeBase)
+                        + UniversalMobyExport.CollectedMaskIndex(definition) * 2);
+                    int after = System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(level.Compose.Executable.AsSpan(offset));
+                    var previous = exportedTreasureTargets.FirstOrDefault(t =>
+                        string.Equals(t.LevelName, level.LevelName, StringComparison.OrdinalIgnoreCase));
+                    exportedTreasureTargets.RemoveAll(t =>
+                        string.Equals(t.LevelName, level.LevelName, StringComparison.OrdinalIgnoreCase));
+                    exportedTreasureTargets.Add(new(level.LevelName, previous?.Before ?? after - level.Compose.TreasureDelta, after));
+                }
                 if (!patchedLevelNames.Contains(level.LevelName, StringComparer.OrdinalIgnoreCase))
                     patchedLevelNames.Add(level.LevelName);
                 skippedEditDetails.AddRange(level.Compose.Warnings.Select(w => $"{level.LevelName}: {w}"));
@@ -14205,6 +14220,7 @@ public sealed partial class MainWindow : Window
                     ramHeadroomAfter = level.Compose.Ram.FinalHeadroom,
                     droppedModels = level.Compose.DroppedModelClasses.Select(c => $"0x{c:X3}"),
                     droppedModelBytes = level.Compose.DroppedModelBytes,
+                    level.Compose.TreasureDelta,
                     playerAnimationImports = level.Compose.PlayerAnimationImports,
                     level.Compose.ArenaSlotsRemaining,
                     level.Compose.VramBytesUsed
