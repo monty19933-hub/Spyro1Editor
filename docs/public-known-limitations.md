@@ -1,66 +1,37 @@
-# Spyro Editor Beta V6 Known Limitations
+# Spyro Editor Beta V6 — build 54 limitations
 
-- This is V6 beta53, a local release candidate with incomplete acceptance. The Mac
-  package is ad-hoc signed, not Apple-signed or notarized. Existing V5 and R03–R08
-  test apps, original game images, and protected projects are not replaced.
-- **Fresh Level…** is integrated into the normal application. Its preview is a
-  schematic, with no native model, terrain-texture, collision or gameplay renderer.
-  Arbitrary terrain construction and direct 3D placement are not finished.
-- Fresh documents save floor/spawn/sky/music, ordered placements, and two material
-  references. Test export supports only checked saved profiles; the Wizard +
-  Grass example requires its exact geometry, placement and materials. Changing
-  an authored field does not imply that the new combination exports.
-- Complete locked-chest family controls save independent key/chest anchors and
-  five named default/explicit WORLD reward destinations. Only the exact saved
-  legacy-floor or four-tile R03 Wizard + Grass + chest profiles are admitted to
-  native research export. Other schema5 layouts remain authored-only.
-- Schema4 tiled research permits zero placed Mobys and bounded supported static
-  retail materials or Base-color faces. Native data is limited to0x1000 bytes,
-  GPU/source checks and a complete64KiB report; animated/HQ/scrolling material
-  support is not implied. R06's exact three-material candidate has separate
-  gameplay observations, not universal composition acceptance.
-- The Moby browsers expose all 368 identified classes and 6,334 observations,
-  including placed donors and resources without placed donor rows. Resources
-  are inspect-only, and generic donor placements are authoring-only until their
-  dependencies are supported. A catalogue entry is not a working native import.
-  All Mobys in all levels remains unfinished.
-- Japanese dragonfly eggs and editable signs are available through the regular
-  object browser and normal combined export, using the user's unchanged Japanese
-  disc. Eyes are removed from game models and native inventory icons. Stable
-  lifetime slots and durable-bit suppression are implemented. Native save-byte
-  and instruction tests do not replace normal memory-card save/cold-load tests.
-  Per-level X/Y, save-menu percentage and bonus-level entry remain incomplete.
-- Some cross-level imports have unresolved particle behavior or class/variant
-  collisions. The capacity check and static matrix identify these separately.
-  A composed image is not proof of working enemy AI, collision, links or sound.
-- Focused DuckStation testing of the two-material Wizard + Grass example showed
-  its authored background, Wizard attack/charge defeat, a ten-value gem reward,
-  fall/respawn and isolated jump/landing. That is not universal runtime acceptance.
-  Normal portals, durable save ownership and broader combinations remain pending.
-- **Fly Anywhere Enabled** has a guarded normal-export option for Toasty only,
-  without other saved edits. It stores a project preference, not a memory-card
-  ability; normal ON/OFF native gameplay and save/reload acceptance are pending.
-  It does not enable flight in arbitrary retail or fresh levels.
-- Fresh-level test export is separate from normal retail **Create BIN**.
-  The original 35-level retail catalogue remains unchanged.
+- Cross-level imports have broader class remapping and dependency support, but
+  **all Mobys working in all levels is not complete**. Static composition does
+  not certify AI, sound, collision, triggers or linked behavior. The browser and
+  exporter report unresolved dependencies and native resource limits.
+- Fresh levels use the regular editor and normal Create BIN, with authored
+  geometry, collision, static native materials and Mobys. This build supports
+  one fresh level in slot 65, at most 255 triangles, and the native coordinate,
+  collision and memory limits. Vertices use whole editor units; each collision
+  triangle spans at most 256 units per axis. Split larger faces before export.
+  A fresh level does not automatically receive a portal network or campaign.
+- Retail terrain changes still depend on correctly mapped native geometry and
+  collision. A toolbar tool being available does not make every retail face or
+  texture combination exportable. Unsafe combinations stop with an explanation.
+- Removed objects free reusable physical slots. Stable collected-state identities
+  are retained and are finite: deleting an object does not recycle its saved
+  identity. Shared or unresolved resources cannot safely be reclaimed.
+- Eye-free eggs, per-level/global inventory, collection and normal card save and
+  cold-load were observed in Stone Hill. Checkpoint navigation for that save test
+  used position-only assistance. Endgame bonus predicates have source and
+  instruction tests; a complete endgame playthrough and every egg/level lifecycle
+  combination have not been verified.
+- Normal New Game was observed entering a fresh authored level with textured
+  terrain, collision and an imported sheep; native walking passed. This is one
+  tested scene, not blanket acceptance of every authored combination.
+- Fly Anywhere is deferred. Its earlier research settings are ignored by normal
+  release exports and its controls are hidden from the normal release UI.
+- The macOS arm64 release is Developer ID signed, but is not notarized. Windows
+  x64 package structure is checked; Windows runtime testing was not available
+  on the build machine.
+- Use the supported unchanged USA SCUS_942.28 source. Japanese eggs/signs require
+  the supported SCPS_100.83 image supplied locally. Custom music import and every
+  native texture format are not supported.
 
-- Use a supported retail Spyro the Dragon BIN/CUE. The editor stops an export when the selected disc does not match the expected game data.
-- ID65 Blank-Level Lab is an evidence-bound construction lab over an independent
-  Town Square-derived engine substrate, not a truly empty level. V5 supports the
-  guarded existing-HP-height/collision-fan path there and editor-preview painting
-  from its exact 66 resident texture records. Resident paint preserves the target
-  material/tint/surface/collision, but it is not runtime-exported: True Add
-  Terrain, LP/XY geometry, arbitrary cross-level Mobys, cross-level/custom/private
-  texture allocation, portals, authored totals/music, and save-slot ownership
-  are not yet public Lab capabilities. The Lab's HP-Z-only disposable CUE is
-  deliberately separate from normal Create BIN.
-- Some cross-level enemies and special chests are not yet available in every level. Options that are not ready are hidden from the normal Add and Replace galleries.
-- Single-section cross-level texture painting depends on source-proven free texture capacity or an exact promoted private-row profile in the destination level. It is not available in every level yet.
-- Linked-section replacement is offered throughout the level catalog, but every selected target/donor pair must pass its own PlayStation texture-memory and ownership checks. Some combinations cannot physically fit and remain blocked rather than producing an unsafe BIN.
-- Music selection uses tracks already on the original disc. Custom audio import
-  is not enabled; native format, timing and capacity require separate work.
-- Arbitrary image replacement is not available for every native texture type.
-- Flight levels have additional game-specific restrictions.
-- Always test a generated CUE in DuckStation before sharing a project or release.
-
-The editor creates a new BIN/CUE and never overwrites the original disc image.
+Original discs, projects, saves and earlier packages are preserved. Always test
+an exported CUE before sharing an edited game or relying on its progression.

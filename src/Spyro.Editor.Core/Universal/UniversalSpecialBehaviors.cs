@@ -329,11 +329,11 @@ public static class UniversalSpecialBehaviors
         return new string(chars.ToArray()).TrimEnd();
     }
 
-    public static byte[] DragonflyEggUpdateCode(IReadOnlyCollection<int> eggClasses, uint baseAddress) =>
-        UniversalBehaviorBundleBuilder.Assemble([DragonflyEggUpdate(eggClasses, "egg_update")], baseAddress).Code;
+    public static byte[] DragonflyEggUpdateCode(IReadOnlyCollection<int> eggClasses, uint baseAddress, bool remapSaveRows = false) =>
+        UniversalBehaviorBundleBuilder.Assemble([DragonflyEggUpdate(eggClasses, "egg_update", remapSaveRows)], baseAddress).Code;
 
     /// <summary>Per-frame dragonfly egg update: spin, pick up near Spyro, persist and count.</summary>
-    internal static UniversalAsmPart DragonflyEggUpdate(IReadOnlyCollection<int> eggClasses, string tag)
+    internal static UniversalAsmPart DragonflyEggUpdate(IReadOnlyCollection<int> eggClasses, string tag, bool remapSaveRows = false)
     {
         int min = eggClasses.Min(), span = eggClasses.Max() - min + 1;
         if (span > 64) throw new InvalidOperationException("Dragonfly egg classes must span at most 64 IDs.");
@@ -374,6 +374,14 @@ public static class UniversalSpecialBehaviors
         a.R(S1, T1, T3, 0, 0x23); a.I(9, Zero, T4, 0x58); a.R(T3, T4, 0, 0, 0x1B);
         a.R(0, 0, T3, 0, 0x12); a.R(0, 0, T4, 0, 0x10);
         a.Br(5, T4, Zero, tag + "_loop"); a.Nop();
+        if (remapSaveRows)
+        {
+            // A reused physical object slot retains its own logical save identity.
+            // The gateway preserves the live object/list registers and T0 native base.
+            a.R(T3, Zero, A2, 0, 0x21);
+            a.Jal(Spyro.Editor.Core.Exporting.NativeMobySaveMap.MapRowAddress); a.Nop();
+            a.R(A2, Zero, T3, 0, 0x21);
+        }
         a.I(11, T3, T4, 256); a.Br(4, T4, Zero, tag + "_loop"); a.Nop();
         a.I(35, T0, T1, 0x5964); a.Nop(); a.I(11, T1, T2, 36);
         a.Br(4, T2, Zero, tag + "_loop"); a.R(0, T1, T1, 5, 0);
