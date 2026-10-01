@@ -89,24 +89,80 @@ public static class UniversalClassRemapping
         }
     }
 
+    internal sealed record InitializerRoles(int ClassRegister, int ActorRegister, int? ParentRegister, uint? ParentSavePc, uint ActorSavePc, uint ClassStorePc);
+
+    internal static InitializerRoles ProveInitializerRoles(UniversalAsmPart part, UniversalOverlay source)
+    {
+        uint start = source.Init;
+        var included = part.Items.Where(i => i.Orig != null || i.SourcePc != null)
+            .Select(i => (i.Orig ?? i.SourcePc)!.Value).ToHashSet();
+        var stores = included.Where(pc => source.Contains(pc) && UniversalMips.Op(source.Word(pc)) == 41 &&
+            UniversalMips.SImm(source.Word(pc)) == 0x36).Order().ToArray();
+        if (stores.Length != 1 || stores[0] < start || stores[0] >= start + 0x80)
+            throw new InvalidDataException("Source initializer class stores differ from the proved native constructor contract.");
+        uint storePc = stores[0], storeWord = source.Word(storePc);
+        int classRegister = UniversalMips.Rt(storeWord), actorRegister = UniversalMips.Rs(storeWord);
+        bool SavedRegister(int r) => r is >= 16 and <= 23;
+        bool Move(uint w, int from, int to) => UniversalMips.Op(w) == 0 && UniversalMips.Fn(w) is 32 or 33 &&
+            UniversalMips.Rd(w) == to && (UniversalMips.Rs(w) == from && UniversalMips.Rt(w) == 0 ||
+            UniversalMips.Rt(w) == from && UniversalMips.Rs(w) == 0);
+        InvalidDataException Unproved() => new("Source initializer has no proved class/allocated-Moby ownership chain.");
+        if (!SavedRegister(classRegister) || !SavedRegister(actorRegister) || classRegister == actorRegister) throw Unproved();
+        var prefix = Enumerable.Range(0, (int)((storePc - start) / 4 + 1)).Select(n => start + (uint)n * 4).ToArray();
+        if (prefix.Any(pc => !included.Contains(pc))) throw Unproved();
+        var calls = prefix.Where(pc => source.Word(pc) == UniversalMips.EncodeJ(3, 0x800524C4)).ToArray();
+        if (calls.Length != 1) throw Unproved();
+        uint call = calls[0];
+        // The only control transfer before the store is the exact native allocator;
+        // an optional conditional branch may own the class store as its delay slot.
+        if (prefix.Any(pc => UniversalMips.IsBranch(source.Word(pc)) && pc != call &&
+            !(pc == storePc - 4 && UniversalMips.Op(source.Word(pc)) is 4 or 5))) throw Unproved();
+        var classSaves = prefix.Where(pc => pc < call && Move(source.Word(pc), 4, classRegister)).ToArray();
+        var actorSaves = prefix.Where(pc => pc >= call + 8 && pc < storePc && Move(source.Word(pc), 2, actorRegister)).ToArray();
+        if (classSaves.Length != 1 || actorSaves.Length != 1) throw Unproved();
+        uint classSave = classSaves[0], actorSave = actorSaves[0];
+        bool LoadDelayBefore(uint pc, int from, int to)
+        {
+            uint prior = source.Word(pc - 4);
+            return UniversalMips.Op(prior) is >= 32 and <= 38 &&
+                (UniversalMips.Rt(prior) == from || UniversalMips.Rt(prior) == to);
+        }
+        // The allocator executes after its delay slot; its returned v0 is not
+        // subject to a load in that earlier slot. Later copies need normal R3000 checks.
+        if (LoadDelayBefore(classSave, 4, classRegister) ||
+            actorSave > call + 8 && LoadDelayBefore(actorSave, 2, actorRegister)) throw Unproved();
+        if (new[] { classSave, actorSave, call }.Any(pc =>
+            part.Items.Count(i => i.Orig == pc && i.Word == source.Word(pc)) != 1)) throw Unproved();
+        if (prefix.Any(pc => pc < classSave && Writes(source.Word(pc), 4)) ||
+            prefix.Any(pc => pc > classSave && pc < storePc && Writes(source.Word(pc), classRegister)) ||
+            prefix.Any(pc => pc > actorSave && pc < storePc && Writes(source.Word(pc), actorRegister)) ||
+            prefix.Any(pc => pc >= call + 8 && pc < actorSave && Writes(source.Word(pc), 2))) throw Unproved();
+        // An immediately preceding load would leave its old register value visible
+        // to the store on the R3000. Do not infer ownership from the eventual value.
+        uint previous = source.Word(storePc - 4);
+        if (UniversalMips.Op(previous) is >= 32 and <= 38 &&
+            UniversalMips.Rt(previous) is int loaded && (loaded == classRegister || loaded == actorRegister)) throw Unproved();
+        var parentSaves = prefix.Where(pc => pc < call && SavedRegister(UniversalMips.Rd(source.Word(pc))) &&
+            Move(source.Word(pc), 5, UniversalMips.Rd(source.Word(pc)))).ToArray();
+        int? parentRegister = null;
+        if (parentSaves.Length == 1)
+        {
+            int parent = UniversalMips.Rd(source.Word(parentSaves[0]));
+            if (parent != classRegister && parent != actorRegister &&
+                part.Items.Count(i => i.Orig == parentSaves[0] && i.Word == source.Word(parentSaves[0])) == 1 &&
+                !LoadDelayBefore(parentSaves[0], 5, parent) &&
+                !prefix.Any(pc => pc < parentSaves[0] && Writes(source.Word(pc), 5)) &&
+                !prefix.Any(pc => pc > parentSaves[0] && pc < storePc && Writes(source.Word(pc), parent))) parentRegister = parent;
+        }
+        return new(classRegister, actorRegister, parentRegister, parentRegister != null ? parentSaves[0] : null, actorSave, storePc);
+    }
+
     internal static void PatchInitClassStore(UniversalAsmPart part, UniversalOverlay source, int sourceClass, int destinationClass)
     {
         if (sourceClass == destinationClass) return;
-        // Native constructors copy a0 to s0, call the engine allocator, copy v0 to s3,
-        // then store s0 into the new Moby's class field. Require that exact ownership chain.
-        uint f = source.Init;
-        bool savedClass = false, allocatedMoby = false, allocatorCalled = false;
-        foreach (var item in part.Items.Where(i => i.Orig >= f && i.Orig < f + 0x80))
-        {
-            uint w = source.Word(item.Orig!.Value);
-            savedClass |= w == 0x00808021; // addu s0,a0,zero
-            allocatorCalled |= w == UniversalMips.EncodeJ(3, 0x800524C4);
-            allocatedMoby |= allocatorCalled && w == 0x00409821; // addu s3,v0,zero
-        }
-        if (!savedClass || !allocatedMoby || !allocatorCalled)
-            throw new InvalidDataException("Source initializer has no proved class/allocated-Moby ownership chain.");
-        var stores = part.Items.Where(i => i.Word is uint w && UniversalMips.Op(w) == 41 && UniversalMips.SImm(w) == 0x36).ToList();
-        if (stores.Count != 1 || stores[0].Word != 0xA6700036)
+        var roles = ProveInitializerRoles(part, source);
+        var stores = part.Items.Where(i => i.Orig == roles.ClassStorePc).ToList();
+        if (stores.Count != 1 || stores[0].Word != source.Word(roles.ClassStorePc))
             throw new InvalidDataException("Source initializer class stores differ from the proved native constructor contract.");
         if (part.Items.Any(i => i.Word is uint native && Reads(native, 25)))
             throw new InvalidDataException("Source initializer owns a live t9 input; no safe class-store scratch register was proved.");
@@ -122,7 +178,7 @@ public static class UniversalClassRemapping
         part.Items.Insert(before, new(UniversalMips.EncodeI(9, 0, 25, destinationClass), default, entry.Orig, null));
         store++;
         var it = part.Items[store];
-        part.Items[store] = it with { Word = UniversalMips.EncodeI(41, 19, 25, 0x36) };
+        part.Items[store] = it with { Word = UniversalMips.EncodeI(41, roles.ActorRegister, 25, 0x36), ClassReadOwned = true };
     }
 
     private static bool Reads(uint w, int register)
@@ -299,35 +355,24 @@ public static class UniversalClassRemapping
     internal static IReadOnlyList<uint> PatchInitAllocatedClassReads(UniversalAsmPart part, UniversalOverlay source, IReadOnlyDictionary<int, int> map, int sourceClass)
     {
         if (!map.Any(k => k.Key != k.Value)) return [];
-        var allocation = part.Items.FirstOrDefault(i => i.Orig >= source.Init && i.Orig < source.Init + 0x80 &&
-            i.Word == UniversalMips.EncodeJ(3, 0x800524C4));
-        var saved = part.Items.FirstOrDefault(i => i.Orig > allocation?.Orig && i.Orig < source.Init + 0x80 && i.Word == 0x00409821);
-        if (saved?.Orig is not uint savedPc) return [];
-        // s3 is the proved newly allocated Moby. Constructor setup may reread its
-        // class for source-specific flags after the mapped class store was installed.
-        return PatchClassificationReads(part, source, map, [sourceClass], 19, savedPc + 4, "allocated_class");
+        var roles = ProveInitializerRoles(part, source);
+        // A class left at its resident ID still needs an instruction owner when
+        // another class in this source namespace was remapped.
+        for (int n = 0; n < part.Items.Count; n++)
+            if (part.Items[n].Orig == roles.ClassStorePc && part.Items[n].Word == source.Word(roles.ClassStorePc))
+                part.Items[n] = part.Items[n] with { ClassReadOwned = true };
+        return PatchClassificationReads(part, source, map, [sourceClass], roles.ActorRegister, roles.ActorSavePc + 4, "allocated_class");
     }
 
     internal static IReadOnlyList<uint> PatchInitParentClassReads(UniversalAsmPart part, UniversalOverlay source, IReadOnlyDictionary<int, int> map)
     {
         if (!map.Any(k => k.Key != k.Value)) return [];
-        // Native Moby initializer a1 is an optional existing Moby/row descriptor. The
-        // allocated-Moby ownership chain is separately checked by PatchInitClassStore.
-        // Admit only its direct, unique save in a callee-saved register before allocation.
-        var saves = part.Items.Where(i => i.Orig >= source.Init && i.Orig < source.Init + 0x80 &&
-            i.Word is uint w && UniversalMips.Op(w) == 0 && UniversalMips.Fn(w) is 32 or 33 &&
-            (UniversalMips.Rs(w) == 5 && UniversalMips.Rt(w) == 0 || UniversalMips.Rs(w) == 0 && UniversalMips.Rt(w) == 5) &&
-            UniversalMips.Rd(w) is >= 17 and <= 23 && UniversalMips.Rd(w) != 19).ToList();
-        if (saves.Count != 1) return [];
-        uint savedPc = saves[0].Orig!.Value;
-        var allocation = part.Items.FirstOrDefault(i => i.Orig >= source.Init && i.Orig < source.Init + 0x80 &&
-            i.Word == UniversalMips.EncodeJ(3, 0x800524C4));
-        if (allocation?.Orig is not uint allocationPc || savedPc >= allocationPc) return [];
-        int parentRegister = UniversalMips.Rd(saves[0].Word!.Value);
-        // Only translated namespace classes need proof: unrelated destination IDs remain
-        // unchanged by the inverse map. Pure comparisons preserve all live pointer registers.
+        var roles = ProveInitializerRoles(part, source);
+        if (roles.ParentRegister is not int parentRegister) return [];
+        // Optional parent ownership is distinct from both the saved source class
+        // and the newly allocated Moby; all three use the same proved prefix.
         return PatchClassificationReads(part, source, map, map.Where(m => m.Key != m.Value).Select(m => m.Key).ToArray(),
-            parentRegister, savedPc + 4, "parent_class");
+            parentRegister, roles.ParentSavePc!.Value + 4, "parent_class");
     }
 
     private static IReadOnlyList<uint> PatchClassificationReads(UniversalAsmPart part, UniversalOverlay source,
@@ -381,8 +426,7 @@ public static class UniversalClassRemapping
             uint? sourcePc = item.Orig ?? item.SourcePc;
             if (!init && overlay != null && sourcePc is uint lookup && FeedsModelTable(overlay, lookup)) continue;
             if (UniversalMips.IsLoad(w) || UniversalMips.IsStore(w))
-                if (!(init && UniversalMips.Op(w) == 41 && UniversalMips.Rs(w) == 19 && UniversalMips.Rt(w) is 16 or 25))
-                    throw new InvalidDataException($"Source class remapping needs ownership for class-field access at 0x{(item.Orig ?? item.SourcePc):X8}.");
+                throw new InvalidDataException($"Source class remapping needs ownership for class-field access at 0x{(item.Orig ?? item.SourcePc):X8}.");
         }
     }
 }

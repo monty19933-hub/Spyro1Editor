@@ -71,6 +71,7 @@ for(int c=0;c<0x200;c++)
     }
     Check(pending==root,"exact root pointer loaded without inverse class conversion "+c);
 }
+InitializerOwnershipCases.Run(Check);
 Console.WriteLine($"UNIVERSAL_CLASS_OWNERSHIP_FREE_OK checks={checks}");
 if(args.Length==0)return;
 if(args.Length<3||args[0]!="--source")throw new ArgumentException("--source <USA.bin> <sourceWorkspace> [baseline.json.gz output.json.gz]");
@@ -95,12 +96,16 @@ foreach(var site in known)
     bool refused=false;try{UniversalClassRemapping.RequireNoUnownedClassMemory(corruptPart,false,clone);}catch(InvalidDataException){refused=true;}
     Check(refused,"final remap guard refuses an ambiguous wrong-table access "+site.Key);
 }
+InitializerOwnershipCases.Source(library,catalog,Check);
 Console.WriteLine($"UNIVERSAL_CLASS_OWNERSHIP_SOURCE_OK checks={checks} sourceSha256={Convert.ToHexStringLower(SHA256.HashData(File.OpenRead(args[1])))}");
+if(args.Length==5&&args[3]=="--export-init")
+{ InitializerOwnershipCases.Written(library,catalog,args[4],Check);Console.WriteLine($"UNIVERSAL_CLASS_INITIALIZER_WRITTEN_OK checks={checks}");return; }
 if(args.Length==5&&args[3]=="--export")
 { WrittenModelLookupCases.Run(library,catalog,args[4],Check);Console.WriteLine($"UNIVERSAL_CLASS_OWNERSHIP_WRITTEN_OK checks={checks}");return; }
-if(args.Length==5)
+if(args.Length==5||args.Length==6&&args[3]=="--initializer-delta")
 {
-    using var input=File.OpenRead(args[3]);using var zipped=new GZipStream(input,CompressionMode.Decompress);
+    bool initializerDelta=args.Length==6;int baselineArg=initializerDelta?4:3,outputArg=initializerDelta?5:4;
+    using var input=File.OpenRead(args[baselineArg]);using var zipped=new GZipStream(input,CompressionMode.Decompress);
     var baseline=JsonSerializer.Deserialize<UniversalCoverageReport>(zipped)!;
     using var sourceHash=IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
     string coreRoot=Path.Combine(args[2],"src","Spyro.Editor.Core");
@@ -116,11 +121,13 @@ if(args.Length==5)
     int exact=0;
     foreach(var old in baseline.Cells.Where(c=>c.FailureKind=="class-remap-ownership"))
     {
-        string? detail=old.Detail;if(detail==null||!detail.Contains("class-field access at 0x"))continue;
+        string? detail=old.Detail;
+        if(initializerDelta){if(detail!="Source initializer has no proved class/allocated-Moby ownership chain.")continue;}
+        else if(detail==null||!detail.Contains("class-field access at 0x"))continue;
         var v=variantById[old.VariantId];if(v.SpecialId!=null)continue;
-        uint pc=Convert.ToUInt32(detail.Split("0x")[1].TrimEnd('.'),16);
         var source=library.Get(v.SourceLevelKey);
-        if(!source.Overlay.Contains(pc)||!UniversalClassRemapping.FeedsModelTable(source.Overlay,pc))continue;
+        if(!initializerDelta){uint pc=Convert.ToUInt32(detail!.Split("0x")[1].TrimEnd('.'),16);
+            if(!source.Overlay.Contains(pc)||!UniversalClassRemapping.FeedsModelTable(source.Overlay,pc))continue;}
         var dest=library.Get(old.Destination);var template=source.Data.CaptureRow(v.SourceLevelKey,v.SourceRow);var row=source.Data.Row(v.SourceRow);
         var key=(old.Destination,v.SourceLevelKey,v.ClassId,template.Properties.Length,template.InternalPointers.Count,template.DroppedExternalPointers,
             template.ExternalRowPointers.Count(l=>l.SourceRow==v.SourceRow),UniversalMobyComposer.TreasureValue(row));
@@ -141,8 +148,8 @@ if(args.Length==5)
     }
     var report=baseline with{Cells=cells,ImplementationModuleVersionId=typeof(UniversalMobyComposer).Module.ModuleVersionId.ToString(),SourceCodeFingerprint=fingerprint,
         SourceCodeFingerprintScope="Isolated Core .cs content at delta start: sorted relative path + NUL + file bytes. Source snapshot is preserved V1 checkpoint plus owned class-ownership fix only.",
-        RuntimeEvidenceScope="Focused current-source model-table ownership delta only. Baseline cells outside this file were not recomposed. Runtime remains not-tested."};
-    using(var file=File.Create(args[4]))using(var compressed=new GZipStream(file,CompressionLevel.SmallestSize))JsonSerializer.Serialize(compressed,report);
-    Console.WriteLine(JsonSerializer.Serialize(new{Scope="exact-source model-table ownership affected cells only",Cells=cells.Count,ExactCompositions=exact,ResourcePlanReuse=cells.Count-exact,
+        RuntimeEvidenceScope="Focused current-source initializer/model-table ownership delta only. Baseline cells outside this file were not recomposed. Runtime remains not-tested."};
+    using(var file=File.Create(args[outputArg]))using(var compressed=new GZipStream(file,CompressionLevel.SmallestSize))JsonSerializer.Serialize(compressed,report);
+    Console.WriteLine(JsonSerializer.Serialize(new{Scope=initializerDelta?"exact-source initializer ownership affected cells only":"exact-source model-table ownership affected cells only",Cells=cells.Count,ExactCompositions=exact,ResourcePlanReuse=cells.Count-exact,
         Composed=cells.Count(c=>c.DependencyExportStatus.StartsWith("composed")),Outcomes=cells.GroupBy(c=>c.FailureKind??c.DependencyExportStatus).ToDictionary(g=>g.Key,g=>g.Count()),Runtime="not-tested"}));
 }
