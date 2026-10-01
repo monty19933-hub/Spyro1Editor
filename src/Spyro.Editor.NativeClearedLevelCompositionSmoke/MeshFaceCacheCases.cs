@@ -16,6 +16,7 @@ internal static class MeshFaceCacheCases
     internal static void Run(Action<bool,string> check)
     {
         var seed=SceneDocument.New();
+        seed=seed with {Surfaces=seed.Surfaces.Select(s=>s with {Vertices=s.Vertices.Select(v=>v with {X=528+(v.X-528)/2,Y=528+(v.Y-528)/2}).ToArray()}).ToArray()};
         foreach(int count in new[]{2,32,255})
         {
             var doc=seed with {Surfaces=Enumerable.Range(0,count).Select(i=>seed.Surfaces[0] with {Id=Guid.NewGuid().ToString("N")}).ToArray()};
@@ -38,7 +39,7 @@ internal static class MeshFaceCacheCases
     }
     internal static void RunSource(UniversalSourceLibrary donors,LevelCatalog catalog,Action<bool,string> check)
     {
-        foreach(var (pc,hex) in new[]{(0x80026808u,"0780163CF4FCD6260C00228F"),(0x80026830u,"FFFF423020B0C202"),(0x80027168u,"1300C01E0100D622"),(0x80027700u,"FFFF6330"),(0x80027734u,"0019030022B0C302")})
+        foreach(var (pc,hex) in new[]{(0x80026808u,"0780163CF4FCD6260C00228F"),(0x80026830u,"FFFF423020B0C202"),(0x80027168u,"1300C01E0100D622"),(0x80027700u,"FFFF6330"),(0x80027734u,"0019030022B0C302"),(0x8004B228u,"021E12000234120040006B8EFF00C630"),(0x80027260u,"8000AB312A00601D"),(0x80027554u,"030E010001002220320040107F002130")})
             check(donors.Disc.Exe.AsSpan(checked((int)(pc-0x8000F800)),hex.Length/2).SequenceEqual(Convert.FromHexString(hex)),"exact native scratch writer/subdivision consumer owner "+pc.ToString("X"));
         int sectors=0;
         foreach(var level in catalog.Levels)

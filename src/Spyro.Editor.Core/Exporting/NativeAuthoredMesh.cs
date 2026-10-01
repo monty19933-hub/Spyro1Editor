@@ -23,6 +23,17 @@ internal static class NativeAuthoredMesh
             triangles.Add(new(s.Vertices[0], s.Vertices[1], s.Vertices[2], s.Color,material,[near[0],near[1],near[2]],[far[0],far[1],far[2]]));
             if (s.Vertices.Length == 4) triangles.Add(new(s.Vertices[0],s.Vertices[2],s.Vertices[3],s.Color,material,[near[0],near[2],near[3]],[far[0],far[2],far[3]]));
         }
+        List<Triangle> nativeTriangles=[];
+        foreach(var triangle in triangles)
+        {
+            // FF material uses the source renderer's direct untextured packet
+            // path, which cannot near-clip a large face. Keep editor faces intact;
+            // render and collision consume the same exact generated lattice.
+            if(triangle.Material==255) AppendUntexturedLattice(nativeTriangles,triangle);
+            else nativeTriangles.Add(triangle);
+            if(nativeTriangles.Count>255)throw new InvalidDataException("The native visibility list supports at most255 generated triangles; reduce authored geometry.");
+        }
+        triangles=nativeTriangles;
         if (triangles.Count is < 1 or > 255) throw new InvalidDataException("The native visibility list supports at most 255 authored triangles.");
         int n = triangles.Count;
         const int span = 116;
@@ -55,7 +66,12 @@ internal static class NativeAuthoredMesh
         {
             var t=triangles[i];var a=t.A;var b=t.B;var c=t.C;
             if((b.X-a.X)*(c.Y-a.Y)-(b.Y-a.Y)*(c.X-a.X)>0)(b,c)=(c,b);
-            W(collision,start+i*12,Axis(a.X,b.X,c.X));W(collision,start+i*12+4,Axis(a.Y,b.Y,c.Y));W(collision,start+i*12+8,Axis(a.Z,b.Z,c.Z));
+            // Native collision Z has unsigned byte deltas at16/24, unlike
+            // the signed9-bit X/Y deltas at14/23. Rotate cyclically so the
+            // minimum Z is the origin without reversing upward winding.
+            if(b.Z<a.Z&&b.Z<=c.Z)(a,b,c)=(b,c,a);
+            else if(c.Z<a.Z&&c.Z<b.Z)(a,b,c)=(c,a,b);
+            W(collision,start+i*12,Axis(a.X,b.X,c.X));W(collision,start+i*12+4,Axis(a.Y,b.Y,c.Y));W(collision,start+i*12+8,HeightAxis(a.Z,b.Z,c.Z));
         }
         collision.AsSpan(flags,n).Fill(0x3F);
         byte[] sky=new byte[16];W(sky,0,16);W(sky,4,Rgb(document.SkyColor));
@@ -63,6 +79,37 @@ internal static class NativeAuthoredMesh
         if(bundle.Length>0x20000)throw new InvalidDataException("Authored surface exceeds the bounded native surface allocation.");
         return bundle;
     }
+    private static void AppendUntexturedLattice(List<Triangle> output,Triangle t)
+    {
+        int[][] v=[new[]{Unit(t.A.X),Unit(t.A.Y),Unit(t.A.Z)},new[]{Unit(t.B.X),Unit(t.B.Y),Unit(t.B.Z)},new[]{Unit(t.C.X),Unit(t.C.Y),Unit(t.C.Z)}];
+        int extent=Enumerable.Range(0,3).Max(d=>v.Max(p=>p[d])-v.Min(p=>p[d]));
+        int gcd=0;
+        for(int d=0;d<3;d++){gcd=Gcd(gcd,Math.Abs(v[1][d]-v[0][d]));gcd=Gcd(gcd,Math.Abs(v[2][d]-v[0][d]));}
+        int divisions=Math.Max(1,(extent+63)/64);
+        while(divisions<=15&&gcd%divisions!=0)divisions++;
+        if(divisions>15||output.Count+divisions*divisions>255)
+            throw new InvalidDataException("Untextured authored faces need exact whole-unit subdivision to at most64 units per axis within255 native triangles. This face cannot fit that lattice; change its vertices or reduce geometry.");
+        if(divisions==1){output.Add(t);return;}
+        Vector3f Point(int i,int j)=>new(
+            v[0][0]+((v[1][0]-v[0][0])*i+(v[2][0]-v[0][0])*j)/divisions,
+            v[0][1]+((v[1][1]-v[0][1])*i+(v[2][1]-v[0][1])*j)/divisions,
+            v[0][2]+((v[1][2]-v[0][2])*i+(v[2][2]-v[0][2])*j)/divisions);
+        ColorRgba Color(ColorRgba[] colors,int i,int j)
+        {
+            int a=divisions-i-j;
+            byte Channel(byte x,byte y,byte z)=>(byte)((a*x+i*y+j*z+divisions/2)/divisions);
+            return new(Channel(colors[0].R,colors[1].R,colors[2].R),Channel(colors[0].G,colors[1].G,colors[2].G),Channel(colors[0].B,colors[1].B,colors[2].B));
+        }
+        void Add((int I,int J) a,(int I,int J) b,(int I,int J) c)=>output.Add(new(Point(a.I,a.J),Point(b.I,b.J),Point(c.I,c.J),t.Color,t.Material,
+            [Color(t.Near,a.I,a.J),Color(t.Near,b.I,b.J),Color(t.Near,c.I,c.J)],
+            [Color(t.Far,a.I,a.J),Color(t.Far,b.I,b.J),Color(t.Far,c.I,c.J)]));
+        for(int i=0;i<divisions;i++)for(int j=0;j<divisions-i;j++)
+        {
+            Add((i,j),(i+1,j),(i,j+1));
+            if(i+j<divisions-1)Add((i+1,j),(i+1,j+1),(i,j+1));
+        }
+    }
+    private static int Gcd(int a,int b){while(b!=0)(a,b)=(b,a%b);return a;}
     private static void EncodeSector(Span<byte> s,Triangle t,int faceCacheStart)
     {
         Vector3f[] v=[t.A,t.B,t.C];int x=v.Min(v=>Unit(v.X)),y=v.Min(v=>Unit(v.Y)),z=v.Min(v=>Unit(v.Z));
@@ -84,7 +131,9 @@ internal static class NativeAuthoredMesh
             W(s,40+i*4,Rgb(t.Far[i]));W(s,72+i*4,Rgb(t.Far[i]));W(s,84+i*4,Rgb(t.Near[i]));
         }
         uint low=(1u<<20)|(2u<<14)|(2u<<8), high=(1u<<16)|(2u<<24);
-        W(s,52,low);W(s,56,low);W(s,96,high);W(s,100,high);W(s,104,(uint)t.Material);W(s,108,0x80);
+        // Retail textured faces use the native subdivision/near-plane path.
+        // FF has no descriptor: retain its direct packet flag and bounded mesh.
+        W(s,52,low);W(s,56,low);W(s,96,high);W(s,100,high);W(s,104,(uint)t.Material);W(s,108,t.Material==255?0x80u:0u);
         Id65EnvironmentSectorHeaderContract.Stamp(s[..112]);
         var header=Id65EnvironmentSectorHeaderContract.ReadPointerSpan(s,s.Length,false,"authored triangle");
         if(header.ExactSectorByteLength!=112||header.PointerGapByteLength!=4)throw new InvalidDataException("Authored triangle sector lost its native prefetch guard.");
@@ -96,6 +145,12 @@ internal static class NativeAuthoredMesh
         return (uint)origin|(((uint)db&511)<<14)|(((uint)dc&511)<<23);
     }
     private static int Raw(float value)=>checked(Unit(value)*16);
+    private static uint HeightAxis(float a,float b,float c)
+    {
+        int origin=Unit(a),db=Unit(b)-origin,dc=Unit(c)-origin;
+        if(db is <0 or >255||dc is <0 or >255)throw new InvalidDataException("Authored collision Z requires its lowest vertex origin and exact unsigned byte deltas.");
+        return (uint)origin|((uint)db<<16)|((uint)dc<<24);
+    }
     private static int Unit(float value)
     {if(value!=MathF.Truncate(value)||value is <0 or >16383)throw new InvalidDataException("Native authored vertices require whole editor units (the exact 16-unit game grid).");return (int)value;}
     private static int Align4(int x)=>(x+3)&~3;
