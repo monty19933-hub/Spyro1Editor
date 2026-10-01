@@ -71,6 +71,7 @@ for(int c=0;c<0x200;c++)
     }
     Check(pending==root,"exact root pointer loaded without inverse class conversion "+c);
 }
+PreloadedModelOwnershipCases.Free(Check);
 InitializerOwnershipCases.Run(Check);
 Console.WriteLine($"UNIVERSAL_CLASS_OWNERSHIP_FREE_OK checks={checks}");
 if(args.Length==0)return;
@@ -96,6 +97,7 @@ foreach(var site in known)
     bool refused=false;try{UniversalClassRemapping.RequireNoUnownedClassMemory(corruptPart,false,clone);}catch(InvalidDataException){refused=true;}
     Check(refused,"final remap guard refuses an ambiguous wrong-table access "+site.Key);
 }
+PreloadedModelOwnershipCases.Source(library,Check);
 InitializerOwnershipCases.Source(library,catalog,Check);
 Console.WriteLine($"UNIVERSAL_CLASS_OWNERSHIP_SOURCE_OK checks={checks} sourceSha256={Convert.ToHexStringLower(SHA256.HashData(File.OpenRead(args[1])))}");
 if(args.Length==5&&args[3]=="--export-init")
@@ -137,7 +139,7 @@ if(args.Length==5||args.Length==6&&args[3]=="--initializer-delta")
         UniversalCoverageCell cell;
         try
         {
-            var result=UniversalMobyComposer.Compose(dest.Level,dest.Data.Bytes,dest.Overlay.Bytes.ToArray(),library.Disc.Exe,library.Get,library.SharedClasses,ranges,[placement],sharedModelPackage:library.SharedModelPackage);
+            var result=UniversalMobyComposer.Compose(dest.Level,dest.Data.Bytes,dest.Overlay.Bytes.ToArray(),library.Disc.Exe,library.Get,library.SharedClasses,ranges,[placement],sharedModelPackage:library.SharedModelPackage,playerAnimationSource:library.PlayerAnimations);
             cell=new(old.Destination,v.VariantId,"listed",result.ParticleDependencies.Any(p=>p.Status=="dependency-unverified")||result.UnresolvedObjectLinks>0?"composed-dependency-unverified":"composed-static-only","not-tested",null,null,result.Classes,result.Warnings,result.Ram)
                 {ParticleDependencies=result.ParticleDependencies,Behavior=result.Behavior,RestoredObjectLinks=result.RestoredObjectLinks,UnresolvedObjectLinks=result.UnresolvedObjectLinks};
         }

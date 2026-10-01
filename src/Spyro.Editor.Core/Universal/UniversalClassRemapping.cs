@@ -223,7 +223,9 @@ public static class UniversalClassRemapping
         if (source.Contains(pc - 4) && UniversalMips.IsBranch(source.Word(pc - 4))) return false;
         // The R3000 class load is not visible to its immediately following instruction.
         if (!source.Contains(pc + 4) || Reads(source.Word(pc + 4), r)) return false;
-        Dictionary<int, uint> bases = []; HashSet<int> indices = []; HashSet<int> addresses = [];
+        Dictionary<int, uint> bases = [];
+        if (AdjacentModelTableBase(source, pc, r) is int preloaded) bases[preloaded] = 0x80076378;
+        HashSet<int> indices = []; HashSet<int> addresses = [];
         bool shifted = false;
         for (uint q = pc + 4; q <= pc + 40 && source.Contains(q); q += 4)
         {
@@ -255,6 +257,55 @@ public static class UniversalClassRemapping
             if (Writes(w, written)) { bases.Remove(written); indices.Remove(written); addresses.Remove(written); }
         }
         return false;
+    }
+
+    private sealed record ModelTableEntries(HashSet<uint> Targets, bool HasUnknownJump);
+    private static readonly Dictionary<string, ModelTableEntries> ModelEntryCache = [];
+
+    private static int? AdjacentModelTableBase(UniversalOverlay source, uint pc, int classRegister)
+    {
+        // Only the adjacent literal pair qualifies. In particular, no register value
+        // is carried across a call, conditional path, or mutable-memory read.
+        if (!source.Contains(pc - 12)) return null;
+        uint high = source.Word(pc - 8), low = source.Word(pc - 4);
+        int register = UniversalMips.Rt(high);
+        if (register == 0 || register == classRegister || UniversalMips.Op(high) != 15 ||
+            UniversalMips.Imm(high) != 0x8007 || UniversalMips.Op(low) != 9 ||
+            UniversalMips.Rs(low) != register || UniversalMips.Rt(low) != register ||
+            UniversalMips.Imm(low) != 0x6378 || UniversalMips.IsBranch(source.Word(pc - 12))) return null;
+        string key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(source.Bytes)) + source.CodeStart.ToString("X8") +
+            string.Join(",", source.Bindings.Values.Select(binding => binding.Value).Order().Select(value => value.ToString("X8")));
+        ModelTableEntries entries;
+        lock (ModelEntryCache)
+        {
+            if (ModelEntryCache.TryGetValue(key, out var cached)) entries = cached;
+            else
+            {
+                var image = source;
+                HashSet<uint> targets = image.Bindings.Values.Select(binding => binding.Value).ToHashSet();
+                bool unknown = false;
+                for (uint at = UniversalOverlay.Base; at + 4 <= image.End; at += 4)
+                {
+                    uint word = image.Word(at);
+                    // Include raw code-address words as well as direct edges: native
+                    // dispatch tables live before CodeStart and contain absolute targets.
+                    if (image.Contains(word)) targets.Add(word);
+                    if (at < image.CodeStart || !UniversalMips.IsBranch(word)) continue;
+                    if (UniversalMips.IsPcRelative(word) || UniversalMips.Op(word) is 2 or 3)
+                        targets.Add(UniversalMips.BranchTarget(word, at));
+                    if (UniversalMips.IsJr(word) && UniversalMips.Rs(word) != 31)
+                    {
+                        var table = UniversalDispatchAnalysis.ResolveJumpTable(image, at);
+                        if (table == null) unknown = true;
+                        else foreach (uint target in table.Targets) targets.Add(target);
+                    }
+                }
+                entries = new(targets, unknown);
+                ModelEntryCache[key] = entries;
+            }
+        }
+        // Entry at the LUI is safe; entry at its low half or the class load is not.
+        return entries.HasUnknownJump || entries.Targets.Contains(pc - 4) || entries.Targets.Contains(pc) ? null : register;
     }
 
     private static Dictionary<int, uint> PrecedingConstants(UniversalOverlay source, HashSet<uint> instructions, uint start)
