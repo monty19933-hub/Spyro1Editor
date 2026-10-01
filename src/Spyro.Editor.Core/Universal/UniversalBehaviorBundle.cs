@@ -30,7 +30,11 @@ public sealed record UniversalBehaviorSourceReport(string SourceLevelKey, IReadO
 }
 
 public sealed record UniversalBehaviorBundle(uint Base, byte[] Code, uint UpdateWrapper, uint InitWrapper,
-    IReadOnlyList<UniversalBehaviorSourceReport> Sources);
+    IReadOnlyList<UniversalBehaviorSourceReport> Sources)
+{
+    public IReadOnlyList<UniversalDestinationGemCall> DestinationGemCollectionCalls { get; init; } = [];
+    public int DestinationGemCollectionExtraBytes { get; init; }
+}
 
 /// <summary>
 /// Builds the relocatable behavior bundle appended to a destination overlay: a pruned copy of each
@@ -46,13 +50,28 @@ public static class UniversalBehaviorBundleBuilder
     public static UniversalBehaviorBundle Build(UniversalOverlay destination,
         IReadOnlyList<(string SourceKey, UniversalOverlay Source, IReadOnlyList<int> Classes)> sources, uint baseAddress,
         IReadOnlyList<int>? dragonflyEggClasses = null, IReadOnlyList<int>? signClasses = null,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<int, int>>? classMaps = null, bool remapSaveRows = false, byte[]? nativeExecutable = null)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<int, int>>? classMaps = null, bool remapSaveRows = false, byte[]? nativeExecutable = null,
+        UniversalOverlay? nativeDestinationOwner = null)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
         int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
         bool Remaps(string key) => classMaps != null && classMaps.TryGetValue(key, out var cm) && cm.Any(k => k.Key != k.Value);
         string InitTag(string key, int c) => Remaps(key) ? $"i_{key}_{c:X3}" : "i_" + key;
         List<UniversalAsmPart> parts = [UniversalSpecialBehaviors.SignHookPreamble(signClasses is { Count: > 0 })];
+        var destinationGems = (classMaps?.Values.SelectMany(m => UniversalGemCollectionAdapter.GemMappings(m)) ?? [])
+            .GroupBy(p => p.Value).Select(g => g.Select(p => p.Key).Distinct().Count() == 1 ? g.First() :
+                throw new InvalidDataException("Destination gem collection has an ambiguous canonical class owner."))
+            .OrderBy(p => p.Value).ToArray();
+        UniversalOverlay destinationOwner = nativeDestinationOwner ?? destination;
+        IReadOnlyList<UniversalDestinationGemCollectionAdapter.OwnedCall> destinationGemCalls = [];
+        if (destinationGems.Length != 0 && Enumerable.Range(0, (int)(destinationOwner.FunctionEnd(destinationOwner.Update) - destinationOwner.Update) / 4)
+            .Any(n => destinationOwner.Word(destinationOwner.Update + (uint)n * 4) == UniversalMips.EncodeJ(3, UniversalGemCollectionAdapter.CollectItem)))
+        {
+            UniversalGemCollectionAdapter.RequireNativeOwner(nativeExecutable);
+            destinationGemCalls = UniversalDestinationGemCollectionAdapter.Analyze(destinationOwner);
+            UniversalDestinationGemCollectionAdapter.RequireCurrentOwner(destination, destinationOwner, destinationGemCalls);
+        }
+        string? destinationGemLabel = null;
         UniversalAsmPart w = new();
         w.Label("wrap_upd");
         w.Emit(UniversalMips.EncodeI(9, 29, 29, -0x18));
@@ -135,15 +154,28 @@ public static class UniversalBehaviorBundleBuilder
             {
                 var adapter = UniversalGemCollectionAdapter.Build(map, gemLabel);
                 parts.Add(adapter); gemBytes = adapter.Items.Count(i => i.Word != null) * 4;
+                if (UniversalGemCollectionAdapter.GemMappings(map).OrderBy(p => p.Value).SequenceEqual(destinationGems))
+                    destinationGemLabel = gemLabel;
             }
             reports.Add(new(s.SourceKey, s.Classes.ToArray(), upd.Items.Count(i => i.Word != null) * 4, initTotal, tablesTotal) { GemCollectionCallSites = gemCalls.Distinct().Order().ToArray(), GemCollectionAdapterBytes = gemBytes, ParentClassReadSites = parentClassSites.Distinct().Order().ToArray(), AllocatedClassReadSites = allocatedClassSites.Distinct().Order().ToArray(), PlayerDamageMask = playerDamageWrites.Aggregate(0u, (mask, w) => mask | w.DamageMask), PlayerDamageWrites = playerDamageWrites.Distinct().OrderBy(w => w.StorePc).ToArray() });
+        }
+        int destinationGemBytes = 0;
+        if (destinationGemCalls.Count != 0 && destinationGemLabel == null)
+        {
+            destinationGemLabel = "gem_collect_destination";
+            var adapter = UniversalGemCollectionAdapter.BuildMappings(destinationGems, destinationGemLabel);
+            parts.Add(adapter); destinationGemBytes = adapter.Items.Count(i => i.Word != null) * 4;
         }
         if (dragonflyEggClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.DragonflyEggUpdate(dragonflyEggClasses, "egg_upd", remapSaveRows));
         if (signClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.SignDraw(signClasses, "sign_draw"));
         var (code, labels) = Assemble(parts, baseAddress);
-        return new(baseAddress, code, labels["wrap_upd"], labels["wrap_init"], reports);
+        return new(baseAddress, code, labels["wrap_upd"], labels["wrap_init"], reports)
+        {
+            DestinationGemCollectionCalls = destinationGemCalls.Select(c => new UniversalDestinationGemCall(c.Pc, c.Delay, c.Role, labels[destinationGemLabel!])).ToArray(),
+            DestinationGemCollectionExtraBytes = destinationGemBytes
+        };
     }
 
     private static void EmitReplay(UniversalAsmPart a, UniversalOverlay o, IReadOnlyList<UniversalReplayed> seq)

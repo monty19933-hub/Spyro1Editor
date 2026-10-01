@@ -48,10 +48,17 @@ var absent=new UniversalAsmPart();absent.Emit(0);
 Check(UniversalGemCollectionAdapter.PatchCalls(absent,overlay,map,"none",null).Count==0,"no collection call needs no executable");
 var noExe=Caller(UniversalOverlay.Base+0x100);var before=noExe.Items.ToArray();
 Check(Refuses(()=>UniversalGemCollectionAdapter.PatchCalls(noExe,overlay,map,"missing",null))&&noExe.Items.SequenceEqual(before),"needed missing executable refuses before any caller mutation");
+DestinationGemCollectionCases.Free(Check);
 Console.WriteLine($"UNIVERSAL_GEM_ADAPTER_FREE_OK checks={checks}");
 if(args.Length==0)return;
 if(args.Length==2&&args[0]=="--emit")
 {File.WriteAllText(args[1],JsonSerializer.Serialize(new{Base=codeBase,Code=Convert.ToHexString(code),Map=map}));return;}
+if(args.Length==4 && args[0]=="--destination-census")
+{
+    var censusCatalog=LevelCatalog.Load(args[2]);var censusLibrary=new UniversalSourceLibrary(args[1],censusCatalog);
+    DestinationGemCollectionCases.Source(censusLibrary,censusCatalog,args[3],Check);
+    Console.WriteLine($"DESTINATION_GEM_CALL_OWNERS_OK checks={checks}");return;
+}
 if(args.Length<3)throw new ArgumentException("USA.bin sourceWorkspace output.bin");
 var catalog=LevelCatalog.Load(args[1]);var library=new UniversalSourceLibrary(args[0],catalog);var exe=library.Disc.Exe;
 UniversalGemCollectionAdapter.RequireNativeOwner(exe);Check(true,"exact original native code and colour owners authenticated");
@@ -76,11 +83,21 @@ UniversalGemCollectionAdapter.RequireNativeOwner(written.Exe);Check(true,"writte
 Check(written.EntryBytes(destination.Level.SourceWadEntry-1).SequenceEqual(composed.Overlay),"written overlay equals actual assembled collection adapter");
 var report=composed.Behavior.Single(s=>s.SourceLevelKey=="icecavern");
 Check(report.GemCollectionCallSites.Contains(0x8007D0D0)&&report.GemCollectionAdapterBytes>0,"written composition reports exact source collection adapter sites and allocation");
+Check(composed.DestinationGemCollectionCalls.Count>0&&composed.DestinationGemCollectionExtraBytes==0,"destination native collector reuses existing source adapter without extra allocation");
+foreach(var call in composed.DestinationGemCollectionCalls)
+{
+    int offset=(int)(call.CallPc-UniversalOverlay.Base);
+    Check(BinaryPrimitives.ReadUInt32LittleEndian(composed.Overlay.AsSpan(offset))==UniversalMips.EncodeJ(3,call.Adapter)&&
+        BinaryPrimitives.ReadUInt32LittleEndian(composed.Overlay.AsSpan(offset+4))==call.DelayWord,"written destination call and original delay readback");
+}
+for(int offset=0;offset<(int)(destination.Overlay.CopyBuffer-UniversalOverlay.Base);offset++)
+    if(!composed.DestinationGemCollectionCalls.Any(c=>offset>=(int)(c.CallPc-UniversalOverlay.Base)&&offset<(int)(c.CallPc-UniversalOverlay.Base)+4))
+        Check(composed.Overlay[offset]==destination.Overlay.Bytes[offset],"every unrelated retained native overlay byte exact");
 Check(composed.Ram.FinalHeadroom>=UniversalMobyComposer.RamSafetyMargin,"native RAM guard retained");
 Check(written.EntryBytes(8).SequenceEqual(library.Disc.EntryBytes(8)),"shared PETE model owner unchanged");
 using(var fs=File.OpenRead(library.ImagePath))Check(Convert.ToHexStringLower(SHA256.HashData(fs))==UniversalSourceLibrary.OriginalUsaSha256,"original USA disc unchanged");
 File.WriteAllText(Path.ChangeExtension(output,".cue"),$"FILE \"{Path.GetFileName(output)}\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n");
-var receipt=new{Checks=checks,Source="icecavern",SourceRow=2,SourceClass=0x53,imported.DestinationClassId,Position=new{X=84992,Y=47850,Z=8960},composed.NewRowIndices,composed.PlacementSaveRows,composed.Ram,report.GemCollectionCallSites,report.GemCollectionAdapterBytes,composed.ParticleDependencies,result.OutputImageSha256,CoreModuleVersionId=typeof(UniversalMobyComposer).Module.ModuleVersionId,CoreSha256=Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(typeof(UniversalMobyComposer).Assembly.Location))),RuntimeStatus="not-tested"};
+var receipt=new{Checks=checks,Source="icecavern",SourceRow=2,SourceClass=0x53,imported.DestinationClassId,Position=new{X=84992,Y=47850,Z=8960},composed.NewRowIndices,composed.PlacementSaveRows,composed.Ram,report.GemCollectionCallSites,report.GemCollectionAdapterBytes,composed.DestinationGemCollectionCalls,composed.DestinationGemCollectionExtraBytes,composed.ParticleDependencies,result.OutputImageSha256,CoreModuleVersionId=typeof(UniversalMobyComposer).Module.ModuleVersionId,CoreSha256=Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(typeof(UniversalMobyComposer).Assembly.Location))),RuntimeStatus="not-tested"};
 File.WriteAllText(Path.ChangeExtension(output,".readback.json"),JsonSerializer.Serialize(receipt,new JsonSerializerOptions{WriteIndented=true}));Console.WriteLine(JsonSerializer.Serialize(receipt));
 
 sealed class StrictMachine(byte[] code,uint codeBase)

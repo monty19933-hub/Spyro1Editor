@@ -65,7 +65,17 @@ internal static class UniversalGemCollectionAdapter
     internal static UniversalAsmPart Build(IReadOnlyDictionary<int, int> map, string label)
     {
         var gems = GemMappings(map);
-        if (gems.Length == 0) throw new InvalidDataException("A gem adapter needs at least one remapped native gem class.");
+        return BuildMappings(gems, label);
+    }
+
+    internal static UniversalAsmPart BuildMappings(IReadOnlyList<KeyValuePair<int, int>> gems, string label)
+    {
+        // Several source packages may have the same canonical gem class, but each actual
+        // destination ID belongs to exactly one package and canonical value.
+        if (gems.Any(p => p.Key is < 0x53 or > 0x57 || p.Value is < 0 or >= 0x200 || p.Key == p.Value) ||
+            gems.Select(p => p.Value).Distinct().Count() != gems.Count)
+            throw new InvalidDataException("Destination gem collection requires unique source-scoped actual classes.");
+        if (gems.Count == 0) throw new InvalidDataException("A gem adapter needs at least one remapped native gem class.");
         UniversalAsmPart p = new();
         void I(int op, int rs, int rt, int imm) => p.Emit(UniversalMips.EncodeI(op, rs, rt, imm));
         p.Label(label);
@@ -73,7 +83,7 @@ internal static class UniversalGemCollectionAdapter
         // Keep the callee argument home area (sp+0..15) free.
         I(43, 29, 8, 16); I(43, 29, 9, 20); I(43, 29, 4, 24); I(43, 29, 31, 32);
         I(37, 4, 8, 0x36); p.Emit(UniversalMips.Nop); I(43, 29, 8, 28);
-        for (int n = 0; n < gems.Length; n++)
+        for (int n = 0; n < gems.Count; n++)
         {
             I(9, 0, 9, gems[n].Value);
             p.Emit(UniversalMips.EncodeI(5, 8, 9, 0), new(UniversalFixKind.BranchLabel, Label: $"{label}_n{n}"));
