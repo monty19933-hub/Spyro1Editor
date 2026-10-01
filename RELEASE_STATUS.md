@@ -28,30 +28,43 @@ packages remain separate from the new fixtures. Fly Anywhere remains deferred.
 - [x] Refresh exact saved-project capacity with all eight existing imports and
   private terrain retained. Alpine Ridge row 1 fits with additional native rows
   7, 31, 32 and 33 removed, leaving 29,880 bytes RAM headroom.
-- [x] Source-free Release regression: 316 checks passed, zero failed, against
-  the byte-verified frozen source at 77490f0. Focused source/Debug checks retain
-  their separate module identities in the verification receipt.
+- [x] Source-free Release regression: 324 checks passed, zero failed, against
+  the 2,333-file byte-verified frozen source at 3196a94. Focused source/Debug
+  checks retain their separate module identities in the verification receipt.
 - [x] Complete final retail/default/fresh matrices with explicit regressions
   caused by newly accounted native allocation.
 - [x] Remove the fresh scene's accidental one-object allocation limit while
   retaining 16 dynamic slots. Release/Debug focused source checks passed; the
   separate frozen 3785f22 Release regression passed 318 checks, zero failed.
-- [ ] Correct the native six-object retake's treasure maximum and persistent
-  collection effects, then repeat the fresh-level runtime test. Loading,
-  collection of 43 gems, egg 1/1, walking, jumping and landing already passed.
-- [ ] Complete signed packages and actual packaged GUI normal-export retake.
+- [x] Correct treasure maxima and both destination-native gem colour producers.
+  Final fresh and retail native runs passed all five values and zero settled
+  collection particles. Fresh inventory is 43/43 plus egg 1/1; Artisans is 43/143.
+  Final ordinary cold Load Game retained all five collected gems and one dragon
+  from the copied earlier native save, without duplicate awards or card changes.
+- [x] Prove thirteen native model-table tails and 24 linked particle no-op
+  argument packets. Final callback/source-byte guards remain mandatory.
+- [x] Build Developer ID signed macOS arm64 and Windows x64 packages; full
+  package verifier passed. Mac is not notarized; Windows runtime is untested.
+- [x] Actual packaged GUI: add a red gem beside the saved egg, save/reopen two
+  objects, enable all terrain face actions, and Create BIN/CUE with both start
+  choices. Exact saved Artisans content remains included.
+- [x] Independent readback and cold New Game boot of the final two-object GUI
+  export: red gem and eye-free egg pickup, platform jump/landing, inventory
+  1/1 treasure plus 1/1 egg (global 1/5), and zero settled collection particles.
+  No save states or RAM writes; the new blank card remained unchanged.
 
-The final continuation matrix composes 104,293 of 145,285 retail
-variant/destination cells: 39,215 static-only and 65,078 with unverified behavior
-dependencies. This is a net increase of 41,607 over the preserved 62,686-cell
-baseline (42,339 newly composed; 732 newly refused). Compared with the earlier
-integrated 104,837-cell survey, 399 newly compose and 943 now correctly fail RAM
-because the gem collection adapter's actual allocation is included. The final
-default-type matrix composes 4,215 of 7,175 cells; the exact default fresh scene
-composes 3,864 of 4,151 variants. Every matrix runtime cell remains not-tested.
+The final-r3 matrix composes 105,559 of 145,285 retail variant/destination cells:
+39,215 static-only and 66,344 with unverified behavior dependencies. This is a
+net increase of 42,873 over the preserved 62,686-cell baseline. Compared with
+final-r2 (104,293), 1,601 ownership failures now compose, 820 now reach real RAM
+limits, and 335 earlier compositions in Dream Weavers now correctly fail RAM
+because the gem-colour adapter consumes actual space. Net gain is 1,266.
+The final default-type matrix composes 4,242 of 7,175 cells (30 gains, three RAM
+regressions); the exact default fresh scene composes 3,980 of 4,151 variants
+(116 gains, no regressions). Every matrix runtime cell remains not-tested.
 Full universal gameplay coverage is unfinished. Final reports and exact source
-fingerprints are in `outputs/Universal-placement-coverage-20261001-final` under
-the task workspace. Retail refusals are 25,876 RAM, 7,225 VRAM, 5,624 ownership,
+fingerprints are in `outputs/Universal-placement-coverage-20261001-final-r3` under
+the task workspace. Retail refusals are 27,031 RAM, 7,225 VRAM, 3,203 ownership,
 1,633 extraction, 340 reserved depth and 294 sound.
 
 Current native receipts are described in
@@ -59,6 +72,12 @@ Current native receipts are described in
 `docs/research/universal-unoccupied-row-group-20261001.md` and
 `docs/research/universal-gem-collection-runtime-20261001.md` and
 `docs/research/universal-fresh-multiple-objects-20261001.md`.
+The final packaged GUI/export/native chain is documented in
+`docs/research/universal-packaged-editor-20261001.md`.
+The bounded ownership proof is documented in
+`docs/research/universal-native-ownership-20261001.md`. App packages use 4afc9bf;
+all product and test files are byte-identical to the 3196a94 regression/matrix
+snapshot, with only four evidence/user-documentation files changed.
 
 ## Preserved V1.0 release history
 
