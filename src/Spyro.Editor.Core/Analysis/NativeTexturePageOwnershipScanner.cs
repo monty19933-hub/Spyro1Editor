@@ -173,7 +173,7 @@ public static class NativeTexturePageOwnershipScanner
     /// retained models, terrain, particles, shared models and cutscenes stay protected. Incomplete
     /// decoding protects the entire image; exclusion is never an ownership shortcut.</summary>
     public static NativeTexturePageOwnershipReport ScanExcludingResidentClasses(string sourceImagePath,
-        LevelDefinition level, IReadOnlySet<int> excludedClasses)
+        LevelDefinition level, IReadOnlySet<int> excludedClasses, byte[]? preparedAsset = null)
     {
         ArgumentNullException.ThrowIfNull(level);
         if (!File.Exists(sourceImagePath))
@@ -183,7 +183,7 @@ public static class NativeTexturePageOwnershipScanner
 
         DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
         using FileStream stream = File.OpenRead(sourceImagePath);
-        LevelAsset asset = LoadLevelAsset(stream, layout, level);
+        LevelAsset asset = LoadLevelAsset(stream, layout, level, preparedAsset);
         ushort[] ownership = new ushort[AddressableTexturePageBytes];
 
         ScopeState terrainLq = new("terrain-lq");
@@ -1045,15 +1045,20 @@ public static class NativeTexturePageOwnershipScanner
         return result;
     }
 
-    private static LevelAsset LoadLevelAsset(FileStream stream, DiscLayout layout, LevelDefinition level)
+    private static LevelAsset LoadLevelAsset(FileStream stream, DiscLayout layout, LevelDefinition level, byte[]? preparedAsset = null)
     {
         byte[] entryPair = DiscImage.ReadFileBytes(stream, layout, WadLba, level.SourceWadEntry * 8L, 8);
         long assetOffset = ReadUInt32(entryPair, 0);
-        int assetLength = checked((int)ReadUInt32(entryPair, 4));
+        int assetLength = preparedAsset?.Length ?? checked((int)ReadUInt32(entryPair, 4));
         if (assetOffset <= 0 || assetLength < LevelHeaderBytes)
             throw new InvalidDataException($"{level.DisplayName} WAD entry {level.SourceWadEntry} has an invalid asset header.");
 
-        byte[] header = DiscImage.ReadFileBytes(stream, layout, WadLba, assetOffset, LevelHeaderBytes);
+        // The prepared header and every ownership component must come from the same asset.
+        // Shared/cutscene packages remain source-bound to the unchanged image.
+        byte[] ReadPrepared(int offset, int length) => preparedAsset == null
+            ? DiscImage.ReadFileBytes(stream, layout, WadLba, assetOffset + offset, length)
+            : preparedAsset.AsSpan(offset, length).ToArray();
+        byte[] header = ReadPrepared(0, LevelHeaderBytes);
         int vramOffset = checked((int)ReadUInt32(header, 0x00));
         int vramSize = checked((int)ReadUInt32(header, 0x04));
         int dataOffset = checked((int)ReadUInt32(header, 0x08));
@@ -1084,12 +1089,7 @@ public static class NativeTexturePageOwnershipScanner
             modelIndices[index] = ReadUInt16(header, 0x150 + (index * 2));
         }
 
-        byte[] texturePagesSubfile = DiscImage.ReadFileBytes(
-            stream,
-            layout,
-            WadLba,
-            assetOffset + vramOffset,
-            vramSize);
+        byte[] texturePagesSubfile = ReadPrepared(vramOffset, vramSize);
         return new LevelAsset(
             assetOffset,
             assetLength,
@@ -1100,13 +1100,14 @@ public static class NativeTexturePageOwnershipScanner
             sceneOffset,
             texturePagesSubfile.AsSpan(0, AddressableTexturePageBytes).ToArray(),
             Convert.ToHexString(SHA256.HashData(texturePagesSubfile)),
-            DiscImage.ReadFileBytes(stream, layout, WadLba, assetOffset + dataOffset, dataSize),
-            DiscImage.ReadFileBytes(stream, layout, WadLba, assetOffset + modelOffset, modelSize),
-            DiscImage.ReadFileBytes(stream, layout, WadLba, assetOffset + sceneOffset, sceneSize),
+            ReadPrepared(dataOffset, dataSize),
+            ReadPrepared(modelOffset, modelSize),
+            ReadPrepared(sceneOffset, sceneSize),
             modelOffsets,
             modelIndices,
             dragonOffsets,
-            dragonLengths);
+            dragonLengths,
+            preparedAsset?.ToArray());
     }
 
     private static void DecodeDragonCutsceneModels(
@@ -1137,12 +1138,9 @@ public static class NativeTexturePageOwnershipScanner
                 continue;
             }
 
-            byte[] blob = DiscImage.ReadFileBytes(
-                stream,
-                layout,
-                WadLba,
-                asset.AssetWadOffset + blobOffset,
-                blobLength);
+            byte[] blob = asset.PreparedBytes == null
+                ? DiscImage.ReadFileBytes(stream,layout,WadLba,asset.AssetWadOffset + blobOffset,blobLength)
+                : asset.PreparedBytes.AsSpan(blobOffset,blobLength).ToArray();
             if (ReadUInt32(blob, 0) != 0)
             {
                 scope.Block($"Dragon cutscene slot {slot} has a nonzero WadDragonHeader sentinel.");
@@ -2265,7 +2263,8 @@ public static class NativeTexturePageOwnershipScanner
         int[] ModelOffsets,
         ushort[] ModelIndices,
         int[] DragonOffsets,
-        int[] DragonLengths);
+        int[] DragonLengths,
+        byte[]? PreparedBytes = null);
 
     private sealed record SharedPeteModelAsset(
         byte[] Models,

@@ -22,7 +22,12 @@ public sealed record NativeTerrainTextureSectorPrivateRecordRequest(
     IReadOnlyList<NativeTerrainTextureRecordExistingPatch> OrdinaryLevelDataPatches,
     NativeTerrainTexturePrivateRecordStagingSourceProof? StagingSourceProof = null,
     NativeTerrainTextureStructuralGrowthPolicy StructuralGrowthPolicy =
-        NativeTerrainTextureStructuralGrowthPolicy.NormalChecked);
+        NativeTerrainTextureStructuralGrowthPolicy.NormalChecked)
+{
+    /// <summary>Extra immutable source storage reserved for the following universal import stage.
+    /// This only adds protection; it never releases any native consumer's ownership.</summary>
+    public IReadOnlyList<NativeTexturePageOwnedRange> AdditionalProtectedRanges { get; init; } = [];
+}
 
 public sealed record NativeTerrainTextureSectorPrivateRecordPlan(
     DateTimeOffset GeneratedAt,
@@ -141,7 +146,7 @@ public static class NativeTerrainTextureSectorPrivateRecordComposer
                         item.MaterialTemplateTextureId))
                     .ToArray(),
                 request.SourceImagePath,
-                request.StagingSourceProof);
+                request.StagingSourceProof) { AdditionalProtectedRanges = request.AdditionalProtectedRanges };
             if (!NativeTerrainTextureGlobalRepackerResearch.TryBuild(
                     globalRequest,
                     out NativeTerrainTextureGlobalRepackSyntheticPlan? global,

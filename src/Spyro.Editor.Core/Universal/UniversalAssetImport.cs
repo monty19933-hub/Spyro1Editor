@@ -8,6 +8,8 @@ public sealed class UniversalVramAllocator
 {
     public const int RowBytes = 1024, Rows = 512, ImageBytes = RowBytes * Rows;
     private readonly bool[] _used = new bool[ImageBytes];
+    private readonly List<NativeTexturePageOwnedRange> _reservations = [];
+    public IReadOnlyList<NativeTexturePageOwnedRange> ImportedReservations => _reservations.ToArray();
     private readonly short[] _runFull = new short[ImageBytes];
     private readonly short[] _run = new short[ImageBytes]; // free bytes from x to the end of its 128-byte page column
 
@@ -22,6 +24,7 @@ public sealed class UniversalVramAllocator
     {
         var c = new UniversalVramAllocator([]);
         Array.Copy(_used, c._used, ImageBytes); Array.Copy(_run, c._run, ImageBytes); Array.Copy(_runFull, c._runFull, ImageBytes);
+        c._reservations.AddRange(_reservations);
         return c;
     }
 
@@ -45,7 +48,7 @@ public sealed class UniversalVramAllocator
 
     private void Mark(int x, int y, int w, int h)
     {
-        for (int yy = y; yy < y + h; yy++) { Array.Fill(_used, true, yy * RowBytes + x, w); RebuildRow(yy); }
+        for (int yy = y; yy < y + h; yy++) { Array.Fill(_used, true, yy * RowBytes + x, w); RebuildRow(yy); _reservations.Add(new(yy * RowBytes + x,w,"universal imported pixel/palette")); }
     }
 
     /// <summary>Allocates a w-byte by h-row rectangle entirely inside one 128-byte by 256-row texture page.</summary>
@@ -85,6 +88,7 @@ public sealed class UniversalVramAllocator
     {
         if (offset < 0 || length < 0 || (long)offset + length > ImageBytes)
             throw new InvalidDataException("Texture reservation is outside level VRAM.");
+        if (length > 0) _reservations.Add(new(offset,length,"universal imported texture used in place"));
         for (int i = offset; i < offset + length; i++) _used[i] = true;
         if (length > 0) for (int y = offset / RowBytes; y <= (offset + length - 1) / RowBytes; y++) RebuildRow(y);
     }

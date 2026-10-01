@@ -13,7 +13,12 @@ public sealed record NativeTerrainTextureGlobalRepackResearchRequest(
     LevelDefinition TargetLevel,
     IReadOnlyList<NativeTerrainTextureRelocationImport> DonorOverrides,
     string DonorSourceImagePath = "",
-    NativeTerrainTexturePrivateRecordStagingSourceProof? StagingSourceProof = null);
+    NativeTerrainTexturePrivateRecordStagingSourceProof? StagingSourceProof = null)
+{
+    /// <summary>Extra immutable source storage reserved for the following universal import stage.
+    /// This only adds protection; it never releases any native consumer's ownership.</summary>
+    public IReadOnlyList<NativeTexturePageOwnedRange> AdditionalProtectedRanges { get; init; } = [];
+}
 
 /// <summary>
 /// One not-yet-installed native texture row. Assigned ids must form the exact
@@ -39,7 +44,12 @@ public sealed record NativeTerrainTextureGlobalRepackSyntheticRequest(
     IReadOnlyList<NativeTerrainTextureRelocationImport> ExistingRecordOverrides,
     IReadOnlyList<NativeTerrainTextureGlobalRepackSyntheticRecord> SyntheticRecords,
     string DonorSourceImagePath = "",
-    NativeTerrainTexturePrivateRecordStagingSourceProof? StagingSourceProof = null);
+    NativeTerrainTexturePrivateRecordStagingSourceProof? StagingSourceProof = null)
+{
+    /// <summary>Extra immutable source storage reserved for the following universal import stage.
+    /// This only adds protection; it never releases any native consumer's ownership.</summary>
+    public IReadOnlyList<NativeTexturePageOwnedRange> AdditionalProtectedRanges { get; init; } = [];
+}
 
 public sealed record NativeTerrainTextureGlobalRepackPackedRecord(
     int TargetTextureId,
@@ -255,7 +265,7 @@ public static class NativeTerrainTextureGlobalRepackerResearch
                 request.TargetLevel,
                 request.ExistingRecordOverrides.Concat(syntheticOverrides).ToArray(),
                 request.DonorSourceImagePath,
-                request.StagingSourceProof);
+                request.StagingSourceProof) { AdditionalProtectedRanges = request.AdditionalProtectedRanges };
             if (!TryBuildCore(coreRequest, synthetic, out NativeTerrainTextureGlobalRepackResearchPlan? proof, out failureReason) ||
                 proof == null)
             {
@@ -659,6 +669,12 @@ public static class NativeTerrainTextureGlobalRepackerResearch
             }
 
             bool[] externalProtectedBytes = BuildProtectedMask(target.TexturePages.Length, ownership.Proof);
+            foreach (var range in request.AdditionalProtectedRanges)
+            {
+                if (range.Offset < 0 || range.Length <= 0 || range.Offset + (long)range.Length > Math.Min(AddressableBytes,externalProtectedBytes.Length))
+                    throw new InvalidDataException("Pending universal texture reservation is outside the level-owned VRAM upload.");
+                Array.Fill(externalProtectedBytes,true,checked((int)range.Offset),range.Length);
+            }
             bool[] retainedBytes = externalProtectedBytes.ToArray();
             Dictionary<int, TextureAsset> donors = [];
             foreach (int wadEntry in overrides.Values.Select(item => item.DonorWadEntry).Distinct())

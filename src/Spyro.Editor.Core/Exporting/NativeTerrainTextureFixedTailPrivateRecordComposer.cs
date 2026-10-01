@@ -30,7 +30,12 @@ public sealed record NativeTerrainTextureFixedTailPrivateRecordRequest(
     IReadOnlyList<NativeTerrainTextureRelocationImport> ExistingRecordOverrides,
     IReadOnlyList<NativeTerrainTexturePrivateSyntheticRecord> SyntheticRecords,
     IReadOnlyList<NativeTerrainTextureRecordExistingPatch> OrdinaryLevelDataPatches,
-    NativeTerrainTexturePrivateRecordStagingSourceProof? StagingSourceProof = null);
+    NativeTerrainTexturePrivateRecordStagingSourceProof? StagingSourceProof = null)
+{
+    /// <summary>Extra immutable source storage reserved for the following universal import stage.
+    /// This only adds protection; it never releases any native consumer's ownership.</summary>
+    public IReadOnlyList<NativeTexturePageOwnedRange> AdditionalProtectedRanges { get; init; } = [];
+}
 
 public sealed record NativeTerrainTexturePrivateOriginalRowProof(
     int TargetTextureId,
@@ -166,7 +171,7 @@ public static class NativeTerrainTextureFixedTailPrivateRecordComposer
                         item.MaterialTemplateTextureId))
                     .ToArray(),
                 request.SourceImagePath,
-                request.StagingSourceProof);
+                request.StagingSourceProof) { AdditionalProtectedRanges = request.AdditionalProtectedRanges };
             if (!NativeTerrainTextureGlobalRepackerResearch.TryBuild(
                     globalRequest,
                     out NativeTerrainTextureGlobalRepackSyntheticPlan? global,

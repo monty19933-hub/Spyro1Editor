@@ -39,6 +39,7 @@ public sealed record UniversalComposeResult(
     public IReadOnlyList<int> DroppedModelClasses { get; init; } = [];
     public int DroppedModelBytes { get; init; }
     public int ReclaimedVramBytes { get; init; }
+    public IReadOnlyList<NativeTexturePageOwnedRange> ImportedVramRanges { get; init; } = [];
     public IReadOnlyList<UniversalParticleDependency> ParticleDependencies { get; init; } = [];
     public int RestoredObjectLinks { get; init; }
     public int UnresolvedObjectLinks { get; init; }
@@ -489,7 +490,7 @@ public static class UniversalMobyComposer
         int[] mappedRows = Enumerable.Repeat(-1, incomingCount).ToArray(), mappedSaveRows = Enumerable.Repeat(-1, incomingCount).ToArray();
         for (int i = 0; i < newRows.Count; i++) { mappedRows[incomingOrder[i]] = newRows[i]; mappedSaveRows[incomingOrder[i]] = saveRows[i]; }
         return new(destination.Key, imports, mappedRows, ram, arena, freeBefore - vram.FreeBytes, behavior, warnings,
-            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ParticleDependencies = particleDependencies.Values.ToList(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties };
+            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties };
     }
 
     /// <summary>Class a fully removed native row is switched to: no model, no behavior in any level, never

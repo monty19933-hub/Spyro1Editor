@@ -27,7 +27,15 @@ public sealed record NativeTerrainTexturePrivateRecordBatchRequest(
     IReadOnlyList<NativeTerrainTextureRecordExistingPatch> OrdinaryLevelDataPatches,
     bool HasCustomImageTexturePatches = false,
     NativeTerrainTextureStructuralGrowthPolicy StructuralGrowthPolicy =
-        NativeTerrainTextureStructuralGrowthPolicy.NormalChecked);
+        NativeTerrainTextureStructuralGrowthPolicy.NormalChecked)
+{
+    /// <summary>Extra immutable source storage reserved for the following universal import stage.
+    /// This only adds protection; it never releases any native consumer's ownership.</summary>
+    public IReadOnlyList<NativeTexturePageOwnedRange> AdditionalProtectedRanges { get; init; } = [];
+    /// <summary>A complete original-bound growing terrain body to materialize before private
+    /// texture packing. Prepare it through NativeTerrainTexturePreparedSourceCompiler first.</summary>
+    public TerrainPatchPlan? TerrainPreparation { get; init; }
+}
 
 public sealed record NativeTerrainTexturePrivateRecordBatchPlan(
     DateTimeOffset GeneratedAt,
@@ -103,6 +111,8 @@ public static class NativeTerrainTexturePrivateRecordBatchCompiler
         ConvertOrdinaryTerrainPlan(TerrainPatchPlan terrainPlan)
     {
         ArgumentNullException.ThrowIfNull(terrainPlan);
+        if (terrainPlan.NativeLevelReplacement != null)
+            throw new InvalidDataException("Growing terrain must be materialized and source-verified before converting ordinary private texture patches.");
         int companionCount = terrainPlan.Patches.Count(patch =>
             patch.Kind == TerrainPatchExporter.NativeTextureLowDetailCompanionPatchKind);
         if (terrainPlan.NativeTextureRelocationBytePatchCount != companionCount ||
@@ -246,6 +256,8 @@ public static class NativeTerrainTexturePrivateRecordBatchCompiler
             ArgumentNullException.ThrowIfNull(request.TargetLevel);
             ArgumentNullException.ThrowIfNull(request.SavedEdits);
             ArgumentNullException.ThrowIfNull(request.OrdinaryLevelDataPatches);
+            if(request.TerrainPreparation!=null)
+                throw new InvalidDataException("Growing private terrain preparation has not been materialized through its verified source compiler.");
             ArgumentException.ThrowIfNullOrWhiteSpace(request.SourceImagePath);
             ArgumentException.ThrowIfNullOrWhiteSpace(request.SourceCuePath);
             ArgumentException.ThrowIfNullOrWhiteSpace(request.OutputPrefix);
@@ -397,7 +409,7 @@ public static class NativeTerrainTexturePrivateRecordBatchCompiler
                 overrides,
                 synthetic,
                 request.OrdinaryLevelDataPatches,
-                stagingSourceProof);
+                stagingSourceProof) { AdditionalProtectedRanges = request.AdditionalProtectedRanges };
             if (NativeTerrainTextureFixedTailPrivateRecordComposer.TryBuild(
                     fixedRequest,
                     out NativeTerrainTextureFixedTailPrivateRecordPlan? fixedPlan,
@@ -441,7 +453,7 @@ public static class NativeTerrainTexturePrivateRecordBatchCompiler
                 synthetic,
                 request.OrdinaryLevelDataPatches,
                 stagingSourceProof,
-                request.StructuralGrowthPolicy);
+                request.StructuralGrowthPolicy) { AdditionalProtectedRanges = request.AdditionalProtectedRanges };
             if (!NativeTerrainTextureSectorPrivateRecordComposer.TryBuild(
                     sectorRequest,
                     out NativeTerrainTextureSectorPrivateRecordPlan? sectorPlan,

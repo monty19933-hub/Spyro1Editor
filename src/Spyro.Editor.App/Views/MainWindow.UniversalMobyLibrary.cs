@@ -7,6 +7,7 @@ using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Spyro.Editor.Core.Exporting;
+using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
@@ -42,6 +43,18 @@ public sealed partial class MainWindow
         ("Other / Unknown", ""),
     ];
 
+    private Dictionary<(string, int), (string, string)> _universalSourceNames = [];
+
+    private string UniversalSourceObjectName(UniversalMobyCatalogEntry entry, UniversalMobyVariant variant)
+    {
+        if (UniversalSpecialCatalog.IsSpecial(variant)) return entry.Name;
+        if (variant.SourceLevelKey == "alpineridge" && variant.ClassId == 0x10F) return "Alpine Ridge caster";
+        if (_universalSourceNames.TryGetValue((variant.SourceLevelKey, variant.SourceRow), out var identity)) return identity.Item1;
+        if (variant.SourceLevelKey == "wizardpeak" && variant.ClassId == 0x11C) return "Armored Druid (Wizard Peak; roster identity)";
+        if (variant.SourceLevelKey == "magiccrafters" && variant.ClassId == 0x10F) return "Armored Druid (Magic Crafters; roster identity)";
+        return $"Source object 0x{variant.ClassId:X3}";
+    }
+
     private string ResolveUniversalSourceDisc() => FirstExistingDiscImagePath(_discImagePathBox.Text,
         _skyboxDiscImagePathBox.Text, DiscImageLocator.FindImage(_workspace));
 
@@ -63,6 +76,7 @@ public sealed partial class MainWindow
                     throw new InvalidDataException("The universal Moby library reads objects from the unchanged original USA disc. The selected image is not that disc.");
             var lib = new UniversalSourceLibrary(path, catalog);
             var names = LoadUniversalNameIndex(workspace, catalog);
+            _universalSourceNames = names;
             var entries = UniversalMobyCatalogBuilder.Build(lib, catalog,
                 (level, row) => names.TryGetValue((level, row), out var n) ? n : null);
             return (path, lib, entries);
@@ -248,16 +262,136 @@ public sealed partial class MainWindow
     private static string UniversalFitFailureSummary(string error, string levelName, bool compact)
     {
         bool textureCapacity = error.Contains("texture", StringComparison.OrdinalIgnoreCase) &&
-            (error.Contains("space", StringComparison.OrdinalIgnoreCase) || error.Contains("allocate", StringComparison.OrdinalIgnoreCase) || error.Contains("fit", StringComparison.OrdinalIgnoreCase));
+            (error.Contains("space", StringComparison.OrdinalIgnoreCase) || error.Contains("memory", StringComparison.OrdinalIgnoreCase) || error.Contains("allocate", StringComparison.OrdinalIgnoreCase) || error.Contains("fit", StringComparison.OrdinalIgnoreCase));
         bool memory = error.Contains("RAM", StringComparison.OrdinalIgnoreCase) || error.Contains("memory", StringComparison.OrdinalIgnoreCase);
         if (textureCapacity) return compact ? "Won't fit: not enough texture space" : $"This won't fit in {levelName}: there is not enough texture space.";
         if (memory) return compact ? "Won't fit: not enough game memory" : $"This won't fit in {levelName}: there is not enough game memory.";
         if (error.Contains("collid", StringComparison.OrdinalIgnoreCase) || error.Contains("conflict", StringComparison.OrdinalIgnoreCase))
             return compact ? "Can't be added: source variant conflict" : $"This source version conflicts with an object already in {levelName}.";
-        return compact ? "Can't be added here: see details" : $"This object can't be added to {levelName} with the current placements. The exact reason is below.";
+        return compact ? "Can't be added here: see details" : $"This object can't be added to {levelName} with the current placements. See Technical details.";
     }
 
     private static string FriendlyCategory(string c) => c switch { "Other / Unknown" => "Other", "All Mobys" => "All objects", _ => c };
+
+    private async Task<(UniversalCompositionHost Host,NativeTerrainTexturePrivateRecordBatchRequest? PrivateRequest)> CaptureUniversalRetailHostAsync(UniversalSourceLibrary library, LevelDefinition level,
+        IReadOnlyList<UniversalMobyPlacement> placements, IReadOnlyCollection<int> removed, Func<string,UniversalSpecialAsset?>? special)
+    {
+        // The modal prevents scene edits while this snapshot is captured. All derived files stay
+        // in a disposable directory; fit checks never save/overwrite the user's edit manifests.
+        string scratch = Path.Combine(Path.GetTempPath(), "spyro-universal-fit-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(scratch);
+        try
+        {
+            string edits = Path.Combine(scratch,"terrain-edits.json");
+            var geometry = _currentGeometry;
+            string savedEdits = Path.Combine(_workspace.RootPath,$"{level.Key}-terrain-edits.json");
+            if (geometry != null) await TerrainEditStore.SaveAsync(edits,geometry.Polygons,level.DisplayName);
+            else if (File.Exists(savedEdits)) File.Copy(savedEdits,edits);
+            string custom = "", customSource = CustomTerrainTextureStore.ManifestPath(_workspace.RootPath,level.Key);
+            var imports = _customTerrainTextures.Count > 0 ? _customTerrainTextures.ToArray()
+                : File.Exists(customSource) ? CustomTerrainTextureStore.LoadManifest(customSource).ToArray() : [];
+            if (geometry != null)
+            {
+                var live = geometry.Polygons.Where(p => !p.IsTerrainRemoved).Select(p => p.TextureId).ToHashSet();
+                imports = imports.Where(i => live.Contains(i.TextureId)).ToArray();
+            }
+            if (imports.Length > 0)
+            {
+                string directory = Path.GetDirectoryName(customSource) ?? _workspace.RootPath;
+                imports = imports.Select(i => i with { SourceImagePath = Path.IsPathRooted(i.SourceImagePath)
+                    ? i.SourceImagePath : Path.GetFullPath(Path.Combine(directory,i.SourceImagePath)) }).ToArray();
+                custom = Path.Combine(scratch,"custom-textures.json");
+                await CustomTerrainTextureStore.SaveManifestAsync(custom,level.Key,level.DisplayName,imports);
+            }
+            string relocation = NativeTerrainTextureRelocationEditStore.ManifestPath(_workspace.RootPath,level.Key);
+            string ram = TerrainPatchDataLocator.FindRamDump(_workspace,level.Key);
+            string search = TerrainPatchDataLocator.FindSourceSearch(_workspace,level.Key);
+            if (geometry != null)
+            {
+                string generated = Path.Combine(scratch,"source-search.json");
+                if (File.Exists(ram)) search = (await TerrainSourceSearchBuilder.BuildAsync(new(library.ImagePath,generated,level,geometry,ram))).OutputPath;
+                else if (IsSourceDerivedGeometry(geometry)) search = (await TerrainSourceSearchBuilder.BuildSourceDerivedAsync(new(library.ImagePath,generated,level,geometry))).OutputPath;
+            }
+            var saved = NativeTerrainTextureRelocationEditStore.Load(_workspace.RootPath,level.Key);
+            bool appended = saved.Any(e => e.UsesAppendedPrivateRecord);
+            var plan = await Task.Run(() => TerrainPatchExporter.BuildPlan(library.ImagePath,DiscImageLocator.FindCueForImage(library.ImagePath),
+                "","",level,ram,search,edits,custom,appended ? "" : relocation));
+            if (!appended) return (await Task.Run(() => UniversalCompositionHost.FromTerrainPlan(library.ImagePath,level,plan)),null);
+            plan = TerrainPatchExporter.AddPrivateTextureAppearanceDependencies(plan,level,saved);
+            var binding = await Task.Run(() => NativeTerrainTextureRecordAppendBuilder.InspectSourceBinding(library.ImagePath,level));
+            var reservations = await Task.Run(() => UniversalTerrainReservations.Capture(library,level,placements,special,removed));
+            var request = new NativeTerrainTexturePrivateRecordBatchRequest(library.ImagePath,DiscImageLocator.FindCueForImage(library.ImagePath),
+                Path.Combine(scratch,"private-host"),WadAnalysisLocator.Find(_workspace),level,saved,
+                plan.NativeLevelReplacement!=null ? [] : NativeTerrainTexturePrivateRecordBatchCompiler.ConvertOrdinaryTerrainPlan(plan),
+                HasCustomImageTexturePatches:plan.CustomTextureBytePatchCount>0,
+                StructuralGrowthPolicy:AppendedPrivateTerrainTextureResearchGate.ResolveStructuralGrowthPolicy(binding,saved.Count(e=>e.UsesAppendedPrivateRecord)))
+                { AdditionalProtectedRanges = reservations, TerrainPreparation=plan.NativeLevelReplacement!=null ? plan : null };
+            return (await BuildUniversalPrivateFitHostAsync(request),request);
+        }
+        finally { Directory.Delete(scratch,recursive:true); }
+    }
+
+    private static async Task<UniversalCompositionHost> BuildUniversalPrivateFitHostAsync(NativeTerrainTexturePrivateRecordBatchRequest request)
+    {
+        string scratch = Path.Combine(Path.GetTempPath(),"spyro-universal-fit-growth-"+Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(scratch);
+        try
+        {
+            var provenance=await NativeTerrainTexturePreparedSourceCompiler.PrepareAsync(request,Path.Combine(scratch,"terrain"));
+            var prepared=provenance.Request;
+            var plan=await Task.Run(()=>NativeTerrainTexturePrivateRecordBatchCompiler.BuildPlan(prepared));
+            if(!AppendedPrivateTerrainTextureResearchGate.TryAllow(provenance.AuthorizationBinding??plan.SourceBinding,plan.WriterKind,plan.AppendedPrivateEdits.Count,plan.StructuralGrowthPolicy,out var reason))
+                throw new InvalidDataException(reason);
+            if(plan.FixedTailPlan!=null)
+                return UniversalCompositionHost.FromPrivateTerrainPlan(request.SourceImagePath,request.TargetLevel,plan,
+                    prepared.SourceImagePath==request.SourceImagePath ? null : prepared.SourceImagePath);
+            var built = await NativeTerrainTexturePrivateRecordBatchCompiler.ExportAsync(plan with { OutputPrefix = Path.Combine(scratch,"host") });
+            return UniversalCompositionHost.FromPreparedImage(request.SourceImagePath,built.OutputImagePath,request.TargetLevel);
+        }
+        finally { Directory.Delete(scratch,recursive:true); }
+    }
+
+    private async Task<IReadOnlyList<NativeTexturePageOwnedRange>> CapturePrivateTerrainActorReservationsAsync(LevelDefinition level)
+    {
+        string path = Path.Combine(_workspace.RootPath,$"{level.Key}-native-edits.json");
+        var placements = level == _currentLevel ? CurrentUniversalPlacements() : UniversalPlacementReader.Read(path);
+        if (!placements.Any(p=>!p.Retired)) return [];
+        var removed = level == _currentLevel ? CurrentRemovedNativeRows() : UniversalPlacementReader.ReadRemovedNativeRows(path);
+        var (_,library,_) = await EnsureUniversalCatalogAsync();
+        var special = UniversalMobyExport.SpecialProvider(ResolveUniversalJapaneseSource());
+        return await Task.Run(() => UniversalTerrainReservations.Capture(library,level,placements,special,removed));
+    }
+
+    private sealed record UniversalFitChoice(UniversalMobyVariant Variant, UniversalRemovalPlan? Plan);
+
+    private void ShowUniversalRemovalPlan(UniversalFitChoice choice, string objectName)
+    {
+        if (choice.Plan == null) return;
+        var rows = choice.Plan.AdditionalRows.ToHashSet();
+        var objects = _currentMobys.Where(m => !m.IsAdded && !m.IsRemoved && rows.Contains(m.TrueIndex)).OrderBy(m => m.TrueIndex).ToList();
+        Window review = new() { Title = $"Inspect removal plan — {objectName}", Width = 640, Height = 460,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        ListBox objectsList = new() { Name = "UniversalRemovalObjects", ItemsSource = objects,
+            ItemTemplate = new FuncDataTemplate<Moby>((m, _) => new TextBlock { Text = m == null ? "" : $"T{m.TrueIndex}: {m.DisplayLabel}", Margin = new Thickness(6) }) };
+        Button locate = NewButton("Select and show this object"); locate.Name = "UniversalRemovalLocate";
+        StyleModernSecondaryButton(locate);
+        locate.Click += (_, _) =>
+        {
+            if (objectsList.SelectedItem is not Moby m || m.IsRemoved) return;
+            _mobySearchBox.Text = "";
+            SelectMobyCategory("All objects");
+            _viewport.SelectMoby(m, true);
+        };
+        DockPanel panel = new() { Margin = new Thickness(16) };
+        var header = new StackPanel { Spacing = 8, Children =
+        {
+            NewSmallNote($"This checked plan lets the {choice.Variant.SourceLevelKey} version fit. Inspect each object and use the editor's normal Remove button if you choose. Nothing is removed automatically.\nReopen Add object afterwards to recheck the current scene."),
+            NewSmallNote(string.Join("\n", choice.Plan.Groups.Select(g => $"{g.Name}: {g.Effect}"))), locate
+        }};
+        DockPanel.SetDock(header, Dock.Top); panel.Children.Add(header); panel.Children.Add(objectsList);
+        review.Content = panel; review.Show(this);
+        objectsList.SelectedIndex = objects.Count > 0 ? 0 : -1;
+    }
 
     private async Task ShowUniversalMobyLibraryAsync(Window owner, string? startCategory = null, string? startSub = null)
     {
@@ -290,6 +424,15 @@ public sealed partial class MainWindow
         StyleModernPrimaryButton(place, ModernGreen);
         Button addHere = NewButton("Add next to selected object"); addHere.Name = "UniversalMobyAddHere"; addHere.IsEnabled = false;
         StyleModernSecondaryButton(addHere);
+        Button findRoom = NewButton("Find space for this object…"); findRoom.Name = "UniversalMobyFindRoom";
+        StyleModernSecondaryButton(findRoom); findRoom.IsEnabled = false;
+        TextBlock roomExplanation = new() { Name = "UniversalMobyRoomExplanation", FontSize = 12, TextWrapping = TextWrapping.Wrap };
+        ListBox roomPlans = new() { Name = "UniversalMobyRemovalPlans", MaxHeight = 190, IsVisible = false };
+        Button inspectPlan = NewButton("Inspect suggested objects…"); inspectPlan.Name = "UniversalMobyInspectPlan";
+        StyleModernSecondaryButton(inspectPlan); inspectPlan.IsVisible = false;
+        using var roomCancellation = new CancellationTokenSource();
+        dialog.Closed += (_, _) => roomCancellation.Cancel();
+        bool findingRoom = false;
         Button close = NewButton("Close"); StyleModernSecondaryButton(close);
         Button japaneseDisc = NewButton("Choose Japanese disc…"); japaneseDisc.Name = "UniversalMobyJapaneseDisc"; StyleModernSecondaryButton(japaneseDisc);
         ToolTip.SetTip(japaneseDisc, "Dragonfly eggs and signs are copied from your unchanged original Spyro the Dragon (Japan) disc. It is only read, never modified.");
@@ -313,7 +456,11 @@ public sealed partial class MainWindow
         UniversalSourceLibrary? lib = null;
         IReadOnlyList<UniversalMobyCatalogEntry> entries = [];
         NativeFreshMainCompilation? freshCompilation = null;
+        UniversalCompositionHost? retailHost = null;
+        NativeTerrainTexturePrivateRecordBatchRequest? retailPrivateRequest = null;
+        System.Collections.Concurrent.ConcurrentDictionary<string,Lazy<UniversalCompositionHost>> jointHosts = new();
         int planned = 0;
+        System.Collections.Concurrent.ConcurrentDictionary<UniversalMobyCatalogEntry,UniversalMobyVariant> fittingVariants = new();
         Dictionary<UniversalMobyVariant, UniversalDestinationEstimate> estimates = [];
         System.Collections.Concurrent.ConcurrentDictionary<UniversalMobyVariant, (UniversalComposeResult? Result, string? Error)> dryRuns = new();
         List<UniversalMobyPlacement> existing = CurrentUniversalPlacements();
@@ -325,8 +472,26 @@ public sealed partial class MainWindow
             return e;
         }
 
+        (UniversalComposeResult? Result,string? Error) ExactRetailCheck(UniversalSourceLibrary library,IReadOnlyList<UniversalMobyPlacement> trial,IReadOnlyCollection<int> gone)
+        {
+            var initial=(retailHost??throw new InvalidDataException("Prepared terrain fit host is not ready.")).DryRun(library,trial,special,gone);
+            if(retailPrivateRequest==null||initial.Error!=null&&!UniversalCapacityPlanner.IsCapacityFailure(initial.Error))return initial;
+            try
+            {
+                // Prospective checks and saved-project exports must select the same reservation
+                // policy. A successful existing-import host alone does not prove the next build.
+                var ranges=UniversalTerrainReservations.Capture(library,destination,trial,special,gone);
+                string key=string.Join(';',ranges.Select(r=>$"{r.Offset}:{r.Length}"));
+                string current=string.Join(';',retailPrivateRequest.AdditionalProtectedRanges.Select(r=>$"{r.Offset}:{r.Length}"));
+                var host=key==current?retailHost:jointHosts.GetOrAdd(key,_=>new Lazy<UniversalCompositionHost>(()=>
+                    BuildUniversalPrivateFitHostAsync(retailPrivateRequest with{AdditionalProtectedRanges=ranges}).GetAwaiter().GetResult())).Value;
+                return host!.DryRun(library,trial,special,gone);
+            }
+            catch(Exception e) when(e is IOException or InvalidDataException or InvalidOperationException){return(null,e.Message);}
+        }
+
         (UniversalComposeResult? Result, string? Error) CheckPlacement(UniversalSourceLibrary library, IReadOnlyList<UniversalMobyPlacement> trial) =>
-            freshCompilation == null ? UniversalMobyCatalogBuilder.DryRun(library, destination, trial, special, removedRows) : DryRunFresh(freshCompilation, library, trial, special);
+            freshCompilation == null ? ExactRetailCheck(library,trial,removedRows) : DryRunFresh(freshCompilation, library, trial, special);
 
         UniversalMobyPlacement TrialFor(UniversalMobyVariant v)
         {
@@ -343,8 +508,9 @@ public sealed partial class MainWindow
         list.ItemTemplate = new FuncDataTemplate<UniversalMobyCatalogEntry>((entry, _) =>
         {
             if (entry == null) return new TextBlock();
-            var e = Est(entry.Default);
-            bool known = listDry.TryGetValue(entry.Default, out var dr);
+            var statusVariant = fittingVariants.TryGetValue(entry,out var fitVersion) ? fitVersion : entry.Default;
+            var e = Est(statusVariant);
+            bool known = listDry.TryGetValue(statusVariant, out var dr);
             bool fitsNow = known ? dr.Error == null : e.Fits;
             string status = entry.RestrictionReason != null ? (UniversalSpecialCatalog.IsSpecial(entry.Default) ? "Needs your Japanese disc" : "Can't be placed")
                 : !known ? "Checking whether it fits…" : fitsNow ? e.Native ? "Already in this level" : "Can be added"
@@ -382,7 +548,8 @@ public sealed partial class MainWindow
         {
             var same = list.SelectedItem is UniversalMobyCatalogEntry en ? en.Variants.Where(x => x.SourceLevelKey == v.SourceLevelKey).ToList() : [v];
             int n = same.IndexOf(v);
-            return same.Count > 1 ? $"From {LevelName(v.SourceLevelKey)} (#{n + 1} of {same.Count})" : $"From {LevelName(v.SourceLevelKey)}";
+            string identity = list.SelectedItem is UniversalMobyCatalogEntry selected ? UniversalSourceObjectName(selected,v) : "Source object";
+            return same.Count > 1 ? $"{identity} — {LevelName(v.SourceLevelKey)} (#{n + 1} of {same.Count})" : $"{identity} — {LevelName(v.SourceLevelKey)}";
         }
 
         string LevelName(string key) => key == UniversalSpecialCatalog.SourceKey ? "Spyro the Dragon (Japan)" : _retailCatalog.FindByKey(key)?.DisplayName ?? key;
@@ -402,7 +569,7 @@ public sealed partial class MainWindow
             var shown = entries.Where(e => (q.Length > 0 || MatchesCategory(e)) &&
                 (q.Length == 0 || q.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(e.SearchText.Contains)) &&
                 (src == null || e.SourceLevels.Contains(src)) &&
-                (fitFilter.SelectedIndex switch { 1 => e.RestrictionReason == null && (listDry.TryGetValue(e.Default, out var d) ? d.Error == null : Est(e.Default).Fits), 2 => Est(e.Default).Native, _ => true }))
+                (fitFilter.SelectedIndex switch { 1 => e.RestrictionReason == null && (fittingVariants.ContainsKey(e) || (listDry.TryGetValue(e.Default, out var d) ? d.Error == null : Est(e.Default).Fits)), 2 => Est(e.Default).Native, _ => true }))
                 .OrderBy(e => UniversalSpecialCatalog.IsSpecial(e.Default) ? 0 : 1).ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
             var selected = list.SelectedItem;
             list.ItemsSource = shown;
@@ -413,6 +580,7 @@ public sealed partial class MainWindow
         void RefreshDetails()
         {
             place.IsEnabled = addHere.IsEnabled = false;
+            findRoom.IsEnabled = !findingRoom && lib != null && freshCompilation == null && list.SelectedItem is UniversalMobyCatalogEntry;
             if (lib == null || list.SelectedItem is not UniversalMobyCatalogEntry entry)
             {
                 title.Text = ""; details.Text = "Choose an object from the list to see what it is and whether it fits here."; fit.Text = ""; technical.Text = "";
@@ -425,7 +593,7 @@ public sealed partial class MainWindow
             {
                 variants.Tag = entry;
                 variants.ItemsSource = entry.Variants.Take(200).ToList();
-                variants.SelectedItem = entry.Default;
+                variants.SelectedItem = fittingVariants.TryGetValue(entry,out var preferred) ? preferred : entry.Default;
             }
             var v = variants.SelectedItem as UniversalMobyVariant ?? entry.Default;
             if (previewVariant != v)
@@ -435,8 +603,8 @@ public sealed partial class MainWindow
             }
             var e = Est(v);
             bool isSpecial = UniversalSpecialCatalog.IsSpecial(v);
-            variantLabel.Text = entry.SubCategory == "Dragonfly Eggs" ? "Colour" : entry.Variants.Count > 1 ? "Version (copies of this object in the game can differ slightly)" : "Version";
-            details.Text = (isSpecial
+            variantLabel.Text = entry.SubCategory == "Dragonfly Eggs" ? "Colour" : entry.Variants.Count > 1 ? "Source object (shared type IDs can mean different objects)" : "Version";
+            details.Text = $"Selected source object: {UniversalSourceObjectName(entry,v)}.\n" + (isSpecial
                     ? "From the Japanese version of Spyro the Dragon.\n"
                     : $"Found in {string.Join(", ", entry.SourceLevels.Select(LevelName))}.\n") +
                 (entry.Notes is { Length: > 0 } friendly ? friendly + "\n" : "") +
@@ -458,7 +626,8 @@ public sealed partial class MainWindow
             if (dry.Error != null)
             {
                 fit.Text = UniversalFitFailureSummary(dry.Error, destination.DisplayName, compact: false) +
-                    "\n" + dry.Error;
+                    (UniversalCapacityPlanner.IsCapacityFailure(dry.Error) ? "\nUse Find space for this object to compare versions and removal plans." : "");
+                technical.Text += "\nExport check: " + dry.Error;
                 fit.Foreground = new SolidColorBrush(ModernRed);
                 return;
             }
@@ -471,6 +640,84 @@ public sealed partial class MainWindow
             fit.Foreground = new SolidColorBrush(ModernGreen);
             place.IsEnabled = addHere.IsEnabled = true;
         }
+
+        roomPlans.ItemTemplate = new FuncDataTemplate<UniversalFitChoice>((choice, _) => new TextBlock
+        {
+            Text = choice == null ? "" : choice.Plan == null
+                ? $"{VersionName(choice.Variant)} — fits without further removals"
+                : $"{VersionName(choice.Variant)}: remove {choice.Plan.AdditionalRows.Count} object(s)\n" +
+                  string.Join(" + ", choice.Plan.Groups.Select(g => $"{g.Name} ({g.AdditionalRows.Count})")) +
+                  $"\nExport check passed: {choice.Plan.FinalRamHeadroom / 1024.0:0.0} KB RAM left; {choice.Plan.ReclaimedVramBytes / 1024.0:0.0} KB textures reclaimed" +
+                  (choice.Plan.ParticleBehaviorUnverified ? "\nParticle behavior still needs a playtest." : "\nGameplay still needs a playtest."),
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4)
+        });
+        roomPlans.SelectionChanged += (_, _) =>
+        {
+            inspectPlan.IsVisible = roomPlans.SelectedItem is UniversalFitChoice { Plan: not null };
+            if (roomPlans.SelectedItem is UniversalFitChoice choice) variants.SelectedItem = choice.Variant;
+        };
+        inspectPlan.Click += (_, _) =>
+        {
+            if (roomPlans.SelectedItem is not UniversalFitChoice choice || list.SelectedItem is not UniversalMobyCatalogEntry entry) return;
+            dialog.Close(); ShowUniversalRemovalPlan(choice, UniversalSourceObjectName(entry,choice.Variant));
+        };
+        findRoom.Click += async (_, _) =>
+        {
+            if (lib == null || freshCompilation != null || list.SelectedItem is not UniversalMobyCatalogEntry selectedEntry) return;
+            findingRoom = true; findRoom.IsEnabled = false; roomPlans.IsVisible = inspectPlan.IsVisible = false;
+            roomExplanation.Text = "Checking versions and complete model-owner removal groups against all current objects…";
+            var selected = variants.SelectedItem as UniversalMobyVariant ?? selectedEntry.Default;
+            var candidates = selectedEntry.Variants.Where(v => v.Extractable)
+                .GroupBy(v => (v.SourceLevelKey, v.PropertiesBytes)).Select(g => g.First())
+                .OrderBy(v => v == selected ? 0 : 1).Take(12).ToList();
+            if (!candidates.Contains(selected)) candidates.Insert(0, selected);
+            var labels = _currentMobys.Where(m => !m.IsAdded && m.TrueIndex >= 0)
+                .GroupBy(m => m.TrueIndex).ToDictionary(g => g.Key, g => (g.First().DisplayLabel, g.First().CandidateKind));
+            var trials = candidates.Select(v => (Variant: v, Trial: existing.Append(TrialFor(v)).ToList())).ToList();
+            try
+            {
+                var reports = await Task.Run(() =>
+                {
+                    var found = new List<(UniversalMobyVariant Variant, UniversalCapacityAdvice Advice)>();
+                    foreach (var item in trials)
+                    {
+                        roomCancellation.Token.ThrowIfCancellationRequested();
+                        (UniversalComposeResult? Result,string? Error) ExactCheck(IReadOnlyCollection<int> gone)
+                        {
+                            var result = ExactRetailCheck(lib,item.Trial,gone);
+                            if (gone.ToHashSet().SetEquals(removedRows) && result.Error == null) dryRuns[item.Variant] = result;
+                            return result;
+                        }
+                        var advice = UniversalCapacityPlanner.Analyze(lib, destination, item.Trial, removedRows,
+                            row => labels.GetValueOrDefault(row, ($"Object T{row}", "unknown")), special,
+                            cancellationToken: roomCancellation.Token, host: retailHost, compositionCheck:ExactCheck);
+                        found.Add((item.Variant, advice));
+                        if (advice.CurrentError == null || advice.Plans.Count > 0) break;
+                    }
+                    return found;
+                }, roomCancellation.Token);
+                if (roomCancellation.IsCancellationRequested) return;
+                if (!ReferenceEquals(list.SelectedItem, selectedEntry)) { roomExplanation.Text = "Selection changed. Compare the new object to get its plan."; return; }
+                var choices = reports.SelectMany(r => r.Advice.CurrentError == null
+                    ? new[] { new UniversalFitChoice(r.Variant, null) }
+                    : r.Advice.Plans.Select(p => new UniversalFitChoice(r.Variant, p))).ToList();
+                roomPlans.ItemsSource = choices; roomPlans.IsVisible = choices.Count > 0;
+                int currentCopies = existing.Count(p => !p.Retired), checks = reports.Sum(r => r.Advice.Checks);
+                roomExplanation.Text = $"Current scene: {removedRows.Count} native removals, {currentCopies} imported objects. Removing a row frees an actor slot; a private model and its exclusive textures are freed only when every live copy is gone. Shared models and required helpers stay resident.\n" +
+                    (choices.Count > 0 ? "Select a measured plan below, then inspect the named objects. Nothing is removed automatically." : "No plan found in this bounded search. Try fewer imported types or a different source version.") +
+                    "";
+                technical.Text += $"\nSpace search: {checks} complete export checks; bounded to three native type groups per plan.";
+                foreach (var report in reports.Where(r => r.Advice.CurrentError != null && !UniversalCapacityPlanner.IsCapacityFailure(r.Advice.CurrentError)))
+                {
+                    roomExplanation.Text += $"\nThe {LevelName(report.Variant.SourceLevelKey)} version needs a source dependency that removing destination objects cannot supply. See Technical details.";
+                    technical.Text += $"\n{LevelName(report.Variant.SourceLevelKey)} T{report.Variant.SourceRow}: {report.Advice.CurrentError}";
+                }
+                roomPlans.SelectedIndex = choices.Count > 0 ? 0 : -1;
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { roomExplanation.Text = ex.Message; }
+            finally { findingRoom = false; if (!roomCancellation.IsCancellationRequested) RefreshDetails(); }
+        };
 
         async Task AddAsync(bool clickToPlace)
         {
@@ -500,6 +747,7 @@ public sealed partial class MainWindow
         right.Children.Add(variants);
         right.Children.Add(details);
         right.Children.Add(fit);
+        right.Children.Add(findRoom); right.Children.Add(roomExplanation); right.Children.Add(roomPlans); right.Children.Add(inspectPlan);
         right.Children.Add(new Expander { Header = "Technical details", IsExpanded = false, Content = technical, HorizontalAlignment = HorizontalAlignment.Stretch });
         WrapPanel buttons = new() { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8 };
         buttons.Children.Add(place); buttons.Children.Add(addHere); buttons.Children.Add(close);
@@ -560,6 +808,7 @@ public sealed partial class MainWindow
                 var es = entries = [.. usa, .. UniversalSpecialCatalog.Entries(japanese != null)];
                 lib = l;
                 if (_freshSceneDocument != null) freshCompilation = await CaptureFreshNativeAsync();
+                else (retailHost,retailPrivateRequest) = await CaptureUniversalRetailHostAsync(l,destination,existing,removedRows,special);
                 planned = await Task.Run(() => PlannedUniversalBytes(l));
                 await Task.Run(() => { foreach (var e in es) Est(e.Default); });
                 var cats = UniversalCategoryOrder.Select(c => (c.Category, c.Sub,
@@ -583,7 +832,16 @@ public sealed partial class MainWindow
                         var trial = existing.Append(TrialFor(x.Default)).ToList();
                         var r = CheckPlacement(l, trial);
                         listDry[x.Default] = (null, r.Error);
-                        if (r.Error == null) dryRuns[x.Default] = r;
+                        if (r.Error == null) { dryRuns[x.Default] = r; fittingVariants[x] = x.Default; }
+                        else
+                            foreach (var alternative in x.Variants.Where(v => v.Extractable && v.SourceLevelKey != x.Default.SourceLevelKey)
+                                .GroupBy(v => v.SourceLevelKey).Select(g => g.First()))
+                            {
+                                var alternate = CheckPlacement(l,existing.Append(TrialFor(alternative)).ToList());
+                                listDry[alternative] = (null,alternate.Error);
+                                if (alternate.Error != null) continue;
+                                dryRuns[alternative] = alternate; fittingVariants[x] = alternative; break;
+                            }
                     }));
                 checking = false;
                 RefreshList();
@@ -606,7 +864,7 @@ public sealed partial class MainWindow
         if (specialId != null && asset == null) { _statusText.Text = "Select the original Japanese disc first (Japanese disc… in the Add Moby browser)."; return; }
         byte[] row = asset?.RowTemplate ?? lib.Get(v.SourceLevelKey).Data.Row(v.SourceRow);
         string sourceName = asset != null ? "Spyro the Dragon (Japan)" : _retailCatalog.FindByKey(v.SourceLevelKey)?.DisplayName ?? v.SourceLevelKey;
-        string name = asset?.Name ?? entry.Name;
+        string name = asset?.Name ?? UniversalSourceObjectName(entry,v);
         var template = new AddMobyTemplate(
             Name: name,
             Type: row[0x50], State: row[0x51],
