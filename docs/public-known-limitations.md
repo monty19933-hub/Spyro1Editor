@@ -13,6 +13,8 @@
 - Imported red, green, blue, gold and purple gem variants from Jacques passed
   native collection, ordinary card save and cold Load Game in Artisans. Their
   values remained 1, 2, 5, 10 and 25; all five stayed collected after reload.
+  The final collection-effect retakes passed in both Artisans and a fresh level;
+  the corrected game also loaded the earlier native save without duplicate gems.
   This verifies those exact variants and destination, not every source/level pair.
 - Fresh levels use the regular editor and normal Create BIN, with authored
   geometry, collision, static native materials and Mobys. This build supports
@@ -21,6 +23,8 @@
   must stay within the native relative-coordinate range. Split larger faces if
   the exporter requests it.
   A fresh level does not automatically receive a portal network or campaign.
+  Multiple placed objects retain the native dynamic-object reserve. A six-object
+  scene passed collection, jumping and landing with 43/43 gems and one egg.
 - Existing-level terrain supports guarded XYZ edits, face copying, face removal
   and texture painting through the shared editor controls. Close and distant
   geometry, visibility and native collision are updated together. Native

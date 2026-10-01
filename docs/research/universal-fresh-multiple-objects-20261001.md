@@ -46,6 +46,34 @@ Direct executable readback subsequently confirmed the original and issued fresh
 target is zero. The five-point maximum was introduced by counting rows after
 their class IDs had been remapped; it was not an inherited bootstrap target.
 
+## Corrected six-object native retake
+
+The combined source at `3196a94` counts rewards before remapping and handles
+both destination-native collection and the independent linked colour lookup.
+The final six-object fixture SHA-256 is
+`db9b3d62967f22293ca9eb18bc61ffa5c692b25c59355a41bcc03ae15eec547d`.
+Independent export/readback passed 289 checks: the same two faces and spawn,
+six physical/logical rows, 16 dynamic slots, a treasure target of 43 and 943,180
+bytes final RAM headroom. Unrelated WAD entries remain exact except the two
+separately authenticated egg gates.
+
+Cold New Game with a fresh private card entered level index 35. All five gem
+values awarded 43 and set both collection bitmaps. Controller-only jumping,
+walking right and landing collected the eye-free egg without falling off the
+platform. All six actors reached state FD, and the native inventory displayed
+43/43 gems and 1/1 egg. Two full read-only RAM captures, after initial collection
+and after movement, each contained zero live type-12/kind-2 collection particles
+and zero malformed stars. This verifies actual settled cleanup, not offscreen
+absence. The second RAM SHA-256 is
+`0fb2035536521cd08a3ade8a7729fed8936e88957e37f1fdf48f7e4a6050078c`.
+
+The private process was closed and its card remained byte-identical. No RAM
+writes, navigation assistance or save states were used. This fixture does not
+claim a card save or cold load. Its receipt and inventory screenshot are
+`runtime/fresh-six-objects-colour-fixed-native-receipt.json` and
+`runtime/fresh-six-objects-colour-fixed-inventory.png` beneath the private work
+directory named below.
+
 Private evidence is under the task workspace at
 `work/universal-v1-continuation/runtime/fresh-six-objects`,
 `fresh-six-objects-native-first-receipt.json` and the corresponding RAM/image

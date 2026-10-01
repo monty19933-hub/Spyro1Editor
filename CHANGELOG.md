@@ -11,6 +11,8 @@
 - Fixed imported gems awarding zero and producing incorrect collection effects.
   All five native values passed collection, ordinary card save and cold Load
   Game in Artisans, retaining the correct combined total of 43.
+  Final Artisans and fresh-level retakes also confirm that collection sparkles
+  disappear normally and inventory totals match the exported gems.
 - Expanded verified child-spawn argument recovery without admitting ambiguous
   object or particle dependencies.
 - Made **Only what fits here** show completed successful checks and refresh

@@ -120,6 +120,40 @@ preimages are checked before publication. Particle lifetimes and palettes are
 not altered. Source checks cover all 35 native destination owners; fresh and
 retail runtime retakes of this combined correction are tracked separately.
 
+## Final combined native effects retake
+
+The `3196a94` retail five-gem export has BIN SHA-256
+`bb9f6dba4a1316b4ce8d8409d061394da19b3401ea1485da4b538410203a55b5`.
+Written readback passed 279 checks, including unchanged positions, rows 174-178,
+179 physical rows, 87 dynamic slots, a treasure target of 143, 50,404 bytes RAM
+headroom and all 254 unrelated WAD entries.
+
+An ordinary cold New Game began with both gem counters zero and all five
+collection bits clear. A controller-only forward walk collected all five
+values. Both counters became 43, all five actors reached FD, and all five durable
+and checkpoint bits were set. The inventory displayed 43/143. After unpaused
+settling, independent full-RAM inspection found zero live type-12/kind-2
+collection particles and zero malformed stars. Read-only RAM SHA-256:
+`9e1267996f00fdf58a34c01cc802e2ed61d04c687b820e9112e30c055817813c`.
+The process was fully closed and the private blank card remained unchanged.
+
+A second new process booted the same final CUE and used ordinary Load Game from
+a copy of the earlier native fairy-save card (SHA-256 `64263a213bb41e898309c0c494a2c682e41396ff7800196c63b967539e3e1759`).
+It restored 43 gems, one dragon and all five FD actors with durable bits set;
+the transient checkpoint bits were clear. Walking through the pickup area
+awarded nothing twice. The inventory remained 43/143 and 1/4 dragons, and the
+particle gate remained zero. The private process was closed and its copied
+card remained unchanged. Cold-load RAM SHA-256:
+`68072e36675dae97a1f5ddae8417a118975c956c12ae51488e5c509fe9136723`.
+This is final-candidate cold-load compatibility evidence; the card write itself
+was performed on the earlier fixture described above.
+
+The same combined source also passed the six-object fresh retake, including
+43/43 gems, egg 1/1, jumping, walking and landing, and zero settled collection
+particles in two captures. See `universal-fresh-multiple-objects-20261001.md`.
+These tests use the real USA BIOS and no RAM writes or save states. They do not
+convert the full variant matrix into runtime acceptance.
+
 Private evidence is under the task's `work/universal-v1-continuation/runtime`:
 `normal-ice-fixed-native-receipt.json`, `normal-five-gems-native-receipt.json`,
 the before/after/cold-loaded RAM receipts, launch receipts and three five-gem
