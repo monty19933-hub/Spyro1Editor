@@ -309,3 +309,20 @@ The same compiled Core passed the 683-check retail composition matrix,
 including all ordinary live Return Home owners, native homeworld/flight/Gnasty
 callbacks and the retained Twilight Harbor capacity refusal. Its receipt is
 `fixtures/portal-live-owner-matrix-r01/export-matrix.json`.
+
+The source/store smoke now also holds the stable `.portal-routes.lock` with
+`FileShare.None` while a second writer runs on another task. That writer is
+rejected before creating a stage file; both main and previous route bytes are
+unchanged. Releasing the lease retains the same lock file and permits the
+expected snapshot writer. The reopened routes match its returned fingerprint,
+and the recovery file contains the exact former main bytes. A subsequent
+stale writer is rejected while preserving both committed versions. Success
+and refusal leave no stage artifacts. These checks verify lock serialization,
+prior-version contents and observed publication behavior, without claiming
+process-crash or filesystem-durability testing.
+
+The run passed 321 source/store checks. Receipt:
+`fixtures/portal-store-lease-r01/source-store-checks.json`, with hashes for
+both versions before and after publication and the observed lock exception.
+Core MVID `cff32080-7790-4b4d-8214-b140bf625fa4`, SHA-256
+`595ca2b449d6562c744a5d69cb55e4414692072f829335697f455300ddfb88f0`.
