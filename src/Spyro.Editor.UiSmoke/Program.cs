@@ -1311,7 +1311,7 @@ void RunId65BlankLabUiOnly()
         TextBlock levelBuildingIndicator =
             FindNamedUnique<TextBlock>(window, "LevelBuildingEditorIndicator");
         TabControl toolTabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
-        SelectWorkspaceTab(window, "Level");
+        SelectWorkspaceTab(window, "Game Settings");
         Expander disclosure = FindNamedUnique<Expander>(window, "Id65BlankLevelLabDisclosure");
         if (!disclosure.IsVisible)
             throw new InvalidOperationException("The narrow ID65 Blank-Level Lab disclosure is hidden in public release mode.");
@@ -1520,7 +1520,7 @@ void RunId65BlankLabUiOnly()
             label: "loaded ID65 Lab without a canonical document");
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Object Manager", "Terrain", "Level", "Environment"],
+            ["Object Manager", "Terrain", "Game Settings", "Environment"],
             "loaded fresh blank-level editor");
         Button freshObjectManagerButton = FindNamedUnique<Button>(
             window,
@@ -2043,7 +2043,7 @@ void RunId65BlankLabUiOnly()
             label: "returned ID65 Lab without a canonical document");
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Object Manager", "Terrain", "Level", "Environment"],
+            ["Object Manager", "Terrain", "Game Settings", "Environment"],
             "returned real ID65 blank-level editor");
         Button returnedStartButton = FindNamedUnique<Button>(
             window,
@@ -5672,7 +5672,7 @@ void RunNativeLevelReplacementUiOnly()
     try
     {
         WaitForLevelData(window);
-        SelectWorkspaceTab(window, "Level");
+        SelectWorkspaceTab(window, "Game Settings");
 
         Expander disclosure = FindNamedUnique<Expander>(window, "NativeLevelReplacementDisclosure");
         ComboBox donor = FindNamedUnique<ComboBox>(window, "NativeLevelReplacementDonorBox");
@@ -5824,7 +5824,7 @@ void RunNativeLevelReplacementUiOnly()
         LevelDefinition townSquare = catalog.FindByKey("townsquare")
             ?? throw new InvalidOperationException("Town Square is missing from the focused UI smoke catalog.");
         SelectLevelForViewportFit(window, townSquare);
-        SelectWorkspaceTab(window, "Level");
+        SelectWorkspaceTab(window, "Game Settings");
         if (disclosure.IsVisible)
             throw new InvalidOperationException("The Stone Hill replacement disclosure remained visible on Town Square.");
 
