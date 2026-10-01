@@ -288,3 +288,24 @@ route fixtures, and passed 1,993 checks. Its receipts and BIN/CUE pairs are in
 The Toasty, Wizard and Sunny Flight hashes match the separately exported
 convenience candidates. Runtime control and gameplay acceptance remain with
 the root worker; this verification worker did not operate an emulator.
+
+The strengthened live-owner integration passed 361 checks with the actual
+`UniversalComposeResult.Classes` provenance supplied to final routing.
+Fresh ID 65 contains one live class `0x1FD`, imported from Stone Hill class 9,
+and no native class-9 actors. Its appended transition call is at overlay
+offset 63840; the dormant native Town class-9 packet is at call offset 13892.
+The negative test damages only the imported call and independently confirms
+the entire native packet remains unchanged and source-valid. Validation then
+refuses with `Live Return Home class0x1FD has no supported transition in its
+dispatched behavior.` Both the direct native helper and the final composer
+leave their complete input buffers unchanged on refusal. The positive still
+preserves real SMAP metadata and the separate Town/65 callbacks; final
+executable bytes are identical to the previous successful composition.
+
+Receipt: `fixtures/portal-fresh-owner-r01/fresh-source-integration.json`.
+Core MVID `22e46e54-2bfd-427e-980e-6c927f702f40`, SHA-256
+`fc991d260b15fd48e541ac767b7f3d2b8368a8a636fac856dcc2a537949e8abb`.
+The same compiled Core passed the 683-check retail composition matrix,
+including all ordinary live Return Home owners, native homeworld/flight/Gnasty
+callbacks and the retained Twilight Harbor capacity refusal. Its receipt is
+`fixtures/portal-live-owner-matrix-r01/export-matrix.json`.

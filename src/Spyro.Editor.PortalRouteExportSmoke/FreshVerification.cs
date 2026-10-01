@@ -41,10 +41,19 @@ static class FreshVerification
         var importedCalls=Enumerable.Range(0,Math.Max(0,(imported.Overlay.Length-52)/4+1)).Select(i=>i*4)
             .Where(p=>certificates.Any(c=>imported.Overlay.AsSpan(p,52).SequenceEqual(c))).Select(p=>p+44).ToArray();
         check(importedCalls.Length==2,"fresh import retains dormant nativeTown packet plus one actual importedStone packet");
+        int nativeTownCall=checked((int)(0x8007E07C-UniversalOverlay.Base));
+        int importedStoneCall=importedCalls.Single(p=>p!=nativeTownCall);
+        var returnClass=imported.Classes.Single(c=>c.ClassId==9&&c.BehaviorImported);
+        check(returnClass.SourceLevelKey=="stonehill"&&returnClass.DestinationClassId==0x1FD,"imported ReturnHome provenance records its actual remapped class identity");
+        var importedData=new UniversalLevelData(imported.LevelData);
+        check(Enumerable.Range(0,importedData.Scene().RowCount).Select(row=>BinaryPrimitives.ReadUInt16LittleEndian(importedData.Row(row).AsSpan(0x36))).SequenceEqual(new ushort[]{0x1FD}),"fresh scene has only the live imported ReturnHome class and no native9 actors");
+        check(importedCalls.Contains(nativeTownCall)&&imported.Overlay.AsSpan(nativeTownCall-44,52).SequenceEqual(basis.EntryBytes(79).AsSpan(nativeTownCall-44,52)),"dormant native9 source packet remains intact before return routing");
         var stone=new PortalEndpoint("artisans",38);var town=new PortalEndpoint("artisans",39);
         var document=PortalRouteDocument.Empty.WithDestination(stone,65,true).WithReturn(13,town);
+        var returnClasses=new Dictionary<int,IReadOnlyList<NativePortalReturnClass>>{{65,NativePortalReturnClass.Capture(imported.Classes)}};
+        check(returnClasses[65].Count==1&&returnClasses[65][0].SourceLevelKey==returnClass.SourceLevelKey&&returnClasses[65][0].DestinationClassId==returnClass.DestinationClassId,"route certificate captures actual composed ReturnHome provenance");
         var exe=imported.Executable.ToArray();Dictionary<int,byte[]> entries=new(){{79,imported.Overlay.ToArray()},{80,imported.LevelData.ToArray()}};
-        NativePortalRouteComposer.Apply(donors,catalog,exe,entries,basis.EntryBytes,document,true);
+        NativePortalRouteComposer.Apply(donors,catalog,exe,entries,basis.EntryBytes,document,true,returnClasses);
         var freshBindings=UniversalExeBindings.Read(exe,65);var townBindings=UniversalExeBindings.Read(exe,13);
         check(townBindings.Count==originalTown.Count&&townBindings.Where(b=>b.Key!=UniversalExeBindings.UpdateGlobal&&b.Key!=UniversalExeBindings.CopyBufferGlobal).All(b=>b.Value.Value==originalTown[b.Key].Value),"ID13 preserves all seven unrelated retail callbacks with simultaneous custom ID65 route");
         check(freshBindings[UniversalExeBindings.UpdateGlobal].Value!=townBindings[UniversalExeBindings.UpdateGlobal].Value,"ID13 and65 have distinct selected ReturnHome callbacks");
@@ -78,9 +87,27 @@ static class FreshVerification
         try{NativePortalRouteComposer.Apply(donors,retail,badExe,badEntries,donors.Disc.EntryBytes,PortalRouteDocument.Empty.WithReturn(14,stone));}
         catch(InvalidDataException){refused=true;}
         check(refused&&Hash(badExe)==initialExe&&badEntries.Count==1&&Hash(badEntries.Values.Single())==initialOverlay,"incomplete ReturnHome packet refuses without changing input owners");
+        byte[] badImportedOverlay=imported.Overlay.ToArray(),badImportedExe=imported.Executable.ToArray();
+        BinaryPrimitives.WriteUInt32LittleEndian(badImportedOverlay.AsSpan(importedStoneCall),0);
+        check(badImportedOverlay.AsSpan(nativeTownCall-44,52).SequenceEqual(imported.Overlay.AsSpan(nativeTownCall-44,52)),"damaged imported0x1FD test retains the entire unrelated native9 packet");
+        check(Enumerable.Range(0,(badImportedOverlay.Length-52)/4+1).Select(i=>i*4).Count(p=>certificates.Any(c=>badImportedOverlay.AsSpan(p,52).SequenceEqual(c)))==1,"damaged imported packet still leaves one valid dormant native9 packet");
+        var importedBindings=UniversalExeBindings.Read(imported.Executable,65);
+        var badRouted=NativePortalRouteRuntime.AppendReturnWrapper(badImportedOverlay,importedBindings[UniversalExeBindings.UpdateGlobal].Value,importedBindings[UniversalExeBindings.CopyBufferGlobal].Value,10,11);
+        string initialRouted=Hash(badRouted.Overlay);bool nativeImportedRefused=false;
+        try{NativePortalRouteRuntime.PatchReturnHomeCalls(donors,badRouted,importedBindings,importedData,target.Key,returnClasses[65]);}
+        catch(InvalidDataException){nativeImportedRefused=true;}
+        check(nativeImportedRefused,"native owner proof rejects damaged live0x1FD before unrelated packet fallback");
+        check(Hash(badRouted.Overlay)==initialRouted,"native live-owner validation refuses before mutating any copied packet");
+        Dictionary<int,byte[]> badImportedEntries=new(){{79,badImportedOverlay},{80,imported.LevelData.ToArray()}};
+        string initialImportedExe=Hash(badImportedExe);var initialImportedEntries=badImportedEntries.ToDictionary(e=>e.Key,e=>Hash(e.Value));
+        bool importedRefused=false;string importedRefusal="";
+        try{NativePortalRouteComposer.Apply(donors,catalog,badImportedExe,badImportedEntries,basis.EntryBytes,document,true,returnClasses);}
+        catch(InvalidDataException ex){importedRefused=true;importedRefusal=ex.Message;}
+        check(importedRefused,"a damaged live remapped ReturnHome owner refuses despite intact dormant native9");
+        check(Hash(badImportedExe)==initialImportedExe&&badImportedEntries.Count==initialImportedEntries.Count&&badImportedEntries.All(e=>initialImportedEntries[e.Key]==Hash(e.Value)),"damaged imported owner refusal preserves executable and every staged entry atomically");
         File.WriteAllText(Path.Combine(directory,"fresh-source-integration.json"),JsonSerializer.Serialize(new{Scope="real fresh65 baseline plus normal universal ReturnHome import and final portal composition",
             InputImage=input,InputImageSha256=inputHash,InputExeHash=Hash(basis.Exe),SourceHash=UniversalSourceLibrary.OriginalUsaSha256,CoreModuleVersionId=typeof(NativePortalRouteComposer).Module.ModuleVersionId,
-            CoreModuleHash=Hash(File.ReadAllBytes(typeof(NativePortalRouteComposer).Assembly.Location)),SourceReturnRow=returnRow,CertificateSignatures=certificates.Select(Hash),ImportedPacketCount=importedCalls.Length,imported.Classes,imported.Ram,imported.PhysicalToLogicalSaveRows,
+            CoreModuleHash=Hash(File.ReadAllBytes(typeof(NativePortalRouteComposer).Assembly.Location)),SourceReturnRow=returnRow,CertificateSignatures=certificates.Select(Hash),ImportedPacketCount=importedCalls.Length,NativeTownCallOffset=nativeTownCall,ImportedStoneCallOffset=importedStoneCall,ReturnClasses=returnClasses,ImportedOwnerRefusal=importedRefusal,imported.Classes,imported.Ram,imported.PhysicalToLogicalSaveRows,
             FinalFreshRuntimeEnd=UniversalMobyComposer.RuntimeEnd(new UniversalLevelData(entries[80]),freshBindings[UniversalExeBindings.CopyBufferGlobal].Value),
             Fresh=freshBindings.Values,TownSquare=townBindings.Values,Route=document,FinalExeHash=Hash(exe),Entries=entries.Select(e=>new{e.Key,Hash=Hash(e.Value),Length=e.Value.Length}),RuntimeTested=false},new JsonSerializerOptions{WriteIndented=true}));
         Console.WriteLine("PORTAL_ROUTE_FRESH_SOURCE_INTEGRATION_OK");
