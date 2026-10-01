@@ -101,25 +101,28 @@ internal static class PublishedDiagnosticsCases
                     "Creating an inventory-only support ZIP changed a retained local report.");
             }
 
-            // An ordinary build starts with absent flight preferences. Saving
-            // ON at the final asynchronous boundary must still invalidate it.
+            // Deferred flight preferences remain research state even when saved
+            // at the final asynchronous boundary of a normal release export.
             var flightDelay = typeof(MainWindow).GetProperty("FreeFlightExportDelayOverrideForTesting", BindingFlags.Instance | BindingFlags.NonPublic)!;
             flightDelay.SetValue(window, (Func<string, Task>)(_ =>
             {
                 NativeFreeFlightSettingsStore.Save(NativeFreeFlightSettingsStore.Capture(workspace), 14, true);
                 return Task.CompletedTask;
             }));
-            bool staleAbsenceRefused = false;
-            try { Complete((Task)Invoke(window, "CreateAllSavedEditsTestAsync", sourceImage, sourceCue, output, targets)!); }
-            catch (InvalidDataException) { staleAbsenceRefused = true; }
+            bool deferredPreferencePreserved = false;
+            try
+            {
+                Complete((Task)Invoke(window, "CreateAllSavedEditsTestAsync", sourceImage, sourceCue, output, targets)!);
+                deferredPreferencePreserved = NativeFreeFlightSettingsStore.Capture(workspace).GlobalEnabled;
+            }
             finally
             {
                 flightDelay.SetValue(window, null);
                 File.Delete(Path.Combine(workspace, NativeFreeFlightSettingsStore.FileName));
             }
-            Require(staleAbsenceRefused && File.ReadAllBytes(finalPrefix + ".bin").AsSpan().SequenceEqual(publishedImage) &&
+            Require(deferredPreferencePreserved && File.ReadAllBytes(finalPrefix + ".bin").AsSpan().SequenceEqual(publishedImage) &&
                 File.ReadAllText(finalPrefix + ".cue") == publishedCue,
-                "An absent-to-ON flight settings change escaped ordinary export publication ownership.");
+                "A deferred research preference changed the release image or was overwritten during publication.");
 
             if (!OperatingSystem.IsWindows())
             {

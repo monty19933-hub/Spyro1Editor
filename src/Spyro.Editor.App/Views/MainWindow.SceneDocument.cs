@@ -216,6 +216,7 @@ public sealed partial class MainWindow
     private Control BuildFreshTerrainTools()
     {
         _freshTerrainPanel=new StackPanel{Spacing=8,IsVisible=false,Name="FreshMainTerrainTools"};
+        if (!_releaseMode) return _freshTerrainPanel;
         StackPanel shared = new(){Spacing=9};
         shared.Children.Add(BuildTerrainTaskControls());
         shared.Children.Add(BuildTerrainBrushControls());
@@ -229,7 +230,7 @@ public sealed partial class MainWindow
         if(_freshSettingsPanel==null||_freshTerrainPanel==null)return;
         _freshSettingsPanel.Children.Clear();_freshTerrainPanel.Children.Clear();
         _freshSettingsPanel.IsVisible=_freshTerrainPanel.IsVisible=_freshSceneDocument!=null;
-        if(_retailTerrainWorkspace!=null)_retailTerrainWorkspace.IsVisible=_freshSceneDocument==null;
+        if(_retailTerrainWorkspace!=null)_retailTerrainWorkspace.IsVisible=!_releaseMode||_freshSceneDocument==null;
         if(_retailNameDisclosure!=null)_retailNameDisclosure.IsVisible=_freshSceneDocument==null;
         if(_retailMusicDisclosure!=null)_retailMusicDisclosure.IsVisible=_freshSceneDocument==null;
         if(_homeworldTextGroup!=null)_homeworldTextGroup.IsVisible=_freshSceneDocument==null;

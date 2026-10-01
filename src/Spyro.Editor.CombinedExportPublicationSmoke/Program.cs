@@ -65,13 +65,15 @@ try
     foreach (bool enabled in new[] { false, true })
     {
         var saved = NativeFreeFlightSettingsStore.Capture(fixtureRoot);
-        NativeFreeFlightSettingsStore.Save(saved, 14, enabled);
+        var preference = NativeFreeFlightSettingsStore.Save(saved, 14, enabled);
         string output = Directory.CreateDirectory(Path.Combine(fixtureRoot, enabled ? "flight-on" : "flight-off")).FullName;
         var previous = SeedPreviousOutput(output);
         Exception? failure = null;
         try { Complete((Task)build.Invoke(window, [sourceImage, sourceCue, output, Array.CreateInstance(targetType, 0)])!); }
         catch (Exception error) { failure = error; }
-        Require(failure != null, "Explicit Fly Anywhere ON/OFF must reach exact-source validation, not return no-patches and leave an old enabled BIN silently active.");
+        Require(failure == null, "Deferred release flight preferences must not start a source export by themselves.");
+        Require(NativeFreeFlightSettingsStore.Capture(fixtureRoot).ContentSha256 == preference.ContentSha256,
+            "Release export must preserve the saved research flight preference.");
         foreach (var artifact in previous)
             Require(File.ReadAllText(artifact.Key) == artifact.Value, "Rejected flight source replaced previous output.");
     }
