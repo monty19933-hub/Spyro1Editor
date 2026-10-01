@@ -53,6 +53,7 @@ public sealed partial class MainWindow
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right };
         var cancel = new Button { Content = "Cancel", Name = "ExportCancel" };
         var create = new Button { Content = "Create BIN/CUE", Name = "ExportCreate" };
+        StyleModernPrimaryButton(create, ModernBlue, 132);
         cancel.Click += (_, _) => dialog.Close(null);
         create.Click += (_, _) => dialog.Close((bool?)(start.SelectedIndex == 1));
         actions.Children.Add(cancel); actions.Children.Add(create); content.Children.Add(actions);

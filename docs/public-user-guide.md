@@ -25,9 +25,10 @@ Use the object browser to place Mobys, and set the player spawn in the inspector
 Save the level before exporting.
 
 **Create BIN** includes the saved fresh level together with saved retail edits.
-In the exported game, choose **New Game** and an empty save slot to enter your
-fresh level. Existing retail save games keep their native load route. This build
-supports one fresh level per project, using native slot 65.
+The export dialog lets you choose whether **New Game** starts in Artisans or
+your authored level. Both current documents are included either way. Existing
+save games keep their saved level. One fresh level per project uses native slot
+65. Older experimental drafts stay separate and are preserved.
 
 ## Add or remove Mobys
 
@@ -36,6 +37,19 @@ variant and inspect its model preview and compatibility result before placement.
 Some objects require dependencies or resources that a destination cannot provide;
 the exporter explains these cases. A visible catalog entry is not a guarantee
 that every enemy behavior works in every level.
+
+If an object does not fit, choose **Find space for this object…**. The editor
+compares source versions and checks proposed removals against your current
+objects and terrain textures. A successful plan names the objects to inspect,
+explains the effect of removing them, and reports the remaining capacity.
+Nothing is removed automatically. Use the normal Remove button for the objects
+you choose, then reopen the browser to check the resulting scene.
+
+Removing one copy frees an object slot. Its model and textures may still be
+needed by other copies or linked objects. For example, removing one Gnorc while
+others of that type remain may free a slot without freeing its artwork. This is
+why the number of removed objects alone cannot predict whether a foreign enemy
+will fit. Choosing another source version can also reduce what must be imported.
 
 **Remove Object** marks an object for removal from the exported level. Export
 reuses removed native object slots for new placements and omits removed imports;
@@ -62,7 +76,8 @@ Use a separate copied memory card for each edited game.
 
 Choose **Build Safety** and resolve any reported issue, then **Create BIN**.
 The exporter checks the finished image before publishing the BIN/CUE pair. It
-leaves your source disc untouched. Test the exported game, including the areas
+leaves your source disc untouched. **Details** beside the status message opens
+the complete message when it is too long for the footer. Test the exported game, including the areas
 and object behaviors you changed.
 
 Fly Anywhere is deferred from this release. Earlier research preferences are

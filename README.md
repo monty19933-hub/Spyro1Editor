@@ -86,14 +86,18 @@ from the released capabilities below. Run `python3 tools/Run-SpyroEditorRegressi
 for the source-free regression gate, or add `--build-all` to compile every
 project without executing research candidate generators.
 
-The V6 development preview adds saved fresh-level documents with floor, spawn,
-sky, music, ordered placements, source browsing, and two floor-material slots.
-The drawing is a schematic, not native game rendering. The separate test-export
-action supports only checked profiles, including the exact Wizard + Grass and
-two-material example. Generic catalogue references remain authoring-only.
-Normal retail **Create BIN** does not consume fresh-level documents.
+The current File → New Level workflow opens an authored document in the main
+viewport, using the shared terrain tools, object browser, inspector and save
+workflow. Normal Create BIN includes the saved authored document together with
+retail edits. Its export dialog chooses whether New Game starts in Artisans or
+the authored level; older experimental drafts remain separate and preserved.
+See the current user guide for supported authoring and capacity limits.
 
-Retained V5 features include:
+The list below retains historical feature and research details. In particular,
+the old ID65 Blank-Level Lab is a separate research tool, not the current
+File → New Level workflow.
+
+Retained features and historical research include:
 
 - **ID65 Blank-Level Lab (V5 beta):** the Level workspace can build a versioned,
   evidence-bound ID65 construction lab from the user's exact clean USA BIN/CUE.

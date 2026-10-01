@@ -1,4 +1,38 @@
-# Beta V6 build 54 release-candidate checklist
+# V1.0 release completion checklist
+
+Active continuation: `release/v1-artisans-20260930`, checkpoint `7573728`.
+The beta54 packages and the user's original project are preserved. Tests use
+`work/v1-continuation/user-project-snapshot` or independent writable copies.
+Fly Anywhere remains deferred.
+
+- [x] Exact edited Artisans capacity planning names removals and checks source variants, current terrain and imports. The Alpine Ridge Armored Druid fits with two additional Regular Gnorc removals (32 and 33); native behavior remains pending.
+- [x] Remove, Restore Removed and transform Undo retain the camera; focused UI test passed.
+- [ ] Final retail terrain UI/native validation, including complete near/distant geometry, collision lookup and genuine allocation growth.
+- [x] Normal Create BIN/CUE exported the copied user project with all five removals, eight imports, eight terrain paints, private texture 68 and the saved authored scene intact.
+- [x] Inactive legacy drafts stay separate and preserved; cancel preserves the prior output.
+- [x] Both explicit New Game destinations passed independent readback. Level content is identical; only the two guarded startup words differ.
+- [x] Actual authored-start export cold-booted through New Game into level 65. Native walking, jumping, landing and egg pickup/inventory 1/1 passed without RAM writes or position assistance.
+- [ ] Native runtime validation of final retail terrain and the full-project Druid export.
+- [ ] Integrate Release/Debug regressions, final GUI checks and V1.0 packages.
+
+The old legacy-draft gate and the second texture-allocation failure are fixed.
+Private terrain packing reserves the exact pending Moby texture allocation, so
+the current eight imports and private terrain texture now fit together without
+additional removals. The planner's two further Gnorc removals release the artwork
+needed for the Alpine Druid and retain the Life Chest and other Gnorc that a
+larger preliminary plan would have removed. Proposed removals are never applied
+automatically. Finite native memory and unresolved behavior dependencies remain
+real limits.
+
+See `docs/research/v1-saved-project-runtime-20260930.md` for exact normal-export
+and authored-gameplay evidence. `docs/research/v1-terrain-runtime-20260930.md`
+records native raised-floor and added-floor checks and their assistance/version
+boundaries. Early topology readbacks compared raw face slots; review caught the
+native HP/LP corner-order difference and physical far-colour table selection.
+Final output uses corrected packet ordering and needs its own acceptance; earlier
+close-up collision proof does not establish the revised distant visuals.
+
+## Preserved beta54 baseline
 
 Application packages were built from `6a2d98e`. Subsequent commits change tests
 and evidence documentation only. The release candidate prioritizes the shared editor workflow and usable capacity reclamation.
