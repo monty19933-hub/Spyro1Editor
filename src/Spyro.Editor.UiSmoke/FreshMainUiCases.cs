@@ -66,6 +66,33 @@ internal static class FreshMainUiCases
             var state=window.CaptureEditorShellSessionSnapshotForTesting();
             Check(state.CurrentMobys.Count==0,"main viewport contains no donor actors");
             Directory.CreateDirectory(outputDirectory);Snapshot(window,Path.Combine(outputDirectory,"fresh-main-editor.png"));
+            Click(Find<Button>(window,"UniversalMobyLibraryButton"));
+            Wait(()=>window.OwnedWindows.Any(w=>w.Title=="Add object — Untitled Level"),"default untextured browser");
+            var untexturedBrowser=window.OwnedWindows.Single(w=>w.Title=="Add object — Untitled Level");
+            var untexturedList=Find<ListBox>(untexturedBrowser,"UniversalMobyList");
+            Wait(()=>untexturedList.ItemsSource?.Cast<UniversalMobyCatalogEntry>().Any(e=>e.ClassId==0x00A)==true,"default untextured catalog",180);
+            Find<TextBox>(untexturedBrowser,"UniversalMobySearch").Text="0x00A";Pump();
+            var defaultSheep=untexturedList.ItemsSource!.Cast<UniversalMobyCatalogEntry>().Single(e=>e.ClassId==0x00A);
+            untexturedList.SelectedItem=defaultSheep;Pump();
+            Check(Find<ComboBox>(untexturedBrowser,"UniversalMobyVariant").SelectedItem?.Equals(defaultSheep.Default)==true,"default native sheep version is retained");
+            Wait(()=>Find<Button>(untexturedBrowser,"UniversalMobyAddHere").IsEnabled,"untextured fresh scene admits default sheep",180);
+            Click(Find<Button>(untexturedBrowser,"UniversalMobyAddHere"));
+            RunTask((Task)Invoke(window,"CreateObjectTestBinAsync")!);
+            string untexturedOutput=Path.Combine(window.CaptureEditorShellSessionSnapshotForTesting().Workspace.RootPath,"output","Spyro Editor - Authored Level.bin");
+            var untexturedRead=UniversalDiscImage.Read(untexturedOutput);var untexturedData=new UniversalLevelData(untexturedRead.EntryBytes(80));
+            var untexturedSubfile=untexturedData.Subfiles()[1];
+            Check(untexturedData.Scene().RowCount==1&&untexturedData.Registrations().Any(r=>r.ClassId==0x00A)&&
+                BinaryPrimitives.ReadInt32LittleEndian(untexturedData.Bytes.AsSpan(untexturedSubfile.Offset))==8&&
+                BinaryPrimitives.ReadInt32LittleEndian(untexturedData.Bytes.AsSpan(untexturedSubfile.Offset+4))==0,
+                "normal Create BIN retains zero terrain textures plus the default sheep actor/model");
+            if(Environment.GetEnvironmentVariable("SPYRO_FRESH_MAIN_KEEP_OUTPUT") is {Length:>0} untexturedKeep)
+            {
+                Directory.CreateDirectory(untexturedKeep);File.Copy(untexturedOutput,Path.Combine(untexturedKeep,"untextured-main.bin"),true);
+                File.WriteAllLines(Path.Combine(untexturedKeep,"untextured-main.cue"),["FILE \"untextured-main.bin\" BINARY","  TRACK 01 MODE2/2352","    INDEX 01 00:00:00"]);
+            }
+            Console.WriteLine("FRESH_UNTEXTURED_DEFAULT_UI_OK defaultSheep=1 nativeTextureCount=0 normalCreateBin=1");
+            RunTask((Task)Invoke(window,"NewMainLevelAsync")!);
+            Check(window.FreshSceneForTesting is {Objects.Count:0,Surfaces.Count:2},"second actual New resets the authored scene for material checks");
             var geometry=Get<GeometryCandidate>(window,"_currentGeometry");
             Set(window,"_selectedTerrain",geometry.Polygons[0]);Set(window,"_selectedTerrainIndex",0);
             Invoke(window,"ShowSelection",ViewportSelectionChangedEventArgs.ForTerrain(0,geometry.Polygons[0]));

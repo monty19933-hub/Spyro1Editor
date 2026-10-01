@@ -331,6 +331,12 @@ try
     }
     if (args.Contains("--level-replacement-ui-only", StringComparer.OrdinalIgnoreCase))
     {
+        RunDeferredReleaseUiPolicy();
+        return 0;
+    }
+    if (args.Contains("--level-replacement-internal-ui-only", StringComparer.OrdinalIgnoreCase))
+    {
+        Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "0");
         RunNativeLevelReplacementUiOnly();
         return 0;
     }
@@ -353,6 +359,12 @@ try
                 "ID65_BLANK_LAB_UI_SMOKE_SKIPPED platform=non-macOS reason=the exact aggregate candidate publication and its focused UI contract are explicitly macOS-only");
             return 0;
         }
+        RunDeferredReleaseUiPolicy();
+        return 0;
+    }
+    if (args.Contains("--id65-blank-lab-internal-ui-only", StringComparer.OrdinalIgnoreCase))
+    {
+        Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "0");
         RunId65BlankLabUiOnly();
         return 0;
     }
@@ -1177,6 +1189,39 @@ void RunWorkspaceShellOnly()
     RunResearchWorkspaceTabMemory();
 }
 
+void RunDeferredReleaseUiPolicy()
+{
+    MainWindow window = new() { Width = 1320, Height = 860 };
+    window.Show();
+    try
+    {
+        WaitForLevelData(window);
+        TabControl tabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
+        AssertWorkspaceTabHeaders(tabs, ["Objects", "Terrain", "Game Settings", "Environment"], "normal release");
+        string[] deferredNames = ["Id65BlankLevelLabDisclosure", "NativeLevelReplacementDisclosure"];
+        if (window.GetLogicalDescendants().OfType<Control>().Any(c => deferredNames.Contains(c.Name)) ||
+            window.GetLogicalDescendants().OfType<CheckBox>().Any(c => c.Content?.ToString()?.Contains("Fly Anywhere", StringComparison.OrdinalIgnoreCase) == true))
+            throw new InvalidOperationException("Deferred research controls leaked into the normal release editor.");
+        var before = window.CaptureEditorShellSessionSnapshotForTesting();
+        ComboBox file = window.GetLogicalDescendants().OfType<ComboBox>().Single(c =>
+            c.ItemsSource?.Cast<object>().Any(i => i.ToString() == "New Level") == true);
+        // Exercise the toolbar SelectionChanged callback, rather than invoke the private command.
+        file.SelectedItem = file.ItemsSource!.Cast<object>().Single(i => i.ToString() == "New Level");
+        FlushUi();
+        var authored = window.CaptureEditorShellSessionSnapshotForTesting();
+        if (!ReferenceEquals(before.Viewport, authored.Viewport) || authored.CurrentLevel?.Key != "authored65" ||
+            authored.CurrentMobys.Count != 0 || window.FreshSceneForTesting?.Surfaces.Count != 2)
+            throw new InvalidOperationException("File > New Level did not enter the shared neutral authoring editor.");
+        SelectWorkspaceTab(window, "Terrain");
+        Button add = (Button)typeof(MainWindow).GetField("_terrainTaskAddCopyButton", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        Button remove = (Button)typeof(MainWindow).GetField("_terrainTaskRemoveFaceButton", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        if (!add.IsEffectivelyVisible || !remove.IsEffectivelyVisible)
+            throw new InvalidOperationException("The authored release editor lost its shared Add/Remove Terrain controls.");
+        Console.WriteLine("DEFERRED_RELEASE_UI_POLICY_OK researchHidden=1 flightHidden=1 actualFileNew=1 sharedViewport=1 neutralScene=1 sharedTerrainTools=1");
+    }
+    finally { window.Close(); FlushUi(); }
+}
+
 void RunId65BlankLabUiOnly()
 {
     string releaseInstallRoot = Path.Combine(
@@ -1314,7 +1359,7 @@ void RunId65BlankLabUiOnly()
         SelectWorkspaceTab(window, "Game Settings");
         Expander disclosure = FindNamedUnique<Expander>(window, "Id65BlankLevelLabDisclosure");
         if (!disclosure.IsVisible)
-            throw new InvalidOperationException("The narrow ID65 Blank-Level Lab disclosure is hidden in public release mode.");
+            throw new InvalidOperationException("The ID65 Blank-Level Lab disclosure is missing from the explicit internal profile.");
 
         MainWindow.Id65BlankLabUiSnapshot initial =
             window.CaptureId65BlankLabUiSnapshotForTesting();
@@ -1366,8 +1411,8 @@ void RunId65BlankLabUiOnly()
         }
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Game Settings", "Environment"],
-            "public existing-level editor");
+            ["Objects", "Terrain", "Game Settings", "Environment", "Research"],
+            "internal existing-level editor");
         AssertNoWholeLevelWipeAction(window);
 
         UnusedLevel65BlankLevelLabWorkspacePaths paths =
@@ -1520,8 +1565,8 @@ void RunId65BlankLabUiOnly()
             label: "loaded ID65 Lab without a canonical document");
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Object Manager", "Terrain", "Game Settings", "Environment"],
-            "loaded fresh blank-level editor");
+            ["Object Manager", "Terrain", "Game Settings", "Environment", "Research"],
+            "internal fresh blank-level editor");
         Button freshObjectManagerButton = FindNamedUnique<Button>(
             window,
             "Id65FreshObjectManagerDocumentButton");
@@ -1984,8 +2029,8 @@ void RunId65BlankLabUiOnly()
         }
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Game Settings", "Environment"],
-            "real ID65 round-trip retail editor");
+            ["Objects", "Terrain", "Game Settings", "Environment", "Research"],
+            "internal ID65 round-trip retail editor");
         bool retailTabsContainFreshStart = ReadItemsSource(
                 toolTabs,
                 "retail round-trip active tabs")
@@ -2043,8 +2088,8 @@ void RunId65BlankLabUiOnly()
             label: "returned ID65 Lab without a canonical document");
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Object Manager", "Terrain", "Game Settings", "Environment"],
-            "returned real ID65 blank-level editor");
+            ["Object Manager", "Terrain", "Game Settings", "Environment", "Research"],
+            "returned internal ID65 blank-level editor");
         Button returnedStartButton = FindNamedUnique<Button>(
             window,
             "Id65FreshObjectManagerDocumentButton");
