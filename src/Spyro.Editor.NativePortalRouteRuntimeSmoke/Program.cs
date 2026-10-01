@@ -143,7 +143,7 @@ foreach(var level in catalog.Levels.Where(l=>l.SourceWadEntry>0))
     var callPcs=closure.Where(pc=>UniversalMips.IsJal(source.Overlay.Word(pc))&&UniversalMips.BranchTarget(source.Overlay.Word(pc),pc)==NativePortalRouteRuntime.TransitionAddress).ToArray();
     if(callPcs.Length==0)continue;
     var route=NativePortalRouteRuntime.AppendReturnWrapper(source.Overlay.Bytes.ToArray(),source.Overlay.Update,source.Overlay.CopyBuffer,30,33);
-    byte[] before=route.Overlay.ToArray();int count=NativePortalRouteRuntime.PatchReturnHomeCalls(library,route.Overlay,route.ReturnStubPointer);
+    byte[] before=route.Overlay.ToArray();int count=NativePortalRouteRuntime.PatchReturnHomeCalls(library,route,source.Overlay.Bindings,source.Data,level.Key);
     Check(count==callPcs.Length,"all exact native class009 calls patched "+level.Key);nativeSites+=count;
     var after=route.Overlay.ToArray();Check(NativePortalRouteRuntime.PatchReturnHomeCalls(library,route.Overlay,route.ReturnStubPointer)==count&&route.Overlay.SequenceEqual(after),"native call patch idempotent "+level.Key);
     Check(Enumerable.Range(0,before.Length).Where(i=>before[i]!=after[i]).All(i=>callPcs.Any(pc=>i>=(int)(pc-UniversalOverlay.Base)&&i<(int)(pc-UniversalOverlay.Base)+4)),"only exact source call words change "+level.Key);
@@ -177,7 +177,7 @@ Check(nativeSites==23,"all23 authenticated source ReturnHome sites covered");
     var branch=route.Overlay.ToArray();Put(branch,call-48,UniversalMips.EncodeJ(2,call-44));
     Refuse(()=>NativePortalRouteRuntime.PatchReturnHomeCalls(library,branch,route.ReturnStubPointer),"copied source packet in a new delay slot refused");
 }
-await FreshBindingCases.Run(args[1],originalExe,args[2],Check,Refuse);
+await FreshBindingCases.Run(args[1],originalExe,args[2],library,Check,Refuse);
 string sourceHash;using(var source=File.OpenRead(args[1]))sourceHash=Convert.ToHexStringLower(SHA256.HashData(source));
 Check(sourceHash==UniversalSourceLibrary.OriginalUsaSha256,"original source image remains intact");
 Console.WriteLine($"NATIVE_PORTAL_ROUTE_SOURCE_OK checks={checks} sourceSha256={sourceHash} runtime=not-tested");

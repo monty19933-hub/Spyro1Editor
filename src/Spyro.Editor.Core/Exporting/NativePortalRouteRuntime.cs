@@ -9,6 +9,14 @@ namespace Spyro.Editor.Core.Exporting;
 
 public sealed record NativePortalRouteOverlay(byte[] Overlay, uint UpdatePointer, uint CopyBuffer, uint ReturnStubPointer);
 
+/// <summary>Trusted composition metadata for source-class009 controllers, including native behavior reuse.</summary>
+public sealed record NativePortalReturnClass(string SourceLevelKey,int DestinationClassId)
+{
+    public static IReadOnlyList<NativePortalReturnClass> Capture(IEnumerable<UniversalClassImport> imports)=>imports
+        .Where(c=>c.ClassId==9).Select(c=>new NativePortalReturnClass(c.SourceLevelKey,c.DestinationClassId))
+        .Distinct().OrderBy(c=>c.DestinationClassId).ThenBy(c=>c.SourceLevelKey,StringComparer.Ordinal).ToArray();
+}
+
 /// <summary>Return routing uses an authenticated rescheduling of the original pause-exit
 /// function, plus metadata appended to each edited resident overlay. No executable cave is used.</summary>
 public static class NativePortalRouteRuntime
@@ -172,7 +180,27 @@ public static class NativePortalRouteRuntime
         if((returnStub&3)!=0||stubOffset<0||stubOffset+32>finalOverlay.Length||
             !finalOverlay.AsSpan((int)stubOffset,32).SequenceEqual(BuildReturnStub(returnStub)))
             throw new InvalidDataException("Return Home calls require the exact appended resident route stub.");
-        List<byte[]> packets=[];
+        var packets=AuthenticateReturnOwners(donors).Values.DistinctBy(p=>Convert.ToHexString(p)).ToArray();
+        // Validate first, then mutate. Existing canonical calls can be recognized on
+        // repeat composition without accepting arbitrary calls to this new stub.
+        List<int> calls=[];uint expected=UniversalMips.EncodeJ(3,TransitionAddress),replacement=UniversalMips.EncodeJ(3,returnStub);
+        for(int at=0;at+52<=finalOverlay.Length;at+=4)
+        {
+            var candidate=finalOverlay.AsSpan(at,52);uint call=BinaryPrimitives.ReadUInt32LittleEndian(candidate.Slice(44,4));
+            if(call!=expected&&call!=replacement)continue;
+            if(!packets.Any(packet=>finalOverlay.AsSpan(at,44).SequenceEqual(packet.AsSpan(0,44))&&
+                finalOverlay.AsSpan(at+48,4).SequenceEqual(packet.AsSpan(48,4))))continue;
+            if(at>=4&&UniversalMips.IsBranch(BinaryPrimitives.ReadUInt32LittleEndian(finalOverlay.AsSpan(at-4,4))))
+                throw new InvalidDataException("A copied Return Home packet became a control-transfer delay slot.");
+            calls.Add(at+44);
+        }
+        foreach(int offset in calls)BinaryPrimitives.WriteUInt32LittleEndian(finalOverlay.AsSpan(offset,4),replacement);
+        return calls.Count;
+    }
+
+    private static IReadOnlyDictionary<string,byte[]> AuthenticateReturnOwners(UniversalSourceLibrary donors)
+    {
+        Dictionary<string,byte[]> packets=new(StringComparer.OrdinalIgnoreCase);
         foreach(var certificate in ReturnOwners)
         {
             var owner=donors.Get(certificate.Key).Overlay;uint start=certificate.CallPc-44;
@@ -199,23 +227,128 @@ public static class NativePortalRouteRuntime
             }
             if(tables.SelectMany(t=>t.Targets).Any(target=>target>start&&target<start+52))
                 throw new InvalidDataException("Native Return Home packet has an interior dispatch-table entry.");
-            if(!packets.Any(existing=>existing.SequenceEqual(packet)))packets.Add(packet);
+            packets.Add(certificate.Key,packet);
         }
-        // Validate first, then mutate. Existing canonical calls can be recognized on
-        // repeat composition without accepting arbitrary calls to this new stub.
-        List<int> calls=[];uint expected=UniversalMips.EncodeJ(3,TransitionAddress),replacement=UniversalMips.EncodeJ(3,returnStub);
-        for(int at=0;at+52<=finalOverlay.Length;at+=4)
+        return packets;
+    }
+
+    /// <summary>Validate every live native/imported Return Home class through its actual
+    /// final update dispatch before changing any source-certified packet call.</summary>
+    public static int PatchReturnHomeCalls(UniversalSourceLibrary donors,NativePortalRouteOverlay routed,
+        IReadOnlyDictionary<uint,UniversalExeBinding> previousBindings,UniversalLevelData finalData,
+        string nativeLevelKey,IReadOnlyList<NativePortalReturnClass>? importedReturnClasses=null)
+    {
+        ArgumentNullException.ThrowIfNull(donors);ArgumentNullException.ThrowIfNull(routed);
+        ArgumentNullException.ThrowIfNull(previousBindings);ArgumentNullException.ThrowIfNull(finalData);
+        var packets=AuthenticateReturnOwners(donors);
+        long start=(long)routed.UpdatePointer-UniversalOverlay.Base;
+        if(start<0||start+60>routed.Overlay.Length||routed.ReturnStubPointer!=routed.UpdatePointer+28||
+            routed.CopyBuffer!=((routed.ReturnStubPointer+32+15)&~15u)||
+            BinaryPrimitives.ReadUInt32LittleEndian(routed.Overlay.AsSpan((int)start))!=UniversalMips.EncodeJ(2,previousBindings[UniversalExeBindings.UpdateGlobal].Value)||
+            BinaryPrimitives.ReadUInt32LittleEndian(routed.Overlay.AsSpan((int)start+4))!=0||
+            BinaryPrimitives.ReadUInt32LittleEndian(routed.Overlay.AsSpan((int)start+16))!=Tag||
+            !routed.Overlay.AsSpan((int)start+28,32).SequenceEqual(BuildReturnStub(routed.ReturnStubPointer)))
+            throw new InvalidDataException("Live Return Home validation requires the complete bound portal update wrapper.");
+        var scene=finalData.Scene();int sceneAt=finalData.Subfiles()[3].Offset;
+        var live=Enumerable.Range(0,scene.RowCount).Select(row=>(int)BinaryPrimitives.ReadUInt16LittleEndian(
+            finalData.Bytes.AsSpan(sceneAt+scene.RowsOffset+row*UniversalLevelData.RowStride+0x36))).ToHashSet();
+        List<NativePortalReturnClass> required=[];
+        foreach(var certificate in importedReturnClasses??[])
         {
-            var candidate=finalOverlay.AsSpan(at,52);uint call=BinaryPrimitives.ReadUInt32LittleEndian(candidate.Slice(44,4));
-            if(call!=expected&&call!=replacement)continue;
-            if(!packets.Any(packet=>finalOverlay.AsSpan(at,44).SequenceEqual(packet.AsSpan(0,44))&&
-                finalOverlay.AsSpan(at+48,4).SequenceEqual(packet.AsSpan(48,4))))continue;
-            if(at>=4&&UniversalMips.IsBranch(BinaryPrimitives.ReadUInt32LittleEndian(finalOverlay.AsSpan(at-4,4))))
-                throw new InvalidDataException("A copied Return Home packet became a control-transfer delay slot.");
-            calls.Add(at+44);
+            if(certificate==null||certificate.DestinationClassId is <1 or >=0x200||string.IsNullOrWhiteSpace(certificate.SourceLevelKey))
+                throw new InvalidDataException("Imported Return Home composition metadata is invalid.");
+            // Producer classes also include reachable spawn dependencies. Their actor
+            // may appear later, so absence from the initial scene is not a waiver.
+            if(!packets.ContainsKey(certificate.SourceLevelKey))
+                throw new InvalidDataException("A live imported Return Home controller has no supported native source packet.");
+            required.Add(certificate);
         }
-        foreach(int offset in calls)BinaryPrimitives.WriteUInt32LittleEndian(finalOverlay.AsSpan(offset,4),replacement);
-        return calls.Count;
+        if(live.Contains(9)&&!required.Any(c=>c.DestinationClassId==9))
+        {
+            if(packets.ContainsKey(nativeLevelKey))required.Add(new(nativeLevelKey,9));
+            else
+                throw new InvalidDataException("The live native Return Home controller has no authenticated destination source owner.");
+        }
+        if(required.Count==0)return PatchReturnHomeCalls(donors,routed.Overlay,routed.ReturnStubPointer);
+        var bindings=previousBindings.ToDictionary(p=>p.Key,p=>p.Value);
+        bindings[UniversalExeBindings.UpdateGlobal]=new(UniversalExeBindings.UpdateGlobal,0,0,routed.UpdatePointer);
+        bindings[UniversalExeBindings.CopyBufferGlobal]=new(UniversalExeBindings.CopyBufferGlobal,0,0,routed.CopyBuffer);
+        var resident=new UniversalOverlay(routed.Overlay,bindings);
+        var dispatches=ReachableUpdateDispatches(resident);
+        foreach(var certificate in required.Distinct())
+        {
+            byte[] source=packets[certificate.SourceLevelKey];bool witnessed=false;
+            foreach(var (overlay,dispatch) in dispatches)
+            {
+                if(!UniversalDispatchAnalysis.Handles(overlay,dispatch,certificate.DestinationClassId))continue;
+                var trace=UniversalDispatchAnalysis.Trace(overlay,dispatch.TreeStart,certificate.DestinationClassId,dispatch.Seeds,dispatch.ClassRegister);
+                var (code,tables)=UniversalDispatchAnalysis.Closure(overlay,dispatch.Function,[trace.Stop],new HashSet<uint>{dispatch.TreeStart});
+                // Trace may replay a short case before stopping at its transition call.
+                var owned=new SortedSet<uint>(code.Concat(trace.Sequence.Where(i=>i.SourcePc!=null).Select(i=>i.SourcePc!.Value)));
+                int ownedCalls=0;
+                foreach(uint pc in owned)
+                {
+                    uint word=overlay.Word(pc);
+                    if(!UniversalMips.IsJal(word))continue;
+                    uint target=UniversalMips.BranchTarget(word,pc);
+                    if(target!=TransitionAddress&&target!=routed.ReturnStubPointer)continue;
+                    uint packetStart=pc-44;
+                    bool complete=Enumerable.Range(0,13).All(n=>owned.Contains(packetStart+(uint)n*4));
+                    long packetOffset=(long)packetStart-UniversalOverlay.Base;
+                    if(!complete||packetOffset<0||packetOffset+52>routed.CopyBuffer-UniversalOverlay.Base||
+                        !routed.Overlay.AsSpan((int)packetOffset,44).SequenceEqual(source.AsSpan(0,44))||
+                        !routed.Overlay.AsSpan((int)packetOffset+48,4).SequenceEqual(source.AsSpan(48,4))||
+                        UniversalMips.IsBranch(overlay.Word(packetStart-4)))
+                        throw new InvalidDataException($"Live Return Home class0x{certificate.DestinationClassId:X3} has an incomplete or changed native transition packet.");
+                    bool Interior(uint address)=>address>packetStart&&address<packetStart+52;
+                    if(owned.Any(at=>(UniversalMips.IsPcRelative(overlay.Word(at))||UniversalMips.Op(overlay.Word(at)) is 2 or 3)&&Interior(UniversalMips.BranchTarget(overlay.Word(at),at)))||
+                        tables.SelectMany(t=>t.Targets).Any(Interior))
+                        throw new InvalidDataException("Live Return Home transition packet has an alternate interior entry.");
+                    ownedCalls++;
+                }
+                if(ownedCalls==0)
+                    throw new InvalidDataException($"Live Return Home class0x{certificate.DestinationClassId:X3} has no supported transition in its dispatched behavior.");
+                witnessed=true;
+            }
+            if(!witnessed)throw new InvalidDataException($"Live Return Home class0x{certificate.DestinationClassId:X3} is absent from the bound update dispatch.");
+        }
+        return PatchReturnHomeCalls(donors,routed.Overlay,routed.ReturnStubPointer);
+    }
+
+    private static IReadOnlyList<(UniversalOverlay Overlay,UniversalClassSwitch Dispatch)> ReachableUpdateDispatches(UniversalOverlay resident)
+    {
+        List<(UniversalOverlay,UniversalClassSwitch)> result=[];HashSet<uint> seen=[];Stack<uint> work=new([resident.Update]);
+        while(work.Count>0)
+        {
+            uint entry=work.Pop();if(!seen.Add(entry))continue;
+            if(seen.Count>64||entry<UniversalOverlay.Base||entry+8>resident.CopyBuffer)
+                throw new InvalidDataException("Return Home update chain escaped its resident ownership budget.");
+            uint word=resident.Word(entry);
+            if(UniversalMips.Op(word)==2&&resident.Word(entry+4)==0)
+            {
+                // Only known PORT and SMAP forwarding metadata is a wrapper owner.
+                if(entry+20>resident.CopyBuffer||resident.Word(entry+8)!=NativeMobySaveMap.Tag&&resident.Word(entry+16)!=Tag)
+                    throw new InvalidDataException("Return Home update tail lacks its canonical wrapper metadata.");
+                work.Push(UniversalMips.BranchTarget(word,entry));continue;
+            }
+            if(word==UniversalMips.JrRa&&resident.Word(entry+4)==0)continue;
+            // The composed update wrapper has a fixed stack frame, direct resident calls,
+            // NOP call slots and a complete epilog. Do not guess through arbitrary code.
+            if(word==UniversalMips.EncodeI(9,29,29,-24)&&resident.Word(entry+4)==UniversalMips.EncodeI(43,29,31,16))
+            {
+                uint cursor=entry+8;List<uint> calls=[];
+                while(cursor+8<=resident.CopyBuffer&&UniversalMips.IsJal(resident.Word(cursor))&&resident.Word(cursor+4)==0)
+                {calls.Add(UniversalMips.BranchTarget(resident.Word(cursor),cursor));cursor+=8;}
+                if(calls.Count>0&&cursor+16<=resident.CopyBuffer&&resident.Word(cursor)==UniversalMips.EncodeI(35,29,31,16)&&
+                    resident.Word(cursor+4)==0&&resident.Word(cursor+8)==UniversalMips.JrRa&&resident.Word(cursor+12)==UniversalMips.EncodeI(9,29,29,24))
+                {foreach(uint target in calls)work.Push(target);continue;}
+            }
+            var bindings=resident.Bindings.ToDictionary(p=>p.Key,p=>p.Value);
+            bindings[UniversalExeBindings.UpdateGlobal]=new(UniversalExeBindings.UpdateGlobal,0,0,entry);
+            var function=new UniversalOverlay(resident.Bytes.ToArray(),bindings);
+            result.Add((function,UniversalDispatchAnalysis.FindUpdateSwitch(function)));
+        }
+        return result;
     }
 
     public static byte[] BuildReturnStub(uint address)

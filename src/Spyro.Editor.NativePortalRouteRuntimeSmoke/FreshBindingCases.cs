@@ -7,7 +7,7 @@ using Spyro.Editor.Core.Universal;
 
 internal static class FreshBindingCases
 {
-    internal static async Task Run(string sourcePath,byte[] original,string workspace,Action<bool,string> check,Action<Action,string> refuse)
+    internal static async Task Run(string sourcePath,byte[] original,string workspace,UniversalSourceLibrary donors,Action<bool,string> check,Action<Action,string> refuse)
     {
         string folder=Path.Combine(workspace,"work","universal-gameplay-20261001","dependencies","portal-fresh-binding-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
         var issued=await NativeFreshMainCompilation.CaptureAsync(sourcePath,SceneDocument.New("Portal Bind Proof"),Path.Combine(folder,"fresh-baseline.bin"));
@@ -82,6 +82,57 @@ internal static class FreshBindingCases
         }
         foreach(uint pointer in new[]{UniversalOverlay.Base-4,route.UpdatePointer+1,0x80200000u})
             refuse(()=>NativePortalRouteFreshBinding.RebindTown(original,split.ToArray(),pointer,route.CopyBuffer),"invalid Town resident callback refused");
+        var source=donors.Get("stonehill");int returnRow=Enumerable.Range(0,source.Data.Scene().RowCount)
+            .Single(row=>BinaryPrimitives.ReadUInt16LittleEndian(source.Data.Row(row).AsSpan(0x36))==9);
+        var placed=Enumerable.Range(0,8).Select(slot=>new UniversalMobyPlacement("stonehill",returnRow,8960,9600,8704,
+            EditorId:"live-return-"+slot,PersistentSlot:slot,Retired:slot!=7)).ToArray();
+        var imported=issued.Compose(donors,placed);var importedBindings=UniversalExeBindings.Read(imported.Executable,65);
+        var contexts=NativePortalReturnClass.Capture(imported.Classes);
+        check(contexts.Count==1&&contexts[0].SourceLevelKey=="stonehill"&&contexts[0].DestinationClassId==0x1FD,"actual composition captures source009 as live mapped0x1FD provenance");
+        var routed=NativePortalRouteRuntime.AppendReturnWrapper(imported.Overlay,importedBindings[UniversalExeBindings.UpdateGlobal].Value,
+            importedBindings[UniversalExeBindings.CopyBufferGlobal].Value,10,11);
+        var copied=routed.Overlay.ToArray();int liveCalls=NativePortalRouteRuntime.PatchReturnHomeCalls(donors,routed,importedBindings,
+            new UniversalLevelData(imported.LevelData),issued.Target.Key,contexts);
+        check(liveCalls==2,"live owner proof accepts actual SMAP wrapped import while preserving dormant native certificate patching");
+        byte[] fixedCalls=routed.Overlay.ToArray();check(NativePortalRouteRuntime.PatchReturnHomeCalls(donors,routed,importedBindings,
+            new UniversalLevelData(imported.LevelData),issued.Target.Key,contexts)==2&&routed.Overlay.SequenceEqual(fixedCalls),"live-owner validation supports canonical already patched packets");
+        int nativePacket=checked((int)(0x8007E07C-UniversalOverlay.Base));
+        var patchedCalls=Enumerable.Range(0,routed.Overlay.Length/4).Select(i=>i*4).Where(at=>
+            BinaryPrimitives.ReadUInt32LittleEndian(routed.Overlay.AsSpan(at))==UniversalMips.EncodeJ(3,routed.ReturnStubPointer)).ToArray();
+        int importedPacket=patchedCalls.Single(at=>at!=nativePacket);
+        foreach(int at in new[]{importedPacket,importedPacket-40,importedPacket+4})
+        {
+            byte[] bad=copied.ToArray();bad[at]^=1;var liveBefore=bad.ToArray();var badRoute=routed with{Overlay=bad};
+            refuse(()=>NativePortalRouteRuntime.PatchReturnHomeCalls(donors,badRoute,importedBindings,new UniversalLevelData(imported.LevelData),issued.Target.Key,contexts),"damaged live mapped packet refuses despite intact dormant native9 "+at);
+            check(bad.SequenceEqual(liveBefore)&&bad.AsSpan(nativePacket-44,52).SequenceEqual(copied.AsSpan(nativePacket-44,52)),"live-owner refusal changes no byte including dormant native packet");
+        }
+        byte[] missingCall=copied.ToArray();BinaryPrimitives.WriteUInt32LittleEndian(missingCall.AsSpan(importedPacket),0);byte[] missingSnapshot=missingCall.ToArray();
+        refuse(()=>NativePortalRouteRuntime.PatchReturnHomeCalls(donors,routed with{Overlay=missingCall},importedBindings,
+            new UniversalLevelData(imported.LevelData),issued.Target.Key,contexts),"removed live mapped transition refuses even when dormant native9 still matches");
+        check(missingCall.SequenceEqual(missingSnapshot),"removed mapped transition refusal is atomic");
+        var futureData=new UniversalLevelData(issued.CopyLevelData());check(futureData.Scene().RowCount==0,"dependency validation fixture starts with no placed actor rows");
+        refuse(()=>NativePortalRouteRuntime.PatchReturnHomeCalls(donors,routed with{Overlay=missingCall.ToArray()},importedBindings,
+            futureData,issued.Target.Key,contexts),"a declared future-spawn ReturnHome owner cannot bypass validation because its initial row is absent");
+        check(NativePortalRouteRuntime.PatchReturnHomeCalls(donors,routed with{Overlay=copied.ToArray()},importedBindings,
+            futureData,issued.Target.Key,contexts)==2,"valid declared future-spawn ReturnHome owner remains supported");
+        var falseContexts=new[]{new NativePortalReturnClass("hauntedtowers",0x1FD)};
+        refuse(()=>NativePortalRouteRuntime.PatchReturnHomeCalls(donors,routed with{Overlay=copied.ToArray()},importedBindings,
+            new UniversalLevelData(imported.LevelData),issued.Target.Key,falseContexts),"mapped behavior with different source packet certificate refuses");
+        var townSource=donors.Get("townsquare");int townReturnRow=Enumerable.Range(0,townSource.Data.Scene().RowCount)
+            .Single(row=>BinaryPrimitives.ReadUInt16LittleEndian(townSource.Data.Row(row).AsSpan(0x36))==9);
+        var reused=UniversalMobyComposer.Compose(townSource.Level,townSource.Data.Bytes,townSource.Overlay.Bytes.ToArray(),original,donors.Get,donors.SharedClasses,
+            UniversalMobyExport.DefaultProtectedVram(sourcePath,townSource.Level),[new UniversalMobyPlacement("townsquare",townReturnRow,8960,9600,8704,EditorId:"reused-town-return")],
+            sharedModelPackage:donors.SharedModelPackage,playerAnimationSource:donors.PlayerAnimations);
+        var reusedContexts=NativePortalReturnClass.Capture(reused.Classes);var reusedClass=reused.Classes.Single(c=>c.ClassId==9);
+        check(reusedContexts.Count==1&&reusedContexts[0].SourceLevelKey=="townsquare"&&reusedContexts[0].DestinationClassId==reusedClass.DestinationClassId,"actual Town return composition always records source009 including native reuse");
+        check(reusedClass.DestinationClassId==9&&!reusedClass.BehaviorImported,"actual ordinary Town ReturnHome reuses native class009 behavior");
+        var reusedBindings=UniversalExeBindings.Read(reused.Executable,13);var reusedRoute=NativePortalRouteRuntime.AppendReturnWrapper(reused.Overlay,
+            reusedBindings[UniversalExeBindings.UpdateGlobal].Value,reusedBindings[UniversalExeBindings.CopyBufferGlobal].Value,10,13);
+        check(NativePortalRouteRuntime.PatchReturnHomeCalls(donors,reusedRoute,reusedBindings,new UniversalLevelData(reused.LevelData),townSource.Level.Key,reusedContexts)==1,"native class009 reuse validates its actual Town engine certificate");
+        var reusedBad=reusedRoute.Overlay.ToArray();reusedBad[nativePacket]^=1;byte[] reusedSnapshot=reusedBad.ToArray();
+        refuse(()=>NativePortalRouteRuntime.PatchReturnHomeCalls(donors,reusedRoute with{Overlay=reusedBad},reusedBindings,
+            new UniversalLevelData(reused.LevelData),townSource.Level.Key,reusedContexts),"changed live reused class009 packet refuses");
+        check(reusedBad.SequenceEqual(reusedSnapshot),"reused class009 packet rejection is atomic");
         File.WriteAllBytes(Path.Combine(folder,"fresh-exe-before.bin"),fresh);File.WriteAllBytes(Path.Combine(folder,"fresh-exe-after.bin"),split);
         File.WriteAllText(Path.Combine(folder,"receipt.json"),JsonSerializer.Serialize(new{ownerAddress=NativePortalRouteFreshBinding.Address,ownerLength=NativePortalRouteFreshBinding.Length,sourceOwnerSha256=NativePortalRouteFreshBinding.SourceSha256,freshInit=after[UniversalExeBindings.InitGlobal].Value,update=route.UpdatePointer,copy=route.CopyBuffer,town=town.ToDictionary(p=>p.Key,p=>p.Value.Value),runtime="not-tested"},new JsonSerializerOptions{WriteIndented=true}));
         Console.WriteLine($"NATIVE_PORTAL_ROUTE_FRESH_BINDING_OK ownerBytes=152 emittedBytes=144..152 simultaneousTownPairs=36 privateCapture={folder} runtime=not-tested");
