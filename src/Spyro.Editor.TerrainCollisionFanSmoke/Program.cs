@@ -146,6 +146,12 @@ StableFixture[] stableFixtures =
 
 try
 {
+    if(Environment.GetEnvironmentVariable("SPYRO_TERRAIN_V1_PLAIN_REMOVAL_ONLY")=="1")
+    {
+        contexts["artisans"]=await BuildLevelContextAsync("artisans");
+        await VerifyPlainArtisansRemovalAsync();
+        return;
+    }
     foreach (string levelKey in new[] { "townsquare", "darkhollow", "drycanyon", "artisans", "alpineridge" })
         contexts[levelKey] = await BuildLevelContextAsync(levelKey);
 
@@ -407,6 +413,23 @@ async Task VerifyCoupledTopologyAsync()
         }
         Console.WriteLine($"PASS coupled topology: remove={remove}; patches={plan.PatchCount}");
     }
+}
+
+async Task VerifyPlainArtisansRemovalAsync()
+{
+    var context=contexts["artisans"];
+    var geometry=GeometryOverlayLoader.LoadFirstCandidate(context.OverlayPath);
+    var face=FindFace(geometry,58,43);
+    face.StageTerrainRemoval();
+    string edits=TempPath("plain-removal-edits.json");
+    await TerrainEditStore.SaveAsync(edits,[face],"Plain approach-ramp removal away from Nestor platform");
+    string root=Environment.GetEnvironmentVariable("SPYRO_TERRAIN_V1_KEEP_OUTPUT")??throw new InvalidOperationException("Plain removal evidence needs an isolated output directory.");
+    Directory.CreateDirectory(root);
+    string prefix=Path.Combine(root,"artisans-plain-ramp-remove");
+    var result=await TerrainPatchExporter.ExportAsync(new TerrainPatchRequest(sourceImagePath,sourceCuePath,prefix,context.Level,"",context.SourceSearchPath,edits,"",true));
+    Assert(result.WroteImage&&result.Plan.SkippedEdits.Count==0,"Plain terrain removal was not emitted by the normal native exporter");
+    File.Copy(edits,prefix+"-edits.json",true);
+    Console.WriteLine($"TERRAIN_PLAIN_REMOVAL_CANDIDATE {result.OutputCuePath}; source58:43; probe5312,2800; native Mobys unchanged");
 }
 
 async Task VerifyReachableArtisansFloorAsync()
