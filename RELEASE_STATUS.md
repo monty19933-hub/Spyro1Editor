@@ -1,6 +1,7 @@
-# Beta V6 build 54 release checklist
+# Beta V6 build 54 release-candidate checklist
 
-The release prioritizes the shared editor workflow and usable capacity reclamation.
+Application packages were built from `6a2d98e`. Subsequent commits change tests
+and evidence documentation only. The release candidate prioritizes the shared editor workflow and usable capacity reclamation.
 Fly Anywhere is deferred at the user's request. Broader universal gameplay
 coverage remains open; catalog/static results are not runtime acceptance.
 
@@ -16,9 +17,12 @@ coverage remains open; catalog/static results are not runtime acceptance.
 - [x] Native rotation export and edits-during-save race fixed.
 - [x] Cross-level class remapping and dependency closure expanded without prior composed-cell regression.
 - [x] Research/flight controls hidden from normal release; saved research flight settings preserved and ignored by release export.
-- [ ] Final integrated permanent-deletion and logical-save mapping verification.
-- [ ] Final Release/Debug regression and source checkpoint.
-- [ ] New macOS arm64 and Windows x64 packages, archive and exact-package GUI verification.
+- [x] Permanent deletion: physical reuse, retired logical identities, native cold-load and six guarded save-map owners verified.
+- [x] Release/Debug broad runs completed; affected failures corrected and focused retests passed. Source-QA limits are recorded below.
+- [x] Developer ID signed macOS arm64 and Windows x64 packages; package identity/content verifier passed.
+- [x] Exact final Mac GUI: reopen three authored faces, add default Sheep without painting, save/reopen and repeated Create BIN.
+- [x] Exact final packaged export: native New Game entered slot 65, sheep and floor visible, short collision-supported walk passed.
+- [x] Fixed untextured fresh-level imports by admitting only the exact empty native terrain texture component.
 
 ## Evidence boundaries
 
@@ -39,7 +43,7 @@ static native terrain materials and admitted universal placements. It does not
 automatically author portals or a full campaign. A tested scene does not certify
 every possible geometry/material/Moby combination.
 
-The new Mac package will use Developer ID signing without notarization. Windows
+The Mac package uses Developer ID signing without notarization. Windows
 package checks do not imply Windows runtime acceptance. No source image, firmware,
 card, state or extracted native asset belongs in application/source archives.
 
@@ -47,3 +51,36 @@ Private logs and fixtures remain in the task `work` folder. Final deliverables
 belong in the new `outputs/SpyroEditor-beta54-release` folder; beta53 RC2 stays
 unchanged. User-facing guides are `docs/public-user-guide.md` and
 `docs/public-known-limitations.md`.
+
+## Regression evidence and boundaries
+
+Release and Debug each built all 294 smoke projects and passed 464 of 466 initial
+runner checks. The two failures (deferred-flight expectation and alternate-profile
+visual-parent duplication) were corrected and both focused cases passed in both
+configurations. Final native mapper checks passed in both configurations; the
+exact final packaged Core passed 6,072 scalar/emission/readback checks, including
+all six source-bound native owner windows. These are instruction/byte checks,
+not 6,072 gameplay tests. Texture ownership passed 97 source-free assertions in
+each configuration, including malformed empty-header refusals.
+
+The bounded source-native suite passed 52 of 68 cases (45 CLI and seven Python);
+16 legacy research cases remained unrun at its original 1,800-second wall limit.
+A pinned legacy oracle was copied into an isolated mirror, preserving its source
+hash. Legacy UI expectations for hidden research controls and retired physical
+rows were updated to the release contract and the affected focused checks passed.
+Full histories and bounded continuation results are recorded in the delivery's
+Verification/release-regression-20260930 files. This is not a blanket all-green
+claim for every historical research test.
+
+The final packaged export SHA-256 is
+`6fa099c7e718384269281eb261294c43e839bc81780c7fdc516d1ab1d2256e2c`.
+It was made through normal Create BIN after saving/reopening the GUI-authored
+scene, then cold-booted with a real US BIOS and a new private memory card.
+Read-only debugger inspection recorded native level 65, one class-0x00A actor,
+spawn position 8705/8888/9060 and a short walk to 8705/9968/9063. No RAM writes
+or save states were used. Exact receipts remain in the private task work folder.
+
+Whole-game universal behavior, retail topology editing, full fresh-level campaign
+entry/exit/save coverage, all egg lifecycle/endgame cases, Windows execution and
+Mac notarization remain open. Fly Anywhere is intentionally deferred. Use the
+candidate honestly within those limits; this is not full original-scope acceptance.
