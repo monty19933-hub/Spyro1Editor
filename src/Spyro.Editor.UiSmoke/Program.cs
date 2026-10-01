@@ -10558,9 +10558,9 @@ void Render(double width, double height, string fileName)
 
     AssertText(window, "Objects");
     AssertText(window, "Terrain");
-    AssertText(window, "Level");
+    AssertText(window, "Game Settings");
     AssertText(window, "Environment");
-    AssertText(window, "Add");
+    AssertText(window, "Add object…");
     AssertText(window, "Edit");
     AssertText(window, "Replace");
     AssertText(window, "Create BIN");
@@ -10920,7 +10920,7 @@ void RunObjectGalleryOnly()
     try
     {
         WaitForLevelData(window);
-        Window addDialog = OpenDialog(window, FindButton(window, "Add"), "add object window");
+        Window addDialog = OpenDialog(window, FindButton(window, "More…"), "add object window");
         Button chooser = FindNamed<Button>(addDialog, "ObjectGalleryButton");
         if (!chooser.Content?.ToString()?.StartsWith("Choose Object", StringComparison.Ordinal) == true)
             throw new InvalidOperationException("The Add Object dialog did not replace the technical object dropdown with the picture-gallery button.");
