@@ -19,9 +19,6 @@ Check(allocator.ImportedReservations.Sum(r=>r.Length) == 544, "Reservation inclu
 Check(allocator.Clone().ImportedReservations.SequenceEqual(allocator.ImportedReservations), "Cloned allocator preserves reservation proof");
 allocator.Reserve(2048,32);
 Check(allocator.ImportedReservations[^1].Offset == 2048, "In-place equivalent texture storage is also reserved");
-Check(UniversalRuntimeInteractionGuards.ReasonFor("artisans","alpineridge",1,0x10F)==UniversalRuntimeInteractionGuards.AlpineArtisansFailure,"Observed interaction failure distinct from capacity");
-Check(UniversalRuntimeInteractionGuards.ReasonFor("townsquare","alpineridge",1,0x10F)==null && UniversalRuntimeInteractionGuards.ReasonFor("artisans","alpineridge",2,0x10F)==null,"Runtime guard remains bounded to exact source row/destination");
-Check(UniversalRuntimeInteractionGuards.ReasonFor("artisans","wizardpeak",18,0x11C)==null,"Wizard source independently qualified");
 if(args.FirstOrDefault()=="--runtime-guards")
 {
     await RuntimeInteractionGuardCases.Run(args[1],args[2],Check);

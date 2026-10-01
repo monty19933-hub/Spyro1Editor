@@ -22,6 +22,8 @@ public sealed record UniversalBehaviorSourceReport(string SourceLevelKey, IReadO
     int UpdateBytes, int InitBytes, int JumpTables)
 {
     public IReadOnlyList<uint> ParentClassReadSites { get; init; } = [];
+    public uint PlayerDamageMask { get; init; }
+    public IReadOnlyList<UniversalPlayerDamageWrite> PlayerDamageWrites { get; init; } = [];
     public IReadOnlyList<uint> AllocatedClassReadSites { get; init; } = [];
 }
 
@@ -101,6 +103,8 @@ public static class UniversalBehaviorBundleBuilder
                 UniversalClassRemapping.PatchConstantSpawns(upd, s.Source, map);
             }
             parts.Add(upd);
+            List<UniversalPlayerDamageWrite> playerDamageWrites = [.. UniversalPlayerDamageWrites.AnalyzeOverlay(s.Source,
+                new SortedSet<uint>(upd.Items.Where(i => i.Word != null && (i.SourcePc ?? i.Orig) != null).Select(i => (i.SourcePc ?? i.Orig)!.Value))).Writes];
             int initTotal = 0, tablesTotal = jt1; List<uint> parentClassSites = [], allocatedClassSites = [];
             foreach (int c in Remaps(s.SourceKey) ? s.Classes : s.Classes.Take(1))
             {
@@ -117,9 +121,11 @@ public static class UniversalBehaviorBundleBuilder
                     UniversalClassRemapping.RequireNoUnownedClassMemory(init, true);
                 }
                 UniversalClassRemapping.PatchConstantSpawns(init, s.Source, map);
+                playerDamageWrites.AddRange(UniversalPlayerDamageWrites.AnalyzeOverlay(s.Source,
+                    new SortedSet<uint>(init.Items.Where(i => i.Word != null && (i.SourcePc ?? i.Orig) != null).Select(i => (i.SourcePc ?? i.Orig)!.Value))).Writes);
                 parts.Add(init); initTotal += init.Items.Count(i => i.Word != null) * 4; tablesTotal += jt2;
             }
-            reports.Add(new(s.SourceKey, s.Classes.ToArray(), upd.Items.Count(i => i.Word != null) * 4, initTotal, tablesTotal) { ParentClassReadSites = parentClassSites.Distinct().Order().ToArray(), AllocatedClassReadSites = allocatedClassSites.Distinct().Order().ToArray() });
+            reports.Add(new(s.SourceKey, s.Classes.ToArray(), upd.Items.Count(i => i.Word != null) * 4, initTotal, tablesTotal) { ParentClassReadSites = parentClassSites.Distinct().Order().ToArray(), AllocatedClassReadSites = allocatedClassSites.Distinct().Order().ToArray(), PlayerDamageMask = playerDamageWrites.Aggregate(0u, (mask, w) => mask | w.DamageMask), PlayerDamageWrites = playerDamageWrites.Distinct().OrderBy(w => w.StorePc).ToArray() });
         }
         if (dragonflyEggClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.DragonflyEggUpdate(dragonflyEggClasses, "egg_upd", remapSaveRows));

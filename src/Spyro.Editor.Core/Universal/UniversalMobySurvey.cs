@@ -31,7 +31,7 @@ public static class UniversalMobySurvey
                 try
                 {
                     var r = UniversalMobyComposer.Compose(dest, d.Data.Bytes, d.Overlay.Bytes.ToArray(), lib.Disc.Exe,
-                        lib.Get, lib.SharedClasses, vram, [p], sharedModelPackage: lib.SharedModelPackage);
+                        lib.Get, lib.SharedClasses, vram, [p], sharedModelPackage: lib.SharedModelPackage, playerAnimationSource: lib.PlayerAnimations);
                     cells.Add(new(dest.Key, v.ClassId, v.SourceLevelKey, v.SourceRow, "ok", null,
                         (int)(r.Ram.FinalEnd - r.Ram.OriginalEnd), r.Ram.OriginalHeadroom) { DependencyExportStatus = r.ParticleDependencies.Any(p => p.Status == "dependency-unverified") || r.UnresolvedObjectLinks > 0 ? "composed-dependency-unverified" : "composed-static-only", Dependencies = r.Classes });
                 }

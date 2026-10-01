@@ -62,6 +62,16 @@ public sealed class NativePlayerAnimationSource
     public IReadOnlyList<NativePlayerAnimationSourceLevel> Levels { get; }
     public IReadOnlyList<NativePlayerAnimationSourceCertificate> NativeCertificates => Certificates;
 
+    /// <summary>Compose into an already edited private destination using the captured original donor.
+    /// The universal compositor remains responsible for final RAM fit and disc readback.</summary>
+    internal NativePlayerAnimationMergeLayout MergeCaptured(ReadOnlySpan<byte> destination, int donorLevelId,
+        IReadOnlyList<int> animationIds)
+    {
+        var donor = Levels.SingleOrDefault(l => l.LevelId == donorLevelId)
+            ?? throw new InvalidDataException("Player-animation donor is not a captured retail level.");
+        return new(destination, donor.Stream, _geometry, SharedAnimationIds, animationIds);
+    }
+
     public static async Task<NativePlayerAnimationSource> CaptureAsync(string originalImagePath,
         CancellationToken cancellationToken = default)
     {

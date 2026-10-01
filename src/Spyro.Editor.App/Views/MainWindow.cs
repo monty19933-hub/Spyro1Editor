@@ -14205,6 +14205,7 @@ public sealed partial class MainWindow : Window
                     ramHeadroomAfter = level.Compose.Ram.FinalHeadroom,
                     droppedModels = level.Compose.DroppedModelClasses.Select(c => $"0x{c:X3}"),
                     droppedModelBytes = level.Compose.DroppedModelBytes,
+                    playerAnimationImports = level.Compose.PlayerAnimationImports,
                     level.Compose.ArenaSlotsRemaining,
                     level.Compose.VramBytesUsed
                 });

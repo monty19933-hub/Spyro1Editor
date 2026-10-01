@@ -17,6 +17,7 @@ public sealed record UniversalCoverageCell(string Destination, string VariantId,
     IReadOnlyList<UniversalClassImport> Dependencies, IReadOnlyList<string> Warnings, UniversalRamBudget? Ram)
 {
     public IReadOnlyList<UniversalParticleDependency> ParticleDependencies { get; init; } = [];
+    public IReadOnlyList<UniversalPlayerAnimationImport> PlayerAnimationImports { get; init; } = [];
     public IReadOnlyList<UniversalBehaviorSourceReport> Behavior { get; init; } = [];
     public int RestoredObjectLinks { get; init; }
     public int UnresolvedObjectLinks { get; init; }
@@ -110,9 +111,9 @@ public static class UniversalMobyCoverage
                 try
                 {
                     var r = UniversalMobyComposer.Compose(dest, d.Data.Bytes, d.Overlay.Bytes.ToArray(), lib.Disc.Exe,
-                        lib.Get, lib.SharedClasses, vram, [p], special, sharedModelPackage: lib.SharedModelPackage);
+                        lib.Get, lib.SharedClasses, vram, [p], special, sharedModelPackage: lib.SharedModelPackage, playerAnimationSource: lib.PlayerAnimations);
                     cells.Add(new(dest.Key, v.VariantId, "listed", r.ParticleDependencies.Any(p => p.Status == "dependency-unverified") || r.UnresolvedObjectLinks > 0 ? "composed-dependency-unverified" : "composed-static-only",
-                        "not-tested", null, null, r.Classes, r.Warnings, r.Ram) { ParticleDependencies = r.ParticleDependencies, Behavior = r.Behavior, RestoredObjectLinks = r.RestoredObjectLinks, UnresolvedObjectLinks = r.UnresolvedObjectLinks });
+                        "not-tested", null, null, r.Classes, r.Warnings, r.Ram) { ParticleDependencies = r.ParticleDependencies, PlayerAnimationImports = r.PlayerAnimationImports, Behavior = r.Behavior, RestoredObjectLinks = r.RestoredObjectLinks, UnresolvedObjectLinks = r.UnresolvedObjectLinks });
                 }
                 catch (Exception e) when (e is InvalidDataException or IOException or InvalidOperationException or ArgumentException)
                 {

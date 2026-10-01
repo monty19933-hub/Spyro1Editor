@@ -104,7 +104,7 @@ public sealed class NativeFreshMainCompilation
             key => string.Equals(key, Target.Key, StringComparison.OrdinalIgnoreCase)
                 ? (Target, new UniversalLevelData(_body), new UniversalOverlay(_overlay, UniversalExeBindings.Read(actualExecutable,65)))
                 : donors.Get(key), donors.SharedClasses,
-            UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,sharedModelPackage: donors.SharedModelPackage);
+            UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,sharedModelPackage: donors.SharedModelPackage, playerAnimationSource: donors.PlayerAnimations);
 
     public async Task<string> ExportAsync(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements,
         UniversalJapaneseSource? japanese,string outputImage,string identityWorkspace,LevelCatalog nativeCatalog,CancellationToken token=default,Action? requireDocumentCurrent=null,

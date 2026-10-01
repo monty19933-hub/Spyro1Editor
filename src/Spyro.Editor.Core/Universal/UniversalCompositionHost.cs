@@ -124,7 +124,7 @@ public sealed class UniversalCompositionHost
                             _afterDrop[key] = ranges = Protected(dropped);
                         return ranges;
                     }
-                },sources.SharedModelPackage),null);
+                },sources.SharedModelPackage, sources.PlayerAnimations),null);
         }
         catch (Exception e) when (e is IOException or InvalidDataException) { return (null,e.Message); }
     }

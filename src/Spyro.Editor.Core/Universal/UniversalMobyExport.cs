@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Spyro.Editor.Core.Analysis;
+using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
 
 namespace Spyro.Editor.Core.Universal;
@@ -35,6 +36,9 @@ public sealed class UniversalSourceLibrary
     public IReadOnlySet<int> SharedClasses { get; }
     private UniversalSharedModelAssets? _sharedAssets;
     public byte[] SharedModelPackage(int classId) => (_sharedAssets ??= new UniversalSharedModelAssets(_disc)).Package(classId);
+    private NativePlayerAnimationSource? _playerAnimations;
+    public NativePlayerAnimationSource PlayerAnimations() => _playerAnimations ??=
+        NativePlayerAnimationSource.CaptureAsync(ImagePath).GetAwaiter().GetResult();
 
     public (LevelDefinition Level, UniversalLevelData Data, UniversalOverlay Overlay) Get(string key)
     {
@@ -117,7 +121,7 @@ public static class UniversalMobyExport
                 current.EntryBytes(level.SourceWadEntry - 1), exe, k => sources.Get(k), sources.SharedClasses,
                 protectedVram(currentImagePath, level), placements, SpecialProvider(japanese),
                 removed,
-                useNativeOwnershipScan ? dropped => DefaultProtectedVram(currentImagePath, level, dropped) : null, sources.SharedModelPackage);
+                useNativeOwnershipScan ? dropped => DefaultProtectedVram(currentImagePath, level, dropped) : null, sources.SharedModelPackage, sources.PlayerAnimations);
             exe = composed.Executable;
             replacements[level.SourceWadEntry] = composed.LevelData;
             replacements[level.SourceWadEntry - 1] = composed.Overlay;

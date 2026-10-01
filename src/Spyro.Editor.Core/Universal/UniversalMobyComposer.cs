@@ -50,6 +50,7 @@ public sealed record UniversalComposeResult(
     public int NativeRowsAfter { get; init; }
     public int ReusedPhysicalRows { get; init; }
     public int DroppedPropertyBytes { get; init; }
+    public IReadOnlyList<UniversalPlayerAnimationImport> PlayerAnimationImports { get; init; } = [];
 }
 
 /// <summary>
@@ -106,7 +107,8 @@ public static class UniversalMobyComposer
         Func<string, UniversalSpecialAsset?>? special = null,
         IReadOnlyCollection<int>? removedRows = null,
         Func<IReadOnlySet<int>, IEnumerable<(long Offset, int Length)>>? protectedVramAfterDrop = null,
-        Func<int, byte[]>? sharedModelPackage = null)
+        Func<int, byte[]>? sharedModelPackage = null,
+        Func<NativePlayerAnimationSource>? playerAnimationSource = null)
     {
         if (placements.Count == 0 && removedRows is not { Count: > 0 }) throw new ArgumentException("No placements or permanent removals were supplied.");
         int incomingCount = placements.Count;
@@ -124,12 +126,6 @@ public static class UniversalMobyComposer
         var activeOrder = Enumerable.Range(0, placements.Count).Where(i => !placements[i].Retired).ToArray();
         incomingOrder = activeOrder.Select(i => incomingOrder[i]).ToArray();
         placements = activeOrder.Select(i => placements[i]).ToArray();
-        foreach (var placement in placements.Where(p => string.Equals(p.SourceLevelKey, "alpineridge", StringComparison.OrdinalIgnoreCase) && p.SourceRowIndex == 1))
-        {
-            int sourceClass = BinaryPrimitives.ReadUInt16LittleEndian(source(placement.SourceLevelKey).Data.Row(placement.SourceRowIndex).AsSpan(0x36));
-            if (UniversalRuntimeInteractionGuards.ReasonFor(destination.Key, placement.SourceLevelKey, placement.SourceRowIndex, sourceClass) is string failure)
-                throw new InvalidDataException(failure);
-        }
         UniversalLevelData dest = new(destinationData.ToArray());
         int nativeRowsBefore = dest.Scene().RowCount;
         var permanentlyRemoved = UniversalRowRemoval.Normalize(nativeRowsBefore, removedRows);
@@ -481,6 +477,27 @@ public static class UniversalMobyComposer
             NativeMobySaveMap.PatchExe(exe);
         }
 
+        // Enemy collision masks can select level-local Spyro hurt animations. They are
+        // separate from the enemy model and must travel with the dependency closure.
+        List<UniversalPlayerAnimationImport> playerAnimationImports = [];
+        foreach (var donorGroup in ordered.Where(o => !string.Equals(o.Source, destination.Key, StringComparison.OrdinalIgnoreCase))
+            .GroupBy(o => o.Source))
+        {
+            var donor = source(donorGroup.Key);
+            var registered = donor.Data.Registrations().Select(r => r.ClassId).ToHashSet();
+            int[] required = donorGroup.Where(o => registered.Contains(o.Class))
+                .SelectMany(o => UniversalPlayerDamageDependencies.Analyze(donor.Data.Package(o.Class), exe).AnimationIds)
+                .Concat(UniversalPlayerDamageDependencies.MapDamageMask(behavior.Where(b => b.SourceLevelKey == donorGroup.Key).Aggregate(0u, (mask, b) => mask | b.PlayerDamageMask), exe))
+                .Distinct().Order().ToArray();
+            if (required.Length == 0) continue;
+            var animations = playerAnimationSource?.Invoke() ?? throw new InvalidDataException(
+                "These objects need additional Spyro animations. Select the unchanged original USA disc to include them.");
+            var merged = UniversalPlayerAnimationImporter.Merge(dest, donorGroup.Key, donor.Level.LevelId, required, animations);
+            dest = merged.Data;
+            modelGrowth += merged.Report.ModelGrowthBytes;
+            playerAnimationImports.Add(merged.Report);
+        }
+
         uint finalEnd = RuntimeEnd(dest, copyBuffer);
         uint limit = NormalBufferFloor - RamSafetyMargin;
         var ram = new UniversalRamBudget(originalEnd, finalEnd, NormalBufferFloor,
@@ -492,11 +509,13 @@ public static class UniversalMobyComposer
         if (finalEnd > limit && !nativeRemovalBudget)
             throw new UniversalBudgetException(
                 $"{destination.DisplayName} does not have enough game RAM for these objects: they need {(finalEnd - originalEnd) / 1024.0:0.0} KB " +
-                $"but the level has {Math.Max(0, (int)(limit - originalEnd)) / 1024.0:0.0} KB available.", ram);
+                $"but the level has {Math.Max(0, (int)(limit - originalEnd)) / 1024.0:0.0} KB available." +
+                (playerAnimationImports.Sum(p => p.ModelGrowthBytes) > 0
+                    ? $" This includes {playerAnimationImports.Sum(p => p.ModelGrowthBytes) / 1024.0:0.0} KB for Spyro's reactions to these enemies." : ""), ram);
         int[] mappedRows = Enumerable.Repeat(-1, incomingCount).ToArray(), mappedSaveRows = Enumerable.Repeat(-1, incomingCount).ToArray();
         for (int i = 0; i < newRows.Count; i++) { mappedRows[incomingOrder[i]] = newRows[i]; mappedSaveRows[incomingOrder[i]] = saveRows[i]; }
         return new(destination.Key, imports, mappedRows, ram, arena, freeBefore - vram.FreeBytes, behavior, warnings,
-            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties };
+            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports };
     }
 
     /// <summary>Class a fully removed native row is switched to: no model, no behavior in any level, never
