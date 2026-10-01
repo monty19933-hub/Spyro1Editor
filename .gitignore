@@ -201,6 +201,7 @@ unsafe-tests/
 !/tools/Test-NativeFreeFlightEffects.py
 !/tools/Test-UniversalEggProgress.py
 !/tools/Test-UniversalEggUpdate.py
+!/tools/Test-NativeMobySaveMap.py
 !/tools/Verify-SpyroNativeEggSave.py
 !/tools/Inspect-SpyroJapaneseObjects.py
 !/tools/Test-Inspect-SpyroJapaneseObjects.py

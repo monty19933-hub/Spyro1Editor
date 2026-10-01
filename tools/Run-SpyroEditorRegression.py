@@ -194,6 +194,7 @@ CORE_CASES = (
     ("UpdateSmoke", "PASS: whole-number and incremental prerelease discovery"),
     ("UniversalMobySmoke", "UNIVERSAL_MOBY_SOURCE_FREE_OK"),
     ("UniversalIdentitySmoke", "UNIVERSAL_IDENTITY_OK"),
+    ("NativeMobySaveMapSmoke", "NATIVE_MOBY_SAVE_MAP_SOURCE_FREE_OK"),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
@@ -586,6 +587,14 @@ def main():
                 str(ROOT / "src/Spyro.Editor.UniversalIdentitySmoke/bin" / options.configuration /
                     "net10.0/Spyro.Editor.UniversalIdentitySmoke.dll")],
                 "UNIVERSAL_EGG_UPDATE_SCALAR_OK")
+
+    map_project = ROOT / "src/Spyro.Editor.NativeMobySaveMapSmoke/Spyro.Editor.NativeMobySaveMapSmoke.csproj"
+    if build_results.get(map_project, False):
+        execute("native-moby-save-map-scalar", [sys.executable, "-B",
+                str(ROOT / "tools/Test-NativeMobySaveMap.py"), "--dll",
+                str(map_project.parent / "bin" / options.configuration / "net10.0" /
+                    "Spyro.Editor.NativeMobySaveMapSmoke.dll")],
+                "NATIVE_MOBY_SAVE_MAP_SCALAR_OK")
 
     flight_project = ROOT / "src/Spyro.Editor.NativeFreeFlightSmoke/Spyro.Editor.NativeFreeFlightSmoke.csproj"
     if any(project == flight_project for project, _, _ in cases) and build_results.get(flight_project, False):
