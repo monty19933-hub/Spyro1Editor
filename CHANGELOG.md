@@ -22,6 +22,8 @@
 - Made terrain texture allocation account for saved foreign objects, including
   their palette space, so the capacity check and export share the same constraints.
 - Added full, copyable status details and simplified the normal editing controls.
+  Fresh terrain copies support Undo immediately, and fresh levels hide irrelevant
+  retail texture-capacity diagnostics.
 - Added the V1.0 stable release and updater identity. Earlier beta packages and
   their update compatibility remain preserved.
 

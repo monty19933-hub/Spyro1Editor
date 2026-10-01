@@ -13,7 +13,7 @@ Fly Anywhere remains deferred.
 - [x] Both explicit New Game destinations passed independent readback. Level content is identical; only the two guarded startup words differ.
 - [x] Actual authored-start export cold-booted through New Game into level 65. Native walking, jumping, landing and egg pickup/inventory 1/1 passed without RAM writes or position assistance.
 - [x] Final retail terrain native retake passed after correcting LP-only sector render-queue admission; the full-project Wizard Peak Druid combat run passed.
-- [ ] Integrate Release/Debug regressions, final GUI checks and V1.0 packages.
+- [x] Integrated Release/Debug regressions and V1.0 packaging. Full package verification and the actual packaged saved-project export passed; final artifact hashes and presentation retake are recorded in the release receipt.
 
 The old legacy-draft gate and the second texture-allocation failure are fixed.
 Private terrain packing reserves the exact pending Moby texture allocation, so
@@ -33,7 +33,7 @@ native HP/LP corner-order difference and physical far-colour table selection.
 Final v23 output passes independent native packet-order/colour verification. Its
 raised Artisans floor also passed controller-only native walking, jumping and
 landing with the exact final HP/LP sector and all fourteen changed collision rows
-verified in RAM. The final added floor also passed native walking, jumping and landing after a recorded position-only approach assist. The original removed-floor probe overlapped Nestor's solid platform and is not counted as a drop test; the independent plain-ramp fixture now passes assisted native falling, jumping and landing, including genuine native allocation growth. The source-free Release runner passed all 300 checks against a byte-verified frozen snapshot. Focused Debug checks also passed after the final terrain-queue and source-variant guard changes. Final package checks follow.
+verified in RAM. The final added floor also passed native walking, jumping and landing after a recorded position-only approach assist. The original removed-floor probe overlapped Nestor's solid platform and is not counted as a drop test; the independent plain-ramp fixture now passes assisted native falling, jumping and landing, including genuine native allocation growth. The source-free Release runner passed all 300 checks against a byte-verified frozen snapshot. Focused Debug checks also passed after the final terrain-queue and source-variant guard changes. The complete package verifier passed, and the packaged normal GUI generated a BIN byte-identical to the independently verified saved-project baseline. Final UI review also exercised fresh add/save/reopen/remove and led to a narrow Undo-enable and irrelevant-retail-helper cleanup. See `docs/research/v1-packaged-editor-20261001.md` and the final release receipt.
 
 ## Preserved beta54 baseline
 
