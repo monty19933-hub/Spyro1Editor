@@ -9,7 +9,7 @@ or copied game asset. Users must provide their own legally obtained disc image.
 
 ## Releases
 
-The current release target is **Spyro Editor V1.0**. Existing and fresh levels
+The current release target is **Spyro Editor 1.0**. Existing and fresh levels
 share terrain and object controls. Create BIN/CUE includes both saved scenes and
 lets you choose the New Game starting level. Cross-level objects have a capacity
 planner that names removals which would make an import fit. Fly Anywhere is

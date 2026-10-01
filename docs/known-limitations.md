@@ -1,6 +1,6 @@
-# Spyro Editor Beta V6 Known Limitations
+# Spyro Editor 1.0 Known Limitations
 
-Current build 54 scope is in [release limitations](public-known-limitations.md).
+Current stable scope is in [release limitations](public-known-limitations.md).
 The sections below are retained historical research notes for older workflows,
 not the normal File > New Level implementation.
 
