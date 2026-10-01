@@ -5,6 +5,27 @@ namespace Spyro.Editor.App.Views;
 
 public sealed partial class MainWindow
 {
+    private LevelDefinition? _retailTerrainTextureWarningLevel;
+    private string _retailTerrainTextureWarningRoot = "";
+    private string? _retailTerrainTextureWarning;
+
+    private string AppendRetailTerrainTextureWarning(string status)
+    {
+        if (_retailTerrainTextureWarning == null ||
+            !ReferenceEquals(_currentLevel, _retailTerrainTextureWarningLevel) ||
+            !PathsEqual(_workspace.RootPath, _retailTerrainTextureWarningRoot) ||
+            status.Contains(_retailTerrainTextureWarning, StringComparison.Ordinal))
+            return status;
+        return status + " " + _retailTerrainTextureWarning;
+    }
+
+    private void RememberRetailTerrainTextureWarning(LevelDefinition level, string root, string? warning)
+    {
+        _retailTerrainTextureWarning = warning;
+        _retailTerrainTextureWarningLevel = warning == null ? null : level;
+        _retailTerrainTextureWarningRoot = warning == null ? "" : root;
+    }
+
     // Call after loading/recovering ordinary source geometry, before committing
     // it to the viewport. The locked ID65 lab retains its existing loader fence.
     private sealed record RetailTerrainTextureLoadPreparation(bool OwnerCurrent, string? Warning = null);
@@ -23,7 +44,11 @@ public sealed partial class MainWindow
             string.Equals(source, ResolveTerrainTextureSourceImage(level), StringComparison.OrdinalIgnoreCase);
         if (!Current()) return new(false);
         if (PortableEditorCacheBuilder.IsCurrentTerrainTexturePreviewCache(root, level.Key))
-            return new(Current());
+        {
+            bool ownerCurrent = Current();
+            if (ownerCurrent) RememberRetailTerrainTextureWarning(level, root, null);
+            return new(ownerCurrent);
+        }
         string? warning = null;
         try
         {
@@ -38,6 +63,7 @@ public sealed partial class MainWindow
         }
         if (!Current()) return new(false);
         _terrainTexturePreviewBundleCache.Clear();
+        RememberRetailTerrainTextureWarning(level, root, warning);
         return new(true, warning);
     }
 }
