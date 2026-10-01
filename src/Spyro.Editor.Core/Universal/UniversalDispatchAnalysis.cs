@@ -2,7 +2,7 @@ namespace Spyro.Editor.Core.Universal;
 
 /// <summary>One replayed instruction of a class-switch path. Either an original word or a
 /// materialized constant load from the source overlay's static data (<see cref="ConstantRegister"/>).</summary>
-public readonly record struct UniversalReplayed(uint Word, int ConstantRegister = -1, uint ConstantValue = 0)
+public readonly record struct UniversalReplayed(uint Word, int ConstantRegister = -1, uint ConstantValue = 0, uint? SourcePc = null)
 {
     public bool IsConstant => ConstantRegister >= 0;
 }
@@ -42,14 +42,14 @@ public static class UniversalDispatchAnalysis
                 {
                     uint ds = o.Word(pc + 4);
                     if (UniversalMips.IsBranch(ds)) return new(pc, seq);
-                    s.Apply(ds); seq.Add(new(ds)); pc = jt; continue;
+                    s.Apply(ds); seq.Add(new(ds, SourcePc: pc + 4)); pc = jt; continue;
                 }
                 if (UniversalMips.IsJal(w) || UniversalMips.IsJr(w) || UniversalMips.IsJalr(w)) return new(pc, seq);
                 bool? c = s.Condition(w);
                 if (c == null) return new(pc, seq);
                 uint delay = o.Word(pc + 4);
                 if (UniversalMips.IsBranch(delay)) return new(pc, seq);
-                s.Apply(delay); seq.Add(new(delay));
+                s.Apply(delay); seq.Add(new(delay, SourcePc: pc + 4));
                 pc = c.Value ? UniversalMips.BranchTarget(w, pc) : pc + 8;
                 continue;
             }
@@ -59,10 +59,10 @@ public static class UniversalDispatchAnalysis
                 if (o.Contains(ad) && ad < o.CodeStart)
                 {
                     uint v = o.Word(ad); int rt = UniversalMips.Rt(w);
-                    s[rt] = v; seq.Add(new(w, rt, v)); pc += 4; continue;
+                    s[rt] = v; seq.Add(new(w, rt, v, pc)); pc += 4; continue;
                 }
             }
-            s.Apply(w); seq.Add(new(w)); pc += 4;
+            s.Apply(w); seq.Add(new(w, SourcePc: pc)); pc += 4;
         }
     }
 

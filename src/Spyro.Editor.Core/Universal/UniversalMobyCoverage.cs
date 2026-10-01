@@ -17,6 +17,9 @@ public sealed record UniversalCoverageCell(string Destination, string VariantId,
     IReadOnlyList<UniversalClassImport> Dependencies, IReadOnlyList<string> Warnings, UniversalRamBudget? Ram)
 {
     public IReadOnlyList<UniversalParticleDependency> ParticleDependencies { get; init; } = [];
+    public IReadOnlyList<UniversalBehaviorSourceReport> Behavior { get; init; } = [];
+    public int RestoredObjectLinks { get; init; }
+    public int UnresolvedObjectLinks { get; init; }
     public int? StaticPlanRepresentativeRow { get; init; }
     public string StaticAnalysisMethod { get; init; } = "exact-compose";
 }
@@ -77,7 +80,7 @@ public static class UniversalMobyCoverage
             progress?.Invoke($"{dest.Key}: {variants.Count} meaningful variants");
             var d = lib.Get(dest.Key);
             var vram = compose ? UniversalMobyExport.DefaultProtectedVram(lib.ImagePath, dest).ToList() : [];
-            Dictionary<(string Source, int Class, int PropertiesBytes, int Fixups, int Links, int Treasure, string? Special), UniversalCoverageCell> plans = [];
+            Dictionary<(string Source, int Class, int PropertiesBytes, int Fixups, int Links, int SelfLinks, int Treasure, string? Special), UniversalCoverageCell> plans = [];
             foreach (var v in variants)
             {
                 if (v.CatalogRestriction != null)
@@ -96,7 +99,7 @@ public static class UniversalMobyCoverage
                     Text: v.SpecialId == UniversalDragonflyEggs.SignId ? ["COVERAGE"] : null);
                 var template = v.SpecialId == null ? lib.Get(v.SourceLevelKey).Data.CaptureRow(v.SourceLevelKey, v.SourceRow) : null;
                 var planKey = (v.SourceLevelKey, v.ClassId, template?.Properties.Length ?? 0, template?.InternalPointers.Count ?? 0,
-                    template?.DroppedExternalPointers ?? 0, v.SpecialId == null ? UniversalMobyComposer.TreasureValue(row) : 0, v.SpecialId);
+                    template?.DroppedExternalPointers ?? 0, template?.ExternalRowPointers.Count(link => link.SourceRow == v.SourceRow) ?? 0, v.SpecialId == null ? UniversalMobyComposer.TreasureValue(row) : 0, v.SpecialId);
                 if (plans.TryGetValue(planKey, out var prior))
                 {
                     cells.Add(prior with { VariantId = v.VariantId, StaticAnalysisMethod = "reused-identical-resource-plan",
@@ -107,9 +110,9 @@ public static class UniversalMobyCoverage
                 try
                 {
                     var r = UniversalMobyComposer.Compose(dest, d.Data.Bytes, d.Overlay.Bytes.ToArray(), lib.Disc.Exe,
-                        lib.Get, lib.SharedClasses, vram, [p], special);
-                    cells.Add(new(dest.Key, v.VariantId, "listed", r.ParticleDependencies.Any(p => p.Status == "dependency-unverified") || v.ExternalObjectLinks > 0 ? "composed-dependency-unverified" : "composed-static-only",
-                        "not-tested", null, null, r.Classes, r.Warnings, r.Ram) { ParticleDependencies = r.ParticleDependencies });
+                        lib.Get, lib.SharedClasses, vram, [p], special, sharedModelPackage: lib.SharedModelPackage);
+                    cells.Add(new(dest.Key, v.VariantId, "listed", r.ParticleDependencies.Any(p => p.Status == "dependency-unverified") || r.UnresolvedObjectLinks > 0 ? "composed-dependency-unverified" : "composed-static-only",
+                        "not-tested", null, null, r.Classes, r.Warnings, r.Ram) { ParticleDependencies = r.ParticleDependencies, Behavior = r.Behavior, RestoredObjectLinks = r.RestoredObjectLinks, UnresolvedObjectLinks = r.UnresolvedObjectLinks });
                 }
                 catch (Exception e) when (e is InvalidDataException or IOException or InvalidOperationException or ArgumentException)
                 {
@@ -122,12 +125,14 @@ public static class UniversalMobyCoverage
         }
         string hash;
         using (var fs = File.OpenRead(lib.ImagePath)) hash = Convert.ToHexStringLower(SHA256.HashData(fs));
-        return new(1, hash, "Same source/class; canonical row and reachable properties, excluding coordinates, heading and activation pod. Source rows remain enumerated; no cross-source semantic equivalence is assumed.",
-            variants, destinations.Select(d => d.Key).ToList(), cells, "No emulator tests are inferred or imported. Written-disc readback and runtime observations require separate receipts. Static resource plans reuse a composed representative only for identical source/class, reachable properties size, fixup count, dropped-link count and treasure delta; each semantic variant remains a distinct cell.");
+        return new(2, hash, "Same source/class; canonical row and reachable properties, excluding coordinates, heading and activation pod. Source rows remain enumerated; no cross-source semantic equivalence is assumed.",
+            variants, destinations.Select(d => d.Key).ToList(), cells, "No emulator tests are inferred or imported. Written-disc readback and runtime observations require separate receipts. Static resource plans reuse a composed representative only for identical source/class, reachable properties size, fixup count, dropped-link count, restorable self-link count and treasure delta; each semantic variant remains a distinct cell.");
     }
 
     public static string FailureKind(Exception e) => e switch
     {
+        _ when e.Message.Contains("class remapping", StringComparison.OrdinalIgnoreCase) || e.Message.Contains("initializer class stores") || e.Message.Contains("Moby ownership chain") || e.Message.Contains("class-store scratch") => "class-remap-ownership",
+        _ when e.Message.Contains("Shared class") && e.Message.Contains("alias package") => "shared-model-package",
         UniversalSourceCollisionException => "source-class-collision",
         UniversalBudgetException => "ram-capacity",
         _ when e.Message.Contains("Particle dependency") && e.Message.Contains("conflict") => "particle-identity-conflict",

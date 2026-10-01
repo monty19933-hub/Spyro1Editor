@@ -33,6 +33,8 @@ public sealed class UniversalSourceLibrary
     }
     public UniversalDiscImage Disc => _disc;
     public IReadOnlySet<int> SharedClasses { get; }
+    private UniversalSharedModelAssets? _sharedAssets;
+    public byte[] SharedModelPackage(int classId) => (_sharedAssets ??= new UniversalSharedModelAssets(_disc)).Package(classId);
 
     public (LevelDefinition Level, UniversalLevelData Data, UniversalOverlay Overlay) Get(string key)
     {
@@ -59,7 +61,14 @@ public sealed class UniversalSourceLibrary
 public sealed record UniversalExportLevelResult(string LevelKey, string LevelName, UniversalComposeResult Compose);
 
 public sealed record UniversalExportResult(string OutputImagePath, string OutputImageSha256,
-    IReadOnlyList<UniversalExportLevelResult> Levels, int WadGrowthBytes);
+    IReadOnlyList<UniversalExportLevelResult> Levels, int WadGrowthBytes)
+{
+    /// <summary>True only for an internal aggregate stage; it is not a completed export.
+    /// The final writer must merge these manifests and install/verify shared hooks once.</summary>
+    public bool SpecialHooksDeferred { get; init; }
+    public IReadOnlyList<(int LevelIndex, int Row, int Colour)> ActiveDragonflyEggs { get; init; } = [];
+    public IReadOnlySet<string> SignLevelKeys { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+}
 
 /// <summary>Image-to-image Create BIN stage: applies universal Moby placements for any number of destinations.</summary>
 public static class UniversalMobyExport
@@ -71,7 +80,8 @@ public static class UniversalMobyExport
         Func<string, LevelDefinition, IEnumerable<(long Offset, int Length)>>? protectedVram = null,
         UniversalJapaneseSource? japanese = null,
         IReadOnlyDictionary<string, IReadOnlyCollection<int>>? removedRowsByLevel = null,
-        string? identityWorkspace = null)
+        string? identityWorkspace = null,
+        bool deferSpecialHooks = false)
     {
         if (string.Equals(Path.GetFullPath(sources.ImagePath), Path.GetFullPath(outputImagePath), StringComparison.Ordinal) ||
             string.Equals(Path.GetFullPath(currentImagePath), Path.GetFullPath(outputImagePath), StringComparison.Ordinal))
@@ -103,7 +113,7 @@ public static class UniversalMobyExport
                 current.EntryBytes(level.SourceWadEntry - 1), exe, k => sources.Get(k), sources.SharedClasses,
                 protectedVram(currentImagePath, level), placements, SpecialProvider(japanese),
                 removedRowsByLevel?.FirstOrDefault(k => string.Equals(catalog.FindByKey(k.Key)?.Key, level.Key, StringComparison.OrdinalIgnoreCase)).Value,
-                useNativeOwnershipScan ? dropped => DefaultProtectedVram(currentImagePath, level, dropped) : null);
+                useNativeOwnershipScan ? dropped => DefaultProtectedVram(currentImagePath, level, dropped) : null, sources.SharedModelPackage);
             exe = composed.Executable;
             replacements[level.SourceWadEntry] = composed.LevelData;
             replacements[level.SourceWadEntry - 1] = composed.Overlay;
@@ -120,10 +130,14 @@ public static class UniversalMobyExport
                     dragonflyEggs.Add((CollectedMaskIndex(level), r.Compose.NewRowIndices[i], UniversalDragonflyEggs.VariantIndex(id)));
         }
         var signLevels = placementsByLevel.Where(k => k.Value.Any(p => !p.Retired && p.SpecialId == UniversalDragonflyEggs.SignId))
-            .Select(k => k.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        UniversalSpecialBehaviors.PatchExeCave(exe, sources.Disc.Exe, signLevels.Count > 0, dragonflyEggs);
-        if (signLevels.Count > 0)
-            RequireSignMarkersOnlyIn(exe, catalog, signLevels, i => replacements.TryGetValue(i, out var r) ? r : current.EntryBytes(i));
+            .Select(k => catalog.FindByKey(k.Key)!.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!deferSpecialHooks)
+        {
+            UniversalSpecialBehaviors.PatchExeCave(exe, sources.Disc.Exe, signLevels.Count > 0, dragonflyEggs);
+            UniversalEggUnlocks.PatchOverlays(catalog, sources.Disc.EntryBytes, current.EntryBytes, replacements, dragonflyEggs.Count);
+            if (signLevels.Count > 0)
+                RequireSignMarkersOnlyIn(exe, catalog, signLevels, i => replacements.TryGetValue(i, out var r) ? r : current.EntryBytes(i));
+        }
         byte[] wad = current.RebuildWad(replacements);
         string staging = outputImagePath + ".pending-" + Guid.NewGuid().ToString("N");
         try
@@ -140,7 +154,8 @@ public static class UniversalMobyExport
             if (identityWorkspace != null)
                 foreach (var (key, rows) in nativePrefixes) UniversalNativeLayoutStore.Bind(identityWorkspace, key, rows);
             File.Move(staging, outputImagePath); // refuse a destination created during export
-            return new(outputImagePath, sha, results, wad.Length - current.Wad.Length);
+            return new(outputImagePath, sha, results, wad.Length - current.Wad.Length)
+            { SpecialHooksDeferred = deferSpecialHooks, ActiveDragonflyEggs = dragonflyEggs.ToArray(), SignLevelKeys = signLevels };
         }
         finally { if (File.Exists(staging)) File.Delete(staging); }
     }

@@ -3,7 +3,12 @@ using Spyro.Editor.Core.Levels;
 namespace Spyro.Editor.Core.Universal;
 
 public sealed record UniversalSurveyCell(string Destination, int ClassId, string SourceLevelKey, int SourceRow,
-    string Outcome, string? Detail, int? RamNeeded, int? RamHeadroom);
+    string Outcome, string? Detail, int? RamNeeded, int? RamHeadroom)
+{
+    public string DependencyExportStatus { get; init; } = "not-tested";
+    public string RuntimeStatus { get; init; } = "not-tested";
+    public IReadOnlyList<UniversalClassImport> Dependencies { get; init; } = [];
+}
 
 /// <summary>Dry-run composition of every placed class (default variant) into every retail destination.</summary>
 public static class UniversalMobySurvey
@@ -26,9 +31,9 @@ public static class UniversalMobySurvey
                 try
                 {
                     var r = UniversalMobyComposer.Compose(dest, d.Data.Bytes, d.Overlay.Bytes.ToArray(), lib.Disc.Exe,
-                        lib.Get, lib.SharedClasses, vram, [p]);
+                        lib.Get, lib.SharedClasses, vram, [p], sharedModelPackage: lib.SharedModelPackage);
                     cells.Add(new(dest.Key, v.ClassId, v.SourceLevelKey, v.SourceRow, "ok", null,
-                        (int)(r.Ram.FinalEnd - r.Ram.OriginalEnd), r.Ram.OriginalHeadroom));
+                        (int)(r.Ram.FinalEnd - r.Ram.OriginalEnd), r.Ram.OriginalHeadroom) { DependencyExportStatus = r.ParticleDependencies.Any(p => p.Status == "dependency-unverified") || r.UnresolvedObjectLinks > 0 ? "composed-dependency-unverified" : "composed-static-only", Dependencies = r.Classes });
                 }
                 catch (UniversalBudgetException e)
                 {

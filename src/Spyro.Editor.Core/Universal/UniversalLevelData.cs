@@ -16,6 +16,8 @@ public sealed record UniversalSceneLayout(int MobyComponent, int MobyComponentSi
 public sealed record UniversalRowTemplate(string SourceLevelKey, int SourceRowIndex, byte[] Row, byte[] Properties,
     IReadOnlyList<(int Offset, int Target)> InternalPointers, int DroppedExternalPointers)
 {
+    public IReadOnlyList<(int Offset, int SourceRow, int RowOffset)> ExternalRowPointers { get; init; } = [];
+    public IReadOnlyList<(int Offset, int PlacementIndex, int RowOffset)> ImportedRowPointers { get; init; } = [];
     public int ClassId => BinaryPrimitives.ReadUInt16LittleEndian(Row.AsSpan(0x36));
 }
 
@@ -272,6 +274,7 @@ public sealed class UniversalLevelData
         byte[] packed = new byte[size];
         List<(int, int)> internalPtrs = [];
         int dropped = 0;
+        List<(int Offset, int SourceRow, int RowOffset)> rowPointers = [];
         foreach (var b in blocks)
         {
             s[b.Start..b.End].CopyTo(packed.AsSpan(newOffset[b.Start]));
@@ -281,10 +284,15 @@ public sealed class UniversalLevelData
                 var owner = blocks.FirstOrDefault(x => t >= x.Start && t < x.End);
                 int at = newOffset[b.Start] + (f - b.Start);
                 if (owner != default) internalPtrs.Add((at, newOffset[owner.Start] + (t - owner.Start)));
-                else { BinaryPrimitives.WriteInt32LittleEndian(packed.AsSpan(at), 0); dropped++; }
+                else
+                {
+                    BinaryPrimitives.WriteInt32LittleEndian(packed.AsSpan(at), 0); dropped++;
+                    if (t >= sc.RowsOffset && t < sc.RowsOffset + sc.RowCount * RowStride)
+                        rowPointers.Add((at, (t - sc.RowsOffset) / RowStride, (t - sc.RowsOffset) % RowStride));
+                }
             }
         }
-        return new(levelKey, index, row, packed, internalPtrs, dropped);
+        return new(levelKey, index, row, packed, internalPtrs, dropped) { ExternalRowPointers = rowPointers };
     }
 
     /// <summary>Appends rows into the Moby arena and their properties at the end of the properties component.</summary>
@@ -308,6 +316,13 @@ public sealed class UniversalLevelData
             foreach (var (off, target) in t.InternalPointers)
             {
                 BinaryPrimitives.WriteInt32LittleEndian(p.AsSpan(off), start + target);
+                newFix.Add(start + off);
+            }
+            foreach (var (off, placement, rowOffset) in t.ImportedRowPointers)
+            {
+                if (placement < 0 || placement >= rows.Count || rowOffset < 0 || rowOffset >= RowStride || off < 0 || off + 4 > p.Length)
+                    throw new InvalidDataException("Imported row-link fixup is outside its proved placement/property ownership.");
+                BinaryPrimitives.WriteInt32LittleEndian(p.AsSpan(off), sc.RowsOffset + (sc.RowCount + placement) * RowStride + rowOffset);
                 newFix.Add(start + off);
             }
             blob.Write(p);

@@ -6,18 +6,24 @@ internal enum UniversalFixKind { None, Branch, BranchLabel, Jump, JumpLabel, Jal
 
 internal readonly record struct UniversalFix(UniversalFixKind Kind, uint Orig = 0, string? Label = null);
 
+internal sealed record UniversalAsmItem(uint? Word, UniversalFix Fix, uint? Orig, string? Label, uint? SourcePc = null, bool ClassReadOwned = false);
+
 internal sealed class UniversalAsmPart
 {
-    public List<(uint? Word, UniversalFix Fix, uint? Orig, string? Label)> Items { get; } = [];
+    public List<UniversalAsmItem> Items { get; } = [];
     public Dictionary<string, IReadOnlyList<uint>> Tables { get; } = [];
     public bool LenientTables { get; set; }
-    public void Emit(uint w, UniversalFix fix = default, uint? orig = null) => Items.Add((w, fix, orig, null));
-    public void Label(string name) => Items.Add((null, default, null, name));
+    public void Emit(uint w, UniversalFix fix = default, uint? orig = null, uint? sourcePc = null) => Items.Add(new(w, fix, orig, null, sourcePc));
+    public void Label(string name) => Items.Add(new(null, default, null, name));
 }
 
 /// <summary>Per-source-level behavior extracted for a destination.</summary>
 public sealed record UniversalBehaviorSourceReport(string SourceLevelKey, IReadOnlyList<int> Classes,
-    int UpdateBytes, int InitBytes, int JumpTables);
+    int UpdateBytes, int InitBytes, int JumpTables)
+{
+    public IReadOnlyList<uint> ParentClassReadSites { get; init; } = [];
+    public IReadOnlyList<uint> AllocatedClassReadSites { get; init; } = [];
+}
 
 public sealed record UniversalBehaviorBundle(uint Base, byte[] Code, uint UpdateWrapper, uint InitWrapper,
     IReadOnlyList<UniversalBehaviorSourceReport> Sources);
@@ -35,9 +41,13 @@ public static class UniversalBehaviorBundleBuilder
 
     public static UniversalBehaviorBundle Build(UniversalOverlay destination,
         IReadOnlyList<(string SourceKey, UniversalOverlay Source, IReadOnlyList<int> Classes)> sources, uint baseAddress,
-        IReadOnlyList<int>? dragonflyEggClasses = null, IReadOnlyList<int>? signClasses = null)
+        IReadOnlyList<int>? dragonflyEggClasses = null, IReadOnlyList<int>? signClasses = null,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<int, int>>? classMaps = null)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
+        int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
+        bool Remaps(string key) => classMaps != null && classMaps.TryGetValue(key, out var cm) && cm.Any(k => k.Key != k.Value);
+        string InitTag(string key, int c) => Remaps(key) ? $"i_{key}_{c:X3}" : "i_" + key;
         List<UniversalAsmPart> parts = [UniversalSpecialBehaviors.SignHookPreamble(signClasses is { Count: > 0 })];
         UniversalAsmPart w = new();
         w.Label("wrap_upd");
@@ -63,23 +73,53 @@ public static class UniversalBehaviorBundleBuilder
         foreach (var s in sources)
             foreach (int c in s.Classes)
             {
-                w.Emit(UniversalMips.EncodeI(9, 0, 1, c));
-                w.Emit(UniversalMips.EncodeI(4, 4, 1, 0), new(UniversalFixKind.BranchLabel, Label: "i_" + s.SourceKey));
+                w.Emit(UniversalMips.EncodeI(9, 0, 1, Mapped(s.SourceKey, c)));
+                w.Emit(UniversalMips.EncodeI(4, 4, 1, 0), new(UniversalFixKind.BranchLabel, Label: Remaps(s.SourceKey) ? $"it_{s.SourceKey}_{c:X3}" : InitTag(s.SourceKey, c)));
                 w.Emit(UniversalMips.Nop);
             }
         w.Emit(UniversalMips.EncodeJ(2, destination.Init));
         w.Emit(UniversalMips.Nop);
+        foreach (var s in sources.Where(s => Remaps(s.SourceKey)))
+            foreach (int c in s.Classes)
+            {
+                w.Label($"it_{s.SourceKey}_{c:X3}");
+                w.Emit(UniversalMips.EncodeJ(2, 0), new(UniversalFixKind.JumpLabel, Label: InitTag(s.SourceKey, c)));
+                w.Emit(UniversalMips.EncodeI(9, 0, 4, c));
+            }
         parts.Add(w);
 
         List<UniversalBehaviorSourceReport> reports = [];
         foreach (var s in sources)
         {
-            var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey);
-            UniversalAsmPart init; int initBytes, jt2;
-            try { (init, initBytes, jt2) = BuildSpecializedInit(s.Source, s.Classes, "i_" + s.SourceKey); }
-            catch (InvalidDataException) { (init, initBytes, jt2) = BuildWholeFunction(s.Source, s.Source.Init, "i_" + s.SourceKey); }
-            parts.Add(upd); parts.Add(init);
-            reports.Add(new(s.SourceKey, s.Classes.ToArray(), updBytes, initBytes, jt1 + jt2));
+            var map = s.Classes.ToDictionary(c => c, c => Mapped(s.SourceKey, c));
+            if (classMaps != null && classMaps.TryGetValue(s.SourceKey, out var fullMap)) map = fullMap.ToDictionary();
+            var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey, map);
+            if (map.Any(k => k.Key != k.Value))
+            {
+                UniversalClassRemapping.PatchOwnedClassReads(upd, s.Source, map, s.Classes);
+                UniversalClassRemapping.RequireNoUnownedClassMemory(upd, false, s.Source);
+                UniversalClassRemapping.PatchConstantSpawns(upd, s.Source, map);
+            }
+            parts.Add(upd);
+            int initTotal = 0, tablesTotal = jt1; List<uint> parentClassSites = [], allocatedClassSites = [];
+            foreach (int c in Remaps(s.SourceKey) ? s.Classes : s.Classes.Take(1))
+            {
+                UniversalAsmPart init; int initBytes, jt2;
+                string initTag = InitTag(s.SourceKey, c);
+                try { (init, initBytes, jt2) = BuildSpecializedInit(s.Source, Remaps(s.SourceKey) ? [c] : s.Classes, initTag); }
+                catch (InvalidDataException) when (Mapped(s.SourceKey, c) == c && !map.Any(k => k.Key != k.Value))
+                { (init, initBytes, jt2) = BuildWholeFunction(s.Source, s.Source.Init, initTag); }
+                UniversalClassRemapping.PatchInitClassStore(init, s.Source, c, Mapped(s.SourceKey, c));
+                if (Remaps(s.SourceKey))
+                {
+                    allocatedClassSites.AddRange(UniversalClassRemapping.PatchInitAllocatedClassReads(init, s.Source, map, c));
+                    parentClassSites.AddRange(UniversalClassRemapping.PatchInitParentClassReads(init, s.Source, map));
+                    UniversalClassRemapping.RequireNoUnownedClassMemory(init, true);
+                }
+                UniversalClassRemapping.PatchConstantSpawns(init, s.Source, map);
+                parts.Add(init); initTotal += init.Items.Count(i => i.Word != null) * 4; tablesTotal += jt2;
+            }
+            reports.Add(new(s.SourceKey, s.Classes.ToArray(), upd.Items.Count(i => i.Word != null) * 4, initTotal, tablesTotal) { ParentClassReadSites = parentClassSites.Distinct().Order().ToArray(), AllocatedClassReadSites = allocatedClassSites.Distinct().Order().ToArray() });
         }
         if (dragonflyEggClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.DragonflyEggUpdate(dragonflyEggClasses, "egg_upd"));
@@ -107,13 +147,13 @@ public static class UniversalBehaviorBundleBuilder
                 }
                 continue;
             }
-            a.Emit(r.Word);
+            a.Emit(r.Word, sourcePc: r.SourcePc);
             // A replayed load may now be adjacent to its consumer; preserve R3000 load-delay semantics.
             if (UniversalMips.IsLoad(r.Word)) a.Emit(UniversalMips.Nop);
         }
     }
 
-    internal static (UniversalAsmPart Part, int Bytes, int Tables) BuildPrunedUpdate(UniversalOverlay o, IReadOnlyList<int> classes, string tag)
+    internal static (UniversalAsmPart Part, int Bytes, int Tables) BuildPrunedUpdate(UniversalOverlay o, IReadOnlyList<int> classes, string tag, IReadOnlyDictionary<int, int>? classMap = null)
     {
         var sw = UniversalDispatchAnalysis.FindUpdateSwitch(o);
         List<(int Class, UniversalTrace Trace)> entries = classes
@@ -129,7 +169,7 @@ public static class UniversalBehaviorBundleBuilder
         {
             for (int i = 0; i < entries.Count; i++)
             {
-                a.Emit(UniversalMips.EncodeI(9, 0, 1, entries[i].Class));
+                a.Emit(UniversalMips.EncodeI(9, 0, 1, classMap != null && classMap.TryGetValue(entries[i].Class, out int mapped) ? mapped : entries[i].Class));
                 a.Emit(UniversalMips.EncodeI(5, sw.ClassRegister, 1, 0), new(UniversalFixKind.BranchLabel, Label: $"{tag}_n{i}"));
                 a.Emit(UniversalMips.Nop);
                 EmitReplay(a, o, entries[i].Trace.Sequence);

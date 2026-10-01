@@ -214,7 +214,7 @@ public static class UniversalMobyCatalogBuilder
             }
             var r = UniversalMobyComposer.Compose(destination, d.Data.Bytes, d.Overlay.Bytes.ToArray(), lib.Disc.Exe,
                 lib.Get, lib.SharedClasses, vram, placements, special, removedRows,
-                dropped => UniversalMobyExport.DefaultProtectedVram(lib.ImagePath, destination, dropped));
+                dropped => UniversalMobyExport.DefaultProtectedVram(lib.ImagePath, destination, dropped), lib.SharedModelPackage);
             return (r, null);
         }
         catch (Exception e) when (e is InvalidDataException or IOException) { return (null, e.Message); }

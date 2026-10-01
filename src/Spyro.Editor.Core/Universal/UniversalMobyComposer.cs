@@ -11,7 +11,12 @@ public sealed record UniversalMobyPlacement(string SourceLevelKey, int SourceRow
     IReadOnlyList<string>? Text = null, int? PersistentSlot = null, bool Retired = false);
 
 public sealed record UniversalClassImport(int ClassId, string SourceLevelKey, bool ModelImported, bool BehaviorImported,
-    int ModelBytes, UniversalTextureReport? Textures, UniversalSoundReport? Sounds, bool DependencyOnly);
+    int ModelBytes, UniversalTextureReport? Textures, UniversalSoundReport? Sounds, bool DependencyOnly)
+{
+    /// <summary>ClassId remains the donor identity; this is the registration/row ID in the output.</summary>
+    public int DestinationClassId { get; init; } = ClassId;
+    public string ModelOrigin { get; init; } = "source-local-or-resident";
+}
 
 public sealed record UniversalRamBudget(uint OriginalEnd, uint FinalEnd, uint Limit, int OriginalHeadroom, int FinalHeadroom,
     int OverlayGrowth, int ModelGrowth, int SceneGrowth, int DataGrowth);
@@ -35,6 +40,8 @@ public sealed record UniversalComposeResult(
     public int DroppedModelBytes { get; init; }
     public int ReclaimedVramBytes { get; init; }
     public IReadOnlyList<UniversalParticleDependency> ParticleDependencies { get; init; } = [];
+    public int RestoredObjectLinks { get; init; }
+    public int UnresolvedObjectLinks { get; init; }
 }
 
 /// <summary>
@@ -83,7 +90,8 @@ public static class UniversalMobyComposer
         IReadOnlyList<UniversalMobyPlacement> placements,
         Func<string, UniversalSpecialAsset?>? special = null,
         IReadOnlyCollection<int>? removedRows = null,
-        Func<IReadOnlySet<int>, IEnumerable<(long Offset, int Length)>>? protectedVramAfterDrop = null)
+        Func<IReadOnlySet<int>, IEnumerable<(long Offset, int Length)>>? protectedVramAfterDrop = null,
+        Func<int, byte[]>? sharedModelPackage = null)
     {
         if (placements.Count == 0) throw new ArgumentException("No universal placements were supplied.");
         int[] incomingOrder = Enumerable.Range(0, placements.Count).ToArray();
@@ -107,13 +115,32 @@ public static class UniversalMobyComposer
         List<string> warnings = [];
 
         // 1. Resolve classes and dependency closure (spawned child classes come from the same source level).
-        Dictionary<int, (string Source, bool Dependency)> classes = [];
+        Dictionary<(string Source, int Class), (int DestinationClass, bool Dependency)> classes = [];
+        HashSet<int> reservedClasses = [.. shared, .. destRegistered, .. UniversalDragonflyEggs.Variants.Select(v => v.Class), UniversalDragonflyEggs.SignClass, InertClass];
+        for (int row = 0; row < dest.Scene().RowCount; row++) reservedClasses.Add(BinaryPrimitives.ReadUInt16LittleEndian(dest.Row(row).AsSpan(0x36)));
+        HashSet<string> reservedSources = new(StringComparer.OrdinalIgnoreCase);
+        for (int c = 1; c < 0x200; c++) if (DestHandles(c)) reservedClasses.Add(c);
+        foreach (byte[] bytes in new[] { exe, destinationOverlay })
+            for (int offset = 0; offset + 4 <= bytes.Length; offset += 4)
+            {
+                uint word = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(offset));
+                if (UniversalMips.Op(word) is 9 or 10 or 11 or 12 or 13 or 14 && UniversalMips.Imm(word) is > 0 and < 0x200)
+                    reservedClasses.Add(UniversalMips.Imm(word));
+            }
+        Dictionary<int, UniversalSpecialAsset> specialClasses = [];
+        int AllocateClass(string sk, int c)
+        {
+            for (int candidate = 0x1FD; candidate > 0; candidate--)
+                if (!reservedClasses.Contains(candidate) && !specialClasses.ContainsKey(candidate))
+                { reservedClasses.Add(candidate); return candidate; }
+            throw new UniversalSourceCollisionException($"No proven unused class ID remains for {sk}:0x{c:X3}.");
+        }
         var originalDestination = source(destination.Key);
         bool originalDestinationAssets = destinationData.AsSpan().SequenceEqual(originalDestination.Data.Bytes) &&
             destinationOverlay.AsSpan().SequenceEqual(originalDestination.Overlay.Bytes);
         bool EquivalentDestination(int c, string sk, out string reason)
         {
-            if (originalDestinationAssets || string.Equals(sk, destination.Key, StringComparison.OrdinalIgnoreCase))
+            if (originalDestinationAssets)
                 return EquivalentSources(c, destination.Key, sk, out reason);
             var donor = source(sk);
             return UniversalSourceIdentity.Equivalent(dest, destOverlay, donor.Data, donor.Overlay, c, shared, out reason);
@@ -127,7 +154,6 @@ public static class UniversalMobyComposer
         Queue<(int Class, string Source, bool Dependency)> work = new();
         List<UniversalRowTemplate> templates = [];
         Dictionary<(string Source, int Type), UniversalParticleDependency> particleDependencies = [];
-        Dictionary<int, UniversalSpecialAsset> specialClasses = [];
         foreach (var p in placements)
         {
             if (p.Retired)
@@ -154,27 +180,59 @@ public static class UniversalMobyComposer
             }
             var s = source(p.SourceLevelKey);
             var t = s.Data.CaptureRow(p.SourceLevelKey, p.SourceRowIndex);
-            if (t.DroppedExternalPointers > 0)
-                warnings.Add($"{p.SourceLevelKey} row {p.SourceRowIndex}: {t.DroppedExternalPointers} link(s) to other source objects were cleared.");
             templates.Add(t);
             work.Enqueue((t.ClassId, p.SourceLevelKey, false));
+        }
+        // Restore source-object fixups only when the target row is imported exactly once.
+        // Repeated copies are ambiguous and stay explicitly cleared; never bind to an arbitrary copy.
+        var rowOwners = placements.Select((p, i) => (Placement: p, Index: i))
+            .Where(x => !x.Placement.Retired && x.Placement.SpecialId == null)
+            .GroupBy(x => (Source: x.Placement.SourceLevelKey.ToLowerInvariant(), x.Placement.SourceRowIndex))
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Index).ToArray());
+        for (int i = 0; i < templates.Count; i++)
+        {
+            var t = templates[i];
+            var restored = t.ExternalRowPointers.Where(link => rowOwners.TryGetValue((t.SourceLevelKey.ToLowerInvariant(), link.SourceRow), out var owners) && owners.Length == 1)
+                .Select(link => (link.Offset, PlacementIndex: rowOwners[(t.SourceLevelKey.ToLowerInvariant(), link.SourceRow)][0], link.RowOffset)).ToList();
+            templates[i] = t with { ImportedRowPointers = restored, DroppedExternalPointers = t.DroppedExternalPointers - restored.Count };
+            if (templates[i].DroppedExternalPointers > 0)
+                warnings.Add($"{t.SourceLevelKey} row {t.SourceRowIndex}: {templates[i].DroppedExternalPointers} unresolved source-object link(s) were cleared; import each target once to restore owned row links.");
         }
         while (work.Count > 0)
         {
             var (c, sk, dep) = work.Dequeue();
             if (c <= 0 || c >= 0x200)
                 throw new InvalidDataException($"Class 0x{c:X3} from {sk} is outside the supported placement range.");
-            if (classes.TryGetValue(c, out var existing))
+            if (reservedSources.Add(sk))
             {
-                if (!EquivalentSources(c, existing.Source, sk, out string reason))
-                    throw new UniversalSourceCollisionException($"Class 0x{c:X3} conflicts between {existing.Source} and {sk}: {reason}. This variant needs a separately remapped class; no source is silently substituted.");
-                if (existing.Dependency && !dep) classes[c] = (existing.Source, false);
+                var sd = source(sk).Data;
+                reservedClasses.UnionWith(sd.Registrations().Select(r => r.ClassId));
+                for (int row = 0; row < sd.Scene().RowCount; row++) reservedClasses.Add(BinaryPrimitives.ReadUInt16LittleEndian(sd.Row(row).AsSpan(0x36)));
+            }
+            var identity = (sk.ToLowerInvariant(), c);
+            if (classes.TryGetValue(identity, out var existing))
+            {
+                if (existing.Dependency && !dep) classes[identity] = (existing.DestinationClass, false);
                 continue;
             }
-            classes[c] = (sk, dep);
-            if ((DestHandles(c) || destRegistered.Contains(c)) &&
-                !EquivalentDestination(c, sk, out string nativeReason))
-                throw new UniversalSourceCollisionException($"Class 0x{c:X3} from {sk} conflicts with the resident class in {destination.Key}: {nativeReason}. This variant needs a separately remapped class; destination assets are not substituted.");
+            int mapped = c;
+            var other = classes.FirstOrDefault(k => k.Key.Class == c);
+            bool collision = classes.Any(k => k.Value.DestinationClass == c && k.Key.Class != c);
+            // Class-specific byte equivalence cannot establish identical child namespaces.
+            // Co-imports share IDs only for an identical complete source package.
+            collision |= other.Key.Source != null &&
+                (!source(other.Key.Source).Data.Bytes.AsSpan().SequenceEqual(source(sk).Data.Bytes) ||
+                 !source(other.Key.Source).Overlay.Bytes.SequenceEqual(source(sk).Overlay.Bytes));
+            collision |= (DestHandles(c) || destRegistered.Contains(c)) && !EquivalentDestination(c, sk, out _);
+            if (collision)
+            {
+                if (shared.Contains(c) && !source(sk).Data.Registrations().Any(r => r.ClassId == c) && sharedModelPackage == null)
+                    throw new UniversalSourceCollisionException($"Shared-model class {sk}:0x{c:X3} needs a local shared package alias before its behavior can be remapped.");
+                mapped = AllocateClass(sk, c);
+            }
+            else if (other.Key.Source != null) mapped = other.Value.DestinationClass;
+            reservedClasses.Add(mapped);
+            classes[identity] = (mapped, dep);
             var s = source(sk);
             var sw = UniversalDispatchAnalysis.FindUpdateSwitch(s.Overlay);
             if (!UniversalDispatchAnalysis.Handles(s.Overlay, sw, c))
@@ -186,6 +244,12 @@ public static class UniversalMobyComposer
             var tr = UniversalDispatchAnalysis.Trace(s.Overlay, sw.TreeStart, c, sw.Seeds, sw.ClassRegister);
             var (closure, _) = UniversalDispatchAnalysis.Closure(s.Overlay, sw.Function, [tr.Stop], new HashSet<uint> { sw.TreeStart });
             var (spawns, particles) = UniversalDispatchAnalysis.Dependencies(s.Overlay, closure);
+            try
+            {
+                var initDependencies = UniversalDispatchAnalysis.Dependencies(s.Overlay, UniversalSpecializer.Specialize(s.Overlay, s.Overlay.Init, 4, [c]).Instructions);
+                spawns.UnionWith(initDependencies.SpawnedClasses); particles.UnionWith(initDependencies.ParticleTypes);
+            }
+            catch (InvalidDataException) when (mapped == c) { /* Existing whole-init fallback remains guarded by bundle extraction. */ }
             foreach (int particle in particles)
             {
                 var key = (sk, particle);
@@ -193,11 +257,20 @@ public static class UniversalMobyComposer
                     particleDependencies[key] = UniversalParticleDependencies.Inspect(sk, particle, s.Data, dest,
                         string.Equals(sk, destination.Key, StringComparison.OrdinalIgnoreCase));
             }
-            foreach (int k in spawns) if (!classes.ContainsKey(k)) work.Enqueue((k, sk, true));
+            foreach (int k in spawns) if (!classes.ContainsKey((sk.ToLowerInvariant(), k))) work.Enqueue((k, sk, true));
         }
 
+        // An otherwise equivalent native parent cannot call a source-mapped child through
+        // its unchanged resident handler. Give the imported namespace its own parent IDs,
+        // so every imported handler uses the same proved child-spawn map.
+        foreach (string sk in classes.Keys.Select(k => k.Source).Distinct().ToArray())
+            if (classes.Any(k => k.Key.Source == sk && k.Key.Class != k.Value.DestinationClass))
+                foreach (var key in classes.Keys.Where(k => k.Source == sk).ToArray())
+                    if (classes[key].DestinationClass == key.Class && DestHandles(key.Class))
+                        classes[key] = (AllocateClass(sk, key.Class), classes[key].Dependency);
+
         foreach (int c in specialClasses.Keys)
-            if (classes.ContainsKey(c) || destRegistered.Contains(c) || shared.Contains(c) || DestHandles(c))
+            if (classes.Values.Any(v => v.DestinationClass == c) || destRegistered.Contains(c) || shared.Contains(c) || DestHandles(c))
                 throw new UniversalSourceCollisionException($"Special class 0x{c:X3} collides with a native or imported class in {destination.Key}.");
 
         foreach (var particle in particleDependencies.Values.Where(p => p.Status == "dependency-unverified"))
@@ -205,7 +278,7 @@ public static class UniversalMobyComposer
 
         // 1b. Free the models of native object types the user removed completely (see DroppableClasses).
         var (dropped, inertRows) = DroppableClasses(dest, destOverlay, exe, shared, removedRows,
-            classes.Keys.Concat(specialClasses.Keys).ToHashSet());
+            classes.Values.Select(v => v.DestinationClass).Concat(specialClasses.Keys).ToHashSet());
         int droppedBytes = 0;
         if (dropped.Count > 0)
         {
@@ -223,10 +296,16 @@ public static class UniversalMobyComposer
         int freeBefore = vram.FreeBytes;
         List<UniversalClassImport> imports = [];
         int modelGrowth = 0;
-        var ordered = classes.OrderBy(k => k.Key).Select(k => (Class: k.Key, Source: k.Value.Source, Dependency: k.Value.Dependency)).ToList();
-        bool NeedModel(int c, string sk) => !destRegistered.Contains(c) && !shared.Contains(c) && source(sk).Data.Registrations().Any(r => r.ClassId == c);
-        var modelJobs = ordered.Where(o => NeedModel(o.Class, o.Source))
-            .Select(o => (o.Class, o.Source, o.Dependency, Pkg: source(o.Source).Data.Package(o.Class), Vram: source(o.Source).Data.Vram().ToArray(), Data: source(o.Source).Data)).ToList();
+        var ordered = classes.OrderBy(k => k.Value.DestinationClass).Select(k => (Class: k.Key.Class, Source: k.Key.Source, DestinationClass: k.Value.DestinationClass, Dependency: k.Value.Dependency)).ToList();
+        var modelJobs = ordered.Where(o => !destRegistered.Contains(o.DestinationClass) &&
+                (source(o.Source).Data.Registrations().Any(r => r.ClassId == o.Class) && !shared.Contains(o.DestinationClass) || o.DestinationClass != o.Class && shared.Contains(o.Class)))
+            .Select(o =>
+            {
+                var data = source(o.Source).Data;
+                byte[] package = data.Registrations().Any(r => r.ClassId == o.Class) ? data.Package(o.Class)
+                    : sharedModelPackage?.Invoke(o.Class) ?? throw new InvalidDataException($"Shared class 0x{o.Class:X3} requires its verified alias package provider.");
+                return (Class: o.DestinationClass, o.Source, o.Dependency, Pkg: package, Vram: data.Vram().ToArray(), Data: data);
+            }).GroupBy(j => j.Class).Select(g => g.First()).ToList();
         foreach (var (c, asset) in specialClasses.OrderBy(k => k.Key))
             if (!destRegistered.Contains(c))
                 modelJobs.Add((c, "japan", false, asset.Package.ToArray(), asset.SourceVram, asset.SourceData));
@@ -269,26 +348,26 @@ public static class UniversalMobyComposer
             }
             imports.Add(new(c, "japan", job.Pkg != null, true, job.Pkg?.Length ?? 0, tex, snd, false));
         }
-        foreach (var (c, sk, dep) in ordered)
+        foreach (var (c, sk, mapped, dep) in ordered)
         {
             var s = source(sk);
             var sourceSwitch = UniversalDispatchAnalysis.FindUpdateSwitch(s.Overlay);
-            bool needBehavior = !DestHandles(c) && UniversalDispatchAnalysis.Handles(s.Overlay, sourceSwitch, c);
-            var job = modelJobs.FirstOrDefault(j => j.Class == c);
-            bool needModel = job.Pkg != null;
-            if (!needModel && !destRegistered.Contains(c) && !shared.Contains(c) && !dep)
+            bool needBehavior = mapped != c || !DestHandles(mapped) && UniversalDispatchAnalysis.Handles(s.Overlay, sourceSwitch, c);
+            var job = modelJobs.FirstOrDefault(j => j.Class == mapped);
+            bool needModel = job.Pkg != null && !destRegistered.Contains(mapped);
+            if (!needModel && !destRegistered.Contains(mapped) && !shared.Contains(mapped) && !dep)
                 warnings.Add($"Class 0x{c:X3} has no model registration in {sk}; it is imported as behavior only.");
             UniversalTextureReport? tex = null; UniversalSoundReport? snd = null; int size = 0;
             if (needModel)
             {
                 byte[] pkg = job.Pkg!;
-                int ti = textured.FindIndex(j => j.Class == c);
+                int ti = textured.FindIndex(j => j.Class == mapped);
                 if (ti >= 0) { tex = texReports[ti]; snd = UniversalAssetImport.ImportSounds(pkg, s.Data, dest); }
                 size = pkg.Length;
-                pendingModels.Add((c, pkg));
-                destRegistered.Add(c);
+                pendingModels.Add((mapped, pkg));
+                destRegistered.Add(mapped);
             }
-            imports.Add(new(c, sk, needModel, needBehavior, size, tex, snd, dep));
+            imports.Add(new(c, sk, needModel, needBehavior, size, tex, snd, dep) { DestinationClassId = mapped, ModelOrigin = mapped != c && shared.Contains(c) && !s.Data.Registrations().Any(r => r.ClassId == c) ? "verified-shared-pete-simple-untextured-alias" : "source-local-or-resident" });
         }
 
         if (pendingModels.Count > 0)
@@ -317,6 +396,8 @@ public static class UniversalMobyComposer
                         throw new InvalidDataException("Row overrides cannot change the imported class identity.");
                     if (o is > 3 and < 0x58) r[o] = b;
                 }
+            if (p.SpecialId == null)
+                BinaryPrimitives.WriteUInt16LittleEndian(r.AsSpan(0x36), (ushort)classes[(p.SourceLevelKey.ToLowerInvariant(), t.ClassId)].DestinationClass);
             rows.Add((r, t));
         }
         // Gem rewards carried by imported rows raise the level's in-game treasure target.
@@ -349,7 +430,9 @@ public static class UniversalMobyComposer
         if (byBehaviorSource.Count > 0 || eggClasses.Count > 0 || signClasses.Count > 0)
         {
             uint baseAddress = (copyBuffer + 7) & ~7u;
-            var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses);
+            var classMaps = classes.GroupBy(k => k.Key.Source).ToDictionary(g => g.Key,
+                g => (IReadOnlyDictionary<int, int>)g.ToDictionary(k => k.Key.Class, k => k.Value.DestinationClass));
+            var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps);
             uint newCopy = (uint)((baseAddress + bundle.Code.Length + 15) & ~15);
             int keep = (int)(copyBuffer - UniversalOverlay.Base);
             byte[] ov = new byte[UniversalLevelData.Align((int)(newCopy - UniversalOverlay.Base), 0x800)];
@@ -376,7 +459,7 @@ public static class UniversalMobyComposer
         int[] mappedRows = new int[newRows.Count];
         for (int i = 0; i < newRows.Count; i++) mappedRows[incomingOrder[i]] = newRows[i];
         return new(destination.Key, imports, mappedRows, ram, arena, freeBefore - vram.FreeBytes, behavior, warnings,
-            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ParticleDependencies = particleDependencies.Values.ToList() };
+            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ParticleDependencies = particleDependencies.Values.ToList(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers) };
     }
 
     /// <summary>Class a fully removed native row is switched to: no model, no behavior in any level, never

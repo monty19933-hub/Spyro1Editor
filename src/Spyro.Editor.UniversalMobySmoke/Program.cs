@@ -40,6 +40,105 @@ if (args[0] == "--egg-bbox")
     return 0;
 }
 var catalog = LevelCatalog.Load(args[2]);
+if (args[0] == "--exe-words")
+{
+    var d = UniversalDiscImage.Read(args[1]); uint start = Convert.ToUInt32(args[3], 16); int length = Convert.ToInt32(args[4], 16);
+    Console.WriteLine($"owner_sha256={Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(d.Exe.AsSpan((int)(start - UniversalExeBindings.ExeBase), length)))}");
+    for (uint pc = start; pc < start + length; pc += 4)
+    {
+        uint w = BinaryPrimitives.ReadUInt32LittleEndian(d.Exe.AsSpan((int)(pc - UniversalExeBindings.ExeBase)));
+        Console.WriteLine($"{pc:X8} {w:X8} op={UniversalMips.Op(w)} rs={UniversalMips.Rs(w)} rt={UniversalMips.Rt(w)} rd={UniversalMips.Rd(w)} fn={UniversalMips.Fn(w)} sh={UniversalMips.Sh(w)} imm={UniversalMips.SImm(w)}");
+    }
+    return 0;
+}
+if (args[0] == "--initializer-scratch-check")
+{
+    var lib = new UniversalSourceLibrary(args[1], catalog);
+    var cases = UniversalMobyCatalogBuilder.AllVariants(lib, catalog).GroupBy(v => (v.SourceLevelKey, v.ClassId)).ToList();
+    var reads = new List<object>(); int specialized = 0, refused = 0;
+    foreach (var g in cases)
+    {
+        var ov = lib.Get(g.Key.SourceLevelKey).Overlay;
+        try
+        {
+            var instructions = UniversalSpecializer.Specialize(ov, ov.Init, 4, [g.Key.ClassId]).Instructions;
+            specialized++;
+            foreach (uint pc in instructions)
+            {
+                uint w = ov.Word(pc); int op = UniversalMips.Op(w);
+                if (w == 0 || op is 2 or 3 or 15) continue;
+                if (UniversalMips.Rs(w) == 25 || (op == 0 || UniversalMips.IsStore(w) || op is 4 or 5) && UniversalMips.Rt(w) == 25)
+                    reads.Add(new { g.Key.SourceLevelKey, g.Key.ClassId, Pc = $"0x{pc:X8}", Word = $"0x{w:X8}" });
+            }
+        }
+        catch (InvalidDataException) { refused++; }
+    }
+    Console.WriteLine(JsonSerializer.Serialize(new { SourceClasses = cases.Count, Specialized = specialized, Unextractable = refused, NativeT9Reads = reads }, new JsonSerializerOptions { WriteIndented = true }));
+    return 0;
+}
+if (args[0] == "--deferred-hooks-check")
+    return UniversalRemappingChecks.DeferredHooks(args[1], args[3], catalog, args[4]);
+if (args[0] == "--shared-alias-check")
+{
+    var d = UniversalDiscImage.Read(args[1]);
+    var aliases = new UniversalSharedModelAssets(d);
+    byte[] pkg = aliases.Package(0x53);
+    if (pkg[0] != 14 || pkg[1] != 18 || pkg.Length != 272 || !UniversalSharedModelAssets.CountDerivedSimplePackage(pkg).AsSpan().SequenceEqual(pkg))
+        throw new InvalidDataException("Shared53 alias model closure mismatch.");
+    foreach (int c in new[] { 0x3A, 0x1FA })
+    {
+        byte[] normal = aliases.Package(c);
+        if (BinaryPrimitives.ReadInt32LittleEndian(normal.AsSpan(4)) <= 16 ||
+            !UniversalSharedModelAssets.CountDerivedSimplePackage(normal).AsSpan().SequenceEqual(normal))
+            throw new InvalidDataException("Shared normal-prefix package closure mismatch.");
+        Console.WriteLine($"normal-prefix class=0x{c:X3} bytes={normal.Length} sha256={Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(normal))}");
+    }
+    pkg[0] ^= 1;
+    if (aliases.Package(0x53)[0] != 14) throw new InvalidDataException("Shared alias bytes were not detached.");
+    int owner = d.Entry(8).Offset;
+    d.Wad[owner] ^= 1;
+    bool refused = false;
+    try { _ = new UniversalSharedModelAssets(d); } catch (InvalidDataException) { refused = true; }
+    if (!refused) throw new InvalidDataException("Mutated PETE source owner was accepted.");
+    Console.WriteLine("UNIVERSAL_SHARED_ALIAS_CLOSURE_AND_OWNER_GUARD_OK"); return 0;
+}
+if (args[0] == "--shared-roots")
+{
+    var d = UniversalDiscImage.Read(args[1]); var entry = d.Entry(8);
+    for (int field = 4; field < 0x204; field += 8)
+    {
+        int root = BinaryPrimitives.ReadInt32LittleEndian(d.Wad.AsSpan(entry.Offset + field));
+        int actor = BinaryPrimitives.ReadInt32LittleEndian(d.Wad.AsSpan(entry.Offset + field + 4));
+        if (root == 0) break;
+        if (actor == (args.Length > 3 ? Convert.ToInt32(args[3], 16) : 0x53))
+        {
+            int f = BinaryPrimitives.ReadInt32LittleEndian(d.Wad.AsSpan(entry.Offset + root + 12));
+            for (int i = 0; i < d.Wad[entry.Offset + root + 1]; i++) Console.WriteLine($"face{i} {Convert.ToHexString(d.Wad.AsSpan(entry.Offset + root + f + i * 8, 8))}");
+        }
+        Console.WriteLine($"{actor:X3} root={root:X} header={Convert.ToHexString(d.Wad.AsSpan(entry.Offset + root, 16))}");
+    }
+    return 0;
+}
+if (args[0] == "--class-code")
+{
+    var lib = new UniversalSourceLibrary(args[1], catalog);
+    var donor = lib.Get(args[3]); int c = Convert.ToInt32(args[4], 16);
+    var spec = UniversalSpecializer.Specialize(donor.Overlay, donor.Overlay.Init, 4, [c]);
+    Console.WriteLine($"init {donor.Overlay.Init:X8} class {c:X3}");
+    foreach (uint pc in spec.Instructions)
+    {
+        uint w = donor.Overlay.Word(pc);
+        Console.WriteLine($"{pc:X8} {w:X8} op={UniversalMips.Op(w)} rs={UniversalMips.Rs(w)} rt={UniversalMips.Rt(w)} rd={UniversalMips.Rd(w)} imm={UniversalMips.SImm(w)}");
+    }
+    return 0;
+}
+if (args[0] == "--dependency-readback")
+    return UniversalRemappingChecks.Readback(args[1], args[3], catalog, args[4], args[5], int.Parse(args[6]),
+        null, Convert.ToInt32(args[7], 16), Convert.ToInt32(args[8], 16));
+if (args[0] == "--remap-readback")
+{
+    return UniversalRemappingChecks.Readback(args[1], args[3], catalog, args[4], args[5], int.Parse(args[6]), args.Length > 7 ? int.Parse(args[7]) : null);
+}
 if (args[0] is "--coverage" or "--catalog-coverage")
 {
     var lib = new UniversalSourceLibrary(args[1], catalog);
@@ -127,8 +226,8 @@ if (args[0] == "--compose")
     var c = result.Levels[0].Compose;
     Console.WriteLine(JsonSerializer.Serialize(new
     {
-        c.DestinationKey, c.Ram, c.ArenaSlotsRemaining, DroppedModelClasses = c.DroppedModelClasses.Select(x => $"0x{x:X3}"), c.DroppedModelBytes, c.ReclaimedVramBytes, c.ParticleDependencies, c.VramBytesUsed, c.NewRowIndices, c.Warnings,
-        Classes = c.Classes.Select(x => new { Class = $"0x{x.ClassId:X3}", x.SourceLevelKey, x.ModelImported, x.BehaviorImported, x.ModelBytes, x.Textures, x.Sounds, x.DependencyOnly }),
+        c.DestinationKey, c.Ram, c.ArenaSlotsRemaining, DroppedModelClasses = c.DroppedModelClasses.Select(x => $"0x{x:X3}"), c.DroppedModelBytes, c.ReclaimedVramBytes, c.ParticleDependencies, c.RestoredObjectLinks, c.UnresolvedObjectLinks, c.VramBytesUsed, c.NewRowIndices, c.Warnings,
+        Classes = c.Classes.Select(x => new { Class = $"0x{x.ClassId:X3}", DestinationClass = $"0x{x.DestinationClassId:X3}", x.SourceLevelKey, x.ModelImported, x.BehaviorImported, x.ModelBytes, x.ModelOrigin, x.Textures, x.Sounds, x.DependencyOnly }),
         c.Behavior, result.OutputImageSha256, result.WadGrowthBytes
     }, new JsonSerializerOptions { WriteIndented = true }));
     return 0;
@@ -220,6 +319,12 @@ if (args[0] == "--debug-class")
     var o = lib.Get(args[3]).Overlay; int cls = Convert.ToInt32(args[4], 16);
     var sw = UniversalDispatchAnalysis.FindUpdateSwitch(o);
     var t = UniversalDispatchAnalysis.Trace(o, sw.TreeStart, cls, sw.Seeds, sw.ClassRegister);
+    var closure = UniversalDispatchAnalysis.Closure(o, sw.Function, [sw.Function, t.Stop, sw.DefaultStop], new HashSet<uint> { sw.TreeStart }).Instructions;
+    foreach (uint pc in closure.Where(pc => UniversalMips.SImm(o.Word(pc)) == 0x36 && (UniversalMips.IsLoad(o.Word(pc)) || UniversalMips.IsStore(o.Word(pc)))))
+    {
+        Console.WriteLine($"class memory {pc:X8}");
+        for (uint q = pc - 16; q <= pc + 40; q += 4) Console.WriteLine($"{q:X8} {o.Word(q):X8} op={UniversalMips.Op(o.Word(q))} rs={UniversalMips.Rs(o.Word(q))} rt={UniversalMips.Rt(o.Word(q))}");
+    }
     Console.WriteLine($"ts {sw.TreeStart:X8} creg {sw.ClassRegister} stop {t.Stop:X8} seq {t.Sequence.Count} default {sw.DefaultStop:X8}");
     try { var r = UniversalBehaviorBundleBuilder.Build(o, [(args[3], o, [cls])], 0x80090000); Console.WriteLine($"ok {r.Code.Length}"); }
     catch (Exception e) { Console.WriteLine(e.Message); }
@@ -277,6 +382,16 @@ void SyntheticOverlayChecks()
     E(UniversalMips.EncodeI(9, 29, 29, 0x20));                  // 22
     // init function (whole copy)
     uint init = B + (uint)code.Count * 4;
+    E(0x00808021); // save source a0 in s0
+    E(0x00A0A821); // save the optional native Moby/row a1 in s5
+    E(UniversalMips.EncodeJ(3, 0x800524C4)); E(0); // engine Moby allocator
+    E(0x00409821); // allocated Moby v0 -> s3
+    E(UniversalMips.EncodeI(4, 21, 0, 1));
+    E(0xA6700036); // class store in the branch delay slot
+    E(UniversalMips.EncodeI(33, 21, 3, 0x36)); E(UniversalMips.EncodeI(9, 0, 2, 0x10));
+    E(UniversalMips.EncodeI(5, 3, 2, 1)); E(0); E(UniversalMips.EncodeI(9, 0, 3, 0));
+    E(UniversalMips.EncodeI(33, 19, 3, 0x36)); E(UniversalMips.EncodeI(9, 0, 2, 0x22));
+    E(UniversalMips.EncodeI(5, 3, 2, 1)); E(0); E(UniversalMips.EncodeI(9, 0, 3, 0));
     E(UniversalMips.JrRa); E(0);
     byte[] ov = new byte[code.Count * 4 + 64];
     for (int i = 0; i < code.Count; i++) BinaryPrimitives.WriteUInt32LittleEndian(ov.AsSpan(i * 4), code[i]);
@@ -320,6 +435,37 @@ void SyntheticOverlayChecks()
     for (int i = 0; i < bundle.Code.Length / 4; i++) if (BinaryPrimitives.ReadUInt32LittleEndian(bundle.Code.AsSpan(i * 4)) == UniversalMips.EncodeI(9, 0, 4, 0x111)) has111 = true;
     Check(!has111, "non-imported case is pruned");
 
+    var remapped = UniversalBehaviorBundleBuilder.Build(o, [("src", o, [0x22])], 0x80090000,
+        classMaps: new Dictionary<string, IReadOnlyDictionary<int, int>> { ["src"] = new Dictionary<int, int> { [0x22] = 0x1FD, [0x10] = 0x1FC } });
+    uint[] mappedWords = Enumerable.Range(0, remapped.Code.Length / 4).Select(i => BinaryPrimitives.ReadUInt32LittleEndian(remapped.Code.AsSpan(4 * i))).ToArray();
+    Check(mappedWords.Contains(UniversalMips.EncodeI(9, 0, 1, 0x1FD)), "remapped update and init dispatch use the destination class identity");
+    Check(mappedWords.Contains(UniversalMips.EncodeI(9, 0, 4, 0x22)), "source init bridge restores the source class for specialized setup");
+    Check(mappedWords.Contains(UniversalMips.EncodeI(9, 0, 25, 0x1FD)) && mappedWords.Contains(UniversalMips.EncodeI(41, 19, 25, 0x36)) && !mappedWords.Contains(0xA6700036),
+        "proved allocated-Moby store writes the destination class without replacing other numeric constants");
+    int classStore = Array.IndexOf(mappedWords, UniversalMips.EncodeI(41, 19, 25, 0x36));
+    Check(classStore > 1 && UniversalMips.IsBranch(mappedWords[classStore - 1]) && mappedWords[classStore - 2] == UniversalMips.EncodeI(9, 0, 25, 0x1FD),
+        "class-store translation preserves the native branch delay slot");
+    Check(UniversalMips.BranchTarget(mappedWords[classStore - 1], 0x80090000 + (uint)(classStore - 1) * 4) == 0x80090000 + (uint)(classStore + 1) * 4,
+        "native branch target remains the instruction following its class-store delay slot");
+    Check(remapped.Sources[0].ParentClassReadSites.Count == 1 && remapped.Sources[0].AllocatedClassReadSites.Count == 1,
+        "constructor classification separately owns parent and newly allocated Moby class reads");
+    Check(mappedWords.Contains(UniversalMips.EncodeI(9, 3, 3, -0x1FC)) && mappedWords.Contains(UniversalMips.EncodeI(9, 0, 3, 0x10)) &&
+        mappedWords.Contains(UniversalMips.EncodeI(9, 3, 3, -0x1FD)) && mappedWords.Contains(UniversalMips.EncodeI(9, 0, 3, 0x22)),
+        "constructor parent/current classification restores source IDs while preserving both live pointers");
+    BinaryPrimitives.WriteUInt32LittleEndian(ov.AsSpan((int)(init - B) + 4), 0x02E0A821); // s5 <- unrelated s7
+    bool parentRefused = false;
+    try { UniversalBehaviorBundleBuilder.Build(o, [("src", o, [0x22])], 0x80090000,
+        classMaps: new Dictionary<string, IReadOnlyDictionary<int, int>> { ["src"] = new Dictionary<int, int> { [0x22] = 0x1FD, [0x10] = 0x1FC } }); }
+    catch (InvalidDataException) { parentRefused = true; }
+    Check(parentRefused, "an unrelated pointer cannot inherit native a1 parent ownership");
+    BinaryPrimitives.WriteUInt32LittleEndian(ov.AsSpan((int)(init - B) + 4), 0x0320A821); // s5 <- live t9
+    bool scratchRefused = false;
+    try { UniversalBehaviorBundleBuilder.Build(o, [("src", o, [0x22])], 0x80090000,
+        classMaps: new Dictionary<string, IReadOnlyDictionary<int, int>> { ["src"] = new Dictionary<int, int> { [0x22] = 0x1FD } }); }
+    catch (InvalidDataException) { scratchRefused = true; }
+    Check(scratchRefused, "class-store translation refuses a constructor with a live native scratch input");
+    BinaryPrimitives.WriteUInt32LittleEndian(ov.AsSpan((int)(init - B) + 4), 0x00A0A821);
+    UniversalRemappingChecks.Run(Check);
     // Signs and dragonfly eggs.
     var signed = UniversalBehaviorBundleBuilder.Build(o, [], 0x80090000, [0x1F2], [UniversalDragonflyEggs.SignClass]);
     Check(BinaryPrimitives.ReadUInt32LittleEndian(signed.Code) == UniversalSpecialBehaviors.SignHookMarker, "bundle with signs carries the marker");
@@ -342,7 +488,7 @@ void SyntheticOverlayChecks()
     Check(slotCode.Contains(UniversalMips.EncodeJ(2, 0x8001844C)) && slotCode.Contains(UniversalMips.EncodeJ(3, 0x8001919C)) &&
           !slotCode.Contains(UniversalMips.EncodeJ(3, 0x800168DC)) && slotData[2] == (6u << 24 | 12u << 16 | 200) && slotData[0] == (4u << 16 | 59),
           "egg row draws coloured still eggs without eye primitives, keeps the divider line, and stores level/row/colour per egg");
-    Check(slotData.Length == 3 + UniversalDragonflyEggs.Variants.Length + 2 && slotData[^2] == 0x252F6425, "egg data holds the tint table and K/Y format");
+    Check(slotData.Length == 3 + UniversalDragonflyEggs.Variants.Length + 2 && slotData[^2] == 0x252F6425, "egg data holds the column caption and K/Y format");
     var many = Enumerable.Range(0, UniversalSpecialBehaviors.MaxDragonflyEggs).Select(i => (i % 30, i, i % 7)).ToList();
     var (countCode, countData) = UniversalSpecialBehaviors.DragonflyEggInventoryRoutine(many);
     Check(countCode.Contains(UniversalMips.EncodeJ(3, 0x80062FD4)) && UniversalSpecialBehaviors.MaxDragonflyEggs >= 60 &&
