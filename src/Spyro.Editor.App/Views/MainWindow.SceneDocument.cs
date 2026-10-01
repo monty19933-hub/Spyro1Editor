@@ -25,7 +25,6 @@ public sealed partial class MainWindow
     private string? FreshSettingsSignature() => _freshSceneDocument?.Fingerprint();
     private StackPanel? _freshSettingsPanel, _freshTerrainPanel;
     private Control? _retailTerrainWorkspace,_retailNameDisclosure,_retailMusicDisclosure;
-    private Control? _freshSharedTerrainTools;
     private Spyro.Editor.Core.Levels.LevelDefinition? _freshLevelPickerOption;
     private void BindFreshLevelPickerOption(Spyro.Editor.Core.Levels.LevelDefinition? authored)
     {
@@ -221,13 +220,6 @@ public sealed partial class MainWindow
     private Control BuildFreshTerrainTools()
     {
         _freshTerrainPanel=new StackPanel{Spacing=8,IsVisible=false,Name="FreshMainTerrainTools"};
-        if (!_releaseMode) return _freshTerrainPanel;
-        StackPanel shared = new(){Spacing=9};
-        shared.Children.Add(BuildTerrainTaskControls());
-        shared.Children.Add(BuildTerrainBrushControls());
-        shared.Children.Add(BuildTerrainPointControls());
-        if(!_releaseMode) shared.Children.Add(BuildAdvancedTerrainControls());
-        _freshSharedTerrainTools=shared;
         return _freshTerrainPanel;
     }
     private void RefreshFreshDocumentPanels()
@@ -235,7 +227,7 @@ public sealed partial class MainWindow
         if(_freshSettingsPanel==null||_freshTerrainPanel==null)return;
         _freshSettingsPanel.Children.Clear();_freshTerrainPanel.Children.Clear();
         _freshSettingsPanel.IsVisible=_freshTerrainPanel.IsVisible=_freshSceneDocument!=null;
-        if(_retailTerrainWorkspace!=null)_retailTerrainWorkspace.IsVisible=!_releaseMode||_freshSceneDocument==null;
+        if(_retailTerrainWorkspace!=null)_retailTerrainWorkspace.IsVisible=true;
         if(_retailNameDisclosure!=null)_retailNameDisclosure.IsVisible=_freshSceneDocument==null;
         if(_retailMusicDisclosure!=null)_retailMusicDisclosure.IsVisible=_freshSceneDocument==null;
         if(_homeworldTextGroup!=null)_homeworldTextGroup.IsVisible=_freshSceneDocument==null;
@@ -294,7 +286,6 @@ public sealed partial class MainWindow
                 _statusText.Text="Authored face material selected from "+level.DisplayName+"; Save Level retains its source identity.";
             }catch(Exception e){_statusText.Text="Material was not applied: "+e.Message;}
         });apply.Name="FreshMainApplyMaterial";if(!_releaseMode)_freshTerrainPanel.Children.Add(apply);
-        if(_freshSharedTerrainTools!=null)_freshTerrainPanel.Children.Add(_freshSharedTerrainTools);
     }
     private void ApplyFreshMaterial(TerrainPolygon face,AuthoredMaterial material)
     {
