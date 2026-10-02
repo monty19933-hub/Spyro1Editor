@@ -3,6 +3,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Layout;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Spyro.Editor.Core;
 using Spyro.Editor.Core.Levels;
@@ -88,7 +90,7 @@ public sealed partial class MainWindow
                 new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Star),
-                new RowDefinition(new GridLength(34))
+                new RowDefinition(new GridLength(38))
             },
             Background = new SolidColorBrush(Color.FromRgb(238, 242, 245))
         };
@@ -105,7 +107,7 @@ public sealed partial class MainWindow
             {
                 new ColumnDefinition(GridLength.Star),
                 new ColumnDefinition(new GridLength(5)),
-                new ColumnDefinition(new GridLength(404))
+                new ColumnDefinition(new GridLength(384)) { MinWidth = 360, MaxWidth = 520 }
             }
         };
         Grid.SetRow(body, 2);
@@ -154,17 +156,23 @@ public sealed partial class MainWindow
                         Background = new SolidColorBrush(ModernTeal),
                         VerticalAlignment = VerticalAlignment.Center
                     },
-                    _statusText,
+                    _visibleStatusText,
                     NewAsyncButton("Details", ShowStatusDetailsAsync)
                 }
             }
         };
-        _statusText.Foreground = new SolidColorBrush(Color.FromRgb(59, 68, 78));
-        _statusText.FontSize = 12;
-        _statusText.VerticalAlignment = VerticalAlignment.Center;
-        _statusText.TextWrapping = TextWrapping.NoWrap;
-        _statusText.TextTrimming = TextTrimming.CharacterEllipsis;
-        Grid.SetColumn(_statusText, 1);
+        _visibleStatusText.Foreground = new SolidColorBrush(Color.FromRgb(59, 68, 78));
+        _visibleStatusText.FontSize = 12;
+        _visibleStatusText.VerticalAlignment = VerticalAlignment.Center;
+        _visibleStatusText.TextWrapping = TextWrapping.NoWrap;
+        _visibleStatusText.TextTrimming = TextTrimming.CharacterEllipsis;
+        _statusText.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == TextBlock.TextProperty)
+                _visibleStatusText.Text = SummarizeEditorStatus(_statusText.Text ?? "");
+        };
+        _visibleStatusText.Text = SummarizeEditorStatus(_statusText.Text ?? "");
+        Grid.SetColumn(_visibleStatusText, 1);
         Grid.SetColumn(((Grid)status.Child!).Children[^1], 2);
         Grid.SetRow(status, 3);
         root.Children.Add(status);
@@ -196,7 +204,7 @@ public sealed partial class MainWindow
         {
             ColumnDefinitions =
             {
-                new ColumnDefinition(new GridLength(242)),
+                new ColumnDefinition(new GridLength(215)),
                 new ColumnDefinition(GridLength.Star),
                 new ColumnDefinition(GridLength.Auto)
             },
@@ -215,14 +223,20 @@ public sealed partial class MainWindow
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Right
         };
-        _toolbarOpenDiscImageButton = NewAsyncButton("Open BIN/CUE", ChooseSourceDiscImageAsync);
-        StyleModernToolbarButton(_toolbarOpenDiscImageButton, 118);
-        fileActions.Children.Add(BuildToolMenu("File", new ToolbarAction("New Level", NewMainLevelAsync),
+        _toolbarOpenDiscImageButton = NewAsyncButton("Open Game…", ChooseSourceDiscImageAsync);
+        ToolTip.SetTip(_toolbarOpenDiscImageButton, "Choose your original Spyro BIN or CUE. Export creates a separate playable copy.");
+        StyleModernToolbarButton(_toolbarOpenDiscImageButton, 106);
+        fileActions.Children.Add(BuildActionMenu("File", "EditorFileMenu", new ToolbarAction("New Level…", NewMainLevelAsync),
             new ToolbarAction("Start Blank in Current Level…", StartBlankCurrentLevelAsync),
             new ToolbarAction("Restore Before Clear…", RestoreBeforeClearAsync),
-            new ToolbarAction("Open Authored Level", OpenMainFreshLevelAsync),
-            new ToolbarAction("Save Level", async () => { await SaveCurrentEditsAsync(); })));
+            new ToolbarAction("Open Created Level…", OpenMainFreshLevelAsync),
+            new ToolbarAction("Save Level", SaveFromToolbarAsync)));
         fileActions.Children.Add(_toolbarOpenDiscImageButton);
+        _toolbarSaveButton = NewAsyncButton("Save", SaveFromToolbarAsync);
+        _toolbarSaveButton.Name = "SaveLevelButton";
+        StyleModernToolbarButton(_toolbarSaveButton, 64);
+        ToolTip.SetTip(_toolbarSaveButton, "Save this level's object and terrain edits (⌘S on Mac, Ctrl+S on Windows). Create BIN exports the game.");
+        fileActions.Children.Add(_toolbarSaveButton);
         Button freshResearch = BuildNativeFreshDocumentButton();
         freshResearch.Content = "Fresh research…";
         ToolTip.SetTip(freshResearch, "Earlier experimental document and its separate research export. Use File > New Level to author a neutral level in this main editor.");
@@ -230,21 +244,22 @@ public sealed partial class MainWindow
 
         _toolbarCreateBinButton = NewAsyncButton("Create BIN", CreateObjectTestBinAsync);
         StyleModernPrimaryButton(_toolbarCreateBinButton, ModernBlue, 110);
+        ToolTip.SetTip(_toolbarCreateBinButton, "Save current edits and export all saved levels to a playable BIN/CUE copy.");
         fileActions.Children.Add(_toolbarCreateBinButton);
 
         List<ToolbarAction> moreActions =
         [
             new("Project Data", ShowProjectDataAsync),
             new("Check for Updates", ShowUpdatesAsync),
-            new("Build Safety", ShowBuildSafetyInspectorAsync),
+            new("Check for Export Issues…", ShowBuildSafetyInspectorAsync),
             new("Help", ShowHelpAsync)
         ];
         if (!_releaseMode)
             moreActions.Insert(3, new ToolbarAction("Diagnostics", ShowDiagnosticsAsync));
-        _toolbarMoreControl = BuildToolMenu("More", moreActions.ToArray());
-        if (_toolbarMoreControl is ComboBox moreBox)
+        _toolbarMoreControl = BuildActionMenu("More", "EditorMoreMenu", moreActions.ToArray());
+        if (_toolbarMoreControl is Button moreBox)
         {
-            moreBox.Width = 112;
+            moreBox.Width = 74;
             moreBox.MinHeight = 34;
             moreBox.Margin = new Thickness(0);
         }
@@ -287,7 +302,7 @@ public sealed partial class MainWindow
         _sourceDiscStatusText.FontSize = 11;
         _sourceDiscStatusText.FontWeight = FontWeight.SemiBold;
         _sourceDiscStatusText.TextTrimming = TextTrimming.CharacterEllipsis;
-        _sourceDiscStatusText.MaxWidth = 320;
+        _sourceDiscStatusText.MaxWidth = 220;
         _sourceDiscStatusText.VerticalAlignment = VerticalAlignment.Center;
         _sourceDiscStatusText.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(_sourceDiscStatusText, 1);
@@ -465,7 +480,7 @@ public sealed partial class MainWindow
             _modernViewportActionButton.Content = "Fit All";
             ToolTip.SetTip(
                 _modernViewportActionButton,
-                "Fit every captured terrain face in the exhaustive top-down Edit Map.");
+                "Fit all editable terrain in the top-down view.");
             return;
         }
 
@@ -710,13 +725,25 @@ public sealed partial class MainWindow
 
     private Control BuildModernObjectWorkspace()
     {
-        StackPanel panel = new() { Spacing = 14 };
+        StackPanel panel = new() { Spacing = 10 };
         panel.Children.Add(BuildModernSelectionSummary());
         panel.Children.Add(ModernDivider());
         panel.Children.Add(BuildModernPrimaryObjectControls());
         panel.Children.Add(ModernDivider());
-        panel.Children.Add(BuildModernBuildSafetyPanel());
-        panel.Children.Add(ModernDivider());
+        var checks = (Expander)BuildModernDisclosure("Export checks", BuildModernBuildSafetyPanel(), false);
+        var checkSummary = new TextBlock { Name = "ExportCheckSummary", TextWrapping = TextWrapping.Wrap, FontSize = 12 };
+        void RefreshCheckSummary()
+        {
+            checkSummary.Text = "Export checks · " + _buildSafetySummaryText.Text;
+            checkSummary.Foreground = _buildSafetySummaryText.Foreground;
+        }
+        _buildSafetySummaryText.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == TextBlock.TextProperty || e.Property == TextBlock.ForegroundProperty)
+                RefreshCheckSummary();
+        };
+        RefreshCheckSummary(); checks.Header = checkSummary;
+        panel.Children.Add(checks);
         panel.Children.Add(BuildModernMobyBrowser());
         ShowSelection(ViewportSelectionChangedEventArgs.None);
         return panel;
@@ -759,7 +786,7 @@ public sealed partial class MainWindow
         StackPanel panel = new() { Spacing = 9 };
         panel.Children.Add(ModernSectionHeading("Add or edit objects"));
 
-        _objectAddButton = NewAsyncButton("More…", AddMobyNearSelectionAsync);
+        _objectAddButton = NewAsyncButton("Quick Add…", AddMobyNearSelectionAsync);
         _objectEditButton = NewAsyncButton("Edit", async () =>
         {
             if (_selectedMoby != null)
@@ -767,7 +794,7 @@ public sealed partial class MainWindow
         });
         _objectSwapCatalogButton = NewAsyncButton("Replace", ShowCrossLevelSwapCatalogAsync);
         StyleModernSecondaryButton(_objectAddButton);
-        ToolTip.SetTip(_objectAddButton, "The previous Add window: gems with a chosen value and copies of objects already in this level.");
+        ToolTip.SetTip(_objectAddButton, "Add a standard gem by value or copy an object already in this level. Use Add object for the full game catalog.");
         StyleModernPrimaryButton(_objectEditButton, ModernBlue);
         StyleModernPrimaryButton(_objectSwapCatalogButton, ModernTeal);
 
@@ -804,7 +831,8 @@ public sealed partial class MainWindow
         AddModernGridButton(secondary, _objectRemoveButton, 3);
         panel.Children.Add(secondary);
 
-        panel.Children.Add(BuildSelectedMobyZControls());
+        var positionTools = new StackPanel { Spacing = 8 };
+        positionTools.Children.Add(BuildSelectedMobyZControls());
 
         _objectLayerDownButton = NewButton("Lower", () => MoveSelectedMobyToAdjacentTerrainLayer(-1));
         _objectLayerUpButton = NewButton("Upper", () => MoveSelectedMobyToAdjacentTerrainLayer(1));
@@ -833,7 +861,8 @@ public sealed partial class MainWindow
         });
         AddModernGridButton(layerRow, _objectLayerDownButton, 1);
         AddModernGridButton(layerRow, _objectLayerUpButton, 2);
-        panel.Children.Add(layerRow);
+        positionTools.Children.Add(layerRow);
+        panel.Children.Add(BuildModernDisclosure("Position & snapping", positionTools, false));
 
         _objectSwapTestButton = NewAsyncButton("Create Swap Test", CreateObjectCandidateBinAsync);
         StyleModernPrimaryButton(_objectSwapTestButton, Color.FromRgb(176, 103, 20));
@@ -849,7 +878,7 @@ public sealed partial class MainWindow
         StyleModernSecondaryButton(_objectRestoreLevelButton, ModernRed);
         _objectUndoRemoveButton.IsVisible = false;
         StackPanel recovery = new() { Spacing = 6, Margin = new Thickness(0, 6, 0, 0) };
-        recovery.Children.Add(_objectUndoRemoveButton);
+        panel.Children.Add(_objectUndoRemoveButton);
         recovery.Children.Add(_objectRestoreLevelButton);
         var beforeClear=NewAsyncButton("Restore Before Clear…",RestoreBeforeClearAsync);beforeClear.Name="RestoreBeforeClear";
         StyleModernSecondaryButton(beforeClear);recovery.Children.Add(beforeClear);
@@ -881,8 +910,9 @@ public sealed partial class MainWindow
     private Control BuildModernMobyBrowser()
     {
         StackPanel panel = new() { Spacing = 8 };
-        panel.Children.Add(ModernSectionHeading("Object browser"));
-        panel.Children.Add(BuildNativeMobyLibraryButton("RetailNativeMobyLibraryButton", allowExistingTemplateSelection: true));
+        panel.Children.Add(ModernSectionHeading("Objects in this level"));
+        if (!_releaseMode)
+            panel.Children.Add(BuildNativeMobyLibraryButton("RetailNativeMobyLibraryButton", allowExistingTemplateSelection: true));
 
         _mobyCategoryBox.ItemsSource = _releaseMode ? EverydayMobyCategoryOptions : MobyCategoryOptions;
         _mobyCategoryBox.SelectedIndex = 0;
@@ -890,7 +920,7 @@ public sealed partial class MainWindow
         _mobyCategoryBox.PlaceholderText = "Category";
         _mobyCategoryBox.SelectionChanged += (_, _) => RefreshMobyList(_selectedMoby);
 
-        _mobySearchBox.PlaceholderText = "Search objects";
+        _mobySearchBox.PlaceholderText = "Find placed objects…";
         _mobySearchBox.MinHeight = 34;
         _mobySearchBox.TextChanged += (_, _) => RefreshMobyList(_selectedMoby);
 

@@ -452,8 +452,8 @@ public sealed partial class MainWindow : Window
             RefreshModernViewModeButtons(mode);
             RefreshContextualViewportAction();
             _statusText.Text = mode == ViewportViewMode.Fly3D
-                ? "Game Camera active; corrected retail color banks and native HP/LP are applied without removing editable terrain."
-                : "Edit Map active; every captured editable source face remains visible, material-rendered, and selectable.";
+                ? "Game Camera: W/A/S/D to move, Q/E up and down, right-drag to look."
+                : "Edit Map: select or drag objects; use Terrain to edit the ground.";
         };
         _terrainBrushRadiusSlider.PropertyChanged += (_, e) =>
         {
@@ -503,6 +503,7 @@ public sealed partial class MainWindow : Window
         Background = new SolidColorBrush(Color.FromRgb(238, 241, 244));
 
         Content = BuildModernLayout();
+        AddHandler(Avalonia.Input.InputElement.KeyDownEvent, HandleEditorSaveShortcut, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         SetMapOrientation(EditorUiDefaults.UseGameViewMapOrientation, announce: false);
         RefreshDiagnosticContext();
         EditorDiagnostics.RecordAction("Main editor window initialized", $"Workspace: {_workspace.RootPath}; release mode: {_releaseMode}");
@@ -554,7 +555,7 @@ public sealed partial class MainWindow : Window
                 "Finishing the active workspace transition before the editor can close.";
             return;
         }
-        if (_regularEditorPersistenceBusy || _buildSafetyBusy)
+        if (_saveCommandRunning || _regularEditorPersistenceBusy || _buildSafetyBusy)
         {
             e.Cancel = true;
             base.OnClosing(e);
@@ -2376,7 +2377,7 @@ public sealed partial class MainWindow : Window
     private void RefreshLevelSelectionAvailability()
     {
         RefreshPortalRouteAvailability();
-        bool enabled = !_freshNativeResearchBusy && !_buildingPortableCache &&
+        bool enabled = !_saveCommandRunning && !_freshNativeResearchBusy && !_buildingPortableCache &&
             !_projectDataImportBusy &&
             !_workspaceTransitionBusy &&
             !_regularEditorPersistenceBusy &&
@@ -2441,7 +2442,7 @@ public sealed partial class MainWindow : Window
         string name,
         out WorkspaceTransitionOperation? operation)
     {
-        if (_freshNativeResearchBusy || _workspaceTransitionBusy || _workspaceTransitionOperation != null ||
+        if (_saveCommandRunning || _freshNativeResearchBusy || _workspaceTransitionBusy || _workspaceTransitionOperation != null ||
             _id65BlankLabBusy || _regularEditorPersistenceBusy ||
             _buildSafetyBusy || _buildingPortableCache ||
             _projectDataImportBusy || _loadingLevel ||
@@ -3220,7 +3221,7 @@ public sealed partial class MainWindow : Window
         RefreshCurrentLevelDetails();
         RefreshTerrainProofQueueHint();
         UpdateLevelToolPanels(level);
-        _statusText.Text = $"{level.DisplayName}: {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces, {_viewport.Mobys.Count} mobys";
+        _statusText.Text = $"{level.DisplayName}: {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces, {_viewport.Mobys.Count} objects";
         RefreshDiagnosticContext();
         EditorDiagnostics.RecordAction("Level loaded", $"{level.DisplayName} ({level.Key}); {_viewport.Mobys.Count} mobys; {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces");
         _id65FreshDocumentProjectionSynchronized = exactId65BlankLab;
@@ -10544,7 +10545,7 @@ public sealed partial class MainWindow : Window
         bool editorPersistenceOperationActive =
             _regularEditorPersistenceBusy || _buildSafetyBusy;
         bool editorMutationOperationActive =
-            _freshNativeResearchBusy || _workspaceTransitionBusy ||
+            _saveCommandRunning || _freshNativeResearchBusy || _workspaceTransitionBusy ||
             manualId65OperationActive ||
             editorPersistenceOperationActive;
         bool sourceCommandEnabled = !editorMutationOperationActive &&
@@ -10598,6 +10599,8 @@ public sealed partial class MainWindow : Window
             _toolbarCreateBinButton,
             hasLevel && !IsCurrentId65BlankLab() && !_createBinBusy && !editorMutationOperationActive);
         SetButtonEnabled(_toolbarOpenDiscImageButton, sourceCommandEnabled);
+        SetButtonEnabled(_toolbarSaveButton, hasLevel && !_saveCommandRunning && !ToolbarSaveBlocked && !editorMutationOperationActive);
+        if (_toolbarFileMenu != null) _toolbarFileMenu.IsEnabled = !editorMutationOperationActive && !_createBinBusy;
         SetButtonEnabled(_discImageChooseButton, sourceCommandEnabled);
         SetButtonEnabled(_importEditorCacheButton, sourceCommandEnabled);
         SetButtonEnabled(_buildPortableCacheButton, sourceCommandEnabled);
@@ -26797,9 +26800,11 @@ public sealed partial class MainWindow : Window
         });
 
         AddHelpSection(panel, "Start", [
-            "Open BIN/CUE: choose the Spyro disc image you want this editor session to use.",
+            "Open Game: choose your original Spyro BIN or CUE disc image.",
             "Level list: choose the level to load objects and map data from that disc.",
-            "Objects, Level, and Environment keep the main editing tools in separate workspaces.",
+            "Objects, Terrain, Game Settings, and Environment organize the editing tools.",
+            "Save (⌘S on Mac, Ctrl+S on Windows): save the current level. Create BIN exports a playable copy.",
+            "File > New Level creates a new level; Start Blank clears the current level after confirmation and saves a recovery snapshot.",
             "Create BIN: build one patched disc from all saved level-name, object, terrain, texture, music, and environment edits.",
             "Build Safety: review any edit that needs attention. Double-click an affected item to select and center it."
         ]);
@@ -26833,7 +26838,9 @@ public sealed partial class MainWindow : Window
         ]);
 
         AddHelpSection(panel, "Objects", [
-            "Add: choose an object by picture, choose its placement, then place it in Edit Map or Game Camera.",
+            "Add object: search the whole game catalog, choose a version, then place it in Edit Map or Game Camera.",
+            "Objects in this level: find objects you already placed. Quick Add offers standard gems and local copies.",
+            "Position & snapping: adjust height or snap an object to terrain.",
             "Copy and Paste: duplicate the selected object's editable data at the cursor.",
             "Edit: change the name, gem or reward value, position, and facing.",
             "Replace: choose from the replacements currently available for the selected chest or enemy.",
@@ -30854,7 +30861,9 @@ public sealed partial class MainWindow : Window
         StackPanel stack = new() { Spacing = 2 };
         stack.Children.Add(new TextBlock
         {
-            Text = $"{moby.DisplayIndex}  {MobyListBadge(moby)}  {moby.DisplayLabel}{(moby.HasAnyEdit ? "  edited" : "")}",
+            Text = _releaseMode
+                ? $"{moby.DisplayLabel}{(moby.IsRemoved ? " · removed" : moby.IsAdded ? " · added" : moby.HasAnyEdit ? " · edited" : "")}"
+                : $"{moby.DisplayIndex}  {MobyListBadge(moby)}  {moby.DisplayLabel}{(moby.HasAnyEdit ? "  edited" : "")}",
             Foreground = new SolidColorBrush(Color.FromRgb(31, 38, 45)),
             FontWeight = FontWeight.SemiBold,
             FontSize = 12,
@@ -30874,6 +30883,10 @@ public sealed partial class MainWindow : Window
 
     private string BuildMobyListSubtitle(Moby moby)
     {
+        if (_releaseMode)
+            return BuildFriendlyMobySummary(moby) +
+                (moby.TreasureValue > 0 ? $" · {moby.TreasureValue} treasure" : "") +
+                (IsQuestionableMoby(moby) ? " · identification needs review" : "");
         bool questionable = IsQuestionableMoby(moby);
         List<string> parts =
         [

@@ -402,27 +402,31 @@ public sealed partial class MainWindow
         Window dialog = new()
         {
             Title = $"Add object — {destination.DisplayName}",
-            Width = 1220, Height = 800, MinWidth = 960, MinHeight = 640,
+            Width = 1080, Height = 760, MinWidth = 900, MinHeight = 620,
             WindowStartupLocation = WindowStartupLocation.CenterOwner, CanResize = true
         };
         TextBlock summary = NewSmallNote("Loading the game-wide object catalog from your disc… (first time takes a few seconds)");
         summary.Name = "UniversalMobySummary";
-        TextBox search = new() { Name = "UniversalMobySearch", PlaceholderText = "Search all objects by name, level or class…", MinHeight = 34 };
+        TextBox search = new() { Name = "UniversalMobySearch", PlaceholderText = "Search by object name, level or type…", MinHeight = 34 };
         ComboBox fitFilter = new() { Name = "UniversalMobyFit", ItemsSource = new[] { "Show everything", "Only what fits here", "Only this level's own objects" }, SelectedIndex = 0, MinWidth = 170 };
         ComboBox sourceFilter = new() { Name = "UniversalMobySourceLevel", MinWidth = 180 };
-        ListBox categories = new() { Name = "UniversalMobyCategories", MinWidth = 220 };
+        ListBox categories = new() { Name = "UniversalMobyCategories", MinWidth = 150 };
         ListBox list = new() { Name = "UniversalMobyList" };
         ComboBox variants = new() { Name = "UniversalMobyVariant", HorizontalAlignment = HorizontalAlignment.Stretch };
+        TextBlock empty = new() { Name = "UniversalMobyEmpty", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(16), IsVisible = false, VerticalAlignment = VerticalAlignment.Center };
+        Button clearSearch = NewButton("Clear search"); clearSearch.Name = "UniversalMobyClearSearch";
+        StyleModernSecondaryButton(clearSearch); clearSearch.IsVisible = false;
+        clearSearch.Click += (_, _) => search.Text = "";
         Border modelPreview = new() { Name = "UniversalMobyPreviewHost" };
         UniversalMobyVariant? previewVariant = null;
         TextBlock title = new() { FontSize = 18, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap };
         TextBlock details = new() { Name = "UniversalMobyDetails", TextWrapping = TextWrapping.Wrap, FontSize = 12, LineHeight = 18 };
-        TextBlock variantLabel = new() { Text = "Version", FontSize = 11, Foreground = new SolidColorBrush(ModernMutedInk), TextWrapping = TextWrapping.Wrap };
+        TextBlock variantLabel = new() { Text = "Source version", FontSize = 11, Foreground = new SolidColorBrush(ModernMutedInk), TextWrapping = TextWrapping.Wrap };
         TextBlock technical = new() { Name = "UniversalMobyTechnical", TextWrapping = TextWrapping.Wrap, FontSize = 11, LineHeight = 16, Foreground = new SolidColorBrush(ModernMutedInk) };
         TextBlock fit = new() { Name = "UniversalMobyFitText", TextWrapping = TextWrapping.Wrap, FontSize = 12, LineHeight = 18, FontWeight = FontWeight.SemiBold };
-        Button place = NewButton("Place it (click in the level)"); place.Name = "UniversalMobyPlace"; place.IsEnabled = false;
+        Button place = NewButton("Place in level"); place.Name = "UniversalMobyPlace"; place.IsEnabled = false;
         StyleModernPrimaryButton(place, ModernGreen);
-        Button addHere = NewButton("Add next to selected object"); addHere.Name = "UniversalMobyAddHere"; addHere.IsEnabled = false;
+        Button addHere = NewButton("Add near selection"); addHere.Name = "UniversalMobyAddHere"; addHere.IsEnabled = false;
         StyleModernSecondaryButton(addHere);
         Button findRoom = NewButton("Find space for this object…"); findRoom.Name = "UniversalMobyFindRoom";
         StyleModernSecondaryButton(findRoom); findRoom.IsEnabled = false;
@@ -433,18 +437,21 @@ public sealed partial class MainWindow
         using var roomCancellation = new CancellationTokenSource();
         dialog.Closed += (_, _) => roomCancellation.Cancel();
         bool findingRoom = false;
-        Button close = NewButton("Close"); StyleModernSecondaryButton(close);
+        Button close = NewButton("Close"); close.Name = "UniversalMobyClose"; StyleModernSecondaryButton(close);
+        ToolTip.SetTip(place, "Close this browser, then click the terrain in the 3D view to place the object.");
+        ToolTip.SetTip(addHere, "Place the object beside the current selection, or at the default position when nothing is selected.");
         Button japaneseDisc = NewButton("Choose Japanese disc…"); japaneseDisc.Name = "UniversalMobyJapaneseDisc"; StyleModernSecondaryButton(japaneseDisc);
         ToolTip.SetTip(japaneseDisc, "Dragonfly eggs and signs are copied from your unchanged original Spyro the Dragon (Japan) disc. It is only read, never modified.");
         UniversalJapaneseSource? japanese = null;
         bool checking = false;
-        StackPanel jpRow = new() { Orientation = Orientation.Horizontal, Spacing = 12 };
+        bool refreshingList = false;
+        Grid jpRow = new() { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 12 };
         jpRow.Children.Add(new TextBlock
         {
             Text = "Dragonfly eggs and signs come from the Japanese version of Spyro. Choose your copy of that disc once to unlock them (it is only read, never changed).",
-            TextWrapping = TextWrapping.Wrap, MaxWidth = 760, VerticalAlignment = VerticalAlignment.Center
+            TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center
         });
-        jpRow.Children.Add(japaneseDisc);
+        Grid.SetColumn(japaneseDisc, 1); jpRow.Children.Add(japaneseDisc);
         Border jpBanner = new()
         {
             Name = "UniversalMobyJapaneseBanner", IsVisible = false, Padding = new Thickness(10, 8), CornerRadius = new CornerRadius(6),
@@ -512,7 +519,7 @@ public sealed partial class MainWindow
             var e = Est(statusVariant);
             bool known = listDry.TryGetValue(statusVariant, out var dr);
             bool fitsNow = known ? dr.Error == null : e.Fits;
-            string status = entry.RestrictionReason != null ? (UniversalSpecialCatalog.IsSpecial(entry.Default) ? "Needs your Japanese disc" : "Can't be placed")
+            string status = entry.RestrictionReason != null ? (UniversalSpecialCatalog.IsSpecial(entry.Default) ? "Needs your Japanese disc" : "See placement details")
                 : !known ? "Checking whether it fits…" : fitsNow ? e.Native ? "Already in this level" : "Can be added"
                 : UniversalFitFailureSummary(dr.Error!, destination.DisplayName, compact: true);
             Color statusColor = entry.RestrictionReason == null && !e.Native && !known ? ModernMutedInk
@@ -542,15 +549,19 @@ public sealed partial class MainWindow
         variants.ItemTemplate = new FuncDataTemplate<UniversalMobyVariant>((v, _) =>
             v != null && UniversalDragonflyEggs.IsEggClass(v.ClassId)
                 ? BuildEggColourChoice(UniversalSpecialCatalog.SpecialIdForClass(v.ClassId)!, UniversalSpecialCatalog.DisplayName(v.ClassId))
-                : new TextBlock { Text = v == null ? "" : v.SourceLevelKey == UniversalHighValueGems.SourceKey ? UniversalSpecialCatalog.DisplayName(v.ClassId) : UniversalSpecialCatalog.IsSpecial(v) ? "Japanese sign" : VersionName(v) });
+                : new TextBlock { Text = v == null ? "" : v.SourceLevelKey == UniversalHighValueGems.SourceKey ? UniversalSpecialCatalog.DisplayName(v.ClassId) : UniversalSpecialCatalog.IsSpecial(v) ? "Japanese sign" : VersionName(v), TextWrapping = TextWrapping.Wrap });
 
         string VersionName(UniversalMobyVariant v)
         {
             var same = list.SelectedItem is UniversalMobyCatalogEntry en ? en.Variants.Where(x => x.SourceLevelKey == v.SourceLevelKey).ToList() : [v];
             int n = same.IndexOf(v);
-            string identity = list.SelectedItem is UniversalMobyCatalogEntry selected ? UniversalSourceObjectName(selected,v) : "Source object";
+            string identity = list.SelectedItem is UniversalMobyCatalogEntry selected ? DisplaySourceName(selected,v) : "Source object";
             return same.Count > 1 ? $"{identity} — {LevelName(v.SourceLevelKey)} (#{n + 1} of {same.Count})" : $"{identity} — {LevelName(v.SourceLevelKey)}";
         }
+
+        string DisplaySourceName(UniversalMobyCatalogEntry entry, UniversalMobyVariant v) => UniversalSourceObjectName(entry,v)
+            .Replace("; roster identity", "", StringComparison.Ordinal)
+            .Replace("(identity unverified)", "(name unknown)", StringComparison.Ordinal);
 
         string LevelName(string key) => key == UniversalHighValueGems.SourceKey ? "USA gem variants" : key == UniversalSpecialCatalog.SourceKey ? "Spyro the Dragon (Japan)" : _retailCatalog.FindByKey(key)?.DisplayName ?? key;
 
@@ -572,12 +583,25 @@ public sealed partial class MainWindow
                 (fitFilter.SelectedIndex switch { 1 => e.RestrictionReason == null && (fittingVariants.ContainsKey(e) || (listDry.TryGetValue(e.Default, out var d) && d.Error == null)), 2 => Est(e.Default).Native, _ => true }))
                 .OrderBy(e => UniversalSpecialCatalog.IsSpecial(e.Default) ? 0 : 1).ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
             var selected = list.SelectedItem;
-            // Fit results are cached outside the entries; rebuild visible status rows
-            // so recycled controls cannot retain their earlier checking message.
-            list.ItemsSource = null;
-            list.ItemsSource = shown;
-            if (selected != null && shown.Contains(selected)) list.SelectedItem = selected;
-            summary.Text = $"Showing {shown.Count} of {entries.Count} objects{(q.Length > 0 ? " · search across all categories" : "")}. Pick one, then press Place it." + (checking ? " (Checking which objects fit this level…)" : "");
+            // Rebuild status rows without treating their temporary removal as a new
+            // selection. Keep the user's chosen source version while fit checks finish.
+            refreshingList = true;
+            try
+            {
+                list.ItemsSource = null;
+                list.ItemsSource = shown;
+                if (selected != null && shown.Contains(selected)) list.SelectedItem = selected;
+            }
+            finally { refreshingList = false; }
+            clearSearch.IsVisible = q.Length > 0;
+            empty.IsVisible = shown.Count == 0;
+            empty.Text = checking && fitFilter.SelectedIndex == 1
+                ? "Checking which objects fit. Results will appear here as the checks finish."
+                : q.Length > 0 ? "No objects match this search. Try a shorter name or clear the search. You can also change the level or fit filters."
+                : "No objects match these filters. Choose another category, source level or fit filter.";
+            summary.Text = $"Showing {shown.Count} of {entries.Count} objects{(q.Length > 0 ? " · searching all categories" : "")}." +
+                (checking ? " Checking which objects fit this level…" : " Choose an object to see its preview and placement options.");
+            RefreshDetails();
         }
 
         void RefreshDetails()
@@ -586,7 +610,8 @@ public sealed partial class MainWindow
             findRoom.IsEnabled = !findingRoom && lib != null && freshCompilation == null && list.SelectedItem is UniversalMobyCatalogEntry;
             if (lib == null || list.SelectedItem is not UniversalMobyCatalogEntry entry)
             {
-                title.Text = ""; details.Text = "Choose an object from the list to see what it is and whether it fits here."; fit.Text = ""; technical.Text = "";
+                title.Text = "Choose an object"; details.Text = "Select an object from the list to see its preview and check whether it fits this level."; fit.Text = ""; technical.Text = "";
+                roomPlans.ItemsSource = null; roomPlans.IsVisible = inspectPlan.IsVisible = false; roomExplanation.Text = "";
                 modelPreview.Child = null; previewVariant = null;
                 variants.ItemsSource = null; variants.Tag = null; variants.IsVisible = variantLabel.IsVisible = false; return;
             }
@@ -595,7 +620,7 @@ public sealed partial class MainWindow
             if (!ReferenceEquals(variants.Tag, entry))
             {
                 variants.Tag = entry;
-                variants.ItemsSource = entry.Variants.Take(200).ToList();
+                variants.ItemsSource = entry.Variants;
                 variants.SelectedItem = fittingVariants.TryGetValue(entry,out var preferred) ? preferred : entry.Default;
             }
             var v = variants.SelectedItem as UniversalMobyVariant ?? entry.Default;
@@ -606,24 +631,34 @@ public sealed partial class MainWindow
             }
             var e = Est(v);
             bool isSpecial = UniversalSpecialCatalog.IsSpecial(v);
-            variantLabel.Text = entry.SubCategory == "Dragonfly Eggs" ? "Colour" : entry.Variants.Count > 1 ? "Source object (shared type IDs can mean different objects)" : "Version";
-            details.Text = $"Selected source object: {UniversalSourceObjectName(entry,v)}.\n" + (isSpecial
-                    ? v.SourceLevelKey == UniversalHighValueGems.SourceKey ? "A new gem variant using your original USA disc.\n" : "From the Japanese version of Spyro the Dragon.\n"
-                    : $"Found in {string.Join(", ", entry.SourceLevels.Select(LevelName))}.\n") +
-                (entry.Notes is { Length: > 0 } friendly ? friendly + "\n" : "") +
-                (e.Native ? "" : "Create BIN copies the supported model, textures, sounds and native behavior dependencies into this level. Imported gameplay still needs a playtest.");
+            variantLabel.Text = entry.SubCategory == "Dragonfly Eggs" ? "Colour" : "Source version";
+            details.Text = $"{DisplaySourceName(entry,v)}\nFrom {LevelName(v.SourceLevelKey)}.\n" +
+                (isSpecial && entry.Notes is { Length: > 0 } friendly ? friendly :
+                    e.Native ? "This object already belongs to this level." : "Its appearance and game behavior are copied when you create the BIN. Playtest your exported level to check it in its new surroundings.");
             technical.Text =
+                $"Source identity: {UniversalSourceObjectName(entry,v)}\n" +
                 $"Object type {entry.ClassHex} · {FriendlyCategory(entry.Category)}{(entry.SubCategory.Length > 0 ? " › " + entry.SubCategory : "")}\n" +
                 (UniversalSpecialCatalog.IsSpecial(v)
                     ? $"Source: {LevelName(v.SourceLevelKey)} (local source model; native USA behavior)\n"
                     : $"Source: {LevelName(v.SourceLevelKey)} row T{v.SourceRow} ({entry.Variants.Count} native placement(s) across {entry.SourceLevels.Count} level(s))\n") +
                 $"Model: {(v.SharedModel ? "shared game-wide model" : v.HasLocalModel ? $"{v.ModelBytes / 1024.0:0.0} KB level model with textures and sounds" : "no visible model (controller/trigger)")}\n" +
                 $"Behavior: {(UniversalSpecialCatalog.IsSpecial(v) ? $"native USA-engine routine added by the editor ({v.BehaviorBytes / 1024.0:0.0} KB)" : v.HasBehavior ? $"native code from {LevelName(v.SourceLevelKey)} ({v.BehaviorBytes / 1024.0:0.0} KB)" : "engine default")}\n" +
-                $"Variants: {entry.Variants.Count} placement(s) across {entry.SourceLevels.Count} level(s)";
+                $"Variants: {entry.Variants.Count} placement(s) across {entry.SourceLevels.Count} level(s)\n" +
+                $"Found in: {string.Join(", ", entry.SourceLevels.Select(LevelName))}" +
+                (!isSpecial && entry.Notes is { Length: > 0 } notes ? "\n" + notes : "");
             string? restriction = v.RestrictionReason ?? entry.RestrictionReason;
             if (v.DroppedExternalPointers > 0)
-                details.Text += $"\nThis copy has {v.DroppedExternalPointers} relationship link(s) outside its source object. Those links are cleared during import; objects it originally referenced are not automatically recreated.";
-            if (restriction != null) { fit.Text = restriction; fit.Foreground = new SolidColorBrush(ModernRed); return; }
+            {
+                details.Text += "\nObjects linked to this source copy are not automatically added. Check how it behaves after exporting.";
+                technical.Text += $"\nImport clears {v.DroppedExternalPointers} external relationship pointer(s).";
+            }
+            if (restriction != null)
+            {
+                fit.Text = isSpecial ? "Choose your Japanese disc above to add this object."
+                    : "This source version cannot be placed here. Try another version if available; see Technical details for the reason.";
+                technical.Text += "\nPlacement restriction: " + restriction;
+                fit.Foreground = new SolidColorBrush(ModernRed); return;
+            }
             var trial = existing.Append(TrialFor(v)).ToList();
             if (!dryRuns.TryGetValue(v, out var dry)) dryRuns[v] = dry = CheckPlacement(lib, trial);
             listDry[v] = (null, dry.Error);
@@ -644,11 +679,13 @@ public sealed partial class MainWindow
             fit.Text = e.Native ? $"✓ Already part of {destination.DisplayName} — ready to place." : $"✓ Fits in {destination.DisplayName} — ready to place." +
                 (dry.Result.Classes.Count(c => c.DependencyOnly) is int deps and > 0 ? $" It brings {deps} small helper object(s) it needs along with it." : "");
             if (dry.Result.ParticleDependencies.Any(p => p.Status == "dependency-unverified"))
-                fit.Text += "\nParticle behavior dependencies are not yet verified.";
+                fit.Text += "\nIts special effects still need a playtest in this level.";
+            if (dry.Result.ParticleDependencies.Any(p => p.Status == "dependency-unverified"))
+                technical.Text += "\nParticle behavior dependencies are not yet verified.";
             technical.Text += $"\nGame RAM left after import: {ram.FinalHeadroom / 1024.0:0.0} KB";
             int reactionBytes = dry.Result.PlayerAnimationImports.Sum(p => p.ModelGrowthBytes);
             if (reactionBytes > 0)
-                fit.Text += $"\nIncludes Spyro's reaction animations ({reactionBytes / 1024.0:0.0} KB).";
+                technical.Text += $"\nIncludes Spyro's reaction animations ({reactionBytes / 1024.0:0.0} KB).";
             fit.Foreground = new SolidColorBrush(ModernGreen);
             place.IsEnabled = addHere.IsEnabled = true;
         }
@@ -659,7 +696,7 @@ public sealed partial class MainWindow
                 ? $"{VersionName(choice.Variant)} — fits without further removals"
                 : $"{VersionName(choice.Variant)}: remove {choice.Plan.AdditionalRows.Count} object(s)\n" +
                   string.Join(" + ", choice.Plan.Groups.Select(g => $"{g.Name} ({g.AdditionalRows.Count})")) +
-                  $"\nExport check passed: {choice.Plan.FinalRamHeadroom / 1024.0:0.0} KB RAM left; {choice.Plan.ReclaimedVramBytes / 1024.0:0.0} KB textures reclaimed" +
+                  $"\nSpace after placement: {choice.Plan.FinalRamHeadroom / 1024.0:0.0} KB game memory left; {choice.Plan.ReclaimedVramBytes / 1024.0:0.0} KB texture space freed" +
                   (choice.Plan.ParticleBehaviorUnverified ? "\nParticle behavior still needs a playtest." : "\nGameplay still needs a playtest."),
             TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4)
         });
@@ -677,7 +714,7 @@ public sealed partial class MainWindow
         {
             if (lib == null || freshCompilation != null || list.SelectedItem is not UniversalMobyCatalogEntry selectedEntry) return;
             findingRoom = true; findRoom.IsEnabled = false; roomPlans.IsVisible = inspectPlan.IsVisible = false;
-            roomExplanation.Text = "Checking versions and complete model-owner removal groups against all current objects…";
+            roomExplanation.Text = "Checking source versions and groups of objects that could make room…";
             var selected = variants.SelectedItem as UniversalMobyVariant ?? selectedEntry.Default;
             var candidates = selectedEntry.Variants.Where(v => v.Extractable)
                 .GroupBy(v => (v.SourceLevelKey, v.PropertiesBytes)).Select(g => g.First())
@@ -709,19 +746,20 @@ public sealed partial class MainWindow
                     return found;
                 }, roomCancellation.Token);
                 if (roomCancellation.IsCancellationRequested) return;
-                if (!ReferenceEquals(list.SelectedItem, selectedEntry)) { roomExplanation.Text = "Selection changed. Compare the new object to get its plan."; return; }
+                if (!ReferenceEquals(list.SelectedItem, selectedEntry) || !Equals(variants.SelectedItem as UniversalMobyVariant ?? selectedEntry.Default, selected))
+                { roomExplanation.Text = "Selection changed. Use Find space again to check the new choice."; return; }
                 var choices = reports.SelectMany(r => r.Advice.CurrentError == null
                     ? new[] { new UniversalFitChoice(r.Variant, null) }
                     : r.Advice.Plans.Select(p => new UniversalFitChoice(r.Variant, p))).ToList();
                 roomPlans.ItemsSource = choices; roomPlans.IsVisible = choices.Count > 0;
                 int currentCopies = existing.Count(p => !p.Retired), checks = reports.Sum(r => r.Advice.Checks);
-                roomExplanation.Text = $"Current scene: {removedRows.Count} native removals, {currentCopies} imported objects. Removing a row frees an actor slot; a private model and its exclusive textures are freed only when every live copy is gone. Shared models and required helpers stay resident.\n" +
-                    (choices.Count > 0 ? "Select a measured plan below, then inspect the named objects. Nothing is removed automatically." : "No plan found in this bounded search. Try fewer imported types or a different source version.") +
+                roomExplanation.Text = $"Current changes: {removedRows.Count} original objects removed, {currentCopies} objects added. Removing an object makes room for another placement. To free its appearance and texture space, every copy of that object must be removed. Some resources are shared and stay in use.\n" +
+                    (choices.Count > 0 ? "Choose a checked plan below, then inspect the named objects. You decide which objects to remove." : "No removal plan found among the versions checked. Try removing added object types or choosing another source version.") +
                     "";
                 technical.Text += $"\nSpace search: {checks} complete export checks; bounded to three native type groups per plan.";
                 foreach (var report in reports.Where(r => r.Advice.CurrentError != null && !UniversalCapacityPlanner.IsCapacityFailure(r.Advice.CurrentError)))
                 {
-                    roomExplanation.Text += $"\nThe {LevelName(report.Variant.SourceLevelKey)} version needs a source dependency that removing destination objects cannot supply. See Technical details.";
+                    roomExplanation.Text += $"\nThe {LevelName(report.Variant.SourceLevelKey)} version needs another resource from its original level. Removing objects here cannot fix that. Try another source version; see Technical details.";
                     technical.Text += $"\n{LevelName(report.Variant.SourceLevelKey)} T{report.Variant.SourceRow}: {report.Advice.CurrentError}";
                 }
                 roomPlans.SelectedIndex = choices.Count > 0 ? 0 : -1;
@@ -741,17 +779,24 @@ public sealed partial class MainWindow
         place.Click += async (_, _) => await AddAsync(true);
         addHere.Click += async (_, _) => await AddAsync(false);
         list.DoubleTapped += async (_, _) => { if (place.IsEnabled) await AddAsync(true); };
-        list.SelectionChanged += (_, _) => RefreshDetails();
+        list.SelectionChanged += (_, _) =>
+        {
+            if (refreshingList) return;
+            roomPlans.ItemsSource = null; roomPlans.IsVisible = inspectPlan.IsVisible = false; roomExplanation.Text = "";
+            RefreshDetails();
+        };
         variants.SelectionChanged += (_, _) => RefreshDetails();
         categories.SelectionChanged += (_, _) => RefreshList();
         search.TextChanged += (_, _) => RefreshList();
         fitFilter.SelectionChanged += (_, _) => RefreshList();
         sourceFilter.SelectionChanged += (_, _) => RefreshList();
 
-        Grid top = new() { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 8 };
+        Grid top = new() { ColumnDefinitions = new ColumnDefinitions("*,Auto"), RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnSpacing = 8, RowSpacing = 8 };
         top.Children.Add(search);
-        Grid.SetColumn(fitFilter, 1); top.Children.Add(fitFilter);
-        Grid.SetColumn(sourceFilter, 2); top.Children.Add(sourceFilter);
+        Grid.SetColumn(clearSearch, 1); top.Children.Add(clearSearch);
+        WrapPanel filters = new() { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8 };
+        filters.Children.Add(fitFilter); filters.Children.Add(sourceFilter);
+        Grid.SetRow(filters, 1); Grid.SetColumnSpan(filters, 2); top.Children.Add(filters);
         StackPanel right = new() { Spacing = 10, Margin = new Thickness(12, 0, 0, 0) };
         right.Children.Add(title);
         right.Children.Add(modelPreview);
@@ -763,16 +808,19 @@ public sealed partial class MainWindow
         right.Children.Add(new Expander { Header = "Technical details", IsExpanded = false, Content = technical, HorizontalAlignment = HorizontalAlignment.Stretch });
         WrapPanel buttons = new() { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8 };
         buttons.Children.Add(place); buttons.Children.Add(addHere); buttons.Children.Add(close);
-        right.Children.Add(buttons);
-        Grid body = new() { ColumnDefinitions = new ColumnDefinitions("240,*,380"), ColumnSpacing = 10 };
+        Grid body = new() { ColumnDefinitions = new ColumnDefinitions("165,*,310"), ColumnSpacing = 8 };
         body.Children.Add(new ScrollViewer { Content = categories });
-        Grid.SetColumn(list, 1); body.Children.Add(list);
+        Grid listHost = new(); listHost.Children.Add(list); listHost.Children.Add(empty);
+        Grid.SetColumn(listHost, 1); body.Children.Add(listHost);
         ScrollViewer rightScroll = new() { Content = right }; Grid.SetColumn(rightScroll, 2); body.Children.Add(rightScroll);
         DockPanel root = new() { Margin = new Thickness(14) };
         StackPanel header = new() { Spacing = 8, Margin = new Thickness(0, 0, 0, 10) };
-        header.Children.Add(new TextBlock { Text = $"Add any Spyro 1 object to {destination.DisplayName}", FontSize = 20, FontWeight = FontWeight.SemiBold });
+        header.Children.Add(new TextBlock { Text = $"Add an object to {destination.DisplayName}", TextWrapping = TextWrapping.Wrap, FontSize = 20, FontWeight = FontWeight.SemiBold });
         header.Children.Add(top); header.Children.Add(summary); header.Children.Add(jpBanner);
-        DockPanel.SetDock(header, Dock.Top); root.Children.Add(header); root.Children.Add(body);
+        DockPanel.SetDock(header, Dock.Top); root.Children.Add(header);
+        Border footer = new() { Name = "UniversalMobyFooter", Padding = new Thickness(0, 10, 0, 0), Child = buttons };
+        buttons.HorizontalAlignment = HorizontalAlignment.Right;
+        DockPanel.SetDock(footer, Dock.Bottom); root.Children.Add(footer); root.Children.Add(body);
         dialog.Content = root;
         dialog.Background = new SolidColorBrush(ModernSurface);
 
@@ -873,7 +921,7 @@ public sealed partial class MainWindow
         if (_currentLevel == null) return;
         string? specialId = UniversalSpecialCatalog.IsSpecial(v) ? UniversalSpecialCatalog.SpecialIdForClass(v.ClassId) : null;
         UniversalSpecialAsset? asset = specialId != null ? UniversalMobyExport.SpecialProvider(japanese, lib)?.Invoke(specialId) : null;
-        if (specialId != null && asset == null) { _statusText.Text = "Select the original Japanese disc first (Japanese disc… in the Add Moby browser)."; return; }
+        if (specialId != null && asset == null) { _statusText.Text = "Select the original Japanese disc first (Choose Japanese disc… in the Add Object browser)."; return; }
         byte[] row = asset?.RowTemplate ?? lib.Get(v.SourceLevelKey).Data.Row(v.SourceRow);
         string sourceName = v.SourceLevelKey == UniversalHighValueGems.SourceKey ? "USA gem variant" : asset != null ? "Spyro the Dragon (Japan)" : _retailCatalog.FindByKey(v.SourceLevelKey)?.DisplayName ?? v.SourceLevelKey;
         string name = asset?.Name ?? UniversalSourceObjectName(entry,v);

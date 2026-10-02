@@ -233,6 +233,7 @@ CASE_ARGUMENTS = {
 # Additional modes retain their own arguments/markers without replacing the
 # established mode of the same executable. Project builds remain deduplicated.
 ADDITIONAL_CORE_CASES = (
+    ("UiSmoke", "EDITOR_NAVIGATION_UI_OK checks=", ["--editor-navigation-ui-only"]),
     ("UiSmoke", "HIGH_VALUE_GEM_UI_OK checks=", ["--high-value-gems-ui-only"]),
     ("UiSmoke", "PORTAL_ROUTE_UI_OK checks=18",
      ["--portal-routes-ui-only"]),

@@ -1,4 +1,4 @@
-# Spyro Editor 1.0.4 — supported scope and limitations
+# Spyro Editor 1.0.5 — supported scope and limitations
 
 - Teal 50 and rainbow 100 gems are available in every level's object browser,
   with brighter, double-size models, idle sparkles, collection bursts and native

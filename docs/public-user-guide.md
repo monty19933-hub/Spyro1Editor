@@ -1,16 +1,26 @@
-# Spyro Editor 1.0.4
+# Spyro Editor 1.0.5
 
 ## Start editing
 
 Open **Spyro Editor.app** on an Apple Silicon Mac, or **Launch Spyro Editor.bat**
-on Windows x64. The application is self-contained. Choose **Open BIN/CUE**, select
+on Windows x64. The application is self-contained. Choose **Open Game…**, select
 your unchanged USA Spyro the Dragon disc, and pick a level. Projects and backups
 are stored outside the application folder.
 
 Select an object or terrain face in the viewport. Use the toolbar to move, copy,
-remove or edit it. **Undo** and **Redo** let you revise changes. **Save Level**
-stores the current edits; **Create BIN** combines the project's saved changes
+remove or edit it. **Undo** and **Redo** let you revise changes. **Save** (⌘S on Mac, Ctrl+S on Windows)
+stores the current level’s object and terrain edits; **Create BIN** combines the project's saved changes
 into a separate game image. Open that exported CUE in your emulator.
+
+**Add object…** searches the whole game. **Objects in this level** finds things
+already placed. Use **Quick Add…** for standard gems and local copies, and
+**Position & snapping** for height controls. **Undo last removal** appears directly
+after deleting an object; **Recovery** holds level restoration options.
+
+File and More are command menus: arrow keys highlight an option, and Enter runs
+it. **More → Check for Export Issues…** opens the detailed export checks. The
+status bar keeps routine messages short; **Details** retains the full result,
+including file locations and exported treasure totals. Warnings stay visible.
 
 Existing levels and fresh levels share the terrain controls. In an existing
 level, select a face to move it, edit a point, copy it with **Add Terrain**, remove

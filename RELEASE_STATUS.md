@@ -1,3 +1,40 @@
+# V1.0.5 UI navigation checkpoint
+
+Branch: `release/ui-navigation-20261002`, continued from the clean V1.0.4
+checkpoint `f7ac875`. Native game generation is unchanged in this update.
+
+- Visible **Save**, Cmd/Ctrl+S and real **File / More** command menus. Arrow keys
+  highlight menu items without running them. Pending saves block duplicate
+  commands, editing/navigation and window closure.
+- **Open Game**, **Quick Add**, **Objects in this level**, **Position & snapping**
+  and directly reachable **Undo last removal** make the main workflows clearer.
+  Detailed export checks and object identities are kept out of ordinary editing.
+  Export warnings remain visible and the full export result remains in Details.
+- The Add Object window keeps placement/close buttons reachable at small sizes,
+  explains empty searches, and exposes all source versions instead of truncating
+  at 200. Background fit updates preserve the selected source version; removal
+  advice discards stale selections.
+- Focused source-free navigation tests passed 44 checks. Source-backed browser
+  review passed 30 checks, including >200 versions and a 900×620 layout. Full
+  release/package/actual GUI results are recorded in the checkpoint report.
+
+## Remaining release priorities
+
+1. Universal linked-object gameplay: the next Gnorc Cove blocker requires both
+   parent-pointer and source-row-index ownership/relocation. All 396 exact cells
+   remain refused; no guessed translation or native guard was relaxed. See
+   [the bounded native audit](docs/research/universal-gnorc-parent-index-20261002.md).
+2. Expand native enemy/interactive-object playtests, mixed-scene lifecycle and
+   whole-game progression coverage beyond the exact verified scenes.
+3. Mac notarization and physical Windows runtime acceptance remain pending.
+   Fly Anywhere remains deferred at the user's request.
+
+This is a UI release checkpoint, not a claim that universal Moby gameplay or
+all original release gates are complete. Original discs, cards, user projects
+and earlier packages remain preserved. No remote release is published.
+
+---
+
 # V1.0.4 high-value gem checkpoint
 
 Branch: `feature/high-value-gems-20261001`. Teal 50 and rainbow 100 gems

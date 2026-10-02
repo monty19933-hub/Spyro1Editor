@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
@@ -63,6 +64,7 @@ internal static class UniversalMobyUiCases
             ListBox cats = Find<ListBox>(library, "UniversalMobyCategories");
             var categoryNames = cats.ItemsSource!.Cast<(string, string, int)>().Select(c => c.Item1).Distinct().ToList();
             Check(categoryNames.Contains("Enemies") && categoryNames.Contains("Collectibles") && categoryNames.Contains("Interactive"), "category hierarchy");
+            CheckBrowserReleaseStates(library, list, outputDirectory);
             Snapshot(library, Path.Combine(outputDirectory, "universal-moby-library.png"));
             ComboBox fitOnly = Find<ComboBox>(library, "UniversalMobyFit");
             fitOnly.SelectedIndex = 1; Pump();
@@ -332,6 +334,54 @@ internal static class UniversalMobyUiCases
             Console.WriteLine("UNIVERSAL_MOBY_UI_OK");
         }
         finally { window.Close(); }
+    }
+
+    private static void CheckBrowserReleaseStates(Window library, ListBox list, string outputDirectory)
+    {
+        var all = Items(list);
+        var broad = all.OrderByDescending(e => e.Variants.Count).First();
+        Check(broad.Variants.Count > 200, "real catalogue fixture covers more than 200 source placements");
+        list.SelectedItem = broad; Pump();
+        var variants = Find<ComboBox>(library, "UniversalMobyVariant");
+        Check(variants.ItemsSource!.Cast<UniversalMobyVariant>().SequenceEqual(broad.Variants),
+            "every source placement remains available without a silent 200-choice limit");
+        var last = broad.Variants.Last();
+        variants.SelectedItem = last; Pump();
+        var search = Find<TextBox>(library, "UniversalMobySearch");
+        search.Text = broad.ClassHex; Pump();
+        Check(ReferenceEquals(list.SelectedItem, broad) && Equals(variants.SelectedItem, last),
+            "search status refresh preserves the selected exact source placement");
+        var summary = Find<TextBlock>(library, "UniversalMobySummary");
+        Wait(() => !(summary.Text ?? "").Contains("Checking", StringComparison.Ordinal), "catalogue fit check completed", 600);
+        Check(Equals(variants.SelectedItem, last), "background fit refresh preserves the chosen source placement");
+        Check((Find<TextBlock>(library, "UniversalMobyTechnical").Text ?? "").Contains($"row T{last.SourceRow}", StringComparison.Ordinal),
+            "details and fit controls still describe the selected placement after asynchronous checks");
+        bool fitPassed = (Find<TextBlock>(library, "UniversalMobyFitText").Text ?? "").StartsWith("✓", StringComparison.Ordinal);
+        Check(Find<Button>(library, "UniversalMobyPlace").IsEnabled == fitPassed &&
+              Find<Button>(library, "UniversalMobyAddHere").IsEnabled == fitPassed,
+            "placement actions follow the preserved source placement's completed check");
+        search.Text = "no-object-could-match-this-search-123456"; Pump();
+        Check(Items(list).Length == 0 && Find<TextBlock>(library, "UniversalMobyEmpty").IsVisible,
+            "empty search shows an explanation");
+        Check(!Find<Button>(library, "UniversalMobyPlace").IsEnabled && !Find<Button>(library, "UniversalMobyAddHere").IsEnabled &&
+              variants.ItemsSource == null, "empty search clears stale selection and disables placement");
+        Check(Find<Button>(library, "UniversalMobyClearSearch").IsVisible, "search can be cleared directly");
+        Click(Find<Button>(library, "UniversalMobyClearSearch"));
+        Check(search.Text == "" && Items(list).Length == all.Length && !Find<TextBlock>(library, "UniversalMobyEmpty").IsVisible,
+            "clear search restores the full catalogue");
+        library.Width = 900; library.Height = 620; Pump();
+        foreach (string name in new[] { "UniversalMobyPlace", "UniversalMobyAddHere", "UniversalMobyClose" })
+        {
+            var button = Find<Button>(library, name);
+            var point = button.TranslatePoint(new Avalonia.Point(), library);
+            Check(point != null && button.Bounds.Width > 0 && button.Bounds.Height > 0 &&
+                  point.Value.X >= 0 && point.Value.Y >= 0 &&
+                  point.Value.X + button.Bounds.Width <= library.ClientSize.Width &&
+                  point.Value.Y + button.Bounds.Height <= library.ClientSize.Height,
+                "browser action stays reachable at minimum size: " + name);
+        }
+        Snapshot(library, Path.Combine(outputDirectory, "universal-moby-minimum-size.png"));
+        library.Width = 1080; library.Height = 760; Pump();
     }
 
     private static int SpecialObjects(MainWindow window, string root, LevelDefinition toasty, LevelDefinition stone, string outputDirectory)

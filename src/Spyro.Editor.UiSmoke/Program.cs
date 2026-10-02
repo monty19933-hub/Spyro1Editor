@@ -23,6 +23,14 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+if (args.Contains("--editor-navigation-ui-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --editor-navigation-ui-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    EditorNavigationUiCases.Run();
+    return 0;
+}
+
 if (args.Contains("--high-value-gems-ui-only", StringComparer.Ordinal))
 {
     if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --high-value-gems-ui-only");
