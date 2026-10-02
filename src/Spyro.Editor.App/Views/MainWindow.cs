@@ -13224,6 +13224,7 @@ public sealed partial class MainWindow : Window
         }
 
         _createBinBusy = true;
+        RefreshActionAvailability();
         RefreshPortalRouteAvailability();
         RefreshFreeFlightSettingsAvailability();
         object? idleButtonContent = _toolbarCreateBinButton?.Content;
@@ -13248,6 +13249,7 @@ public sealed partial class MainWindow : Window
         finally
         {
             _createBinBusy = false;
+            RefreshActionAvailability();
             RefreshPortalRouteAvailability();
             RefreshFreeFlightSettingsAvailability();
             if (_toolbarCreateBinButton != null)

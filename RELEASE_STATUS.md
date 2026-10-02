@@ -14,7 +14,7 @@ checkpoint `f7ac875`. Native game generation is unchanged in this update.
   explains empty searches, and exposes all source versions instead of truncating
   at 200. Background fit updates preserve the selected source version; removal
   advice discards stale selections.
-- Focused source-free navigation tests passed 47 checks. Source-backed browser
+- Focused source-free navigation tests passed 50 checks. Source-backed browser
   review passed 30 checks, including >200 versions and a 900×620 layout. Full
   release/package/actual GUI results are recorded in the checkpoint report.
 

@@ -87,6 +87,14 @@ internal static class EditorNavigationUiCases
             SetFence("_loadingLevel", false); SetFence("_handlingLevelSelection", false);
             Invoke(window, "RefreshLevelSelectionAvailability");
             Check(save.IsEnabled, "Finishing the outer picker enables Save immediately, without another edit or command.");
+            var exportBarrier = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Task exporting = window.RunCreateBinCommandWithVisibleFeedbackAsync(() => exportBarrier.Task);
+            Check(!save.IsEnabled && !file.IsEnabled, "Create BIN immediately disables Save and File commands.");
+            exportBarrier.SetResult(); Wait(() => exporting.IsCompleted); exporting.GetAwaiter().GetResult();
+            Check(save.IsEnabled && file.IsEnabled, "Successful export restores Save and File without another edit.");
+            Task failedExport = window.RunCreateBinCommandWithVisibleFeedbackAsync(() => Task.FromException(new InvalidOperationException("navigation test export failure")));
+            Wait(() => failedExport.IsCompleted); failedExport.GetAwaiter().GetResult();
+            Check(save.IsEnabled && file.IsEnabled && Get<TextBlock>(window,"_statusText").Text!.StartsWith("Could not create BIN:"), "Failed exports also restore commands and preserve the failure message.");
             byte[] beforeBusy = File.ReadAllBytes(path);
             foreach (string owner in new[] { "_createBinBusy", "_regularEditorPersistenceBusy", "_workspaceTransitionBusy", "_loadingLevel", "_freshNativeResearchBusy", "_buildSafetyBusy", "_buildingPortableCache", "_projectDataImportBusy", "_terrainTexturePaintBusy", "_terrainTextureRelocationBusy", "_terrainTexturePaintHistoryRestoreBusy", "_id65BlankLabBusy", "_nativeLevelReplacementBusy", "_handlingLevelSelection" })
             {
