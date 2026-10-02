@@ -801,8 +801,8 @@ public readonly record struct GemValue(string Name, int Value, int IdByte, int V
     public static GemValue Blue { get; } = new("Blue gem", 5, 0x55, 0x03, ColorRgba.FromRgb(24, 78, 232));
     public static GemValue Yellow { get; } = new("Yellow gem", 10, 0x56, 0x04, ColorRgba.FromRgb(226, 211, 42));
     public static GemValue Purple { get; } = new("Purple gem", 25, 0x57, 0x05, ColorRgba.FromRgb(176, 70, 230));
-    public static GemValue Teal { get; } = new("Teal gem", 50, UniversalHighValueGems.TealClass, 0, ColorRgba.FromRgb(0, 205, 190));
-    public static GemValue Rainbow { get; } = new("Rainbow gem", 100, UniversalHighValueGems.RainbowClass, 0, ColorRgba.FromRgb(240, 140, 240));
+    public static GemValue Teal { get; } = new("Teal gem", 50, UniversalHighValueGems.TealClass, 0, ColorRgba.FromRgb(72, 255, 232));
+    public static GemValue Rainbow { get; } = new("Rainbow gem", 100, UniversalHighValueGems.RainbowClass, 0, ColorRgba.FromRgb(255, 176, 255));
 
     public string DisplayName => Value > 0 ? $"{Name} ({Value})" : Name;
 

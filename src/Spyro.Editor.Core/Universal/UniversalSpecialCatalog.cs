@@ -53,7 +53,7 @@ public static class UniversalSpecialCatalog
             16, 1024, 4096, true, false, true);
         return new(classId, name, "Collectibles", "Gems", [variant], variant,
             [UniversalHighValueGems.SourceKey], null,
-            $"Adds {value} to collected treasure and this level's available total. Collected state is saved by the game. Uses your USA disc; no Japanese disc is needed.");
+            $"A bright, double-size gem with a sparkling effect. Adds {value} to collected treasure and this level's available total. Collected state is saved by the game. Uses your USA disc; no Japanese disc is needed.");
     }
 }
 

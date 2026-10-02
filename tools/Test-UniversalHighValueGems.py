@@ -85,6 +85,8 @@ def fixture(cls, physical=0, logical=None, level=0, saved=False, position=(0, 0,
     m.poke(0x80119200, actor)
     m.poke(0x800761D4, 0x8006FFF0)
     m.poke(0x800758E4, PARTICLE)
+    m.poke(0x80075824, 0x80120000)
+    m.poke(0x80075738, 0x80120000)
     m.poke(actor, prop)
     m.poke(actor+0x36, cls, 2)
     m.poke(actor+0x34, 0, 2)
@@ -196,7 +198,64 @@ for cls in CLASSES:
         m, actor, prop, _ = fixture(cls, position=position)
         e = run(m)
         check(m.read(0x80075860) == 0 and m.read(actor+0x48, 1) == 0, 'outside native authored pickup boundary')
-        check(m.read(prop) == 0 and not e, 'outside radius no effect or popup')
+        stars = [v for v in e if v['Target'] == PARTICLE]
+        check(m.read(prop) == 0 and len(stars) == 1 and stars[0]['Arguments'][:3] == [1, 12, actor], 'nearby uncollected boundary gem emits one idle star without popup')
+# Idle stars are transient, nearby and throttled independently of draw calls.
+idle_cases = []
+for cls in CLASSES:
+    m, actor, prop, _ = fixture(cls, position=(2048, 0, 0))
+    emitted_frames = []
+    for frame in range(65):
+        effects = [e for e in run(m) if e['Target'] == PARTICLE]
+        if effects:
+            emitted_frames.append(frame)
+            check(len(effects) == 1 and effects[0]['Arguments'][:3] == [1, 12, actor], 'single native idle star per gem')
+        check(m.read(actor+0x48, 1) == 0 and m.read(prop) == 0, 'idle gem remains active without collection popup')
+        check(m.read(0x80075860) == 0 and m.read(0x80077908) == 0, 'idle sparkle changes no treasure or saved identity')
+    check(emitted_frames == [0, 32, 64], 'deterministic thirty-two-update idle sparkle cadence')
+    cooldown = m.read(prop+4)
+    check(not any(e['Target'] == TEXT for e in run(m, 'Draw')) and m.read(prop+4) == cooldown, 'active cooldown survives render hook without popup')
+    m.poke(actor+12, 0)
+    pickup = [e for e in run(m) if e['Target'] == PARTICLE]
+    check(len(pickup) == 1 and pickup[0]['Arguments'][:3] == [6, 12, actor], 'pickup replaces idle sparkle with unchanged six-star burst')
+    for frame in range(32):
+        check(not any(e['Target'] == PARTICLE for e in run(m)), 'retired gem never emits an idle star')
+    idle_cases.append({'Class': cls, 'EmissionUpdates': emitted_frames, 'PickupBurst': 6})
+for cls in CLASSES:
+    for position in [(4096, 0, 0), (0, -4096, 0), (0, 0, 4096), (10000, 10000, 10000)]:
+        m, actor, prop, _ = fixture(cls, position=position)
+        check(not run(m) and m.read(prop+4) == 0, 'distant gem does not emit or accumulate invisible sparkle timers')
+    for address in [0x80075690, 0x800757D8]:
+        m, actor, prop, _ = fixture(cls, position=(2048, 0, 0))
+        m.poke(address, 1)
+        check(not run(m) and m.read(prop+4) == 0, 'modal/non-gameplay idle particle gate')
+    m, actor, prop, _ = fixture(cls, position=(2048, 0, 0))
+    m.poke(actor+0x48, 0x80, 1)
+    check(not run(m) and m.read(prop+4) == 0, 'inactive gem does not emit idle particles')
+    m, actor, prop, _ = fixture(cls, position=(2048, 0, 0))
+    m.poke(0x80075738, 0x80122000)
+    check(not run(m) and m.read(prop+4) == 0, 'full native pool skips idle cosmetics without evicting gameplay particles or aging cooldown')
+    m.poke(0x80075738, 0x80121000)
+    check(any(e['Target'] == PARTICLE for e in run(m)), 'freed native particle slot resumes pending idle sparkle')
+    m.poke(0x80075738, 0x80122000)
+    m.poke(actor+12, 0)
+    burst = [e for e in run(m) if e['Target'] == PARTICLE]
+    check(len(burst) == 1 and burst[0]['Arguments'][0] == 6, 'collection retains native burst at pool capacity')
+# All 256 simultaneous nearby gems share the per-scan emission budget. Both
+# values get a native star; no callback keeps actor pointers or modifies saves.
+m, actor, prop, _ = fixture(CLASSES[0], physical=255, position=(2048, 0, 0))
+for row in range(256):
+    moby, properties = ACTORS+row*0x58, PROPS+row*16
+    m.poke(moby, properties)
+    m.poke(moby+0x36, CLASSES[row % 2], 2)
+    m.poke(moby+12, 2048)
+sparkled = []
+for frame in range(64):
+    effects = [e for e in run(m) if e['Target'] == PARTICLE]
+    check(len(effects) <= 8, 'eight idle native particles per scan across all gems')
+    sparkled.extend(e['Arguments'][2] for e in effects)
+    check(m.read(0x80075860) == 0 and m.read(0x80077908) == 0, 'dense idle gems preserve accounting')
+check(all(sparkled.count(ACTORS+row*0x58) == 2 for row in range(256)), 'all 256 nearby gems each receive bounded repeated idle stars')
 for cls in [0x53, 0x54, 0x55, 0x56, 0x57, 0x1FE]:
     m, actor, prop, _ = fixture(cls)
     check(not run(m) and m.read(actor+0x48, 1) == 0 and m.read(prop) == 0, 'retail five gems and inert actors untouched')
@@ -232,7 +291,7 @@ for i in range(150):
 check(not any(e['Target'] == TEXT for e in run(m, 'Draw')), 'native HUD capacity protected')
 receipt = {'Marker': 'HIGH_VALUE_GEM_NATIVE_SCALAR_OK', 'Evidence':
            'source-native award/retirement and emitted update/draw; strict integer branch/load delays; audio/particle/HUD text are ABI effect doubles, not gameplay/card/visual acceptance',
-           'Checks': checks, 'Cases': cases, 'SourceExecutableSha256': hashlib.sha256(exe).hexdigest(),
+           'Checks': checks, 'Cases': cases, 'IdleCases': idle_cases, 'SourceExecutableSha256': hashlib.sha256(exe).hexdigest(),
            'EmittedSha256': hashlib.sha256(Path(args.emitted).read_bytes()).hexdigest(), 'RuntimeStatus': 'not-tested'}
 if args.receipt:
     Path(args.receipt).write_text(json.dumps(receipt, indent=2)+'\n')

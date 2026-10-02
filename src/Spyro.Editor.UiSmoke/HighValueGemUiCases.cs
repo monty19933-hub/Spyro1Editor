@@ -59,7 +59,10 @@ internal static class HighValueGemUiCases
         var loaded = SceneDocument.Read(scene);
         Check(loaded.ProjectObjects().Sum(m => m.TreasureValue) == 200, "fresh document preserves higher values");
         Check(loaded.Ledger.Entries.Select(e => e.Id).SequenceEqual(fresh.Ledger.Entries.Select(e => e.Id)), "fresh reload preserves collection identities");
-        Check(MobyGemIconCatalog.HitRadius(12, GemValue.Rainbow) >= 18 && MobyGemIconCatalog.HitRadius(12, GemValue.Teal) >= 18, "new viewport markers keep usable hit regions");
+        foreach (double markerSize in new[] { 4.0, 12.0, 24.0 })
+            Check(MobyGemIconCatalog.HitRadius(markerSize, GemValue.Rainbow) == 2 * MobyGemIconCatalog.HitRadius(markerSize, GemValue.Purple)
+                && MobyGemIconCatalog.HitRadius(markerSize, GemValue.Teal) == 2 * MobyGemIconCatalog.HitRadius(markerSize, GemValue.Purple),
+                "double-size gem hit regions follow the drawn size at near and far zoom");
         Console.WriteLine($"HIGH_VALUE_GEM_UI_OK checks={checks}");
     }
 }

@@ -11,3 +11,5 @@
 - Keep the original five gem values and enemy/chest reward selectors unchanged.
 - Add native source-owner, save identity, numeric popup and particle lifecycle
   checks. Level capacity still applies; see the supported-scope guide.
+
+- The new gems sparkle while waiting to be collected; their catalogue previews and larger editor markers match the new appearance.

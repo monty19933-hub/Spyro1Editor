@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
+using Spyro.Editor.Core.Analysis;
 using Spyro.Editor.Core.Exporting;
 
 [assembly: InternalsVisibleTo("Spyro.Editor.UniversalHighValueGemSmoke")]
@@ -17,6 +18,7 @@ public static partial class UniversalHighValueGems
     // immediate in all 35 overlays/the executable excludes these two IDs.
     public const int TealClass = 0x1CF, RainbowClass = 0x1DA;
     public const int PopupFrames = 45;
+    public const int ModelScale = 2, IdleSparkleFrames = 32, IdleSparkleLimit = 8, IdleSparkleRadius = 0x1000;
     public const string PurplePackageSha256 = "0c7823412b2a1a1df1da587d6bc9d9cde824062d4b9387715075112db241caea";
     internal const uint TealParticleColour = 0x2C808000, RainbowParticleColour = 0x2C808080;
 
@@ -58,8 +60,10 @@ public static partial class UniversalHighValueGems
         return [Asset(TealId, "Teal gem (50)", TealClass), Asset(RainbowId, "Rainbow gem (100)", RainbowClass)];
     }
 
-    /// <summary>Recolours every RGB entry of the bounded untextured simple model;
-    /// geometry, offsets and read-ahead bytes remain exact. Native profile faces
+    /// <summary>Doubles signed-byte vertex coordinates and brightens every RGB entry
+    /// of the bounded untextured simple model. Unreferenced trailing RGB entries
+    /// are removed to close the indexed-RGB owner; face/read-ahead bytes move together.
+    /// Native profile faces
     /// become admitted indexed-RGB faces, so the authored colours reach the renderer.</summary>
     public static byte[] Recolour(byte[] package, int classId)
     {
@@ -68,22 +72,33 @@ public static partial class UniversalHighValueGems
         if (admitted.Length != package.Length)
             throw new InvalidDataException("High-value gem simple model contains unowned trailing bytes.");
         byte[] copy = package.ToArray();
+        int vertexStart = BinaryPrimitives.ReadInt32LittleEndian(copy.AsSpan(4));
+        int vertexEnd = checked(vertexStart + unchecked((sbyte)copy[0]) * 3);
+        for (int p = vertexStart; p < vertexEnd; p++)
+        {
+            int scaled = unchecked((sbyte)copy[p]) * ModelScale;
+            if (scaled < sbyte.MinValue || scaled > sbyte.MaxValue)
+                throw new InvalidDataException("High-value gem doubled vertex exceeds its native signed-byte coordinate.");
+            copy[p] = unchecked((byte)(sbyte)scaled);
+        }
         int rgb = BinaryPrimitives.ReadInt32LittleEndian(copy.AsSpan(8));
         int faces = BinaryPrimitives.ReadInt32LittleEndian(copy.AsSpan(12));
         int count = (faces - rgb) / 4;
         if (count <= 0 || rgb < 16 || faces > copy.Length)
             throw new InvalidDataException("High-value gem RGB interval is not owned by its simple model.");
-        (byte R, byte G, byte B)[] rainbow = [(240, 48, 64), (240, 144, 32), (240, 224, 48), (48, 224, 80), (32, 208, 224), (64, 96, 240), (176, 64, 240)];
+        (byte R, byte G, byte B)[] rainbow = [(255, 80, 104), (255, 176, 64), (255, 240, 80), (80, 255, 128), (64, 240, 255), (104, 144, 255), (224, 104, 255)];
         for (int i = 0; i < count; i++)
         {
             int p = rgb + i * 4;
-            int shade = Math.Clamp((int)Math.Max(copy[p], Math.Max(copy[p + 1], copy[p + 2])), 48, 255);
-            var tint = classId == TealClass ? ((byte)32, (byte)224, (byte)208) : rainbow[i % rainbow.Length];
-            copy[p] = (byte)(tint.Item1 * shade / 255);
-            copy[p + 1] = (byte)(tint.Item2 * shade / 255);
-            copy[p + 2] = (byte)(tint.Item3 * shade / 255);
+            // Indexed RGB is the native unlit colour path. The donor's 127 gray
+            // table must not halve the authored palette again.
+            var tint = classId == TealClass ? ((byte)48, (byte)255, (byte)232) : rainbow[i % rainbow.Length];
+            copy[p] = tint.Item1;
+            copy[p + 1] = tint.Item2;
+            copy[p + 2] = tint.Item3;
         }
         int faceCount = copy[1];
+        int highestColor = -1;
         for (int i = 0; i < faceCount; i++)
         {
             int p = faces + i * 8;
@@ -93,8 +108,25 @@ public static partial class UniversalHighValueGems
             // path and uses one authored colour per unchanged geometry vertex.
             BinaryPrimitives.WriteUInt32LittleEndian(copy.AsSpan(p), vertices & ~3u);
             BinaryPrimitives.WriteUInt32LittleEndian(copy.AsSpan(p + 4), vertices & ~3u);
+            int[] indices = [(int)(vertices >> 23 & 127), (int)(vertices >> 16 & 127), (int)(vertices >> 9 & 127), (int)(vertices >> 2 & 127)];
+            highestColor = Math.Max(highestColor, indices.Take(indices[2] == indices[3] ? 3 : 4).Max());
+        }
+        // The purple donor owns fifteen gray RGB words but its fourteen vertices
+        // reference only the first fourteen. Once converted to indexed RGB, retain
+        // precisely the referenced prefix and relocate the complete face/read-ahead
+        // stream; both native and preview readers then have one closed owner.
+        int closedFaces = checked(rgb + (highestColor + 1) * 4);
+        if (closedFaces > faces) throw new InvalidDataException("High-value gem references an unowned RGB entry.");
+        if (closedFaces < faces)
+        {
+            byte[] closed = new byte[copy.Length - (faces - closedFaces)];
+            copy.AsSpan(0, closedFaces).CopyTo(closed);
+            copy.AsSpan(faces).CopyTo(closed.AsSpan(closedFaces));
+            BinaryPrimitives.WriteInt32LittleEndian(closed.AsSpan(12), closedFaces);
+            copy = closed;
         }
         _ = UniversalSharedModelAssets.CountDerivedSimplePackage(copy);
+        _ = NativeSimpleGouraudModelGeometry.Decode(copy);
         return copy;
     }
 

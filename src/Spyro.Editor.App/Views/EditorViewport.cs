@@ -4609,9 +4609,9 @@ public sealed partial class EditorViewport : Control
     {
         if (gem == GemValue.Rainbow)
         {
-            double radius = Math.Clamp(size * 1.5, 12, 27);
-            Color[] colors = [Color.Parse("#FF5555"), Color.Parse("#FFAA35"), Color.Parse("#F5EB42"),
-                Color.Parse("#30D86D"), Color.Parse("#27CCD5"), Color.Parse("#538AFF"), Color.Parse("#AE65EC"), Color.Parse("#F278D7")];
+            double radius = MobyGemIconCatalog.IconHeight(size) / 1.15;
+            Color[] colors = [Color.Parse("#FF8080"), Color.Parse("#FFBB60"), Color.Parse("#FFF576"),
+                Color.Parse("#70FF9E"), Color.Parse("#60F5FF"), Color.Parse("#80AAFF"), Color.Parse("#CC95FF"), Color.Parse("#FFA0ED")];
             Point[] outline = Enumerable.Range(0, 8).Select(i =>
                 new Point(point.X + Math.Sin(i * Math.PI / 4) * radius,
                     point.Y - Math.Cos(i * Math.PI / 4) * radius * 1.15)).ToArray();
@@ -4620,11 +4620,14 @@ public sealed partial class EditorViewport : Control
                 DrawPolygon(context, [point, outline[i], outline[(i + 1) % outline.Length]],
                     new SolidColorBrush(colors[i]), null);
             DrawPolygon(context, outline, null, rim);
+            DrawHighValueGemSparkles(context, point, radius);
             return;
         }
         if (gem == GemValue.Teal)
         {
-            DrawSpyroDiamondGem(context, point, Math.Clamp(size * 1.3, 12, 25), GemMarkerColor(color, gem), rim);
+            double radius = MobyGemIconCatalog.IconHeight(size) / 1.23;
+            DrawSpyroDiamondGem(context, point, radius, GemMarkerColor(color, gem), rim);
+            DrawHighValueGemSparkles(context, point, radius);
             return;
         }
         if (MobyGemIconCatalog.TryDraw(context, point, size, rim, gem))
@@ -4632,6 +4635,21 @@ public sealed partial class EditorViewport : Control
 
         color = GemMarkerColor(color, gem);
         DrawSpyroDiamondGem(context, point, size * 0.72, color, rim);
+    }
+
+    private static void DrawHighValueGemSparkles(DrawingContext context, Point point, double radius)
+    {
+        foreach (var (x, y, scale) in new[] { (-0.75, -0.7, 0.16), (0.9, -0.2, 0.12), (0.3, 0.85, 0.1) })
+        {
+            Point center = new(point.X + x * radius, point.Y + y * radius);
+            double r = radius * scale;
+            DrawPolygon(context,
+                [new(center.X, center.Y - r), new(center.X + r * 0.22, center.Y - r * 0.22),
+                 new(center.X + r, center.Y), new(center.X + r * 0.22, center.Y + r * 0.22),
+                 new(center.X, center.Y + r), new(center.X - r * 0.22, center.Y + r * 0.22),
+                 new(center.X - r, center.Y), new(center.X - r * 0.22, center.Y - r * 0.22)],
+                Brushes.White, null);
+        }
     }
 
     private static double MobyHitRadius(Moby moby, double markerSize)
