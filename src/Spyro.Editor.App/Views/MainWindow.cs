@@ -14229,7 +14229,7 @@ public sealed partial class MainWindow : Window
             ReportCreateBinProgress("Importing objects...", "Create BIN: importing models, textures, sounds and behavior for objects from other levels...");
             string universalImage = Path.Combine(tempDir, $"{++step:00}-universal-mobys.bin");
             string donorImage = sourceImage;
-            bool needsJapanese = universalPlacements.Values.Any(list => list.Any(p => p.SpecialId != null));
+            bool needsJapanese = universalPlacements.Values.Any(list => list.Any(p => UniversalSpecialCatalog.RequiresJapaneseSource(p.SpecialId)));
             string japaneseImage = needsJapanese ? UniversalJapaneseDiscLocator.Find(_workspace) : "";
             UniversalExportResult universal = await Task.Run(() =>
             {

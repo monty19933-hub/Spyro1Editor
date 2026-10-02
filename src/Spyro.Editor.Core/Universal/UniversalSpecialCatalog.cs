@@ -14,6 +14,8 @@ public static class UniversalSpecialCatalog
 
     public static bool IsSpecial(UniversalMobyVariant v) => v.SourceLevelKey is SourceKey or UniversalHighValueGems.SourceKey;
 
+    public static bool RequiresJapaneseSource(string? id) => id != null && !UniversalHighValueGems.IsId(id);
+
     public static bool NeedsRenderHook(string? id) => id == UniversalDragonflyEggs.SignId || UniversalHighValueGems.IsId(id);
 
     public static string? SpecialIdForClass(int classId) =>

@@ -33,6 +33,11 @@ internal static class HighValueGemUiCases
         Check(mobys.Select(m => m.UniversalPlacementId).Distinct().Count() == 3, "duplicates receive unique collected identities");
         var entries = UniversalSpecialCatalog.Entries(false).Where(e => e.Default.SourceLevelKey == UniversalHighValueGems.SourceKey).ToArray();
         Check(entries.Length == 2 && entries.All(e => e.RestrictionReason == null && e.SubCategory == "Gems"), "both placeable catalog entries work without Japanese disc");
+        Check(!UniversalSpecialCatalog.RequiresJapaneseSource(UniversalHighValueGems.TealId)
+            && !UniversalSpecialCatalog.RequiresJapaneseSource(UniversalHighValueGems.RainbowId), "normal Create BIN needs only USA for high-value gems");
+        Check(!UniversalSpecialCatalog.RequiresJapaneseSource(null), "ordinary USA objects do not require Japan");
+        Check(UniversalSpecialCatalog.RequiresJapaneseSource(UniversalDragonflyEggs.SignId)
+            && UniversalDragonflyEggs.Variants.All(v => UniversalSpecialCatalog.RequiresJapaneseSource(v.Id)), "mixed exports still require Japan for eggs and signs");
         var editable = typeof(MainWindow).GetMethod("HasEditableGemValue", BindingFlags.Static | BindingFlags.NonPublic)!;
         Check(mobys.All(m => !(bool)editable.Invoke(null, [m])!), "retail reward editor cannot corrupt special gem identity");
         bool refused = false;
