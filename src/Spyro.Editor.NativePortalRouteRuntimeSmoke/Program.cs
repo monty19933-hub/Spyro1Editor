@@ -10,6 +10,7 @@ using Spyro.Editor.Core.Universal;
 int checks=0;
 void Check(bool value,string message){if(!value)throw new InvalidOperationException(message);checks++;}
 void Refuse(Action action,string message){bool refused=false;try{action();}catch(InvalidDataException){refused=true;}Check(refused,message);}
+PortalLandingCases.Run(Check,Refuse);
 uint Word(byte[] bytes,uint address)=>BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(checked((int)(address-UniversalOverlay.Base)),4));
 void Put(byte[] bytes,uint address,uint value)=>BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(checked((int)(address-UniversalOverlay.Base)),4),value);
 const uint oldUpdate=UniversalOverlay.Base+0x100,oldCopy=UniversalOverlay.Base+0x300;

@@ -8,18 +8,30 @@ namespace Spyro.Editor.Core.Exporting;
 public static class NativeAuthoredSpawn
 {
     public const float PlayerRadius = 356f / 16;
+    // Conservative authoring policy: ordinary entry keeps moving after control
+    // returns. This is an area-support certificate, not a complete trajectory proof.
+    public const float PortalArrivalAreaRadius = 192;
     private const int MaximumFragments = 4096;
     private readonly record struct Point(double X, double Y);
 
     public static void RequireSupported(SceneDocument document)
+        => RequireArea(document,PlayerRadius,"Move the player start above a solid floor, with room around its edges. The entire player footprint needs a floor within 128 editor units below the start and room for Spyro.");
+
+    /// <summary>Certify a continuous 384-wide landing area around the rounded
+    /// spawn. Retains the original 128 maximum drop and 22.25 vertical clearance;
+    /// does not certify the incoming animation, airborne obstacles or held input.</summary>
+    public static void RequirePortalArrivalSupported(SceneDocument document)
+        => RequireArea(document,PortalArrivalAreaRadius,"Portal arrival needs a continuous solid landing area at least 384 editor units wide, centered on the player start. Add floor around the start or move the start onto a wider platform; keep the floor within 128 units below it and leave room above the floor for Spyro.");
+
+    private static void RequireArea(SceneDocument document,double areaRadius,string failure)
     {
         document.Validate();
         // Use the same native 1/16-unit rounding as the compiled scene header.
         var p = new Vector3f(MathF.Round(document.Spawn.X*16)/16,
             MathF.Round(document.Spawn.Y*16)/16,MathF.Round(document.Spawn.Z*16)/16);
-        double r = PlayerRadius;
-        // This square contains the circular native footprint. Marginal corner
-        // support is conservatively refused; sampling cannot exclude holes.
+        double r = areaRadius;
+        // Certify the whole square, including its corners. For spawn-only checks
+        // it contains the circular native footprint; sampling cannot exclude holes.
         List<List<Point>> uncovered = [[new(-r,-r),new(r,-r),new(r,r),new(-r,r)]];
         foreach (var face in document.Surfaces)
         {
@@ -28,7 +40,7 @@ public static class NativeAuthoredSpawn
             if (v.Length == 4) Cover(v[0],v[2],v[3]);
             if (uncovered.Count == 0) return;
         }
-        throw new InvalidDataException("Move the player start above a solid floor, with room around its edges. The entire player footprint needs a floor within 128 editor units below the start and room for Spyro.");
+        throw new InvalidDataException(failure);
 
         void Cover(Vector3f a,Vector3f b,Vector3f c)
         {
@@ -41,7 +53,7 @@ public static class NativeAuthoredSpawn
             double z0=a.Z-zx*ax-zy*ay;
             List<Point> floor=[new(ax,ay),new(bx,by),new(cx,cy)];
             if (determinant<0) floor.Reverse();
-            floor=Clip(floor,q=>p.Z-r-(z0+zx*q.X+zy*q.Y));
+            floor=Clip(floor,q=>p.Z-PlayerRadius-(z0+zx*q.X+zy*q.Y));
             floor=Clip(floor,q=>z0+zx*q.X+zy*q.Y-(p.Z-128));
             if (floor.Count<3) return;
             List<List<Point>> next=[];
