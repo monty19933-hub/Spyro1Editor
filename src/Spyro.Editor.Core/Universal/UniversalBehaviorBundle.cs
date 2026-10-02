@@ -40,6 +40,7 @@ public sealed record UniversalBehaviorBundle(uint Base, byte[] Code, uint Update
     public IReadOnlyList<UniversalDestinationGemColourLoad> DestinationGemColourLoads { get; init; } = [];
     public int DestinationGemColourExtraBytes { get; init; }
     public IReadOnlyList<UniversalNativeParticleNoOpProof> NativeParticleNoOpProofs { get; init; } = [];
+    public uint? OwnedParticleUpdateWrapper {get;init;}
 }
 
 /// <summary>
@@ -60,7 +61,7 @@ public static class UniversalBehaviorBundleBuilder
         UniversalOverlay? nativeDestinationOwner = null, IReadOnlyList<int>? highValueGemClasses = null,
         IReadOnlyDictionary<string, UniversalWhirlwindSoundBinding>? whirlwindSounds = null,
         IReadOnlyDictionary<string, UniversalDryCanyonBirdCertificate>? dryCanyonBirdBranches = null,
-        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null)
+        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null,IReadOnlyList<UniversalOwnedParticleCertificate>? ownedParticles = null)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
         int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
@@ -136,6 +137,24 @@ public static class UniversalBehaviorBundleBuilder
             }
         parts.Add(w);
 
+        foreach(var source in sources.Where(s=>s.SourceKey=="hauntedtowers" && s.Classes.Contains(0xCC)))
+            if(!UniversalHauntedWizardParticles.HasNativeOwner(destination) &&
+                !(ownedParticles?.Any(c=>c.SourceLevelKey==source.SourceKey && c.TypeIds.SequenceEqual(new[]{29}))??false))
+                throw new InvalidDataException("This wizard needs its native resurrection effect before it can be placed in this level.");
+        Dictionary<string,UniversalOwnedParticleParts> ownedParticleParts=new(StringComparer.OrdinalIgnoreCase);
+        if(ownedParticles is {Count:>0})
+        {
+            var native=ownedParticles[0].NativeUpdate;
+            foreach(var certificate in ownedParticles)
+            {
+                certificate.RequireDestination(destination);
+                if(certificate.NativeUpdate!=native || !sources.Any(s=>string.Equals(s.SourceKey,certificate.SourceLevelKey,StringComparison.OrdinalIgnoreCase) && s.Source.Bytes.SequenceEqual(certificate.Profile.Source.Bytes) && s.Source.Bindings.Count==certificate.Profile.Source.Bindings.Count && s.Source.Bindings.All(b=>certificate.Profile.Source.Bindings.TryGetValue(b.Key,out var captured) && b.Value==captured)))
+                    throw new InvalidDataException("Owned particle dispatcher has no exact copied source or common destination manager.");
+                var body=UniversalOwnedParticleDispatch.Build(certificate.Profile,"particle_"+certificate.SourceLevelKey);
+                ownedParticleParts.Add(certificate.SourceLevelKey,body);parts.Add(body.Spawn);parts.Add(body.Update);
+            }
+            parts.Add(UniversalOwnedParticleDispatch.ChainUpdates(ownedParticleParts.Values.Select(p=>p.UpdateLabel).ToArray(),native,"wrap_owned_particles"));
+        }
         List<UniversalBehaviorSourceReport> reports = [];
         List<UniversalNativeParticleNoOpProof> particleNoOpProofs = [];
         foreach (var s in sources)
@@ -154,10 +173,20 @@ public static class UniversalBehaviorBundleBuilder
                 (dryCanyonBirdBranches == null || !dryCanyonBirdBranches.TryGetValue(s.SourceKey, out birdProof)))
                 throw new InvalidDataException("Copied Dry Canyon B8 behavior requires its issued state/frame branch proof.");
             var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey, map, birdProof);
+            if(s.SourceKey=="terracevillage" && s.Classes.Contains(0x20) && destination.Bindings[UniversalExeBindings.ParticleSpawnGlobal].Value==0x800844A0)
+            {
+                UniversalTerraceLineParticle77.Capture(s.SourceKey,"darkhollow",s.Source,destination,nativeExecutable??[]);
+                UniversalTerraceLineParticle77.RequireCopiedCall(upd,s.Source);
+            }
+            if(string.Equals(s.SourceKey,"hauntedtowers",StringComparison.OrdinalIgnoreCase))
+                UniversalHauntedWizardPlacement.RequireCopiedPlacementInputs(upd,s.Source,s.Classes);
+            if(ownedParticleParts.TryGetValue(s.SourceKey,out var ownedParticleBody))
+                ownedParticles!.Single(c=>string.Equals(c.SourceLevelKey,s.SourceKey,StringComparison.OrdinalIgnoreCase)).Patch(upd,s.Source,ownedParticleBody.SpawnLabel);
             flightChest?.Patch(upd,s.Source,map);
             flightGate?.Patch(upd,s.Source,map);
             if (map.Any(k => k.Key != k.Value))
             {
+                if(s.SourceKey=="hauntedtowers")UniversalHauntedWizardClassOwnership.MarkArmorDebrisModelRead(upd,s.Source,s.Classes);
                 UniversalNativeModelTailOwnership.MarkOwned(upd, s.Source, nativeExecutable);
                 if (s.SourceKey == "gnorccove") UniversalGnorcCurrentModelRead.MarkOwned(upd, s.Source);
                 particleNoOpProofs.AddRange(UniversalNativeParticleNoOpOwnership.MarkOwned(upd, s.Source, destination, nativeExecutable ?? []));
@@ -183,6 +212,7 @@ public static class UniversalBehaviorBundleBuilder
                 {
                     allocatedClassSites.AddRange(UniversalClassRemapping.PatchInitAllocatedClassReads(init, s.Source, map, c));
                     parentClassSites.AddRange(UniversalClassRemapping.PatchInitParentClassReads(init, s.Source, map));
+                    if(s.SourceKey=="hauntedtowers")parentClassSites.AddRange(UniversalHauntedWizardClassOwnership.PatchProjectileParent(init,s.Source,map,c));
                     UniversalClassRemapping.RequireNoUnownedClassMemory(init, true);
                 }
                 UniversalClassRemapping.PatchConstantSpawns(init, s.Source, map);
@@ -239,7 +269,8 @@ public static class UniversalBehaviorBundleBuilder
             DestinationGemCollectionExtraBytes = destinationGemBytes,
             DestinationGemColourLoads = destinationColourLoads.Select(c => new UniversalDestinationGemColourLoad(c.Pc, c.PatchWord, c.Delay, c.AddWord, c.LoadWord, c.LoadPc, c.ClassRegister, c.Role, labels[$"gem_colour_destination_{c.Pc:X8}"])).ToArray(),
             DestinationGemColourExtraBytes = destinationColourBytes,
-            NativeParticleNoOpProofs = particleNoOpProofs
+            NativeParticleNoOpProofs = particleNoOpProofs,
+            OwnedParticleUpdateWrapper=ownedParticleParts.Count==0?null:labels["wrap_owned_particles"]
         };
     }
 

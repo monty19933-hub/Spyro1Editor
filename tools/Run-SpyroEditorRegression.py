@@ -281,6 +281,9 @@ ADDITIONAL_CORE_CASES = (
      ["--fresh-saved-research-ui"]),
 )
 SOURCE_QA_CASES = (
+    ("HauntedWizardOwnershipSmoke", "HAUNTED_PLACEMENT_OWNERSHIP_GUARDS_OK", []),
+    ("HauntedWizardIntegrationSmoke", "HAUNTED_INTEGRATED_SOURCE_COMPOSE_OK", []),
+    ("TerraceParticleOwnershipSmoke", "TERRACE_NATIVE_LINE77_OWNERSHIP_OK", []),
     ("UniversalFlightChestSmoke", "FLIGHT_CHEST_OWNERSHIP_GUARDS_OK", []),
     ("UniversalFlightGateSmoke", "FLIGHT_GATE_OWNERSHIP_GUARDS_OK", []),
     ("UniversalPlacementVisibilitySmoke", "UNIVERSAL_PLACEMENT_VISIBILITY_OK", []),
@@ -369,9 +372,9 @@ SOURCE_QA_CASES = (
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
-SOURCE_QA_WORKSPACE_CASES = frozenset({"UniversalFlightGateSmoke", "UniversalFlightChestSmoke", "UniversalPlacementVisibilitySmoke", "UniversalParticleBoundarySmoke", "UniversalFlightDependencySmoke", "UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalLinkedActorOwnershipSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke", "NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
+SOURCE_QA_WORKSPACE_CASES = frozenset({"HauntedWizardOwnershipSmoke", "HauntedWizardIntegrationSmoke", "TerraceParticleOwnershipSmoke", "UniversalFlightGateSmoke", "UniversalFlightChestSmoke", "UniversalPlacementVisibilitySmoke", "UniversalParticleBoundarySmoke", "UniversalFlightDependencySmoke", "UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalLinkedActorOwnershipSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke", "NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
 # These suites retain new source/readback reports inside this run's isolated log directory.
-SOURCE_QA_REPORT_CASES = frozenset({"UniversalFlightGateSmoke", "UniversalFlightChestSmoke", "UniversalPlacementVisibilitySmoke", "UniversalParticleBoundarySmoke", "UniversalFlightDependencySmoke", "UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke"})
+SOURCE_QA_REPORT_CASES = frozenset({"HauntedWizardOwnershipSmoke", "HauntedWizardIntegrationSmoke", "TerraceParticleOwnershipSmoke", "UniversalFlightGateSmoke", "UniversalFlightChestSmoke", "UniversalPlacementVisibilitySmoke", "UniversalParticleBoundarySmoke", "UniversalFlightDependencySmoke", "UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke"})
 SOURCE_QA_CUE_CASES = frozenset({"NativeCollectibleCardAdmissionResearchSmoke", "NativeCollectibleCardLoadResearchSmoke", "NativeCollectibleStartupResearchSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke", "NativeFreshSavedLevelResearchSmoke", "NativeFreshSavedLevelPublicSmoke", "UiSmoke"})
 # These raw-source checks have no project/build or default invocation. Each
 # accepts only the selected original BIN and shares the source-suite deadline.
@@ -683,7 +686,7 @@ def main():
                             *arguments, source_image_before(source_deadline),
                             *([configured_source_cue()] if name in SOURCE_QA_CUE_CASES else []),
                             *([str(ROOT)] if name in SOURCE_QA_WORKSPACE_CASES else []),
-                            *([str(output / (name if name == "DragonStatueColorSmoke" else name + ".json"))]
+                            *([str(output / (name if name in {"DragonStatueColorSmoke", "HauntedWizardIntegrationSmoke"} else name + ".json"))]
                               if name in SOURCE_QA_REPORT_CASES else []),
                             *(["--compose"] if name == "UniversalNativePlayerDamageCallsSmoke" else [])], marker,
                         timeout=options.source_qa_timeout, deadline=source_deadline):

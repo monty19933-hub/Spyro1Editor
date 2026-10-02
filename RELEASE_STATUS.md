@@ -1,3 +1,19 @@
+# Follow-up: Haunted Towers resurrection in a cleared level
+
+Moved wizard groups now preserve their paths, trigger rectangles, seven armor
+links and metal textures. A scoped particle adapter carries the resurrection
+spell into Peace Keepers, including its cleared-level workflow. All 31 source
+variants and independent duplicate groups pass integrated composition checks.
+
+Native testing in the rebuilt, textured blank level shows the wizard moving
+and firing, the green resurrection spell, activation of all seven linked armor
+rows, and damage from the first armor. The current exporter reproduces the
+tested BIN exactly. Other destinations, defeat/rewards, persistence and other
+effects remain separate work. Universal gameplay is not complete.
+[Evidence and limits](docs/research/universal-haunted-wizard-20261002.md).
+
+---
+
 # Follow-up: exact row coverage and native enemy rewards
 
 Coverage now composes each variant separately with its required linked actors.
@@ -7,8 +23,9 @@ Village enemy awards two gems after flame defeat, while a quarantined Magic
 Crafters pair awards five plus two after charge and flame defeats. Both tests
 set their collection flags and show the final HUD totals.
 
-The Terrace electric arc and Magic Crafters collision/state ownership remain
-open. Universal gameplay is not complete and no new package has been released.
+Terrace particle 77 is now source-certified as an existing native egg effect,
+not an enemy attack arc. Collection-star semantics and Magic Crafters
+collision/state ownership remain open. Universal gameplay is not complete and no new package has been released.
 [Evidence and limits](docs/research/universal-coverage-and-runtime-20261002.md).
 
 ---

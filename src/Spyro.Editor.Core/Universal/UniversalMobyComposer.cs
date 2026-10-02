@@ -45,6 +45,7 @@ public sealed record UniversalComposeResult(
     public int ReclaimedVramBytes { get; init; }
     public IReadOnlyList<NativeTexturePageOwnedRange> ImportedVramRanges { get; init; } = [];
     public IReadOnlyList<UniversalParticleDependency> ParticleDependencies { get; init; } = [];
+    public IReadOnlyList<UniversalTerraceLineParticleProof> NativeLineParticleProofs {get;init;}=[];
     public IReadOnlyList<UniversalFlightChestParticleProof> FlightChestParticleProofs { get; init; } = [];
     public IReadOnlyList<UniversalFlightGateParticleProof> FlightGateParticleProofs { get; init; } = [];
     public int RestoredObjectLinks { get; init; }
@@ -214,6 +215,7 @@ public static class UniversalMobyComposer
         Queue<(int Class, string Source, bool Dependency)> work = new();
         List<UniversalRowTemplate> templates = [];
         Dictionary<(string Source, int Type), UniversalParticleDependency> particleDependencies = [];
+        UniversalTerraceLineParticleCertificate? nativeLine77=null;
         Dictionary<(string Source, int Type), UniversalFlightChestParticleProof> flightParticleProofs = [];
         Dictionary<(string Source, int Type), UniversalFlightGateParticleProof> gateParticleProofs = [];
         foreach (var p in placements)
@@ -329,6 +331,11 @@ public static class UniversalMobyComposer
                         var issued=UniversalFlightGateParticles.Inspect(gateParticleCertificate,particle,s.Overlay,destOverlay,s.Data,dest,exe);
                         particleDependencies[key]=issued.Dependency;gateParticleProofs[key]=issued.Proof;
                     }
+                    else if(sk=="terracevillage" && destination.Key=="darkhollow" && particle==77)
+                    {
+                        nativeLine77=UniversalTerraceLineParticle77.Capture(sk,destination.Key,s.Overlay,destOverlay,exe);
+                        particleDependencies[key]=UniversalTerraceLineParticle77.Inspect(nativeLine77);
+                    }
                     else particleDependencies[key] = UniversalParticleDependencies.Inspect(sk, particle, s.Data, dest,
                         string.Equals(sk, destination.Key, StringComparison.OrdinalIgnoreCase));
                 }
@@ -348,9 +355,6 @@ public static class UniversalMobyComposer
         foreach (int c in specialClasses.Keys)
             if (classes.Values.Any(v => v.DestinationClass == c) || destRegistered.Contains(c) || shared.Contains(c) || DestHandles(c))
                 throw new UniversalSourceCollisionException($"Special class 0x{c:X3} collides with a native or imported class in {destination.Key}.");
-
-        foreach (var particle in particleDependencies.Values.Where(p => p.Status == "dependency-unverified"))
-            warnings.Add($"Particle 0x{particle.TypeId:X2} from {particle.SourceLevelKey}: {particle.Detail}");
 
         // 1b. Free the models of native object types the user removed completely (see DroppableClasses).
         var (dropped, inertRows) = DroppableClasses(dest, destOverlay, exe, shared, removedRows,
@@ -382,6 +386,13 @@ public static class UniversalMobyComposer
                 ?? throw new InvalidDataException("The Cliff Town metal model has no native shader-field authority.");
             metalModels.Add(key, certificate);
             metalBindings.Add(UniversalCliffMetalTextures.BindDestination(certificate, donor.Data, dest, vram, exe));
+        }
+        foreach(var key in classes.Keys.Where(k=>k.Class==0xCB && k.Source=="hauntedtowers"))
+        {
+            var donor=source(key.Source);
+            var certificate=UniversalHauntedArmorMetalTextures.Capture(donor.Data,donor.Overlay,exe);
+            metalModels.Add(key,certificate);
+            metalBindings.Add(UniversalHauntedArmorMetalTextures.BindDestination(certificate,donor.Data,donor.Overlay,dest,vram,exe));
         }
         List<UniversalClassImport> imports = [];
         int modelGrowth = 0;
@@ -427,7 +438,6 @@ public static class UniversalMobyComposer
             {
                 particleDependencies[key] = particleDependencies[key] with { Status = "dependency-unverified",
                     Detail = "Missing source texture record/pixels/palette imported; per-ID spawn/update semantics remain unverified." };
-                warnings.Add($"Particle 0x{key.Type:X2} from {key.Source}: {particleDependencies[key].Detail}");
             }
         List<(int, byte[])> pendingModels = [];
         foreach (var (c, asset) in specialClasses.OrderBy(k => k.Key))
@@ -517,6 +527,12 @@ public static class UniversalMobyComposer
                 UniversalDryCanyonBirdBranches.RequireInitialRow(r);
             if(flightChests.TryGetValue(p.SourceLevelKey,out var chestRowProof))chestRowProof.RequireRow(r,t.Properties,t.ClassId);
             if(flightGates.TryGetValue(p.SourceLevelKey,out var gateRowProof))gateRowProof.RequireRow(r,t.Properties,t.ClassId);
+            if (UniversalHauntedWizardPlacement.Applies(t))
+            {
+                UniversalHauntedWizardPlacement.RequireInitialRow(t, r);
+                var hauntedSource = source(p.SourceLevelKey);
+                t = UniversalHauntedWizardPlacement.Rebase(hauntedSource.Data, hauntedSource.Overlay, t, r);
+            }
             if (p.SpecialId == null)
             {
                 // Count the actual authored bytes while class still identifies
@@ -533,6 +549,9 @@ public static class UniversalMobyComposer
         int sceneBefore = dest.Subfiles()[3].Length;
         UniversalIndexedRows.RequireNativeRemoval(destination.Key, dest, originalDestination.Data, originalDestination.Overlay, permanentlyRemoved);
         var allocation = UniversalRowRemoval.Allocate(dest, permanentlyRemoved, rows.Count);
+        for (int i = 0; i < rows.Count; i++)
+            if (rows[i].Item2.SourceLevelKey == "hauntedtowers" && rows[i].Item2.ClassId == 0xCC)
+                UniversalHauntedWizardParticles.RequirePhysicalWizardRow(allocation.NewRows[i]);
         int droppedProperties = UniversalRowRemoval.RemoveOwnedPropertiesAndClearRows(dest, permanentlyRemoved);
         var (_, sceneGrowth, newRows) = dest.AppendRows(rows, permanentlyRemoved);
         int[] physicalSaveRows = Enumerable.Range(0, allocation.FinalRowCount).Select(i => permanentlyRemoved.Contains(i) ? -1 : i).ToArray();
@@ -542,6 +561,13 @@ public static class UniversalMobyComposer
         if (arena < MinimumDynamicSlots)
             throw new InvalidDataException($"Only {arena} dynamic object slots would remain in {destination.DisplayName}; at least {MinimumDynamicSlots} are required.");
 
+        List<UniversalOwnedParticleCertificate> ownedParticles=[];
+        if(destination.Key=="peacekeepers" && placements.Any(p=>p.SourceLevelKey=="hauntedtowers" && source(p.SourceLevelKey).Data.CaptureRow(p.SourceLevelKey,p.SourceRowIndex).ClassId==0xCC))
+        {
+            var donor=source("hauntedtowers");
+            ownedParticles.Add(UniversalHauntedWizardParticles.Capture(donor.Data,donor.Overlay,destOverlay,exe));
+            UniversalHauntedWizardParticles.RequireDestinationTexture(donor.Data,dest);
+        }
         // 4. Behavior bundle chained onto the destination's own callbacks.
         List<UniversalBehaviorSourceReport> behavior = [];
         IReadOnlyList<UniversalDestinationGemCall> destinationGemCalls = [];
@@ -567,7 +593,7 @@ public static class UniversalMobyComposer
             var classMaps = classes.GroupBy(k => k.Key.Source).ToDictionary(g => g.Key,
                 g => (IReadOnlyDictionary<int, int>)g.ToDictionary(k => k.Key.Class, k => k.Value.DestinationClass));
             var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps, remapSaveRows, nativeExecutable: exe,
-                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates);
+                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles);
             uint newCopy = (uint)((baseAddress + bundle.Code.Length + 15) & ~15);
             int keep = (int)(copyBuffer - UniversalOverlay.Base);
             byte[] ov = new byte[UniversalLevelData.Align((int)(newCopy - UniversalOverlay.Base), 0x800)];
@@ -581,6 +607,14 @@ public static class UniversalMobyComposer
             destinationGemCalls = bundle.DestinationGemCollectionCalls;
             destinationGemBytes = bundle.DestinationGemCollectionExtraBytes;
             overlay = ov;
+            if (bundle.OwnedParticleUpdateWrapper is uint particleUpdate)
+            {
+                UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.ParticleUpdateGlobal], particleUpdate);
+                foreach (var certificate in ownedParticles)
+                    foreach (int type in certificate.TypeIds)
+                        particleDependencies[(certificate.SourceLevelKey, type)] = new(certificate.SourceLevelKey, type,
+                            "source-certified-copied", "Uses the authenticated source effect, translated actor links and relocated texture; the destination particle manager runs once.");
+            }
             UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.UpdateGlobal], bundle.UpdateWrapper);
             UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.InitGlobal], bundle.InitWrapper);
             UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.CopyBufferGlobal], newCopy);
@@ -665,8 +699,11 @@ public static class UniversalMobyComposer
         int[] mappedRows = Enumerable.Repeat(-1, incomingCount).ToArray(), mappedSaveRows = Enumerable.Repeat(-1, incomingCount).ToArray();
         for (int i = 0; i < newRows.Count; i++) { mappedRows[incomingOrder[i]] = newRows[i]; mappedSaveRows[incomingOrder[i]] = saveRows[i]; }
         if (placements.Any(p => p.DragonColor != null)) NativeDragonStatueColors.Install(exe);
+        nativeLine77?.RequireDestination(new UniversalOverlay(overlay,UniversalExeBindings.Read(exe,destination.LevelId)),exe);
+        foreach (var particle in particleDependencies.Values.Where(p => p.Status == "dependency-unverified"))
+            warnings.Add($"Particle 0x{particle.TypeId:X2} from {particle.SourceLevelKey}: {particle.Detail}");
         return new(destination.Key, imports, mappedRows, ram, arena, freeBefore - vram.FreeBytes, behavior, warnings,
-            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), FlightChestParticleProofs = flightParticleProofs.Values.ToArray(), FlightGateParticleProofs = gateParticleProofs.Values.ToArray(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), RestoredIndexedObjectLinks = templates.Sum(t => t.ImportedRowIndices.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports, WhirlwindSoundImports = whirlwindSounds.Values.ToArray(), MetalTextureBindings = metalBindings, DestinationGemCollectionCalls = destinationGemCalls, DestinationGemCollectionExtraBytes = destinationGemBytes, DestinationGemColourLoads = destinationColourLoads, DestinationGemColourExtraBytes = destinationColourBytes, NativeParticleNoOpProofs = particleNoOpProofs };
+            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), NativeLineParticleProofs=nativeLine77==null?[]:[nativeLine77.Proof], FlightChestParticleProofs = flightParticleProofs.Values.ToArray(), FlightGateParticleProofs = gateParticleProofs.Values.ToArray(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), RestoredIndexedObjectLinks = templates.Sum(t => t.ImportedRowIndices.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports, WhirlwindSoundImports = whirlwindSounds.Values.ToArray(), MetalTextureBindings = metalBindings, DestinationGemCollectionCalls = destinationGemCalls, DestinationGemCollectionExtraBytes = destinationGemBytes, DestinationGemColourLoads = destinationColourLoads, DestinationGemColourExtraBytes = destinationColourBytes, NativeParticleNoOpProofs = particleNoOpProofs };
     }
 
     /// <summary>Class a fully removed native row is switched to: no model, no behavior in any level, never

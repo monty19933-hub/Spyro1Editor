@@ -143,7 +143,12 @@ public static class UniversalCliffMetalTextures
     {
         if(certificate is null)throw new InvalidDataException("Metal resource binding requires an issued model certificate.");
         ProveNative(exe);if(Hash(source.Bytes)!=DataHash)throw new InvalidDataException("An issued metal fallback lost its original source data owner.");
-        _=certificate.TextureDescriptorOffsets(source.Package(0xE2));
+        return BindAuthenticatedMaterial(certificate,source,destination,alloc,exe,0xE2);
+    }
+    internal static UniversalMetalTextureBinding BindAuthenticatedMaterial(UniversalMetalModelCertificate certificate,UniversalLevelData source,UniversalLevelData destination,UniversalVramAllocator alloc,byte[] exe,int sourceClass)
+    {
+        ProveNative(exe);
+        _=certificate.TextureDescriptorOffsets(source.Package(sourceClass));
         byte[] current=Tile(destination).ToArray();bool imported=!current.Any(b=>b!=0);int x,y,palette;byte[] pixels,pal;
         if(!imported){var layout=Layout(current);x=layout.X;y=layout.Y;palette=layout.Palette;pixels=Pixels(destination,x,y);pal=Palettes(destination,palette);Reserve(alloc,x,y);ReservePalette(alloc,palette);}
         else{

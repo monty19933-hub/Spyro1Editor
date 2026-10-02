@@ -34,11 +34,17 @@ row 128, retaining all 128 original Dark Hollow actors. BIN SHA-256:
 
 Native rendering, flame defeat, death-flight animation, two-gem reward and
 both checkpoint/durable collection flags were observed. The settled HUD shows
-2. Missing electric arc particle 77 and collection-star semantic certification
-remain open. The first capture was after an arrival attack, so an exact initial
+2. A subsequent exact source check corrected the original particle 77 premise:
+it is the egg-completion line effect, and Dark Hollow already owns a compatible
+constructor/updater. The issued native-equivalence certificate passes 5,232
+checks, adds no updater, and produces the identical BIN above. This is a source
+reporting correction; no new egg-effect gameplay observation is claimed.
+Collection-star (type 12) semantic certification remains open. The first capture was after an arrival attack, so an exact initial
 health transition is not claimed.
 
-Receipt: `runtime/terrace-darkhollow-r1/runtime-partial-proof.json`.
+Receipts: `runtime/terrace-darkhollow-r1/runtime-partial-proof.json` (original
+particle-77 interpretation superseded), `terrace77-integrated-r1.json`, and
+`coverage/terrace77-ownership-r1/delivery/README.md`.
 
 ## Quarantined Magic Crafters pair
 
