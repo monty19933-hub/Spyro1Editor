@@ -1,3 +1,18 @@
+# Follow-up: exact row coverage and native enemy rewards
+
+Coverage now composes each variant separately with its required linked actors.
+The Dark Hollow audit records 4,153 static cases, including 87 expanded groups;
+no result is promoted to runtime support. In native gameplay, the Terrace
+Village enemy awards two gems after flame defeat, while a quarantined Magic
+Crafters pair awards five plus two after charge and flame defeats. Both tests
+set their collection flags and show the final HUD totals.
+
+The Terrace electric arc and Magic Crafters collision/state ownership remain
+open. Universal gameplay is not complete and no new package has been released.
+[Evidence and limits](docs/research/universal-coverage-and-runtime-20261002.md).
+
+---
+
 # Follow-up: original Flight gate replacement
 
 The editor now offers **Replace Flight gate…** for an original course gate,

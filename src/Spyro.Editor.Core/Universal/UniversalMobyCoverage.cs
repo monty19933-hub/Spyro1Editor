@@ -22,6 +22,7 @@ public sealed record UniversalCoverageCell(string Destination, string VariantId,
     public int RestoredObjectLinks { get; init; }
     public int UnresolvedObjectLinks { get; init; }
     public int? StaticPlanRepresentativeRow { get; init; }
+    public IReadOnlyList<int> ComposedSourceRows { get; init; } = [];
     public string StaticAnalysisMethod { get; init; } = "exact-compose";
 }
 
@@ -81,7 +82,6 @@ public static class UniversalMobyCoverage
             progress?.Invoke($"{dest.Key}: {variants.Count} meaningful variants");
             var d = lib.Get(dest.Key);
             var vram = compose ? UniversalMobyExport.DefaultProtectedVram(lib.ImagePath, dest).ToList() : [];
-            Dictionary<(string Source, int Class, int PropertiesBytes, int Fixups, int Links, int SelfLinks, int Treasure, string? Special), UniversalCoverageCell> plans = [];
             foreach (var v in variants)
             {
                 if (v.CatalogRestriction != null)
@@ -96,22 +96,17 @@ public static class UniversalMobyCoverage
                 }
                 byte[] row = v.SpecialId == null ? lib.Get(v.SourceLevelKey).Data.Row(v.SourceRow) : new byte[UniversalLevelData.RowStride];
                 var p = new UniversalMobyPlacement(v.SourceLevelKey, v.SourceRow, BitConverter.ToInt32(row, 0x0C),
-                    BitConverter.ToInt32(row, 0x10), BitConverter.ToInt32(row, 0x14), SpecialId: v.SpecialId,
+                    BitConverter.ToInt32(row, 0x10), BitConverter.ToInt32(row, 0x14), Yaw: row[0x46], SpecialId: v.SpecialId,
                     Text: v.SpecialId == UniversalDragonflyEggs.SignId ? ["COVERAGE"] : null);
-                var template = v.SpecialId == null ? lib.Get(v.SourceLevelKey).Data.CaptureRow(v.SourceLevelKey, v.SourceRow) : null;
-                var planKey = (v.SourceLevelKey, v.ClassId, template?.Properties.Length ?? 0, template?.InternalPointers.Count ?? 0,
-                    template?.DroppedExternalPointers ?? 0, template?.ExternalRowPointers.Count(link => link.SourceRow == v.SourceRow) ?? 0, v.SpecialId == null ? UniversalMobyComposer.TreasureValue(row) : 0, v.SpecialId);
-                if (plans.TryGetValue(planKey, out var prior))
-                {
-                    cells.Add(prior with { VariantId = v.VariantId, StaticAnalysisMethod = "reused-identical-resource-plan",
-                        Warnings = prior.Warnings.Select(w => w.Replace($" row {prior.StaticPlanRepresentativeRow}:", $" row {v.SourceRow}:", StringComparison.Ordinal)).ToArray() });
-                    continue;
-                }
                 int cellStart = cells.Count;
+                IReadOnlyList<UniversalMobyPlacement> placements = [];
                 try
                 {
+                    // Row state, indexed companions and native ownership checks are semantic inputs.
+                    // Equal resource sizes or link counts do not establish equivalent composition.
+                    placements = UniversalPlacementGroups.Expand(lib.Get, p);
                     var r = UniversalMobyComposer.Compose(dest, d.Data.Bytes, d.Overlay.Bytes.ToArray(), lib.Disc.Exe,
-                        lib.Get, lib.SharedClasses, vram, [p], special, sharedModelPackage: lib.SharedModelPackage, playerAnimationSource: lib.PlayerAnimations);
+                        lib.Get, lib.SharedClasses, vram, placements, special, sharedModelPackage: lib.SharedModelPackage, playerAnimationSource: lib.PlayerAnimations);
                     cells.Add(new(dest.Key, v.VariantId, "listed", r.ParticleDependencies.Any(p => p.Status == "dependency-unverified") || r.UnresolvedObjectLinks > 0 ? "composed-dependency-unverified" : "composed-static-only",
                         "not-tested", null, null, r.Classes, r.Warnings, r.Ram) { ParticleDependencies = r.ParticleDependencies, PlayerAnimationImports = r.PlayerAnimationImports, Behavior = r.Behavior, RestoredObjectLinks = r.RestoredObjectLinks, UnresolvedObjectLinks = r.UnresolvedObjectLinks });
                 }
@@ -120,14 +115,18 @@ public static class UniversalMobyCoverage
                     cells.Add(new(dest.Key, v.VariantId, "listed", "failed", "not-tested", FailureKind(e), e.Message, [], [],
                         e is UniversalBudgetException budget ? budget.Budget : null));
                 }
-                cells[cellStart] = cells[cellStart] with { StaticPlanRepresentativeRow = v.SourceRow };
-                plans[planKey] = cells[cellStart];
+                cells[cellStart] = cells[cellStart] with
+                {
+                    StaticPlanRepresentativeRow = v.SourceRow,
+                    ComposedSourceRows = placements.Select(placement => placement.SourceRowIndex).ToArray(),
+                    StaticAnalysisMethod = "exact-compose-expanded-group"
+                };
             }
         }
         string hash;
         using (var fs = File.OpenRead(lib.ImagePath)) hash = Convert.ToHexStringLower(SHA256.HashData(fs));
-        return new(2, hash, "Same source/class; canonical row and reachable properties, excluding coordinates, heading and activation pod. Source rows remain enumerated; no cross-source semantic equivalence is assumed.",
-            variants, destinations.Select(d => d.Key).ToList(), cells, "No emulator tests are inferred or imported. Written-disc readback and runtime observations require separate receipts. Static resource plans reuse a composed representative only for identical source/class, reachable properties size, fixup count, dropped-link count, restorable self-link count and treasure delta; each semantic variant remains a distinct cell.");
+        return new(3, hash, "Same source/class; canonical row and reachable properties, excluding coordinates, heading and activation pod. Source rows remain enumerated; no cross-source semantic equivalence is assumed.",
+            variants, destinations.Select(d => d.Key).ToList(), cells, "No emulator tests are inferred or imported. Written-disc readback and runtime observations require separate receipts. Each semantic variant representative is composed independently with its required indexed companions and original heading; no result is reused across variants. EquivalentSourceRows enumerate catalog duplicates only: their individual composition is not inferred from the representative. Flight replacement transactions and removal scenarios require separate evidence.");
     }
 
     public static string FailureKind(Exception e) => e switch
