@@ -29,7 +29,7 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
         LevelCatalog catalog, string scratchBaselinePath, CancellationToken token=default)
     {
         ExportArtifactTransaction.RequireSourceSeparation(originalUSA,null,scratchBaselinePath);
-        NativeAuthoredSpawn.RequireSupported(document);
+        NativeAuthoredSpawn.RequirePortalArrivalSupported(document);
         var binding=document.TargetBinding ?? throw new InvalidDataException("The replacement scene has no retail target.");
         var target=document.ResolveTarget(catalog);
         var original=UniversalDiscImage.Read(originalUSA);

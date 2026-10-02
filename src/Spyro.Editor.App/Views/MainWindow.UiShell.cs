@@ -954,7 +954,7 @@ public sealed partial class MainWindow
             Name = "StartingAbilitiesPanel", Spacing = 8,
             Children = { BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), true) }
         }, false));
-        _homeworldTextGroup = BuildModernDisclosure("Portal location", BuildPortalControlPanel(), false);
+        _homeworldTextGroup = BuildModernDisclosure("Portals & Return Home", BuildPortalControlPanel(), false);
         panel.Children.Add(_homeworldTextGroup);
 
         // V5 whole-level replacement is deliberately a separate, guarded research

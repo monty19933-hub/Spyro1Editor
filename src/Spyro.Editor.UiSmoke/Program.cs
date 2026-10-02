@@ -23,6 +23,14 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+if (args.Contains("--portal-routes-ui-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --portal-routes-ui-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    PortalRouteUiCases.Run();
+    return 0;
+}
+
 if (args.Contains("--start-blank-ui-only", StringComparer.Ordinal))
 {
     if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --start-blank-ui-only");

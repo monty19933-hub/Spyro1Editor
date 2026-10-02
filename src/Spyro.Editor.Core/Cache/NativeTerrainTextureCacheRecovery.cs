@@ -28,7 +28,7 @@ public static class NativeTerrainTextureCacheRecovery
             sourceImage, sourceOverlay, workspaceRoot, level, overwrite: false,
             cancellationToken: cancellationToken).ConfigureAwait(false);
         if (count <= 0 || !PortableEditorCacheBuilder.IsCurrentTerrainTexturePreviewCache(workspaceRoot, level.Key))
-            throw new InvalidDataException($"{level.DisplayName}'s original terrain texture cache failed validation. The level was not presented as a flat texture substitute.");
+            throw new InvalidDataException($"{level.DisplayName}'s original terrain texture cache failed validation. Select the source Spyro BIN/CUE again to repair its materials.");
         return new(true, count);
     }
 }

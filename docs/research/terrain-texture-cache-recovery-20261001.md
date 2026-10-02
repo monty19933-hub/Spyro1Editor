@@ -32,10 +32,12 @@ available; missing source materials return an actionable warning that the
 caller must show after applying the scene. A stale owner returns
 `OwnerCurrent=false` and must not apply its result.
 
-Root owns the existing loader insertion: await
+The ordinary loader now awaits
 `EnsureRetailTerrainTexturesForLoadAsync(level)` after ordinary geometry load,
-check its `OwnerCurrent` and the request ID before `ApplyLoadedLevel`, and
-append its optional `Warning` after the usual loaded-scene status.
+checks its `OwnerCurrent` and the request ID before `ApplyLoadedLevel`, and
+appends its optional `Warning` after the usual loaded-scene status. Cache import
+and full cache-build completion also retain the warning for the matching level
+and workspace. A later successful complete-cache validation clears it.
 
 The independent `Spyro.Editor.TerrainTextureRecoverySmoke` uses the original
 USA source BIN and the live private Artisans geometry overlay as read-only
@@ -46,7 +48,13 @@ refusal, unchanged source geometry, and read-only validation of the protected
 user Artisans cache. All 12 checks passed. It does not control an app or emulator. Receipt:
 `work/universal-gameplay-20261001/fixtures/terrain-texture-recovery-r02/texture-cache-recovery.json`.
 The new app partial compiles in an isolated Release build with zero warnings
-and errors. Root owns the live visual and terrain-editing acceptance check.
+and errors. The live private app rebuilt all 136 Artisans PNGs through ordinary level
+selection and visibly rendered the original grass, masonry and roof materials.
+The viewport retained 5,199 faces. CUA selected face 3120, raised all four
+vertices by 32, and used Undo Height Only; the editor returned to zero terrain
+edits while preserving its textured view. Receipt outside the checkout:
+`../../work/universal-gameplay-20261001/portal-gui/texture-and-portal-ui-receipt.json`.
+This is editor UI evidence; prior terrain emulator proofs remain separate.
 
 Prior all-level material evidence remains separate from this repair:
 `work/universal-v1-continuation/aggregate-final-expected-input/_local/ui-overhaul/terrain-native-map-materials-metrics.json`

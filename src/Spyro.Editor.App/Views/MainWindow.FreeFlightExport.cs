@@ -7,7 +7,7 @@ public partial class MainWindow
     internal Func<string, Task>? FreeFlightExportDelayOverrideForTesting { get; set; }
 
     private static bool HasOrdinarySavedEdits(EditedLevelExportTarget target) =>
-        target.HasObjectEdits || target.HasTerrainEdits || target.HasCustomTerrainTextures ||
+        target.HasPortalRoutes || target.HasObjectEdits || target.HasTerrainEdits || target.HasCustomTerrainTextures ||
         target.HasNativeTerrainTextureRelocations || target.HasLevelTextEdit || target.HasLevelMusicEdit || target.HasSkyboxEdit;
 
     private void RequireFreeFlightExportOwner(NativeFreeFlightProjectExportIntent? intent,

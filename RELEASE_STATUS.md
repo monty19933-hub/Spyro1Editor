@@ -1,3 +1,45 @@
+# V1.0.3 portal routing and textured terrain checkpoint
+
+Branch: `release/universal-gameplay-20261001`. Original discs, the user's project,
+earlier packages and every runtime candidate remain preserved separately.
+Fly Anywhere remains deferred. Full universal Moby gameplay is unfinished.
+
+- **Game Settings > Portals & Return Home** saves doorway destinations by
+  level name/ID and each level's return doorway. Route-only projects work in
+  normal Create BIN. Undo and a previous route document remain available.
+- Moved doorway triggers, lettering and fly-out paths retain their original
+  return identity. The stone arch remains separately editable terrain.
+- Full-firmware emulator runs passed moved Stone Hill doorway travel to Toasty,
+  Wizard Peak, Sunny Flight and fresh level65, with return to Artisans route2.
+  Toasty's native vortex and pause exit passed; Wizard Peak used pause exit;
+  Sunny Flight used No on failed-flight results. Fresh65 used its imported
+  Return Home vortex. These are exact route examples, not every permutation.
+- Fresh portal arrival exposed and corrected an unused-slot height mismatch.
+  The new 384-wide removable starter floor passed first arrival with no life
+  lost. Saved terrain is not resized. Rebuilt retail levels and fresh levels
+  reached by portals require a continuous landing area before export. The
+  coverage check is conservative; arbitrary obstacles and all headings still
+  require in-game testing.
+- Missing or corrupt original terrain materials rebuild automatically during
+  ordinary level loading. Actual Artisans UI verification retained all5,199
+  editable faces, displayed the original materials, raised a selected face
+  and undid it without losing textures. Offline missing-material status is
+  retained through the outer loading workflow.
+- Final production fresh-route export matches the runtime-verified safe-floor
+  BIN byte for byte. Unsafe small-floor exports refuse before staging or
+  changing outputs; a small fresh New Game-only scene still exports unchanged.
+- The Gnorc dependency proof advances396 cells past their first ownership
+  blocker but adds no successful composition or gameplay coverage. The prior
+  matrix remains105,559/145,285 composed cells, with runtime evidence separate.
+
+Exact test and runtime receipts are linked from
+[the portal checkpoint report](docs/research/portal-routing-release-20261001.md)
+and [the texture recovery report](docs/research/terrain-texture-cache-recovery-20261001.md).
+Packaging verification and a final packaged-UI pass are in progress for the
+local V1.0.3 checkpoint. No remote release has been published.
+
+---
+
 # V1.0.2 Start Blank checkpoint
 
 Branch: `feature/start-blank-level-20261001`. The completed universal continuation

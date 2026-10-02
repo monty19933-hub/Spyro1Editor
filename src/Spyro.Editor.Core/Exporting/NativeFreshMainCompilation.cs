@@ -118,9 +118,12 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
     public async Task<string> ExportAsync(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements,
         UniversalJapaneseSource? japanese,string outputImage,string identityWorkspace,LevelCatalog nativeCatalog,CancellationToken token=default,Action? requireDocumentCurrent=null,
         string? stagedRetailImage=null,IReadOnlyList<(int LevelIndex,int Row,int Colour)>? retailEggs=null,IReadOnlySet<string>? retailSignLevels=null,
-        IReadOnlyList<LevelTextReplacement>? retailNames=null,bool startInAuthoredLevel=true,int? startLevelId=null)
+        IReadOnlyList<LevelTextReplacement>? retailNames=null,bool startInAuthoredLevel=true,int? startLevelId=null,PortalRouteDocument? portalRoutes=null,
+        IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses=null)
     {
         if(Path.GetFullPath(outputImage)==Path.GetFullPath(donors.ImagePath))throw new InvalidDataException("Fresh export cannot replace its original source image.");
+        if(portalRoutes?.Destinations.Any(d=>d.DestinationLevelId==65)==true)
+            NativeAuthoredSpawn.RequirePortalArrivalSupported(Document);
         ExportArtifactTransaction.RequireSourceSeparation(donors.ImagePath,null,outputImage,Path.ChangeExtension(outputImage,".cue"));
         ExportArtifactTransaction.RequireSourceSeparation(stagedRetailImage??_baseline,null,outputImage,Path.ChangeExtension(outputImage,".cue"));
         UniversalNativeLayoutStore.Validate(identityWorkspace,Target.Key,0);
@@ -130,6 +133,8 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         if(startLevelId is {} chosen) NativeClearedRetailBinding.ApplyNewGameStart(donors.Disc.Exe,stagedExe,chosen);
         else NativeFreshNewGameEntry.Apply(donors.Disc.Exe,stagedExe,startInAuthoredLevel);
         var compose=placements.Count == 0 ? null : ComposeWithExecutable(donors,placements,stagedExe,UniversalMobyExport.SpecialProvider(japanese));
+        Dictionary<int,IReadOnlyList<NativePortalReturnClass>> returnClasses=retailReturnClasses?.ToDictionary(p=>p.Key,p=>p.Value)??[];
+        returnClasses[65]=compose==null?[]:NativePortalReturnClass.Capture(compose.Classes);
         byte[] levelData=compose?.LevelData ?? _body.ToArray(), overlayData=compose?.Overlay ?? _overlay.ToArray();
         List<(int LevelIndex,int Row,int Colour)> eggs=retailEggs?.ToList()??[];
         for(int i=0;i<placements.Count;i++)if(!placements[i].Retired&&placements[i].SpecialId is { } id&&UniversalDragonflyEggs.Variants.Any(v=>v.Id==id))
@@ -153,6 +158,10 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         if(_flight?.Enabled==true)
             foreach(var level in nativeCatalog.Levels.Where(l=>NativeFreeFlightCompositionPlan.IsNormalLevel(l.LevelId)))
                 _=_flight.RequireFinalLevelClosure(level.LevelId,baseline.EntryBytes(level.SourceWadEntry),exe);
+        if(portalRoutes?.HasEdits==true)
+            NativePortalRouteComposer.Apply(donors,new LevelCatalog(nativeCatalog.Levels.Where(l=>l.LevelId!=65).Append(Target)),
+                exe,replacements,baseline.EntryBytes,portalRoutes,includesFreshLevel:true,returnClasses:returnClasses);
+        levelData=replacements[80];overlayData=replacements[79];
         byte[] wad=baseline.RebuildWad(replacements);
         string stage=outputImage+".pending-"+Guid.NewGuid().ToString("N"),cue=Path.ChangeExtension(outputImage,".cue"),stagedCue=stage+".cue";
         bool retainStage=false;

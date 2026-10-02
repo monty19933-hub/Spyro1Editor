@@ -18,7 +18,8 @@ public static class NativeAuthoredProjectExporter
         string workspace,int startLevelId,CancellationToken token=default,Action? requireCurrent=null,
         string? stagedRetailImage=null,IReadOnlyList<(int LevelIndex,int Row,int Colour)>? retailEggs=null,
         IReadOnlySet<string>? retailSignLevels=null,IReadOnlyList<LevelTextReplacement>? retailNames=null,
-        NativeFreeFlightCompositionPlan? flight=null)
+        NativeFreeFlightCompositionPlan? flight=null,PortalRouteDocument? portalRoutes=null,
+        IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses=null)
     {
         if(scenes.Count==0)throw new InvalidDataException("No authored scenes were selected for export.");
         // ID65 is source-issued through Town's initializer. Composing two
@@ -27,7 +28,12 @@ public static class NativeAuthoredProjectExporter
         if(scenes.Any(s=>s.Document.TargetBinding?.LevelId==13)&&
             scenes.Any(s=>s.Document.TargetBinding==null))
             throw new InvalidDataException("Town Square and the new level cannot be exported together because they share native callback bindings. Export them separately or restore Town Square before combining them.");
-        foreach(var scene in scenes)NativeAuthoredSpawn.RequireSupported(scene.Document);
+        foreach(var scene in scenes)
+        {
+            NativeAuthoredSpawn.RequireSupported(scene.Document);
+            if(scene.Document.TargetBinding!=null || portalRoutes?.Destinations.Any(d=>d.DestinationLevelId==65)==true)
+                NativeAuthoredSpawn.RequirePortalArrivalSupported(scene.Document);
+        }
         var targets=scenes.Select(s=>s.Document.ResolveTarget(catalog)).ToArray();
         if(targets.Select(t=>t.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count()!=targets.Length)
             throw new InvalidDataException("The same level cannot be rebuilt twice in one export.");
@@ -41,6 +47,7 @@ public static class NativeAuthoredProjectExporter
         var baseline=UniversalDiscImage.Read(stagedRetailImage??donors.ImagePath);
         byte[] exe=baseline.Exe.ToArray();
         Dictionary<int,byte[]> replacements=[];
+        Dictionary<int,IReadOnlyList<NativePortalReturnClass>> returnClasses=retailReturnClasses?.ToDictionary(p=>p.Key,p=>p.Value)??[];
         List<(int LevelIndex,int Row,int Colour)> eggs=retailEggs?.ToList()??[];
         HashSet<string> signs=new(retailSignLevels??new HashSet<string>(),StringComparer.OrdinalIgnoreCase);
         List<LevelTextReplacement> names=[..retailNames??[]];
@@ -58,6 +65,7 @@ public static class NativeAuthoredProjectExporter
             exe=NativeClearedRetailBinding.Prepare(donors.Disc.Exe,exe,target);
             var result=scene.Placements.Count==0?null:compiled.ComposeWithExecutable(donors,scene.Placements,exe,special);
             exe=result?.Executable??exe;
+            returnClasses[target.LevelId]=result==null?[]:NativePortalReturnClass.Capture(result.Classes);
             replacements.Add(target.SourceWadEntry,result?.LevelData??compiled.CopyLevelData());
             replacements.Add(target.SourceWadEntry-1,result?.Overlay??compiled.CopyOverlay());
             for(int i=0;i<scene.Placements.Count;i++)
@@ -96,7 +104,7 @@ public static class NativeAuthoredProjectExporter
                 foreach(var identity in identities)UniversalNativeLayoutStore.Bind(workspace,identity.Key,identity.Prefix);
             }
             string hash=await compilation.ExportAsync(donors,fresh.Placements,japanese,outputImage,workspace,catalog,token,
-                RequirePublication,stage,eggs,signs,names,startLevelId==65,startLevelId);
+                RequirePublication,stage,eggs,signs,names,startLevelId==65,startLevelId,portalRoutes,returnClasses);
             return hash;
         }
         NativeClearedRetailBinding.ApplyNewGameStart(donors.Disc.Exe,exe,startLevelId);
@@ -106,6 +114,8 @@ public static class NativeAuthoredProjectExporter
         if(signs.Count>0)UniversalMobyExport.RequireSignMarkersOnlyIn(exe,catalog,signs,
             entry=>replacements.TryGetValue(entry,out var bytes)?bytes:baseline.EntryBytes(entry));
         if(flight?.Enabled==true)throw new InvalidDataException("Experimental flight cannot be merged into a rebuilt retail slot.");
+        if(portalRoutes?.HasEdits==true)NativePortalRouteComposer.Apply(donors,catalog,exe,replacements,baseline.EntryBytes,portalRoutes,
+            returnClasses:returnClasses);
         string pending=outputImage+".pending-"+Guid.NewGuid().ToString("N"),pendingCue=pending+".cue";
         bool retain=false;
         try

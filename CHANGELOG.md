@@ -1,14 +1,10 @@
-# Spyro Editor 1.0.2
+# Spyro Editor 1.0.3
 
-## Changes since Spyro Editor 1.0.1
+## Changes since Spyro Editor 1.0.2
 
-- Add **File → Start Blank in Current Level** for ten supported ordinary levels and the fresh authored level. Confirmation saves a checked recovery snapshot before clearing; **Restore Before Clear** works after reopening the project.
-- Keep cleared levels in the ordinary level picker and shared terrain/object editor. Include a safe player start and removable starter floor, allow empty drafts, and verify a complete floor beneath the player before export.
-- Rebuild cleared terrain, collision, object rows and asset tables so removed content releases real capacity. Preserve engine resources and retired collectible identities.
-- Combine saved cleared levels, ordinary edits and the fresh level in normal **Create BIN**. Choose the New Game starting level; read back the completed image before publishing its BIN/CUE pair.
-- Correct authored terrain face-cache ownership, subdivide large untextured faces internally, enable native textured clipping and encode sloped collision with the native Z format. Editable faces remain intact.
-- Keep Previous/Next navigation correct after clearing. Label authored-scene reload accurately and protect source discs from aliased temporary paths.
-
-Start Blank supports Artisans, Stone Hill, Town Square, Peace Keepers, Dry Canyon, Cliff Town, Magic Crafters, Beast Makers, Dream Weavers and Gnasty's World. Other ordinary level slots remain unsupported. Cleared Town Square and the separate fresh level cannot share one export. Native geometry, memory and save-identity limits remain.
-
-Full universal Moby gameplay coverage is unfinished. Fly Anywhere remains deferred. The local macOS package is Developer ID signed but not notarized; Windows packaging does not establish Windows runtime acceptance. See the included user guide and limitations for the current supported scope.
+- Add **Game Settings → Portals & Return Home**: choose a doorway destination and each level's return doorway, save immediately, undo a route change, and include routes in normal Create BIN.
+- Preserve the moved doorway's trigger, lettering and fly-out path when returning. Duplicate destinations use the return doorway you select. The stone arch remains separately editable terrain.
+- Support route composition with imported Return Home objects, saved replacement levels and fresh slot65, with native ownership and memory checks before export.
+- Automatically rebuild missing or damaged original terrain textures when loading a level. Textures and all editable terrain remain available together; offline geometry loads explain missing materials.
+- Give new and cleared levels a wider removable starter floor, correct fresh-level portal arrival height, and check landing space before export. Existing saved terrain is preserved.
+- Continue universal-object dependency proofs. Full universal Moby gameplay coverage remains unfinished; native resource and behavior limits still apply.

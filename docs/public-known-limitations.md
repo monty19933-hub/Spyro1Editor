@@ -1,5 +1,12 @@
-# Spyro Editor 1.0.2 — supported scope and limitations
+# Spyro Editor 1.0.3 — supported scope and limitations
 
+- Portal destinations and per-level Return Home routes are editable. Routes
+  require the original physical doorway and its travel path to remain present.
+  Moving its stone arch is a separate terrain edit. Several doorways can share
+  a destination, but each destination has one selected Return Home doorway.
+  The fresh level must be saved before ID65 is offered. Native checks may refuse
+  routes in a full level; the current full Twilight Harbor fixture lacks 400
+  bytes of required buffer space. A route does not create a complete campaign.
 - Cross-level imports have broader class remapping and dependency support, but
   **all Mobys working in all levels is not complete**. Static composition does
   not certify AI, sound, collision, triggers or linked behavior. The browser and
@@ -36,6 +43,10 @@
   Player/companion models, the engine overlay, shared sound and particle support
   remain; this is not a proof of the smallest possible engine footprint.
   Recovery works after reopening. Old collected-state identities remain retired.
+  Export requires a continuous 384-wide landing area around the player start
+  for rebuilt retail levels and portal-accessible fresh levels. Older small
+  starter floors may need enlarging. This checks floor coverage; keep the
+  arrival area clear of walls and objects and test the finished route in-game.
 - Existing-level terrain supports guarded XYZ edits, face copying, face removal
   and texture painting through the shared editor controls. Close and distant
   geometry, visibility and native collision are updated together. Native

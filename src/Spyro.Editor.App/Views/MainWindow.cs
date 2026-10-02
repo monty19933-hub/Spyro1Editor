@@ -1836,6 +1836,7 @@ public sealed partial class MainWindow : Window
         panel.Children.Add(_portalControlDetails);
         panel.Children.Add(_portalControlBox);
         panel.Children.Add(buttons);
+        panel.Children.Add(BuildPortalRoutingControls());
         return panel;
     }
 
@@ -2374,6 +2375,7 @@ public sealed partial class MainWindow : Window
 
     private void RefreshLevelSelectionAvailability()
     {
+        RefreshPortalRouteAvailability();
         bool enabled = !_freshNativeResearchBusy && !_buildingPortableCache &&
             !_projectDataImportBusy &&
             !_workspaceTransitionBusy &&
@@ -2845,7 +2847,7 @@ public sealed partial class MainWindow : Window
                     captured.Level ?? _levelJumpBox.SelectedItem as LevelDefinition;
                 if (reloadLevel != null)
                     await SelectLevelAsync(reloadLevel);
-                _statusText.Text = $"This workspace is already using that editor-cache: {sourceMobys} object cache(s), {sourceOverlays} terrain map(s).";
+                _statusText.Text = AppendRetailTerrainTextureWarning($"This workspace is already using that editor-cache: {sourceMobys} object cache(s), {sourceOverlays} terrain map(s).");
                 return;
             }
 
@@ -2855,7 +2857,7 @@ public sealed partial class MainWindow : Window
                 captured.Level ?? _levelJumpBox.SelectedItem as LevelDefinition;
             if (importedReloadLevel != null)
                 await SelectLevelAsync(importedReloadLevel);
-            _statusText.Text = $"Imported editor-cache: {sourceMobys} object cache(s), {sourceOverlays} terrain map(s).";
+            _statusText.Text = AppendRetailTerrainTextureWarning($"Imported editor-cache: {sourceMobys} object cache(s), {sourceOverlays} terrain map(s).");
         }
         catch (Exception ex)
         {
@@ -3073,7 +3075,14 @@ public sealed partial class MainWindow : Window
             if (requestId != _levelLoadRequestId)
                 return;
 
+            RetailTerrainTextureLoadPreparation textureLoad = exactId65BlankLab
+                ? new(true)
+                : await EnsureRetailTerrainTexturesForLoadAsync(level);
+            if (!textureLoad.OwnerCurrent || requestId != _levelLoadRequestId)
+                return;
             ApplyLoadedLevel(level, loaded);
+            if (textureLoad.Warning != null)
+                _statusText.Text += " " + textureLoad.Warning;
             if (id65Operation != null)
             {
                 TransitionId65BlankLabManualOperationSceneIdentity(
@@ -3910,11 +3919,11 @@ public sealed partial class MainWindow : Window
             string objectNote = result.MobyCacheCount == 0
                 ? " Object placement could not be decoded from the selected disc."
                 : "";
-            _statusText.Text = triggeredByDiscSelection
+            _statusText.Text = AppendRetailTerrainTextureWarning(triggeredByDiscSelection
                 ? result.ReusedExistingCache
                     ? $"Selected disc and reused existing level maps: {result.OverlayCacheCount}/{result.LevelCount} terrain map(s), {result.MobyCacheCount}/{result.LevelCount} object cache(s), {result.TexturePreviewCount} native terrain texture(s).{objectNote}"
                     : $"Selected disc and rebuilt level maps from that BIN/CUE: {result.OverlayCacheCount}/{result.LevelCount} terrain map(s), {result.MobyCacheCount}/{result.LevelCount} object cache(s), {result.TexturePreviewCount} native terrain texture(s).{objectNote}"
-                : $"Built cache: {result.MobyCacheCount}/{result.LevelCount} object cache(s), {result.OverlayCacheCount}/{result.LevelCount} terrain map(s), {result.TexturePreviewCount} native terrain texture(s).{objectNote}";
+                : $"Built cache: {result.MobyCacheCount}/{result.LevelCount} object cache(s), {result.OverlayCacheCount}/{result.LevelCount} terrain map(s), {result.TexturePreviewCount} native terrain texture(s).{objectNote}");
         }
         catch (Exception ex)
         {
@@ -10528,6 +10537,7 @@ public sealed partial class MainWindow : Window
 
     private void RefreshActionAvailability()
     {
+        RefreshPortalRouteAvailability();
         bool hasLevel = _currentLevel != null;
         bool manualId65OperationActive = _id65BlankLabBusy &&
             _id65BlankLabManualOperation != null;
@@ -11661,9 +11671,8 @@ public sealed partial class MainWindow : Window
         if (!id65Unavailable)
             _ = RefreshSavedEnvironmentGradePreviewAsync(level, _levelLoadRequestId);
 
-        bool isHomeWorld = IsHomeWorld(level);
         if (_homeworldTextGroup != null)
-            _homeworldTextGroup.IsVisible = isHomeWorld;
+            _homeworldTextGroup.IsVisible = PortalRouteDocument.IsLevelId(level.LevelId);
 
         _levelTextTargetBox.SelectedItem = id65Unavailable
             ? null
@@ -11794,20 +11803,23 @@ public sealed partial class MainWindow : Window
 
     private void RefreshPortalControlPanel()
     {
+        int? selectedPath = (_portalControlBox.SelectedItem as PortalControlEditorRow)?.EntryTrigger?.TrueIndex;
         List<PortalControlEditorRow> rows = BuildPortalControlEditorRows()
             .OrderBy(row => row.IsPartial)
             .ThenBy(row => row.EntryTrigger?.TrueIndex ?? int.MaxValue)
             .ToList();
         _portalControlBox.ItemsSource = rows;
-        _portalControlBox.SelectedItem = rows.FirstOrDefault();
+        _portalControlBox.SelectedItem = rows.FirstOrDefault(row => row.EntryTrigger?.TrueIndex == selectedPath) ?? rows.FirstOrDefault();
         if (rows.Count == 0)
-            _portalControlDetails.Text = "No source-proven portal locations are mapped for this level.";
+            _portalControlDetails.Text = "This level has no homeworld entry portals. You can still choose its Return Home destination below.";
         else
             RefreshPortalControlDetails();
+        RefreshPortalRoutingEditor();
     }
 
     private IEnumerable<PortalControlEditorRow> BuildPortalControlEditorRows()
     {
+        if (_freshSceneDocument != null) yield break;
         Dictionary<int, Moby> byTrueIndex = _currentMobys
             .Where(moby => !moby.IsRemoved && moby.TrueIndex >= 0)
             .GroupBy(moby => moby.TrueIndex)
@@ -11837,6 +11849,12 @@ public sealed partial class MainWindow : Window
                 string label = lettering != null
                     ? $"{link.Name} / T{entryTrigger.TrueIndex}{(partial ? " (partial)" : "")}"
                     : $"Entry T{entryTrigger.TrueIndex} (partial mapping)";
+                if (_releaseMode && _currentLevel != null)
+                {
+                    var portal = HomeworldPortalControlCatalog.ForLevel(_currentLevel.Key)
+                        .SingleOrDefault(p => p.PathTrueIndex == entryTrigger.TrueIndex);
+                    if (portal != null) label = portal.DestinationName + " doorway" + (partial ? " (incomplete)" : "");
+                }
                 yield return new PortalControlEditorRow(
                     label,
                     lettering,
@@ -11850,8 +11868,15 @@ public sealed partial class MainWindow : Window
 
     private void RefreshPortalControlDetails()
     {
+        RefreshPortalRoutingEditor();
         if (_portalControlBox.SelectedItem is not PortalControlEditorRow row)
             return;
+
+        if (_releaseMode)
+        {
+            _portalControlDetails.Text = "Select a doorway to move its portal surface, lettering and travel path together. Choose where it leads below.";
+            return;
+        }
 
         string lettering = FormatPortalPart(row.Lettering, "not mapped");
         string location = FormatPortalPart(row.Location, "not mapped");
@@ -13195,6 +13220,7 @@ public sealed partial class MainWindow : Window
         }
 
         _createBinBusy = true;
+        RefreshPortalRouteAvailability();
         RefreshFreeFlightSettingsAvailability();
         object? idleButtonContent = _toolbarCreateBinButton?.Content;
         ReportCreateBinProgress(
@@ -13218,6 +13244,7 @@ public sealed partial class MainWindow : Window
         finally
         {
             _createBinBusy = false;
+            RefreshPortalRouteAvailability();
             RefreshFreeFlightSettingsAvailability();
             if (_toolbarCreateBinButton != null)
             {
@@ -13425,7 +13452,7 @@ public sealed partial class MainWindow : Window
             : $" for {FormatShortList(result.PatchedLevelNames, 4)}";
         string treasureSummary = BuildExportedTreasureStatus(result.ExportedTreasureTargets);
         string skippedSummary = BuildSkippedExportStatus(result.SkippedEdits, result.SkippedEditDetails);
-        string successStatus = $"Created all-edits test {Path.GetFileName(result.OutputCuePath)}{levelSummary}: {result.ObjectPatches} object patch(es), {result.TerrainPatches} terrain patch(es), {result.EnvironmentGradePatches} environment patch(es), {result.SkyboxPatches} sky block patch(es), {result.LevelNamePatches} level name(s), {result.MusicLevelPatches} music level(s).{treasureSummary}{skippedSummary}{result.FreeFlightSummary}{PreservedResearchExportNote()}";
+        string successStatus = $"Created all-edits test {Path.GetFileName(result.OutputCuePath)}{levelSummary}: {result.ObjectPatches} object patch(es), {result.TerrainPatches} terrain patch(es), {result.EnvironmentGradePatches} environment patch(es), {result.SkyboxPatches} sky block patch(es), {result.LevelNamePatches} level name(s), {result.MusicLevelPatches} music level(s), {result.PortalRoutePatches} portal route(s).{treasureSummary}{skippedSummary}{result.FreeFlightSummary}{PreservedResearchExportNote()}";
         _statusText.Text = successStatus;
         try
         {
@@ -13478,6 +13505,7 @@ public sealed partial class MainWindow : Window
     private IReadOnlyList<EditedLevelExportTarget> FindEditedLevelExportTargets()
     {
         var flightIntent = _releaseMode ? null : NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
+        var portalRoutes = PortalRouteStore.Capture(_workspace.RootPath).Document;
         var replacementKeys=SceneDocumentStore.LoadOverrides(_workspace.RootPath,_retailCatalog)
             .Select(d=>d.TargetBinding!.LevelKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
         List<EditedLevelExportTarget> targets = [];
@@ -13519,7 +13547,8 @@ public sealed partial class MainWindow : Window
             bool hasLevelMusicEdit = LevelMusicEditStore.Load(_workspace.RootPath, level) != null;
             bool hasSkyboxEdit = NativeSkyEditStore.Load(_workspace.RootPath, level) != null;
             bool hasFlightSelection = flightIntent?.HasExplicitSelection(level.LevelId)==true;
-            if (hasObjectEdits || hasTerrainEdits || hasCustomTerrainTextures || hasNativeTerrainTextureRelocations || hasLevelTextEdit || hasLevelMusicEdit || hasSkyboxEdit || hasFlightSelection)
+            bool hasPortalRoutes = portalRoutes.Destinations.Any(d => d.Portal.HomeworldKey == level.Key) || portalRoutes.Returns.Any(r => r.LevelId == level.LevelId);
+            if (hasPortalRoutes || hasObjectEdits || hasTerrainEdits || hasCustomTerrainTextures || hasNativeTerrainTextureRelocations || hasLevelTextEdit || hasLevelMusicEdit || hasSkyboxEdit || hasFlightSelection)
             {
                 targets.Add(new EditedLevelExportTarget(
                     level,
@@ -13529,10 +13558,23 @@ public sealed partial class MainWindow : Window
                     hasNativeTerrainTextureRelocations,
                     hasLevelTextEdit,
                     hasLevelMusicEdit,
-                    hasSkyboxEdit) { HasFreeFlightSelection = hasFlightSelection });
+                    hasSkyboxEdit) { HasFreeFlightSelection = hasFlightSelection, HasPortalRoutes = hasPortalRoutes });
             }
         }
 
+        // Keep route-only projects visible to the final routing writer even when
+        // their level is handled by the authored-level exporter (including ID65).
+        if (portalRoutes.HasEdits && !targets.Any(t => t.HasPortalRoutes))
+        {
+            if (targets.Count > 0)
+                targets[0] = targets[0] with { HasPortalRoutes = true };
+            else
+            {
+                var routeHost = _retailCatalog.Levels.First(l => l.LevelId == 10);
+                targets.Add(new EditedLevelExportTarget(routeHost, false, false, false, false, false, false, false)
+                    { HasPortalRoutes = true });
+            }
+        }
         return targets;
     }
 
@@ -13570,6 +13612,7 @@ public sealed partial class MainWindow : Window
         IReadOnlyList<EditedLevelExportTarget> targets,
         bool deferSharedRuntimeHooks = false)
     {
+        var portalSnapshot = PortalRouteStore.Capture(_workspace.RootPath);
         if (TryGetId65BlankLabNormalCreateBinBlockReason(out string id65BlockReason))
             throw new InvalidOperationException(id65BlockReason);
 
@@ -13620,6 +13663,7 @@ public sealed partial class MainWindow : Window
         NativeFreeFlightExportStageResult? flightStage = null;
         IReadOnlyList<(int LevelIndex, int Row, int Colour)> activeDragonflyEggs = [];
         IReadOnlySet<string> signLevelKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<int, IReadOnlyList<NativePortalReturnClass>> returnClasses = [];
         NativeFreeFlightCompositionPlan? globalFlight = flightIntent?.RequiresRebuild==true
             ? await NativeFreeFlightCompositionPlan.CaptureAsync(sourceImage, flightIntent?.Enabled==true)
             : null;
@@ -14210,6 +14254,9 @@ public sealed partial class MainWindow : Window
                 BuildCueText(currentCue, currentImage, Path.GetFileName(universalImage)), DiscCueSheet.TextEncoding);
             foreach (var level in universal.Levels)
             {
+                var returnLevel = _retailCatalog.FindByKey(level.LevelKey)
+                    ?? throw new InvalidDataException("The imported object's level is missing from the catalog.");
+                returnClasses[returnLevel.LevelId] = NativePortalReturnClass.Capture(level.Compose.Classes);
                 objectPatches += level.Compose.NewRowIndices.Count;
                 if (level.Compose.TreasureDelta != 0)
                 {
@@ -14253,7 +14300,29 @@ public sealed partial class MainWindow : Window
             RequireFreeFlightExportOwner(flightIntent, flightOwner, flightImageSelection, flightSkyImageSelection);
         }
 
-        if (objectPatches + terrainPatches + environmentGradePatches + skyboxPatches + levelNamePatches + musicLevelPatches == 0 && flightStage == null && globalFlight == null || !File.Exists(currentImage))
+        int portalRoutePatches = 0;
+        if (portalSnapshot.Document.HasEdits && !deferSharedRuntimeHooks)
+        {
+            ReportCreateBinProgress("Routing portals…", "Create BIN: linking portal destinations and Return Home paths…");
+            string portalImage = Path.Combine(tempDir, $"{++step:00}-portal-routes.bin");
+            await Task.Run(() =>
+            {
+                UniversalSourceLibrary.RequireOriginal(sourceImage);
+                var donors = new UniversalSourceLibrary(sourceImage, _retailCatalog);
+                NativePortalRouteComposer.ApplyImage(donors, _retailCatalog, currentImage, portalImage, portalSnapshot.Document,
+                    returnClasses: returnClasses);
+            });
+            portalSnapshot.RequireCurrent(_workspace.RootPath);
+            await File.WriteAllTextAsync(Path.ChangeExtension(portalImage, ".cue"),
+                BuildCueText(currentCue, currentImage, Path.GetFileName(portalImage)), DiscCueSheet.TextEncoding);
+            currentImage = portalImage; currentCue = Path.ChangeExtension(portalImage, ".cue");
+            portalRoutePatches = portalSnapshot.Document.Destinations.Count + portalSnapshot.Document.Returns.Count;
+            stepSummaries.Add(new { kind = "portal-routes", routes = portalSnapshot.Document, fingerprint = portalSnapshot.Fingerprint });
+            foreach (var target in targets.Where(t => t.HasPortalRoutes))
+                if (!patchedLevelNames.Contains(target.Level.DisplayName)) patchedLevelNames.Add(target.Level.DisplayName);
+        }
+
+        if (objectPatches + terrainPatches + environmentGradePatches + skyboxPatches + levelNamePatches + musicLevelPatches + portalRoutePatches == 0 && flightStage == null && globalFlight == null || !File.Exists(currentImage))
             return new CombinedTestBinResult("", "", objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, false);
 
         string stagedPrefix = Path.Combine(tempDir, Path.GetFileName(finalPrefix));
@@ -14287,6 +14356,7 @@ public sealed partial class MainWindow : Window
             skyboxPatches,
             levelNamePatches,
             musicLevelPatches,
+            portalRoutePatches,
             skippedEdits,
             skippedEditDetails,
             exportedTreasureTargets,
@@ -14311,6 +14381,7 @@ public sealed partial class MainWindow : Window
             throw new InvalidOperationException(finalFlightBlockReason);
         ExportArtifactTransaction.RequireSourceSeparation(sourceImage, sourceCue,
             finalImage, finalCue, finalSummary, finalSkipped, finalDiagnostics, finalSupportBundle);
+        portalSnapshot.RequireCurrent(_workspace.RootPath);
         ExportArtifactPublicationResult publication = ExportArtifactTransaction.Publish(outputDir,
         [
             new(finalImage, stagedImage),
@@ -14332,7 +14403,8 @@ public sealed partial class MainWindow : Window
         { FreeFlightSummary = globalFlight == null ? "" : flightIntent?.Enabled==true
             ? " Fly Anywhere ON: all normal levels; gameplay validation pending."
             : " Fly Anywhere OFF: original normal movement restored.",
-            ActiveDragonflyEggs = activeDragonflyEggs, SignLevelKeys = signLevelKeys,
+            PortalRoutePatches = portalRoutePatches,
+            ActiveDragonflyEggs = activeDragonflyEggs, SignLevelKeys = signLevelKeys, ReturnClasses = returnClasses,
             DeferredLevelNames = deferSharedRuntimeHooks ? levelTextEdits.ToArray() : [] };
     }
 
@@ -32192,6 +32264,7 @@ public sealed partial class MainWindow : Window
         bool HasSkyboxEdit)
     {
         public bool HasFreeFlightSelection { get; init; }
+        public bool HasPortalRoutes { get; init; }
     }
 
     internal sealed record PrivateTextureAggregateSavedWriterScope(
@@ -32221,9 +32294,11 @@ public sealed partial class MainWindow : Window
         bool WroteImage,
         string BuildDirectory = "")
     {
+        public int PortalRoutePatches { get; init; }
         public string FreeFlightSummary { get; init; } = "";
         public IReadOnlyList<(int LevelIndex, int Row, int Colour)> ActiveDragonflyEggs { get; init; } = [];
         public IReadOnlySet<string> SignLevelKeys { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public IReadOnlyDictionary<int, IReadOnlyList<NativePortalReturnClass>> ReturnClasses { get; init; } = new Dictionary<int, IReadOnlyList<NativePortalReturnClass>>();
         public IReadOnlyList<LevelTextReplacement> DeferredLevelNames { get; init; } = [];
     }
 

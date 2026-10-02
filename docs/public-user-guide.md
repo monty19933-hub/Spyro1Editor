@@ -1,4 +1,4 @@
-# Spyro Editor 1.0.2
+# Spyro Editor 1.0.3
 
 ## Start editing
 
@@ -22,6 +22,27 @@ The game has limits on coordinates, collision encoding and memory. If a shape
 cannot be represented safely, the editor explains why. Try a smaller change or
 a simpler face; an unsupported edit does not produce a partially patched game.
 Translucent source faces cannot currently be copied or removed by these tools.
+
+## Portal destinations and Return Home
+
+Open **Game Settings → Portals & Return Home**. Choose a doorway, select its
+new destination by name and level ID, then **Apply portal destination**. Leave
+**Return Home comes back through this portal** checked to pair its destination
+with this doorway. Each level also has a separate **Return Home destination**
+choice. Changes save immediately; **Undo route change** restores the previous
+version, and **Create BIN** includes the saved routes.
+
+Use **Select Portal** to move the trigger, lettering and travel path together.
+Returning uses that doorway's current fly-out path. Move its stone arch with
+the terrain tools separately. If several doorways enter the same level, choose
+which one that level returns through. A saved fresh level appears as ID65.
+Deleted doorways cannot be used as return destinations; restore them or choose
+another doorway. Native memory limits can prevent a route from exporting.
+
+Original terrain textures remain visible while editing. If texture files are
+missing or damaged, loading the level rebuilds them from the selected disc.
+Without the source disc, cached geometry can still open and the status explains
+why original materials are unavailable.
 
 ## Create a fresh level
 
@@ -47,8 +68,11 @@ keeps its place in the level picker. Other levels remain in the project.
 
 Use the same terrain and object tools to build the replacement. You can remove
 both starter-floor faces, save an empty draft, and use **Add Terrain** to begin
-again. Before export, place the player above a solid floor wide enough for
-Spyro to stand on. Export checks the whole starting footprint.
+again. Before export, place the player above a solid floor. Rebuilt retail levels
+and fresh levels reached through a portal need a continuous landing area at
+least 384 units wide, centered on the start. The new removable starter floor
+provides this area. Existing saved terrain stays unchanged; enlarge it or move
+the start if export reports insufficient landing space.
 
 **Recovery → Restore Before Clear** restores the saved scene from before the
 clear and preserves your replacement scene in the recovery folder. Recovery

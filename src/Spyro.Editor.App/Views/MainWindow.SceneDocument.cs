@@ -183,6 +183,7 @@ public sealed partial class MainWindow
         string workspacePath=_workspace.RootPath, original=ResolveUniversalSourceDisc();
         string? imageSelection=_discImagePathBox.Text,skySelection=_skyboxDiscImagePathBox.Text;
         var flightIntent=_releaseMode?null:NativeFreeFlightProjectExportIntent.Capture(workspacePath);
+        var portalSnapshot=PortalRouteStore.Capture(workspacePath);
         var saved=SceneDocumentStore.ReadAll(workspacePath,_retailCatalog);
         var fingerprints=saved.ToDictionary(s=>s.ResolveTarget(_retailCatalog).Key,s=>s.Fingerprint());
         int? startLevelId=await ShowAuthoredProjectExportScopeAsync(saved,authoredActive?_currentLevel!.LevelId:10);
@@ -196,6 +197,7 @@ public sealed partial class MainWindow
             if(current.Count!=saved.Count||current.Any(s=>!fingerprints.TryGetValue(s.ResolveTarget(_retailCatalog).Key,out var hash)||hash!=s.Fingerprint()))
                 throw new InvalidDataException("A saved authored level changed during export. Save and create the BIN again.");
             flightIntent?.RequireCurrent(workspacePath);
+            portalSnapshot.RequireCurrent(workspacePath);
             if(TryGetFreeFlightSettingsExportBlockReason(out string reason))throw new InvalidDataException(reason);
             if(TryGetId65BlankLabNormalCreateBinBlockReason(out reason))throw new InvalidDataException(reason);
         }
@@ -227,7 +229,8 @@ public sealed partial class MainWindow
             return await NativeAuthoredProjectExporter.ExportAsync(donors,_retailCatalog,plans,japanese,output,workspacePath,startLevelId.Value,
                 requireCurrent:()=>Dispatcher.UIThread.InvokeAsync(RequireOwner).GetAwaiter().GetResult(),
                 stagedRetailImage:retail?.WroteImage==true?retail.OutputImagePath:null,retailEggs:retail?.ActiveDragonflyEggs,
-                retailSignLevels:retail?.SignLevelKeys,retailNames:retail?.DeferredLevelNames,flight:flight);
+                retailSignLevels:retail?.SignLevelKeys,retailNames:retail?.DeferredLevelNames,flight:flight,portalRoutes:portalSnapshot.Document,
+                retailReturnClasses:retail?.ReturnClasses);
         });
         RequireOwner();
         string startName=saved.FirstOrDefault(s=>s.ResolveTarget(_retailCatalog).LevelId==startLevelId)?.Name??"Artisans";
@@ -252,7 +255,8 @@ public sealed partial class MainWindow
         if(_retailTerrainDetailsPanel!=null)_retailTerrainDetailsPanel.IsVisible=_freshSceneDocument==null;
         if(_retailNameDisclosure!=null)_retailNameDisclosure.IsVisible=_freshSceneDocument==null;
         if(_retailMusicDisclosure!=null)_retailMusicDisclosure.IsVisible=_freshSceneDocument==null;
-        if(_homeworldTextGroup!=null)_homeworldTextGroup.IsVisible=_freshSceneDocument==null;
+        if(_homeworldTextGroup!=null)_homeworldTextGroup.IsVisible=true;
+        RefreshPortalControlPanel();
         _terrainPlayableOnlyBox.IsVisible=_terrainBrushSafetyText.IsVisible=_freshSceneDocument==null;
         if(_freshSceneDocument is not { } scene)return;
         _freshSettingsPanel.Children.Add(NewSmallNote(_freshSceneDocument.TargetBinding==null?"Your level opens when you choose New Game in the exported game.":"This blank scene replaces the current level in your exported game."));

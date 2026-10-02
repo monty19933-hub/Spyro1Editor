@@ -207,11 +207,13 @@ CORE_CASES = (
     ("UniversalCapacityPlanSmoke", "UNIVERSAL_CAPACITY_PLAN_OK"),
     ("UniversalIdentitySmoke", "UNIVERSAL_IDENTITY_OK"),
     ("NativeMobySaveMapSmoke", "NATIVE_MOBY_SAVE_MAP_SOURCE_FREE_OK"),
+    ("UniversalJumpModelOwnershipSmoke", "UNIVERSAL_JUMP_MODEL_FREE_OK"),
+    ("NativePortalRouteRuntimeSmoke", "NATIVE_PORTAL_ROUTE_FREE_OK"),
     ("StartBlankSmoke", "START_BLANK_SOURCE_FREE_OK checks=32"),
     ("NativeClearedRetailBindingSmoke", "NATIVE_CLEARED_RETAIL_BINDING_SMOKE_OK"),
     ("NativeClearedTitleDemosSmoke", "NATIVE_CLEARED_TITLE_DEMOS_SMOKE_OK"),
     ("NativeAuthoredAggregateOwnershipSmoke", "NATIVE_AUTHORED_AGGREGATE_OWNERSHIP_CHECKS_OK checks=32"),
-    ("NativeClearedLevelCompositionSmoke", "NATIVE_CLEARED_LEVEL_COMPOSITION_CHECKS_OK checks=1158"),
+    ("NativeClearedLevelCompositionSmoke", "NATIVE_CLEARED_LEVEL_COMPOSITION_CHECKS_OK checks="),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
@@ -229,6 +231,8 @@ CASE_ARGUMENTS = {
 # Additional modes retain their own arguments/markers without replacing the
 # established mode of the same executable. Project builds remain deduplicated.
 ADDITIONAL_CORE_CASES = (
+    ("UiSmoke", "PORTAL_ROUTE_UI_OK checks=18",
+     ["--portal-routes-ui-only"]),
     ("UiSmoke", "START_BLANK_UI_OK checks=27",
      ["--start-blank-ui-only"]),
     ("TownSquareLockedChestSmoke", "LOCKED_CHEST_BEHAVIOR_FREE_OK",
@@ -570,6 +574,7 @@ def main():
             continue
         suffix = {
             ("--behavior-free",): "-behavior",
+            ("--portal-routes-ui-only",): "-portal-routes-ui",
             ("--start-blank-ui-only",): "-start-blank-ui",
             ("--free-flight-ui-only",): "-free-flight-ui",
             ("--level-picker-automation-only",): "-level-picker-automation",

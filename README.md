@@ -9,32 +9,34 @@ or copied game asset. Users must provide their own legally obtained disc image.
 
 ## Releases
 
-The current release target is **Spyro Editor 1.0.2**. Existing and fresh levels
+The current release target is **Spyro Editor 1.0.3**. Existing and fresh levels
 share terrain and object controls. Create BIN/CUE includes both saved scenes and
 lets you choose the New Game starting level. Cross-level objects have a capacity
 planner that names removals which would make an import fit. Start Blank clears a
 supported current level with a recoverable snapshot, safe start and removable
-floor, then rebuilds its exported terrain, collision and object data. Fly Anywhere is
+floor, then rebuilds its exported terrain, collision and object data. Portal
+destinations and Return Home doorways are editable, and missing original terrain
+textures repair automatically without removing terrain controls. Fly Anywhere is
 deferred. See the [user guide](docs/public-user-guide.md),
 [supported scope](docs/public-known-limitations.md) and
 [current verification status](RELEASE_STATUS.md).
 
 The self-contained release packages are named:
 
-- `SpyroEditor-V1.0.2-osx-arm64.zip`
-- `SpyroEditor-V1.0.2-win-x64.zip`
+- `SpyroEditor-V1.0.3-osx-arm64.zip`
+- `SpyroEditor-V1.0.3-win-x64.zip`
 
-Stable builds use the `v1.0.2` identity, schema-3 package manifests and the stable
+Stable builds use the `v1.0.3` identity, schema-3 package manifests and the stable
 update channel. They do not select beta releases as updates. Earlier numbered
 and dotted beta packages retain their existing compatibility rules and must not
-be replaced or retagged. Source builds default to V1.0.2 stable; the release script accepts an explicit
+be replaced or retagged. Source builds default to V1.0.3 stable; the release script accepts an explicit
 identity for reproducible packaging:
 
 ```sh
 SPYRO_EDITOR_RELEASE_CHANNEL=stable \
-SPYRO_EDITOR_STABLE_VERSION=1.0.2 \
-SPYRO_EDITOR_STABLE_INTERNAL_VERSION=1.0.2 \
-tools/Build-SpyroEditorRelease.sh SpyroEditor-V1.0.2
+SPYRO_EDITOR_STABLE_VERSION=1.0.3 \
+SPYRO_EDITOR_STABLE_INTERNAL_VERSION=1.0.3 \
+tools/Build-SpyroEditorRelease.sh SpyroEditor-V1.0.3
 ```
 
 The updater checks release identity, platform, packaged application and manifest,
