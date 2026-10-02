@@ -14,9 +14,21 @@ checkpoint `f7ac875`. Native game generation is unchanged in this update.
   explains empty searches, and exposes all source versions instead of truncating
   at 200. Background fit updates preserve the selected source version; removal
   advice discards stale selections.
-- Focused source-free navigation tests passed 50 checks. Source-backed browser
-  review passed 30 checks, including >200 versions and a 900×620 layout. Full
-  release/package/actual GUI results are recorded in the checkpoint report.
+- The full Release regression gate passed **346 checks, zero failures**. After
+  the real GUI caught two control-refresh bugs, all **14 UI suites** passed
+  again on the final source, including **50 navigation assertions**. Source-backed
+  browser review passed 30 checks, including >200 versions and a 900×620 layout.
+- Final packages are in task-root `outputs/SpyroEditor-V1.0.5-release-r3`, built
+  from `a4e8a35d7c913feb947638e5ec9cb8adb46762f1`. Both passed full package
+  verification. The signed Mac app saved Artisans by button and Cmd+S, exported
+  the BIN/CUE, restored File/Save after export, and reopened **176 objects / 250
+  treasure**. The final BIN is byte-identical to the previous verified GUI gem
+  export. No new emulator playthrough is claimed for this UI update.
+- All 173 protected user-project files match their snapshot. Exact artifacts,
+  source/package hashes, verification scope and the recovered automatic UI
+  reopen incident are recorded in task-root
+  `work/ui-release-20261002/final-checkpoint.json` and the
+  [UI checkpoint report](docs/research/ui-navigation-release-20261002.md).
 
 ## Remaining release priorities
 
