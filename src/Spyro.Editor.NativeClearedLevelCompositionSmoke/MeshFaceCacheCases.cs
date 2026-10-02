@@ -16,7 +16,9 @@ internal static class MeshFaceCacheCases
     internal static void Run(Action<bool,string> check)
     {
         var seed=SceneDocument.New();
-        seed=seed with {Surfaces=seed.Surfaces.Select(s=>s with {Vertices=s.Vertices.Select(v=>v with {X=528+(v.X-528)/2,Y=528+(v.Y-528)/2}).ToArray()}).ToArray()};
+        // Scratch ownership needs one bounded native triangle per editor face,
+        // independently of the product's starter platform dimensions.
+        seed=seed with {Surfaces=[seed.Surfaces[0] with {Vertices=[new(528,528,544),new(592,528,544),new(528,592,544)]}]};
         foreach(int count in new[]{2,32,255})
         {
             var doc=seed with {Surfaces=Enumerable.Range(0,count).Select(i=>seed.Surfaces[0] with {Id=Guid.NewGuid().ToString("N")}).ToArray()};

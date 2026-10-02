@@ -28,7 +28,7 @@ Supported(seed with {Surfaces=[Rectangle(528,528,656,656)]},"exact authored quad
 Refused(seed with {Surfaces=[]},"empty floor");
 Refused(seed with {Surfaces=[Rectangle(558,528,562,656)]},"narrow strip under player centre");
 Refused(seed with {Surfaces=[Rectangle(560,528,656,656)]},"centre on outside edge");
-Refused(seed with {Spawn=new(540,540,576)},"square corner footprint leaves default platform");
+Refused(seed with {Spawn=new(540,540,576),Surfaces=[Rectangle(528,528,656,656)]},"square corner footprint leaves explicit legacy platform");
 Refused(seed with {Spawn=new(560,560,566)},"less than native radius clearance");
 Supported(seed with {Spawn=new(560,560,567)},"first whole-unit radius clearance");
 Supported(seed with {Spawn=new(560,560,672)},"maximum downward gap inclusive");
@@ -58,6 +58,7 @@ Supported(seed with {Spawn=new(560.249f,560,576),Surfaces=[Rectangle(538,528,620
 
 MeshFaceCacheCases.Run(Check);
 SubdivisionCases.Run(Check);
+await StarterFloorCases.Run(Check);
 await SourceAliasCases.Run(Check);
 
 if(args.Length==0) { Console.WriteLine("NATIVE_CLEARED_LEVEL_COMPOSITION_CHECKS_OK checks="+checks);return; }

@@ -35,7 +35,9 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
 
     public static SceneDocument New(string name = "Untitled Level")
     {
-        Vector3f a = new(528, 528, 544), b = new(656, 528, 544), c = new(528, 656, 544), d = new(656, 656, 544);
+        // The native portal arrival moves before Spyro settles onto the floor.
+        // Only new scenes use this larger starter; saved terrain is read verbatim.
+        Vector3f a = new(368, 368, 544), b = new(752, 368, 544), c = new(368, 752, 544), d = new(752, 752, 544);
         return new(1, Guid.NewGuid().ToString("N"), name, new(560, 560, 576), 64,
             new(80, 128, 112), 19,
             [new(Guid.NewGuid().ToString("N"), [a,b,c], new(128,96,64), null),
