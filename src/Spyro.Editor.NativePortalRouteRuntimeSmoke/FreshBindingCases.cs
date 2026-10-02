@@ -12,6 +12,7 @@ internal static class FreshBindingCases
         string folder=Path.Combine(workspace,"work","universal-gameplay-20261001","dependencies","portal-fresh-binding-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
         var issued=await NativeFreshMainCompilation.CaptureAsync(sourcePath,SceneDocument.New("Portal Bind Proof"),Path.Combine(folder,"fresh-baseline.bin"));
         byte[] fresh=issued.CopyExecutable();var originalTown=UniversalExeBindings.Read(original,13);var legacy=UniversalExeBindings.Read(fresh,65);
+        PortalArrivalCases.Run(original,fresh,check,refuse);
         uint[] changed=[UniversalExeBindings.CopyBufferGlobal,UniversalExeBindings.InitGlobal,UniversalExeBindings.UpdateGlobal];
         check(legacy.Count==9&&originalTown.Count==9,"captured fresh and original Town have all nine callbacks");
         check(originalTown.Where(p=>!changed.Contains(p.Key)).All(p=>legacy[p.Key].Value==p.Value.Value),"all six other fresh callbacks match authenticated Town literals");

@@ -26,6 +26,42 @@ public static class NativePortalRouteFreshBinding
     ];
     private static readonly uint[] Overridden=[UniversalExeBindings.CopyBufferGlobal,UniversalExeBindings.InitGlobal,UniversalExeBindings.UpdateGlobal];
     private static bool Pointer(uint value)=>value>=UniversalOverlay.Base&&value<0x80200000&&(value&3)==0;
+    public const int OrdinaryPortalHeightOffset=0x5F640;
+
+    /// <summary>Ordinary portal arrival uses an indexed height in addition to the scene
+    /// spawn. The unused65 slot retains a flight height; give only that slot Town's
+    /// normal arrival height. The separate balloon/state12 classifier remains intact.</summary>
+    public static void PatchOrdinaryPortalArrival(byte[] originalExecutable,byte[] stagedExecutable)
+    {
+        if(originalExecutable.Length!=0x66000||stagedExecutable.Length!=originalExecutable.Length||
+            Convert.ToHexStringLower(SHA256.HashData(originalExecutable))!="a533d75cab8afaae6107ec35a02a9a5fe979a92c7c955f9cf1ee50f693a1b998")
+            throw new InvalidDataException("Fresh portal arrival requires the complete original USA executable.");
+        foreach(var (offset,length,digest) in new (int,int,string)[]{
+            (0x419C,168,"7ebc26c894040d85ff4ed3143a41c78f85bbce7e6ee9610a2b7894ce51918d43"),
+            (0x5DFC,104,"aa329be57b96475b5c97242a7220b7b25fbf70b057bb97dae183651f949046c3"),
+            (0x5F5B4,144,"4726dfc8e49f12b07a5a39cd0209a3d155b66a5c9566f4d198ab0de0bcda14f4")})
+        {
+            var source=originalExecutable.AsSpan(offset,length);
+            if(Convert.ToHexStringLower(SHA256.HashData(source))!=digest)
+                throw new InvalidDataException("Fresh portal arrival source owner changed.");
+            if(offset==0x5F5B4)continue;
+            if(!stagedExecutable.AsSpan(offset,length).SequenceEqual(source))
+                throw new InvalidDataException("Fresh portal arrival consumer or level index changed.");
+        }
+        byte[] expected=originalExecutable.AsSpan(0x5F5B4,144).ToArray();
+        BinaryPrimitives.WriteInt32LittleEndian(expected.AsSpan(35*4),8192);
+        var table=stagedExecutable.AsSpan(0x5F5B4,144);
+        if(!table.SequenceEqual(originalExecutable.AsSpan(0x5F5B4,144))&&!table.SequenceEqual(expected))
+            throw new InvalidDataException("Fresh portal arrival conflicts with another level's entry height.");
+        // The normal classifier must already be issued by the fresh bootstrap;
+        // authenticate its complete local owner while retaining the state12 bypass.
+        byte[] classifier=originalExecutable.AsSpan(0x409C,100).ToArray();
+        BinaryPrimitives.WriteUInt32LittleEndian(classifier.AsSpan(0x40C0-0x409C),0x3C025E00);
+        if(!stagedExecutable.AsSpan(0x409C,100).SequenceEqual(classifier)||
+            UniversalExeBindings.Word(stagedExecutable,UniversalExeBindings.LevelInitJumpTable+65*4)!=Address)
+            throw new InvalidDataException("Fresh portal arrival requires its canonical normal65 bootstrap.");
+        BinaryPrimitives.WriteInt32LittleEndian(stagedExecutable.AsSpan(OrdinaryPortalHeightOffset),8192);
+    }
     private static byte[] Build(uint copy,uint init,uint update,uint townCopy=0x80089ECC,uint townUpdate=0x8007DA54)
     {
         if(!Pointer(copy)||!Pointer(init)||!Pointer(update)||!Pointer(townCopy)||!Pointer(townUpdate))throw new InvalidDataException("Fresh callbacks must remain aligned resident PS1 addresses.");

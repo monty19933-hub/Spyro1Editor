@@ -64,8 +64,10 @@ internal sealed class ScalarMips
                 case 13:value=R[rs]|(w&0xFFFF);write=true;break;
                 case 15:value=(w&0xFFFF)<<16;write=true;break;
                 case 33:
+                case 37:
                     uint halfAddress=unchecked(R[rs]+(uint)imm),packed=Word(halfAddress&~3u);
-                    value=unchecked((uint)(short)(packed>>((int)(halfAddress&2)*8)));load=true;Reads.Add((halfAddress,value));break;
+                    uint half=(packed>>((int)(halfAddress&2)*8))&0xFFFF;
+                    value=op==33?unchecked((uint)(short)half):half;load=true;Reads.Add((halfAddress,value));break;
                 case 35:uint address=unchecked(R[rs]+(uint)imm);value=Word(address);load=true;Reads.Add((address,value));break;
                 case 43:uint destination=unchecked(R[rs]+(uint)imm);Memory[destination]=R[rt];Writes.Add((destination,R[rt]));break;
                 default:throw new InvalidDataException($"Unsupported scalar opcode {op} at {pc:X8}.");
