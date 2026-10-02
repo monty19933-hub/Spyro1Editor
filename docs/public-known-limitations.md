@@ -1,4 +1,4 @@
-# Spyro Editor 1.0.3 — supported scope and limitations
+# Spyro Editor 1.0.4 — supported scope and limitations
 
 - Portal destinations and per-level Return Home routes are editable. Routes
   require the original physical doorway and its travel path to remain present.
