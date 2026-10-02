@@ -1,3 +1,75 @@
+# Universal gameplay implementation — 2 October 2026
+
+Active branch: `release/universal-gameplay-20261002`, continued from clean
+checkpoint `ada3e545759c6af7b80e30a1082b7609c6bf5509`. Implementation and native
+acceptance are still in progress; previous release packages are preserved.
+
+- The editor adds, moves, copies, removes, restores and reopens complete linked
+  groups. Actual UI-to-BIN tests pass for Lofty Castle's seven-object whirlwind
+  groups (33 assertions) and Gnorc Cove's linked barrel pair (21 assertions).
+- Source-owned integer links, native parent reads and Gnorc's physical model
+  lookup are handled separately. Source/copy mutation tests retain the class
+  and namespace guards; unsupported pointers remain refused.
+- All 46 original native sphere-damage calls across 23 source families now
+  contribute their verified Spyro reaction animations. The integrated suite
+  passes 2,117 checks, including seven real compositions. In Dark Hollow, the
+  Gnorc hatch/TNT candidate passed native explosion, hurt animation 29 and
+  recovery. The current scoped hatch export is byte-identical to that tested
+  candidate. This is bounded interaction evidence, not whole-family acceptance.
+- Cliff Town's E2 metal model now retains a valid destination material or imports
+  the complete source material when the slot is empty. Seven generated shader
+  descriptors are authenticated separately from ordinary textures. The reserved
+  footprint includes 30,976 pixel bytes and all eight fog palettes (4,096 bytes).
+  The scoped 350 retail cases yield 130 static compositions, 150 RAM-capacity
+  refusals and 70 VRAM-capacity refusals; all 10 fresh cases compose. Actual
+  ordinary export/readback and source mutation checks passed. A cold BIOS run
+  in Dark Hollow rendered an imported E2, defeated it by charging and collected
+  its green gem: both game/level totals became 2 and native collection flags
+  were set. Contact damage, flame resistance and card reload remain unverified.
+- Dragon double-click editing now contains a color picker, independent copied
+  colors, project persistence and an original-color reset (14 actual UI checks).
+  The native renderer now tints each draw independently without changing shared
+  palettes. Red and blue statues rendered together in Dark Hollow; the red
+  rescue returned to gameplay with its native collected flags set. Normal export
+  is byte-identical to that tested image. Source/export checks pass for all 79
+  original statue rows, with exact code-space and palette bounds. Card reload
+  and every-color/every-level emulator coverage are not claimed.
+- Object pointer fixups now resolve within each copied group, with a final
+  writer guard against cross-group pointers. The source-free Moby suite passes
+  102 checks including two independent groups and ambiguous/missing targets.
+- Dry Canyon's bird handler keeps its real E6 bird dependency while omitting an
+  authenticated unreachable legacy B7 spawn. All six original variants compose
+  in eight retail destinations and a fresh level; other tested destinations
+  retain RAM/VRAM refusals. A cold BIOS Dark Hollow test rendered the handler,
+  played its close attack and Spyro reaction, released the real bird on flame
+  defeat, and awarded five gems to both totals with native collection flags.
+  This covers one variant/destination, not every bird lifecycle.
+- Magic Crafters deletion now protects native druid pod membership as well as
+  integer links. Removing part of a live pod refuses instead of allowing a
+  replacement actor to inherit its activation. Whole-pod and unrelated gem
+  removal pass. The dedicated source suite passes 242 checks; import remains
+  refused until the full state and dependency closure is established.
+
+Evidence is under task-root `work/universal-finish-20261002`: `index-links/`,
+`coverage/`, `universal-groups-ui-r10.log`, `dragon-colour-ui-r2.log`, and
+`runtime/`. The complete older coverage matrix has not yet been refreshed for
+these changes. Universal Moby gameplay, broad lifecycle/progression coverage,
+Mac notarization and physical Windows acceptance remain unfinished. Fly Anywhere
+remains deferred. Original discs, user projects, cards and packages are preserved.
+
+The integrated Release run passed all 527 build/source-free suite entries. Its
+optional older offline suite first required a generated local cache, then exposed
+an existing V5 locked-base terrain path passing a modified executable to the
+exact-original surface consumer certificate. That failure is preserved; no
+certificate was relaxed. All 68 separately registered current source suites and seven Python source
+audits pass, including the remaining cases after the first run reached its
+time budget and the authoring case after restoring its exact preserved fixture.
+The full optional legacy offline gate is still not marked passed. A newly found
+Flight identity-map dependency gap and imported wizard path/index defect remain
+open; historical static composition counts are not universal gameplay proof.
+
+---
+
 # V1.0.5 UI navigation checkpoint
 
 Branch: `release/ui-navigation-20261002`, continued from the clean V1.0.4

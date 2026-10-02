@@ -1134,7 +1134,8 @@ public sealed partial class MainWindow
         ComboBox? transformBox,
         TextBlock? transformNote,
         TextBox? signTextBox = null,
-        ComboBox? eggColourBox = null)
+        ComboBox? eggColourBox = null,
+        DragonColorEditor? dragonColor = null)
     {
         StackPanel body = new()
         {
@@ -1162,6 +1163,7 @@ public sealed partial class MainWindow
         Grid.SetColumn(rotation, 1);
         transform.Children.Add(rotation);
         body.Children.Add(transform);
+        if (dragonColor != null) body.Children.Add(BuildModernDialogField("Dragon color", dragonColor.Control));
 
         if (eggColourBox != null)
         {
@@ -1273,7 +1275,8 @@ public sealed partial class MainWindow
         cancel.Click += (_, _) => dialog.Close(false);
         apply.Click += (_, _) =>
         {
-            if (!TryValidateDirectGemEdit(moby, typeBox.Text, gemBox, editsRewardGem, transformBox, out string message))
+            if (!TryValidateDirectGemEdit(moby, typeBox.Text, gemBox, editsRewardGem, transformBox, out string message) ||
+                dragonColor != null && !dragonColor.Validate(out message))
             {
                 validationMessage.Text = message;
                 validationMessage.IsVisible = true;

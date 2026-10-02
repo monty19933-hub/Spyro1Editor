@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # commands have no source image, emulator connection or input mode. Explicit
 # discovery plus its frozen test-count marker must not accept an empty suite.
 OBSERVER_PYTHON_CASES = (
+    ("python-dragon-tint-r3000", ("tools/Test-DragonStatueTint.py",), "DRAGON_TINT_R3000_OK checks=856"),
     ("python-fresh-chest-observer", ("tools/Observe-SpyroFreshChest.py", "--self-test"),
      "FRESH_CHEST_OBSERVER_OFFLINE_OK tests=13 connections=0 romReads=0 runtime=false"),
     ("python-tiled-family-chest-observer",
@@ -69,6 +70,7 @@ OBSERVER_PYTHON_CASES = (
 # Source-disc tests remain opt-in below; the existing broader source suite is
 # Run-SpyroEditorOfflineQa.sh. Neither route mode launches the emulator.
 CORE_CASES = (
+    ("DragonStatueColorSmoke", "DRAGON_STATUE_COLOUR_SOURCE_FREE_OK"),
     ("DiscImageWorkingCopySmoke", "Disc-image working-copy smoke passed."),
     ("DiscImageWriteIntegritySmoke", "DISC_IMAGE_WRITE_INTEGRITY_SMOKE_OK"),
     ("DiscImageReadBoundsSmoke", "DISC_IMAGE_READ_BOUNDS_SMOKE_OK"),
@@ -233,6 +235,7 @@ CASE_ARGUMENTS = {
 # Additional modes retain their own arguments/markers without replacing the
 # established mode of the same executable. Project builds remain deduplicated.
 ADDITIONAL_CORE_CASES = (
+    ("UiSmoke", "DRAGON_COLOUR_UI_OK checks=", ["--dragon-colour-ui"]),
     ("UiSmoke", "EDITOR_NAVIGATION_UI_OK checks=", ["--editor-navigation-ui-only"]),
     ("UiSmoke", "HIGH_VALUE_GEM_UI_OK checks=", ["--high-value-gems-ui-only"]),
     ("UiSmoke", "PORTAL_ROUTE_UI_OK checks=18",
@@ -277,6 +280,13 @@ ADDITIONAL_CORE_CASES = (
      ["--fresh-saved-research-ui"]),
 )
 SOURCE_QA_CASES = (
+    ("UniversalDryCanyonBirdSmoke", "B8_PROOF_OK", []),
+    ("DragonStatueColorSmoke", "DRAGON_STATUE_COLOUR_SOURCE_OK", []),
+    ("UniversalIndexedRowsSmoke", "UNIVERSAL_INDEXED_ROWS_SOURCE_OK", []),
+    ("UniversalGnorcCurrentModelReadSmoke", "GNORC_CURRENT_MODEL_READ_OK", []),
+    ("UniversalLinkedActorOwnershipSmoke", "UNIVERSAL_LINKED_ACTOR_SOURCE_OK", []),
+    ("UniversalNativePlayerDamageCallsSmoke", "NATIVE_PLAYER_DAMAGE_CALLS_OK", []),
+    ("UniversalMagicCraftersIndexedRowsSmoke", "Magic Crafters indexed-row checks", []),
     ("NativeCollectibleCardLoadResearchSmoke", "COLLECTIBLE_CARD_LOAD_RESEARCH_SOURCE_OK", ["--source"]),
     ("NativeCollectibleCardAdmissionResearchSmoke", "COLLECTIBLE_CARD_ADMISSION_RESEARCH_SOURCE_OK", ["--source"]),
     ("NativeCollectibleSaveTailSmoke", "NATIVE_COLLECTIBLE_SAVE_TAIL_SOURCE_OK", ["--source"]),
@@ -353,7 +363,9 @@ SOURCE_QA_CASES = (
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
-SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
+SOURCE_QA_WORKSPACE_CASES = frozenset({"UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalLinkedActorOwnershipSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke", "NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
+# These suites retain new source/readback reports inside this run's isolated log directory.
+SOURCE_QA_REPORT_CASES = frozenset({"UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke"})
 SOURCE_QA_CUE_CASES = frozenset({"NativeCollectibleCardAdmissionResearchSmoke", "NativeCollectibleCardLoadResearchSmoke", "NativeCollectibleStartupResearchSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke", "NativeFreshSavedLevelResearchSmoke", "NativeFreshSavedLevelPublicSmoke", "UiSmoke"})
 # These raw-source checks have no project/build or default invocation. Each
 # accepts only the selected original BIN and shares the source-suite deadline.
@@ -578,6 +590,8 @@ def main():
             continue
         suffix = {
             ("--behavior-free",): "-behavior",
+            ("--dragon-colour-ui",): "-dragon-colour-ui",
+            ("--editor-navigation-ui-only",): "-editor-navigation-ui",
             ("--portal-routes-ui-only",): "-portal-routes-ui",
             ("--high-value-gems-ui-only",): "-high-value-gems-ui",
             ("--start-blank-ui-only",): "-start-blank-ui",
@@ -662,7 +676,10 @@ def main():
                             options.configuration, "--no-build", "--no-restore", "--",
                             *arguments, source_image_before(source_deadline),
                             *([configured_source_cue()] if name in SOURCE_QA_CUE_CASES else []),
-                            *([str(ROOT)] if name in SOURCE_QA_WORKSPACE_CASES else [])], marker,
+                            *([str(ROOT)] if name in SOURCE_QA_WORKSPACE_CASES else []),
+                            *([str(output / (name if name == "DragonStatueColorSmoke" else name + ".json"))]
+                              if name in SOURCE_QA_REPORT_CASES else []),
+                            *(["--compose"] if name == "UniversalNativePlayerDamageCallsSmoke" else [])], marker,
                         timeout=options.source_qa_timeout, deadline=source_deadline):
                     break
             if all(result["passed"] for result in results):

@@ -196,6 +196,8 @@ unsafe-tests/
 !/tools/Build-SpyroEditorRelease.sh
 !/tools/Run-SpyroEditorOfflineQa.sh
 !/tools/Run-SpyroEditorRegression.py
+!/tools/Build-DragonStatueTint.py
+!/tools/Test-DragonStatueTint.py
 !/tools/SpyroEggScalarMips.py
 !/tools/Test-NativeFreeFlightLoader.py
 !/tools/Test-NativeFreeFlightEffects.py

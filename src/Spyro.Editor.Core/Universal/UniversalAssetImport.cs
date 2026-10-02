@@ -30,6 +30,14 @@ public sealed class UniversalVramAllocator
 
     public int FreeBytes => _used.Count(u => !u);
 
+    /// <summary>Checks a candidate range without reserving or copying the VRAM ownership map.</summary>
+    public bool IsFree(int offset, int length)
+    {
+        if (offset < 0 || length < 0 || (long)offset + length > ImageBytes)
+            throw new InvalidDataException("Texture query is outside level VRAM.");
+        return !_used.AsSpan(offset, length).Contains(true);
+    }
+
     private void RebuildRow(int y)
     {
         int b = y * RowBytes;
@@ -212,15 +220,20 @@ public static class UniversalAssetImport
     /// <summary>Plans all texture regions of several packages first, then allocates them largest-first
     /// so small regions cannot fragment the space a larger region needs.</summary>
     public static IReadOnlyList<UniversalTextureReport> ImportTexturesBatch(IReadOnlyList<(byte[] Pkg, byte[] SourceVram, string Label)> items,
-        Span<byte> destVram, UniversalVramAllocator alloc)
+        Span<byte> destVram, UniversalVramAllocator alloc,
+        IReadOnlyDictionary<int, UniversalMetalModelCertificate>? metalCertificates = null)
     {
+        if (metalCertificates?.Keys.Any(i => i < 0 || i >= items.Count) == true)
+            throw new InvalidDataException("Metal texture authority references an absent import package.");
         var groupCount = new int[items.Count]; var pixelBytes = new int[items.Count]; var cluts = new int[items.Count]; var reused = new int[items.Count];
         List<TexRequest> pending = [];
         for (int it = 0; it < items.Count; it++)
         {
             var (pkg, src, _) = items[it];
             Dictionary<(int Page, int Pal), List<int>> groups = [];
-            foreach (int f in TextureDescriptorOffsets(pkg))
+            var fields = metalCertificates != null && metalCertificates.TryGetValue(it, out var metal)
+                ? metal.TextureDescriptorOffsets(pkg) : TextureDescriptorOffsets(pkg);
+            foreach (int f in fields)
             {
                 int pal = BinaryPrimitives.ReadUInt16LittleEndian(pkg.AsSpan(f + 2));
                 int page = BinaryPrimitives.ReadUInt16LittleEndian(pkg.AsSpan(f + 6));
@@ -298,6 +311,8 @@ public static class UniversalAssetImport
                 BinaryPrimitives.WriteUInt16LittleEndian(p.AsSpan(f + 6), (ushort)((op & ~0x1F) | newPage));
             }
         }
+        if (metalCertificates != null)
+            foreach (var (index, certificate) in metalCertificates) certificate.RequireShaderFields(items[index].Pkg);
         return Enumerable.Range(0, items.Count).Select(i => new UniversalTextureReport(groupCount[i], pixelBytes[i], cluts[i], reused[i])).ToList();
     }
 

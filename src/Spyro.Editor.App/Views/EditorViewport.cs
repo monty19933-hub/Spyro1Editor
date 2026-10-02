@@ -4515,7 +4515,7 @@ public sealed partial class EditorViewport : Control
                 DrawChestMarker(context, point, size, fill, rim, GetMobyStamp(moby), markerText, moby.RewardGem);
                 break;
             case MobyVisualKind.Dragon:
-                DrawDragonStatueMarker(context, point, size, rim);
+                DrawDragonStatueMarker(context, point, size, rim, moby.DragonColor);
                 break;
             case MobyVisualKind.Actor:
                 DrawActorMarker(context, point, size, fill, rim, GetMobyStamp(moby), markerText);
@@ -5018,7 +5018,7 @@ public sealed partial class EditorViewport : Control
             context.DrawEllipse(null, rim, point, size * 1.28, size * 1.05);
     }
 
-    private static void DrawDragonStatueMarker(DrawingContext context, Point point, double size, Pen rim)
+    private static void DrawDragonStatueMarker(DrawingContext context, Point point, double size, Pen rim, ColorRgba? customColor = null)
     {
         static Point P(Point origin, double scale, double x, double y) =>
             new(origin.X + (scale * x), origin.Y + (scale * y));
@@ -5033,6 +5033,18 @@ public sealed partial class EditorViewport : Control
         Color pedestalTop = Color.FromRgb(135, 211, 219);
         Color pedestalSide = Color.FromRgb(102, 166, 190);
         Color pedestalFront = Color.FromRgb(72, 126, 160);
+        if (customColor is { } tint)
+        {
+            Color Shade(Color original)
+            {
+                double light = Math.Max(original.R, Math.Max(original.G, original.B)) / 255d;
+                return Color.FromRgb((byte)(tint.R * light), (byte)(tint.G * light), (byte)(tint.B * light));
+            }
+            crystalGlow = Shade(crystalGlow); crystalLight = Shade(crystalLight);
+            crystalMid = Shade(crystalMid); crystalBlue = Shade(crystalBlue);
+            crystalDark = Shade(crystalDark); crystalDeep = Shade(crystalDeep);
+            pedestalTop = Shade(pedestalTop); pedestalSide = Shade(pedestalSide); pedestalFront = Shade(pedestalFront);
+        }
         Color horn = Color.FromRgb(228, 247, 255);
         Pen outline = new(new SolidColorBrush(Color.FromArgb(226, 5, 35, 82)), Math.Max(0.62, size * 0.07));
         Pen facetPen = new(new SolidColorBrush(Color.FromArgb(140, 226, 252, 255)), Math.Max(0.34, size * 0.032));
@@ -6732,6 +6744,7 @@ public sealed partial class EditorViewport : Control
 
     private static bool TryDrawMobyRasterIcon(DrawingContext context, Point point, double size, Pen rim, Moby moby)
     {
+        if (DragonStatueColor.IsStatue(moby) && moby.DragonColor != null) return false;
         if (!MobyRasterIconCatalog.TryMatch(moby, out MobyRasterIconDefinition definition))
             return false;
 

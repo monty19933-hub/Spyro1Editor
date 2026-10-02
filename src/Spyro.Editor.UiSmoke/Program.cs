@@ -23,6 +23,22 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+if (args.Contains("--dragon-colour-ui", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --dragon-colour-ui");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    DragonColorUiCases.Run();
+    return 0;
+}
+
+if (args.Contains("--universal-groups-ui", StringComparer.Ordinal))
+{
+    if (args.Length != 3) throw new ArgumentException("Usage: UiSmoke --universal-groups-ui <USA.bin> <catalog root>");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    UniversalGroupUiCases.Run(args[1], args[2]);
+    return 0;
+}
+
 if (args.Contains("--editor-navigation-ui-only", StringComparer.Ordinal))
 {
     if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --editor-navigation-ui-only");

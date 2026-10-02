@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Spyro.Editor.Core.Levels;
+using Spyro.Editor.Core.Scene;
 
 namespace Spyro.Editor.Core.Universal;
 
@@ -66,7 +67,8 @@ public static class UniversalPlacementReader
             if (edit.TryGetProperty("stateEditedHex", out var st) && st.ValueKind == JsonValueKind.String) overrides[0x51] = (byte)Convert.ToInt32(st.GetString(), 16);
             if (edit.TryGetProperty("typeEditedHex", out var ty) && ty.ValueKind == JsonValueKind.String) overrides[0x50] = (byte)Convert.ToInt32(ty.GetString(), 16);
             string id = UniversalPlacementLedger.IdentityOf(edit);
-            if (!slots.TryGetValue(id, out int slot) || !active.TryAdd(id, new(src, row, x, y, z, yaw, overrides, id, special, text, PersistentSlot: slot)))
+            string? group = edit.TryGetProperty("universalLinkGroupId", out var lg) && lg.ValueKind == JsonValueKind.String ? lg.GetString() : null;
+            if (!slots.TryGetValue(id, out int slot) || !active.TryAdd(id, new(src, row, x, y, z, yaw, overrides, id, special, text, PersistentSlot: slot) { LinkGroupId = group, DragonColor = DragonStatueColor.Read(edit) }))
                 throw new InvalidDataException("An imported object has a missing or duplicate placement identity; export stopped to preserve collected state.");
         }
         foreach (var entry in ledger.Entries)

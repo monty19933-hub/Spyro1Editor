@@ -58,9 +58,12 @@ public sealed class Moby
     public string CrossLevelTemplateId { get; set; } = "";
     /// <summary>Message lines ('\n' separated) shown by a universal sign.</summary>
     public string SignText { get; set; } = "";
+    /// <summary>Null preserves the source statue's appearance.</summary>
+    public ColorRgba? DragonColor { get; set; }
     /// <summary>Stable placement identity; copies receive a new identity, colour changes retain it.</summary>
     [JsonIgnore]
     public string UniversalPlacementId { get; set; } = Guid.NewGuid().ToString("N");
+    public string UniversalLinkGroupId { get; set; } = "";
     public string CrossLevelFamily { get; set; } = "";
     public string CrossLevelSourceLevelKey { get; set; } = "";
     public string CrossLevelSourceLevelName { get; set; } = "";
@@ -234,6 +237,7 @@ public sealed class Moby
     public bool HasPositionEdit => DistanceSquared(Position, OriginalPosition) > 0.0001f;
     public bool HasRotationEdit => OriginalYawByte >= 0 && YawByte >= 0 && YawByte != OriginalYawByte;
     public bool HasMetadataEdit => OriginalType >= 0 && Type != OriginalType
+        || DragonColor != null
         || OriginalState >= 0 && State != OriginalState
         || HasRotationEdit
         || OriginalSourceByte36 >= 0 && SourceByte36 != OriginalSourceByte36
@@ -255,6 +259,7 @@ public sealed class Moby
 
     public void UndoEdits()
     {
+        DragonColor = null;
         Position = OriginalPosition;
         if (OriginalType >= 0)
             SetType(OriginalType);
@@ -282,6 +287,7 @@ public sealed class Moby
         BehaviorNote = OriginalBehaviorNote;
         ZoneLabel = OriginalZoneLabel;
         CrossLevelTemplateId = "";
+        UniversalLinkGroupId = "";
         CrossLevelFamily = "";
         CrossLevelSourceLevelKey = "";
         CrossLevelSourceLevelName = "";

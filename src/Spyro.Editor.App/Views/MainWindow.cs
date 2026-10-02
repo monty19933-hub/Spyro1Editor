@@ -10946,7 +10946,9 @@ public sealed partial class MainWindow : Window
 
     private static bool IsReleaseProtectedControlMoby(Moby moby)
     {
-        return moby.IsEditorControl || moby.VisualKind == MobyVisualKind.Control;
+        return moby.IsEditorControl ||
+            moby.CrossLevelRequiredExporterFeature != UniversalMobyExport.RequiredExporterFeature &&
+            moby.VisualKind == MobyVisualKind.Control;
     }
 
     private static bool IsMappedPortalControlMoby(Moby moby)
@@ -10956,6 +10958,10 @@ public sealed partial class MainWindow : Window
 
     private static bool IsReleaseProtectedControlClipboard(MobyClipboard clipboard)
     {
+        // Universal placements retain private properties and their complete required
+        // group. Their names/radii cannot classify them as standalone legacy controls.
+        if (clipboard.CrossLevelRequiredExporterFeature == UniversalMobyExport.RequiredExporterFeature)
+            return false;
         if (IsReleaseSafeTrueAddIdentity(
                 clipboard.Type,
                 clipboard.SourceByte36,
@@ -11629,6 +11635,7 @@ public sealed partial class MainWindow : Window
                 .Append(moby.CrossLevelTemplateId)
                 .Append('|')
                 .Append(moby.SignText)
+                .Append('|').Append(DragonStatueColor.Hex(moby.DragonColor))
                 .Append('|')
                 .Append(moby.CrossLevelSourceLevelKey)
                 .Append('|')
@@ -23743,6 +23750,7 @@ public sealed partial class MainWindow : Window
     {
         return MobyLinkTraversal.GetLinkedMoveMobys(selected, _currentMobys)
             .Concat(GetAtomicSpecialChestBundleMembers(selected))
+            .Concat(GetUniversalLinkGroupMembers(selected))
             .DistinctBy(moby => moby.TrueIndex);
     }
 
@@ -24118,6 +24126,8 @@ public sealed partial class MainWindow : Window
             trueIndex++;
         }
 
+        AppendPendingUniversalCompanions(pending, moby, addedMobys, ref index, ref trueIndex);
+
         if (!string.IsNullOrWhiteSpace(selectedTemplate.CompanionTemplateId))
         {
             AddMobyTemplate? companion = pending.AvailableTemplates.FirstOrDefault(template =>
@@ -24202,7 +24212,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (IsGreenWizardMoby(_selectedMoby))
+        if (IsGreenWizardMoby(_selectedMoby) &&
+            _selectedMoby.CrossLevelRequiredExporterFeature != UniversalMobyExport.RequiredExporterFeature)
         {
             _statusText.Text = "Green Wizard copies stay guarded because each added instance needs a private properties block, patrol route, and pointer fixup. Select an existing enemy and use Replace instead.";
             return;
@@ -24223,7 +24234,7 @@ public sealed partial class MainWindow : Window
         float? terrainGroundOffset = TryGetTerrainGroundOffset(_selectedMoby, out float copiedGroundOffset)
             ? copiedGroundOffset
             : null;
-        _mobyClipboard = MobyClipboard.From(_selectedMoby, _currentLevel, terrainGroundOffset);
+        _mobyClipboard = WithUniversalClipboardCompanions(MobyClipboard.From(_selectedMoby, _currentLevel, terrainGroundOffset), _selectedMoby);
         RefreshActionAvailability();
         int linkedCompanions = MobyCompanionClonePlanner.GetCompanionDonors(_selectedMoby, _currentMobys).Count;
         string companionNote = _selectedMoby.VisualKind == MobyVisualKind.Dragon && linkedCompanions == 2
@@ -24295,6 +24306,7 @@ public sealed partial class MainWindow : Window
         List<Moby> pastedMobys = [pasted];
         int nextIndex = pasted.Index + 1;
         int nextTrueIndex = pasted.TrueIndex + 1;
+        AppendUniversalClipboardCompanions(_mobyClipboard, pasted, pastedMobys, ref nextIndex, ref nextTrueIndex);
         if (ResolveSameLevelCloneSource(pasted.SourceCloneTrueIndex) is Moby sourceRoot)
             AddLinkedCompanionClones(sourceRoot, pasted, pastedMobys, ref nextIndex, ref nextTrueIndex);
 
@@ -24320,16 +24332,17 @@ public sealed partial class MainWindow : Window
             await ShowLastSafeObjectSlotWarningAsync(pasted.DisplayLabel);
     }
 
-    private Moby CreateMobyFromClipboard(MobyClipboard clipboard, Vector3f position)
+    private Moby CreateMobyFromClipboard(MobyClipboard clipboard, Vector3f position, int? indexOverride = null, int? trueIndexOverride = null)
     {
-        int index = _currentMobys.Count == 0 ? 0 : _currentMobys.Max(moby => moby.Index) + 1;
-        int trueIndex = _currentMobys.Count == 0 ? 0 : _currentMobys.Max(moby => moby.TrueIndex) + 1;
+        int index = indexOverride ?? (_currentMobys.Count == 0 ? 0 : _currentMobys.Max(moby => moby.Index) + 1);
+        int trueIndex = trueIndexOverride ?? (_currentMobys.Count == 0 ? 0 : _currentMobys.Max(moby => moby.TrueIndex) + 1);
         bool pasteContainedGemAsLooseGem = clipboard.CopiedGemLike &&
             !clipboard.CopiedVisibleGem &&
             clipboard.CopiedGem != GemValue.Unknown;
         bool pasteVisibleGemAsLooseGem = clipboard.CopiedVisibleGem &&
             clipboard.CopiedGem != GemValue.Unknown;
-        bool pasteGemAsLooseGem = pasteContainedGemAsLooseGem || pasteVisibleGemAsLooseGem;
+        bool pasteGemAsLooseGem = clipboard.CrossLevelRequiredExporterFeature != UniversalMobyExport.RequiredExporterFeature &&
+            (pasteContainedGemAsLooseGem || pasteVisibleGemAsLooseGem);
         int type = pasteGemAsLooseGem ? 0x18 : clipboard.Type;
         int state = pasteGemAsLooseGem ? 0x00 : clipboard.State;
         int sourceByte36 = pasteGemAsLooseGem ? clipboard.CopiedGem.IdByte : clipboard.SourceByte36;
@@ -24399,6 +24412,7 @@ public sealed partial class MainWindow : Window
             SourceCloneLevelName = patchStatus == "native-clone" ? clipboard.SourceCloneLevelName : "",
             SourceCloneTrueIndex = patchStatus == "native-clone" ? clipboard.SourceCloneTrueIndex : -1,
             SignText = pasteGemAsLooseGem ? "" : clipboard.SignText,
+            DragonColor = pasteGemAsLooseGem ? null : clipboard.DragonColor,
             IsAdded = true
         };
     }
@@ -25683,6 +25697,7 @@ public sealed partial class MainWindow : Window
 
         Moby removed = _selectedMoby;
         List<Moby> removalGroup = GetAtomicSpecialChestBundleMembers(removed)
+            .Concat(GetUniversalLinkGroupMembers(removed))
             .DistinctBy(moby => moby.TrueIndex)
             .ToList();
         _lastRemovedMoby = removed;
@@ -25720,7 +25735,7 @@ public sealed partial class MainWindow : Window
             _viewport.ResetSelection();
 
         _statusText.Text = removalGroup.Count > 1
-            ? $"Removed the complete special-chest bundle ({removalGroup.Count} linked rows) from this level edit."
+            ? $"Removed {removed.DisplayLabel} and {removalGroup.Count - 1} linked object(s). Use Undo last removal to restore them."
             : "Removed object from this level edit.";
         EditorDiagnostics.RecordAction("Object removed", $"{_currentLevel?.DisplayName}: {BuildMobyDiagnosticSummary(removed)}");
         RefreshDiagnosticContext();
@@ -25755,7 +25770,7 @@ public sealed partial class MainWindow : Window
         RefreshCurrentLevelDetails();
         _viewport.SelectMoby(moby, focus: false);
         _statusText.Text = restoreGroup.Count > 1
-            ? $"Restored {moby.DisplayLabel} and {restoreGroup.Count - 1} special-chest companion row(s)."
+            ? $"Restored {moby.DisplayLabel} and {restoreGroup.Count - 1} linked object(s)."
             : $"Restored {moby.DisplayLabel}.";
     }
 
@@ -26056,7 +26071,8 @@ public sealed partial class MainWindow : Window
         };
         TextBox? signTextBox = IsUniversalSign(moby) ? BuildUniversalSignTextBox(moby) : null;
         ComboBox? eggColourBox = IsUniversalEgg(moby) ? BuildUniversalEggColourBox(moby) : null;
-        dialog.Content = BuildModernMobyEditDialogContent(dialog, moby, nameBox, typeBox, stateBox, xBox, yBox, zBox, yawBox, gemBox, editsRewardGem, rewardRows, chestRows, transformBox, transformNote, signTextBox, eggColourBox);
+        DragonColorEditor? dragonColor = BuildDragonColorEditor(moby);
+        dialog.Content = BuildModernMobyEditDialogContent(dialog, moby, nameBox, typeBox, stateBox, xBox, yBox, zBox, yawBox, gemBox, editsRewardGem, rewardRows, chestRows, transformBox, transformNote, signTextBox, eggColourBox, dragonColor);
 
         bool accepted = MobyEditDialogOverrideForTesting != null
             ? await MobyEditDialogOverrideForTesting(moby, nameBox)
@@ -26069,6 +26085,7 @@ public sealed partial class MainWindow : Window
         // to partially apply position/type changes before the native gem encoding is checked.
         if (!TryValidateDirectGemEdit(moby, typeBox.Text, gemBox, editsRewardGem, transformBox, out _))
             return;
+        if (dragonColor != null && !dragonColor.Validate(out _)) return;
 
         AddMobyTemplate? transformTemplate = transformBox?.SelectedItem as AddMobyTemplate;
         bool appliesObjectTransform = transformTemplate?.FromLevelTemplate == true ||
@@ -26133,6 +26150,7 @@ public sealed partial class MainWindow : Window
             SetUniversalSignText(moby, signTextBox.Text);
         if (eggColourBox?.SelectedItem is UniversalEggColourChoice colour)
             SetUniversalEggColour(moby, colour.Id);
+        if (dragonColor != null) moby.DragonColor = !appliesObjectTransform ? dragonColor.Value : null;
         int removedChestContents = 0;
         if (keepsChestGemRows)
         {
@@ -32583,6 +32601,8 @@ public sealed partial class MainWindow : Window
         IReadOnlyList<AddMobyTemplate> AvailableTemplates)
     {
         public Vector3f FallbackPosition { get; init; }
+        public string UniversalLinkGroupId { get; init; } = "";
+        public IReadOnlyList<UniversalCompanionTemplate> UniversalCompanions { get; init; } = [];
     }
 
     private sealed record MobyClipboard(
@@ -32619,6 +32639,8 @@ public sealed partial class MainWindow : Window
         float? TerrainGroundOffset,
         string SignText = "")
     {
+        public ColorRgba? DragonColor { get; init; }
+        public IReadOnlyList<UniversalCompanionClipboard> UniversalCompanions { get; init; } = [];
         public static MobyClipboard From(Moby moby, LevelDefinition? currentLevel, float? terrainGroundOffset)
         {
             int sourceTrueIndex = moby.SourceCloneTrueIndex >= 0
@@ -32668,7 +32690,7 @@ public sealed partial class MainWindow : Window
                 moby.IsVisibleGem,
                 moby.Gem,
                 terrainGroundOffset,
-                moby.SignText);
+                moby.SignText) { DragonColor = moby.DragonColor };
         }
     }
 

@@ -18,6 +18,10 @@ public sealed record UniversalRowTemplate(string SourceLevelKey, int SourceRowIn
 {
     public IReadOnlyList<(int Offset, int SourceRow, int RowOffset)> ExternalRowPointers { get; init; } = [];
     public IReadOnlyList<(int Offset, int PlacementIndex, int RowOffset)> ImportedRowPointers { get; init; } = [];
+    public string? LinkGroupId { get; init; }
+    public IReadOnlyList<UniversalSourceRowIndex> SourceRowIndices { get; init; } = [];
+    public IReadOnlyList<UniversalSourcePrerequisite> SourcePrerequisiteRows { get; init; } = [];
+    public IReadOnlyList<UniversalImportedRowIndex> ImportedRowIndices { get; init; } = [];
     public int ClassId => BinaryPrimitives.ReadUInt16LittleEndian(Row.AsSpan(0x36));
 }
 
@@ -316,6 +320,7 @@ public sealed class UniversalLevelData
         int total = rows.Sum(r => Align(r.Template.Properties.Length, 4));
         var allocation = UniversalRowRemoval.Allocate(this, removedRows, rows.Count);
         List<int> newFix = [], newIdx = [];
+        var activeTemplates = rows.Select(r => r.Template).ToArray();
         using MemoryStream blob = new();
         List<int> propStarts = [];
         foreach (var (_, t) in rows)
@@ -330,11 +335,11 @@ public sealed class UniversalLevelData
             }
             foreach (var (off, placement, rowOffset) in t.ImportedRowPointers)
             {
-                if (placement < 0 || placement >= rows.Count || rowOffset < 0 || rowOffset >= RowStride || off < 0 || off + 4 > p.Length)
-                    throw new InvalidDataException("Imported row-link fixup is outside its proved placement/property ownership.");
+                UniversalObjectRowLinks.RequireTarget(t, activeTemplates, off, placement, rowOffset);
                 BinaryPrimitives.WriteInt32LittleEndian(p.AsSpan(off), sc.RowsOffset + allocation.NewRows[placement] * RowStride + rowOffset);
                 newFix.Add(start + off);
             }
+            UniversalIndexedRows.Apply(t, rows, allocation, p);
             blob.Write(p);
         }
         List<int> fixups = sc.Fixups.Select(f => f >= insert ? f + total : f).ToList();

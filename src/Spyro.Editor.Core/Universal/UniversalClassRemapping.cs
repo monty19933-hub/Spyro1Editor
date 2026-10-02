@@ -468,26 +468,39 @@ public static class UniversalClassRemapping
             int target = UniversalMips.Rt(w);
             if (!stableActor || UniversalMips.Rs(w) != actorRegister || Reads(source.Word(pc + 4), target) ||
                 UniversalMips.IsBranch(source.Word(pc - 4)) || !ComparisonOnly(source, instructions, pc + 4, target, classes)) continue;
-            // Pure current-actor classification uses the source namespace. Translate in the
-            // already overwritten destination register, preserving every other live register.
-            UniversalAsmPart conversion = new(); conversion.Emit(UniversalMips.Nop);
-            string tag = $"{part.Items.FirstOrDefault(i => i.Label != null)?.Label}_{role}_{candidate.Index}_{pc:X8}";
-            for (int n = 0; n < remaps.Length; n++)
-            {
-                var m = remaps[n]; string next = $"{tag}_n{n}";
-                conversion.Emit(UniversalMips.EncodeI(9, target, target, -m.Value));
-                conversion.Emit(UniversalMips.EncodeI(5, target, 0, 0), new(UniversalFixKind.BranchLabel, Label: next)); conversion.Emit(0);
-                conversion.Emit(UniversalMips.EncodeI(9, 0, target, m.Key));
-                conversion.Emit(UniversalMips.EncodeJ(2, 0), new(UniversalFixKind.JumpLabel, Label: tag + "_done")); conversion.Emit(0);
-                conversion.Label(next); conversion.Emit(UniversalMips.EncodeI(9, target, target, m.Value));
-            }
-            conversion.Label(tag + "_done");
-            part.Items.InsertRange(candidate.Index + 1, conversion.Items);
-            // The remaining access was proved/translated, so the final guard does not treat
-            // it as an unowned source class read. Source metadata remains in the patch report.
-            part.Items[candidate.Index] = item with { ClassReadOwned = true }; sites.Add(pc);
+            TranslateOwnedClassification(part, candidate.Index, map, role); sites.Add(pc);
         }
         return sites;
+    }
+
+    // Callers must first prove the pointer owner, all emitted witnesses and comparison-only
+    // consumption. The inverse mapping uses only the load's overwritten register. The first
+    // NOP retires its R3000 delayed load; incoming edges still enter at the original load.
+    internal static void TranslateOwnedClassification(UniversalAsmPart part, int index,
+        IReadOnlyDictionary<int, int> map, string role)
+    {
+        var item = part.Items[index]; uint w = item.Word ?? throw new InvalidDataException("Missing class load.");
+        if (UniversalMips.Op(w) is not (33 or 37) || UniversalMips.SImm(w) != 0x36 ||
+            item.Fix.Kind != UniversalFixKind.None || UniversalMips.Rt(w) == 0)
+            throw new InvalidDataException("Classification translation requires an owned halfword class load.");
+        int target = UniversalMips.Rt(w);
+        var remaps = map.Where(m => m.Key != m.Value).OrderBy(m => m.Key).ToArray();
+        if (map.Values.Distinct().Count() != map.Count || map.Any(m => m.Key is < 0 or >= 512 || m.Value is < 0 or >= 512))
+            throw new InvalidDataException("Classification mapping is not a unique native class namespace.");
+        UniversalAsmPart conversion = new(); conversion.Emit(UniversalMips.Nop);
+        string tag = $"{part.Items.FirstOrDefault(i => i.Label != null)?.Label}_{role}_{index}_{item.Orig ?? item.SourcePc:X8}";
+        for (int n = 0; n < remaps.Length; n++)
+        {
+            var m = remaps[n]; string next = $"{tag}_n{n}";
+            conversion.Emit(UniversalMips.EncodeI(9, target, target, -m.Value));
+            conversion.Emit(UniversalMips.EncodeI(5, target, 0, 0), new(UniversalFixKind.BranchLabel, Label: next)); conversion.Emit(0);
+            conversion.Emit(UniversalMips.EncodeI(9, 0, target, m.Key));
+            conversion.Emit(UniversalMips.EncodeJ(2, 0), new(UniversalFixKind.JumpLabel, Label: tag + "_done")); conversion.Emit(0);
+            conversion.Label(next); conversion.Emit(UniversalMips.EncodeI(9, target, target, m.Value));
+        }
+        conversion.Label(tag + "_done");
+        part.Items.InsertRange(index + 1, conversion.Items);
+        part.Items[index] = item with { ClassReadOwned = true };
     }
 
     internal static void RequireNoUnownedClassMemory(UniversalAsmPart part, bool init, UniversalOverlay? overlay = null)

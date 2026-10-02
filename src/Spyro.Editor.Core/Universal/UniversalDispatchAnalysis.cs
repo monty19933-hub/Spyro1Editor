@@ -158,8 +158,9 @@ public static class UniversalDispatchAnalysis
 
     /// <summary>Control-flow closure inside function <paramref name="f"/>; <paramref name="stops"/> are not entered.</summary>
     public static (SortedSet<uint> Instructions, List<UniversalJumpTable> Tables) Closure(UniversalOverlay o, uint f,
-        IEnumerable<uint> entries, ISet<uint> stops)
+        IEnumerable<uint> entries, ISet<uint> stops, UniversalDryCanyonBirdCertificate? birdBranches = null)
     {
+        birdBranches?.RequireOwner(o);
         uint fe = o.FunctionEnd(f);
         SortedSet<uint> seen = [];
         Dictionary<uint, UniversalJumpTable> tables = [];
@@ -186,6 +187,7 @@ public static class UniversalDispatchAnalysis
                         break;
                     }
                     uint target = UniversalMips.BranchTarget(w, pc);
+                    if (birdBranches?.TryDecision(pc, out uint ownedTarget) == true) { pc = ownedTarget; continue; }
                     if (UniversalMips.IsUnconditionalBranch(w)) { pc = target; continue; }
                     work.Push(target); pc += 8; continue;
                 }

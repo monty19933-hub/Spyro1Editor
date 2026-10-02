@@ -186,6 +186,7 @@ class SourceOracleHelperPinTests(unittest.TestCase):
 
 class ObserverPrebuildTests(unittest.TestCase):
     EXPECTED = (
+        ("python-dragon-tint-r3000", ("tools/Test-DragonStatueTint.py",), "DRAGON_TINT_R3000_OK checks=856"),
         ("python-fresh-chest-observer", ("tools/Observe-SpyroFreshChest.py", "--self-test"),
          "FRESH_CHEST_OBSERVER_OFFLINE_OK tests=13 connections=0 romReads=0 runtime=false"),
         ("python-tiled-family-chest-observer",
@@ -486,12 +487,13 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
-        self.assertEqual(14, len(lines))
+        self.assertEqual(15, len(lines))
         self.assertTrue(any(flag + " | " + marker in line for line in lines))
 
     def test_aggregate_ui_is_an_additional_isolated_mode_not_a_source_or_default_alias(self):
         name = "UiSmoke"
-        expected = [(name, "EDITOR_NAVIGATION_UI_OK checks=", ["--editor-navigation-ui-only"]),
+        expected = [(name, "DRAGON_COLOUR_UI_OK checks=", ["--dragon-colour-ui"]),
+                    (name, "EDITOR_NAVIGATION_UI_OK checks=", ["--editor-navigation-ui-only"]),
                     (name, "HIGH_VALUE_GEM_UI_OK checks=", ["--high-value-gems-ui-only"]),
                     (name, "PORTAL_ROUTE_UI_OK checks=18", ["--portal-routes-ui-only"]),
                     (name, "START_BLANK_UI_OK checks=27", ["--start-blank-ui-only"]),
@@ -515,7 +517,7 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
-        self.assertEqual(14, len(lines))
+        self.assertEqual(15, len(lines))
         for _, marker, arguments in expected:
             self.assertTrue(any(arguments[0] + " | " + marker in line for line in lines))
 

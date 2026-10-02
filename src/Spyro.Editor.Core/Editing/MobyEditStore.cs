@@ -41,6 +41,7 @@ public static class MobyEditStore
             if (moby.OriginalFlag4B >= 0)
                 moby.Flag4B = moby.OriginalFlag4B;
             moby.Label = moby.OriginalLabel;
+            moby.DragonColor = null;
             if (moby.OriginalColor is ColorRgba originalColor)
                 moby.Color = originalColor;
             else
@@ -53,6 +54,7 @@ public static class MobyEditStore
             moby.BehaviorNote = moby.OriginalBehaviorNote;
             moby.ZoneLabel = moby.OriginalZoneLabel;
             moby.CrossLevelTemplateId = "";
+            moby.UniversalLinkGroupId = "";
             moby.CrossLevelFamily = "";
             moby.CrossLevelSourceLevelKey = "";
             moby.CrossLevelSourceLevelName = "";
@@ -106,11 +108,18 @@ public static class MobyEditStore
 
             if (moby == null)
                 continue;
+            moby.DragonColor = DragonStatueColor.Read(edit);
 
             if (UniversalPlacementReader.IsUniversalEdit(edit))
+            {
                 moby.UniversalPlacementId = UniversalPlacementLedger.IdentityOf(edit);
+                moby.UniversalLinkGroupId = JsonValue.GetString(edit, "universalLinkGroupId");
+            }
             bool changed = ApplyPositionEdit(edit, moby);
             changed = ApplyMetadataEdit(edit, moby) || changed;
+            changed = moby.DragonColor != null || changed;
+            if (moby.DragonColor != null && !DragonStatueColor.IsStatue(moby))
+                throw new InvalidDataException("A saved dragon colour belongs to a different object type.");
             if (JsonValue.GetBoolean(edit, "removed"))
             {
                 moby.IsRemoved = true;
@@ -203,6 +212,8 @@ public static class MobyEditStore
                 ["editorControlKind"] = moby.IsEditorControl ? moby.EditorControlKind : null,
                 ["crossLevelTemplate"] = NewCrossLevelTemplate(moby),
                 ["signText"] = NullIfEmpty(moby.SignText),
+                [DragonStatueColor.EditField] = DragonStatueColor.Hex(moby.DragonColor),
+                ["universalLinkGroupId"] = NullIfEmpty(moby.UniversalLinkGroupId),
                 ["universalPlacementId"] = moby.CrossLevelRequiredExporterFeature == UniversalMobyExport.RequiredExporterFeature ? moby.UniversalPlacementId : null,
                 ["specialChestBundleId"] = NullIfEmpty(moby.SpecialChestBundleId),
                 ["profileId"] = NullIfEmpty(moby.SpecialChestProfileId),

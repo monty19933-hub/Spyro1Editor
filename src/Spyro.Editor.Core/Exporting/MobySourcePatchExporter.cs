@@ -1436,6 +1436,13 @@ public static class MobySourcePatchExporter
             ? "Disposable candidate mode is enabled: plan-only actor-package recipes can write for explicit emulator testing."
             : "Promoted or in-game-verified cross-level actor-package recipes write only to disposable test BIN/CUE output; unmapped or unpromoted recipes remain guarded previews.");
 
+        var colouredRows = editsElement.EnumerateArray()
+            .Where(edit => !Spyro.Editor.Core.Universal.UniversalPlacementReader.IsUniversalEdit(edit) &&
+                !JsonValue.GetBoolean(edit, "removed") && DragonStatueColor.Read(edit) != null)
+            .Select(edit => JsonValue.GetInt32(edit, "trueIndex", -1)).ToHashSet();
+        if (editOutcomes.Any(outcome => colouredRows.Contains(outcome.EditorTrueIndex) && outcome.PatchKinds.Count > 0))
+            AddDragonColourRenderer(imageStream, layout, level, patches);
+
         return new MobySourcePatchPlan(
             GeneratedAt: DateTimeOffset.UtcNow,
             SourceImagePath: sourceImagePath,
@@ -6944,6 +6951,13 @@ public static class MobySourcePatchExporter
         List<MobySourcePatch> patches,
         HashSet<long> writtenWadOffsets)
     {
+        if (DragonStatueColor.Read(edit) is { } color)
+        {
+            byte[] row = ReadWadBytes(stream, layout, tableWadOffset + (long)trueIndex * RecordStride, RecordStride);
+            DragonStatueColor.Apply(row, color);
+            AddPatch(stream, layout, level, tableWadOffset, trueIndex, 0x4B, row.AsSpan(0x4B, 5).ToArray(),
+                "moby-dragon-colour", label, $"Set {label} dragon colour to {DragonStatueColor.Hex(color)}.", patches, writtenWadOffsets);
+        }
         if (!edit.TryGetProperty("sourceByteEdits", out JsonElement sourceByteEdits) || sourceByteEdits.ValueKind != JsonValueKind.Array)
             return;
 
@@ -6953,6 +6967,10 @@ public static class MobySourcePatchExporter
             int value = JsonValue.GetInt32(byteEdit, "value", JsonValue.GetInt32(byteEdit, "valueHex", -1));
             if (offset < 0 || offset >= RecordStride || value < 0 || value > 255)
                 continue;
+            if (DragonStatueColor.Read(edit) != null && offset is >= 0x4B and <= 0x4F)
+                continue; // The colour picker owns these renderer fields while enabled.
+            if (DragonStatueColor.Read(edit) != null && (offset == 0x36 && value != 0xFA || offset == 0x37 && value != 0))
+                throw new InvalidDataException("Restore the original dragon colour before changing its object type.");
 
             string field = JsonValue.GetString(byteEdit, "field", "source-byte");
             AddPatch(
@@ -7091,6 +7109,7 @@ public static class MobySourcePatchExporter
 
     private static void ApplySourceByteEdits(byte[] bytes, JsonElement edit)
     {
+        if (DragonStatueColor.Read(edit) is { } color) DragonStatueColor.Apply(bytes, color);
         if (!edit.TryGetProperty("sourceByteEdits", out JsonElement sourceByteEdits) || sourceByteEdits.ValueKind != JsonValueKind.Array)
             return;
 
@@ -7098,8 +7117,32 @@ public static class MobySourcePatchExporter
         {
             int offset = JsonValue.GetInt32(byteEdit, "offset", JsonValue.GetInt32(byteEdit, "offsetHex", -1));
             int value = JsonValue.GetInt32(byteEdit, "value", JsonValue.GetInt32(byteEdit, "valueHex", -1));
+            if (DragonStatueColor.Read(edit) != null && offset is >= 0x4B and <= 0x4F)
+                continue;
+            if (DragonStatueColor.Read(edit) != null && (offset == 0x36 && value != 0xFA || offset == 0x37 && value != 0))
+                throw new InvalidDataException("Restore the original dragon colour before changing its object type.");
             if (offset >= 0 && offset < bytes.Length && value >= 0 && value <= 255)
                 bytes[offset] = (byte)value;
+        }
+    }
+
+    private static void AddDragonColourRenderer(FileStream stream, DiscLayout layout, LevelDefinition level,
+        List<MobySourcePatch> patches)
+    {
+        byte[] entry = ReadWadBytes(stream, layout, level.SourceWadEntry * 8L, 8);
+        int offset = BinaryPrimitives.ReadInt32LittleEndian(entry), length = BinaryPrimitives.ReadInt32LittleEndian(entry.AsSpan(4));
+        var data = new Spyro.Editor.Core.Universal.UniversalLevelData(ReadWadBytes(stream, layout, offset, length));
+        NativeDragonStatueColors.RequirePalette(data.Package(0xFA));
+        var executable = FindExecutable(stream, layout);
+        RequireTreasureTableExecutable(executable);
+        byte[] exe = DiscImage.ReadFileBytes(stream, layout, executable.Lba, 0, executable.Size);
+        foreach (var patch in NativeDragonStatueColors.Plan(exe))
+        {
+            long fileOffset = ExeFileOffset(patch.Address, "dragon colour renderer");
+            long imageOffset = DiscImage.ConvertFileOffsetToImageOffset(layout, executable.Lba, fileOffset);
+            patches.Add(new MobySourcePatch($"{level.Key}-dragon-colour-{patch.Address:X8}", "dragon-colour-renderer",
+                level.Key, "Dragon colour", -1, "", $"exe:0x{patch.Address:X8}", $"0x{imageOffset:X}", patch.After.Length,
+                ToHex(patch.Before), ToHex(patch.After), "Render each customised dragon statue in its chosen colour."));
         }
     }
 

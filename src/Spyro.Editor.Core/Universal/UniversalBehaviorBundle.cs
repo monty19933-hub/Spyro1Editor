@@ -24,7 +24,10 @@ public sealed record UniversalBehaviorSourceReport(string SourceLevelKey, IReadO
     public IReadOnlyList<uint> ParentClassReadSites { get; init; } = [];
     public uint PlayerDamageMask { get; init; }
     public IReadOnlyList<UniversalPlayerDamageWrite> PlayerDamageWrites { get; init; } = [];
+    public IReadOnlyList<UniversalNativePlayerDamageCall> NativePlayerDamageCalls { get; init; } = [];
     public IReadOnlyList<uint> AllocatedClassReadSites { get; init; } = [];
+    public IReadOnlyList<uint> LinkedClassReadSites { get; init; } = [];
+    public IReadOnlyList<uint> GlobalSoundReadSites { get; init; } = [];
     public IReadOnlyList<uint> GemCollectionCallSites { get; init; } = [];
     public int GemCollectionAdapterBytes { get; init; }
 }
@@ -54,7 +57,9 @@ public static class UniversalBehaviorBundleBuilder
         IReadOnlyList<(string SourceKey, UniversalOverlay Source, IReadOnlyList<int> Classes)> sources, uint baseAddress,
         IReadOnlyList<int>? dragonflyEggClasses = null, IReadOnlyList<int>? signClasses = null,
         IReadOnlyDictionary<string, IReadOnlyDictionary<int, int>>? classMaps = null, bool remapSaveRows = false, byte[]? nativeExecutable = null,
-        UniversalOverlay? nativeDestinationOwner = null, IReadOnlyList<int>? highValueGemClasses = null)
+        UniversalOverlay? nativeDestinationOwner = null, IReadOnlyList<int>? highValueGemClasses = null,
+        IReadOnlyDictionary<string, UniversalWhirlwindSoundBinding>? whirlwindSounds = null,
+        IReadOnlyDictionary<string, UniversalDryCanyonBirdCertificate>? dryCanyonBirdBranches = null)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
         int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
@@ -136,13 +141,17 @@ public static class UniversalBehaviorBundleBuilder
         {
             var map = s.Classes.ToDictionary(c => c, c => Mapped(s.SourceKey, c));
             if (classMaps != null && classMaps.TryGetValue(s.SourceKey, out var fullMap)) map = fullMap.ToDictionary();
-            var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey, map);
+            UniversalDryCanyonBirdCertificate? birdProof = null;
+            if (s.SourceKey == "drycanyon" && s.Classes.Contains(0xB8) &&
+                (dryCanyonBirdBranches == null || !dryCanyonBirdBranches.TryGetValue(s.SourceKey, out birdProof)))
+                throw new InvalidDataException("Copied Dry Canyon B8 behavior requires its issued state/frame branch proof.");
+            var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey, map, birdProof);
             if (map.Any(k => k.Key != k.Value))
             {
                 UniversalNativeModelTailOwnership.MarkOwned(upd, s.Source, nativeExecutable);
+                if (s.SourceKey == "gnorccove") UniversalGnorcCurrentModelRead.MarkOwned(upd, s.Source);
                 particleNoOpProofs.AddRange(UniversalNativeParticleNoOpOwnership.MarkOwned(upd, s.Source, destination, nativeExecutable ?? []));
                 UniversalClassRemapping.PatchOwnedClassReads(upd, s.Source, map, s.Classes);
-                UniversalClassRemapping.RequireNoUnownedClassMemory(upd, false, s.Source);
                 UniversalClassRemapping.PatchConstantSpawns(upd, s.Source, map);
             }
             string gemLabel = "gem_collect_" + s.SourceKey;
@@ -151,6 +160,7 @@ public static class UniversalBehaviorBundleBuilder
             List<UniversalPlayerDamageWrite> playerDamageWrites = [.. UniversalPlayerDamageWrites.AnalyzeOverlay(s.Source,
                 new SortedSet<uint>(upd.Items.Where(i => i.Word != null && (i.SourcePc ?? i.Orig) != null).Select(i => (i.SourcePc ?? i.Orig)!.Value))).Writes];
             int initTotal = 0, tablesTotal = jt1; List<uint> parentClassSites = [], allocatedClassSites = [];
+            Dictionary<int, UniversalAsmPart> constructors = [];
             foreach (int c in Remaps(s.SourceKey) ? s.Classes : s.Classes.Take(1))
             {
                 UniversalAsmPart init; int initBytes, jt2;
@@ -170,7 +180,19 @@ public static class UniversalBehaviorBundleBuilder
                     new SortedSet<uint>(init.Items.Where(i => i.Word != null && (i.SourcePc ?? i.Orig) != null).Select(i => (i.SourcePc ?? i.Orig)!.Value))).Writes);
                 gemCalls.AddRange(UniversalGemCollectionAdapter.PatchCalls(init, s.Source, map, gemLabel, nativeExecutable));
                 parts.Add(init); initTotal += init.Items.Count(i => i.Word != null) * 4; tablesTotal += jt2;
+                constructors[c] = init;
             }
+            var linkedClassSites = UniversalNativeLinkedActorOwnership.Patch(upd, s.Source, map, constructors)
+                .Concat(Remaps(s.SourceKey) ? UniversalWhirlwindIndexedRows.TranslateOwnedReads(upd, s.Source, map) : []).ToArray();
+            IReadOnlyList<uint> soundReadSites = [];
+            if (s.Classes.Contains(0x12C))
+            {
+                if (whirlwindSounds == null || !whirlwindSounds.TryGetValue(s.SourceKey, out var soundBinding))
+                    throw new InvalidDataException("Imported whirlwind behavior requires its native looping sound dependency.");
+                soundReadSites = UniversalWhirlwindSoundDependency.Patch(upd, s.Source, nativeExecutable ?? [], soundBinding);
+            }
+            if (Remaps(s.SourceKey)) UniversalClassRemapping.RequireNoUnownedClassMemory(upd, false, s.Source);
+            var nativeDamage = UniversalNativePlayerDamageCalls.AnalyzeSource(s.SourceKey, s.Source, upd, nativeExecutable);
             int gemBytes = 0;
             if (gemCalls.Count != 0)
             {
@@ -179,7 +201,7 @@ public static class UniversalBehaviorBundleBuilder
                 if (UniversalGemCollectionAdapter.GemMappings(map).OrderBy(p => p.Value).SequenceEqual(destinationGems))
                     destinationGemLabel = gemLabel;
             }
-            reports.Add(new(s.SourceKey, s.Classes.ToArray(), upd.Items.Count(i => i.Word != null) * 4, initTotal, tablesTotal) { GemCollectionCallSites = gemCalls.Distinct().Order().ToArray(), GemCollectionAdapterBytes = gemBytes, ParentClassReadSites = parentClassSites.Distinct().Order().ToArray(), AllocatedClassReadSites = allocatedClassSites.Distinct().Order().ToArray(), PlayerDamageMask = playerDamageWrites.Aggregate(0u, (mask, w) => mask | w.DamageMask), PlayerDamageWrites = playerDamageWrites.Distinct().OrderBy(w => w.StorePc).ToArray() });
+            reports.Add(new(s.SourceKey, s.Classes.ToArray(), upd.Items.Count(i => i.Word != null) * 4, initTotal, tablesTotal) { GlobalSoundReadSites = soundReadSites, LinkedClassReadSites = linkedClassSites, GemCollectionCallSites = gemCalls.Distinct().Order().ToArray(), GemCollectionAdapterBytes = gemBytes, ParentClassReadSites = parentClassSites.Distinct().Order().ToArray(), AllocatedClassReadSites = allocatedClassSites.Distinct().Order().ToArray(), PlayerDamageMask = playerDamageWrites.Aggregate(nativeDamage.DamageMask, (mask, w) => mask | w.DamageMask), NativePlayerDamageCalls = nativeDamage.Calls, PlayerDamageWrites = playerDamageWrites.Distinct().OrderBy(w => w.StorePc).ToArray() });
         }
         int destinationGemBytes = 0;
         if (destinationGemCalls.Count != 0 && destinationGemLabel == null)
@@ -235,8 +257,9 @@ public static class UniversalBehaviorBundleBuilder
         }
     }
 
-    internal static (UniversalAsmPart Part, int Bytes, int Tables) BuildPrunedUpdate(UniversalOverlay o, IReadOnlyList<int> classes, string tag, IReadOnlyDictionary<int, int>? classMap = null)
+    internal static (UniversalAsmPart Part, int Bytes, int Tables) BuildPrunedUpdate(UniversalOverlay o, IReadOnlyList<int> classes, string tag, IReadOnlyDictionary<int, int>? classMap = null, UniversalDryCanyonBirdCertificate? birdBranches = null)
     {
+        if (birdBranches != null && !classes.Contains(0xB8)) throw new InvalidDataException("Dry Canyon bird branch proof has no B8 owner in this copy.");
         var sw = UniversalDispatchAnalysis.FindUpdateSwitch(o);
         List<(int Class, UniversalTrace Trace)> entries = classes
             .Select(c => (c, UniversalDispatchAnalysis.Trace(o, sw.TreeStart, c, sw.Seeds, sw.ClassRegister))).ToList();
@@ -246,7 +269,7 @@ public static class UniversalBehaviorBundleBuilder
         // Materialized code addresses (jump-table targets) must stay addressable in the copy.
         foreach (var r in entries.SelectMany(e => e.Trace.Sequence).Concat(def.Sequence))
             if (r.IsConstant && r.ConstantValue >= sw.Function && r.ConstantValue < fEnd && r.ConstantValue % 4 == 0) starts.Add(r.ConstantValue);
-        var (closure, tables) = UniversalDispatchAnalysis.Closure(o, sw.Function, starts, new HashSet<uint> { sw.TreeStart });
+        var (closure, tables) = UniversalDispatchAnalysis.Closure(o, sw.Function, starts, new HashSet<uint> { sw.TreeStart }, birdBranches);
         var part = Relayout(o, closure, tables, tag, sw.TreeStart, a =>
         {
             for (int i = 0; i < entries.Count; i++)
@@ -262,7 +285,8 @@ public static class UniversalBehaviorBundleBuilder
             EmitReplay(a, o, def.Sequence);
             a.Emit(UniversalMips.EncodeJ(2, 0), new(UniversalFixKind.Jump, def.Stop));
             a.Emit(UniversalMips.Nop);
-        }, nopJalsBefore: sw.TreeStart);
+        }, nopJalsBefore: sw.TreeStart, decided: birdBranches?.Decisions);
+        birdBranches?.RequireEmitted(part);
         return (part, part.Items.Count(i => i.Word != null) * 4, tables.Count);
     }
 

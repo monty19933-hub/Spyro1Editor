@@ -160,7 +160,7 @@ public sealed partial class MainWindow
                 Yaw:m.YawByte>=0?m.YawByte:null,
                 RowByteOverrides:new Dictionary<int,byte>{{0x50,checked((byte)m.Type)},{0x51,checked((byte)m.State)}},
                 EditorId: identity.Id, PersistentSlot: identity.Slot,
-                SpecialId: UniversalSpecialIdOf(m), Text: IsUniversalSign(m) ? UniversalPlacementReader.SplitSignText(m.SignText) : null)
+                SpecialId: UniversalSpecialIdOf(m), Text: IsUniversalSign(m) ? UniversalPlacementReader.SplitSignText(m.SignText) : null) { LinkGroupId = m.UniversalLinkGroupId, DragonColor = m.DragonColor }
             : new UniversalMobyPlacement("", -1, 0, 0, 0, EditorId: identity.Id, PersistentSlot: identity.Slot, Retired: true)).ToList();
     }
 
@@ -500,16 +500,23 @@ public sealed partial class MainWindow
         (UniversalComposeResult? Result, string? Error) CheckPlacement(UniversalSourceLibrary library, IReadOnlyList<UniversalMobyPlacement> trial) =>
             freshCompilation == null ? ExactRetailCheck(library,trial,removedRows) : DryRunFresh(freshCompilation, library, trial, special);
 
-        UniversalMobyPlacement TrialFor(UniversalMobyVariant v)
+        IReadOnlyList<UniversalMobyPlacement> TrialFor(UniversalMobyVariant v)
         {
             if (UniversalSpecialCatalog.IsSpecial(v))
-                return new UniversalMobyPlacement(v.SourceLevelKey, v.SourceRow, 0, 0, 0,
+                return [new UniversalMobyPlacement(v.SourceLevelKey, v.SourceRow, 0, 0, 0,
                     SpecialId: UniversalSpecialCatalog.SpecialIdForClass(v.ClassId), Text: ["SIGN"],
-                    EditorId: Guid.NewGuid().ToString("N"), PersistentSlot: existing.Count);
+                    EditorId: Guid.NewGuid().ToString("N"), PersistentSlot: existing.Count)];
             var row = lib!.Get(v.SourceLevelKey).Data.Row(v.SourceRow);
-            return new UniversalMobyPlacement(v.SourceLevelKey, v.SourceRow,
+            var root = new UniversalMobyPlacement(v.SourceLevelKey, v.SourceRow,
                 BitConverter.ToInt32(row, 0x0C), BitConverter.ToInt32(row, 0x10), BitConverter.ToInt32(row, 0x14),
                 EditorId: Guid.NewGuid().ToString("N"), PersistentSlot: existing.Count);
+            try { return UniversalPlacementGroups.Expand(lib.Get, root); }
+            catch (InvalidDataException)
+            {
+                // The normal composition check returns the precise source-ownership
+                // failure to this row instead of cancelling the entire object browser.
+                return [root];
+            }
         }
 
         list.ItemTemplate = new FuncDataTemplate<UniversalMobyCatalogEntry>((entry, _) =>
@@ -659,7 +666,9 @@ public sealed partial class MainWindow
                 technical.Text += "\nPlacement restriction: " + restriction;
                 fit.Foreground = new SolidColorBrush(ModernRed); return;
             }
-            var trial = existing.Append(TrialFor(v)).ToList();
+            var trial = existing.Concat(TrialFor(v)).ToList();
+            if (trial.Count > existing.Count + 1)
+                details.Text += $"\nIncludes {trial.Count - existing.Count - 1} required linked object(s). They move, copy and remove together.";
             if (!dryRuns.TryGetValue(v, out var dry)) dryRuns[v] = dry = CheckPlacement(lib, trial);
             listDry[v] = (null, dry.Error);
             if (dry.Error == null) fittingVariants[entry] = v;
@@ -722,7 +731,7 @@ public sealed partial class MainWindow
             if (!candidates.Contains(selected)) candidates.Insert(0, selected);
             var labels = _currentMobys.Where(m => !m.IsAdded && m.TrueIndex >= 0)
                 .GroupBy(m => m.TrueIndex).ToDictionary(g => g.Key, g => (g.First().DisplayLabel, g.First().CandidateKind));
-            var trials = candidates.Select(v => (Variant: v, Trial: existing.Append(TrialFor(v)).ToList())).ToList();
+            var trials = candidates.Select(v => (Variant: v, Trial: existing.Concat(TrialFor(v)).ToList())).ToList();
             try
             {
                 var reports = await Task.Run(() =>
@@ -845,7 +854,7 @@ public sealed partial class MainWindow
                 foreach (var e in specials) listDry.TryRemove(e.Default, out _);
                 if (lib != null)
                     foreach (var e in specials.Where(e => e.RestrictionReason == null))
-                        listDry[e.Default] = (null, CheckPlacement(lib, existing.Append(TrialFor(e.Default)).ToList()).Error);
+                        listDry[e.Default] = (null, CheckPlacement(lib, existing.Concat(TrialFor(e.Default)).ToList()).Error);
                 previewVariant = null;
                 RefreshList(); RefreshDetails();
                 summary.Text = "Japanese disc found — dragonfly eggs and signs are ready to use.";
@@ -889,7 +898,7 @@ public sealed partial class MainWindow
                 await Task.Run(() => Parallel.ForEach(es.Where(x => x.RestrictionReason == null),
                     new ParallelOptions { MaxDegreeOfParallelism = Math.Max(2, Environment.ProcessorCount / 2) }, x =>
                     {
-                        var trial = existing.Append(TrialFor(x.Default)).ToList();
+                        var trial = existing.Concat(TrialFor(x.Default)).ToList();
                         var r = CheckPlacement(l, trial);
                         listDry[x.Default] = (null, r.Error);
                         if (r.Error == null) { dryRuns[x.Default] = r; fittingVariants[x] = x.Default; }
@@ -897,7 +906,7 @@ public sealed partial class MainWindow
                             foreach (var alternative in x.Variants.Where(v => v.Extractable && v.SourceLevelKey != x.Default.SourceLevelKey)
                                 .GroupBy(v => v.SourceLevelKey).Select(g => g.First()))
                             {
-                                var alternate = CheckPlacement(l,existing.Append(TrialFor(alternative)).ToList());
+                                var alternate = CheckPlacement(l,existing.Concat(TrialFor(alternative)).ToList());
                                 listDry[alternative] = (null,alternate.Error);
                                 if (alternate.Error != null) continue;
                                 dryRuns[alternative] = alternate; fittingVariants[x] = alternative; break;
@@ -954,6 +963,7 @@ public sealed partial class MainWindow
             : new("Near selection", fallback, "Placed next to the current selection.", SnapOnAdd: true, PlaceAfterDialog: false);
         PendingMobyAdd pending = new(template, name, template.Type, template.State, template.YawByte,
             template.SourceByte36, template.SourceByte4F, template.Flag4B, GemValue.Red, option, [template]);
+        pending = WithUniversalCompanions(pending, lib, row);
         if (clickToPlace) { BeginPendingMobyPlacement(pending, fallback); return; }
         Vector3f position = ApplyTerrainPlacementLift(SnapOrNearestTerrain(fallback), pending);
         await AddPendingMobyAtPositionAsync(pending, position);

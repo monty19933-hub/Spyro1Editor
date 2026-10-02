@@ -154,7 +154,31 @@ internal static class UniversalRemappingChecks
         var data = new UniversalLevelData(bytes);
         byte[] row = new byte[UniversalLevelData.RowStride];
         var t = new UniversalRowTemplate("source", 0, row, new byte[4], [], 0)
-            { ImportedRowPointers = [(0, 1, 0x0C)] };
+            { ExternalRowPointers = [(0, 1, 0x0C)], ImportedRowPointers = [(0, 1, 0x0C)] };
+        var groupData = new UniversalLevelData(bytes.ToArray());
+        var a = t with { ImportedRowPointers = [], DroppedExternalPointers = 1, LinkGroupId = "first-copy" };
+        var b = a with { LinkGroupId = "second-copy" };
+        var target = new UniversalRowTemplate("SOURCE", 1, row, new byte[4], [], 0) { LinkGroupId = "first-copy" };
+        var grouped = new[] { a, target, b, target with { LinkGroupId = "second-copy" } };
+        grouped[0] = UniversalObjectRowLinks.Resolve(grouped[0], grouped);
+        grouped[2] = UniversalObjectRowLinks.Resolve(grouped[2], grouped);
+        groupData.AppendRows(grouped.Select(template => (row, template)).ToArray());
+        int Pointer(int owner) => BinaryPrimitives.ReadInt32LittleEndian(groupData.Bytes.AsSpan(so + BinaryPrimitives.ReadInt32LittleEndian(groupData.Row(owner))));
+        check(Pointer(0) == groupData.Scene().RowsOffset + UniversalLevelData.RowStride + 12 &&
+            Pointer(2) == groupData.Scene().RowsOffset + 3 * UniversalLevelData.RowStride + 12,
+            "two copies retain independent native pointers after physical allocation");
+        var missing = UniversalObjectRowLinks.Resolve(a, [a, grouped[3]]);
+        check(missing.ImportedRowPointers.Count == 0 && missing.DroppedExternalPointers == 1,
+            "a target from another group cannot silently replace a missing companion");
+        var ambiguous = UniversalObjectRowLinks.Resolve(a, [a, target, target]);
+        check(ambiguous.ImportedRowPointers.Count == 0 && ambiguous.DroppedExternalPointers == 1,
+            "duplicate source rows inside one group remain ambiguous");
+        var legacy = UniversalObjectRowLinks.Resolve(a with { LinkGroupId = null }, [target with { LinkGroupId = "" }]);
+        check(legacy.ImportedRowPointers.Count == 1, "legacy ungrouped pointers still resolve uniquely");
+        bool crossGroup = false;
+        try { UniversalObjectRowLinks.RequireTarget(grouped[0], grouped, 0, 3, 12); }
+        catch (InvalidDataException) { crossGroup = true; }
+        check(crossGroup, "a forged cross-group physical pointer is rejected by the final writer");
         data.AppendRows([(row, t), (row, new("source", 1, row, new byte[4], [], 0))]);
         var scene = data.Scene();
         int link = BinaryPrimitives.ReadInt32LittleEndian(data.Bytes.AsSpan(props + 4));
