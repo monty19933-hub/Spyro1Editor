@@ -10,8 +10,8 @@ The ordinary USA-only Create BIN path includes these gems.
 The final Release regression gate passed **345 checks, zero failures**. Native
 instruction checks verify award amounts, collected bits, cleanup, particle
 limits and native popup digits. Composition/readback covers 144 combinations
-across all 35 retail slots and the fresh slot: 130 fit unchanged and 14 report
-capacity refusal. Explicit object removal can create space; no automatic
+across all 35 retail slots and the fresh slot: 130 fit unchanged; 14 first
+refuse capacity and then compose after explicit source-row removals. Explicit object removal can create space; no automatic
 removal is performed. This does not complete universal Moby gameplay.
 
 Artisans native collection, ordinary save and cold reload passed. The final
@@ -21,6 +21,16 @@ in [the gem checkpoint report](docs/research/high-value-gems-release-20261001.md
 A save/reopen regression also corrected added objects incorrectly binding to an
 original row through a legacy index alias; old affected additions recover without
 replacing the original object.
+
+Final packages are in task-root `outputs/SpyroEditor-V1.0.4-release-r7`, built
+from `d0e957b40e5f37bd062a76b686a7fa7e0c9335de`. Both passed full package
+verification. The signed Mac application reopened 176 Artisans objects and
+250 treasure, showed both model previews, created the USA-only BIN/CUE and
+reopened the saved project again. Independent readback preserved every byte
+of all 174 original object rows, with both final models/native code and the
+250 target. Final native cold Load Game retained 193 treasure and all seven
+collected identities. All 173 protected user-project files match their snapshot.
+The exact receipt is task-root `work/high-value-gems-20261001/final-checkpoint.json`.
 
 Original discs, the user's project, earlier packages, cards and runtime
 candidates are preserved. Fly Anywhere remains deferred. Mac release packaging
