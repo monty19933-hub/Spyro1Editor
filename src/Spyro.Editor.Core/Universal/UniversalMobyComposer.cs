@@ -471,6 +471,12 @@ public static class UniversalMobyComposer
                         throw new InvalidDataException("Row overrides cannot change the imported class identity.");
                     if (o is > 3 and < 0x58) r[o] = b;
                 }
+            // A donor sector belongs to its original terrain visibility graph.
+            // Even an identical-level clone can be placed in rebuilt terrain.
+            // Use the native unrestricted sentinel (also used by every retail
+            // Town Square row); stale overrides must not hide an imported actor.
+            // Existing destination rows retain their own sector assignments.
+            r[0x4A] = 0xFF;
             if (p.DragonColor is { } dragonColor)
             {
                 NativeDragonStatueColors.RequirePalette(source(p.SourceLevelKey).Data.Package(0xFA));

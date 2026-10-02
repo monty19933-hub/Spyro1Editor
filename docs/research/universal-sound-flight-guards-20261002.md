@@ -57,4 +57,7 @@ adapter now passes 5,329 source/readback checks but is not integrated or accepte
 in the emulator. Magic Crafters and positive Flight dependency adapters remain
 private research. A separate Firework chest candidate revealed that a donor's
 visibility-sector byte can hide an otherwise active imported actor. An isolated
-one-byte comparison is in progress; no rendering fix is claimed yet.
+one-byte comparison subsequently confirmed the cause. The normal exporter now
+uses the native unrestricted visibility sector for new placements; the chest's
+rendering, explosion and five-gem reward passed a bounded emulator test. See
+[the visibility follow-up](universal-placement-visibility-20261002.md).

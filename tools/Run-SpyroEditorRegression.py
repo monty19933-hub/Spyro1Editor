@@ -281,6 +281,7 @@ ADDITIONAL_CORE_CASES = (
      ["--fresh-saved-research-ui"]),
 )
 SOURCE_QA_CASES = (
+    ("UniversalPlacementVisibilitySmoke", "UNIVERSAL_PLACEMENT_VISIBILITY_OK", []),
     ("UniversalParticleBoundarySmoke", "PARTICLE_SOUND_BOUNDARY_OK", []),
     ("UniversalFlightDependencySmoke", "FLIGHT_COPIED_ROOT_GUARD_OK", []),
     ("UniversalDryCanyonBirdSmoke", "B8_PROOF_OK", []),
@@ -366,9 +367,9 @@ SOURCE_QA_CASES = (
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
-SOURCE_QA_WORKSPACE_CASES = frozenset({"UniversalParticleBoundarySmoke", "UniversalFlightDependencySmoke", "UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalLinkedActorOwnershipSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke", "NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
+SOURCE_QA_WORKSPACE_CASES = frozenset({"UniversalPlacementVisibilitySmoke", "UniversalParticleBoundarySmoke", "UniversalFlightDependencySmoke", "UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalLinkedActorOwnershipSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke", "NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
 # These suites retain new source/readback reports inside this run's isolated log directory.
-SOURCE_QA_REPORT_CASES = frozenset({"UniversalParticleBoundarySmoke", "UniversalFlightDependencySmoke", "UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke"})
+SOURCE_QA_REPORT_CASES = frozenset({"UniversalPlacementVisibilitySmoke", "UniversalParticleBoundarySmoke", "UniversalFlightDependencySmoke", "UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke"})
 SOURCE_QA_CUE_CASES = frozenset({"NativeCollectibleCardAdmissionResearchSmoke", "NativeCollectibleCardLoadResearchSmoke", "NativeCollectibleStartupResearchSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke", "NativeFreshSavedLevelResearchSmoke", "NativeFreshSavedLevelPublicSmoke", "UiSmoke"})
 # These raw-source checks have no project/build or default invocation. Each
 # accepts only the selected original BIN and shares the source-suite deadline.

@@ -58,14 +58,18 @@ internal static class UniversalImportSafetyChecks
 
     private static void ParticleRecordReadback(Action<bool, string> check)
     {
-        int f0 = 0x800, f1 = f0 + 0x80000, f2 = f1 + 0x800, f3 = f2 + 0x800;
+        int f0 = 0x800, f1 = f0 + 0x80800, f2 = f1 + 0x800, f3 = f2 + 0x800;
         byte[] bytes = new byte[f3 + 0x800];
-        int[] offsets = [f0, f1, f2, f3], lengths = [0x80000, 0x800, 0x800, 0x800];
+        int[] offsets = [f0, f1, f2, f3], lengths = [0x80800, 0x800, 0x800, 0x800];
         for (int i = 0; i < 4; i++)
         {
             BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(i * 8), offsets[i]);
             BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(i * 8 + 4), lengths[i]);
         }
+        // A complete native level owns a model root and an SPU bank. Particle
+        // insertion now validates the following sound component's exact extent.
+        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(0x50), f2);
+        bytes[f0 + 0x80000 + 1] = 1; // one terminating silent ADPCM frame
         for (int i = 0; i < 6; i++) BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(f1 + i * 4), 4);
         int component = f1 + 28;
         BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(component), 32);
@@ -73,15 +77,19 @@ internal static class UniversalImportSafetyChecks
         BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(component + 8), 7);
         BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(component + 10), 8);
         TexturedPackage().AsSpan(0x70, 8).CopyTo(bytes.AsSpan(component + 12));
-        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(component + 32), 0x12345678);
+        int sound = component + 32;
+        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(sound), 0x11C);
+        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(sound + 0x104), 1);
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(sound + 0x112), 0x1000);
+        byte[] soundBefore = bytes.AsSpan(sound, 0x11C).ToArray();
         var data = new UniversalLevelData(bytes);
         byte[] pkg = UniversalParticleDependencies.TexturePackage(TexturedPackage().AsSpan(0x70, 8).ToArray());
         UniversalParticleDependencies.AppendTexture(data, 15, pkg);
         var records = UniversalParticleDependencies.Records(data);
         check(records.Count == 2 && records[7].AsSpan().SequenceEqual(records[15]) &&
             BinaryPrimitives.ReadInt32LittleEndian(data.Bytes.AsSpan(component)) == 44 &&
-            BinaryPrimitives.ReadInt32LittleEndian(data.Bytes.AsSpan(component + 44)) == 0x12345678,
-            "particle record append preserves count, component padding and following component bytes");
+            data.Bytes.AsSpan(component + 44, soundBefore.Length).SequenceEqual(soundBefore),
+            "particle record append preserves count, component padding and the entire following sound component");
         bool duplicate = false;
         try { UniversalParticleDependencies.AppendTexture(data, 15, pkg); } catch (InvalidDataException) { duplicate = true; }
         check(duplicate, "particle imports refuse overwriting an existing destination type");

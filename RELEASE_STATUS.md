@@ -1,3 +1,19 @@
+# Follow-up: imported actor visibility
+
+New imported rows now use the native unrestricted visibility sector instead of
+retaining an unrelated donor terrain sector. The change passes 1,212 source
+checks while leaving native destination rows unchanged. A controlled one-byte
+disc comparison confirmed the invisible-chest cause; the normal exporter now
+produces the exact successful image. Native Peace Keepers testing shows the
+imported Firework chest's fuse, sparks, explosion, damage and five-gem reward,
+with both counters and collected flags verified. Audio and card reload remain
+unverified. [Evidence and limits](docs/research/universal-placement-visibility-20261002.md).
+
+Universal gameplay remains in progress, including positive Flight adapters,
+Magic Crafters ownership and Haunted Towers wizard paths/armor links.
+
+---
+
 # Follow-up: sound preservation and Flight admission
 
 The integrated particle insertion writer preserves owned sound bytes, including
@@ -9,7 +25,7 @@ reject unsupported foreign course objects. The editor Release build is clean.
 
 These are correctness fixes, not completion of Universal Moby gameplay. Positive
 Flight adapters, Magic Crafters ownership, Haunted Towers wizard paths/armor
-links and imported-object visibility are still being worked on. See
+links are still being worked on. Imported visibility is addressed above. See
 [the follow-up evidence](docs/research/universal-sound-flight-guards-20261002.md).
 
 ---
