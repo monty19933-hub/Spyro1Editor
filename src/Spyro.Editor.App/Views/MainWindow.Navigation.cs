@@ -50,6 +50,9 @@ public sealed partial class MainWindow
         _terrainTexturePaintBusy || _terrainTextureRelocationBusy || _terrainTexturePaintHistoryRestoreBusy ||
         _id65BlankLabBusy || _nativeLevelReplacementBusy || _handlingLevelSelection || _levelSelectionAsyncInFlight > 0;
 
+    private void RefreshToolbarSaveAvailability() =>
+        SetButtonEnabled(_toolbarSaveButton, _currentLevel != null && !_saveCommandRunning && !ToolbarSaveBlocked);
+
     private async Task SaveFromToolbarAsync()
     {
         if (_saveCommandRunning) return;

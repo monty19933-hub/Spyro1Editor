@@ -22,7 +22,7 @@ guards remain unchanged.
 
 Private evidence lives under task-root `work/ui-release-20261002`.
 
-- `navigation-final.log`: 44 headless checks; menu navigation does not create or
+- `navigation-final-r2.log`: 47 headless checks; menu navigation does not create or
   save a scene; Cmd/Ctrl+S and Save write real fresh-scene geometry; held saves
   cannot overlap or close the editor; toolbar bounds at 980×640, 1060×720 and 1320×860.
 - `catalog/review-only.log`: 30 source-backed browser checks, including all >200

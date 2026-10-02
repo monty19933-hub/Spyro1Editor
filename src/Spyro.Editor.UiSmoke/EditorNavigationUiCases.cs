@@ -75,6 +75,18 @@ internal static class EditorNavigationUiCases
             barrier.SetResult(); Wait(() => !Get<bool>(window,"_saveCommandRunning"));
             window.FreshSaveWrittenBarrierForTesting = null;
             Check(save.IsEnabled && file.IsEnabled && Get<Control>(window,"_viewport").IsEnabled, "Save completion restores the editor controls.");
+            // A retail picker holds an outer load fence after the inner loader
+            // finishes. Save must update at both releases without another edit.
+            void SetFence(string name, object value) => typeof(MainWindow).GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(window, value);
+            SetFence("_loadingLevel", true); SetFence("_handlingLevelSelection", true); SetFence("_levelSelectionAsyncInFlight", 1);
+            Invoke(window, "RefreshLevelSelectionAvailability");
+            Check(!save.IsEnabled, "Save is disabled while the level picker owns its load.");
+            SetFence("_levelSelectionAsyncInFlight", 0);
+            Invoke(window, "RefreshLevelSelectionAvailability");
+            Check(!save.IsEnabled, "Finishing the inner loader cannot enable Save before the outer picker completes.");
+            SetFence("_loadingLevel", false); SetFence("_handlingLevelSelection", false);
+            Invoke(window, "RefreshLevelSelectionAvailability");
+            Check(save.IsEnabled, "Finishing the outer picker enables Save immediately, without another edit or command.");
             byte[] beforeBusy = File.ReadAllBytes(path);
             foreach (string owner in new[] { "_createBinBusy", "_regularEditorPersistenceBusy", "_workspaceTransitionBusy", "_loadingLevel", "_freshNativeResearchBusy", "_buildSafetyBusy", "_buildingPortableCache", "_projectDataImportBusy", "_terrainTexturePaintBusy", "_terrainTextureRelocationBusy", "_terrainTexturePaintHistoryRestoreBusy", "_id65BlankLabBusy", "_nativeLevelReplacementBusy", "_handlingLevelSelection" })
             {

@@ -2395,6 +2395,7 @@ public sealed partial class MainWindow : Window
         // Loaded settings are bound before the inner/outer level-load fences
         // release. Reflect each fence transition without resetting the draft.
         RefreshFreeFlightSettingsAvailability();
+        RefreshToolbarSaveAvailability();
     }
 
     private static Control BuildUnsavedTerrainDialogContent(Window dialog, string heading, string message)
@@ -10599,7 +10600,7 @@ public sealed partial class MainWindow : Window
             _toolbarCreateBinButton,
             hasLevel && !IsCurrentId65BlankLab() && !_createBinBusy && !editorMutationOperationActive);
         SetButtonEnabled(_toolbarOpenDiscImageButton, sourceCommandEnabled);
-        SetButtonEnabled(_toolbarSaveButton, hasLevel && !_saveCommandRunning && !ToolbarSaveBlocked && !editorMutationOperationActive);
+        RefreshToolbarSaveAvailability();
         if (_toolbarFileMenu != null) _toolbarFileMenu.IsEnabled = !editorMutationOperationActive && !_createBinBusy;
         SetButtonEnabled(_discImageChooseButton, sourceCommandEnabled);
         SetButtonEnabled(_importEditorCacheButton, sourceCommandEnabled);
