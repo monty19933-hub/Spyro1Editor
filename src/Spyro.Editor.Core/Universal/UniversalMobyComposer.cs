@@ -203,14 +203,14 @@ public static class UniversalMobyComposer
             if (p.SpecialId != null)
             {
                 var asset = special?.Invoke(p.SpecialId) ?? throw new InvalidDataException(
-                    $"'{p.SpecialId}' needs the original Japanese disc. Select it in the editor settings.");
+                    $"'{p.SpecialId}' needs its original source disc. Select that disc in the editor settings.");
                 byte[] row = asset.RowTemplate.ToArray();
                 BinaryPrimitives.WriteUInt16LittleEndian(row.AsSpan(0x36), (ushort)asset.ClassId);
                 row[0x53] = 0xFF; // no gem reward
                 byte[] props = asset.Behavior == UniversalSpecialBehavior.Sign
                     ? UniversalSpecialBehaviors.EncodeSignText(p.Text ?? [])
                     : new byte[16];
-                templates.Add(new UniversalRowTemplate("japan", -1, row, props, [], 0));
+                templates.Add(new UniversalRowTemplate(asset.SourceKey, -1, row, props, [], 0));
                 specialClasses[asset.ClassId] = asset;
                 continue;
             }
@@ -344,7 +344,7 @@ public static class UniversalMobyComposer
             }).GroupBy(j => j.Class).Select(g => g.First()).ToList();
         foreach (var (c, asset) in specialClasses.OrderBy(k => k.Key))
             if (!destRegistered.Contains(c))
-                modelJobs.Add((c, "japan", false, asset.Package.ToArray(), asset.SourceVram, asset.SourceData));
+                modelJobs.Add((c, asset.SourceKey, false, asset.Package.ToArray(), asset.SourceVram, asset.SourceData));
         var particleJobs = particleDependencies.Values.Where(p => p.Status == "texture-import-required")
             .GroupBy(p => p.TypeId).Select(g =>
             {
@@ -382,7 +382,7 @@ public static class UniversalMobyComposer
                 if (ti >= 0) { tex = texReports[ti]; snd = UniversalAssetImport.ImportSounds(job.Pkg, asset.SourceData, dest); }
                 pendingModels.Add((c, job.Pkg)); destRegistered.Add(c);
             }
-            imports.Add(new(c, "japan", job.Pkg != null, true, job.Pkg?.Length ?? 0, tex, snd, false));
+            imports.Add(new(c, asset.SourceKey, job.Pkg != null, true, job.Pkg?.Length ?? 0, tex, snd, false));
         }
         foreach (var (c, sk, mapped, dep) in ordered)
         {
@@ -442,6 +442,8 @@ public static class UniversalMobyComposer
                 treasure = checked(treasure + TreasureValue(r));
                 BinaryPrimitives.WriteUInt16LittleEndian(r.AsSpan(0x36), (ushort)classes[(p.SourceLevelKey.ToLowerInvariant(), t.ClassId)].DestinationClass);
             }
+            else if (UniversalHighValueGems.IsId(p.SpecialId))
+                treasure = checked(treasure + UniversalHighValueGems.ValueForClass(t.ClassId));
             rows.Add((r, t));
         }
         UniversalTreasureAccounting.ApplyDelta(exe, destination.LevelId, treasure);
@@ -465,18 +467,23 @@ public static class UniversalMobyComposer
         IReadOnlyList<UniversalNativeParticleNoOpProof> particleNoOpProofs = [];
         byte[] overlay = destinationOverlay.ToArray();
         uint copyBuffer = destOverlay.CopyBuffer;
-        var byBehaviorSource = imports.Where(i => i.BehaviorImported && i.SourceLevelKey != "japan").GroupBy(i => i.SourceLevelKey)
+        var byBehaviorSource = imports.Where(i => i.BehaviorImported && !specialClasses.ContainsKey(i.DestinationClassId)).GroupBy(i => i.SourceLevelKey)
             .Select(g => (g.Key, source(g.Key).Overlay, (IReadOnlyList<int>)g.Select(i => i.ClassId).Order().ToList())).ToList();
         var eggClasses = specialClasses.Values.Where(a => a.Behavior == UniversalSpecialBehavior.DragonflyEgg).Select(a => a.ClassId).Order().ToList();
         var signClasses = specialClasses.Values.Where(a => a.Behavior == UniversalSpecialBehavior.Sign).Select(a => a.ClassId).Order().ToList();
-        byBehaviorSource = byBehaviorSource.Where(b => b.Key != "japan").ToList();
-        if (byBehaviorSource.Count > 0 || eggClasses.Count > 0 || signClasses.Count > 0)
+        var highValueGemClasses = specialClasses.Values.Where(a => a.Behavior == UniversalSpecialBehavior.HighValueGem).Select(a => a.ClassId).Order().ToList();
+        if (highValueGemClasses.Count > 0)
+        {
+            UniversalHighValueGems.RequireNativeOwner(exe);
+            UniversalHighValueGems.RequireDestinationParticleOwner(destOverlay);
+        }
+        if (byBehaviorSource.Count > 0 || eggClasses.Count > 0 || signClasses.Count > 0 || highValueGemClasses.Count > 0)
         {
             uint baseAddress = (copyBuffer + 7) & ~7u;
             var classMaps = classes.GroupBy(k => k.Key.Source).ToDictionary(g => g.Key,
                 g => (IReadOnlyDictionary<int, int>)g.ToDictionary(k => k.Key.Class, k => k.Value.DestinationClass));
             var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps, remapSaveRows, nativeExecutable: exe,
-                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay);
+                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses);
             uint newCopy = (uint)((baseAddress + bundle.Code.Length + 15) & ~15);
             int keep = (int)(copyBuffer - UniversalOverlay.Base);
             byte[] ov = new byte[UniversalLevelData.Align((int)(newCopy - UniversalOverlay.Base), 0x800)];
@@ -531,6 +538,8 @@ public static class UniversalMobyComposer
 
         UniversalNativeParticleNoOpOwnership.RequireFinalDestination(particleNoOpProofs,
             new UniversalOverlay(overlay, UniversalExeBindings.Read(exe, destination.LevelId)), exe);
+        if (highValueGemClasses.Count > 0)
+            UniversalHighValueGems.RequireDestinationParticleOwner(new UniversalOverlay(overlay, UniversalExeBindings.Read(exe, destination.LevelId)));
         uint finalEnd = RuntimeEnd(dest, copyBuffer);
         uint limit = NormalBufferFloor - RamSafetyMargin;
         var ram = new UniversalRamBudget(originalEnd, finalEnd, NormalBufferFloor,

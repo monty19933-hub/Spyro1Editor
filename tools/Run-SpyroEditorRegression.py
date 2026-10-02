@@ -198,6 +198,7 @@ CORE_CASES = (
     ("UniversalDependencySmoke", "UNIVERSAL_DEPENDENCY_CHECKS_OK"),
     ("UniversalSpawnProducerSmoke", "UNIVERSAL_SPAWN_PRODUCER_CHECKS_OK"),
     ("UniversalGemCollectionSmoke", "UNIVERSAL_GEM_ADAPTER_FREE_OK"),
+    ("UniversalHighValueGemSmoke", "HIGH_VALUE_GEM_FREE_OK"),
     ("UniversalClassOwnershipSmoke", "UNIVERSAL_CLASS_OWNERSHIP_FREE_OK"),
     ("UniversalModelTailSmoke", "UNIVERSAL_MODEL_TAIL_FREE_OK"),
     ("UniversalParticleNoOpSmoke", "UNIVERSAL_PARTICLE_NOOP_SOURCE_FREE_OK"),
@@ -231,6 +232,7 @@ CASE_ARGUMENTS = {
 # Additional modes retain their own arguments/markers without replacing the
 # established mode of the same executable. Project builds remain deduplicated.
 ADDITIONAL_CORE_CASES = (
+    ("UiSmoke", "HIGH_VALUE_GEM_UI_OK checks=", ["--high-value-gems-ui-only"]),
     ("UiSmoke", "PORTAL_ROUTE_UI_OK checks=18",
      ["--portal-routes-ui-only"]),
     ("UiSmoke", "START_BLANK_UI_OK checks=27",
@@ -575,6 +577,7 @@ def main():
         suffix = {
             ("--behavior-free",): "-behavior",
             ("--portal-routes-ui-only",): "-portal-routes-ui",
+            ("--high-value-gems-ui-only",): "-high-value-gems-ui",
             ("--start-blank-ui-only",): "-start-blank-ui",
             ("--free-flight-ui-only",): "-free-flight-ui",
             ("--level-picker-automation-only",): "-level-picker-automation",

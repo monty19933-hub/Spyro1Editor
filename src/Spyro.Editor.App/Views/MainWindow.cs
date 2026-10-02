@@ -27064,7 +27064,7 @@ public sealed partial class MainWindow : Window
 
     private static bool HasEditableGemValue(Moby moby)
     {
-        return moby.IsGemLike || IsRewardGemCarrier(moby);
+        return !moby.IsHighValueGem && (moby.IsGemLike || IsRewardGemCarrier(moby));
     }
 
     private static bool IsRewardGemCarrier(Moby moby)

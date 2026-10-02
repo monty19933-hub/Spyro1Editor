@@ -358,7 +358,7 @@ public sealed partial class MainWindow
         if (!placements.Any(p=>!p.Retired)) return [];
         var removed = level == _currentLevel ? CurrentRemovedNativeRows() : UniversalPlacementReader.ReadRemovedNativeRows(path);
         var (_,library,_) = await EnsureUniversalCatalogAsync();
-        var special = UniversalMobyExport.SpecialProvider(ResolveUniversalJapaneseSource());
+        var special = UniversalMobyExport.SpecialProvider(ResolveUniversalJapaneseSource(), library);
         return await Task.Run(() => UniversalTerrainReservations.Capture(library,level,placements,special,removed));
     }
 
@@ -496,7 +496,7 @@ public sealed partial class MainWindow
         UniversalMobyPlacement TrialFor(UniversalMobyVariant v)
         {
             if (UniversalSpecialCatalog.IsSpecial(v))
-                return new UniversalMobyPlacement(UniversalSpecialCatalog.SourceKey, v.SourceRow, 0, 0, 0,
+                return new UniversalMobyPlacement(v.SourceLevelKey, v.SourceRow, 0, 0, 0,
                     SpecialId: UniversalSpecialCatalog.SpecialIdForClass(v.ClassId), Text: ["SIGN"],
                     EditorId: Guid.NewGuid().ToString("N"), PersistentSlot: existing.Count);
             var row = lib!.Get(v.SourceLevelKey).Data.Row(v.SourceRow);
@@ -523,7 +523,7 @@ public sealed partial class MainWindow
                 Children =
                 {
                     new TextBlock { Text = entry.Name, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis },
-                    new TextBlock { Text = $"{FriendlyCategory(entry.Category)}{(entry.SubCategory.Length > 0 ? " › " + entry.SubCategory : "")} · {(UniversalSpecialCatalog.IsSpecial(entry.Default) ? "Japanese version of the game" : "found in " + string.Join(", ", entry.SourceLevels.Take(3).Select(LevelName)) + (entry.SourceLevels.Count > 3 ? $" and {entry.SourceLevels.Count - 3} more" : ""))}",
+                    new TextBlock { Text = $"{FriendlyCategory(entry.Category)}{(entry.SubCategory.Length > 0 ? " › " + entry.SubCategory : "")} · {(entry.Default.SourceLevelKey == UniversalHighValueGems.SourceKey ? "USA gem variant" : UniversalSpecialCatalog.IsSpecial(entry.Default) ? "Japanese version of the game" : "found in " + string.Join(", ", entry.SourceLevels.Take(3).Select(LevelName)) + (entry.SourceLevels.Count > 3 ? $" and {entry.SourceLevels.Count - 3} more" : ""))}",
                         FontSize = 11, Foreground = new SolidColorBrush(ModernMutedInk), TextTrimming = TextTrimming.CharacterEllipsis },
                     new TextBlock { Text = status, FontSize = 11, Foreground = new SolidColorBrush(statusColor) }
                 }
@@ -542,7 +542,7 @@ public sealed partial class MainWindow
         variants.ItemTemplate = new FuncDataTemplate<UniversalMobyVariant>((v, _) =>
             v != null && UniversalDragonflyEggs.IsEggClass(v.ClassId)
                 ? BuildEggColourChoice(UniversalSpecialCatalog.SpecialIdForClass(v.ClassId)!, UniversalSpecialCatalog.DisplayName(v.ClassId))
-                : new TextBlock { Text = v == null ? "" : UniversalSpecialCatalog.IsSpecial(v) ? "Japanese sign" : VersionName(v) });
+                : new TextBlock { Text = v == null ? "" : v.SourceLevelKey == UniversalHighValueGems.SourceKey ? UniversalSpecialCatalog.DisplayName(v.ClassId) : UniversalSpecialCatalog.IsSpecial(v) ? "Japanese sign" : VersionName(v) });
 
         string VersionName(UniversalMobyVariant v)
         {
@@ -552,7 +552,7 @@ public sealed partial class MainWindow
             return same.Count > 1 ? $"{identity} — {LevelName(v.SourceLevelKey)} (#{n + 1} of {same.Count})" : $"{identity} — {LevelName(v.SourceLevelKey)}";
         }
 
-        string LevelName(string key) => key == UniversalSpecialCatalog.SourceKey ? "Spyro the Dragon (Japan)" : _retailCatalog.FindByKey(key)?.DisplayName ?? key;
+        string LevelName(string key) => key == UniversalHighValueGems.SourceKey ? "USA gem variants" : key == UniversalSpecialCatalog.SourceKey ? "Spyro the Dragon (Japan)" : _retailCatalog.FindByKey(key)?.DisplayName ?? key;
 
         bool MatchesCategory(UniversalMobyCatalogEntry e)
         {
@@ -608,14 +608,14 @@ public sealed partial class MainWindow
             bool isSpecial = UniversalSpecialCatalog.IsSpecial(v);
             variantLabel.Text = entry.SubCategory == "Dragonfly Eggs" ? "Colour" : entry.Variants.Count > 1 ? "Source object (shared type IDs can mean different objects)" : "Version";
             details.Text = $"Selected source object: {UniversalSourceObjectName(entry,v)}.\n" + (isSpecial
-                    ? "From the Japanese version of Spyro the Dragon.\n"
+                    ? v.SourceLevelKey == UniversalHighValueGems.SourceKey ? "A new gem variant using your original USA disc.\n" : "From the Japanese version of Spyro the Dragon.\n"
                     : $"Found in {string.Join(", ", entry.SourceLevels.Select(LevelName))}.\n") +
                 (entry.Notes is { Length: > 0 } friendly ? friendly + "\n" : "") +
                 (e.Native ? "" : "Create BIN copies the supported model, textures, sounds and native behavior dependencies into this level. Imported gameplay still needs a playtest.");
             technical.Text =
                 $"Object type {entry.ClassHex} · {FriendlyCategory(entry.Category)}{(entry.SubCategory.Length > 0 ? " › " + entry.SubCategory : "")}\n" +
                 (UniversalSpecialCatalog.IsSpecial(v)
-                    ? $"Source: {LevelName(v.SourceLevelKey)} (model copied from the Japanese disc; behavior written natively for the USA game)\n"
+                    ? $"Source: {LevelName(v.SourceLevelKey)} (local source model; native USA behavior)\n"
                     : $"Source: {LevelName(v.SourceLevelKey)} row T{v.SourceRow} ({entry.Variants.Count} native placement(s) across {entry.SourceLevels.Count} level(s))\n") +
                 $"Model: {(v.SharedModel ? "shared game-wide model" : v.HasLocalModel ? $"{v.ModelBytes / 1024.0:0.0} KB level model with textures and sounds" : "no visible model (controller/trigger)")}\n" +
                 $"Behavior: {(UniversalSpecialCatalog.IsSpecial(v) ? $"native USA-engine routine added by the editor ({v.BehaviorBytes / 1024.0:0.0} KB)" : v.HasBehavior ? $"native code from {LevelName(v.SourceLevelKey)} ({v.BehaviorBytes / 1024.0:0.0} KB)" : "engine default")}\n" +
@@ -790,9 +790,9 @@ public sealed partial class MainWindow
                 string bin = DiscImageLocator.ResolveImagePath(picked);
                 await Task.Run(() => UniversalJapaneseDiscLocator.Configure(_workspace, bin));
                 japanese = await Task.Run(ResolveUniversalJapaneseSource);
-                special = UniversalMobyExport.SpecialProvider(japanese);
+                special = UniversalMobyExport.SpecialProvider(japanese, lib);
                 var specials = UniversalSpecialCatalog.Entries(japanese != null);
-                entries = [.. entries.Where(e => e.Default.SourceLevelKey != UniversalSpecialCatalog.SourceKey), .. specials];
+                entries = [.. entries.Where(e => !UniversalSpecialCatalog.IsSpecial(e.Default)), .. specials];
                 dryRuns.Clear();
                 foreach (var e in specials) listDry.TryRemove(e.Default, out _);
                 if (lib != null)
@@ -816,7 +816,7 @@ public sealed partial class MainWindow
             {
                 var (_, l, usa) = await EnsureUniversalCatalogAsync();
                 japanese = await Task.Run(ResolveUniversalJapaneseSource);
-                special = UniversalMobyExport.SpecialProvider(japanese);
+                special = UniversalMobyExport.SpecialProvider(japanese, l);
                 var es = entries = [.. usa, .. UniversalSpecialCatalog.Entries(japanese != null)];
                 lib = l;
                 if (_freshSceneDocument != null) freshCompilation = await CaptureFreshNativeAsync();
@@ -872,10 +872,10 @@ public sealed partial class MainWindow
     {
         if (_currentLevel == null) return;
         string? specialId = UniversalSpecialCatalog.IsSpecial(v) ? UniversalSpecialCatalog.SpecialIdForClass(v.ClassId) : null;
-        UniversalSpecialAsset? asset = specialId != null ? japanese?.Find(specialId) : null;
+        UniversalSpecialAsset? asset = specialId != null ? UniversalMobyExport.SpecialProvider(japanese, lib)?.Invoke(specialId) : null;
         if (specialId != null && asset == null) { _statusText.Text = "Select the original Japanese disc first (Japanese disc… in the Add Moby browser)."; return; }
         byte[] row = asset?.RowTemplate ?? lib.Get(v.SourceLevelKey).Data.Row(v.SourceRow);
-        string sourceName = asset != null ? "Spyro the Dragon (Japan)" : _retailCatalog.FindByKey(v.SourceLevelKey)?.DisplayName ?? v.SourceLevelKey;
+        string sourceName = v.SourceLevelKey == UniversalHighValueGems.SourceKey ? "USA gem variant" : asset != null ? "Spyro the Dragon (Japan)" : _retailCatalog.FindByKey(v.SourceLevelKey)?.DisplayName ?? v.SourceLevelKey;
         string name = asset?.Name ?? UniversalSourceObjectName(entry,v);
         var template = new AddMobyTemplate(
             Name: name,
@@ -885,7 +885,7 @@ public sealed partial class MainWindow
             UsesGem: false,
             DefaultLabel: name,
             FromCrossLevelTemplate: true,
-            DefaultColor: Moby.ColorForType(row[0x50]),
+            DefaultColor: v.ClassId == UniversalHighValueGems.TealClass ? GemValue.Teal.Color : v.ClassId == UniversalHighValueGems.RainbowClass ? GemValue.Rainbow.Color : Moby.ColorForType(row[0x50]),
             TemplateId: specialId != null ? UniversalSpecialCatalog.TemplatePrefix + specialId : $"universal:{v.SourceLevelKey}:{v.SourceRow}",
             Family: "universal",
             SourceLevelKey: v.SourceLevelKey,

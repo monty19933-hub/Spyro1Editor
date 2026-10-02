@@ -52,7 +52,8 @@ public static class UniversalPlacementReader
             string templateId = t.TryGetProperty("id", out var tid) && tid.ValueKind == JsonValueKind.String ? tid.GetString() ?? "" : "";
             string? special = templateId.StartsWith(UniversalSpecialCatalog.TemplatePrefix, StringComparison.Ordinal)
                 ? templateId[UniversalSpecialCatalog.TemplatePrefix.Length..] : null;
-            string src = special != null ? UniversalSpecialCatalog.SourceKey : LevelCatalog.NormalizeKey(t.GetProperty("sourceLevelKey").GetString() ?? "");
+            string src = special != null ? UniversalHighValueGems.IsId(special) ? UniversalHighValueGems.SourceKey : UniversalSpecialCatalog.SourceKey
+                : LevelCatalog.NormalizeKey(t.GetProperty("sourceLevelKey").GetString() ?? "");
             int row = t.TryGetProperty("sourceTrueIndex", out var sti) && sti.ValueKind == JsonValueKind.Number ? sti.GetInt32() : -1;
             string[]? text = edit.TryGetProperty("signText", out var st2) && st2.ValueKind == JsonValueKind.String
                 ? SplitSignText(st2.GetString()) : null;

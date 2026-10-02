@@ -61,7 +61,9 @@ internal static class MobyGemIconCatalog
 
     internal static double HitRadius(double markerSize, GemValue gem)
     {
-        return AssetsByValue.ContainsKey(gem.Value)
+        return gem == GemValue.Teal || gem == GemValue.Rainbow
+            ? Math.Clamp(markerSize * 1.5, 12, 27)
+            : AssetsByValue.ContainsKey(gem.Value)
             ? IconHeight(markerSize) * 0.5
             : 12;
     }

@@ -1,4 +1,4 @@
-# Spyro Editor 1.0.3
+# Spyro Editor 1.0.4
 
 ## Start editing
 
@@ -22,6 +22,20 @@ The game has limits on coordinates, collision encoding and memory. If a shape
 cannot be represented safely, the editor explains why. Try a smaller change or
 a simpler face; an unsupported edit does not produce a partially patched game.
 Translucent source faces cannot currently be copied or removed by these tools.
+
+## Teal and rainbow gems
+
+Choose **Objects → Add object… → Collectibles → Gems**, then **Teal gem (50)**
+or **Rainbow gem (100)**. Place, move, duplicate and remove them with the usual
+object tools. Both use the USA source disc. Save the level and use **Create BIN**
+to include them in the game. They add 50 or 100 to collected treasure, increase
+the level's available total and retain their collected state in ordinary saves.
+
+They can be placed in existing or fresh levels, subject to normal level capacity.
+If a full level needs room, use **Find space for this object…** and review the
+proposed removals. Their value is fixed; place the other gem to change its value.
+Existing saved games keep their collected identities, so use New Game when
+testing a newly rearranged collection layout.
 
 ## Portal destinations and Return Home
 

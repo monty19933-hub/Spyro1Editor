@@ -33,7 +33,7 @@ internal static class UniversalMobyModelPreview
                 byte[] package, vram;
                 if (UniversalSpecialCatalog.IsSpecial(variant))
                 {
-                    var asset = japanese?.Find(UniversalSpecialCatalog.SpecialIdForClass(variant.ClassId)!);
+                    var asset = UniversalMobyExport.SpecialProvider(japanese, library)?.Invoke(UniversalSpecialCatalog.SpecialIdForClass(variant.ClassId)!);
                     if (asset == null) return new(null, "Choose your Japanese disc to preview this model.");
                     package = asset.Package; vram = asset.SourceVram;
                 }

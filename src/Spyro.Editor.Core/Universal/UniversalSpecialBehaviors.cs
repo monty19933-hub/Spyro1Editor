@@ -1,7 +1,7 @@
 namespace Spyro.Editor.Core.Universal;
 
 /// <summary>Native-engine behavior routines for recovered objects, assembled into the destination bundle.</summary>
-public static class UniversalSpecialBehaviors
+public static partial class UniversalSpecialBehaviors
 {
     // Engine addresses (USA SCUS_942.28).
     private const uint ActiveList = 0x800700F4;

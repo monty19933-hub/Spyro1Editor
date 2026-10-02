@@ -122,7 +122,7 @@ public static class UniversalMobyExport
             }
             var composed = UniversalMobyComposer.Compose(level, levelBytes,
                 current.EntryBytes(level.SourceWadEntry - 1), exe, k => sources.Get(k), sources.SharedClasses,
-                protectedVram(currentImagePath, level), placements, SpecialProvider(japanese),
+                protectedVram(currentImagePath, level), placements, SpecialProvider(japanese, sources),
                 removed,
                 useNativeOwnershipScan ? dropped => DefaultProtectedVram(currentImagePath, level, dropped) : null, sources.SharedModelPackage, sources.PlayerAnimations,
                 removedTreasureAlreadyApplied);
@@ -141,7 +141,7 @@ public static class UniversalMobyExport
                 if (!placed[i].Retired && placed[i].SpecialId is { } id && UniversalDragonflyEggs.Variants.Any(v => v.Id == id))
                     dragonflyEggs.Add((CollectedMaskIndex(level), r.Compose.PlacementSaveRows[i], UniversalDragonflyEggs.VariantIndex(id)));
         }
-        var signLevels = allPlacements.Where(k => k.Value.Any(p => !p.Retired && p.SpecialId == UniversalDragonflyEggs.SignId))
+        var signLevels = allPlacements.Where(k => k.Value.Any(p => !p.Retired && UniversalSpecialCatalog.NeedsRenderHook(p.SpecialId)))
             .Select(k => catalog.FindByKey(k.Key)!.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (!deferSpecialHooks)
         {
@@ -192,11 +192,14 @@ public static class UniversalMobyExport
     /// <summary>Index of a level's durable collected-object mask (0x80077908 + index*32): realm*6 + slot.</summary>
     public static int CollectedMaskIndex(LevelDefinition level) => (level.LevelId / 10 - 1) * 6 + level.LevelId % 10;
 
-    public static Func<string, UniversalSpecialAsset?>? SpecialProvider(UniversalJapaneseSource? japanese)
+    public static Func<string, UniversalSpecialAsset?>? SpecialProvider(UniversalJapaneseSource? japanese, UniversalSourceLibrary? sources = null)
     {
-        if (japanese == null) return null;
-        var assets = japanese.Assets().ToDictionary(a => a.Id);
-        return id => assets.TryGetValue(id, out var a) ? a : null;
+        if (japanese == null && sources == null) return null;
+        var japaneseAssets = new Lazy<Dictionary<string, UniversalSpecialAsset>>(() =>
+            japanese?.Assets().ToDictionary(a => a.Id) ?? []);
+        var gems = new Lazy<Dictionary<string, UniversalSpecialAsset>>(() =>
+            sources == null ? [] : UniversalHighValueGems.Assets(sources).ToDictionary(a => a.Id));
+        return id => (UniversalHighValueGems.IsId(id) ? gems.Value : japaneseAssets.Value).GetValueOrDefault(id);
     }
 
 

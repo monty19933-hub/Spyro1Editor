@@ -1,4 +1,5 @@
 using Spyro.Editor.Core.Primitives;
+using Spyro.Editor.Core.Universal;
 using System.Text.Json.Serialization;
 
 namespace Spyro.Editor.Core.Scene;
@@ -325,7 +326,10 @@ public sealed class Moby
         Flag4B == 0xFF;
     public bool SupportsTerrainSnap =>
         VisualKind != MobyVisualKind.Control || IsHomeworldPortalControl;
-    public bool IsVisibleGem => !IsKey &&
+    public bool IsHighValueGem => CrossLevelRequiredExporterFeature == UniversalMobyExport.RequiredExporterFeature &&
+        (CrossLevelTemplateId == UniversalSpecialCatalog.TemplatePrefix + UniversalHighValueGems.TealId ||
+         CrossLevelTemplateId == UniversalSpecialCatalog.TemplatePrefix + UniversalHighValueGems.RainbowId);
+    public bool IsVisibleGem => IsHighValueGem || !IsKey &&
         Type == 0x18 &&
         GemValue.TryFromEncoding(SourceByte36, SourceByte4F, out _);
     public bool IsGemLike => !IsKey && (IsChestContent || IsVisibleGem);
@@ -336,6 +340,9 @@ public sealed class Moby
     {
         get
         {
+            if (IsHighValueGem)
+                return CrossLevelTemplateId == UniversalSpecialCatalog.TemplatePrefix + UniversalHighValueGems.TealId
+                    ? GemValue.Teal : GemValue.Rainbow;
             if (IsChestContent && GemValue.TryFromIdByte(Flag4B, out GemValue containedGem))
                 return containedGem;
 
@@ -351,6 +358,8 @@ public sealed class Moby
     {
         if (gem == GemValue.Unknown)
             return;
+        if (IsHighValueGem || gem == GemValue.Teal || gem == GemValue.Rainbow)
+            throw new InvalidOperationException("Place Teal gem (50) or Rainbow gem (100) from Collectibles → Gems. Their saved identity and pickup behavior are managed together.");
 
         if (IsChestContent)
         {
@@ -792,9 +801,13 @@ public readonly record struct GemValue(string Name, int Value, int IdByte, int V
     public static GemValue Blue { get; } = new("Blue gem", 5, 0x55, 0x03, ColorRgba.FromRgb(24, 78, 232));
     public static GemValue Yellow { get; } = new("Yellow gem", 10, 0x56, 0x04, ColorRgba.FromRgb(226, 211, 42));
     public static GemValue Purple { get; } = new("Purple gem", 25, 0x57, 0x05, ColorRgba.FromRgb(176, 70, 230));
+    public static GemValue Teal { get; } = new("Teal gem", 50, UniversalHighValueGems.TealClass, 0, ColorRgba.FromRgb(0, 205, 190));
+    public static GemValue Rainbow { get; } = new("Rainbow gem", 100, UniversalHighValueGems.RainbowClass, 0, ColorRgba.FromRgb(240, 140, 240));
 
     public string DisplayName => Value > 0 ? $"{Name} ({Value})" : Name;
 
+    // Native one-byte reward selectors remain unchanged. Higher values are
+    // separate placeable objects, with their own model, behavior and save identity.
     public static IReadOnlyList<GemValue> Known { get; } = new[] { Red, Green, Blue, Yellow, Purple };
 
     public static bool TryFromIdByte(int value, out GemValue gem)

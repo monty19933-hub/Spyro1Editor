@@ -506,9 +506,9 @@ void SyntheticOverlayChecks()
     Check(UniversalSpecialBehaviors.NormalizeSignLine("it's ~ok~ " + new string('a', 40)).Length == UniversalSpecialBehaviors.SignLineMaxChars &&
           UniversalSpecialBehaviors.NormalizeSignLine("it's").SequenceEqual("ITS"), "unsupported characters are dropped and lines capped");
     Check(UniversalPlacementReader.SplitSignText("A\r\nB\nC\nD").SequenceEqual(["A", "B", "C"]), "sign text keeps three lines");
-    var specialEntries = UniversalSpecialCatalog.Entries(true);
+    var specialEntries = UniversalSpecialCatalog.Entries(true).Where(e => e.Default.SourceLevelKey == UniversalSpecialCatalog.SourceKey).ToList();
     Check(specialEntries.Count == 2 && specialEntries[0].Variants.Count == UniversalDragonflyEggs.Variants.Length &&
-          specialEntries.All(e => e.RestrictionReason == null) && UniversalSpecialCatalog.Entries(false).All(e => e.RestrictionReason != null),
+          specialEntries.All(e => e.RestrictionReason == null) && UniversalSpecialCatalog.Entries(false).Where(e => e.Default.SourceLevelKey == UniversalSpecialCatalog.SourceKey).All(e => e.RestrictionReason != null),
           "egg and sign catalogue entries (restricted without the Japanese disc)");
     Check(specialEntries[0].SubCategory == "Dragonfly Eggs" && specialEntries[1].SubCategory == "Signs", "egg/sign categories");
     Check(UniversalDragonflyEggs.Variants.Select(v => v.Class).Append(UniversalDragonflyEggs.SignClass).Distinct().Count() == 8, "distinct special classes");

@@ -12,14 +12,20 @@ public static class UniversalSpecialCatalog
     public const string TemplatePrefix = "special:";
     private const int EggModelBytes = 2056, SignModelBytes = 2664, EggCodeBytes = 0x150, SignCodeBytes = 0x1C0;
 
-    public static bool IsSpecial(UniversalMobyVariant v) => v.SourceLevelKey == SourceKey;
+    public static bool IsSpecial(UniversalMobyVariant v) => v.SourceLevelKey is SourceKey or UniversalHighValueGems.SourceKey;
+
+    public static bool NeedsRenderHook(string? id) => id == UniversalDragonflyEggs.SignId || UniversalHighValueGems.IsId(id);
 
     public static string? SpecialIdForClass(int classId) =>
-        classId == UniversalDragonflyEggs.SignClass ? UniversalDragonflyEggs.SignId
+        classId == UniversalHighValueGems.TealClass ? UniversalHighValueGems.TealId
+        : classId == UniversalHighValueGems.RainbowClass ? UniversalHighValueGems.RainbowId
+        : classId == UniversalDragonflyEggs.SignClass ? UniversalDragonflyEggs.SignId
         : UniversalDragonflyEggs.Variants.FirstOrDefault(v => v.Class == classId).Id;
 
     public static string DisplayName(int classId) =>
-        classId == UniversalDragonflyEggs.SignClass ? "Sign"
+        classId == UniversalHighValueGems.TealClass ? "Teal gem (50)"
+        : classId == UniversalHighValueGems.RainbowClass ? "Rainbow gem (100)"
+        : classId == UniversalDragonflyEggs.SignClass ? "Sign"
         : UniversalDragonflyEggs.Variants.FirstOrDefault(v => v.Class == classId).Name ?? $"Object 0x{classId:X3}";
 
     public static IReadOnlyList<UniversalMobyCatalogEntry> Entries(bool japaneseDiscAvailable)
@@ -32,11 +38,22 @@ public static class UniversalSpecialCatalog
             UniversalSpecialBehaviors.SignLineBytes * UniversalSpecialBehaviors.SignLines, SignModelBytes, SignCodeBytes, true, false, true);
         return
         [
+            HighValueGemEntry(UniversalHighValueGems.TealClass, "Teal gem (50)", 50),
+            HighValueGemEntry(UniversalHighValueGems.RainbowClass, "Rainbow gem (100)", 100),
             new(eggs[0].ClassId, "Dragonfly Egg", "Collectibles", "Dragonfly Eggs", eggs, eggs[0], [SourceKey], restriction,
                 "Choose its colour above. Collection updates the level and global dragonfly-egg counters and completion score. The game's memory-card save preserves collected eggs. Newly earned bonus access also requires every placed dragonfly egg."),
             new(sign.ClassId, "Sign", "Interactive", "Signs", [sign], sign, [SourceKey], restriction,
                 "When Spyro stands next to it, your message (up to three short lines) appears on screen. After placing it, select it and press Edit to type the message."),
         ];
+    }
+
+    private static UniversalMobyCatalogEntry HighValueGemEntry(int classId, string name, int value)
+    {
+        var variant = new UniversalMobyVariant(classId, UniversalHighValueGems.SourceKey, -1,
+            16, 1024, 4096, true, false, true);
+        return new(classId, name, "Collectibles", "Gems", [variant], variant,
+            [UniversalHighValueGems.SourceKey], null,
+            $"Adds {value} to collected treasure and this level's available total. Collected state is saved by the game. Uses your USA disc; no Japanese disc is needed.");
     }
 }
 

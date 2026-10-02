@@ -132,7 +132,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         NativeFreshTreasureTarget.RequireZeroBaseline(donors.Disc.Exe,stagedExe);
         if(startLevelId is {} chosen) NativeClearedRetailBinding.ApplyNewGameStart(donors.Disc.Exe,stagedExe,chosen);
         else NativeFreshNewGameEntry.Apply(donors.Disc.Exe,stagedExe,startInAuthoredLevel);
-        var compose=placements.Count == 0 ? null : ComposeWithExecutable(donors,placements,stagedExe,UniversalMobyExport.SpecialProvider(japanese));
+        var compose=placements.Count == 0 ? null : ComposeWithExecutable(donors,placements,stagedExe,UniversalMobyExport.SpecialProvider(japanese,donors));
         Dictionary<int,IReadOnlyList<NativePortalReturnClass>> returnClasses=retailReturnClasses?.ToDictionary(p=>p.Key,p=>p.Value)??[];
         returnClasses[65]=compose==null?[]:NativePortalReturnClass.Capture(compose.Classes);
         byte[] levelData=compose?.LevelData ?? _body.ToArray(), overlayData=compose?.Overlay ?? _overlay.ToArray();
@@ -141,7 +141,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
             eggs.Add((UniversalMobyExport.CollectedMaskIndex(Target),compose!.PlacementSaveRows[i],UniversalDragonflyEggs.VariantIndex(id)));
         byte[] exe=compose?.Executable ?? stagedExe;
         HashSet<string> signLevels=new(retailSignLevels??new HashSet<string>(),StringComparer.OrdinalIgnoreCase);
-        if(placements.Any(p=>!p.Retired&&p.SpecialId==UniversalDragonflyEggs.SignId))signLevels.Add(Target.Key);
+        if(placements.Any(p=>!p.Retired&&UniversalSpecialCatalog.NeedsRenderHook(p.SpecialId)))signLevels.Add(Target.Key);
         UniversalSpecialBehaviors.PatchExeCave(exe,donors.Disc.Exe,signLevels.Count>0,eggs);
         if (_flight != null) exe = _flight.ApplyToExecutable(exe);
         var title = new TextTargetEntry(Target.Key, Target.ScriptKey, Document.Name, "LAB", 3, 19, LevelTextTableKind.LevelNames, 35);

@@ -52,7 +52,7 @@ public static class NativeAuthoredProjectExporter
         HashSet<string> signs=new(retailSignLevels??new HashSet<string>(),StringComparer.OrdinalIgnoreCase);
         List<LevelTextReplacement> names=[..retailNames??[]];
         List<(string Key,int Prefix)> identities=[];
-        var special=UniversalMobyExport.SpecialProvider(japanese);
+        var special=UniversalMobyExport.SpecialProvider(japanese,donors);
         foreach(var scene in scenes.Where(s=>s.Document.TargetBinding!=null).OrderBy(s=>s.Document.TargetBinding!.LevelId))
         {
             token.ThrowIfCancellationRequested();requireCurrent?.Invoke();
@@ -73,7 +73,7 @@ public static class NativeAuthoredProjectExporter
                 var p=scene.Placements[i];if(p.Retired)continue;
                 if(p.SpecialId is {} id&&UniversalDragonflyEggs.Variants.Any(v=>v.Id==id))
                     eggs.Add((UniversalMobyExport.CollectedMaskIndex(target),result!.PlacementSaveRows[i],UniversalDragonflyEggs.VariantIndex(id)));
-                if(p.SpecialId==UniversalDragonflyEggs.SignId)signs.Add(target.Key);
+                if(UniversalSpecialCatalog.NeedsRenderHook(p.SpecialId))signs.Add(target.Key);
             }
             var title=TextTargetCatalog.CreateDefault().FindForLevel(target)??throw new InvalidDataException("Missing retail title slot.");
             names.Add(new(title,doc.Name));

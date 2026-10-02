@@ -4607,6 +4607,26 @@ public sealed partial class EditorViewport : Control
 
     private static void DrawGemMarker(DrawingContext context, Point point, double size, Color color, Pen rim, GemValue gem)
     {
+        if (gem == GemValue.Rainbow)
+        {
+            double radius = Math.Clamp(size * 1.5, 12, 27);
+            Color[] colors = [Color.Parse("#FF5555"), Color.Parse("#FFAA35"), Color.Parse("#F5EB42"),
+                Color.Parse("#30D86D"), Color.Parse("#27CCD5"), Color.Parse("#538AFF"), Color.Parse("#AE65EC"), Color.Parse("#F278D7")];
+            Point[] outline = Enumerable.Range(0, 8).Select(i =>
+                new Point(point.X + Math.Sin(i * Math.PI / 4) * radius,
+                    point.Y - Math.Cos(i * Math.PI / 4) * radius * 1.15)).ToArray();
+            DrawGemBackFace(context, outline, radius * 0.7);
+            for (int i = 0; i < outline.Length; i++)
+                DrawPolygon(context, [point, outline[i], outline[(i + 1) % outline.Length]],
+                    new SolidColorBrush(colors[i]), null);
+            DrawPolygon(context, outline, null, rim);
+            return;
+        }
+        if (gem == GemValue.Teal)
+        {
+            DrawSpyroDiamondGem(context, point, Math.Clamp(size * 1.3, 12, 25), GemMarkerColor(color, gem), rim);
+            return;
+        }
         if (MobyGemIconCatalog.TryDraw(context, point, size, rim, gem))
             return;
 

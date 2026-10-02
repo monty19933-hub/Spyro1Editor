@@ -54,13 +54,14 @@ public static class UniversalBehaviorBundleBuilder
         IReadOnlyList<(string SourceKey, UniversalOverlay Source, IReadOnlyList<int> Classes)> sources, uint baseAddress,
         IReadOnlyList<int>? dragonflyEggClasses = null, IReadOnlyList<int>? signClasses = null,
         IReadOnlyDictionary<string, IReadOnlyDictionary<int, int>>? classMaps = null, bool remapSaveRows = false, byte[]? nativeExecutable = null,
-        UniversalOverlay? nativeDestinationOwner = null)
+        UniversalOverlay? nativeDestinationOwner = null, IReadOnlyList<int>? highValueGemClasses = null)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
         int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
         bool Remaps(string key) => classMaps != null && classMaps.TryGetValue(key, out var cm) && cm.Any(k => k.Key != k.Value);
         string InitTag(string key, int c) => Remaps(key) ? $"i_{key}_{c:X3}" : "i_" + key;
-        List<UniversalAsmPart> parts = [UniversalSpecialBehaviors.SignHookPreamble(signClasses is { Count: > 0 })];
+        bool hasHighValueGems = highValueGemClasses is { Count: > 0 };
+        List<UniversalAsmPart> parts = [UniversalSpecialBehaviors.SignHookPreamble(signClasses is { Count: > 0 } || hasHighValueGems)];
         var destinationGems = (classMaps?.Values.SelectMany(m => UniversalGemCollectionAdapter.GemMappings(m)) ?? [])
             .GroupBy(p => p.Value).Select(g => g.Select(p => p.Key).Distinct().Count() == 1 ? g.First() :
                 throw new InvalidDataException("Destination gem collection has an ambiguous canonical class owner."))
@@ -99,6 +100,11 @@ public static class UniversalBehaviorBundleBuilder
         if (dragonflyEggClasses is { Count: > 0 })
         {
             w.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: "egg_upd"));
+            w.Emit(UniversalMips.Nop);
+        }
+        if (hasHighValueGems)
+        {
+            w.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: "high_gem_upd"));
             w.Emit(UniversalMips.Nop);
         }
         w.Emit(UniversalMips.EncodeI(35, 29, 31, 0x10));
@@ -190,7 +196,29 @@ public static class UniversalBehaviorBundleBuilder
         }
         if (dragonflyEggClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.DragonflyEggUpdate(dragonflyEggClasses, "egg_upd", remapSaveRows));
-        if (signClasses is { Count: > 0 })
+        if (hasHighValueGems)
+        {
+            parts.Add(UniversalSpecialBehaviors.HighValueGemUpdate(highValueGemClasses!, "high_gem_upd", remapSaveRows));
+            parts.Add(UniversalSpecialBehaviors.HighValueGemDraw(highValueGemClasses!, "high_gem_draw"));
+            UniversalAsmPart draw = new();
+            draw.Label("sign_draw");
+            draw.Emit(UniversalMips.EncodeI(9, 29, 29, -24));
+            draw.Emit(UniversalMips.EncodeI(43, 29, 31, 16));
+            if (signClasses is { Count: > 0 })
+            {
+                parts.Add(UniversalSpecialBehaviors.SignDraw(signClasses, "sign_draw_native"));
+                draw.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: "sign_draw_native"));
+                draw.Emit(UniversalMips.Nop);
+            }
+            draw.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: "high_gem_draw"));
+            draw.Emit(UniversalMips.Nop);
+            draw.Emit(UniversalMips.EncodeI(35, 29, 31, 16));
+            draw.Emit(UniversalMips.Nop);
+            draw.Emit(UniversalMips.JrRa);
+            draw.Emit(UniversalMips.EncodeI(9, 29, 29, 24));
+            parts.Add(draw);
+        }
+        else if (signClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.SignDraw(signClasses, "sign_draw"));
         var (code, labels) = Assemble(parts, baseAddress);
         return new(baseAddress, code, labels["wrap_upd"], labels["wrap_init"], reports)

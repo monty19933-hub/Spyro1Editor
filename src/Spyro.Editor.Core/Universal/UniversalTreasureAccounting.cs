@@ -20,6 +20,8 @@ internal static class UniversalTreasureAccounting
         if (sourceSemanticRow.Length != UniversalLevelData.RowStride)
             throw new InvalidDataException("Treasure accounting requires a complete native source-semantic actor row.");
         int sourceClass = BinaryPrimitives.ReadUInt16LittleEndian(sourceSemanticRow.AsSpan(0x36));
+        if (UniversalHighValueGems.ValueForClass(sourceClass) is > 0 and var highValue)
+            return sourceSemanticRow[0x50] == 0x18 ? highValue : 0;
         // A visible gem owns its value encoding. Its unrelated reward byte must
         // not become a second interpretation when an authored kind/value changes.
         if (GemValue.TryFromIdByte(sourceClass, out _))
