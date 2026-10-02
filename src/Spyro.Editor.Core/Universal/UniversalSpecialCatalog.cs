@@ -16,7 +16,7 @@ public static class UniversalSpecialCatalog
 
     public static bool RequiresJapaneseSource(string? id) => id != null && !UniversalHighValueGems.IsId(id);
 
-    public static bool NeedsRenderHook(string? id) => id == UniversalDragonflyEggs.SignId || UniversalHighValueGems.IsId(id);
+    public static bool NeedsRenderHook(string? id) => id == UniversalDragonflyEggs.SignId;
 
     public static string? SpecialIdForClass(int classId) =>
         classId == UniversalHighValueGems.TealClass ? UniversalHighValueGems.TealId

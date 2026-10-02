@@ -13,6 +13,14 @@ public static class MobyEditStore
         if (!File.Exists(path))
             return 0;
 
+        using FileStream stream = File.OpenRead(path);
+        using JsonDocument document = JsonDocument.Parse(stream);
+        // Rebuild additions from the manifest on every load. Their editor indices
+        // are not original native/legacy row references, even when numbers overlap.
+        for (int i = mobys.Count - 1; i >= 0; i--)
+            if (mobys[i].IsAdded)
+                mobys.RemoveAt(i);
+
         foreach (Moby moby in mobys)
         {
             moby.Position = moby.OriginalPosition;
@@ -65,10 +73,13 @@ public static class MobyEditStore
             moby.LoadedNativeEditSummary = "";
         }
 
-        using FileStream stream = File.OpenRead(path);
-        using JsonDocument document = JsonDocument.Parse(stream);
         if (!document.RootElement.TryGetProperty("edits", out JsonElement editsElement) || editsElement.ValueKind != JsonValueKind.Array)
             return 0;
+
+        int[] reservedIndices = editsElement.EnumerateArray().Where(IsAddEdit)
+            .Select(edit => JsonValue.GetInt32(edit, "index", -1)).Where(index => index >= 0).ToArray();
+        int[] reservedTrueIndices = editsElement.EnumerateArray().Where(IsAddEdit)
+            .Select(edit => JsonValue.GetInt32(edit, "trueIndex", -1)).Where(index => index >= 0).ToArray();
 
         Dictionary<int, Moby> byIndex = mobys.ToDictionary(moby => moby.Index);
         Dictionary<int, Moby> byTrueIndex = mobys
@@ -81,15 +92,17 @@ public static class MobyEditStore
         int applied = 0;
         foreach (JsonElement edit in editsElement.EnumerateArray())
         {
-            Moby? moby = ResolveMoby(edit, byIndex, byTrueIndex, byEditorControlKind);
-            if (moby == null && IsAddEdit(edit))
+            Moby? moby;
+            if (IsAddEdit(edit))
             {
-                moby = CreateAddedMoby(edit, mobys);
+                moby = CreateAddedMoby(edit, mobys, reservedIndices, reservedTrueIndices);
                 mobys.Add(moby);
                 byIndex[moby.Index] = moby;
                 if (moby.TrueIndex >= 0)
                     byTrueIndex[moby.TrueIndex] = moby;
             }
+            else
+                moby = ResolveMoby(edit, byIndex, byTrueIndex, byEditorControlKind);
 
             if (moby == null)
                 continue;
@@ -277,10 +290,18 @@ public static class MobyEditStore
             || string.Equals(JsonValue.GetString(edit, "editKind"), "add", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static Moby CreateAddedMoby(JsonElement edit, IList<Moby> mobys)
+    private static Moby CreateAddedMoby(JsonElement edit, IList<Moby> mobys,
+        IReadOnlyList<int> reservedIndices, IReadOnlyList<int> reservedTrueIndices)
     {
-        int index = JsonValue.GetInt32(edit, "index", NextIndex(mobys));
-        int trueIndex = JsonValue.GetInt32(edit, "trueIndex", NextTrueIndex(mobys));
+        int index = JsonValue.GetInt32(edit, "index", -1);
+        int trueIndex = JsonValue.GetInt32(edit, "trueIndex", -1);
+        // Old buggy loads could re-save an addition with an original actor's
+        // indices. Recover that addition without touching the original, while
+        // leaving the other additions' saved indices and placement IDs intact.
+        if (index < 0 || mobys.Any(moby => moby.Index == index))
+            index = Math.Max(NextIndex(mobys), reservedIndices.DefaultIfEmpty(-1).Max() + 1);
+        if (trueIndex < 0 || mobys.Any(moby => moby.TrueIndex == trueIndex))
+            trueIndex = Math.Max(NextTrueIndex(mobys), reservedTrueIndices.DefaultIfEmpty(-1).Max() + 1);
         int type = Math.Clamp(JsonValue.GetInt32(edit, "typeEditedHex", JsonValue.GetInt32(edit, "typeHex", 0x20)), 0, 255);
         int state = Math.Clamp(JsonValue.GetInt32(edit, "stateEditedHex", JsonValue.GetInt32(edit, "stateHex", 0)), 0, 255);
         int yawByte = ReadYawByte(edit, 0);
@@ -300,7 +321,7 @@ public static class MobyEditStore
         {
             Index = index,
             TrueIndex = trueIndex,
-            LegacyIndex = JsonValue.GetInt32(edit, "legacyIndex", MobyLoader.GetLegacyAliasIndex(trueIndex)),
+            LegacyIndex = MobyLoader.GetLegacyAliasIndex(trueIndex),
             Position = original,
             OriginalPosition = original,
             Type = type,
@@ -512,6 +533,11 @@ public static class MobyEditStore
             changed = true;
         if (moby.SourceCloneTrueIndex >= 0)
             changed = true;
+
+        // These two authored variants use the current gem palette. Older saved
+        // display colors must not override it after the template is restored.
+        if (moby.IsHighValueGem)
+            ApplyGemColor(moby);
 
         return changed;
     }

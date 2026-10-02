@@ -1,5 +1,14 @@
 # Spyro Editor 1.0.4 — supported scope and limitations
 
+- Teal 50 and rainbow 100 gems are available in every level's object browser,
+  with brighter, double-size models, idle sparkles, collection bursts and native
+  treasure/save accounting. Normal Create BIN only needs the USA disc for these
+  gems. All 35 retail slots and the fresh level passed composition/readback
+  coverage; a full level can still require explicit removals to fit. Native
+  collection and card persistence were checked in Artisans, with collection
+  and the revised appearance also checked in the fresh level. This is not a
+  full playthrough of every destination or every gem mixture.
+
 - Portal destinations and per-level Return Home routes are editable. Routes
   require the original physical doorway and its travel path to remain present.
   Moving its stone arch is a separate terrain edit. Several doorways can share

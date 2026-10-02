@@ -3,7 +3,7 @@ namespace Spyro.Editor.Core.Universal;
 public static partial class UniversalSpecialBehaviors
 {
     /// <summary>Placed loose gems: spin, proximity pickup, exact native treasure/save
-    /// award, bounded idle/collection effects, and retirement. Popup age advances even offscreen.</summary>
+    /// award, bounded idle/collection effects, and retirement. Native MarkCollected owns the popup.</summary>
     internal static UniversalAsmPart HighValueGemUpdate(IReadOnlyCollection<int> gemClasses, string tag, bool remapSaveRows = false)
     {
         ValidateHighGems(gemClasses);
@@ -23,8 +23,6 @@ public static partial class UniversalSpecialBehaviors
         }
         a.J(tag + "_loop"); a.Nop(); a.L(tag + "_gem");
         a.I(35, S1, S3, 0); a.Nop(); a.Br(4, S3, Zero, tag + "_loop"); a.Nop();
-        a.I(35, S3, V0, 0); a.Nop(); a.Br(4, V0, Zero, tag + "_age_done"); a.Nop();
-        a.I(9, V0, V0, -1); a.I(43, S3, V0, 0); a.L(tag + "_age_done");
         a.I(36, S1, V0, 0x48); a.Nop(); a.I(11, V0, V0, 0x80);
         a.Br(4, V0, Zero, tag + "_loop"); a.Nop();
         // Suppress already saved placed gems independently of the retail loader's
@@ -64,7 +62,6 @@ public static partial class UniversalSpecialBehaviors
         a.I(9, Zero, A0, 50); a.J(tag + "_award"); a.Nop();
         a.L(tag + "_rainbow"); a.I(9, Zero, A0, 100);
         a.L(tag + "_award"); a.Jal(MarkCollected); a.R(S1, Zero, A1, 0, 0x21);
-        a.I(9, Zero, V0, UniversalHighValueGems.PopupFrames); a.I(43, S3, V0, 0);
         a.I(9, Zero, V0, 6); a.I(43, Sp, V0, 0x28);
         a.I(9, Zero, V0, UniversalHighValueGems.IdleSparkleLimit); a.I(43, Sp, V0, 0x24);
         // Type12/kind2 copies the actor coordinates synchronously. Each RGB channel
@@ -92,7 +89,7 @@ public static partial class UniversalSpecialBehaviors
         // fallback at capacity. Its certified next-free pointer includes freed slots.
         a.I(35, T0, T1, 0x5824); a.I(35, T0, T2, 0x5738); a.I(9, T1, T1, 0x2000);
         a.Br(4, T1, T2, tag + "_loop"); a.Nop();
-        // Word4 is an active-only cooldown. After retirement the popup owns words4/8/12.
+        // Word4 is a transient active-only sparkle cooldown; native glyphs own their properties.
         a.I(35, S3, V0, 4); a.Nop(); a.I(9, V0, V0, -1);
         a.Br(7, V0, Zero, tag + "_loop"); a.I(43, S3, V0, 4);
         // Eight attempts per scan and a thirty-two-update cooldown prevent scan
@@ -108,65 +105,6 @@ public static partial class UniversalSpecialBehaviors
         a.I(35, Sp, Ra, 0x20); a.I(35, Sp, S0, 0x10); a.I(35, Sp, S1, 0x14);
         a.I(35, Sp, S2, 0x18); a.I(35, Sp, S3, 0x1C); a.Nop();
         a.Part.Emit(UniversalMips.JrRa); a.I(9, Sp, Sp, 0x30);
-        return a.Part;
-    }
-
-    /// <summary>Render after the engine rebuilds its visible list: native HUD letters
-    /// show the exact 50/100 amount, rising for 45 updates from private row properties.</summary>
-    internal static UniversalAsmPart HighValueGemDraw(IReadOnlyCollection<int> gemClasses, string tag)
-    {
-        ValidateHighGems(gemClasses);
-        const int S2 = 18;
-        var a = new Asm(); a.L(tag);
-        a.I(9, Sp, Sp, -0x48); a.I(43, Sp, Ra, 0x40); a.I(43, Sp, S0, 0x34);
-        a.I(43, Sp, S1, 0x38); a.I(43, Sp, S2, 0x3C);
-        // Match the native gem HUD classifier and exclude transition/rescue/menu modes.
-        a.I(15, Zero, T0, 0x8007); a.I(35, T0, V0, 0x5690); a.Nop();
-        a.Br(5, V0, Zero, tag + "_return"); a.Nop();
-        a.I(35, T0, V0, 0x57D8); a.Nop(); a.Br(5, V0, Zero, tag + "_return"); a.Nop();
-        a.I(15, Zero, T0, 0x8007); a.I(35, T0, S0, 0x5828); a.I(35, T0, S2, 0x5890); a.Nop();
-        a.L(tag + "_loop");
-        a.R(S0, S2, V0, 0, 0x2B); a.Br(4, V0, Zero, tag + "_done"); a.R(S0, Zero, S1, 0, 0x21);
-        a.I(9, S0, S0, 0x58); a.I(37, S1, T0, 0x36); a.Nop();
-        foreach (int cls in gemClasses.Order())
-        {
-            a.I(9, Zero, T1, cls); a.Br(4, T0, T1, tag + "_gem"); a.Nop();
-        }
-        a.J(tag + "_loop"); a.Nop(); a.L(tag + "_gem");
-        a.I(35, S1, T1, 0); a.Nop(); a.Br(4, T1, Zero, tag + "_loop"); a.Nop();
-        a.I(35, T1, T2, 0); a.Nop(); a.Br(4, T2, Zero, tag + "_loop"); a.Nop();
-        a.I(11, T2, V0, UniversalHighValueGems.PopupFrames + 1); a.Br(4, V0, Zero, tag + "_loop"); a.Nop();
-        // The placed actor is already FD and keeps its properties/class. Source FreeMoby
-        // excludes the dynamic freeing path before either field could be reclaimed.
-        a.I(36, S1, V0, 0x48); a.I(9, Zero, T1, 0xFD); a.Br(5, V0, T1, tag + "_loop"); a.Nop();
-        a.I(9, Zero, T1, UniversalHighValueGems.TealClass); a.Br(5, T0, T1, tag + "_rainbow"); a.Nop();
-        a.I(9, Zero, V0, 0x3035); a.I(43, Sp, V0, 0x28); // "50\0"
-        a.I(9, Zero, V0, 0xEE); a.J(tag + "_position"); a.Nop();
-        a.L(tag + "_rainbow"); a.I(15, Zero, V0, 0x30); a.I(13, V0, V0, 0x3031); a.I(43, Sp, V0, 0x28); // "100\0"
-        a.I(9, Zero, V0, 0x10A);
-        a.L(tag + "_position"); a.I(43, Sp, V0, 0x18);
-        a.R(Zero, T2, V0, 1, 2); a.I(9, V0, V0, 75); a.I(43, Sp, V0, 0x1C);
-        a.I(9, Zero, V0, 0x1100); a.I(43, Sp, V0, 0x20);
-        // Construct a contiguous step vector in the private actor's otherwise unused
-        // properties words4/8/12; they are transient and never enter the native save.
-        a.I(35, S1, T1, 0); a.Nop(); a.I(9, Zero, V0, 0x10); a.I(43, T1, V0, 4);
-        a.I(43, T1, Zero, 8); a.I(9, Zero, V0, 0x1100); a.I(43, T1, V0, 12);
-        // Reserve native visible-list capacity for every popup, including projects
-        // where many gems are collected in one update.
-        a.La(T3, VisibleList); a.I(9, Zero, T4, 0);
-        a.L(tag + "_visible"); a.I(35, T3, V0, 0); a.Nop();
-        a.Br(4, V0, Zero, tag + "_visible_done"); a.I(9, T3, T3, 4);
-        a.J(tag + "_visible"); a.I(9, T4, T4, 1);
-        a.L(tag + "_visible_done"); a.I(11, T4, V0, VisibleListLimit);
-        a.Br(4, V0, Zero, tag + "_done"); a.Nop();
-        a.I(9, Zero, V0, SignTextStyle); a.I(43, Sp, V0, 0x10);
-        a.I(9, Sp, A0, 0x28); a.I(9, Sp, A1, 0x18); a.I(9, T1, A2, 4);
-        a.Jal(SpawnText); a.I(9, Zero, A3, 0x12);
-        a.J(tag + "_loop"); a.Nop();
-        a.L(tag + "_done"); a.Jal(FlushHudText); a.Nop();
-        a.L(tag + "_return");
-        a.I(35, Sp, Ra, 0x40); a.I(35, Sp, S0, 0x34); a.I(35, Sp, S1, 0x38); a.I(35, Sp, S2, 0x3C); a.Nop();
-        a.Part.Emit(UniversalMips.JrRa); a.I(9, Sp, Sp, 0x48);
         return a.Part;
     }
 

@@ -30,6 +30,8 @@ or **Rainbow gem (100)**. Place, move, duplicate and remove them with the usual
 object tools. Both use the USA source disc. Save the level and use **Create BIN**
 to include them in the game. They add 50 or 100 to collected treasure, increase
 the level's available total and retain their collected state in ordinary saves.
+Both gems are twice the normal gem size, with bright colours and sparkles while
+waiting to be collected. Pickup uses the game's own rising value display.
 
 They can be placed in existing or fresh levels, subject to normal level capacity.
 If a full level needs room, use **Find space for this object…** and review the

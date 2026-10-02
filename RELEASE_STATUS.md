@@ -1,3 +1,34 @@
+# V1.0.4 high-value gem checkpoint
+
+Branch: `feature/high-value-gems-20261001`. Teal 50 and rainbow 100 gems
+are placeable through Add Object in every level, including the fresh level.
+They use brighter, double-size native models with bounded idle sparkles,
+collection bursts and the game's native rising value numerals. Collection adds
+50/100 to global and level treasure, and normal memory-card saves preserve it.
+The ordinary USA-only Create BIN path includes these gems.
+
+The final Release regression gate passed **345 checks, zero failures**. Native
+instruction checks verify award amounts, collected bits, cleanup, particle
+limits and native popup digits. Composition/readback covers 144 combinations
+across all 35 retail slots and the fresh slot: 130 fit unchanged and 14 report
+capacity refusal. Explicit object removal can create space; no automatic
+removal is performed. This does not complete universal Moby gameplay.
+
+Artisans native collection, ordinary save and cold reload passed. The final
+appearance and effects passed native collection in the fresh level (193/193
+including all seven gem values). Final package and runtime receipts are recorded
+in [the gem checkpoint report](docs/research/high-value-gems-release-20261001.md).
+A save/reopen regression also corrected added objects incorrectly binding to an
+original row through a legacy index alias; old affected additions recover without
+replacing the original object.
+
+Original discs, the user's project, earlier packages, cards and runtime
+candidates are preserved. Fly Anywhere remains deferred. Mac release packaging
+uses Developer ID signing without notarization; Windows runtime remains
+untested. No remote release has been published.
+
+---
+
 # V1.0.3 portal routing and textured terrain checkpoint
 
 Branch: `release/universal-gameplay-20261001`. Original discs, the user's project,

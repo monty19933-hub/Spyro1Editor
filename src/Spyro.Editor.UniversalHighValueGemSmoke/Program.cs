@@ -12,17 +12,17 @@ int[] classes=[UniversalHighValueGems.TealClass,UniversalHighValueGems.RainbowCl
 Check(UniversalHighValueGems.ValueForClass(classes[0])==50&&UniversalHighValueGems.ValueForClass(classes[1])==100,"two authored native awards");
 for(int c=0;c<512;c++)if(!classes.Contains(c))Check(UniversalHighValueGems.ValueForClass(c)==0,"no retail reward selector changed");
 Check(Refuses(()=>UniversalSpecialBehaviors.HighValueGemUpdate([0x57],"bad")),"retail native class refused");
-Check(Refuses(()=>UniversalSpecialBehaviors.HighValueGemDraw([classes[0],classes[0]],"bad")),"duplicate class refused");
+Check(Refuses(()=>UniversalSpecialBehaviors.HighValueGemUpdate([classes[0],classes[0]],"bad")),"duplicate class refused");
 const uint basis=0x80090000;
 var (update,ul)=UniversalBehaviorBundleBuilder.Assemble([UniversalSpecialBehaviors.HighValueGemUpdate(classes,"high_update")],basis);
-var (draw,dl)=UniversalBehaviorBundleBuilder.Assemble([UniversalSpecialBehaviors.HighValueGemDraw(classes,"high_draw")],basis);
-Check(update.Length>0&&draw.Length>0,"bounded native routines assembled");
+Check(update.Length>0,"bounded native update assembled");
+Check(classes.All(c=>!UniversalSpecialCatalog.NeedsRenderHook(UniversalHighValueGems.IdForClass(c))),"native pickup text needs no editor render hook");
 Check(update.Length <= 792,"idle sparkle native code stays within its 192-byte resident growth allowance");
 if(args.Length==2&&args[0]=="--emit")
 {
  var remapped=UniversalBehaviorBundleBuilder.Assemble([UniversalSpecialBehaviors.HighValueGemUpdate(classes,"high_update",true)],basis).Code;
  var mark=Spyro.Editor.Core.Exporting.NativeMobySaveMap.Windows().Single(w=>w.Address==0x8003B854);
- File.WriteAllText(args[1],JsonSerializer.Serialize(new{Base=basis,Update=Convert.ToHexString(update),RemappedUpdate=Convert.ToHexString(remapped),Draw=Convert.ToHexString(draw),Classes=classes,PopupFrames=UniversalHighValueGems.PopupFrames,IdleSparkleFrames=UniversalHighValueGems.IdleSparkleFrames,IdleSparkleLimit=UniversalHighValueGems.IdleSparkleLimit,IdleSparkleRadius=UniversalHighValueGems.IdleSparkleRadius,RemappedMark=Convert.ToHexString(mark.Code)}));
+ File.WriteAllText(args[1],JsonSerializer.Serialize(new{Base=basis,Update=Convert.ToHexString(update),RemappedUpdate=Convert.ToHexString(remapped),Classes=classes,IdleSparkleFrames=UniversalHighValueGems.IdleSparkleFrames,IdleSparkleLimit=UniversalHighValueGems.IdleSparkleLimit,IdleSparkleRadius=UniversalHighValueGems.IdleSparkleRadius,RemappedMark=Convert.ToHexString(mark.Code)}));
  Console.WriteLine($"HIGH_VALUE_GEM_EMIT_OK checks={checks}");return;
 }
 if(args.Length==4&&args[0]=="--emit-particles")
@@ -53,8 +53,12 @@ foreach(var asset in assets)
  for(int p=60;p<116;p+=4)
  {
   Check(asset.Package[p+3]==original[p+3],"colour command byte preserved");
-  Check(Math.Max(asset.Package[p],Math.Max(asset.Package[p+1],asset.Package[p+2]))>=224,"bright native palette never attenuated by donor gray");
-  if(asset.ClassId==UniversalHighValueGems.TealClass)Check(asset.Package.AsSpan(p,3).SequenceEqual(new byte[]{48,255,232}),"consistent vivid teal RGB");
+  Check(Math.Max(asset.Package[p],Math.Max(asset.Package[p+1],asset.Package[p+2]))>=(asset.ClassId==UniversalHighValueGems.TealClass?175:224),"bright native palette never attenuated by donor gray");
+  if(asset.ClassId==UniversalHighValueGems.TealClass)
+  {
+   byte[][] shades=[[120,255,240],[32,200,190],[75,240,215],[30,200,200],[165,255,245],[40,225,210],[18,175,165]];
+   Check(asset.Package.AsSpan(p,3).SequenceEqual(shades[((p-60)/4)%shades.Length]),"seven bright teal shades retain facet definition");
+  }
  }
  Check(UniversalSharedModelAssets.CountDerivedSimplePackage(asset.Package).SequenceEqual(asset.Package),"native simple colour-index bounds readback");
  var preview=NativeSimpleGouraudModelGeometry.Decode(asset.Package);
@@ -68,8 +72,8 @@ foreach(byte overflow in new byte[]{64,191})
 }
 Check(lib.SharedModelPackage(0x57).SequenceEqual(original),"retail purple shared model unchanged");
 UniversalHighValueGems.RequireNativeOwner(lib.Disc.Exe);
-Check(true,"certified native collection/text owners");
-foreach(var (address,n) in new[]{(0x80053570u,0x98),(0x80053608u,0x9C),(0x80052568u,0x64),(0x800181ACu,0x2A0),(0x80018880u,0x80),(0x8003B854u,0x180)})
+Check(true,"certified native collection/numeral popup owners");
+foreach(var (address,n) in new[]{(0x80053570u,0x98),(0x80053608u,0x9C),(0x80052568u,0x64),(0x800557CCu,0x190),(0x8003B854u,0x180)})
  for(int i=0;i<n;i++){var altered=lib.Disc.Exe.ToArray();altered[(int)(address-UniversalExeBindings.ExeBase)+i]^=1;Check(Refuses(()=>UniversalHighValueGems.RequireNativeOwner(altered)),"every native owner byte guarded");}
 var mapped=lib.Disc.Exe.ToArray();Spyro.Editor.Core.Exporting.NativeMobySaveMap.PatchExe(mapped);UniversalHighValueGems.RequireNativeOwner(mapped);Check(true,"canonical native logical-save mapping allowed");
 Console.WriteLine($"HIGH_VALUE_GEM_SOURCE_OK checks={checks}");

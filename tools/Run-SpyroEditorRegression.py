@@ -207,6 +207,7 @@ CORE_CASES = (
     ("UniversalRowRemovalSmoke", "UNIVERSAL_ROW_REMOVAL_CHECKS_OK"),
     ("UniversalCapacityPlanSmoke", "UNIVERSAL_CAPACITY_PLAN_OK"),
     ("UniversalIdentitySmoke", "UNIVERSAL_IDENTITY_OK"),
+    ("AddedMobyEditRoundTripSmoke", "ADDED_MOBY_FULL_RETAIL_SAVE_REOPEN_REGRESSION_OK"),
     ("NativeMobySaveMapSmoke", "NATIVE_MOBY_SAVE_MAP_SOURCE_FREE_OK"),
     ("UniversalJumpModelOwnershipSmoke", "UNIVERSAL_JUMP_MODEL_FREE_OK"),
     ("NativePortalRouteRuntimeSmoke", "NATIVE_PORTAL_ROUTE_FREE_OK"),

@@ -61,7 +61,7 @@ public static class UniversalBehaviorBundleBuilder
         bool Remaps(string key) => classMaps != null && classMaps.TryGetValue(key, out var cm) && cm.Any(k => k.Key != k.Value);
         string InitTag(string key, int c) => Remaps(key) ? $"i_{key}_{c:X3}" : "i_" + key;
         bool hasHighValueGems = highValueGemClasses is { Count: > 0 };
-        List<UniversalAsmPart> parts = [UniversalSpecialBehaviors.SignHookPreamble(signClasses is { Count: > 0 } || hasHighValueGems)];
+        List<UniversalAsmPart> parts = [UniversalSpecialBehaviors.SignHookPreamble(signClasses is { Count: > 0 })];
         var destinationGems = (classMaps?.Values.SelectMany(m => UniversalGemCollectionAdapter.GemMappings(m)) ?? [])
             .GroupBy(p => p.Value).Select(g => g.Select(p => p.Key).Distinct().Count() == 1 ? g.First() :
                 throw new InvalidDataException("Destination gem collection has an ambiguous canonical class owner."))
@@ -197,28 +197,8 @@ public static class UniversalBehaviorBundleBuilder
         if (dragonflyEggClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.DragonflyEggUpdate(dragonflyEggClasses, "egg_upd", remapSaveRows));
         if (hasHighValueGems)
-        {
             parts.Add(UniversalSpecialBehaviors.HighValueGemUpdate(highValueGemClasses!, "high_gem_upd", remapSaveRows));
-            parts.Add(UniversalSpecialBehaviors.HighValueGemDraw(highValueGemClasses!, "high_gem_draw"));
-            UniversalAsmPart draw = new();
-            draw.Label("sign_draw");
-            draw.Emit(UniversalMips.EncodeI(9, 29, 29, -24));
-            draw.Emit(UniversalMips.EncodeI(43, 29, 31, 16));
-            if (signClasses is { Count: > 0 })
-            {
-                parts.Add(UniversalSpecialBehaviors.SignDraw(signClasses, "sign_draw_native"));
-                draw.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: "sign_draw_native"));
-                draw.Emit(UniversalMips.Nop);
-            }
-            draw.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: "high_gem_draw"));
-            draw.Emit(UniversalMips.Nop);
-            draw.Emit(UniversalMips.EncodeI(35, 29, 31, 16));
-            draw.Emit(UniversalMips.Nop);
-            draw.Emit(UniversalMips.JrRa);
-            draw.Emit(UniversalMips.EncodeI(9, 29, 29, 24));
-            parts.Add(draw);
-        }
-        else if (signClasses is { Count: > 0 })
+        if (signClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.SignDraw(signClasses, "sign_draw"));
         var (code, labels) = Assemble(parts, baseAddress);
         return new(baseAddress, code, labels["wrap_upd"], labels["wrap_init"], reports)

@@ -17,7 +17,6 @@ public static partial class UniversalHighValueGems
     // Every original USA row, local/shared registration, update dispatch and integer
     // immediate in all 35 overlays/the executable excludes these two IDs.
     public const int TealClass = 0x1CF, RainbowClass = 0x1DA;
-    public const int PopupFrames = 45;
     public const int ModelScale = 2, IdleSparkleFrames = 32, IdleSparkleLimit = 8, IdleSparkleRadius = 0x1000;
     public const string PurplePackageSha256 = "0c7823412b2a1a1df1da587d6bc9d9cde824062d4b9387715075112db241caea";
     internal const uint TealParticleColour = 0x2C808000, RainbowParticleColour = 0x2C808080;
@@ -87,12 +86,13 @@ public static partial class UniversalHighValueGems
         if (count <= 0 || rgb < 16 || faces > copy.Length)
             throw new InvalidDataException("High-value gem RGB interval is not owned by its simple model.");
         (byte R, byte G, byte B)[] rainbow = [(255, 80, 104), (255, 176, 64), (255, 240, 80), (80, 255, 128), (64, 240, 255), (104, 144, 255), (224, 104, 255)];
+        (byte R, byte G, byte B)[] teal = [(120, 255, 240), (32, 200, 190), (75, 240, 215), (30, 200, 200), (165, 255, 245), (40, 225, 210), (18, 175, 165)];
         for (int i = 0; i < count; i++)
         {
             int p = rgb + i * 4;
             // Indexed RGB is the native unlit colour path. The donor's 127 gray
             // table must not halve the authored palette again.
-            var tint = classId == TealClass ? ((byte)48, (byte)255, (byte)232) : rainbow[i % rainbow.Length];
+            var tint = classId == TealClass ? teal[i % teal.Length] : rainbow[i % rainbow.Length];
             copy[p] = tint.Item1;
             copy[p + 1] = tint.Item2;
             copy[p + 2] = tint.Item3;
@@ -130,7 +130,7 @@ public static partial class UniversalHighValueGems
         return copy;
     }
 
-    /// <summary>Authenticates the native placed retirement path and HUD text owners;
+    /// <summary>Authenticates native placed retirement and the amount-to-numeral popup;
     /// award accepts the original helper or the canonical physical/save-row mapping.</summary>
     public static void RequireNativeOwner(byte[] executable)
     {
@@ -143,8 +143,7 @@ public static partial class UniversalHighValueGems
         Require(0x80053570, 0x98, "2eefe927534faee54464ea9af9e53a9382ff3fafa0f90d50b6a68982dce61ddb");
         Require(0x80053608, 0x9C, "3bf6f2ab0aaba682bc34bb5c4f734e872e144df43022b4e3f389784aa5a11be8");
         Require(0x80052568, 0x64, "602fc31b1351212e5d5c72c39ac59cc86a9afd0226a9a0549192855588498505");
-        Require(0x800181AC, 0x2A0, "abd220f600bf905329074305b9ad933a9d2ca24fe8f8902962aa38bad51d4e64");
-        Require(0x80018880, 0x80, "820b951358c0ed3f9a032141d0b29987735d2475347764f788072c0b541577a7");
+        Require(0x800557CC, 0x190, "ede979bdf91a0602de89166b225633adf582a1c1a4eabd32e81f131271723709");
         var mark = NativeMobySaveMap.Windows().Single(w => w.Address == NativeMobySaveMap.MarkAddress);
         ReadOnlySpan<byte> current = executable.AsSpan((int)(mark.Address - UniversalExeBindings.ExeBase), mark.Code.Length);
         if (!current.SequenceEqual(mark.Code) && Convert.ToHexStringLower(SHA256.HashData(current)) != mark.SourceSha256)
