@@ -21,22 +21,33 @@ Fly Anywhere remains deferred. Full universal Moby gameplay is unfinished.
   coverage check is conservative; arbitrary obstacles and all headings still
   require in-game testing.
 - Missing or corrupt original terrain materials rebuild automatically during
-  ordinary level loading. Actual Artisans UI verification retained all5,199
+  ordinary level loading. Actual Artisans UI verification retained all 5,199
   editable faces, displayed the original materials, raised a selected face
   and undid it without losing textures. Offline missing-material status is
   retained through the outer loading workflow.
 - Final production fresh-route export matches the runtime-verified safe-floor
   BIN byte for byte. Unsafe small-floor exports refuse before staging or
   changing outputs; a small fresh New Game-only scene still exports unchanged.
-- The Gnorc dependency proof advances396 cells past their first ownership
+- The Gnorc dependency proof advances 396 cells past their first ownership
   blocker but adds no successful composition or gameplay coverage. The prior
-  matrix remains105,559/145,285 composed cells, with runtime evidence separate.
+  matrix remains 105,559/145,285 composed cells, with runtime evidence separate.
 
 Exact test and runtime receipts are linked from
 [the portal checkpoint report](docs/research/portal-routing-release-20261001.md)
 and [the texture recovery report](docs/research/terrain-texture-cache-recovery-20261001.md).
-Packaging verification and a final packaged-UI pass are in progress for the
-local V1.0.3 checkpoint. No remote release has been published.
+The final Release gate resolves all 340 checks, including the documented serial
+retry. Both packages passed full verification. The unchanged signed Mac package
+reopened the saved portal routes, displayed textured Artisans with Terrain tools,
+and created the expected route-only BIN through normal Create BIN. The editor is
+left open in the private verification project. Original USA/Japan discs and all
+173 protected user-project files match their preserved hashes.
+
+Final packages are in task-root `outputs/SpyroEditor-V1.0.3-release-r03` and use
+product source commit `6797636626beaae3e711ef97a52edad732da1e13`. Earlier V1.0.3
+folders are retained candidates, not this final package. Mac signing is Developer
+ID without notarization; Windows runtime remains untested. No remote release has
+been published. The final receipt is task-root
+`work/universal-gameplay-20261001/final-checkpoint.json`.
 
 ---
 

@@ -28,9 +28,13 @@ Task-root evidence is outside this checkout at
 `../../work/universal-gameplay-20261001/`. Fixture evidence below is inside the
 checkout at `work/universal-gameplay-20261001/fixtures/`.
 
-- Release regression: 340 checks passed, zero failed, including the later
-  arrival-height fix. Task-root `release-regression-after-arrival-summary.json` retains every
-  command/log path. Portal UI: 18 checks passed in both Release and Debug.
+- Final Release gate: 340 checks passed after one serial build/test retry.
+  A concurrent package publish removed an Avalonia resource intermediate during
+  the first run; the affected publication project rebuilt and passed after both
+  writers finished. `release-regression-checkpoint-summary.json` retains the
+  original result, exact retry commands and all resolved results. An earlier
+  count-specific smoke marker was also corrected when new checks increased its
+  count. Portal UI: 18 checks passed in both Release and Debug.
 - Native portal source validation: 9,440 checks in both configurations, including
   3,276 source-free cases. Delayed scalar initializer tests prove independent
   Town Square and fresh65 update/copy routing. The live imported handler test
@@ -39,6 +43,15 @@ checkout at `work/universal-gameplay-20261001/fixtures/`.
   refusal, previous-version preservation. This is not a crash-durability claim.
 - Production near-portal fixture readback: 1,993 checks, plus 683 owner-matrix
   checks and 361 fresh integration checks. These are source/readback evidence.
+- Final factory/landing integration: 574 production checks. The ordinary
+  exported BIN is byte-identical to R8's runtime candidate. Four small-floor
+  refusals preserve existing or absent output/workspace trees without staging;
+  a separate small fresh New Game-only scene still exports its original floor.
+  `portal-fresh-runtime-r05/fixture-receipt.json`. Landing geometry adds 28
+  source-free assertions, with 3,304 portal checks in Release and Debug. The
+  wider default adds exact compiled geometry and saved-scene preservation
+  checks: 1,164 composition, 32 recovery and 1,747 source-backed replacement
+  export checks, separately from native gameplay.
 - Actual private editor: original Artisans materials rebuilt automatically;
   5,199 faces retained; face3120 raised32 and undone to zero edits. Portal
   destination14 plus paired return saved, and ordinary Create BIN succeeded for
@@ -121,3 +134,27 @@ levels; twenty shorter initializers remain guarded. Cleared Town Square plus
 fresh65 remains refused, independently of the new portal initializer routing.
 Fly Anywhere is deferred. Original discs, protected user projects, cards and
 prior packages remain separate from these private verification artifacts.
+
+## Final local packages and packaged UI
+
+Product commit: `6797636626beaae3e711ef97a52edad732da1e13`. Final Mac arm64 and
+Windows x64 packages are in task-root `outputs/SpyroEditor-V1.0.3-release-r03`.
+The serial build passed the complete package verifier, including stable 1.0.3
+assembly identity and identical shared Core assemblies. Mac is Developer ID
+signed without notarization. Windows execution is not verified. The earlier
+`release-r02` package attempt failed a shared-assembly mismatch while a regression
+build ran concurrently; that candidate remains separate and is not deliverable.
+
+The final signed Mac app was launched unchanged with private project/data paths.
+Artisans displayed its original grass, stone and roof materials with 5,199 faces
+and 174 objects. The Terrain tab retained its editing tools. The saved Stone Hill
+doorway destination Toasty (14) and paired Return Home survived reopening.
+Normal Create BIN succeeded with two route patches and no other edits. Its BIN
+SHA-256 is `7ec3a5fa966dd4b7342bd35a4d55db9d65cf8d80e7108b7b841ddec4772c2256`,
+identical to the earlier private GUI export. The app is left open on textured
+Artisans, Terrain tab. See `portal-gui/packaged-final-ui-receipt.json`.
+
+Final preservation verification matches both original disc hashes and all 173
+protected user-project files. `final-checkpoint.json` records package hashes,
+source archive identity, test receipts, runtime scope and remaining limitations.
+No remote publication occurred.
