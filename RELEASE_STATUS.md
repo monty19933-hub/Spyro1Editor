@@ -1,3 +1,19 @@
+# Follow-up: sound preservation and Flight admission
+
+The integrated particle insertion writer preserves owned sound bytes, including
+zero-valued descriptor tails, and grows the data subfile when padding is too
+small. Checks pass: 1,856 source-free cases and 4,828 checks across all 35 levels.
+A typed Flight dependency refusal also closes copied behavior admission through
+unchanged class IDs; 295 source checks preserve native same-level handlers and
+reject unsupported foreign course objects. The editor Release build is clean.
+
+These are correctness fixes, not completion of Universal Moby gameplay. Positive
+Flight adapters, Magic Crafters ownership, Haunted Towers wizard paths/armor
+links and imported-object visibility are still being worked on. See
+[the follow-up evidence](docs/research/universal-sound-flight-guards-20261002.md).
+
+---
+
 # Universal gameplay implementation — 2 October 2026
 
 Active branch: `release/universal-gameplay-20261002`, continued from clean

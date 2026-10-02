@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using Spyro.Editor.Core.Exporting;
 
 namespace Spyro.Editor.Core.Universal;
 
@@ -74,7 +75,9 @@ public static class UniversalParticleDependencies
         BinaryPrimitives.WriteUInt16LittleEndian(record.AsSpan(2), 8);
         relocatedPackage.AsSpan(0x70, 8).CopyTo(record.AsSpan(4));
         int sfOffset = data.Subfiles()[1].Offset;
-        data.InsertWithinSubfile(1, layout.Offset + 8 + existing.Values.Sum(v => 4 + v.Length) - sfOffset, record);
+        // The final sound descriptor may end in zero bytes that are still owned data.
+        int usedByteLength = new NativeLevelSoundLayout(data.Bytes).SoundEnd - sfOffset;
+        data.InsertWithinSubfile(1, layout.Offset + 8 + existing.Values.Sum(v => 4 + v.Length) - sfOffset, record, usedByteLength);
         BinaryPrimitives.WriteInt32LittleEndian(data.Bytes.AsSpan(layout.Offset), layout.Length + 12);
         BinaryPrimitives.WriteInt32LittleEndian(data.Bytes.AsSpan(layout.Offset + 4), layout.Count + 1);
     }

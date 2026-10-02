@@ -94,13 +94,14 @@ public sealed class UniversalLevelData
     }
 
     /// <summary>Inserts a component record within a subfile, preserving every following byte. Only
-    /// verified zero tail padding is consumed; otherwise the subfile grows by a sector.</summary>
-    public void InsertWithinSubfile(int index, int relativeOffset, ReadOnlySpan<byte> bytes)
+    /// zero tail padding beyond the caller-certified owned byte range is consumed; otherwise the subfile grows by a sector.</summary>
+    public void InsertWithinSubfile(int index, int relativeOffset, ReadOnlySpan<byte> bytes, int usedByteLength)
     {
         if (bytes.Length == 0) return;
         var sf = Subfiles()[index];
-        if (relativeOffset < 0 || relativeOffset > sf.Length) throw new ArgumentOutOfRangeException(nameof(relativeOffset));
-        int padding = Math.Min(bytes.Length, sf.Length - relativeOffset);
+        if (usedByteLength < 0 || usedByteLength > sf.Length) throw new ArgumentOutOfRangeException(nameof(usedByteLength));
+        if (relativeOffset < 0 || relativeOffset > usedByteLength) throw new ArgumentOutOfRangeException(nameof(relativeOffset));
+        int padding = Math.Min(bytes.Length, sf.Length - usedByteLength);
         bool usePadding = padding == bytes.Length && _data.AsSpan(sf.Offset + sf.Length - padding, padding).IndexOfAnyExcept((byte)0) < 0;
         int move = sf.Length - relativeOffset - (usePadding ? bytes.Length : 0);
         if (!usePadding) GrowSubfile(index, Align(bytes.Length, 0x800));

@@ -139,6 +139,7 @@ public static class UniversalBehaviorBundleBuilder
         List<UniversalNativeParticleNoOpProof> particleNoOpProofs = [];
         foreach (var s in sources)
         {
+            UniversalFlightCopiedRootOwnership.RequireCopiedSourceDependencyOwnership(s.SourceKey, s.Source, s.Classes);
             var map = s.Classes.ToDictionary(c => c, c => Mapped(s.SourceKey, c));
             if (classMaps != null && classMaps.TryGetValue(s.SourceKey, out var fullMap)) map = fullMap.ToDictionary();
             UniversalDryCanyonBirdCertificate? birdProof = null;

@@ -132,6 +132,7 @@ public static class UniversalMobyCoverage
 
     public static string FailureKind(Exception e) => e switch
     {
+        UniversalFlightDependencyException => "flight-dependency-ownership",
         _ when e.Message.Contains("class remapping", StringComparison.OrdinalIgnoreCase) || e.Message.Contains("initializer class stores") || e.Message.Contains("Moby ownership chain") || e.Message.Contains("class-store scratch") => "class-remap-ownership",
         _ when e.Message.Contains("Shared class") && e.Message.Contains("alias package") => "shared-model-package",
         UniversalSourceCollisionException => "source-class-collision",

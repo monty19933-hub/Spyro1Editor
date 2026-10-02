@@ -279,6 +279,8 @@ public static class UniversalMobyComposer
                     throw new InvalidDataException($"Class 0x{c:X3} from {sk} has neither a model nor an extractable handler; its dependency is unresolved.");
                 continue;
             }
+            if (mapped != c || !DestHandles(mapped))
+                UniversalFlightCopiedRootOwnership.RequireCopiedSourceDependencyOwnership(sk, s.Overlay, [c]);
             var tr = UniversalDispatchAnalysis.Trace(s.Overlay, sw.TreeStart, c, sw.Seeds, sw.ClassRegister);
             UniversalDryCanyonBirdCertificate? birdProof = null;
             if (c == 0xB8 && string.Equals(sk, "drycanyon", StringComparison.OrdinalIgnoreCase))

@@ -7,6 +7,7 @@
     <RootNamespace>Spyro.Editor.Core</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Spyro.Editor.UniversalParticleBoundarySmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UniversalDryCanyonBirdSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.CrossLevelCandidateFingerprintSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.DiscImageWorkingCopySmoke" />
