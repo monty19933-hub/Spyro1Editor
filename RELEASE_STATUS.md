@@ -1,3 +1,19 @@
+# Follow-up: original Flight chest replacement
+
+A scoped adapter now supports replacing one original Flight chest with a chest
+from another Flight that uses the same objective category. All 13 source/native
+control cases pass 1,011 checks; 295 unsupported Flight checks still pass. The
+Release App builds cleanly. In Night Flight, an imported Icy chest rendered,
+broke under flame, awarded two seconds, appeared as Chests 1/8 in results, and
+returned on native Try Again. Normal export/readback passes separately.
+
+This does not complete universal gameplay or enable Flight objectives in normal
+levels. Other source/destination runtime cases, full course completion,
+persistence, audio and interactive replacement UI acceptance remain open.
+[Evidence and limits](docs/research/universal-flight-chest-20261002.md).
+
+---
+
 # Follow-up: imported actor visibility
 
 New imported rows now use the native unrestricted visibility sector instead of
@@ -9,7 +25,7 @@ imported Firework chest's fuse, sparks, explosion, damage and five-gem reward,
 with both counters and collected flags verified. Audio and card reload remain
 unverified. [Evidence and limits](docs/research/universal-placement-visibility-20261002.md).
 
-Universal gameplay remains in progress, including positive Flight adapters,
+Universal gameplay remains in progress, including further Flight adapters,
 Magic Crafters ownership and Haunted Towers wizard paths/armor links.
 
 ---

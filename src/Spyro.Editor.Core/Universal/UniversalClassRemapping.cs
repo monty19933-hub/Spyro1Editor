@@ -11,7 +11,7 @@ public static class UniversalClassRemapping
 {
     public sealed record SpawnArgument(uint CallPc, uint ConstantPc, int ClassId);
 
-    public static IReadOnlyList<SpawnArgument> ConstantSpawns(UniversalOverlay overlay, IReadOnlySet<uint> instructions)
+    public static IReadOnlyList<SpawnArgument> ConstantSpawns(UniversalOverlay overlay, IReadOnlySet<uint> instructions, UniversalFlightChestCertificate? flightChest = null)
     {
         List<SpawnArgument> result = [];
         IReadOnlyList<UniversalDependencyCall>? boundedCalls = null;
@@ -19,6 +19,7 @@ public static class UniversalClassRemapping
         {
             uint word = overlay.Word(pc);
             if (!UniversalMips.IsJalr(word)) continue;
+            if (flightChest?.SpawnAt(overlay,pc) is { } flightSpawn) { result.Add(flightSpawn);continue; }
             int targetRegister = UniversalMips.Rs(word);
             uint? loadPc = null;
             for (uint q = pc - 4; q + 28 > pc && instructions.Contains(q); q -= 4)
@@ -90,11 +91,11 @@ public static class UniversalClassRemapping
         return UniversalMips.Op(w) == 0 ? UniversalMips.Rd(w) == register : UniversalMips.Rt(w) == register;
     }
 
-    internal static void PatchConstantSpawns(UniversalAsmPart part, UniversalOverlay source, IReadOnlyDictionary<int, int> map)
+    internal static void PatchConstantSpawns(UniversalAsmPart part, UniversalOverlay source, IReadOnlyDictionary<int, int> map, UniversalFlightChestCertificate? flightChest = null)
     {
         if (!map.Any(k => k.Key != k.Value)) return;
         var insns = part.Items.Where(i => i.Orig != null || i.SourcePc != null).Select(i => (i.Orig ?? i.SourcePc)!.Value).ToHashSet();
-        var owned = ConstantSpawns(source, insns);
+        var owned = ConstantSpawns(source, insns, flightChest);
         var reported = UniversalDispatchAnalysis.Dependencies(source, new SortedSet<uint>(insns)).SpawnedClasses;
         foreach (int dependency in reported.Where(c => map.TryGetValue(c, out int mapped) && mapped != c))
             if (!owned.Any(s => s.ClassId == dependency))
