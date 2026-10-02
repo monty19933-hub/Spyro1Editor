@@ -804,6 +804,9 @@ public sealed partial class MainWindow
         AddModernGridButton(primary, _objectSwapCatalogButton, 1);
         AddModernGridButton(primary, _objectAddButton, 2);
         panel.Children.Add(primary);
+        var replaceFlightGate = BuildReplaceFlightGateButton();
+        StyleModernPrimaryButton(replaceFlightGate, ModernTeal);
+        panel.Children.Add(replaceFlightGate);
 
         _objectNativeMovementButton = NewAsyncButton("Edit Native Movement", EditSelectedNativeMovementAsync);
         StyleModernPrimaryButton(_objectNativeMovementButton, Color.FromRgb(111, 86, 174));

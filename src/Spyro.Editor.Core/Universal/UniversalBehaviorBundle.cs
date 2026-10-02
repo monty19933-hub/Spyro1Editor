@@ -60,7 +60,7 @@ public static class UniversalBehaviorBundleBuilder
         UniversalOverlay? nativeDestinationOwner = null, IReadOnlyList<int>? highValueGemClasses = null,
         IReadOnlyDictionary<string, UniversalWhirlwindSoundBinding>? whirlwindSounds = null,
         IReadOnlyDictionary<string, UniversalDryCanyonBirdCertificate>? dryCanyonBirdBranches = null,
-        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null)
+        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
         int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
@@ -140,9 +140,12 @@ public static class UniversalBehaviorBundleBuilder
         List<UniversalNativeParticleNoOpProof> particleNoOpProofs = [];
         foreach (var s in sources)
         {
+            UniversalFlightGateCertificate? flightGate = null;
+            if(flightGates!=null)flightGates.TryGetValue(s.SourceKey,out flightGate);
             UniversalFlightChestCertificate? flightChest = null;
             if(flightChests!=null)flightChests.TryGetValue(s.SourceKey,out flightChest);
             if(flightChest!=null)flightChest.RequireBundle(s.Source,destination,s.Classes,nativeExecutable);
+            else if(flightGate!=null)flightGate.RequireBundle(s.Source,destination,s.Classes,nativeExecutable);
             else UniversalFlightCopiedRootOwnership.RequireCopiedSourceDependencyOwnership(s.SourceKey, s.Source, s.Classes);
             var map = s.Classes.ToDictionary(c => c, c => Mapped(s.SourceKey, c));
             if (classMaps != null && classMaps.TryGetValue(s.SourceKey, out var fullMap)) map = fullMap.ToDictionary();
@@ -152,13 +155,14 @@ public static class UniversalBehaviorBundleBuilder
                 throw new InvalidDataException("Copied Dry Canyon B8 behavior requires its issued state/frame branch proof.");
             var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey, map, birdProof);
             flightChest?.Patch(upd,s.Source,map);
+            flightGate?.Patch(upd,s.Source,map);
             if (map.Any(k => k.Key != k.Value))
             {
                 UniversalNativeModelTailOwnership.MarkOwned(upd, s.Source, nativeExecutable);
                 if (s.SourceKey == "gnorccove") UniversalGnorcCurrentModelRead.MarkOwned(upd, s.Source);
                 particleNoOpProofs.AddRange(UniversalNativeParticleNoOpOwnership.MarkOwned(upd, s.Source, destination, nativeExecutable ?? []));
                 UniversalClassRemapping.PatchOwnedClassReads(upd, s.Source, map, s.Classes);
-                UniversalClassRemapping.PatchConstantSpawns(upd, s.Source, map,flightChest);
+                UniversalClassRemapping.PatchConstantSpawns(upd, s.Source, map,flightChest,flightGate);
             }
             string gemLabel = "gem_collect_" + s.SourceKey;
             List<uint> gemCalls = [.. UniversalGemCollectionAdapter.PatchCalls(upd, s.Source, map, gemLabel, nativeExecutable)];

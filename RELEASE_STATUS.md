@@ -1,3 +1,25 @@
+# Follow-up: original Flight gate replacement
+
+The editor now offers **Replace Flight gate…** for an original course gate,
+with compatible source choices, a capacity check, confirmation and recoverable
+undo after reopening. Gate position and crossing plane remain fixed. Eight
+same-category source/native cells compose; two others correctly exceed memory.
+The integrated checks pass: 1,050 gate checks, 25 actual UI cases, 1,011 chest
+regressions and 295 unsupported Flight guards. The Release App builds cleanly.
+
+In Crystal Flight, an imported Sunny gate rendered, awarded three seconds on
+native crossing, spawned all thirteen fragment classes, appeared as Arches 1/8
+in results, and returned on Try Again. The ordinary UI export is identical to
+the tested content; only native New Game entry selects Crystal for the test.
+The UI checks also cover the supported chest's ordinary Remove/Add workflow.
+[Evidence and limits](docs/research/universal-flight-gate-20261002.md).
+
+Universal gameplay is still in progress. Full Flight completion/persistence,
+other combinations, Magic Crafters ownership and Haunted Towers wizard groups
+remain open. This is a source checkpoint, not a new release package.
+
+---
+
 # Follow-up: original Flight chest replacement
 
 A scoped adapter now supports replacing one original Flight chest with a chest
@@ -9,7 +31,8 @@ returned on native Try Again. Normal export/readback passes separately.
 
 This does not complete universal gameplay or enable Flight objectives in normal
 levels. Other source/destination runtime cases, full course completion,
-persistence, audio and interactive replacement UI acceptance remain open.
+persistence and audio remain open. The later gate checkpoint above adds
+interactive chest replacement UI checks.
 [Evidence and limits](docs/research/universal-flight-chest-20261002.md).
 
 ---

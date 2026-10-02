@@ -49,6 +49,15 @@ proposed removals. Their value is fixed; place the other gem to change its value
 Existing saved games keep their collected identities, so use New Game when
 testing a newly rearranged collection layout.
 
+## Replace a Flight gate
+
+Select an original Flight gate and choose **Replace Flight gate…**. Pick a
+replacement, review its time bonus and fit check, then choose **Replace gate**.
+Only compatible objective categories appear. Keep the rest of the course's
+objects unchanged for this operation. The replacement stays at the original
+gate position; **Undo Object** restores the original, including after reopening
+the project. Save and use **Create BIN** to export it.
+
 ## Portal destinations and Return Home
 
 Open **Game Settings → Portals & Return Home**. Choose a doorway, select its

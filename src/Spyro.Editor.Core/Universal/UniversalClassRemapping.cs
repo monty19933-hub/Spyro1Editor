@@ -11,7 +11,7 @@ public static class UniversalClassRemapping
 {
     public sealed record SpawnArgument(uint CallPc, uint ConstantPc, int ClassId);
 
-    public static IReadOnlyList<SpawnArgument> ConstantSpawns(UniversalOverlay overlay, IReadOnlySet<uint> instructions, UniversalFlightChestCertificate? flightChest = null)
+    public static IReadOnlyList<SpawnArgument> ConstantSpawns(UniversalOverlay overlay, IReadOnlySet<uint> instructions, UniversalFlightChestCertificate? flightChest = null, UniversalFlightGateCertificate? flightGate = null)
     {
         List<SpawnArgument> result = [];
         IReadOnlyList<UniversalDependencyCall>? boundedCalls = null;
@@ -19,6 +19,7 @@ public static class UniversalClassRemapping
         {
             uint word = overlay.Word(pc);
             if (!UniversalMips.IsJalr(word)) continue;
+            if(flightGate?.SpawnAt(overlay,pc) is {} gateSpawn){result.Add(gateSpawn);continue;}
             if (flightChest?.SpawnAt(overlay,pc) is { } flightSpawn) { result.Add(flightSpawn);continue; }
             int targetRegister = UniversalMips.Rs(word);
             uint? loadPc = null;
@@ -91,17 +92,18 @@ public static class UniversalClassRemapping
         return UniversalMips.Op(w) == 0 ? UniversalMips.Rd(w) == register : UniversalMips.Rt(w) == register;
     }
 
-    internal static void PatchConstantSpawns(UniversalAsmPart part, UniversalOverlay source, IReadOnlyDictionary<int, int> map, UniversalFlightChestCertificate? flightChest = null)
+    internal static void PatchConstantSpawns(UniversalAsmPart part, UniversalOverlay source, IReadOnlyDictionary<int, int> map, UniversalFlightChestCertificate? flightChest = null, UniversalFlightGateCertificate? flightGate = null)
     {
         if (!map.Any(k => k.Key != k.Value)) return;
         var insns = part.Items.Where(i => i.Orig != null || i.SourcePc != null).Select(i => (i.Orig ?? i.SourcePc)!.Value).ToHashSet();
-        var owned = ConstantSpawns(source, insns, flightChest);
+        var owned = ConstantSpawns(source, insns, flightChest,flightGate);
         var reported = UniversalDispatchAnalysis.Dependencies(source, new SortedSet<uint>(insns)).SpawnedClasses;
         foreach (int dependency in reported.Where(c => map.TryGetValue(c, out int mapped) && mapped != c))
             if (!owned.Any(s => s.ClassId == dependency))
                 throw new InvalidDataException($"Source class remapping has no proved instruction owner for child 0x{dependency:X3}.");
         foreach (var spawn in owned)
         {
+            if(flightGate?.SpawnCalls.Contains(spawn.CallPc)==true)continue;
             if (!map.TryGetValue(spawn.ClassId, out int mapped))
                 throw new InvalidDataException($"Child class 0x{spawn.ClassId:X3} lacks a source-scoped mapping.");
             if (mapped == spawn.ClassId) continue;

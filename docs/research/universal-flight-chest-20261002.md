@@ -22,8 +22,11 @@ The ordinary export first marks a removed native row with three -480000
 coordinates. The certificate accepts exactly that known staging change for the
 single replacement row, checks all other bytes, then reuses its physical slot.
 It does not waive the destination guard for unrelated edits. Authored chest
-position and yaw remain supported. The normal Remove then Add workflow can
-supply this transaction; interactive UI acceptance is still pending.
+position and yaw remain supported. The normal Remove then Add workflow supplies
+this transaction. The later `flight-gate-ui-integrated-r1.log` includes actual
+catalog controls, saved type/state projection and composition over native
+removal staging for Icy row 28 replacing Night row 0; that UI test does not
+extend the row-28 runtime result below.
 
 ## Verification
 

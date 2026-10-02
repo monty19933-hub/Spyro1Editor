@@ -23,6 +23,14 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+if (args.Contains("--flight-replacement-ui", StringComparer.Ordinal))
+{
+    if (args.Length != 3) throw new ArgumentException("Usage: UiSmoke --flight-replacement-ui <USA.bin> <catalog root>");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    FlightGateReplacementUiCases.Run(args[1], args[2]);
+    return 0;
+}
+
 if (args.Contains("--dragon-colour-ui", StringComparer.Ordinal))
 {
     if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --dragon-colour-ui");

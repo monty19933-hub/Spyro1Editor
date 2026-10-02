@@ -46,6 +46,7 @@ public sealed record UniversalComposeResult(
     public IReadOnlyList<NativeTexturePageOwnedRange> ImportedVramRanges { get; init; } = [];
     public IReadOnlyList<UniversalParticleDependency> ParticleDependencies { get; init; } = [];
     public IReadOnlyList<UniversalFlightChestParticleProof> FlightChestParticleProofs { get; init; } = [];
+    public IReadOnlyList<UniversalFlightGateParticleProof> FlightGateParticleProofs { get; init; } = [];
     public int RestoredObjectLinks { get; init; }
     public int RestoredIndexedObjectLinks { get; init; }
     public int UnresolvedObjectLinks { get; init; }
@@ -189,10 +190,13 @@ public static class UniversalMobyComposer
             throw new UniversalSourceCollisionException($"No proven unused class ID remains for {sk}:0x{c:X3}.");
         }
         var originalDestination = source(destination.Key);
+        var flightGate = UniversalFlightGateOwnership.Capture(destination.Key,dest,destOverlay,originalDestination.Data,originalDestination.Overlay,placements,permanentlyRemoved,source,exe);
+        var flightGates = new Dictionary<string,UniversalFlightGateCertificate>(StringComparer.OrdinalIgnoreCase);
+        if(flightGate!=null)flightGates[flightGate.SourceKey]=flightGate;
         var flightChest = UniversalFlightChestOwnership.Capture(destination.Key,dest,destOverlay,originalDestination.Data,originalDestination.Overlay,placements,permanentlyRemoved,source,exe);
         var flightChests = new Dictionary<string,UniversalFlightChestCertificate>(StringComparer.OrdinalIgnoreCase);
         if(flightChest!=null)flightChests[flightChest.SourceKey]=flightChest;
-        bool originalDestinationAssets = (flightChest != null || destinationData.AsSpan().SequenceEqual(originalDestination.Data.Bytes)) &&
+        bool originalDestinationAssets = (flightChest != null || flightGate != null || destinationData.AsSpan().SequenceEqual(originalDestination.Data.Bytes)) &&
             destinationOverlay.AsSpan().SequenceEqual(originalDestination.Overlay.Bytes);
         bool EquivalentDestination(int c, string sk, out string reason)
         {
@@ -211,6 +215,7 @@ public static class UniversalMobyComposer
         List<UniversalRowTemplate> templates = [];
         Dictionary<(string Source, int Type), UniversalParticleDependency> particleDependencies = [];
         Dictionary<(string Source, int Type), UniversalFlightChestParticleProof> flightParticleProofs = [];
+        Dictionary<(string Source, int Type), UniversalFlightGateParticleProof> gateParticleProofs = [];
         foreach (var p in placements)
         {
             if (p.SpecialId != null)
@@ -229,6 +234,7 @@ public static class UniversalMobyComposer
             }
             var s = source(p.SourceLevelKey);
             var t = UniversalIndexedRows.Capture(s.Data, s.Overlay, s.Data.CaptureRow(p.SourceLevelKey, p.SourceRowIndex));
+            if(flightGates.TryGetValue(p.SourceLevelKey,out var gateTemplateProof))t=gateTemplateProof.PrepareTemplate(t);
             templates.Add(t with { LinkGroupId = p.LinkGroupId });
             work.Enqueue((t.ClassId, p.SourceLevelKey, false));
         }
@@ -287,6 +293,7 @@ public static class UniversalMobyComposer
             if (mapped != c || !DestHandles(mapped))
             {
                 if(flightChests.TryGetValue(sk,out var proof))proof.RequireSource(s.Overlay);
+                else if(flightGates.TryGetValue(sk,out var gateProof))gateProof.RequireSource(s.Overlay);
                 else UniversalFlightCopiedRootOwnership.RequireCopiedSourceDependencyOwnership(sk, s.Overlay, [c]);
             }
             var tr = UniversalDispatchAnalysis.Trace(s.Overlay, sw.TreeStart, c, sw.Seeds, sw.ClassRegister);
@@ -306,6 +313,7 @@ public static class UniversalMobyComposer
             }
             catch (InvalidDataException) when (mapped == c) { /* Existing whole-init fallback remains guarded by bundle extraction. */ }
             if(flightChests.TryGetValue(sk,out var chestProof))chestProof.AddDependencies(s.Overlay,c,spawns);
+            if(flightGates.TryGetValue(sk,out var gateDependencies))gateDependencies.AddDependencies(s.Overlay,c,spawns);
             foreach (int particle in particles)
             {
                 var key = (sk, particle);
@@ -315,6 +323,11 @@ public static class UniversalMobyComposer
                     {
                         var issued=UniversalFlightChestParticles.Inspect(flightParticleCertificate,particle,s.Overlay,destOverlay,s.Data,dest,exe);
                         particleDependencies[key]=issued.Dependency;flightParticleProofs[key]=issued.Proof;
+                    }
+                    else if(flightGates.TryGetValue(sk,out var gateParticleCertificate))
+                    {
+                        var issued=UniversalFlightGateParticles.Inspect(gateParticleCertificate,particle,s.Overlay,destOverlay,s.Data,dest,exe);
+                        particleDependencies[key]=issued.Dependency;gateParticleProofs[key]=issued.Proof;
                     }
                     else particleDependencies[key] = UniversalParticleDependencies.Inspect(sk, particle, s.Data, dest,
                         string.Equals(sk, destination.Key, StringComparison.OrdinalIgnoreCase));
@@ -329,7 +342,7 @@ public static class UniversalMobyComposer
         foreach (string sk in classes.Keys.Select(k => k.Source).Distinct().ToArray())
             if (classes.Any(k => k.Key.Source == sk && k.Key.Class != k.Value.DestinationClass))
                 foreach (var key in classes.Keys.Where(k => k.Source == sk).ToArray())
-                    if (classes[key].DestinationClass == key.Class && DestHandles(key.Class))
+                    if (classes[key].DestinationClass == key.Class && (DestHandles(key.Class) || (key.Class==0x176 && flightGates.ContainsKey(sk))))
                         classes[key] = (AllocateClass(sk, key.Class), classes[key].Dependency);
 
         foreach (int c in specialClasses.Keys)
@@ -503,6 +516,7 @@ public static class UniversalMobyComposer
             if (t.ClassId == 0xB8 && string.Equals(t.SourceLevelKey, "drycanyon", StringComparison.OrdinalIgnoreCase))
                 UniversalDryCanyonBirdBranches.RequireInitialRow(r);
             if(flightChests.TryGetValue(p.SourceLevelKey,out var chestRowProof))chestRowProof.RequireRow(r,t.Properties,t.ClassId);
+            if(flightGates.TryGetValue(p.SourceLevelKey,out var gateRowProof))gateRowProof.RequireRow(r,t.Properties,t.ClassId);
             if (p.SpecialId == null)
             {
                 // Count the actual authored bytes while class still identifies
@@ -553,7 +567,7 @@ public static class UniversalMobyComposer
             var classMaps = classes.GroupBy(k => k.Key.Source).ToDictionary(g => g.Key,
                 g => (IReadOnlyDictionary<int, int>)g.ToDictionary(k => k.Key.Class, k => k.Value.DestinationClass));
             var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps, remapSaveRows, nativeExecutable: exe,
-                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests);
+                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates);
             uint newCopy = (uint)((baseAddress + bundle.Code.Length + 15) & ~15);
             int keep = (int)(copyBuffer - UniversalOverlay.Base);
             byte[] ov = new byte[UniversalLevelData.Align((int)(newCopy - UniversalOverlay.Base), 0x800)];
@@ -632,6 +646,7 @@ public static class UniversalMobyComposer
             UniversalDryCanyonBirdBranches.RequireAnimationFrames(dest.Package(classes[key].DestinationClass));
         foreach (var (key, certificate) in metalModels)
             certificate.RequireShaderFields(dest.Package(classes[key].DestinationClass));
+        if(flightGate!=null)flightGate.RequireFinal(dest,overlay,newRows.Single(),classes[(flightGate.SourceKey,0x161)].DestinationClass);
         if(flightChest!=null)flightChest.RequireFinal(dest,overlay,newRows.Single(),classes[(flightChest.SourceKey,0x12B)].DestinationClass);
         uint finalEnd = RuntimeEnd(dest, copyBuffer);
         uint limit = NormalBufferFloor - RamSafetyMargin;
@@ -651,7 +666,7 @@ public static class UniversalMobyComposer
         for (int i = 0; i < newRows.Count; i++) { mappedRows[incomingOrder[i]] = newRows[i]; mappedSaveRows[incomingOrder[i]] = saveRows[i]; }
         if (placements.Any(p => p.DragonColor != null)) NativeDragonStatueColors.Install(exe);
         return new(destination.Key, imports, mappedRows, ram, arena, freeBefore - vram.FreeBytes, behavior, warnings,
-            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), FlightChestParticleProofs = flightParticleProofs.Values.ToArray(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), RestoredIndexedObjectLinks = templates.Sum(t => t.ImportedRowIndices.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports, WhirlwindSoundImports = whirlwindSounds.Values.ToArray(), MetalTextureBindings = metalBindings, DestinationGemCollectionCalls = destinationGemCalls, DestinationGemCollectionExtraBytes = destinationGemBytes, DestinationGemColourLoads = destinationColourLoads, DestinationGemColourExtraBytes = destinationColourBytes, NativeParticleNoOpProofs = particleNoOpProofs };
+            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), FlightChestParticleProofs = flightParticleProofs.Values.ToArray(), FlightGateParticleProofs = gateParticleProofs.Values.ToArray(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), RestoredIndexedObjectLinks = templates.Sum(t => t.ImportedRowIndices.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports, WhirlwindSoundImports = whirlwindSounds.Values.ToArray(), MetalTextureBindings = metalBindings, DestinationGemCollectionCalls = destinationGemCalls, DestinationGemCollectionExtraBytes = destinationGemBytes, DestinationGemColourLoads = destinationColourLoads, DestinationGemColourExtraBytes = destinationColourBytes, NativeParticleNoOpProofs = particleNoOpProofs };
     }
 
     /// <summary>Class a fully removed native row is switched to: no model, no behavior in any level, never

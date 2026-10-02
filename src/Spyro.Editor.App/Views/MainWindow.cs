@@ -10559,6 +10559,7 @@ public sealed partial class MainWindow : Window
             Id65FreshLevelSceneProjector.IsProjectionGeometry(_currentGeometry);
         bool hasObject = _selectedMoby != null && !_selectedMoby.IsRemoved;
         bool objectHasEdits = hasObject && HasUndoableMobyEdits(_selectedMoby!);
+        bool flightGateLocked = hasObject && IsFlightGateReplacement(_selectedMoby!);
         bool selectedProtectedControl = hasObject && IsReleaseProtectedControlMoby(_selectedMoby!);
         bool selectedEditorControl = hasObject && _selectedMoby!.IsEditorControl;
         bool canUseSwapCatalog = hasObject &&
@@ -10582,16 +10583,17 @@ public sealed partial class MainWindow : Window
 
         SetButtonEnabled(_objectAddButton, hasLevel && !id65ObjectInspectionOnly);
         SetButtonEnabled(_objectRemoveButton, hasObject && !id65ObjectInspectionOnly && !selectedEditorControl && !(_releaseMode && selectedProtectedControl));
-        SetButtonEnabled(_objectEditButton, hasObject && !id65ObjectInspectionOnly);
+        SetButtonEnabled(_objectEditButton, hasObject && !id65ObjectInspectionOnly && !flightGateLocked);
         RefreshNativeMovementActionButton();
+        RefreshFlightGateReplacementAction();
         SetButtonEnabled(_objectSwapCatalogButton, canUseSwapCatalog && !id65ObjectInspectionOnly);
         SetButtonEnabled(_objectSwapTestButton, hasLevel && hasCrossLevelSwapCandidate && !id65ObjectInspectionOnly);
         if (_objectSwapTestButton != null)
             _objectSwapTestButton.IsVisible = hasCrossLevelSwapCandidate;
-        SetButtonEnabled(_objectCopyButton, hasObject && !id65ObjectInspectionOnly && !selectedEditorControl && !(_releaseMode && selectedProtectedControl));
+        SetButtonEnabled(_objectCopyButton, hasObject && !id65ObjectInspectionOnly && !flightGateLocked && !selectedEditorControl && !(_releaseMode && selectedProtectedControl));
         SetButtonEnabled(_objectPasteButton, hasLevel && !id65ObjectInspectionOnly && _mobyClipboard != null && !(_releaseMode && clipboardProtectedControl));
-        SetButtonEnabled(_objectLayerDownButton, hasObject && !id65ObjectInspectionOnly && CanMoveMobyToAdjacentTerrainLayer(_selectedMoby!, -1));
-        SetButtonEnabled(_objectLayerUpButton, hasObject && !id65ObjectInspectionOnly && CanMoveMobyToAdjacentTerrainLayer(_selectedMoby!, 1));
+        SetButtonEnabled(_objectLayerDownButton, hasObject && !id65ObjectInspectionOnly && !flightGateLocked && CanMoveMobyToAdjacentTerrainLayer(_selectedMoby!, -1));
+        SetButtonEnabled(_objectLayerUpButton, hasObject && !id65ObjectInspectionOnly && !flightGateLocked && CanMoveMobyToAdjacentTerrainLayer(_selectedMoby!, 1));
         SetButtonEnabled(_objectUndoButton, objectHasEdits && !id65ObjectInspectionOnly);
         SetButtonEnabled(_objectUndoRemoveButton, _lastRemovedMoby != null && !id65ObjectInspectionOnly);
         if (_objectUndoRemoveButton != null)
@@ -17852,6 +17854,7 @@ public sealed partial class MainWindow : Window
         objectActions.Children.Add(_objectAddButton);
         objectActions.Children.Add(BuildUniversalMobyLibraryButton("ClassicUniversalMobyLibraryButton"));
         objectActions.Children.Add(_objectRemoveButton);
+        objectActions.Children.Add(BuildReplaceFlightGateButton());
         objectActions.Children.Add(_objectEditButton);
         objectActions.Children.Add(_objectSwapCatalogButton);
         objectActions.Children.Add(_objectSwapTestButton);
@@ -20476,6 +20479,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (BlockFlightGateReplacementEdit(_selectedMoby)) return;
         bool snapToTerrain = Math.Abs(dz) <= 0.001f && (Math.Abs(dx) > 0.001f || Math.Abs(dy) > 0.001f);
         (List<Moby> moved, bool snapped) = MoveLinkedMobyGroup(_selectedMoby, dx, dy, dz, snapToTerrain);
 
@@ -20490,6 +20494,7 @@ public sealed partial class MainWindow : Window
 
     private void MoveMobyFromViewport(MobyMoveRequestedEventArgs e)
     {
+        if (BlockFlightGateReplacementEdit(e.Moby)) return;
         if (IsId65BlankLabObjectInspectionOnly())
         {
             _statusText.Text = "ID65 Lab resident Mobys are inspection-only in this profile.";
@@ -20509,6 +20514,7 @@ public sealed partial class MainWindow : Window
 
     private void RotateMobyFromViewport(MobyRotateRequestedEventArgs e)
     {
+        if (BlockFlightGateReplacementEdit(e.Moby)) return;
         if (IsId65BlankLabObjectInspectionOnly())
         {
             _statusText.Text = "ID65 Lab resident Mobys are inspection-only in this profile.";
@@ -23513,6 +23519,7 @@ public sealed partial class MainWindow : Window
 
     private bool MoveMoby(Moby moby, float dx, float dy, float dz, bool snapToTerrain = false)
     {
+        if(BlockFlightGateReplacementEdit(moby))return false;
         float x = moby.Position.X + dx;
         float y = moby.Position.Y + dy;
         float z = moby.Position.Z + dz;
@@ -24200,6 +24207,7 @@ public sealed partial class MainWindow : Window
 
     private void CopySelectedMoby()
     {
+        if(_selectedMoby!=null&&BlockFlightGateReplacementEdit(_selectedMoby))return;
         if (_selectedMoby == null || _selectedMoby.IsRemoved)
         {
             _statusText.Text = "Select an object before copying it.";
@@ -25695,6 +25703,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (IsFlightGateReplacement(_selectedMoby) && UndoFlightGateReplacement(_selectedMoby))
+            return;
+
         Moby removed = _selectedMoby;
         List<Moby> removalGroup = GetAtomicSpecialChestBundleMembers(removed)
             .Concat(GetUniversalLinkGroupMembers(removed))
@@ -25750,6 +25761,7 @@ public sealed partial class MainWindow : Window
         }
 
         Moby moby = _lastRemovedMoby;
+        if(UndoFlightGateReplacement(moby))return;
         List<Moby> restoreGroup = _lastRemovedMobyBundle.Count > 0 &&
             _lastRemovedMobyBundle.Any(member => ReferenceEquals(member, moby))
             ? _lastRemovedMobyBundle.ToList()
@@ -25776,6 +25788,7 @@ public sealed partial class MainWindow : Window
 
     private void UndoMoby(Moby moby)
     {
+        if(UndoFlightGateReplacement(moby))return;
         if (moby.IsAdded)
         {
             List<Moby> rowsToRemove = GetAddedRowsOwnedByRootForUndo(moby);
@@ -25940,6 +25953,7 @@ public sealed partial class MainWindow : Window
 
     private async Task EditMobyAsync(Moby moby)
     {
+        if(BlockFlightGateReplacementEdit(moby))return;
         if (TryBlockId65ObjectMutation("Object editing"))
             return;
 

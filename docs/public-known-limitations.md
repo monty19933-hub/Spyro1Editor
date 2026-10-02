@@ -20,6 +20,13 @@
   **all Mobys working in all levels is not complete**. Static composition does
   not certify AI, sound, collision, triggers or linked behavior. The browser and
   exporter report unresolved dependencies and native resource limits.
+- Original Flight gate and chest replacement is supported only within matching
+  objective categories and the unchanged original course. Gate replacements
+  keep the original position and crossing plane. Some compatible choices still
+  exceed memory capacity. A Sunny gate in Crystal and an Icy chest in Night
+  passed their native objective count, time bonus, results and retry checks;
+  full course completion, persistence and other combinations remain unverified.
+  Flight objectives in ordinary levels are not enabled by these adapters.
 - The Wizard Peak Armored Druid source variant has passed appearance, enemy
   attack, flame resistance and charge defeat in the edited Artisans test project.
   The Alpine Ridge row-1 variant now imports its missing player reaction

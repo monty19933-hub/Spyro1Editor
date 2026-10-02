@@ -104,6 +104,7 @@ public sealed partial class MainWindow
             return;
         }
 
+        if (BlockFlightGateReplacementEdit(_selectedMoby)) { RefreshSelectedMobyZControls(_selectedMoby); return; }
         Moby moby = _selectedMoby;
         float targetZ = (float)_selectedMobyZSlider.Value;
         float dz = targetZ - moby.Position.Z;
@@ -131,6 +132,7 @@ public sealed partial class MainWindow
             return;
         }
 
+        if (BlockFlightGateReplacementEdit(_selectedMoby)) { RefreshSelectedMobyZControls(_selectedMoby); return; }
         Moby moby = _selectedMoby;
         if (!ShouldSnapMobyToTerrain(moby))
         {
@@ -182,7 +184,7 @@ public sealed partial class MainWindow
         try
         {
             bool hasSelection = moby != null && !moby.IsRemoved;
-            bool canMutateSelection = hasSelection &&
+            bool canMutateSelection = hasSelection && !IsFlightGateReplacement(moby!) &&
                 !IsId65BlankLabObjectInspectionOnly() &&
                 !_workspaceTransitionBusy &&
                 !(_id65BlankLabBusy && _id65BlankLabManualOperation != null) &&
