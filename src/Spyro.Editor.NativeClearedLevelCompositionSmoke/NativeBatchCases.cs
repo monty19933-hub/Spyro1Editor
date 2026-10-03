@@ -50,6 +50,8 @@ internal static class NativeBatchCases
                     var native=hv.Select(n=>Decode(hpv,n)).ToArray();int[] packet=[0,1,3,2];
                     check(hv.All(n=>n<v)&&hc.All(n=>n<c)&&hv[2]!=hv[3]&&Word(mesh,hpf+16*j+8)==0&&Word(mesh,hpf+16*j+12)==0,"native quad indices and material/near-clip flags");
                     check(packet.Select(n=>native[n]).SequenceEqual(lv.Select(n=>Decode(s+28,n))),"LP and HP native packet strip corners agree");
+                    double Area(int a,int b,int d)=>(native[b].X-native[a].X)*(native[d].Y-native[a].Y)-(native[b].Y-native[a].Y)*(native[d].X-native[a].X);
+                    check(Area(0,1,3)<0&&Area(2,1,3)>0,"HP native NCLIP triples retain established upward triangle winding");
                     for(int k=0;k<4;k++)
                     {
                         uint Rgb(ColorRgba q)=>(uint)(q.R|q.G<<8|q.B<<16);
@@ -86,6 +88,12 @@ internal static class NativeBatchCases
         {
             byte[] m=Compile(seed with{Surfaces=[Quad(p)]});int s=4+(int)Word(m,8);
             check(m[s+22]==2,"nonplanar or concave quads retain original triangle rendering instead of changing the collision plane");
+            int v=m[s+16],c=m[s+17],lp=s+28+4*v+4*c,hp=s+28+4*m[s+23]+4*v+8*c;
+            for(int i=0;i<2;i++)
+            {
+                uint l=Word(m,lp+8*i),h=Word(m,hp+16*i);
+                check(new[]{(int)(l>>26),(int)(l>>20&63),(int)(l>>14&63),(int)(l>>8&63)}.SequenceEqual(new[]{(int)(h>>24),(int)(h>>16&255),(int)(h>>8&255),(int)(h&255)}),"fallback triangles use identical LP/HP vertex winding");
+            }
         }
     }
 }

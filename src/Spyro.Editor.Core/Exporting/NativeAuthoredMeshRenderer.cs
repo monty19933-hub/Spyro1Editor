@@ -102,7 +102,11 @@ internal static class NativeAuthoredMeshRenderer
         for(int i=0;i<f;i++)
         {
             var face=batch.Faces[i];int[] vertex=face.Points.Select(p=>batch.Vertices.IndexOf(p)).ToArray(),color=face.Near.Zip(face.Far).Select(p=>batch.Colors.IndexOf(p)).ToArray();
-            int[] lp=face.Points.Length==3?[0,1,2,2]:[0,1,3,2],hp=face.Points.Length==3?[2,1,0,0]:[0,1,2,3];
+            // HP quads test (0,1,3), then (2,1,3); LP stores the
+            // corresponding GPU strip (0,1,3,2). Reverse the authored
+            // perimeter, as the established HP triangle path does, so both
+            // tiers accept the same side. Colors follow their vertex corners.
+            int[] lp=face.Points.Length==3?[2,1,0,0]:[3,2,0,1],hp=face.Points.Length==3?[2,1,0,0]:[3,2,1,0];
             uint Low(int[] indexes)=>(uint)(indexes[lp[0]]<<26|indexes[lp[1]]<<20|indexes[lp[2]]<<14|indexes[lp[3]]<<8);
             uint High(int[] indexes)=>(uint)(indexes[hp[0]]<<24|indexes[hp[1]]<<16|indexes[hp[2]]<<8|indexes[hp[3]]);
             W(s,lpf+i*8,Low(vertex));W(s,lpf+i*8+4,Low(color));W(s,hpf+i*16,High(vertex));W(s,hpf+i*16+4,High(color));W(s,hpf+i*16+8,(uint)face.Material);W(s,hpf+i*16+12,face.Material==255?128u:0u);
