@@ -1,3 +1,15 @@
+# Follow-up: Green Druid and original moving terrain
+
+The complete original Alpine5/48 group now exports into empty authored Peace
+Keepers with its original moving sector, fixed and animated collision, materials,
+paths, spell particles and native callbacks. Integrated checks907, candidate
+readback279 and affected regressions pass; the Release App builds cleanly. The
+root-rebuilt disc matches the independent candidate exactly. Fresh emulator
+gameplay and editor group-movement checks remain pending; other variants/hosts
+remain restricted. [Evidence](docs/research/universal-green-druid-world-20261003.md).
+
+---
+
 # Follow-up: Alpine Ridge armored druid gameplay
 
 The complete original Alpine0/1 group now uses ordinary placement and export into

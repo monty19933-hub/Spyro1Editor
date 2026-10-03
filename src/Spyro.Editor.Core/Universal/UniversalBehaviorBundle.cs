@@ -66,7 +66,7 @@ public static class UniversalBehaviorBundleBuilder
         UniversalOverlay? nativeDestinationOwner = null, IReadOnlyList<int>? highValueGemClasses = null,
         IReadOnlyDictionary<string, UniversalWhirlwindSoundBinding>? whirlwindSounds = null,
         IReadOnlyDictionary<string, UniversalDryCanyonBirdCertificate>? dryCanyonBirdBranches = null,
-        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null,IReadOnlyList<UniversalOwnedParticleCertificate>? ownedParticles = null, UniversalMagicPairCertificate? magicPair = null,IReadOnlyDictionary<string,UniversalDarkPassageLanternContext>? darkLanternContexts = null,IReadOnlyDictionary<string,UniversalDarkPassageProjectileParticleCertificate>? darkProjectileParticles = null, UniversalMagicDruidChainCertificate? magicChain = null,IReadOnlyDictionary<string,UniversalHighCavesSpellParticleCertificate>? highCavesSpellParticles = null,UniversalMagicDruidOriginalCertificate? magicOriginal = null,UniversalHighCavesWorldInstallation? highCavesWorld=null)
+        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null,IReadOnlyList<UniversalOwnedParticleCertificate>? ownedParticles = null, UniversalMagicPairCertificate? magicPair = null,IReadOnlyDictionary<string,UniversalDarkPassageLanternContext>? darkLanternContexts = null,IReadOnlyDictionary<string,UniversalDarkPassageProjectileParticleCertificate>? darkProjectileParticles = null, UniversalMagicDruidChainCertificate? magicChain = null,IReadOnlyDictionary<string,UniversalHighCavesSpellParticleCertificate>? highCavesSpellParticles = null,UniversalMagicDruidOriginalCertificate? magicOriginal = null,UniversalHighCavesWorldInstallation? highCavesWorld=null,UniversalGreenDruidWorldInstallation? greenDruidWorld=null)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
         int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
@@ -147,6 +147,7 @@ public static class UniversalBehaviorBundleBuilder
                 !(ownedParticles?.Any(c=>c.SourceLevelKey==source.SourceKey && c.TypeIds.SequenceEqual(new[]{29}))??false))
                 throw new InvalidDataException("This wizard needs its native resurrection effect before it can be placed in this level.");
         foreach(var source in sources)UniversalDarkPassageProjectileParticles.RequireBundle(source.SourceKey,source.Source,source.Classes,destination,nativeExecutable??[],darkProjectileParticles,ownedParticles);
+        foreach(var source in sources.Where(s=>UniversalGreenDruidWorldRows.OwnsCopiedActor(s.SourceKey,s.Source,s.Classes))){if(source.SourceKey!="alpineridge"||greenDruidWorld==null||sources.Count!=1||ownedParticles?.Count!=1)throw new InvalidDataException("Copied Green Druid needs its complete installed moving-world owner.");var map=source.Classes.ToDictionary(c=>c,c=>Mapped(source.SourceKey,c));if(classMaps!=null&&classMaps.TryGetValue(source.SourceKey,out var full))map=full.ToDictionary();greenDruidWorld.RequireBundle(source.Source,destination,source.Classes,map,nativeExecutable??[],ownedParticles);}
         foreach(var source in sources.Where(s=>s.SourceKey=="highcaves"&&s.Classes.Contains(0x12E))){if(highCavesWorld==null)throw new InvalidDataException("Copied High Caves moving terrain needs its complete installed world owner.");var m=source.Classes.ToDictionary(c=>c,c=>Mapped(source.SourceKey,c));if(classMaps!=null&&classMaps.TryGetValue(source.SourceKey,out var full))m=full.ToDictionary();highCavesWorld.RequireBundle(source.Source,destination,source.Classes,m,nativeExecutable??[],ownedParticles);}
         foreach(var source in sources)UniversalHighCavesSpellParticles.RequireBundle(source.SourceKey,source.Source,source.Classes,destination,nativeExecutable??[],highCavesSpellParticles,ownedParticles,highCavesWorld);
         Dictionary<string,UniversalOwnedParticleParts> ownedParticleParts=new(StringComparer.OrdinalIgnoreCase);
@@ -230,6 +231,7 @@ public static class UniversalBehaviorBundleBuilder
                 catch (InvalidDataException) when (Mapped(s.SourceKey, c) == c && !map.Any(k => k.Key != k.Value))
                 { (init, initBytes, jt2) = BuildWholeFunction(s.Source, s.Source.Init, initTag); }
                 if(string.Equals(s.SourceKey,"highcaves",StringComparison.OrdinalIgnoreCase))UniversalHighCavesTornadoPlacement.RequireInitializer(init,s.Source,Remaps(s.SourceKey)?[c]:s.Classes,nativeExecutable??[]);
+                if(s.SourceKey=="alpineridge"&&greenDruidWorld!=null)greenDruidWorld.RequireInitializer(init,s.Source,Remaps(s.SourceKey)?[c]:s.Classes);
                 if(s.SourceKey=="highcaves"&&highCavesWorld!=null)highCavesWorld.RequireInitializer(init,s.Source,Remaps(s.SourceKey)?[c]:s.Classes);
                 if(s.SourceKey=="twilightharbor")UniversalTwilightTrooperOwnership.RequireInitializer(init,s.Source,c,nativeExecutable??[],Remaps(s.SourceKey)?[c]:s.Classes);
                 if(string.Equals(s.SourceKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&s.Classes.Contains(0x7A)&&darkLanternContexts!=null&&darkLanternContexts.TryGetValue(s.SourceKey,out var lanternInitContext))lanternInitContext.RequireCopiedInit(init,s.Source,Remaps(s.SourceKey)?[c]:s.Classes);
@@ -292,6 +294,7 @@ public static class UniversalBehaviorBundleBuilder
         if (signClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.SignDraw(signClasses, "sign_draw"));
         var (code, labels) = Assemble(parts, baseAddress);
+        greenDruidWorld?.RequireCompiled(code,baseAddress,parts,labels);
         highCavesWorld?.RequireCompiled(code,baseAddress,parts,labels);
         if(magicOriginal!=null){var proof=magicOriginal.RequireCompiled(code,baseAddress,parts);reports=reports.Select(r=>r.SourceLevelKey=="magiccrafters"?r with{PrivateMagicDruidOriginal=proof}:r).ToList();}
         if(magicChain!=null){var proof=magicChain.RequireCompiled(code,baseAddress,parts);reports=reports.Select(r=>r.SourceLevelKey=="magiccrafters"?r with{PrivateMagicDruidChain=proof}:r).ToList();}

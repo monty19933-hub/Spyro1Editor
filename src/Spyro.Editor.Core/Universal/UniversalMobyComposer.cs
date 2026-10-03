@@ -182,6 +182,8 @@ public static class UniversalMobyComposer
         HashSet<int> destRegistered = [.. dest.Registrations().Select(r => r.ClassId)];
         List<string> warnings = [];
 
+        var greenDonor=destination.Key!="alpineridge"&&placements.Any(p=>p.SourceLevelKey=="alpineridge"&&UniversalGreenDruidWorldRows.Members.Contains(p.SourceRowIndex))?source("alpineridge"):default;
+        var greenRequest=greenDonor.Data==null?null:UniversalGreenDruidWorldInstallation.RequireRequest(destination.Key,dest,destOverlay,exe,nativeOriginalExecutable,greenDonor.Data!,greenDonor.Overlay,placements,permanentlyRemoved,persistentNativePrefixRows);
         // 1. Resolve classes and dependency closure (spawned child classes come from the same source level).
         Dictionary<(string Source, int Class), (int DestinationClass, bool Dependency)> classes = [];
         Dictionary<string, UniversalDryCanyonBirdCertificate> dryCanyonBirdBranches = new(StringComparer.OrdinalIgnoreCase);
@@ -255,6 +257,7 @@ public static class UniversalMobyComposer
             }
             var s = source(p.SourceLevelKey);
             var t = UniversalIndexedRows.Capture(s.Data, s.Overlay, s.Data.CaptureRow(p.SourceLevelKey, p.SourceRowIndex));
+            if(destination.Key=="alpineridge"&&UniversalGreenDruidWorldRows.Applies(t))t=UniversalGreenDruidNativeReferences.Capture(dest,s.Data,s.Overlay,t,permanentlyRemoved);
             if(string.Equals(p.SourceLevelKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&string.Equals(destination.Key,"darkpassage",StringComparison.OrdinalIgnoreCase)&&t.ClassId==0x35&&t.SourceRowIndices.Count==1&&
                 destinationData.AsSpan().SequenceEqual(originalDestination.Data.Bytes)&&destinationOverlay.AsSpan().SequenceEqual(originalDestination.Overlay.Bytes))
             {
@@ -284,7 +287,8 @@ public static class UniversalMobyComposer
             var (c, sk, dep) = work.Dequeue();
             if (c <= 0 || c >= 0x200)
                 throw new InvalidDataException($"Class 0x{c:X3} from {sk} is outside the supported placement range.");
-            UniversalGreenDruidWorldOwnership.Require(destination.Key, sk, c, dest, source(sk).Data, permanentlyRemoved);
+            if(greenRequest!=null&&c==0x10E&&sk=="alpineridge")greenRequest.Require(destination.Key,sk,c,dest,source(sk).Data);
+            else UniversalGreenDruidWorldOwnership.Require(destination.Key, sk, c, dest, source(sk).Data, permanentlyRemoved);
             if (reservedSources.Add(sk))
             {
                 var sd = source(sk).Data;
@@ -413,6 +417,8 @@ public static class UniversalMobyComposer
         int reclaimedVram = vram.FreeBytes - baselineVram.FreeBytes;
         if (reclaimedVram < 0) throw new InvalidDataException("Dropped-model ownership scan unexpectedly reduced free texture space.");
         int freeBefore = vram.FreeBytes;
+        var greenWorld=greenRequest==null?null:UniversalGreenDruidWorldInstallation.Capture(destination.Key,dest,destOverlay,exe,nativeOriginalExecutable,greenDonor.Data!,greenDonor.Overlay,placements,vram,permanentlyRemoved,persistentNativePrefixRows);
+        if(greenWorld!=null){dest=new(greenWorld.Storage.CopyLevelData());warnings.Add(greenWorld.BehaviorNote);}
         var worldDonor=placements.Any(p=>p.SourceLevelKey=="highcaves"&&UniversalHighCavesWorldRows.Members.Contains(p.SourceRowIndex))?source("highcaves"):default;
         var highCavesWorld=worldDonor.Data==null?null:UniversalHighCavesWorldInstallation.Capture(destination.Key,dest,destOverlay,exe,nativeOriginalExecutable,worldDonor.Data,worldDonor.Overlay,placements,vram,permanentlyRemoved,persistentNativePrefixRows);
         if(highCavesWorld!=null){dest=new(highCavesWorld.Storage.CopyLevelData());warnings.Add(highCavesWorld.BehaviorNote);}
@@ -577,6 +583,7 @@ public static class UniversalMobyComposer
             }
             if(flightChests.TryGetValue(p.SourceLevelKey,out var chestRowProof))chestRowProof.RequireRow(r,t.Properties,t.ClassId);
             if(flightGates.TryGetValue(p.SourceLevelKey,out var gateRowProof))gateRowProof.RequireRow(r,t.Properties,t.ClassId);
+            if(UniversalGreenDruidWorldRows.Applies(t)&&destination.Key!="alpineridge"){if(greenWorld==null)throw new InvalidDataException("Green Druid world installation is missing.");t=greenWorld.Prepare(t,r);}
             if(UniversalHighCavesWorldRows.Applies(t)){if(highCavesWorld==null)throw new InvalidDataException("Moving terrain installation is missing.");t=highCavesWorld.Prepare(t,r);}
             if(UniversalHighCavesTornadoPlacement.Applies(t)) { var tornadoSource=source(p.SourceLevelKey);t=UniversalHighCavesTornadoPlacement.Rebase(tornadoSource.Data,tornadoSource.Overlay,t,r); }
             if (UniversalHauntedWizardPlacement.Applies(t))
@@ -610,6 +617,7 @@ public static class UniversalMobyComposer
         for (int i = 0; i < rows.Count; i++)
             if (rows[i].Item2.SourceLevelKey == "hauntedtowers" && rows[i].Item2.ClassId == 0xCC)
                 UniversalHauntedWizardParticles.RequirePhysicalWizardRow(allocation.NewRows[i]);
+        greenWorld?.RequireAllocation(allocation.NewRows);
         highCavesWorld?.RequireAllocation(allocation.NewRows);
         int droppedProperties = UniversalRowRemoval.RemoveOwnedPropertiesAndClearRows(dest, permanentlyRemoved);
         var (_, sceneGrowth, newRows) = dest.AppendRows(rows, permanentlyRemoved);
@@ -624,6 +632,7 @@ public static class UniversalMobyComposer
             throw new InvalidDataException($"Only {arena} dynamic object slots would remain in {destination.DisplayName}; at least {MinimumDynamicSlots} are required.");
 
         List<UniversalOwnedParticleCertificate> ownedParticles=[];
+        if(greenWorld!=null){UniversalGreenDruidWorldSpellParticles.RequireTexture(greenDonor.Data!,dest);ownedParticles.Add(greenWorld.Dispatcher());particleDependencies[("alpineridge",8)]=new("alpineridge",8,"source-certified-copied","Original live-model vertex spell and physical target; native gameplay pending.");}
         Dictionary<string,UniversalHighCavesSpellParticleCertificate> highCavesSpellParticles=new(StringComparer.OrdinalIgnoreCase);
         if(imports.Any(i=>i.SourceLevelKey=="highcaves"&&i.ClassId==0x127&&i.BehaviorImported)){
             var donor=source("highcaves");var proof=UniversalHighCavesSpellParticles.Capture("highcaves",destination.Key,destination.LevelId,donor.Data,donor.Overlay,dest,destOverlay,exe);
@@ -691,7 +700,7 @@ public static class UniversalMobyComposer
             var classMaps = classes.GroupBy(k => k.Key.Source).ToDictionary(g => g.Key,
                 g => (IReadOnlyDictionary<int, int>)g.ToDictionary(k => k.Key.Class, k => k.Value.DestinationClass));
             var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps, remapSaveRows, nativeExecutable: exe,
-                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles,magicPair:magicPair,darkLanternContexts:darkLanternContexts,darkProjectileParticles:darkProjectileParticles,magicChain:magicChain,highCavesSpellParticles:highCavesSpellParticles,magicOriginal:magicOriginal,highCavesWorld:highCavesWorld);
+                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles,magicPair:magicPair,darkLanternContexts:darkLanternContexts,darkProjectileParticles:darkProjectileParticles,magicChain:magicChain,highCavesSpellParticles:highCavesSpellParticles,magicOriginal:magicOriginal,highCavesWorld:highCavesWorld,greenDruidWorld:greenWorld);
             uint newCopy = (uint)((baseAddress + bundle.Code.Length + 15) & ~15);
             int keep = (int)(copyBuffer - UniversalOverlay.Base);
             byte[] ov = new byte[UniversalLevelData.Align((int)(newCopy - UniversalOverlay.Base), 0x800)];
@@ -805,6 +814,7 @@ public static class UniversalMobyComposer
             certificate.RequireShaderFields(dest.Package(classes[key].DestinationClass));
         if(flightGate!=null)flightGate.RequireFinal(dest,overlay,newRows.Single(),classes[(flightGate.SourceKey,0x161)].DestinationClass);
         if(flightChest!=null)flightChest.RequireFinal(dest,overlay,newRows.Single(),classes[(flightChest.SourceKey,0x12B)].DestinationClass);
+        greenWorld?.RequireFinal(dest,new(overlay,UniversalExeBindings.Read(exe,destination.LevelId)),exe,rows,newRows);
         highCavesWorld?.RequireFinal(dest,new(overlay,UniversalExeBindings.Read(exe,destination.LevelId)),exe,rows,newRows);
         uint finalEnd = RuntimeEnd(dest, copyBuffer);
         uint limit = NormalBufferFloor - RamSafetyMargin;

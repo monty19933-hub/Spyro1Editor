@@ -95,4 +95,5 @@
   </ItemGroup>
   <ItemGroup><InternalsVisibleTo Include="Spyro.Editor.MagicOriginalSmoke" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="Universal/AlpineBlowhardTextureOwners.json" LogicalName="Spyro.Editor.Core.Universal.AlpineBlowhardTextureOwners.json" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="Spyro.Editor.GreenDruidWorldSmoke" /></ItemGroup>
 </Project>
