@@ -33,9 +33,11 @@ The complete original Alpine5/48 group now exports into empty authored Peace
 Keepers with its original moving sector, fixed and animated collision, materials,
 paths, spell particles and native callbacks. Integrated checks907, candidate
 readback279 and affected regressions pass; the Release App builds cleanly. The
-root-rebuilt disc matches the independent candidate exactly. The first fresh native run confirms the rendered world and druid flee/linked
-state behavior; casting, platform animation/carry and reward are still pending.
-Editor group-movement checks and other variants/hosts remain open. [Evidence](docs/research/universal-green-druid-world-20261003.md).
+root-rebuilt disc matches the independent candidate exactly. A spawn-only diagnostic now confirms native platform animation/carry, jumping,
+spell8 objects targeting the linked terrain, charge defeat, collected green2 and
+inventory2/2. Normal death/respawn retains the total and restores the enemy with
+its reward disabled. Close spell visual confirmation, card persistence, audio,
+editor group movement and other hosts remain open. [Evidence](docs/research/universal-green-druid-world-20261003.md).
 
 ---
 
