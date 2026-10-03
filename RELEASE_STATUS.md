@@ -9,6 +9,12 @@ log are preserved. Runtime acceptance is withheld until the fault is repaired
 and the test repeated. Universal gameplay remains unfinished.
 [Evidence and limits](docs/research/universal-boar-placement-20261002.md).
 
+Dark Passage dogs now bring both transformation models/handlers and their attack
+class. The nine variants without lantern links pass 2,489 ownership checks;
+seven lantern-linked variants remain restricted while their adapter is built.
+Native gameplay and attack particles remain unverified.
+[Evidence and limits](docs/research/universal-dark-passage-dogs-20261002.md).
+
 ---
 
 # Follow-up: Haunted Towers resurrection in a cleared level

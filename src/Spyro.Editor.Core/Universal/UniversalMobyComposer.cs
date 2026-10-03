@@ -316,6 +316,7 @@ public static class UniversalMobyComposer
             catch (InvalidDataException) when (mapped == c) { /* Existing whole-init fallback remains guarded by bundle extraction. */ }
             if(flightChests.TryGetValue(sk,out var chestProof))chestProof.AddDependencies(s.Overlay,c,spawns);
             if(flightGates.TryGetValue(sk,out var gateDependencies))gateDependencies.AddDependencies(s.Overlay,c,spawns);
+            UniversalDarkPassageShapeshifterOwnership.AddDependencies(sk,s.Overlay,c,spawns);
             foreach (int particle in particles)
             {
                 var key = (sk, particle);
@@ -525,6 +526,11 @@ public static class UniversalMobyComposer
                 UniversalCliffMetalTextures.RequireRow(metalModel, r);
             if (t.ClassId == 0xB8 && string.Equals(t.SourceLevelKey, "drycanyon", StringComparison.OrdinalIgnoreCase))
                 UniversalDryCanyonBirdBranches.RequireInitialRow(r);
+            if (UniversalDarkPassageShapeshifterOwnership.Applies(t))
+            {
+                var dogSource = source(p.SourceLevelKey);
+                UniversalDarkPassageShapeshifterOwnership.RequirePlacement(destination.Key,dogSource.Data,dogSource.Overlay,t,r,dest);
+            }
             if(flightChests.TryGetValue(p.SourceLevelKey,out var chestRowProof))chestRowProof.RequireRow(r,t.Properties,t.ClassId);
             if(flightGates.TryGetValue(p.SourceLevelKey,out var gateRowProof))gateRowProof.RequireRow(r,t.Properties,t.ClassId);
             if (UniversalHauntedWizardPlacement.Applies(t))

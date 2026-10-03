@@ -98,6 +98,7 @@ public static class UniversalIndexedRows
     public static void RequireNativeRemoval(string destinationKey, UniversalLevelData destination,
         UniversalLevelData original, UniversalOverlay originalOverlay, IReadOnlySet<int> removed)
     {
+        UniversalDarkPassageShapeshifterOwnership.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalBeastMistyBoarPlacement.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalHauntedWizardPlacement.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
         UniversalLoftyWhirlwindGroups.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);

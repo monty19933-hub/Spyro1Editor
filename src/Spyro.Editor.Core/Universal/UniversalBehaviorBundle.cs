@@ -27,6 +27,7 @@ public sealed record UniversalBehaviorSourceReport(string SourceLevelKey, IReadO
     public IReadOnlyList<UniversalNativePlayerDamageCall> NativePlayerDamageCalls { get; init; } = [];
     public IReadOnlyList<uint> AllocatedClassReadSites { get; init; } = [];
     public IReadOnlyList<uint> LinkedClassReadSites { get; init; } = [];
+    public IReadOnlyList<uint> TransitionClassStoreSites { get; init; } = [];
     public IReadOnlyList<uint> GlobalSoundReadSites { get; init; } = [];
     public IReadOnlyList<uint> GemCollectionCallSites { get; init; } = [];
     public int GemCollectionAdapterBytes { get; init; }
@@ -173,6 +174,7 @@ public static class UniversalBehaviorBundleBuilder
                 (dryCanyonBirdBranches == null || !dryCanyonBirdBranches.TryGetValue(s.SourceKey, out birdProof)))
                 throw new InvalidDataException("Copied Dry Canyon B8 behavior requires its issued state/frame branch proof.");
             var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey, map, birdProof);
+            var darkDogTransitionSites = UniversalDarkPassageShapeshifterOwnership.Patch(upd,s.SourceKey,s.Source,s.Classes,map,nativeExecutable??[]);
             UniversalBeastMistyBoarPlacement.RequireCopiedInputs(upd,s.SourceKey,s.Source,s.Classes,map,nativeExecutable??[]);
             var boarClassSites = map.Any(k=>k.Key!=k.Value)
                 ? UniversalBeastMistyBoarClassOwnership.Translate(upd,s.SourceKey,s.Source,s.Classes,map,nativeExecutable??[])
@@ -245,7 +247,7 @@ public static class UniversalBehaviorBundleBuilder
                 if (UniversalGemCollectionAdapter.GemMappings(map).OrderBy(p => p.Value).SequenceEqual(destinationGems))
                     destinationGemLabel = gemLabel;
             }
-            reports.Add(new(s.SourceKey, s.Classes.ToArray(), upd.Items.Count(i => i.Word != null) * 4, initTotal, tablesTotal) { GlobalSoundReadSites = soundReadSites, LinkedClassReadSites = linkedClassSites, GemCollectionCallSites = gemCalls.Distinct().Order().ToArray(), GemCollectionAdapterBytes = gemBytes, ParentClassReadSites = parentClassSites.Distinct().Order().ToArray(), AllocatedClassReadSites = allocatedClassSites.Distinct().Order().ToArray(), PlayerDamageMask = playerDamageWrites.Aggregate(nativeDamage.DamageMask, (mask, w) => mask | w.DamageMask), NativePlayerDamageCalls = nativeDamage.Calls, PlayerDamageWrites = playerDamageWrites.Distinct().OrderBy(w => w.StorePc).ToArray() });
+            reports.Add(new(s.SourceKey, s.Classes.ToArray(), upd.Items.Count(i => i.Word != null) * 4, initTotal, tablesTotal) { GlobalSoundReadSites = soundReadSites, LinkedClassReadSites = linkedClassSites, TransitionClassStoreSites = darkDogTransitionSites, GemCollectionCallSites = gemCalls.Distinct().Order().ToArray(), GemCollectionAdapterBytes = gemBytes, ParentClassReadSites = parentClassSites.Distinct().Order().ToArray(), AllocatedClassReadSites = allocatedClassSites.Distinct().Order().ToArray(), PlayerDamageMask = playerDamageWrites.Aggregate(nativeDamage.DamageMask, (mask, w) => mask | w.DamageMask), NativePlayerDamageCalls = nativeDamage.Calls, PlayerDamageWrites = playerDamageWrites.Distinct().OrderBy(w => w.StorePc).ToArray() });
         }
         int destinationGemBytes = 0;
         if (destinationGemCalls.Count != 0 && destinationGemLabel == null)
