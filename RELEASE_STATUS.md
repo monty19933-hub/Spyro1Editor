@@ -1,3 +1,18 @@
+# Follow-up: native collection stars and linked Dark gameplay
+
+Canonical native gem collection now retains source-certified stars and resources
+in all 35 original levels, with final exported-code/data checks and one native
+particle update. Integrated checks pass 2,995; arbitrary copied particle-12
+callers remain unverified. Twilight, Magic and Haunted regressions pass, and the
+App builds cleanly. [Evidence](docs/research/universal-collection-stars-20261003.md).
+
+The moved Dark Passage lantern/creature group now has bounded native evidence:
+form changes, health loss, charge defeat, five-gem collection and both collection
+flags. Projectile-specific damage, impact visuals, respawn and save persistence
+remain open. [Evidence](docs/research/universal-dark-passage-dogs-20261002.md).
+
+---
+
 # Follow-up: Twilight soldiers integrated for Dark Hollow verification
 
 All fourteen original Twilight Harbor soldier variants now use ordinary
@@ -35,7 +50,7 @@ Dark Passage dogs now bring both transformation models/handlers and their attack
 class. Linked lantern groups and the attack-effect adapter are now integrated;
 338 lantern, 189 projectile and 2,489 existing dog checks pass. Imported lanterns
 change linked creatures without changing destination terrain lighting, explained
-in Add Object details. Native gameplay remains unverified.
+in Add Object details. The bounded r5 native result is recorded above.
 [Evidence and limits](docs/research/universal-dark-passage-dogs-20261002.md).
 
 ---

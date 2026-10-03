@@ -47,3 +47,24 @@ also cover Magic, boar and Haunted adapters. Native testing is pending on the
 immutable r5 candidate under `coverage/darkpassage-projectile-cleared-candidate-r5`
 in `work/universal-finish-20261002`. Neither a copied model nor these source
 checks establish gameplay acceptance.
+
+## Native r5 linked-group result
+
+The immutable r5 BIN (`618bf3efa158d4f56e5b3425bd30528b413fbdcdcf29ce2879324ef9e35757fb`)
+entered the cleared Peace Keepers test through actual New Game with a private
+blank card. Native lantern timers/glow changed the linked creature between
+classes 35 and 36. Spyro's health fell from three to two while close to it.
+A flame attempt did not defeat the small form; charging did. The native blue
+gem reward collected for five overall and five in the level, with both collection
+flags set for logical row 135 and the defeated actor retired. The pause HUD
+shows five gems and four lives.
+
+Native projectile 9B and trail/impact particles 1/13 were observed in memory;
+one trail was marked rendered. Projectile-specific damage and impact visuals
+are not established. This run does not prove explicit flame-lighting of the
+lantern, other variants/destinations, respawn, card persistence or audio. Textured
+floor seams remain visible. There were no invalid-access/panic log entries,
+RAM writes or save states; the blank card hash remained unchanged after exit.
+
+The full receipt, 15 screenshots and 12 observations are preserved in the task
+evidence folder `runtime/dark-lantern-projectile-r5/runtime-proof.json`.

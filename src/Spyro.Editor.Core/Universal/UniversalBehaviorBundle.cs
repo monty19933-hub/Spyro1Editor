@@ -43,6 +43,7 @@ public sealed record UniversalBehaviorBundle(uint Base, byte[] Code, uint Update
     public int DestinationGemColourExtraBytes { get; init; }
     public IReadOnlyList<UniversalNativeParticleNoOpProof> NativeParticleNoOpProofs { get; init; } = [];
     public uint? OwnedParticleUpdateWrapper {get;init;}
+    public UniversalCollectionStarContinuation? CollectionStarContinuation {get;init;}
 }
 
 /// <summary>
@@ -289,7 +290,8 @@ public static class UniversalBehaviorBundleBuilder
             DestinationGemColourLoads = destinationColourLoads.Select(c => new UniversalDestinationGemColourLoad(c.Pc, c.PatchWord, c.Delay, c.AddWord, c.LoadWord, c.LoadPc, c.ClassRegister, c.Role, labels[$"gem_colour_destination_{c.Pc:X8}"])).ToArray(),
             DestinationGemColourExtraBytes = destinationColourBytes,
             NativeParticleNoOpProofs = particleNoOpProofs,
-            OwnedParticleUpdateWrapper=ownedParticleParts.Count==0?null:labels["wrap_owned_particles"]
+            OwnedParticleUpdateWrapper=ownedParticleParts.Count==0?null:labels["wrap_owned_particles"],
+            CollectionStarContinuation=UniversalCollectionStarParticles.CaptureContinuation(destination,baseAddress,code,labels,ownedParticles,parts)
         };
     }
 
