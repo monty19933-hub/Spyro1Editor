@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Spyro.Editor.Core.Analysis;
 namespace Spyro.Editor.Core.Universal;
-/// <summary>Only issued Alpine group0 materials21/28/43. Keeps original HQ4/HQ8
+/// <summary>Only exact issued Alpine group materials. Keeps original HQ4/HQ8
 /// depth, blend flags and all sixteen LQ distance palettes. Generic texture
 /// grammar is unchanged. This is resource ownership, never gameplay permission.</summary>
 internal sealed class GreenDruidWorldMaterialStorage
@@ -39,7 +39,7 @@ internal sealed class GreenDruidWorldMaterialStorage
    var key=(offset,width,rows,bpp,palette,low);if(targets.TryGetValue(key,out int cached))return cached;
    int target=-1;for(int y=0;y+rows<=512&&target<0;y+=palette&&low?4:1){if(!palette&&y%256+rows>256)continue;for(int x=0;x+width<=1024;x+=palette?32:16){if(!palette&&x%128*(bpp==4?2:1)+width*(bpp==4?2:1)>256)continue;bool free=true;for(int r=0;r<rows;r++)if(!staged.IsFree((y+r)*1024+x,width)){free=false;break;}if(free){target=y*1024+x;break;}}}
    Require(target>=0,"no full free rectangle remains; failed reservations discarded");var bytes=CopyRectangle(source,offset,width,rows);for(int r=0;r<rows;r++){bytes.AsSpan(r*width,width).CopyTo(_gpu.AsSpan(target+r*1024));staged.Reserve(target+r*1024,width);}targets[key]=target;
-   regions.Add(new(material,"original-alpine-group0","original-alpine-gpu","green-druid-native-depth-preserving-r1",palette?"palette":"pixel",bpp,offset,target,width,rows,Convert.ToHexStringLower(SHA256.HashData(bytes))));return target;
+   regions.Add(new(material,"original-alpine-group"+issued.Profile.Group,"original-alpine-gpu","green-druid-native-depth-preserving-r1",palette?"palette":"pixel",bpp,offset,target,width,rows,Convert.ToHexStringLower(SHA256.HashData(bytes))));return target;
   }
   for(int m=0;m<_records.Length;m++)foreach(var f in Describe(_records[m]))
   {
@@ -50,11 +50,11 @@ internal sealed class GreenDruidWorldMaterialStorage
   var original=issued.CopyMaterials();for(int m=0;m<_records.Length;m++){var a=Describe(original[m].Record);var b=Describe(_records[m]);for(int n=0;n<a.Length;n++){Require(a[n].Bpp==b[n].Bpp&&a[n].Side==b[n].Side,"native depth/shape retained");Require(CopyRectangle(source,a[n].Pixel,a[n].Width,a[n].Side).SequenceEqual(CopyRectangle(_gpu,b[n].Pixel,b[n].Width,b[n].Side))&&CopyRectangle(source,a[n].Palette,a[n].PaletteWidth,a[n].PaletteRows).SequenceEqual(CopyRectangle(_gpu,b[n].Palette,b[n].PaletteWidth,b[n].PaletteRows)),"every original pixel and complete palette copied exactly");}}
   for(int n=0;n<host.Length;n++)if(allocator.IsFree(n,1)==staged.IsFree(n,1))Require(host[n]==_gpu[n],"protected/unallocated GPU complement retained");Regions=regions.ToArray();
  }
- internal static GreenDruidWorldMaterialStorage Capture(string key,UniversalLevelData source,UniversalOverlay overlay,byte[]exe,byte[]hostGpu,UniversalVramAllocator allocator)=>new(UniversalGreenDruidWorldPrerequisites.CaptureSource(key,source,overlay,exe),hostGpu,allocator);
+ internal static GreenDruidWorldMaterialStorage Capture(string key,UniversalLevelData source,UniversalOverlay overlay,byte[]exe,byte[]hostGpu,UniversalVramAllocator allocator,int sourceDruidRow=5)=>new(UniversalGreenDruidWorldPrerequisites.CaptureSource(key,source,overlay,exe,sourceDruidRow),hostGpu,allocator);
  internal byte[] CopyGpu()=>_gpu.ToArray();internal byte[][] CopyRecords()=>_records.Select(r=>r.ToArray()).ToArray();
  internal byte[] AppendTable(byte[]before)
  {
-  int count=I(before,4);Require(count>=0&&count+3<=128&&before.Length==8+count*184,"complete retained native table");byte[] result=new byte[8+(count+3)*184];W(result,0,result.Length);W(result,4,count+3);before.AsSpan(8,count*16).CopyTo(result.AsSpan(8));before.AsSpan(8+count*16,count*168).CopyTo(result.AsSpan(8+(count+3)*16));for(int n=0;n<3;n++){_records[n].AsSpan(0,16).CopyTo(result.AsSpan(8+(count+n)*16));_records[n].AsSpan(16).CopyTo(result.AsSpan(8+(count+3)*16+(count+n)*168));}return result;
+  int count=I(before,4);Require(count>=0&&count+_records.Length<=128&&before.Length==8+count*184,"complete retained native table");byte[] result=new byte[8+(count+_records.Length)*184];W(result,0,result.Length);W(result,4,count+_records.Length);before.AsSpan(8,count*16).CopyTo(result.AsSpan(8));before.AsSpan(8+count*16,count*168).CopyTo(result.AsSpan(8+(count+_records.Length)*16));for(int n=0;n<_records.Length;n++){_records[n].AsSpan(0,16).CopyTo(result.AsSpan(8+(count+n)*16));_records[n].AsSpan(16).CopyTo(result.AsSpan(8+(count+_records.Length)*16+(count+n)*168));}return result;
  }
- internal void RequireFinal(byte[]gpu,byte[][]records){Require(gpu.AsSpan().SequenceEqual(_gpu)&&records.Length==3&&records.Where((r,n)=>!r.SequenceEqual(_records[n])).Any()==false,"issued complete final GPU/material bytes changed");}
+ internal void RequireFinal(byte[]gpu,byte[][]records){Require(gpu.AsSpan().SequenceEqual(_gpu)&&records.Length==_records.Length&&records.Where((r,n)=>!r.SequenceEqual(_records[n])).Any()==false,"issued complete final GPU/material bytes changed");}
 }

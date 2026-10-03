@@ -98,4 +98,5 @@
   <ItemGroup><EmbeddedResource Include="Universal/ArtisansAlpineTextureOwners.json" LogicalName="Spyro.Editor.Core.Universal.ArtisansAlpineTextureOwners.json" /></ItemGroup>
   <ItemGroup><InternalsVisibleTo Include="Spyro.Editor.GreenDruidWorldSmoke" /></ItemGroup>
   <ItemGroup><InternalsVisibleTo Include="Spyro.Editor.AlpineArtisansSmoke" /><InternalsVisibleTo Include="Spyro.Editor.AlpineArtisansExportSmoke" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="Spyro.Editor.GreenDruidSecondWorldSmoke" /></ItemGroup>
 </Project>

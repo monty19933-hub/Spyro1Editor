@@ -26,8 +26,8 @@ internal sealed class GreenDruidSceneBankStorage
  private GreenDruidSceneBankStorage(UniversalGreenDruidWorldPrerequisites source,UniversalLevelData host,IReadOnlyList<int>delta,int firstSector,int firstTriangle)
  {
   var sf=host.Subfiles()[3];_before=host.Bytes.AsSpan(sf.Offset,sf.Length).ToArray();_beforeLayout=host.Scene();_beforeBanks=Banks(_before);OriginalPrefix=_beforeLayout.MobyComponent;
-  var groups=new HashSet<byte>();foreach(var bank in _beforeBanks)for(int n=0;n<I(bank,4);n++)groups.Add(bank[4+I(bank,8+n*4)]);int next=Enumerable.Range(0,256).FirstOrDefault(i=>!groups.Contains((byte)i),-1);Require(next>=0,"all native group bytes owned");GroupId=(byte)next;Require(GroupId==0,"first slice preserves the source group0 comparison");
-  Require(firstTriangle>=0&&firstTriangle+16<=32768,"native15-bit collision interval");var moved=source.CopyTranslated(delta);var rebound=source.Rebind(moved,GroupId,new[]{firstSector},firstTriangle,new[]{128,129});
+  var groups=new HashSet<byte>();foreach(var bank in _beforeBanks)for(int n=0;n<I(bank,4);n++)groups.Add(bank[4+I(bank,8+n*4)]);GroupId=source.Profile.Group;Require(!groups.Contains(GroupId),"preserve the authenticated source group byte; never remap a source branch");
+  Require(firstTriangle>=0&&firstTriangle+source.CollisionTriangleCount<=32768,"native15-bit collision interval");var moved=source.CopyTranslated(delta);var rebound=source.Rebind(moved,GroupId,new[]{firstSector},firstTriangle,new[]{128,129});
   _afterBanks=_beforeBanks.Select(b=>b.ToArray()).ToArray();_newRecordCounts=new int[7];
   foreach(int role in new[]{2,3,4})
   {
@@ -51,8 +51,8 @@ internal sealed class GreenDruidSceneBankStorage
   for(int n=0;n<7;n++)if(at<_oldStarts[n]+_beforeBanks[n].Length){int relative=at-_oldStarts[n],tableEnd=8+I(_beforeBanks[n],4)*4;return _newStarts[n]+relative+(relative>=tableEnd?_newRecordCounts[n]*4:0);}
   throw new InvalidDataException("Unmapped retained native scene address");
  }
- internal static GreenDruidSceneBankStorage Capture(string key,UniversalLevelData source,UniversalOverlay overlay,byte[]exe,UniversalLevelData host,IReadOnlyList<int>delta,int firstSector,int firstTriangle)
- {var proof=UniversalGreenDruidWorldPrerequisites.CaptureSource(key,source,overlay,exe);return new(proof,new(host.Bytes.ToArray()),delta,firstSector,firstTriangle);}
+ internal static GreenDruidSceneBankStorage Capture(string key,UniversalLevelData source,UniversalOverlay overlay,byte[]exe,UniversalLevelData host,IReadOnlyList<int>delta,int firstSector,int firstTriangle,int sourceDruidRow=5)
+ {var proof=UniversalGreenDruidWorldPrerequisites.CaptureSource(key,source,overlay,exe,sourceDruidRow);return new(proof,new(host.Bytes.ToArray()),delta,firstSector,firstTriangle);}
  internal byte[] CopyScene()=>_after.ToArray();
  internal void ValidateFinal(byte[] scene)
  {

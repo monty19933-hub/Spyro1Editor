@@ -1,3 +1,15 @@
+# Follow-up: second Green Druid moving-world group
+
+Original Alpine15/137 now exports with its complete moving cube, textures,
+collision, paths, native group6 controller and linked target into empty authored
+Peace Keepers. Real saved/reopened export and readback1174, native instruction
+replay2546, existing Green/Alpine/High Caves regressions and runner123 pass. The
+existing5/48 output remains byte-identical; the Release App builds cleanly.
+Native gameplay of this second group remains pending. Its original−1 target
+cache is preserved. [Evidence](docs/research/universal-green-second-world-20261003.md).
+
+---
+
 # Follow-up: second Alpine linked pair
 
 Original Alpine3/4 now place together into intact Blowhard through the ordinary

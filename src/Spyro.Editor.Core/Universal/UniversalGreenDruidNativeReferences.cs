@@ -1,6 +1,6 @@
 namespace Spyro.Editor.Core.Universal;
 /// <summary>Only an unchanged original native Alpine world can retain original
-/// physical target48. Separate from foreign translated-world installation.</summary>
+/// physical terrain target indices. Separate from foreign translated-world installation.</summary>
 internal sealed class UniversalGreenDruidNativeReferences
 {
  private readonly UniversalRowTemplate _original;

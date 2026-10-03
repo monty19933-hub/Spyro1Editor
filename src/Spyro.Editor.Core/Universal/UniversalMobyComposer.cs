@@ -182,7 +182,7 @@ public static class UniversalMobyComposer
         HashSet<int> destRegistered = [.. dest.Registrations().Select(r => r.ClassId)];
         List<string> warnings = [];
 
-        var greenDonor=destination.Key!="alpineridge"&&placements.Any(p=>p.SourceLevelKey=="alpineridge"&&UniversalGreenDruidWorldRows.Members.Contains(p.SourceRowIndex))?source("alpineridge"):default;
+        var greenDonor=destination.Key!="alpineridge"&&placements.Any(p=>p.SourceLevelKey=="alpineridge"&&UniversalGreenDruidWorldRows.EnrolledMembers.Contains(p.SourceRowIndex))?source("alpineridge"):default;
         var greenRequest=greenDonor.Data==null?null:UniversalGreenDruidWorldInstallation.RequireRequest(destination.Key,dest,destOverlay,exe,nativeOriginalExecutable,greenDonor.Data!,greenDonor.Overlay,placements,permanentlyRemoved,persistentNativePrefixRows);
         // 1. Resolve classes and dependency closure (spawned child classes come from the same source level).
         Dictionary<(string Source, int Class), (int DestinationClass, bool Dependency)> classes = [];
