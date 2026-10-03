@@ -645,10 +645,10 @@ public static class UniversalMobyComposer
             if(issued.OwnedDispatcher is {} dispatcher)ownedParticles.Add(dispatcher);
             UniversalTwilightTrooperParticles.RequireTextures(issued,donor.Data,dest);
         }
-        if(destination.Key=="peacekeepers" && placements.Any(p=>p.SourceLevelKey=="hauntedtowers" && source(p.SourceLevelKey).Data.CaptureRow(p.SourceLevelKey,p.SourceRowIndex).ClassId==0xCC))
+        if(destination.Key is "peacekeepers" or "darkhollow" && placements.Any(p=>p.SourceLevelKey=="hauntedtowers" && source(p.SourceLevelKey).Data.CaptureRow(p.SourceLevelKey,p.SourceRowIndex).ClassId==0xCC))
         {
             var donor=source("hauntedtowers");
-            ownedParticles.Add(UniversalHauntedWizardParticles.Capture(donor.Data,donor.Overlay,destOverlay,exe));
+            ownedParticles.Add(UniversalHauntedWizardParticles.Capture(donor.Data,donor.Overlay,destOverlay,exe,destination.Key));
             UniversalHauntedWizardParticles.RequireDestinationTexture(donor.Data,dest);
         }
         Dictionary<string,UniversalDarkPassageProjectileParticleCertificate> darkProjectileParticles=new(StringComparer.OrdinalIgnoreCase);

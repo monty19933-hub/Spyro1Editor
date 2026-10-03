@@ -1,28 +1,32 @@
 using System.Security.Cryptography;
 namespace Spyro.Editor.Core.Universal;
 
-/// <summary>Bounded original Haunted resurrection29 into an original Peace manager with native no-op29.
+/// <summary>Bounded original Haunted resurrection29 into issued native no-op29 destination managers.
 /// Source placement inputs and seven armor links must also be authenticated. Static proof is not runtime acceptance.</summary>
 public static class UniversalHauntedWizardParticles
 {
  private const uint Spawn=0x800881D8,Update=0x80086754;
  private static readonly UniversalOwnedParticleFunction SpawnOwner=new(Spawn,5704,"50b00ff3a9a569328d9192195bc323f515da5c1f9e0e7fb84e1ed08dc70b3a4a",0x8007B388,0x800897C8,[29]);
  private static readonly UniversalOwnedParticleFunction UpdateOwner=new(Update,6788,"e5af2729cd0e3666ee092c2993b007d3430e44699a67f97258a762e5da0a99a8",0x8007B244,0x80088188,[29]);
- public static UniversalOwnedParticleCertificate Capture(UniversalLevelData source,UniversalOverlay overlay,UniversalOverlay destination,byte[] exe)
+ public static UniversalOwnedParticleCertificate Capture(UniversalLevelData source,UniversalOverlay overlay,UniversalOverlay destination,byte[] exe)=>Capture(source,overlay,destination,exe,"peacekeepers");
+ public static UniversalOwnedParticleCertificate Capture(UniversalLevelData source,UniversalOverlay overlay,UniversalOverlay destination,byte[] exe,string destinationLevelKey)
  {
   UniversalHauntedWizardPlacement.RequireSource(source,overlay);RequireNative(exe);
   if(overlay.Bindings[UniversalExeBindings.ParticleSpawnGlobal].Value!=Spawn || overlay.Bindings[UniversalExeBindings.ParticleUpdateGlobal].Value!=Update ||
    overlay.Word(SpawnOwner.Table+29*4)!=0x80088B90 || overlay.Word(UpdateOwner.Table+29*4)!=0x8008714C)
    throw new InvalidDataException("Haunted resurrection particle callbacks/table29 changed.");
-  uint nativeUpdate=RequireDestination(destination);
-  return new(new("hauntedtowers",new UniversalOverlay(overlay.Bytes.ToArray(),overlay.Bindings.ToDictionary(p=>p.Key,p=>p.Value)),SpawnOwner,UpdateOwner),"peacekeepers",nativeUpdate,PatchConstructor,d=>{if(RequireDestination(d)!=nativeUpdate)throw new InvalidDataException("Particle destination manager changed after capture.");});
+  uint nativeUpdate=RequireDestination(destination,destinationLevelKey);
+  if(destinationLevelKey=="darkhollow")UniversalHauntedWizardDarkHollowParticles.Require(destination,exe);
+  return new(new("hauntedtowers",new UniversalOverlay(overlay.Bytes.ToArray(),overlay.Bindings.ToDictionary(p=>p.Key,p=>p.Value)),SpawnOwner,UpdateOwner),destinationLevelKey,nativeUpdate,PatchConstructor,d=>{if(RequireDestination(d,destinationLevelKey)!=nativeUpdate)throw new InvalidDataException("Particle destination manager changed after capture.");});
  }
  internal static bool HasNativeOwner(UniversalOverlay overlay)=>
   Convert.ToHexStringLower(SHA256.HashData(overlay.Bytes))=="e714a2c4aff4a7e8d4980fa091540f4fdcd320b4fe4c532fa8c6c3d36fd7fbfc" &&
   overlay.Update==0x8007B510 && overlay.Init==0x8008590C && overlay.CopyBuffer==0x80089820 &&
   overlay.Bindings[UniversalExeBindings.ParticleSpawnGlobal].Value==Spawn && overlay.Bindings[UniversalExeBindings.ParticleUpdateGlobal].Value==Update;
- internal static uint RequireDestination(UniversalOverlay destination)
+ internal static uint RequireDestination(UniversalOverlay destination,string destinationLevelKey="peacekeepers")
  {
+  if(destinationLevelKey=="darkhollow"){UniversalHauntedWizardDarkHollowParticles.Require(destination);return UniversalHauntedWizardDarkHollowParticles.Update;}
+  if(destinationLevelKey!="peacekeepers")throw new InvalidDataException("This wizard needs an issued native resurrection effect owner for this level.");
   // Start Blank's separately authenticated Town engine retains the complete
   // native table and update callback. Type29 is the exact same no-op loop tail.
   if(destination.Bindings[UniversalExeBindings.ParticleUpdateGlobal].Value==0x80087E20 &&

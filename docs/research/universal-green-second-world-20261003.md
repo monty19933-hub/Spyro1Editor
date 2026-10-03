@@ -6,10 +6,10 @@ The target cache remains the authentic−1. Offline original and copied floor qu
 
 Root verification after integration:
 
--1174 source, mutation, capacity, real saved/reopened project, ordinary export and independent disc-readback checks. Candidate BIN SHA256 b6cd5dfaecf35701affeb4ed9f89433e043223281a7562cf878d46fdc4bca1cc.
--2546 offline actual R3000/GTE checks against current emitted bytes: complete world/bank loading, every geometry/collision frame combination, all30 commands and120 continuous updates. Group6 is found by its native byte; absent groups require no dummy records. This is instruction evidence, not gameplay.
--907 existing Green5/48 checks; all four composed/installed binaries match the unmodified e290748 baseline byte-for-byte.
--839 Alpine3/4 checks,1039 High Caves world checks,123 regression-runner tests; Release App zero warnings/errors.
+- 1174 source, mutation, capacity, real saved/reopened project, ordinary export and independent disc-readback checks. Candidate BIN SHA256 b6cd5dfaecf35701affeb4ed9f89433e043223281a7562cf878d46fdc4bca1cc.
+- 2546 offline actual R3000/GTE checks against current emitted bytes: complete world/bank loading, every geometry/collision frame combination, all30 commands and120 continuous updates. Group6 is found by its native byte; absent groups require no dummy records. This is instruction evidence, not gameplay.
+- 907 existing Green5/48 checks; all four composed/installed binaries match the unmodified e290748 baseline byte-for-byte.
+- 839 Alpine3/4 checks,1039 High Caves world checks,123 regression-runner tests; Release App zero warnings/errors.
 
 Receipts: /Users/john/Documents/Codex/2026-09-29/files-pasted-by-the-user-spyro/work/universal-finish-20261002/root-green-second-r1, /Users/john/Documents/Codex/2026-09-29/files-pasted-by-the-user-spyro/work/universal-finish-20261002/root-green-second-r1/native-frame-cache-audit.json, /Users/john/Documents/Codex/2026-09-29/files-pasted-by-the-user-spyro/work/universal-finish-20261002/root-green-integration-r1.json and /Users/john/Documents/Codex/2026-09-29/files-pasted-by-the-user-spyro/work/universal-finish-20261002/root-green-first-profile-byte-identity-r1.json. The registered regression runner builds current Core before invoking the new suite and rejects a missing success marker or stale build.
 
