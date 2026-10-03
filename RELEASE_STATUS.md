@@ -1,3 +1,9 @@
+# Fixed: imported player animations retain later model alignment
+
+The shared animation importer now preserves every later native model root’s original alignment using an authenticated four-byte gap after the exact animation terminator when needed. Root source763, cleared Haunted10925 and actual native parser22019 checks pass. Complete animation and model payloads are retained. Affected ordinary export identities change and their gameplay evidence must be renewed. [Evidence](docs/research/player-animation-model-alignment-20261003.md).
+
+---
+
 # Follow-up: original Green Druid ramp group
 
 Alpine18/49 now exports its complete original group2 ramp, both geometry and collision keyframes, four-node path and linked target into an authored cleared Peace Keepers level. Root export/readback9254, native frame2155, effect1162, route30 and runner131 checks pass; the Release App builds cleanly. The ordinary native run confirms spell emission, collapsed-ramp contact and controller-driven target movement. Moving collision/carry, combat, rewards and wider universal coverage remain under verification. [Evidence](docs/research/universal-green-druid-ramp-world-20261003.md).

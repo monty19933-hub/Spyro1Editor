@@ -58,7 +58,8 @@ internal sealed class NativePlayerAnimationMergeLayout
     internal string FinalSha256 { get; }
     internal int OriginalByteLength { get; }
     internal int FinalByteLength => _final.Length;
-    internal int ExactGrowth => _payload?.Bytes.Length ?? 0;
+    internal int ExactGrowth => _payload is null?0:_payload.Bytes.Length-_payload.OriginalLength;
+    internal NativePlayerAnimationAlignmentPadding? AlignmentPaddingOwner {get;}
     internal IReadOnlyList<int> RequestedIds { get; }
     internal IReadOnlyList<int> AddedIds { get; }
     internal IReadOnlyList<int> ReusedLocalIds { get; }
@@ -68,7 +69,7 @@ internal sealed class NativePlayerAnimationMergeLayout
 
     internal NativePlayerAnimationMergeLayout(ReadOnlySpan<byte> targetData, NativePlayerAnimationStream donor,
         ReadOnlySpan<byte> sharedGeometry, IReadOnlyList<int> sharedAnimationIds, IReadOnlyList<int> animationIds,
-        int dataWadEntry = 0, long dataWadOffset = 0)
+        int dataWadEntry = 0, long dataWadOffset = 0,NativePlayerAnimationModelAlignment? modelAlignment=null)
     {
         ArgumentNullException.ThrowIfNull(donor);
         ArgumentNullException.ThrowIfNull(sharedAnimationIds);
@@ -89,7 +90,10 @@ internal sealed class NativePlayerAnimationMergeLayout
         if (BinaryPrimitives.ReadUInt16LittleEndian(original.AsSpan(0x150)) != 0 ||
             nextRoot <= streamOffset || streamOffset < modelOffset || nextRoot > modelOffset + (long)modelLength)
             throw new InvalidDataException("Animation merge requires a bounded special class-0 stream ending at the next native model root.");
-        var target = NativePlayerAnimationStreamCodec.Decode(original.AsSpan(streamOffset, nextRoot - streamOffset), sharedGeometry);
+        var declaredStream=original.AsSpan(streamOffset,nextRoot-streamOffset);
+        var decoded=modelAlignment==null?(NativePlayerAnimationStreamCodec.Decode(declaredStream,sharedGeometry),(NativePlayerAnimationAlignmentPadding?)null):modelAlignment.DecodeModelOwner(declaredStream,sharedGeometry);
+        var target=decoded.Item1;int originalPadding=decoded.Item2?.ByteLength??0;
+        decoded.Item2?.Require(declaredStream);
         if (target.SharedGeometrySha256 != donor.SharedGeometrySha256 ||
             target.SharedGeometryByteLength != donor.SharedGeometryByteLength)
             throw new InvalidDataException("Donor and destination player animations use different shared-geometry address domains.");
@@ -121,10 +125,20 @@ internal sealed class NativePlayerAnimationMergeLayout
         byte[] inserted = new byte[records.Sum(r => r.Length)];
         int cursor = 0;
         foreach (byte[] record in records) { record.CopyTo(inserted, cursor); cursor += record.Length; }
+        int finalPadding=(originalPadding-inserted.Length%8+8)%8;
+        if(finalPadding is not(0 or 4)||finalPadding!=0&&modelAlignment==null)throw new InvalidDataException("Player insertion requires its issued native parser alignment owner.");
         NativeLevelDataGrowthLayout growth = validation;
         if (inserted.Length > 0)
         {
-            _payload = new(0, 37, checked(dataWadOffset + insertion), dataWadEntry, insertion - modelOffset, 0, inserted, 2, false);
+            if(originalPadding==0&&finalPadding==0)
+                _payload = new(0, 37, checked(dataWadOffset + insertion), dataWadEntry, insertion - modelOffset, 0, inserted, 2, false);
+            else
+            {
+                // Replace only the owned terminator/gap. Every source record and
+                // later complete model remains byte-exact; net growth is mod8=0.
+                byte[] aligned=new byte[inserted.Length+4+finalPadding];inserted.CopyTo(aligned,0);original.AsSpan(insertion,4).CopyTo(aligned.AsSpan(inserted.Length));
+                _payload = new(0,37,checked(dataWadOffset+insertion),dataWadEntry,insertion-modelOffset,4+originalPadding,aligned,2,false);
+            }
             growth = new(original.AsSpan(0, 0x800), original.Length, [_payload]);
             if (dataWadOffset > long.MaxValue - growth.FinalLength)
                 throw new InvalidDataException("Expanded player-animation level exceeds its representable WAD owner.");
@@ -143,8 +157,8 @@ internal sealed class NativePlayerAnimationMergeLayout
             {
                 int prefix = insertion - subfile.OriginalOffset;
                 Preserve("models-before-terminator", subfile.OriginalOffset, subfile.FinalOffset, prefix);
-                Preserve("terminator-and-all-existing-models", insertion, subfile.FinalOffset + prefix + inserted.Length,
-                    subfile.OriginalLength - prefix);
+                Preserve("player-stream-terminator",insertion,subfile.FinalOffset+prefix+inserted.Length,4);
+                Preserve("all-existing-models-after-player-stream",insertion+4+originalPadding,subfile.FinalOffset+prefix+inserted.Length+4+finalPadding,subfile.OriginalLength-prefix-4-originalPadding);
             }
             else Preserve($"subfile-{subfile.Index}", subfile.OriginalOffset, subfile.FinalOffset, subfile.OriginalLength);
         }
@@ -160,7 +174,11 @@ internal sealed class NativePlayerAnimationMergeLayout
         }
         Preservations = preserved.AsReadOnly(); HeaderChanges = changes.AsReadOnly();
         int finalStart = Integer(_final, 0x50), finalEnd = Integer(_final, 0x54);
-        var readback = NativePlayerAnimationStreamCodec.Decode(_final.AsSpan(finalStart, finalEnd - finalStart), sharedGeometry);
+        var finalOwner=_final.AsSpan(finalStart,finalEnd-finalStart);
+        var finalDecoded=modelAlignment==null?(NativePlayerAnimationStreamCodec.Decode(finalOwner,sharedGeometry),(NativePlayerAnimationAlignmentPadding?)null):modelAlignment.DecodeModelOwner(finalOwner,sharedGeometry);
+        var readback=finalDecoded.Item1;AlignmentPaddingOwner=finalDecoded.Item2;AlignmentPaddingOwner?.Require(finalOwner);
+        if((AlignmentPaddingOwner?.ByteLength??0)!=finalPadding)throw new InvalidDataException("Final player stream lost its issued alignment padding owner.");
+        for(int slot=1;slot<64;slot++){uint before=Word(original,0x50+slot*4),after=Word(_final,0x50+slot*4);if(before!=0&&(after-before)%8!=0)throw new InvalidDataException("Player insertion changed a retained native model root alignment.");}
         if (!readback.Records.Select(r => r.AnimationId).SequenceEqual(target.Records.Select(r => r.AnimationId).Concat(added)))
             throw new InvalidDataException("Final player-animation stream failed native record-order readback.");
         foreach (var record in target.Records.Concat(donor.Records.Where(r => added.Contains(r.AnimationId))))

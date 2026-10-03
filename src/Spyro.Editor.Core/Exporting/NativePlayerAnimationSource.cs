@@ -49,8 +49,10 @@ public sealed class NativePlayerAnimationSource
             new("native-player-frame-sound-selector-consumers", 0x3AE38, 0x10C, "85b931efc214ddfbe44e3a893e036bbceb09e7a15e0e2007d333a5ba323132ca")
         ]);
     private readonly byte[] _geometry;
-    private NativePlayerAnimationSource(IEnumerable<NativePlayerAnimationSourceLevel> levels, byte[] geometry, IEnumerable<int> sharedIds)
+    private readonly NativePlayerAnimationModelAlignment _modelAlignment;
+    private NativePlayerAnimationSource(IEnumerable<NativePlayerAnimationSourceLevel> levels, byte[] geometry, IEnumerable<int> sharedIds,byte[] executable)
     {
+        _modelAlignment=NativePlayerAnimationModelAlignment.Capture(executable);
         Levels = Array.AsReadOnly(levels.OrderBy(l => l.LevelId).ToArray());
         _geometry = geometry.ToArray(); SharedAnimationIds = Array.AsReadOnly(sharedIds.Order().ToArray());
         SharedGeometrySha256 = NativePlayerAnimationStreamCodec.Hash(_geometry);
@@ -69,7 +71,7 @@ public sealed class NativePlayerAnimationSource
     {
         var donor = Levels.SingleOrDefault(l => l.LevelId == donorLevelId)
             ?? throw new InvalidDataException("Player-animation donor is not a captured retail level.");
-        return new(destination, donor.Stream, _geometry, SharedAnimationIds, animationIds);
+        return new(destination, donor.Stream, _geometry, SharedAnimationIds, animationIds,modelAlignment:_modelAlignment);
     }
 
     public static async Task<NativePlayerAnimationSource> CaptureAsync(string originalImagePath,
@@ -127,7 +129,7 @@ public sealed class NativePlayerAnimationSource
                 modelOffset, modelLength, streamOffset, stream));
         }
         await RequireOriginalAsync(image, cancellationToken);
-        return new(levels, geometry, shared);
+        return new(levels, geometry, shared,executable);
     }
 
     public async Task<NativePlayerAnimationMergePlan> CompileMergeAsync(string originalImagePath, int donorLevelId,
@@ -153,7 +155,7 @@ public sealed class NativePlayerAnimationSource
         byte[] data = DiscImage.ReadFileBytes(image, layout, 37, target.DataWadOffset, target.DataByteLength);
         RequireHash(data, target.DataSha256, "captured destination level");
         var merged = new NativePlayerAnimationMergeLayout(data, donor.Stream, _geometry, SharedAnimationIds,
-            requested, target.DataWadEntry, target.DataWadOffset);
+            requested, target.DataWadEntry, target.DataWadOffset,_modelAlignment);
         await RequireOriginalAsync(image, cancellationToken);
         return new(this, donorLevelId, targetLevelId, merged);
     }

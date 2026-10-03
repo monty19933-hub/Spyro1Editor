@@ -171,14 +171,30 @@ if (args.Length == 2 && args[0] == "--source")
         byte[] sharedGeometry = DiscImage.ReadFileBytes(originalImage, disc, 37, 0x7B9AA8, 0x32374);
         Check(NativePlayerAnimationStreamCodec.Hash(sharedGeometry) == source.SharedGeometrySha256, "independent shared geometry read");
         var wizardStream = source.Levels.Single(l => l.LevelId == 33).Stream;
+        byte[] nativeExe=DiscImage.ReadFileBytes(originalImage,disc,53875,0,0x66000);
+        var alignment=NativePlayerAnimationModelAlignment.Capture(nativeExe);
+        for(int pc=0x3A30;pc<0x3BE0;pc+=4){var mutated=nativeExe.ToArray();mutated[pc]^=1;Reject(()=>NativePlayerAnimationModelAlignment.Capture(mutated),"complete native parser mutation");}
+        byte[] canonical=source.Levels[0].Stream.Encode();var padded=canonical.Concat(new byte[4]).ToArray();var issued=alignment.DecodeModelOwner(padded,sharedGeometry);
+        Check(issued.Padding?.ByteLength==4&&issued.Stream.Encode().SequenceEqual(canonical),"issued four zero bytes preserve complete stream");issued.Padding!.Require(padded);
+        Reject(()=>NativePlayerAnimationStreamCodec.Decode(padded,sharedGeometry),"public codec remains strict about trailing bytes");
+        foreach(var bad in new[]{canonical.Concat(new byte[8]).ToArray(),canonical.Concat(new byte[]{1,0,0,0}).ToArray(),canonical.Concat(new byte[2]).ToArray()}){Reject(()=>alignment.DecodeModelOwner(bad,sharedGeometry),"extra/nonzero/truncated gap");Reject(()=>issued.Padding.Require(bad),"issued padding extent/payload mutation");}
+        // A source-shaped odd-sized record exercises both padding transitions.
+        byte[] odd=Stream(8);Array.Resize(ref odd,odd.Length+4);Put(odd,4,0x84);Put(odd,odd.Length-4,uint.MaxValue);Put(odd,odd.Length-8,0);
+        var oddDonor=NativePlayerAnimationStreamCodec.Decode(odd,new byte[64]);var oddMerge=new NativePlayerAnimationMergeLayout(Entry(Stream(18)),oddDonor,new byte[64],[],[8],modelAlignment:alignment);
+        Check(oddMerge.ExactGrowth==0x90&&oddMerge.AlignmentPaddingOwner?.ByteLength==4,"four-byte gap preserves native rootsmod8");
+        var onePad=oddMerge.CopyFinalBytes();var second=Stream(9);Array.Resize(ref second,second.Length+4);Put(second,4,0x84);Put(second,second.Length-4,uint.MaxValue);Put(second,second.Length-8,0);
+        var consume=new NativePlayerAnimationMergeLayout(onePad,NativePlayerAnimationStreamCodec.Decode(second,new byte[64]),new byte[64],[],[9],modelAlignment:alignment);
+        Check(consume.ExactGrowth==0x88&&consume.AlignmentPaddingOwner==null,"second odd insertion consumes only the owned four-byte gap");
+        var reused=new NativePlayerAnimationMergeLayout(onePad,oddDonor,new byte[64],[],[8],modelAlignment:alignment);Check(reused.ExactGrowth==0&&reused.FinalSha256==oddMerge.FinalSha256,"padded repeated merge keeps exact no-op identity");
+        for(int slot=1;slot<64;slot++)if(Word(onePad,0x50+slot*4)!=0)Check((Word(consume.CopyFinalBytes(),0x50+slot*4)-Word(onePad,0x50+slot*4))%8==0,"all later roots preserve modulo8 through gap consumption");
         foreach (var level in source.Levels)
         {
             byte[] original = DiscImage.ReadFileBytes(originalImage, disc, 37, level.DataWadOffset, level.DataByteLength);
             Check(NativePlayerAnimationStreamCodec.Hash(original) == level.DataSha256, "source matrix exact level hash");
             var matrix = new NativePlayerAnimationMergeLayout(original, wizardStream, sharedGeometry,
-                source.SharedAnimationIds, [8], level.DataWadEntry, level.DataWadOffset);
+                source.SharedAnimationIds, [8], level.DataWadEntry, level.DataWadOffset,alignment);
             bool resident = level.Stream.Records.Any(r => r.AnimationId == 8);
-            Check(matrix.ExactGrowth == (resident ? 0 : 0x3E1C) && matrix.FinalByteLength - matrix.OriginalByteLength == (resident ? 0 : 0x4000),
+            Check(matrix.ExactGrowth == (resident ? 0 : 0x3E20) && matrix.FinalByteLength - matrix.OriginalByteLength == (resident ? 0 : 0x4000),
                 "all35 native targets: exact reuse or actual append");
             byte[] output = matrix.CopyFinalBytes();
             Check(original.AsSpan(checked((int)Word(original, 0x18)), checked((int)Word(original, 0x1C)))
@@ -192,12 +208,12 @@ if (args.Length == 2 && args[0] == "--source")
             "original source identity preserved after all35 native merge matrix");
     }
     var toasty = await source.CompileMergeAsync(args[1], 33, 14, [8]);
-    Check(toasty.AddedAnimationIds.SequenceEqual(new[] { 8 }) && toasty.ExactInsertedByteLength == 0x3E1C && toasty.SectorRoundedGrowth == 0x4000,
+    Check(toasty.AddedAnimationIds.SequenceEqual(new[] { 8 }) && toasty.ExactInsertedByteLength == 0x3E20 && toasty.SectorRoundedGrowth == 0x4000,
         "real Toasty missing-animation merge");
     Check(toasty.Preservations.Sum(p => p.ByteLength) == toasty.OriginalDataByteLength - 0x800, "all original Toasty payload bytes preserved");
     Check(!toasty.RuntimeFitProven && !toasty.CompleteAnimationConsumersProven && !toasty.PublicationApproved,
         "real structural merge still requires RAM and dependency acceptance");
-    Check(toasty.FinalDataSha256 == "25e1a8d8c74a4c9e22596a72847ddd3b8dde155022d38221317d5204a9cc5f5e", "Toasty animation8 byte golden");
+    Check(toasty.FinalDataSha256=="4d0018961c179297b2ca41cd3cc55792db8ea5ea5c5f5a0f51ff486844c56e33","Toasty alignment-preserved source-byte golden");
     Console.WriteLine($"NATIVE_PLAYER_ANIMATION_MERGE target=14 ids=8 exact=0x{toasty.ExactInsertedByteLength:X} sector=0x{toasty.SectorRoundedGrowth:X} sha256={toasty.FinalDataSha256} plan={toasty.PlanSha256}");
     var flight = await source.CompileMergeAsync(args[1], 64, 14, [35, 33, 34]);
     Check(flight.AddedAnimationIds.SequenceEqual(new[] { 33, 34, 35 }) && flight.ExactInsertedByteLength == 0x33C8,

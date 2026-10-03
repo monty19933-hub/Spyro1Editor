@@ -12,7 +12,8 @@ int checks=0;List<object> receipts=[];void Check(bool v,string msg){if(!v)throw 
 void Case(IReadOnlyList<UniversalMobyPlacement> placements,string name,bool alias=false){
  UniversalComposeResult result;
  if(alias){var host=new UniversalLevelData(cleared.CopyLevelData());foreach(int c in new[]{0xCB,0xCC,0xD7,0x26})host.AppendModel(c,haunted.Data.Package(c));var prepared=NativeFreshPlacementArena.Prepare(host.Bytes,placements.Count);result=UniversalMobyComposer.Compose(peace.Level,prepared,cleared.CopyOverlay(),cleared.CopyExecutable(),lib.Get,lib.SharedClasses,UniversalMobyExport.DefaultProtectedVram(Path.Combine(dir,"baseline.bin"),peace.Level),placements,sharedModelPackage:lib.SharedModelPackage,playerAnimationSource:lib.PlayerAnimations,persistentNativePrefixRows:peace.Data.Scene().RowCount);Check(result.Classes.Where(c=>c.ClassId is 0xCB or 0xCC).All(c=>c.DestinationClassId!=c.ClassId),"forced occupied-namespace aliases");}
- else result=cleared.Compose(lib,placements);var data=new UniversalLevelData(result.LevelData);Check(result.UnresolvedObjectLinks==0,name+" links");
+ else result=cleared.Compose(lib,placements);if(name=="variant0"){File.WriteAllBytes(Path.Combine(dir,"variant0-baseline-data.bin"),cleared.CopyLevelData());File.WriteAllBytes(Path.Combine(dir,"variant0-final-data.bin"),result.LevelData);File.WriteAllBytes(Path.Combine(dir,"variant0-final-executable.bin"),result.Executable);}
+ var data=new UniversalLevelData(result.LevelData);Check(result.UnresolvedObjectLinks==0,name+" links");
  if(result.Classes.Any(c=>c.SourceLevelKey=="hauntedtowers"&&c.ClassId==0xCC)){
   Check(result.ParticleDependencies.Single(p=>p.SourceLevelKey=="hauntedtowers"&&p.TypeId==29).Status=="source-certified-copied",name+" issued resurrection status");
   Check(!result.Warnings.Any(w=>w.StartsWith("Particle 0x1D from hauntedtowers:")),name+" no stale resurrection warning");
