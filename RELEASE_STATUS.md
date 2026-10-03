@@ -8,8 +8,10 @@ visual confirmation and other hosts/variants remain open.
 One complete four-object moving-terrain group now exports into an empty authored
 Peace Keepers level with its original world, animation banks, collision and effects.
 Integrated1,039 checks, affected regressions, runner115 and Release App build pass;
-the independently rebuilt candidate matches exactly. Moving-world native gameplay
-is the next gate. [Evidence](docs/research/universal-high-caves-20261003.md).
+the independently rebuilt candidate matches exactly. A separate spawn-only native
+diagnostic now confirms animated-floor carry, jumping/landing, visible type8 spells,
+controller flame defeat and five-gem collection with inventory5/20. Full-world
+cohort completion, postcollection respawn/card persistence and other hosts remain open. [Evidence](docs/research/universal-high-caves-20261003.md).
 
 ---
 
