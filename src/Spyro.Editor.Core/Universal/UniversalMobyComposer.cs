@@ -454,7 +454,7 @@ public static class UniversalMobyComposer
             if (job.Pkg != null)
             {
                 int ti = textured.FindIndex(j => j.Class == c);
-                if (ti >= 0) { tex = texReports[ti]; snd = UniversalAssetImport.ImportSounds(job.Pkg, asset.SourceData, dest); }
+                if (ti >= 0) { tex = texReports[ti]; snd = UniversalAssetImport.ImportSounds(job.Pkg, asset.SourceData, dest, exe); }
                 pendingModels.Add((c, job.Pkg)); destRegistered.Add(c);
             }
             imports.Add(new(c, asset.SourceKey, job.Pkg != null, true, job.Pkg?.Length ?? 0, tex, snd, false));
@@ -473,7 +473,7 @@ public static class UniversalMobyComposer
             {
                 byte[] pkg = job.Pkg!;
                 int ti = textured.FindIndex(j => j.Class == mapped);
-                if (ti >= 0) { tex = texReports[ti]; snd = UniversalAssetImport.ImportSounds(pkg, s.Data, dest); }
+                if (ti >= 0) { tex = texReports[ti]; snd = UniversalAssetImport.ImportSounds(pkg, s.Data, dest, exe); }
                 size = pkg.Length;
                 pendingModels.Add((mapped, pkg));
                 destRegistered.Add(mapped);

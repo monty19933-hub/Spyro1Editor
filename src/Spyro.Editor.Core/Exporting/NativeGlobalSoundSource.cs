@@ -141,7 +141,13 @@ internal sealed class NativeLevelSoundLayout
         ParticleOffset = cursor;
         cursor += Component(data, cursor, end); // particle component
         SoundOffset = cursor; int soundLength = Component(data, cursor, end);
-        Sound = NativeSoundBankCodec.Decode(data.Slice(cursor, soundLength), data.Slice(BankOffset, VramLength - 0x80000));
+        int storageLength = VramLength - 0x80000;
+        if (storageLength > NativeSoundBankCodec.SpuUploadByteLength &&
+            (storageLength != 0x7F000 || data.Slice(BankOffset + NativeSoundBankCodec.SpuUploadByteLength,
+                storageLength - NativeSoundBankCodec.SpuUploadByteLength).IndexOfAnyExcept((byte)0) >= 0))
+            throw new InvalidDataException("Native sound storage beyond the SPU upload must be exactly one zero DMA padding frame.");
+        Sound = NativeSoundBankCodec.Decode(data.Slice(cursor, soundLength), data.Slice(BankOffset,
+            Math.Min(storageLength, NativeSoundBankCodec.SpuUploadByteLength)));
     }
     internal int VramOffset { get; }
     internal int VramLength { get; }

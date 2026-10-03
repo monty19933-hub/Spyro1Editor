@@ -113,7 +113,10 @@ public sealed class UniversalVramAllocator
 
 public sealed record UniversalTextureReport(int Groups, int PixelBytes, int Cluts, int Reused);
 
-public sealed record UniversalSoundReport(int SlotsBound, int SlotsReused, int DescriptorsAppended, int SampleBytesAppended, int SlotsSilenced);
+public sealed record UniversalSoundReport(int SlotsBound, int SlotsReused, int DescriptorsAppended, int SampleBytesAppended, int SlotsSilenced)
+{
+    public int BankBytesReclaimed { get; init; }
+}
 
 /// <summary>Texture and sound dependencies of a copied Moby model package.</summary>
 public static class UniversalAssetImport
@@ -342,11 +345,11 @@ public static class UniversalAssetImport
 
     /// <summary>Rebinds the package's 16 local sound slots (bytes 4..19) to equivalent destination sounds,
     /// appending descriptors and ADPCM samples to the destination bank when absent.</summary>
-    public static UniversalSoundReport ImportSounds(byte[] pkg, UniversalLevelData source, UniversalLevelData dest)
+    public static UniversalSoundReport ImportSounds(byte[] pkg, UniversalLevelData source, UniversalLevelData dest, byte[]? nativeExecutable = null)
     {
         if (BinaryPrimitives.ReadInt32LittleEndian(pkg) <= 0) return new(0, 0, 0, 0, 0);
         var src = new NativeLevelSoundLayout(source.Bytes);
-        int bound = 0, reused = 0, appended = 0, sampleBytes = 0, silenced = 0;
+        int bound = 0, reused = 0, appended = 0, sampleBytes = 0, silenced = 0, reclaimed = 0;
         for (int slot = 0; slot < 16; slot++)
         {
             byte b = pkg[4 + slot];
@@ -370,14 +373,24 @@ public static class UniversalAssetImport
                 int usedEnd = dst.Sound.Descriptors.Select(e => e.Sample.BankOffset + e.Sample.ByteLength).DefaultIfEmpty(0).Max();
                 ReadOnlySpan<byte> bank = dest.Bytes.AsSpan(dst.BankOffset, NativeSoundBankTail(dst));
                 usedEnd = UniversalLevelData.Align(Math.Max(usedEnd, bank.LastIndexOfAnyExcept((byte)0) + 1), 16);
-                if (usedEnd + sample.Length > NativeSoundBankTail(dst))
+                int storage = NativeSoundBankTail(dst);
+                int growth = UniversalLevelData.Align(Math.Max(0, usedEnd + sample.Length - storage), 0x800);
+                bool certified = false;
+                if (usedEnd + sample.Length > Analysis.NativeSoundBankCodec.SpuUploadByteLength || storage + growth > Analysis.NativeSoundBankCodec.SpuUploadByteLength)
                 {
-                    int need = usedEnd + sample.Length - NativeSoundBankTail(dst);
-                    if (dst.VramLength - 0x80000 + UniversalLevelData.Align(need, 0x800) > 0x7EFF0)
-                    throw new InvalidDataException("The destination sound bank cannot fit a required sample; import would otherwise silence it.");
-                    dest.GrowSubfile(0, UniversalLevelData.Align(need, 0x800));
+                    if (nativeExecutable == null)
+                        throw new InvalidDataException("The destination sound bank cannot fit a required sample; import would otherwise silence it.");
+                    UniversalSoundBankStorage.RequireExecutable(nativeExecutable); certified = true;
+                    int previousEnd = usedEnd;
+                    usedEnd = UniversalSoundBankStorage.Compact(dest, dst);
+                    reclaimed += previousEnd - usedEnd;
                     dst = new NativeLevelSoundLayout(dest.Bytes);
+                    growth = UniversalLevelData.Align(Math.Max(0, usedEnd + sample.Length - storage), 0x800);
                 }
+                int maximumStorage = certified ? UniversalSoundBankStorage.MaximumStorageBytes : Analysis.NativeSoundBankCodec.SpuUploadByteLength;
+                if (usedEnd + sample.Length > Analysis.NativeSoundBankCodec.SpuUploadByteLength || storage + growth > maximumStorage)
+                    throw new InvalidDataException("The destination sound bank cannot fit a required sample; import would otherwise silence it.");
+                if (growth > 0) { dest.GrowSubfile(0, growth); dst = new NativeLevelSoundLayout(dest.Bytes); }
                 sample.CopyTo(dest.Bytes, dst.BankOffset + usedEnd);
                 sampleOffset = usedEnd; sampleBytes += sample.Length;
             }
@@ -385,7 +398,7 @@ public static class UniversalAssetImport
             int newIndex = AppendDescriptor(dest, want);
             pkg[4 + slot] = (byte)newIndex; appended++; bound++;
         }
-        return new(bound, reused, appended, sampleBytes, silenced);
+        return new(bound, reused, appended, sampleBytes, silenced) { BankBytesReclaimed = reclaimed };
     }
 
     static int NativeSoundBankTail(NativeLevelSoundLayout l) => l.VramLength - 0x80000;

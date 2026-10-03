@@ -58,7 +58,7 @@ public static class UniversalWhirlwindSoundDependency
             throw new InvalidDataException("Whirlwind original looping sound record differs from its certified native descriptor/sample.");
         byte[] originalMap=new NativeLevelSoundLayout(destination.Bytes).Sound.Map.ToArray();
         byte[] oneSlot=Enumerable.Repeat((byte)0xFF,20).ToArray();oneSlot[0]=1;oneSlot[1]=oneSlot[2]=oneSlot[3]=0;oneSlot[4]=index;
-        var report=UniversalAssetImport.ImportSounds(oneSlot,sourceData,destination);
+        var report=UniversalAssetImport.ImportSounds(oneSlot,sourceData,destination,nativeExecutable);
         var binding=new UniversalWhirlwindSoundBinding(sourceKey,pc,oneSlot[4],Hash(sourceOverlay.Bytes),
             sourceOverlay.Update,sourceOverlay.Init,sourceOverlay.CopyBuffer,report);
         RequireDestination(binding,destination);
