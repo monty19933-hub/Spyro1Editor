@@ -106,3 +106,38 @@ no invalid access/panic lines occurred. The blank card stayed unchanged, so card
 persistence is not claimed. Other retained rescues, full combat/respawn, audio and
 other hosts remain pending. The ordinary export now additionally passes the
 source-wide final rescue-prefix guard described in the linked capacity report.
+
+## Relocated lower-field pair: both native rewards
+
+The complete group was saved, reopened and exported through the ordinary editor
+path with a common translation to the lower Artisans field. FD starts at
+79000/59000/7360; the caster starts at77474/62133/8127. Full source homes, both path
+nodes, reciprocal links, behavior, assets and all six native world components
+remain intact. The fixture records423 composition/export/readback checks and
+native collision-floor/clearance queries across seven approach segments.
+
+Ordinary BIN SHA256 is
+`6e80e31d7a0ed88156f06477b340958395058a05c63d3898d47d359278fe09ec`.
+The separately labeled diagnostic shortens only initial player XYZ to
+76000/59000/7216, preserving heading and every other payload. Its BIN SHA256 is
+`9d872a439093149c3b8027e160dd3b1d0c1cc5cf0415c9da117aad1a87953cf6`.
+Independent extraction validates the one changed sector and regenerated EDC/ECC.
+Full fixture evidence is `work/universal-finish-20261002/alpine-artisans-open-field-r1/FINDINGS.md`.
+
+Fresh US firmware New Game with native controls confirms:
+
+- Flame changes physical0/class509 to native defeat state3, spawns blue5 and
+  collects it. The caster progresses through its linked6/7/0 states.
+- The caster keeps its source-relative elevated height. An ordinary jump-charge
+  defeats it and spawns yellow10; its death animation then reaches floor6800.
+- Both rewards collect with no original gem contributing: global/level total15,
+  logical174/175 durable and checkpoint flags true. Native inventory visibly
+  shows Artisans15/102 and dragons0/4 at08:45:08.
+
+The closed receipt is
+`work/universal-finish-20261002/runtime/alpine-artisans-open-field-native-r1/runtime-proof.json`.
+Six native screenshots, full log and read-only captures are preserved. There are
+no invalid-memory/panic log entries, runtime writes or save states; the private
+blank card is unchanged. This closes relocated pair combat/reward acceptance in
+Artisans. Death/respawn, card save/cold reload, close audio listening and rescues
+beyond the separately verified Nestor remain pending.

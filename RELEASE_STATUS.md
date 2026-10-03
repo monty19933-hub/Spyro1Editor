@@ -6,7 +6,10 @@ space for dragon dialogue; the retail copy length underflowed and overwrote
 native code. Complete models are now reordered without increasing allocation.
 Fresh full-firmware gameplay completes Nestor's rescue, restores the world and
 imported models, and confirms the armored enemy's blue5 reward with native
-inventory5/102 and dragon1/4. The linked caster's yellow10 remains pending.
+inventory5/102 and dragon1/4. A separate ordinary-export lower-field placement,
+tested with only its initial player XYZ shortened, now confirms both enemies:
+native flame/blue5, jump-charge/yellow10, both saved collection identities and
+inventory15/102. Respawn/card persistence and the other retained rescues remain open.
 The closed run has no invalid-memory/panic log entries or save-state/RAM writes.
 [Evidence](docs/research/universal-alpine-artisans-20261003.md).
 
