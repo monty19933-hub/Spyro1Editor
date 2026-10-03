@@ -15,6 +15,9 @@ internal static class BatchCases
         var peaceHost=await NativeClearedLevelCompilation.CaptureAsync(donors.ImagePath,doc,catalog,Path.Combine(artifacts,"peace-host.bin"));
         var freshDoc=SceneDocument.New("New Authored Level");
         var freshHost=await NativeFreshMainCompilation.CaptureAsync(donors.ImagePath,freshDoc,Path.Combine(artifacts,"fresh-host.bin"));
+        RewardFallbackCases.RequirePreserved(donors,peaceHost.CopyLevelData(),check,"aggregate cleared Peace Keepers host");
+        RewardFallbackCases.RequirePreserved(donors,freshHost.CopyLevelData(),check,"aggregate Fresh65 host");
+        RewardFallbackCases.RequireProtected(Path.Combine(artifacts,"fresh-host.bin"),freshHost.Target,check,"actual Fresh65 baseline");
         // An ordinary, independently staged native sheep transform in Stone Hill.
         // This explicit owned row coordinate must survive the aggregate rebuild.
         var stone=donors.Get("stonehill");var stoneData=new UniversalLevelData(stone.Data.Bytes.ToArray());
@@ -26,6 +29,9 @@ internal static class BatchCases
         string folder=Path.Combine(artifacts,"batch");Directory.CreateDirectory(folder);string output=Path.Combine(folder,"candidate.bin");
         string hash=await NativeAuthoredProjectExporter.ExportAsync(donors,catalog,[new(artisans,placements),new(doc,[]),new(freshDoc,[])],null,output,folder,20,stagedRetailImage:stage);
         var written=UniversalDiscImage.Read(output);
+        foreach(int entry in new[]{10,peace.Level.SourceWadEntry,80})
+            RewardFallbackCases.RequirePreserved(donors,written.EntryBytes(entry),check,"aggregate independent written host "+entry);
+        RewardFallbackCases.RequireProtected(output,freshHost.Target,check,"aggregate written Fresh65 host");
         check(written.EntryBytes(10).AsSpan().SequenceEqual(result.LevelData),"aggregate cleared Artisans actors and body exact");
         check(written.EntryBytes(9).AsSpan().SequenceEqual(result.Overlay),"aggregate cleared Artisans overlay exact");
         check(written.EntryBytes(peace.Level.SourceWadEntry).AsSpan().SequenceEqual(peaceHost.CopyLevelData()),"aggregate second retail authored body exact");

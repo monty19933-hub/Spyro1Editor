@@ -7,6 +7,7 @@ Original checkout, game images, saved projects, cards and R15 packages remain se
 - [x] Verify exact USA/Japan source identities and baseline build/regression.
 - [ ] Universal type/variant inventory and destination matrix; separate runtime evidence.
 - [x] Guard import source identities, sound limits and proven VRAM ownership; import missing particle textures.
+- [x] Preserve native replacement-reward resources in fresh/cleared exports; cold-boot druid repeat defeat and orb pickup without duplicate gems or invalid reads. Native0E/10 and card coverage remain separate.
 - [ ] Close remaining behavior, links, collision and renderer-format gaps across the catalog.
 - [x] Original Alpine0/1 in intact Blowhard: native arms, damage, rewards, inventory and no duplicate gems after death; [bounded evidence](research/universal-alpine-arm-groups-20261003.md).
 - [x] Remove added eyes from model and inventory; preserve native eye-free assets.

@@ -16,9 +16,10 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
 {
     private readonly byte[] _body, _overlay, _exe;
     private readonly string _baseline;
+    internal NativeFreshRewardFallbackResources RewardFallbacks { get; }
     private NativeClearedLevelCompilation(SceneDocument document, LevelDefinition target, string baseline,
-        byte[] body, byte[] overlay, byte[] exe)
-    { Document=document; Target=target; _baseline=baseline; _body=body; _overlay=overlay; _exe=exe; }
+        byte[] body, byte[] overlay, byte[] exe, NativeFreshRewardFallbackResources rewardFallbacks)
+    { Document=document; Target=target; _baseline=baseline; _body=body; _overlay=overlay; _exe=exe; RewardFallbacks=rewardFallbacks; }
     public SceneDocument Document { get; }
     public LevelDefinition Target { get; }
     public byte[] CopyLevelData() => _body.ToArray();
@@ -56,7 +57,7 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
                 throw new InvalidDataException("The rebuilt retail level failed independent disc readback.");
             ExportArtifactTransaction.RequireSourceSeparation(originalUSA,null,scratchBaselinePath);
             File.Move(stage,scratchBaselinePath,true);
-            return new(document,target,scratchBaselinePath,body,overlay,exe);
+            return new(document,target,scratchBaselinePath,body,overlay,exe,kernel.RewardFallbacks);
         }
         finally {if(File.Exists(stage))File.Delete(stage);if(File.Exists(kernelPath))File.Delete(kernelPath);}
     }
@@ -69,9 +70,11 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
     {
         byte[] prepared=NativeFreshPlacementArena.Prepare(_body,placements.Count(p=>!p.Retired));
         var nativeOwner=new UniversalOverlay(_overlay,UniversalExeBindings.Read(executable,Target.LevelId));
-        return UniversalMobyComposer.Compose(Target,prepared,_overlay,executable,donors.Get,donors.SharedClasses,
+        var composed=UniversalMobyComposer.Compose(Target,prepared,_overlay,executable,donors.Get,donors.SharedClasses,
             UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,
             sharedModelPackage:donors.SharedModelPackage,playerAnimationSource:donors.PlayerAnimations,
             persistentNativePrefixRows:Document.TargetBinding!.NativePrefixRows,nativeDestinationOwner:nativeOwner,nativeOriginalExecutable:donors.Disc.Exe);
+        RewardFallbacks.RequireInstalled(composed.LevelData);
+        return composed;
     }
 }

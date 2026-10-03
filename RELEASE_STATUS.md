@@ -1,12 +1,14 @@
-# Active blocker: native replacement assets in cleared levels
+# Fixed: native replacement resources in fresh and cleared levels
 
-The ordinary Green15/137 export passes first pickup, native inventory1/1 and
-normal respawn retention, but stalls on the subsequent flame defeat. The native
-replacement reward selects class0F whose model is absent from the fresh/cleared
-host. Read-only saved RAM and actual instruction replay reproduce the null model
-read; the earlier Green5/48 host has the same missing0E/0F/10 dependency. Complete
-replacement assets and fresh native repeat-defeat verification are required.
-[Failure evidence](docs/research/universal-green-second-world-20261003.md).
+Fresh and cleared exports now preserve the complete original0E/0F/10 replacement
+models, texture ownership and native model read-ahead alignment. The rebuilt
+ordinary Green15/137 export cold-boots, awards its first gem, retains it through
+normal death, and completes the subsequent flame defeat without the former
+crash. The original0F replacement orb renders and is collected; its counter
+advances0→1 while native inventory stays1/1. No invalid memory reads occurred.
+Source9358, cleared export/batch6048, Fresh652613 and affected regressions pass.
+Native0E/10 rendering, card persistence and wider universal gameplay remain open.
+[Fix and bounded native evidence](docs/research/universal-green-second-world-20261003.md).
 
 ---
 
@@ -27,7 +29,9 @@ Original Haunted wizard21 and armor1 now compose/export into intact Dark Hollow
 with native resurrection links, full source assets and all five authenticated
 effect dependencies. Saved/reopened source checks2019, asset checks608984, actual
 native instruction checks623470/1055 controls, existing Haunted regressions and
-runner128 pass; the Release App builds cleanly. Native gameplay remains pending.
+runner128 pass; the Release App builds cleanly. An arrival-only native diagnostic
+now verifies resurrection, animated armor activation, normal wizard flame defeat,
+green2 collection and inventory2/112. Powered armor defeat and persistence remain open.
 [Evidence](docs/research/universal-haunted-darkhollow-20261003.md).
 
 ---
@@ -39,8 +43,9 @@ collision, paths, native group6 controller and linked target into empty authored
 Peace Keepers. Real saved/reopened export and readback1174, native instruction
 replay2546, existing Green/Alpine/High Caves regressions and runner123 pass. The
 existing5/48 output remains byte-identical; the Release App builds cleanly.
-First pickup and terrain gameplay now have native evidence, but repeat defeat
-fails as described above. Its original−1 target cache is preserved. [Evidence](docs/research/universal-green-second-world-20261003.md).
+First pickup and terrain gameplay have native evidence; the replacement-resource
+fix above additionally verifies repeat defeat and orb pickup. Its original−1
+target cache is preserved. [Evidence](docs/research/universal-green-second-world-20261003.md).
 
 ---
 

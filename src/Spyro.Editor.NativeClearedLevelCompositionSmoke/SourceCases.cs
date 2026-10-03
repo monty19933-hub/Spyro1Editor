@@ -22,11 +22,12 @@ internal static class SourceCases
         byte[] data=cleared.CopyLevelData(),overlay=cleared.CopyOverlay(),exe=cleared.CopyExecutable();
         check(new UniversalLevelData(data).Scene().RowCount==0,"real rebuilt retail host is empty");
         check(cleared.Target.LevelId==10 && cleared.Target.SourceWadEntry==10,"exact original retail target");
+        int gnorcRow=Enumerable.Range(0,prefix).First(i=>BinaryPrimitives.ReadUInt16LittleEndian(old.Data.Row(i).AsSpan(0x36))==0x72);
         int gemRow=Enumerable.Range(0,prefix).First(i=>BinaryPrimitives.ReadUInt16LittleEndian(old.Data.Row(i).AsSpan(0x36))==0x53);
         var placements=new[]{
             new UniversalMobyPlacement("artisans",gemRow,556*16,560*16,544*16){EditorId=Guid.NewGuid().ToString("N"),PersistentSlot=0},
             new UniversalMobyPlacement("artisans",gemRow,558*16,560*16,544*16){EditorId=Guid.NewGuid().ToString("N"),PersistentSlot=1,Retired=true},
-            new UniversalMobyPlacement("alpineridge",1,600*16,560*16,544*16){EditorId=Guid.NewGuid().ToString("N"),PersistentSlot=2}};
+            new UniversalMobyPlacement("artisans",gnorcRow,600*16,560*16,544*16){EditorId=Guid.NewGuid().ToString("N"),PersistentSlot=2}};
         document=document with {Ledger=new(1,placements.Select(p=>new UniversalPlacementIdentity(p.EditorId!,p.PersistentSlot!.Value)).ToArray())};
         var result=cleared.Compose(donors,placements);
         check(result.NewRowIndices.SequenceEqual(new[]{0,-1,1}),"retired row consumes no physical actor");
@@ -37,12 +38,21 @@ internal static class SourceCases
         var finalData=new UniversalLevelData(result.LevelData);
         check(finalData.Scene().RowCount==2,"real two-actor scene");
         check(result.Classes.Any(c=>c.SourceLevelKey=="artisans"&&c.ClassId==0x53),"same-level source donor remains available after clear");
-        int gnorcRow=Enumerable.Range(0,prefix).First(i=>BinaryPrimitives.ReadUInt16LittleEndian(old.Data.Row(i).AsSpan(0x36))==0x72);
         var localEnemy=cleared.Compose(donors,[new("artisans",gnorcRow,600*16,560*16,544*16){EditorId=Guid.NewGuid().ToString("N"),PersistentSlot=0}]);
         check(localEnemy.Classes.Any(c=>c.SourceLevelKey=="artisans"&&c.ClassId==0x72),"same-level local enemy model imported from original donor");
         check(localEnemy.Behavior.Any(b=>b.SourceLevelKey=="artisans"&&b.Classes.Contains(0x72)),"same-level local enemy behavior imported from original donor");
         check(localEnemy.PhysicalToLogicalSaveRows.SequenceEqual(new[]{prefix}),"same-level local enemy retains original-prefix identity");
-        check(result.PlayerAnimationImports.Any(i=>i.AddedAnimationIds.Contains(23)),"Alpine reaction animation dependency included");
+        // This supported native Gnorc has no foreign reaction-animation owner.
+        // Preserve the complete retained player stream rather than asserting an Alpine-only dependency.
+        var initial=new UniversalLevelData(data);int playerRoot=initial.U32(0x50),finalPlayerRoot=finalData.U32(0x50);
+        int playerLength=initial.Registrations().Where(r=>r.Root>playerRoot).Min(r=>r.Root)-playerRoot;
+        check(finalData.Bytes.AsSpan(finalPlayerRoot,playerLength).SequenceEqual(data.AsSpan(playerRoot,playerLength)),"supported native Gnorc preserves complete retained player stream");
+        check(result.PlayerAnimationImports.Count==0,"native Gnorc introduces no unrelated foreign reaction animations");
+        check(result.Classes.Any(c=>c.SourceLevelKey=="artisans"&&c.ClassId==0x72)&&result.Behavior.Any(b=>b.SourceLevelKey=="artisans"&&b.Classes.Contains(0x72)),"replacement contains full original native Gnorc model and behavior");
+        RewardFallbackCases.RequirePreserved(donors,data,check,"blank cleared host");
+        RewardFallbackCases.RequireProtected(baseline,cleared.Target,check,"blank cleared host");
+        RewardFallbackCases.RequirePreserved(donors,result.LevelData,check,"replacement after native imports");
+        RewardFallbackCases.RequirePreserved(donors,localEnemy.LevelData,check,"standalone native enemy import");
         for(int i=0;i<placements.Length;i++)
         {
             if(placements[i].Retired)continue;
@@ -56,6 +66,9 @@ internal static class SourceCases
             try { action();throw new InvalidOperationException(name+" accepted"); }
             catch(InvalidDataException) {check(true,name);}
         }
+        Refuse(()=>cleared.Compose(donors,[new("alpineridge",1,600*16,560*16,544*16){EditorId=Guid.NewGuid().ToString("N"),PersistentSlot=0}]),"lone Alpine actor cannot bypass complete original-host ownership");
+        var unsupportedAlpineGroup=UniversalPlacementGroups.Expand(donors.Get,new("alpineridge",1,600*16,560*16,544*16,EditorId:Guid.NewGuid().ToString("N"),PersistentSlot:0));
+        Refuse(()=>cleared.Compose(donors,unsupportedAlpineGroup),"complete Alpine group still requires its issued original-host capability");
         Refuse(()=>Direct(prefix-1),"incorrect original prefix refuses");
         Refuse(()=>Direct(-1),"negative prefix refuses");
         Refuse(()=>Direct(257),"prefix above bitmap refuses");
@@ -73,11 +86,13 @@ internal static class SourceCases
         Refuse(()=>cleared.Compose(donors,overflow),"active lifetime bitmap overflow refuses");
         check(cleared.CopyLevelData().AsSpan().SequenceEqual(data)&&cleared.CopyOverlay().AsSpan().SequenceEqual(overlay)&&cleared.CopyExecutable().AsSpan().SequenceEqual(exe),"captured host bytes immutable after success/refusal");
         check(donors.Disc.EntryBytes(10).AsSpan().SequenceEqual(old.Data.Bytes),"original donor body untouched");
+        // Rebuilt retail scenes must support the complete native portal-arrival footprint.
         var newTerrain=document with {Name="Rebuilt Artisans",Surfaces=[new(Guid.NewGuid().ToString("N"),
-            [new(520,520,544),new(720,520,544),new(720,720,544),new(520,720,544)],new(64,160,200),null)]};
+            [new(320,320,544),new(800,320,544),new(800,800,544),new(320,800,544)],new(64,160,200),null)]};
         var newTerrainHost=await NativeClearedLevelCompilation.CaptureAsync(original,newTerrain,catalog,Path.Combine(artifacts,"new-terrain-host.bin"));
-        var newTerrainPlacements=placements.Select(p=>p.SourceLevelKey=="alpineridge"?p with {X=660*16}:p).ToArray();
+        var newTerrainPlacements=placements.Select(p=>p.SourceRowIndex==gnorcRow?p with {X=660*16}:p).ToArray();
         var newTerrainResult=newTerrainHost.Compose(donors,newTerrainPlacements);
+        RewardFallbackCases.RequirePreserved(donors,newTerrainResult.LevelData,check,"new authored terrain and native enemy");
         check(!newTerrainResult.LevelData.AsSpan().SequenceEqual(result.LevelData),"replacement authors new quad geometry and colour");
         check(newTerrainResult.PhysicalToLogicalSaveRows.SequenceEqual(result.PhysicalToLogicalSaveRows),"new terrain preserves imported lifetime identities");
         foreach(var (name,doc,rows,expectedBody,expectedOverlay) in new[]{
@@ -90,6 +105,8 @@ internal static class SourceCases
             string bin=Path.Combine(folder,"candidate.bin");
             string hash=await NativeAuthoredProjectExporter.ExportAsync(donors,catalog,[new(doc,rows)],null,bin,folder,10);
             var written=UniversalDiscImage.Read(bin);
+            RewardFallbackCases.RequirePreserved(donors,written.EntryBytes(10),check,name+" independent written readback");
+            RewardFallbackCases.RequireProtected(bin,cleared.Target,check,name+" written readback");
             check(written.EntryBytes(10).AsSpan().SequenceEqual(expectedBody),name+" actual exporter body readback");
             check(written.EntryBytes(9).AsSpan().SequenceEqual(expectedOverlay),name+" actual exporter overlay readback");
             for(int entry=0;entry<256;entry++)if(entry is not 9 and not 10)

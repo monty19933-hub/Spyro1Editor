@@ -14,11 +14,12 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
 {
     private readonly byte[] _body, _overlay, _exe;
     private readonly string _baseline;
+    internal NativeFreshRewardFallbackResources RewardFallbacks { get; }
     private readonly NativeFreeFlightCompositionPlan? _flight;
     private readonly IReadOnlyList<NativeId65FreshExecutableWindow> _bootstrapWindows;
     private NativeFreshMainCompilation(SceneDocument document, string baseline, byte[] body, byte[] overlay, byte[] exe, NativeFreeFlightCompositionPlan? flight,
-        IReadOnlyList<NativeId65FreshExecutableWindow> bootstrapWindows)
-    { Document=document;_baseline=baseline;_body=body;_overlay=overlay;_exe=exe;_flight=flight;_bootstrapWindows=bootstrapWindows; }
+        IReadOnlyList<NativeId65FreshExecutableWindow> bootstrapWindows, NativeFreshRewardFallbackResources rewardFallbacks)
+    { Document=document;_baseline=baseline;_body=body;_overlay=overlay;_exe=exe;_flight=flight;_bootstrapWindows=bootstrapWindows; RewardFallbacks=rewardFallbacks; }
     public SceneDocument Document { get; }
     public LevelDefinition Target => SceneDocument.NativeTarget(Document.Name);
     public byte[] CopyLevelData()=>_body.ToArray();
@@ -47,12 +48,13 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         _=NativeId65AuthoredSurfaceConsumers.Capture(originalExe);
         var fresh=issued.FreshResourceAncestor;
         byte[] oldData=fresh.CopyDataComponents();var oldLayout=NativeId65NormalComponentLayout.Decode(oldData);
-        byte[] upload=fresh.CopyUploadPayload();
+        var rewardFallbacks=await NativeFreshRewardFallbackResources.CaptureAsync(originalUSA,fresh,token);
+        byte[] upload=rewardFallbacks.CopyUploadPayload();
         byte[] metadata=[8,0,0,0,0,0,0,0];
         if(materials.Length>0)
         {
             var sources=materials.Select(m=>NativeStaticTerrainTextureSource.Capture(originalUSA,m.SourceWadEntry,m.TextureId)).ToArray();
-            var allocation=NativeStaticTerrainTextureAllocation.CompileSelected(upload,fresh.UploadOwners,sources.Select((s,i)=>
+            var allocation=NativeStaticTerrainTextureAllocation.CompileSelected(upload,rewardFallbacks.UploadOwners,sources.Select((s,i)=>
                 new NativeStaticTerrainTextureInput(i,s.Handle,"source-right-half-vram:wad-"+s.SourceWadEntry,
                     NativeStaticTerrainTextureAllocation.RelocationPolicyId,s.Layout.CopyRecord(),s.CopySourceVram())),0x8000);
             upload=allocation.CopyUploadPayload();metadata=NativeTerrainMaterialTableCodec.Encode(allocation.Records.ToArray());
@@ -66,6 +68,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         var vramFile=body.Subfiles()[0];
         if(vramFile.Length!=upload.Length)throw new InvalidDataException("Fresh native upload allocation changed unexpectedly.");
         upload.CopyTo(body.Bytes,vramFile.Offset);
+        rewardFallbacks.InstallModels(body);
         var sceneFile=body.Subfiles()[3];
         _=NativeId65FreshSceneLayout.DecodeCanonical(body.Bytes.AsSpan(sceneFile.Offset,sceneFile.Length));
         BinaryPrimitives.WriteInt32LittleEndian(body.Bytes.AsSpan(sceneFile.Offset),checked((int)MathF.Round(document.Spawn.X*16)));
@@ -74,6 +77,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         body.Bytes[sceneFile.Offset+14]=(byte)document.Heading;
         _=NativeId65FreshSceneLayout.DecodeCanonical(body.Bytes.AsSpan(sceneFile.Offset,sceneFile.Length));
         if (flight != null) body = new UniversalLevelData(flight.MergeLevelData(65, body.Bytes).CopyLevelData());
+        rewardFallbacks.RequireInstalled(body.Bytes);
         if(body.Scene().RowCount!=0)throw new InvalidDataException("Fresh native bootstrap unexpectedly contains source actors.");
         _=UniversalMobyComposer.RuntimeEnd(body,new UniversalOverlay(issued.DiscPlan.CopyOverlay(),UniversalExeBindings.Read(issued.DiscPlan.CopyExecutable(),65)).CopyBuffer);
         Directory.CreateDirectory(Path.GetDirectoryName(scratchBaselinePath)!);
@@ -91,7 +95,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
             if(!read.EntryBytes(80).AsSpan().SequenceEqual(body.Bytes))throw new InvalidDataException("Fresh native scene readback differs from authored output.");
             ExportArtifactTransaction.RequireSourceSeparation(originalUSA,null,scratchBaselinePath);
             File.Move(stage,scratchBaselinePath,true);
-            return new(document,scratchBaselinePath,body.Bytes,issued.DiscPlan.CopyOverlay(),issued.DiscPlan.CopyExecutable(),flight,issued.DiscPlan.Executable.SequentialStages);
+            return new(document,scratchBaselinePath,body.Bytes,issued.DiscPlan.CopyOverlay(),issued.DiscPlan.CopyExecutable(),flight,issued.DiscPlan.Executable.SequentialStages,rewardFallbacks);
         }
         finally {if(File.Exists(stage))File.Delete(stage);}
     }
@@ -108,11 +112,13 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         // Size its owned empty arena before imports consume further placed rows;
         // the ordinary composer still checks the final dynamic reserve and RAM.
         byte[] prepared = NativeFreshPlacementArena.Prepare(_body, placements.Count(p => !p.Retired));
-        return UniversalMobyComposer.Compose(Target,prepared,_overlay,actualExecutable,
+        var composed=UniversalMobyComposer.Compose(Target,prepared,_overlay,actualExecutable,
             key => string.Equals(key, Target.Key, StringComparison.OrdinalIgnoreCase)
                 ? (Target, new UniversalLevelData(prepared), new UniversalOverlay(_overlay, UniversalExeBindings.Read(actualExecutable,65)))
                 : donors.Get(key), donors.SharedClasses,
             UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,sharedModelPackage: donors.SharedModelPackage, playerAnimationSource: donors.PlayerAnimations,nativeOriginalExecutable:donors.Disc.Exe);
+        RewardFallbacks.RequireInstalled(composed.LevelData);
+        return composed;
     }
 
     public async Task<string> ExportAsync(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements,
@@ -163,6 +169,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
             NativePortalRouteComposer.Apply(donors,new LevelCatalog(nativeCatalog.Levels.Where(l=>l.LevelId!=65).Append(Target)),
                 exe,replacements,baseline.EntryBytes,portalRoutes,includesFreshLevel:true,returnClasses:returnClasses, freshParticleBinding:freshParticleBinding, reportFreshParticleBinding:updated=>freshParticleBinding=updated);
         levelData=replacements[80];overlayData=replacements[79];
+        RewardFallbacks.RequireInstalled(levelData);
         if(freshParticleBinding!=null)NativePortalRouteFreshBinding.RequireOwnedParticleDestination(donors.Disc.Exe,exe,
             new(overlayData,UniversalExeBindings.Read(exe,65)),freshParticleBinding);
         byte[] wad=baseline.RebuildWad(replacements);
