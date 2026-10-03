@@ -632,7 +632,7 @@ public static class UniversalMobyComposer
             throw new InvalidDataException($"Only {arena} dynamic object slots would remain in {destination.DisplayName}; at least {MinimumDynamicSlots} are required.");
 
         List<UniversalOwnedParticleCertificate> ownedParticles=[];
-        if(greenWorld!=null){UniversalGreenDruidWorldSpellParticles.RequireTexture(greenDonor.Data!,dest);ownedParticles.Add(greenWorld.Dispatcher());particleDependencies[("alpineridge",8)]=new("alpineridge",8,"source-certified-copied","Original live-model vertex spell and physical target; native gameplay pending.");}
+        if(greenWorld!=null){UniversalGreenDruidWorldSpellParticles.RequireTexture(greenDonor.Data!,dest);ownedParticles.Add(greenWorld.Dispatcher());particleDependencies[("alpineridge",8)]=new("alpineridge",8,"source-certified-copied",greenWorld.HasSpellTarget?"Original live-model vertex spell and physical target; native gameplay pending.":"Original no-target druid; complete copied particle owner retained, native target−1 skips emission; native gameplay pending.");}
         Dictionary<string,UniversalHighCavesSpellParticleCertificate> highCavesSpellParticles=new(StringComparer.OrdinalIgnoreCase);
         if(imports.Any(i=>i.SourceLevelKey=="highcaves"&&i.ClassId==0x127&&i.BehaviorImported)){
             var donor=source("highcaves");var proof=UniversalHighCavesSpellParticles.Capture("highcaves",destination.Key,destination.LevelId,donor.Data,donor.Overlay,dest,destOverlay,exe);

@@ -20,7 +20,7 @@ public sealed class UniversalGreenDruidWorldPrerequisites
     private readonly GreenDruidWorldSourceProfile _profile;
     internal GreenDruidWorldSourceProfile Profile=>_profile;
     private int[] ActorRows=>_profile.Members;
-    private static readonly int[] ActorClasses = [0x10E,0x148];
+    private int[] ActorClasses=>_profile.Classes;
     private int[] SectorIds=>_profile.Sectors;
     private int[] StaticCollisionIds=>_profile.FixedTriangles;
     public int FixedCollisionTriangleCount=>StaticCollisionIds.Length;
@@ -62,14 +62,14 @@ public sealed class UniversalGreenDruidWorldPrerequisites
     {var sf=d.Subfiles()[3];int at=sf.Offset+0x88;List<byte[]> parts=[];for(int n=0;n<7;n++){int size=I(d.Bytes,at);Require(size>=8&&size%4==0&&at+size<=sf.Offset+sf.Length,"animation component bounds");parts.Add(d.Bytes.AsSpan(at,size).ToArray());at+=size;}Require(at==sf.Offset+d.Scene().MobyComponent,"native seven-bank scene prefix");return parts.ToArray();}
     public static UniversalGreenDruidWorldPrerequisites CaptureSource(string sourceKey,UniversalLevelData source,UniversalOverlay overlay,byte[] exe,int sourceDruidRow=5)
     {
-        var profile=GreenDruidWorldSourceProfile.ForDruid(sourceDruidRow);var ActorRows=profile.Members;var SectorIds=profile.Sectors;var MaterialIds=profile.Materials;var StaticCollisionIds=profile.FixedTriangles;
+        var profile=GreenDruidWorldSourceProfile.ForDruid(sourceDruidRow);var ActorRows=profile.Members;var ActorClasses=profile.Classes;var SectorIds=profile.Sectors;var MaterialIds=profile.Materials;var StaticCollisionIds=profile.FixedTriangles;
         Require(sourceKey=="alpineridge"&&H(source.Bytes)==DataSha&&H(overlay.Bytes)==OverlaySha&&H(exe)==ExeSha,"complete original source/native owners");
         byte[] bindings=new byte[overlay.Bindings.Count*16];int cursor=0;foreach(var b in overlay.Bindings.OrderBy(b=>b.Key))foreach(uint v in new[]{b.Value.Global,b.Value.LuiAddress,b.Value.AddiuAddress,b.Value.Value}){W(bindings,cursor,(int)v);cursor+=4;}Require(overlay.Bindings.All(b=>b.Key==b.Value.Global)&&H(bindings)=="461f8f271b5653a1f4268d41cd3aadba45d27dc24cf06013965da839c2212850","complete source callback load-site identities");
         Require(overlay.Update==0x8007BB00&&overlay.Init==0x8008A36C&&overlay.CopyBuffer==0x8008DEC0&&overlay.Bindings[UniversalExeBindings.ParticleSpawnGlobal].Value==0x8008C9D8&&overlay.Bindings[UniversalExeBindings.ParticleUpdateGlobal].Value==0x8008AF54,"source callback identities");
         for(int n=0;n<ActorRows.Length;n++)Require(source.CaptureRow(sourceKey,ActorRows[n]).ClassId==ActorClasses[n],"source actor class");
-        var d=source.CaptureRow(sourceKey,profile.DruidRow);var scenery=source.CaptureRow(sourceKey,profile.TargetRow);
+        var d=source.CaptureRow(sourceKey,profile.DruidRow);var scenery=profile.HasTarget?source.CaptureRow(sourceKey,profile.TargetRow):null;
         Require(d.Properties.Length==148&&I(d.Properties,4)==profile.Group&&I(d.Properties,8)==profile.TargetRow&&I(d.Properties,12)==-1&&I(d.Properties,16)==1&&d.InternalPointers.SequenceEqual(new[]{(0,92)})&&d.Properties[92]==3&&d.ExternalRowPointers.Count==0&&d.DroppedExternalPointers==0,"issued druid group/target/mode1 and complete three-node path");
-        Require(scenery.Properties.Length==4&&I(scenery.Properties,0)==-1,"scenery48 initial native cache");
+        if(profile.HasTarget)Require(scenery!.Properties.Length==4&&I(scenery.Properties,0)==-1,"issued target initial native cache");
         var banks=Animations(source);List<byte[]> records=[];List<int> roles=[];
         for(int role=0;role<7;role++)
         {
@@ -86,7 +86,7 @@ public sealed class UniversalGreenDruidWorldPrerequisites
         }
         Require(roles.Count(r=>r==2)==1&&roles.Count(r=>r==3)==1&&roles.Count(r=>r==4)==1,"all three group0 record owners required");
         Require(U(records.Where((_,i)=>roles[i]==4).Single(),4)==(uint)((profile.CollisionFirst<<16)|profile.CollisionCount),"complete authenticated animated triangle interval");
-        var world=World(source);byte[] env=world[1];byte[][] sectors=SectorIds.Select(id=>{int at=4+I(env,8+id*4),end=4+I(env,8+(id+1)*4);return env.AsSpan(at,end-at).ToArray();}).ToArray();
+        var world=World(source);byte[] env=world[1];int sectorCount=I(env,4);byte[][] sectors=SectorIds.Select(id=>{Require(id>=0&&id<sectorCount,"authenticated source sector ordinal");int at=4+I(env,8+id*4),end=id+1<sectorCount?4+I(env,8+(id+1)*4):env.Length;Require(at>=8+sectorCount*4&&end>=at&&end<=env.Length,"complete source sector extent");return env.AsSpan(at,end-at).ToArray();}).ToArray();
         for(int n=0;n<SectorIds.Length;n++)foreach(int role in new[]{2,3})
         {byte[] record=records.Where((_,i)=>roles[i]==role).Single(r=>(U(r,4)&65535)==SectorIds[n]);Require((U(record,4)>>16)==profile.AnimatedVertices*4&&sectors[n][role==2?20:16]==profile.Vertices,"exact authenticated animated vertex extent in the complete native tier");}
         var used=sectors.SelectMany(s=>Enumerable.Range(0,s[22]).Select(n=>(int)(U(s,28+4*s[23]+4*s[20]+8*s[21]+16*n+8)&127))).Distinct().Order().ToArray();Require(used.SequenceEqual(MaterialIds),"all authored native material owners");
@@ -104,7 +104,7 @@ public sealed class UniversalGreenDruidWorldPrerequisites
     public UniversalRowTemplate Enroll(int sourceRow)
     {
         int index=Array.IndexOf(ActorRows,sourceRow);Require(index>=0,"unenrolled world variant");var t=_source.CaptureRow("alpineridge",sourceRow);
-        UniversalSourceRowIndex[] links=sourceRow==_profile.DruidRow?[new(8,_profile.TargetRow,0x148)]:[];
+        UniversalSourceRowIndex[] links=_profile.HasTarget&&sourceRow==_profile.DruidRow?[new(8,_profile.TargetRow,0x148)]:[];
         return t with{SourceRowIndices=links,SourcePrerequisiteRows=ActorRows.Where(r=>r!=sourceRow).Select(r=>new UniversalSourcePrerequisite(r,ActorClasses[Array.IndexOf(ActorRows,r)])).ToArray()};
     }
     /// <summary>Copies source-relative sector geometry and absolute collision frames
@@ -171,13 +171,13 @@ public sealed class UniversalGreenDruidWorldPrerequisites
     public Translation Rebind(Translation translated,byte groupId,IReadOnlyList<int> destinationSectors,int firstTriangle,IReadOnlyList<int> physicalRows)
     {
         var expected=CopyTranslated(translated.DeltaRaw);
-        Require(translated.Roles.SequenceEqual(expected.Roles)&&translated.AnimationRecords.Length==expected.AnimationRecords.Length&&translated.Sectors.Length==expected.Sectors.Length&&translated.Actors.Count==2,"issued translation resource topology");
+        Require(translated.Roles.SequenceEqual(expected.Roles)&&translated.AnimationRecords.Length==expected.AnimationRecords.Length&&translated.Sectors.Length==expected.Sectors.Length&&translated.Actors.Count==ActorRows.Length,"issued translation resource topology");
         for(int n=0;n<expected.AnimationRecords.Length;n++)Require(translated.AnimationRecords[n].AsSpan().SequenceEqual(expected.AnimationRecords[n]),"issued complete command/frame resource");
         for(int n=0;n<expected.Sectors.Length;n++)Require(translated.Sectors[n].AsSpan().SequenceEqual(expected.Sectors[n]),"issued translated source sector");
-        for(int n=0;n<2;n++){var a=translated.Actors[n];var b=expected.Actors[n];Require(a.SourceRow==b.SourceRow&&a.Row.AsSpan().SequenceEqual(b.Row)&&a.Template.SourceLevelKey==b.Template.SourceLevelKey&&a.Template.SourceRowIndex==b.Template.SourceRowIndex&&a.Template.Row.AsSpan().SequenceEqual(b.Template.Row)&&a.Template.Properties.AsSpan().SequenceEqual(b.Template.Properties)&&a.Template.InternalPointers.SequenceEqual(b.Template.InternalPointers)&&a.Template.SourceRowIndices.SequenceEqual(b.Template.SourceRowIndices)&&a.Template.SourcePrerequisiteRows.SequenceEqual(b.Template.SourcePrerequisiteRows)&&a.Template.ExternalRowPointers.SequenceEqual(b.Template.ExternalRowPointers)&&a.Template.DroppedExternalPointers==b.Template.DroppedExternalPointers,"issued initial actor/path/ordinal/source identity");}
+        for(int n=0;n<ActorRows.Length;n++){var a=translated.Actors[n];var b=expected.Actors[n];Require(a.SourceRow==b.SourceRow&&a.Row.AsSpan().SequenceEqual(b.Row)&&a.Template.SourceLevelKey==b.Template.SourceLevelKey&&a.Template.SourceRowIndex==b.Template.SourceRowIndex&&a.Template.Row.AsSpan().SequenceEqual(b.Template.Row)&&a.Template.Properties.AsSpan().SequenceEqual(b.Template.Properties)&&a.Template.InternalPointers.SequenceEqual(b.Template.InternalPointers)&&a.Template.SourceRowIndices.SequenceEqual(b.Template.SourceRowIndices)&&a.Template.SourcePrerequisiteRows.SequenceEqual(b.Template.SourcePrerequisiteRows)&&a.Template.ExternalRowPointers.SequenceEqual(b.Template.ExternalRowPointers)&&a.Template.DroppedExternalPointers==b.Template.DroppedExternalPointers,"issued initial actor/path/ordinal/source identity");}
         Require(destinationSectors.Count==1&&destinationSectors.Distinct().Count()==1&&destinationSectors.All(s=>s is >=0 and <255),"one unique byte-visible native sector owners");
         Require(firstTriangle>=0&&firstTriangle+_profile.CollisionCount<=65535,"native animated collision interval");
-        Require(physicalRows.Count==2&&physicalRows.Distinct().Count()==2&&physicalRows.All(r=>r is >=0 and <=255),"both actor owners including byte-indexed particle8 target");
+        Require(physicalRows.Count==ActorRows.Length&&physicalRows.Distinct().Count()==ActorRows.Length&&physicalRows.All(r=>r is >=0 and <=255),"both actor owners including byte-indexed particle8 target");
         Require(groupId==_profile.Group,"source group byte is a native branch input and must remain unchanged");
         var records=translated.AnimationRecords.Select(r=>r.ToArray()).ToArray();for(int n=0;n<records.Length;n++){records[n][0]=groupId;if(translated.Roles[n]==4)W(records[n],4,(firstTriangle<<16)|_profile.CollisionCount);else{int id=(int)(U(records[n],4)&65535),slot=Array.IndexOf(SectorIds,id);Require(slot>=0,"unenrolled source sector");W(records[n],4,(int)(U(records[n],4)&0xFFFF0000u)|destinationSectors[slot]);}}
         var actors=translated.Actors.Select(a=>{byte[] p=a.Template.Properties.ToArray();if(a.SourceRow==_profile.DruidRow)W(p,4,groupId);return a with{Row=a.Row.ToArray(),Template=a.Template with{Properties=p}};}).ToArray();

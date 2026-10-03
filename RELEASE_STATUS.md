@@ -1,3 +1,14 @@
+# Follow-up: two original Green Druid terrain controllers
+
+Alpine16/group5 and17/group7 now export their complete original shrinking terrain
+and paths while retaining target−1. They require one original actor each and
+create no dummy target. Integrated saved/reopened export1594, native instruction
+checks8834, paired regressions/byte identity and runner128 pass; the Release App
+builds cleanly. Native gameplay of these new groups remains pending.
+[Evidence](docs/research/universal-green-no-target-world-20261003.md).
+
+---
+
 # Follow-up: Haunted resurrection in Dark Hollow
 
 Original Haunted wizard21 and armor1 now compose/export into intact Dark Hollow

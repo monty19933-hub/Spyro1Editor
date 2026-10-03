@@ -27,7 +27,7 @@ internal sealed class GreenDruidSceneBankStorage
  {
   var sf=host.Subfiles()[3];_before=host.Bytes.AsSpan(sf.Offset,sf.Length).ToArray();_beforeLayout=host.Scene();_beforeBanks=Banks(_before);OriginalPrefix=_beforeLayout.MobyComponent;
   var groups=new HashSet<byte>();foreach(var bank in _beforeBanks)for(int n=0;n<I(bank,4);n++)groups.Add(bank[4+I(bank,8+n*4)]);GroupId=source.Profile.Group;Require(!groups.Contains(GroupId),"preserve the authenticated source group byte; never remap a source branch");
-  Require(firstTriangle>=0&&firstTriangle+source.CollisionTriangleCount<=32768,"native15-bit collision interval");var moved=source.CopyTranslated(delta);var rebound=source.Rebind(moved,GroupId,new[]{firstSector},firstTriangle,new[]{128,129});
+  Require(firstTriangle>=0&&firstTriangle+source.CollisionTriangleCount<=32768,"native15-bit collision interval");var moved=source.CopyTranslated(delta);var rebound=source.Rebind(moved,GroupId,new[]{firstSector},firstTriangle,Enumerable.Range(128,source.RequiredSourceRows.Count).ToArray());
   _afterBanks=_beforeBanks.Select(b=>b.ToArray()).ToArray();_newRecordCounts=new int[7];
   foreach(int role in new[]{2,3,4})
   {

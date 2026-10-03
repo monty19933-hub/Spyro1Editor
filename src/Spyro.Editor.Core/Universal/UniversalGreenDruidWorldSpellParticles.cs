@@ -12,7 +12,7 @@ internal static class UniversalGreenDruidWorldSpellParticles
  }
  internal static void PatchCalls(UniversalAsmPart part,UniversalOverlay source,string label,IReadOnlyList<int> classes,IReadOnlyDictionary<int,int> map)
  {
-  if(Convert.ToHexStringLower(SHA256.HashData(source.Bytes))!=UniversalGreenDruidWorldPrerequisites.OverlaySha||!classes.SequenceEqual(new[]{0x10E,0x148})||map.Count!=2||!classes.All(map.ContainsKey))throw new InvalidDataException("Green Druid copied actor namespace owner changed.");
+  if(Convert.ToHexStringLower(SHA256.HashData(source.Bytes))!=UniversalGreenDruidWorldPrerequisites.OverlaySha||!(classes.SequenceEqual(new[]{0x10E,0x148})||classes.SequenceEqual(new[]{0x10E}))||map.Count!=classes.Count||!classes.All(map.ContainsKey))throw new InvalidDataException("Green Druid copied actor namespace owner changed.");
   var original=UniversalBehaviorBundleBuilder.BuildPrunedUpdate(source,classes,part.Items.FirstOrDefault()?.Label??throw new InvalidDataException("Missing Green Druid entry."),map).Part;
   if(!part.Items.SequenceEqual(original.Items)||part.Tables.Count!=original.Tables.Count||original.Tables.Any(t=>!part.Tables.TryGetValue(t.Key,out var rows)||!rows.SequenceEqual(t.Value)))throw new InvalidDataException("Green Druid complete copied actor flow/targets/entries/operands changed.");
   uint[] packet=[0x8E020008,0x3C038007,0x8C6358E4,0x00023840,0x00E23821,0x00073880,0x00E23823,0x3C028007,0x8C425828,0x000738C0,0x0060F809,0x00473821];

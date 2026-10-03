@@ -5,7 +5,7 @@ namespace Spyro.Editor.Core.Universal;
 internal static class UniversalGreenDruidWorldRows
 {
  // Keep the legacy first-profile contract; production dispatch uses all issued rows.
- internal static readonly int[] Members=[5,48];internal static readonly int[] EnrolledMembers=[5,48,15,137];internal static readonly int[] Classes=[0x10E,0x148];
+ internal static readonly int[] Members=[5,48];internal static readonly int[] EnrolledMembers=[5,48,15,137,16,17];internal static readonly int[] Classes=[0x10E,0x148];
  internal static bool OwnsCopiedActor(string key,UniversalOverlay overlay,IReadOnlyList<int> classes)
  {
   if(!classes.Contains(0x10E))return false;
@@ -20,17 +20,17 @@ internal static class UniversalGreenDruidWorldRows
  private static void Require(bool v,string why){if(!v)throw new InvalidDataException("Green Druid linked terrain: "+why);}
  internal static UniversalRowTemplate Capture(UniversalLevelData data,UniversalOverlay overlay,UniversalRowTemplate t)
  {
-  if(!Applies(t))return t;RequireSource(data,overlay);var profile=GreenDruidWorldSourceProfile.ForRow(t.SourceRowIndex);var members=profile.Members;var original=data.CaptureRow(t.SourceLevelKey,t.SourceRowIndex);Require(t.ClassId==Classes[Array.IndexOf(members,t.SourceRowIndex)]&&t.Row.SequenceEqual(original.Row)&&t.Properties.SequenceEqual(original.Properties)&&t.InternalPointers.SequenceEqual(original.InternalPointers)&&t.ExternalRowPointers.SequenceEqual(original.ExternalRowPointers)&&t.DroppedExternalPointers==0,"original source state/path/input row");
-  return t with{SourceRowIndices=t.SourceRowIndex==profile.DruidRow?[new(8,profile.TargetRow,0x148)]:[],SourcePrerequisiteRows=members.Where(r=>r!=t.SourceRowIndex).Select(r=>new UniversalSourcePrerequisite(r,Classes[Array.IndexOf(members,r)])).ToArray()};
+  if(!Applies(t))return t;RequireSource(data,overlay);var profile=GreenDruidWorldSourceProfile.ForRow(t.SourceRowIndex);var members=profile.Members;var Classes=profile.Classes;var original=data.CaptureRow(t.SourceLevelKey,t.SourceRowIndex);Require(t.ClassId==Classes[Array.IndexOf(members,t.SourceRowIndex)]&&t.Row.SequenceEqual(original.Row)&&t.Properties.SequenceEqual(original.Properties)&&t.InternalPointers.SequenceEqual(original.InternalPointers)&&t.ExternalRowPointers.SequenceEqual(original.ExternalRowPointers)&&t.DroppedExternalPointers==0,"original source state/path/input row");
+  return t with{SourceRowIndices=profile.HasTarget&&t.SourceRowIndex==profile.DruidRow?[new(8,profile.TargetRow,0x148)]:[],SourcePrerequisiteRows=members.Where(r=>r!=t.SourceRowIndex).Select(r=>new UniversalSourcePrerequisite(r,Classes[Array.IndexOf(members,r)])).ToArray()};
  }
  internal static void RequirePrerequisites(UniversalRowTemplate t,IReadOnlyList<UniversalRowTemplate> rows)
  {
   if(t.GreenDruidNativeReferences!=null){t.GreenDruidNativeReferences.Require(t);return;}
-  Require(Applies(t),"source enrollment");var profile=GreenDruidWorldSourceProfile.ForRow(t.SourceRowIndex);var members=profile.Members;Require(t.SourceRowIndices.SequenceEqual(t.SourceRowIndex==profile.DruidRow?new UniversalSourceRowIndex[]{new(8,profile.TargetRow,0x148)}:[]),"original target enrollment");Require(t.SourcePrerequisiteRows.SequenceEqual(members.Where(r=>r!=t.SourceRowIndex).Select(r=>new UniversalSourcePrerequisite(r,Classes[Array.IndexOf(members,r)]))),"both prerequisite owners");foreach(int row in members){var found=rows.Where(x=>Applies(x)&&x.SourceRowIndex==row&&(x.LinkGroupId??"")==(t.LinkGroupId??"")).ToArray();Require(found.Length==1&&found[0].ClassId==Classes[Array.IndexOf(members,row)],"unique same-instance original group");}
+  Require(Applies(t),"source enrollment");var profile=GreenDruidWorldSourceProfile.ForRow(t.SourceRowIndex);var members=profile.Members;var Classes=profile.Classes;Require(t.SourceRowIndices.SequenceEqual(profile.HasTarget&&t.SourceRowIndex==profile.DruidRow?new UniversalSourceRowIndex[]{new(8,profile.TargetRow,0x148)}:[]),"original target enrollment");Require(t.SourcePrerequisiteRows.SequenceEqual(members.Where(r=>r!=t.SourceRowIndex).Select(r=>new UniversalSourcePrerequisite(r,Classes[Array.IndexOf(members,r)]))),"both prerequisite owners");foreach(int row in members){var found=rows.Where(x=>Applies(x)&&x.SourceRowIndex==row&&(x.LinkGroupId??"")==(t.LinkGroupId??"")).ToArray();Require(found.Length==1&&found[0].ClassId==Classes[Array.IndexOf(members,row)],"unique same-instance original group");}
  }
  internal static void RequireNativeRemoval(string key,UniversalLevelData current,UniversalLevelData original,UniversalOverlay overlay,IReadOnlySet<int> removed)
  {
-  if(key!="alpineridge"||removed.Count==0)return;RequireSource(original,overlay);foreach(int druid in new[]{5,15}){var members=GreenDruidWorldSourceProfile.ForDruid(druid).Members;if(members.Any(removed.Contains))Require(members.All(removed.Contains),"remove the complete actor/terrain-target pair together");foreach(int row in members.Where(r=>!removed.Contains(r))){var before=original.CaptureRow(key,row);var now=current.CaptureRow(key,row);Require(now.ClassId==before.ClassId&&now.Properties.Length==before.Properties.Length&&(row!=druid||now.Properties.AsSpan(4,12).SequenceEqual(before.Properties.AsSpan(4,12))),"remaining actor cannot hide/retarget its group or target before slot reuse");}}
+  if(key!="alpineridge"||removed.Count==0)return;RequireSource(original,overlay);foreach(int druid in new[]{5,15,16,17}){var members=GreenDruidWorldSourceProfile.ForDruid(druid).Members;if(members.Any(removed.Contains))Require(members.All(removed.Contains),"remove the complete actor/terrain-target pair together");foreach(int row in members.Where(r=>!removed.Contains(r))){var before=original.CaptureRow(key,row);var now=current.CaptureRow(key,row);Require(now.ClassId==before.ClassId&&now.Properties.Length==before.Properties.Length&&(row!=druid||now.Properties.AsSpan(4,12).SequenceEqual(before.Properties.AsSpan(4,12))),"remaining actor cannot hide/retarget its group or target before slot reuse");}}
 
  }
 }
