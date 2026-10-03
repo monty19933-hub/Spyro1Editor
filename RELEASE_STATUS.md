@@ -1,12 +1,29 @@
-# Follow-up: complete Alpine group in Artisans
+# Follow-up: native dragon rescue capacity and Artisans imports
 
-The original Alpine0/1 group now fits Artisans through ordinary saved deletion
-and export after an explicit46-row removal profile, reclaiming198,656 model
-bytes. This profile includes the balloon and balloonist; export warns that
-balloon travel is unavailable. It never removes objects automatically. Root
-structural/asset/save/export checks and affected regressions pass, the App
-builds cleanly, and the rebuilt candidate matches independently. Native gameplay
-remains pending. [Evidence](docs/research/universal-alpine-artisans-20261003.md).
+The native rescue-loader crash is fixed for the supported complete Alpine0/1
+Artisans group. The first candidate's model order left too little temporary
+space for dragon dialogue; the retail copy length underflowed and overwrote
+native code. Complete models are now reordered without increasing allocation.
+Fresh full-firmware gameplay completes Nestor's rescue, restores the world and
+imported models, and confirms the armored enemy's blue5 reward with native
+inventory5/102 and dragon1/4. The linked caster's yellow10 remains pending.
+The closed run has no invalid-memory/panic log entries or save-state/RAM writes.
+[Evidence](docs/research/universal-alpine-artisans-20261003.md).
+
+A final export guard now checks retained dragon rescue reservations across all28
+original hosts with those streams. The Magic12/13 Artisans pair also has a complete
+model-order correction: same six Gnorc removals and allocation, all payloads
+preserved, with36,864bytes above the largest aligned rescue requirement. Root
+source3268, normal saved export/readback284, actual native instruction replay128,
+source-wide guard2029 and runner118 checks pass. Fresh gameplay of this revised
+Magic candidate and all retained dragon dialogues remain pending.
+[Technical evidence](docs/research/universal-dragon-rescue-capacity-20261003.md).
+
+The editor now offers the exact named46-object Alpine removal plan through the
+normal export check and manual review. It explicitly warns that removing the
+balloonist and balloon disables balloon travel. No objects are auto-deleted. Registered chooser source/API checks57 pass.
+The Release App builds with zero warnings/errors. Universal gameplay and V1.0
+remain unfinished.
 
 ---
 
@@ -16,9 +33,9 @@ The complete original Alpine5/48 group now exports into empty authored Peace
 Keepers with its original moving sector, fixed and animated collision, materials,
 paths, spell particles and native callbacks. Integrated checks907, candidate
 readback279 and affected regressions pass; the Release App builds cleanly. The
-root-rebuilt disc matches the independent candidate exactly. Fresh emulator
-gameplay and editor group-movement checks remain pending; other variants/hosts
-remain restricted. [Evidence](docs/research/universal-green-druid-world-20261003.md).
+root-rebuilt disc matches the independent candidate exactly. The first fresh native run confirms the rendered world and druid flee/linked
+state behavior; casting, platform animation/carry and reward are still pending.
+Editor group-movement checks and other variants/hosts remain open. [Evidence](docs/research/universal-green-druid-world-20261003.md).
 
 ---
 

@@ -7,7 +7,7 @@
       "Offset": 0,
       "Length": 2048,
       "Role": "derived exact originalArtisans layout/registered classes, source271 only; removed072/153",
-      "SHA256": "0e344e1a117c0469f8dfef070dca2e350af7682eba326d40af6a2d8a4f727420"
+      "SHA256": "239d40ca7aa750d61dca42d9bd1d5101c0c1ce431f021b74f2f8d34e86a1823b"
     },
     {
       "Offset": 2048,
@@ -24,8 +24,8 @@
     {
       "Offset": 1572864,
       "Length": 288768,
-      "Role": "independently audited originalArtisans/source271 native assets subfile2",
-      "SHA256": "3ab0fa019f8301883f8b1c04d320cf4e9d90e5961cb1c2b2448a2884b742c04c"
+      "Role": "independently audited originalArtisans/source271 native assets subfile2; complete271 moved before250, all rootmod8 retained, four generated sector-padding bytes reassigned to final251 padding",
+      "SHA256": "8faa61d56d55cdab9bd224b92147a6785231420b2a310d6a6de20bb3d23badc9"
     },
     {
       "Offset": 1943552,
@@ -69,5 +69,14 @@
     33
   ],
   "AssetAuditSHA256": "cd0eb576a994dc54f919bdb18425db4cca9fb10ce9119a61f99e854667ed4abf",
-  "Provenance": "Original full host/source; 529999 independent retainednative/model/texture/sound/reaction checks. Fixed structural assets only, never final authored scene, pose, IDs, lifetime or bundlebase."
+  "Provenance": "Original full host/source; 529999 independent retainednative/model/texture/sound/reaction checks. Fixed structural assets only, never final authored scene, pose, IDs, lifetime or bundlebase.",
+  "RescueNormalization": {
+    "NativeRequiredPrefix": 243712,
+    "NativeAvailablePrefix": 280576,
+    "ImportedModelPayloadBytes": 83756,
+    "MovedBytes": 84296,
+    "GeneratedSectorPaddingReassigned": 4,
+    "AllocationGrowth": 0,
+    "PriorModelSHA256": "3ab0fa019f8301883f8b1c04d320cf4e9d90e5961cb1c2b2448a2884b742c04c"
+  }
 }

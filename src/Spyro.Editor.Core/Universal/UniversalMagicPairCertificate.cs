@@ -4,7 +4,8 @@ using System.Text.Json;
 using Spyro.Editor.Core.Exporting;
 namespace Spyro.Editor.Core.Universal;
 
-/// <summary>Original Magic12/13 selector2 group translated within the unchanged Dark Hollow host.
+/// <summary>Original Magic12/13 selector2 group within unchanged Dark Hollow,
+/// or original Artisans with its six selected native Gnorc removals.
 /// This authority never applies to other rows, selectors, groups, destinations or mixed imports.
 /// Native ordinary scene/sound/particle arenas are retained; imported movement owns its private
 /// cache and bounds every future XY query/commit. The native engine is not certified for corrupted RAM.</summary>
@@ -190,6 +191,8 @@ public sealed class UniversalMagicPairCertificate
         int fixupsAt=Move(sc.FixupsOffset);for(int i=0;i<sc.Fixups.Count;i++)BinaryPrimitives.WriteInt32LittleEndian(rewritten.AsSpan(fixupsAt+4+4*i),Move(sc.Fixups[i]));
         if(rewritten.Length>sf.Length)data.GrowSubfile(3,UniversalLevelData.Align(rewritten.Length-sf.Length,2048));sf=data.Subfiles()[3];Array.Clear(data.Bytes,sf.Offset,sf.Length);rewritten.CopyTo(data.Bytes,sf.Offset);
     }
+    internal void PrepareArtisansRescueModels(UniversalLevelData data)
+    { if(_hostKey=="artisans")UniversalMagicArtisansRescueModels.Prepare(data); }
     internal void RequireFinalRows(UniversalLevelData data,IReadOnlyList<int> rows,bool finalized=true)
     {
         // Source-converted immutable asset regions retain their reviewed owners.
@@ -208,7 +211,7 @@ public sealed class UniversalMagicPairCertificate
         }
         if(finalized && _hostKey=="artisans")
         {
-            var owners=Resource<AssetOwners>("MagicPairArtisansAssetOwners.json","6a2b6d85d40538869107c855299be341922f3cadabdeaaf7bef1dfd95432c915");
+            var owners=Resource<AssetOwners>("MagicPairArtisansAssetOwners.json","f10ff35aab3da1c1b6a15495782a6a865fa4fa93a33f8e7a1386edca571e8204");
             Require(data.Bytes.Length==owners.Length&&data.Subfiles()[3]==(owners.SceneOffset,owners.SceneLength),"Artisans asset/scene allocation differs from independently audited structural owners");
             foreach(var region in owners.Owners)Require(H(data.Bytes.AsSpan(region.Offset,region.Length).ToArray())==region.SHA256,"immutable Artisans asset owner changed: "+region.Role);
             Require(data.Bytes.AsSpan(owners.SceneOffset,owners.SceneLength).SequenceEqual(ExpectedScene()),"Artisans scene differs from original plus authenticated deletions and actual authored source group");

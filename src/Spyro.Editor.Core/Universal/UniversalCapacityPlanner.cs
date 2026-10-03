@@ -40,6 +40,29 @@ public static class UniversalCapacityPlanner
         if (current.Error == null)
             return new(null, count, removed.Count, trial.Count(p => !p.Retired), trial.Count(p => p.Retired),
                 current.Result!.Ram.FinalHeadroom, [], [], 1, false);
+        // This option needs more than the general three-family search can find.
+        // Check exactly the existing explicit profile, including its travel loss;
+        // never widen removals or treat the estimate as export permission.
+        if (UniversalAlpineArtisansRemovalAdvice.Requested(destination.Key,trial))
+        {
+            var named = UniversalAlpineArtisansRemovalAdvice.Groups(native.Data,removed);
+            var profilePlans = new List<UniversalRemovalPlan>();
+            int profileChecks = 1;
+            string profileError = current.Error;
+            if (removed.IsSubsetOf(UniversalAlpineArtisansRemovalAdvice.RequiredRows.ToHashSet()) && profileChecks < maximumChecks)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var checkedProfile = Compose(UniversalAlpineArtisansRemovalAdvice.RequiredRows);
+                profileChecks++;
+                if (checkedProfile.Error != null) profileError = checkedProfile.Error;
+                if (checkedProfile.Error == null && checkedProfile.Result is { } r)
+                    profilePlans.Add(new(named,UniversalAlpineArtisansRemovalAdvice.RequiredRows.Except(removed).ToArray(),
+                        r.DroppedModelBytes,r.ReclaimedVramBytes,r.Ram.FinalHeadroom,r.ArenaSlotsRemaining,
+                        r.DroppedModelClasses.ToArray(),r.ParticleDependencies.Any(p=>p.Status=="dependency-unverified")));
+            }
+            return new(profileError,count,removed.Count,trial.Count(p=>!p.Retired),trial.Count(p=>p.Retired),null,
+                named,profilePlans,profileChecks,profilePlans.Count==0 && profileChecks>=maximumChecks);
+        }
         var groups = Enumerable.Range(0, count).GroupBy(row => (int)BinaryPrimitives.ReadUInt16LittleEndian(data.Row(row).AsSpan(0x36)))
             .Select(group =>
             {

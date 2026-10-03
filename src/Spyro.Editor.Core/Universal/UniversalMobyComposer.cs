@@ -803,6 +803,7 @@ public static class UniversalMobyComposer
         magicChain?.RequireFinalRows(dest,newRows);magicOriginal?.RequireFinalRows(dest,newRows);
         magicChain?.RequireFinalOverlay(overlay);magicOriginal?.RequireFinalOverlay(overlay);
         magicChain?.RequireFinalExecutable(exe);magicOriginal?.RequireFinalExecutable(exe);
+        magicPair?.PrepareArtisansRescueModels(dest);
         magicPair?.RequireFinalRows(dest,newRows);
         magicPair?.RequireFinalOverlay(overlay);
         magicPair?.RequireFinalExecutable(exe);
@@ -816,6 +817,7 @@ public static class UniversalMobyComposer
         if(flightChest!=null)flightChest.RequireFinal(dest,overlay,newRows.Single(),classes[(flightChest.SourceKey,0x12B)].DestinationClass);
         greenWorld?.RequireFinal(dest,new(overlay,UniversalExeBindings.Read(exe,destination.LevelId)),exe,rows,newRows);
         highCavesWorld?.RequireFinal(dest,new(overlay,UniversalExeBindings.Read(exe,destination.LevelId)),exe,rows,newRows);
+        UniversalNativeDragonRescuePrefix.RequireSafe(destination.Key,destination.DisplayName,originalDestination.Data,dest,exe);
         uint finalEnd = RuntimeEnd(dest, copyBuffer);
         uint limit = NormalBufferFloor - RamSafetyMargin;
         var ram = new UniversalRamBudget(originalEnd, finalEnd, NormalBufferFloor,

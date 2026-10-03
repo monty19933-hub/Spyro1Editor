@@ -37,6 +37,27 @@ def process_is_running(pid):
 
 @unittest.skipUnless(os.name == "posix", "POSIX process-group implementation; Windows is not exercised")
 class OwnedCommandTests(unittest.TestCase):
+    def test_dragon_rescue_prefix_source_suite_registration(self):
+        name="NativeDragonRescuePrefixSmoke"
+        self.assertIn((name,"NATIVE_DRAGON_RESCUE_PREFIX_SOURCE_WIDE_GUARD_OK",[]),RUNNER.SOURCE_QA_CASES)
+        self.assertIn(name,RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        self.assertIn(name,RUNNER.SOURCE_QA_REPORT_CASES)
+        self.assertNotIn(name,RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertIn(("MagicArtisansPairSmoke","MAGIC_ARTISANS_PAIR_SOURCE_OK",[]),RUNNER.SOURCE_QA_CASES)
+
+    def test_alpine_chooser_source_suite_registration(self):
+        name="AlpineArtisansChooserSmoke"
+        self.assertIn((name,"ALPINE_ARTISANS_CHOOSER_SOURCE_OK",[]),RUNNER.SOURCE_QA_CASES)
+        self.assertIn(name,RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        self.assertIn(name,RUNNER.SOURCE_QA_REPORT_CASES)
+        self.assertNotIn(name,RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertFalse(any(c[0]==name for c in RUNNER.CORE_CASES))
+        self.assertFalse(any(c[0]==name for c in RUNNER.ADDITIONAL_CORE_CASES))
+        project=RUNNER.ROOT/"src"/("Spyro.Editor."+name)/("Spyro.Editor."+name+".csproj")
+        text=project.read_text()
+        self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"',text)
+        self.assertNotIn("HintPath",text,"chooser must compile current Core rather than reference a frozen DLL")
+
     def test_denied_cleanup_retains_timeout_and_never_claims_stopped(self):
         process = mock.Mock(pid=123456, returncode=None)
         expired = subprocess.TimeoutExpired(["fixture"], 0.1)
@@ -446,6 +467,39 @@ class RunnerOptionsTests(unittest.TestCase):
         observer_patcher = mock.patch.object(RUNNER, "OBSERVER_PYTHON_CASES", ())
         observer_patcher.start()
         self.addCleanup(observer_patcher.stop)
+
+    def test_alpine_chooser_source_dispatch_and_marker_failure(self):
+        name,marker="AlpineArtisansChooserSmoke","ALPINE_ARTISANS_CHOOSER_SOURCE_OK"
+        for emit_marker in (True,False):
+            calls=[]
+            def fake_run(command,**kwargs):
+                calls.append(command)
+                kwargs["stdout"].write("Offline QA passed.\n")
+                if command[:2]==["dotnet","run"] and emit_marker:
+                    kwargs["stdout"].write(marker+" checks=57\n")
+                return subprocess.CompletedProcess(command,0)
+            with self.subTest(emit_marker=emit_marker),tempfile.TemporaryDirectory(prefix="spyro-alpine-chooser-runner-") as output:
+                with mock.patch.object(RUNNER,"CORE_CASES",()), \
+                        mock.patch.object(RUNNER,"ADDITIONAL_CORE_CASES",()), \
+                        mock.patch.object(RUNNER,"SOURCE_QA_CASES",((name,marker,[]),)), \
+                        mock.patch.object(RUNNER,"run_owned_command",side_effect=fake_run), \
+                        mock.patch.object(RUNNER,"configured_source_image",return_value="/selected original.bin") as source, \
+                        mock.patch.object(RUNNER,"configured_source_cue",side_effect=AssertionError("unneeded CUE")), \
+                        mock.patch.object(RUNNER.tempfile,"mkdtemp",return_value=output), \
+                        mock.patch.object(sys,"argv",[str(SPEC.origin),"--with-source-qa"]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0 if emit_marker else 1,RUNNER.main())
+                    source.assert_called_once_with()
+                runs=[c for c in calls if c[:2]==["dotnet","run"]]
+                self.assertEqual(1,len(runs))
+                self.assertEqual(["/selected original.bin",str(RUNNER.ROOT),str(Path(output)/(name+".json"))],runs[0][runs[0].index("--")+1:])
+                self.assertIn("--no-build",runs[0]);self.assertIn("--no-restore",runs[0])
+                builds=[c for c in calls if c[:2]==["dotnet","build"] and name in c[2]]
+                self.assertEqual(1,len(builds),"current source project must build once before its source check")
+                summary=json.loads((Path(output)/"summary.json").read_text())
+                self.assertEqual(emit_marker,summary[-1]["passed"])
+                self.assertEqual("source-"+name,summary[-1]["name"])
+                if not emit_marker:self.assertEqual("missing success marker",summary[-1]["detail"])
 
     def test_global_flight_loader_uses_built_configuration_and_requires_scalar_marker(self):
         for marker_present in (True, False):
@@ -1800,6 +1854,7 @@ class RunnerOptionsTests(unittest.TestCase):
     def test_native_source_checks_use_read_only_modes_and_distinct_logs(self):
         cases = tuple(c for c in RUNNER.SOURCE_QA_CASES if c[0].startswith("Native"))
         expected = {
+            "NativeDragonRescuePrefixSmoke": ["/selected original.bin", str(RUNNER.ROOT), "<REPORT>"],
             "NativeSimpleMobyGeometrySmoke": ["--source", "/selected original.bin"],
             "NativeCollectibleSelectedSlotResidenceSmoke": ["--source", "/selected original.bin"],
             "NativeCollectibleReservationMechanicsSmoke": ["--source", "/selected original.bin"],
@@ -1885,7 +1940,10 @@ class RunnerOptionsTests(unittest.TestCase):
         for command in runs:
             name = Path(command[command.index("--project") + 1]).stem.removeprefix("Spyro.Editor.")
             arguments = command[command.index("--") + 1:]
-            if name == "NativeFreshSavedLevelResearchSmoke" and arguments[0] in (
+            if name == "NativeDragonRescuePrefixSmoke":
+                self.assertEqual(expected[name][:-1], arguments[:-1])
+                self.assertEqual(Path(output) / (name + ".json"), Path(arguments[-1]))
+            elif name == "NativeFreshSavedLevelResearchSmoke" and arguments[0] in (
                     "--locked-chest-source", "--tiled-family-candidate-source"):
                 self.assertEqual([arguments[0], "/selected original.bin", "/selected original.cue"], arguments)
             else:

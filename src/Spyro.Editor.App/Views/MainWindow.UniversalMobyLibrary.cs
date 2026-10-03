@@ -655,6 +655,12 @@ public sealed partial class MainWindow
                 findRoom.Content = "Review the six Gnorcs to make room…";
                 findRoom.IsEnabled = !findingRoom && IsMagicArtisansPairChoice(v);
             }
+            bool alpineArtisans = freshCompilation == null && UniversalAlpineArtisansRemovalAdvice.IsChoice(destination.Key,v.SourceLevelKey,v.SourceRow);
+            if (alpineArtisans)
+            {
+                magicRoom.Text = UniversalAlpineArtisansRemovalAdvice.Explanation; magicRoom.IsVisible = true;
+                findRoom.Content = "Review the objects needed to make room…";
+            }
             var e = Est(v);
             bool isSpecial = UniversalSpecialCatalog.IsSpecial(v);
             variantLabel.Text = entry.SubCategory == "Dragonfly Eggs" ? "Colour" : "Source version";
@@ -708,6 +714,12 @@ public sealed partial class MainWindow
                             ? "\nUse Find space for this object to compare versions and removal plans."
                             : "\nRemove other objects or choose a different source version to make room."
                         : "");
+                if (alpineArtisans)
+                    fit.Text = removedRows.Any(r => !UniversalAlpineArtisansRemovalAdvice.RequiredRows.Contains(r))
+                        ? "Undo other original-object removals first. This option needs exactly the listed 46 objects removed."
+                        : UniversalAlpineArtisansRemovalAdvice.RequiredRows.Except(removedRows).Any()
+                            ? "Review the named objects below, then use the normal Remove button and save your changes. Reopen Add object to recheck. Removing the balloonist and balloon also removes balloon travel."
+                            : "The removal list is complete, but this group did not pass the export check. Keep the terrain and remaining original objects unchanged, and use this group on its own. See Technical details for the reason.";
                 if (magicArtisans)
                     fit.Text = MagicArtisansRoomRestriction(existing, removedRows) ??
                         (MagicArtisansRoomRows.Except(removedRows).Any()
@@ -837,8 +849,14 @@ public sealed partial class MainWindow
                     (choices.Count > 0 ? "Choose a checked plan below, then inspect the named objects. You decide which objects to remove." : "No removal plan found among the versions checked. Try removing added object types or choosing another source version.") +
                     "";
                 technical.Text += $"\nSpace search: {checks} complete export checks; bounded to three native type groups per plan.";
-                foreach (var report in reports.Where(r => r.Advice.CurrentError != null && !UniversalCapacityPlanner.IsCapacityFailure(r.Advice.CurrentError)))
+                foreach (var report in reports.Where(r => r.Advice.Plans.Count == 0 && r.Advice.CurrentError != null && !UniversalCapacityPlanner.IsCapacityFailure(r.Advice.CurrentError)))
                 {
+                    if (UniversalAlpineArtisansRemovalAdvice.IsChoice(destination.Key,report.Variant.SourceLevelKey,report.Variant.SourceRow))
+                    {
+                        roomExplanation.Text += "\nThis Alpine group needs exactly the listed 46 removals, unchanged Artisans terrain and remaining objects, and no other added objects. This includes losing balloon travel. The removal option did not pass the export check.";
+                        technical.Text += $"\nAlpine Ridge T{report.Variant.SourceRow}: {report.Advice.CurrentError}";
+                        continue;
+                    }
                     roomExplanation.Text += $"\nThe {LevelName(report.Variant.SourceLevelKey)} version needs another resource from its original level. Removing objects here cannot fix that. Try another source version; see Technical details.";
                     technical.Text += $"\n{LevelName(report.Variant.SourceLevelKey)} T{report.Variant.SourceRow}: {report.Advice.CurrentError}";
                 }

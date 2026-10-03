@@ -75,6 +75,7 @@ internal static class UniversalAlpineArtisansInstaller
         Require(animations!=null,"the original Spyro reaction resources must be supplied by the export.");var animationSource=animations!();
         var local=animationSource.Levels.Single(l=>l.LevelId==donor.Level.LevelId).Stream.Records.Select(r=>r.AnimationId).ToHashSet();List<UniversalPlayerAnimationImport> reactions=[];
         foreach(var g in ids.GroupBy(id=>local.Contains(id)?donor.Level.LevelId:10)){var merged=UniversalPlayerAnimationImporter.Merge(dest,g.Key==10?"artisans":"alpineridge",g.Key,g.ToArray(),animationSource,exe);dest=merged.Data;reactions.Add(merged.Report);}
+        UniversalAlpineArtisansRescueModels.Prepare(dest,host.Data,map[0xFD],originalExe);
         UniversalAlpineArmDeathSound.Require(donor.Data,donor.Overlay,originalExe,host.Data,dest);
         var rows=templates.Select((t,n)=>{var row=t.Row.ToArray();for(int a=0;a<3;a++)BinaryPrimitives.WriteInt32LittleEndian(row.AsSpan(12+4*a),new[]{active[n].X,active[n].Y,active[n].Z}[a]);BinaryPrimitives.WriteUInt16LittleEndian(row.AsSpan(54),(ushort)map[t.ClassId]);row[74]=255;return(Row:row,Template:t);}).ToArray();
         int treasure=templates.Sum(t=>UniversalTreasureAccounting.KnownValue(t.Row))-UniversalAlpineArtisansHost.RemovedRows.Sum(r=>UniversalTreasureAccounting.KnownValue(host.Data.Row(r)));UniversalTreasureAccounting.ApplyDelta(exe,level.LevelId,treasure);
