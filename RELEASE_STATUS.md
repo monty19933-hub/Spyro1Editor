@@ -1,3 +1,13 @@
+# Follow-up: four linked Magic Crafters druids
+
+Original rows 2–5 now expand and export as one linked group into unchanged Dark
+Hollow, preserving native paths, pod, shared state and collection identities.
+The integrated 5,749 checks and existing pair/Twilight regressions pass; the App
+builds cleanly. Native gameplay for this chain remains pending.
+[Evidence](docs/research/universal-magic-chain-20261003.md).
+
+---
+
 # Follow-up: imported effects in fresh levels
 
 Fresh level 65 now retains imported attack effects through normal export and

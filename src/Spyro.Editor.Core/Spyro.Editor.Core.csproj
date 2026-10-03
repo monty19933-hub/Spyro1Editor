@@ -83,6 +83,8 @@
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringRewardStagingRuntimeCandidatePublisherSmoke" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Universal/PrivateMagicPathFollowingSource.json" LogicalName="Spyro.Editor.Core.Universal.PrivateMagicPathFollowingSource.json" />
+    <InternalsVisibleTo Include="Spyro.Editor.MagicChainSmoke" />
     <EmbeddedResource Include="Universal/PrivateMagicMovementSource.json" LogicalName="Spyro.Editor.Core.Universal.PrivateMagicMovementSource.json" />
     <EmbeddedResource Include="Universal/PrivateMagicPairSourcePart.json" LogicalName="Spyro.Editor.Core.Universal.PrivateMagicPairSourcePart.json" />
     <EmbeddedResource Include="Universal/MagicPairArtisansAssetOwners.json" LogicalName="Spyro.Editor.Core.Universal.MagicPairArtisansAssetOwners.json" />

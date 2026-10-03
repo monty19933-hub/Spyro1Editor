@@ -23,6 +23,7 @@ public sealed record UniversalBehaviorSourceReport(string SourceLevelKey, IReadO
 {
     public IReadOnlyList<uint> ParentClassReadSites { get; init; } = [];
     public UniversalMagicPairShadowReadback? PrivateMagicPairShadow { get; init; }
+    public UniversalMagicDruidChainReadback? PrivateMagicDruidChain {get;init;}
     public uint PlayerDamageMask { get; init; }
     public IReadOnlyList<UniversalPlayerDamageWrite> PlayerDamageWrites { get; init; } = [];
     public IReadOnlyList<UniversalNativePlayerDamageCall> NativePlayerDamageCalls { get; init; } = [];
@@ -64,7 +65,7 @@ public static class UniversalBehaviorBundleBuilder
         UniversalOverlay? nativeDestinationOwner = null, IReadOnlyList<int>? highValueGemClasses = null,
         IReadOnlyDictionary<string, UniversalWhirlwindSoundBinding>? whirlwindSounds = null,
         IReadOnlyDictionary<string, UniversalDryCanyonBirdCertificate>? dryCanyonBirdBranches = null,
-        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null,IReadOnlyList<UniversalOwnedParticleCertificate>? ownedParticles = null, UniversalMagicPairCertificate? magicPair = null,IReadOnlyDictionary<string,UniversalDarkPassageLanternContext>? darkLanternContexts = null,IReadOnlyDictionary<string,UniversalDarkPassageProjectileParticleCertificate>? darkProjectileParticles = null)
+        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null,IReadOnlyList<UniversalOwnedParticleCertificate>? ownedParticles = null, UniversalMagicPairCertificate? magicPair = null,IReadOnlyDictionary<string,UniversalDarkPassageLanternContext>? darkLanternContexts = null,IReadOnlyDictionary<string,UniversalDarkPassageProjectileParticleCertificate>? darkProjectileParticles = null, UniversalMagicDruidChainCertificate? magicChain = null)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
         int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
@@ -176,7 +177,7 @@ public static class UniversalBehaviorBundleBuilder
             if (s.SourceKey == "drycanyon" && s.Classes.Contains(0xB8) &&
                 (dryCanyonBirdBranches == null || !dryCanyonBirdBranches.TryGetValue(s.SourceKey, out birdProof)))
                 throw new InvalidDataException("Copied Dry Canyon B8 behavior requires its issued state/frame branch proof.");
-            var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey, map, birdProof, s.SourceKey=="magiccrafters"?magicPair:null);
+            var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey, map, birdProof, s.SourceKey=="magiccrafters"?magicPair:null,s.SourceKey=="magiccrafters"?magicChain:null);
             if(s.SourceKey=="twilightharbor" || UniversalTwilightTrooperOwnership.SourceFamily(s.Source)&&s.Classes.Any(c=>c is 0x93 or 0x94))
             {UniversalTwilightTrooperPlacement.RequireSourceLabel(s.SourceKey);UniversalTwilightTrooperOwnership.RequireCopiedInputs(upd,s.Source,s.Classes,map,nativeExecutable??[]);UniversalTwilightTrooperParticles.RequireBundle(s.Source,destination,s.Classes,ownedParticles,nativeExecutable??[]);}
             IReadOnlyList<uint> twilightClassSites=[];
@@ -252,6 +253,7 @@ public static class UniversalBehaviorBundleBuilder
             if (Remaps(s.SourceKey)) UniversalClassRemapping.RequireNoUnownedClassMemory(upd, false, s.Source);
             var nativeDamage = UniversalNativePlayerDamageCalls.AnalyzeSource(s.SourceKey, s.Source, upd, nativeExecutable);
             if(magicPair!=null&&s.SourceKey=="magiccrafters")parts.Add(UniversalMagicPairCollisionShadow.Apply(upd,s.Source,nativeExecutable??[],magicPair));
+            if(magicChain!=null&&s.SourceKey=="magiccrafters")parts.Add(magicChain.Apply(upd,s.Source,nativeExecutable??[]));
             int gemBytes = 0;
             if (gemCalls.Count != 0)
             {
@@ -282,6 +284,7 @@ public static class UniversalBehaviorBundleBuilder
         if (signClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.SignDraw(signClasses, "sign_draw"));
         var (code, labels) = Assemble(parts, baseAddress);
+        if(magicChain!=null){var proof=magicChain.RequireCompiled(code,baseAddress,parts);reports=reports.Select(r=>r.SourceLevelKey=="magiccrafters"?r with{PrivateMagicDruidChain=proof}:r).ToList();}
         if(magicPair!=null){magicPair.RequireCompiled(code,baseAddress,parts);var proof=UniversalMagicPairCollisionShadow.RequireWritten(code,labels,baseAddress,magicPair.PreservedCacheBytes);reports=reports.Select(r=>r.SourceLevelKey=="magiccrafters"?r with{PrivateMagicPairShadow=proof}:r).ToList();}
         return new(baseAddress, code, labels["wrap_upd"], labels["wrap_init"], reports)
         {
@@ -319,7 +322,7 @@ public static class UniversalBehaviorBundleBuilder
         }
     }
 
-    internal static (UniversalAsmPart Part, int Bytes, int Tables) BuildPrunedUpdate(UniversalOverlay o, IReadOnlyList<int> classes, string tag, IReadOnlyDictionary<int, int>? classMap = null, UniversalDryCanyonBirdCertificate? birdBranches = null, UniversalMagicPairCertificate? magicPair = null)
+    internal static (UniversalAsmPart Part, int Bytes, int Tables) BuildPrunedUpdate(UniversalOverlay o, IReadOnlyList<int> classes, string tag, IReadOnlyDictionary<int, int>? classMap = null, UniversalDryCanyonBirdCertificate? birdBranches = null, UniversalMagicPairCertificate? magicPair = null, UniversalMagicDruidChainCertificate? magicChain = null)
     {
         if (birdBranches != null && !classes.Contains(0xB8)) throw new InvalidDataException("Dry Canyon bird branch proof has no B8 owner in this copy.");
         var sw = UniversalDispatchAnalysis.FindUpdateSwitch(o);
@@ -331,7 +334,7 @@ public static class UniversalBehaviorBundleBuilder
         // Materialized code addresses (jump-table targets) must stay addressable in the copy.
         foreach (var r in entries.SelectMany(e => e.Trace.Sequence).Concat(def.Sequence))
             if (r.IsConstant && r.ConstantValue >= sw.Function && r.ConstantValue < fEnd && r.ConstantValue % 4 == 0) starts.Add(r.ConstantValue);
-        var (closure, tables) = UniversalDispatchAnalysis.Closure(o, sw.Function, starts, new HashSet<uint> { sw.TreeStart }, birdBranches, magicPair);
+        var (closure, tables) = UniversalDispatchAnalysis.Closure(o, sw.Function, starts, new HashSet<uint> { sw.TreeStart }, birdBranches, magicPair, magicChain);
         var part = Relayout(o, closure, tables, tag, sw.TreeStart, a =>
         {
             for (int i = 0; i < entries.Count; i++)
