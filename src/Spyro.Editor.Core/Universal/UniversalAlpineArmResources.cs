@@ -9,7 +9,22 @@ internal static class UniversalAlpineArmResources
 {
     internal const string DataHash = "507c7b327bdfe9e4c230bef7d93da5d8c935a9a9f033ad99de22a5af8dfd0ddf";
     internal const string OverlayHash = "f7c9a174f64959fb53b4058f9786df223a9c142b2289563ca31edc6a24c6d383";
-    private static readonly int[][] Cohorts = [[0,1],[24,25,26]];
+    private static readonly int[][] Cohorts = [[0,1],[3,4],[24,25,26]];
+    internal static void RequireSourceFamilyEnrollment(UniversalLevelData data,UniversalOverlay overlay,UniversalRowTemplate template)
+    {
+        if(template.ClassId is not(0xFD or 0x10F))return;
+        bool sourceLabel=template.SourceLevelKey.Equals("alpineridge",StringComparison.OrdinalIgnoreCase);
+        bool sourceOwner=Convert.ToHexStringLower(SHA256.HashData(overlay.Bytes))==OverlayHash;
+        if(!sourceLabel&&!sourceOwner)return;
+        Require(template.SourceLevelKey=="alpineridge","complete original Alpine source namespace changed");
+        ProveSource(data,overlay);
+        Require(template.SourceRowIndex>=0&&template.SourceRowIndex<data.Scene().RowCount&&
+            BinaryPrimitives.ReadUInt16LittleEndian(data.Row(template.SourceRowIndex).AsSpan(54))==template.ClassId,"source family row/class identity changed");
+        // The complete source hash owns the real row enumeration. Never turn an
+        // unproved scalar companion index into a destination native row owner.
+        Require(UniversalAlpineArmInstaller.Applies(template),"this original Alpine druid needs its complete native behavior and resources before placement; this variant is not supported yet");
+    }
+    private static int ClassForRow(int row)=>row is 1 or 4 or 26?0x10F:0xFD;
     private static int I(byte[] b,int at)=>BinaryPrimitives.ReadInt32LittleEndian(b.AsSpan(at));
     private static void Require(bool ok,string why){if(!ok)throw new InvalidDataException("Alpine dynamic arms storage: "+why);}
     internal static void ProveSource(UniversalLevelData data,UniversalOverlay overlay)
@@ -23,6 +38,9 @@ internal static class UniversalAlpineArmResources
         // all producers. These witnesses specify integer semantics explicitly.
         Packet(0x80082344,[0x8E230020,0x9264003D,0x00031040,0x00431021,0x00021080,0x00431023,0x3C038007,0x8C635828,0x000210C0,0x1080000E,0x00628021]);
         Packet(0x800825E0,[0x8E230020,0,0x00031040,0x00431021,0x00021080,0x00431023,0x3C038007,0x8C635828,0x000210C0]);
+        // Original selector5 uses props+36 as a signed physical row number,
+        // writes peer state10 and initializes its own linked-activation timer210.
+        Packet(0x80084F54,[0x8E230024,0,0x00031040,0x00431021,0x00021080,0x00431023,0x3C038007,0x8C635828,0x000210C0,0x00621821,0x2402000A,0xA0620048,0x240200D2,0xAE220030]);
         // Actual13B factories are reached through g_MobyInit with literal class,
         // and actor pointer in the jalr delay slot. No arbitrary constant scan.
         Packet(0x80084DA0,[0x2404013B,0x3C028007,0x8C4258CC,0,0x0040F809,0x02602821]);
@@ -30,7 +48,7 @@ internal static class UniversalAlpineArmResources
         void Packet(uint pc,uint[] words){for(int i=0;i<words.Length;i++)Require(overlay.Word(pc+(uint)i*4)==words[i],"native integer/factory packet changed");}
     }
     internal static int[] Members(int row)=>Cohorts.SingleOrDefault(c=>c.Contains(row))?.ToArray()
-        ??throw new InvalidDataException("Alpine dynamic arms storage: original row is outside the two proved storage cohorts.");
+        ??throw new InvalidDataException("Alpine dynamic arms storage: original row is outside the three proved storage cohorts.");
     internal static UniversalRowTemplate CaptureSource(UniversalLevelData data,UniversalOverlay overlay,UniversalRowTemplate template)
     {
         ProveSource(data,overlay);Require(template.SourceLevelKey=="alpineridge","wrong source namespace");
@@ -38,29 +56,29 @@ internal static class UniversalAlpineArmResources
         Require(template.Row.SequenceEqual(original.Row)&&template.Properties.SequenceEqual(original.Properties)&&
             template.InternalPointers.SequenceEqual(original.InternalPointers)&&template.ExternalRowPointers.SequenceEqual(original.ExternalRowPointers)&&
             template.DroppedExternalPointers==original.DroppedExternalPointers&&template.DroppedExternalPointers==0,"placed original row/properties/fixup ownership changed");
-        int row=template.SourceRowIndex;Require(template.Row[72]==0&&template.Row[73]==0&&template.Row[67]==(row<=1?4:2),"native initial state/pod changed");
+        int row=template.SourceRowIndex;Require(template.Row[72]==0&&template.Row[73]==0&&template.Row[67]==(row<=1?4:row<=4?5:2),"native initial state/pod changed");
         int selector=I(template.Properties,template.ClassId==0xFD?16:20);
         Require((row,template.ClassId,selector,template.Properties.Length) switch
-            {(0,0xFD,0,104)or(1,0x10F,4,120)or(24,0xFD,4,136)or(25,0xFD,4,136)or(26,0x10F,10,280)=>true,_=>false},"row/class/selector/private-block owner changed");
-        int path=template.ClassId==0xFD?64:80,count=template.ClassId==0xFD?(row==0?2:4):(row==1?2:12);
+            {(0,0xFD,0,104)or(1,0x10F,4,120)or(3,0xFD,2,104)or(4,0x10F,5,120)or(24,0xFD,4,136)or(25,0xFD,4,136)or(26,0x10F,10,280)=>true,_=>false},"row/class/selector/private-block owner changed");
+        int path=template.ClassId==0xFD?64:80,count=template.ClassId==0xFD?(row is 0 or 3?2:4):(row is 1 or 4?2:12);
         Require(template.InternalPointers.Contains((template.ClassId==0xFD?12:0,path))&&
             template.InternalPointers.Count==(template.ClassId==0xFD?1:2)&&
             (template.ClassId==0xFD||template.InternalPointers.Contains((60,76)))&&
             template.Properties[path]==count&&path+8+16*count==template.Properties.Length,
             "complete native path/current/direction/flag block changed");
-        var links=template.ClassId==0xFD?new[]{new UniversalSourceRowIndex(32,row==0?1:26,0x10F)}:
-            row==1?[new UniversalSourceRowIndex(36,0,0xFD)]:new[]{new UniversalSourceRowIndex(36,24,0xFD),new UniversalSourceRowIndex(40,25,0xFD)};
+        var links=template.ClassId==0xFD?new[]{new UniversalSourceRowIndex(32,row==0?1:row==3?4:26,0x10F)}:
+            row is 1 or 4?[new UniversalSourceRowIndex(36,row==1?0:3,0xFD)]:new[]{new UniversalSourceRowIndex(36,24,0xFD),new UniversalSourceRowIndex(40,25,0xFD)};
         Require(links.All(l=>I(template.Properties,l.Offset)==l.SourceRow&&BinaryPrimitives.ReadUInt16LittleEndian(data.Row(l.SourceRow).AsSpan(54))==l.SourceClass),"reciprocal source integer target changed");
         Require(!links.Any(l=>template.InternalPointers.Any(p=>p.Offset==l.Offset)||template.ExternalRowPointers.Any(p=>p.Offset==l.Offset)),"row integer was retyped as a pointer");
         RequirePod(data,template.Row[67],members);
-        return template with{SourceRowIndices=links,ImportedRowIndices=[],SourcePrerequisiteRows=members.Where(r=>r!=row).Select(r=>new UniversalSourcePrerequisite(r,r==1||r==26?0x10F:0xFD)).ToArray()};
+        return template with{SourceRowIndices=links,ImportedRowIndices=[],SourcePrerequisiteRows=members.Where(r=>r!=row).Select(r=>new UniversalSourcePrerequisite(r,ClassForRow(r))).ToArray()};
     }
     internal static void RequireGroup(UniversalRowTemplate owner,IReadOnlyList<UniversalRowTemplate> active)
     {
         Require(owner.SourceLevelKey=="alpineridge"&&!string.IsNullOrWhiteSpace(owner.LinkGroupId),"cohort needs its own group identity");
         int[] members=Members(owner.SourceRowIndex);
-        Require(owner.SourcePrerequisiteRows.SequenceEqual(members.Where(r=>r!=owner.SourceRowIndex).Select(r=>new UniversalSourcePrerequisite(r,r==1||r==26?0x10F:0xFD))),"whole pod prerequisite metadata changed");
-        foreach(int row in members)Require(active.Count(t=>t.SourceLevelKey=="alpineridge"&&t.SourceRowIndex==row&&t.LinkGroupId==owner.LinkGroupId&&t.ClassId==(row==1||row==26?0x10F:0xFD))==1,"each actual pod member must occur exactly once in its own group");
+        Require(owner.SourcePrerequisiteRows.SequenceEqual(members.Where(r=>r!=owner.SourceRowIndex).Select(r=>new UniversalSourcePrerequisite(r,ClassForRow(r)))),"whole pod prerequisite metadata changed");
+        foreach(int row in members)Require(active.Count(t=>t.SourceLevelKey=="alpineridge"&&t.SourceRowIndex==row&&t.LinkGroupId==owner.LinkGroupId&&t.ClassId==(ClassForRow(row)))==1,"each actual pod member must occur exactly once in its own group");
     }
     internal static UniversalRowTemplate Rebase(UniversalLevelData data,UniversalOverlay overlay,UniversalRowTemplate raw,UniversalMobyPlacement placement)
     {

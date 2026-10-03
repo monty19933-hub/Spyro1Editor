@@ -4,13 +4,13 @@ using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
 namespace Spyro.Editor.Core.Universal;
 
-/// <summary>One complete original Alpine0/1 or24/25/26 cohort over retained original Blowhard.
+/// <summary>One complete original Alpine0/1,3/4 or24/25/26 cohort over retained original Blowhard.
 /// Authenticates source, retained native owners and actual allocations; no final
 /// image hash or fixed authored pose grants admission.</summary>
 internal static class UniversalAlpineArmInstaller
 {
-    internal static bool Applies(UniversalRowTemplate t)=>string.Equals(t.SourceLevelKey,"alpineridge",StringComparison.OrdinalIgnoreCase)&&t.SourceRowIndex is 0 or 1 or 24 or 25 or 26;
-    internal static bool Requested(IReadOnlyList<UniversalMobyPlacement> p)=>p.Any(x=>!x.Retired&&string.Equals(x.SourceLevelKey,"alpineridge",StringComparison.OrdinalIgnoreCase)&&x.SourceRowIndex is 0 or 1 or 24 or 25 or 26);
+    internal static bool Applies(UniversalRowTemplate t)=>string.Equals(t.SourceLevelKey,"alpineridge",StringComparison.OrdinalIgnoreCase)&&t.SourceRowIndex is 0 or 1 or 3 or 4 or 24 or 25 or 26;
+    internal static bool Requested(IReadOnlyList<UniversalMobyPlacement> p)=>p.Any(x=>!x.Retired&&string.Equals(x.SourceLevelKey,"alpineridge",StringComparison.OrdinalIgnoreCase)&&x.SourceRowIndex is 0 or 1 or 3 or 4 or 24 or 25 or 26);
     private static int I(byte[] b,int at)=>BinaryPrimitives.ReadInt32LittleEndian(b.AsSpan(at));
     private static void Require(bool ok,string reason){if(!ok)throw new InvalidDataException("Alpine armored druid group: "+reason);}
     internal static UniversalComposeResult Compose(LevelDefinition level,byte[] hostBytes,byte[] hostOverlayBytes,
@@ -55,7 +55,7 @@ internal static class UniversalAlpineArmInstaller
         templates=templates.Select(t=>UniversalIndexedRows.Resolve(t,templates)).ToArray();
         // Native reserve90 is preserved. One genuine druid emits at most16 arms.
         // Per-source retained reward/fallback/replacement and decimal digits
-        // give peak23 for0/1, peak26 for24/25/26, below32 extra lifetimes.
+        // give peak23 for0/1, peak22 for3/4, peak26 for24/25/26, below32 extra lifetimes.
         int peak=16+2*placed+templates.Sum(t=>UniversalTreasureAccounting.KnownValue(t.Row)>=10?2:1);
         Require(peak<=32,"complete source reward/digit/dynamic arm lifetime peak exceeds owned reserve.");
         int reserve=32+(placed*88+111)/112;

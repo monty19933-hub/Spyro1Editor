@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 
 namespace Spyro.Editor.Core.Universal;
 
-/// <summary>Private native deletion prerequisite for the two authenticated arm
+/// <summary>Private native deletion prerequisite for the three authenticated arm
 /// cohorts. Does not enroll imported rows or authorize other source families.</summary>
 internal static class UniversalAlpineArmNativeRows
 {
@@ -11,7 +11,7 @@ internal static class UniversalAlpineArmNativeRows
     {
         if(sourceKey!="alpineridge"||removed.Count==0)return;
         UniversalAlpineArmResources.ProveSource(original,source);
-        foreach(int[] cohort in new[]{new[]{0,1},new[]{24,25,26}})
+        foreach(int[] cohort in new[]{new[]{0,1},new[]{3,4},new[]{24,25,26}})
         {
             int[] surviving=cohort.Where(row=>!removed.Contains(row)).ToArray();
             if(surviving.Length==0)continue;

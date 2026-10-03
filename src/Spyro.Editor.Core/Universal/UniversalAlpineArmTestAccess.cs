@@ -6,3 +6,5 @@ using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("Spyro.Editor.AlpineArmSecondSmoke")]
 [assembly: InternalsVisibleTo("Spyro.Editor.AlpineArmSecondRewardSmoke")]
+
+[assembly: InternalsVisibleTo("Spyro.Editor.AlpineArmPair34Smoke")]

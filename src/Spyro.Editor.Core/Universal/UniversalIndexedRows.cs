@@ -20,6 +20,7 @@ public static class UniversalIndexedRows
     /// separately writes -1; no placed template is manufactured from that inactive sentinel.</summary>
     public static UniversalRowTemplate Capture(UniversalLevelData data, UniversalOverlay overlay, UniversalRowTemplate template)
     {
+        UniversalAlpineArmResources.RequireSourceFamilyEnrollment(data,overlay,template);
         if(UniversalAlpineArmInstaller.Applies(template))return UniversalAlpineArmResources.CaptureSource(data,overlay,template);
         template = UniversalBeastMistyBoarPlacement.Capture(data,overlay,template);
         template = UniversalHauntedWizardPlacement.Capture(data, overlay, template);

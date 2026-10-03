@@ -1,3 +1,17 @@
+# Follow-up: second Alpine linked pair
+
+Original Alpine3/4 now place together into intact Blowhard through the ordinary
+editor workflow. Both reciprocal native indices, selectors2/5, complete paths,
+models, sounds and native behavior remain intact. Project save/reopen and normal
+export/readback pass839 checks; native selector5 instruction replay38 and runner120
+checks pass. Existing Alpine, Artisans rescue and Green Druid regressions pass;
+the Release App builds with zero warnings/errors. Remaining unproved Alpine
+groups now refuse instead of exporting unresolved native actor references.
+Fresh native gameplay of3/4 is in progress. This does not finish universal
+coverage or issue a V1.0 package. [Evidence](docs/research/universal-alpine-pair34-20261003.md).
+
+---
+
 # Follow-up: native dragon rescue capacity and Artisans imports
 
 The native rescue-loader crash is fixed for the supported complete Alpine0/1
