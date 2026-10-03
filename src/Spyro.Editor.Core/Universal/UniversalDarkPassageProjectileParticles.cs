@@ -8,8 +8,8 @@ public sealed class UniversalDarkPassageProjectileParticleCertificate
  {DestinationLevelKey=destinationKey;Source=new(source.Bytes.ToArray(),source.Bindings.ToDictionary());Destination=new(destination.Bytes.ToArray(),destination.Bindings.ToDictionary());}
  public string SourceLevelKey=>"darkpassage";
  public string DestinationLevelKey {get;}
- public bool CopiesImpact=>Destination.Bindings[UniversalExeBindings.ParticleUpdateGlobal].Value!=0x8008AE28;
- public string DestinationParticleProfile=>Destination.Bindings[UniversalExeBindings.ParticleUpdateGlobal].Value==0x80087E20?"native-town-square-cleared":DestinationLevelKey;
+ public bool CopiesImpact=>!UniversalDarkPassageParticleHosts.Resolve(Destination).HasEquivalentNativeImpact;
+ public string DestinationParticleProfile=>UniversalDarkPassageParticleHosts.Resolve(Destination).Key=="townsquare"&&DestinationLevelKey!="townsquare"?"native-town-square-cleared":UniversalDarkPassageParticleHosts.Resolve(Destination).Key;
  internal UniversalOverlay Source {get;}
  internal UniversalOverlay Destination {get;}
  internal void RequireDestination(UniversalOverlay destination,byte[] exe)=>UniversalDarkPassageProjectileParticles.RequireDestination(DestinationLevelKey,destination,exe);
@@ -26,11 +26,11 @@ public static class UniversalDarkPassageProjectileParticles
  internal static readonly UniversalOwnedParticleFunction Update13=new(0x800857FC,5436,"0de2b6053564c8aa12aaa5c447964561dbe2088f63719d595f936d74ce1eb9cf",0x8007B22C,0x80086CE8,[13]);
  public static UniversalDarkPassageProjectileParticleCertificate Capture(string sourceKey,string destinationKey,UniversalLevelData data,UniversalOverlay source,UniversalOverlay destination,byte[] exe)
  {
-  if(!string.Equals(sourceKey,"darkpassage",StringComparison.OrdinalIgnoreCase) || destinationKey is not ("darkhollow" or "peacekeepers"))throw new InvalidDataException("The projectile particle certificate has an unrelated source or destination.");
+  if(!string.Equals(sourceKey,"darkpassage",StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("The projectile particle certificate has an unrelated source or destination.");
   if(Hash(data.Bytes)!="217d4e525f10b63f4ae4a413d807989241b7f2f91963b543b421cbd3954c364a")throw new InvalidDataException("Dark projectile particle source data changed.");
   RequireSource(source);RequireDestination(destinationKey,destination,exe);return new(destinationKey,source,destination);
  }
- internal static bool IsSupportedDestination(UniversalOverlay o)=>o.Bindings.TryGetValue(UniversalExeBindings.ParticleSpawnGlobal,out var b)&&b.Value is 0x800844A0 or 0x8008BFF0 or 0x80088F68;
+ internal static bool IsSupportedDestination(UniversalOverlay o){try{UniversalDarkPassageParticleHosts.Resolve(o);return true;}catch(InvalidDataException){return false;}}
  internal static bool HasNativeSourceOwner(UniversalOverlay o)
  {
   try{RequireSourceParticleFunctions(o);return true;}catch(InvalidDataException){return false;}
@@ -43,12 +43,12 @@ public static class UniversalDarkPassageProjectileParticles
    source.Bindings.TryGetValue(UniversalExeBindings.ParticleSpawnGlobal,out var spawnBinding)&&source.Bindings.TryGetValue(UniversalExeBindings.ParticleUpdateGlobal,out var updateBinding)&&spawnBinding.Value==Spawn13.Entry&&updateBinding.Value==Update13.Entry;
   if(!string.Equals(key,"darkpassage",StringComparison.OrdinalIgnoreCase)) {if(originalSource)throw new InvalidDataException("Dark projectile particle source was mislabeled.");return;}
   RequireSource(source);
-  if(HasNativeSourceOwner(destination))return;
-  if(!IsSupportedDestination(destination))return; // Other destinations remain explicitly dependency-unverified.
+  if(HasNativeSourceOwner(destination)){RequireDestination("darkpassage",destination,exe);if(owned?.Any(c=>c.TypeIds.Contains(13))??false)throw new InvalidDataException("A copied updater cannot run beside the native Dark particle13 owner.");return;}
+  if(!IsSupportedDestination(destination))throw new InvalidDataException("This Dark projectile host lacks certified native trail and impact owners.");
   if(certificates==null||!certificates.TryGetValue(key,out var certificate))throw new InvalidDataException("This copied Dark projectile needs its issued particle effect ownership.");
   certificate.RequireDestination(destination,exe);
   if(!source.Bytes.SequenceEqual(certificate.Source.Bytes)||source.Bindings.Count!=certificate.Source.Bindings.Count||source.Bindings.Any(b=>!certificate.Source.Bindings.TryGetValue(b.Key,out var c)||c!=b.Value))throw new InvalidDataException("The projectile effect certificate has a different copied source.");
-  if(certificate.CopiesImpact && (owned?.Any(c=>c.SourceLevelKey!="darkpassage"&&c.TypeIds.Contains(13))??false))throw new InvalidDataException("Two copied sources cannot independently update the same particle13 lifetime.");
+  if((owned?.Any(c=>c.TypeIds.Contains(13)&&(!certificate.CopiesImpact||c.SourceLevelKey!="darkpassage"))??false))throw new InvalidDataException("Two copied sources cannot independently update the same particle13 lifetime.");
   if(certificate.CopiesImpact && !(owned?.Any(c=>c.SourceLevelKey=="darkpassage"&&c.TypeIds.SequenceEqual(new[]{13}))??false))throw new InvalidDataException("The projectile impact needs its issued source13 dispatcher.");
  }
  internal static UniversalParticleDependency Inspect(UniversalDarkPassageProjectileParticleCertificate c,int type)=>new("darkpassage",type,
@@ -73,22 +73,8 @@ public static class UniversalDarkPassageProjectileParticles
  }
  internal static void RequireDestination(string key,UniversalOverlay destination,byte[]? exe)
  {
-  if(key is not ("darkhollow" or "peacekeepers"))throw new InvalidDataException("Unowned projectile particle destination.");
-  bool town=key=="peacekeepers"&&destination.Bindings.TryGetValue(UniversalExeBindings.ParticleUpdateGlobal,out var update)&&update.Value==0x80087E20;
-  var bindings=town?TownClearedPeaceBindings:key=="darkhollow"?DarkBindings:PeaceBindings;
-
-  foreach(var b in bindings)if(!destination.Bindings.TryGetValue(b.Global,out var f)||f!=b)throw new InvalidDataException("Projectile destination particle callback identity changed.");
-  if(exe!=null){foreach(var b in bindings)if(UniversalExeBindings.Read(exe,key=="darkhollow"?12:20)[b.Global]!=b)throw new InvalidDataException("Projectile destination executable callback identity changed.");RequireNative(exe);}
-  foreach(var owner in town?TownOwners:key=="darkhollow"?DarkOwners:PeaceOwners)RequireOwner(destination,owner.Pc,owner.Length,owner.Sha);
-  if(town)
-  {
-   if(destination.Word(0x8007AC80+13*4)!=0x80088F20||destination.Word(0x80088F20)!=0x26100020||destination.Word(0x8007ADC4+13*4)!=0x80089E74)throw new InvalidDataException("Cleared Town particle13 no-op owner changed.");
-   // The exact nine-setter Town initializer is the Start Blank owner. Its full
-   // bytes, copied into Peace's isolated native initializer, must remain intact.
-   if(exe!=null && Hash(exe.AsSpan((int)(0x8005AA28-UniversalExeBindings.ExeBase),152))!="fe4669229aedbbc8ff698d57a237327af36025aaeda0ff5cc2e1c806fd23e50b")throw new InvalidDataException("Cleared Peace lost its exact Town nine-setter initializer owner.");
-  }
-  // Dark13 is exactly the original no-op tail, so only its issued source updater runs.
-  if(key=="darkhollow"&&(destination.Word(0x8007AB74+13*4)!=0x80084450||destination.Word(0x80084450)!=0x26310020||destination.Word(0x8007ACB8+13*4)!=0x8008553C))throw new InvalidDataException("Dark Hollow particle13 no-op owner changed.");
+  UniversalDarkPassageParticleHosts.Require(key,destination,exe);
+  if(exe!=null)RequireNative(exe);
  }
  internal static void RequireNative(byte[] exe)
  {
@@ -118,34 +104,12 @@ public static class UniversalDarkPassageProjectileParticles
  }
  private static void RequireOwner(UniversalOverlay o,uint pc,int length,string sha){if(!o.Contains(pc)||(ulong)pc+(uint)length>o.End||Hash(o.Bytes.Slice((int)(pc-UniversalOverlay.Base),length))!=sha)throw new InvalidDataException("Projectile particle function/table owner changed.");}
  private static string Hash(ReadOnlySpan<byte> bytes)=>Convert.ToHexStringLower(SHA256.HashData(bytes));
- private static readonly UniversalExeBinding[] TownClearedPeaceBindings=[new(0x800758E4,0x8005AA58,0x8005AA5C,0x80088F68),new(0x800756BC,0x8005AA68,0x8005AA6C,0x80087E20)];
- private static readonly (uint Pc,int Length,string Sha)[] TownOwners=[
-  (0x80088F68,3940,"0f41d76490950c9ee0b2c3be847ff9b3f360b4852ce674e7acc04120c975c931"),
-  (0x80087E20,4424,"1279e327bdbf92e03c991d619cf3190f3015bb63493f13855355588c0ba78cdc"),
-  (0x8007ADC4,324,"cfbfca35aad07e26113533f2444ec9d148510523e93e37ddf506aa5203132532"),
-  (0x8007AC80,324,"2e8c2cfb1539eab094c0c0d8cb771df1aaac08c092947b20869c715e4fc93bc8")];
  private static readonly UniversalExeBinding[] SourceBindings=[
   new(0x800785D8,0x8005B2D0,0x8005B2D4,0x800880D4),
   new(0x800758CC,0x8005B2E0,0x8005B2E4,0x80084B94),
   new(0x80075734,0x8005B2F0,0x8005B2F4,0x8007B4F8),
   new(0x800758E4,0x8005B300,0x8005B304,0x80086D38),
   new(0x800756BC,0x8005B310,0x8005B314,0x800857FC)];
- private static readonly UniversalExeBinding[] DarkBindings=[
-  new(0x800758E4,0x8005A878,0x8005A87C,0x800844A0),
-  new(0x800756BC,0x8005A888,0x8005A88C,0x80083274)];
- private static readonly (uint Pc,int Length,string Sha)[] DarkOwners=[
-  (0x800844A0,4340,"3c8bb2b250a0f63124d46b7b4e5238ed325172efb9fcc50a9015968d93d1b908"),
-  (0x8007ACB8,324,"3d7229fa46f8f21d4d3dd07f28fb18cbfa0872c445aa24ae571eb1975243c4c6"),
-  (0x80083274,4652,"42568934fe492f56cb58c8d22e803ccfb605b994789d917c86ae8a245b074af8"),
-  (0x8007AB74,324,"138aafd4977dd3327e9283992d2082469c5d064b08b373848f2101d53cce3997")];
- private static readonly UniversalExeBinding[] PeaceBindings=[
-  new(0x800758E4,0x8005AA58,0x8005AA5C,0x8008BFF0),
-  new(0x800756BC,0x8005AA68,0x8005AA6C,0x8008AE28)];
- private static readonly (uint Pc,int Length,string Sha)[] PeaceOwners=[
-  (0x8008BFF0,4020,"73c3300f23403ea80dd10c4e2d8fb2134b84a726af9078e0e4b38b43e110a022"),
-  (0x8007B710,324,"84c0178e89a2789a34e7e04487eaa2483d130caaafb20ceebbdd0a11af07579f"),
-  (0x8008AE28,4552,"4222aa7ae72bafa344b89844ba31b817b9e1917ed1636d957ef17fd76b015b9b"),
-  (0x8007B5CC,324,"8d43637b3dcf652cb8ce111ee7a360792f803122ddca530618a033e076a6320f")];
  private static readonly (uint Pc,int Length,string Sha)[] Native=[
   (0x800131BC,48,"26d3b05d50cd1f302f5a3690c1d1e38719e35c8a46e04b4f1327e78953f077b0"),
   (0x800169AC,5288,"cd7816e798e34cc9b4a015bca681d845f526823c50ca29e2db94cf8b1ced0426"),

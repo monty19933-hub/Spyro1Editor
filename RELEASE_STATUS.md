@@ -1,5 +1,11 @@
 # Follow-up: native collection stars and linked Dark gameplay
 
+Dark Passage attack-effect ownership now covers all 35 original particle hosts.
+The linked example composes in ten populated levels; the others retain explicit
+RAM/texture limits. All ten supported cleared-level targets passed source
+composition checks. This is broader export coverage, not 35-level gameplay
+acceptance. [Evidence](docs/research/universal-dark-passage-dogs-20261002.md).
+
 Canonical native gem collection now retains source-certified stars and resources
 in all 35 original levels, with final exported-code/data checks and one native
 particle update. Integrated checks pass 2,995; arbitrary copied particle-12

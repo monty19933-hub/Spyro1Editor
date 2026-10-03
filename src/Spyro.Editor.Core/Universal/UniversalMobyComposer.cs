@@ -617,7 +617,7 @@ public static class UniversalMobyComposer
             UniversalHauntedWizardParticles.RequireDestinationTexture(donor.Data,dest);
         }
         Dictionary<string,UniversalDarkPassageProjectileParticleCertificate> darkProjectileParticles=new(StringComparer.OrdinalIgnoreCase);
-        if(destination.Key is "darkhollow" or "peacekeepers" && imports.Any(i=>i.SourceLevelKey=="darkpassage" && i.ClassId==0x9B && i.BehaviorImported))
+        if(imports.Any(i=>i.SourceLevelKey=="darkpassage" && i.ClassId==0x9B && i.BehaviorImported))
         {
             var donor=source("darkpassage");var certificate=UniversalDarkPassageProjectileParticles.Capture("darkpassage",destination.Key,donor.Data,donor.Overlay,destOverlay,exe);
             UniversalDarkPassageProjectileParticles.RequireTextures(certificate,donor.Data,dest);darkProjectileParticles.Add("darkpassage",certificate);

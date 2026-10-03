@@ -1,4 +1,4 @@
-# Dark Passage dog transitions
+# Dark Passage creatures: transition-only milestone
 
 The composer now includes both forms of the Dark Passage dog and its actual
 spawned attack class. The three native class-changing stores select the imported
@@ -68,3 +68,22 @@ RAM writes or save states; the blank card hash remained unchanged after exit.
 
 The full receipt, 15 screenshots and 12 observations are preserved in the task
 evidence folder `runtime/dark-lantern-projectile-r5/runtime-proof.json`.
+
+## All original particle hosts
+
+The current adapter authenticates particle 1 in all 35 original levels. Seven
+already contain the equivalent native impact effect 13; the other 28 receive
+one scoped source updater, after proving their original handler is a no-op.
+Unknown profiles and conflicting copied effect owners still refuse.
+
+Integrated source checks pass 634 plus the existing 189 effect checks; the App
+builds cleanly. The linked row-26 example composes in ten populated destinations;
+17 others refuse for RAM capacity and eight for texture capacity. All ten
+currently supported cleared-level targets passed the separate 90-check ordinary
+compiler/composition suite. These numbers describe this representative group,
+not every Moby or a gameplay matrix. Fresh ID65 still needs a separate compact
+initializer extension for copied particle updaters.
+
+Reports: `dark-all-hosts-integrated-r1.json` and
+`coverage/dark-projectile-hosts-r1/delivery/RESULT.md` under the task evidence
+root. The r5 native observations above remain the only new gameplay claim here.
