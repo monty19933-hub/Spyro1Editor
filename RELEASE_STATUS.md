@@ -1,3 +1,15 @@
+# Follow-up: High Caves linked creatures and native spell effects
+
+The first two High Caves groups now preserve both directions of creature links,
+complete translated paths, native spell effect 5 and Spyro reaction 28. Integrated
+placement 4,701, particle 663 and animation 497 checks pass, together with affected
+Magic/fresh-level regressions and the Release App build. The rebuilt candidate
+matches the independently verified disc exactly. Native gameplay remains pending;
+the moving-terrain group and genuine capacity failures remain restricted.
+[Evidence](docs/research/universal-high-caves-20261003.md).
+
+---
+
 # Follow-up: four linked Magic Crafters druids
 
 Original rows 2–5 now expand and export as one linked group into unchanged Dark

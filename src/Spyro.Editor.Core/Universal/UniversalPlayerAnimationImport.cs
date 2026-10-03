@@ -5,16 +5,18 @@ namespace Spyro.Editor.Core.Universal;
 
 public sealed record UniversalPlayerAnimationImport(string SourceLevelKey, IReadOnlyList<int> RequestedAnimationIds,
     IReadOnlyList<int> AddedAnimationIds, IReadOnlyList<int> ReusedLocalAnimationIds,
-    IReadOnlyList<int> ReusedSharedAnimationIds, int InsertedBytes, int ModelGrowthBytes);
+    IReadOnlyList<int> ReusedSharedAnimationIds, int InsertedBytes, int ModelGrowthBytes)
+{ public IReadOnlyList<UniversalHighCavesTornadoReactionCertificate> NativeHeaderProofs { get; init; } = []; }
 
 internal static class UniversalPlayerAnimationImporter
 {
     internal static (UniversalLevelData Data, UniversalPlayerAnimationImport Report) Merge(
         UniversalLevelData destination, string sourceKey, int sourceLevelId, IReadOnlyList<int> animationIds,
-        NativePlayerAnimationSource source)
+        NativePlayerAnimationSource source, byte[]? nativeExecutable = null)
     {
         var donor = source.Levels.Single(l => l.LevelId == sourceLevelId);
         var textureOwner = source.Levels.Single(l => l.LevelId == 10).Stream.Records.Single(r => r.AnimationId == 18).CopyRecord();
+        List<UniversalHighCavesTornadoReactionCertificate> headerProofs=[];
         foreach (int id in animationIds)
         {
             var record = donor.Stream.Records.SingleOrDefault(r => r.AnimationId == id);
@@ -26,11 +28,14 @@ internal static class UniversalPlayerAnimationImporter
             if (record.Frames.Any(f => f.UpperByte != 0xFF))
                 throw new InvalidDataException($"Spyro animation {id} from {sourceKey} needs a global sound dependency that is not supported yet.");
             if (!record.CopyRecord().AsSpan(0x0A, 0x22).SequenceEqual(textureOwner.AsSpan(0x0A, 0x22)))
-                throw new InvalidDataException($"Spyro animation {id} from {sourceKey} uses a different shared texture or geometry header.");
+            {
+                if(sourceKey=="highcaves"&&sourceLevelId==32&&id==28)headerProofs.Add(UniversalHighCavesTornadoReaction.Capture(sourceKey,sourceLevelId,source,record,nativeExecutable??[]));
+                else throw new InvalidDataException($"Spyro animation {id} from {sourceKey} uses a different shared texture or geometry header.");
+            }
         }
         var merged = source.MergeCaptured(destination.Bytes, sourceLevelId, animationIds);
         var result = new UniversalLevelData(merged.CopyFinalBytes());
         return (result, new(sourceKey, merged.RequestedIds, merged.AddedIds, merged.ReusedLocalIds,
-            merged.ReusedSharedIds, merged.ExactGrowth, result.Subfiles()[2].Length - destination.Subfiles()[2].Length));
+            merged.ReusedSharedIds, merged.ExactGrowth, result.Subfiles()[2].Length - destination.Subfiles()[2].Length) { NativeHeaderProofs=headerProofs });
     }
 }

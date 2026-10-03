@@ -568,6 +568,7 @@ public static class UniversalMobyComposer
             }
             if(flightChests.TryGetValue(p.SourceLevelKey,out var chestRowProof))chestRowProof.RequireRow(r,t.Properties,t.ClassId);
             if(flightGates.TryGetValue(p.SourceLevelKey,out var gateRowProof))gateRowProof.RequireRow(r,t.Properties,t.ClassId);
+            if(UniversalHighCavesTornadoPlacement.Applies(t)) { var tornadoSource=source(p.SourceLevelKey);t=UniversalHighCavesTornadoPlacement.Rebase(tornadoSource.Data,tornadoSource.Overlay,t,r); }
             if (UniversalHauntedWizardPlacement.Applies(t))
             {
                 UniversalHauntedWizardPlacement.RequireInitialRow(t, r);
@@ -591,6 +592,7 @@ public static class UniversalMobyComposer
             rows.Add((r, t));
         }
         foreach(var context in darkLanternContexts.Values)context.RequireGroups(rows);
+        UniversalHighCavesTornadoPlacement.RequireGroups(rows);
         UniversalTreasureAccounting.ApplyDelta(exe, destination.LevelId, treasure);
         int sceneBefore = dest.Subfiles()[3].Length;
         UniversalIndexedRows.RequireNativeRemoval(destination.Key, dest, originalDestination.Data, originalDestination.Overlay, permanentlyRemoved);
@@ -610,6 +612,12 @@ public static class UniversalMobyComposer
             throw new InvalidDataException($"Only {arena} dynamic object slots would remain in {destination.DisplayName}; at least {MinimumDynamicSlots} are required.");
 
         List<UniversalOwnedParticleCertificate> ownedParticles=[];
+        Dictionary<string,UniversalHighCavesSpellParticleCertificate> highCavesSpellParticles=new(StringComparer.OrdinalIgnoreCase);
+        if(imports.Any(i=>i.SourceLevelKey=="highcaves"&&i.ClassId==0x127&&i.BehaviorImported)){
+            var donor=source("highcaves");var proof=UniversalHighCavesSpellParticles.Capture("highcaves",destination.Key,destination.LevelId,donor.Data,donor.Overlay,dest,destOverlay,exe);
+            UniversalHighCavesSpellParticles.RequireTextures(proof,donor.Data,dest);highCavesSpellParticles.Add("highcaves",proof);if(proof.OwnedDispatcher is {} dispatch)ownedParticles.Add(dispatch);particleDependencies[("highcaves",5)]=UniversalHighCavesSpellParticles.Inspect(proof);
+        }
+
         if(destination.Key=="darkhollow" && imports.Any(i=>i.SourceLevelKey=="twilightharbor"&&i.ClassId is 0x93 or 0x94))
         {
             var donor=source("twilightharbor");var issued=UniversalTwilightTrooperParticles.Capture(donor.Data,donor.Overlay,destOverlay,exe,imports.Any(i=>i.SourceLevelKey=="twilightharbor"&&i.ClassId==0xB0));
@@ -671,7 +679,7 @@ public static class UniversalMobyComposer
             var classMaps = classes.GroupBy(k => k.Key.Source).ToDictionary(g => g.Key,
                 g => (IReadOnlyDictionary<int, int>)g.ToDictionary(k => k.Key.Class, k => k.Value.DestinationClass));
             var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps, remapSaveRows, nativeExecutable: exe,
-                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles,magicPair:magicPair,darkLanternContexts:darkLanternContexts,darkProjectileParticles:darkProjectileParticles,magicChain:magicChain);
+                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles,magicPair:magicPair,darkLanternContexts:darkLanternContexts,darkProjectileParticles:darkProjectileParticles,magicChain:magicChain,highCavesSpellParticles:highCavesSpellParticles);
             uint newCopy = (uint)((baseAddress + bundle.Code.Length + 15) & ~15);
             int keep = (int)(copyBuffer - UniversalOverlay.Base);
             byte[] ov = new byte[UniversalLevelData.Align((int)(newCopy - UniversalOverlay.Base), 0x800)];
@@ -758,13 +766,15 @@ public static class UniversalMobyComposer
                 string reactionSource = reactionGroup.Key == donor.Level.LevelId ? donorGroup.Key :
                     reactionGroup.Key == 12 ? "darkhollow" : throw new InvalidDataException("Unknown certified Spyro reaction donor.");
                 var merged = UniversalPlayerAnimationImporter.Merge(dest, reactionSource, reactionGroup.Key,
-                    reactionGroup.Select(r => r.Id).ToArray(), animations);
+                    reactionGroup.Select(r => r.Id).ToArray(), animations, exe);
                 dest = merged.Data;
                 modelGrowth += merged.Report.ModelGrowthBytes;
                 playerAnimationImports.Add(merged.Report);
             }
         }
 
+        if(rows.Any(r=>UniversalHighCavesTornadoPlacement.Applies(r.Item2))) { var tornadoSource=source(UniversalHighCavesTornadoPlacement.Key);UniversalHighCavesTornadoPlacement.RequireDestination(tornadoSource.Data,tornadoSource.Overlay,dest,rows,newRows); }
+        foreach(var proof in playerAnimationImports.SelectMany(p=>p.NativeHeaderProofs))UniversalHighCavesTornadoReaction.RequireDestination(proof,dest,exe);
         UniversalNativeParticleNoOpOwnership.RequireFinalDestination(particleNoOpProofs,
             new UniversalOverlay(overlay, UniversalExeBindings.Read(exe, destination.LevelId)), exe);
         if (highValueGemClasses.Count > 0)
@@ -803,6 +813,7 @@ public static class UniversalMobyComposer
         nativeLine77?.RequireDestination(new UniversalOverlay(overlay,UniversalExeBindings.Read(exe,destination.LevelId)),exe);
         if(freshParticleBinding!=null)NativePortalRouteFreshBinding.RequireOwnedParticleDestination(nativeOriginalExecutable!,exe,
             new UniversalOverlay(overlay,UniversalExeBindings.Read(exe,65)),freshParticleBinding);
+        foreach(var proof in highCavesSpellParticles.Values){particleDependencies[("highcaves",5)]=UniversalHighCavesSpellParticles.Inspect(proof);UniversalHighCavesSpellParticles.RequireFinal(proof,source("highcaves").Data,dest,new UniversalOverlay(overlay,UniversalExeBindings.Read(exe,destination.LevelId)),exe,collectionStarContinuation);}
         foreach (var certificate in collectionStars)
             UniversalCollectionStarParticles.RequireFinalDestination(certificate, dest,
                 new UniversalOverlay(overlay, UniversalExeBindings.Read(exe, destination.LevelId)),

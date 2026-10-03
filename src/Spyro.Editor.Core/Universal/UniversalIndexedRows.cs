@@ -24,6 +24,7 @@ public static class UniversalIndexedRows
         template = UniversalHauntedWizardPlacement.Capture(data, overlay, template);
         var rescue = UniversalLoftyWhirlwindGroups.Capture(data, overlay, template);
         template = rescue.Template with { SourcePrerequisiteRows = rescue.Prerequisites };
+        template = UniversalHighCavesTornadoPlacement.Capture(data, overlay, template);
         template = UniversalDarkPassageLanternGroups.Capture(data,overlay,template);
         if (template.ClassId == 0x12C) return UniversalWhirlwindIndexedRows.Capture(data, overlay, template);
         template = UniversalMagicDruidChainResources.IsChain(template) ? UniversalMagicDruidChainResources.CaptureSource(data,overlay,template) : UniversalMagicPairCertificate.IsPair(template) ? UniversalMagicPairCertificate.CaptureSource(data,overlay,template) : UniversalMagicCraftersDruidIndexedRows.Capture(data, overlay, template);
@@ -103,6 +104,7 @@ public static class UniversalIndexedRows
         UniversalDarkPassageShapeshifterOwnership.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalBeastMistyBoarPlacement.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalHauntedWizardPlacement.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
+        UniversalHighCavesTornadoPlacement.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
         UniversalLoftyWhirlwindGroups.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
         UniversalWhirlwindIndexedRows.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
         UniversalMagicCraftersDruidIndexedRows.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
@@ -140,7 +142,8 @@ public static class UniversalIndexedRows
     /// integer is never an owner. Missing, retired and repeated copies are refused.</summary>
     public static UniversalRowTemplate Resolve(UniversalRowTemplate template, IReadOnlyList<UniversalRowTemplate> activeTemplates)
     {
-        if(UniversalMagicDruidChainResources.IsChain(template))UniversalMagicDruidChainResources.RequireGroup(template,activeTemplates);
+        if(UniversalHighCavesTornadoPlacement.Applies(template))UniversalHighCavesTornadoPlacement.RequirePrerequisites(template,activeTemplates);
+        else if(UniversalMagicDruidChainResources.IsChain(template))UniversalMagicDruidChainResources.RequireGroup(template,activeTemplates);
         else if(UniversalMagicPairCertificate.IsPair(template))UniversalMagicPairCertificate.RequirePrerequisites(template,activeTemplates);
         else if(string.Equals(template.SourceLevelKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&template.ClassId==0x7A)UniversalDarkPassageLanternGroups.RequirePrerequisites(template,activeTemplates);
         else UniversalLoftyWhirlwindGroups.RequirePrerequisites(template, template.SourcePrerequisiteRows, activeTemplates);
@@ -165,7 +168,8 @@ public static class UniversalIndexedRows
     internal static void Apply(UniversalRowTemplate template, IReadOnlyList<(byte[] Row, UniversalRowTemplate Template)> rows,
         UniversalRowAllocation allocation, Span<byte> properties)
     {
-        if(UniversalMagicDruidChainResources.IsChain(template))UniversalMagicDruidChainResources.RequireGroup(template,rows.Select(r=>r.Template).ToArray());
+        if(UniversalHighCavesTornadoPlacement.Applies(template))UniversalHighCavesTornadoPlacement.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
+        else if(UniversalMagicDruidChainResources.IsChain(template))UniversalMagicDruidChainResources.RequireGroup(template,rows.Select(r=>r.Template).ToArray());
         else if(UniversalMagicPairCertificate.IsPair(template))UniversalMagicPairCertificate.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
         else if(string.Equals(template.SourceLevelKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&template.ClassId==0x7A)UniversalDarkPassageLanternGroups.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
         else UniversalLoftyWhirlwindGroups.RequirePrerequisites(template, template.SourcePrerequisiteRows, rows.Select(r => r.Template).ToArray());

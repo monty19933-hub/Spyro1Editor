@@ -65,7 +65,7 @@ public static class UniversalBehaviorBundleBuilder
         UniversalOverlay? nativeDestinationOwner = null, IReadOnlyList<int>? highValueGemClasses = null,
         IReadOnlyDictionary<string, UniversalWhirlwindSoundBinding>? whirlwindSounds = null,
         IReadOnlyDictionary<string, UniversalDryCanyonBirdCertificate>? dryCanyonBirdBranches = null,
-        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null,IReadOnlyList<UniversalOwnedParticleCertificate>? ownedParticles = null, UniversalMagicPairCertificate? magicPair = null,IReadOnlyDictionary<string,UniversalDarkPassageLanternContext>? darkLanternContexts = null,IReadOnlyDictionary<string,UniversalDarkPassageProjectileParticleCertificate>? darkProjectileParticles = null, UniversalMagicDruidChainCertificate? magicChain = null)
+        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null,IReadOnlyList<UniversalOwnedParticleCertificate>? ownedParticles = null, UniversalMagicPairCertificate? magicPair = null,IReadOnlyDictionary<string,UniversalDarkPassageLanternContext>? darkLanternContexts = null,IReadOnlyDictionary<string,UniversalDarkPassageProjectileParticleCertificate>? darkProjectileParticles = null, UniversalMagicDruidChainCertificate? magicChain = null,IReadOnlyDictionary<string,UniversalHighCavesSpellParticleCertificate>? highCavesSpellParticles = null)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
         int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
@@ -146,6 +146,7 @@ public static class UniversalBehaviorBundleBuilder
                 !(ownedParticles?.Any(c=>c.SourceLevelKey==source.SourceKey && c.TypeIds.SequenceEqual(new[]{29}))??false))
                 throw new InvalidDataException("This wizard needs its native resurrection effect before it can be placed in this level.");
         foreach(var source in sources)UniversalDarkPassageProjectileParticles.RequireBundle(source.SourceKey,source.Source,source.Classes,destination,nativeExecutable??[],darkProjectileParticles,ownedParticles);
+        foreach(var source in sources)UniversalHighCavesSpellParticles.RequireBundle(source.SourceKey,source.Source,source.Classes,destination,nativeExecutable??[],highCavesSpellParticles,ownedParticles);
         Dictionary<string,UniversalOwnedParticleParts> ownedParticleParts=new(StringComparer.OrdinalIgnoreCase);
         if(ownedParticles is {Count:>0})
         {
@@ -178,6 +179,8 @@ public static class UniversalBehaviorBundleBuilder
                 (dryCanyonBirdBranches == null || !dryCanyonBirdBranches.TryGetValue(s.SourceKey, out birdProof)))
                 throw new InvalidDataException("Copied Dry Canyon B8 behavior requires its issued state/frame branch proof.");
             var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey, map, birdProof, s.SourceKey=="magiccrafters"?magicPair:null,s.SourceKey=="magiccrafters"?magicChain:null);
+            UniversalHighCavesTornadoPlacement.RequireCopied(upd,s.SourceKey,s.Source,s.Classes,map,nativeExecutable??[]);
+            if(s.SourceKey=="highcaves"&&s.Classes.Contains(0x127))UniversalHighCavesSpellParticles.RequireCopiedCalls(upd,s.Source);
             if(s.SourceKey=="twilightharbor" || UniversalTwilightTrooperOwnership.SourceFamily(s.Source)&&s.Classes.Any(c=>c is 0x93 or 0x94))
             {UniversalTwilightTrooperPlacement.RequireSourceLabel(s.SourceKey);UniversalTwilightTrooperOwnership.RequireCopiedInputs(upd,s.Source,s.Classes,map,nativeExecutable??[]);UniversalTwilightTrooperParticles.RequireBundle(s.Source,destination,s.Classes,ownedParticles,nativeExecutable??[]);}
             IReadOnlyList<uint> twilightClassSites=[];
@@ -224,6 +227,7 @@ public static class UniversalBehaviorBundleBuilder
                 try { (init, initBytes, jt2) = BuildSpecializedInit(s.Source, Remaps(s.SourceKey) ? [c] : s.Classes, initTag); }
                 catch (InvalidDataException) when (Mapped(s.SourceKey, c) == c && !map.Any(k => k.Key != k.Value))
                 { (init, initBytes, jt2) = BuildWholeFunction(s.Source, s.Source.Init, initTag); }
+                if(string.Equals(s.SourceKey,"highcaves",StringComparison.OrdinalIgnoreCase))UniversalHighCavesTornadoPlacement.RequireInitializer(init,s.Source,Remaps(s.SourceKey)?[c]:s.Classes,nativeExecutable??[]);
                 if(s.SourceKey=="twilightharbor")UniversalTwilightTrooperOwnership.RequireInitializer(init,s.Source,c,nativeExecutable??[],Remaps(s.SourceKey)?[c]:s.Classes);
                 if(string.Equals(s.SourceKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&s.Classes.Contains(0x7A)&&darkLanternContexts!=null&&darkLanternContexts.TryGetValue(s.SourceKey,out var lanternInitContext))lanternInitContext.RequireCopiedInit(init,s.Source,Remaps(s.SourceKey)?[c]:s.Classes);
                 UniversalClassRemapping.PatchInitClassStore(init, s.Source, c, Mapped(s.SourceKey, c));
