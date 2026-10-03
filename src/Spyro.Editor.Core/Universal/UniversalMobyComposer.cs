@@ -130,6 +130,8 @@ public static class UniversalMobyComposer
     {
         if (placements.Count == 0 && removedRows is not { Count: > 0 }) throw new ArgumentException("No placements or permanent removals were supplied.");
         if(UniversalAlpineArmInstaller.Requested(placements))return UniversalAlpineArmInstaller.Compose(destination,destinationData,destinationOverlay,executable,source,shared,protectedVram,placements,removedRows,playerAnimationSource,nativeSharedEntry8,persistentNativePrefixRows,magicPairBundlePaddingBytes,protectedVramAfterDrop,removedTreasureAlreadyApplied);
+        UniversalHauntedSuperflameFairy.RequirePlacements(destination.Key,placements,source);
+        bool hauntedFairy=destination.Key=="darkhollow"&&UniversalHauntedSuperflameFairy.Requested(placements);
         UniversalMagicPairCertificate? magicPair=null;
         UniversalMagicDruidChainCertificate? magicChain=null;
         UniversalMagicDruidOriginalCertificate? magicOriginal=null;
@@ -443,6 +445,7 @@ public static class UniversalMobyComposer
             metalModels.Add(key,certificate);
             metalBindings.Add(UniversalHauntedArmorMetalTextures.BindDestination(certificate,donor.Data,donor.Overlay,dest,vram,exe));
         }
+        var superflameScene=hauntedFairy?UniversalHauntedSuperflameScene.Bind(source("hauntedtowers").Data,source("hauntedtowers").Overlay,dest,vram,exe):null;
         List<UniversalClassImport> imports = [];
         int modelGrowth = 0;
         var ordered = classes.OrderBy(k => k.Value.DestinationClass).Select(k => (Class: k.Key.Class, Source: k.Key.Source, DestinationClass: k.Value.DestinationClass, Dependency: k.Value.Dependency)).ToList();
@@ -592,6 +595,7 @@ public static class UniversalMobyComposer
                 var hauntedSource = source(p.SourceLevelKey);
                 t = UniversalHauntedWizardPlacement.Rebase(hauntedSource.Data, hauntedSource.Overlay, t, r);
             }
+            if(UniversalHauntedSuperflameFairy.Applies(t)){var fairySource=source(p.SourceLevelKey);t=UniversalHauntedSuperflameFairy.Rebase(fairySource.Data,fairySource.Overlay,t,r);}
             if(UniversalTwilightTrooperPlacement.Applies(t)||t.ClassId is 0x93 or 0x94&&UniversalTwilightTrooperOwnership.SourceFamily(source(p.SourceLevelKey).Overlay))
             { var donor=source(p.SourceLevelKey);UniversalTwilightTrooperPlacement.RequireSourceLabel(p.SourceLevelKey);UniversalTwilightTrooperPlacement.RequireInitialRow(t,r);t=UniversalTwilightTrooperPlacement.Rebase(donor.Data,donor.Overlay,t,r); }
             if(UniversalBeastMistyBoarPlacement.Applies(t))
@@ -648,10 +652,11 @@ public static class UniversalMobyComposer
         if(destination.Key is "peacekeepers" or "darkhollow" && placements.Any(p=>p.SourceLevelKey=="hauntedtowers" && source(p.SourceLevelKey).Data.CaptureRow(p.SourceLevelKey,p.SourceRowIndex).ClassId==0xCC))
         {
             var donor=source("hauntedtowers");
-            ownedParticles.Add(UniversalHauntedWizardParticles.Capture(donor.Data,donor.Overlay,destOverlay,exe,destination.Key));
+            ownedParticles.Add(hauntedFairy?UniversalHauntedSuperflameEffects.Capture(donor.Data,donor.Overlay,destOverlay,exe):UniversalHauntedWizardParticles.Capture(donor.Data,donor.Overlay,destOverlay,exe,destination.Key));
             UniversalHauntedWizardParticles.RequireDestinationTexture(donor.Data,dest);
             if(destination.Key=="darkhollow"){UniversalHauntedWizardDarkHollowEffects.RequireTextures(donor.Data,dest);foreach(int type in new[]{1,70})particleDependencies[("hauntedtowers",type)]=UniversalHauntedWizardDarkHollowEffects.Inspect(type);}
         }
+        if(hauntedFairy){UniversalHauntedSuperflameEffects.RequireTextures(source("hauntedtowers").Data,dest);particleDependencies[("hauntedtowers",66)]=new("hauntedtowers",66,"source-certified-native-equivalent","Original native untextured sparkle, movement, RNG and expiry; native gameplay remains pending.");}
         Dictionary<string,UniversalDarkPassageProjectileParticleCertificate> darkProjectileParticles=new(StringComparer.OrdinalIgnoreCase);
         if(imports.Any(i=>i.SourceLevelKey=="darkpassage" && i.ClassId==0x9B && i.BehaviorImported))
         {
@@ -810,6 +815,7 @@ public static class UniversalMobyComposer
         magicPair?.RequireFinalExecutable(exe);
         foreach (var binding in whirlwindSounds.Values) UniversalWhirlwindSoundDependency.RequireDestination(binding, dest);
         foreach (var binding in metalBindings) UniversalCliffMetalTextures.RequireDestination(binding, dest);
+        superflameScene?.Require(dest);
         foreach (var key in classes.Keys.Where(k => k.Class == 0xB8 && k.Source == "drycanyon"))
             UniversalDryCanyonBirdBranches.RequireAnimationFrames(dest.Package(classes[key].DestinationClass));
         foreach (var (key, certificate) in metalModels)

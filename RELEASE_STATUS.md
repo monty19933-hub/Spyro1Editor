@@ -1,3 +1,9 @@
+# Follow-up: original temporary Superflame fairy
+
+The original Haunted fairy82 now composes with wizard21/armor1 in intact Dark Hollow, retaining its full path, kiss effects, temporary power, sounds and complete powered-flame texture page. Root source3909, complete assets648584, native instruction499757, cleared6048 and treasure2613 checks pass; Release App builds cleanly. Native fairy power and powered armor defeat are next. [Evidence](docs/research/universal-haunted-darkhollow-superflame-20261003.md).
+
+---
+
 # Fixed: imported player animations retain later model alignment
 
 The shared animation importer now preserves every later native model root’s original alignment using an authenticated four-byte gap after the exact animation terminator when needed. Root source763, cleared Haunted10925 and actual native parser22019 checks pass. Complete animation and model payloads are retained. Affected ordinary export identities change and their gameplay evidence must be renewed. [Evidence](docs/research/player-animation-model-alignment-20261003.md).

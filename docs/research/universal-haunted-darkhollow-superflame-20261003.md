@@ -1,0 +1,9 @@
+# Original Haunted temporary Superflame fairy in Dark Hollow
+
+The complete original Haunted fairy82 can join the supported wizard21/armor1 group in original Dark Hollow. Ordinary saved placements export with all three actors, their exact native code and resources. The four-node fairy path is translated as a whole. The original900-unit temporary power grant, camera/kiss/animation behavior and two source sound slots remain intact. Other fairy variants and destinations still need separate dependency coverage.
+
+The import owns original kiss effect31 and its full lifetime, while equivalent native66/1/79 effects retain the host manager. Powered flame uses native scene material13, with a complete32768-byte texture page and eight fade palettes256bytes. Page/CLUT relocation retains UV and blend bits. Capacity failure refuses with the complete requirements; there are no silent native removals or shortened effects. All128 original Dark Hollow objects,34 model packages, terrain and source sound owners are retained.
+
+Root work/universal-finish-20261002/root-haunted-superflame-r1 records3909 source/save/export checks and648584 complete-asset checks, plus499757 integer-native checks across1608 controls. Original pair2019/608984, cleared6048, treasure2613 and Release App zero-warning/error build pass. Corrected shared animation alignment is included.
+
+Ordinary BIN SHA34e635cddce8ef99c24586938b86e38ae18082fa9d213b2de36ada4e808f0d72. The separately identified arrival-only diagnostic93494d57ad10d3dd131652d137fbee1abc3a0f226b3b61a37443756f92d52767 changes initial XYZ/yaw and normal New Game routing only;3301627 payload comparisons and469 independent disc/EDC/ECC checks confirm exactly3 changed sectors. Root emulator acceptance is pending. Offline instruction replay does not establish native kiss, full rendered powered flame, armor breakup/reward, card persistence or audio.

@@ -24,6 +24,7 @@ public static class UniversalIndexedRows
         if(UniversalAlpineArmInstaller.Applies(template))return UniversalAlpineArmResources.CaptureSource(data,overlay,template);
         template = UniversalBeastMistyBoarPlacement.Capture(data,overlay,template);
         template = UniversalHauntedWizardPlacement.Capture(data, overlay, template);
+        template = UniversalHauntedSuperflameFairy.Capture(data,overlay,template);
         var rescue = UniversalLoftyWhirlwindGroups.Capture(data, overlay, template);
         template = rescue.Template with { SourcePrerequisiteRows = rescue.Prerequisites };
         template = UniversalGreenDruidWorldRows.Capture(data,overlay,template);

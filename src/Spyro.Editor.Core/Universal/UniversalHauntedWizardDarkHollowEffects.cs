@@ -36,7 +36,7 @@ internal static class UniversalHauntedWizardDarkHollowEffects
   foreach(int type in new[]{65,70})if(src.ContainsKey(type)||dst.ContainsKey(type))throw new InvalidDataException("Haunted line effects changed their native untextured resource contract.");
  }
  internal static UniversalParticleDependency Inspect(int type)=>type is 1 or 70?new("hauntedtowers",type,"source-certified-native-equivalent","Uses the authenticated equivalent native effect with its complete lifetime and resources; native gameplay remains pending."):throw new InvalidDataException("No native Haunted effect equivalence was issued for this type.");
- private static void Patch(UniversalAsmPart part,UniversalOverlay source,string label)
+ internal static void Patch(UniversalAsmPart part,UniversalOverlay source,string label)
  {
   UniversalHauntedWizardParticles.PatchConstructor(part,source,label);
   var expected=UniversalBehaviorBundleBuilder.BuildPrunedUpdate(source,[0x26,0xCB,0xCC,0xD7],"effects_proof").Part;
