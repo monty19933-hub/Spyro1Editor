@@ -20,6 +20,7 @@ public static class UniversalIndexedRows
     /// separately writes -1; no placed template is manufactured from that inactive sentinel.</summary>
     public static UniversalRowTemplate Capture(UniversalLevelData data, UniversalOverlay overlay, UniversalRowTemplate template)
     {
+        if(UniversalAlpineArmInstaller.Applies(template))return UniversalAlpineArmResources.CaptureSource(data,overlay,template);
         template = UniversalBeastMistyBoarPlacement.Capture(data,overlay,template);
         template = UniversalHauntedWizardPlacement.Capture(data, overlay, template);
         var rescue = UniversalLoftyWhirlwindGroups.Capture(data, overlay, template);
@@ -144,7 +145,8 @@ public static class UniversalIndexedRows
     /// integer is never an owner. Missing, retired and repeated copies are refused.</summary>
     public static UniversalRowTemplate Resolve(UniversalRowTemplate template, IReadOnlyList<UniversalRowTemplate> activeTemplates)
     {
-        if(UniversalHighCavesWorldRows.Applies(template))UniversalHighCavesWorldRows.RequirePrerequisites(template,activeTemplates);
+        if(UniversalAlpineArmInstaller.Applies(template))UniversalAlpineArmResources.RequireGroup(template,activeTemplates);
+        else if(UniversalHighCavesWorldRows.Applies(template))UniversalHighCavesWorldRows.RequirePrerequisites(template,activeTemplates);
         else if(UniversalHighCavesTornadoPlacement.Applies(template))UniversalHighCavesTornadoPlacement.RequirePrerequisites(template,activeTemplates);
         else if(UniversalMagicDruidOriginalRows.IsSecondPair(template))UniversalMagicDruidOriginalRows.RequirePair(template,activeTemplates);
         else if(UniversalMagicDruidChainResources.IsChain(template))UniversalMagicDruidChainResources.RequireGroup(template,activeTemplates);
@@ -172,7 +174,8 @@ public static class UniversalIndexedRows
     internal static void Apply(UniversalRowTemplate template, IReadOnlyList<(byte[] Row, UniversalRowTemplate Template)> rows,
         UniversalRowAllocation allocation, Span<byte> properties)
     {
-        if(UniversalHighCavesWorldRows.Applies(template))UniversalHighCavesWorldRows.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
+        if(UniversalAlpineArmInstaller.Applies(template))UniversalAlpineArmResources.RequireGroup(template,rows.Select(r=>r.Template).ToArray());
+        else if(UniversalHighCavesWorldRows.Applies(template))UniversalHighCavesWorldRows.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
         else if(UniversalHighCavesTornadoPlacement.Applies(template))UniversalHighCavesTornadoPlacement.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
         else if(UniversalMagicDruidOriginalRows.IsSecondPair(template))UniversalMagicDruidOriginalRows.RequirePair(template,rows.Select(r=>r.Template).ToArray());
         else if(UniversalMagicDruidChainResources.IsChain(template))UniversalMagicDruidChainResources.RequireGroup(template,rows.Select(r=>r.Template).ToArray());

@@ -126,9 +126,10 @@ public static class UniversalMobyComposer
         Func<NativePlayerAnimationSource>? playerAnimationSource = null,
         bool removedTreasureAlreadyApplied = false,
         int? persistentNativePrefixRows = null,
-        UniversalOverlay? nativeDestinationOwner = null, int magicPairBundlePaddingBytes = 0, byte[]? nativeOriginalExecutable = null)
+        UniversalOverlay? nativeDestinationOwner = null, int magicPairBundlePaddingBytes = 0, byte[]? nativeOriginalExecutable = null, byte[]? nativeSharedEntry8 = null)
     {
         if (placements.Count == 0 && removedRows is not { Count: > 0 }) throw new ArgumentException("No placements or permanent removals were supplied.");
+        if(UniversalAlpineArmInstaller.Requested(placements))return UniversalAlpineArmInstaller.Compose(destination,destinationData,destinationOverlay,executable,source,shared,protectedVram,placements,removedRows,playerAnimationSource,nativeSharedEntry8,persistentNativePrefixRows,magicPairBundlePaddingBytes);
         UniversalMagicPairCertificate? magicPair=null;
         UniversalMagicDruidChainCertificate? magicChain=null;
         UniversalMagicDruidOriginalCertificate? magicOriginal=null;

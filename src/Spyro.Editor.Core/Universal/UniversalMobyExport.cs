@@ -125,7 +125,7 @@ public static class UniversalMobyExport
                 protectedVram(currentImagePath, level), placements, SpecialProvider(japanese, sources),
                 removed,
                 useNativeOwnershipScan ? dropped => DefaultProtectedVram(currentImagePath, level, dropped) : null, sources.SharedModelPackage, sources.PlayerAnimations,
-                removedTreasureAlreadyApplied);
+                removedTreasureAlreadyApplied, nativeSharedEntry8:current.EntryBytes(8));
             exe = composed.Executable;
             replacements[level.SourceWadEntry] = composed.LevelData;
             replacements[level.SourceWadEntry - 1] = composed.Overlay;

@@ -9,7 +9,7 @@ namespace Spyro.Editor.Core.Universal;
 /// Ownership is enumerated against the same prepared image, never the raw retail texture upload.</summary>
 public sealed class UniversalCompositionHost
 {
-    private readonly byte[] _data, _overlay, _exe;
+    private readonly byte[] _data, _overlay, _exe, _sharedEntry8;
     private readonly string _imagePath;
     private readonly byte[]? _preparedAsset;
     public LevelDefinition Destination { get; }
@@ -20,13 +20,13 @@ public sealed class UniversalCompositionHost
     public byte[] Executable => _exe.ToArray();
 
     private UniversalCompositionHost(string imagePath, LevelDefinition destination, UniversalDiscImage image, bool prepared = false)
-        : this(imagePath,destination,image.EntryBytes(destination.SourceWadEntry),image.EntryBytes(destination.SourceWadEntry-1),image.Exe,prepared)
+        : this(imagePath,destination,image.EntryBytes(destination.SourceWadEntry),image.EntryBytes(destination.SourceWadEntry-1),image.Exe,prepared,image.EntryBytes(8))
     { }
 
-    private UniversalCompositionHost(string imagePath,LevelDefinition destination,byte[] data,byte[] overlay,byte[] exe,bool prepared)
+    private UniversalCompositionHost(string imagePath,LevelDefinition destination,byte[] data,byte[] overlay,byte[] exe,bool prepared,byte[] sharedEntry8)
     {
         _imagePath = imagePath; Destination = destination;
-        _data = data.ToArray(); _overlay = overlay.ToArray(); _exe = exe.ToArray();
+        _data = data.ToArray(); _overlay = overlay.ToArray(); _exe = exe.ToArray(); _sharedEntry8=sharedEntry8.ToArray();
         _preparedAsset = prepared ? _data : null;
         _protected = Protected(new HashSet<int>());
     }
@@ -66,7 +66,7 @@ public sealed class UniversalCompositionHost
             if(original!=replacement.OriginalRuntimeEnd||final!=replacement.FinalRuntimeEnd||
                 final>UniversalMobyComposer.NormalBufferFloor-UniversalMobyComposer.RamSafetyMargin && final>original)
                 throw new InvalidDataException("Growing terrain fit host failed its source-authenticated native RAM guard.");
-            return new(sourceImagePath,destination,replacement.After,image.EntryBytes(destination.SourceWadEntry-1),image.Exe,prepared:true);
+            return new(sourceImagePath,destination,replacement.After,image.EntryBytes(destination.SourceWadEntry-1),image.Exe,prepared:true,sharedEntry8:image.EntryBytes(8));
         }
         foreach (var patch in plan.Patches)
         {
@@ -124,7 +124,7 @@ public sealed class UniversalCompositionHost
                             _afterDrop[key] = ranges = Protected(dropped);
                         return ranges;
                     }
-                },sources.SharedModelPackage, sources.PlayerAnimations),null);
+                },sources.SharedModelPackage, sources.PlayerAnimations,nativeSharedEntry8:_sharedEntry8),null);
         }
         catch (Exception e) when (e is IOException or InvalidDataException) { return (null,e.Message); }
     }

@@ -1,3 +1,17 @@
+# Follow-up: Alpine Ridge armored druid gameplay
+
+The complete original Alpine0/1 group now uses ordinary placement and export into
+intact Blowhard, with its real dynamic arms, sounds, paths, links and native combat.
+Integrated export/source/reward tests and affected regressions pass; the App builds
+cleanly. Fresh full-firmware gameplay confirms arm movement/expiry, slam damage,
+flame and charge defeats, five-plus-ten gem rewards and inventory15/415. After a
+native death, both enemies give normal replacement objects and no duplicate gems.
+Card persistence, close arm contact, audio and other hosts remain open.
+[Evidence](docs/research/universal-alpine-arm-groups-20261003.md). Universal gameplay
+and the V1.0 release remain unfinished.
+
+---
+
 # Follow-up: High Caves gameplay and complete moving terrain
 
 The two-actor High Caves example now passes bounded native testing: linked tornado
