@@ -10,10 +10,14 @@ namespace Spyro.Editor.Core.Exporting;
 /// arena. This is not a general retail scene relocation or a capacity waiver.</summary>
 internal static class NativeFreshPlacementArena
 {
-    internal static byte[] Prepare(byte[] originalBody, int activePlacements)
+    internal static byte[] Prepare(byte[] originalBody, int activePlacements,
+        int requiredDynamicSlots = UniversalMobyComposer.MinimumDynamicSlots)
     {
         if (activePlacements is < 0 or > 256)
             throw new InvalidDataException("Fresh placement count exceeds the native 256-row save limit.");
+        if (requiredDynamicSlots < UniversalMobyComposer.MinimumDynamicSlots || requiredDynamicSlots > 256 ||
+            (requiredDynamicSlots > UniversalMobyComposer.MinimumDynamicSlots && activePlacements + requiredDynamicSlots > 256))
+            throw new InvalidDataException("The requested native dynamic reserve exceeds the supported physical object range.");
         var body = new UniversalLevelData(originalBody.ToArray());
         var file = body.Subfiles()[3];
         var canonical = NativeId65FreshSceneLayout.DecodeCanonical(body.Bytes.AsSpan(file.Offset, file.Length));
@@ -21,9 +25,10 @@ internal static class NativeFreshPlacementArena
             throw new InvalidDataException("Fresh placement preparation requires the original zero-actor16-slot scene.");
         // The issuer's 0x58 row reserve accommodates the first placement without
         // changing any output byte. Further rows need their own complete storage.
-        if (activePlacements <= 1) return body.Bytes;
+        if (activePlacements <= 1 && requiredDynamicSlots == UniversalMobyComposer.MinimumDynamicSlots) return body.Bytes;
         var layout = body.Scene();
-        int added = checked((activePlacements - 1) * UniversalLevelData.RowStride);
+        int added = checked(Math.Max(0, activePlacements - 1) * UniversalLevelData.RowStride +
+            (requiredDynamicSlots - UniversalMobyComposer.MinimumDynamicSlots) * 0x70);
         int insert = layout.PropertiesComponent;
         byte[] scene = new byte[checked(layout.UsedEnd + added)];
         body.Bytes.AsSpan(file.Offset, insert).CopyTo(scene);
@@ -40,7 +45,7 @@ internal static class NativeFreshPlacementArena
             final.PodComponent != layout.PodComponent + added ||
             final.CollisionComponent != layout.CollisionComponent + added ||
             final.FixupsOffset != layout.FixupsOffset + added ||
-            (final.ArenaEnd - final.RowsOffset - activePlacements * UniversalLevelData.RowStride) / 0x70 != UniversalMobyComposer.MinimumDynamicSlots)
+            (final.ArenaEnd - final.RowsOffset - activePlacements * UniversalLevelData.RowStride) / 0x70 != requiredDynamicSlots)
             throw new InvalidDataException("Fresh actor arena relocation lost an owned component or dynamic reserve.");
         return body.Bytes;
     }

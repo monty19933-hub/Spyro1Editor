@@ -31,15 +31,17 @@ internal sealed class GreenDruidWorldMaterialStorage
  internal static byte[] CopyRectangle(ReadOnlySpan<byte>b,int offset,int width,int rows)
  {Require(b.Length==0x80000,"exact GPU plane");byte[] r=new byte[width*rows];for(int y=0;y<rows;y++)b.Slice(offset+y*1024,width).CopyTo(r.AsSpan(y*width));return r;}
  private GreenDruidWorldMaterialStorage(UniversalGreenDruidWorldPrerequisites issued,byte[]host,UniversalVramAllocator allocator)
+  :this(issued.CopySourceVram(),issued.CopyMaterials(),"original-alpine-group"+issued.Profile.Group,host,allocator){}
+ private GreenDruidWorldMaterialStorage(byte[]source,IReadOnlyList<UniversalGreenDruidWorldPrerequisites.SourceMaterial> original,string owner,byte[]host,UniversalVramAllocator allocator)
  {
-  Require(host.Length==0x80000,"exact destination GPU plane");var source=issued.CopySourceVram();_gpu=host.ToArray();_records=issued.CopyMaterials().Select(m=>m.Record.ToArray()).ToArray();List<NativeStaticTerrainTextureAllocationRegion> regions=[];
+  Require(host.Length==0x80000,"exact destination GPU plane");_gpu=host.ToArray();_records=original.Select(m=>m.Record.ToArray()).ToArray();List<NativeStaticTerrainTextureAllocationRegion> regions=[];
   var staged=allocator.Clone();Dictionary<(int Offset,int Width,int Rows,int Bpp,bool Palette,bool Low),int> targets=[];
   int Allocate(int material,int offset,int width,int rows,int bpp,bool palette,bool low)
   {
    var key=(offset,width,rows,bpp,palette,low);if(targets.TryGetValue(key,out int cached))return cached;
    int target=-1;for(int y=0;y+rows<=512&&target<0;y+=palette&&low?4:1){if(!palette&&y%256+rows>256)continue;for(int x=0;x+width<=1024;x+=palette?32:16){if(!palette&&x%128*(bpp==4?2:1)+width*(bpp==4?2:1)>256)continue;bool free=true;for(int r=0;r<rows;r++)if(!staged.IsFree((y+r)*1024+x,width)){free=false;break;}if(free){target=y*1024+x;break;}}}
    Require(target>=0,"no full free rectangle remains; failed reservations discarded");var bytes=CopyRectangle(source,offset,width,rows);for(int r=0;r<rows;r++){bytes.AsSpan(r*width,width).CopyTo(_gpu.AsSpan(target+r*1024));staged.Reserve(target+r*1024,width);}targets[key]=target;
-   regions.Add(new(material,"original-alpine-group"+issued.Profile.Group,"original-alpine-gpu","green-druid-native-depth-preserving-r1",palette?"palette":"pixel",bpp,offset,target,width,rows,Convert.ToHexStringLower(SHA256.HashData(bytes))));return target;
+   regions.Add(new(material,owner,"original-alpine-gpu","green-druid-native-depth-preserving-r1",palette?"palette":"pixel",bpp,offset,target,width,rows,Convert.ToHexStringLower(SHA256.HashData(bytes))));return target;
   }
   for(int m=0;m<_records.Length;m++)foreach(var f in Describe(_records[m]))
   {
@@ -47,10 +49,11 @@ internal sealed class GreenDruidWorldMaterialStorage
    r[0]=(byte)u;r[1]=(byte)(y%256);r[4]=(byte)(u+f.Side-1);r[5]=r[1];r[6]=(byte)((r[6]&224)|(f.Bpp==8?128:0)|8|x/128|(y>=256?16:0));
    if(f.Low){r[2]=(byte)((px+1024)/32);r[3]=(byte)(py/4);}else BinaryPrimitives.WriteUInt16LittleEndian(r[2..],(ushort)(py*64+(px+1024)/32));
   }
-  var original=issued.CopyMaterials();for(int m=0;m<_records.Length;m++){var a=Describe(original[m].Record);var b=Describe(_records[m]);for(int n=0;n<a.Length;n++){Require(a[n].Bpp==b[n].Bpp&&a[n].Side==b[n].Side,"native depth/shape retained");Require(CopyRectangle(source,a[n].Pixel,a[n].Width,a[n].Side).SequenceEqual(CopyRectangle(_gpu,b[n].Pixel,b[n].Width,b[n].Side))&&CopyRectangle(source,a[n].Palette,a[n].PaletteWidth,a[n].PaletteRows).SequenceEqual(CopyRectangle(_gpu,b[n].Palette,b[n].PaletteWidth,b[n].PaletteRows)),"every original pixel and complete palette copied exactly");}}
+  for(int m=0;m<_records.Length;m++){var a=Describe(original[m].Record);var b=Describe(_records[m]);for(int n=0;n<a.Length;n++){Require(a[n].Bpp==b[n].Bpp&&a[n].Side==b[n].Side,"native depth/shape retained");Require(CopyRectangle(source,a[n].Pixel,a[n].Width,a[n].Side).SequenceEqual(CopyRectangle(_gpu,b[n].Pixel,b[n].Width,b[n].Side))&&CopyRectangle(source,a[n].Palette,a[n].PaletteWidth,a[n].PaletteRows).SequenceEqual(CopyRectangle(_gpu,b[n].Palette,b[n].PaletteWidth,b[n].PaletteRows)),"every original pixel and complete palette copied exactly");}}
   for(int n=0;n<host.Length;n++)if(allocator.IsFree(n,1)==staged.IsFree(n,1))Require(host[n]==_gpu[n],"protected/unallocated GPU complement retained");Regions=regions.ToArray();
  }
  internal static GreenDruidWorldMaterialStorage Capture(string key,UniversalLevelData source,UniversalOverlay overlay,byte[]exe,byte[]hostGpu,UniversalVramAllocator allocator,int sourceDruidRow=5)=>new(UniversalGreenDruidWorldPrerequisites.CaptureSource(key,source,overlay,exe,sourceDruidRow),hostGpu,allocator);
+ internal static GreenDruidWorldMaterialStorage CaptureLinked(UniversalGreenDruidLinkedWorldPrerequisites proof,byte[]hostGpu,UniversalVramAllocator allocator)=>new(proof.CopySourceVram(),proof.CopyMaterials(),"original-alpine-groups8-9",hostGpu,allocator);
  internal byte[] CopyGpu()=>_gpu.ToArray();internal byte[][] CopyRecords()=>_records.Select(r=>r.ToArray()).ToArray();
  internal byte[] AppendTable(byte[]before)
  {

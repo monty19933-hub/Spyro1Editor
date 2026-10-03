@@ -186,6 +186,9 @@ public static class UniversalMobyComposer
 
         var greenDonor=destination.Key!="alpineridge"&&placements.Any(p=>p.SourceLevelKey=="alpineridge"&&UniversalGreenDruidWorldRows.EnrolledMembers.Contains(p.SourceRowIndex))?source("alpineridge"):default;
         var greenRequest=greenDonor.Data==null?null:UniversalGreenDruidWorldInstallation.RequireRequest(destination.Key,dest,destOverlay,exe,nativeOriginalExecutable,greenDonor.Data!,greenDonor.Overlay,placements,permanentlyRemoved,persistentNativePrefixRows);
+        bool linkedRequested=destination.Key!="alpineridge"&&UniversalGreenDruidLinkedWorldInstallation.IsRequested(placements);
+        var linkedDonor=linkedRequested?source("alpineridge"):default;
+        if(linkedRequested)UniversalGreenDruidLinkedWorldInstallation.RequireRequest(destination.Key,dest,destOverlay,exe,nativeOriginalExecutable,linkedDonor.Data!,linkedDonor.Overlay,placements,permanentlyRemoved,persistentNativePrefixRows);
         // 1. Resolve classes and dependency closure (spawned child classes come from the same source level).
         Dictionary<(string Source, int Class), (int DestinationClass, bool Dependency)> classes = [];
         Dictionary<string, UniversalDryCanyonBirdCertificate> dryCanyonBirdBranches = new(StringComparer.OrdinalIgnoreCase);
@@ -289,7 +292,8 @@ public static class UniversalMobyComposer
             var (c, sk, dep) = work.Dequeue();
             if (c <= 0 || c >= 0x200)
                 throw new InvalidDataException($"Class 0x{c:X3} from {sk} is outside the supported placement range.");
-            if(greenRequest!=null&&c==0x10E&&sk=="alpineridge")greenRequest.Require(destination.Key,sk,c,dest,source(sk).Data);
+            if(linkedRequested&&c==0x10E&&sk=="alpineridge"){ /* The exact complete request is validated above; installed capability is required below. */ }
+            else if(greenRequest!=null&&c==0x10E&&sk=="alpineridge")greenRequest.Require(destination.Key,sk,c,dest,source(sk).Data);
             else UniversalGreenDruidWorldOwnership.Require(destination.Key, sk, c, dest, source(sk).Data, permanentlyRemoved);
             if (reservedSources.Add(sk))
             {
@@ -421,6 +425,8 @@ public static class UniversalMobyComposer
         int freeBefore = vram.FreeBytes;
         var greenWorld=greenRequest==null?null:UniversalGreenDruidWorldInstallation.Capture(destination.Key,dest,destOverlay,exe,nativeOriginalExecutable,greenDonor.Data!,greenDonor.Overlay,placements,vram,permanentlyRemoved,persistentNativePrefixRows);
         if(greenWorld!=null){dest=new(greenWorld.Storage.CopyLevelData());warnings.Add(greenWorld.BehaviorNote);}
+        var linkedWorld=linkedRequested?UniversalGreenDruidLinkedWorldInstallation.Capture(destination.Key,dest,destOverlay,exe,nativeOriginalExecutable,linkedDonor.Data!,linkedDonor.Overlay,placements,vram,permanentlyRemoved,persistentNativePrefixRows):null;
+        if(linkedWorld!=null){dest=new(linkedWorld.Storage.CopyLevelData());linkedWorld.BindNamespace(classes.Where(k=>k.Key.Source=="alpineridge").ToDictionary(k=>k.Key.Class,k=>k.Value.DestinationClass),exe);warnings.Add(linkedWorld.BehaviorNote);}
         var worldDonor=placements.Any(p=>p.SourceLevelKey=="highcaves"&&UniversalHighCavesWorldRows.Members.Contains(p.SourceRowIndex))?source("highcaves"):default;
         var highCavesWorld=worldDonor.Data==null?null:UniversalHighCavesWorldInstallation.Capture(destination.Key,dest,destOverlay,exe,nativeOriginalExecutable,worldDonor.Data,worldDonor.Overlay,placements,vram,permanentlyRemoved,persistentNativePrefixRows);
         if(highCavesWorld!=null){dest=new(highCavesWorld.Storage.CopyLevelData());warnings.Add(highCavesWorld.BehaviorNote);}
@@ -537,7 +543,7 @@ public static class UniversalMobyComposer
         if (pendingModels.Count > 0)
         {
             int before = dest.Subfiles()[2].Length;
-            dest.AppendModels(pendingModels);
+            if(linkedWorld!=null)linkedWorld.Actors.AppendModels(dest,pendingModels);else dest.AppendModels(pendingModels);
             modelGrowth = dest.Subfiles()[2].Length - before;
         }
 
@@ -586,6 +592,7 @@ public static class UniversalMobyComposer
             }
             if(flightChests.TryGetValue(p.SourceLevelKey,out var chestRowProof))chestRowProof.RequireRow(r,t.Properties,t.ClassId);
             if(flightGates.TryGetValue(p.SourceLevelKey,out var gateRowProof))gateRowProof.RequireRow(r,t.Properties,t.ClassId);
+            if(UniversalGreenDruidLinkedRows.Applies(t)&&destination.Key!="alpineridge"){if(linkedWorld==null)throw new InvalidDataException("Linked Druid world installation is missing.");t=linkedWorld.Prepare(t,r);}
             if(UniversalGreenDruidWorldRows.Applies(t)&&destination.Key!="alpineridge"){if(greenWorld==null)throw new InvalidDataException("Green Druid world installation is missing.");t=greenWorld.Prepare(t,r);}
             if(UniversalHighCavesWorldRows.Applies(t)){if(highCavesWorld==null)throw new InvalidDataException("Moving terrain installation is missing.");t=highCavesWorld.Prepare(t,r);}
             if(UniversalHighCavesTornadoPlacement.Applies(t)) { var tornadoSource=source(p.SourceLevelKey);t=UniversalHighCavesTornadoPlacement.Rebase(tornadoSource.Data,tornadoSource.Overlay,t,r); }
@@ -621,6 +628,7 @@ public static class UniversalMobyComposer
         for (int i = 0; i < rows.Count; i++)
             if (rows[i].Item2.SourceLevelKey == "hauntedtowers" && rows[i].Item2.ClassId == 0xCC)
                 UniversalHauntedWizardParticles.RequirePhysicalWizardRow(allocation.NewRows[i]);
+        if(linkedWorld!=null){linkedWorld.RequireAllocation(allocation.NewRows);linkedWorld.Actors.RequireTranslatedRows(rows,linkedWorld.Storage.DeltaRaw,allocation.NewRows);}
         greenWorld?.RequireAllocation(allocation.NewRows);
         highCavesWorld?.RequireAllocation(allocation.NewRows);
         int droppedProperties = UniversalRowRemoval.RemoveOwnedPropertiesAndClearRows(dest, permanentlyRemoved);
@@ -637,6 +645,7 @@ public static class UniversalMobyComposer
 
         List<UniversalOwnedParticleCertificate> ownedParticles=[];
         if(greenWorld!=null){UniversalGreenDruidWorldSpellParticles.RequireTexture(greenDonor.Data!,dest);ownedParticles.Add(greenWorld.Dispatcher());particleDependencies[("alpineridge",8)]=new("alpineridge",8,"source-certified-copied",greenWorld.HasSpellTarget?"Original live-model vertex spell and physical target; native gameplay pending.":"Original no-target druid; complete copied particle owner retained, native target−1 skips emission; native gameplay pending.");}
+        if(linkedWorld!=null){linkedWorld.Actors.RequireParticles(dest);ownedParticles.Add(linkedWorld.Dispatcher());foreach(int type in new[]{5,8})particleDependencies[("alpineridge",type)]=new("alpineridge",type,"source-certified-copied","Complete original linked Druid effects and actual physical targets; native gameplay pending.");}
         Dictionary<string,UniversalHighCavesSpellParticleCertificate> highCavesSpellParticles=new(StringComparer.OrdinalIgnoreCase);
         if(imports.Any(i=>i.SourceLevelKey=="highcaves"&&i.ClassId==0x127&&i.BehaviorImported)){
             var donor=source("highcaves");var proof=UniversalHighCavesSpellParticles.Capture("highcaves",destination.Key,destination.LevelId,donor.Data,donor.Overlay,dest,destOverlay,exe);
@@ -706,7 +715,7 @@ public static class UniversalMobyComposer
             var classMaps = classes.GroupBy(k => k.Key.Source).ToDictionary(g => g.Key,
                 g => (IReadOnlyDictionary<int, int>)g.ToDictionary(k => k.Key.Class, k => k.Value.DestinationClass));
             var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps, remapSaveRows, nativeExecutable: exe,
-                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles,magicPair:magicPair,darkLanternContexts:darkLanternContexts,darkProjectileParticles:darkProjectileParticles,magicChain:magicChain,highCavesSpellParticles:highCavesSpellParticles,magicOriginal:magicOriginal,highCavesWorld:highCavesWorld,greenDruidWorld:greenWorld);
+                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles,magicPair:magicPair,darkLanternContexts:darkLanternContexts,darkProjectileParticles:darkProjectileParticles,magicChain:magicChain,highCavesSpellParticles:highCavesSpellParticles,magicOriginal:magicOriginal,highCavesWorld:highCavesWorld,greenDruidWorld:greenWorld,greenDruidLinkedWorld:linkedWorld);
             uint newCopy = (uint)((baseAddress + bundle.Code.Length + 15) & ~15);
             int keep = (int)(copyBuffer - UniversalOverlay.Base);
             byte[] ov = new byte[UniversalLevelData.Align((int)(newCopy - UniversalOverlay.Base), 0x800)];
@@ -822,6 +831,7 @@ public static class UniversalMobyComposer
             certificate.RequireShaderFields(dest.Package(classes[key].DestinationClass));
         if(flightGate!=null)flightGate.RequireFinal(dest,overlay,newRows.Single(),classes[(flightGate.SourceKey,0x161)].DestinationClass);
         if(flightChest!=null)flightChest.RequireFinal(dest,overlay,newRows.Single(),classes[(flightChest.SourceKey,0x12B)].DestinationClass);
+        linkedWorld?.RequireFinal(dest,new(overlay,UniversalExeBindings.Read(exe,destination.LevelId)),exe,rows,newRows);
         greenWorld?.RequireFinal(dest,new(overlay,UniversalExeBindings.Read(exe,destination.LevelId)),exe,rows,newRows);
         highCavesWorld?.RequireFinal(dest,new(overlay,UniversalExeBindings.Read(exe,destination.LevelId)),exe,rows,newRows);
         UniversalNativeDragonRescuePrefix.RequireSafe(destination.Key,destination.DisplayName,originalDestination.Data,dest,exe);

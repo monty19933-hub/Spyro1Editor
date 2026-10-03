@@ -40,6 +40,18 @@ for (int count=0;count<=256;count++)
     if(count<=1) Check(after.AsSpan().SequenceEqual(seed),"existing zero/single output byteexact " + count);
 }
 Check(seed.AsSpan(0x2000,canonical.Length).SequenceEqual(canonical),"original input never mutated");
+foreach(int count in new[]{0,1,3,165})
+{
+    var expanded=new UniversalLevelData(NativeFreshPlacementArena.Prepare(seed,count,91));
+    var layout=expanded.Scene();var file=expanded.Subfiles()[3];
+    Check(layout.MobyComponentSize==before.MobyComponentSize+Math.Max(0,count-1)*0x58+75*0x70,"real source-sized dynamic row/property storage "+count);
+    Check((layout.ArenaEnd-layout.RowsOffset-count*0x58)/0x70==91,"complete native91-slot reserve "+count);
+    Check(expanded.Bytes.AsSpan(file.Offset+layout.PropertiesComponent,layout.UsedEnd-layout.PropertiesComponent).SequenceEqual(seed.AsSpan(0x2000+before.PropertiesComponent,before.UsedEnd-before.PropertiesComponent)),"expanded reserve preserves all following scene components "+count);
+    Check(expanded.Bytes.AsSpan(expanded.Subfiles()[4].Offset,0x800).SequenceEqual(seed.AsSpan(old.Subfiles()[4].Offset,0x800)),"expanded reserve preserves following subfile "+count);
+}
+Refuse(()=>NativeFreshPlacementArena.Prepare(seed,3,15),"cannot reduce native minimum reserve");
+Refuse(()=>NativeFreshPlacementArena.Prepare(seed,166,91),"expanded physical row byte range");
+Refuse(()=>NativeFreshPlacementArena.Prepare(seed,0,257),"oversized dynamic reserve");
 Refuse(()=>NativeFreshPlacementArena.Prepare(seed,-1),"negative count");
 Refuse(()=>NativeFreshPlacementArena.Prepare(seed,257),"native save-count limit");
 foreach (int offset in new[]{0xD0,0xD4,before.PropertiesComponent+4,before.CollisionComponent+4,before.FixupsOffset,canonical.Length-1})

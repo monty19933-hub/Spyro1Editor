@@ -27,6 +27,7 @@ public static class UniversalIndexedRows
         template = UniversalHauntedSuperflameFairy.Capture(data,overlay,template);
         var rescue = UniversalLoftyWhirlwindGroups.Capture(data, overlay, template);
         template = rescue.Template with { SourcePrerequisiteRows = rescue.Prerequisites };
+        template = UniversalGreenDruidLinkedRows.Capture(data,overlay,template);
         template = UniversalGreenDruidWorldRows.Capture(data,overlay,template);
         template = UniversalHighCavesWorldRows.Capture(data,overlay,template);
         template = UniversalHighCavesTornadoPlacement.Capture(data, overlay, template);
@@ -109,6 +110,7 @@ public static class UniversalIndexedRows
         UniversalDarkPassageShapeshifterOwnership.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalBeastMistyBoarPlacement.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalHauntedWizardPlacement.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
+        UniversalGreenDruidLinkedRows.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalGreenDruidWorldRows.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalHighCavesWorldRows.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalHighCavesTornadoPlacement.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
@@ -150,6 +152,7 @@ public static class UniversalIndexedRows
     public static UniversalRowTemplate Resolve(UniversalRowTemplate template, IReadOnlyList<UniversalRowTemplate> activeTemplates)
     {
         if(UniversalAlpineArmInstaller.Applies(template))UniversalAlpineArmResources.RequireGroup(template,activeTemplates);
+        else if(UniversalGreenDruidLinkedRows.Applies(template))UniversalGreenDruidLinkedRows.RequirePrerequisites(template,activeTemplates);
         else if(UniversalGreenDruidWorldRows.Applies(template))UniversalGreenDruidWorldRows.RequirePrerequisites(template,activeTemplates);
         else if(UniversalHighCavesWorldRows.Applies(template))UniversalHighCavesWorldRows.RequirePrerequisites(template,activeTemplates);
         else if(UniversalHighCavesTornadoPlacement.Applies(template))UniversalHighCavesTornadoPlacement.RequirePrerequisites(template,activeTemplates);
@@ -180,6 +183,7 @@ public static class UniversalIndexedRows
         UniversalRowAllocation allocation, Span<byte> properties)
     {
         if(UniversalAlpineArmInstaller.Applies(template))UniversalAlpineArmResources.RequireGroup(template,rows.Select(r=>r.Template).ToArray());
+        else if(UniversalGreenDruidLinkedRows.Applies(template))UniversalGreenDruidLinkedRows.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
         else if(UniversalGreenDruidWorldRows.Applies(template))UniversalGreenDruidWorldRows.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
         else if(UniversalHighCavesWorldRows.Applies(template))UniversalHighCavesWorldRows.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
         else if(UniversalHighCavesTornadoPlacement.Applies(template))UniversalHighCavesTornadoPlacement.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());

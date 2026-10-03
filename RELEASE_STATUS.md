@@ -1,3 +1,18 @@
+# Follow-up: complete linked Alpine Druid and wizard world
+
+Original11/44/53 now composes as one complete group into authored empty Peace
+Keepers, retaining six whole sectors, two moving groups,183 source colliders,
+paths, reciprocal links, models and native effects. Ordinary export313/6 refusals,
+arena2086, actor/resource92, emitted342 and independent world controls pass;
+the existing ramp remains byte-identical and the Release App builds cleanly.
+Native testing found and fixed a16-slot allocation that blocked original fragment
+effects: this group now allocates the original91 slots without changing its
+native reserve guards. The corrected ordinary disc loads with91 slots confirmed
+in RAM; full encounter/reward verification is continuing. This does not finish
+universal gameplay or issue V1.0. [Evidence](docs/research/universal-green-linked-world-20261003.md).
+
+---
+
 # Follow-up: original temporary Superflame fairy
 
 The original Haunted fairy82 now composes with wizard21/armor1 in intact Dark Hollow, retaining its full path, kiss effects, temporary power, sounds and complete powered-flame texture page. Root source3909, complete assets648584, native instruction499757, cleared6048 and treasure2613 checks pass; Release App builds cleanly. The fresh native arrival diagnostic now confirms the fairy kiss/power grant, rendered powered flame, all six armor fragments, yellow10 and green2 pickups, durable live bits and inventory12/112 with zero invalid reads. Card persistence, repeat defeat and other destinations remain open. [Evidence](docs/research/universal-haunted-darkhollow-superflame-20261003.md).

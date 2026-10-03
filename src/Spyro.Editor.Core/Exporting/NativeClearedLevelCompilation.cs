@@ -68,7 +68,15 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
     public UniversalComposeResult ComposeWithExecutable(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements,
         byte[] executable,Func<string,UniversalSpecialAsset?>? special=null)
     {
-        byte[] prepared=NativeFreshPlacementArena.Prepare(_body,placements.Count(p=>!p.Retired));
+        int dynamicSlots=UniversalMobyComposer.MinimumDynamicSlots;
+        if(UniversalGreenDruidLinkedWorldInstallation.IsRequested(placements))
+        {
+            var source=donors.Get("alpineridge");
+            // Preserve the original encounter's allocator reservation, including
+            // its unchanged per-fragment reserve guard. Allocate real storage.
+            dynamicSlots=UniversalGreenDruidGroup8Actors.CaptureSource(source.Data,source.Overlay,donors.Disc.Exe).OriginalDynamicCapacity;
+        }
+        byte[] prepared=NativeFreshPlacementArena.Prepare(_body,placements.Count(p=>!p.Retired),dynamicSlots);
         var nativeOwner=new UniversalOverlay(_overlay,UniversalExeBindings.Read(executable,Target.LevelId));
         var composed=UniversalMobyComposer.Compose(Target,prepared,_overlay,executable,donors.Get,donors.SharedClasses,
             UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,
