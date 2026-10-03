@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Buffers.Binary;
 using Spyro.Editor.Core.Exporting;
 namespace Spyro.Editor.Core.Universal;
-/// <summary>Private prerequisite for the genuine Alpine0/1 quarantine over intact
+/// <summary>Private prerequisite for the genuine Alpine arm cohort quarantine over intact
 /// Blowhard. Authenticates retained wall/reward code/resources and the exact
 /// derived callback graph. It does not issue source/contact gameplay admission.</summary>
 internal static class UniversalAlpineArmRetainedRewardOwners
@@ -34,16 +34,17 @@ internal static class UniversalAlpineArmRetainedRewardOwners
         if(!map.Keys.Order().SequenceEqual(new[]{0xFD,0x10F,0x13B})||map.Values.Distinct().Count()!=3||
             map.Values.Any(c=>c<0||c>=512||occupied.Contains(c)))
             throw new InvalidDataException("Alpine cohort requires three distinct unused physical classes.");
-        if(writtenHost.Scene().RowCount!=89)
-            throw new InvalidDataException("This private Alpine owner covers one appended original0/1 cohort only.");
-        for(int ordinal=0;ordinal<2;ordinal++)
+        int[] allocated=sourceRows?.ToArray()??[0,1];
+        var members=UniversalAlpineArmResources.Members(allocated.Length>0?allocated[0]:-1);
+        if(!allocated.Order().SequenceEqual(members)||writtenHost.Scene().RowCount!=87+members.Length)
+            throw new InvalidDataException("Alpine retained owner requires one complete original cohort allocation.");
+        for(int ordinal=0;ordinal<allocated.Length;ordinal++)
         {
-            int sourceRow=sourceRows?[ordinal]??ordinal;
-            if(sourceRows!=null&&!sourceRows.Order().SequenceEqual(new[]{0,1}))throw new InvalidDataException("Alpine retained owner requires exact original0/1 allocation.");
+            int sourceRow=allocated[ordinal];
             var row=writtenHost.Row(87+ordinal);var originalRow=source.Row(sourceRow);
             if(row[58]!=originalRow[58]||row[83]!=originalRow[83]||row[72]!=originalRow[72]||
                 row[73]!=originalRow[73]||row[70]!=originalRow[70]||row[74]!=255||
-                BinaryPrimitives.ReadUInt16LittleEndian(row.AsSpan(54))!=map[sourceRow==0?0xFD:0x10F])
+                BinaryPrimitives.ReadUInt16LittleEndian(row.AsSpan(54))!=map[BinaryPrimitives.ReadUInt16LittleEndian(originalRow.AsSpan(54))])
                 throw new InvalidDataException("Alpine initialized source reward/group/state/yaw owner changed.");
         }
         foreach(var (cls,hash) in LocalModels)
