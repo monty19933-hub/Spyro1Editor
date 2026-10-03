@@ -130,7 +130,7 @@ public static class UniversalMobyComposer
         if (placements.Count == 0 && removedRows is not { Count: > 0 }) throw new ArgumentException("No placements or permanent removals were supplied.");
         UniversalMagicPairCertificate? magicPair=null;
         if(placements.Any(p=>!p.Retired&&p.SourceLevelKey=="magiccrafters"&&p.SourceRowIndex is 12 or 13))
-        { var donor=source("magiccrafters"); magicPair=UniversalMagicPairCertificate.Capture(destination.Key,destinationData,destinationOverlay,executable,donor.Data,donor.Overlay,placements,removedRows); }
+        { var donor=source("magiccrafters"); magicPair=UniversalMagicPairCertificate.Capture(destination.Key,destinationData,destinationOverlay,executable,donor.Data,donor.Overlay,placements,removedRows,removedTreasureAlreadyApplied); }
         if(magicPairBundlePaddingBytes!=0&&magicPair==null)throw new InvalidDataException("Magic bundle padding requires the scoped original pair owner.");
         if(magicPairBundlePaddingBytes<0||magicPairBundlePaddingBytes%8!=0)throw new InvalidDataException("Magic bundle padding must be a nonnegative aligned allocation.");
         int incomingCount = placements.Count;

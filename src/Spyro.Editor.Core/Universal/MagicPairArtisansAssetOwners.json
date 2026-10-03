@@ -1,0 +1,73 @@
+{
+  "Length": 3667968,
+  "SceneOffset": 1861632,
+  "SceneLength": 81920,
+  "Owners": [
+    {
+      "Offset": 0,
+      "Length": 2048,
+      "Role": "derived exact originalArtisans layout/registered classes, source271 only; removed072/153",
+      "SHA256": "0e344e1a117c0469f8dfef070dca2e350af7682eba326d40af6a2d8a4f727420"
+    },
+    {
+      "Offset": 2048,
+      "Length": 991232,
+      "Role": "independently audited originalArtisans/source271 native assets subfile0",
+      "SHA256": "36becb53073f5851f2ad67193eb4be1e5abb58ec460d3ea5305fce9f58438942"
+    },
+    {
+      "Offset": 993280,
+      "Length": 579584,
+      "Role": "independently audited originalArtisans/source271 native assets subfile1",
+      "SHA256": "cf768767eca7d1cc5634cb87e1211c89c9dbefba854ab056d41e4f8dd1844e1a"
+    },
+    {
+      "Offset": 1572864,
+      "Length": 288768,
+      "Role": "independently audited originalArtisans/source271 native assets subfile2",
+      "SHA256": "3ab0fa019f8301883f8b1c04d320cf4e9d90e5961cb1c2b2448a2884b742c04c"
+    },
+    {
+      "Offset": 1943552,
+      "Length": 362496,
+      "Role": "independently audited originalArtisans/source271 native assets subfile4",
+      "SHA256": "b332534f85579bafe50b9a6fbb432f6202e1cd62e398e44d2decb6b5970c56f8"
+    },
+    {
+      "Offset": 2306048,
+      "Length": 301056,
+      "Role": "independently audited originalArtisans/source271 native assets subfile5",
+      "SHA256": "29ba0b289f605d49265b8f025ebbd77def6cbd68b2b28693c567be460e2e92b6"
+    },
+    {
+      "Offset": 2607104,
+      "Length": 237568,
+      "Role": "independently audited originalArtisans/source271 native assets subfile6",
+      "SHA256": "a3ddccd59c793738d799a8a1b328b3b5d5f3a18a5b56ec77658d0cfc32affe53"
+    },
+    {
+      "Offset": 2844672,
+      "Length": 421888,
+      "Role": "independently audited originalArtisans/source271 native assets subfile7",
+      "SHA256": "3662f2b9186e331a7d3528a98ffdb6f721e44fd4ea86391c130ed87f55966830"
+    },
+    {
+      "Offset": 3266560,
+      "Length": 401408,
+      "Role": "independently audited originalArtisans/source271 native assets subfile8",
+      "SHA256": "1b19f2dd8115f660bf90f3725119b88a6c309e4c7031b73379dd41cbaafcefb7"
+    }
+  ],
+  "SourceDataSHA256": "ad34af2e3401514e7db740691c80fd2bbf59057a55bdfedbaaa39b6939141fcb",
+  "HostDataSHA256": "86cde4f886d97821a3a4b869100b586842dbd4b9fb696558bead274bb547af4f",
+  "RemovedRows": [
+    7,
+    29,
+    30,
+    31,
+    32,
+    33
+  ],
+  "AssetAuditSHA256": "cd0eb576a994dc54f919bdb18425db4cca9fb10ce9119a61f99e854667ed4abf",
+  "Provenance": "Original full host/source; 529999 independent retainednative/model/texture/sound/reaction checks. Fixed structural assets only, never final authored scene, pose, IDs, lifetime or bundlebase."
+}

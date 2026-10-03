@@ -85,8 +85,10 @@
   <ItemGroup>
     <EmbeddedResource Include="Universal/PrivateMagicMovementSource.json" LogicalName="Spyro.Editor.Core.Universal.PrivateMagicMovementSource.json" />
     <EmbeddedResource Include="Universal/PrivateMagicPairSourcePart.json" LogicalName="Spyro.Editor.Core.Universal.PrivateMagicPairSourcePart.json" />
+    <EmbeddedResource Include="Universal/MagicPairArtisansAssetOwners.json" LogicalName="Spyro.Editor.Core.Universal.MagicPairArtisansAssetOwners.json" />
     <EmbeddedResource Include="Universal/MagicPairAssetOwners.json" LogicalName="Spyro.Editor.Core.Universal.MagicPairAssetOwners.json" />
     <EmbeddedResource Include="Universal/MagicPairAssemblyOwner.json" LogicalName="Spyro.Editor.Core.Universal.MagicPairAssemblyOwner.json" />
     <InternalsVisibleTo Include="Spyro.Editor.MagicPairCertificateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.MagicArtisansPairSmoke" />
   </ItemGroup>
 </Project>

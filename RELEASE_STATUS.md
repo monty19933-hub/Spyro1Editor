@@ -1,3 +1,26 @@
+# Follow-up: Artisans druid capacity recovery and gameplay
+
+The editor now explains the exact six Gnorcs to remove for the supported Magic
+Crafters pair, checks actual export capacity, and supports the normal manual
+Remove/save/reopen/Add workflow. The rebuilt export reclaims132KB of model
+storage and2.1KB of texture space, with86.6KB RAM headroom after import.
+Source2,887, UI25, saved-export284, Dark Hollow8,753 and runner115 checks pass;
+the UI/App builds cleanly.
+
+Native Artisans testing shows both imported druids moving/attacking, health loss,
+flame/charge defeats, two-plus-five gem rewards and new collection identities.
+A private native card save and fresh-process card reload retain all seven gems
+and the two new collected identities. Remaining
+variants, edited hosts and mixed groups are still explicit limits. Universal
+Moby gameplay remains unfinished. [Evidence](docs/research/universal-magic-pair-20261003.md).
+
+The enemy-free authored floor passes stationary and moving jumps without life
+loss. The earlier boar-run death is not reproduced. An experimental face flag
+still has visible gaps and worsens texture distortion; it is not integrated.
+Terrain seam quality remains open.
+
+---
+
 # Follow-up: native collection stars and linked Dark gameplay
 
 Dark Passage attack-effect ownership now covers all 35 original particle hosts.

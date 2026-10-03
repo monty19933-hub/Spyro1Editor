@@ -16,24 +16,30 @@ public sealed class UniversalMagicPairCertificate
     private readonly UniversalLevelData _host;
     private readonly UniversalOverlay _hostOverlay;
     private readonly byte[] _originalExe;
+    private readonly string _hostKey;
+    private readonly int _hostId;
+    private readonly int[] _removed;
+    private readonly UniversalRowAllocation _allocation;
+    internal int PreservedCacheBytes => _hostKey=="artisans" ? UniversalMagicArtisansHost.CacheBytes(_host,_allocation.FinalRowCount) : UniversalMagicPairCollisionShadow.ShadowBytes;
     private uint _bundleBase;
     private byte[]? _expectedCode;
     private Dictionary<string,uint>? _expectedLabels;
     private int NativeCount=>_host.Scene().RowCount;
     private int PodId=>I(_host.Bytes,_host.Subfiles()[3].Offset+_host.Scene().PodComponent+4);
-    private UniversalMagicPairCertificate(UniversalLevelData source, UniversalOverlay overlay, IReadOnlyList<UniversalMobyPlacement> placements, byte[] hostData,byte[] hostOverlay,byte[] exe)
-    { _source = new(source.Bytes.ToArray()); _overlay = new(overlay.Bytes.ToArray(),overlay.Bindings.ToDictionary()); _placements = placements.Where(p=>!p.Retired).All(p=>p.PersistentSlot!=null)?placements.Where(p=>!p.Retired).OrderBy(p=>p.PersistentSlot).ToArray():placements.Where(p=>!p.Retired).ToArray(); _host=new(hostData.ToArray());_originalExe=exe.ToArray();_hostOverlay=new(hostOverlay.ToArray(),UniversalExeBindings.Read(exe,12)); }
+    private UniversalMagicPairCertificate(UniversalLevelData source, UniversalOverlay overlay, IReadOnlyList<UniversalMobyPlacement> placements, byte[] hostData,byte[] hostOverlay,byte[] exe,string hostKey,IReadOnlyCollection<int>? removals)
+    { _source = new(source.Bytes.ToArray()); _overlay = new(overlay.Bytes.ToArray(),overlay.Bindings.ToDictionary()); _placements = placements.Where(p=>!p.Retired).All(p=>p.PersistentSlot!=null)?placements.Where(p=>!p.Retired).OrderBy(p=>p.PersistentSlot).ToArray():placements.Where(p=>!p.Retired).ToArray(); _host=new(hostData.ToArray());_originalExe=exe.ToArray();_hostKey=hostKey;_hostId=hostKey=="artisans"?10:12;_removed=(removals??[]).Order().ToArray();_allocation=UniversalRowRemoval.Allocate(_host,_removed,2);_hostOverlay=new(hostOverlay.ToArray(),UniversalExeBindings.Read(exe,_hostId)); }
     private static string H(byte[] b) => Convert.ToHexStringLower(SHA256.HashData(b));
     private static int I(byte[] b,int at) => BinaryPrimitives.ReadInt32LittleEndian(b.AsSpan(at));
     private static void Require(bool ok,string why) { if(!ok)throw new InvalidDataException("Magic selector2 pair: "+why); }
     internal static bool IsPair(UniversalRowTemplate t) => t.SourceLevelKey=="magiccrafters" && t.SourceRowIndex is 12 or 13;
     internal static UniversalMagicPairCertificate Capture(string destination, byte[] data, byte[] overlay, byte[] exe,
-        UniversalLevelData source, UniversalOverlay sourceOverlay, IReadOnlyList<UniversalMobyPlacement> placements,IReadOnlyCollection<int>? removals)
+        UniversalLevelData source, UniversalOverlay sourceOverlay, IReadOnlyList<UniversalMobyPlacement> placements,IReadOnlyCollection<int>? removals,bool removedTreasureAlreadyApplied=false)
     {
+        if(destination=="artisans"&&removedTreasureAlreadyApplied)(data,exe)=UniversalMagicArtisansHost.RestoreSavedDeletions(data,overlay,exe,removals);
         UniversalMagicPairCollisionShadow.RequireScenario(destination,data,overlay,exe,source,sourceOverlay,placements,removals);
         var bindings=UniversalExeBindings.Read(exe,30);Require(sourceOverlay.Bindings.Count==bindings.Count&&bindings.All(b=>sourceOverlay.Bindings.TryGetValue(b.Key,out var current)&&current==b.Value),"complete source callback/copy/particle bindings differ from original native issuer");
         foreach(var p in placements.Where(p=>!p.Retired)) RequireSourceTemplate(source,sourceOverlay,source.CaptureRow(p.SourceLevelKey,p.SourceRowIndex));
-        return new(source,sourceOverlay,placements,data,overlay,exe);
+        return new(source,sourceOverlay,placements,data,overlay,exe,destination,removals);
     }
     // Source-only enrollment exposes the authentic companion identity for Expand. The export
     // still requires Capture above before dependency pruning/negative-index admission/rebasing.
@@ -81,10 +87,18 @@ public sealed class UniversalMagicPairCertificate
         using var input=typeof(UniversalMagicPairCertificate).Assembly.GetManifestResourceStream("Spyro.Editor.Core.Universal."+name)??throw new InvalidDataException("Missing authenticated Magic owner schema");
         using var buffer=new MemoryStream();input.CopyTo(buffer);var bytes=buffer.ToArray();Require(H(bytes)==sha,"complete immutable owner schema changed");return JsonSerializer.Deserialize<T>(bytes)??throw new InvalidDataException("Invalid Magic owner schema");
     }
-    private static IReadOnlyList<UniversalAsmPart> ExpectedParts()
+    private IReadOnlyList<UniversalAsmPart> ExpectedParts()
     {
         var fixture=Resource<AssemblyOwner[]>("MagicPairAssemblyOwner.json","591667503a0274040c285f9def7314b7e504549f46d90ba1083255e117ddfc08");
-        return fixture.Select(f=>{UniversalAsmPart p=new(){LenientTables=f.LenientTables};p.Items.AddRange(f.Items);foreach(var t in f.Tables)p.Tables.Add(t.Key,t.Value);return p;}).ToArray();
+        var parts=fixture.Select(f=>{UniversalAsmPart p=new(){LenientTables=f.LenientTables};p.Items.AddRange(f.Items);foreach(var t in f.Tables)p.Tables.Add(t.Key,t.Value);return p;}).ToArray();
+        if(_hostKey=="artisans")
+        {
+            var wrappers=parts[1];int update=wrappers.Items.FindIndex(i=>i.Word==UniversalMips.EncodeJ(3,0x8007AE40));int init=wrappers.Items.FindIndex(i=>i.Word==UniversalMips.EncodeJ(2,0x80082960));
+            Require(update>=0&&init>=0,"exact native replay owner disappeared");
+            wrappers.Items[update]=wrappers.Items[update] with{Word=UniversalMips.EncodeJ(3,_hostOverlay.Update)};wrappers.Items[init]=wrappers.Items[init] with{Word=UniversalMips.EncodeJ(2,_hostOverlay.Init)};
+            parts[4]=UniversalMagicPairCollisionShadow.BuildOwnedWrappers(PreservedCacheBytes);
+        }
+        return parts;
     }
     internal void RequireCompiled(byte[] code,uint baseAddress,IReadOnlyList<UniversalAsmPart>? actualParts=null)
     {
@@ -102,7 +116,11 @@ public sealed class UniversalMagicPairCertificate
     // Physical rows derive from the append-only scene; lifetime identities derive
     // from the validated editor ledger, including retired slots. Retired entries
     // own no actors/properties/code. They cannot donate an old card bit to a new row.
-    private int[] SaveRows()=>Enumerable.Range(0,NativeCount).Concat(_placements.Select((p,i)=>checked(NativeCount+(p.PersistentSlot??i)))).ToArray();
+    private int[] SaveRows()
+    {
+        int[] map=Enumerable.Range(0,_allocation.FinalRowCount).Select(i=>_removed.Contains(i)?-1:i).ToArray();
+        for(int i=0;i<_placements.Count;i++)map[_allocation.NewRows[i]]=checked(NativeCount+(_placements[i].PersistentSlot??i));return map;
+    }
     private bool RemapsSaveRows=>SaveRows().Where((n,i)=>n!=i).Any();
     private NativeMobySaveMapOverlay ExpectedOverlay()
     {
@@ -123,8 +141,8 @@ public sealed class UniversalMagicPairCertificate
     internal void RequireFinalExecutable(byte[] exe)
     {
         Require(_expectedCode!=null&&_expectedLabels!=null,"final executable has no admitted callbacks");
-        byte[] expected=_originalExe.ToArray();UniversalTreasureAccounting.ApplyDelta(expected,12,_placements.Sum(p=>UniversalMobyComposer.TreasureValue(_source.Row(p.SourceRowIndex))));
-        var bindings=UniversalExeBindings.Read(_originalExe,12);var overlay=ExpectedOverlay();
+        byte[] expected=_originalExe.ToArray();UniversalTreasureAccounting.ApplyDelta(expected,_hostId,_placements.Sum(p=>UniversalMobyComposer.TreasureValue(_source.Row(p.SourceRowIndex)))-_removed.Sum(r=>UniversalMobyComposer.TreasureValue(_host.Row(r))));
+        var bindings=UniversalExeBindings.Read(_originalExe,_hostId);var overlay=ExpectedOverlay();
         UniversalExeBindings.Patch(expected,bindings[UniversalExeBindings.UpdateGlobal],overlay.UpdatePointer);
         UniversalExeBindings.Patch(expected,bindings[UniversalExeBindings.InitGlobal],_expectedLabels!["wrap_init"]);
         UniversalExeBindings.Patch(expected,bindings[UniversalExeBindings.CopyBufferGlobal],overlay.CopyBuffer);
@@ -134,6 +152,7 @@ public sealed class UniversalMagicPairCertificate
         if(RemapsSaveRows)NativeMobySaveMap.PatchExe(expected);
         Require(exe.SequenceEqual(expected),"final executable differs from original plus derived treasure/callback/lifetime-map owners");
     }
+    internal void RequireTreasuredExecutable(byte[] exe) { var expected=_originalExe.ToArray();UniversalTreasureAccounting.ApplyDelta(expected,_hostId,7-_removed.Sum(r=>UniversalMobyComposer.TreasureValue(_host.Row(r))));Require(exe.SequenceEqual(expected),"native source before bundle differs from original plus exact pair treasure delta"); }
     private byte[] ExpectedScene()
     {
         UniversalLevelData expected=new(_host.Bytes.ToArray());List<(byte[] Row,UniversalRowTemplate Template)> rows=[];
@@ -142,7 +161,8 @@ public sealed class UniversalMagicPairCertificate
             var t=Rebase(CaptureSource(_source,_overlay,_source.CaptureRow("magiccrafters",p.SourceRowIndex)),p) with{LinkGroupId=p.LinkGroupId};byte[] row=t.Row.ToArray();
             BinaryPrimitives.WriteInt32LittleEndian(row.AsSpan(12),p.X);BinaryPrimitives.WriteInt32LittleEndian(row.AsSpan(16),p.Y);BinaryPrimitives.WriteInt32LittleEndian(row.AsSpan(20),p.Z);row[0x43]=255;row[0x4A]=255;rows.Add((row,t));
         }
-        var (_,_,physical)=expected.AppendRows(rows);WritePod(expected,physical);var sf=expected.Subfiles()[3];return expected.Bytes.AsSpan(sf.Offset,sf.Length).ToArray();
+        if(_removed.Length>0) { foreach(int r in _removed)expected.SetRowClass(r,UniversalMobyComposer.InertClass);expected.RemoveModels([114,339]);UniversalRowRemoval.RemoveOwnedPropertiesAndClearRows(expected,_removed); }
+        var (_,_,physical)=expected.AppendRows(rows,_removed);WritePod(expected,physical);var sf=expected.Subfiles()[3];return expected.Bytes.AsSpan(sf.Offset,sf.Length).ToArray();
     }
     internal UniversalRowTemplate Rebase(UniversalRowTemplate template,UniversalMobyPlacement placement)
     {
@@ -157,7 +177,7 @@ public sealed class UniversalMagicPairCertificate
     { WritePod(data,rows);RequireFinalRows(data,rows,finalized:false); }
     private void WritePod(UniversalLevelData data,IReadOnlyList<int> rows)
     {
-        Require(rows.SequenceEqual(Enumerable.Range(NativeCount,2)) && data.Scene().RowCount==NativeCount+2,"exact append-only final physical pair required; no reuse, duplicate or reordered row binding");
+        Require(rows.SequenceEqual(_allocation.NewRows) && data.Scene().RowCount==_allocation.FinalRowCount,"exact append-only final physical pair required; no reuse, duplicate or reordered row binding");
         var sc=data.Scene();var sf=data.Subfiles()[3];byte[] scene=data.Bytes.AsSpan(sf.Offset,sf.Length).ToArray();
         int oldSize=I(scene,sc.PodComponent),oldCount=I(scene,sc.PodComponent+4);Require(oldCount==PodId,"native Dark Hollow pod namespace changed");
         int newSize=checked(oldSize+8);byte[] pods=new byte[newSize];BinaryPrimitives.WriteInt32LittleEndian(pods,newSize);BinaryPrimitives.WriteInt32LittleEndian(pods.AsSpan(4),oldCount+1);
@@ -179,19 +199,26 @@ public sealed class UniversalMagicPairCertificate
         // new property owners, native pod/fixups and visibility. This intentionally
         // refuses different assets, allocation layouts or edited terrain in this
         // first scoped certificate, rather than admitting generic mutable buffers.
-        if(finalized)
+        if(finalized && _hostKey!="artisans")
         {
             var owners=Resource<AssetOwners>("MagicPairAssetOwners.json","69db09bd5f88d71a5c6b0656c804aea7c9fc979168400c91aa90159384039f3e");
             Require(data.Bytes.Length==owners.Length&&data.Subfiles()[3]==(owners.SceneOffset,owners.SceneLength),"asset/scene region allocation differs from source-bound import owner");
             foreach(var region in owners.Owners)Require(H(data.Bytes.AsSpan(region.Offset,region.Length).ToArray())==region.SHA256,"immutable asset owner changed: "+region.Role);
             Require(data.Bytes.AsSpan(owners.SceneOffset,owners.SceneLength).SequenceEqual(ExpectedScene()),"scene differs from authenticated native host plus actual source-derived translated rows/properties/pod/fixups");
         }
+        if(finalized && _hostKey=="artisans")
+        {
+            var owners=Resource<AssetOwners>("MagicPairArtisansAssetOwners.json","6a2b6d85d40538869107c855299be341922f3cadabdeaaf7bef1dfd95432c915");
+            Require(data.Bytes.Length==owners.Length&&data.Subfiles()[3]==(owners.SceneOffset,owners.SceneLength),"Artisans asset/scene allocation differs from independently audited structural owners");
+            foreach(var region in owners.Owners)Require(H(data.Bytes.AsSpan(region.Offset,region.Length).ToArray())==region.SHA256,"immutable Artisans asset owner changed: "+region.Role);
+            Require(data.Bytes.AsSpan(owners.SceneOffset,owners.SceneLength).SequenceEqual(ExpectedScene()),"Artisans scene differs from original plus authenticated deletions and actual authored source group");
+        }
         if(finalized)
         {
             var srcTextures=UniversalParticleDependencies.Records(_source);var dstTextures=UniversalParticleDependencies.Records(data);
             Require(srcTextures.TryGetValue(0,out var sourceTile)&&dstTextures.TryGetValue(0,out var targetTile)&&UniversalParticleDependencies.EquivalentTexture(sourceTile,_source.Vram(),targetTile,data.Vram()),"native death texture0 pixels/palette lost their source owner");
         }
-        Require(rows.SequenceEqual(Enumerable.Range(NativeCount,2))&&data.Scene().RowCount==NativeCount+2,"final physical identity changed");var sc=data.Scene();int so=data.Subfiles()[3].Offset;
+        Require(rows.SequenceEqual(_allocation.NewRows)&&data.Scene().RowCount==_allocation.FinalRowCount,"final physical identity changed");var sc=data.Scene();int so=data.Subfiles()[3].Offset;
         Require(I(data.Bytes,so+sc.PodComponent+4)==PodId+1,"final pod namespace changed");int memberAt=I(data.Bytes,so+sc.PodComponent+8+4*PodId);
         Require(BinaryPrimitives.ReadUInt16LittleEndian(data.Bytes.AsSpan(so+sc.PodComponent+memberAt))==rows[0] && BinaryPrimitives.ReadUInt16LittleEndian(data.Bytes.AsSpan(so+sc.PodComponent+memberAt+2))==(rows[1]|0x8000),"final pod must contain exact pair once with native terminal bit");
         Require(I(data.Row(rows[0]),0)!=I(data.Row(rows[1]),0),"final properties cannot alias between native pod members");

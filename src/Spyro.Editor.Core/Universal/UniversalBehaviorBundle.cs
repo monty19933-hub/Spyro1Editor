@@ -251,7 +251,7 @@ public static class UniversalBehaviorBundleBuilder
             }
             if (Remaps(s.SourceKey)) UniversalClassRemapping.RequireNoUnownedClassMemory(upd, false, s.Source);
             var nativeDamage = UniversalNativePlayerDamageCalls.AnalyzeSource(s.SourceKey, s.Source, upd, nativeExecutable);
-            if(magicPair!=null&&s.SourceKey=="magiccrafters")parts.Add(UniversalMagicPairCollisionShadow.Apply(upd,s.Source,nativeExecutable??[]));
+            if(magicPair!=null&&s.SourceKey=="magiccrafters")parts.Add(UniversalMagicPairCollisionShadow.Apply(upd,s.Source,nativeExecutable??[],magicPair));
             int gemBytes = 0;
             if (gemCalls.Count != 0)
             {
@@ -282,7 +282,7 @@ public static class UniversalBehaviorBundleBuilder
         if (signClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.SignDraw(signClasses, "sign_draw"));
         var (code, labels) = Assemble(parts, baseAddress);
-        if(magicPair!=null){magicPair.RequireCompiled(code,baseAddress,parts);var proof=UniversalMagicPairCollisionShadow.RequireWritten(code,labels,baseAddress);reports=reports.Select(r=>r.SourceLevelKey=="magiccrafters"?r with{PrivateMagicPairShadow=proof}:r).ToList();}
+        if(magicPair!=null){magicPair.RequireCompiled(code,baseAddress,parts);var proof=UniversalMagicPairCollisionShadow.RequireWritten(code,labels,baseAddress,magicPair.PreservedCacheBytes);reports=reports.Select(r=>r.SourceLevelKey=="magiccrafters"?r with{PrivateMagicPairShadow=proof}:r).ToList();}
         return new(baseAddress, code, labels["wrap_upd"], labels["wrap_init"], reports)
         {
             DestinationGemCollectionCalls = destinationGemCalls.Select(c => new UniversalDestinationGemCall(c.Pc, c.Delay, c.Role, labels[destinationGemLabel!])).ToArray(),

@@ -30,9 +30,12 @@ internal static class UniversalMagicPairCollisionShadow
     internal static void RequireScenario(string destination, byte[] data, byte[] overlay, byte[] exe,
         UniversalLevelData source, UniversalOverlay sourceOverlay, IReadOnlyList<UniversalMobyPlacement> placements, IReadOnlyCollection<int>? removals)
     {
-        Require(destination == "darkhollow" && (removals == null || removals.Count == 0), "Use an untouched Dark Hollow level for this druid group; other destinations or native removals are not yet supported");
-        Require(Hash(data) == "a937aecb3626ffd2311ba136684a34c9f36877054b52557b4524fcacee0e2d97" &&
-            Hash(overlay) == "9920aa47b94005166f457b5b36df6dedd1f2400f91698bac21cdb01d8590ef32", "Use an untouched Dark Hollow level for this druid group; existing native-object, terrain or asset edits are not yet supported");
+        if(destination=="artisans")UniversalMagicArtisansHost.RequireOriginal(data,overlay,exe,removals);
+        else
+        {
+            Require(destination=="darkhollow" && (removals==null||removals.Count==0),"Use original Dark Hollow without native removals, or original Artisans after deleting its six linked Gnorcs together");
+            Require(Hash(data)=="a937aecb3626ffd2311ba136684a34c9f36877054b52557b4524fcacee0e2d97"&&Hash(overlay)=="9920aa47b94005166f457b5b36df6dedd1f2400f91698bac21cdb01d8590ef32","Use original Dark Hollow for this group; existing native-object, terrain or asset edits are not supported");
+        }
         Require(Hash(source.Bytes) == "ad34af2e3401514e7db740691c80fd2bbf59057a55bdfedbaaa39b6939141fcb", "complete original source data changed");
         RequireSource(sourceOverlay, exe);
         // Full ledger is checked before inactive entries are discarded. Its
@@ -42,7 +45,7 @@ internal static class UniversalMagicPairCollisionShadow
         else Require(placements.All(p=>!p.Retired),"retired entries require their persistent lifetime slots");
         placements=placements.Where(p=>!p.Retired).ToArray();
         int nativePrefix=new UniversalLevelData(data).Scene().RowCount;
-        Require(placements.Select(p=>p.PersistentSlot).Where(n=>n!=null).All(n=>n>=0&&n<256-nativePrefix),"druid lifetime identities exceed Dark Hollow's native 256-bit saved bitmap; retirements cannot be reused");
+        Require(placements.Select(p=>p.PersistentSlot).Where(n=>n!=null).All(n=>n>=0&&n<256-nativePrefix),"druid lifetime identities exceed this host's native 256-bit saved bitmap; retirements cannot be reused");
         Require(placements.Count == 2 && placements.All(p => p.SourceLevelKey == "magiccrafters") && placements.Select(p => p.SourceRowIndex).Order().SequenceEqual(new[] {12,13}), "exact original pair required, no duplicate/mixed/source row binding");
         var a = placements.Single(p => p.SourceRowIndex == 12); var b = placements.Single(p => p.SourceRowIndex == 13);
         Require(!string.IsNullOrWhiteSpace(a.LinkGroupId) && a.LinkGroupId == b.LinkGroupId && a.EditorId != b.EditorId && !string.IsNullOrWhiteSpace(a.EditorId) && !string.IsNullOrWhiteSpace(b.EditorId), "exact one unique authored group required");
@@ -61,7 +64,7 @@ internal static class UniversalMagicPairCollisionShadow
                 if(axis<2)Require(value>=UniversalMagicPairMovementBoundary.Minimum&&value<UniversalMagicPairMovementBoundary.MaximumExclusive,"rebased home/path XY leaves retained native neighbor grid");
             }
         }
-        Require(placements.All(p => !p.Retired && (p.Yaw == null || p.Yaw == source.Row(p.SourceRowIndex)[0x46]) && p.RowByteOverrides == null && p.Text == null && p.SpecialId == null && p.DragonColor == null), "no unproved row/selector/frame/pod/class overrides");
+        Require(placements.All(p => !p.Retired && (p.Yaw == null || p.Yaw == source.Row(p.SourceRowIndex)[0x46]) && (p.RowByteOverrides == null || p.RowByteOverrides.All(field=>field.Key is 0x50 or 0x51 && field.Value==source.Row(p.SourceRowIndex)[field.Key])) && p.Text == null && p.SpecialId == null && p.DragonColor == null), "no unproved row/selector/frame/pod/class overrides");
     }
     private static void RequireSource(UniversalOverlay source, byte[] exe, bool allowOwnedTreasureDelta = false)
     {
@@ -81,9 +84,9 @@ internal static class UniversalMagicPairCollisionShadow
         Require(part.Items.SequenceEqual(expected.Items), "complete copied preimage/producer/label/incoming schema changed");
         Require(part.Tables.Count == expected.Tables.Count && expected.Tables.All(k => part.Tables.TryGetValue(k.Key, out var v) && v.SequenceEqual(k.Value)), "complete copied native table/target namespace changed");
     }
-    internal static UniversalAsmPart Apply(UniversalAsmPart part, UniversalOverlay source, byte[] exe)
+    internal static UniversalAsmPart Apply(UniversalAsmPart part, UniversalOverlay source, byte[] exe,UniversalMagicPairCertificate? certificate=null)
     {
-        RequireSource(source, exe, true); RequireCopiedOwner(part);
+        if(certificate==null)RequireSource(source, exe, true);else { certificate.RequireOwner(source);certificate.RequireTreasuredExecutable(exe); } RequireCopiedOwner(part);
         foreach (var (pc, native) in Calls)
         {
             int at = part.Items.FindIndex(i => i.Orig == pc);
@@ -91,17 +94,22 @@ internal static class UniversalMagicPairCollisionShadow
             part.Items[at] = part.Items[at] with { Fix = new(UniversalFixKind.JalLabel, Label: WrapLabel(pc)) };
             part.Items.Insert(at, new(null, default, null, CallLabel(pc)));
         }
+        return BuildOwnedWrappers(certificate?.PreservedCacheBytes??ShadowBytes);
+    }
+    internal static UniversalAsmPart BuildOwnedWrappers(int shadowBytes)
+    {
+        Require(shadowBytes is ShadowBytes or 1064,"cache profile has no authenticated host capacity owner");
         UniversalAsmPart wrapper = new();
         foreach (var (pc, native) in Calls)
         {
             wrapper.Label(WrapLabel(pc));
-            foreach (var item in Build(native)) wrapper.Items.Add(item);
+            foreach (var item in Build(native,shadowBytes)) wrapper.Items.Add(item);
         }
         wrapper.Items.AddRange(UniversalMagicPairMovementBoundary.Build().Items);
-        wrapper.Label(ShadowLabel); for (int i = 0; i < ShadowBytes / 4; i++) wrapper.Emit(0);
+        wrapper.Label(ShadowLabel); for (int i = 0; i < shadowBytes / 4; i++) wrapper.Emit(0);
         return wrapper;
     }
-    private static IReadOnlyList<UniversalAsmItem> Build(uint native)
+    private static IReadOnlyList<UniversalAsmItem> Build(uint native,int shadowBytes=ShadowBytes)
     {
         List<UniversalAsmItem> items = [];
         void Emit(uint w, UniversalFix fix = default) => items.Add(new(w, fix, null, null));
@@ -115,7 +123,7 @@ internal static class UniversalMagicPairCollisionShadow
             Emit(I(15,0,8,UniversalMips.Hi(Cache))); Emit(I(9,8,8,UniversalMips.Lo(Cache)));
             Emit(I(15,0,9,0),new(UniversalFixKind.LabelAddrHi,Label:ShadowLabel));
             Emit(I(9,9,9,0),new(UniversalFixKind.LabelAddrLo,Label:ShadowLabel));
-            Emit(I(9,0,10,ShadowBytes/4)); int start = items.Count;
+            Emit(I(9,0,10,shadowBytes/4)); int start = items.Count;
             Emit(I(35,save?8:9,11,0)); Emit(I(9,save?8:9,save?8:9,4)); Emit(I(43,save?9:8,11,0)); Emit(I(9,save?9:8,save?9:8,4)); Emit(I(9,10,10,-1)); Emit(I(5,10,0,start-items.Count-1)); Emit(0);
         }
         Loop(true); Temps(false); Emit(UniversalMips.EncodeJ(3,native),new(UniversalFixKind.JalLabel,Label:UniversalMagicPairMovementBoundary.EntryLabel(native))); Emit(0); Emit(0); Temps(true); Loop(false); Temps(false);
@@ -133,14 +141,15 @@ internal static class UniversalMagicPairCollisionShadow
         foreach(var c in proof.Calls) { labels[CallLabel(c.SourceCall)] = c.CopiedCall; labels[WrapLabel(c.SourceCall)] = c.Wrapper; }
         var (_,nativeLabels) = UniversalBehaviorBundleBuilder.Assemble([UniversalMagicPairMovementBoundary.Build()],proof.MovementBoundary!.Base);
         foreach(var p in nativeLabels) labels[p.Key]=p.Value;
-        var actual = RequireWritten(code, labels, proof.Base);
+        var actual = RequireWritten(code, labels, proof.Base,proof.ShadowBytes);
         Require(actual.Shadow == proof.Shadow && actual.Calls.SequenceEqual(proof.Calls), "written call/group shadow ownership changed");
     }
-    internal static UniversalMagicPairShadowReadback RequireWritten(byte[] code, IReadOnlyDictionary<string,uint> labels, uint baseAddress)
+    internal static UniversalMagicPairShadowReadback RequireWritten(byte[] code, IReadOnlyDictionary<string,uint> labels, uint baseAddress,int shadowBytes=ShadowBytes)
     {
-        Require(labels.TryGetValue(ShadowLabel,out uint shadow) && shadow%4==0 && shadow>=baseAddress && (ulong)shadow+ShadowBytes <= (ulong)baseAddress+(uint)code.Length, "private shadow lacks complete aligned behavior-allocation owner");
+        Require(shadowBytes is ShadowBytes or 1064,"readback cache profile is unowned");
+        Require(labels.TryGetValue(ShadowLabel,out uint shadow) && shadow%4==0 && shadow>=baseAddress && (ulong)shadow+(uint)shadowBytes <= (ulong)baseAddress+(uint)code.Length, "private shadow lacks complete aligned behavior-allocation owner");
         uint Word(uint at) { Require(at>=baseAddress && (ulong)at+4 <= (ulong)baseAddress+(uint)code.Length,"readback leaves complete allocation"); return BinaryPrimitives.ReadUInt32LittleEndian(code.AsSpan(checked((int)(at-baseAddress)))); }
-        Require(code.AsSpan(checked((int)(shadow-baseAddress)),ShadowBytes).IndexOfAnyExcept((byte)0)<0,"private shadow initialization changed");
+        Require(code.AsSpan(checked((int)(shadow-baseAddress)),shadowBytes).IndexOfAnyExcept((byte)0)<0,"private shadow initialization changed");
         List<UniversalMagicPairShadowCall> calls = [];
         Dictionary<uint,uint> incoming = [];
         foreach (var (pc,native) in Calls)
@@ -148,7 +157,7 @@ internal static class UniversalMagicPairCollisionShadow
             bool hasCall=labels.TryGetValue(CallLabel(pc),out uint call); bool hasEntry=labels.TryGetValue(WrapLabel(pc),out uint entry);
             Require(hasCall && hasEntry,"private copied call/wrapper labels missing");
             Require(Word(call)==UniversalMips.EncodeJ(3,entry),"copied call does not bind its own exact wrapper");
-            var items=Build(native); Require((ulong)entry+(uint)items.Count*4 <= shadow,"wrapper overlaps owned shadow data");
+            var items=Build(native,shadowBytes); Require((ulong)entry+(uint)items.Count*4 <= shadow,"wrapper overlaps owned shadow data");
             for(int i=0;i<items.Count;i++)
             {
                 uint expected=items[i].Word!.Value;
@@ -161,6 +170,7 @@ internal static class UniversalMagicPairCollisionShadow
         }
         var boundary=UniversalMagicPairMovementBoundary.RequireWritten(code,labels,baseAddress,incoming);
         Require((ulong)boundary.Base+(uint)boundary.Bytes<=shadow,"native copy overlaps shadow data");
-        return new(baseAddress,shadow,ShadowBytes,Frame,calls,Hash(code)) { CodeBytes = code.Length, MovementBoundary=boundary };
+        var proof=new UniversalMagicPairShadowReadback(baseAddress,shadow,shadowBytes,Frame,calls,Hash(code)) { CodeBytes = code.Length, MovementBoundary=boundary };
+        return shadowBytes==1064 ? proof with {Status="PARAMETERIZED_MAGIC12_13_ARTISANS_SOURCE_CERTIFICATE_PRIVATE_REVIEW",Pending="Original Artisans native prefix/assets plus exact six-Gnorc saved deletions; original selector2 pair12/13, common XYZ/native yaw, one source pod, fresh lifetime ledger and independent bundle allocation. Other edits/removals/selectors/13B retain refusal; Artisans native gameplay remains separate.",MovementBoundary=boundary with{Scope="Original Magic12/13 selector2 + authenticated Artisans six-Gnorc removal host; original in-domain native movement retained, unsafe proposed XY returns blocked2 before query/commit"}} : proof;
     }
 }

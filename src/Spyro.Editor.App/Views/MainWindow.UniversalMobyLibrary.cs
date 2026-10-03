@@ -385,7 +385,7 @@ public sealed partial class MainWindow
         DockPanel panel = new() { Margin = new Thickness(16) };
         var header = new StackPanel { Spacing = 8, Children =
         {
-            NewSmallNote($"This checked plan lets the {choice.Variant.SourceLevelKey} version fit. Inspect each object and use the editor's normal Remove button if you choose. Nothing is removed automatically.\nReopen Add object afterwards to recheck the current scene."),
+            NewSmallNote($"This checked plan lets the {_retailCatalog.FindByKey(choice.Variant.SourceLevelKey)?.DisplayName ?? choice.Variant.SourceLevelKey} version fit. Inspect each object and use the editor's normal Remove button if you choose. Nothing is removed automatically.\nReopen Add object afterwards to recheck the current scene."),
             NewSmallNote(string.Join("\n", choice.Plan.Groups.Select(g => $"{g.Name}: {g.Effect}"))), locate
         }};
         DockPanel.SetDock(header, Dock.Top); panel.Children.Add(header); panel.Children.Add(objectsList);
@@ -434,6 +434,15 @@ public sealed partial class MainWindow
         ListBox roomPlans = new() { Name = "UniversalMobyRemovalPlans", MaxHeight = 190, IsVisible = false };
         Button inspectPlan = NewButton("Inspect suggested objects…"); inspectPlan.Name = "UniversalMobyInspectPlan";
         StyleModernSecondaryButton(inspectPlan); inspectPlan.IsVisible = false;
+        TextBlock magicRoom = new() { Name = "UniversalMagicArtisansAdvice", IsVisible = false, FontSize = 12, TextWrapping = TextWrapping.Wrap };
+        Button magicPair = NewButton("Use the supported druid pair"); magicPair.Name = "UniversalMagicArtisansPair";
+        StyleModernSecondaryButton(magicPair); magicPair.IsVisible = false;
+        magicPair.Click += (_, _) =>
+        {
+            if (list.SelectedItem is UniversalMobyCatalogEntry entry)
+                variants.SelectedItem = entry.Variants.FirstOrDefault(v => v.SourceLevelKey == "magiccrafters" && v.SourceRow == 12)
+                    ?? entry.Variants.FirstOrDefault(v => v.SourceLevelKey == "magiccrafters" && v.SourceRow == 13);
+        };
         using var roomCancellation = new CancellationTokenSource();
         dialog.Closed += (_, _) => roomCancellation.Cancel();
         bool findingRoom = false;
@@ -614,6 +623,8 @@ public sealed partial class MainWindow
         void RefreshDetails()
         {
             place.IsEnabled = addHere.IsEnabled = false;
+            magicRoom.IsVisible = magicPair.IsVisible = false;
+            findRoom.Content = "Find space for this object…";
             findRoom.IsEnabled = !findingRoom && lib != null && freshCompilation == null && list.SelectedItem is UniversalMobyCatalogEntry;
             if (lib == null || list.SelectedItem is not UniversalMobyCatalogEntry entry)
             {
@@ -636,6 +647,14 @@ public sealed partial class MainWindow
                 previewVariant = v;
                 modelPreview.Child = UniversalMobyModelPreview.Build(() => UniversalMobyModelPreview.LoadAsync(lib, v, japanese), detailed: true);
             }
+            bool magicArtisans = freshCompilation == null && IsMagicArtisansRoomChoice(destination.Key, v);
+            if (magicArtisans)
+            {
+                magicRoom.Text = MagicArtisansRoomText(v); magicRoom.IsVisible = true;
+                magicPair.IsVisible = !IsMagicArtisansPairChoice(v) && entry.Variants.Any(p => p.SourceLevelKey == "magiccrafters" && p.SourceRow is 12 or 13);
+                findRoom.Content = "Review the six Gnorcs to make room…";
+                findRoom.IsEnabled = !findingRoom && IsMagicArtisansPairChoice(v);
+            }
             var e = Est(v);
             bool isSpecial = UniversalSpecialCatalog.IsSpecial(v);
             variantLabel.Text = entry.SubCategory == "Dragonfly Eggs" ? "Colour" : "Source version";
@@ -653,6 +672,15 @@ public sealed partial class MainWindow
                 $"Variants: {entry.Variants.Count} placement(s) across {entry.SourceLevels.Count} level(s)\n" +
                 $"Found in: {string.Join(", ", entry.SourceLevels.Select(LevelName))}" +
                 (!isSpecial && entry.Notes is { Length: > 0 } notes ? "\n" + notes : "");
+            if (magicArtisans && !IsMagicArtisansPairChoice(v))
+            {
+                fit.Text = "Use the supported pair above to check this Artisans option.";
+                fit.Foreground = new SolidColorBrush(ModernRed); return;
+            }
+            if (magicArtisans && MagicArtisansRoomRestriction(existing, removedRows) is string magicRestriction)
+            {
+                fit.Text = magicRestriction; fit.Foreground = new SolidColorBrush(ModernRed); return;
+            }
             string? restriction = v.RestrictionReason ?? entry.RestrictionReason;
             if (v.DroppedExternalPointers > 0)
             {
@@ -680,6 +708,11 @@ public sealed partial class MainWindow
                             ? "\nUse Find space for this object to compare versions and removal plans."
                             : "\nRemove other objects or choose a different source version to make room."
                         : "");
+                if (magicArtisans)
+                    fit.Text = MagicArtisansRoomRestriction(existing, removedRows) ??
+                        (MagicArtisansRoomRows.Except(removedRows).Any()
+                            ? "Remove all six listed Gnorcs, then reopen Add object to check the pair. Review them below before removing."
+                            : "This pair could not pass the export check. It needs unchanged Artisans terrain and remaining original objects; see Technical details for the reason.");
                 technical.Text += "\nExport check: " + dry.Error;
                 fit.Foreground = new SolidColorBrush(ModernRed);
                 return;
@@ -727,6 +760,39 @@ public sealed partial class MainWindow
         findRoom.Click += async (_, _) =>
         {
             if (lib == null || freshCompilation != null || list.SelectedItem is not UniversalMobyCatalogEntry selectedEntry) return;
+            var magicSelected = variants.SelectedItem as UniversalMobyVariant ?? selectedEntry.Default;
+            if (IsMagicArtisansRoomChoice(destination.Key, magicSelected))
+            {
+                roomPlans.ItemsSource = null; roomPlans.IsVisible = inspectPlan.IsVisible = false;
+                if (!IsMagicArtisansPairChoice(magicSelected)) { roomExplanation.Text = "Choose the supported druid pair first."; return; }
+                string? blocked = MagicArtisansRoomRestriction(existing, removedRows);
+                if (blocked != null) { roomExplanation.Text = blocked; return; }
+                findingRoom = true; findRoom.IsEnabled = false;
+                roomExplanation.Text = "Checking the pair with all six Gnorcs removed…";
+                var magicTrial = existing.Concat(TrialFor(magicSelected)).ToList();
+                try
+                {
+                    var check = await Task.Run(() => ExactRetailCheck(lib, magicTrial, MagicArtisansRoomRows), roomCancellation.Token);
+                    if (roomCancellation.IsCancellationRequested) return;
+                    if (!ReferenceEquals(list.SelectedItem, selectedEntry) || !Equals(variants.SelectedItem as UniversalMobyVariant ?? selectedEntry.Default, magicSelected))
+                    { roomExplanation.Text = "Selection changed. Use Review again to check the new choice."; return; }
+                    if (check.Error != null || check.Result == null)
+                    {
+                        roomExplanation.Text = "This removal option did not pass the export check. Keep the Artisans terrain and remaining original objects unchanged. See Technical details for the exact reason.";
+                        technical.Text += "\nArtisans removal check: " + check.Error; return;
+                    }
+                    string Name(int row) => _currentMobys.Single(m => !m.IsAdded && m.TrueIndex == row).DisplayLabel;
+                    var plan = MagicArtisansCheckedPlan(check.Result, removedRows, Name);
+                    roomPlans.ItemsSource = new[] { new UniversalFitChoice(magicSelected, plan.AdditionalRows.Count > 0 ? plan : null) };
+                    roomPlans.IsVisible = true; roomPlans.SelectedIndex = 0;
+                    roomExplanation.Text = $"Checked: removing these six enemies frees {plan.DroppedModelBytes / 1024.0:0.0} KB of model memory and {plan.ReclaimedVramBytes / 1024.0:0.0} KB of texture space. The pair leaves {plan.FinalRamHeadroom / 1024.0:0.0} KB of game memory.\n" +
+                        (plan.AdditionalRows.Count > 0 ? $"{plan.AdditionalRows.Count} of the six still need removal. Inspect them below and use the normal Remove button. Reopen Add object afterwards to recheck." : "All six are already removed. The pair fits without further removals.");
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex) { roomExplanation.Text = "The removal option could not be checked: " + ex.Message; }
+                finally { findingRoom = false; if (!roomCancellation.IsCancellationRequested) RefreshDetails(); }
+                return;
+            }
             findingRoom = true; findRoom.IsEnabled = false; roomPlans.IsVisible = inspectPlan.IsVisible = false;
             roomExplanation.Text = "Checking source versions and groups of objects that could make room…";
             var selected = variants.SelectedItem as UniversalMobyVariant ?? selectedEntry.Default;
@@ -799,7 +865,14 @@ public sealed partial class MainWindow
             roomPlans.ItemsSource = null; roomPlans.IsVisible = inspectPlan.IsVisible = false; roomExplanation.Text = "";
             RefreshDetails();
         };
-        variants.SelectionChanged += (_, _) => RefreshDetails();
+        variants.SelectionChanged += (_, _) =>
+        {
+            if (roomPlans.SelectedItem is UniversalFitChoice oldPlan && !Equals(oldPlan.Variant, variants.SelectedItem))
+            {
+                roomPlans.ItemsSource = null; roomPlans.IsVisible = inspectPlan.IsVisible = false; roomExplanation.Text = "";
+            }
+            RefreshDetails();
+        };
         categories.SelectionChanged += (_, _) => RefreshList();
         search.TextChanged += (_, _) => RefreshList();
         fitFilter.SelectionChanged += (_, _) => RefreshList();
@@ -818,6 +891,7 @@ public sealed partial class MainWindow
         right.Children.Add(variants);
         right.Children.Add(details);
         right.Children.Add(fit);
+        right.Children.Add(magicRoom); right.Children.Add(magicPair);
         right.Children.Add(findRoom); right.Children.Add(roomExplanation); right.Children.Add(roomPlans); right.Children.Add(inspectPlan);
         right.Children.Add(new Expander { Header = "Technical details", IsExpanded = false, Content = technical, HorizontalAlignment = HorizontalAlignment.Stretch });
         WrapPanel buttons = new() { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8 };
