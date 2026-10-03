@@ -23,7 +23,7 @@ var code=result.Overlay.AsSpan((int)(proof.Base-UniversalOverlay.Base),proof.Cod
 foreach(int at in new[]{final.Subfiles()[2].Offset+56, final.Subfiles()[2].Offset+100,0,final.Bytes.Length-1}){var bad=result.LevelData.ToArray();bad[at]^=1;Refuse(()=>cert.RequireFinalRows(new UniversalLevelData(bad),result.NewRowIndices),"final complete model/header/padding owner");}
 cert.RequireFinalOverlay(result.Overlay);checks++;foreach(int at in new[]{0,100,4096,result.Overlay.Length-1}){var bad=result.Overlay.ToArray();bad[at]^=1;Refuse(()=>cert.RequireFinalOverlay(bad),"whole final callback/table/incoming overlay");}
 cert.RequireFinalExecutable(result.Executable);checks++;foreach(int at in new[]{0,(int)(0x8003B47C-0x8000F800),(int)(0x8004E3C8-0x8000F800),result.Executable.Length-1}){var bad=result.Executable.ToArray();bad[at]^=1;Refuse(()=>cert.RequireFinalExecutable(bad),"complete final native/callback/executable owner");}
-var inactive=src.Data.CaptureRow("magiccrafters",11);Refuse(()=>UniversalIndexedRows.Capture(src.Data,src.Overlay,inactive),"other negative selector retains refusal");
+var inactive=src.Data.CaptureRow("magiccrafters",11);Refuse(()=>UniversalMagicPairCertificate.CaptureSource(src.Data,src.Overlay,inactive),"new singleton cannot inherit the original pair certificate");
 
 
 {

@@ -27,7 +27,7 @@ public static class UniversalIndexedRows
         template = UniversalHighCavesTornadoPlacement.Capture(data, overlay, template);
         template = UniversalDarkPassageLanternGroups.Capture(data,overlay,template);
         if (template.ClassId == 0x12C) return UniversalWhirlwindIndexedRows.Capture(data, overlay, template);
-        template = UniversalMagicDruidChainResources.IsChain(template) ? UniversalMagicDruidChainResources.CaptureSource(data,overlay,template) : UniversalMagicPairCertificate.IsPair(template) ? UniversalMagicPairCertificate.CaptureSource(data,overlay,template) : UniversalMagicCraftersDruidIndexedRows.Capture(data, overlay, template);
+        template = UniversalMagicDruidOriginalRows.IsSupported(template) ? UniversalMagicDruidOriginalRows.CaptureSource(data,overlay,template) : UniversalMagicDruidChainResources.IsChain(template) ? UniversalMagicDruidChainResources.CaptureSource(data,overlay,template) : UniversalMagicPairCertificate.IsPair(template) ? UniversalMagicPairCertificate.CaptureSource(data,overlay,template) : UniversalMagicCraftersDruidIndexedRows.Capture(data, overlay, template);
         if (!string.Equals(template.SourceLevelKey, "gnorccove", StringComparison.OrdinalIgnoreCase) || !IsGnorcIndexedClass(template.ClassId))
             return template;
         // Bind the complete source, including incoming branches, tables and every later
@@ -143,6 +143,7 @@ public static class UniversalIndexedRows
     public static UniversalRowTemplate Resolve(UniversalRowTemplate template, IReadOnlyList<UniversalRowTemplate> activeTemplates)
     {
         if(UniversalHighCavesTornadoPlacement.Applies(template))UniversalHighCavesTornadoPlacement.RequirePrerequisites(template,activeTemplates);
+        else if(UniversalMagicDruidOriginalRows.IsSecondPair(template))UniversalMagicDruidOriginalRows.RequirePair(template,activeTemplates);
         else if(UniversalMagicDruidChainResources.IsChain(template))UniversalMagicDruidChainResources.RequireGroup(template,activeTemplates);
         else if(UniversalMagicPairCertificate.IsPair(template))UniversalMagicPairCertificate.RequirePrerequisites(template,activeTemplates);
         else if(string.Equals(template.SourceLevelKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&template.ClassId==0x7A)UniversalDarkPassageLanternGroups.RequirePrerequisites(template,activeTemplates);
@@ -169,6 +170,7 @@ public static class UniversalIndexedRows
         UniversalRowAllocation allocation, Span<byte> properties)
     {
         if(UniversalHighCavesTornadoPlacement.Applies(template))UniversalHighCavesTornadoPlacement.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
+        else if(UniversalMagicDruidOriginalRows.IsSecondPair(template))UniversalMagicDruidOriginalRows.RequirePair(template,rows.Select(r=>r.Template).ToArray());
         else if(UniversalMagicDruidChainResources.IsChain(template))UniversalMagicDruidChainResources.RequireGroup(template,rows.Select(r=>r.Template).ToArray());
         else if(UniversalMagicPairCertificate.IsPair(template))UniversalMagicPairCertificate.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
         else if(string.Equals(template.SourceLevelKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&template.ClassId==0x7A)UniversalDarkPassageLanternGroups.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());

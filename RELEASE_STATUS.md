@@ -1,3 +1,14 @@
+# Follow-up: remaining original Magic Crafters druids
+
+Six more singleton druids and the second linked pair now use ordinary placement
+and export into original Dark Hollow, retaining their native behavior, paths and
+actual gem rewards. The new 5,057 checks and affected pair/chain/High Caves
+regressions pass; 42 compiled data/code comparisons match the independent
+delivery and the Release App builds cleanly. Native acceptance for these new
+variants remains pending. [Evidence](docs/research/universal-magic-originals-20261003.md).
+
+---
+
 # Follow-up: High Caves linked creatures and native spell effects
 
 The first two High Caves groups now preserve both directions of creature links,

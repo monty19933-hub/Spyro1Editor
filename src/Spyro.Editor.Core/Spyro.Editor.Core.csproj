@@ -93,4 +93,5 @@
     <InternalsVisibleTo Include="Spyro.Editor.MagicPairCertificateSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.MagicArtisansPairSmoke" />
   </ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="Spyro.Editor.MagicOriginalSmoke" /></ItemGroup>
 </Project>
