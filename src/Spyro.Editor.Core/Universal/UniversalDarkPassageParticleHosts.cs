@@ -25,7 +25,23 @@ internal static class UniversalDarkPassageParticleHosts
  }
  internal static UniversalDarkProjectileHost Require(string key,UniversalOverlay overlay,byte[]? exe)
  {
-  var p=Resolve(overlay);var target=Profiles.SingleOrDefault(p=>p.Key==key)??throw new InvalidDataException("Unowned Dark projectile host identity.");
+  var p=Resolve(overlay);
+  if(key=="authored65")
+  {
+   if(p.Key!="townsquare")throw new InvalidDataException("Fresh Dark projectile host needs its exact native Town engine.");
+   if(exe==null)
+   {
+    var spawn=overlay.Bindings[UniversalExeBindings.ParticleSpawnGlobal];var update=overlay.Bindings[UniversalExeBindings.ParticleUpdateGlobal];
+    bool nativeMetadata=spawn==new UniversalExeBinding(spawn.Global,p.SpawnLui,p.SpawnLo,0x80088F68)&&update==new UniversalExeBinding(update.Global,p.UpdateLui,p.UpdateLo,0x80087E20);
+    bool compact=spawn==new UniversalExeBinding(spawn.Global,0,0,0x80088F68)&&update==new UniversalExeBinding(update.Global,0,0,0x80087E20);
+    if(!nativeMetadata&&!compact)throw new InvalidDataException("Fresh Dark projectile callback metadata lost its native or canonical compact owner.");
+   }
+   if(exe!=null)Spyro.Editor.Core.Exporting.NativePortalRouteFreshBinding.RequireNativeParticleInitializer(exe);
+   foreach(uint global in new[]{UniversalExeBindings.ParticleSpawnGlobal,UniversalExeBindings.ParticleUpdateGlobal})
+    if(exe!=null&&UniversalExeBindings.Read(exe,65)[global]!=overlay.Bindings[global])throw new InvalidDataException("Fresh Dark projectile callback identity changed.");
+   return p;
+  }
+  var target=Profiles.SingleOrDefault(p=>p.Key==key)??throw new InvalidDataException("Unowned Dark projectile host identity.");
   bool cleared=p.Key=="townsquare"&&target.InitializerLength==152;
   if(p.Key!=target.Key&&!cleared)throw new InvalidDataException("Dark projectile host profile differs from its destination.");
   var native=UniversalHighValueGems.DarkProjectileParticleOwner(overlay);

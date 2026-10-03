@@ -124,7 +124,10 @@ public static class UniversalCollectionStarParticles
  {
   var actual=UniversalExeBindings.Read(exe,levelId);
   foreach(uint global in new[]{UniversalExeBindings.ParticleSpawnGlobal,UniversalExeBindings.ParticleUpdateGlobal})
-  {var expected=native.Bindings[global];if(continuation!=null&&global==UniversalExeBindings.ParticleUpdateGlobal)expected=expected with{Value=continuation.Entry};if(!actual.TryGetValue(global,out var found)||found!=expected)throw new InvalidDataException("Collection-star destination callback or initializer identity changed.");}
+  {var expected=native.Bindings[global];if(continuation!=null&&global==UniversalExeBindings.ParticleUpdateGlobal)expected=expected with{Value=continuation.Entry};
+   if(levelId==65&&continuation!=null&&Spyro.Editor.Core.Exporting.NativePortalRouteFreshBinding.TryReadOwnedParticles(exe,65,out var fresh)&&fresh[UniversalExeBindings.ParticleUpdateGlobal].Value==continuation.Entry)
+       expected=expected with{LuiAddress=0,AddiuAddress=0};
+   if(!actual.TryGetValue(global,out var found)||found!=expected)throw new InvalidDataException("Collection-star destination callback or initializer identity changed.");}
  }
  public static void RequireFinalDestination(UniversalCollectionStarCertificate certificate,UniversalLevelData data,UniversalOverlay finalOverlay,byte[] executable,UniversalCollectionStarContinuation? continuation=null)
  {

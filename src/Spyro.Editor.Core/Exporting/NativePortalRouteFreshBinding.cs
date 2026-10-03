@@ -6,7 +6,7 @@ namespace Spyro.Editor.Core.Exporting;
 
 /// <summary>A compact, source-owned Town Square initializer keeps its nine retail
 /// callbacks while current ID65 selects only the three authored callback overrides.</summary>
-public static class NativePortalRouteFreshBinding
+public static partial class NativePortalRouteFreshBinding
 {
     public const uint Address=0x8005A898;
     public const int Length=152;
@@ -142,6 +142,7 @@ public static class NativePortalRouteFreshBinding
     public static void RebindTown(byte[] originalExecutable,byte[] stagedExecutable,uint newUpdate,uint newCopyBuffer)
     {
         RequireOwners(originalExecutable,stagedExecutable);
+        if(TryReadOwnedParticles(stagedExecutable,65,out _))throw new InvalidDataException("An owned particle route needs its issued binding when changing Town routing.");
         if(!TryRead(stagedExecutable,65,out var fresh))throw new InvalidDataException("Town routing requires the complete canonical ID65 split initializer.");
         byte[] code=Build(fresh[UniversalExeBindings.CopyBufferGlobal].Value,fresh[UniversalExeBindings.InitGlobal].Value,
             fresh[UniversalExeBindings.UpdateGlobal].Value,newCopyBuffer,newUpdate);
@@ -152,6 +153,7 @@ public static class NativePortalRouteFreshBinding
     /// per-level bindings. No shared literal instruction may be patched through these bindings.</summary>
     public static bool TryRead(ReadOnlySpan<byte> executable,int levelId,out IReadOnlyDictionary<uint,UniversalExeBinding> bindings)
     {
+        if(TryReadOwnedParticles(executable,levelId,out bindings))return true;
         bindings=new Dictionary<uint,UniversalExeBinding>();
         if(executable.Length!=0x66000||UniversalExeBindings.Word(executable,UniversalExeBindings.LevelInitJumpTable+(uint)levelId*4)!=Address)return false;
         int offset=checked((int)(Address-UniversalExeBindings.ExeBase));var owner=executable.Slice(offset,Length);

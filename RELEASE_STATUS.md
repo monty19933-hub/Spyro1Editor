@@ -1,3 +1,15 @@
+# Follow-up: imported effects in fresh levels
+
+Fresh level 65 now retains imported attack effects through normal export and
+portal routing while preserving Town Square's original effect callbacks.
+Integrated binding/export and regression checks pass; the Release App builds
+cleanly. Native testing shows the linked Dark Passage creature and lantern,
+visible attack effects, health loss, charge defeat, five-gem collection and six
+rendered collection stars. Fresh save persistence and routed-vortex gameplay
+remain unverified. [Evidence](docs/research/universal-fresh-particle-effects-20261003.md).
+
+---
+
 # Follow-up: Artisans druid capacity recovery and gameplay
 
 The editor now explains the exact six Gnorcs to remove for the supported Magic

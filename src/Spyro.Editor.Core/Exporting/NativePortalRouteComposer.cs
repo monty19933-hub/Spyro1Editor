@@ -12,7 +12,7 @@ public static class NativePortalRouteComposer
     public static void Apply(UniversalSourceLibrary donors, LevelCatalog catalog, byte[] executable,
         Dictionary<int, byte[]> replacements, Func<int, byte[]> readEntry, PortalRouteDocument routes,
         bool includesFreshLevel = false,
-        IReadOnlyDictionary<int, IReadOnlyList<NativePortalReturnClass>>? returnClasses = null)
+        IReadOnlyDictionary<int, IReadOnlyList<NativePortalReturnClass>>? returnClasses = null, NativeFreshParticleBinding? freshParticleBinding = null, Action<NativeFreshParticleBinding>? reportFreshParticleBinding = null)
     {
         routes.Validate();
         if (!routes.HasEdits) return;
@@ -22,7 +22,12 @@ public static class NativePortalRouteComposer
         if (includesFreshLevel)
         {
             var fresh = UniversalExeBindings.Read(exe, 65);
-            NativePortalRouteFreshBinding.Rebind(donors.Disc.Exe, exe,
+            if(freshParticleBinding!=null)
+            {
+                byte[] ov=replacements.TryGetValue(79,out var replaced)?replaced:readEntry(79);
+                NativePortalRouteFreshBinding.RequireOwnedParticleDestination(donors.Disc.Exe,exe,new(ov,fresh),freshParticleBinding);
+            }
+            else NativePortalRouteFreshBinding.Rebind(donors.Disc.Exe, exe,
                 fresh[UniversalExeBindings.UpdateGlobal].Value, fresh[UniversalExeBindings.CopyBufferGlobal].Value);
         }
         byte[] bindingBaseline = exe.ToArray();
@@ -83,9 +88,21 @@ public static class NativePortalRouteComposer
                 if (end > UniversalMobyComposer.NormalBufferFloor - UniversalMobyComposer.RamSafetyMargin)
                     throw new InvalidDataException($"{level.DisplayName} needs {end - (UniversalMobyComposer.NormalBufferFloor - UniversalMobyComposer.RamSafetyMargin):N0} more bytes for its Return Home route. Remove unused objects or level assets and try again.");
                 if (level.LevelId == 65)
-                    NativePortalRouteFreshBinding.Rebind(donors.Disc.Exe, exe, result.UpdatePointer, result.CopyBuffer);
+                {
+                    if(freshParticleBinding!=null)
+                    {
+                        var continuation=NativePortalRouteRuntime.ReissueParticleContinuation(donors,overlay,result,freshParticleBinding.Continuation);
+                        freshParticleBinding=NativePortalRouteFreshBinding.RebindOwnedParticleContinuation(donors.Disc.Exe,exe,
+                            new(result.Overlay,bindings),continuation,result.UpdatePointer,bindings[UniversalExeBindings.InitGlobal].Value,result.CopyBuffer);
+                    }
+                    else NativePortalRouteFreshBinding.Rebind(donors.Disc.Exe, exe, result.UpdatePointer, result.CopyBuffer);
+                }
                 else if (includesFreshLevel && level.LevelId == 13)
-                    NativePortalRouteFreshBinding.RebindTown(donors.Disc.Exe, exe, result.UpdatePointer, result.CopyBuffer);
+                {
+                    if(freshParticleBinding!=null)freshParticleBinding=NativePortalRouteFreshBinding.RebindOwnedParticleTown(donors.Disc.Exe,exe,
+                        new(Read(79),UniversalExeBindings.Read(exe,65)),freshParticleBinding,result.UpdatePointer,result.CopyBuffer);
+                    else NativePortalRouteFreshBinding.RebindTown(donors.Disc.Exe, exe, result.UpdatePointer, result.CopyBuffer);
+                }
                 else
                 {
                     UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.UpdateGlobal], result.UpdatePointer);
@@ -115,6 +132,7 @@ public static class NativePortalRouteComposer
                 throw new InvalidDataException("The native portal destination limit conflicts with another executable edit.");
             Put(exe, entryLimit, UniversalMips.EncodeI(10, 2, 2, 66));
         }
+        if(freshParticleBinding!=null)reportFreshParticleBinding?.Invoke(freshParticleBinding);
         exe.CopyTo(executable, 0);
         foreach (var (entry, bytes) in changed) replacements[entry] = bytes;
     }

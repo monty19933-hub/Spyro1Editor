@@ -19,7 +19,7 @@ public sealed record NativePortalReturnClass(string SourceLevelKey,int Destinati
 
 /// <summary>Return routing uses an authenticated rescheduling of the original pause-exit
 /// function, plus metadata appended to each edited resident overlay. No executable cave is used.</summary>
-public static class NativePortalRouteRuntime
+public static partial class NativePortalRouteRuntime
 {
     public const uint PauseExitAddress = 0x8002C664;
     public const int PauseExitLength = 0xB0;

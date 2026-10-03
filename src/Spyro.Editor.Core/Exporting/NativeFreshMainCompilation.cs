@@ -112,7 +112,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
             key => string.Equals(key, Target.Key, StringComparison.OrdinalIgnoreCase)
                 ? (Target, new UniversalLevelData(prepared), new UniversalOverlay(_overlay, UniversalExeBindings.Read(actualExecutable,65)))
                 : donors.Get(key), donors.SharedClasses,
-            UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,sharedModelPackage: donors.SharedModelPackage, playerAnimationSource: donors.PlayerAnimations);
+            UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,sharedModelPackage: donors.SharedModelPackage, playerAnimationSource: donors.PlayerAnimations,nativeOriginalExecutable:donors.Disc.Exe);
     }
 
     public async Task<string> ExportAsync(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements,
@@ -158,10 +158,13 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         if(_flight?.Enabled==true)
             foreach(var level in nativeCatalog.Levels.Where(l=>NativeFreeFlightCompositionPlan.IsNormalLevel(l.LevelId)))
                 _=_flight.RequireFinalLevelClosure(level.LevelId,baseline.EntryBytes(level.SourceWadEntry),exe);
+        var freshParticleBinding=compose?.FreshParticleBinding;
         if(portalRoutes?.HasEdits==true)
             NativePortalRouteComposer.Apply(donors,new LevelCatalog(nativeCatalog.Levels.Where(l=>l.LevelId!=65).Append(Target)),
-                exe,replacements,baseline.EntryBytes,portalRoutes,includesFreshLevel:true,returnClasses:returnClasses);
+                exe,replacements,baseline.EntryBytes,portalRoutes,includesFreshLevel:true,returnClasses:returnClasses, freshParticleBinding:freshParticleBinding, reportFreshParticleBinding:updated=>freshParticleBinding=updated);
         levelData=replacements[80];overlayData=replacements[79];
+        if(freshParticleBinding!=null)NativePortalRouteFreshBinding.RequireOwnedParticleDestination(donors.Disc.Exe,exe,
+            new(overlayData,UniversalExeBindings.Read(exe,65)),freshParticleBinding);
         byte[] wad=baseline.RebuildWad(replacements);
         string stage=outputImage+".pending-"+Guid.NewGuid().ToString("N"),cue=Path.ChangeExtension(outputImage,".cue"),stagedCue=stage+".cue";
         bool retainStage=false;
@@ -171,6 +174,8 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
             var read=UniversalDiscImage.Read(stage);
             if(!read.EntryBytes(80).AsSpan().SequenceEqual(levelData)||!read.EntryBytes(79).AsSpan().SequenceEqual(overlayData)||!read.Exe.AsSpan().SequenceEqual(exe))
                 throw new InvalidDataException("Fresh native image readback differs from its authored mesh and object composition.");
+            if(freshParticleBinding!=null)NativePortalRouteFreshBinding.RequireOwnedParticleDestination(donors.Disc.Exe,read.Exe,
+                new(read.EntryBytes(79),UniversalExeBindings.Read(read.Exe,65)),freshParticleBinding);
             if(_flight!=null)_flight.RequireResidentEntry8(read.EntryBytes(8));
             foreach(var(entry,bytes) in replacements)
                 if(!read.EntryBytes(entry).AsSpan().SequenceEqual(bytes))throw new InvalidDataException("Fresh native bonus-overlay readback differs from its composition.");

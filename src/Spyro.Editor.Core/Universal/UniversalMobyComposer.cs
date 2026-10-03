@@ -45,6 +45,7 @@ public sealed record UniversalComposeResult(
     public int ReclaimedVramBytes { get; init; }
     public IReadOnlyList<NativeTexturePageOwnedRange> ImportedVramRanges { get; init; } = [];
     public IReadOnlyList<UniversalParticleDependency> ParticleDependencies { get; init; } = [];
+    public NativeFreshParticleBinding? FreshParticleBinding { get; init; }
     public IReadOnlyList<UniversalCollectionStarCertificate> CanonicalGemCollectionProofs { get; init; } = [];
     public IReadOnlyList<UniversalTerraceLineParticleProof> NativeLineParticleProofs {get;init;}=[];
     public IReadOnlyList<UniversalFlightChestParticleProof> FlightChestParticleProofs { get; init; } = [];
@@ -125,7 +126,7 @@ public static class UniversalMobyComposer
         Func<NativePlayerAnimationSource>? playerAnimationSource = null,
         bool removedTreasureAlreadyApplied = false,
         int? persistentNativePrefixRows = null,
-        UniversalOverlay? nativeDestinationOwner = null, int magicPairBundlePaddingBytes = 0)
+        UniversalOverlay? nativeDestinationOwner = null, int magicPairBundlePaddingBytes = 0, byte[]? nativeOriginalExecutable = null)
     {
         if (placements.Count == 0 && removedRows is not { Count: > 0 }) throw new ArgumentException("No placements or permanent removals were supplied.");
         UniversalMagicPairCertificate? magicPair=null;
@@ -638,6 +639,7 @@ public static class UniversalMobyComposer
                     dest, destOverlay, exe, destination.LevelId);
             }).ToArray();
         UniversalCollectionStarContinuation? collectionStarContinuation = null;
+        NativeFreshParticleBinding? freshParticleBinding = null;
         // 4. Behavior bundle chained onto the destination's own callbacks.
         List<UniversalBehaviorSourceReport> behavior = [];
         IReadOnlyList<UniversalDestinationGemCall> destinationGemCalls = [];
@@ -681,16 +683,25 @@ public static class UniversalMobyComposer
             overlay = ov;
             if (bundle.OwnedParticleUpdateWrapper is uint particleUpdate)
             {
-                UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.ParticleUpdateGlobal], particleUpdate);
+                if(destination.LevelId==65)
+                {
+                    if(nativeOriginalExecutable==null||collectionStarContinuation==null)throw new InvalidDataException("Fresh copied particles need their original executable and issued updater chain.");
+                    freshParticleBinding=NativePortalRouteFreshBinding.RebindOwnedParticleContinuation(nativeOriginalExecutable,exe,
+                        new UniversalOverlay(overlay,bindings),collectionStarContinuation,bundle.UpdateWrapper,bundle.InitWrapper,newCopy);
+                }
+                else UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.ParticleUpdateGlobal], particleUpdate);
                 foreach (var certificate in ownedParticles)
                     foreach (int type in certificate.TypeIds)
                         particleDependencies[(certificate.SourceLevelKey, type)] = certificate.SourceLevelKey=="darkpassage" && darkProjectileParticles.TryGetValue(certificate.SourceLevelKey,out var projectileEffect)
                             ? UniversalDarkPassageProjectileParticles.Inspect(projectileEffect,type)
                             : new(certificate.SourceLevelKey, type,"source-certified-copied", "Uses the authenticated source effect, translated actor links and relocated texture; the destination particle manager runs once.");
             }
-            UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.UpdateGlobal], bundle.UpdateWrapper);
-            UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.InitGlobal], bundle.InitWrapper);
-            UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.CopyBufferGlobal], newCopy);
+            if(freshParticleBinding==null)
+            {
+                UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.UpdateGlobal], bundle.UpdateWrapper);
+                UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.InitGlobal], bundle.InitWrapper);
+                UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.CopyBufferGlobal], newCopy);
+            }
             copyBuffer = newCopy;
             behavior.AddRange(bundle.Sources);
         }
@@ -701,8 +712,14 @@ public static class UniversalMobyComposer
             uint update = mappedBindings[UniversalExeBindings.UpdateGlobal].Value;
             var mapped = NativeMobySaveMap.Append(destOverlay, overlay, update, copyBuffer, physicalSaveRows);
             overlay = mapped.Overlay; copyBuffer = mapped.CopyBuffer;
-            UniversalExeBindings.Patch(exe, mappedBindings[UniversalExeBindings.UpdateGlobal], mapped.UpdatePointer);
-            UniversalExeBindings.Patch(exe, mappedBindings[UniversalExeBindings.CopyBufferGlobal], copyBuffer);
+            if(freshParticleBinding!=null)
+                freshParticleBinding=NativePortalRouteFreshBinding.RebindOwnedParticleContinuation(nativeOriginalExecutable!,exe,
+                    new UniversalOverlay(overlay,mappedBindings),collectionStarContinuation!,mapped.UpdatePointer,mappedBindings[UniversalExeBindings.InitGlobal].Value,copyBuffer);
+            else
+            {
+                UniversalExeBindings.Patch(exe, mappedBindings[UniversalExeBindings.UpdateGlobal], mapped.UpdatePointer);
+                UniversalExeBindings.Patch(exe, mappedBindings[UniversalExeBindings.CopyBufferGlobal], copyBuffer);
+            }
             NativeMobySaveMap.PatchExe(exe);
         }
 
@@ -776,6 +793,8 @@ public static class UniversalMobyComposer
         for (int i = 0; i < newRows.Count; i++) { mappedRows[incomingOrder[i]] = newRows[i]; mappedSaveRows[incomingOrder[i]] = saveRows[i]; }
         if (placements.Any(p => p.DragonColor != null)) NativeDragonStatueColors.Install(exe);
         nativeLine77?.RequireDestination(new UniversalOverlay(overlay,UniversalExeBindings.Read(exe,destination.LevelId)),exe);
+        if(freshParticleBinding!=null)NativePortalRouteFreshBinding.RequireOwnedParticleDestination(nativeOriginalExecutable!,exe,
+            new UniversalOverlay(overlay,UniversalExeBindings.Read(exe,65)),freshParticleBinding);
         foreach (var certificate in collectionStars)
             UniversalCollectionStarParticles.RequireFinalDestination(certificate, dest,
                 new UniversalOverlay(overlay, UniversalExeBindings.Read(exe, destination.LevelId)),
@@ -783,7 +802,7 @@ public static class UniversalMobyComposer
         foreach (var particle in particleDependencies.Values.Where(p => p.Status == "dependency-unverified"))
             warnings.Add($"Particle 0x{particle.TypeId:X2} from {particle.SourceLevelKey}: {particle.Detail}");
         return new(destination.Key, imports, mappedRows, ram, arena, freeBefore - vram.FreeBytes, behavior, warnings,
-            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), CanonicalGemCollectionProofs = collectionStars, NativeLineParticleProofs=nativeLine77==null?[]:[nativeLine77.Proof], FlightChestParticleProofs = flightParticleProofs.Values.ToArray(), FlightGateParticleProofs = gateParticleProofs.Values.ToArray(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), RestoredIndexedObjectLinks = templates.Sum(t => t.ImportedRowIndices.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports, WhirlwindSoundImports = whirlwindSounds.Values.ToArray(), MetalTextureBindings = metalBindings, DestinationGemCollectionCalls = destinationGemCalls, DestinationGemCollectionExtraBytes = destinationGemBytes, DestinationGemColourLoads = destinationColourLoads, DestinationGemColourExtraBytes = destinationColourBytes, NativeParticleNoOpProofs = particleNoOpProofs };
+            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), CanonicalGemCollectionProofs = collectionStars, FreshParticleBinding = freshParticleBinding, NativeLineParticleProofs=nativeLine77==null?[]:[nativeLine77.Proof], FlightChestParticleProofs = flightParticleProofs.Values.ToArray(), FlightGateParticleProofs = gateParticleProofs.Values.ToArray(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), RestoredIndexedObjectLinks = templates.Sum(t => t.ImportedRowIndices.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports, WhirlwindSoundImports = whirlwindSounds.Values.ToArray(), MetalTextureBindings = metalBindings, DestinationGemCollectionCalls = destinationGemCalls, DestinationGemCollectionExtraBytes = destinationGemBytes, DestinationGemColourLoads = destinationColourLoads, DestinationGemColourExtraBytes = destinationColourBytes, NativeParticleNoOpProofs = particleNoOpProofs };
     }
 
     /// <summary>Class a fully removed native row is switched to: no model, no behavior in any level, never
