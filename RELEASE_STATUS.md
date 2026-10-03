@@ -12,7 +12,7 @@ The shared animation importer now preserves every later native model root’s or
 
 # Follow-up: original Green Druid ramp group
 
-Alpine18/49 now exports its complete original group2 ramp, both geometry and collision keyframes, four-node path and linked target into an authored cleared Peace Keepers level. Root export/readback9254, native frame2155, effect1162, route30 and runner131 checks pass; the Release App builds cleanly. The ordinary native run confirms spell emission, collapsed-ramp contact and controller-driven target movement. Moving collision/carry, combat, rewards and wider universal coverage remain under verification. [Evidence](docs/research/universal-green-druid-ramp-world-20261003.md).
+Alpine18/49 now exports its complete original group2 ramp, both geometry and collision keyframes, four-node path and linked target into an authored cleared Peace Keepers level. Root export/readback9254, native frame2155, effect1162, route30 and runner131 checks pass; the Release App builds cleanly. The completed ordinary native run confirms spell emission, raised/lowered collision, player carry, flame defeat/blue5 pickup, death persistence, repeat-defeat0F orb pickup and inventory5/5 without invalid reads. Card persistence, audio and wider universal coverage remain open. [Evidence](docs/research/universal-green-druid-ramp-world-20261003.md).
 
 ---
 
