@@ -1,3 +1,15 @@
+# Active blocker: native replacement assets in cleared levels
+
+The ordinary Green15/137 export passes first pickup, native inventory1/1 and
+normal respawn retention, but stalls on the subsequent flame defeat. The native
+replacement reward selects class0F whose model is absent from the fresh/cleared
+host. Read-only saved RAM and actual instruction replay reproduce the null model
+read; the earlier Green5/48 host has the same missing0E/0F/10 dependency. Complete
+replacement assets and fresh native repeat-defeat verification are required.
+[Failure evidence](docs/research/universal-green-second-world-20261003.md).
+
+---
+
 # Follow-up: two original Green Druid terrain controllers
 
 Alpine16/group5 and17/group7 now export their complete original shrinking terrain
@@ -27,8 +39,8 @@ collision, paths, native group6 controller and linked target into empty authored
 Peace Keepers. Real saved/reopened export and readback1174, native instruction
 replay2546, existing Green/Alpine/High Caves regressions and runner123 pass. The
 existing5/48 output remains byte-identical; the Release App builds cleanly.
-Native gameplay of this second group remains pending. Its original−1 target
-cache is preserved. [Evidence](docs/research/universal-green-second-world-20261003.md).
+First pickup and terrain gameplay now have native evidence, but repeat defeat
+fails as described above. Its original−1 target cache is preserved. [Evidence](docs/research/universal-green-second-world-20261003.md).
 
 ---
 
