@@ -29,7 +29,7 @@ internal static class SubdivisionCases
     {
         var seed=SceneDocument.New();
         AuthoredSurface Quad(int side)=>new(Guid.NewGuid().ToString("N"),[new(520,520,544),new(520+side,520,544),new(520+side,520+side,544),new(520,520+side,544)],new(64,160,200),null);
-        foreach(var(side,n) in new[]{(32,2),(64,2),(128,8),(200,32),(255,50),(512,128)})
+        foreach(var(side,n) in new[]{(32,2),(64,2),(128,8),(200,32),(255,50),(448,98)})
         {
             var doc=seed with{Surfaces=[Quad(side)]};string hash=doc.Fingerprint();byte[] mesh=Compile(doc);
             check(Word(mesh,4)==n,"exact native lattice triangle count side"+side);

@@ -35,6 +35,14 @@ internal static class NativeAuthoredMesh
         }
         triangles=nativeTriangles;
         if (triangles.Count is < 1 or > 255) throw new InvalidDataException("The native visibility list supports at most 255 authored triangles.");
+        // This grammar emits one sector per triangle and puts every sector in
+        // one visibility group. Native 800259BC/8002679C reserves only 0x200
+        // bytes for the HP sector queue before the close-HQ queue begins.
+        // Each textured triangle can append a sector header and a face word to
+        // close-HQ (800272E0..80027300). Include each queue's zero terminator.
+        // Do not rely on the current camera to hide a structurally unsafe mesh.
+        if (triangles.Count > 127 || triangles.Count(t=>t.Material!=255) > 63)
+            throw new InvalidDataException("Authored terrain exceeds the native renderer queues: this all-visible mesh supports at most 127 generated triangles, including at most 63 textured triangles. Reduce terrain before export; larger scenes require spatial visibility partitioning.");
         int n = triangles.Count;
         const int span = 116;
         byte[] environment = new byte[8+n*(4+span)]; W(environment,0,(uint)environment.Length); W(environment,4,(uint)n);
