@@ -25,6 +25,32 @@ Task evidence is under `work/universal-finish-20261002`. Integrated reports are
 `twilight-sourcefree-r1.json`. The detailed owner ledger, native test route and
 immutable first candidate are under `coverage/twilight-9394-r1`.
 
-Native gameplay verification is pending: visibility, movement, attacks, defeat,
-rewards, respawn and save persistence are separate acceptance work. No release
-package was produced from this checkpoint.
+## Bounded native gameplay
+
+The closed `runtime/twilight-pair-native-r2/runtime-proof.json` records native
+New Game 12 on a private blank card, original Dark Hollow terrain and all 128
+original actors. Original 93 row 6 and 94 row 12 occupy new physical/logical
+slots 128/129. Candidate SHA256 is
+`60d628cecf93d7720a4784bb96db154e951b6c835f01ffffcac34aaad91753c8`;
+its ordinary builder passed 860 independent readbacks.
+
+Both imported soldiers are visible. Captured native objects include projectile
+1F6, flash 1FB, barrel B0 and fragments 1CA/1CB with nonzero model roots.
+Native damage, death and respawn occurred; original enemies are also nearby,
+so damage is not exclusively attributed to the imports. After respawn, visible
+flame defeats the gunner and both imported rows reach retired state FD. The
+barrel's exact finishing attack is not isolated from the preceding charge,
+flame and explosion sequence.
+
+The blue reward advances actual level/global gems from zero to five and sets
+logical 128's durable/checkpoint collection bits. The green reward displays
+two, advances both counters to seven and sets logical 129's bits. Collection
+sparkles are visible. Native inventory shows **Dark Hollow 7/107**, confirming
+both actual rewards and the expanded total. The private card is unchanged and
+the emulator closed without a resume state; captures use read-only RAM access.
+
+Earlier attract footage and unobserved startup losses are excluded. The r1
+attempt remains a separate partial attack/respawn record. Postcollection
+respawn/duplicate suppression, native card save/reload, sound listening and
+remaining variants/hosts are still unverified. No release package was produced
+from this checkpoint.

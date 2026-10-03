@@ -1,3 +1,15 @@
+# Follow-up: Twilight soldiers native gameplay
+
+Two imported Twilight Harbor soldiers in original Dark Hollow now have bounded
+native gameplay evidence: visible bodies and attack objects, damage/respawn,
+defeated rows, five-plus-two gem rewards, collection sparkles and native inventory
+7/107. Both new collection identities are set. The closed run uses a private
+blank card with no save states or runtime writes. Postcollection respawn,
+card persistence, sound listening and other variants/hosts remain unverified.
+[Evidence](docs/research/universal-twilight-troopers-20261003.md).
+
+---
+
 # Follow-up: remaining original Magic Crafters druids
 
 Six more singleton druids and the second linked pair now use ordinary placement
