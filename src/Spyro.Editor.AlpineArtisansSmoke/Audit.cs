@@ -1,0 +1,19 @@
+using System.Buffers.Binary;
+using Spyro.Editor.Core.Universal;
+using Spyro.Editor.Core.Exporting;
+static class Audit {
+ internal static long Count;
+ internal static void Require(bool ok,string why){Count++;if(!ok)throw new Exception("Independent probe audit: "+why);}
+ internal static void Assets(UniversalLevelData original,UniversalLevelData donor,UniversalLevelData written,IEnumerable<(int Value,byte[] Pkg)> imports,IReadOnlyCollection<int> removed,IEnumerable<(long Offset,int Length)> protectedVram){
+  foreach(var r in original.Registrations().Where(r=>!removed.Contains(r.ClassId))){byte[] a=original.Package(r.ClassId),b=written.Package(r.ClassId);int n=Math.Min(a.Length,b.Length);Require(a.AsSpan(0,n).SequenceEqual(b.AsSpan(0,n))&&a.AsSpan(n).IndexOfAnyExcept((byte)0)<0&&b.AsSpan(n).IndexOfAnyExcept((byte)0)<0,$"retained full model except zero allocation padding {r.ClassId:X3}");}
+  foreach(var range in protectedVram)Require(original.Vram().Slice((int)range.Offset,range.Length).SequenceEqual(written.Vram().Slice((int)range.Offset,range.Length)),"retained VRAM range");
+  var before=new NativeLevelSoundLayout(original.Bytes).Sound;var after=new NativeLevelSoundLayout(written.Bytes).Sound;Require(before.Map.SequenceEqual(after.Map),"retained global sound map");foreach(var d in before.Descriptors){var t=after.Descriptors[d.Index];Require(d.CopyDescriptor().AsSpan(4).SequenceEqual(t.CopyDescriptor().AsSpan(4)),"retained sound controls");Require(d.Sample.CopyBytes().SequenceEqual(t.Sample.CopyBytes()),"retained full ADPCM");}
+  foreach(var p in imports){int source=p.Value;byte[] a=donor.Package(source),b=p.Pkg;Require(b.Length>=a.Length&&b.AsSpan(a.Length).IndexOfAnyExcept((byte)0)<0,"full source model plus zero allocation padding extent");var refs=UniversalAssetImport.TextureDescriptorOffsets(a);Require(refs.SequenceEqual(UniversalAssetImport.TextureDescriptorOffsets(b)),"every source textured face address retained");bool[] mask=new bool[a.Length];if(BinaryPrimitives.ReadInt32LittleEndian(a)>0){for(int j=4;j<20;j++)mask[j]=true;var src=new NativeLevelSoundLayout(donor.Bytes).Sound;for(int j=4;j<20;j++){Require((a[j]==255)==(b[j]==255),"source silence slots retained");if(a[j]!=255){var x=src.Descriptors[a[j]];var y=after.Descriptors[b[j]];Require(x.CopyDescriptor().AsSpan(4).SequenceEqual(y.CopyDescriptor().AsSpan(4)),"source sound controls retained");Require(x.Sample.CopyBytes().SequenceEqual(y.Sample.CopyBytes()),"full source sound payload retained");}}}
+   foreach(int f in refs){for(int j=0;j<12;j++)mask[f+j]=true;int du=b[f]-a[f],dv=b[f+1]-a[f+1];foreach(int j in new[]{0,4,8,10}){Require(b[f+j]-a[f+j]==du&&b[f+j+1]-a[f+j+1]==dv,"all source UV corners translated equally");}
+    int pa=BinaryPrimitives.ReadUInt16LittleEndian(a.AsSpan(f+6)),pb=BinaryPrimitives.ReadUInt16LittleEndian(b.AsSpan(f+6));int ca=BinaryPrimitives.ReadUInt16LittleEndian(a.AsSpan(f+2)),cb=BinaryPrimitives.ReadUInt16LittleEndian(b.AsSpan(f+2));Require((pa&~31)==(pb&~31),"native texture depth/blend controls");int xmin=new[]{0,4,8,10}.Min(j=>a[f+j]),xmax=new[]{0,4,8,10}.Max(j=>a[f+j]),ymin=new[]{0,4,8,10}.Min(j=>a[f+j+1]),ymax=new[]{0,4,8,10}.Max(j=>a[f+j+1]);for(int y=ymin;y<=ymax;y++)for(int x=xmin;x<=xmax;x++)Require(Color(donor.Vram(),pa,ca,x,y)==Color(written.Vram(),pb,cb,x+du,y+dv),"native indexed texel/CLUT color");
+   }
+   for(int j=0;j<a.Length;j++)if(!mask[j])Require(a[j]==b[j],"unmodified source animation/frame/model byte");
+  }
+ }
+ static ushort Color(Span<byte> v,int page,int clut,int x,int y){int depth=(page>>7)&3;int row=((page&16)!=0?256:0)+y;int baseByte=row*1024+(page&15)*128-1024;int index;if(depth==2)return BinaryPrimitives.ReadUInt16LittleEndian(v.Slice(baseByte+x*2));if(depth==1)index=v[baseByte+x];else{byte packed=v[baseByte+x/2];index=(packed>>((x&1)*4))&15;}int pal=(clut>>6)*1024+(clut&63)*32-1024+index*2;return BinaryPrimitives.ReadUInt16LittleEndian(v.Slice(pal));}
+}

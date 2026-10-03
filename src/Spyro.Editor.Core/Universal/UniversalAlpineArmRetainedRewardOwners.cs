@@ -18,12 +18,11 @@ internal static class UniversalAlpineArmRetainedRewardOwners
         UniversalLevelData originalHost,UniversalOverlay originalHostOverlay,UniversalLevelData writtenHost,
         byte[] originalExe,byte[] writtenExe,byte[] originalSharedEntry8,byte[] writtenSharedEntry8,
         byte[] writtenOverlay,IReadOnlyDictionary<int,int> map,uint baseAddress,byte[] writtenCode,
-        IReadOnlyDictionary<string,uint> labels,IReadOnlyList<int>? sourceRows=null)
+        IReadOnlyDictionary<string,uint> labels,IReadOnlyList<int>? sourceRows=null,string hostKey="blowhard",IReadOnlyList<int>? physicalRows=null)
     {
         UniversalAlpineArmResources.ProveSource(source,sourceOverlay);
         UniversalAlpineArmNative.RequireNative(originalExe);
-        Hash(originalHost.Bytes,UniversalAlpineArmArenaStorage.HostHash,"original Blowhard data");
-        Hash(originalHostOverlay.Bytes,HostOverlayHash,"original Blowhard callbacks");
+        if(hostKey=="artisans")UniversalAlpineArtisansHost.RequireOriginal(originalHost,originalHostOverlay,originalExe,UniversalAlpineArtisansHost.RemovedRows);else {if(hostKey!="blowhard")throw new InvalidDataException("Unowned Alpine retained host");Hash(originalHost.Bytes,UniversalAlpineArmArenaStorage.HostHash,"original Blowhard data");Hash(originalHostOverlay.Bytes,HostOverlayHash,"original Blowhard callbacks");}
         Hash(originalSharedEntry8,SharedHash,"original shared reward/digit resources");
         if(!originalSharedEntry8.AsSpan().SequenceEqual(writtenSharedEntry8))
             throw new InvalidDataException("Alpine native reward/digit resources must retain original shared entry8.");
@@ -36,12 +35,14 @@ internal static class UniversalAlpineArmRetainedRewardOwners
             throw new InvalidDataException("Alpine cohort requires three distinct unused physical classes.");
         int[] allocated=sourceRows?.ToArray()??[0,1];
         var members=UniversalAlpineArmResources.Members(allocated.Length>0?allocated[0]:-1);
-        if(!allocated.Order().SequenceEqual(members)||writtenHost.Scene().RowCount!=87+members.Length)
+        if(!allocated.Order().SequenceEqual(members)||writtenHost.Scene().RowCount!=(hostKey=="artisans"?174:87+members.Length))
             throw new InvalidDataException("Alpine retained owner requires one complete original cohort allocation.");
+        if(hostKey=="artisans"&&(!allocated.Order().SequenceEqual(new[]{0,1})||physicalRows==null||!physicalRows.SequenceEqual(new[]{0,1})))
+            throw new InvalidDataException("Artisans source group allocation changed");
         for(int ordinal=0;ordinal<allocated.Length;ordinal++)
         {
             int sourceRow=allocated[ordinal];
-            var row=writtenHost.Row(87+ordinal);var originalRow=source.Row(sourceRow);
+            var row=writtenHost.Row(physicalRows?[ordinal]??87+ordinal);var originalRow=source.Row(sourceRow);
             if(row[58]!=originalRow[58]||row[83]!=originalRow[83]||row[72]!=originalRow[72]||
                 row[73]!=originalRow[73]||row[70]!=originalRow[70]||row[74]!=255||
                 BinaryPrimitives.ReadUInt16LittleEndian(row.AsSpan(54))!=map[BinaryPrimitives.ReadUInt16LittleEndian(originalRow.AsSpan(54))])
@@ -49,8 +50,8 @@ internal static class UniversalAlpineArmRetainedRewardOwners
         }
         foreach(var (cls,hash) in LocalModels)
         {
-            var original=originalHost.Package(cls);Hash(original,hash,$"native reward class{cls:X3}");
-            if(!original.AsSpan().SequenceEqual(writtenHost.Package(cls)))
+            var original=originalHost.Package(cls);if(hostKey=="blowhard")Hash(original,hash,$"native reward class{cls:X3}");var actual=writtenHost.Package(cls);int common=Math.Min(original.Length,actual.Length);
+            if(!original.AsSpan(0,common).SequenceEqual(actual.AsSpan(0,common))||original.AsSpan(common).IndexOfAnyExcept((byte)0)>=0||actual.AsSpan(common).IndexOfAnyExcept((byte)0)>=0)
                 throw new InvalidDataException($"Alpine fallback requires retained native model class{cls:X3}.");
         }
         var originalSounds=new NativeLevelSoundLayout(originalHost.Bytes).Sound;
@@ -80,7 +81,7 @@ internal static class UniversalAlpineArmRetainedRewardOwners
         if(writtenOverlay.Length<prefix||!originalHostOverlay.Bytes[..prefix].SequenceEqual(writtenOverlay.AsSpan(0,prefix)))
             throw new InvalidDataException("Alpine retained reward constructors/updaters and tables changed.");
         UniversalAlpineArmQuarantine.RequireWritten(source,sourceOverlay,originalHostOverlay,originalExe,map,
-            baseAddress,writtenCode,labels);
+            baseAddress,writtenCode,labels,hostKey=="artisans"?UniversalAlpineArtisansHost.CacheBytes:1024);
         int codeOffset=checked((int)(baseAddress-UniversalOverlay.Base));
         if(writtenOverlay.Length<codeOffset+writtenCode.Length||!writtenOverlay.AsSpan(codeOffset,writtenCode.Length).SequenceEqual(writtenCode))
             throw new InvalidDataException("Alpine derived callback code is not the emitted overlay region.");

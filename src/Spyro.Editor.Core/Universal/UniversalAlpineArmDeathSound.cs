@@ -10,8 +10,9 @@ internal static class UniversalAlpineArmDeathSound
     internal static void Require(UniversalLevelData source,UniversalOverlay overlay,byte[] exe,UniversalLevelData originalHost,UniversalLevelData written)
     {
         UniversalAlpineArmResources.ProveSource(source,overlay);UniversalAlpineArmNative.RequireNative(exe);
-        if(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(originalHost.Bytes))!=UniversalAlpineArmArenaStorage.HostHash)
-            throw new InvalidDataException("Alpine common death sound requires its intact original Blowhard resource owner.");
+        string hash=Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(originalHost.Bytes));
+        if(hash!=UniversalAlpineArmArenaStorage.HostHash&&hash!=UniversalAlpineArtisansHost.DataHash)
+            throw new InvalidDataException("Alpine common death sound requires its authenticated original Blowhard or Artisans resource owner.");
         var a=new NativeLevelSoundLayout(source.Bytes).Sound;var b=new NativeLevelSoundLayout(originalHost.Bytes).Sound;var c=new NativeLevelSoundLayout(written.Bytes).Sound;
         var da=a.Descriptors[a.Map[Selector]];var db=b.Descriptors[b.Map[Selector]];var dc=c.Descriptors[c.Map[Selector]];
         if(a.Map[Selector]!=22||b.Map[Selector]!=22||c.Map[Selector]!=b.Map[Selector]||

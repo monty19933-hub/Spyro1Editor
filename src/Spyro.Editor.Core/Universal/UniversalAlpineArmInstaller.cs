@@ -17,8 +17,9 @@ internal static class UniversalAlpineArmInstaller
         byte[] originalExe,Func<string,(LevelDefinition Level,UniversalLevelData Data,UniversalOverlay Overlay)> get,
         IReadOnlySet<int> shared,IEnumerable<(long Offset,int Length)> protectedVram,
         IReadOnlyList<UniversalMobyPlacement> ledger,IReadOnlyCollection<int>? removed,
-        Func<NativePlayerAnimationSource>? animations,byte[]? sharedEntry,int? nativePrefix,int padding)
+        Func<NativePlayerAnimationSource>? animations,byte[]? sharedEntry,int? nativePrefix,int padding,Func<IReadOnlySet<int>,IEnumerable<(long Offset,int Length)>>? protectedAfterDrop=null,bool removedTreasureAlreadyApplied=false)
     {
+        if(level.Key=="artisans")return UniversalAlpineArtisansInstaller.Compose(level,hostBytes,hostOverlayBytes,originalExe,get,shared,protectedVram,ledger,removed,animations,sharedEntry,nativePrefix,padding,protectedAfterDrop,removedTreasureAlreadyApplied);
         Require(level.Key=="blowhard","this group currently needs the original Blowhard level.");
         Require(removed is not {Count:>0}&&padding==0&&nativePrefix is null or 87,
             "keep Blowhard's original objects and terrain; edited or cleared hosts are not supported for this group yet.");

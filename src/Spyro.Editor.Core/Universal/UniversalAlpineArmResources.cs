@@ -65,7 +65,7 @@ internal static class UniversalAlpineArmResources
     internal static UniversalRowTemplate Rebase(UniversalLevelData data,UniversalOverlay overlay,UniversalRowTemplate raw,UniversalMobyPlacement placement)
     {
         var t=CaptureSource(data,overlay,raw);Require(placement.SourceLevelKey==t.SourceLevelKey&&placement.SourceRowIndex==t.SourceRowIndex&&
-            (placement.Yaw==null||placement.Yaw==t.Row[70])&&placement.RowByteOverrides==null&&placement.SpecialId==null&&placement.Text==null&&placement.DragonColor==null,
+            (placement.Yaw==null||placement.Yaw==t.Row[70])&&(placement.RowByteOverrides==null||placement.RowByteOverrides.All(f=>f.Key is 0x50 or 0x51&&f.Value==t.Row[f.Key]))&&placement.SpecialId==null&&placement.Text==null&&placement.DragonColor==null,
             "only authored common translation with native yaw is proved");
         long[] delta=[(long)placement.X-I(t.Row,12),(long)placement.Y-I(t.Row,16),(long)placement.Z-I(t.Row,20)];
         var props=t.Properties.ToArray();int path=t.ClassId==0xFD?64:80,count=props[path];

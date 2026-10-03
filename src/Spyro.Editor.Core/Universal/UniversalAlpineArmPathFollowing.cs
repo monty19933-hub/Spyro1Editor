@@ -30,10 +30,10 @@ internal static class UniversalAlpineArmPathFollowing
         Require(H(packet) == "87bf3554f489b3b84623027b279df666cc11c7d0b022f5dfc9fe3fde4c6c1f43" && f.SHA256 == H(packet), "whole native path packet changed");
         return f;
     }
-    internal static UniversalAsmPart Build()
+    internal static UniversalAsmPart Build(int cacheBytes=1024)
     {
-        var f = Load(); UniversalAsmPart part = new();
-        part.Label(WrapperLabel); part.Items.AddRange(Wrapper());
+        Require(cacheBytes is 1024 or 1192,"cache profile has no source owner"); var f = Load(); UniversalAsmPart part = new();
+        part.Label(WrapperLabel); part.Items.AddRange(Wrapper(cacheBytes));
         part.Label(EntryLabel);
         for (int i = 0; i < f.Words.Count; i++)
         {
@@ -52,10 +52,10 @@ internal static class UniversalAlpineArmPathFollowing
             }
             part.Emit(word, fix);
         }
-        part.Label(ShadowLabel); for (int i = 0; i < CacheBytes / 4; i++) part.Emit(0);
+        part.Label(ShadowLabel); for (int i = 0; i < cacheBytes / 4; i++) part.Emit(0);
         return part;
     }
-    private static IReadOnlyList<UniversalAsmItem> Wrapper()
+    private static IReadOnlyList<UniversalAsmItem> Wrapper(int cacheBytes)
     {
         List<UniversalAsmItem> a = [];
         void Emit(uint word, UniversalFix fix = default) => a.Add(new(word,fix,null,null));
@@ -72,7 +72,7 @@ internal static class UniversalAlpineArmPathFollowing
             Emit(I(9,8,8,UniversalMips.Lo(UniversalAlpineArmWorldCalls.Cache)));
             Emit(I(15,0,9,0),new(UniversalFixKind.LabelAddrHi,Label:ShadowLabel));
             Emit(I(9,9,9,0),new(UniversalFixKind.LabelAddrLo,Label:ShadowLabel));
-            Emit(I(9,0,10,CacheBytes/4));int start=a.Count;
+            Emit(I(9,0,10,cacheBytes/4));int start=a.Count;
             Emit(I(35,save?8:9,11,0)); Emit(I(9,save?8:9,save?8:9,4));
             Emit(I(43,save?9:8,11,0)); Emit(I(9,save?9:8,save?9:8,4));
             Emit(I(9,10,10,-1)); Emit(I(5,10,0,start-a.Count-1)); Emit(0);

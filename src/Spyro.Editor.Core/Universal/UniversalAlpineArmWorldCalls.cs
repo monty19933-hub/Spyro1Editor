@@ -28,9 +28,9 @@ internal static class UniversalAlpineArmWorldCalls
         Require(key=="darkhollow"&&H(data.Bytes)=="a937aecb3626ffd2311ba136684a34c9f36877054b52557b4524fcacee0e2d97"&&H(overlay.Bytes.ToArray())=="9920aa47b94005166f457b5b36df6dedd1f2400f91698bac21cdb01d8590ef32", "this private cache profile requires intact original Dark Hollow geometry, objects and assets");
     }
     internal static (UniversalAsmPart Update,IReadOnlyList<UniversalAsmPart> Constructors,UniversalAsmPart World) Build(
-        UniversalLevelData data,UniversalOverlay source,byte[] exe,IReadOnlyDictionary<int,int> map)
+        UniversalLevelData data,UniversalOverlay source,byte[] exe,IReadOnlyDictionary<int,int> map,int cacheBytes=1024)
     {
-        var cohort=UniversalAlpineArmNative.BuildCohort(data,source,exe,map);
+        Require(cacheBytes is 1024 or 1192,"cache profile has no authenticated capacity owner"); var cohort=UniversalAlpineArmNative.BuildCohort(data,source,exe,map);
         // Full native/source hashes and complete class closures bind every actual
         // predecessor, argument, delay slot, cross-class producer and table. The
         // actual copied call inventory is then independently derived and checked.
@@ -48,12 +48,12 @@ internal static class UniversalAlpineArmWorldCalls
         UniversalAlpineArmBoneBoundary.Bind(cohort.Update,source);
         UniversalAsmPart world=new();
         foreach(uint target in new uint[]{0x80039398,0x80039688,0x80039910})
-        { world.Label(Wrapper(target));world.Items.AddRange(MovementWrapper(target)); }
-        var path=UniversalAlpineArmPathFollowing.Build();
+        { world.Label(Wrapper(target));world.Items.AddRange(MovementWrapper(target,cacheBytes)); }
+        var path=UniversalAlpineArmPathFollowing.Build(cacheBytes);
         world.Items.AddRange(path.Items);world.Items.AddRange(UniversalAlpineArmBoneBoundary.Build().Items);world.Items.AddRange(UniversalAlpineArmMovementBoundary.Build().Items);
         return(cohort.Update,cohort.Constructors,world);
     }
-    private static IReadOnlyList<UniversalAsmItem> MovementWrapper(uint target)
+    private static IReadOnlyList<UniversalAsmItem> MovementWrapper(uint target,int cacheBytes)
     {
         List<UniversalAsmItem> a=[]; const int frame=64;
         void E(uint w,UniversalFix fix=default)=>a.Add(new(w,fix,null,null));
@@ -66,7 +66,7 @@ internal static class UniversalAlpineArmWorldCalls
             E(I(15,0,8,UniversalMips.Hi(Cache)));E(I(9,8,8,UniversalMips.Lo(Cache)));
             E(I(15,0,9,0),new(UniversalFixKind.LabelAddrHi,Label:UniversalAlpineArmPathFollowing.ShadowLabel));
             E(I(9,9,9,0),new(UniversalFixKind.LabelAddrLo,Label:UniversalAlpineArmPathFollowing.ShadowLabel));
-            E(I(9,0,10,CacheBytes/4));int start=a.Count;
+            E(I(9,0,10,cacheBytes/4));int start=a.Count;
             E(I(35,save?8:9,11,0));E(I(9,save?8:9,save?8:9,4));E(I(43,save?9:8,11,0));E(I(9,save?9:8,save?9:8,4));
             E(I(9,10,10,-1));E(I(5,10,0,start-a.Count-1));E(0);
         }
@@ -75,16 +75,16 @@ internal static class UniversalAlpineArmWorldCalls
         Require(a.Count==58,"complete two-stack-argument wrapper extent changed");return a;
     }
     internal static void RequireCopied(UniversalLevelData data,UniversalOverlay source,byte[] exe,IReadOnlyDictionary<int,int> map,
-        UniversalAsmPart update,IReadOnlyList<UniversalAsmPart> constructors,UniversalAsmPart world)
+        UniversalAsmPart update,IReadOnlyList<UniversalAsmPart> constructors,UniversalAsmPart world,int cacheBytes=1024)
     {
-        var expected=Build(data,source,exe,map);
+        var expected=Build(data,source,exe,map,cacheBytes);
         bool Same(UniversalAsmPart a,UniversalAsmPart b)=>a.LenientTables==b.LenientTables&&a.Items.SequenceEqual(b.Items)&&a.Tables.Count==b.Tables.Count&&b.Tables.All(t=>a.Tables.TryGetValue(t.Key,out var targets)&&t.Value.SequenceEqual(targets));
         Require(Same(update,expected.Update)&&Same(world,expected.World)&&constructors.Count==expected.Constructors.Count&&constructors.Where((p,i)=>!Same(p,expected.Constructors[i])).Any()==false,"complete copied source/argument/native/grid/cache/path/table/label/incoming ownership changed");
     }
     internal static void RequireWritten(UniversalLevelData data,UniversalOverlay source,byte[] exe,IReadOnlyDictionary<int,int> map,
-        byte[] code,IReadOnlyDictionary<string,uint> labels,uint codeBase)
+        byte[] code,IReadOnlyDictionary<string,uint> labels,uint codeBase,int cacheBytes=1024)
     {
-        var expected=Build(data,source,exe,map);
+        var expected=Build(data,source,exe,map,cacheBytes);
         var (bytes,derived)=UniversalBehaviorBundleBuilder.Assemble(new[]{expected.Update}.Concat(expected.Constructors).Append(expected.World).ToList(),codeBase);
         Require(codeBase>=UniversalOverlay.Base&&(ulong)codeBase+(uint)bytes.Length<=0x80200000,"whole private owned fragment allocation leaves PS1 RAM");
         Require(code.AsSpan().SequenceEqual(bytes)&&labels.Count==derived.Count&&derived.All(p=>labels.TryGetValue(p.Key,out uint at)&&at==p.Value),"independently derived final native/source/cache/path/branch/constructor regions changed");

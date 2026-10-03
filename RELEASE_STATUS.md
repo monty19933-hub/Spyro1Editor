@@ -1,3 +1,15 @@
+# Follow-up: complete Alpine group in Artisans
+
+The original Alpine0/1 group now fits Artisans through ordinary saved deletion
+and export after an explicit46-row removal profile, reclaiming198,656 model
+bytes. This profile includes the balloon and balloonist; export warns that
+balloon travel is unavailable. It never removes objects automatically. Root
+structural/asset/save/export checks and affected regressions pass, the App
+builds cleanly, and the rebuilt candidate matches independently. Native gameplay
+remains pending. [Evidence](docs/research/universal-alpine-artisans-20261003.md).
+
+---
+
 # Follow-up: Green Druid and original moving terrain
 
 The complete original Alpine5/48 group now exports into empty authored Peace
