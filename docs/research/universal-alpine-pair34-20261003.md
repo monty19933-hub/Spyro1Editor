@@ -45,5 +45,29 @@ changes only initial XYZ41300/84500/16824, heading50 and the two exact native
 New Game level immediates for Blowhard34. All other extracted bytes remain
 identical, with ordinary export retained separately. Its SHA256 is
 `beddd9194a647ffd5e0c3b89a5d47f141542fcf9d317889b818f640301293e99`.
-Native gameplay is in progress; attacks, rewards, persistence and audio are not
-yet accepted for this pair. Unsupported hosts and mixed cohorts remain open.
+That first shortened arrival failed the native fly-in and repeated on respawn;
+its closed failure receipt is preserved. It is not a playable start.
+
+The corrected lower-field diagnostic `runtime/alpine-pair34-native-r2` uses
+XYZ37000/86500/14424 heading207, retaining identical actor/world data. BIN SHA256
+`6752c5449559aa5c854509be94dc1035084fefaaf63c07a34776c94df98e26ee`.
+Its native full-firmware run now verifies:
+
+- Linked activation: FD87 state10, caster88 state16 landing on FD; subsequent
+  native states7/17 also observed after respawn.
+- Flame defeats FD, blue5 spawns/collects. Caster jumps away in18, follows the
+  retained path in100, returns to2 and reacts in4. Native flame defeats caster;
+  green2 spawns/collects. Both imported logical87/88 collection bits become true.
+- Native original wizard rows3/5 (class283, blue5 each) were also defeated and
+  collected. Total17 therefore equals imported7 plus original10, independently
+  checked from the complete read-only native collection bitmap.
+- Native inventory shows17/407 and0/1 dragons. Normal fall/respawn reduces lives
+  3→2, retains17 and both durable bits, clears checkpoint bits and restores
+  the linked actors with rewardFF. No duplicate reward quantity is granted.
+- Seven native screenshots, full read-only RAM/register captures and closed log
+  are retained in the run receipt. No invalid-memory/panic lines. Private card
+  remains byte-identical; no save states or live RAM writes were used.
+
+Exact imported damage attribution/dynamic arm attack, memory-card save/coldload,
+original-start traversal, audio, other hosts and mixed cohorts remain pending.
+This closes the observed link/reward/respawn checks, not universal coverage.

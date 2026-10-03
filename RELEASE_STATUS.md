@@ -30,8 +30,11 @@ export/readback pass839 checks; native selector5 instruction replay38 and runner
 checks pass. Existing Alpine, Artisans rescue and Green Druid regressions pass;
 the Release App builds with zero warnings/errors. Remaining unproved Alpine
 groups now refuse instead of exporting unresolved native actor references.
-Fresh native gameplay of3/4 is in progress. This does not finish universal
-coverage or issue a V1.0 package. [Evidence](docs/research/universal-alpine-pair34-20261003.md).
+Fresh full-firmware gameplay now confirms both linked actors, flame defeat,
+blue5/green2 collection and durable identities after normal death/respawn. Native
+inventory17/407 includes the imported7 and original10 collected along the route.
+Card save/load, arm attacks and other hosts remain open. This does not finish
+universal coverage or issue a V1.0 package. [Evidence](docs/research/universal-alpine-pair34-20261003.md).
 
 ---
 
