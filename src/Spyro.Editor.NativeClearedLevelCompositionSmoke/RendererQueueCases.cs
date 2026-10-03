@@ -23,12 +23,12 @@ internal static class RendererQueueCases
             check(doc.Fingerprint()==before,"renderer admission preserves document");
             return accepted;
         }
-        check(Accepted(Document(0,63)),"63 textured triangles fit both terminated queues");
-        check(!Accepted(Document(0,64)),"64 textured triangles refuse close-HQ terminator overflow");
+        check(Accepted(Document(0,125)),"125 shared triangles fit one sector header and terminated HQ queue");
+        check(!Accepted(Document(0,126)),"126 textured triangles refuse batched HQ terminator overflow");
         check(Accepted(Document(127,0)),"127 direct triangles fit terminated sector queue");
-        check(!Accepted(Document(128,0)),"128 direct triangles refuse HP terminator overflow");
+        check(Accepted(Document(128,0)),"128 direct triangles batch into bounded sector queues");
         check(Accepted(Document(64,63)),"mixed maximum respects both independent native queues");
-        check(!Accepted(Document(65,63)),"mixed scene refuses combined sector overflow");
+        check(Accepted(Document(65,63)),"mixed scene safely batches shared direct and textured vertices");
         check(!Accepted(Document(0,242)),"failed 121 textured quads refuse before native export");
         check(Accepted(Document(0,50)),"bounded 25-quad runtime fixture admitted");
 

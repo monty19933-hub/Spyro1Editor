@@ -31,30 +31,36 @@ internal static class NativeAuthoredMesh
             // render and collision consume the same exact generated lattice.
             if(triangle.Material==255) AppendUntexturedLattice(nativeTriangles,triangle);
             else nativeTriangles.Add(triangle);
-            if(nativeTriangles.Count>255)throw new InvalidDataException("The native visibility list supports at most255 generated triangles; reduce authored geometry.");
+            if(nativeTriangles.Count>255)throw new InvalidDataException("Authored geometry exceeds the bounded 255 generated collision-triangle allocation; reduce geometry.");
         }
         triangles=nativeTriangles;
-        if (triangles.Count is < 1 or > 255) throw new InvalidDataException("The native visibility list supports at most 255 authored triangles.");
-        // This grammar emits one sector per triangle and puts every sector in
-        // one visibility group. Native 800259BC/8002679C reserves only 0x200
-        // bytes for the HP sector queue before the close-HQ queue begins.
-        // Each textured triangle can append a sector header and a face word to
-        // close-HQ (800272E0..80027300). Include each queue's zero terminator.
-        // Do not rely on the current camera to hide a structurally unsafe mesh.
-        if (triangles.Count > 127 || triangles.Count(t=>t.Material!=255) > 63)
-            throw new InvalidDataException("Authored terrain exceeds the native renderer queues: this all-visible mesh supports at most 127 generated triangles, including at most 63 textured triangles. Reduce terrain before export; larger scenes require spatial visibility partitioning.");
-        int n = triangles.Count;
-        const int span = 116;
-        byte[] environment = new byte[8+n*(4+span)]; W(environment,0,(uint)environment.Length); W(environment,4,(uint)n);
-        for (int i=0;i<n;i++)
+        if (triangles.Count is < 1 or > 255) throw new InvalidDataException("Authored geometry requires 1 to 255 generated collision triangles.");
+        foreach(var t in triangles)
         {
-            int at=8+n*4+i*span; W(environment,8+i*4,(uint)(at-4));
-            EncodeSector(environment.AsSpan(at,span),triangles[i],i+1);
+            var a=new Vector3f(t.B.X-t.A.X,t.B.Y-t.A.Y,t.B.Z-t.A.Z);var b=new Vector3f(t.C.X-t.A.X,t.C.Y-t.A.Y,t.C.Z-t.A.Z);
+            if(a.Y*b.Z-a.Z*b.Y==0&&a.Z*b.X-a.X*b.Z==0&&a.X*b.Y-a.Y*b.X==0)
+                throw new InvalidDataException("An authored triangle has zero area.");
         }
-        int list=(n+4)&~3, skyAt=16+list;
-        byte[] visibility=new byte[skyAt+12]; W(visibility,0,(uint)visibility.Length);W(visibility,4,(uint)(skyAt-4));W(visibility,8,1);W(visibility,12,12);
-        visibility.AsSpan(16,list).Fill(255);for(int i=0;i<n;i++)visibility[16+i]=(byte)i;
-        W(visibility,skyAt,1);W(visibility,skyAt+4,8);visibility.AsSpan(skyAt+8,4).Fill(255);
+        // Legacy direct-only geometry has one sector per lattice triangle.
+        // Textured or mixed geometry proves its actual batched queue cost below.
+        int n = triangles.Count;
+        byte[] environment,visibility;
+        if(triangles.Any(t=>t.Material!=255)||triangles.Count>127)
+            (environment,visibility)=NativeAuthoredMeshRenderer.Compile(document,materials,triangles.Where(t=>t.Material==255).ToArray());
+        else
+        {
+            const int span = 116;
+            environment = new byte[8+n*(4+span)]; W(environment,0,(uint)environment.Length); W(environment,4,(uint)n);
+            for (int i=0;i<n;i++)
+            {
+                int at=8+n*4+i*span; W(environment,8+i*4,(uint)(at-4));
+                EncodeSector(environment.AsSpan(at,span),triangles[i],i+1);
+            }
+            int list=(n+4)&~3, skyAt=16+list;
+            visibility=new byte[skyAt+12]; W(visibility,0,(uint)visibility.Length);W(visibility,4,(uint)(skyAt-4));W(visibility,8,1);W(visibility,12,12);
+            visibility.AsSpan(16,list).Fill(255);for(int i=0;i<n;i++)visibility[16+i]=(byte)i;
+            W(visibility,skyAt,1);W(visibility,skyAt+4,8);visibility.AsSpan(skyAt+8,4).Fill(255);
+        }
         byte[] special=new byte[8];W(special,0,8);
         Dictionary<NativeCollisionCell,List<int>> cells=[];
         for(int i=n-1;i>=0;i--)

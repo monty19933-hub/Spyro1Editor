@@ -106,8 +106,9 @@ internal static class SubdivisionCases
         }
         check(sampled,"independently decoded native collision plane queries source slope at560/560");
         var textured=seed with{Surfaces=[Quad(200) with{Material=new(10,0)}]};byte[] tex=Compile(textured);
-        check(Word(tex,4)==2,"textured source material retains original triangle count");
-        check(Enumerable.Range(0,2).All(i=>{int s=4+Word(tex,8+4*i);return Word(tex,s+104)==0&&Word(tex,s+108)==0;}),"genuine textured descriptor enables original native near clipping");
+        check(Word(tex,4)==1,"planar textured quad emits one batched native sector");
+        int ts=4+Word(tex,8),tf=ts+28+4*tex[ts+23]+4*tex[ts+20]+8*tex[ts+21];
+        check(tex[ts+22]==1&&Word(tex,tf+8)==0&&Word(tex,tf+12)==0,"genuine textured quad descriptor enables native near clipping");
         void Refuse(SceneDocument doc,string name)
         {
             string before=doc.Fingerprint();bool refused=false;try{_=Compile(doc);}catch(TargetInvocationException e)when(e.InnerException is InvalidDataException){refused=true;}

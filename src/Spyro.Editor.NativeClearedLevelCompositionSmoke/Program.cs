@@ -59,6 +59,7 @@ Supported(seed with {Spawn=new(560.249f,560,576),Surfaces=[Rectangle(538,528,620
 MeshFaceCacheCases.Run(Check);
 SubdivisionCases.Run(Check);
 RendererQueueCases.Run(Check);
+NativeBatchCases.Run(Check);
 await StarterFloorCases.Run(Check);
 await SourceAliasCases.Run(Check);
 

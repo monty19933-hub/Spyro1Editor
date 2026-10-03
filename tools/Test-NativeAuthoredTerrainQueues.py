@@ -18,7 +18,9 @@ with source.open('rb') as f:
     exe=b''.join(sector(owner[0]+i) for i in range(owner[1]//2048))
 spans={0x80025BA4:'0000E5AD0400EF21',0x800261A4:'0000E0AD',
        0x800272D4:'02002B330400601D02003937825819000000ABAF0400BD23F0FF2B22024909002058690102006B350000ABAF0400BD2304000B20DD9A0008FFFFCBA2',
-       0x8002768C:'0000A0AF',0x800267F0:'0300313326C831030800218F'}
+       0x8002768C:'0000A0AF',0x800267F0:'0300313326C831030800218F',
+       0x80026B78:'820D0E0082130E0082190E0080200E0010002E8EFC032130FC034230FC036330FC0384307201641010003122',
+       0x80026398:'C24D0D00F801293142540D00F8014A31C25A0D00F8016B3142610D00F8018C3185006C1120483D01'}
 code={}
 for pc,hexdata in spans.items():
     blob=bytes.fromhex(hexdata)
@@ -48,11 +50,23 @@ for count,allowed in [(50,True),(127,True),(128,False),(242,False)]:
         require('Unmapped fixture write' in str(e),'Only strict owner overflow is expected');refused=True
     require(refused!=allowed,f'HP queue admitted boundary {count}');checks+=1
     cases.append(dict(queue='HPsectors',sectors=count,strictOwnerOverflow=refused,instructions=cpu.instructions))
+# Execute actual native LP/HP face-index consumers. The quad packet strip
+# swaps the HP perimeter corners 2/3; LP stores that same strip explicitly.
+for kind in ('quad','triangle'):
+    hp=(0<<24|1<<16|2<<8|3) if kind=='quad' else (2<<24|1<<16)
+    lp=(1<<20|3<<14|2<<8) if kind=='quad' else (1<<20|2<<14|2<<8)
+    cpu=Scalar(code);cpu.map(0x80090000,32);cpu.r[17]=0x80090000;cpu.r[14]=hp
+    target=cpu.run(0x80026B78,{0x80026BA4,0x80027168},maximum=20)
+    expected=[0,4,8,12] if kind=='quad' else [8,4,0,0]
+    require([cpu.r[i] for i in (1,2,3,4)]==expected and target==(0x80026BA4 if kind=='quad' else 0x80027168),'Exact HP corner masks and triangle discrimination');checks+=1
+    cpu=Scalar(code);cpu.r[13]=lp;cpu.r[29]=0x1F800000
+    target=cpu.run(0x80026398,{0x800263C0,0x800265D0},maximum=20)
+    require(cpu.r[10]==8 and cpu.r[11:13]==([24,16] if kind=='quad' else [16,16]) and target==(0x800263C0 if kind=='quad' else 0x800265D0),'Exact LP corner masks and triangle discrimination');checks+=1
 # Reproduce the first observed bad read after a compact HQ header replaces an
 # HP sector pointer. Pipeline semantics complete ANDI then XOR before the LW.
 cpu=Scalar(code);cpu.r[25]=0x20023862
 try:cpu.run(0x800267F0,{0x80026800},maximum=4);raise AssertionError('Invalid header pointer accepted')
 except AssertionError as e:require('Unmapped native read 20023868+4' in str(e),'Exact first observed invalid read');checks+=1
 report.parent.mkdir(parents=True,exist_ok=True)
-report.write_text(json.dumps(dict(sourceSha256=hashlib.sha256(source.read_bytes()).hexdigest(),executableSha256=hashlib.sha256(exe).hexdigest(),checks=checks,cases=cases,nativeInstructionSpans=5,firstObservedReadReproduced='0x20023868',scalarOnly=True,runtimeVerified=False),indent=2)+'\n')
+report.write_text(json.dumps(dict(sourceSha256=hashlib.sha256(source.read_bytes()).hexdigest(),executableSha256=hashlib.sha256(exe).hexdigest(),checks=checks,cases=cases,nativeInstructionSpans=7,firstObservedReadReproduced='0x20023868',scalarOnly=True,runtimeVerified=False),indent=2)+'\n')
 print(f'NATIVE_AUTHORED_TERRAIN_QUEUES_SCALAR_OK checks={checks} cases={len(cases)} firstBadRead=20023868')
