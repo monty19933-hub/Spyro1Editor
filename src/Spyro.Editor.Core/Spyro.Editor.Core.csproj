@@ -99,5 +99,6 @@
   <ItemGroup><InternalsVisibleTo Include="Spyro.Editor.GreenDruidWorldSmoke" /></ItemGroup>
   <ItemGroup><InternalsVisibleTo Include="Spyro.Editor.AlpineArtisansSmoke" /><InternalsVisibleTo Include="Spyro.Editor.AlpineArtisansExportSmoke" /></ItemGroup>
   <ItemGroup><InternalsVisibleTo Include="Spyro.Editor.GreenDruidSecondWorldSmoke" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="Spyro.Editor.GreenDruidRampWorldSmoke" /></ItemGroup>
   <ItemGroup><InternalsVisibleTo Include="Spyro.Editor.GreenDruidNoTargetWorldSmoke" /></ItemGroup>
 </Project>

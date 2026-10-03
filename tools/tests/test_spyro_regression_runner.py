@@ -81,6 +81,24 @@ class OwnedCommandTests(unittest.TestCase):
         self.assertIn("if(Directory.Exists(dir))throw", program)
         self.assertIn(marker, program)
 
+    def test_green_ramp_world_source_suite_registration_uses_current_core(self):
+        name = "GreenDruidRampWorldSmoke"
+        marker = "GREEN_DRUID_RAMP_GROUP_SAVED_REOPENED_ORDINARY_EXPORT_READBACK_OK"
+        self.assertIn((name, marker, []), RUNNER.SOURCE_QA_CASES)
+        self.assertIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        self.assertIn(name, RUNNER.SOURCE_QA_REPORT_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertFalse(any(c[0] == name for c in RUNNER.CORE_CASES))
+        self.assertFalse(any(c[0] == name for c in RUNNER.ADDITIONAL_CORE_CASES))
+        project = RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
+        text = project.read_text()
+        self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"', text)
+        self.assertNotIn("HintPath", text, "source smoke must compile the current Core")
+        program = (project.parent / "Program.cs").read_text()
+        self.assertIn("if(args.Length!=3)", program)
+        self.assertIn("if(Directory.Exists(dir))throw", program)
+        self.assertIn(marker, program)
+
     def test_alpine_chooser_source_suite_registration(self):
         name="AlpineArtisansChooserSmoke"
         self.assertIn((name,"ALPINE_ARTISANS_CHOOSER_SOURCE_OK",[]),RUNNER.SOURCE_QA_CASES)
@@ -649,6 +667,72 @@ class RunnerOptionsTests(unittest.TestCase):
             failed = command[:2] == ["dotnet", "build"] and name in command[2]
             return subprocess.CompletedProcess(command, 9 if failed else 0)
         with tempfile.TemporaryDirectory(prefix="spyro-green-second-build-failure-") as output:
+            with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "SOURCE_QA_CASES", ((name, marker, []),)), \
+                    mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                    mock.patch.object(RUNNER, "configured_source_image") as source, \
+                    mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                    mock.patch.object(sys, "argv", [str(SPEC.origin), "--with-source-qa"]), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(1, RUNNER.main())
+                source.assert_not_called()
+            summary = json.loads((Path(output) / "summary.json").read_text())
+        self.assertFalse(any(c[:2] == ["dotnet", "run"] for c in calls))
+        self.assertTrue(any(name in r["name"] and not r["passed"] for r in summary))
+
+    def test_green_ramp_world_source_dispatch_new_directory_and_marker_failure(self):
+        name = "GreenDruidRampWorldSmoke"
+        marker = "GREEN_DRUID_RAMP_GROUP_SAVED_REOPENED_ORDINARY_EXPORT_READBACK_OK"
+        for emit_marker in (True, False):
+            calls = []
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                kwargs["stdout"].write("Offline QA passed.\n")
+                if command[:2] == ["dotnet", "run"]:
+                    arguments = command[command.index("--") + 1:]
+                    self.assertEqual(3, len(arguments), "real smoke accepts exactly three arguments")
+                    self.assertFalse(Path(arguments[2]).exists(), "report directory must be NEW")
+                    Path(arguments[2]).mkdir()
+                    if emit_marker:
+                        kwargs["stdout"].write(marker + " 9246 fixture-sha\n")
+                return subprocess.CompletedProcess(command, 0)
+            with self.subTest(emit_marker=emit_marker), tempfile.TemporaryDirectory(prefix="spyro-green-ramp-runner-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "SOURCE_QA_CASES", ((name, marker, []),)), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", return_value="/selected original.bin") as source, \
+                        mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("unneeded CUE")), \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin), "--with-source-qa", "--configuration", "Debug"]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0 if emit_marker else 1, RUNNER.main())
+                    source.assert_called_once_with()
+                runs = [c for c in calls if c[:2] == ["dotnet", "run"]]
+                self.assertEqual(1, len(runs))
+                self.assertEqual(["/selected original.bin", str(RUNNER.ROOT), str(Path(output) / name)], runs[0][runs[0].index("--") + 1:])
+                self.assertIn("--no-build", runs[0]); self.assertIn("--no-restore", runs[0])
+                builds = [c for c in calls if c[:2] == ["dotnet", "build"] and name in c[2]]
+                self.assertEqual(1, len(builds), "current Core project reference must build once before dispatch")
+                self.assertLess(calls.index(builds[0]), calls.index(runs[0]))
+                self.assertEqual("Debug", builds[0][builds[0].index("--configuration") + 1])
+                self.assertEqual("Debug", runs[0][runs[0].index("--configuration") + 1])
+                summary = json.loads((Path(output) / "summary.json").read_text())
+                self.assertEqual(emit_marker, summary[-1]["passed"])
+                self.assertEqual("source-" + name, summary[-1]["name"])
+                if not emit_marker:
+                    self.assertEqual("missing success marker", summary[-1]["detail"])
+
+    def test_green_ramp_world_failed_current_build_never_runs_stale_smoke(self):
+        name = "GreenDruidRampWorldSmoke"
+        marker = "GREEN_DRUID_RAMP_GROUP_SAVED_REOPENED_ORDINARY_EXPORT_READBACK_OK"
+        calls = []
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            failed = command[:2] == ["dotnet", "build"] and name in command[2]
+            return subprocess.CompletedProcess(command, 9 if failed else 0)
+        with tempfile.TemporaryDirectory(prefix="spyro-green-ramp-build-failure-") as output:
             with mock.patch.object(RUNNER, "CORE_CASES", ()), \
                     mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
                     mock.patch.object(RUNNER, "SOURCE_QA_CASES", ((name, marker, []),)), \

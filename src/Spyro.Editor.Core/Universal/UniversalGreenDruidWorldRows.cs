@@ -5,7 +5,7 @@ namespace Spyro.Editor.Core.Universal;
 internal static class UniversalGreenDruidWorldRows
 {
  // Keep the legacy first-profile contract; production dispatch uses all issued rows.
- internal static readonly int[] Members=[5,48];internal static readonly int[] EnrolledMembers=[5,48,15,137,16,17];internal static readonly int[] Classes=[0x10E,0x148];
+ internal static readonly int[] Members=[5,48];internal static readonly int[] EnrolledMembers=[5,48,15,137,16,17,18,49];internal static readonly int[] Classes=[0x10E,0x148];
  internal static bool OwnsCopiedActor(string key,UniversalOverlay overlay,IReadOnlyList<int> classes)
  {
   if(!classes.Contains(0x10E))return false;
@@ -30,7 +30,7 @@ internal static class UniversalGreenDruidWorldRows
  }
  internal static void RequireNativeRemoval(string key,UniversalLevelData current,UniversalLevelData original,UniversalOverlay overlay,IReadOnlySet<int> removed)
  {
-  if(key!="alpineridge"||removed.Count==0)return;RequireSource(original,overlay);foreach(int druid in new[]{5,15,16,17}){var members=GreenDruidWorldSourceProfile.ForDruid(druid).Members;if(members.Any(removed.Contains))Require(members.All(removed.Contains),"remove the complete actor/terrain-target pair together");foreach(int row in members.Where(r=>!removed.Contains(r))){var before=original.CaptureRow(key,row);var now=current.CaptureRow(key,row);Require(now.ClassId==before.ClassId&&now.Properties.Length==before.Properties.Length&&(row!=druid||now.Properties.AsSpan(4,12).SequenceEqual(before.Properties.AsSpan(4,12))),"remaining actor cannot hide/retarget its group or target before slot reuse");}}
+  if(key!="alpineridge"||removed.Count==0)return;RequireSource(original,overlay);foreach(int druid in new[]{5,15,16,17,18}){var members=GreenDruidWorldSourceProfile.ForDruid(druid).Members;if(members.Any(removed.Contains))Require(members.All(removed.Contains),"remove the complete actor/terrain-target pair together");foreach(int row in members.Where(r=>!removed.Contains(r))){var before=original.CaptureRow(key,row);var now=current.CaptureRow(key,row);Require(now.ClassId==before.ClassId&&now.Properties.Length==before.Properties.Length&&(row!=druid||now.Properties.AsSpan(4,12).SequenceEqual(before.Properties.AsSpan(4,12))),"remaining actor cannot hide/retarget its group or target before slot reuse");}}
 
  }
 }

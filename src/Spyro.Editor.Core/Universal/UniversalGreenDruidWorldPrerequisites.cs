@@ -5,7 +5,7 @@ using Spyro.Editor.Core.Analysis;
 
 namespace Spyro.Editor.Core.Universal;
 
-/// <summary>Inert original group0 resource certificate. This does not admit placement,
+/// <summary>Inert exact original source-profile resource certificate. This does not admit placement,
 /// install a particle handler, or authorize an original-world-bank guard exception.</summary>
 public sealed class UniversalGreenDruidWorldPrerequisites
 {
@@ -68,7 +68,7 @@ public sealed class UniversalGreenDruidWorldPrerequisites
         Require(overlay.Update==0x8007BB00&&overlay.Init==0x8008A36C&&overlay.CopyBuffer==0x8008DEC0&&overlay.Bindings[UniversalExeBindings.ParticleSpawnGlobal].Value==0x8008C9D8&&overlay.Bindings[UniversalExeBindings.ParticleUpdateGlobal].Value==0x8008AF54,"source callback identities");
         for(int n=0;n<ActorRows.Length;n++)Require(source.CaptureRow(sourceKey,ActorRows[n]).ClassId==ActorClasses[n],"source actor class");
         var d=source.CaptureRow(sourceKey,profile.DruidRow);var scenery=profile.HasTarget?source.CaptureRow(sourceKey,profile.TargetRow):null;
-        Require(d.Properties.Length==148&&I(d.Properties,4)==profile.Group&&I(d.Properties,8)==profile.TargetRow&&I(d.Properties,12)==-1&&I(d.Properties,16)==1&&d.InternalPointers.SequenceEqual(new[]{(0,92)})&&d.Properties[92]==3&&d.ExternalRowPointers.Count==0&&d.DroppedExternalPointers==0,"issued druid group/target/mode1 and complete three-node path");
+        Require(d.Properties.Length==profile.PropertiesBytes&&I(d.Properties,4)==profile.Group&&I(d.Properties,8)==profile.TargetRow&&I(d.Properties,12)==-1&&I(d.Properties,16)==1&&d.InternalPointers.SequenceEqual(new[]{(0,92)})&&d.Properties[92]==profile.PathNodes&&d.ExternalRowPointers.Count==0&&d.DroppedExternalPointers==0,"issued druid group/target/mode1 and complete counted path");
         if(profile.HasTarget)Require(scenery!.Properties.Length==4&&I(scenery.Properties,0)==-1,"issued target initial native cache");
         var banks=Animations(source);List<byte[]> records=[];List<int> roles=[];
         for(int role=0;role<7;role++)
@@ -88,16 +88,20 @@ public sealed class UniversalGreenDruidWorldPrerequisites
         Require(U(records.Where((_,i)=>roles[i]==4).Single(),4)==(uint)((profile.CollisionFirst<<16)|profile.CollisionCount),"complete authenticated animated triangle interval");
         var world=World(source);byte[] env=world[1];int sectorCount=I(env,4);byte[][] sectors=SectorIds.Select(id=>{Require(id>=0&&id<sectorCount,"authenticated source sector ordinal");int at=4+I(env,8+id*4),end=id+1<sectorCount?4+I(env,8+(id+1)*4):env.Length;Require(at>=8+sectorCount*4&&end>=at&&end<=env.Length,"complete source sector extent");return env.AsSpan(at,end-at).ToArray();}).ToArray();
         for(int n=0;n<SectorIds.Length;n++)foreach(int role in new[]{2,3})
-        {byte[] record=records.Where((_,i)=>roles[i]==role).Single(r=>(U(r,4)&65535)==SectorIds[n]);Require((U(record,4)>>16)==profile.AnimatedVertices*4&&sectors[n][role==2?20:16]==profile.Vertices,"exact authenticated animated vertex extent in the complete native tier");}
+        {byte[] record=records.Where((_,i)=>roles[i]==role).Single(r=>(U(r,4)&65535)==SectorIds[n]);Require((U(record,4)>>16)==profile.AnimatedVertices*4&&sectors[n][role==2?20:16]==(role==2?profile.Vertices:profile.LowVertices),"exact authenticated animated vertex extent in the complete native tier");}
         var used=sectors.SelectMany(s=>Enumerable.Range(0,s[22]).Select(n=>(int)(U(s,28+4*s[23]+4*s[20]+8*s[21]+16*n+8)&127))).Distinct().Order().ToArray();Require(used.SequenceEqual(MaterialIds),"all authored native material owners");
         int countMaterials=I(world[0],4);foreach(int id in MaterialIds){byte[] material=[..world[0].AsSpan(8+id*16,16),..world[0].AsSpan(8+countMaterials*16+id*168,168)];_=GreenDruidWorldMaterialStorage.Describe(material);}
         byte[] collision=world[4];int flag=4+I(collision,28);Require(collision.AsSpan(flag+profile.CollisionFirst,profile.CollisionCount).IndexOfAnyExcept((byte)63)<0,"all animated collision surface flags");
         int tri=4+I(collision,20),assignment=4+I(collision,24),flagsCount=I(collision,8);Require(StaticCollisionIds.All(id=>id>=flagsCount&&id<I(collision,4)),"fixed faces retain native defaultFF surface flags");
-        Require(StaticCollisionIds.All(id=>collision[assignment+id] is 16 or 255),"fixed collision has only source occlusion16 or unrestricted context");
+        Require(StaticCollisionIds.All(id=>collision[assignment+id]==255 || collision[assignment+id]==(profile.DruidRow==18?10:16)),"fixed collision has only its authenticated source occlusion or unrestricted context");
         var sector=sectors.Single();int vertex=28+4*sector[23],face=vertex+4*sector[20]+8*sector[21];int[] origin=[(int)(U(sector,8)>>16),(int)(U(sector,8)&65535),(int)(U(sector,12)>>16)];
         int[][] points=Enumerable.Range(0,profile.Vertices).Select(n=>{uint w=U(sector,vertex+n*4);return new[]{origin[0]+(int)(w>>21),origin[1]+(int)((w>>10)&2047),origin[2]+(int)(w&1023)};}).ToArray();HashSet<int> matched=[];
+        if(profile.DruidRow==18)GreenDruidRampCollisionOwnership.Require(sector,records.Where((_,i)=>roles[i]==2).Single(),records.Where((_,i)=>roles[i]==4).Single(),collision,StaticCollisionIds);
+        else
+        {
         for(int f=profile.FixedFaceStart;f<profile.Faces;f++){int[] ids=sector.AsSpan(face+f*16,4).ToArray().Select(b=>(int)b).ToArray();Require(ids.All(i=>i>=profile.AnimatedVertices&&i<profile.Vertices),"all fixed native face vertices retained");var found=StaticCollisionIds.Where(id=>GreenDruidAnimatedCollisionStorage.Points(collision.AsSpan(tri+id*12,12).ToArray(),0).All(p=>ids.Any(i=>p.SequenceEqual(points[i])))).ToArray();Require(found.Length==2,"two exact original collision triangles own each fixed quad");matched.UnionWith(found);}
         Require(matched.SetEquals(StaticCollisionIds),"all fixed collision owners correspond to issued source faces");
+        }
         return new(source,overlay,records.ToArray(),roles.ToArray(),sectors,profile);
     }
     /// <summary>Enrolls only original ordinals, never destination rows. Still inert.</summary>
@@ -134,7 +138,7 @@ public sealed class UniversalGreenDruidWorldPrerequisites
         foreach(int row in ActorRows)
         {
             var t=Enroll(row);byte[] rr=t.Row.ToArray(),props=t.Properties.ToArray();for(int a=0;a<3;a++){int v=checked(I(rr,12+a*4)+deltaRaw[a]);Require(v is >=0 and <262144,"translated actor bounds");W(rr,12+a*4,v);}
-            if(row==_profile.DruidRow){int head=92;for(int node=0;node<3;node++)for(int a=0;a<3;a++){int at=head+8+node*16+a*4;int v=checked(I(props,at)+deltaRaw[a]);Require(v is >=0 and <262144,"translated complete native path bounds");W(props,at,v);}}
+            if(row==_profile.DruidRow){int head=92;for(int node=0;node<_profile.PathNodes;node++)for(int a=0;a<3;a++){int at=head+8+node*16+a*4;int v=checked(I(props,at)+deltaRaw[a]);Require(v is >=0 and <262144,"translated complete native path bounds");W(props,at,v);}}
             actors.Add(new(row,rr,t with{Properties=props}));
         }
         return new(deltaRaw.ToArray(),actors.ToArray(),sectors,records,_animationRoles.ToArray());

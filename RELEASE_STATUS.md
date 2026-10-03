@@ -1,3 +1,9 @@
+# Follow-up: original Green Druid ramp group
+
+Alpine18/49 now exports its complete original group2 ramp, both geometry and collision keyframes, four-node path and linked target into an authored cleared Peace Keepers level. Root export/readback9254, native frame2155, effect1162, route30 and runner131 checks pass; the Release App builds cleanly. The ordinary native run confirms spell emission, collapsed-ramp contact and controller-driven target movement. Moving collision/carry, combat, rewards and wider universal coverage remain under verification. [Evidence](docs/research/universal-green-druid-ramp-world-20261003.md).
+
+---
+
 # Fixed: native replacement resources in fresh and cleared levels
 
 Fresh and cleared exports now preserve the complete original0E/0F/10 replacement
