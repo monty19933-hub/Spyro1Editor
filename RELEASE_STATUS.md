@@ -1,6 +1,6 @@
 # Follow-up: original temporary Superflame fairy
 
-The original Haunted fairy82 now composes with wizard21/armor1 in intact Dark Hollow, retaining its full path, kiss effects, temporary power, sounds and complete powered-flame texture page. Root source3909, complete assets648584, native instruction499757, cleared6048 and treasure2613 checks pass; Release App builds cleanly. Native fairy power and powered armor defeat are next. [Evidence](docs/research/universal-haunted-darkhollow-superflame-20261003.md).
+The original Haunted fairy82 now composes with wizard21/armor1 in intact Dark Hollow, retaining its full path, kiss effects, temporary power, sounds and complete powered-flame texture page. Root source3909, complete assets648584, native instruction499757, cleared6048 and treasure2613 checks pass; Release App builds cleanly. The fresh native arrival diagnostic now confirms the fairy kiss/power grant, rendered powered flame, all six armor fragments, yellow10 and green2 pickups, durable live bits and inventory12/112 with zero invalid reads. Card persistence, repeat defeat and other destinations remain open. [Evidence](docs/research/universal-haunted-darkhollow-superflame-20261003.md).
 
 ---
 
