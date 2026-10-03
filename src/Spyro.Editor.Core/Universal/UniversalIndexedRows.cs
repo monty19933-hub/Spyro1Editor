@@ -24,6 +24,7 @@ public static class UniversalIndexedRows
         template = UniversalHauntedWizardPlacement.Capture(data, overlay, template);
         var rescue = UniversalLoftyWhirlwindGroups.Capture(data, overlay, template);
         template = rescue.Template with { SourcePrerequisiteRows = rescue.Prerequisites };
+        template = UniversalDarkPassageLanternGroups.Capture(data,overlay,template);
         if (template.ClassId == 0x12C) return UniversalWhirlwindIndexedRows.Capture(data, overlay, template);
         template = UniversalMagicPairCertificate.IsPair(template) ? UniversalMagicPairCertificate.CaptureSource(data,overlay,template) : UniversalMagicCraftersDruidIndexedRows.Capture(data, overlay, template);
         if (!string.Equals(template.SourceLevelKey, "gnorccove", StringComparison.OrdinalIgnoreCase) || !IsGnorcIndexedClass(template.ClassId))
@@ -98,6 +99,7 @@ public static class UniversalIndexedRows
     public static void RequireNativeRemoval(string destinationKey, UniversalLevelData destination,
         UniversalLevelData original, UniversalOverlay originalOverlay, IReadOnlySet<int> removed)
     {
+        UniversalDarkPassageLanternGroups.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalDarkPassageShapeshifterOwnership.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalBeastMistyBoarPlacement.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalHauntedWizardPlacement.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
@@ -139,6 +141,7 @@ public static class UniversalIndexedRows
     public static UniversalRowTemplate Resolve(UniversalRowTemplate template, IReadOnlyList<UniversalRowTemplate> activeTemplates)
     {
         if(UniversalMagicPairCertificate.IsPair(template))UniversalMagicPairCertificate.RequirePrerequisites(template,activeTemplates);
+        else if(string.Equals(template.SourceLevelKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&template.ClassId==0x7A)UniversalDarkPassageLanternGroups.RequirePrerequisites(template,activeTemplates);
         else UniversalLoftyWhirlwindGroups.RequirePrerequisites(template, template.SourcePrerequisiteRows, activeTemplates);
         List<UniversalImportedRowIndex> resolved = [];
         foreach (var link in template.SourceRowIndices)
@@ -162,6 +165,7 @@ public static class UniversalIndexedRows
         UniversalRowAllocation allocation, Span<byte> properties)
     {
         if(UniversalMagicPairCertificate.IsPair(template))UniversalMagicPairCertificate.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
+        else if(string.Equals(template.SourceLevelKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&template.ClassId==0x7A)UniversalDarkPassageLanternGroups.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
         else UniversalLoftyWhirlwindGroups.RequirePrerequisites(template, template.SourcePrerequisiteRows, rows.Select(r => r.Template).ToArray());
         if (template.ImportedRowIndices.Count != template.SourceRowIndices.Count ||
             template.SourceRowIndices.Select(p => p.Offset).Distinct().Count() != template.SourceRowIndices.Count ||

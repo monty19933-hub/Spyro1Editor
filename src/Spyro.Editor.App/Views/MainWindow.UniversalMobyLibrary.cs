@@ -685,6 +685,11 @@ public sealed partial class MainWindow
                 return;
             }
             var ram = dry.Result!.Ram;
+            const string lanternNote = "Lights the lantern and changes linked creatures; terrain lighting is unchanged.";
+            if (dry.Result.Warnings.Contains(lanternNote) && trial.Skip(existing.Count).Any(p =>
+                    p.SpecialId == null && string.Equals(p.SourceLevelKey, "darkpassage", StringComparison.OrdinalIgnoreCase) &&
+                    BitConverter.ToUInt16(lib.Get(p.SourceLevelKey).Data.Row(p.SourceRowIndex), 0x36) == 0x7A))
+                details.Text += "\n" + lanternNote;
             fit.Text = e.Native ? $"✓ Already part of {destination.DisplayName} — ready to place." : $"✓ Fits in {destination.DisplayName} — ready to place." +
                 (dry.Result.Classes.Count(c => c.DependencyOnly) is int deps and > 0 ? $" It brings {deps} small helper object(s) it needs along with it." : "");
             if (dry.Result.ParticleDependencies.Any(p => p.Status == "dependency-unverified"))

@@ -63,7 +63,7 @@ public static class UniversalBehaviorBundleBuilder
         UniversalOverlay? nativeDestinationOwner = null, IReadOnlyList<int>? highValueGemClasses = null,
         IReadOnlyDictionary<string, UniversalWhirlwindSoundBinding>? whirlwindSounds = null,
         IReadOnlyDictionary<string, UniversalDryCanyonBirdCertificate>? dryCanyonBirdBranches = null,
-        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null,IReadOnlyList<UniversalOwnedParticleCertificate>? ownedParticles = null, UniversalMagicPairCertificate? magicPair = null)
+        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null,IReadOnlyList<UniversalOwnedParticleCertificate>? ownedParticles = null, UniversalMagicPairCertificate? magicPair = null,IReadOnlyDictionary<string,UniversalDarkPassageLanternContext>? darkLanternContexts = null,IReadOnlyDictionary<string,UniversalDarkPassageProjectileParticleCertificate>? darkProjectileParticles = null)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
         int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
@@ -143,6 +143,7 @@ public static class UniversalBehaviorBundleBuilder
             if(!UniversalHauntedWizardParticles.HasNativeOwner(destination) &&
                 !(ownedParticles?.Any(c=>c.SourceLevelKey==source.SourceKey && c.TypeIds.SequenceEqual(new[]{29}))??false))
                 throw new InvalidDataException("This wizard needs its native resurrection effect before it can be placed in this level.");
+        foreach(var source in sources)UniversalDarkPassageProjectileParticles.RequireBundle(source.SourceKey,source.Source,source.Classes,destination,nativeExecutable??[],darkProjectileParticles,ownedParticles);
         Dictionary<string,UniversalOwnedParticleParts> ownedParticleParts=new(StringComparer.OrdinalIgnoreCase);
         if(ownedParticles is {Count:>0})
         {
@@ -175,6 +176,9 @@ public static class UniversalBehaviorBundleBuilder
                 (dryCanyonBirdBranches == null || !dryCanyonBirdBranches.TryGetValue(s.SourceKey, out birdProof)))
                 throw new InvalidDataException("Copied Dry Canyon B8 behavior requires its issued state/frame branch proof.");
             var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey, map, birdProof, s.SourceKey=="magiccrafters"?magicPair:null);
+            if(string.Equals(s.SourceKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&s.Classes.Contains(0x7A)&&darkLanternContexts!=null&&darkLanternContexts.TryGetValue(s.SourceKey,out var lanternDestinationContext))lanternDestinationContext.RequireDestination(destination,nativeExecutable??[]);
+            UniversalDarkPassageLanternGroups.RequireCopied(upd,s.SourceKey,s.Source,s.Classes,map,darkLanternContexts);
+            if(string.Equals(s.SourceKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&s.Classes.Contains(0x9B)&&darkProjectileParticles?.ContainsKey(s.SourceKey)==true)UniversalDarkPassageProjectileParticles.RequireCopiedCalls(upd,s.Source);
             var darkDogTransitionSites = UniversalDarkPassageShapeshifterOwnership.Patch(upd,s.SourceKey,s.Source,s.Classes,map,nativeExecutable??[]);
             UniversalBeastMistyBoarPlacement.RequireCopiedInputs(upd,s.SourceKey,s.Source,s.Classes,map,nativeExecutable??[]);
             var boarClassSites = map.Any(k=>k.Key!=k.Value)
@@ -214,6 +218,7 @@ public static class UniversalBehaviorBundleBuilder
                 try { (init, initBytes, jt2) = BuildSpecializedInit(s.Source, Remaps(s.SourceKey) ? [c] : s.Classes, initTag); }
                 catch (InvalidDataException) when (Mapped(s.SourceKey, c) == c && !map.Any(k => k.Key != k.Value))
                 { (init, initBytes, jt2) = BuildWholeFunction(s.Source, s.Source.Init, initTag); }
+                if(string.Equals(s.SourceKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&s.Classes.Contains(0x7A)&&darkLanternContexts!=null&&darkLanternContexts.TryGetValue(s.SourceKey,out var lanternInitContext))lanternInitContext.RequireCopiedInit(init,s.Source,Remaps(s.SourceKey)?[c]:s.Classes);
                 UniversalClassRemapping.PatchInitClassStore(init, s.Source, c, Mapped(s.SourceKey, c));
                 if (Remaps(s.SourceKey))
                 {

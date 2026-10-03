@@ -202,10 +202,14 @@ public static class UniversalMobyComposer
         var flightChest = UniversalFlightChestOwnership.Capture(destination.Key,dest,destOverlay,originalDestination.Data,originalDestination.Overlay,placements,permanentlyRemoved,source,exe);
         var flightChests = new Dictionary<string,UniversalFlightChestCertificate>(StringComparer.OrdinalIgnoreCase);
         if(flightChest!=null)flightChests[flightChest.SourceKey]=flightChest;
+        var darkLanternContexts=new Dictionary<string,UniversalDarkPassageLanternContext>(StringComparer.OrdinalIgnoreCase);
+        if(placements.Any(p=>p.SpecialId==null&&!p.Retired&&string.Equals(p.SourceLevelKey,"darkpassage",StringComparison.OrdinalIgnoreCase)))
+        { var lanternSource=source("darkpassage");var context=UniversalDarkPassageLanternGroups.Issue(destination.Key,dest,destOverlay,lanternSource.Data,lanternSource.Overlay,placements,exe);if(context!=null) { darkLanternContexts.Add("darkpassage",context);warnings.Add(context.BehaviorNote); } }
         bool originalDestinationAssets = (flightChest != null || flightGate != null || destinationData.AsSpan().SequenceEqual(originalDestination.Data.Bytes)) &&
             destinationOverlay.AsSpan().SequenceEqual(originalDestination.Overlay.Bytes);
         bool EquivalentDestination(int c, string sk, out string reason)
         {
+            if(c==0x7A&&darkLanternContexts.TryGetValue(sk,out var lanternContext)&&!lanternContext.UsesSourceTerrainLighting) { reason="Imported lantern actor lighting owns a separate source namespace.";return false; }
             if (originalDestinationAssets)
                 return EquivalentSources(c, destination.Key, sk, out reason);
             var donor = source(sk);
@@ -219,6 +223,7 @@ public static class UniversalMobyComposer
         }
         Queue<(int Class, string Source, bool Dependency)> work = new();
         List<UniversalRowTemplate> templates = [];
+        HashSet<(int SourceRow,string? Group)> darkRetainedNativeDogTargets=[];
         Dictionary<(string Source, int Type), UniversalParticleDependency> particleDependencies = [];
         UniversalTerraceLineParticleCertificate? nativeLine77=null;
         Dictionary<(string Source, int Type), UniversalFlightChestParticleProof> flightParticleProofs = [];
@@ -241,6 +246,14 @@ public static class UniversalMobyComposer
             }
             var s = source(p.SourceLevelKey);
             var t = UniversalIndexedRows.Capture(s.Data, s.Overlay, s.Data.CaptureRow(p.SourceLevelKey, p.SourceRowIndex));
+            if(string.Equals(p.SourceLevelKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&string.Equals(destination.Key,"darkpassage",StringComparison.OrdinalIgnoreCase)&&t.ClassId==0x35&&t.SourceRowIndices.Count==1&&
+                destinationData.AsSpan().SequenceEqual(originalDestination.Data.Bytes)&&destinationOverlay.AsSpan().SequenceEqual(originalDestination.Overlay.Bytes))
+            {
+                var nativeLink=t.SourceRowIndices.Single();
+                bool copiedTarget=placements.Any(a=>a.SpecialId==null&&!a.Retired&&string.Equals(a.SourceLevelKey,p.SourceLevelKey,StringComparison.OrdinalIgnoreCase)&&a.SourceRowIndex==nativeLink.SourceRow&&(a.LinkGroupId??"")==(p.LinkGroupId??""));
+                if(!copiedTarget&&!permanentlyRemoved.Contains(nativeLink.SourceRow))
+                { darkRetainedNativeDogTargets.Add((t.SourceRowIndex,p.LinkGroupId));t=t with{SourceRowIndices=[]}; }
+            }
             if(flightGates.TryGetValue(p.SourceLevelKey,out var gateTemplateProof))t=gateTemplateProof.PrepareTemplate(t);
             if(magicPair!=null&&UniversalMagicPairCertificate.IsPair(t))t=magicPair.Rebase(t,p);
             templates.Add(t with { LinkGroupId = p.LinkGroupId });
@@ -532,7 +545,9 @@ public static class UniversalMobyComposer
                 UniversalCliffMetalTextures.RequireRow(metalModel, r);
             if (t.ClassId == 0xB8 && string.Equals(t.SourceLevelKey, "drycanyon", StringComparison.OrdinalIgnoreCase))
                 UniversalDryCanyonBirdBranches.RequireInitialRow(r);
-            if (UniversalDarkPassageShapeshifterOwnership.Applies(t))
+            if(UniversalDarkPassageLanternGroups.Applies(t)&&!darkRetainedNativeDogTargets.Contains((t.SourceRowIndex,t.LinkGroupId)))
+            { t=darkLanternContexts[t.SourceLevelKey].Prepare(t,r); }
+            else if (UniversalDarkPassageShapeshifterOwnership.Applies(t))
             {
                 var dogSource = source(p.SourceLevelKey);
                 UniversalDarkPassageShapeshifterOwnership.RequirePlacement(destination.Key,dogSource.Data,dogSource.Overlay,t,r,dest);
@@ -559,6 +574,7 @@ public static class UniversalMobyComposer
                 treasure = checked(treasure + UniversalHighValueGems.ValueForClass(t.ClassId));
             rows.Add((r, t));
         }
+        foreach(var context in darkLanternContexts.Values)context.RequireGroups(rows);
         UniversalTreasureAccounting.ApplyDelta(exe, destination.LevelId, treasure);
         int sceneBefore = dest.Subfiles()[3].Length;
         UniversalIndexedRows.RequireNativeRemoval(destination.Key, dest, originalDestination.Data, originalDestination.Overlay, permanentlyRemoved);
@@ -583,6 +599,14 @@ public static class UniversalMobyComposer
             ownedParticles.Add(UniversalHauntedWizardParticles.Capture(donor.Data,donor.Overlay,destOverlay,exe));
             UniversalHauntedWizardParticles.RequireDestinationTexture(donor.Data,dest);
         }
+        Dictionary<string,UniversalDarkPassageProjectileParticleCertificate> darkProjectileParticles=new(StringComparer.OrdinalIgnoreCase);
+        if(destination.Key is "darkhollow" or "peacekeepers" && imports.Any(i=>i.SourceLevelKey=="darkpassage" && i.ClassId==0x9B && i.BehaviorImported))
+        {
+            var donor=source("darkpassage");var certificate=UniversalDarkPassageProjectileParticles.Capture("darkpassage",destination.Key,donor.Data,donor.Overlay,destOverlay,exe);
+            UniversalDarkPassageProjectileParticles.RequireTextures(certificate,donor.Data,dest);darkProjectileParticles.Add("darkpassage",certificate);
+            if(certificate.OwnedDispatcher is {} dispatch)ownedParticles.Add(dispatch);
+            foreach(int type in new[]{1,13})particleDependencies[("darkpassage",type)]=UniversalDarkPassageProjectileParticles.Inspect(certificate,type);
+        }
         // 4. Behavior bundle chained onto the destination's own callbacks.
         List<UniversalBehaviorSourceReport> behavior = [];
         IReadOnlyList<UniversalDestinationGemCall> destinationGemCalls = [];
@@ -592,6 +616,7 @@ public static class UniversalMobyComposer
         IReadOnlyList<UniversalNativeParticleNoOpProof> particleNoOpProofs = [];
         byte[] overlay = destinationOverlay.ToArray();
         uint copyBuffer = destOverlay.CopyBuffer;
+        foreach(var context in darkLanternContexts.Values)context.RequireDestinationData(dest);
         var byBehaviorSource = imports.Where(i => i.BehaviorImported && !specialClasses.ContainsKey(i.DestinationClassId)).GroupBy(i => i.SourceLevelKey)
             .Select(g => (g.Key, source(g.Key).Overlay, (IReadOnlyList<int>)g.Select(i => i.ClassId).Order().ToList())).ToList();
         var eggClasses = specialClasses.Values.Where(a => a.Behavior == UniversalSpecialBehavior.DragonflyEgg).Select(a => a.ClassId).Order().ToList();
@@ -608,7 +633,7 @@ public static class UniversalMobyComposer
             var classMaps = classes.GroupBy(k => k.Key.Source).ToDictionary(g => g.Key,
                 g => (IReadOnlyDictionary<int, int>)g.ToDictionary(k => k.Key.Class, k => k.Value.DestinationClass));
             var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps, remapSaveRows, nativeExecutable: exe,
-                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles,magicPair:magicPair);
+                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles,magicPair:magicPair,darkLanternContexts:darkLanternContexts,darkProjectileParticles:darkProjectileParticles);
             uint newCopy = (uint)((baseAddress + bundle.Code.Length + 15) & ~15);
             int keep = (int)(copyBuffer - UniversalOverlay.Base);
             byte[] ov = new byte[UniversalLevelData.Align((int)(newCopy - UniversalOverlay.Base), 0x800)];
@@ -627,8 +652,9 @@ public static class UniversalMobyComposer
                 UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.ParticleUpdateGlobal], particleUpdate);
                 foreach (var certificate in ownedParticles)
                     foreach (int type in certificate.TypeIds)
-                        particleDependencies[(certificate.SourceLevelKey, type)] = new(certificate.SourceLevelKey, type,
-                            "source-certified-copied", "Uses the authenticated source effect, translated actor links and relocated texture; the destination particle manager runs once.");
+                        particleDependencies[(certificate.SourceLevelKey, type)] = certificate.SourceLevelKey=="darkpassage" && darkProjectileParticles.TryGetValue(certificate.SourceLevelKey,out var projectileEffect)
+                            ? UniversalDarkPassageProjectileParticles.Inspect(projectileEffect,type)
+                            : new(certificate.SourceLevelKey, type,"source-certified-copied", "Uses the authenticated source effect, translated actor links and relocated texture; the destination particle manager runs once.");
             }
             UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.UpdateGlobal], bundle.UpdateWrapper);
             UniversalExeBindings.Patch(exe, bindings[UniversalExeBindings.InitGlobal], bundle.InitWrapper);

@@ -13,15 +13,17 @@ source checks pass 7,453 class-ownership and 7,111 placement checks; the Release
 App builds cleanly. A smaller textured cleared-level example passes native boar
 movement, contact damage, flame defeat and collection of its five-gem reward.
 The original large floor exposed a renderer queue overflow. Batching addresses
-the queue budget, but its native test currently shows invisible terrain and is
-under repair. Both failed exports and evidence are preserved. Universal gameplay
-remains unfinished.
+the queue budget, and corrected quad winding restores visible textures during
+movement. Native testing still shows tile seams and a life lost after a jump
+inside the floor; these are under investigation. Failed exports and evidence
+are preserved. Universal gameplay remains unfinished.
 [Evidence and limits](docs/research/universal-boar-placement-20261002.md).
 
 Dark Passage dogs now bring both transformation models/handlers and their attack
-class. The nine variants without lantern links pass 2,489 ownership checks;
-seven lantern-linked variants remain restricted while their adapter is built.
-Native gameplay and attack particles remain unverified.
+class. Linked lantern groups and the attack-effect adapter are now integrated;
+338 lantern, 189 projectile and 2,489 existing dog checks pass. Imported lanterns
+change linked creatures without changing destination terrain lighting, explained
+in Add Object details. Native gameplay remains unverified.
 [Evidence and limits](docs/research/universal-dark-passage-dogs-20261002.md).
 
 ---

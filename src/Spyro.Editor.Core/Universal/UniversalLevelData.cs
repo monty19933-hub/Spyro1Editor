@@ -23,6 +23,7 @@ public sealed record UniversalRowTemplate(string SourceLevelKey, int SourceRowIn
     public IReadOnlyList<UniversalSourceRowIndex> SourceRowIndices { get; init; } = [];
     public IReadOnlyList<UniversalSourcePrerequisite> SourcePrerequisiteRows { get; init; } = [];
     public IReadOnlyList<UniversalImportedRowIndex> ImportedRowIndices { get; init; } = [];
+    internal UniversalDarkPassageLanternContext? DarkLanternContext {get;init;}
     public int ClassId => BinaryPrimitives.ReadUInt16LittleEndian(Row.AsSpan(0x36));
 }
 
