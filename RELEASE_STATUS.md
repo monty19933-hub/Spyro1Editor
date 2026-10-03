@@ -31,8 +31,9 @@ cleanly. Fresh full-firmware gameplay confirms arm movement/expiry, slam damage,
 flame and charge defeats, five-plus-ten gem rewards and inventory15/415. After a
 native death, both enemies give normal replacement objects and no duplicate gems.
 The second complete24/25/26 group also passes1,425 export checks and fresh native
-arm/phase/flame checks, but its first test pose put a blue reward below terrain;
-a corrected layout and complete16-gem run are pending.
+arm/phase/flame checks. A corrected common placement now confirms visible yellow10
+and blue5 collection, both durable flags, native death/respawn retention and
+inventory15/416. The elevated caster's red1 and complete16-gem run remain pending.
 Card persistence, close arm contact, audio and other hosts remain open.
 [Evidence](docs/research/universal-alpine-arm-groups-20261003.md). Universal gameplay
 and the V1.0 release remain unfinished.

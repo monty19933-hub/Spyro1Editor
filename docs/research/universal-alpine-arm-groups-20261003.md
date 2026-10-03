@@ -36,4 +36,26 @@ Root `alpine-second-root-ordinary-r1`:1425 export/capacity/source/native/shared/
 
 `runtime/alpine-second-native-r1/runtime-proof.json` records a **partial** native run. The selector10 caster emits actual arms with parent88, timer22→12 and position58428/61531/16420→58843/61366/16220, then retires them. Both large druids animate and can be defeated with flame. The first awards a collected yellow10 and immediately advances the caster to selector9/state7, then selector0/state0. The second emits blue5, but the authored home lies under overlapping terrain; its reward falls below the accessible floor. A later failed jump approach causes native death; after respawn both defeated actors have durable bits and suppressed reward bytesFF, global15 and the caster remains uncollected. That interval is not ordinary visible blue pickup evidence.
 
-The original test pose is therefore not a completed playable example. A native floor probe recommends common translation+1700X/−4200Y while preserving all relative coordinates; a corrected ordinary export and fresh gameplay run remain required. Red1 collection/total16, full path traversal, attributed imported damage, postcollection repeat defeats, cards and audio are not accepted for this three-actor group. The closed private card remains unchanged and logs have no invalid-access/panic lines.
+The original test pose is therefore not a completed playable example. Its evidence is retained separately from the corrected run below.
+
+## Corrected three-actor placement
+
+`runtime/alpine-second-native-r2/runtime-proof.json` preserves the full-firmware
+run of candidate `313405a4806118843a7db7ee44c184637d33d1e4305d845b1ca63f8580f44e82`.
+The group uses common translation +1700X/−4200Y from the first test, preserving
+all relative homes and paths. Ordinary export and candidate readbacks pass1,425
+and260 checks respectively. Eighteen native screenshots and41 read-only evidence
+files accompany the closed run; there are no invalid-access/panic lines.
+
+Both large enemies are defeated by flame. The yellow10 and blue5 rewards settle
+on reachable ground and are visibly collected through ordinary movement/jumping.
+Level/global totals progress0→10→15; nearby native chest31/32 flags remain clear.
+The caster advances to selector9/state7 after a linked defeat and returns to0.
+After native deaths, collected durable identities87/89 remain set, both reward
+bytes becomeFF, and the checkpoint bits clear. Native inventory displays15/416.
+The private blank card is unchanged; no save states or runtime writes were used.
+
+The caster's elevated position has not yet passed reachable combat/red1 pickup;
+the attempted jump-charge/flame approach falls from the original terrain. Full16
+collection, full path traversal, separately attributed imported damage, repeated
+postcollection defeats, card persistence and audio remain pending for this group.
