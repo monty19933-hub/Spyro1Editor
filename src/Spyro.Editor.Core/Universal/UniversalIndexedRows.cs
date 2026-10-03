@@ -20,6 +20,7 @@ public static class UniversalIndexedRows
     /// separately writes -1; no placed template is manufactured from that inactive sentinel.</summary>
     public static UniversalRowTemplate Capture(UniversalLevelData data, UniversalOverlay overlay, UniversalRowTemplate template)
     {
+        template = UniversalBeastMistyBoarPlacement.Capture(data,overlay,template);
         template = UniversalHauntedWizardPlacement.Capture(data, overlay, template);
         var rescue = UniversalLoftyWhirlwindGroups.Capture(data, overlay, template);
         template = rescue.Template with { SourcePrerequisiteRows = rescue.Prerequisites };
@@ -97,6 +98,7 @@ public static class UniversalIndexedRows
     public static void RequireNativeRemoval(string destinationKey, UniversalLevelData destination,
         UniversalLevelData original, UniversalOverlay originalOverlay, IReadOnlySet<int> removed)
     {
+        UniversalBeastMistyBoarPlacement.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalHauntedWizardPlacement.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
         UniversalLoftyWhirlwindGroups.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
         UniversalWhirlwindIndexedRows.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);

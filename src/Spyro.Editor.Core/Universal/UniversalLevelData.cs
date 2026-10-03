@@ -19,6 +19,7 @@ public sealed record UniversalRowTemplate(string SourceLevelKey, int SourceRowIn
     public IReadOnlyList<(int Offset, int SourceRow, int RowOffset)> ExternalRowPointers { get; init; } = [];
     public IReadOnlyList<(int Offset, int PlacementIndex, int RowOffset)> ImportedRowPointers { get; init; } = [];
     public string? LinkGroupId { get; init; }
+    public UniversalBoarPlacementCertificate? BoarPlacementCertificate {get;init;}
     public IReadOnlyList<UniversalSourceRowIndex> SourceRowIndices { get; init; } = [];
     public IReadOnlyList<UniversalSourcePrerequisite> SourcePrerequisiteRows { get; init; } = [];
     public IReadOnlyList<UniversalImportedRowIndex> ImportedRowIndices { get; init; } = [];
@@ -324,9 +325,10 @@ public sealed class UniversalLevelData
         var activeTemplates = rows.Select(r => r.Template).ToArray();
         using MemoryStream blob = new();
         List<int> propStarts = [];
+        int nextStart=insert; foreach(var row in rows){propStarts.Add(row.Template.Properties.Length==0?0:nextStart);nextStart=checked(nextStart+Align(row.Template.Properties.Length,4));}
         foreach (var (_, t) in rows)
         {
-            int start = insert + (int)blob.Length; propStarts.Add(t.Properties.Length == 0 ? 0 : start);
+            int start = insert + (int)blob.Length;
             byte[] p = new byte[Align(t.Properties.Length, 4)];
             t.Properties.CopyTo(p, 0);
             foreach (var (off, target) in t.InternalPointers)
@@ -341,6 +343,7 @@ public sealed class UniversalLevelData
                 newFix.Add(start + off);
             }
             UniversalIndexedRows.Apply(t, rows, allocation, p);
+            UniversalBeastMistyBoarPlacement.ApplyChargePointer(t,rows,propStarts,p);
             blob.Write(p);
         }
         List<int> fixups = sc.Fixups.Select(f => f >= insert ? f + total : f).ToList();

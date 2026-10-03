@@ -1,3 +1,16 @@
+# Follow-up: moved boar ownership; native terrain failure under repair
+
+All nine Beast Makers/Misty Bog boar variants now preserve their paths, home
+coordinates, charge state and linked chicken indices after relocation. Integrated
+source checks pass 7,453 class-ownership and 7,111 placement checks; the Release
+App builds cleanly. The native cleared-level example loads and moves the boar,
+but then fails in terrain rendering during movement. The failing export, RAM and
+log are preserved. Runtime acceptance is withheld until the fault is repaired
+and the test repeated. Universal gameplay remains unfinished.
+[Evidence and limits](docs/research/universal-boar-placement-20261002.md).
+
+---
+
 # Follow-up: Haunted Towers resurrection in a cleared level
 
 Moved wizard groups now preserve their paths, trigger rectangles, seven armor

@@ -173,6 +173,10 @@ public static class UniversalBehaviorBundleBuilder
                 (dryCanyonBirdBranches == null || !dryCanyonBirdBranches.TryGetValue(s.SourceKey, out birdProof)))
                 throw new InvalidDataException("Copied Dry Canyon B8 behavior requires its issued state/frame branch proof.");
             var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey, map, birdProof);
+            UniversalBeastMistyBoarPlacement.RequireCopiedInputs(upd,s.SourceKey,s.Source,s.Classes,map,nativeExecutable??[]);
+            var boarClassSites = map.Any(k=>k.Key!=k.Value)
+                ? UniversalBeastMistyBoarClassOwnership.Translate(upd,s.SourceKey,s.Source,s.Classes,map,nativeExecutable??[])
+                : (IReadOnlyList<uint>)[];
             if(s.SourceKey=="terracevillage" && s.Classes.Contains(0x20) && destination.Bindings[UniversalExeBindings.ParticleSpawnGlobal].Value==0x800844A0)
             {
                 UniversalTerraceLineParticle77.Capture(s.SourceKey,"darkhollow",s.Source,destination,nativeExecutable??[]);
@@ -223,7 +227,7 @@ public static class UniversalBehaviorBundleBuilder
                 constructors[c] = init;
             }
             var linkedClassSites = UniversalNativeLinkedActorOwnership.Patch(upd, s.Source, map, constructors)
-                .Concat(Remaps(s.SourceKey) ? UniversalWhirlwindIndexedRows.TranslateOwnedReads(upd, s.Source, map) : []).ToArray();
+                .Concat(Remaps(s.SourceKey) ? UniversalWhirlwindIndexedRows.TranslateOwnedReads(upd, s.Source, map) : []).Concat(boarClassSites).ToArray();
             IReadOnlyList<uint> soundReadSites = [];
             if (s.Classes.Contains(0x12C))
             {

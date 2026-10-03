@@ -533,6 +533,8 @@ public static class UniversalMobyComposer
                 var hauntedSource = source(p.SourceLevelKey);
                 t = UniversalHauntedWizardPlacement.Rebase(hauntedSource.Data, hauntedSource.Overlay, t, r);
             }
+            if(UniversalBeastMistyBoarPlacement.Applies(t))
+            { var boarSource=source(p.SourceLevelKey);t=UniversalBeastMistyBoarPlacement.Rebase(boarSource.Data,boarSource.Overlay,t,r); }
             if (p.SpecialId == null)
             {
                 // Count the actual authored bytes while class still identifies
