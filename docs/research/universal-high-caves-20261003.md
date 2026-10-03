@@ -19,8 +19,25 @@ Evidence root: `/Users/john/Documents/Codex/2026-09-29/files-pasted-by-the-user-
 
 The private delivery retains original and copied R3000 replay evidence: 79,084 original particle checks, 4,312 copied-pool/continuation checks, 828 animation-loader checks and 166 target/constructor/current-model checks. These are instruction tests, not emulator graphics or gameplay acceptance.
 
-## Remaining acceptance
+## Bounded native gameplay, first two-actor group
 
-The candidate uses native New Game 20, a cleared Peace Keepers floor and original wizard 4 / druid 3 with their complete translated path. Native spell rendering, partner feedback, damage/reaction, defeat, collection and persistence still require emulator verification. No all-host or universal gameplay claim is made.
+`runtime/highcaves-linked-native-r1/runtime-proof.json` preserves the closed native run, 26 screenshots, read-only RAM captures and launch/card hashes for the exact `d0c388...` candidate above. Native New Game20 uses full US firmware, a private empty card and no save states or runtime writes.
 
-Rows 5/6 and their moving-world partners remain refused. Their original animated scene bank, collision, visibility, scenery and type-8 particle ownership are separate work. Capacity failures remain real limits and have not been bypassed.
+The wizard's tornado follows the translated native path and reaches its actual druid partner. The captured handoff has child state2, druid state5/flag1 and wizard busy0. Wizard damage/dizzy response is visible; after defeating the wizard, a separate close druid attack reduces health1 to0 and produces Spyro state28 with visible stars. Both actors are defeated using observed Circle flame. Blue5 then yellow10 are collected, actual global/level counters become15, and native inventory displays Peace Keepers Home15/15. The new logical135/136 durable/checkpoint bits are set and both physical rows retireFD.
+
+Early helper captures passed incorrect logical indices0/1. They retain valid row/class/position evidence, but their collection flags are not evidence for imported identities. Captures from `wizard-collected` onward explicitly use physical0/logical135 and physical1/logical136. The close attack's short-lived type5 particle was not independently captured. Postcollection death/duplicate suppression, card save/reload, audio listening, the first three-actor group and other hosts remain unverified. The blank card is unchanged; no invalid-access/panic lines appear. Authored-floor texture seams remain open.
+
+## Complete moving-world group
+
+Ordinary cleared-level composition now supports one complete original High Caves5/6/15/20 group in an empty authored Peace Keepers level. Every root expands the same four linked objects. The installer retains all three animated sectors, eight sampled materials, seven native animation banks, 136 collision triangles across six frames, all cell references, both complete paths and three physical links. Source visibility32 becomes destination unrestrictedFF with an explicit editor warning to move all four linked objects together. No model is fabricated for the native behavior-only scenery member.
+
+Source-bound checks reject incomplete, duplicated, differently moved, retired or modified groups, other destination states, unknown native hooks and insufficient RAM/VRAM/queue capacity. The native type5 and type8 effect paths share one imported dispatcher followed by one original destination update. Final code, callbacks, world/banks/collision/materials/rows and native save-map hooks are checked before export admission. Other moving-world groups and populated/other hosts remain restricted.
+
+Integrated evidence:
+
+- `highcaves-world-integrated-r1`: 1,023 mutation/ownership guards and 1,039 combined checks pass.
+- `highcaves-world-root-regressions-r1`: existing HC particle663, placement4704, reaction497; Magic chain5749, originals5057, pair8753, Artisans2887; fresh binding354; Release App build; runner115 all pass.
+- `highcaves-world-root-candidate-r1`: 365 independent exported readbacks; candidate SHA256 `aab5752623062e13a0b12f56bd6e36c1e242945637d0cfadee20b91f9aa6ae2c`, byte-identical to the private reviewed candidate. Native NewGame20; safe floor plus four approach ramps, actual imported platform without a static authored floor beneath it,807236B RAM headroom.
+- Frozen private `coverage/highcaves-world-installer-r1/delivery-complete-world-r1` retains complete implementation and strict original R3000/GTE replay receipts: native loader1228, conservative final face/cache queue545, actor cache46, merged particles9713, floor-query15. These do not prove GPU rendering or player locomotion.
+
+The moving-world candidate remains pending native scene/controller/collision/standing/jumping/effect/reward verification. No all-host, all-variant or completed universal gameplay claim is made.

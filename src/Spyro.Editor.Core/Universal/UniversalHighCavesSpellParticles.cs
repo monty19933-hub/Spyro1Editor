@@ -85,7 +85,7 @@ public static class UniversalHighCavesSpellParticles
   byte[] bb=new byte[source.Bindings.Count*16];int at=0;foreach(var b in source.Bindings.OrderBy(b=>b.Key))foreach(uint n in new[]{b.Value.Global,b.Value.LuiAddress,b.Value.AddiuAddress,b.Value.Value}){System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(bb.AsSpan(at),n);at+=4;}
   if(source.Bindings.Any(b=>b.Key!=b.Value.Global)||Hash(bb)!="0719106e3771779b366e785551f692c4e998e1aae61ec853aaca13ab3a7908eb"||source.Word(Spawn5.Table+20)!=0x8008B340||source.Word(Update5.Table+20)!=0x80089AF4||source.Word(Spawn5.Table+52)!=Spawn5.Default||source.Word(Update5.Table+52)!=Update5.Default)throw new InvalidDataException("High Caves particle5 callbacks, source leaves or no-op tail changed.");
  }
- internal static void RequireBundle(string key,UniversalOverlay source,IReadOnlyList<int>classes,UniversalOverlay destination,byte[]exe,IReadOnlyDictionary<string,UniversalHighCavesSpellParticleCertificate>?proofs,IReadOnlyList<UniversalOwnedParticleCertificate>?owned)
+ internal static void RequireBundle(string key,UniversalOverlay source,IReadOnlyList<int>classes,UniversalOverlay destination,byte[]exe,IReadOnlyDictionary<string,UniversalHighCavesSpellParticleCertificate>?proofs,IReadOnlyList<UniversalOwnedParticleCertificate>?owned,UniversalHighCavesWorldInstallation?world=null)
  {
   if(!classes.Contains(0x127))return;
   bool sourceOwner=Hash(source.Bytes)==UniversalHighCavesTornadoPlacement.OverlaySha||source.Bindings.TryGetValue(UniversalExeBindings.ParticleSpawnGlobal,out var spawn)&&spawn.Value==Spawn5.Entry;
@@ -94,7 +94,7 @@ public static class UniversalHighCavesSpellParticles
   RequireDestination(proof.DestinationLevelKey,destination,exe);
   if(!source.Bytes.SequenceEqual(proof.Source.Bytes)||source.Bindings.Count!=proof.Source.Bindings.Count||source.Bindings.Any(b=>!proof.Source.Bindings.TryGetValue(b.Key,out var v)||v!=b.Value)||RequiresCopy(destination)!=proof.CopiesEffect)throw new InvalidDataException("High Caves spell particle certificate belongs to another source or host.");
   var copies=owned?.Where(p=>p.TypeIds.Contains(5)).ToArray()??[];
-  if(proof.CopiesEffect?copies.Length!=1||copies[0].SourceLevelKey!="highcaves"||!copies[0].TypeIds.SequenceEqual(new[]{5}):copies.Length!=0)throw new InvalidDataException("High Caves particle5 needs one owned updater, never a duplicate native or copied lifetime pass.");
+  if(proof.CopiesEffect?copies.Length!=1||copies[0].SourceLevelKey!="highcaves"||!(world==null?copies[0].TypeIds.SequenceEqual(new[]{5}):copies[0].TypeIds.SequenceEqual(new[]{5,8})):copies.Length!=0)throw new InvalidDataException("High Caves particle5 needs one owned updater, never a duplicate native or copied lifetime pass.");
  }
  internal static UniversalParticleDependency Inspect(UniversalHighCavesSpellParticleCertificate p)=>new("highcaves",5,p.CopiesEffect?"source-certified-copied":"source-certified-native-equivalent","Original count1/type5/position/NULL call; pooled FT4 quad, RNG drift and48-tick/rendered lifetime, sampled texture0 and full palette; native manager runs once. Native gameplay/visual acceptance remains separate.");
  internal static void RequireTextures(UniversalHighCavesSpellParticleCertificate proof,UniversalLevelData source,UniversalLevelData destination)

@@ -9,7 +9,7 @@ public static class UniversalHighCavesTornadoPlacement
  public const string Key="highcaves";
  internal const string DataSha="5f8f3189f0695e8710f71cc4056fc5dd677758c0cf26fd291953a650a6ada16c";
  internal const string OverlaySha="6c153366d9b3dd6d25a7aa8e8d1ea6708bdf97b04ee35912b11df0f8b9913140";
- public static bool Applies(UniversalRowTemplate t)=>string.Equals(t.SourceLevelKey,Key,StringComparison.OrdinalIgnoreCase)&&(t.ClassId is 0x12D or 0x12E or 0x12F||t.SourceRowIndex is >=0 and <=6 or 15 or 16 or 18 or 19);
+ public static bool Applies(UniversalRowTemplate t)=>!UniversalHighCavesWorldRows.Applies(t)&&string.Equals(t.SourceLevelKey,Key,StringComparison.OrdinalIgnoreCase)&&(t.ClassId is 0x12D or 0x12E or 0x12F||t.SourceRowIndex is >=0 and <=6 or 15 or 16 or 18 or 19);
  private static string Sha(ReadOnlySpan<byte>b)=>Convert.ToHexStringLower(SHA256.HashData(b));
  public static void RequireSource(UniversalLevelData data,UniversalOverlay overlay)
  {
@@ -86,11 +86,11 @@ public static class UniversalHighCavesTornadoPlacement
   if(removed.Count==0||!string.Equals(key,Key,StringComparison.OrdinalIgnoreCase))return;RequireSource(original,overlay);
   for(int i=0;i<original.Scene().RowCount;i++){var t=original.CaptureRow(Key,i);if(!Applies(t)||removed.Contains(i))continue;int offset=t.ClassId==0x12F?16:t.ClassId==0x12D?0:12;int target=I(t.Properties,offset);var now=current.CaptureRow(Key,i);if(now.ClassId!=t.ClassId||now.Properties.Length!=t.Properties.Length||I(now.Properties,offset)!=target)throw new InvalidDataException("A surviving High Caves actor changed or hid its original linked target.");if(target>=0&&removed.Contains(target))throw new InvalidDataException("Remove the referencing High Caves creature together with its required target.");}
  }
- internal static void RequireCopied(UniversalAsmPart part,string key,UniversalOverlay source,IReadOnlyList<int>classes,IReadOnlyDictionary<int,int>map,byte[]exe)
+ internal static void RequireCopied(UniversalAsmPart part,string key,UniversalOverlay source,IReadOnlyList<int>classes,IReadOnlyDictionary<int,int>map,byte[]exe,UniversalHighCavesWorldInstallation? world=null)
  {
   bool family=classes.Any(c=>c is 0x12D or 0x12E or 0x12F or 0x127 or 0x130);
   if(!family)return;bool owner=Sha(source.Bytes)==OverlaySha||source.Update==0x8007B64C&&source.Init==0x8008883C&&source.CopyBuffer==0x8008C73C;
-  if(!string.Equals(key,Key,StringComparison.OrdinalIgnoreCase)){if(owner)throw new InvalidDataException("High Caves behavior was relabeled.");return;}RequireOverlay(source);RequireNative(exe);if(classes.Contains(0x12E))throw new InvalidDataException("Copied High Caves moving terrain has no imported environment animation owner.");
+  if(!string.Equals(key,Key,StringComparison.OrdinalIgnoreCase)){if(owner)throw new InvalidDataException("High Caves behavior was relabeled.");return;}RequireOverlay(source);RequireNative(exe);if(classes.Contains(0x12E)&&world==null)throw new InvalidDataException("Copied High Caves moving terrain has no imported environment animation owner.");
   if(classes.Contains(0x12F)&&(!classes.Contains(0x12D)||!classes.Contains(0x130))||classes.Contains(0x12D)&&(!classes.Contains(0x12F)||!classes.Contains(0x127)||!classes.Contains(0x13E)))throw new InvalidDataException("Copied High Caves group needs both root classes and their complete child dependencies.");
   string tag=part.Items.FirstOrDefault()?.Label??throw new InvalidDataException("Missing High Caves update entry.");var expected=UniversalBehaviorBundleBuilder.BuildPrunedUpdate(source,classes,tag,map).Part;
   if(!part.Items.SequenceEqual(expected.Items)||part.Tables.Count!=expected.Tables.Count||expected.Tables.Any(t=>!part.Tables.TryGetValue(t.Key,out var a)||!a.SequenceEqual(t.Value)))throw new InvalidDataException("High Caves copied target/path producer or consumer flow changed.");

@@ -1,3 +1,18 @@
+# Follow-up: High Caves gameplay and complete moving terrain
+
+The two-actor High Caves example now passes bounded native testing: linked tornado
+handoff, damage/reaction, flame defeats, five-plus-ten gem rewards and inventory
+15/15. Both new collection flags are set. Card persistence, separate spell-particle
+visual confirmation and other hosts/variants remain open.
+
+One complete four-object moving-terrain group now exports into an empty authored
+Peace Keepers level with its original world, animation banks, collision and effects.
+Integrated1,039 checks, affected regressions, runner115 and Release App build pass;
+the independently rebuilt candidate matches exactly. Moving-world native gameplay
+is the next gate. [Evidence](docs/research/universal-high-caves-20261003.md).
+
+---
+
 # Follow-up: Twilight soldiers native gameplay
 
 Two imported Twilight Harbor soldiers in original Dark Hollow now have bounded
@@ -27,8 +42,8 @@ The first two High Caves groups now preserve both directions of creature links,
 complete translated paths, native spell effect 5 and Spyro reaction 28. Integrated
 placement 4,701, particle 663 and animation 497 checks pass, together with affected
 Magic/fresh-level regressions and the Release App build. The rebuilt candidate
-matches the independently verified disc exactly. Native gameplay remains pending;
-the moving-terrain group and genuine capacity failures remain restricted.
+matches the independently verified disc exactly. Subsequent native and moving-world
+evidence is recorded in the newer follow-up above; genuine capacity failures remain restricted.
 [Evidence](docs/research/universal-high-caves-20261003.md).
 
 ---

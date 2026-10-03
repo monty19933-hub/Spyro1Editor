@@ -24,6 +24,7 @@ public static class UniversalIndexedRows
         template = UniversalHauntedWizardPlacement.Capture(data, overlay, template);
         var rescue = UniversalLoftyWhirlwindGroups.Capture(data, overlay, template);
         template = rescue.Template with { SourcePrerequisiteRows = rescue.Prerequisites };
+        template = UniversalHighCavesWorldRows.Capture(data,overlay,template);
         template = UniversalHighCavesTornadoPlacement.Capture(data, overlay, template);
         template = UniversalDarkPassageLanternGroups.Capture(data,overlay,template);
         if (template.ClassId == 0x12C) return UniversalWhirlwindIndexedRows.Capture(data, overlay, template);
@@ -104,6 +105,7 @@ public static class UniversalIndexedRows
         UniversalDarkPassageShapeshifterOwnership.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalBeastMistyBoarPlacement.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalHauntedWizardPlacement.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
+        UniversalHighCavesWorldRows.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalHighCavesTornadoPlacement.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
         UniversalLoftyWhirlwindGroups.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
         UniversalWhirlwindIndexedRows.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
@@ -142,7 +144,8 @@ public static class UniversalIndexedRows
     /// integer is never an owner. Missing, retired and repeated copies are refused.</summary>
     public static UniversalRowTemplate Resolve(UniversalRowTemplate template, IReadOnlyList<UniversalRowTemplate> activeTemplates)
     {
-        if(UniversalHighCavesTornadoPlacement.Applies(template))UniversalHighCavesTornadoPlacement.RequirePrerequisites(template,activeTemplates);
+        if(UniversalHighCavesWorldRows.Applies(template))UniversalHighCavesWorldRows.RequirePrerequisites(template,activeTemplates);
+        else if(UniversalHighCavesTornadoPlacement.Applies(template))UniversalHighCavesTornadoPlacement.RequirePrerequisites(template,activeTemplates);
         else if(UniversalMagicDruidOriginalRows.IsSecondPair(template))UniversalMagicDruidOriginalRows.RequirePair(template,activeTemplates);
         else if(UniversalMagicDruidChainResources.IsChain(template))UniversalMagicDruidChainResources.RequireGroup(template,activeTemplates);
         else if(UniversalMagicPairCertificate.IsPair(template))UniversalMagicPairCertificate.RequirePrerequisites(template,activeTemplates);
@@ -169,7 +172,8 @@ public static class UniversalIndexedRows
     internal static void Apply(UniversalRowTemplate template, IReadOnlyList<(byte[] Row, UniversalRowTemplate Template)> rows,
         UniversalRowAllocation allocation, Span<byte> properties)
     {
-        if(UniversalHighCavesTornadoPlacement.Applies(template))UniversalHighCavesTornadoPlacement.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
+        if(UniversalHighCavesWorldRows.Applies(template))UniversalHighCavesWorldRows.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
+        else if(UniversalHighCavesTornadoPlacement.Applies(template))UniversalHighCavesTornadoPlacement.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());
         else if(UniversalMagicDruidOriginalRows.IsSecondPair(template))UniversalMagicDruidOriginalRows.RequirePair(template,rows.Select(r=>r.Template).ToArray());
         else if(UniversalMagicDruidChainResources.IsChain(template))UniversalMagicDruidChainResources.RequireGroup(template,rows.Select(r=>r.Template).ToArray());
         else if(UniversalMagicPairCertificate.IsPair(template))UniversalMagicPairCertificate.RequirePrerequisites(template,rows.Select(r=>r.Template).ToArray());

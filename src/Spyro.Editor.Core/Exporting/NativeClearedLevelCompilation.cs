@@ -72,6 +72,6 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
         return UniversalMobyComposer.Compose(Target,prepared,_overlay,executable,donors.Get,donors.SharedClasses,
             UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,
             sharedModelPackage:donors.SharedModelPackage,playerAnimationSource:donors.PlayerAnimations,
-            persistentNativePrefixRows:Document.TargetBinding!.NativePrefixRows,nativeDestinationOwner:nativeOwner);
+            persistentNativePrefixRows:Document.TargetBinding!.NativePrefixRows,nativeDestinationOwner:nativeOwner,nativeOriginalExecutable:donors.Disc.Exe);
     }
 }
