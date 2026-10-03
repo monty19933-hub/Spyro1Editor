@@ -650,6 +650,7 @@ public static class UniversalMobyComposer
             var donor=source("hauntedtowers");
             ownedParticles.Add(UniversalHauntedWizardParticles.Capture(donor.Data,donor.Overlay,destOverlay,exe,destination.Key));
             UniversalHauntedWizardParticles.RequireDestinationTexture(donor.Data,dest);
+            if(destination.Key=="darkhollow"){UniversalHauntedWizardDarkHollowEffects.RequireTextures(donor.Data,dest);foreach(int type in new[]{1,70})particleDependencies[("hauntedtowers",type)]=UniversalHauntedWizardDarkHollowEffects.Inspect(type);}
         }
         Dictionary<string,UniversalDarkPassageProjectileParticleCertificate> darkProjectileParticles=new(StringComparer.OrdinalIgnoreCase);
         if(imports.Any(i=>i.SourceLevelKey=="darkpassage" && i.ClassId==0x9B && i.BehaviorImported))

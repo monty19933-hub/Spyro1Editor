@@ -2,7 +2,7 @@
 
 Ordinary grouped placement now composes original Haunted wizard21 and armor1 into original intact Dark Hollow. The copied resurrection29 constructor keeps the live wizard physical index; its native update follows the rewritten armor link and complete source path. All128 native actors, terrain, callbacks and assets remain. This destination uses an authenticated complete original no-op29 constructor/update; the copied Haunted update runs before the original manager exactly once.
 
-The saved/reopened ordinary candidate retains the complete804/92-byte private blocks, all eight wizard paths, armor path and ten trigger/rectangle vectors. Source relative pose and yaws are unchanged. Full source models, sounds, textures and input/state bytes remain. Wizard/armor become128/129;89 dynamic slots and198596 bytes gross RAM headroom remain. No removals were applied.
+The saved/reopened ordinary candidate retains the complete804/92-byte private blocks, all eight wizard paths, armor path and ten trigger/rectangle vectors. Source relative pose and yaws are unchanged. Full source models, sounds, textures and input/state bytes remain. Wizard/armor become128/129;89 dynamic slots and197684 bytes gross RAM headroom remain after the complete effects extension. No removals were applied.
 
 Root checks against current integrated Core:
 
@@ -12,4 +12,10 @@ Root checks against current integrated Core:
 
 Reports: /Users/john/Documents/Codex/2026-09-29/files-pasted-by-the-user-spyro/work/universal-finish-20261002/root-haunted-darkhollow-r1, /Users/john/Documents/Codex/2026-09-29/files-pasted-by-the-user-spyro/work/universal-finish-20261002/root-haunted-darkhollow-native-r1.json and /Users/john/Documents/Codex/2026-09-29/files-pasted-by-the-user-spyro/work/universal-finish-20261002/root-haunted-integration-r1.json. The initial clean patch applied to production paths; regression registration was merged with the new Green second-world suite, retaining both current-Core builds and markers.
 
-Native traversal, resurrection triggering, combat, rewards, effects, audio and persistence remain pending. Effects1/7/65/70 retain four visible dependency-unverified warnings and are a separate ongoing task. The29 certificate does not prove these effects. No V1.0 or universal-completion claim is made.
+## Complete original effects extension
+
+The exact Haunted-to-original-Dark-Hollow route now owns all five required effects. Types7/29/65 use copied, authenticated complete source constructor/update branches. Types1/70 retain the independently verified equivalent native Dark Hollow implementations. Original constructor arguments, allocation, RGB, texture/CLUT pixels and orientation, lifetimes, vector/RNG helpers and expiry remain. Types65/70 use native untextured line primitives. Native Dark Hollow7/29/65 are authenticated no-op tails, so owned updates run once before the original manager. Other hosts keep their existing contracts and warnings.
+
+Root saved/reopened ordinary export passes2019 source checks and608984 asset checks. The emitted full-effects BIN SHA256 is3465c969847296152ec56a87f666492a466cf5c355b78ae1766ff96772c1410f. Native-instruction verification passes623470 assertions across1055 controls, including complete source and host functions and changed-constructor mutation controls. Existing Haunted ownership13895/31, integration10925/33, runner128 and the Release App build pass; the App has zero warnings/errors. Reports are in `work/universal-finish-20261002/root-haunted-full-effects-r1`, `root-haunted-full-effects-native-r1.json` and `root-haunted-effects-integration-r1.json` under the task workspace. These supersede the29-only candidate for further runtime work.
+
+Native traversal, resurrection triggering, combat, rewards, visible effects, audio and persistence remain pending. Instruction replay does not establish gameplay acceptance. No V1.0 or universal-completion claim is made.

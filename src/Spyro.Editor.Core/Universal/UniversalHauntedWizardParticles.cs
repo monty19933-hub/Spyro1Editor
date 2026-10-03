@@ -16,7 +16,7 @@ public static class UniversalHauntedWizardParticles
    overlay.Word(SpawnOwner.Table+29*4)!=0x80088B90 || overlay.Word(UpdateOwner.Table+29*4)!=0x8008714C)
    throw new InvalidDataException("Haunted resurrection particle callbacks/table29 changed.");
   uint nativeUpdate=RequireDestination(destination,destinationLevelKey);
-  if(destinationLevelKey=="darkhollow")UniversalHauntedWizardDarkHollowParticles.Require(destination,exe);
+  if(destinationLevelKey=="darkhollow")return UniversalHauntedWizardDarkHollowEffects.Capture(source,overlay,destination,exe);
   return new(new("hauntedtowers",new UniversalOverlay(overlay.Bytes.ToArray(),overlay.Bindings.ToDictionary(p=>p.Key,p=>p.Value)),SpawnOwner,UpdateOwner),destinationLevelKey,nativeUpdate,PatchConstructor,d=>{if(RequireDestination(d,destinationLevelKey)!=nativeUpdate)throw new InvalidDataException("Particle destination manager changed after capture.");});
  }
  internal static bool HasNativeOwner(UniversalOverlay overlay)=>

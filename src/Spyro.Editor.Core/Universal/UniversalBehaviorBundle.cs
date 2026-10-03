@@ -144,7 +144,7 @@ public static class UniversalBehaviorBundleBuilder
 
         foreach(var source in sources.Where(s=>s.SourceKey=="hauntedtowers" && s.Classes.Contains(0xCC)))
             if(!UniversalHauntedWizardParticles.HasNativeOwner(destination) &&
-                !(ownedParticles?.Any(c=>c.SourceLevelKey==source.SourceKey && c.TypeIds.SequenceEqual(new[]{29}))??false))
+                !(ownedParticles?.Any(c=>c.SourceLevelKey==source.SourceKey && (c.TypeIds.SequenceEqual(new[]{29})||UniversalHauntedWizardDarkHollowEffects.Owns(c)))??false))
                 throw new InvalidDataException("This wizard needs its native resurrection effect before it can be placed in this level.");
         foreach(var source in sources)UniversalDarkPassageProjectileParticles.RequireBundle(source.SourceKey,source.Source,source.Classes,destination,nativeExecutable??[],darkProjectileParticles,ownedParticles);
         foreach(var source in sources.Where(s=>UniversalGreenDruidWorldRows.OwnsCopiedActor(s.SourceKey,s.Source,s.Classes))){if(source.SourceKey!="alpineridge"||greenDruidWorld==null||sources.Count!=1||ownedParticles?.Count!=1)throw new InvalidDataException("Copied Green Druid needs its complete installed moving-world owner.");var map=source.Classes.ToDictionary(c=>c,c=>Mapped(source.SourceKey,c));if(classMaps!=null&&classMaps.TryGetValue(source.SourceKey,out var full))map=full.ToDictionary();greenDruidWorld.RequireBundle(source.Source,destination,source.Classes,map,nativeExecutable??[],ownedParticles);}

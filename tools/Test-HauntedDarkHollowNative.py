@@ -119,4 +119,44 @@ for delta in(1,8,16):
   def capture(m):calls.append((pc,m.r[4]));m.r[2]=123;m.r[4]=0xeeee
   return capture
  native=0x80083274;owned=UPDATE[0x80086754];run(m,L['ParticleChain'],{RET}, {owned:call(owned),native:call(native)});ck(calls==[(owned,delta),(native,delta)],'owned update then original destination exactly once, delta preserved');ck(m.r[29]==0x801ff000 and m.r[31]==RET,'wrapper preserves native stack/return address');records.append({'Kind':'chain-ABI','Delta':delta,'Calls':calls,'Instructions':m.steps})
+
+# Exact effects1/70 use the retained equivalent native manager;7/65 use full
+# source bodies. Execute complete functions and all real integer native helpers.
+POOL=0x80120000;VEC=0x80140000
+
+def full_machine(b,rng=1):
+ m=blank();m.limit=50000;m.word=lambda p:word(b,p);m.r[31]=RET;put(m,OB,b);put(m,POOL,bytes(8192));m.seed(POOL+1,255,1);m.seed(0x80075824,POOL);m.seed(0x80075738,POOL);m.seed(0x80075ac0,rng);m.seed(0x800757d8,8);put(m,VEC,struct.pack('<6i',40000,56000,17356,128,-256,512));return m
+
+def pool_state(m):return(bytes(m.mem[POOL+i]for i in range(8192)),m.read(0x80075738,4),m.read(0x80075ac0,4))
+
+for typ in(1,7,65,70):
+ for count in(1,2,7):
+  for seed in(0,1,0x12345678,0xffffffff):
+   for control in(8,9):
+    states=[]
+    for b,entry in[(O,0x800881d8),(F,0x800844a0 if typ in(1,70)else SPAWN[0x800881d8])]:
+     m=full_machine(b,seed);m.seed(0x800757d8,control);m.r[4]=count;m.r[5]=typ;m.r[6]=VEC;m.r[7]=VEC+12 if typ==1 else 512;run(m,entry,{RET});states.append(pool_state(m))
+    ck(states[0]==states[1],f'complete actual source/final effect ctor and helpers {typ}/{count}/{seed}/{control}');ck(states[1][0][0]==typ and states[1][0][1]==(2 if typ in(1,7)else 1),'native texture kind2 vs untextured kind1 allocation contract');ck(states[1][0][15]==0x2e if typ in(1,7)else states[1][0][19]==0x50,'native textured quad2E vs untextured Gouraud line50 packet contract');records.append({'Kind':'full-effect-constructor','Type':typ,'Count':count,'Seed':seed,'Control':control})
+ for delta in(0,1,2,8,16):
+  for age in(0,1,7,23,24,31,255):
+   for flags in(0,1):
+    for timer in(0,1,255):
+     states=[]
+     for b,entry in[(O,0x80086754),(F,L['ParticleChain'])]:
+      m=full_machine(b,0x12345678);put(m,POOL,bytes((i*7+19)%256 for i in range(32)));m.seed(POOL,typ,1);m.seed(POOL+1,2 if typ in(1,7)else 1,1);m.seed(POOL+2,flags,1);m.seed(POOL+3,1,1);m.seed(POOL+12,age,1);m.seed(POOL+30,timer,2);m.seed(POOL+33,255,1);m.seed(0x80075738,POOL+32);m.r[4]=delta;run(m,entry,{RET});states.append(pool_state(m));ck(m.r[29]==0x801ff000,'actual complete native chain restores SP')
+     ck(states[0]==states[1],f'complete source/final lifetime, movement, RNG and free helper {typ}/{delta}/{age}/{flags}/{timer}');records.append({'Kind':'full-effect-update-chain','Type':typ,'Delta':delta,'Age':age,'Flags':flags,'Timer':timer})
+
+for b,retained in[(D,False),(F,True)]:
+ for typ in(7,65):
+  for count in(1,2,7):
+   m=full_machine(b);m.r[4]=count;m.r[5]=typ;m.r[6]=VEC;m.r[7]=0;before=pool_state(m);run(m,0x800844a0,{RET});ck(pool_state(m)==before,'complete original Dark7/65 ctor is authenticated no-op');records.append({'Kind':'destination-7-65-no-op-constructor','Type':typ,'Count':count,'Retained':retained})
+   for delta in(1,8,16):
+    m=full_machine(b);m.r[4]=delta
+    for k in range(count):m.seed(POOL+k*32,typ,1);m.seed(POOL+k*32+1,1,1)
+    m.seed(POOL+count*32+1,255,1);before=pool_state(m);run(m,0x80083274,{RET});ck(pool_state(m)==before,'complete original Dark7/65 update is authenticated no-op');records.append({'Kind':'destination-7-65-no-op-update','Type':typ,'Count':count,'Delta':delta,'Retained':retained})
+# Mutating a real body word must alter the declared native result.
+mut=bytearray(F);off=(SPAWN[0x80088F1C]-OB);struct.pack_into('<I',mut,off,struct.unpack_from('<I',mut,off)[0]^1)
+a=full_machine(F);b=full_machine(mut)
+for m in(a,b):m.r[4]=1;m.r[5]=65;m.r[6]=VEC;m.r[7]=0;run(m,SPAWN[0x800881d8],{RET})
+ck(pool_state(a)!=pool_state(b),'emitted native65 body mutation is observable')
 result={'Status':'CURRENT_SAVED_EXPORT_DECLARED_MEMORY_NATIVE_INSTRUCTION_CONTROLS_GAMEPLAY_SEPARATE','Checks':checks,'Controls':len(records),'BinSHA':R['BinSHA'],'FinalOverlaySHA':H(F),'Records':records,'Limitations':['Renderer/player combat/reward/audio/card/camera gameplay not executed','Byte256 wrapping is a rejected-capacity diagnostic, never production admission','Wrapper leaf entries record ABI; real owned byte lookup/activation and complete destination29 no-op functions execute separately']};OUT.write_text(json.dumps(result,indent=2)+'\n');print('HAUNTED_DARKHOLLOW_NATIVE_OK',checks,len(records),R['BinSHA'])

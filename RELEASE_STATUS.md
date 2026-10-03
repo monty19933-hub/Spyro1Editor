@@ -12,10 +12,10 @@ builds cleanly. Native gameplay of these new groups remains pending.
 # Follow-up: Haunted resurrection in Dark Hollow
 
 Original Haunted wizard21 and armor1 now compose/export into intact Dark Hollow
-with native resurrection29 links and full source assets. Saved/reopened source
-checks1776, asset checks608984, actual native instruction checks9543/71 controls,
-existing Haunted regressions and runner125 pass; the Release App builds cleanly.
-Gameplay and the other four effect dependencies remain pending.
+with native resurrection links, full source assets and all five authenticated
+effect dependencies. Saved/reopened source checks2019, asset checks608984, actual
+native instruction checks623470/1055 controls, existing Haunted regressions and
+runner128 pass; the Release App builds cleanly. Native gameplay remains pending.
 [Evidence](docs/research/universal-haunted-darkhollow-20261003.md).
 
 ---
