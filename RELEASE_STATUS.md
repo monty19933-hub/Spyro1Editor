@@ -7,8 +7,13 @@ arena2086, actor/resource92, emitted342 and independent world controls pass;
 the existing ramp remains byte-identical and the Release App builds cleanly.
 Native testing found and fixed a16-slot allocation that blocked original fragment
 effects: this group now allocates the original91 slots without changing its
-native reserve guards. The corrected ordinary disc loads with91 slots confirmed
-in RAM; full encounter/reward verification is continuing. This does not finish
+native reserve guards. The corrected ordinary disc now has full-firmware native
+evidence for linked reset, moving terrain, projectile damage and fragments,
+both flame defeats, red1+red1 collection, inventory2/2, two ordinary restarts and
+the Druid's repeat-defeat0F orb without duplicate treasure.1063 loaded-world and
+176 complete loaded-model checks pass; the closed run has no invalid-memory/panic
+entries and its private blank card is unchanged. Card persistence, level reentry,
+audio and other hosts remain open. This does not finish
 universal gameplay or issue V1.0. [Evidence](docs/research/universal-green-linked-world-20261003.md).
 
 ---

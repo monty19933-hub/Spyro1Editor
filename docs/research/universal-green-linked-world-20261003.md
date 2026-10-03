@@ -78,8 +78,50 @@ without whole-player replay. The original surface rotates/deforms during its lif
 
 That run used an isolated unchanged blank card, no save states or live RAM writes,
 and was closed cleanly. Its blocked fragment behavior is not promoted to gameplay
-acceptance. Corrected r6 gameplay, rewards and lifecycle verification are ongoing.
-Card persistence, audio listening, other hosts and mixed campaigns remain open.
+acceptance.
+
+The corrected ordinary r6 run is frozen at
+`runtime/green-linked-native-r2/runtime-proof.json`, with102 hashed evidence files
+including10 native screenshots. It used the full USA firmware, Software renderer,
+normal New Game, original authored safe start, private blank card and ordinary
+controller input. The emulator was closed without a resume save state; the card
+and original USA disc hashes remain unchanged. The complete log contains no
+invalid-memory, bus-error or panic entries.
+
+- Three normal running jump/glide crossings reach the complete imported floor.
+  All91 dynamic slots are present. Native127 projectile impacts damage Spyro,
+  spawn visible13E fragments, and the recorded six fragments subsequently expire.
+  The fragments themselves are not attributed the projectile's damage.
+- Original wizard proximity resets the linked actors/target and moving world.
+  Both raised and lowered geometry/collision remain intact. After the Druid defeat,
+  neutral input records lowering carry: original packet[5,26,-400] against player
+  delta[5,26,-398]. The2-unit Z residual remains separate from the proven packet.
+- Ordinary flame defeats the wizard and Druid. The wizard's state6/flag10000
+  already precedes the later charge movement used to collect its red1 gem;
+  that movement is not misreported as its defeat. The Druid's accepted flame
+  similarly precedes its red1 pickup. Native inventory explicitly shows2/2.
+- The first ordinary death restores the wizard with rewardFF while retaining its
+  gem and durable identity137. The second death retains both gems and identities
+ 135/137, clears checkpoint flags, and restores both actors with rewardFF.
+- Repeat Druid flame defeat creates the original0F replacement orb. It renders,
+  is collected, and advances the partial-life counter0→1 while global/level gems
+  remain2/2. The original model consumer reads its valid owned resource. The
+  wizard remains active and its projectiles still work after respawn.
+
+Independent frozen receipts in `green-linked-native-analysis-r2/` cover15 current
+RAM snapshots:1063 exact loaded-world checks,176 complete native-loaded model
+checks,10 native lowering checks,21 initial lifecycle assertions and31 final
+restart/repeat-consumer checks. These receipts retain whole sectors, materials,
+all233 collision assignments/flags/index entries, eight animation records, paths,
+links and exact native code. They do not infer general GPU equivalence from a
+model-loader replay. The early naive dynamic-pool scan is explicitly superseded
+by terminal-aware scans that skip free rows.
+
+Card persistence, level reentry, wizard repeat defeat, all replacement RNG/GPU
+branches, audio listening, other hosts and mixed campaigns remain open. The
+separate original6/52 group1 still refuses: its conservative156 queue-content
+words plus terminator exceed the unchanged128-word native partition; current
+research does not justify dropping source faces or weakening that guard.
 
 Independent worker requests used the user's specified Sol High configuration;
 effective worker model/effort could not be independently verified.
