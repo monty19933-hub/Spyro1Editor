@@ -19,6 +19,7 @@ public static class UniversalClassRemapping
         {
             uint word = overlay.Word(pc);
             if (!UniversalMips.IsJalr(word)) continue;
+            if (pc==UniversalTwilightTrooperOwnership.FlashCall && UniversalTwilightTrooperOwnership.SourceFamily(overlay) && UniversalTwilightTrooperOwnership.SpawnArguments(overlay,instructions,pc) is {} twilightSpawns){result.AddRange(twilightSpawns);continue;}
             if(flightGate?.SpawnAt(overlay,pc) is {} gateSpawn){result.Add(gateSpawn);continue;}
             if (flightChest?.SpawnAt(overlay,pc) is { } flightSpawn) { result.Add(flightSpawn);continue; }
             int targetRegister = UniversalMips.Rs(word);

@@ -352,6 +352,13 @@ public static class UniversalMobyComposer
                         var issued=UniversalFlightGateParticles.Inspect(gateParticleCertificate,particle,s.Overlay,destOverlay,s.Data,dest,exe);
                         particleDependencies[key]=issued.Dependency;gateParticleProofs[key]=issued.Proof;
                     }
+                    else if(sk=="twilightharbor" && destination.Key=="darkhollow" && particle is 1 or 13 or 70 or 79)
+                    {
+                        var issued=UniversalTwilightTrooperParticles.Capture(s.Data,s.Overlay,destOverlay,exe,particle==13);
+                        //13 still uses the existing exact texture import path, then
+                        //the owned dispatcher and readback issue its final status.
+                        particleDependencies[key]=particle==13?UniversalParticleDependencies.Inspect(sk,particle,s.Data,dest,false):UniversalTwilightTrooperParticles.Inspect(issued,particle);
+                    }
                     else if(sk=="terracevillage" && destination.Key=="darkhollow" && particle==77)
                     {
                         nativeLine77=UniversalTerraceLineParticle77.Capture(sk,destination.Key,s.Overlay,destOverlay,exe);
@@ -561,6 +568,8 @@ public static class UniversalMobyComposer
                 var hauntedSource = source(p.SourceLevelKey);
                 t = UniversalHauntedWizardPlacement.Rebase(hauntedSource.Data, hauntedSource.Overlay, t, r);
             }
+            if(UniversalTwilightTrooperPlacement.Applies(t)||t.ClassId is 0x93 or 0x94&&UniversalTwilightTrooperOwnership.SourceFamily(source(p.SourceLevelKey).Overlay))
+            { var donor=source(p.SourceLevelKey);UniversalTwilightTrooperPlacement.RequireSourceLabel(p.SourceLevelKey);UniversalTwilightTrooperPlacement.RequireInitialRow(t,r);t=UniversalTwilightTrooperPlacement.Rebase(donor.Data,donor.Overlay,t,r); }
             if(UniversalBeastMistyBoarPlacement.Applies(t))
             { var boarSource=source(p.SourceLevelKey);t=UniversalBeastMistyBoarPlacement.Rebase(boarSource.Data,boarSource.Overlay,t,r); }
             if (p.SpecialId == null)
@@ -594,6 +603,12 @@ public static class UniversalMobyComposer
             throw new InvalidDataException($"Only {arena} dynamic object slots would remain in {destination.DisplayName}; at least {MinimumDynamicSlots} are required.");
 
         List<UniversalOwnedParticleCertificate> ownedParticles=[];
+        if(destination.Key=="darkhollow" && imports.Any(i=>i.SourceLevelKey=="twilightharbor"&&i.ClassId is 0x93 or 0x94))
+        {
+            var donor=source("twilightharbor");var issued=UniversalTwilightTrooperParticles.Capture(donor.Data,donor.Overlay,destOverlay,exe,imports.Any(i=>i.SourceLevelKey=="twilightharbor"&&i.ClassId==0xB0));
+            if(issued.OwnedDispatcher is {} dispatcher)ownedParticles.Add(dispatcher);
+            UniversalTwilightTrooperParticles.RequireTextures(issued,donor.Data,dest);
+        }
         if(destination.Key=="peacekeepers" && placements.Any(p=>p.SourceLevelKey=="hauntedtowers" && source(p.SourceLevelKey).Data.CaptureRow(p.SourceLevelKey,p.SourceRowIndex).ClassId==0xCC))
         {
             var donor=source("hauntedtowers");

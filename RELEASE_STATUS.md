@@ -1,3 +1,15 @@
+# Follow-up: Twilight soldiers integrated for Dark Hollow verification
+
+All fourteen original Twilight Harbor soldier variants now use ordinary
+placement and export into Dark Hollow. Paths, activation rectangles, dynamic
+children and source-owned effects follow the imported group. Integrated checks
+pass 4,431, with 189 Dark Passage and 102 source-free regression checks; the App
+builds cleanly. Native gameplay testing remains pending. Other destinations and
+conflicting copied effect owners remain restricted.
+[Evidence and limits](docs/research/universal-twilight-troopers-20261003.md).
+
+---
+
 # Follow-up: Magic pair integrated; boar gameplay and terrain repair
 
 The original Magic Crafters selector-2 pair now reaches ordinary placement and

@@ -176,6 +176,9 @@ public static class UniversalBehaviorBundleBuilder
                 (dryCanyonBirdBranches == null || !dryCanyonBirdBranches.TryGetValue(s.SourceKey, out birdProof)))
                 throw new InvalidDataException("Copied Dry Canyon B8 behavior requires its issued state/frame branch proof.");
             var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey, map, birdProof, s.SourceKey=="magiccrafters"?magicPair:null);
+            if(s.SourceKey=="twilightharbor" || UniversalTwilightTrooperOwnership.SourceFamily(s.Source)&&s.Classes.Any(c=>c is 0x93 or 0x94))
+            {UniversalTwilightTrooperPlacement.RequireSourceLabel(s.SourceKey);UniversalTwilightTrooperOwnership.RequireCopiedInputs(upd,s.Source,s.Classes,map,nativeExecutable??[]);UniversalTwilightTrooperParticles.RequireBundle(s.Source,destination,s.Classes,ownedParticles,nativeExecutable??[]);}
+            IReadOnlyList<uint> twilightClassSites=[];
             if(string.Equals(s.SourceKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&s.Classes.Contains(0x7A)&&darkLanternContexts!=null&&darkLanternContexts.TryGetValue(s.SourceKey,out var lanternDestinationContext))lanternDestinationContext.RequireDestination(destination,nativeExecutable??[]);
             UniversalDarkPassageLanternGroups.RequireCopied(upd,s.SourceKey,s.Source,s.Classes,map,darkLanternContexts);
             if(string.Equals(s.SourceKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&s.Classes.Contains(0x9B)&&darkProjectileParticles?.ContainsKey(s.SourceKey)==true)UniversalDarkPassageProjectileParticles.RequireCopiedCalls(upd,s.Source);
@@ -201,6 +204,7 @@ public static class UniversalBehaviorBundleBuilder
                 UniversalNativeModelTailOwnership.MarkOwned(upd, s.Source, nativeExecutable);
                 if (s.SourceKey == "gnorccove") UniversalGnorcCurrentModelRead.MarkOwned(upd, s.Source);
                 particleNoOpProofs.AddRange(UniversalNativeParticleNoOpOwnership.MarkOwned(upd, s.Source, destination, nativeExecutable ?? []));
+                if(s.SourceKey=="twilightharbor")twilightClassSites=UniversalTwilightTrooperOwnership.TranslateLinkedRead(upd,s.Source,s.Classes,map);
                 UniversalClassRemapping.PatchOwnedClassReads(upd, s.Source, map, s.Classes);
                 UniversalClassRemapping.PatchConstantSpawns(upd, s.Source, map,flightChest,flightGate);
             }
@@ -218,6 +222,7 @@ public static class UniversalBehaviorBundleBuilder
                 try { (init, initBytes, jt2) = BuildSpecializedInit(s.Source, Remaps(s.SourceKey) ? [c] : s.Classes, initTag); }
                 catch (InvalidDataException) when (Mapped(s.SourceKey, c) == c && !map.Any(k => k.Key != k.Value))
                 { (init, initBytes, jt2) = BuildWholeFunction(s.Source, s.Source.Init, initTag); }
+                if(s.SourceKey=="twilightharbor")UniversalTwilightTrooperOwnership.RequireInitializer(init,s.Source,c,nativeExecutable??[],Remaps(s.SourceKey)?[c]:s.Classes);
                 if(string.Equals(s.SourceKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&s.Classes.Contains(0x7A)&&darkLanternContexts!=null&&darkLanternContexts.TryGetValue(s.SourceKey,out var lanternInitContext))lanternInitContext.RequireCopiedInit(init,s.Source,Remaps(s.SourceKey)?[c]:s.Classes);
                 UniversalClassRemapping.PatchInitClassStore(init, s.Source, c, Mapped(s.SourceKey, c));
                 if (Remaps(s.SourceKey))
@@ -235,7 +240,7 @@ public static class UniversalBehaviorBundleBuilder
                 constructors[c] = init;
             }
             var linkedClassSites = UniversalNativeLinkedActorOwnership.Patch(upd, s.Source, map, constructors)
-                .Concat(Remaps(s.SourceKey) ? UniversalWhirlwindIndexedRows.TranslateOwnedReads(upd, s.Source, map) : []).Concat(boarClassSites).ToArray();
+                .Concat(Remaps(s.SourceKey) ? UniversalWhirlwindIndexedRows.TranslateOwnedReads(upd, s.Source, map) : []).Concat(boarClassSites).Concat(twilightClassSites).ToArray();
             IReadOnlyList<uint> soundReadSites = [];
             if (s.Classes.Contains(0x12C))
             {

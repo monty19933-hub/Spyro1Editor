@@ -263,6 +263,7 @@ public static class UniversalDispatchAnalysis
             if (call.Global == UniversalExeBindings.ParticleSpawnGlobal && call.Argument1 is < 0x51)
                 particles.Add((int)call.Argument1.Value);
         }
+        if((insns.Contains(UniversalTwilightTrooperOwnership.FlashCall)||insns.Contains(0x80081A88))&&UniversalTwilightTrooperOwnership.SourceFamily(o)){UniversalTwilightTrooperOwnership.AddDependencies(o,insns,spawns);UniversalTwilightTrooperOwnership.AddParticles(o,insns,particles);}
         return (spawns, particles);
     }
 
