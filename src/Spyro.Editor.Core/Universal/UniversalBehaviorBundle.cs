@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 
 namespace Spyro.Editor.Core.Universal;
 
-internal enum UniversalFixKind { None, Branch, BranchLabel, Jump, JumpLabel, JalLabel, AddrHi, AddrLo, TableHi, TableLo }
+internal enum UniversalFixKind { None, Branch, BranchLabel, Jump, JumpLabel, JalLabel, AddrHi, AddrLo, TableHi, TableLo, LabelAddrHi, LabelAddrLo }
 
 internal readonly record struct UniversalFix(UniversalFixKind Kind, uint Orig = 0, string? Label = null);
 
@@ -22,6 +22,7 @@ public sealed record UniversalBehaviorSourceReport(string SourceLevelKey, IReadO
     int UpdateBytes, int InitBytes, int JumpTables)
 {
     public IReadOnlyList<uint> ParentClassReadSites { get; init; } = [];
+    public UniversalMagicPairShadowReadback? PrivateMagicPairShadow { get; init; }
     public uint PlayerDamageMask { get; init; }
     public IReadOnlyList<UniversalPlayerDamageWrite> PlayerDamageWrites { get; init; } = [];
     public IReadOnlyList<UniversalNativePlayerDamageCall> NativePlayerDamageCalls { get; init; } = [];
@@ -62,7 +63,7 @@ public static class UniversalBehaviorBundleBuilder
         UniversalOverlay? nativeDestinationOwner = null, IReadOnlyList<int>? highValueGemClasses = null,
         IReadOnlyDictionary<string, UniversalWhirlwindSoundBinding>? whirlwindSounds = null,
         IReadOnlyDictionary<string, UniversalDryCanyonBirdCertificate>? dryCanyonBirdBranches = null,
-        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null,IReadOnlyList<UniversalOwnedParticleCertificate>? ownedParticles = null)
+        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null,IReadOnlyList<UniversalOwnedParticleCertificate>? ownedParticles = null, UniversalMagicPairCertificate? magicPair = null)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
         int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
@@ -173,7 +174,7 @@ public static class UniversalBehaviorBundleBuilder
             if (s.SourceKey == "drycanyon" && s.Classes.Contains(0xB8) &&
                 (dryCanyonBirdBranches == null || !dryCanyonBirdBranches.TryGetValue(s.SourceKey, out birdProof)))
                 throw new InvalidDataException("Copied Dry Canyon B8 behavior requires its issued state/frame branch proof.");
-            var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey, map, birdProof);
+            var (upd, updBytes, jt1) = BuildPrunedUpdate(s.Source, s.Classes, "u_" + s.SourceKey, map, birdProof, s.SourceKey=="magiccrafters"?magicPair:null);
             var darkDogTransitionSites = UniversalDarkPassageShapeshifterOwnership.Patch(upd,s.SourceKey,s.Source,s.Classes,map,nativeExecutable??[]);
             UniversalBeastMistyBoarPlacement.RequireCopiedInputs(upd,s.SourceKey,s.Source,s.Classes,map,nativeExecutable??[]);
             var boarClassSites = map.Any(k=>k.Key!=k.Value)
@@ -239,6 +240,7 @@ public static class UniversalBehaviorBundleBuilder
             }
             if (Remaps(s.SourceKey)) UniversalClassRemapping.RequireNoUnownedClassMemory(upd, false, s.Source);
             var nativeDamage = UniversalNativePlayerDamageCalls.AnalyzeSource(s.SourceKey, s.Source, upd, nativeExecutable);
+            if(magicPair!=null&&s.SourceKey=="magiccrafters")parts.Add(UniversalMagicPairCollisionShadow.Apply(upd,s.Source,nativeExecutable??[]));
             int gemBytes = 0;
             if (gemCalls.Count != 0)
             {
@@ -269,6 +271,7 @@ public static class UniversalBehaviorBundleBuilder
         if (signClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.SignDraw(signClasses, "sign_draw"));
         var (code, labels) = Assemble(parts, baseAddress);
+        if(magicPair!=null){magicPair.RequireCompiled(code,baseAddress,parts);var proof=UniversalMagicPairCollisionShadow.RequireWritten(code,labels,baseAddress);reports=reports.Select(r=>r.SourceLevelKey=="magiccrafters"?r with{PrivateMagicPairShadow=proof}:r).ToList();}
         return new(baseAddress, code, labels["wrap_upd"], labels["wrap_init"], reports)
         {
             DestinationGemCollectionCalls = destinationGemCalls.Select(c => new UniversalDestinationGemCall(c.Pc, c.Delay, c.Role, labels[destinationGemLabel!])).ToArray(),
@@ -304,7 +307,7 @@ public static class UniversalBehaviorBundleBuilder
         }
     }
 
-    internal static (UniversalAsmPart Part, int Bytes, int Tables) BuildPrunedUpdate(UniversalOverlay o, IReadOnlyList<int> classes, string tag, IReadOnlyDictionary<int, int>? classMap = null, UniversalDryCanyonBirdCertificate? birdBranches = null)
+    internal static (UniversalAsmPart Part, int Bytes, int Tables) BuildPrunedUpdate(UniversalOverlay o, IReadOnlyList<int> classes, string tag, IReadOnlyDictionary<int, int>? classMap = null, UniversalDryCanyonBirdCertificate? birdBranches = null, UniversalMagicPairCertificate? magicPair = null)
     {
         if (birdBranches != null && !classes.Contains(0xB8)) throw new InvalidDataException("Dry Canyon bird branch proof has no B8 owner in this copy.");
         var sw = UniversalDispatchAnalysis.FindUpdateSwitch(o);
@@ -316,7 +319,7 @@ public static class UniversalBehaviorBundleBuilder
         // Materialized code addresses (jump-table targets) must stay addressable in the copy.
         foreach (var r in entries.SelectMany(e => e.Trace.Sequence).Concat(def.Sequence))
             if (r.IsConstant && r.ConstantValue >= sw.Function && r.ConstantValue < fEnd && r.ConstantValue % 4 == 0) starts.Add(r.ConstantValue);
-        var (closure, tables) = UniversalDispatchAnalysis.Closure(o, sw.Function, starts, new HashSet<uint> { sw.TreeStart }, birdBranches);
+        var (closure, tables) = UniversalDispatchAnalysis.Closure(o, sw.Function, starts, new HashSet<uint> { sw.TreeStart }, birdBranches, magicPair);
         var part = Relayout(o, closure, tables, tag, sw.TreeStart, a =>
         {
             for (int i = 0; i < entries.Count; i++)
@@ -432,6 +435,8 @@ public static class UniversalBehaviorBundleBuilder
                 case UniversalFixKind.JalLabel: w = UniversalMips.EncodeJ(3, labels[fix.Label!]); break;
                 case UniversalFixKind.AddrHi: w = UniversalMips.WithImm(w, UniversalMips.Hi(Orig(fix.Orig))); break;
                 case UniversalFixKind.AddrLo: w = UniversalMips.WithImm(w, UniversalMips.Lo(Orig(fix.Orig))); break;
+                case UniversalFixKind.LabelAddrHi: w = UniversalMips.WithImm(w, UniversalMips.Hi(labels[fix.Label!])); break;
+                case UniversalFixKind.LabelAddrLo: w = UniversalMips.WithImm(w, UniversalMips.Lo(labels[fix.Label!])); break;
                 case UniversalFixKind.TableHi: w = UniversalMips.WithImm(w, UniversalMips.Hi(tableAddr[fix.Label!])); break;
                 case UniversalFixKind.TableLo: w = UniversalMips.WithImm(w, UniversalMips.Lo(tableAddr[fix.Label!])); break;
             }

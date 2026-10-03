@@ -2,6 +2,15 @@
 
 Evidence root: `/Users/john/Documents/Codex/2026-09-29/files-pasted-by-the-user-spyro/work/universal-finish-20261002`.
 
+Later terrain finding: the stepped example contains 63 authored surfaces and
+can exceed the native close-rendering queue with its one-face sectors. Its
+bounded gameplay log contains no invalid memory accesses, so the actor/spell
+observations below remain recorded, but the floor is not accepted as safe for
+arbitrary movement. The separate boar run reproduced this renderer overflow.
+Terrain repair and a rebuilt example remain required; see
+`runtime/renderer-fault-audit-r1.json` and
+`terrain-render-crash-r1/renderer-queue-evidence.json` in the evidence root.
+
 The exporter translates the original wizard/armor paths and trigger rectangles
 with each placement, resolves all seven signed armor indices to the output
 rows, and imports the armor's native metal material. It preserves source state,

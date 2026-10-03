@@ -124,9 +124,14 @@ public static class UniversalMobyComposer
         Func<NativePlayerAnimationSource>? playerAnimationSource = null,
         bool removedTreasureAlreadyApplied = false,
         int? persistentNativePrefixRows = null,
-        UniversalOverlay? nativeDestinationOwner = null)
+        UniversalOverlay? nativeDestinationOwner = null, int magicPairBundlePaddingBytes = 0)
     {
         if (placements.Count == 0 && removedRows is not { Count: > 0 }) throw new ArgumentException("No placements or permanent removals were supplied.");
+        UniversalMagicPairCertificate? magicPair=null;
+        if(placements.Any(p=>!p.Retired&&p.SourceLevelKey=="magiccrafters"&&p.SourceRowIndex is 12 or 13))
+        { var donor=source("magiccrafters"); magicPair=UniversalMagicPairCertificate.Capture(destination.Key,destinationData,destinationOverlay,executable,donor.Data,donor.Overlay,placements,removedRows); }
+        if(magicPairBundlePaddingBytes!=0&&magicPair==null)throw new InvalidDataException("Magic bundle padding requires the scoped original pair owner.");
+        if(magicPairBundlePaddingBytes<0||magicPairBundlePaddingBytes%8!=0)throw new InvalidDataException("Magic bundle padding must be a nonnegative aligned allocation.");
         int incomingCount = placements.Count;
         int[] incomingOrder = Enumerable.Range(0, placements.Count).ToArray();
         if (placements.Any(p => p.PersistentSlot != null))
@@ -237,6 +242,7 @@ public static class UniversalMobyComposer
             var s = source(p.SourceLevelKey);
             var t = UniversalIndexedRows.Capture(s.Data, s.Overlay, s.Data.CaptureRow(p.SourceLevelKey, p.SourceRowIndex));
             if(flightGates.TryGetValue(p.SourceLevelKey,out var gateTemplateProof))t=gateTemplateProof.PrepareTemplate(t);
+            if(magicPair!=null&&UniversalMagicPairCertificate.IsPair(t))t=magicPair.Rebase(t,p);
             templates.Add(t with { LinkGroupId = p.LinkGroupId });
             work.Enqueue((t.ClassId, p.SourceLevelKey, false));
         }
@@ -306,7 +312,7 @@ public static class UniversalMobyComposer
                     ?? throw new InvalidDataException("Dry Canyon B8 branch authority is unavailable.");
                 dryCanyonBirdBranches[sk] = birdProof;
             }
-            var (closure, _) = UniversalDispatchAnalysis.Closure(s.Overlay, sw.Function, [tr.Stop], new HashSet<uint> { sw.TreeStart }, birdProof);
+            var (closure, _) = UniversalDispatchAnalysis.Closure(s.Overlay, sw.Function, [tr.Stop], new HashSet<uint> { sw.TreeStart }, birdProof, sk=="magiccrafters"?magicPair:null);
             var (spawns, particles) = UniversalDispatchAnalysis.Dependencies(s.Overlay, closure);
             try
             {
@@ -562,6 +568,7 @@ public static class UniversalMobyComposer
                 UniversalHauntedWizardParticles.RequirePhysicalWizardRow(allocation.NewRows[i]);
         int droppedProperties = UniversalRowRemoval.RemoveOwnedPropertiesAndClearRows(dest, permanentlyRemoved);
         var (_, sceneGrowth, newRows) = dest.AppendRows(rows, permanentlyRemoved);
+        if(magicPair!=null){magicPair.AppendPod(dest,newRows);sceneGrowth=dest.Subfiles()[3].Length-sceneBefore;}
         int[] physicalSaveRows = Enumerable.Range(0, allocation.FinalRowCount).Select(i => permanentlyRemoved.Contains(i) ? -1 : i).ToArray();
         for (int i = 0; i < newRows.Count; i++) physicalSaveRows[newRows[i]] = saveRows[i];
         bool remapSaveRows = physicalSaveRows.Where((logical, physical) => logical != physical).Any();
@@ -597,11 +604,11 @@ public static class UniversalMobyComposer
         }
         if (byBehaviorSource.Count > 0 || eggClasses.Count > 0 || signClasses.Count > 0 || highValueGemClasses.Count > 0)
         {
-            uint baseAddress = (copyBuffer + 7) & ~7u;
+            uint baseAddress = checked(((copyBuffer + 7) & ~7u) + (uint)magicPairBundlePaddingBytes);
             var classMaps = classes.GroupBy(k => k.Key.Source).ToDictionary(g => g.Key,
                 g => (IReadOnlyDictionary<int, int>)g.ToDictionary(k => k.Key.Class, k => k.Value.DestinationClass));
             var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps, remapSaveRows, nativeExecutable: exe,
-                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles);
+                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles,magicPair:magicPair);
             uint newCopy = (uint)((baseAddress + bundle.Code.Length + 15) & ~15);
             int keep = (int)(copyBuffer - UniversalOverlay.Base);
             byte[] ov = new byte[UniversalLevelData.Align((int)(newCopy - UniversalOverlay.Base), 0x800)];
@@ -682,6 +689,9 @@ public static class UniversalMobyComposer
             new UniversalOverlay(overlay, UniversalExeBindings.Read(exe, destination.LevelId)), exe);
         if (highValueGemClasses.Count > 0)
             UniversalHighValueGems.RequireDestinationParticleOwner(new UniversalOverlay(overlay, UniversalExeBindings.Read(exe, destination.LevelId)));
+        magicPair?.RequireFinalRows(dest,newRows);
+        magicPair?.RequireFinalOverlay(overlay);
+        magicPair?.RequireFinalExecutable(exe);
         foreach (var binding in whirlwindSounds.Values) UniversalWhirlwindSoundDependency.RequireDestination(binding, dest);
         foreach (var binding in metalBindings) UniversalCliffMetalTextures.RequireDestination(binding, dest);
         foreach (var key in classes.Keys.Where(k => k.Class == 0xB8 && k.Source == "drycanyon"))

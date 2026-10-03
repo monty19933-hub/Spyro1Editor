@@ -23,7 +23,8 @@ repository. Reports are `beast-misty89-integrated-r1.json` and
 `1d6c2021114219d83d2a52107410f54429fc4b22add205d4d8cfc9a022345e99`, uses the
 ordinary cleared-level compiler and composer. It places Misty Bog row 9 at
 `36000,36000,8352` on 121 textured, collidable floor tiles in cleared Peace Keepers.
-The boar visibly loads and moves along the translated path.
+The boar visibly loads and wanders near its translated home. This variant uses
+the native wandering mode; following the stored path nodes was not observed.
 
 The actual New Game run used real Sony firmware with fast boot disabled, a private
 blank card and native controls. No save state or emulated-memory writes were used.

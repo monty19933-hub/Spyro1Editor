@@ -1,12 +1,21 @@
-# Follow-up: moved boar ownership; native terrain failure under repair
+# Follow-up: Magic pair integrated; boar gameplay and terrain repair
+
+The original Magic Crafters selector-2 pair now reaches ordinary placement and
+export into untouched Dark Hollow, with translated groups and persistent editor
+identities. Integrated checks pass 8,754; the App builds cleanly. The original
+placement reproduces the r5 native test's scene and overlay. Other selectors,
+destinations, mixed imports and modified hosts remain restricted.
+[Evidence and limits](docs/research/universal-magic-pair-20261003.md).
 
 All nine Beast Makers/Misty Bog boar variants now preserve their paths, home
 coordinates, charge state and linked chicken indices after relocation. Integrated
 source checks pass 7,453 class-ownership and 7,111 placement checks; the Release
-App builds cleanly. The native cleared-level example loads and moves the boar,
-but then fails in terrain rendering during movement. The failing export, RAM and
-log are preserved. Runtime acceptance is withheld until the fault is repaired
-and the test repeated. Universal gameplay remains unfinished.
+App builds cleanly. A smaller textured cleared-level example passes native boar
+movement, contact damage, flame defeat and collection of its five-gem reward.
+The original large floor exposed a renderer queue overflow. Batching addresses
+the queue budget, but its native test currently shows invisible terrain and is
+under repair. Both failed exports and evidence are preserved. Universal gameplay
+remains unfinished.
 [Evidence and limits](docs/research/universal-boar-placement-20261002.md).
 
 Dark Passage dogs now bring both transformation models/handlers and their attack

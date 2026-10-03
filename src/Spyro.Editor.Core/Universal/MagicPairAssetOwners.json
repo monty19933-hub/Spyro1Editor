@@ -1,0 +1,53 @@
+{
+  "Length": 2799616,
+  "SceneOffset": 1777664,
+  "SceneLength": 71680,
+  "Owners": [
+    {
+      "Offset": 0,
+      "Length": 2048,
+      "Role": "derived fixed source model registrations/subfile layout and native header owner",
+      "SHA256": "1d4bed341cfa3443be8db3a64393a0c17e696e204e57cca238d13190c48104db"
+    },
+    {
+      "Offset": 2048,
+      "Length": 1001472,
+      "Role": "fixed authenticated host plus source271 import/reaction owner subfile0",
+      "SHA256": "2d81eab5a4f62b041aaf0d0e53aa9e42089f18f575e8403dcb03d8f66fa7192c"
+    },
+    {
+      "Offset": 1003520,
+      "Length": 231424,
+      "Role": "fixed authenticated host plus source271 import/reaction owner subfile1",
+      "SHA256": "701d6b75e0f9dc27d284c1cb91c2d30be8040de5c6c16683a0103ba4b302853c"
+    },
+    {
+      "Offset": 1234944,
+      "Length": 542720,
+      "Role": "fixed authenticated host plus source271 import/reaction owner subfile2",
+      "SHA256": "e19bc67805ca0b923a9e5491258294877168b4586d42cad0704de7c27f6d3ed5"
+    },
+    {
+      "Offset": 1849344,
+      "Length": 339968,
+      "Role": "fixed authenticated host plus source271 import/reaction owner subfile4",
+      "SHA256": "1b2bf882c2362f59c7f7bc4ab0848b54793bd527efef9f63ef9cd13590450c1a"
+    },
+    {
+      "Offset": 2189312,
+      "Length": 227328,
+      "Role": "fixed authenticated host plus source271 import/reaction owner subfile5",
+      "SHA256": "683b71afc790dfc3da18e84b91cbe33ca3879ba34e35fb4ae3a795bee9788863"
+    },
+    {
+      "Offset": 2416640,
+      "Length": 382976,
+      "Role": "fixed authenticated host plus source271 import/reaction owner subfile6",
+      "SHA256": "1e7afd91a9b0df54ab4690821eaf6d8945c263f1f9752c8edea7cfa82ffdb1d7"
+    }
+  ],
+  "SourceDataSHA256": "ad34af2e3401514e7db740691c80fd2bbf59057a55bdfedbaaa39b6939141fcb",
+  "HostDataSHA256": "a937aecb3626ffd2311ba136684a34c9f36877054b52557b4524fcacee0e2d97",
+  "SourceModelSHA256": "46a8bddbf1aef86a86a0178d1845048f2b883edfd876325a026d28f14de40bd5",
+  "Provenance": "Immutable source-conversion owners independently read back from r5. They cover fixed assets/layout, never authored scene coordinates; scene expected bytes are regenerated from authenticated host and actual source templates."
+}

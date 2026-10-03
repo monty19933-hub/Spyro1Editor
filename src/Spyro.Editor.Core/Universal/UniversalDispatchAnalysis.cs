@@ -158,9 +158,9 @@ public static class UniversalDispatchAnalysis
 
     /// <summary>Control-flow closure inside function <paramref name="f"/>; <paramref name="stops"/> are not entered.</summary>
     public static (SortedSet<uint> Instructions, List<UniversalJumpTable> Tables) Closure(UniversalOverlay o, uint f,
-        IEnumerable<uint> entries, ISet<uint> stops, UniversalDryCanyonBirdCertificate? birdBranches = null)
+        IEnumerable<uint> entries, ISet<uint> stops, UniversalDryCanyonBirdCertificate? birdBranches = null, UniversalMagicPairCertificate? magicPair = null)
     {
-        birdBranches?.RequireOwner(o);
+        birdBranches?.RequireOwner(o); magicPair?.RequireOwner(o);
         uint fe = o.FunctionEnd(f);
         SortedSet<uint> seen = [];
         Dictionary<uint, UniversalJumpTable> tables = [];
@@ -182,6 +182,7 @@ public static class UniversalDispatchAnalysis
                     {
                         if (UniversalMips.Rs(w) == 31) break;
                         var t = ResolveJumpTable(o, pc) ?? throw new InvalidDataException($"Unresolved indirect jump at 0x{pc:X8}.");
+                        if(magicPair!=null)t=magicPair.Filter(o,t);
                         tables[pc] = t;
                         foreach (uint x in t.Targets) work.Push(x);
                         break;
