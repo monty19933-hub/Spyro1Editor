@@ -273,6 +273,7 @@ public static class UniversalMobyComposer
             var (c, sk, dep) = work.Dequeue();
             if (c <= 0 || c >= 0x200)
                 throw new InvalidDataException($"Class 0x{c:X3} from {sk} is outside the supported placement range.");
+            UniversalGreenDruidWorldOwnership.Require(destination.Key, sk, c, dest, source(sk).Data, permanentlyRemoved);
             if (reservedSources.Add(sk))
             {
                 var sd = source(sk).Data;
