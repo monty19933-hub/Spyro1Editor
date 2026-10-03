@@ -1,3 +1,20 @@
+# In progress: complete Alpine6/52 terrain dependencies
+
+The original group1 now has immutable source, complete-world storage and typed
+renderer-queue prerequisites. All six sectors, nine animation tracks, 427 collision
+owners, both visibility contexts and both original actor rows are retained. Root
+validation passed 1,229 source checks, 220 source-native controls, 66 translated
+controls, 3,099 storage checks with 39 refusal cases, 1,333 emitted-world controls,
+39 queue checks with 31 refusal cases, 6,513 emitted renderer controls and nine full
+scene-loader controls. The Release App builds with zero warnings/errors.
+
+These stages remain inert. Normal GPU packet capacity and the final actor/world
+capability are still being implemented; this checkpoint does not enroll group1,
+produce its ordinary candidate or claim gameplay. Existing export guards remain.
+[Queue contract](docs/green-group1-terrain-queues-contract.md).
+
+---
+
 # Follow-up: complete linked Alpine Druid and wizard world
 
 Original11/44/53 now composes as one complete group into authored empty Peace
