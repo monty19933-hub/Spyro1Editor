@@ -26,4 +26,6 @@ Root integration owns existing files. A third optional `UniversalGreenDruidGroup
 
 Product source enrollment, ordinary export and a final GPU-admitted coordinator are intentionally absent. A false `ForeignPlacementAdmitted` is an evidence limit, not a caller option. The default user project and original disc are unchanged.
 
+The current inert terrain stage also requires an entry-lifetime correction before any native candidate: its EXE hook jumps into the selected level's appended overlay before the index/copy/scene checks execute. Offline controls with that overlay already loaded do not prove safe entry during title rendering, before loading, or after unloading. A replacement stage must own a resident conditional gate or authenticated installation/restoration across the complete level lifetime. No existing ordinary export uses this inert hook.
+
 The new source suite is `Spyro.Editor.GreenGroup1InstallationSmoke`, with exactly three CLI arguments: original USA BIN, catalog root, NEW report directory. Its required positive marker is `GREEN_DRUID_GROUP1_INERT_INSTALLATION_SOURCE_RESOURCES_EMISSION_OK`; an exit status alone is insufficient. Runner/catalog registration is a separate root-owned integration decision.
