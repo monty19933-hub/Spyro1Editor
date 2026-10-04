@@ -1,4 +1,4 @@
-# Spyro Editor 1.0.5
+# Spyro Editor 1.0.6
 
 ## Start editing
 
@@ -32,6 +32,11 @@ The game has limits on coordinates, collision encoding and memory. If a shape
 cannot be represented safely, the editor explains why. Try a smaller change or
 a simpler face; an unsupported edit does not produce a partially patched game.
 Translucent source faces cannot currently be copied or removed by these tools.
+
+## Dragon statue colours
+
+Double-click a dragon statue and use its colour picker to choose a colour.
+Save the level, then use **Create BIN** to include the change in the game.
 
 ## Teal and rainbow gems
 

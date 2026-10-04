@@ -70,8 +70,9 @@ native-tested candidate SHA256
 
 Native Artisans r1 uses the original New Game entry and original textured
 terrain. Both druids rendered, moved and attacked. Health fell2→1→0 during
-the encounter while lives stayed4. Flame put the green-reward member into
-its death transition; charge defeated the blue-reward member. Native rewards
+the encounter while lives stayed4. The green-reward member reached its death
+transition, but the saved evidence does not establish the attack that caused
+it; charge defeated the blue-reward member. Native rewards
 advanced global and level totals0→2→7, set checkpoint/durable in-memory bits
 174/175 and retired both actors toFD. Original dragon88 was rescued during
 navigation. The original fairy then reported Game Saved to the isolated card;

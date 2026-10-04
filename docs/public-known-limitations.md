@@ -1,4 +1,11 @@
-# Spyro Editor 1.0.5 — supported scope and limitations
+# Spyro Editor 1.0.6 — supported scope and limitations
+
+- This local 1.0.6 checkpoint adds guarded enemy groups and dragon statue colours.
+  The Magic Crafters druid pair in Artisans has fresh combat, Nestor rescue,
+  2+5 gem collection, normal card save and cold-load verification. The reloaded
+  inventory retains 7/94 gems and 1/4 dragons. A second defeat after reload is
+  not yet verified. The unfinished Alpine group-one renderer stays disabled.
+  Mac notarization, Windows gameplay and a whole-campaign playthrough remain open.
 
 - Teal 50 and rainbow 100 gems are available in every level's object browser,
   with brighter, double-size models, idle sparkles, collection bursts and native

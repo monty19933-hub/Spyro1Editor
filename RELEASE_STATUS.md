@@ -1,3 +1,14 @@
+# Local 1.0.6 playable checkpoint — 3 October 2026
+
+Scope expansion stopped at the user's request to provide a usable release and
+conserve credits. This stable-channel package retains the verified editor and
+guarded adapters. Universal gameplay is incomplete; the unfinished Alpine
+group-one renderer remains inert, with every admission flag false. No public
+upload or notarization is performed. Original projects, discs and cards are preserved.
+Private continuation notes are under `work/universal-finish-20261002/green-group1-frame-guard-r1/CONTINUATION-STOP-20261003.md` and `green-group1-modal-callback-independent-r1/CONTINUATION.md` in the task root.
+
+---
+
 # In progress: complete Alpine6/52 terrain dependencies
 
 The original group1 now has immutable source, complete-world storage and typed
@@ -40,7 +51,9 @@ source model alignments, payloads, six-removal scope and allocations remain.
 The retained dragon streams still have36,864 bytes of spare reservation.
 Current Artisans source3302, saved export/readback284, native rescue replay128
 and Dark Hollow8791 checks pass. Release App builds without warnings/errors.
-New native gameplay remains required for these changed export identities.
+Current Artisans gameplay now verifies both charge defeats,2+5 gems,Nestor rescue,
+normal card save and cold-process Load Game with inventory7/94 and1/4.
+Other changed export identities still need fresh native gameplay.
 [Evidence](docs/research/magic-pair-model-alignment-20261003.md).
 
 ---

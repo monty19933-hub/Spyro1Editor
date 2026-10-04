@@ -560,7 +560,7 @@ find it. Create BIN always writes a new BIN/CUE and leaves your original disc
 image untouched.
 
 Your projects and saved edits live outside the application folder, so replacing
-the app with a newer beta does not erase them. See the included guide for
+the app with a newer version does not erase them. See the included guide for
 object placement, terrain painting, skies, music, backups, and updates.
 
 More detail:
