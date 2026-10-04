@@ -10,8 +10,14 @@ Focused actual-window headless verification covers cold selection, dispatcher
 responsiveness, rapid source changes, stale results, search, close/reopen and
 real gem capacity checks. Evidence is in task-root
 `work/object-picker-freeze-20261004`. Package and native GUI results are recorded
-there after building. Tests use isolated projects; user projects and earlier
-packages are preserved. Universal gameplay remains incomplete.
+there after building. The 18 responsiveness checks and 25 Magic Artisans
+capacity checks pass. Both release packages pass their verification, and the
+signed Mac app was exercised through search, object/source selection, normal
+Add and Save in a private project (177 objects, treasure 350). Product source
+is `24d5595`; ZIP hashes and the saved-edit receipt are in
+`work/object-picker-freeze-20261004/final-receipt.json`. Mac notarization and
+Windows execution remain unverified. Saved user edits and previous packages
+are preserved. Universal gameplay remains incomplete.
 
 # Local 1.0.6 playable checkpoint — 3 October 2026
 
