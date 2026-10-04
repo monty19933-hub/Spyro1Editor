@@ -81,7 +81,12 @@ Alpine16/group5 and17/group7 now export their complete original shrinking terrai
 and paths while retaining target−1. They require one original actor each and
 create no dummy target. Integrated saved/reopened export1594, native instruction
 checks8834, paired regressions/byte identity and runner128 pass; the Release App
-builds cleanly. Native gameplay of these new groups remains pending.
+builds cleanly. Fresh row16 full-firmware gameplay now verifies flame defeat,
+red1/inventory1/1, ordinary death persistence, repeat0F orb without duplicate
+treasure and normal jump/glide landing on the complete expanded cube. Independent
+saved-world/model/collider1122 and transition/contact270 checks pass. Its closed
+run preserves the original disc/private card and has no invalid-memory/panic
+entries. Row17, live carry, card save/load and other hosts remain pending.
 [Evidence](docs/research/universal-green-no-target-world-20261003.md).
 
 ---
