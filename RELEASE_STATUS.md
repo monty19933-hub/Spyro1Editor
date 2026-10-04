@@ -15,6 +15,14 @@ and all 200 original fallback RNG/health branches. It retains both complete
 actors, all native resources, the original 91 dynamic slots and a real scene
 reservation for the renderer queues. The Release App builds cleanly.
 
+The complete normal-frame replacement now also passes 88 source/refusal checks,
+37,912 packet-boundary checks, 288 complete-frame comparisons and 30 native
+factory/bootstrap controls against actual root-built output. It retains every
+resource and fits the unchanged overlay ceiling with 34,816 bytes remaining.
+The Release App build remains clean. Mode-12 loading, modal rendering and
+hardware verification remain open; all admission flags remain false.
+[Complete-frame prerequisite](docs/research/green-group1-complete-frame-prerequisite-20261003.md).
+
 These stages remain inert. Normal GPU packet capacity and final export admission
 are still being implemented; this checkpoint does not enroll group1, produce its
 ordinary candidate or claim gameplay. Existing export guards remain.
