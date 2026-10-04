@@ -23,6 +23,20 @@ ordinary candidate or claim gameplay. Existing export guards remain.
 
 ---
 
+# Fixed: Magic pair exports after player-model alignment
+
+Fresh verification caught stale complete-asset certificates in the Magic12/13
+Artisans and Dark Hollow routes. Both now authenticate the aligned model layout.
+Artisans rotates all33 whole packages without moving padding between them; all
+source model alignments, payloads, six-removal scope and allocations remain.
+The retained dragon streams still have36,864 bytes of spare reservation.
+Current Artisans source3302, saved export/readback284, native rescue replay128
+and Dark Hollow8791 checks pass. Release App builds without warnings/errors.
+New native gameplay remains required for these changed export identities.
+[Evidence](docs/research/magic-pair-model-alignment-20261003.md).
+
+---
+
 # Follow-up: complete linked Alpine Druid and wizard world
 
 Original11/44/53 now composes as one complete group into authored empty Peace

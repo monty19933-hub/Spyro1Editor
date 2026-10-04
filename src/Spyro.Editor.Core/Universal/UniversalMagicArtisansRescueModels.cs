@@ -4,7 +4,8 @@ namespace Spyro.Editor.Core.Universal;
 
 /// <summary>Exact original Magic12/13 in Artisans: retain every complete model
 /// and its alignment while preserving the native dragon stream reservation.
-/// Only four generated zero sector-padding bytes move between package tails.</summary>
+/// The shared animation importer preserves root alignment before this exact
+/// whole-package rotation; no payload or package padding is reassigned.</summary>
 internal static class UniversalMagicArtisansRescueModels
 {
     private static string Hash(ReadOnlySpan<byte> b)=>Convert.ToHexStringLower(SHA256.HashData(b));
@@ -13,13 +14,13 @@ internal static class UniversalMagicArtisansRescueModels
     {
         var sf=data.Subfiles()[2];var regs=data.Registrations();
         Require(sf==(1572864,288768)&&regs.Count==33&&
-            Hash(data.Bytes.AsSpan(0,2048))=="0e344e1a117c0469f8dfef070dca2e350af7682eba326d40af6a2d8a4f727420"&&
-            Hash(data.Bytes.AsSpan(sf.Offset,sf.Length))=="3ab0fa019f8301883f8b1c04d320cf4e9d90e5961cb1c2b2448a2884b742c04c",
+            Hash(data.Bytes.AsSpan(0,2048))=="b6bdad6dfbe339ae290b06f946f828f1465faaed072e2e178545ec58eceac456"&&
+            Hash(data.Bytes.AsSpan(sf.Offset,sf.Length))=="f3d4c190582504411962314f065172e7fbf6f35a9d1cd50a8b8cf39b93095274",
             "the complete source-bound model allocation differs from its audited owner.");
         var moved=regs.Single(r=>r.ClassId==271);var anchor=regs.Single(r=>r.ClassId==423);var statue=regs.Single(r=>r.ClassId==250);
-        Require(moved.Root==0x1b1eb4&&anchor.Root==0x1b01f4&&statue.Root==0x1b0350&&moved.Root>statue.Root,
+        Require(moved.Root==0x1b1eb8&&anchor.Root==0x1b01f8&&statue.Root==0x1b0354&&moved.Root>statue.Root,
             "the native statue/imported-model ordering changed.");
-        const int payload=83756,padding=544,shift=84296;
+        const int payload=83756,padding=540,shift=84296;
         Require(data.Package(271).Length==payload+padding&&data.Bytes.AsSpan(moved.Root+payload,padding).IndexOfAnyExcept((byte)0)<0,
             "the complete imported model's generated sector padding changed.");
         var old=data.Bytes.ToArray();var before=new UniversalLevelData(old);
@@ -32,14 +33,12 @@ internal static class UniversalMagicArtisansRescueModels
         foreach(var r in regs)
         {
             var after=data.Registrations().Single(t=>t.ClassId==r.ClassId);Require((after.Root&7)==(r.Root&7),"a complete native model's alignment changed.");
-            byte[] a=before.Package(r.ClassId),b=data.Package(r.ClassId);int common=Math.Min(a.Length,b.Length);
-            Require(a.AsSpan(0,common).SequenceEqual(b.AsSpan(0,common))&&a.AsSpan(common).IndexOfAnyExcept((byte)0)<0&&b.AsSpan(common).IndexOfAnyExcept((byte)0)<0,
-                "a complete native/imported model changed beyond generated zero sector padding.");
-            Require(r.ClassId==271?b.Length==a.Length-4:r.ClassId==251?b.Length==a.Length+4:b.Length==a.Length,"an unexpected model's package extent changed.");
+            byte[] a=before.Package(r.ClassId),b=data.Package(r.ClassId);
+            Require(a.AsSpan().SequenceEqual(b),"a complete native/imported model or its package padding changed.");
         }
         Require(before.Package(271).AsSpan(0,payload).SequenceEqual(data.Package(271).AsSpan(0,payload)),"the entire imported model payload changed.");
-        Require(Hash(data.Bytes.AsSpan(0,2048))=="239d40ca7aa750d61dca42d9bd1d5101c0c1ce431f021b74f2f8d34e86a1823b"&&
-            Hash(data.Bytes.AsSpan(sf.Offset,sf.Length))=="8faa61d56d55cdab9bd224b92147a6785231420b2a310d6a6de20bb3d23badc9",
+        Require(Hash(data.Bytes.AsSpan(0,2048))=="db347383bac5e4baa1e45747eb77a4281c57630f6fabe6da0a373fe72e127576"&&
+            Hash(data.Bytes.AsSpan(sf.Offset,sf.Length))=="021a3ba02ef10c041f6db4b559430f13031910632b597f7023d4e044f6772252",
             "the independently derived complete model/registration owner changed.");
     }
 }

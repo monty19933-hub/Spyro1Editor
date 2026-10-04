@@ -204,14 +204,14 @@ public sealed class UniversalMagicPairCertificate
         // first scoped certificate, rather than admitting generic mutable buffers.
         if(finalized && _hostKey!="artisans")
         {
-            var owners=Resource<AssetOwners>("MagicPairAssetOwners.json","69db09bd5f88d71a5c6b0656c804aea7c9fc979168400c91aa90159384039f3e");
+            var owners=Resource<AssetOwners>("MagicPairAssetOwners.json","95bca7569c62303b711c04a7a33900ead30f5e3c560742e20bea3069101854c5");
             Require(data.Bytes.Length==owners.Length&&data.Subfiles()[3]==(owners.SceneOffset,owners.SceneLength),"asset/scene region allocation differs from source-bound import owner");
             foreach(var region in owners.Owners)Require(H(data.Bytes.AsSpan(region.Offset,region.Length).ToArray())==region.SHA256,"immutable asset owner changed: "+region.Role);
             Require(data.Bytes.AsSpan(owners.SceneOffset,owners.SceneLength).SequenceEqual(ExpectedScene()),"scene differs from authenticated native host plus actual source-derived translated rows/properties/pod/fixups");
         }
         if(finalized && _hostKey=="artisans")
         {
-            var owners=Resource<AssetOwners>("MagicPairArtisansAssetOwners.json","f10ff35aab3da1c1b6a15495782a6a865fa4fa93a33f8e7a1386edca571e8204");
+            var owners=Resource<AssetOwners>("MagicPairArtisansAssetOwners.json","3bf51743a5a0522e56e947f8fadab3f80da5f442c78c714b6cf9307ac051b81a");
             Require(data.Bytes.Length==owners.Length&&data.Subfiles()[3]==(owners.SceneOffset,owners.SceneLength),"Artisans asset/scene allocation differs from independently audited structural owners");
             foreach(var region in owners.Owners)Require(H(data.Bytes.AsSpan(region.Offset,region.Length).ToArray())==region.SHA256,"immutable Artisans asset owner changed: "+region.Role);
             Require(data.Bytes.AsSpan(owners.SceneOffset,owners.SceneLength).SequenceEqual(ExpectedScene()),"Artisans scene differs from original plus authenticated deletions and actual authored source group");

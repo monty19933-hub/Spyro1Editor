@@ -1,5 +1,10 @@
 # Magic Crafters pair: ordinary export integration
 
+Current export identities changed after the shared player-model alignment fix.
+The refreshed complete asset certificates and regression results are recorded
+in [the alignment follow-up](magic-pair-model-alignment-20261003.md). Earlier
+native evidence below applies to the identified earlier candidates only.
+
 The original selector-2 druid pair (Magic Crafters rows 12/13) now uses the
 ordinary placement-group and export path into untouched Dark Hollow. Either
 member can be the authored root. Common translation, unique editor identities,

@@ -7,7 +7,7 @@
       "Offset": 0,
       "Length": 2048,
       "Role": "derived exact originalArtisans layout/registered classes, source271 only; removed072/153",
-      "SHA256": "239d40ca7aa750d61dca42d9bd1d5101c0c1ce431f021b74f2f8d34e86a1823b"
+      "SHA256": "db347383bac5e4baa1e45747eb77a4281c57630f6fabe6da0a373fe72e127576"
     },
     {
       "Offset": 2048,
@@ -24,8 +24,8 @@
     {
       "Offset": 1572864,
       "Length": 288768,
-      "Role": "independently audited originalArtisans/source271 native assets subfile2; complete271 moved before250, all rootmod8 retained, four generated sector-padding bytes reassigned to final251 padding",
-      "SHA256": "8faa61d56d55cdab9bd224b92147a6785231420b2a310d6a6de20bb3d23badc9"
+      "Role": "independently audited originalArtisans/source271 native assets subfile2; complete271 moved before250 after source-native root alignment; all package payloads and padding retained",
+      "SHA256": "021a3ba02ef10c041f6db4b559430f13031910632b597f7023d4e044f6772252"
     },
     {
       "Offset": 1943552,
@@ -75,8 +75,15 @@
     "NativeAvailablePrefix": 280576,
     "ImportedModelPayloadBytes": 83756,
     "MovedBytes": 84296,
-    "GeneratedSectorPaddingReassigned": 4,
+    "GeneratedSectorPaddingReassigned": 0,
     "AllocationGrowth": 0,
-    "PriorModelSHA256": "3ab0fa019f8301883f8b1c04d320cf4e9d90e5961cb1c2b2448a2884b742c04c"
+    "PriorModelSHA256": "f3d4c190582504411962314f065172e7fbf6f35a9d1cd50a8b8cf39b93095274"
+  },
+  "PlayerAnimationAlignment": {
+    "PostTerminatorZeroGap": 4,
+    "AllNativeRootMod8Preserved": true,
+    "CompleteModelCount": 33,
+    "PriorUnalignedModelSHA256": "3ab0fa019f8301883f8b1c04d320cf4e9d90e5961cb1c2b2448a2884b742c04c",
+    "Proof": "magic-rescue-alignment-current-r1/independent-full-model-proof.json"
   }
 }

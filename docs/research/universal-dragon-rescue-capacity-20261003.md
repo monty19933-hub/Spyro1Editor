@@ -1,5 +1,10 @@
 # Native dragon rescue reservation
 
+The later [Magic alignment follow-up](magic-pair-model-alignment-20261003.md)
+updates its complete asset owners and native root alignment. Its current whole
+package rotation retains all padding; the four-byte padding reassignment below
+describes the earlier layout. Reservation and RAM margins remain unchanged.
+
 Removing all instances of a model frees its package, but it can also shorten
 the space the original dragon loader borrows before model250. The ordinary RAM
 budget did not detect this separate temporary owner. The final composer now
