@@ -7,6 +7,19 @@ group-one renderer remains inert, with every admission flag false. No public
 upload or notarization is performed. Original projects, discs and cards are preserved.
 Private continuation notes are under `work/universal-finish-20261002/green-group1-frame-guard-r1/CONTINUATION-STOP-20261003.md` and `green-group1-modal-callback-independent-r1/CONTINUATION.md` in the task root.
 
+Packages are in task-root `outputs/SpyroEditor-V1.0.6-release`, built from
+clean product source `1f64331`. Mac Developer ID signing and both platform
+package checks pass; notarization and Windows execution remain unverified.
+The final packaged Mac app opened a copied project, loaded textured Artisans,
+saved its edits and exported BIN/CUE successfully with zero skipped edits.
+The resulting661547040-byte BIN SHA256 is
+`be08b8ea0a9766067bdf56764edeb1b0196d294629b2b24a991f6242f0bfb556`,
+byte-identical to the previously verified high-value-gem export. Terrain tools
+and command controls remained available afterwards. Original USA hash still
+matches; test app and emulator closed without resume states. No further research
+workers are running. Exact hashes/evidence are in
+`work/universal-finish-20261002/package-1.0.6-final-receipt.json`.
+
 ---
 
 # In progress: complete Alpine6/52 terrain dependencies
