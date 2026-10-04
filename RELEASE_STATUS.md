@@ -86,7 +86,13 @@ red1/inventory1/1, ordinary death persistence, repeat0F orb without duplicate
 treasure and normal jump/glide landing on the complete expanded cube. Independent
 saved-world/model/collider1122 and transition/contact270 checks pass. Its closed
 run preserves the original disc/private card and has no invalid-memory/panic
-entries. Row17, live carry, card save/load and other hosts remain pending.
+entries. The corrected row17 example now also cold-boots through normal New Game,
+preserves the original patrol floor, awards red1/inventory1/1, retains collected
+progress through ordinary death and gives a repeat0F orb without duplicate
+treasure. Seven saved captures pass491 complete world/model/collider checks.
+Its closed run preserves the original disc/private card with no invalid-memory
+or panic entries. Current row17 cube contact, live carry, card save/load and
+other hosts remain pending.
 [Evidence](docs/research/universal-green-no-target-world-20261003.md).
 
 ---
