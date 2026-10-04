@@ -1,4 +1,8 @@
-# Spyro Editor 1.0.6
+# Spyro Editor 1.0.7
+
+The full **Add object…** catalog checks space in the background. You can keep
+searching, change source versions or close the window while it checks. Placement
+becomes available only when the selected object passes its fit check.
 
 ## Start editing
 

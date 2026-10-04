@@ -1,3 +1,18 @@
+# Object picker responsiveness fix — 4 October 2026
+
+Version 1.0.7 moves selected-object and source-version fit calculations off the
+Avalonia UI thread. This removes the synchronous wait on the private-terrain
+async preparation path. Shared background checks are bounded to two workers;
+queued checks cancel on close, and stale results cannot enable a different
+selection. Export composition and gameplay admission rules are unchanged.
+
+Focused actual-window headless verification covers cold selection, dispatcher
+responsiveness, rapid source changes, stale results, search, close/reopen and
+real gem capacity checks. Evidence is in task-root
+`work/object-picker-freeze-20261004`. Package and native GUI results are recorded
+there after building. Tests use isolated projects; user projects and earlier
+packages are preserved. Universal gameplay remains incomplete.
+
 # Local 1.0.6 playable checkpoint — 3 October 2026
 
 Scope expansion stopped at the user's request to provide a usable release and

@@ -90,6 +90,7 @@ internal static class MagicArtisansCapacityUiCases
             Wait(()=>Find<Button>(dialog,"UniversalMobyAddHere").IsEnabled,"saved/reopened six deletion fit");
             Check(Find<TextBlock>(dialog,"UniversalMobyFitText").Text!.Contains("ready to place"),"saved/reopened removals enable the ordinary pair Add action");
             Find<ComboBox>(dialog,"UniversalMobyVariant").SelectedItem=otherRoot;
+            Wait(()=>Find<Button>(dialog,"UniversalMobyAddHere").IsEnabled,"other pair member asynchronous fit");
             Check(Find<Button>(dialog,"UniversalMobyAddHere").IsEnabled,"either original pair member can root the supported group");
             Click(Find<Button>(dialog,"UniversalMobyAddHere"));Complete(open);
             Check(originals.Count(m=>m.IsAdded&&!m.IsRemoved)==2,"ordinary Add action creates the two linked actors");

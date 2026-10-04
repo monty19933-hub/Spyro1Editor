@@ -19,6 +19,74 @@ using Spyro.Editor.Core.Universal;
 internal static class UniversalMobyUiCases
 {
     private static int _checks;
+    internal static void RunSelectionResponsiveness(string outputDirectory)
+    {
+        _checks = 0;
+        var window = new MainWindow { Width = 1440, Height = 900 };
+        window.Show();
+        try
+        {
+            Wait(() => Mobys(window).Count > 0, "initial scene");
+            Load(window, Get<LevelCatalog>(window, "_retailCatalog").FindByKey("artisans")!);
+            int originalCount = Mobys(window).Count;
+            Click(Find<Button>(window, "UniversalMobyLibraryButton"));
+            Window browser = Owned(window, "Add object — Artisans");
+            var list = Find<ListBox>(browser, "UniversalMobyList");
+            Wait(() => Items(list).Length > 150, "complete catalog loaded", 240);
+            var entry = Items(list).Where(e => e.RestrictionReason == null)
+                .OrderByDescending(e => e.Variants.Count).First();
+            list.SelectedItem = entry;
+            var variants = Find<ComboBox>(browser, "UniversalMobyVariant");
+            var last = entry.Variants.Last(v => v.RestrictionReason == null);
+            var clock = Stopwatch.StartNew();
+            variants.SelectedItem = last; // No dispatcher pump: a cold selection must return immediately.
+            Check(clock.ElapsedMilliseconds < 250, "cold source selection returns within 250 ms");
+            Check(Find<TextBlock>(browser, "UniversalMobyFitText").Text!.Contains("Checking"),
+                "cold source selection shows an asynchronous fit check");
+            Check(!Find<Button>(browser, "UniversalMobyPlace").IsEnabled && !Find<Button>(browser, "UniversalMobyAddHere").IsEnabled,
+                "unchecked selection cannot be placed");
+            var search = Find<TextBox>(browser, "UniversalMobySearch");
+            search.Text = "no-match-selection-regression";
+            bool heartbeat = false;
+            Dispatcher.UIThread.Post(() => heartbeat = true);
+            Wait(() => heartbeat, "UI dispatcher remains responsive");
+            Check(Items(list).Length == 0 && !Find<Button>(browser, "UniversalMobyAddHere").IsEnabled,
+                "changing search during a fit check clears selection safely");
+            search.Text = ""; Pump();
+            list.SelectedItem = entry;
+            variants.SelectedItem = entry.Variants.First(v => v.RestrictionReason == null);
+            variants.SelectedItem = last;
+            Wait(() => !(Find<TextBlock>(browser, "UniversalMobyFitText").Text ?? "").Contains("Checking"),
+                "latest source version finishes", 120);
+            Check(Find<TextBlock>(browser, "UniversalMobyTechnical").Text!.Contains($"row T{last.SourceRow}"),
+                "late results keep the latest source identity: expected " + last + "; selected " + variants.SelectedItem + "; details " + Find<TextBlock>(browser, "UniversalMobyTechnical").Text);
+            bool fits = Find<TextBlock>(browser, "UniversalMobyFitText").Text!.StartsWith("✓");
+            Check(Find<Button>(browser, "UniversalMobyAddHere").IsEnabled == fits,
+                "placement reflects the completed exact check");
+            Snapshot(browser, Path.Combine(outputDirectory, "object-picker-responsive.png"));
+            // Start a previously unselected version, then close without waiting for its check.
+            variants.SelectedItem = entry.Variants.First(v => v != last && v != entry.Default && v.RestrictionReason == null);
+            clock.Restart();
+            Find<Button>(browser, "UniversalMobyClose").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(clock.ElapsedMilliseconds < 250 && !browser.IsVisible, "close returns immediately during background checks");
+            Pump();
+            Check(Mobys(window).Count == originalCount, "browsing and cancellation do not mutate the level");
+            Click(Find<Button>(window, "UniversalMobyLibraryButton"));
+            browser = Owned(window, "Add object — Artisans");
+            list = Find<ListBox>(browser, "UniversalMobyList");
+            Wait(() => Items(list).Length > 150, "browser reopens after cancellation", 240);
+            list.SelectedItem = Items(list).Single(e => e.ClassId == 0x1CF);
+            Wait(() => Find<Button>(browser, "UniversalMobyAddHere").IsEnabled, "teal gem still passes the real export check", 120);
+            Click(Find<Button>(browser, "UniversalMobyClose"));
+            Console.WriteLine($"UNIVERSAL_SELECTION_RESPONSIVENESS_OK checks={_checks}");
+        }
+        finally
+        {
+            foreach (var owned in window.OwnedWindows.ToArray()) owned.Close();
+            window.Close(); Pump();
+        }
+    }
+
     internal static void Run(string outputDirectory)
     {
         _checks = 0;

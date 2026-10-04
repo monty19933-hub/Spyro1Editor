@@ -384,6 +384,11 @@ try
         FreshMainUiCases.Run(outputDirectory);
         return 0;
     }
+    if (args.Contains("--universal-selection-ui-only", StringComparer.OrdinalIgnoreCase))
+    {
+        UniversalMobyUiCases.RunSelectionResponsiveness(outputDirectory);
+        return 0;
+    }
     if (args.Contains("--universal-moby-ui-only", StringComparer.OrdinalIgnoreCase))
     {
         UniversalMobyUiCases.Run(outputDirectory);

@@ -444,6 +444,7 @@ public sealed partial class MainWindow
                     ?? entry.Variants.FirstOrDefault(v => v.SourceLevelKey == "magiccrafters" && v.SourceRow == 13);
         };
         using var roomCancellation = new CancellationTokenSource();
+        CancellationToken browserCancellation = roomCancellation.Token;
         dialog.Closed += (_, _) => roomCancellation.Cancel();
         bool findingRoom = false;
         Button close = NewButton("Close"); close.Name = "UniversalMobyClose"; StyleModernSecondaryButton(close);
@@ -477,8 +478,16 @@ public sealed partial class MainWindow
         System.Collections.Concurrent.ConcurrentDictionary<string,Lazy<UniversalCompositionHost>> jointHosts = new();
         int planned = 0;
         System.Collections.Concurrent.ConcurrentDictionary<UniversalMobyCatalogEntry,UniversalMobyVariant> fittingVariants = new();
-        Dictionary<UniversalMobyVariant, UniversalDestinationEstimate> estimates = [];
+        System.Collections.Concurrent.ConcurrentDictionary<UniversalMobyVariant, UniversalDestinationEstimate> estimates = [];
         System.Collections.Concurrent.ConcurrentDictionary<UniversalMobyVariant, (UniversalComposeResult? Result, string? Error)> dryRuns = new();
+        // Share bounded background work between the catalog and selected-object panel.
+        // Never synchronously wait for a composition from an Avalonia event handler:
+        // private-terrain preparation awaits I/O and must not capture a blocked UI thread.
+        var fitWorkers = new SemaphoreSlim(2);
+        var fitTasks = new System.Collections.Concurrent.ConcurrentDictionary<UniversalMobyVariant,
+            Lazy<Task<(UniversalComposeResult? Result, string? Error)>>>();
+        HashSet<UniversalMobyVariant> pendingDetails = [];
+        bool refreshingDetails = false;
         List<UniversalMobyPlacement> existing = CurrentUniversalPlacements();
         List<int> removedRows = CurrentRemovedNativeRows();
         System.Collections.Concurrent.ConcurrentDictionary<UniversalMobyVariant, (UniversalComposeResult? Result, string? Error)> listDry = new();
@@ -526,6 +535,40 @@ public sealed partial class MainWindow
                 // failure to this row instead of cancelling the entire object browser.
                 return [root];
             }
+        }
+
+        Task<(UniversalComposeResult? Result, string? Error)> CheckVariantAsync(UniversalMobyVariant variant) =>
+            fitTasks.GetOrAdd(variant, v => new(() => Task.Run(async () =>
+            {
+                await fitWorkers.WaitAsync(browserCancellation).ConfigureAwait(false);
+                try
+                {
+                    browserCancellation.ThrowIfCancellationRequested();
+                    Est(v);
+                    return CheckPlacement(lib!, existing.Concat(TrialFor(v)).ToList());
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                { return (null, ex.Message); }
+                finally { fitWorkers.Release(); }
+            }, browserCancellation))).Value;
+
+        async Task UpdateSelectedFitAsync(UniversalMobyCatalogEntry entry, UniversalMobyVariant variant)
+        {
+            // Even a cached task must resume after the current selection refresh completes.
+            await Task.Yield();
+            try
+            {
+                var result = await CheckVariantAsync(variant);
+                if (browserCancellation.IsCancellationRequested) return;
+                dryRuns[variant] = result;
+                listDry[variant] = (null, result.Error);
+                if (result.Error == null) fittingVariants[entry] = variant;
+            }
+            catch (OperationCanceledException) when (browserCancellation.IsCancellationRequested) { }
+            finally { pendingDetails.Remove(variant); }
+            // A late result must not enable placement or change another object's details.
+            if (!browserCancellation.IsCancellationRequested && ReferenceEquals(list.SelectedItem, entry) &&
+                Equals(variants.SelectedItem as UniversalMobyVariant ?? entry.Default, variant)) RefreshDetails();
         }
 
         list.ItemTemplate = new FuncDataTemplate<UniversalMobyCatalogEntry>((entry, _) =>
@@ -622,6 +665,14 @@ public sealed partial class MainWindow
 
         void RefreshDetails()
         {
+            if (refreshingDetails || browserCancellation.IsCancellationRequested) return;
+            refreshingDetails = true;
+            try { RefreshDetailsCore(); }
+            finally { refreshingDetails = false; }
+        }
+
+        void RefreshDetailsCore()
+        {
             place.IsEnabled = addHere.IsEnabled = false;
             magicRoom.IsVisible = magicPair.IsVisible = false;
             findRoom.Content = "Find space for this object…";
@@ -661,7 +712,9 @@ public sealed partial class MainWindow
                 magicRoom.Text = UniversalAlpineArtisansRemovalAdvice.Explanation; magicRoom.IsVisible = true;
                 findRoom.Content = "Review the objects needed to make room…";
             }
-            var e = Est(v);
+            // Source-version estimates can also decode models; populate those on the worker.
+            var e = estimates.TryGetValue(v, out var estimate) ? estimate :
+                new UniversalDestinationEstimate(false, v.HasLocalModel, v.HasBehavior, 0, 0, false, "Checking…");
             bool isSpecial = UniversalSpecialCatalog.IsSpecial(v);
             variantLabel.Text = entry.SubCategory == "Dragonfly Eggs" ? "Colour" : "Source version";
             details.Text = $"{DisplaySourceName(entry,v)}\nFrom {LevelName(v.SourceLevelKey)}.\n" +
@@ -703,7 +756,13 @@ public sealed partial class MainWindow
             var trial = existing.Concat(TrialFor(v)).ToList();
             if (trial.Count > existing.Count + 1)
                 details.Text += $"\nIncludes {trial.Count - existing.Count - 1} required linked object(s). They move, copy and remove together.";
-            if (!dryRuns.TryGetValue(v, out var dry)) dryRuns[v] = dry = CheckPlacement(lib, trial);
+            if (!dryRuns.TryGetValue(v, out var dry))
+            {
+                fit.Text = "Checking whether this object fits… You can keep browsing.";
+                fit.Foreground = new SolidColorBrush(ModernMutedInk);
+                if (pendingDetails.Add(v)) _ = UpdateSelectedFitAsync(entry, v);
+                return;
+            }
             listDry[v] = (null, dry.Error);
             if (dry.Error == null) fittingVariants[entry] = v;
             if (dry.Error != null)
@@ -784,8 +843,8 @@ public sealed partial class MainWindow
                 var magicTrial = existing.Concat(TrialFor(magicSelected)).ToList();
                 try
                 {
-                    var check = await Task.Run(() => ExactRetailCheck(lib, magicTrial, MagicArtisansRoomRows), roomCancellation.Token);
-                    if (roomCancellation.IsCancellationRequested) return;
+                    var check = await Task.Run(() => ExactRetailCheck(lib, magicTrial, MagicArtisansRoomRows), browserCancellation);
+                    if (browserCancellation.IsCancellationRequested) return;
                     if (!ReferenceEquals(list.SelectedItem, selectedEntry) || !Equals(variants.SelectedItem as UniversalMobyVariant ?? selectedEntry.Default, magicSelected))
                     { roomExplanation.Text = "Selection changed. Use Review again to check the new choice."; return; }
                     if (check.Error != null || check.Result == null)
@@ -802,7 +861,7 @@ public sealed partial class MainWindow
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception ex) { roomExplanation.Text = "The removal option could not be checked: " + ex.Message; }
-                finally { findingRoom = false; if (!roomCancellation.IsCancellationRequested) RefreshDetails(); }
+                finally { findingRoom = false; if (!browserCancellation.IsCancellationRequested) RefreshDetails(); }
                 return;
             }
             findingRoom = true; findRoom.IsEnabled = false; roomPlans.IsVisible = inspectPlan.IsVisible = false;
@@ -822,7 +881,7 @@ public sealed partial class MainWindow
                     var found = new List<(UniversalMobyVariant Variant, UniversalCapacityAdvice Advice)>();
                     foreach (var item in trials)
                     {
-                        roomCancellation.Token.ThrowIfCancellationRequested();
+                        browserCancellation.ThrowIfCancellationRequested();
                         (UniversalComposeResult? Result,string? Error) ExactCheck(IReadOnlyCollection<int> gone)
                         {
                             var result = ExactRetailCheck(lib,item.Trial,gone);
@@ -836,8 +895,8 @@ public sealed partial class MainWindow
                         if (advice.CurrentError == null || advice.Plans.Count > 0) break;
                     }
                     return found;
-                }, roomCancellation.Token);
-                if (roomCancellation.IsCancellationRequested) return;
+                }, browserCancellation);
+                if (browserCancellation.IsCancellationRequested) return;
                 if (!ReferenceEquals(list.SelectedItem, selectedEntry) || !Equals(variants.SelectedItem as UniversalMobyVariant ?? selectedEntry.Default, selected))
                 { roomExplanation.Text = "Selection changed. Use Find space again to check the new choice."; return; }
                 var choices = reports.SelectMany(r => r.Advice.CurrentError == null
@@ -864,7 +923,7 @@ public sealed partial class MainWindow
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { roomExplanation.Text = ex.Message; }
-            finally { findingRoom = false; if (!roomCancellation.IsCancellationRequested) RefreshDetails(); }
+            finally { findingRoom = false; if (!browserCancellation.IsCancellationRequested) RefreshDetails(); }
         };
 
         async Task AddAsync(bool clickToPlace)
@@ -948,10 +1007,11 @@ public sealed partial class MainWindow
                 var specials = UniversalSpecialCatalog.Entries(japanese != null);
                 entries = [.. entries.Where(e => !UniversalSpecialCatalog.IsSpecial(e.Default)), .. specials];
                 dryRuns.Clear();
+                fitTasks.Clear();
                 foreach (var e in specials) listDry.TryRemove(e.Default, out _);
                 if (lib != null)
                     foreach (var e in specials.Where(e => e.RestrictionReason == null))
-                        listDry[e.Default] = (null, CheckPlacement(lib, existing.Concat(TrialFor(e.Default)).ToList()).Error);
+                        listDry[e.Default] = (null, (await CheckVariantAsync(e.Default)).Error);
                 previewVariant = null;
                 RefreshList(); RefreshDetails();
                 summary.Text = "Japanese disc found — dragonfly eggs and signs are ready to use.";
@@ -975,6 +1035,7 @@ public sealed partial class MainWindow
                 lib = l;
                 if (_freshSceneDocument != null) freshCompilation = await CaptureFreshNativeAsync();
                 else (retailHost,retailPrivateRequest) = await CaptureUniversalRetailHostAsync(l,destination,existing,removedRows,special);
+                if (browserCancellation.IsCancellationRequested) return;
                 planned = await Task.Run(() => PlannedUniversalBytes(l));
                 await Task.Run(() => { foreach (var e in es) Est(e.Default); });
                 var cats = UniversalCategoryOrder.Select(c => (c.Category, c.Sub,
@@ -992,28 +1053,30 @@ public sealed partial class MainWindow
                 RefreshDetails();
                 checking = true;
                 RefreshList();
-                await Task.Run(() => Parallel.ForEach(es.Where(x => x.RestrictionReason == null),
-                    new ParallelOptions { MaxDegreeOfParallelism = Math.Max(2, Environment.ProcessorCount / 2) }, x =>
+                await Parallel.ForEachAsync(es.Where(x => x.RestrictionReason == null),
+                    new ParallelOptions { MaxDegreeOfParallelism = 2, CancellationToken = browserCancellation }, async (x, _) =>
                     {
-                        var trial = existing.Concat(TrialFor(x.Default)).ToList();
-                        var r = CheckPlacement(l, trial);
+                        var r = await CheckVariantAsync(x.Default);
                         listDry[x.Default] = (null, r.Error);
                         if (r.Error == null) { dryRuns[x.Default] = r; fittingVariants[x] = x.Default; }
                         else
                             foreach (var alternative in x.Variants.Where(v => v.Extractable && v.SourceLevelKey != x.Default.SourceLevelKey)
                                 .GroupBy(v => v.SourceLevelKey).Select(g => g.First()))
                             {
-                                var alternate = CheckPlacement(l,existing.Concat(TrialFor(alternative)).ToList());
+                                var alternate = await CheckVariantAsync(alternative);
                                 listDry[alternative] = (null,alternate.Error);
                                 if (alternate.Error != null) continue;
                                 dryRuns[alternative] = alternate; fittingVariants[x] = alternative; break;
                             }
-                    }));
+                    });
+                if (browserCancellation.IsCancellationRequested) return;
                 checking = false;
                 RefreshList();
             }
+            catch (OperationCanceledException) when (browserCancellation.IsCancellationRequested) { }
             catch (Exception ex)
             {
+                if (browserCancellation.IsCancellationRequested) return;
                 summary.Text = ex.Message;
                 summary.Foreground = new SolidColorBrush(ModernRed);
             }
