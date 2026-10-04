@@ -8,9 +8,17 @@ controls, 3,099 storage checks with 39 refusal cases, 1,333 emitted-world contro
 39 queue checks with 31 refusal cases, 6,513 emitted renderer controls and nine full
 scene-loader controls. The Release App builds with zero warnings/errors.
 
-These stages remain inert. Normal GPU packet capacity and the final actor/world
-capability are still being implemented; this checkpoint does not enroll group1,
-produce its ordinary candidate or claim gameplay. Existing export guards remain.
+The exact actor/resource installation stage now also passes 72 source checks
+with 62 refusal cases, 1,333 current-world controls, 145 initializer checks,
+1,152 type-8 checks, 6,513 emitted-renderer controls, nine loaded-scene checks
+and all 200 original fallback RNG/health branches. It retains both complete
+actors, all native resources, the original 91 dynamic slots and a real scene
+reservation for the renderer queues. The Release App builds cleanly.
+
+These stages remain inert. Normal GPU packet capacity and final export admission
+are still being implemented; this checkpoint does not enroll group1, produce its
+ordinary candidate or claim gameplay. Existing export guards remain.
+[Installation contract](docs/universal-green-group1-inert-installation.md).
 [Queue contract](docs/green-group1-terrain-queues-contract.md).
 
 ---
