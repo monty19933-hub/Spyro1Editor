@@ -373,24 +373,66 @@ public sealed partial class MainWindow
             WindowStartupLocation = WindowStartupLocation.CenterOwner };
         ListBox objectsList = new() { Name = "UniversalRemovalObjects", ItemsSource = objects,
             ItemTemplate = new FuncDataTemplate<Moby>((m, _) => new TextBlock { Text = m == null ? "" : $"T{m.TrueIndex}: {m.DisplayLabel}", Margin = new Thickness(6) }) };
-        Button locate = NewButton("Select and show this object"); locate.Name = "UniversalRemovalLocate";
-        StyleModernSecondaryButton(locate);
-        locate.Click += (_, _) =>
+        Button locate = NewButton("Go to object"); locate.Name = "UniversalRemovalLocate";
+        Button remove = NewButton("Remove object"); remove.Name = "UniversalRemovalRemove";
+        StyleModernSecondaryButton(locate); StyleModernSecondaryButton(remove);
+        TextBlock status = NewSmallNote(""); status.Name = "UniversalRemovalStatus";
+        LevelDefinition? inspectedLevel = _currentLevel;
+        bool CurrentScene() => ReferenceEquals(_currentLevel, inspectedLevel) && objects.All(_currentMobys.Contains);
+        bool CanSelect() => CurrentScene() && objectsList.SelectedItem is Moby { IsRemoved: false } m && objects.Contains(m);
+        void UpdateButtons()
         {
-            if (objectsList.SelectedItem is not Moby m || m.IsRemoved) return;
+            locate.IsEnabled = remove.IsEnabled = CanSelect();
+        }
+        void RefreshObjects()
+        {
+            var selected = objectsList.SelectedItem as Moby;
+            objectsList.ItemsSource = CurrentScene() ? objects.Where(m => !m.IsRemoved).ToList() : [];
+            objectsList.SelectedItem = selected is { IsRemoved: false } && CurrentScene() ? selected : null;
+            UpdateButtons();
+            if (!CurrentScene()) status.Text = "The level has changed. Reopen Add object to check this scene.";
+            else if (objects.All(m => m.IsRemoved)) status.Text = "All suggested objects are removed. Reopen Add object to check the available space.";
+        }
+        void SelectObject(bool focus)
+        {
+            if (!CanSelect()) { RefreshObjects(); return; }
             _mobySearchBox.Text = "";
             SelectMobyCategory("All objects");
-            _viewport.SelectMoby(m, true);
+            _viewport.SelectMoby((Moby)objectsList.SelectedItem!, focus);
+        }
+        locate.Click += (_, _) => SelectObject(focus: true);
+        objectsList.DoubleTapped += (_, args) =>
+        {
+            args.Handled = true;
+            SelectObject(focus: true);
         };
+        objectsList.SelectionChanged += (_, _) => UpdateButtons();
+        remove.Click += (_, _) =>
+        {
+            if (!CanSelect()) { RefreshObjects(); return; }
+            var selected = (Moby)objectsList.SelectedItem!;
+            SelectObject(focus: false);
+            if (!ReferenceEquals(_selectedMoby, selected)) return;
+            RemoveSelectedMoby();
+            status.Text = selected.IsRemoved
+                ? $"Removed {selected.DisplayLabel}. Use Undo last removal in the editor's Recovery section to restore it."
+                : _statusText.Text;
+            RefreshObjects();
+        };
+        // This inspector is modeless: reflect removals/undo in the editor and reject stale scenes.
+        review.Activated += (_, _) => RefreshObjects();
         DockPanel panel = new() { Margin = new Thickness(16) };
+        var actions = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8 };
+        actions.Children.Add(locate); actions.Children.Add(remove);
         var header = new StackPanel { Spacing = 8, Children =
         {
-            NewSmallNote($"This checked plan lets the {_retailCatalog.FindByKey(choice.Variant.SourceLevelKey)?.DisplayName ?? choice.Variant.SourceLevelKey} version fit. Inspect each object and use the editor's normal Remove button if you choose. Nothing is removed automatically.\nReopen Add object afterwards to recheck the current scene."),
-            NewSmallNote(string.Join("\n", choice.Plan.Groups.Select(g => $"{g.Name}: {g.Effect}"))), locate
+            NewSmallNote($"This checked plan lets the {_retailCatalog.FindByKey(choice.Variant.SourceLevelKey)?.DisplayName ?? choice.Variant.SourceLevelKey} version fit. Double-click an object to go to it, or select it and choose Remove object. Removals can be undone in the editor's Recovery section.\nReopen Add object afterwards to recheck the current scene."),
+            NewSmallNote(string.Join("\n", choice.Plan.Groups.Select(g => $"{g.Name}: {g.Effect}"))), actions, status
         }};
         DockPanel.SetDock(header, Dock.Top); panel.Children.Add(header); panel.Children.Add(objectsList);
         review.Content = panel; review.Show(this);
         objectsList.SelectedIndex = objects.Count > 0 ? 0 : -1;
+        UpdateButtons();
     }
 
     private async Task ShowUniversalMobyLibraryAsync(Window owner, string? startCategory = null, string? startSub = null)

@@ -1,8 +1,13 @@
-# Spyro Editor 1.0.7
+# Spyro Editor 1.0.8
 
 The full **Add object…** catalog checks space in the background. You can keep
 searching, change source versions or close the window while it checks. Placement
 becomes available only when the selected object passes its fit check.
+
+In **Inspect removal plan**, double-click a row or choose **Go to object** to
+move the camera to it. **Remove object** removes that selection using the normal
+editor behavior; **Recovery → Undo last removal** restores it. Reopen **Add object…**
+after removing objects to check the available space again.
 
 ## Start editing
 

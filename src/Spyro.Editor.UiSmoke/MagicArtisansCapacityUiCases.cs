@@ -72,6 +72,18 @@ internal static class MagicArtisansCapacityUiCases
             Check(listed.Select(m=>m.TrueIndex).SequenceEqual(new[]{7,29,30,31,32,33}),"review displays precisely the six required original identities");
             objects.SelectedItem=originals[31];Click(Find<Button>(review,"UniversalRemovalLocate"));Pump();
             Check(Get<Moby>(window,"_selectedMoby")==originals[31]&&before==Signature(),"Select and show locates an existing Gnorc without removing it");
+            var camera=Get<EditorViewport>(window,"_viewport").CaptureNavigationSnapshotForTesting();
+            Click(Find<Button>(review,"UniversalRemovalRemove"));
+            Check(originals[31].IsRemoved&&!objects.ItemsSource!.Cast<Moby>().Contains(originals[31]),"inspector Remove uses normal removal and updates its list");
+            var afterRemoval=Get<EditorViewport>(window,"_viewport").CaptureNavigationSnapshotForTesting();
+            Check(afterRemoval with { SelectedMobyIndex=camera.SelectedMobyIndex }==camera,"inspector removal preserves the camera position");
+            Check(!Find<Button>(review,"UniversalRemovalRemove").IsEnabled,"removal clears selection so a second click cannot remove another object");
+            Invoke(window,"UndoLastRemovedMoby");
+            Check(before==Signature(),"normal Undo last removal restores the inspector deletion");
+            objects.SelectedItem=originals[29];var currentLevel=Get<LevelDefinition>(window,"_currentLevel");
+            Set(window,"_currentLevel",catalog.FindByKey("stonehill"));Click(Find<Button>(review,"UniversalRemovalRemove"));
+            Check(before==Signature()&&!Find<Button>(review,"UniversalRemovalRemove").IsEnabled,"an old inspector cannot delete after changing levels");
+            Set(window,"_currentLevel",currentLevel);
             review.Close();Pump();
             Set(window,"_selectedMoby",originals[7]);Invoke(window,"RemoveSelectedMoby");
             Open();Click(Find<Button>(dialog,"UniversalMagicArtisansPair"));Click(Find<Button>(dialog,"UniversalMobyFindRoom"));

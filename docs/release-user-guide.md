@@ -1,6 +1,6 @@
-# Spyro Editor 1.0.7 Guide
+# Spyro Editor 1.0.8 Guide
 
-Current internal build: `1.0.7`. The historical Beta V6 reference below
+Current internal build: `1.0.8`. The historical Beta V6 reference below
 describes internal build `0.1.0-beta.54`.
 
 For the normal release workflow, use the [user guide](public-user-guide.md) and

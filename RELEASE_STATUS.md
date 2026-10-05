@@ -1,3 +1,12 @@
+# Removal-plan inspector controls — 4 October 2026
+
+Version 1.0.8 adds double-click navigation and a Remove object action to the
+removal-plan inspector. Removal uses the normal editor path, preserves camera
+position and remains recoverable with Recovery > Undo last removal. Modeless
+inspectors refresh their rows and reject actions after the scene changes.
+Evidence is in task-root `work/removal-inspector-20261004`. No gameplay or
+export-admission changes are included.
+
 # Object picker responsiveness fix — 4 October 2026
 
 Version 1.0.7 moves selected-object and source-version fit calculations off the
