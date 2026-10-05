@@ -125,10 +125,15 @@
   it belongs to the game you export.
 - Signs show one message at a time when several are close together. A sign
   with no message shows nothing.
-- The macOS arm64 package was opened and used on the build Mac. It is not
-  notarized, so macOS asks for confirmation the first time (see
-  `MACOS-OPEN-INSTRUCTIONS.txt`). The Windows x64 package structure is checked;
-  the Windows build was not run, because no Windows machine was available.
+- The macOS arm64 package was opened and used on the build Mac. It is signed
+  but not notarized, so on another Mac macOS asks for confirmation the first
+  time (see `MACOS-OPEN-INSTRUCTIONS.txt`). macOS also asks once whether the
+  editor may use the Documents folder, where projects are kept; the editor's
+  window appears after that question is answered. The Windows x64 package
+  structure is checked; the Windows build was not run, because no Windows
+  machine was available.
+- Create BIN wants about 2.1 GB of free disk space (3.3 GB with a level you
+  built) and refuses to start with less.
 - Use the supported unchanged USA SCUS_942.28 source. Japanese eggs/signs require
   the supported SCPS_100.83 image supplied locally. Custom music import and every
   native texture format are not supported.

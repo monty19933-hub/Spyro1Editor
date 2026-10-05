@@ -11,6 +11,35 @@ public static class ExportScratchSpace
 
     public static string AggregateRoot(string workspace) => Path.Combine(workspace, "_local", "authored-aggregate");
 
+    /// <summary>
+    /// Room Create BIN wants on the project's disk before it starts. It writes working copies of the whole
+    /// game image (three for ordinary edits, up to five when the project has levels you built) before the
+    /// finished one is published; starting with less risks filling the disk half-way through.
+    /// </summary>
+    public static long RequiredFreeBytes(long sourceImageBytes, int workingCopies) =>
+        Math.Max(sourceImageBytes, 600L * 1024 * 1024) * Math.Clamp(workingCopies, 2, 8) + 256L * 1024 * 1024;
+
+    /// <summary>Free bytes on the disk that holds the folder, or null when that cannot be told.</summary>
+    public static long? FreeBytes(string folder)
+    {
+        try { return new DriveInfo(Path.GetFullPath(folder)).AvailableFreeSpace; }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException) { return null; }
+    }
+
+    /// <summary>A sentence for the user when there is too little room, otherwise null. Unknown free space never blocks.</summary>
+    public static string? DescribeShortage(long? freeBytes, long sourceImageBytes, int workingCopies)
+    {
+        if (freeBytes is not long free)
+            return null;
+        long required = RequiredFreeBytes(sourceImageBytes, workingCopies);
+        if (free >= required)
+            return null;
+        static string Gb(long bytes) => (bytes / (1024d * 1024 * 1024)).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+        return $"Create BIN needs about {Gb(required)} GB of free disk space while it works (the finished game takes about " +
+               $"{Gb(Math.Max(sourceImageBytes, 600L * 1024 * 1024))} GB). Only {Gb(free)} GB is free on the disk that holds your project. " +
+               "Free some space and press Create BIN again. Nothing was changed.";
+    }
+
     /// <summary>Deletes one staging folder. Never throws: failing to clean up must not fail an export.</summary>
     public static void Delete(string folder)
     {

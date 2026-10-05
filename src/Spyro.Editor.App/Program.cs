@@ -67,7 +67,10 @@ internal static class Program
         catch (Exception exception)
         {
             EditorDiagnostics.RecordException("preparing persistent project storage", exception, fatal: true);
-            throw;
+            // Ending here would show nothing at all. Open a small window that says what is wrong instead.
+            App.StartupProblem = Views.StartupProblem.For(exception);
+            try { App.StartupLogFolder = EditorDiagnostics.DefaultLogDirectory(); }
+            catch (Exception) { App.StartupLogFolder = null; }
         }
         RegisterExceptionLogging();
 
@@ -76,6 +79,11 @@ internal static class Program
         {
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
             cleanShutdown = true;
+            if (App.StartupProblem != null)
+            {
+                EditorDiagnostics.MarkCleanShutdown();
+                return 1;
+            }
         }
         catch (Exception exception)
         {

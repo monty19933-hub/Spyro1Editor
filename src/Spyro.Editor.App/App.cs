@@ -14,10 +14,16 @@ public sealed class App : Application
         Styles.Add(new FluentTheme());
     }
 
+    /// <summary>Set by Program when the project could not be prepared: the editor then explains instead of opening.</summary>
+    internal static StartupProblem? StartupProblem { get; set; }
+    internal static string? StartupLogFolder { get; set; }
+
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            desktop.MainWindow = new MainWindow();
+            desktop.MainWindow = StartupProblem != null
+                ? new StartupProblemWindow(StartupProblem, StartupLogFolder)
+                : new MainWindow();
 
         base.OnFrameworkInitializationCompleted();
     }

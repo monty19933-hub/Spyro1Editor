@@ -200,15 +200,15 @@ public sealed partial class MainWindow
         if (_freeFlightRevert != null) _freeFlightRevert.IsEnabled = retail && !busy;
         if (_releaseMode)
         {
-            const string what =
-                "In the game you export, Spyro can fly in every normal level the way he does in Gnasty's Loot: jump, then press ✕ again in the air. " +
+            const string how =
+                "Spyro can fly in every normal level the way he does in Gnasty's Loot: jump, then press ✕ again in the air. " +
                 "The five flight levels keep their own rules. This is separate from the editor's Game Camera, which always flies.";
             _freeFlightDetails.Text = _freeFlightError.Length != 0
                 ? "This setting could not be read, so it is left as it was: " + _freeFlightError
                 : !retail ? "Open a level to change this setting."
-                : (_freeFlightSnapshot?.GlobalEnabled == true
-                    ? "On. The next Create BIN includes it. "
-                    : "Off. Spyro moves as in the original game. ") + what;
+                : _freeFlightSnapshot?.GlobalEnabled == true
+                    ? "On. The next Create BIN includes it. In the game you export, " + how
+                    : "Off. Spyro moves as in the original game. Tick the box and, in the next game you export, " + how;
             return;
         }
         if (_freeFlightError.Length != 0) _freeFlightDetails.Text = "Fly Anywhere settings unavailable: " + _freeFlightError;

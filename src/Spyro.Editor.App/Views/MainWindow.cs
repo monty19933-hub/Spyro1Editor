@@ -13373,8 +13373,31 @@ public sealed partial class MainWindow : Window
         _statusText.Text = statusText;
     }
 
+    /// <summary>Lets a test pretend the disk is nearly full.</summary>
+    internal Func<string, long?>? FreeDiskBytesOverrideForTesting { get; set; }
+
+    /// <summary>Create BIN on a nearly full disk would write gigabytes of working copies until nothing is left.</summary>
+    private bool TryGetCreateBinDiskSpaceBlockReason(out string reason)
+    {
+        bool builtLevels = _freshSceneDocument != null || File.Exists(FreshScenePath) ||
+            SceneDocumentStore.ReadAll(_workspace.RootPath, _retailCatalog).Count > 0;
+        string image = FirstExistingDiscImagePath(_discImagePathBox.Text, _skyboxDiscImagePathBox.Text, DiscImageLocator.FindImage(_workspace));
+        long imageBytes = File.Exists(image) ? new FileInfo(image).Length : 0;
+        long? free = FreeDiskBytesOverrideForTesting != null
+            ? FreeDiskBytesOverrideForTesting(_workspace.RootPath)
+            : ExportScratchSpace.FreeBytes(_workspace.RootPath);
+        reason = ExportScratchSpace.DescribeShortage(free, imageBytes, builtLevels ? 5 : 3) ?? "";
+        return reason.Length > 0;
+    }
+
     private async Task CreateObjectTestBinCoreAsync()
     {
+        if (_releaseMode && TryGetCreateBinDiskSpaceBlockReason(out string diskSpaceReason))
+        {
+            _statusText.Text = diskSpaceReason;
+            EditorDiagnostics.RecordWarning("Create BIN not started", diskSpaceReason);
+            return;
+        }
         if (_freshSceneDocument != null || SceneDocumentStore.ReadAll(_workspace.RootPath,_retailCatalog).Count>0) { await CreateFreshMainBinAsync(); return; }
         if (TryGetId65BlankLabNormalCreateBinBlockReason(out string id65BlockReason))
         {

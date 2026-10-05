@@ -47,6 +47,14 @@ if (args.Contains("--terrain-problem-ui", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Contains("--startup-problem-ui", StringComparer.Ordinal))
+{
+    if (args.Length != 2) throw new ArgumentException("Usage: UiSmoke --startup-problem-ui <output folder>");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    StartupProblemCases.Run(args[1]);
+    return 0;
+}
+
 if (args.Contains("--plain-status-only", StringComparer.Ordinal))
 {
     PlainStatusCases.Run();

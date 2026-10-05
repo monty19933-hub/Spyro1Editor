@@ -164,6 +164,18 @@ internal static class KeyboardUiCases
             Check(viewport.TerrainBrushAction == TerrainBrushAction.Off, "1 does not switch a brush on outside the Terrain tab");
             Check(EditSignature(window.CaptureEditorShellSessionSnapshotForTesting()) == editsBefore,
                 "after all of that the level is exactly as it was");
+            // 5. Create BIN on a nearly full disk says so and starts nothing.
+            var spaceOverride = typeof(MainWindow).GetProperty("FreeDiskBytesOverrideForTesting", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            spaceOverride.SetValue(window, (Func<string, long?>)(_ => 300L * 1024 * 1024));
+            var createBin = (Task)Invoke(window, "CreateObjectTestBinAsync")!;
+            Wait(() => createBin.IsCompleted, "Create BIN returns at once on a nearly full disk", 60);
+            Pump(20);
+            Check((status.Text ?? "").StartsWith("Create BIN needs about ", StringComparison.Ordinal) && status.Text!.Contains("Only 0.3 GB is free", StringComparison.Ordinal),
+                "Create BIN says how much room it needs: " + status.Text);
+            Check(!Directory.Exists(Path.Combine(workspace, "output")) || Directory.GetFiles(Path.Combine(workspace, "output"), "*.bin", SearchOption.AllDirectories).Length == 0,
+                "nothing was written to the output folder");
+            Check(!Get<bool>(window, "_createBinBusy"), "the Create BIN button is free again");
+            spaceOverride.SetValue(window, null);
             Console.WriteLine($"KEYBOARD_UI_OK checks={_checks}");
         }
         finally { window.Close(); Pump(10); }

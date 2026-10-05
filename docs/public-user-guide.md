@@ -28,6 +28,9 @@ choose **Allow**. The editor's window appears after you answer.
 - **Create BIN** saves first, then builds a new BIN and CUE from everything saved
   in the project. The files go in the project's `output` folder. Your original
   disc is never changed.
+- Create BIN needs working room on the disk that holds your project: about
+  2.1 GB, or 3.3 GB when the project has a level you built. With less it says
+  so and starts nothing.
 - If something cannot be put in the game, the editor says what and where, and
   nothing half-built is written: the game you created last stays exactly as it
   was. **More ▾ → Check for Export Issues…** runs the same check without building.

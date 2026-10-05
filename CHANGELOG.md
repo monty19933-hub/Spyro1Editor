@@ -25,6 +25,7 @@ Clearer
 - Coloured buttons keep their colour under the pointer instead of turning grey.
 - While the game is being read for the first time the view says so, and the result is reported in one plain sentence.
 - The question asked when you close with unsaved terrain explains that object changes are kept automatically.
+- The Create BIN question lists only the levels you changed; Fly Anywhere has its own line.
 
 Fixed
 
@@ -35,6 +36,8 @@ Fixed
 - In a level you built yourself (New Level or Start Blank), painting a texture on the starting floor, or on any tile wider than 255 units, made Create BIN refuse the level. Large painted tiles now export.
 - A failed Create BIN never touches the game you created before; this is now tested.
 - A single-letter key (C or V) could copy and paste a tile's look without any hint. That shortcut is off.
+- Create BIN did not look at free disk space. On a nearly full disk it kept writing working copies of the game (several gigabytes) until nothing was left. It now says how much room it needs and starts nothing when there is too little.
+- When the project could not be prepared at start (for example macOS had not allowed the Documents folder, or a file in the project's support folder was in the way) the editor ended without showing anything. It now opens a small window that says what is wrong and what to do.
 - After removing an object the editor selected the first object in the list by itself, so a second press of Delete would have removed something you never chose. Nothing is selected after a removal now.
 - The camera keys (W A S D Q E and the arrows) also reacted while Command, Control or Alt was held, so a shortcut could nudge the view. They are bare keys only now.
 
