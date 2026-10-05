@@ -8366,7 +8366,17 @@ public sealed partial class EditorViewport : Control
                 : $"Painting {paint}: click tiles to paint them  ·  Esc stops  ·  {move}";
         }
         if (_terrainBrushAction != TerrainBrushAction.Off)
-            return $"{TerrainBrushActionLabel(_terrainBrushAction)}: drag over the ground  ·  keys 1–5 change brush, 0 turns it off  ·  {move}";
+        {
+            string brush = _terrainBrushAction switch
+            {
+                TerrainBrushAction.Raise => "Raise ground",
+                TerrainBrushAction.Lower => "Lower ground",
+                TerrainBrushAction.Blend => "Smooth ground",
+                TerrainBrushAction.Flatten => "Level ground",
+                _ => "Restore original shape"
+            };
+            return $"{brush}: drag over the ground  ·  keys 1–5 change brush, 0 turns it off  ·  {move}";
+        }
         if (IsTerrainVisualFocusActive())
             return $"Click a tile to select it  ·  drag to move  ·  Shift-drag changes height  ·  {(OperatingSystem.IsMacOS() ? "⌘" : "Ctrl")}-click selects several  ·  {move}";
         return $"Click an object to select it  ·  drag to move  ·  double-click to edit  ·  {move}";

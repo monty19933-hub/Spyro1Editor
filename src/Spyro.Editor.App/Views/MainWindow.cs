@@ -10569,6 +10569,7 @@ public sealed partial class MainWindow : Window
     private void RefreshActionAvailability()
     {
         RefreshWelcomeOverlay();
+        RefreshReleaseTerrainPanelTexts();
         RefreshPortalRouteAvailability();
         bool hasLevel = _currentLevel != null;
         bool manualId65OperationActive = _id65BlankLabBusy &&
@@ -19750,9 +19751,10 @@ public sealed partial class MainWindow : Window
         if (selected.Action != TerrainBrushAction.Off)
             StopTerrainTexturePaintMode(announce: false);
         _viewport.TerrainBrushAction = selected.Action;
+        RefreshReleaseTerrainPanelTexts();
         RefreshTerrainBrushHistoryText();
         if (selected.Action != TerrainBrushAction.Off)
-            _statusText.Text = $"{selected.Label}: left-drag terrain in Edit Map or Game Camera to paint with the smooth brush.";
+            _statusText.Text = $"{selected.Label}: drag over the ground in the view. Key 0 turns the brush off.";
     }
 
     private void RunTerrainBrushCommandOrMode(TerrainBrushAction action, Action selectedAction)
@@ -19775,7 +19777,7 @@ public sealed partial class MainWindow : Window
         _terrainBrushModeBox.SelectedItem = option;
         RefreshTerrainBrushMode();
         if (announce)
-            _statusText.Text = $"{option.Label}: left-drag terrain in Edit Map or Game Camera to paint with the smooth brush.";
+            _statusText.Text = $"{option.Label}: drag over the ground in the view. Key 0 turns the brush off.";
     }
 
     private void ResetTerrainBrush()
@@ -21883,6 +21885,7 @@ public sealed partial class MainWindow : Window
         _selectedTerrainPointIndex = NormalizeTerrainPointIndex(_selectedTerrain, _selectedTerrainPointIndex);
         _viewport.SetSelectedTerrainPoint(_selectedTerrainPointIndex);
         _terrainPointEditText.Text = BuildSelectedTerrainPointSummary();
+        RefreshReleaseTerrainPanelTexts();
     }
 
     private float SelectedTerrainPointDelta()
@@ -22085,6 +22088,7 @@ public sealed partial class MainWindow : Window
         if (_terrainTaskRemoveFaceButton != null)
             _terrainTaskRemoveFaceButton.Content = count >= 2 ? $"Remove {count} Tiles" : "Remove Terrain";
         RefreshActionAvailability();
+        RefreshReleaseTerrainPanelTexts();
         if (count >= 2)
         {
             int removed = MultiSelectedTerrainFaces().Count(face => face.Face.IsTerrainRemoved);
@@ -32814,12 +32818,12 @@ public sealed partial class MainWindow : Window
     {
         public static IReadOnlyList<TerrainBrushModeOption> All { get; } =
         [
-            new("Off - select objects", TerrainBrushAction.Off),
-            new("Raise terrain", TerrainBrushAction.Raise),
-            new("Lower terrain", TerrainBrushAction.Lower),
-            new("Blend/smooth terrain", TerrainBrushAction.Blend),
-            new("Level terrain", TerrainBrushAction.Flatten),
-            new("Restore original terrain", TerrainBrushAction.Restore)
+            new("Brush off — select tiles", TerrainBrushAction.Off),
+            new("Raise ground", TerrainBrushAction.Raise),
+            new("Lower ground", TerrainBrushAction.Lower),
+            new("Smooth ground", TerrainBrushAction.Blend),
+            new("Level ground", TerrainBrushAction.Flatten),
+            new("Restore original shape", TerrainBrushAction.Restore)
         ];
 
         public override string ToString()

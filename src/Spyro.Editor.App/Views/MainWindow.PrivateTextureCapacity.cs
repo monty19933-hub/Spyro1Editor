@@ -145,6 +145,10 @@ public sealed partial class MainWindow
                 Math.Max(0, appendedCapacity - stagedRows);
             int capacity = nativeSlots.Total + appendedCapacity;
             int remaining = nativeSlots.Remaining + appendedRemaining;
+            _terrainTextureSlotsKnown = _currentLevel != null;
+            _terrainTextureSlotsTotal = capacity;
+            _terrainTextureSlotsRemaining = remaining;
+            RefreshReleaseTerrainPanelTexts();
             string latestCheck = "";
             bool checkTargetsCurrentLevel = string.Equals(
                 currentLevelKey,

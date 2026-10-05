@@ -3522,6 +3522,7 @@ public sealed partial class MainWindow
                 _terrainTexturePaintStopButton.IsEnabled = false;
             if (_terrainTexturePaintReturnButton != null)
                 _terrainTexturePaintReturnButton.IsEnabled = false;
+            RefreshReleaseTerrainPanelTexts();
             return;
         }
 
@@ -3538,6 +3539,7 @@ public sealed partial class MainWindow
               "Undo Selected removes only the texture record under the selected terrain section.";
         _terrainTexturePaintModeText.Text =
             $"{state}\nSource: {_activeTerrainTexturePaintBrush.DisplayLabel}.{last}{staged}";
+        RefreshReleaseTerrainPanelTexts();
         if (_terrainTexturePaintStopButton != null)
             _terrainTexturePaintStopButton.IsEnabled =
                 !_id65BlankLabBusy &&

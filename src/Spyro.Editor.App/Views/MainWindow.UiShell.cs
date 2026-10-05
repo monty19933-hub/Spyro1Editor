@@ -522,7 +522,7 @@ public sealed partial class MainWindow
             "Object Manager",
             BuildId65LevelBuildingObjectManager());
 
-        _retailTerrainWorkspace=_releaseMode ? BuildReleaseTerrainTextureWorkspace() : BuildTerrainTabControls();
+        _retailTerrainWorkspace=_releaseMode ? BuildReleaseTerrainWorkspace() : BuildTerrainTabControls();
         _modernTerrainWorkspaceTab = NewModernWorkspaceTab(
             "Terrain",
             new StackPanel { Spacing = 8, Children = { BuildFreshTerrainTools(),
