@@ -10,6 +10,8 @@ using Spyro.Editor.Core.Persistence;
 if (args.Length != 0 && (args.Length != 4 || args[0] != "--flight-production"))
     throw new ArgumentException("Usage: CombinedExportPublicationSmoke [--flight-production original.bin original.cue NEW_DIRECTORY]");
 
+VerifyExportScratchSpace();
+
 string fixtureRoot = Path.Combine(Path.GetTempPath(), $"spyro-combined-publication-{Guid.NewGuid():N}");
 Directory.CreateDirectory(fixtureRoot);
 File.WriteAllText(Path.Combine(fixtureRoot, "spyro-level-catalog.json"), "{\"levels\":[]}");
@@ -128,6 +130,43 @@ static void Require(bool condition, string message)
 {
     if (!condition)
         throw new InvalidOperationException(message);
+}
+
+// Create BIN working copies must not accumulate in the project: stale staging folders are swept,
+// a running export's folder is kept, and only the newest authored baseline image survives.
+static void VerifyExportScratchSpace()
+{
+    string workspace = Path.Combine(Path.GetTempPath(), $"spyro-export-scratch-{Guid.NewGuid():N}");
+    try
+    {
+        string root = Spyro.Editor.Core.Exporting.ExportScratchSpace.AggregateRoot(workspace);
+        string stale = Path.Combine(root, "stale"), nested = Path.Combine(stale, "_combined-build"), live = Path.Combine(root, "live");
+        Directory.CreateDirectory(nested); Directory.CreateDirectory(live);
+        File.WriteAllBytes(Path.Combine(stale, "retail-stage.bin"), new byte[4096]);
+        File.WriteAllBytes(Path.Combine(nested, "step.bin"), new byte[1024]);
+        File.WriteAllBytes(Path.Combine(live, "fresh-host.bin"), new byte[2048]);
+        DateTime old = DateTime.UtcNow.AddHours(-3);
+        foreach (string file in Directory.GetFiles(stale, "*", SearchOption.AllDirectories)) File.SetLastWriteTimeUtc(file, old);
+        Directory.SetLastWriteTimeUtc(nested, old); Directory.SetLastWriteTimeUtc(stale, old);
+        long freed = Spyro.Editor.Core.Exporting.ExportScratchSpace.SweepStale(workspace, TimeSpan.FromHours(1));
+        Require(freed == 5120 && !Directory.Exists(stale), "Stale Create BIN working copies were not removed.");
+        Require(File.Exists(Path.Combine(live, "fresh-host.bin")), "A recent export's working copy must be kept.");
+        Spyro.Editor.Core.Exporting.ExportScratchSpace.Delete(live);
+        Spyro.Editor.Core.Exporting.ExportScratchSpace.Delete(Path.Combine(root, "never-created"));
+        Require(!Directory.Exists(live), "An export's working copy must be deletable when it finishes.");
+        string baselines = Path.Combine(workspace, "_local", "authored-native");
+        Directory.CreateDirectory(baselines);
+        string keep = Path.Combine(baselines, "scene-new.bin"), dead = Path.Combine(baselines, "scene-old.bin");
+        File.WriteAllBytes(keep, new byte[16]); File.WriteAllBytes(dead, new byte[32]);
+        Require(Spyro.Editor.Core.Exporting.ExportScratchSpace.PruneAuthoredBaselines(workspace, keep) == 32 &&
+                File.Exists(keep) && !File.Exists(dead), "Only the newest authored baseline image may remain.");
+        Require(Spyro.Editor.Core.Exporting.ExportScratchSpace.SweepStale(Path.Combine(workspace, "missing"), TimeSpan.Zero) == 0,
+            "Sweeping a project without working copies must be a no-op.");
+    }
+    finally
+    {
+        if (Directory.Exists(workspace)) Directory.Delete(workspace, recursive: true);
+    }
 }
 
 static void Complete(Task task)

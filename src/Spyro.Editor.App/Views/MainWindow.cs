@@ -372,6 +372,7 @@ public sealed partial class MainWindow : Window
     {
         _workspace = EditorWorkspace.Find();
         _releaseMode = IsReleaseMode(_workspace);
+        BeginExportScratchSweep();
         _retailCatalog = LevelCatalog.Load(_workspace.RootPath);
         _catalog = ResetCatalogForDeferredId65BlankLabValidation(_retailCatalog);
         _skyboxDiscImagePathBox.Text = DiscImageLocator.FindImage(_workspace);
@@ -28024,6 +28025,30 @@ public sealed partial class MainWindow : Window
                 _id65BlankLabManifest.LockedBaseImageSha256,
                 _id65BlankLabTextureOverlaySha256,
                 UnusedLevel65BlankLevelLabProfileRegistry.ResidentTextureCount);
+    }
+
+    /// <summary>
+    /// Create BIN working copies left by an interrupted or older run are several GB each. Nothing can still
+    /// own a folder that has been untouched for an hour, so those are removed when a project opens.
+    /// </summary>
+    private void BeginExportScratchSweep()
+    {
+        if (!_releaseMode)
+            return;
+        string workspace = _workspace.RootPath;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                long freed = ExportScratchSpace.SweepStale(workspace, TimeSpan.FromHours(1));
+                if (freed > 0)
+                    EditorDiagnostics.RecordAction("Removed leftover Create BIN working copies", $"{freed / (1024 * 1024)} MB freed in {workspace}");
+            }
+            catch (Exception exception)
+            {
+                EditorDiagnostics.RecordException("removing leftover Create BIN working copies", exception);
+            }
+        });
     }
 
     private static bool IsReleaseMode(EditorWorkspace workspace)

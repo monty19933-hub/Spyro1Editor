@@ -161,6 +161,7 @@ public sealed partial class MainWindow
         {
             _freshNativeCompilationKey=key;
             string baseline=Path.Combine(_workspace.RootPath,"_local","authored-native",scene.Id+"-"+scene.Fingerprint()+".bin");
+            ExportScratchSpace.PruneAuthoredBaselines(_workspace.RootPath,baseline);
             _freshNativeCompilation=Task.Run<INativeAuthoredCompilation>(async () =>
             {
                 var flight = _releaseMode ? null : await NativeFreeFlightCompositionPlan.CaptureAsync(sourceImage, flightEnabled);
@@ -212,12 +213,15 @@ public sealed partial class MainWindow
         }).ToArray();
         string outputFolder=Path.Combine(workspacePath,"output");Directory.CreateDirectory(outputFolder);
         CombinedTestBinResult? retail=null;
+        string? retailStage=null;
+        try
+        {
         var targets=FindEditedLevelExportTargets();
         if(targets.Count>0)
         {
             ReportCreateBinProgress("Merging saved levels…","Create BIN: composing saved changes from the other levels…");
-            retail=await CreateSavedEditsStageAsync(original,DiscImageLocator.FindCueForImage(original),
-                Path.Combine(workspacePath,"_local","authored-aggregate",Guid.NewGuid().ToString("N")),targets,true);
+            retailStage=Path.Combine(ExportScratchSpace.AggregateRoot(workspacePath),Guid.NewGuid().ToString("N"));
+            retail=await CreateSavedEditsStageAsync(original,DiscImageLocator.FindCueForImage(original),retailStage,targets,true);
             if(retail.SkippedEdits>0)throw new InvalidDataException("Saved changes could not be included: "+string.Join("; ",retail.SkippedEditDetails));
             RequireOwner();
         }
@@ -235,6 +239,9 @@ public sealed partial class MainWindow
         RequireOwner();
         string startName=saved.FirstOrDefault(s=>s.ResolveTarget(_retailCatalog).LevelId==startLevelId)?.Name??"Artisans";
         _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. All saved level replacements and other saved edits are included."+PreservedResearchExportNote();
+        }
+        // The merged retail image is a working copy for this export only.
+        finally{if(retailStage!=null)ExportScratchSpace.Delete(retailStage);}
     }
 
     private Control BuildFreshDocumentSettings()

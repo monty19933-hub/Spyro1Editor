@@ -21,6 +21,24 @@ public static class NativeAuthoredProjectExporter
         NativeFreeFlightCompositionPlan? flight=null,PortalRouteDocument? portalRoutes=null,
         IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses=null)
     {
+        // The staged disc images are working copies; remove them whether the export succeeds or fails.
+        string scratch=Path.Combine(ExportScratchSpace.AggregateRoot(workspace),Guid.NewGuid().ToString("N"));
+        try
+        {
+            return await ExportCoreAsync(donors,catalog,scenes,japanese,outputImage,workspace,startLevelId,scratch,token,requireCurrent,
+                stagedRetailImage,retailEggs,retailSignLevels,retailNames,flight,portalRoutes,retailReturnClasses);
+        }
+        finally{ExportScratchSpace.Delete(scratch);}
+    }
+
+    private static async Task<string> ExportCoreAsync(UniversalSourceLibrary donors,LevelCatalog catalog,
+        IReadOnlyList<NativeAuthoredExportScene> scenes,UniversalJapaneseSource? japanese,string outputImage,
+        string workspace,int startLevelId,string scratch,CancellationToken token,Action? requireCurrent,
+        string? stagedRetailImage,IReadOnlyList<(int LevelIndex,int Row,int Colour)>? retailEggs,
+        IReadOnlySet<string>? retailSignLevels,IReadOnlyList<LevelTextReplacement>? retailNames,
+        NativeFreeFlightCompositionPlan? flight,PortalRouteDocument? portalRoutes,
+        IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses)
+    {
         if(scenes.Count==0)throw new InvalidDataException("No authored scenes were selected for export.");
         // ID65 is source-issued through Town's initializer. Composing two
         // distinct overlays would rewrite the same callback instruction pairs.
@@ -42,7 +60,6 @@ public static class NativeAuthoredProjectExporter
         string cue=Path.ChangeExtension(outputImage,".cue");
         ExportArtifactTransaction.RequireSourceSeparation(donors.ImagePath,null,outputImage,cue);
         ExportArtifactTransaction.RequireSourceSeparation(stagedRetailImage??donors.ImagePath,null,outputImage,cue);
-        string scratch=Path.Combine(workspace,"_local","authored-aggregate",Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(scratch);
         var baseline=UniversalDiscImage.Read(stagedRetailImage??donors.ImagePath);
         byte[] exe=baseline.Exe.ToArray();
