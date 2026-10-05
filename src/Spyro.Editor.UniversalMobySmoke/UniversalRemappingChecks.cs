@@ -227,6 +227,8 @@ internal static class UniversalRemappingChecks
         foreach (var (address, length) in new (uint, int)[] {
             (UniversalSpecialBehaviors.CaveStart, (int)(UniversalSpecialBehaviors.CaveEnd - UniversalSpecialBehaviors.CaveStart)),
             (UniversalSpecialBehaviors.EggInventoryHost, (int)(UniversalSpecialBehaviors.EggInventoryHostEnd - UniversalSpecialBehaviors.EggInventoryHost)),
+            (UniversalSpecialBehaviors.EggModelCave, (int)(UniversalSpecialBehaviors.EggModelCaveEnd - UniversalSpecialBehaviors.EggModelCave)),
+            (UniversalSpecialBehaviors.EggInventoryRowSite, 4), (UniversalSpecialBehaviors.EggInventoryLastLineSite, 4),
             (UniversalSpecialBehaviors.SignHookCallSite, 4), (UniversalSpecialBehaviors.EggInventoryCallSite, 4) })
         {
             int offset = (int)(address - UniversalExeBindings.ExeBase);

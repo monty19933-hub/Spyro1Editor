@@ -1,5 +1,12 @@
-# Spyro Editor 1.0.8 — supported scope and limitations
+# Spyro Editor 1.0.9 — supported scope and limitations
 
+- Version 1.0.9 aligns the in-game inventory (one text size, a spinning gold
+  dragonfly egg column header) and adds multi-tile terrain removal, a whole-tile
+  terrain brush and fixes for "independent HP vertex slots" Create BIN errors.
+  The gold egg header needs the Japanese disc at Create BIN (as dragonfly eggs
+  do); it is skipped in a level that already uses its class slot. Tiles that
+  would only hide ground Spyro can still stand on are still kept, and corner
+  drags that would fold the ground are refused.
 - Version 1.0.8 adds navigation and removal to the removal-plan inspector and
   retains the object-picker responsiveness fix. It also retains the guarded
   enemy groups and dragon statue colours from 1.0.6.

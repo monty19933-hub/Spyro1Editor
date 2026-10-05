@@ -148,7 +148,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         byte[] exe=compose?.Executable ?? stagedExe;
         HashSet<string> signLevels=new(retailSignLevels??new HashSet<string>(),StringComparer.OrdinalIgnoreCase);
         if(placements.Any(p=>!p.Retired&&UniversalSpecialCatalog.NeedsRenderHook(p.SpecialId)))signLevels.Add(Target.Key);
-        UniversalSpecialBehaviors.PatchExeCave(exe,donors.Disc.Exe,signLevels.Count>0,eggs);
+        UniversalSpecialBehaviors.PatchExeCave(exe,donors.Disc.Exe,signLevels.Count>0,eggs,eggs.Count>0?japanese?.InventoryEggModel():null);
         if (_flight != null) exe = _flight.ApplyToExecutable(exe);
         var title = new TextTargetEntry(Target.Key, Target.ScriptKey, Document.Name, "LAB", 3, 19, LevelTextTableKind.LevelNames, 35);
         exe = LevelTextPatchExporter.ComposeStagedExecutable(stagedRetailImage??_baseline, exe, [..retailNames??[],new(title, Document.Name)]);

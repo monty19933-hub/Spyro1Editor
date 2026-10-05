@@ -100,6 +100,11 @@ public sealed partial class EditorViewport : Control
     private bool _isDraggingMobyFacing;
     private bool _isDraggingTerrainFace;
     private bool _isDraggingTerrainPoint;
+    // Clicking a face or corner must never move it: drags start only after the pointer leaves a small
+    // dead zone around the press position (sub-pixel jitter used to save half-unit moves).
+    private const double TerrainDragDeadZonePixels = 5;
+    private Point _terrainDragPressPosition;
+    private bool _terrainDragArmed;
     private bool _draggingTerrainAsAddCopy;
     private bool _isPaintingTerrain;
     private int _draggingMobyIndex = -1;
@@ -115,6 +120,10 @@ public sealed partial class EditorViewport : Control
     private GeometryCandidate? _sceneFitGeometry;
     private SceneFitFocus? _sceneFitFocus;
     private int _selectedTerrainIndex = -1;
+    // Several tiles selected at once (Cmd-click / Cmd-drag on Mac, Ctrl on Windows), e.g. to remove them together.
+    private readonly HashSet<int> _multiSelectedTerrain = new();
+    private bool _isMultiSelectingTerrain;
+    private bool _multiSelectAdding;
     private int _selectedTerrainPointIndex = -1;
     private int _selectedMobyIndex = -1;
     private int _hoverTerrainIndex = -1;
@@ -180,6 +189,7 @@ public sealed partial class EditorViewport : Control
     public event EventHandler<ViewportTerrainPointEditRequestedEventArgs>? TerrainPointEditRequested;
     public event EventHandler<ViewportTerrainPointMoveRequestedEventArgs>? TerrainPointMoveRequested;
     public event EventHandler<ViewportTerrainBrushRequestedEventArgs>? TerrainBrushRequested;
+    public event EventHandler? TerrainMultiSelectionChanged;
     public event EventHandler<ViewportTerrainBrushAdjustmentRequestedEventArgs>? TerrainBrushAdjustmentRequested;
     public event EventHandler<ViewportTerrainBrushModeRequestedEventArgs>? TerrainBrushModeRequested;
     public event EventHandler? TerrainBrushStrokeFinished;
@@ -448,7 +458,11 @@ public sealed partial class EditorViewport : Control
 
     static EditorViewport()
     {
-        GeometryProperty.Changed.AddClassHandler<EditorViewport>((viewport, _) => viewport.ResetView());
+        GeometryProperty.Changed.AddClassHandler<EditorViewport>((viewport, _) =>
+        {
+            viewport.ClearTerrainMultiSelection();
+            viewport.ResetView();
+        });
         MobysProperty.Changed.AddClassHandler<EditorViewport>((viewport, _) =>
         {
             viewport._sceneFitGeometry = null;
@@ -1628,6 +1642,24 @@ public sealed partial class EditorViewport : Control
             }
 
             bool terrainFirst = ShouldPrioritizeTerrainInteraction();
+            if (terrainFirst && _terrainBrushAction == TerrainBrushAction.Off && IsTerrainMultiSelectGesture(e.KeyModifiers) && Geometry != null)
+            {
+                ScreenTerrainFace? picked = FindScreenTerrain(_lastPointerPosition);
+                if (picked != null)
+                {
+                    if (_multiSelectedTerrain.Count == 0 && _selectedTerrainIndex >= 0 && _selectedTerrainIndex != picked.Index)
+                        _multiSelectedTerrain.Add(_selectedTerrainIndex);
+                    _multiSelectAdding = !_multiSelectedTerrain.Remove(picked.Index);
+                    if (_multiSelectAdding)
+                        _multiSelectedTerrain.Add(picked.Index);
+                    _isMultiSelectingTerrain = true;
+                    SelectTerrain(picked);
+                    TerrainMultiSelectionChanged?.Invoke(this, EventArgs.Empty);
+                    e.Pointer.Capture(this);
+                    e.Handled = true;
+                    return;
+                }
+            }
             if (!terrainFirst && TryBeginNativeMovementHandleDrag(_lastPointerPosition, e.Pointer))
             {
                 e.Handled = true;
@@ -1771,6 +1803,19 @@ public sealed partial class EditorViewport : Control
             return;
         }
 
+        if (_isMultiSelectingTerrain && Geometry != null)
+        {
+            ScreenTerrainFace? swept = FindScreenTerrain(position);
+            if (swept != null && (_multiSelectAdding ? _multiSelectedTerrain.Add(swept.Index) : _multiSelectedTerrain.Remove(swept.Index)))
+            {
+                TerrainMultiSelectionChanged?.Invoke(this, EventArgs.Empty);
+                InvalidateVisual();
+            }
+            _lastPointerPosition = position;
+            e.Handled = true;
+            return;
+        }
+
         if (_isPaintingTerrain && Geometry != null)
         {
             ScreenTerrainFace? terrain = FindScreenTerrain(position);
@@ -1787,6 +1832,21 @@ public sealed partial class EditorViewport : Control
             }
 
             _lastPointerPosition = position;
+            e.Handled = true;
+            return;
+        }
+
+        if ((_isDraggingTerrainFace || _isDraggingTerrainPoint) && !_terrainDragArmed)
+        {
+            Point moved = position - _terrainDragPressPosition;
+            if (Math.Sqrt(moved.X * moved.X + moved.Y * moved.Y) < TerrainDragDeadZonePixels)
+            {
+                _lastPointerPosition = position;
+                e.Handled = true;
+                return;
+            }
+            _terrainDragArmed = true;
+            _lastPointerPosition = position; // start moving from here, without a jump
             e.Handled = true;
             return;
         }
@@ -1910,6 +1970,13 @@ public sealed partial class EditorViewport : Control
         if (_isPanning)
         {
             _isPanning = false;
+            e.Pointer.Capture(null);
+            e.Handled = true;
+        }
+
+        if (_isMultiSelectingTerrain)
+        {
+            _isMultiSelectingTerrain = false;
             e.Pointer.Capture(null);
             e.Handled = true;
         }
@@ -2290,6 +2357,8 @@ public sealed partial class EditorViewport : Control
         {
             SelectTerrainPoint(terrainPoint);
             _isDraggingTerrainPoint = true;
+            _terrainDragPressPosition = point;
+            _terrainDragArmed = false;
             _draggingTerrainIndex = terrainPoint.TerrainIndex;
             _draggingTerrainPointIndex = terrainPoint.PointIndex;
             SetViewportCursor(StandardCursorType.SizeAll);
@@ -2300,8 +2369,11 @@ public sealed partial class EditorViewport : Control
         ScreenTerrainFace? terrain = FindScreenTerrain(point);
         if (terrain != null)
         {
+            ClearTerrainMultiSelection();
             SelectTerrain(terrain);
             _isDraggingTerrainFace = true;
+            _terrainDragPressPosition = point;
+            _terrainDragArmed = false;
             _draggingTerrainAsAddCopy = IsTerrainAddCopyDrag(keyModifiers);
             _draggingTerrainFaceIndex = terrain.Index;
             SetViewportCursor(StandardCursorType.SizeAll);
@@ -2318,6 +2390,23 @@ public sealed partial class EditorViewport : Control
             _terrainTexturePaintMode ||
             _terrainBrushAction != TerrainBrushAction.Off;
     }
+
+    /// <summary>Tiles currently in the multi-selection (empty when only one tile is selected).</summary>
+    public IReadOnlyCollection<int> MultiSelectedTerrainIndexes => _multiSelectedTerrain;
+
+    public void ClearTerrainMultiSelection()
+    {
+        if (_multiSelectedTerrain.Count == 0)
+            return;
+        _multiSelectedTerrain.Clear();
+        TerrainMultiSelectionChanged?.Invoke(this, EventArgs.Empty);
+        InvalidateVisual();
+    }
+
+    private static bool IsTerrainMultiSelectGesture(KeyModifiers modifiers) =>
+        (modifiers & (KeyModifiers.Meta | KeyModifiers.Control)) != 0;
+
+    private bool IsTerrainFaceSelected(int index) => index == _selectedTerrainIndex || _multiSelectedTerrain.Contains(index);
 
     private void SelectTerrain(ScreenTerrainFace face)
     {
@@ -2789,7 +2878,7 @@ public sealed partial class EditorViewport : Control
                 continue;
             }
 
-            bool selected = face.Index == _selectedTerrainIndex;
+            bool selected = IsTerrainFaceSelected(face.Index);
             bool edited = face.Polygon.IsTerrainEdited;
             bool simplifyInteractiveMaterial = interactiveFullMaterialFaces != null &&
                 !interactiveFullMaterialFaces.Contains(face.Index) &&
@@ -3302,7 +3391,7 @@ public sealed partial class EditorViewport : Control
                 continue;
             }
 
-            bool selected = face.Index == _selectedTerrainIndex;
+            bool selected = IsTerrainFaceSelected(face.Index);
             bool edited = polygon.IsTerrainEdited;
             TerrainPatchSafetyKind safety = TerrainPatchSafetyFor(polygon);
             Color fillColor = selected
@@ -4045,6 +4134,12 @@ public sealed partial class EditorViewport : Control
         context.DrawText(text, origin);
     }
 
+    /// <summary>Set by the editor when "Whole tiles" is on; only Raise, Lower and Level use it.</summary>
+    public bool TerrainBrushWholeTiles { get; set; }
+
+    private static bool IsWholeTileBrushAction(TerrainBrushAction action) =>
+        action is TerrainBrushAction.Raise or TerrainBrushAction.Lower or TerrainBrushAction.Flatten;
+
     private IReadOnlyList<TerrainBrushPreviewPoint> BuildTerrainBrushVertexPreview(
         GeometryCandidate geometry,
         Vector2f brushCenter,
@@ -4063,17 +4158,21 @@ public sealed partial class EditorViewport : Control
                 continue;
 
             int count = Math.Min(polygon.Points.Count, polygon.ZValues.Length);
+            // Whole-tile mode moves every corner of a tile the circle touches, at full strength.
+            bool wholeTile = TerrainBrushWholeTiles && IsWholeTileBrushAction(_terrainBrushAction) &&
+                (Enumerable.Range(0, count).Any(i => WorldDistance(brushCenter, polygon.Points[i]) <= safeRadius) ||
+                 WorldDistance(brushCenter, polygon.Center) <= safeRadius);
             for (int i = 0; i < count; i++)
             {
                 double distance = WorldDistance(brushCenter, polygon.Points[i]);
-                if (distance > safeRadius)
+                if (!wholeTile && distance > safeRadius)
                     continue;
 
                 Point? projected = project(polygon, i);
                 if (projected == null)
                     continue;
 
-                double falloff = TerrainBrushPreviewFalloff(distance / safeRadius, brushFeather);
+                double falloff = wholeTile ? 1.0 : TerrainBrushPreviewFalloff(distance / safeRadius, brushFeather);
                 TerrainBrushPreviewVertexKind kind = _terrainBrushVertexClassifier?.Invoke(polygon, i) ?? TerrainBrushPreviewVertexKind.Editable;
                 points.Add((projected.Value, distance, falloff, kind));
             }
@@ -10015,7 +10114,7 @@ public sealed partial class EditorViewport : Control
             if (face.IsAddCopySourcePreview)
                 continue;
 
-            bool selected = face.Index == _selectedTerrainIndex;
+            bool selected = IsTerrainFaceSelected(face.Index);
             bool edited = face.Polygon.IsTerrainEdited;
             if (!selected && !edited)
                 continue;

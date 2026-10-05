@@ -108,7 +108,7 @@ public static class NativeAuthoredProjectExporter
             return hash;
         }
         NativeClearedRetailBinding.ApplyNewGameStart(donors.Disc.Exe,exe,startLevelId);
-        UniversalSpecialBehaviors.PatchExeCave(exe,donors.Disc.Exe,signs.Count>0,eggs);
+        UniversalSpecialBehaviors.PatchExeCave(exe,donors.Disc.Exe,signs.Count>0,eggs,eggs.Count>0?japanese?.InventoryEggModel():null);
         exe=LevelTextPatchExporter.ComposeStagedExecutable(stage,exe,names);
         UniversalEggUnlocks.PatchOverlays(catalog,donors.Disc.EntryBytes,baseline.EntryBytes,replacements,eggs.Count);
         if(signs.Count>0)UniversalMobyExport.RequireSignMarkersOnlyIn(exe,catalog,signs,

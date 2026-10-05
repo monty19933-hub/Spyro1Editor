@@ -562,6 +562,13 @@ public sealed class TerrainPolygon
         StructureEdit = TerrainStructureEditKind.RemoveFace;
     }
 
+    /// <summary>Undoes only a staged removal, keeping any other edits on the face.</summary>
+    public void CancelTerrainRemoval()
+    {
+        if (StructureEdit == TerrainStructureEditKind.RemoveFace)
+            StructureEdit = TerrainStructureEditKind.None;
+    }
+
     public void StageTerrainAddClone()
     {
         StructureEdit = TerrainStructureEditKind.AddCloneFace;

@@ -5300,11 +5300,8 @@ public static partial class TerrainPatchExporter
         int count = Math.Min(originalPoints.Count, editedPoints.Count);
         for (int i = 0; i < count; i++)
         {
-            if (Math.Abs(originalPoints[i].X - editedPoints[i].X) > 0.001f ||
-                Math.Abs(originalPoints[i].Y - editedPoints[i].Y) > 0.001f)
-            {
+            if (IsDeliberatePointMove(originalPoints[i], editedPoints[i]))
                 return true;
-            }
         }
 
         return editedPoints.Count != originalPoints.Count;
@@ -5327,9 +5324,19 @@ public static partial class TerrainPatchExporter
         if (index >= originalPoints.Count)
             return true;
 
-        return Math.Abs(editedPoints[index].X - originalPoints[index].X) > 0.001f ||
-            Math.Abs(editedPoints[index].Y - originalPoints[index].Y) > 0.001f;
+        return IsDeliberatePointMove(originalPoints[index], editedPoints[index]);
     }
+
+    /// <summary>
+    /// Native terrain points are whole game units. A saved X/Y change smaller than one unit is click
+    /// drift from selecting or dragging a face (for example 6272 → 6272.59); exporting it would round
+    /// to an unintended one-unit shift of a shared corner. Such drift is treated as unchanged.
+    /// </summary>
+    private const float PointDriftTolerance = 1.0f;
+
+    private static bool IsDeliberatePointMove(Vector2f original, Vector2f edited) =>
+        Math.Abs(edited.X - original.X) >= PointDriftTolerance ||
+        Math.Abs(edited.Y - original.Y) >= PointDriftTolerance;
 
     private static CollisionPatchContext? TryBuildSourceDerivedCollisionPatchContext(
         byte[] wad,
@@ -7324,6 +7331,62 @@ public static partial class TerrainPatchExporter
             faces);
     }
 
+    /// <summary>
+    /// A native point is often stored in several independent HP vertex slots (one per sector or face
+    /// list that borders it). An edit made on one face moves only that face's slot; the other copies
+    /// would stay behind, splitting the surface and making collision ownership ambiguous. Move every
+    /// copy to the same target, encoded in its own sector, when each copy can represent it exactly.
+    /// Copies that cannot (for example a coarser sector encoding) are left for the explicit refusal.
+    /// </summary>
+    private static void PropagateEditedPointsToNativeAliases(
+        byte[] ram,
+        TerrainHpTopologyInventory topology,
+        Dictionary<long, TerrainPhysicalVertexTransformBuilder> physicalTransforms)
+    {
+        foreach (IGrouping<string, TerrainPhysicalVertexTransformBuilder> group in physicalTransforms.Values
+            .GroupBy(transform => CollisionPointKey(transform.Source.Point.X, transform.Source.Point.Y, transform.Source.Point.Z), StringComparer.Ordinal)
+            .ToArray())
+        {
+            if (!topology.VerticesByPointKey.TryGetValue(group.Key, out IReadOnlyList<TerrainHpVertexReference>? aliases))
+                continue;
+            TerrainPhysicalVertexTransformBuilder[] edited = group.OrderBy(transform => transform.Source.WadOffset).ToArray();
+            if (edited.Select(transform => transform.Target).Distinct().Count() != 1)
+                continue; // conflicting targets keep their explicit refusal
+            TerrainPhysicalVertexTransformBuilder first = edited[0];
+            Vector3f target = DecodeSceneVertex(first.NewWord, ReadSceneSectorHeader(ram, first.Source.RuntimeSectorOffset));
+            List<TerrainPhysicalVertexTransformBuilder> added = [];
+            bool complete = true;
+            foreach (TerrainHpVertexReference alias in aliases)
+            {
+                if (physicalTransforms.ContainsKey(alias.WadOffset))
+                    continue;
+                SceneSectorHeader sector = ReadSceneSectorHeader(ram, alias.RuntimeSectorOffset);
+                int vertexOffset = GetSceneVertexOffset(sector, "hp", alias.VertexIndex);
+                if (vertexOffset < 0) { complete = false; break; }
+                uint oldWord = ReadUInt32(ram, vertexOffset);
+                uint newWord;
+                try
+                {
+                    newWord = SetSceneVertexWord(oldWord, sector, new Vector2f(target.X, target.Y), target.Z);
+                }
+                catch (InvalidOperationException)
+                {
+                    complete = false;
+                    break;
+                }
+                if (ToCollisionPoint(DecodeSceneVertex(newWord, sector)) != first.Target) { complete = false; break; }
+                TerrainPhysicalVertexTransformBuilder copy = new(alias, first.Target, oldWord, newWord);
+                foreach (TerrainPhysicalVertexTransformBuilder transform in edited)
+                    copy.RuntimeKeys.UnionWith(transform.RuntimeKeys);
+                added.Add(copy);
+            }
+            if (!complete)
+                continue;
+            foreach (TerrainPhysicalVertexTransformBuilder copy in added)
+                physicalTransforms[copy.Source.WadOffset] = copy;
+        }
+    }
+
     private static void ValidateTopologySafeTerrainExposure(
         TerrainHpTopologyInventory topology,
         IReadOnlyDictionary<long, TerrainPhysicalVertexTransformBuilder> physicalTransforms)
@@ -7749,6 +7812,8 @@ public static partial class TerrainPatchExporter
             throw new InvalidOperationException(
                 "The requested HP Z edit rounded back to the original packed vertices. No terrain BIN was built.");
         }
+
+        PropagateEditedPointsToNativeAliases(ram, topology, physicalTransforms);
 
         Dictionary<string, TerrainCollisionPointTransformBuilder> transforms = new(StringComparer.Ordinal);
         foreach (IGrouping<string, TerrainPhysicalVertexTransformBuilder> group in physicalTransforms.Values

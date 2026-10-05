@@ -588,7 +588,9 @@ async Task VerifyAlpineAliasRejectAsync()
             face.ApplyTerrainVertexDeltas([0, 0, 32]);
             return [face];
         },
-        ["independent HP vertex slots", "Coordinate-alias collision ownership is ambiguous"]);
+        // Every native copy of the shared point now moves together; the shared face then
+        // rises into the close surface above it, which stays blocked.
+        ["vertically shadowed", "Close vertically overlapping terrain remains blocked"]);
 }
 
 async Task VerifyLowDetailRejectAsync()
@@ -731,7 +733,8 @@ async Task VerifyHistoricalHiddenControlAliasRejectAsync()
             lower.ApplyTerrainVertexDeltas([0, 0, 16]);
             return [lower];
         },
-        ["independent HP vertex slots", "Coordinate-alias collision ownership is ambiguous"]);
+        // The shared point's native copies now move together; the close surface above still blocks it.
+        ["vertically shadowed", "Close vertically overlapping terrain remains blocked"]);
 }
 
 async Task ExpectRejectedAsync(

@@ -1,4 +1,13 @@
-# Spyro Editor 1.0.8
+# Spyro Editor 1.0.9
+
+**Several terrain tiles at once:** Cmd-click (Ctrl-click on Windows) tiles to add
+or drop them from the selection, or Cmd-drag across them. **Remove Terrain** then
+removes them all with one confirmation; **Undo Terrain** brings them back. A plain
+click selects a single tile again. With **Whole tiles** checked in the brush panel,
+Raise, Lower and Level move every tile the brush circle touches evenly.
+
+In the game's inventory, dragonfly eggs have their own column under a spinning
+gold egg, with the same text size as treasure and dragons.
 
 The full **Add object…** catalog checks space in the background. You can keep
 searching, change source versions or close the window while it checks. Placement

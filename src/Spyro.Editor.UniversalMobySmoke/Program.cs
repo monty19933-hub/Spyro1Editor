@@ -491,14 +491,17 @@ void SyntheticOverlayChecks()
     }
     Check(encodeOk, "egg eye vertices encode within a few units in the native absolute vertex format");
     var (slotCode, slotData) = UniversalSpecialBehaviors.DragonflyEggInventoryRoutine([(4, 59, 0), (4, 60, 1), (12, 200, 6)]);
-    Check(slotCode.Contains(UniversalMips.EncodeJ(2, 0x8001844C)) && slotCode.Contains(UniversalMips.EncodeJ(3, 0x8001919C)) &&
-          !slotCode.Contains(UniversalMips.EncodeJ(3, 0x800168DC)) && slotData[2] == (6u << 24 | 12u << 16 | 200) && slotData[0] == (4u << 16 | 59),
-          "egg row draws coloured still eggs without eye primitives, keeps the divider line, and stores level/row/colour per egg");
-    Check(slotData.Length == 3 + UniversalDragonflyEggs.Variants.Length + 2 && slotData[^2] == 0x252F6425, "egg data holds the column caption and K/Y format");
+    Check(slotCode.Contains(UniversalMips.EncodeJ(2, 0x8001844C)) && slotCode.Contains(UniversalMips.EncodeJ(3, 0x80016914)) &&
+          !slotCode.Contains(UniversalMips.EncodeJ(3, 0x8001919C)) && slotData[2] == (6u << 24 | 12u << 16 | 200) && slotData[0] == (4u << 16 | 59),
+          "egg column header spawns the gold egg instead of a sprite, keeps the divider line, and stores level/row/colour per egg");
+    Check(slotData.Length == 3, "egg data holds only the egg list (the row uses the native number format and slash)");
     var many = Enumerable.Range(0, UniversalSpecialBehaviors.MaxDragonflyEggs).Select(i => (i % 30, i, i % 7)).ToList();
     var (countCode, countData) = UniversalSpecialBehaviors.DragonflyEggInventoryRoutine(many);
-    Check(countCode.Contains(UniversalMips.EncodeJ(3, 0x80062FD4)) && UniversalSpecialBehaviors.MaxDragonflyEggs >= 60 &&
-          UniversalSpecialBehaviors.EggInventoryData + countData.Length * 4 <= UniversalSpecialBehaviors.CaveEnd, "the maximum number of eggs fits (one egg plus a K/Y count)");
+    Check(UniversalSpecialBehaviors.MaxDragonflyEggs >= 60 && UniversalSpecialBehaviors.InventoryEggModelCapacity(many) >= 1024 &&
+          UniversalSpecialBehaviors.EggInventoryData + countData.Length * 4 <= UniversalSpecialBehaviors.CaveEnd, "the maximum number of eggs fits, with room for the gold egg model");
+    var layout = UniversalSpecialBehaviors.InventoryLayout;
+    Check(layout.Select(l => l.Address).Distinct().Count() == layout.Length && layout.All(l => (l.Before >> 16) is 0x2402 or 0x2403 or 0x2405 or 0x2406 or 0x2407 or 0x2409 or 0x2442 or 0x2482 or 0x2488 or 0x2631 or 0x26A2 or 0x26E4 or 0x26E5),
+          "inventory layout changes only immediates of distinct native instructions");
     Check(UniversalSpecialBehaviors.SignHookHost + UniversalSpecialBehaviors.SignHookRoutine().Length * 4 <= UniversalSpecialBehaviors.EggInventoryData, "sign hook and egg data do not overlap");
     byte[] text = UniversalSpecialBehaviors.EncodeSignText(["Hello, world!", "line two", "x"]);
     Check(text.Length == 84 && System.Text.Encoding.ASCII.GetString(text, 0, 13) == "HELLO, WORLD!" && text[13] == 0 &&

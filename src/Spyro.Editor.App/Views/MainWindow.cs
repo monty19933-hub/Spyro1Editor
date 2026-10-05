@@ -197,6 +197,13 @@ public sealed partial class MainWindow : Window
     private readonly ComboBox _terrainBrushModeBox = new();
     private readonly CheckBox _terrainPlayableOnlyBox = new() { Content = "Only edit playable ground", IsChecked = true };
     private readonly CheckBox _terrainJoinSeamsBox = new() { Content = "Keep ground edges joined", IsChecked = true };
+    // Terrain points exist only at tile corners, so a soft brush lifts single corners into spikes.
+    // Whole tiles: Raise/Lower/Level move every tile the circle touches evenly (neighbours slope to meet it).
+    private readonly CheckBox _terrainWholeTilesBox = new()
+    {
+        Content = "Whole tiles: raise/lower everything the circle touches evenly",
+        IsChecked = true
+    };
     private readonly TextBlock _terrainBrushSafetyText = new();
     private readonly TextBlock _terrainBrushHistoryText = new();
     private readonly TextBlock _terrainPointEditText = new();
@@ -415,6 +422,7 @@ public sealed partial class MainWindow : Window
         };
         _viewport.TerrainPointMoveRequested += (_, e) => MoveTerrainPointFromViewport(e);
         _viewport.TerrainBrushRequested += (_, e) => ApplyViewportTerrainBrush(e);
+        _viewport.TerrainMultiSelectionChanged += (_, _) => OnTerrainMultiSelectionChanged();
         _viewport.TerrainBrushAdjustmentRequested += (_, e) => AdjustTerrainBrushFromViewport(e);
         _viewport.TerrainBrushModeRequested += (_, e) => SelectTerrainBrushMode(e.Action);
         _viewport.TerrainBrushStrokeFinished += (_, _) => FinishTerrainBrushUndo();
@@ -10661,7 +10669,7 @@ public sealed partial class MainWindow : Window
             _terrainSelectedLinkedPaintButton,
             hasTerrain && !id65TerrainZOnly && _selectedTerrain!.TextureId >= 0);
         SetButtonEnabled(_terrainTaskAddCopyButton, canStageAnyAddCopy);
-        SetButtonEnabled(_terrainTaskRemoveFaceButton, canRemoveSelectedTerrain);
+        SetButtonEnabled(_terrainTaskRemoveFaceButton, canRemoveSelectedTerrain || _viewport.MultiSelectedTerrainIndexes.Count >= 2);
         SetButtonEnabled(
             _terrainTaskSaveButton,
             hasUnsavedTerrainEdits && !id65FreshProjectionTerrainLocked);
@@ -19473,6 +19481,13 @@ public sealed partial class MainWindow : Window
         panel.Children.Add(modeGrid);
         panel.Children.Add(_terrainPlayableOnlyBox);
         panel.Children.Add(_terrainJoinSeamsBox);
+        panel.Children.Add(_terrainWholeTilesBox);
+        _viewport.TerrainBrushWholeTiles = _terrainWholeTilesBox.IsChecked == true;
+        _terrainWholeTilesBox.IsCheckedChanged += (_, _) =>
+        {
+            _viewport.TerrainBrushWholeTiles = _terrainWholeTilesBox.IsChecked == true;
+            _viewport.InvalidateVisual();
+        };
         panel.Children.Add(_terrainBrushSafetyText);
         _terrainUndoStrokeButton = NewButton("Undo Stroke", UndoLastTerrainBrushStroke);
         _terrainRedoStrokeButton = NewButton("Redo Stroke", RedoLastTerrainBrushStroke);
@@ -20606,7 +20621,7 @@ public sealed partial class MainWindow : Window
         {
             float currentDelta = polygon.ZValues[vertexIndex] - polygon.OriginalZValues[vertexIndex];
             return currentDelta + (strength * falloff);
-        });
+        }, wholeTiles: _terrainWholeTilesBox.IsChecked == true);
 
         RefreshAfterTerrainBrush(result, strength >= 0 ? "Raised" : "Lowered");
     }
@@ -20675,7 +20690,7 @@ public sealed partial class MainWindow : Window
             float currentZ = polygon.ZValues[vertexIndex];
             float flattenedZ = currentZ + ((targetZ - currentZ) * falloff * blendStrength);
             return flattenedZ - polygon.OriginalZValues[vertexIndex];
-        });
+        }, wholeTiles: _terrainWholeTilesBox.IsChecked == true);
 
         RefreshAfterTerrainBrush(result, "Leveled");
     }
@@ -21455,10 +21470,55 @@ public sealed partial class MainWindow : Window
         _selectedTerrain = e.Terrain;
         _selectedTerrainIndex = e.TerrainIndex;
         _selectedTerrainPointIndex = NormalizeTerrainPointIndex(e.Terrain, e.PointIndex);
+        if (movesXy && _selectedTerrainPointIndex >= 0 &&
+            WouldFoldTerrainAt(e.Terrain.Points[_selectedTerrainPointIndex],
+                new Vector2f(e.Terrain.Points[_selectedTerrainPointIndex].X + e.Dx, e.Terrain.Points[_selectedTerrainPointIndex].Y + e.Dy)))
+        {
+            _statusText.Text = "That corner can't go further this way: the ground would fold over itself, which the game can't stand on. Drag it back or move a neighbouring corner first.";
+            return;
+        }
         if (Math.Abs(e.Dz) > 0.001f)
             ApplySelectedTerrainPointEdit(currentDelta => currentDelta + e.Dz, null, e.Dz >= 0 ? "Dragged up" : "Dragged down");
         else
             ApplySelectedTerrainPointEdit(null, currentDelta => new Vector2f(currentDelta.X + e.Dx, currentDelta.Y + e.Dy), "Dragged");
+    }
+
+    /// <summary>
+    /// True when moving the corner at <paramref name="from"/> to <paramref name="to"/> would flip or flatten
+    /// a triangle of any face sharing that corner (seen from above). Quads are checked with both diagonals
+    /// because the game's collision may use either one. Such folds cannot be exported as solid ground.
+    /// </summary>
+    private bool WouldFoldTerrainAt(Vector2f from, Vector2f to)
+    {
+        if (_currentGeometry == null)
+            return false;
+        static double Area(Vector2f a, Vector2f b, Vector2f c) => (b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X);
+        foreach (TerrainPolygon polygon in _currentGeometry.Polygons)
+        {
+            if (polygon.IsTerrainRemoved || polygon.Points.Count < 3)
+                continue;
+            int shared = -1;
+            for (int i = 0; i < polygon.Points.Count; i++)
+                if (MathF.Abs(polygon.Points[i].X - from.X) < 0.5f && MathF.Abs(polygon.Points[i].Y - from.Y) < 0.5f) { shared = i; break; }
+            if (shared < 0)
+                continue;
+            int[][] triangles = polygon.Points.Count == 4
+                ? [[0, 1, 2], [0, 2, 3], [0, 1, 3], [1, 2, 3]]
+                : Enumerable.Range(1, polygon.Points.Count - 2).Select(k => new[] { 0, k, k + 1 }).ToArray();
+            foreach (int[] t in triangles)
+            {
+                if (!t.Contains(shared))
+                    continue;
+                Vector2f P(int i, bool moved) => moved && i == shared ? to : polygon.Points[i];
+                double before = Area(P(t[0], false), P(t[1], false), P(t[2], false));
+                double after = Area(P(t[0], true), P(t[1], true), P(t[2], true));
+                if (Math.Abs(before) < 1)
+                    continue; // already degenerate in the original game data
+                if (Math.Sign(after) != Math.Sign(before) || Math.Abs(after) < Math.Abs(before) * 0.02)
+                    return true;
+            }
+        }
+        return false;
     }
 
     private void ResetSelectedTerrainPoint()
@@ -21922,6 +21982,12 @@ public sealed partial class MainWindow : Window
         if (TryBlockId65UnsupportedTerrainMutation(_selectedTerrain, "Terrain removal", structural: true))
             return;
 
+        if (_viewport.MultiSelectedTerrainIndexes.Count >= 2)
+        {
+            await StageRemoveMultipleTerrainAsync();
+            return;
+        }
+
         if(_freshSceneDocument!=null && _selectedTerrain!=null)
         {
             StageTerrainRemoval(_selectedTerrainIndex,_selectedTerrain,"Removed");
@@ -21977,6 +22043,113 @@ public sealed partial class MainWindow : Window
             return;
 
         StageTerrainRemoval(_selectedTerrainIndex, terrain, "Staged");
+    }
+
+    private List<(int Index, TerrainPolygon Face)> MultiSelectedTerrainFaces() =>
+        _currentGeometry == null
+            ? []
+            : _viewport.MultiSelectedTerrainIndexes
+                .Where(index => index >= 0 && index < _currentGeometry.Polygons.Count)
+                .Order()
+                .Select(index => (index, _currentGeometry.Polygons[index]))
+                .ToList();
+
+    private void OnTerrainMultiSelectionChanged()
+    {
+        int count = _viewport.MultiSelectedTerrainIndexes.Count;
+        if (_terrainTaskRemoveFaceButton != null)
+            _terrainTaskRemoveFaceButton.Content = count >= 2 ? $"Remove {count} Tiles" : "Remove Terrain";
+        RefreshActionAvailability();
+        if (count >= 2)
+        {
+            int removed = MultiSelectedTerrainFaces().Count(face => face.Face.IsTerrainRemoved);
+            _statusText.Text = $"{count} tiles selected{(removed > 0 ? $" ({removed} already removed)" : "")}. " +
+                "Remove Terrain removes them all; Undo Terrain brings removed ones back. " +
+                "Cmd-click (Ctrl-click on Windows) adds or drops a tile, Cmd-drag paints over several; a plain click selects one tile again.";
+        }
+    }
+
+    /// <summary>Removes every selected tile that can be removed, with one confirmation.</summary>
+    private async Task StageRemoveMultipleTerrainAsync()
+    {
+        List<(int Index, TerrainPolygon Face)> faces = MultiSelectedTerrainFaces();
+        if (_freshSceneDocument == null && !CanUseTerrainRemoveInCurrentLevel())
+        {
+            _statusText.Text = BuildTerrainRemoveUnavailableHint();
+            return;
+        }
+        int already = faces.Count(face => face.Face.IsTerrainRemoved);
+        List<(int Index, TerrainPolygon Face)> removable = faces
+            .Where(face => !face.Face.IsTerrainRemoved && (_freshSceneDocument != null || CanStageTerrainRemoval(face.Face)))
+            .ToList();
+        int blocked = faces.Count - already - removable.Count;
+        if (removable.Count == 0)
+        {
+            _statusText.Text = already == faces.Count
+                ? "All selected tiles are already removed. Undo Terrain brings them back."
+                : $"None of the {faces.Count} selected tiles can be removed safely: removing them would only hide the ground while Spyro could still stand on it.";
+            return;
+        }
+
+        if (_freshSceneDocument == null)
+        {
+            TextBlock details = new()
+            {
+                Text = $"Remove {removable.Count} tile{(removable.Count == 1 ? "" : "s")}? Create BIN deletes their visible ground and the matching gameplay collision." +
+                       (blocked > 0 ? $"\n\n{blocked} selected tile{(blocked == 1 ? " is" : "s are")} kept: removing {(blocked == 1 ? "it" : "them")} would only hide the ground while Spyro could still stand there." : "") +
+                       (already > 0 ? $"\n\n{already} selected tile{(already == 1 ? " is" : "s are")} already removed." : "") +
+                       "\n\nUndo Terrain brings them back until you save.",
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92)),
+                FontSize = 12,
+                LineHeight = 18
+            };
+            Window dialog = new()
+            {
+                Title = "Remove Terrain Tiles",
+                Width = 540,
+                Height = 360,
+                MinWidth = 440,
+                MinHeight = 300,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                CanResize = true
+            };
+            dialog.Content = BuildTerrainRemoveDialogContent(dialog, details);
+            if (!await dialog.ShowDialog<bool>(this))
+                return;
+        }
+
+        ClearTerrainBrushUndoHistory();
+        foreach ((_, TerrainPolygon face) in removable)
+            face.StageTerrainRemoval();
+        _viewport.NotifyTerrainPresentationDataChanged();
+        RefreshCurrentLevelDetails();
+        RefreshTerrainReadinessHint();
+        RefreshTerrainSurfaceQuickState();
+        RefreshActionAvailability();
+        _statusText.Text = $"Removed {removable.Count} tile{(removable.Count == 1 ? "" : "s")} and their gameplay collision." +
+            (blocked > 0 ? $" {blocked} kept because removing {(blocked == 1 ? "it" : "them")} would only hide the ground." : "") +
+            (_freshSceneDocument != null ? " Save Level records the change." : " Save Terrain records the change; Create BIN applies it.") +
+            " Undo Terrain brings them back.";
+    }
+
+    /// <summary>Brings back removed tiles in the multi-selection. Returns false when none of them is removed.</summary>
+    private bool RestoreRemovedMultiSelectedTerrain()
+    {
+        List<TerrainPolygon> removed = MultiSelectedTerrainFaces().Select(face => face.Face).Where(face => face.IsTerrainRemoved).ToList();
+        if (removed.Count == 0)
+            return false;
+        ClearTerrainBrushUndoHistory();
+        foreach (TerrainPolygon face in removed)
+            face.CancelTerrainRemoval();
+        _viewport.NotifyTerrainPresentationDataChanged();
+        RefreshCurrentLevelDetails();
+        RefreshTerrainReadinessHint();
+        RefreshTerrainSurfaceQuickState();
+        RefreshActionAvailability();
+        _statusText.Text = $"Brought back {removed.Count} removed tile{(removed.Count == 1 ? "" : "s")}." +
+            (_freshSceneDocument != null ? " Save Level records the change." : " Save Terrain records the change.");
+        return true;
     }
 
     private void StageTerrainRemovalFromViewport(int terrainIndex, TerrainPolygon terrain)
@@ -22378,7 +22551,7 @@ public sealed partial class MainWindow : Window
         return panel;
     }
 
-    private TerrainBrushResult ApplyTerrainBrush(Vector2f center, float radius, Func<TerrainPolygon, int, float, float> nextDelta)
+    private TerrainBrushResult ApplyTerrainBrush(Vector2f center, float radius, Func<TerrainPolygon, int, float, float> nextDelta, bool wholeTiles = false)
     {
         if (TryBlockTerrainMutationDuringId65BlankLabManualOperation("applying a terrain brush gesture"))
             return new TerrainBrushResult(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -22433,10 +22606,12 @@ public sealed partial class MainWindow : Window
             float[] deltas = originalDeltas.ToArray();
             HashSet<int> touchedIndexes = new();
             bool changed = false;
+            if (wholeTiles && !touchesBrush)
+                continue;
             for (int i = 0; i < polygon.Points.Count && i < polygon.ZValues.Length && i < polygon.OriginalZValues.Length && i < deltas.Length; i++)
             {
                 float distance = Distance(center, polygon.Points[i]);
-                if (distance > safeRadius)
+                if (!wholeTiles && distance > safeRadius)
                     continue;
                 if (playableOnly && !coverage.VertexIndexes.Contains(i))
                 {
@@ -22445,7 +22620,7 @@ public sealed partial class MainWindow : Window
                 }
 
                 editableVerticesInRadius++;
-                float falloff = TerrainBrushFalloff(distance / safeRadius);
+                float falloff = wholeTiles ? 1f : TerrainBrushFalloff(distance / safeRadius);
                 float updated = nextDelta(polygon, i, falloff);
                 if (Math.Abs(updated - deltas[i]) <= 0.001f)
                     continue;
@@ -22847,6 +23022,9 @@ public sealed partial class MainWindow : Window
     private async Task UndoSelectedTerrainAsync()
     {
         if (TryBlockTerrainMutationDuringId65BlankLabManualOperation("undoing terrain edits"))
+            return;
+
+        if (_viewport.MultiSelectedTerrainIndexes.Count >= 2 && RestoreRemovedMultiSelectedTerrain())
             return;
 
         if (_selectedTerrain == null || _currentLevel == null || _currentGeometry == null)

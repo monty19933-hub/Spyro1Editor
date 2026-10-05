@@ -1,3 +1,18 @@
+# Inventory column and terrain editing — 4 October 2026
+
+Version 1.0.9 (Claude, uncommitted on top of `f1ab4d1`) gives every inventory row
+one text size, replaces the top egg picture and K/Y total with a spinning gold
+dragonfly egg above the egg column, and fixes terrain editing: multi-tile removal
+(Cmd/Ctrl-click or drag), a whole-tile brush, alias-safe export of shared corners,
+ignored click drift, a drag dead zone and a fold guard for corner drags. The gold
+egg is a HUD-format model converted from the Japanese egg and stored in unused
+libgpu code at `0x8005EC04`; it is installed into model slot `0x1D2` only when the
+slot is empty. Evidence is in task-root `work/inventory-terrain-20261004`
+(inventory screenshots, exported Toasty eggs in an isolated emulator, logs).
+Regression: 349 of 351 cases pass; the two failures and the runner self-test fail
+identically on a clean `f1ab4d1`. Packages are community (ad-hoc) signed and pass
+package verification with host provenance allowed; the Mac app launches.
+
 # Removal-plan inspector controls — 4 October 2026
 
 Version 1.0.8 adds double-click navigation and a Remove object action to the

@@ -145,7 +145,7 @@ public static class UniversalMobyExport
             .Select(k => catalog.FindByKey(k.Key)!.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (!deferSpecialHooks)
         {
-            UniversalSpecialBehaviors.PatchExeCave(exe, sources.Disc.Exe, signLevels.Count > 0, dragonflyEggs);
+            UniversalSpecialBehaviors.PatchExeCave(exe, sources.Disc.Exe, signLevels.Count > 0, dragonflyEggs, dragonflyEggs.Count > 0 ? japanese?.InventoryEggModel() : null);
             UniversalEggUnlocks.PatchOverlays(catalog, sources.Disc.EntryBytes, current.EntryBytes, replacements, dragonflyEggs.Count);
             if (signLevels.Count > 0)
                 RequireSignMarkersOnlyIn(exe, catalog, signLevels, i => replacements.TryGetValue(i, out var r) ? r : current.EntryBytes(i));

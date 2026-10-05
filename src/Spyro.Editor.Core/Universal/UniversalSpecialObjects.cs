@@ -50,6 +50,120 @@ public static class UniversalDragonflyEggs
 
     public static int VariantIndex(string id) => Array.FindIndex(Variants, v => v.Id == id);
 
+    /// <summary>The egg as a HUD model (the format of the inventory's spinning chest and dragon, drawn by
+    /// 0x80022D1C): byte 0 vertex count, byte 1 face count, +4 positions, +8 colours (unused when normals are
+    /// present), +0xC faces, +0x10 one normal per vertex. Positions and normals are signed bytes (x, y, z with
+    /// -z up); faces are two words of four 7-bit indices (vertices, then normals; a triangle repeats its third).
+    /// Pointers are absolute for <paramref name="address"/>.</summary>
+    public static byte[] HudModel(byte[] package, uint address, int height = 64)
+    {
+        byte[] p = package;
+        const int anim = 0x3C, md = 0x70;
+        uint W(int o) => BinaryPrimitives.ReadUInt32LittleEndian(p.AsSpan(o));
+        if (W(0) != 1 || W(0x34) != md || W(0x38) != anim || p[anim + 4] != 0)
+            throw new InvalidDataException("Unexpected dragonfly egg model layout.");
+        var src = UniversalEggEyes.DebugFrames(p)[0];
+        int top = src.Max(v => Math.Abs(v.Z));
+        double scale = (double)height / top;
+        var verts = src.Select(v => ((int)Math.Round(v.X * scale), (int)Math.Round(v.Y * scale), (int)Math.Round(v.Z * scale))).ToList();
+        if (verts.Count > 127 || verts.Any(v => Math.Abs(v.Item1) > 127 || Math.Abs(v.Item2) > 127 || Math.Abs(v.Item3) > 127))
+            throw new InvalidDataException("The egg does not fit the HUD model format.");
+        static (double X, double Y, double Z) Sub((int, int, int) a, (int, int, int) b) => (a.Item1 - b.Item1, a.Item2 - b.Item2, a.Item3 - b.Item3);
+        static (double X, double Y, double Z) Cross((double X, double Y, double Z) a, (double X, double Y, double Z) b) =>
+            (a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
+        static double Dot((double X, double Y, double Z) a, (double X, double Y, double Z) b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+        (double X, double Y, double Z) N(int a, int b, int c) => Cross(Sub(verts[b], verts[a]), Sub(verts[c], verts[a]));
+
+        // Native faces: tri = 8 bytes, quad (bit 31) = 12 bytes with the fourth index in the third word.
+        int faces = md + (int)W(anim + 0x14), length = (int)W(faces);
+        var polys = new List<int[]>();
+        for (int q = faces + 4; q < faces + 4 + length;)
+        {
+            uint a = W(q); bool quad = (a & 0x80000000) != 0;
+            int i0 = (int)(a >> 22 & 511), i1 = (int)(a >> 13 & 511), i2 = (int)(a >> 4 & 511);
+            if (quad)
+            {
+                int i3 = (int)(W(q + 8) >> 2 & 511);
+                // GPU quads are drawn as (0,1,2)+(1,2,3): keep the order whose two halves face the same way.
+                double z = Dot(N(i0, i1, i2), N(i3, i2, i1)), c = Dot(N(i0, i1, i3), N(i2, i3, i1));
+                polys.Add(z >= c ? [i0, i1, i2, i3] : [i0, i1, i3, i2]);
+            }
+            else polys.Add([i0, i1, i2]);
+            q += quad ? 12 : 8;
+        }
+        if (polys.Count > 255) throw new InvalidDataException("The egg has too many faces for a HUD model.");
+        // HUD faces are visible when cross(b-a, c-a) points into the model (inventory arrow and chest convention).
+        var centre = (verts.Average(v => v.Item1), verts.Average(v => v.Item2), verts.Average(v => v.Item3));
+        (double X, double Y, double Z) FromCentre(int[] f) => (
+            (verts[f[0]].Item1 + verts[f[1]].Item1 + verts[f[2]].Item1) / 3.0 - centre.Item1,
+            (verts[f[0]].Item2 + verts[f[1]].Item2 + verts[f[2]].Item2) / 3.0 - centre.Item2,
+            (verts[f[0]].Item3 + verts[f[1]].Item3 + verts[f[2]].Item3) / 3.0 - centre.Item3);
+        double native = polys.Sum(f => Math.Sign(Dot(N(f[0], f[1], f[2]), FromCentre(f))));
+        if (native > 0) // native outward winding: mirror every face (a quad keeps its diagonal)
+            for (int i = 0; i < polys.Count; i++)
+                polys[i] = polys[i].Length == 3 ? [polys[i][0], polys[i][2], polys[i][1]] : [polys[i][0], polys[i][2], polys[i][1], polys[i][3]];
+
+        // Per-corner normals: average of the faces around the vertex that bend less than 60 degrees from this face.
+        static (double X, double Y, double Z) Unit((double X, double Y, double Z) v) { double l = Math.Sqrt(Dot(v, v)); return l == 0 ? (0, 0, -1) : (v.X / l, v.Y / l, v.Z / l); }
+        var faceNormal = polys.Select(f => { var n = N(f[0], f[1], f[2]); return Unit((-n.X, -n.Y, -n.Z)); }).ToList();
+        var around = Enumerable.Range(0, verts.Count).Select(v => Enumerable.Range(0, polys.Count).Where(f => polys[f].Contains(v)).ToList()).ToList();
+        var palette = new List<(int, int, int)>();
+        var cornerNormals = new List<int[]>();
+        foreach (var (f, fi) in polys.Select((f, i) => (f, i)))
+        {
+            var ids = new int[f.Length];
+            for (int k = 0; k < f.Length; k++)
+            {
+                var sum = (X: 0.0, Y: 0.0, Z: 0.0);
+                foreach (int g in around[f[k]])
+                    if (Dot(faceNormal[g], faceNormal[fi]) > 0.5) sum = (sum.X + faceNormal[g].X, sum.Y + faceNormal[g].Y, sum.Z + faceNormal[g].Z);
+                var u = Unit(sum);
+                var q = ((int)Math.Round(u.X * 127), (int)Math.Round(u.Y * 127), (int)Math.Round(u.Z * 127));
+                int at = palette.IndexOf(q);
+                if (at < 0) { at = palette.Count; palette.Add(q); }
+                ids[k] = at;
+            }
+            cornerNormals.Add(ids);
+        }
+        if (palette.Count > 127)
+        {
+            // Merge to the nearest kept normal until the palette fits.
+            var keep = palette.Take(127).ToList();
+            for (int i = 0; i < cornerNormals.Count; i++)
+                for (int k = 0; k < cornerNormals[i].Length; k++)
+                    if (cornerNormals[i][k] >= 127)
+                    {
+                        var q = palette[cornerNormals[i][k]];
+                        cornerNormals[i][k] = Enumerable.Range(0, 127).MaxBy(j => keep[j].Item1 * q.Item1 + keep[j].Item2 * q.Item2 + keep[j].Item3 * q.Item3);
+                    }
+            palette = keep;
+        }
+        int count = Math.Max(verts.Count, palette.Count);
+        while (verts.Count < count) verts.Add(verts[0]);
+        while (palette.Count < count) palette.Add((0, 0, -127));
+
+        static int Align(int n) => (n + 3) & ~3;
+        int normals = 0x10, positions = Align(normals + 3 * count), colours = Align(positions + 3 * count), faceTable = colours + 4;
+        byte[] r = new byte[faceTable + 8 * polys.Count];
+        r[0] = (byte)count; r[1] = (byte)polys.Count; r[2] = (byte)Math.Min(127, verts.Max(v => Math.Max(Math.Abs(v.Item1), Math.Max(Math.Abs(v.Item2), Math.Abs(v.Item3))))); r[3] = 0xFF;
+        BinaryPrimitives.WriteUInt32LittleEndian(r.AsSpan(4), address + (uint)positions);
+        BinaryPrimitives.WriteUInt32LittleEndian(r.AsSpan(8), address + (uint)colours);
+        BinaryPrimitives.WriteUInt32LittleEndian(r.AsSpan(12), address + (uint)faceTable);
+        for (int i = 0; i < count; i++)
+        {
+            r[normals + 3 * i] = (byte)(sbyte)palette[i].Item1; r[normals + 3 * i + 1] = (byte)(sbyte)palette[i].Item2; r[normals + 3 * i + 2] = (byte)(sbyte)palette[i].Item3;
+            r[positions + 3 * i] = (byte)(sbyte)verts[i].Item1; r[positions + 3 * i + 1] = (byte)(sbyte)verts[i].Item2; r[positions + 3 * i + 2] = (byte)(sbyte)verts[i].Item3;
+        }
+        BinaryPrimitives.WriteUInt32LittleEndian(r.AsSpan(colours), 0x007F7F7F);
+        static uint Pack(int[] i) => (uint)(i[0] << 23 | i[1] << 16 | i[2] << 9 | (i.Length == 4 ? i[3] : i[2]) << 2);
+        for (int f = 0; f < polys.Count; f++)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(r.AsSpan(faceTable + 8 * f), Pack(polys[f]));
+            BinaryPrimitives.WriteUInt32LittleEndian(r.AsSpan(faceTable + 8 * f + 4), Pack(cornerNormals[f]));
+        }
+        return r;
+    }
+
     /// <summary>Applies a hue/saturation/brightness transform to both 70-entry colour tables of each animation.</summary>
     public static byte[] Recolour(byte[] package, double hue, double saturation, double brightness)
     {
@@ -139,4 +253,8 @@ public sealed class UniversalJapaneseSource
     }
 
     public UniversalSpecialAsset? Find(string id) => Assets().FirstOrDefault(a => a.Id == id);
+
+    /// <summary>The native egg model package, the source of the inventory column's gold egg (see
+    /// <see cref="UniversalDragonflyEggs.HudModel"/>).</summary>
+    public byte[] InventoryEggModel() => _artisans.Package(UniversalDragonflyEggs.JapaneseEggClass);
 }
