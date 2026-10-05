@@ -1,5 +1,6 @@
-# Spyro Editor 1.0.9 — supported scope and limitations
+# Spyro Editor 1.0.10 — supported scope and limitations
 
+- Version 1.0.10 turns terrain brushes off outside the Terrain tab.
 - Version 1.0.9 aligns the in-game inventory (one text size, a spinning gold
   dragonfly egg column header) and adds multi-tile terrain removal, a whole-tile
   terrain brush and fixes for "independent HP vertex slots" Create BIN errors.

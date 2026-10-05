@@ -127,6 +127,25 @@ internal static class EditorNavigationUiCases
                 }
             }
             Check(!window.GetLogicalDescendants().OfType<Button>().Any(b => b.Name == "RetailNativeMobyLibraryButton"), "Release main browser has one clear Add Object entry instead of a second technical library.");
+
+            // Terrain brushes belong to the Terrain tab.
+            var tabs = Get<TabControl>(window, "_modernWorkspaceTabs");
+            var terrainTab = Get<TabItem>(window, "_modernTerrainWorkspaceTab");
+            var otherTab = tabs.Items.OfType<TabItem>().First(t => !ReferenceEquals(t, terrainTab) && t.IsEnabled);
+            var viewport = Get<EditorViewport>(window, "_viewport");
+            tabs.SelectedItem = terrainTab; Pump();
+            Invoke(window, "SelectTerrainBrushMode", TerrainBrushAction.Raise, false); Pump();
+            Check(viewport.TerrainBrushAction == TerrainBrushAction.Raise, "Raise brush can be selected in the Terrain tab.");
+            tabs.SelectedItem = otherTab; Pump();
+            Check(viewport.TerrainBrushAction == TerrainBrushAction.Off, "Leaving the Terrain tab turns the brush off.");
+            viewport.GetType().GetMethod("TryRequestTerrainBrushMode", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(viewport, [new KeyEventArgs { Key = Key.D1 }]); Pump();
+            Check(viewport.TerrainBrushAction == TerrainBrushAction.Off, "Brush keys do nothing outside the Terrain tab.");
+            tabs.SelectedItem = terrainTab; Pump();
+            viewport.GetType().GetMethod("TryRequestTerrainBrushMode", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(viewport, [new KeyEventArgs { Key = Key.D1 }]); Pump();
+            Check(viewport.TerrainBrushAction == TerrainBrushAction.Raise, "Brush keys still work in the Terrain tab.");
+            Invoke(window, "SelectTerrainBrushMode", TerrainBrushAction.Off, false); Pump();
             Console.WriteLine($"EDITOR_NAVIGATION_UI_OK checks={checks}");
         }
         finally

@@ -1,3 +1,11 @@
+# Terrain brush stays in the Terrain tab — 4 October 2026
+
+Version 1.0.10 (Claude) turns the terrain brush and texture painting off when the
+editor leaves the Terrain tab and ignores the brush keys 1–5 outside it, so clicks
+in Objects always select objects. The editor-navigation UI test covers it (54
+checks). Regression is unchanged: 349 of 351 cases pass, with the same two
+failures as 1.0.8. Evidence is in task-root `work/terrain-brush-tab-20261004`.
+
 # Inventory column and terrain editing — 4 October 2026
 
 Version 1.0.9 (Claude; product source `f495eb7`) gives every inventory row

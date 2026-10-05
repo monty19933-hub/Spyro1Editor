@@ -1,6 +1,10 @@
-# Spyro Editor 1.0.9
+# Spyro Editor 1.0.10
 
-## Changes since Spyro Editor 1.0.8
+## Changes since Spyro Editor 1.0.9
+
+- Terrain brushes and texture painting turn off when you leave the Terrain tab. The brush keys 1–5 only work in the Terrain tab, so clicks in Objects and the other tabs always select objects.
+
+## Spyro Editor 1.0.9 — changes since Spyro Editor 1.0.8
 
 - Inventory: every row now uses one text size, so level names, dragonfly eggs, treasure and dragons line up and fit.
 - Inventory: the dragonfly egg column has a spinning gold dragonfly egg above it, like the treasure chest and dragon. The egg picture and project total at the top of the screen are gone; levels without dragonfly eggs show a dash.

@@ -635,11 +635,21 @@ public sealed partial class MainWindow
 
     private void RefreshEditorWorkspaceTerrainFocusMode()
     {
-        _viewport.TerrainFocusMode =
-            _modernWorkspaceTabs != null &&
-            _modernTerrainWorkspaceTab != null &&
-            ReferenceEquals(_modernWorkspaceTabs.SelectedItem, _modernTerrainWorkspaceTab);
+        _viewport.TerrainFocusMode = IsTerrainWorkspaceTabSelected();
+        // Terrain brushes belong to the Terrain tab: leaving it turns them off so clicks select objects.
+        if (!_viewport.TerrainFocusMode)
+        {
+            if (_viewport.TerrainBrushAction != TerrainBrushAction.Off)
+                SelectTerrainBrushMode(TerrainBrushAction.Off, announce: false);
+            if (_activeTerrainTexturePaintBrush != null || _viewport.TerrainTexturePaintMode)
+                StopTerrainTexturePaintMode(announce: false);
+        }
     }
+
+    private bool IsTerrainWorkspaceTabSelected() =>
+        _modernWorkspaceTabs != null &&
+        _modernTerrainWorkspaceTab != null &&
+        ReferenceEquals(_modernWorkspaceTabs.SelectedItem, _modernTerrainWorkspaceTab);
 
     private void RefreshEditorWorkspaceIndicator()
     {

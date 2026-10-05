@@ -424,7 +424,16 @@ public sealed partial class MainWindow : Window
         _viewport.TerrainBrushRequested += (_, e) => ApplyViewportTerrainBrush(e);
         _viewport.TerrainMultiSelectionChanged += (_, _) => OnTerrainMultiSelectionChanged();
         _viewport.TerrainBrushAdjustmentRequested += (_, e) => AdjustTerrainBrushFromViewport(e);
-        _viewport.TerrainBrushModeRequested += (_, e) => SelectTerrainBrushMode(e.Action);
+        _viewport.TerrainBrushModeRequested += (_, e) =>
+        {
+            // Brush hotkeys only work in the Terrain tab; elsewhere clicks always select objects.
+            if (e.Action != TerrainBrushAction.Off && _modernWorkspaceTabs != null && !IsTerrainWorkspaceTabSelected())
+            {
+                _statusText.Text = "Terrain brushes work in the Terrain tab. Open Terrain to raise, lower or level ground.";
+                return;
+            }
+            SelectTerrainBrushMode(e.Action);
+        };
         _viewport.TerrainBrushStrokeFinished += (_, _) => FinishTerrainBrushUndo();
         _viewport.TerrainTexturePaintRequested += async (_, e) =>
         {
