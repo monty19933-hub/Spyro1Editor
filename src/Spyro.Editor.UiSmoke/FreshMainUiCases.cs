@@ -61,7 +61,7 @@ internal static class FreshMainUiCases
             using var retailEdits=System.Text.Json.JsonDocument.Parse(File.ReadAllBytes(Path.Combine(retailRoot,"toasty-native-edits.json")));
             var savedNative=retailEdits.RootElement.GetProperty("edits").EnumerateArray().Single(e=>e.GetProperty("trueIndex").GetInt32()==editedNativeRow);
             int nativeZ=savedNative.GetProperty("rawEdited").GetProperty("z").GetInt32();
-            var viewport=Get<object>(window,"_viewport");RunTask((Task)Invoke(window,"NewMainLevelAsync")!);
+            var viewport=Get<object>(window,"_viewport");NewLevel(window);
             Check(ReferenceEquals(viewport,Get<object>(window,"_viewport")),"New retains the same viewport");
             Check(window.FreshSceneForTesting is {Objects.Count:0,Surfaces.Count:2},"neutral authored floor has no source actors");
             var state=window.CaptureEditorShellSessionSnapshotForTesting();
@@ -79,7 +79,7 @@ internal static class FreshMainUiCases
             Wait(()=>window.FreshSceneForTesting!.Surfaces.Count==2,"normal Undo Terrain removes the added fresh face");
             string initialFreshPath=Path.Combine(state.Workspace.RootPath,SceneDocument.FileName);
             Wait(()=>File.Exists(initialFreshPath)&&SceneDocument.Read(initialFreshPath).Surfaces.Count==2,"fresh copy undo persists the restored authored scene");
-            RunTask((Task)Invoke(window,"NewMainLevelAsync")!);
+            NewLevel(window);
             Console.WriteLine("FRESH_ADD_UNDO_AND_RETAIL_HELPER_VISIBILITY_OK");
             Directory.CreateDirectory(outputDirectory);Snapshot(window,Path.Combine(outputDirectory,"fresh-main-editor.png"));
             Click(Find<Button>(window,"UniversalMobyLibraryButton"));
@@ -107,7 +107,7 @@ internal static class FreshMainUiCases
                 File.WriteAllLines(Path.Combine(untexturedKeep,"untextured-main.cue"),["FILE \"untextured-main.bin\" BINARY","  TRACK 01 MODE2/2352","    INDEX 01 00:00:00"]);
             }
             Console.WriteLine("FRESH_UNTEXTURED_DEFAULT_UI_OK defaultSheep=1 nativeTextureCount=0 normalCreateBin=1");
-            RunTask((Task)Invoke(window,"NewMainLevelAsync")!);
+            NewLevel(window);
             Check(window.FreshSceneForTesting is {Objects.Count:0,Surfaces.Count:2},"second actual New resets the authored scene for material checks");
             var geometry=Get<GeometryCandidate>(window,"_currentGeometry");
             Set(window,"_selectedTerrain",geometry.Polygons[0]);Set(window,"_selectedTerrainIndex",0);
@@ -166,8 +166,9 @@ internal static class FreshMainUiCases
             RunTask((Task)Invoke(window,"OpenMainFreshLevelAsync")!);
             Check(window.FreshSceneForTesting!.Surfaces[1].Vertices[1].Z==560,"save/reopen retains sculpted vertex in main editor");
             Console.WriteLine("fresh main: compiling native floor/material/spawn");
-            var compilationTask=(Task<NativeFreshMainCompilation>)Invoke(window,"CaptureFreshNativeAsync")!;RunTask(compilationTask);
-            var native=compilationTask.Result;Check(new UniversalLevelData(native.CopyLevelData()).Scene().RowCount==0,"compiled neutral scene has zero donor actors");
+            // The editor compiles created and cleared levels through one interface; a created level is the fresh-main kind.
+            var compilationTask=(Task<INativeAuthoredCompilation>)Invoke(window,"CaptureFreshNativeAsync")!;RunTask(compilationTask);
+            var native=(NativeFreshMainCompilation)compilationTask.Result;Check(new UniversalLevelData(native.CopyLevelData()).Scene().RowCount==0,"compiled neutral scene has zero donor actors");
             string original=(string)Invoke(window,"ResolveUniversalSourceDisc")!;
             var zeroSpawn=NativeFreshMainCompilation.CaptureAsync(original,saved with{Spawn=new(0,0,0),Objects=[],Ledger=UniversalPlacementLedger.Empty},Path.Combine(root,"_local","authored-native","spawn-boundary.bin"));
             RunTask(zeroSpawn);var boundary=new UniversalLevelData(zeroSpawn.Result.CopyLevelData());
@@ -286,7 +287,9 @@ internal static class FreshMainUiCases
         int Word(byte[] data,int at)=>checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(at)));
         Vector3f[] Vertices(byte[] data,int i)
         {
-            int at=Word(data,8+i*4)+4,ox=Word(data,at+8)>>16,oy=Word(data,at+8)&65535,oz=Word(data,at+12)>>16;
+            // The packed origin words use all 32 bits, so read them unsigned.
+            int at=Word(data,8+i*4)+4;uint xy=BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(at+8)),zw=BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(at+12));
+            int ox=(int)(xy>>16),oy=(int)(xy&65535),oz=(int)(zw>>16);
             return Enumerable.Range(0,3).Select(v=>{uint w=BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(at+60+v*4));
                 return new Vector3f(ox+(w>>21),oy+((w>>10)&2047),oz+(w&1023));}).ToArray();
         }
@@ -331,12 +334,56 @@ internal static class FreshMainUiCases
         var quad=document with{Surfaces=[document.Surfaces[0] with{Vertices=[new(528,528,544),new(656,528,544),new(656,656,544),new(528,656,544)]}]};
         Check(BinaryPrimitives.ReadInt32LittleEndian(Compile(quad).AsSpan(4))==8&&quad.Surfaces.Count==1,"one editor quad compiles to eight bounded native triangles");
         var textured=ramp with{Surfaces=[ramp.Surfaces[0] with{Material=new AuthoredMaterial(10,66)}]};
+        // Textured faces are written as a batched sector: a 28-byte header carrying the vertex, colour and
+        // face counts, the low-detail arrays, then the high-detail arrays ending in 16-byte face records
+        // (vertex indexes, colour indexes, material, flags).
         byte[] texturedMesh=Compile(textured);int texturedSector=Word(texturedMesh,8)+4;
-        Check(Word(texturedMesh,4)==1&&Word(texturedMesh,texturedSector+108)==0&&Word(bytes,Word(bytes,8)+4+108)==128,
+        int tv=texturedMesh[texturedSector+20],tc=texturedMesh[texturedSector+21],tf=texturedMesh[texturedSector+22];
+        int texturedFace=texturedSector+28+4*tv+4*tc+8*tf+4*tv+4*tc+4*tc;
+        Check(Word(texturedMesh,4)==1&&tv==3&&tf==1&&Word(texturedMesh,texturedFace+8)==0&&Word(texturedMesh,texturedFace+12)==0&&
+            Word(bytes,Word(bytes,8)+4+108)==128,
             "textured terrain keeps native near-clipping flag while direct untextured packets use bounded lattice");
+        // A painted starter-floor triangle (384 units wide) is drawn whole but collided with as an even
+        // lattice, because one native collision triangle spans at most 255 units per axis.
+        List<Vector3f[]> CollisionOf(byte[] mesh)
+        {
+            int at=0;for(int i=0;i<3;i++)at+=Word(mesh,at);
+            int first=at+4+Word(mesh,at+20),count=Word(mesh,at+8);
+            return Enumerable.Range(0,count).Select(i=>
+            {
+                var xyz=Enumerable.Range(0,3).Select(axis=>
+                {
+                    uint w=BinaryPrimitives.ReadUInt32LittleEndian(mesh.AsSpan(first+i*12+axis*4));int origin=(int)(w&16383);
+                    return axis==2?new[]{origin,origin+(int)((w>>16)&255),origin+(int)(w>>24)}:
+                        new[]{origin,origin+Sign((int)(w>>14)&511),origin+Sign((int)(w>>23)&511)};
+                }).ToArray();
+                return Enumerable.Range(0,3).Select(v=>new Vector3f(xyz[0][v],xyz[1][v],xyz[2][v])).ToArray();
+            }).ToList();
+        }
+        var painted=document with{Surfaces=[document.Surfaces[0] with{Material=new AuthoredMaterial(10,66)}]};
+        var starter=document.Surfaces[0].Vertices;
+        Check(starter.Max(v=>v.X)-starter.Min(v=>v.X)==384,"the starter floor triangle is 384 units wide");
+        byte[] paintedMesh=Compile(painted);var paintedCollision=CollisionOf(paintedMesh);
+        int paintedSector=Word(paintedMesh,8)+4;
+        Check(Word(paintedMesh,4)==1&&paintedMesh[paintedSector+20]==3&&paintedMesh[paintedSector+22]==1,
+            "a painted starter-floor triangle is still drawn as one textured face");
+        Check(paintedCollision.Count==4&&paintedCollision.Sum(Area)==384*384/2&&
+            paintedCollision.All(t=>t.Max(p=>p.X)-t.Min(p=>p.X)<=255&&t.Max(p=>p.Y)-t.Min(p=>p.Y)<=255)&&
+            paintedCollision.SelectMany(t=>t).All(p=>p.Z==544),
+            "its collision is four even triangles within the native range covering the whole footprint");
+        // Corners that allow no even split (599 and 99 share no divisor) still export: the collision
+        // pieces' inner corners are rounded to whole units, never truncated and never out of range.
         var wide=textured with{Surfaces=[textured.Surfaces[0] with{Vertices=[new(1,1,1),new(600,1,1),new(1,100,1)]}]};
-        bool refused=false;try{_=Compile(wide);}catch(TargetInvocationException e)when(e.InnerException is InvalidDataException){refused=true;}
-        Check(refused,"textured collision range overflow refuses rather than truncates authored vertices");
+        byte[] wideMesh=Compile(wide);var wideCollision=CollisionOf(wideMesh);
+        Check(wideCollision.Count==9&&Math.Abs(wideCollision.Sum(Area)-599*99/2.0)<=599*99/2.0*0.01&&
+            wideCollision.All(t=>t.Max(p=>p.X)-t.Min(p=>p.X)<=255&&t.Max(p=>p.Y)-t.Min(p=>p.Y)<=255)&&
+            wideCollision.SelectMany(t=>t).All(p=>p.X is>=1 and<=600&&p.Y is>=1 and<=100&&p.Z==1),
+            "a long textured face with awkward corners is split for collision instead of being refused");
+        int wideSector=Word(wideMesh,8)+4;
+        Check(Word(wideMesh,4)==1&&wideMesh[wideSector+20]==3&&wideMesh[wideSector+22]==1,"and is still drawn as the one face the user made");
+        var huge=textured with{Surfaces=[textured.Surfaces[0] with{Vertices=[new(1,1,1),new(4001,1,1),new(1,100,1)]}]};
+        bool refused=false;try{_=Compile(huge);}catch(TargetInvocationException e)when(e.InnerException is InvalidDataException){refused=true;}
+        Check(refused,"a textured face beyond every native range is refused rather than truncated");
         Console.WriteLine("AUTHORED_MESH_CHECKS_OK: copy/remove, stable IDs, exact lattice and ramp area, independent unsigned-Z collision decode, interpolated near/far colours, textured flags, quad and overflow");
     }
 
@@ -356,6 +403,21 @@ internal static class FreshMainUiCases
     }
     private static void Set(object owner,string field,object value)=>owner.GetType().GetField(field,BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(owner,value);
     private static void RunTask(Task task){Wait(()=>task.IsCompleted,"async operation",600);task.GetAwaiter().GetResult();}
+    /// <summary>File > New Level, answering "Start New Level" when the project already has a created level.</summary>
+    private static void NewLevel(MainWindow window)
+    {
+        var task=(Task)Invoke(window,"NewMainLevelAsync")!;
+        Wait(()=>
+        {
+            if(window.OwnedWindows.FirstOrDefault(w=>w.Name=="NewLevelReplaceDialog") is { } ask)
+            {
+                var confirm=Find<Button>(ask,"ConfirmationConfirm");
+                confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,confirm));
+            }
+            return task.IsCompleted;
+        },"File > New Level",600);
+        task.GetAwaiter().GetResult();
+    }
     private static void Wait(Func<bool> condition,string label,int seconds=180)
     {var timer=Stopwatch.StartNew();while(timer.Elapsed.TotalSeconds<seconds){Pump();if(condition())return;Thread.Sleep(20);}throw new InvalidOperationException("Fresh main UI timeout: "+label);}
     private static void Pump(){Dispatcher.UIThread.RunJobs();}

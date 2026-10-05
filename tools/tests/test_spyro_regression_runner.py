@@ -59,7 +59,8 @@ class OwnedCommandTests(unittest.TestCase):
         self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"', text)
         self.assertNotIn("HintPath", text, "source smoke must compile the current Core")
         program = (project.parent / "Program.cs").read_text()
-        self.assertIn("if(args.Length!=3)", program)
+        # The smoke takes an optional fourth argument (which rows to issue) since the two-row variant.
+        self.assertIn("if(args.Length is not(3 or 4))", program)
         self.assertIn("if(Directory.Exists(root))throw", program)
         self.assertIn(marker, program)
 

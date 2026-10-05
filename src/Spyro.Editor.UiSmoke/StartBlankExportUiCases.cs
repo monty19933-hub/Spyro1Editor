@@ -68,7 +68,30 @@ internal static class StartBlankExportUiCases
             blankName = scene!.Name;
             Snapshot(window, Path.Combine(outDir, "2-blank-level.png"));
 
-            // 3. The same Add object window fills it: an egg, a sign and an object from another level.
+            // 3a. Paint both tiles of the starting floor with a texture through the ordinary chooser.
+            var blankGeometry = window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry!;
+            for (int tile = 0; tile < 2; tile++)
+            {
+                window.CaptureEditorShellSessionSnapshotForTesting().Viewport.SelectTerrainForTesting(tile); Pump(10);
+                Button paint = Get<Button>(window, "_terrainTaskPaintFaceButton");
+                Check(paint.IsEnabled, "Choose Texture is available for a tile of the blank level");
+                Click(paint);
+                Window chooser = WaitOwned(window, w => w.Title == "Choose terrain material");
+                Find<ComboBox>(chooser, "AuthoredMaterialLevel").SelectedItem =
+                    Get<LevelCatalog>(window, "_retailCatalog").Levels.Single(l => l.SourceWadEntry == 10);
+                Pump(10);
+                Find<ComboBox>(chooser, "AuthoredMaterialChoice").SelectedIndex = 66; Pump(10);
+                Button apply = Find<Button>(chooser, "AuthoredMaterialApply");
+                Wait(() => apply.IsEnabled, "the texture preview is ready", 180);
+                if (tile == 0) Snapshot(chooser, Path.Combine(outDir, "2b-texture-chooser.png"));
+                Click(apply);
+                int painted = tile;
+                Wait(() => window.FreshSceneForTesting!.Surfaces[painted].Material != null, "the tile took the texture", 60);
+            }
+            Check(blankGeometry.Polygons.Count == 2 && window.FreshSceneForTesting!.Surfaces.All(surface => surface.Material != null),
+                "the whole starting floor is textured and still two tiles");
+
+            // 3b. The same Add object window fills it: an egg, a sign and an object from another level.
             AddFromBrowser(window, e => e.ClassId == 0x1E9, "dragonfly egg", UniversalDragonflyEggs.Variants.Single(v => v.Id == "dragonfly-egg-gold").Class);
             AddFromBrowser(window, e => e.ClassId == UniversalDragonflyEggs.SignClass, "sign", null);
             AddFromBrowser(window, e => e.ClassId == 0x0A, "sheep from another level", null);
@@ -106,6 +129,8 @@ internal static class StartBlankExportUiCases
             Check(window.FreshSceneForTesting?.Name == blankName && reopened.Count == 3, "the reopened level is the blank one with three objects: " + reopened.Count);
             Check(reopened.Single(m => m.CrossLevelTemplateId == "special:sign").SignText == "BLANK LEVEL\nBUILT IN THE EDITOR", "the sign message survived reopening");
             Check(reopened.Any(m => m.CrossLevelTemplateId == "special:dragonfly-egg-gold"), "the egg kept its colour");
+            Check(window.FreshSceneForTesting!.Surfaces.Count == 2 && window.FreshSceneForTesting.Surfaces.All(surface => surface.Material != null),
+                "the floor texture survived reopening");
             Check(Find<MenuItem>(window, null, "Restore Before Clear…") != null, "Restore Before Clear is offered");
 
             // 5. Create BIN; New Game starts in the first level so the blank one is entered through its portal.

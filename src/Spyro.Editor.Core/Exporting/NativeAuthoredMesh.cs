@@ -29,8 +29,11 @@ internal static class NativeAuthoredMesh
             // FF material uses the source renderer's direct untextured packet
             // path, which cannot near-clip a large face. Keep editor faces intact;
             // render and collision consume the same exact generated lattice.
-            if(triangle.Material==255) AppendUntexturedLattice(nativeTriangles,triangle);
-            else nativeTriangles.Add(triangle);
+            // A textured face is drawn whole by the batched renderer, which takes it from the document.
+            // Only its collision is taken from this list, and one collision triangle can span at most
+            // 255 units per axis, so a larger textured face is split here for collision alone.
+            if(triangle.Material==255) AppendLattice(nativeTriangles,triangle,64);
+            else AppendLattice(nativeTriangles,triangle,255);
             if(nativeTriangles.Count>255)throw new InvalidDataException("Authored geometry exceeds the bounded 255 generated collision-triangle allocation; reduce geometry.");
         }
         triangles=nativeTriangles;
@@ -93,18 +96,35 @@ internal static class NativeAuthoredMesh
         if(bundle.Length>0x20000)throw new InvalidDataException("Authored surface exceeds the bounded native surface allocation.");
         return bundle;
     }
-    private static void AppendUntexturedLattice(List<Triangle> output,Triangle t)
+    /// <summary>Splits a triangle into an even lattice whose pieces span at most <paramref name="cell"/> units per
+    /// axis. 64 is the direct untextured renderer's limit: those pieces are drawn and collided with, so their
+    /// corners must fall exactly on whole units. 255 is the collision encoding's limit and applies to textured
+    /// faces, whose pieces are used for collision only: when no exact lattice exists their inner corners are
+    /// rounded to the nearest whole unit (less than one unit from the drawn face).</summary>
+    private static void AppendLattice(List<Triangle> output,Triangle t,int cell)
     {
         int[][] v=[new[]{Unit(t.A.X),Unit(t.A.Y),Unit(t.A.Z)},new[]{Unit(t.B.X),Unit(t.B.Y),Unit(t.B.Z)},new[]{Unit(t.C.X),Unit(t.C.Y),Unit(t.C.Z)}];
         int extent=Enumerable.Range(0,3).Max(d=>v.Max(p=>p[d])-v.Min(p=>p[d]));
         int gcd=0;
         for(int d=0;d<3;d++){gcd=Gcd(gcd,Math.Abs(v[1][d]-v[0][d]));gcd=Gcd(gcd,Math.Abs(v[2][d]-v[0][d]));}
-        int divisions=Math.Max(1,(extent+63)/64);
+        int divisions=Math.Max(1,(extent+cell-1)/cell);
         while(divisions<=15&&gcd%divisions!=0)divisions++;
+        bool rounded=false;
+        if(divisions>15&&cell==255)
+        {
+            // Collision only: one unit of headroom so rounding cannot push a piece past the 255-unit range.
+            divisions=Math.Max(1,(extent+253)/254);rounded=true;
+        }
         if(divisions>15||output.Count+divisions*divisions>255)
-            throw new InvalidDataException("Untextured authored faces need exact whole-unit subdivision to at most64 units per axis within255 native triangles. This face cannot fit that lattice; change its vertices or reduce geometry.");
+            throw new InvalidDataException(cell==64
+                ?"Untextured authored faces need exact whole-unit subdivision to at most64 units per axis within255 native triangles. This face cannot fit that lattice; change its vertices or reduce geometry."
+                :"The level's textured tiles need more collision pieces than the game allows (255 for the whole level). Use fewer or smaller textured tiles.");
         if(divisions==1){output.Add(t);return;}
-        Vector3f Point(int i,int j)=>new(
+        Vector3f Point(int i,int j)=>rounded
+            ?new(MathF.Round(v[0][0]+((v[1][0]-v[0][0])*i+(v[2][0]-v[0][0])*j)/(float)divisions),
+                 MathF.Round(v[0][1]+((v[1][1]-v[0][1])*i+(v[2][1]-v[0][1])*j)/(float)divisions),
+                 MathF.Round(v[0][2]+((v[1][2]-v[0][2])*i+(v[2][2]-v[0][2])*j)/(float)divisions))
+            :new(
             v[0][0]+((v[1][0]-v[0][0])*i+(v[2][0]-v[0][0])*j)/divisions,
             v[0][1]+((v[1][1]-v[0][1])*i+(v[2][1]-v[0][1])*j)/divisions,
             v[0][2]+((v[1][2]-v[0][2])*i+(v[2][2]-v[0][2])*j)/divisions);
@@ -114,9 +134,19 @@ internal static class NativeAuthoredMesh
             byte Channel(byte x,byte y,byte z)=>(byte)((a*x+i*y+j*z+divisions/2)/divisions);
             return new(Channel(colors[0].R,colors[1].R,colors[2].R),Channel(colors[0].G,colors[1].G,colors[2].G),Channel(colors[0].B,colors[1].B,colors[2].B));
         }
-        void Add((int I,int J) a,(int I,int J) b,(int I,int J) c)=>output.Add(new(Point(a.I,a.J),Point(b.I,b.J),Point(c.I,c.J),t.Color,t.Material,
-            [Color(t.Near,a.I,a.J),Color(t.Near,b.I,b.J),Color(t.Near,c.I,c.J)],
-            [Color(t.Far,a.I,a.J),Color(t.Far,b.I,b.J),Color(t.Far,c.I,c.J)]));
+        void Add((int I,int J) a,(int I,int J) b,(int I,int J) c)
+        {
+            Vector3f pa=Point(a.I,a.J),pb=Point(b.I,b.J),pc=Point(c.I,c.J);
+            if(rounded)
+            {
+                // Rounding can flatten a sliver of a very thin face; a zero-area piece adds no collision.
+                float ux=pb.X-pa.X,uy=pb.Y-pa.Y,uz=pb.Z-pa.Z,wx=pc.X-pa.X,wy=pc.Y-pa.Y,wz=pc.Z-pa.Z;
+                if(uy*wz-uz*wy==0&&uz*wx-ux*wz==0&&ux*wy-uy*wx==0)return;
+            }
+            output.Add(new(pa,pb,pc,t.Color,t.Material,
+                [Color(t.Near,a.I,a.J),Color(t.Near,b.I,b.J),Color(t.Near,c.I,c.J)],
+                [Color(t.Far,a.I,a.J),Color(t.Far,b.I,b.J),Color(t.Far,c.I,c.J)]));
+        }
         for(int i=0;i<divisions;i++)for(int j=0;j<divisions-i;j++)
         {
             Add((i,j),(i+1,j),(i,j+1));
