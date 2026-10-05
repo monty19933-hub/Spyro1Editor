@@ -105,6 +105,10 @@ public sealed partial class EditorViewport : Control
     private const double TerrainDragDeadZonePixels = 5;
     private Point _terrainDragPressPosition;
     private bool _terrainDragArmed;
+    // The same rule for objects and their facing handle: a click selects, and only a drag that leaves the
+    // dead zone moves or turns. Without it the slightest hand movement during a click nudged the object.
+    private Point _mobyDragPressPosition;
+    private bool _mobyDragArmed;
     private bool _draggingTerrainAsAddCopy;
     private bool _isPaintingTerrain;
     private int _draggingMobyIndex = -1;
@@ -1680,6 +1684,8 @@ public sealed partial class EditorViewport : Control
                 SelectMoby(facingGuide.Index, false);
                 _isDraggingMobyFacing = true;
                 _draggingMobyFacingIndex = facingGuide.Index;
+                _mobyDragPressPosition = _lastPointerPosition;
+                _mobyDragArmed = false;
                 SetViewportCursor(StandardCursorType.Cross);
                 e.Pointer.Capture(this);
                 e.Handled = true;
@@ -1748,6 +1754,8 @@ public sealed partial class EditorViewport : Control
                 SelectMoby(moby.Index, false);
                 _isDraggingMoby = true;
                 _draggingMobyIndex = moby.Index;
+                _mobyDragPressPosition = _lastPointerPosition;
+                _mobyDragArmed = false;
                 SetViewportCursor(StandardCursorType.SizeAll);
                 e.Pointer.Capture(this);
             }
@@ -1797,6 +1805,21 @@ public sealed partial class EditorViewport : Control
         {
             _lastPointerPosition = position;
             InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
+        if ((_isDraggingMoby || _isDraggingMobyFacing) && !_mobyDragArmed)
+        {
+            Point moved = position - _mobyDragPressPosition;
+            if (Math.Sqrt(moved.X * moved.X + moved.Y * moved.Y) < TerrainDragDeadZonePixels)
+            {
+                _lastPointerPosition = position;
+                e.Handled = true;
+                return;
+            }
+            _mobyDragArmed = true;
+            _lastPointerPosition = position; // start moving from here, without a jump
             e.Handled = true;
             return;
         }
@@ -2654,6 +2677,19 @@ public sealed partial class EditorViewport : Control
 
         for (double y = startY; y < bounds.Bottom; y += spacing)
             context.DrawLine(Math.Abs(y % (spacing * 4)) < 1 ? major : minor, new Point(bounds.Left, y), new Point(bounds.Right, y));
+    }
+
+    /// <summary>"Grass", "Stone"… A tile the editor has no surface name for (a plain tile in a level you built) gets the fallback.</summary>
+    internal static string PlainSurfaceName(string? surface, string fallback)
+    {
+        string name = TerrainMaterialClassifier.FormatSurface(surface ?? "");
+        return name == "Unknown" ? fallback : name;
+    }
+
+    internal static string PlainTileName(string? surface)
+    {
+        string name = PlainSurfaceName(surface, fallback: "");
+        return name.Length == 0 ? "Tile" : name + " tile";
     }
 
     /// <summary>Heading above the empty-scene message.</summary>
@@ -3980,6 +4016,8 @@ public sealed partial class EditorViewport : Control
         int maxLabels = _zoom >= 1.45 ? 8 : 5;
         foreach (TerrainSurfaceLabelAccumulator label in labels.Values
             .Where(label => label.FaceCount >= 3 || label.TotalArea >= 420)
+            // A surface the editor has no name for gets no label in the shipping view ("Unknown" says nothing).
+            .Where(label => !PlainLabels || TerrainMaterialClassifier.FormatSurface(label.Surface) != "Unknown")
             .OrderByDescending(label => TerrainSurfaceLabelScore(label))
             .Take(maxLabels))
         {
@@ -8489,7 +8527,7 @@ public sealed partial class EditorViewport : Control
                 TerrainPatchSafetyKind.TextureOnly => "repainted",
                 _ => "changed"
             };
-            label = string.Join("  ·  ", new[] { TerrainMaterialClassifier.FormatSurface(terrain.Surface) + " tile", ground, change }
+            label = string.Join("  ·  ", new[] { PlainTileName(terrain.Surface), ground, change }
                 .Where(part => part.Length > 0));
         }
 
@@ -10453,7 +10491,7 @@ public sealed partial class EditorViewport : Control
 
         string role = IsMapUnderlaySurface(face.Polygon.Surface) ? "underlay" : "foreground";
         string label = PlainLabels
-            ? TerrainMaterialClassifier.FormatSurface(face.Polygon.Surface)
+            ? PlainSurfaceName(face.Polygon.Surface, fallback: "Tile")
             : $"{TerrainMaterialClassifier.FormatSurface(face.Polygon.Surface)} {role}  F{terrainIndex}";
         FormattedText text = new(
             label,

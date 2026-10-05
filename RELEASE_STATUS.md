@@ -35,8 +35,8 @@ withdrawing the permission whenever the game is not in normal gameplay. Played
 in an isolated emulator: Artisans, Stone Hill and Toasty through portals, Doctor
 Shemp (demo), Exit Level while flying, death and respawn while flying; the Icy
 Flight demo is frame-identical on and off; the OFF export is byte-identical to a
-project that never used the option. The other 26 normal levels and Gnasty's Loot
-were not played with it.
+project that never used the option. The other 26 normal levels (Gnasty's Loot
+among them) were not played with it.
 
 Dragonfly eggs (four colours seen in game, pickup, inventory 1/4, save at a
 fairy, cold restart and Load Game), signs (message shown in game; edit, save and

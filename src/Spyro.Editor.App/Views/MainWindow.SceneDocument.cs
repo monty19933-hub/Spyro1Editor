@@ -361,7 +361,9 @@ public sealed partial class MainWindow
         });applySky.Name="FreshMainSetSkyColor";_freshSettingsPanel.Children.Add(applySky);
         ComboBox source=new(){Name="FreshMainMaterialSource",ItemsSource=_retailCatalog.Levels.Where(l=>l.SourceWadEntry is >=10 and <=78).ToList(),SelectedItem=_retailCatalog.FindByKey("stonehill"),MinHeight=32};
         TextBox texture=new(){Name="FreshMainMaterialId",Text="0"};
-        _freshTerrainPanel.Children.Add(NewSmallNote("Select a face to move it, edit its points or choose a material. Add Terrain extends your level; Remove Terrain cuts out the selected face."));
+        _freshTerrainPanel.Children.Add(NewSmallNote(_releaseMode
+            ? "This is a level you built. Select a tile to move it, edit its corners or paint it. Add Terrain extends the level; Remove Terrain cuts out the selected tile."
+            : "Select a face to move it, edit its points or choose a material. Add Terrain extends your level; Remove Terrain cuts out the selected face."));
         if(!_releaseMode){_freshTerrainPanel.Children.Add(source);_freshTerrainPanel.Children.Add(texture);}
         Button apply=NewAsyncButton("Apply source material",async()=>
         {

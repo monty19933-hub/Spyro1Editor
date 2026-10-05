@@ -46,8 +46,8 @@
   safe-start rule rejects.
 
 ## Not verified
-- Windows package never run. Mac package not notarized. Fly Anywhere not played in 26 normal levels and
-  Gnasty's Loot. No whole-campaign playthrough. Universal object behaviour beyond the documented checks.
+- Windows package never run. Mac package not notarized. Fly Anywhere not played in the other 26 normal levels
+  (Gnasty's Loot among them). No whole-campaign playthrough. Universal object behaviour beyond the documented checks.
 
 ## Next (only if the owner asks)
 - Owner's hands-on review with `PLAYTEST-CHECKLIST.md`; fix what it finds.

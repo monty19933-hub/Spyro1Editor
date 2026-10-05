@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
@@ -176,9 +177,74 @@ internal static class KeyboardUiCases
                 "nothing was written to the output folder");
             Check(!Get<bool>(window, "_createBinBusy"), "the Create BIN button is free again");
             spaceOverride.SetValue(window, null);
+
+            // 6. A click selects and never moves: the pointer may wander a few pixels between press and
+            //    release. A real drag still moves the object. (Nothing is saved; the clone is thrown away.)
+            SelectTab(window, "Objects");
+            viewport.ResetSelection(); Pump(10);
+            Moby? target = null; Point at = default;
+            foreach (Moby candidate in session.CurrentMobys.Where(m => !m.IsRemoved && !m.IsEditorControl && m.TreasureValue > 0).Take(12))
+            {
+                viewport.SelectMoby(candidate, focus: true); Pump(20);
+                Snapshot(window, Path.Combine(outDir, "pointer-probe.png"));
+                Point? center = ScreenCenter(viewport, candidate);
+                viewport.ResetSelection(); Pump(10);
+                if (center is not Point c) continue;
+                Point inWindow = viewport.TranslatePoint(c, window) ?? c;
+                Thread.Sleep(650);
+                window.MouseMove(inWindow, RawInputModifiers.None); Pump(3);
+                window.MouseDown(inWindow, MouseButton.Left, RawInputModifiers.None); Pump(3);
+                window.MouseUp(inWindow, MouseButton.Left, RawInputModifiers.None); Pump(10);
+                if (ReferenceEquals(typeof(MainWindow).GetField("_selectedMoby", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window), candidate))
+                { target = candidate; at = inWindow; break; }
+            }
+            Check(target != null, "a click in the view selects the object under the pointer");
+            string placeBefore = $"{target!.Position.X:F3},{target.Position.Y:F3},{target.Position.Z:F3}";
+            string signatureBefore = EditSignature(window.CaptureEditorShellSessionSnapshotForTesting());
+            foreach ((double dx, double dy) in new[] { (0d, 0d), (2d, 1d), (-3d, 2d), (3d, -3d) })
+            {
+                Thread.Sleep(650); // separate clicks, not a double-click (which opens the Edit window)
+                window.MouseDown(at, MouseButton.Left, RawInputModifiers.None); Pump(3);
+                window.MouseMove(new Point(at.X + dx, at.Y + dy), RawInputModifiers.LeftMouseButton); Pump(3);
+                window.MouseUp(new Point(at.X + dx, at.Y + dy), MouseButton.Left, RawInputModifiers.None); Pump(10);
+                window.MouseMove(at, RawInputModifiers.None); Pump(3);
+            }
+            Check($"{target.Position.X:F3},{target.Position.Y:F3},{target.Position.Z:F3}" == placeBefore &&
+                  EditSignature(window.CaptureEditorShellSessionSnapshotForTesting()) == signatureBefore,
+                "clicks whose pointer wanders a few pixels do not move the object: " + status.Text);
+            Check(!(status.Text ?? "").StartsWith("Moved ", StringComparison.Ordinal), "and the status does not claim a move: " + status.Text);
+            Check(window.OwnedWindows.Count == 0, "single clicks open no window");
+            Thread.Sleep(650);
+            window.MouseDown(at, MouseButton.Left, RawInputModifiers.None); Pump(3);
+            for (int step = 1; step <= 8; step++)
+            {
+                window.MouseMove(new Point(at.X + step * 6, at.Y + step * 2), RawInputModifiers.LeftMouseButton); Pump(2);
+            }
+            window.MouseUp(new Point(at.X + 48, at.Y + 16), MouseButton.Left, RawInputModifiers.None); Pump(20);
+            Check($"{target.Position.X:F3},{target.Position.Y:F3},{target.Position.Z:F3}" != placeBefore &&
+                  (status.Text ?? "").StartsWith("Moved ", StringComparison.Ordinal),
+                "a real drag moves the object and says so: " + status.Text);
             Console.WriteLine($"KEYBOARD_UI_OK checks={_checks}");
         }
         finally { window.Close(); Pump(10); }
+    }
+
+    /// <summary>Where the view last drew this object, in view coordinates (null when it is off screen).</summary>
+    private static Point? ScreenCenter(EditorViewport viewport, Moby moby)
+    {
+        int index = -1;
+        for (int i = 0; i < viewport.Mobys.Count; i++)
+            if (ReferenceEquals(viewport.Mobys[i], moby)) { index = i; break; }
+        var drawn = (System.Collections.IEnumerable)typeof(EditorViewport)
+            .GetField("_screenMobys", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(viewport)!;
+        foreach (object entry in drawn)
+        {
+            Type type = entry.GetType();
+            if ((int)type.GetProperty("Index")!.GetValue(entry)! != index) continue;
+            Point center = (Point)type.GetProperty("Center")!.GetValue(entry)!;
+            return center.X > 20 && center.Y > 60 && center.X < viewport.Bounds.Width - 20 && center.Y < viewport.Bounds.Height - 20 ? center : null;
+        }
+        return null;
     }
 
     private static string Camera(EditorViewport viewport) =>

@@ -119,7 +119,7 @@
   and a death and respawn while flying. The Icy Flight demo plays frame for
   frame the same with the option on and off. With the option off the game only
   glides, and its files are identical to a project that never used the option.
-  The other 26 normal levels and Gnasty's Loot were not played with it. Flying
+  The other 26 normal levels, Gnasty's Loot among them, were not played with it. Flying
   lets the player reach places the levels were not built for, including out of
   bounds; that is the nature of the option. It is not stored on the memory card:
   it belongs to the game you export.

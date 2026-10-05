@@ -305,7 +305,7 @@ public sealed partial class MainWindow
             _terrainPanelSelectionText.Text = $"Click a tile in the view to select it. {several} selects several.";
         else
         {
-            string surface = TerrainMaterialClassifier.FormatSurface(_selectedTerrain.Surface);
+            string tile = EditorViewport.PlainTileName(_selectedTerrain.Surface);
             string state = _selectedTerrain.IsTerrainRemoved
                 ? " It is removed; Undo Terrain brings it back."
                 : _selectedTerrain.IsTerrainAddClone
@@ -313,7 +313,7 @@ public sealed partial class MainWindow
                     : _selectedTerrain.IsTerrainEdited
                         ? " You have changed it."
                         : "";
-            _terrainPanelSelectionText.Text = $"{surface} tile selected.{state} Drag it in the view to move it, or use the buttons.";
+            _terrainPanelSelectionText.Text = $"{tile} selected.{state} Drag it in the view to move it, or use the buttons.";
         }
 
         if (_terrainPanelHeightRow != null)

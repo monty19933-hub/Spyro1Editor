@@ -157,7 +157,7 @@ public sealed partial class MainWindow
         {
             Title = "Project Data",
             Width = 680,
-            Height = 500,
+            Height = 560,
             MinWidth = 560,
             MinHeight = 420,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -170,21 +170,21 @@ public sealed partial class MainWindow
         };
         body.Children.Add(new TextBlock
         {
-            Text = "Protected project storage",
+            Text = "Your project",
             FontSize = 22,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(ModernInk)
         });
         body.Children.Add(new TextBlock
         {
-            Text = "Your edits and generated files now live outside the replaceable application folder. Installing or updating the editor does not overwrite this project.",
+            Text = "Your changes and the games you create are kept in the folder below, outside the app. Replacing or updating the editor does not touch it.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(ModernMutedInk),
             LineHeight = 20
         });
         body.Children.Add(new TextBlock
         {
-            Text = "Current project",
+            Text = "Project folder",
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(ModernInk)
         });
@@ -202,7 +202,7 @@ public sealed partial class MainWindow
             Spacing = 8
         };
         pathActions.Children.Add(NewButton("Open Project Folder", () => OpenPath(context.Project.RootPath)));
-        pathActions.Children.Add(NewButton("Open Backups / Updates", () => OpenPath(context.UserData.RootPath)));
+        pathActions.Children.Add(NewButton("Open Settings and Backups Folder", () => OpenPath(context.UserData.RootPath)));
         body.Children.Add(pathActions);
 
         body.Children.Add(new Border
@@ -213,31 +213,31 @@ public sealed partial class MainWindow
         });
         body.Children.Add(new TextBlock
         {
-            Text = "Import a previous portable beta",
+            Text = "Bring over work from an old beta",
             FontSize = 17,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(ModernInk)
         });
         body.Children.Add(new TextBlock
         {
-            Text = "Choose the old SpyroEditor-beta folder. Saved edits, custom skies, textures, and settings are copied into this project. The old folder is never moved or deleted, and existing project files are never overwritten.",
+            Text = "Early betas kept your work inside their own folder. Choose that old SpyroEditor-beta folder and its saved edits, skies, textures and settings are copied into this project. The old folder is not changed, and nothing already in this project is overwritten.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(ModernMutedInk),
             LineHeight = 20
         });
         CheckBox includeOutputs = new()
         {
-            Content = "Also copy generated output BIN/CUE files (this can be several GB)",
+            Content = "Also copy the games it exported (BIN/CUE files; can be several GB)",
             IsChecked = false
         };
         body.Children.Add(includeOutputs);
         TextBlock resultText = new()
         {
-            Text = "No previous beta imported in this session.",
+            Text = "Nothing has been brought over yet.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(ModernMutedInk)
         };
-        Button import = NewButton("Choose Previous Beta Folder...");
+        Button import = NewButton("Choose Old Beta Folder…");
         _projectDataImportButton = import;
         import.Click += async (_, _) =>
         {

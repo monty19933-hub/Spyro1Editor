@@ -949,12 +949,22 @@ public sealed partial class MainWindow
         {
             Title = _releaseMode ? "Export Check" : "Build Safety",
             Width = 760,
-            Height = 660,
             MinWidth = 620,
-            MinHeight = 500,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = true
         };
+        if (_releaseMode)
+        {
+            // As tall as what it has to say (a clean check is three lines), up to the old fixed height.
+            dialog.SizeToContent = SizeToContent.Height;
+            dialog.MinHeight = 200;
+            dialog.MaxHeight = 660;
+        }
+        else
+        {
+            dialog.Height = 660;
+            dialog.MinHeight = 500;
+        }
         dialog.Opened += (_, _) =>
         {
             dialog.Activate();
