@@ -186,7 +186,7 @@ internal static class UniversalMobyUiCases
             Wait(() => Items(list).Length > 150, "catalogue reopened");
             var existing = (List<UniversalMobyPlacement>)Invoke(window, "CurrentUniversalPlacements")!;
             var enemy = Items(list).Where(e => e.Category == "Enemies" && !e.SourceLevels.Contains("toasty") &&
-                e.SourceLevels.Any(s => catalog.FindByKey(s)!.LevelId >= 30)).OrderBy(e => e.Default.ModelBytes)
+                e.SourceLevels.Any(s => catalog.FindByKey(s)?.LevelId >= 30)).OrderBy(e => e.Default.ModelBytes)
                 .FirstOrDefault(e =>
                 {
                     var row = Library(window).Get(e.Default.SourceLevelKey).Data.Row(e.Default.SourceRow);
@@ -255,7 +255,7 @@ internal static class UniversalMobyUiCases
             Wait(() => Items(list).Length > 150, "catalogue for Stone Hill", 240);
             var later = Items(list).Where(e => e.RestrictionReason == null && !e.SourceLevels.Contains("stonehill") &&
                     e.Default.SourceLevelKey != UniversalSpecialCatalog.SourceKey &&
-                    catalog.FindByKey(e.Default.SourceLevelKey)!.LevelId >= 40)
+                    catalog.FindByKey(e.Default.SourceLevelKey)?.LevelId >= 40)
                 .OrderBy(e => e.Default.ModelBytes + e.Default.BehaviorBytes)
                 .FirstOrDefault(e =>
                 {

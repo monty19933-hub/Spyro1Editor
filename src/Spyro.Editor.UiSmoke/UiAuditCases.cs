@@ -159,14 +159,32 @@ internal static class UiAuditCases
         });
 
         // Dialogs reachable from the toolbar and the Objects tab.
-        foreach (string buttonText in new[] { "Add object…", "Add dragonfly egg", "Add sign", "Quick Add…", "Edit", "Replace" })
-            Dialog(window, $"{key}-dialog-{Slug(buttonText)}", () =>
-            {
-                Button? b = window.GetLogicalDescendants().OfType<Button>()
-                    .FirstOrDefault(x => x.IsEffectivelyVisible && x.IsEffectivelyEnabled && (x.Content as string) == buttonText);
-                if (b == null) { Line($"   (button '{buttonText}' not available)"); return; }
-                b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, b));
-            });
+        void Click(string buttonText)
+        {
+            Button? b = window.GetLogicalDescendants().OfType<Button>()
+                .FirstOrDefault(x => x.IsEffectivelyVisible && x.IsEffectivelyEnabled && (x.Content as string) == buttonText);
+            if (b == null) { Line($"   (button '{buttonText}' not available)"); return; }
+            b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, b));
+        }
+        foreach (string buttonText in new[] { "Add object…", "Add dragonfly egg", "Add sign", "Add a gem or copy an object…" })
+            Dialog(window, $"{key}-dialog-{Slug(buttonText)}", () => Click(buttonText));
+        // Edit and Replace for the kinds of object a user edits most.
+        (string Name, Func<Moby, bool> Pick, string Button)[] edits =
+        [
+            ("edit-gem", m => m.TreasureValue > 0 && !m.IsAdded, "Edit…"),
+            ("edit-sign", m => m.DisplayLabel.Contains("Sign", StringComparison.OrdinalIgnoreCase) && m.IsAdded, "Edit…"),
+            ("edit-dragonfly-egg", m => m.DisplayLabel.Contains("Dragonfly", StringComparison.OrdinalIgnoreCase), "Edit…"),
+            ("edit-dragon", m => m.DisplayLabel.Equals("Dragon", StringComparison.OrdinalIgnoreCase), "Edit…"),
+            ("replace-chest", m => m.DisplayLabel.Contains("Chest", StringComparison.OrdinalIgnoreCase) && !m.IsAdded, "Replace…")
+        ];
+        foreach (var (name, pick, button) in edits)
+        {
+            Moby? target = mobys.FirstOrDefault(m => !m.IsRemoved && !m.IsEditorControl && pick(m));
+            if (target == null) { Section($"DIALOG {key}-dialog-{name}"); Line("   (no such object in this level)"); continue; }
+            tabs.SelectedIndex = 0; Pump(5);
+            viewport.SelectMoby(target, false); Pump(15);
+            Dialog(window, $"{key}-dialog-{name}", () => Click(button));
+        }
         foreach (string method in new[] { "ShowProjectDataAsync", "ShowBuildSafetyInspectorAsync", "ShowHelpAsync", "StartBlankCurrentLevelAsync",
                      "RestoreBeforeClearAsync", "CreateObjectTestBinAsync" })
             Dialog(window, $"{key}-dialog-{Slug(method)}", () => Invoke(window, method));

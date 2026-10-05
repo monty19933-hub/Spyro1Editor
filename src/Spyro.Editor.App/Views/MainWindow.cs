@@ -31204,7 +31204,15 @@ public sealed partial class MainWindow : Window
     private static string BuildFriendlyMobySummary(Moby moby)
     {
         if (moby.IsFlyInLandingControl)
-            return "Homeworld entry landing";
+            return "Where Spyro lands when he flies in";
+        if (moby.CrossLevelTemplateId is { } special &&
+            special.StartsWith(UniversalSpecialCatalog.TemplatePrefix, StringComparison.Ordinal))
+        {
+            string id = special[UniversalSpecialCatalog.TemplatePrefix.Length..];
+            if (id == UniversalDragonflyEggs.SignId) return "Sign with your message";
+            if (id.StartsWith("dragonfly-egg", StringComparison.Ordinal)) return "Dragonfly egg to collect";
+            if (UniversalHighValueGems.IsId(id)) return "High-value gem";
+        }
 
         string text = $"{moby.DisplayLabel} {moby.CandidateKind}".ToLowerInvariant();
         if (moby.VisualKind == MobyVisualKind.Gem && moby.Gem != GemValue.Unknown)
@@ -31222,7 +31230,7 @@ public sealed partial class MainWindow : Window
         if (moby.VisualKind == MobyVisualKind.FlightTarget)
             return "Flight target";
         if (moby.VisualKind == MobyVisualKind.Control)
-            return "Control/helper marker";
+            return "Hidden helper the game needs";
         if (moby.VisualKind == MobyVisualKind.Scenery)
             return "Scenery prop";
         if (moby.VisualKind == MobyVisualKind.Actor)
@@ -31234,7 +31242,7 @@ public sealed partial class MainWindow : Window
             return "Enemy or actor";
         }
 
-        return IsQuestionableMoby(moby) ? "Needs live identification" : "Mapped object";
+        return "Object";
     }
 
     private static string BuildMobyIdentityStatus(Moby moby)
