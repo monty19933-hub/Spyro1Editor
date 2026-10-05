@@ -112,6 +112,32 @@ internal static class FlyAnywhereUiCases
         finally { window.Close(); Pump(10); }
     }
 
+    /// <summary>Opens the given project folder itself (no clone) and applies "Undo that change" to a saved
+    /// terrain shape Create BIN would refuse. Used to prepare test projects from a copy of a real one.</summary>
+    internal static void FixSavedTerrainProblem(string workspace, string outDir)
+    {
+        Directory.CreateDirectory(outDir);
+        Environment.SetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE", workspace);
+        Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "1");
+        Environment.SetEnvironmentVariable("SPYRO_EDITOR_DATA_ROOT", Path.Combine(outDir, "data-root"));
+        Environment.SetEnvironmentVariable("SPYRO_EDITOR_DIAGNOSTICS_DIR", Path.Combine(outDir, "logs"));
+        Environment.CurrentDirectory = workspace;
+        MainWindow window = Open();
+        try
+        {
+            LevelDefinition artisans = Get<LevelCatalog>(window, "_retailCatalog").FindByKey("artisans")!;
+            if (window.CaptureEditorShellSessionSnapshotForTesting().CurrentLevel?.Key != "artisans")
+            {
+                var load = (Task)Invoke(window, "SelectLevelAsync", artisans, null)!;
+                Wait(() => load.IsCompleted, "load Artisans", 300);
+                WaitIdle(window);
+            }
+            FixTerrainProblemIfAny(window);
+            Console.WriteLine("TERRAIN_PROBLEM_FIXED remaining=" + (window.CurrentTerrainExportProblemForTesting != null));
+        }
+        finally { window.Close(); Pump(10); }
+    }
+
     private static string Details(MainWindow window) => Get<TextBlock>(window, "_statusText").Text ?? "";
     private static string Sha(string path) { using var s = File.OpenRead(path); return Convert.ToHexStringLower(SHA256.HashData(s)); }
 

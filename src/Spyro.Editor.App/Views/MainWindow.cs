@@ -17670,14 +17670,14 @@ public sealed partial class MainWindow : Window
             _selectionTitle.Text = moby.DisplayLabel;
             _selectionDetails.Text = _releaseMode
                 ? moby.IsFlyInLandingControl
-                    ? $"Level entry marker\n" +
+                    ? $"Where Spyro lands when he flies in\n" +
                       $"Position: {moby.Position.X:0.0}, {moby.Position.Y:0.0}, {moby.Position.Z:0.0}\n" +
-                      $"Heading: {FlyInLandingEditorControl.HeadingByteToDegrees(moby.YawByte):0.#}°\n" +
-                      $"Edited: {(moby.HasAnyEdit ? "yes" : "no")}"
-                    : $"Category: {MobyListBadge(moby)}\n" +
+                      $"Facing: {FlyInLandingEditorControl.HeadingByteToDegrees(moby.YawByte):0.#}°\n" +
+                      (moby.HasAnyEdit ? "Changed from the original" : "Not changed")
+                    : $"{BuildFriendlyMobySummary(moby)}\n" +
                       $"Position: {moby.Position.X:0.0}, {moby.Position.Y:0.0}, {moby.Position.Z:0.0}\n" +
-                      $"Rotation: {Moby.YawByteToDegrees(moby.YawByte):0.#}°\n" +
-                      $"Edited: {(moby.HasAnyEdit ? "yes" : "no")}"
+                      $"Facing: {Moby.YawByteToDegrees(moby.YawByte):0.#}°\n" +
+                      (moby.IsAdded ? "Added by you" : moby.HasAnyEdit ? "Changed from the original" : "Not changed")
                 : moby.IsFlyInLandingControl
                     ? $"Level entry: homeworld to this level\n" +
                       $"Identity: {BuildMobyIdentityStatus(moby)}\n" +
@@ -31128,7 +31128,8 @@ public sealed partial class MainWindow : Window
         if (moby == null)
             return new TextBlock();
 
-        bool questionable = IsQuestionableMoby(moby);
+        // The yellow "needs identifying" highlight is a research aid; shipping builds list every object alike.
+        bool questionable = !_releaseMode && IsQuestionableMoby(moby);
         Border border = new()
         {
             BorderBrush = new SolidColorBrush(ToAvaloniaColor(moby.Color)),
@@ -31167,8 +31168,7 @@ public sealed partial class MainWindow : Window
     {
         if (_releaseMode)
             return BuildFriendlyMobySummary(moby) +
-                (moby.TreasureValue > 0 ? $" · {moby.TreasureValue} treasure" : "") +
-                (IsQuestionableMoby(moby) ? " · identification needs review" : "");
+                (moby.TreasureValue > 0 ? $" · {moby.TreasureValue} treasure" : "");
         bool questionable = IsQuestionableMoby(moby);
         List<string> parts =
         [

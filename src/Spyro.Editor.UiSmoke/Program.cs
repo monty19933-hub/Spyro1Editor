@@ -47,6 +47,22 @@ if (args.Contains("--terrain-problem-ui", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Contains("--fix-terrain-problem", StringComparer.Ordinal))
+{
+    if (args.Length != 3) throw new ArgumentException("Usage: UiSmoke --fix-terrain-problem <project folder (changed in place)> <output folder>");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    FlyAnywhereUiCases.FixSavedTerrainProblem(args[1], args[2]);
+    return 0;
+}
+
+if (args.Contains("--start-blank-export-ui", StringComparer.Ordinal))
+{
+    if (args.Length is not (3 or 4)) throw new ArgumentException("Usage: UiSmoke --start-blank-export-ui <project folder> <output folder> [level key]");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    StartBlankExportUiCases.Run(args[1], args[2], args.Length == 4 ? args[3] : "stonehill");
+    return 0;
+}
+
 if (args.Contains("--keyboard-ui", StringComparer.Ordinal))
 {
     if (args.Length != 3) throw new ArgumentException("Usage: UiSmoke --keyboard-ui <project folder> <output folder>");
