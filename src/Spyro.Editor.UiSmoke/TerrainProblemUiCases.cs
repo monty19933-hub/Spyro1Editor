@@ -55,9 +55,8 @@ internal static class TerrainProblemUiCases
             Border bar = Find<Border>(window, "TerrainProblemBar");
             Check(bar.IsVisible && Find<TextBlock>(window, "TerrainProblemText").Text!.Contains("Artisans", StringComparison.Ordinal),
                 "the red bar is visible and names the level");
-            Check(Find<TextBlock>(window, "ExportCheckSummary").Text!.Contains("Blocked", StringComparison.OrdinalIgnoreCase) ||
-                  Get<TextBlock>(window, "_buildSafetySummaryText").Text!.Contains("Blocked", StringComparison.OrdinalIgnoreCase),
-                "the export check summary is blocked, not stable");
+            Check(Find<TextBlock>(window, "ExportCheckSummary").Text!.Contains("Can't export yet", StringComparison.Ordinal),
+                "the export check summary says the level can't be exported yet");
             Snapshot(window, Path.Combine(outDir, "1-problem-bar.png"));
 
             // 2. The object browser still loads its catalogue and says why space checks are approximate.

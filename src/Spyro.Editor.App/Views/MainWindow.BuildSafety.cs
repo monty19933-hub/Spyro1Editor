@@ -32,7 +32,10 @@ public sealed partial class MainWindow
     private Control BuildModernBuildSafetyPanel()
     {
         StackPanel panel = new() { Spacing = 8 };
-        panel.Children.Add(ModernSectionHeading("Build safety"));
+        if (!_releaseMode)
+            panel.Children.Add(ModernSectionHeading("Build safety"));
+        else if (_buildSafetySummaryText.Text == "Not inspected yet")
+            _buildSafetySummaryText.Text = "Not checked yet";
 
         _buildSafetySummaryText.Foreground = new SolidColorBrush(ModernMutedInk);
         panel.Children.Add(new Border
@@ -45,11 +48,13 @@ public sealed partial class MainWindow
             Child = _buildSafetySummaryText
         });
 
-        _inspectBuildSafetyButton = NewAsyncButton("Inspect Build Safety", ShowBuildSafetyInspectorAsync);
+        _inspectBuildSafetyButton = NewAsyncButton(_releaseMode ? "Check for Export Issues" : "Inspect Build Safety", ShowBuildSafetyInspectorAsync);
         StyleModernPrimaryButton(_inspectBuildSafetyButton, ModernTeal);
         ToolTip.SetTip(
             _inspectBuildSafetyButton,
-            "Check saved object, chest, and terrain edits before Create BIN.");
+            _releaseMode
+                ? "Look through everything you have saved for anything Create BIN could not put in the game."
+                : "Check saved object, chest, and terrain edits before Create BIN.");
         panel.Children.Add(_inspectBuildSafetyButton);
         if (!_releaseMode)
             panel.Children.Add(BuildSpecialChestAvailabilityControl());
@@ -72,7 +77,7 @@ public sealed partial class MainWindow
         if (_buildSafetyBusy)
         {
             persistenceOperation = null;
-            _statusText.Text = "Build Safety is already running.";
+            _statusText.Text = _releaseMode ? "The export check is already running." : "Build Safety is already running.";
             return false;
         }
         if (!TryBeginRegularEditorPersistenceOperation(
@@ -909,10 +914,10 @@ public sealed partial class MainWindow
         MobyBuildSafetyReport report = inspection.Report;
         _buildSafetySummaryText.Text = _releaseMode
             ? report.Levels.Count == 0
-                ? "Ready: no saved edits need attention"
+                ? "Ready to export: nothing needs attention"
                 : report.Status == MobyBuildSafetyStatus.Stable
-                    ? $"Ready: {report.Levels.Count} edited level(s) checked"
-                    : $"{report.StatusLabel}: review {report.Levels.Count} edited level(s)"
+                    ? $"Ready to export: {Count(report.Levels.Count, "edited level", "edited levels")} checked"
+                    : $"{PlainExportStatus(report.Status)}: {Count(report.Levels.Count(level => level.Status != MobyBuildSafetyStatus.Stable), "level needs", "levels need")} a look"
             : report.Levels.Count == 0
                 ? $"{report.StatusLabel}: no saved edits requiring structural inspection"
                 : $"{report.StatusLabel}: {report.Levels.Count} level(s), {report.TrueAppendCount} true append(s), {report.RuntimeSlotsConsumed} runtime slot(s) consumed, {report.SkippedEditCount} skipped edit(s)";
@@ -942,7 +947,7 @@ public sealed partial class MainWindow
     {
         Window dialog = new()
         {
-            Title = "Build Safety",
+            Title = _releaseMode ? "Export Check" : "Build Safety",
             Width = 760,
             Height = 660,
             MinWidth = 620,
@@ -968,7 +973,7 @@ public sealed partial class MainWindow
         StackPanel body = new() { Spacing = 12, Margin = new Thickness(18) };
         body.Children.Add(new TextBlock
         {
-            Text = $"Build Safety: {report.StatusLabel}",
+            Text = _releaseMode ? PlainExportStatus(report.Status) : $"Build Safety: {report.StatusLabel}",
             FontSize = 20,
             FontWeight = FontWeight.SemiBold,
             Foreground = BuildSafetyBrush(report.Status)
@@ -979,7 +984,7 @@ public sealed partial class MainWindow
                 ? report.Levels.Count == 0
                     ? "No saved edits need attention."
                     : report.Status == MobyBuildSafetyStatus.Stable
-                        ? $"{report.Levels.Count} edited level(s) checked. No problems were found."
+                        ? $"{Count(report.Levels.Count, "edited level", "edited levels")} checked. No problems were found."
                         : "Review the highlighted items below before creating a BIN."
                 : report.Levels.Count == 0
                     ? "No saved edits require a structural Build Safety inspection."
@@ -1041,7 +1046,7 @@ public sealed partial class MainWindow
         StackPanel content = new() { Spacing = 6 };
         content.Children.Add(new TextBlock
         {
-            Text = $"{level.LevelName}  |  {level.StatusLabel}",
+            Text = _releaseMode ? $"{level.LevelName}: {PlainExportStatus(level.Status).ToLowerInvariant()}" : $"{level.LevelName}  |  {level.StatusLabel}",
             FontWeight = FontWeight.SemiBold,
             FontSize = 14,
             Foreground = BuildSafetyBrush(level.Status)
@@ -1216,7 +1221,7 @@ public sealed partial class MainWindow
                 await SelectLevelFromPickerAsync(level);
                 if (!string.Equals(_currentLevel?.Key, level.Key, StringComparison.OrdinalIgnoreCase))
                 {
-                    _statusText.Text = $"Build Safety navigation to {level.DisplayName} was canceled.";
+                    _statusText.Text = _releaseMode ? $"Stayed on this level instead of opening {level.DisplayName}." : $"Build Safety navigation to {level.DisplayName} was canceled.";
                     return;
                 }
             }
@@ -1265,8 +1270,9 @@ public sealed partial class MainWindow
 
                 SelectEditorToolTab(_modernTerrainWorkspaceTab);
                 _viewport.FocusTerrain(terrainIndex);
-                _statusText.Text =
-                    $"Build Safety: selected and centered {level.DisplayName} terrain section {terrain.RuntimeKey}.";
+                _statusText.Text = _releaseMode
+                    ? $"Showing the terrain tile to look at in {level.DisplayName}."
+                    : $"Build Safety: selected and centered {level.DisplayName} terrain section {terrain.RuntimeKey}.";
                 return;
             }
 
@@ -1290,7 +1296,9 @@ public sealed partial class MainWindow
             _viewport.SelectMoby(moby, true);
             _mobyList.ScrollIntoView(moby);
             _mobyList.Focus();
-            _statusText.Text = $"Build Safety: selected and centered {level.DisplayName} T{moby.TrueIndex} {moby.DisplayLabel}.";
+            _statusText.Text = _releaseMode
+                ? $"Showing {PlainObjectName(moby)} in {level.DisplayName}."
+                : $"Build Safety: selected and centered {level.DisplayName} T{moby.TrueIndex} {moby.DisplayLabel}.";
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
         {

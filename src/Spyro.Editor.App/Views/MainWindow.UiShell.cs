@@ -788,11 +788,11 @@ public sealed partial class MainWindow
         root.Children.Add(BuildModernMobyBrowser());
         if (_objectRecoveryExpander != null) root.Children.Add(Detach(_objectRecoveryExpander));
 
-        var checks = (Expander)BuildModernDisclosure("Export checks", BuildModernBuildSafetyPanel(), false);
+        var checks = (Expander)BuildModernDisclosure("Export check", BuildModernBuildSafetyPanel(), false);
         var checkSummary = new TextBlock { Name = "ExportCheckSummary", TextWrapping = TextWrapping.Wrap, FontSize = 12 };
         void RefreshCheckSummary()
         {
-            checkSummary.Text = "Export checks · " + _buildSafetySummaryText.Text;
+            checkSummary.Text = "Export check · " + _buildSafetySummaryText.Text;
             checkSummary.Foreground = _buildSafetySummaryText.Foreground;
         }
         _buildSafetySummaryText.PropertyChanged += (_, e) =>
@@ -815,11 +815,11 @@ public sealed partial class MainWindow
         panel.Children.Add(ModernDivider());
         panel.Children.Add(BuildModernPrimaryObjectControls());
         panel.Children.Add(ModernDivider());
-        var checks = (Expander)BuildModernDisclosure("Export checks", BuildModernBuildSafetyPanel(), false);
+        var checks = (Expander)BuildModernDisclosure("Export check", BuildModernBuildSafetyPanel(), false);
         var checkSummary = new TextBlock { Name = "ExportCheckSummary", TextWrapping = TextWrapping.Wrap, FontSize = 12 };
         void RefreshCheckSummary()
         {
-            checkSummary.Text = "Export checks · " + _buildSafetySummaryText.Text;
+            checkSummary.Text = "Export check · " + _buildSafetySummaryText.Text;
             checkSummary.Foreground = _buildSafetySummaryText.Foreground;
         }
         _buildSafetySummaryText.PropertyChanged += (_, e) =>
@@ -926,12 +926,12 @@ public sealed partial class MainWindow
         var positionTools = new StackPanel { Spacing = 8 };
         positionTools.Children.Add(BuildSelectedMobyZControls());
 
-        _objectLayerDownButton = NewButton("Lower", () => MoveSelectedMobyToAdjacentTerrainLayer(-1));
-        _objectLayerUpButton = NewButton("Upper", () => MoveSelectedMobyToAdjacentTerrainLayer(1));
+        _objectLayerDownButton = NewButton("Below", () => MoveSelectedMobyToAdjacentTerrainLayer(-1));
+        _objectLayerUpButton = NewButton("Above", () => MoveSelectedMobyToAdjacentTerrainLayer(1));
         StyleModernSecondaryButton(_objectLayerDownButton);
         StyleModernSecondaryButton(_objectLayerUpButton);
-        ToolTip.SetTip(_objectLayerDownButton, "Snap to the next terrain surface below at the same X/Y.");
-        ToolTip.SetTip(_objectLayerUpButton, "Snap to the next terrain surface above at the same X/Y.");
+        ToolTip.SetTip(_objectLayerDownButton, "Put the object on the next floor below it, such as the ground under a bridge.");
+        ToolTip.SetTip(_objectLayerUpButton, "Put the object on the next floor above it, such as a bridge or roof over the ground.");
 
         Grid layerRow = new()
         {
@@ -945,7 +945,7 @@ public sealed partial class MainWindow
         };
         layerRow.Children.Add(new TextBlock
         {
-            Text = "Terrain layer",
+            Text = "Jump to floor",
             FontSize = 12,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(ModernMutedInk),
@@ -954,7 +954,7 @@ public sealed partial class MainWindow
         AddModernGridButton(layerRow, _objectLayerDownButton, 1);
         AddModernGridButton(layerRow, _objectLayerUpButton, 2);
         positionTools.Children.Add(layerRow);
-        _objectPositionDisclosure = BuildModernDisclosure("Position & snapping", positionTools, false);
+        _objectPositionDisclosure = BuildModernDisclosure("Height and ground", positionTools, false);
         panel.Children.Add(_objectPositionDisclosure);
 
         _objectSwapTestButton = NewAsyncButton("Create Swap Test", CreateObjectCandidateBinAsync);
@@ -1083,12 +1083,18 @@ public sealed partial class MainWindow
         _retailNameDisclosure=BuildModernDisclosure("Level name", BuildLevelTextPanel(), true);
         _retailMusicDisclosure=BuildModernDisclosure("Music", BuildLevelMusicPanel(), false);
         panel.Children.Add(_retailNameDisclosure);panel.Children.Add(_retailMusicDisclosure);
-        // Preserve the internal settings/backend workflow; the release omits the flight control.
         if (!_releaseMode) panel.Children.Add(BuildModernDisclosure("Starting Abilities", new StackPanel
         {
             Name = "StartingAbilitiesPanel", Spacing = 8,
             Children = { BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), true) }
         }, false));
+        else
+        {
+            // One switch for the whole exported game, off unless the user turns it on.
+            var flight = BuildModernDisclosure("Fly Anywhere (whole game)", BuildFreeFlightSettingsPanel(), true);
+            flight.Name = "FlyAnywhereSection";
+            panel.Children.Add(flight);
+        }
         _homeworldTextGroup = BuildModernDisclosure("Portals & Return Home", BuildPortalControlPanel(), false);
         panel.Children.Add(_homeworldTextGroup);
 
@@ -1275,7 +1281,7 @@ public sealed partial class MainWindow
 
         if (eggColourBox != null)
         {
-            body.Children.Add(BuildModernDialogField("Egg colour", eggColourBox));
+            body.Children.Add(BuildModernDialogField("Egg color", eggColourBox));
             body.Children.Add(BuildUniversalEggEditPreview(eggColourBox));
         }
 

@@ -6979,7 +6979,7 @@ public static class MobySourcePatchExporter
             if (DragonStatueColor.Read(edit) != null && offset is >= 0x4B and <= 0x4F)
                 continue; // The colour picker owns these renderer fields while enabled.
             if (DragonStatueColor.Read(edit) != null && (offset == 0x36 && value != 0xFA || offset == 0x37 && value != 0))
-                throw new InvalidDataException("Restore the original dragon colour before changing its object type.");
+                throw new InvalidDataException("Restore the original dragon color before changing its object type.");
 
             string field = JsonValue.GetString(byteEdit, "field", "source-byte");
             AddPatch(
@@ -7129,7 +7129,7 @@ public static class MobySourcePatchExporter
             if (DragonStatueColor.Read(edit) != null && offset is >= 0x4B and <= 0x4F)
                 continue;
             if (DragonStatueColor.Read(edit) != null && (offset == 0x36 && value != 0xFA || offset == 0x37 && value != 0))
-                throw new InvalidDataException("Restore the original dragon colour before changing its object type.");
+                throw new InvalidDataException("Restore the original dragon color before changing its object type.");
             if (offset >= 0 && offset < bytes.Length && value >= 0 && value <= 255)
                 bytes[offset] = (byte)value;
         }

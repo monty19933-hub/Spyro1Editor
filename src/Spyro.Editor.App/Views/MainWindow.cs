@@ -95,7 +95,7 @@ public sealed partial class MainWindow : Window
     ];
     private static readonly SkyboxEditModeOption[] SkyboxEditModeOptions =
     [
-        new(NativeSkyEditPlan.PaletteMode, "Recolour this sky"),
+        new(NativeSkyEditPlan.PaletteMode, "Recolor this sky"),
         new(NativeSkyEditPlan.SwapMode, "Use another level's sky"),
         new(NativeSkyEditPlan.OriginalPresetMode, "Use a ready-made sky"),
         new(NativeSkyEditPlan.ImportMode, "Import a .sky file")
@@ -1518,9 +1518,9 @@ public sealed partial class MainWindow : Window
         _skyboxImportPathBox.PlaceholderText = "No native .sky selected";
         _skyboxImportPathBox.MinHeight = 34;
 
-        _skyboxPalettePanel.Children.Add(new TextBlock { Text = "Palette", FontWeight = FontWeight.SemiBold });
+        _skyboxPalettePanel.Children.Add(new TextBlock { Text = "Colors", FontWeight = FontWeight.SemiBold });
         _skyboxPalettePanel.Children.Add(_skyboxPresetBox);
-        _skyboxPaletteImportButton = NewAsyncButton("Import Colors From PNG", async () => await ChooseSkyPaletteImageAsync());
+        _skyboxPaletteImportButton = NewAsyncButton("Use Colors From a Picture…", async () => await ChooseSkyPaletteImageAsync());
         _skyboxPalettePanel.Children.Add(_skyboxPaletteImportButton);
         _skyboxCustomPalettePanel.Children.Add(new TextBlock { Text = "Custom colors", FontWeight = FontWeight.SemiBold });
         _skyboxCustomPalettePanel.Children.Add(_skyboxCustomPaletteBox);
@@ -3244,7 +3244,8 @@ public sealed partial class MainWindow : Window
         RefreshTerrainProofQueueHint();
         UpdateLevelToolPanels(level);
         _statusText.Text = _releaseMode
-            ? $"{level.DisplayName} loaded: {_viewport.Geometry?.Polygons.Count ?? 0:N0} terrain tiles, {_viewport.Mobys.Count(moby => !moby.IsEditorControl):N0} objects."
+            ? $"{level.DisplayName} loaded: {Count(_viewport.Geometry?.Polygons.Count(face => !face.IsTerrainRemoved) ?? 0, "terrain tile")}, " +
+              $"{Count(_viewport.Mobys.Count(moby => !moby.IsRemoved && !moby.IsEditorControl), "object")}."
             : $"{level.DisplayName}: {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces, {_viewport.Mobys.Count} objects";
         RefreshDiagnosticContext();
         EditorDiagnostics.RecordAction("Level loaded", $"{level.DisplayName} ({level.Key}); {_viewport.Mobys.Count} mobys; {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces");
@@ -10717,6 +10718,8 @@ public sealed partial class MainWindow : Window
               Id65FreshProjectionOfflineCandidateGuidance
             : id65ObjectInspectionOnly
             ? "ID65 Lab: resident Mobys are visible for inspection only; mutation and cross-level imports are unavailable in this profile."
+            : _releaseMode
+            ? BuildPlainObjectActionHint(hasLevel, hasObject, objectHasEdits)
             : BuildObjectActionHint(hasLevel, hasObject, objectHasEdits);
         _terrainActionHint.Text = id65FreshProjectionTerrainLocked
             ? "Fresh ID65 scene: generic HP-Z, texture, add/remove, undo, and save controls are intentionally unavailable because a one-sided edit would desynchronize HP, LP, collision, occlusion, and the protected spawn. Use Edit Full Authoring Document… for coupled terrain create/remove work."
@@ -12226,9 +12229,13 @@ public sealed partial class MainWindow : Window
                 : "Native sky layout: ready to verify from the selected original BIN.";
         }
 
-        _skyboxDetails.Text = saved == null
-            ? nativeStatus
-            : $"{nativeStatus}\nSaved: {DescribeSkyboxEdit(saved)}. Create BIN will include it.";
+        _skyboxDetails.Text = _releaseMode
+            ? saved == null
+                ? "This level has its original sky. Recolor it, borrow another level's sky, or pick a ready-made one."
+                : $"This level's sky: {DescribeSkyboxEdit(saved)}. Create BIN puts it in the game."
+            : saved == null
+                ? nativeStatus
+                : $"{nativeStatus}\nSaved: {DescribeSkyboxEdit(saved)}. Create BIN will include it.";
     }
 
     private string DescribeSkyboxEdit(NativeSkyEditPlan edit)
@@ -12897,7 +12904,9 @@ public sealed partial class MainWindow : Window
                 ? $" Environment grade covers {environmentMatch.TargetSceneColorTableCount} scene color tables; {environmentMatch.TargetTexturePaletteCount} native RGB555 palettes guided the match but their pixels remain unchanged" +
                   (environmentGrade.GradeAnyMobys ? ", plus native scenery/chest/creature lighting." : ".")
                 : "";
-            _statusText.Text = $"Saved {capturedLevel.DisplayName} skybox: {DescribeSkyboxEdit(plan)}.{storageStatus}{occlusionStatus}{gradeStatus} Create BIN will include it.";
+            _statusText.Text = _releaseMode
+                ? $"Sky saved for {capturedLevel.DisplayName}: {DescribeSkyboxEdit(plan)}. Create BIN puts it in the game."
+                : $"Saved {capturedLevel.DisplayName} skybox: {DescribeSkyboxEdit(plan)}.{storageStatus}{occlusionStatus}{gradeStatus} Create BIN will include it.";
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or JsonException)
@@ -13332,7 +13341,7 @@ public sealed partial class MainWindow : Window
             _statusText.Text = flightBlockReason;
             return;
         }
-        var flightIntent = _releaseMode ? null : NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
+        var flightIntent = NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
         var flightWorkspace = _workspace;
         int flightWorkspaceGeneration = _workspaceTransitionGeneration;
         var flightLevel = _currentLevel;
@@ -13553,7 +13562,7 @@ public sealed partial class MainWindow : Window
 
     private IReadOnlyList<EditedLevelExportTarget> FindEditedLevelExportTargets()
     {
-        var flightIntent = _releaseMode ? null : NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
+        var flightIntent = NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
         var portalRoutes = PortalRouteStore.Capture(_workspace.RootPath).Document;
         var replacementKeys=SceneDocumentStore.LoadOverrides(_workspace.RootPath,_retailCatalog)
             .Select(d=>d.TargetBinding!.LevelKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -13667,7 +13676,7 @@ public sealed partial class MainWindow : Window
 
         if (TryGetFreeFlightSettingsExportBlockReason(out string flightBlockReason))
             throw new InvalidOperationException(flightBlockReason);
-        var flightIntent = _releaseMode ? null : NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
+        var flightIntent = NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
         var flightOwner = CaptureSourceDiscOperationIdentity();
         string? flightImageSelection = _discImagePathBox.Text;
         string? flightSkyImageSelection = _skyboxDiscImagePathBox.Text;
@@ -14450,8 +14459,8 @@ public sealed partial class MainWindow : Window
 
         return new CombinedTestBinResult(finalImage, finalCue, objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, true, tempDir)
         { FreeFlightSummary = globalFlight == null ? "" : flightIntent?.Enabled==true
-            ? " Fly Anywhere ON: all normal levels; gameplay validation pending."
-            : " Fly Anywhere OFF: original normal movement restored.",
+            ? _releaseMode ? " Fly Anywhere is on in this game." : " Fly Anywhere ON: all normal levels; gameplay validation pending."
+            : _releaseMode ? " Fly Anywhere is off in this game." : " Fly Anywhere OFF: original normal movement restored.",
             PortalRoutePatches = portalRoutePatches,
             ActiveDragonflyEggs = activeDragonflyEggs, SignLevelKeys = signLevelKeys, ReturnClasses = returnClasses,
             DeferredLevelNames = deferSharedRuntimeHooks ? levelTextEdits.ToArray() : [] };
@@ -17768,7 +17777,7 @@ public sealed partial class MainWindow : Window
         RefreshIdentityObservationSuggestions(null);
         RefreshSelectedMobyZControls(null);
         _selectionTitle.Text = "Nothing selected";
-        _selectionDetails.Text = "No terrain face or object selected.";
+        _selectionDetails.Text = _releaseMode ? "" : "No terrain face or object selected.";
         _identityObservationHint.Text = "";
         RefreshObjectReadinessHint();
         RefreshActionAvailability();

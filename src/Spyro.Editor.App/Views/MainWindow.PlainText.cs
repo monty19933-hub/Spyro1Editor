@@ -1,3 +1,6 @@
+using Spyro.Editor.Core.Analysis;
+using Spyro.Editor.Core.Scene;
+
 namespace Spyro.Editor.App.Views;
 
 /// <summary>
@@ -53,4 +56,43 @@ public sealed partial class MainWindow
     private static string BuildPlainObjectListLine(int objects, int shown, int total, int changed, bool filtered) =>
         (filtered ? $"Showing {shown:N0} of {total:N0}" : Count(objects, "object")) +
         (changed > 0 ? $"  ·  {changed:N0} changed" : "");
+    /// <summary>The short note under the selected object's buttons, in everyday words.</summary>
+    private string BuildPlainObjectActionHint(bool hasLevel, bool hasObject, bool objectHasEdits)
+    {
+        if (!hasLevel)
+            return "Open a level to see its objects.";
+        if (_pendingMobyAdd != null)
+            return $"Click in the view where the new {_pendingMobyAdd.Label} should go. Press Esc to cancel.";
+        if (!hasObject)
+            return _lastRemovedMoby == null
+                ? "Click an object in the view, or pick one from the list below."
+                : $"Removed {PlainObjectName(_lastRemovedMoby)}. Undo last removal brings it back.";
+        Moby moby = _selectedMoby!;
+        string name = PlainObjectName(moby);
+        string changed = objectHasEdits ? " Changed from the original; Undo puts it back." : "";
+        if (moby.IsFlyInLandingControl)
+            return "This is where Spyro lands when he flies into the level. His approach path moves with it." + changed;
+        if (IsMappedPortalControlMoby(moby))
+            return "Portal. Its lettering, travel path and walk-in surface move together with it." + changed;
+        if (IsReleaseProtectedControlMoby(moby))
+            return "This is a hidden helper the game needs. It can be moved, but not copied or removed." + changed;
+        if (IsCrossLevelExistingSlotSwapEdit(moby))
+            return $"{name} was swapped in with Replace. Undo puts the original back.";
+        if (objectHasEdits)
+            return $"{name}: changed from the original. Undo puts it back.";
+        if (!moby.IsAdded && moby.TrueIndex >= 0 &&
+            CrossLevelSwapCatalogBuilder.TryGetEligibleTargetCategory(moby, out CrossLevelSwapCategory category, out _))
+            return $"{name} selected. Replace… can swap it for a different {(category == CrossLevelSwapCategory.Enemy ? "enemy" : "chest")}.";
+        return $"{name} selected. Drag it in the view to move it.";
+    }
+
+    private static string PlainObjectName(Moby moby) =>
+        string.IsNullOrWhiteSpace(moby.DisplayLabel) ? "the object" : moby.DisplayLabel;
+    /// <summary>Export check results as an answer to "can I create the BIN?".</summary>
+    private static string PlainExportStatus(Spyro.Editor.Core.Exporting.MobyBuildSafetyStatus status) => status switch
+    {
+        Spyro.Editor.Core.Exporting.MobyBuildSafetyStatus.Stable => "Ready to export",
+        Spyro.Editor.Core.Exporting.MobyBuildSafetyStatus.Review => "Worth checking first",
+        _ => "Can't export yet"
+    };
 }

@@ -47,6 +47,22 @@ if (args.Contains("--terrain-problem-ui", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Contains("--fly-anywhere-ui", StringComparer.Ordinal))
+{
+    if (args.Length is not (3 or 4)) throw new ArgumentException("Usage: UiSmoke --fly-anywhere-ui <project folder> <output folder> [--settings-only]");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    FlyAnywhereUiCases.Run(args[1], args[2], args.Contains("--settings-only", StringComparer.Ordinal));
+    return 0;
+}
+
+if (args.Contains("--new-level-confirm-ui", StringComparer.Ordinal))
+{
+    if (args.Length != 3) throw new ArgumentException("Usage: UiSmoke --new-level-confirm-ui <project folder> <output folder>");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    NewLevelConfirmUiCases.Run(args[1], args[2]);
+    return 0;
+}
+
 if (args.Contains("--magic-artisans-capacity-ui", StringComparer.Ordinal))
 {
     if (args.Length != 3) throw new ArgumentException("Usage: UiSmoke --magic-artisans-capacity-ui <USA.bin> <catalog root>");
@@ -1236,9 +1252,11 @@ void RunDeferredReleaseUiPolicy()
         TabControl tabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
         AssertWorkspaceTabHeaders(tabs, ["Objects", "Terrain", "Game Settings", "Environment"], "normal release");
         string[] deferredNames = ["Id65BlankLevelLabDisclosure", "NativeLevelReplacementDisclosure"];
-        if (window.GetLogicalDescendants().OfType<Control>().Any(c => deferredNames.Contains(c.Name)) ||
-            window.GetLogicalDescendants().OfType<CheckBox>().Any(c => c.Content?.ToString()?.Contains("Fly Anywhere", StringComparison.OrdinalIgnoreCase) == true))
+        if (window.GetLogicalDescendants().OfType<Control>().Any(c => deferredNames.Contains(c.Name)))
             throw new InvalidOperationException("Deferred research controls leaked into the normal release editor.");
+        CheckBox flyAnywhere = FindNamedUnique<CheckBox>(window, "FreeFlightEnabled");
+        if (flyAnywhere.IsChecked != false || window.GetLogicalDescendants().OfType<Button>().Any(b => b.Name is "FreeFlightSave" or "FreeFlightRevert"))
+            throw new InvalidOperationException("Fly Anywhere must ship as one switch that starts off.");
         var before = window.CaptureEditorShellSessionSnapshotForTesting();
         Button file = FindNamedUnique<Button>(window, "EditorFileMenu");
         // Exercise the File menu item's own Click handler, rather than invoke the private command.
@@ -1258,7 +1276,7 @@ void RunDeferredReleaseUiPolicy()
         Button remove = (Button)typeof(MainWindow).GetField("_terrainTaskRemoveFaceButton", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
         if (!add.IsEffectivelyVisible || !remove.IsEffectivelyVisible)
             throw new InvalidOperationException("The authored release editor lost its shared Add/Remove Terrain controls.");
-        Console.WriteLine("DEFERRED_RELEASE_UI_POLICY_OK researchHidden=1 flightHidden=1 actualFileNew=1 sharedViewport=1 neutralScene=1 sharedTerrainTools=1");
+        Console.WriteLine("DEFERRED_RELEASE_UI_POLICY_OK researchHidden=1 flightOffByDefault=1 actualFileNew=1 sharedViewport=1 neutralScene=1 sharedTerrainTools=1");
     }
     finally { window.Close(); FlushUi(); }
 }
@@ -8007,7 +8025,7 @@ void AssertAppendedPrivateBuildSafetyTerrainNavigation(MainWindow owner)
     }
     AssertTextContains(
         owner,
-        $"Build Safety: selected and centered {level.DisplayName} terrain section {terrain.RuntimeKey}");
+        $"Showing the terrain tile to look at in {level.DisplayName}.");
     Console.WriteLine(
         $"Appended-private Build Safety navigation: {level.DisplayName} terrain {terrain.RuntimeKey} selected and centered from a double-click.");
 }
@@ -10605,7 +10623,7 @@ void Render(double width, double height, string fileName)
     AssertText(window, "Edit");
     AssertText(window, "Replace");
     AssertText(window, "Create BIN");
-    FindButton(window, "Inspect Build Safety");
+    FindButton(window, "Check for Export Issues");
     FindButton(window, "Edit Map");
     FindButton(window, "Game Camera");
     if (window.GetLogicalDescendants().OfType<Button>().Any(button =>
@@ -11764,14 +11782,14 @@ void AssertBuildSafetyInspection(MainWindow owner)
     long sourceLength = sourceImageBefore.Length;
     DateTime sourceWriteTime = sourceImageBefore.LastWriteTimeUtc;
 
-    Button inspect = FindButton(owner, "Inspect Build Safety");
+    Button inspect = FindButton(owner, "Check for Export Issues");
     if (!inspect.IsEnabled)
         throw new InvalidOperationException("Inspect Build Safety was not enabled before the smoke action.");
 
-    Window dialog = OpenAsyncDialog(owner, inspect, "Build Safety", "build-safety report dialog");
-    AssertText(dialog, "Build Safety: Stable");
-    AssertTextContains(dialog, "1 edited level(s) checked. No problems were found.");
-    AssertTextContains(dialog, "Stone Hill  |  Stable");
+    Window dialog = OpenAsyncDialog(owner, inspect, "Export Check", "build-safety report dialog");
+    AssertText(dialog, "Ready to export");
+    AssertTextContains(dialog, "1 edited level checked. No problems were found.");
+    AssertTextContains(dialog, "Stone Hill: ready to export");
     FindButton(dialog, "Open Report Folder");
     Button close = FindButton(dialog, "Close");
 
@@ -11833,7 +11851,7 @@ void AssertBuildSafetyInspection(MainWindow owner)
         ?? throw new InvalidOperationException("Could not inspect the build-safety summary field.");
     TextBlock summary = (TextBlock)(summaryField.GetValue(owner)
         ?? throw new InvalidOperationException("The build-safety summary control was unavailable."));
-    const string expectedSummary = "Ready: 1 edited level(s) checked";
+    const string expectedSummary = "Ready to export: 1 edited level checked";
     if (!string.Equals(summary.Text, expectedSummary, StringComparison.Ordinal))
         throw new InvalidOperationException($"Unexpected build-safety summary: '{summary.Text}'.");
 
@@ -11955,7 +11973,7 @@ void AssertBuildSafetyIssueNavigation(MainWindow owner)
         .First(list => list.ItemsSource is IEnumerable<Moby> && ReferenceEquals(list.SelectedItem, selected));
     if (!ReferenceEquals(browser.SelectedItem, selected))
         throw new InvalidOperationException("Build Safety navigation did not reveal the target in the object browser.");
-    AssertTextContains(owner, $"Build Safety: selected and centered {targetLevelName} T{targetRecord.TrueIndex}");
+    AssertTextContains(owner, $" in {targetLevelName}.");
     Console.WriteLine($"Build Safety navigation UI: {targetLevelName} T{targetRecord.TrueIndex} selected, revealed, and centered in Fly 3D.");
 }
 

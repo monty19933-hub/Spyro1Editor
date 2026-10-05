@@ -113,8 +113,8 @@ internal static class EditorNavigationUiCases
             Check(Find<TextBlock>(window, "EditorStatusSummary").Text == status.Text, "Partial-export warnings remain visible.");
             status.Text = "Could not create BIN: missing floor."; Pump();
             Check(Find<TextBlock>(window, "EditorStatusSummary").Text == status.Text, "Failure text is never summarized away.");
-            Get<TextBlock>(window,"_buildSafetySummaryText").Text = "Blocked: review 1 edited level"; Pump();
-            Check(Find<TextBlock>(window,"ExportCheckSummary").Text!.Contains("Blocked"), "Collapsed export checks retain their warning in the visible header.");
+            Get<TextBlock>(window,"_buildSafetySummaryText").Text = "Can't export yet: 1 level needs a look"; Pump();
+            Check(Find<TextBlock>(window,"ExportCheckSummary").Text!.Contains("Can't export yet"), "Collapsed export checks retain their warning in the visible header.");
             foreach (var size in new[] { new Size(980,640), new Size(1060,720), new Size(1320,860) })
             {
                 window.Width = size.Width; window.Height = size.Height;

@@ -1,6 +1,8 @@
 using System.Globalization;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Spyro.Editor.Core.Analysis;
 using Spyro.Editor.Core.Cache;
@@ -45,17 +47,56 @@ public sealed partial class MainWindow
     {
         if(_createBinBusy||_regularEditorPersistenceBusy||_workspaceTransitionBusy)return;
         if((HasUnsavedTerrainEdits()||HasUnsavedMobyEdits())&&!await SaveCurrentEditsAsync())return;
+        string root=_workspace.RootPath,existing=SceneDocumentStore.PathForTarget(root,"authored65");
+        string? keptCopy=null;
+        if(File.Exists(existing))
+        {
+            // A project holds one created level, so a second New Level would overwrite the first on the next save.
+            string name="your created level";
+            try{name="\""+SceneDocument.Read(existing).Name+"\"";}catch(Exception e)when(e is IOException or InvalidDataException or System.Text.Json.JsonException){}
+            if(!await ShowConfirmationAsync("NewLevelReplaceDialog","New Level",$"Replace {name} with a new level?",
+                "This project already has a level you created, and a project holds one created level. Starting a new one replaces it the next time you save.\n"+
+                "A copy of the current one is kept first in the project's \"backups\" folder. To keep working on it instead, choose Cancel and use File > Open Created Level.",
+                "Start New Level"))return;
+            if(_workspace.RootPath!=root)return;
+            try
+            {
+                string folder=Path.Combine(root,"backups");Directory.CreateDirectory(folder);
+                keptCopy=Path.Combine(folder,$"created-level-{DateTime.Now:yyyyMMdd-HHmmss}.scene.json");
+                File.Copy(existing,keptCopy,overwrite:false);
+            }
+            catch(Exception e)when(e is IOException or UnauthorizedAccessException)
+            { _statusText.Text="Could not keep a copy of the current created level, so it was left unchanged: "+e.Message;return; }
+        }
         ApplyFreshScene(SceneDocument.New());
-        _statusText.Text="New level created. Edit the floor, add objects and save; Create BIN makes a game that opens your level from New Game.";
+        _statusText.Text="New level created. Edit the floor, add objects and save; Create BIN makes a game that opens your level from New Game."+
+            (keptCopy==null?"":" The previous one was copied to backups/"+Path.GetFileName(keptCopy)+".");
+    }
+
+    /// <summary>A plain yes/no question for an action that replaces or removes the user's work.</summary>
+    private async Task<bool> ShowConfirmationAsync(string dialogName,string title,string heading,string explanation,string confirmLabel)
+    {
+        var content=new StackPanel{Margin=new Thickness(22),Spacing=12};
+        content.Children.Add(new TextBlock{Text=heading,FontSize=20,FontWeight=FontWeight.SemiBold,TextWrapping=TextWrapping.Wrap});
+        content.Children.Add(new TextBlock{Name="ConfirmationExplanation",TextWrapping=TextWrapping.Wrap,Text=explanation,LineHeight=20});
+        var dialog=new Window{Name=dialogName,Title=title,Width=520,SizeToContent=SizeToContent.Height,CanResize=false,
+            WindowStartupLocation=WindowStartupLocation.CenterOwner,Content=content};
+        var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=10,HorizontalAlignment=HorizontalAlignment.Right};
+        Button cancel=NewButton("Cancel"),confirm=NewButton(confirmLabel);
+        cancel.Name="ConfirmationCancel";confirm.Name="ConfirmationConfirm";cancel.IsCancel=true;
+        cancel.Click+=(_,_)=>dialog.Close(false);confirm.Click+=(_,_)=>dialog.Close(true);
+        StyleModernPrimaryButton(confirm,ModernBlue,Math.Max(132,confirmLabel.Length*9+28));
+        actions.Children.Add(cancel);actions.Children.Add(confirm);content.Children.Add(actions);
+        return await dialog.ShowDialog<bool>(this);
     }
 
     private async Task OpenMainFreshLevelAsync()
     {
         string path=SceneDocumentStore.PathForTarget(_workspace.RootPath,"authored65");
-        if(!File.Exists(path)){_statusText.Text="No authored level is saved in this project. Choose File > New Level.";return;}
+        if(!File.Exists(path)){_statusText.Text="This project has no created level yet. Choose File > New Level… to start one.";return;}
         if ((HasUnsavedTerrainEdits() || HasUnsavedMobyEdits()) && !await SaveCurrentEditsAsync()) return;
         ApplyFreshScene(SceneDocument.Read(path));
-        _statusText.Text="Opened the saved authored level in the main editor.";
+        _statusText.Text="Opened your created level.";
 
     }
 
@@ -111,11 +152,13 @@ public sealed partial class MainWindow
             _freshSceneDocument=_freshSceneDocument with { Ledger=snapshot.Ledger };
             _savedFreshSettingsSignature=settingsSignature;
             _savedTerrainEditSignature=terrainSignature;_savedMobyEditSignature=mobySignature;
-            _statusText.Text=$"Saved {snapshot.Name}: {snapshot.Surfaces.Count} authored faces, {snapshot.Objects.Count(o=>!o.Value.IsRemoved)} objects.";
+            _statusText.Text=_releaseMode
+                ?$"Saved {snapshot.Name}: {Count(snapshot.Surfaces.Count,"terrain tile","terrain tiles")}, {Count(snapshot.Objects.Count(o=>!o.Value.IsRemoved),"object","objects")}."
+                :$"Saved {snapshot.Name}: {snapshot.Surfaces.Count} authored faces, {snapshot.Objects.Count(o=>!o.Value.IsRemoved)} objects.";
             RefreshCurrentLevelDetails();return true;
         }
         catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException or System.Text.Json.JsonException)
-        {_statusText.Text="Authored scene save failed: "+e.Message;return false;}
+        {_statusText.Text=(_releaseMode?"Could not save your level, so the last saved version is unchanged: ":"Authored scene save failed: ")+e.Message;return false;}
     }
 
     private TerrainPolygon AddFreshTerrainCopy(TerrainPolygon source,float dx,float dy,float dz)
@@ -155,8 +198,10 @@ public sealed partial class MainWindow
     {
         var scene=CaptureFreshScene() with {Objects=[],Ledger=UniversalPlacementLedger.Empty};
         string sourceImage = ResolveUniversalSourceDisc();
-        bool flightEnabled = !_releaseMode && NativeFreeFlightSettingsStore.Capture(_workspace.RootPath).GlobalEnabled;
-        string key=scene.Fingerprint()+"|"+sourceImage+"|flight="+flightEnabled;
+        // No flight plan at all until the project holds an explicit Fly Anywhere choice.
+        var flightSettings = NativeFreeFlightSettingsStore.Capture(_workspace.RootPath);
+        bool flightEnabled = flightSettings.GlobalEnabled, flightChosen = !_releaseMode || flightSettings.Preferences.Count != 0;
+        string key=scene.Fingerprint()+"|"+sourceImage+"|flight="+(flightChosen?flightEnabled.ToString():"unset");
         if(_freshNativeCompilation==null||_freshNativeCompilation.IsFaulted||_freshNativeCompilationKey!=key)
         {
             _freshNativeCompilationKey=key;
@@ -164,7 +209,7 @@ public sealed partial class MainWindow
             ExportScratchSpace.PruneAuthoredBaselines(_workspace.RootPath,baseline);
             _freshNativeCompilation=Task.Run<INativeAuthoredCompilation>(async () =>
             {
-                var flight = _releaseMode ? null : await NativeFreeFlightCompositionPlan.CaptureAsync(sourceImage, flightEnabled);
+                var flight = flightChosen ? await NativeFreeFlightCompositionPlan.CaptureAsync(sourceImage, flightEnabled) : null;
                 return scene.TargetBinding==null
                     ? await NativeFreshMainCompilation.CaptureAsync(sourceImage,scene,baseline,flight:flight)
                     : await NativeClearedLevelCompilation.CaptureAsync(sourceImage,scene,_retailCatalog,baseline);
@@ -183,7 +228,7 @@ public sealed partial class MainWindow
         var owner=CaptureSourceDiscOperationIdentity();
         string workspacePath=_workspace.RootPath, original=ResolveUniversalSourceDisc();
         string? imageSelection=_discImagePathBox.Text,skySelection=_skyboxDiscImagePathBox.Text;
-        var flightIntent=_releaseMode?null:NativeFreeFlightProjectExportIntent.Capture(workspacePath);
+        var flightIntent=NativeFreeFlightProjectExportIntent.Capture(workspacePath);
         var portalSnapshot=PortalRouteStore.Capture(workspacePath);
         var saved=SceneDocumentStore.ReadAll(workspacePath,_retailCatalog);
         var fingerprints=saved.ToDictionary(s=>s.ResolveTarget(_retailCatalog).Key,s=>s.Fingerprint());
@@ -229,7 +274,7 @@ public sealed partial class MainWindow
         string output=Path.Combine(outputFolder,"Spyro Editor - Authored Level.bin");
         string hash=await Task.Run(async()=>
         {
-            var flight=_releaseMode?null:await NativeFreeFlightCompositionPlan.CaptureAsync(original,flightIntent?.Enabled==true);
+            var flight=!_releaseMode||flightIntent.RequiresRebuild?await NativeFreeFlightCompositionPlan.CaptureAsync(original,flightIntent.Enabled):null;
             return await NativeAuthoredProjectExporter.ExportAsync(donors,_retailCatalog,plans,japanese,output,workspacePath,startLevelId.Value,
                 requireCurrent:()=>Dispatcher.UIThread.InvokeAsync(RequireOwner).GetAwaiter().GetResult(),
                 stagedRetailImage:retail?.WroteImage==true?retail.OutputImagePath:null,retailEggs:retail?.ActiveDragonflyEggs,
@@ -238,7 +283,8 @@ public sealed partial class MainWindow
         });
         RequireOwner();
         string startName=saved.FirstOrDefault(s=>s.ResolveTarget(_retailCatalog).LevelId==startLevelId)?.Name??"Artisans";
-        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. All saved level replacements and other saved edits are included."+PreservedResearchExportNote();
+        string flightNote=!flightIntent.RequiresRebuild?"":flightIntent.Enabled?" Fly Anywhere is on in this game.":" Fly Anywhere is off in this game.";
+        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. All saved level replacements and other saved edits are included."+flightNote+PreservedResearchExportNote();
         }
         // The merged retail image is a working copy for this export only.
         finally{if(retailStage!=null)ExportScratchSpace.Delete(retailStage);}

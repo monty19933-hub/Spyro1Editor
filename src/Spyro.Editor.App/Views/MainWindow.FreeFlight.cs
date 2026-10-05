@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
+using Spyro.Editor.Core.Diagnostics;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Persistence;
 using Spyro.Editor.Core.Workspace;
@@ -21,26 +22,51 @@ public sealed partial class MainWindow
 
     private Control BuildFreeFlightSettingsPanel()
     {
-        ToolTip.SetTip(_freeFlightEnabled,
-            "Controls Spyro's native flight ability in the exported game. The editor's Free Camera is separate.");
-        _freeFlightEnabled.PropertyChanged += (_, change) =>
+        ToolTip.SetTip(_freeFlightEnabled, _releaseMode
+            ? "Changes the game you export: Spyro can fly in every normal level. The editor's Game Camera is separate and always flies."
+            : "Controls Spyro's native flight ability in the exported game. The editor's Free Camera is separate.");
+        if (_releaseMode)
+        {
+            _freeFlightEnabled.Content = "Let Spyro fly in every level";
+            _freeFlightDetails.FontSize = 12;
+            _freeFlightDetails.LineHeight = 17;
+            _freeFlightDetails.Foreground = new SolidColorBrush(ModernMutedInk);
+        }
+        _freeFlightEnabled.PropertyChanged += async (_, change) =>
         {
             if (_syncingFreeFlight || change.Property != ToggleButton.IsCheckedProperty) return;
             _freeFlightDraft = _freeFlightEnabled.IsChecked == true;
             _freeFlightGeneration++;
             RefreshFreeFlightSettingsAvailability();
+            // The shipping editor has no separate draft: ticking the box is the saved project choice.
+            if (_releaseMode)
+            {
+                try { await SaveFreeFlightSettingsAsync(); }
+                catch (Exception error)
+                {
+                    EditorDiagnostics.RecordException("saving the Fly Anywhere choice", error);
+                    _statusText.Text = "Could not save the Fly Anywhere choice: " + error.Message;
+                }
+                if (_freeFlightSnapshot != null && _freeFlightDraft != _freeFlightSnapshot.GlobalEnabled)
+                {
+                    // Not saved (busy or failed): show what the project really holds.
+                    _freeFlightDraft = _freeFlightSnapshot.GlobalEnabled;
+                    _syncingFreeFlight = true;
+                    try { _freeFlightEnabled.IsChecked = _freeFlightDraft; }
+                    finally { _syncingFreeFlight = false; }
+                    RefreshFreeFlightSettingsAvailability();
+                }
+            }
         };
         _freeFlightSave = NewAsyncButton("Save Flight", SaveFreeFlightSettingsAsync, RefreshFreeFlightSettingsAvailability);
         _freeFlightSave.Name = "FreeFlightSave";
         _freeFlightRevert = NewButton("Revert", RevertFreeFlightSettings);
         _freeFlightRevert.Name = "FreeFlightRevert";
-        return new StackPanel
-        {
-            Spacing = 8,
-            Children = { _freeFlightEnabled, _freeFlightDetails,
-                new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 8,
-                    Children = { _freeFlightSave, _freeFlightRevert } } }
-        };
+        StackPanel panel = new() { Spacing = 8, Children = { _freeFlightEnabled, _freeFlightDetails } };
+        if (!_releaseMode)
+            panel.Children.Add(new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 8,
+                Children = { _freeFlightSave, _freeFlightRevert } });
+        return panel;
     }
 
     internal void RefreshFreeFlightSettingsEditor(LevelDefinition? level)
@@ -102,7 +128,11 @@ public sealed partial class MainWindow
             // owner; no await separates the last current check from publication.
             var saved = NativeFreeFlightSettingsStore.SaveGlobal(expected, enabled);
             _freeFlightSnapshot = saved;
-            _statusText.Text = $"Saved Fly Anywhere {(enabled ? "On" : "Off")} for all normal levels in this project. Create BIN will rebuild from the original source.";
+            _statusText.Text = _releaseMode
+                ? enabled
+                    ? "Fly Anywhere is on for this project. The next Create BIN makes a game where Spyro can fly in every level."
+                    : "Fly Anywhere is off for this project. The next Create BIN keeps the game's normal movement."
+                : $"Saved Fly Anywhere {(enabled ? "On" : "Off")} for all normal levels in this project. Create BIN will rebuild from the original source.";
             if (saved.RetainedRecoveryDirectory.Length != 0)
                 _statusText.Text += " Previous-settings recovery files: " + saved.RetainedRecoveryDirectory;
         }
@@ -124,7 +154,6 @@ public sealed partial class MainWindow
     internal bool TryGetFreeFlightSettingsExportBlockReason(out string reason)
     {
         reason = "";
-        if (_releaseMode) return false;
         if (_freeFlightError.Length != 0)
             reason = "Fly Anywhere settings unavailable: " + _freeFlightError;
         else if (_freeFlightLevel != null && !IsCurrentFreeFlightBinding())
@@ -150,8 +179,9 @@ public sealed partial class MainWindow
         _freeFlightLevelLoadRequest == _levelLoadRequestId &&
         (_freeFlightSnapshot == null || PathsEqual(_freeFlightSnapshot.Path, Path.Combine(_workspace.RootPath, NativeFreeFlightSettingsStore.FileName)));
 
-    private bool IsRetailFreeFlightLevel(LevelDefinition? level) => level != null &&
-        (level.Key=="authored65" && _freshSceneDocument!=null ||
+    // The choice is for the whole game, so the shipping editor offers it with any level open.
+    private bool IsRetailFreeFlightLevel(LevelDefinition? level) => level != null && (_releaseMode ||
+        level.Key=="authored65" && _freshSceneDocument!=null ||
         level.LevelId is >= 10 and <= 64 && level.LevelId % 10 <= 4 &&
         _retailCatalog.Levels.Any(retail => retail.LevelId == level.LevelId &&
             LevelCatalog.NormalizeKey(retail.Key) == LevelCatalog.NormalizeKey(level.Key)));
@@ -168,6 +198,19 @@ public sealed partial class MainWindow
         _freeFlightEnabled.IsEnabled = usable && !busy;
         if (_freeFlightSave != null) _freeFlightSave.IsEnabled = usable && !busy;
         if (_freeFlightRevert != null) _freeFlightRevert.IsEnabled = retail && !busy;
+        if (_releaseMode)
+        {
+            const string what =
+                "In the game you export, Spyro can fly in every normal level the way he does in Gnasty's Loot: jump, then press ✕ again in the air. " +
+                "The five flight levels keep their own rules. This is separate from the editor's Game Camera, which always flies.";
+            _freeFlightDetails.Text = _freeFlightError.Length != 0
+                ? "This setting could not be read, so it is left as it was: " + _freeFlightError
+                : !retail ? "Open a level to change this setting."
+                : (_freeFlightSnapshot?.GlobalEnabled == true
+                    ? "On. The next Create BIN includes it. "
+                    : "Off. Spyro moves as in the original game. ") + what;
+            return;
+        }
         if (_freeFlightError.Length != 0) _freeFlightDetails.Text = "Fly Anywhere settings unavailable: " + _freeFlightError;
         else if (!retail) _freeFlightDetails.Text = "Open an ordinary level or the authored main-editor level to change this project setting. Native flight courses retain their own rules.";
         else

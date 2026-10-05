@@ -8411,6 +8411,27 @@ public sealed partial class EditorViewport : Control
             : "Foreground terrain";
         string label =
             $"Face {terrainIndex}  |  {TerrainMaterialClassifier.FormatSurface(terrain.Surface)}  |  {visualRole}  |  {texture}  |  {TerrainBehaviorClassifier.FormatBehavior(terrain.Behavior)}  |  {editStatus}";
+        if (PlainLabels)
+        {
+            string behavior = TerrainBehaviorClassifier.FormatBehavior(terrain.Behavior).ToLowerInvariant();
+            string ground = behavior.StartsWith("solid", StringComparison.Ordinal) ? "solid ground"
+                : behavior.StartsWith("hazard", StringComparison.Ordinal) || behavior.StartsWith("damage", StringComparison.Ordinal) ? "hurts Spyro"
+                : behavior.StartsWith("steep", StringComparison.Ordinal) ? "wall or steep slope"
+                : behavior.StartsWith("state", StringComparison.Ordinal) ? "special surface"
+                : "";
+            string change = !terrain.IsTerrainEdited ? "not changed" : safety switch
+            {
+                TerrainPatchSafetyKind.Structural => terrain.IsTerrainRemoved ? "removed" : "added",
+                TerrainPatchSafetyKind.PlayableHeight => "reshaped",
+                TerrainPatchSafetyKind.PartialHeight => "reshaped, partly solid",
+                TerrainPatchSafetyKind.VisualOnlyHeight => "reshaped, looks only",
+                TerrainPatchSafetyKind.UnknownHeight => "reshaped, not checked",
+                TerrainPatchSafetyKind.TextureOnly => "repainted",
+                _ => "changed"
+            };
+            label = string.Join("  ·  ", new[] { TerrainMaterialClassifier.FormatSurface(terrain.Surface) + " tile", ground, change }
+                .Where(part => part.Length > 0));
+        }
 
         FormattedText text = new(
             label,

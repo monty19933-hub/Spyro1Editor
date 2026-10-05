@@ -20,7 +20,7 @@ public sealed partial class MainWindow
     {
         if (!DragonStatueColor.IsStatue(moby)) return null;
         ColorPalettePicker picker = new([
-            new("Current colour", moby.DragonColor ?? ColorRgba.FromRgb(48, 208, 112)),
+            new("Current color", moby.DragonColor ?? ColorRgba.FromRgb(48, 208, 112)),
             new("Ruby", ColorRgba.FromRgb(255, 48, 72)),
             new("Gold", ColorRgba.FromRgb(255, 196, 32)),
             new("Emerald", ColorRgba.FromRgb(32, 224, 96)),

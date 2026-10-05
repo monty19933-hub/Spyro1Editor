@@ -32,7 +32,7 @@ public sealed partial class MainWindow
     private readonly CheckBox _selectedMobySnapZBox = new()
     {
         Name = "SelectedMobySnapZBox",
-        Content = "Snap to terrain Z",
+        Content = "Stay on the ground when moved",
         IsChecked = false,
         IsEnabled = false,
         Foreground = new SolidColorBrush(ModernInk)
@@ -55,8 +55,8 @@ public sealed partial class MainWindow
             _selectedMobySnapZBox.IsCheckedChanged += (_, _) => ApplySelectedMobyTerrainSnapChoice();
         }
 
-        ToolTip.SetTip(_selectedMobyZSlider, "Move the selected object and its linked companions vertically in one-unit steps. Manual Z movement turns terrain snap off for this object.");
-        ToolTip.SetTip(_selectedMobySnapZBox, "When enabled, horizontal object movement follows the nearest terrain surface. Enabling it also snaps the object at its current X/Y.");
+        ToolTip.SetTip(_selectedMobyZSlider, "Move the selected object up or down. Changing the height by hand stops it following the ground.");
+        ToolTip.SetTip(_selectedMobySnapZBox, "When ticked, the object follows the ground as you drag it. Ticking it also drops the object onto the ground where it is now.");
 
         Grid zRow = new()
         {
@@ -70,7 +70,7 @@ public sealed partial class MainWindow
         };
         zRow.Children.Add(new TextBlock
         {
-            Text = "Z axis",
+            Text = "Height",
             FontSize = 12,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(ModernMutedInk),

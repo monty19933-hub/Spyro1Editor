@@ -116,7 +116,7 @@ public sealed partial class MainWindow
         button.HorizontalAlignment = HorizontalAlignment.Stretch;
         ToolTip.SetTip(button, sub switch
         {
-            "Dragonfly Eggs" => "Place a collectible dragonfly egg. Choose its colour in the next window.",
+            "Dragonfly Eggs" => "Place a collectible dragonfly egg. Choose its color in the next window.",
             "Signs" => "Place a sign. You can type its message afterwards with Edit.",
             _ => "Pick any object from any Spyro level (enemies, NPCs, gems, eggs, signs, props…) and place it here."
         });
@@ -256,7 +256,7 @@ public sealed partial class MainWindow
     private static string EggColourName(string name)
     {
         string c = name.Replace("Dragonfly Egg (", "").TrimEnd(')');
-        return c == "native colours" ? "Original colours" : c.Length > 0 ? char.ToUpperInvariant(c[0]) + c[1..] : c;
+        return c == "native colours" ? "Original colors" : c.Length > 0 ? char.ToUpperInvariant(c[0]) + c[1..] : c;
     }
 
     private static string UniversalFitFailureSummary(string error, string levelName, bool compact)
@@ -767,7 +767,7 @@ public sealed partial class MainWindow
             var e = estimates.TryGetValue(v, out var estimate) ? estimate :
                 new UniversalDestinationEstimate(false, v.HasLocalModel, v.HasBehavior, 0, 0, false, "Checking…");
             bool isSpecial = UniversalSpecialCatalog.IsSpecial(v);
-            variantLabel.Text = entry.SubCategory == "Dragonfly Eggs" ? "Colour" : "Source version";
+            variantLabel.Text = entry.SubCategory == "Dragonfly Eggs" ? "Color" : "Source version";
             details.Text = $"{DisplaySourceName(entry,v)}\nFrom {LevelName(v.SourceLevelKey)}.\n" +
                 (isSpecial && entry.Notes is { Length: > 0 } friendly ? friendly :
                     e.Native ? "This object already belongs to this level." : "Its appearance and game behavior are copied when you create the BIN. Playtest your exported level to check it in its new surroundings.");
