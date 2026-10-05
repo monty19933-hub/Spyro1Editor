@@ -5,7 +5,12 @@ removal-plan inspector. Removal uses the normal editor path, preserves camera
 position and remains recoverable with Recovery > Undo last removal. Modeless
 inspectors refresh their rows and reject actions after the scene changes.
 Evidence is in task-root `work/removal-inspector-20261004`. No gameplay or
-export-admission changes are included.
+export-admission changes are included. All 30 workflow checks pass, including
+normal removal, undo, camera preservation and stale-scene protection. The
+packaged Mac app also verified double-click selection of T31 from the checked
+six-object plan. Both Mac and Windows packages pass package verification.
+Product source is `d74cefa`; package hashes and evidence are recorded in
+`work/removal-inspector-20261004/final-receipt.json`.
 
 # Object picker responsiveness fix — 4 October 2026
 
