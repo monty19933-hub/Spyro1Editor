@@ -1,6 +1,6 @@
 # Inventory column and terrain editing — 4 October 2026
 
-Version 1.0.9 (Claude, uncommitted on top of `f1ab4d1`) gives every inventory row
+Version 1.0.9 (Claude; product source `f495eb7`) gives every inventory row
 one text size, replaces the top egg picture and K/Y total with a spinning gold
 dragonfly egg above the egg column, and fixes terrain editing: multi-tile removal
 (Cmd/Ctrl-click or drag), a whole-tile brush, alias-safe export of shared corners,

@@ -2,7 +2,7 @@
 
 ## Where
 - Worktree `/Users/john/Documents/Codex/2026-09-29/files-pasted-by-the-user-spyro/outputs/SpyroEditor-source`,
-  branch `release/universal-gameplay-20261002`, base `f1ab4d1` (1.0.8). **All 1.0.9 work is uncommitted.**
+  branch `release/universal-gameplay-20261002`, 1.0.9 product source `f495eb7` (on top of 1.0.8 `f1ab4d1`).
 - Packages: task-root `outputs/SpyroEditor-V1.0.9-release` (community/ad-hoc Mac, Windows unexecuted).
   Evidence and `final-receipt.json`: task-root `work/inventory-terrain-20261004`.
 
@@ -25,4 +25,4 @@
 - Not run: terrain gesture UI automation; universal UI smoke (stale before eggs at f1ab4d1).
 
 ## Next
-- Ask the user before committing. Optionally add UI automation for multi-select and whole tiles.
+- Optionally add UI automation for multi-select and whole tiles.
