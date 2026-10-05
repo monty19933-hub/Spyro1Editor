@@ -544,24 +544,33 @@ README
 $PUBLIC_RELEASE_NAME
 Internal build: $PROJECT_VERSION
 
-On macOS, open Spyro Editor.app directly. On Windows, start with
-Launch Spyro Editor.bat.
+QUICK START
 
-Use Open BIN/CUE inside the editor and choose your own Spyro the Dragon disc
-image. The editor rebuilds terrain maps and object placement from that selected
-disc image, then writes patched test BIN/CUE output to the output folder.
+1. Open the editor.
+   Mac: open "Spyro Editor.app" (see MACOS-OPEN-INSTRUCTIONS.txt the first time).
+   Windows: open "Launch Spyro Editor.bat".
+2. Choose "Open Game..." and select your own unchanged USA Spyro the Dragon
+   disc image (.bin or .cue). The editor only reads it.
+3. Pick a level at the top left. Change it in the four tabs on the right:
+   Objects, Terrain, Game Settings and Environment.
+4. Press Save. Then press Create BIN. The editor builds a new BIN and CUE in
+   your project's "output" folder; "Show Game File" in the bottom bar opens it.
+5. Open that CUE in your PlayStation emulator and choose New Game.
+
+GOOD TO KNOW
+
+- Your original disc image is never changed.
+- Your projects live in Documents/Spyro Editor, outside this folder, so
+  replacing the app with a newer version keeps your work.
+- If something cannot be put in the game, the editor tells you what and where,
+  and the game you created before stays as it was.
+- Fly Anywhere (Game Settings) lets Spyro fly in every level of the game you
+  export. It is off unless you turn it on.
+- Dragonfly eggs and signs need your own unchanged Japanese disc as well.
+- Help is under "More" at the top right of the editor.
 
 This package does not include game data, BIOS files, emulator files, RAM dumps,
 patched discs, or extracted assets.
-
-Use Build Safety before Create BIN. The editor reports any edit that needs
-attention and lets you double-click an affected object or terrain section to
-find it. Create BIN always writes a new BIN/CUE and leaves your original disc
-image untouched.
-
-Your projects and saved edits live outside the application folder, so replacing
-the app with a newer version does not erase them. See the included guide for
-object placement, terrain painting, skies, music, backups, and updates.
 
 More detail:
   support/docs/release-user-guide.md

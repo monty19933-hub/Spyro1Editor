@@ -8339,13 +8339,26 @@ public sealed partial class EditorViewport : Control
         Typeface typeface = new("Inter");
         string brushSafety = string.IsNullOrWhiteSpace(_terrainBrushSafetyHint) ? "" : $"    {_terrainBrushSafetyHint}";
         string help = BuildViewportHelpText(brushSafety);
-        FormattedText text = new(
-            help,
+        FormattedText Format(string value) => new(
+            value,
             System.Globalization.CultureInfo.CurrentCulture,
             FlowDirection.LeftToRight,
             typeface,
             13,
             new SolidColorBrush(Color.FromArgb(210, 224, 232, 240)));
+        FormattedText text = Format(help);
+        if (PlainLabels && text.Width > bounds.Width - 36)
+        {
+            // In a narrow window keep whole hints and drop the last ones, rather than cutting a word in half.
+            const string separator = "  ·  ";
+            string[] parts = help.Split(separator);
+            for (int count = parts.Length - 1; count >= 1; count--)
+            {
+                text = Format(string.Join(separator, parts.Take(count)));
+                if (text.Width <= bounds.Width - 36)
+                    break;
+            }
+        }
         context.DrawText(text, new Point(bounds.Left + 18, bounds.Top + 16));
         DrawTerrainSurfaceLabels(context, bounds);
         DrawTerrainTargetReadout(context, bounds);

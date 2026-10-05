@@ -88,7 +88,7 @@ public sealed partial class MainWindow
         try
         {
             var record=StartBlankRecoveryStore.Read(root,key);
-            if(record?.Active!=true){_statusText.Text="No active before-clear snapshot is available for this level.";return;}
+            if(record?.Active!=true){_statusText.Text=_releaseMode?$"{level.DisplayName} has not been emptied with Start Blank, so there is nothing to restore.":"No active before-clear snapshot is available for this level.";return;}
             if(!await ShowStartBlankConfirmationAsync(level.DisplayName,0,0,true))return;
             if(_workspace.RootPath!=root||_currentLevel!=level)return;
             _startBlankBusy=true;
@@ -107,7 +107,7 @@ public sealed partial class MainWindow
                 var original=_retailCatalog.FindByKey(key)??throw new InvalidDataException("The original level is not in the source catalog.");
                 await SelectLevelAsync(original);
             }
-            _statusText.Text="Restored the saved level from before clear. The blank scene was preserved in its recovery folder.";
+            _statusText.Text=_releaseMode?$"{level.DisplayName} is back the way it was before Start Blank. The blank version you built was kept in the project's recovery folder.":"Restored the saved level from before clear. The blank scene was preserved in its recovery folder.";
         }
         catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException or System.Text.Json.JsonException)
         { _statusText.Text="Restore Before Clear stopped: "+e.Message; }
@@ -117,7 +117,11 @@ public sealed partial class MainWindow
     {
         var content=new StackPanel{Margin=new Thickness(22),Spacing=12};
         content.Children.Add(new TextBlock{Text=restoring?"Restore "+name+" from before clear?":"Start blank in "+name+"?",FontSize=20,FontWeight=FontWeight.SemiBold,TextWrapping=TextWrapping.Wrap});
-        content.Children.Add(new TextBlock{Name="StartBlankExplanation",TextWrapping=TextWrapping.Wrap,Text=restoring
+        content.Children.Add(new TextBlock{Name="StartBlankExplanation",TextWrapping=TextWrapping.Wrap,Text=_releaseMode
+            ?restoring
+                ?$"This brings {name} back the way it was before you cleared it: its terrain, objects and settings. The blank version you built is saved first, so nothing is lost. Other levels are not touched."
+                :$"This empties {name}: its {Count(objects,"object","objects")} and {Count(faces,"terrain tile","terrain tiles")} are taken out, leaving a small floor to build on. Other levels are not touched.\nA recovery copy of the level as it is now is saved first. File ▾ > Restore Before Clear… brings it back."
+            :restoring
             ?"Your current blank scene will be saved and preserved. The previous level's geometry, objects and settings will return. Other levels stay unchanged."
             :$"Remove {objects} objects and {faces} terrain faces from this level, including their collision and unused assets in the exported game. A small editable starting floor will remain.\nYour current changes will be saved in a verified recovery snapshot before clearing. Other levels stay unchanged."});
         var dialog=new Window{Name=restoring?"RestoreBeforeClearDialog":"StartBlankDialog",Title=restoring?"Restore Before Clear":"Start Blank in Current Level",Width=520,SizeToContent=SizeToContent.Height,CanResize=false,WindowStartupLocation=WindowStartupLocation.CenterOwner,Content=content};

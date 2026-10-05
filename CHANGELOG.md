@@ -1,6 +1,37 @@
-# Spyro Editor 1.0.10
+# Spyro Editor 1.1
 
-## Changes since Spyro Editor 1.0.9
+## Changes since Spyro Editor 1.0.10
+
+New
+
+- Fly Anywhere: Game Settings has one switch, "Let Spyro fly in every level". With it on, the game you export lets Spyro fly in every normal level (jump, then ✕ again in the air), as in Gnasty's Loot. It is off unless you turn it on, it is saved with your project, and turning it off gives the normal game back. The five flight levels keep their own rules. It has nothing to do with the editor's Game Camera.
+- A welcome screen on first start explains the three steps (open your game, edit, Create BIN). The editor reopens the level you last worked on.
+- When terrain cannot be exported (for example a corner dragged until the ground folds over itself), a red bar says so in plain words, with "Show it" and "Undo that change". Check for Export Issues now finds this too, and the Add object window keeps working.
+- "Show Game File" appears in the bottom bar after Create BIN and opens the folder with your new game.
+- In the view: Delete removes the selected object, Ctrl/Cmd+Z brings back the last removed object or undoes the last brush stroke, Ctrl+Y or Shift+Cmd+Z redoes a stroke.
+- File > New Level asks before replacing a level you already made, and keeps a copy of it in the project's backups folder.
+
+Clearer
+
+- Objects tab: "Add to this level" and "Selected object" cards, a longer object list, plain notes about what is selected.
+- Terrain tab: four groups — Tiles, Brush, Textures, Corner by corner — instead of three overlapping button sets. "Reset Height" puts a tile back at its original height and keeps its texture.
+- Game Settings and Environment: "Apply Name", "Apply Music", "Apply Sky"; portal lists show level names.
+- Everyday wording throughout: level details, treasure line, save and load messages, export results, object kinds, the Start Blank and Create BIN questions. "Build Safety" is now "Export Check".
+- The view shows object names without internal numbers, a short hint line that fits the window, and a legend only while you work on terrain.
+- Help is rewritten for the current layout.
+
+Fixed
+
+- With Fly Anywhere on, entering a level through a portal could crash the game while the level loaded. Found by playing the exported game and fixed before this feature was released.
+- Create BIN left 1.3 to 2.6 GB of working copies in the project folder every time. They are now removed after every export, also when the export fails, and old ones are cleaned up at start.
+- Create BIN failed with "collision block storage contains unreferenced groups" in a project that both moved a portal and added or removed terrain in the same level.
+- Create BIN failed with "authored surface consumer authority requires the complete exact original USA executable" when a level had both changed gem totals and added or removed terrain.
+- A failed Create BIN never touches the game you created before; this is now tested.
+- A single-letter key (C or V) could copy and paste a tile's look without any hint. That shortcut is off.
+
+All existing gameplay limits are retained; see the known limitations. The Mac package is not notarized; the Windows package has not been run on Windows.
+
+## Spyro Editor 1.0.10 — changes since Spyro Editor 1.0.9
 
 - Terrain brushes and texture painting turn off when you leave the Terrain tab. The brush keys 1–5 only work in the Terrain tab, so clicks in Objects and the other tabs always select objects.
 

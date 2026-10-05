@@ -1,5 +1,12 @@
-# Spyro Editor 1.0.10 — supported scope and limitations
+# Spyro Editor 1.1 — supported scope and limitations
 
+- Version 1.1 reorganizes the interface (first-run welcome, carded Objects and
+  Terrain tabs, plain wording, one Export Check), adds **Fly Anywhere**, a red
+  bar that explains and undoes terrain the game cannot stand on, **Show Game
+  File**, Delete / Undo keys in the view, and a confirmation with a backup
+  before New Level replaces a level you made. It fixes Create BIN leaving large
+  working copies in the project, and two export failures in projects that
+  combine a moved portal or changed gem totals with added or removed terrain.
 - Version 1.0.10 turns terrain brushes off outside the Terrain tab.
 - Version 1.0.9 aligns the in-game inventory (one text size, a spinning gold
   dragonfly egg column header) and adds multi-tile terrain removal, a whole-tile
@@ -104,11 +111,24 @@
   objects and private terrain texture. The saved fresh level also passed native
   New Game, walking, jumping and egg collection with its 1/1 inventory count.
   This does not certify every authored scene or a complete campaign.
-- Fly Anywhere is deferred. Its earlier research settings are ignored by normal
-  release exports and its controls are hidden from the normal release UI.
-- The macOS arm64 release is Developer ID signed, but is not notarized. Windows
-  x64 package structure is checked; Windows runtime testing was not available
-  on the build machine.
+- **Fly Anywhere** is one switch for the whole exported game, off by default.
+  With it on, Spyro can fly in every normal level (jump, then ✕ again in the
+  air); the five flight levels keep their own rules. It was played in the
+  emulator in Artisans, Stone Hill, Toasty and Doctor Shemp: take-off, climbing,
+  turning, landing, entering levels through portals, Exit Level while flying,
+  and a death and respawn while flying. The Icy Flight demo plays frame for
+  frame the same with the option on and off. With the option off the game only
+  glides, and its files are identical to a project that never used the option.
+  The other 26 normal levels and Gnasty's Loot were not played with it. Flying
+  lets the player reach places the levels were not built for, including out of
+  bounds; that is the nature of the option. It is not stored on the memory card:
+  it belongs to the game you export.
+- Signs show one message at a time when several are close together. A sign
+  with no message shows nothing.
+- The macOS arm64 package was opened and used on the build Mac. It is not
+  notarized, so macOS asks for confirmation the first time (see
+  `MACOS-OPEN-INSTRUCTIONS.txt`). The Windows x64 package structure is checked;
+  the Windows build was not run, because no Windows machine was available.
 - Use the supported unchanged USA SCUS_942.28 source. Japanese eggs/signs require
   the supported SCPS_100.83 image supplied locally. Custom music import and every
   native texture format are not supported.

@@ -963,7 +963,7 @@ public sealed partial class MainWindow
         _objectSwapTestButton = NewAsyncButton("Create Swap Test", CreateObjectCandidateBinAsync);
         StyleModernPrimaryButton(_objectSwapTestButton, Color.FromRgb(176, 103, 20));
         _objectSwapTestButton.IsVisible = false;
-        ToolTip.SetTip(_objectSwapCatalogButton, "Replace this existing chest or self-contained enemy slot from the swap catalogue.");
+        ToolTip.SetTip(_objectSwapCatalogButton, "Swap this chest or enemy for another kind that is known to work in this level.");
         ToolTip.SetTip(_objectSwapTestButton, "Create a disposable BIN/CUE for a staged cross-level swap.");
         if (!_releaseMode)
             panel.Children.Add(_objectSwapTestButton);

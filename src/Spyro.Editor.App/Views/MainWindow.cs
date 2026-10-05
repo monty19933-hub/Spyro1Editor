@@ -15079,11 +15079,17 @@ public sealed partial class MainWindow : Window
                     CrossLevelSwapCatalogBuilder.GreenWizardVerifiedCompatibility))
             .ToList();
         if (_releaseMode)
-            entries = entries.Where(entry => entry.NormalCreateBinReady).ToList();
+        {
+            // Several source objects of the same kind in the same level are one choice to the user.
+            entries = entries.Where(entry => entry.NormalCreateBinReady)
+                .GroupBy(entry => (entry.DisplayName, entry.SourceLevelName))
+                .Select(group => group.First())
+                .ToList();
+        }
         if (entries.Count == 0)
         {
             _statusText.Text = _releaseMode
-                ? $"No additional safe {category.ToString().ToLowerInvariant()} replacements are available for this object yet."
+                ? $"There is nothing else this {category.ToString().ToLowerInvariant()} can be swapped for in this level yet."
                 : $"No {category.ToString().ToLowerInvariant()} catalogue entries were found in the local editor cache.";
             return;
         }

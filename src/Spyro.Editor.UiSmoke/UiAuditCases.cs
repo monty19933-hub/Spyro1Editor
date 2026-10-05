@@ -18,6 +18,7 @@ using Spyro.Editor.Core.Scene;
 /// everything a user can read or press. It never writes outside <c>outDir</c> and the given project copy.</summary>
 internal static class UiAuditCases
 {
+    private static double auditHeight = 900;
     private static readonly StringBuilder Log = new();
     private static string _out = "";
     private static int _shot;
@@ -31,7 +32,10 @@ internal static class UiAuditCases
         Environment.SetEnvironmentVariable("SPYRO_EDITOR_DATA_ROOT", Path.Combine(_out, "data-root"));
         Environment.SetEnvironmentVariable("SPYRO_EDITOR_DIAGNOSTICS_DIR", Path.Combine(_out, "logs"));
         Environment.CurrentDirectory = Path.GetFullPath(workspace);
-        MainWindow window = new() { Width = 1440, Height = 900 };
+        // SPYRO_AUDIT_SIZE=1024x700 reviews the layout in a small window.
+        string[] size = (Environment.GetEnvironmentVariable("SPYRO_AUDIT_SIZE") ?? "1440x900").Split('x');
+        double auditWidth = double.Parse(size[0]); auditHeight = double.Parse(size[1]);
+        MainWindow window = new() { Width = auditWidth, Height = auditHeight };
         window.Show();
         if (levelKeys.Length == 1 && levelKeys[0] == "--first-run")
         {
@@ -141,7 +145,7 @@ internal static class UiAuditCases
                 Line("status: " + Get<TextBlock>(window, "_statusText").Text);
                 window.Height = 2600; Pump(10);
                 Shot(window, $"{key}-object-selected");
-                window.Height = 900; Pump(5);
+                window.Height = auditHeight; Pump(5);
                 Dump(tabs.Items.OfType<TabItem>().First().Content as Control);
             });
         Step("select terrain", () =>
@@ -153,7 +157,7 @@ internal static class UiAuditCases
             Line("status: " + Get<TextBlock>(window, "_statusText").Text);
             window.Height = 2600; Pump(10);
             Shot(window, $"{key}-terrain-selected");
-            window.Height = 900; Pump(5);
+            window.Height = auditHeight; Pump(5);
             Dump(terrain.Content as Control);
             tabs.SelectedIndex = 0; Pump(5);
         });

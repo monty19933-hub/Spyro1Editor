@@ -17,7 +17,7 @@ public sealed partial class MainWindow
     {
         var targets = FindEditedLevelExportTargets();
         string existing = targets.Count == 0 ? "No saved changes to existing levels." :
-            "Saved changes: " + string.Join(", ", targets.Select(t => t.Level.DisplayName)) + ".";
+            (_releaseMode ? "Includes your saved changes to: " : "Saved changes: ") + string.Join(", ", targets.Select(t => t.Level.DisplayName)) + ".";
         var choices = new[] { (Id:10, Name:scenes.FirstOrDefault(s=>s.TargetBinding?.LevelId==10)?.Name??"Artisans") }
             .Concat(scenes.Where(s=>s.ResolveTarget(_retailCatalog).LevelId!=10).Select(s=>(Id:s.ResolveTarget(_retailCatalog).LevelId,Name:s.Name))).ToArray();
         var start = new ComboBox
@@ -29,18 +29,21 @@ public sealed partial class MainWindow
         var content = new StackPanel { Spacing = 12, Margin = new Thickness(22) };
         content.Children.Add(new TextBlock
         {
-            Text = "Create a playable copy", FontSize = 20, FontWeight = FontWeight.SemiBold
+            Text = _releaseMode ? "Create your game" : "Create a playable copy", FontSize = 20, FontWeight = FontWeight.SemiBold
         });
         content.Children.Add(new TextBlock
         {
             Name = "ExportIncludedLevels", TextWrapping = TextWrapping.Wrap,
-            Text = existing + "\nRebuilt levels: " + string.Join(", ",scenes.Select(s=>s.Name)) + "."
+            Text = existing + (_releaseMode ? "\nLevels you built: " : "\nRebuilt levels: ") + string.Join(", ",scenes.Select(s=>s.Name)) + "."
         });
         content.Children.Add(new TextBlock { Text = "New Game starts in" });
         content.Children.Add(start);
         content.Children.Add(new TextBlock
         {
-            Text = "Start a New Game to play the rebuilt layout from its safe player start. Loading an existing game keeps its previous collected state.",
+            Text = _releaseMode
+                ? "Choose New Game in the exported game to play from here. A saved game from before keeps what it had already collected.\n" +
+                  "The BIN and CUE are written to this project's output folder. Your original disc is not changed."
+                : "Start a New Game to play the rebuilt layout from its safe player start. Loading an existing game keeps its previous collected state.",
             TextWrapping = TextWrapping.Wrap
         });
         string research = PreservedResearchExportNote().Trim();

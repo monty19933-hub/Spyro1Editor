@@ -1,219 +1,202 @@
-# Spyro Editor 1.0.10
+# Spyro Editor 1.1
 
-**Several terrain tiles at once:** Cmd-click (Ctrl-click on Windows) tiles to add
-or drop them from the selection, or Cmd-drag across them. **Remove Terrain** then
-removes them all with one confirmation; **Undo Terrain** brings them back. A plain
-click selects a single tile again. With **Whole tiles** checked in the brush panel,
-Raise, Lower and Level move every tile the brush circle touches evenly. Brushes
-turn off when you leave the Terrain tab, so clicks elsewhere select objects.
+Spyro Editor changes the levels of the original PlayStation game *Spyro the Dragon*
+(USA) and builds a new, playable copy of the game from your changes. It never
+writes to your own disc image, and it does not include the game.
 
-In the game's inventory, dragonfly eggs have their own column under a spinning
-gold egg, with the same text size as treasure and dragons.
+## The short version
 
-The full **Add object…** catalog checks space in the background. You can keep
-searching, change source versions or close the window while it checks. Placement
-becomes available only when the selected object passes its fit check.
+1. Open **Spyro Editor.app** on an Apple Silicon Mac, or **Launch Spyro Editor.bat**
+   on Windows x64.
+2. Choose **Open Game…** and select your own unchanged USA *Spyro the Dragon* disc
+   image (a `.bin` or `.cue` file).
+3. Pick a level from the list at the top left.
+4. Change things in the four tabs on the right: **Objects**, **Terrain**,
+   **Game Settings** and **Environment**.
+5. Press **Save**, then **Create BIN**. Open the new `.cue` file in your emulator.
+   **Show Game File** in the bottom bar takes you to it.
 
-In **Inspect removal plan**, double-click a row or choose **Go to object** to
-move the camera to it. **Remove object** removes that selection using the normal
-editor behavior; **Recovery → Undo last removal** restores it. Reopen **Add object…**
-after removing objects to check the available space again.
+Projects and backups are stored outside the application folder (in
+`Documents/Spyro Editor`), so replacing the app with a newer one keeps your work.
 
-## Start editing
+## Save and Create BIN
 
-Open **Spyro Editor.app** on an Apple Silicon Mac, or **Launch Spyro Editor.bat**
-on Windows x64. The application is self-contained. Choose **Open Game…**, select
-your unchanged USA Spyro the Dragon disc, and pick a level. Projects and backups
-are stored outside the application folder.
+- **Save** (⌘S on Mac, Ctrl+S on Windows) keeps the open level's changes in your
+  project. It does not make a game.
+- **Create BIN** saves first, then builds a new BIN and CUE from everything saved
+  in the project. The files go in the project's `output` folder. Your original
+  disc is never changed.
+- If something cannot be put in the game, the editor says what and where, and
+  nothing half-built is written: the game you created last stays exactly as it
+  was. **More ▾ → Check for Export Issues…** runs the same check without building.
+- A terrain shape the game cannot stand on (for example a corner dragged so far
+  that the ground folds over itself) raises a red bar with **Show it** and
+  **Undo that change**.
 
-Select an object or terrain face in the viewport. Use the toolbar to move, copy,
-remove or edit it. **Undo** and **Redo** let you revise changes. **Save** (⌘S on Mac, Ctrl+S on Windows)
-stores the current level’s object and terrain edits; **Create BIN** combines the project's saved changes
-into a separate game image. Open that exported CUE in your emulator.
+## The view
 
-**Add object…** searches the whole game. **Objects in this level** finds things
-already placed. Use **Quick Add…** for standard gems and local copies, and
-**Position & snapping** for height controls. **Undo last removal** appears directly
-after deleting an object; **Recovery** holds level restoration options.
+**Edit Map** looks straight down at the whole level; **Game Camera** flies
+through it. **Fit All**, **Frame Selection** and **Return to Entry** bring the
+view back.
 
-File and More are command menus: arrow keys highlight an option, and Enter runs
-it. **More → Check for Export Issues…** opens the detailed export checks. The
-status bar keeps routine messages short; **Details** retains the full result,
-including file locations and exported treasure totals. Warnings stay visible.
+- Click selects. Drag moves what you selected. Double-click opens its settings.
+- Right-drag (or middle-drag) pans the map or looks around; the mouse wheel zooms
+  the map or moves the camera forward and back.
+- Game Camera keys, after clicking in the view: **W A S D** fly, **Q** and **E**
+  go up and down, the arrow keys turn.
 
-Existing levels and fresh levels share the terrain controls. In an existing
-level, select a face to move it, edit a point, copy it with **Add Terrain**, remove
-it, or paint it. The exporter updates the visible surface, distant geometry,
-visibility and collision together. A shared corner moves with every face that
-uses it. Save before creating the BIN/CUE.
+Shortcuts for the level only work after you click in the view. While you are
+typing in a box, keys only affect that box.
 
-The game has limits on coordinates, collision encoding and memory. If a shape
-cannot be represented safely, the editor explains why. Try a smaller change or
-a simpler face; an unsupported edit does not produce a partially patched game.
-Translucent source faces cannot currently be copied or removed by these tools.
+## Objects tab
 
-## Dragon statue colours
+**Add to this level**
 
-Double-click a dragon statue and use its colour picker to choose a colour.
-Save the level, then use **Create BIN** to include the change in the game.
+- **Add object…** searches every object from every level. Choose one, check its
+  preview, then place it. The window checks in the background whether the
+  object fits this level; you can keep searching while it checks. Esc cancels a
+  placement.
+- **Add dragonfly egg** and **Add sign** place the editor's own collectibles and
+  readable signs (see below).
+- **Add a gem or copy an object…** offers the standard gems and copies of what
+  is already in the level.
 
-## Teal and rainbow gems
+**Selected object**
 
-Choose **Objects → Add object… → Collectibles → Gems**, then **Teal gem (50)**
-or **Rainbow gem (100)**. Place, move, duplicate and remove them with the usual
-object tools. Both use the USA source disc. Save the level and use **Create BIN**
-to include them in the game. They add 50 or 100 to collected treasure, increase
-the level's available total and retain their collected state in ordinary saves.
-Both gems are twice the normal gem size, with bright colours and sparkles while
-waiting to be collected. Pickup uses the game's own rising value display.
+- **Edit…** changes the name, gem or reward value, position and facing.
+- **Replace…** swaps a chest or enemy for another kind known to work in this level.
+- **Copy** and **Paste** (⌘C / ⌘V, or Ctrl+C / Ctrl+V, in the view) duplicate the
+  selected object at the pointer.
+- **Remove** (or the Delete key in the view) takes the object out. **Undo last
+  removal** (⌘Z / Ctrl+Z in the view) brings it back.
+- **Undo** puts the selected object back the way it is in the original game.
+- **Height and ground** slides the object up or down, keeps it on the ground
+  while you drag it, or jumps it to the floor above or below.
 
-They can be placed in existing or fresh levels, subject to normal level capacity.
-If a full level needs room, use **Find space for this object…** and review the
-proposed removals. Their value is fixed; place the other gem to change its value.
-Existing saved games keep their collected identities, so use New Game when
-testing a newly rearranged collection layout.
+Dragons keep their pedestal and rescue scene with them when moved. The ENTRY
+marker is where Spyro lands when he flies into the level. Double-click a dragon
+statue to give it your own color.
 
-## Replace a Flight gate
+**Recovery** holds **Restore entire level** and **Restore Before Clear…**.
 
-Select an original Flight gate and choose **Replace Flight gate…**. Pick a
-replacement, review its time bonus and fit check, then choose **Replace gate**.
-Only compatible objective categories appear. Keep the rest of the course's
-objects unchanged for this operation. The replacement stays at the original
-gate position; **Undo Object** restores the original, including after reopening
-the project. Save and use **Create BIN** to export it.
+### Objects from other levels
 
-## Portal destinations and Return Home
+Different levels sometimes reuse an object number for a different look or
+behavior, so check the source name and the preview. Some objects need artwork,
+sounds or helper objects the destination level has no room for; the window
+explains those cases.
 
-Open **Game Settings → Portals & Return Home**. Choose a doorway, select its
-new destination by name and level ID, then **Apply portal destination**. Leave
-**Return Home comes back through this portal** checked to pair its destination
-with this doorway. Each level also has a separate **Return Home destination**
-choice. Changes save immediately; **Undo route change** restores the previous
-version, and **Create BIN** includes the saved routes.
+If an object does not fit, choose **Find space for this object…**. The editor
+names objects whose removal would make room and reports what would be left.
+Nothing is removed automatically: remove what you choose, then open
+**Add object…** again. **Only what fits here** lists only objects whose check
+has finished successfully.
 
-Use **Select Portal** to move the trigger, lettering and travel path together.
-Returning uses that doorway's current fly-out path. Move its stone arch with
-the terrain tools separately. If several doorways enter the same level, choose
-which one that level returns through. A saved fresh level appears as ID65.
-Deleted doorways cannot be used as return destinations; restore them or choose
-another doorway. Native memory limits can prevent a route from exporting.
+Removing one copy of an object frees its slot, but its model and textures may
+still be needed by other copies. That is why the number of removed objects alone
+cannot predict whether a new enemy will fit.
 
-Original terrain textures remain visible while editing. If texture files are
-missing or damaged, loading the level rebuilds them from the selected disc.
-Without the source disc, cached geometry can still open and the status explains
-why original materials are unavailable.
+### Dragonfly eggs and signs
 
-## Create a fresh level
+These come from the Japanese version of the game, so the editor asks for your
+own unchanged Japanese disc the first time.
 
-Choose **File → New Level**. Your level opens in the same viewport and inspector
-as the existing levels, with a starter floor and no inherited level objects.
-Use **Add Terrain**, **Remove Terrain**, **Move Face**, **Edit Point** and the
-brush tools to shape it. **Paint Face** opens a material chooser with previews.
-Use the object browser to place Mobys, and set the player spawn in the inspector.
-Save the level before exporting.
+- **Dragonfly eggs** come in seven colors. Select an egg and choose **Edit…** to
+  recolor it. The game's inventory shows eggs collected and available for the
+  whole game and per level, under a spinning gold egg. Collected eggs are saved
+  with the ordinary game save and count toward completion.
+- **Signs** show your message when Spyro stands next to them: up to three lines
+  of 24 characters, in the game's own letters (A–Z, 0–9, space and `! ? . ,`;
+  lowercase is shown in capitals). Select a sign and choose **Edit…** to type it.
+  When several signs are close together the game shows one message at a time.
 
-**Create BIN** includes the saved fresh level together with saved retail edits.
-The export dialog lets you choose whether **New Game** starts in Artisans or
-your authored level. Both current documents are included either way. Existing
-save games keep their saved level. One fresh level per project uses native slot
-65. Older experimental drafts stay separate and are preserved.
+Use a separate memory card for each edited game.
 
-## Clear the current level
+### Teal and rainbow gems
 
-Choose **File → Start Blank in Current Level…** and review the confirmation.
-The editor saves your current work and a checked recovery snapshot before
-replacing the level with an empty scene and a small starting floor. The level
-keeps its place in the level picker. Other levels remain in the project.
+**Add object… → Collectibles → Gems** has **Teal gem (50)** and
+**Rainbow gem (100)**: double-size, bright gems that add 50 or 100 to collected
+treasure and to the level's total. They use only your USA disc.
 
-Use the same terrain and object tools to build the replacement. You can remove
-both starter-floor faces, save an empty draft, and use **Add Terrain** to begin
-again. Before export, place the player above a solid floor. Rebuilt retail levels
-and fresh levels reached through a portal need a continuous landing area at
-least 384 units wide, centered on the start. The new removable starter floor
-provides this area. Existing saved terrain stays unchanged; enlarge it or move
-the start if export reports insufficient landing space.
+### Replace a Flight gate
 
-**Recovery → Restore Before Clear** restores the saved scene from before the
-clear and preserves your replacement scene in the recovery folder. Recovery
-also works after reopening the project. If a recovery file was changed outside
-the editor, restore stops instead of overwriting it.
+In a flight level, select an original gate and choose **Replace Flight gate…**.
+Pick a replacement, review its time bonus and fit check, then choose
+**Replace gate**. **Undo** restores the original.
 
-**Create BIN** rebuilds the cleared level's terrain, collision, object storage
-and asset tables. Removed content frees actual game memory; player and engine
-resources remain. All saved replacements, ordinary level edits and the fresh
-level are included. Choose the New Game starting level in the export dialog.
-Use New Game for the first test; existing saves retain their collected states.
+## Terrain tab
+
+- **Tiles**: click a tile to select it; ⌘-click (Ctrl-click on Windows) selects
+  several; drag to move; Shift-drag to change height. **Move Tile…** and
+  **Edit Corner…** take exact amounts. **Raise**, **Lower** and **Reset Height**
+  work on the selected tile.
+- **Add Terrain** copies the selected tile so you can move the copy into place.
+  **Remove Terrain** (or Delete in the view) takes the selected tiles out.
+  **Undo Terrain** puts the selected tile back the way it was, or brings removed
+  tiles back.
+- **Brush**: Raise, Lower, Smooth, Level or Restore the ground under the circle.
+  Keys 1 to 5 choose a brush; 0 or Esc switches it off. **Undo Stroke** is
+  ⌘Z / Ctrl+Z in the view; **Redo Stroke** is ⇧⌘Z / Ctrl+Y. With **Whole tiles**
+  ticked the brush moves every tile it touches evenly. Brushes switch off when
+  you leave the Terrain tab.
+- **Textures**: **Choose Texture…**, then click tiles to paint them. Esc stops.
+- **Corner by corner** moves one corner at a time.
+- **Restore Original Terrain…** undoes every terrain change in the level, after
+  asking.
+
+The exporter updates what you see, the distant version of the level, visibility
+and collision together. A corner shared by several tiles moves with all of them.
+The game has limits on coordinates, collision and memory; if a shape cannot be
+represented safely the editor explains why and nothing half-patched is produced.
+Translucent original tiles cannot currently be copied or removed.
+
+## Game Settings tab
+
+- **Level name** changes the name on portals, loading screens and in the
+  guidebook (capital letters, spaces and apostrophes).
+- **Music** picks the level's track.
+- **Fly Anywhere (whole game)**: tick **Let Spyro fly in every level** and the
+  game you export lets Spyro fly in every normal level the way he does in
+  Gnasty's Loot: jump, then press ✕ again in the air. Steer with the direction
+  buttons; land by flying down to the ground. It is off unless you turn it on,
+  it is saved with the project, and unticking it gives back the game's normal
+  gliding in the next Create BIN. The five flight levels keep their own rules.
+  This is separate from the editor's **Game Camera**, which always flies.
+- **Portals & Return Home**: choose where each portal leads and where Return
+  Home goes. **Select Portal** moves the trigger, lettering and travel path
+  together; move the stone arch with the terrain tools.
+
+## Environment tab
+
+Recolor the level's sky, borrow another level's sky, or use a ready-made one.
+
+## Levels of your own
+
+- **File ▾ → New Level…** starts a level of your own that opens when you choose
+  New Game. It uses the same Objects and Terrain tools. A project holds one such
+  level: if you already have one, the editor asks before replacing it and keeps
+  a copy in the project's `backups` folder.
+- **File ▾ → Open Created Level…** reopens the level you made.
+- **File ▾ → Start Blank in Current Level…** empties the open level down to a
+  small floor so you can rebuild it. A recovery copy is saved first;
+  **Restore Before Clear…** brings the previous version back, also after
+  reopening the project.
+
+When a project has a level of your own or a blank level, **Create BIN** asks
+which level **New Game** starts in. Use New Game for the first test; a saved game
+from before keeps what it had already collected.
+
+Before exporting a rebuilt level, place the player above a solid floor. Levels
+reached through a portal need a continuous landing area at least 384 units wide
+centered on the start; the starting floor provides it.
 
 Start Blank currently supports Artisans, Stone Hill, Town Square, Peace Keepers,
 Dry Canyon, Cliff Town, Magic Crafters, Beast Makers, Dream Weavers and Gnasty's
-World, plus the fresh authored level. Other level slots are not yet supported.
-Clearing does not recycle old collectible identities or create a portal network.
-A cleared Town Square and the separate fresh level cannot currently be exported
-together; restore Town Square before combining it with the fresh level.
+World, plus the level of your own. A cleared Town Square and a level of your own
+cannot currently be exported together. Untextured terrain is split into smaller
+triangles automatically and must fit the game's 255-triangle limit.
 
-Untextured terrain is split internally into smaller triangles for reliable
-visibility near Spyro. Your editable faces stay intact. The combined generated
-terrain must fit the game's 255-triangle limit. If an exact split is impossible,
-export explains which geometry needs simplifying.
+## What this package does not contain
 
-## Add or remove Mobys
-
-Choose **Objects → Add object…** and search across the game. Select a source
-variant and inspect its model preview and compatibility result before placement.
-Different source levels may reuse an object number for different appearances or
-behaviors. Check the selected source name and preview; a source variant is not
-a promise of an identical enemy. Some objects require dependencies or resources that a destination cannot provide;
-the exporter explains these cases. A visible catalog entry is not a guarantee
-that every enemy behavior works in every level.
-
-If an object does not fit, choose **Find space for this object…**. The editor
-compares source versions and checks proposed removals against your current
-objects and terrain textures. A successful plan names the objects to inspect,
-explains the effect of removing them, and reports the remaining capacity.
-Nothing is removed automatically. Use the normal Remove button for the objects
-you choose, then reopen the browser to check the resulting scene.
-
-**Only what fits here** includes only objects with a completed successful
-compatibility check. Imported enemies can need additional player reaction
-animations; these count toward the displayed memory use and removal plan.
-
-Removing one copy frees an object slot. Its model and textures may still be
-needed by other copies or linked objects. For example, removing one Gnorc while
-others of that type remain may free a slot without freeing its artwork. This is
-why the number of removed objects alone cannot predict whether a foreign enemy
-will fit. Choosing another source version can also reduce what must be imported.
-
-**Remove Object** marks an object for removal from the exported level. Export
-reuses removed native object slots for new placements and omits removed imports;
-unused trailing slots are trimmed. Resources owned only by removed classes are
-reclaimed when the exporter can prove they are no longer used. Save identities
-remain separate from physical slots, so a replacement does not inherit another
-object's collected state. The game's finite memory and save-identity limits still
-apply. Undo or restore before export if you want the object back.
-
-## Dragonfly eggs and signs
-
-Choose **Add dragonfly egg** or **Add sign**, and select your unchanged Japanese
-disc when prompted. Eggs have named color swatches. Select an egg and choose
-**Edit** to recolor it; select a sign to edit its three lines of text. The preview
-shows supported characters and length limits.
-
-Dragonfly eggs have no added eyes in the game or inventory. The native inventory
-shows collected/available counts globally and per level. Collected eggs use the
-ordinary game save; copies receive new identities while recoloring preserves
-them. Required dragonfly eggs contribute to completion and bonus admission.
-Use a separate copied memory card for each edited game.
-
-## Check and export
-
-Choose **Build Safety** and resolve any reported issue, then **Create BIN**.
-The exporter checks the finished image before publishing the BIN/CUE pair. It
-leaves your source disc untouched. **Details** beside the status message opens
-the complete message when it is too long for the footer. Test the exported game, including the areas
-and object behaviors you changed.
-
-Fly Anywhere is deferred from this release. Earlier research preferences are
-preserved but do not enable flight in normal release exports.
-
-This package contains no game image, BIOS, emulator, memory card or extracted
-game assets. See `public-known-limitations.md` for supported scope and verification.
+No game image, BIOS, emulator, memory card or extracted game assets. See
+`public-known-limitations.md` for the supported scope and what has been verified.
