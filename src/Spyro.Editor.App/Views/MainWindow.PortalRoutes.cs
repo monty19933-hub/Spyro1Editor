@@ -74,7 +74,12 @@ public sealed partial class MainWindow
                 var level = scene.ResolveTarget(_retailCatalog);
                 levels.RemoveAll(l => l.LevelId == level.LevelId); levels.Add(level);
             }
-            var choices = levels.OrderBy(l => l.LevelId).Select(l => new PortalLevelChoice(l.LevelId, $"{l.DisplayName} (ID {l.LevelId})")).ToArray();
+            // Shipping builds list levels by name; the number is added only when two entries share a name
+            // (for example a new level that was given an existing level's name).
+            var repeatedNames = levels.GroupBy(l => l.DisplayName, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1)
+                .Select(g => g.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var choices = levels.OrderBy(l => l.LevelId).Select(l => new PortalLevelChoice(l.LevelId,
+                _releaseMode && !repeatedNames.Contains(l.DisplayName) ? l.DisplayName : $"{l.DisplayName} (ID {l.LevelId})")).ToArray();
             _portalDestinationBox.ItemsSource = choices;
             var endpoint = SelectedPortalEndpoint();
             _portalDestinationBox.SelectedItem = endpoint == null ? null : choices.FirstOrDefault(c => c.LevelId == snapshot.Document.DestinationFor(endpoint));

@@ -141,8 +141,10 @@ public sealed partial class MainWindow
         content.Children.Add(shape);
 
         Grid height = TwoColumnGrid(1);
+        height.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1.35, GridUnitType.Star)));
         Place(height, _releaseTerrainRaiseFaceButton, 0, 0, "Raise", "Lift the selected tile a little, keeping its shape.");
         Place(height, _releaseTerrainLowerFaceButton, 1, 0, "Lower", "Drop the selected tile a little, keeping its shape.");
+        Place(height, _releaseTerrainUndoHeightButton, 2, 0, "Reset Height", "Put the selected tile back at its original height. Its texture and other changes are kept.");
         _terrainPanelHeightRow = height;
         content.Children.Add(height);
 

@@ -95,10 +95,10 @@ public sealed partial class MainWindow : Window
     ];
     private static readonly SkyboxEditModeOption[] SkyboxEditModeOptions =
     [
-        new(NativeSkyEditPlan.PaletteMode, "Recolor"),
-        new(NativeSkyEditPlan.SwapMode, "Swap From Level"),
-        new(NativeSkyEditPlan.OriginalPresetMode, "Original Sky Preset"),
-        new(NativeSkyEditPlan.ImportMode, "Import Native .sky")
+        new(NativeSkyEditPlan.PaletteMode, "Recolour this sky"),
+        new(NativeSkyEditPlan.SwapMode, "Use another level's sky"),
+        new(NativeSkyEditPlan.OriginalPresetMode, "Use a ready-made sky"),
+        new(NativeSkyEditPlan.ImportMode, "Import a .sky file")
     ];
 
     private EditorWorkspace _workspace;
@@ -1588,17 +1588,17 @@ public sealed partial class MainWindow : Window
         _skyboxImportPanel.Children.Add(_skyboxCustomImportButton);
 
         WrapPanel buttons = new() { Orientation = Orientation.Horizontal };
-        _skyboxSaveButton = NewAsyncButton(_releaseMode ? "Save Changes" : "Save Skybox", async () => { await SaveSkyboxPlanAsync(); });
+        _skyboxSaveButton = NewAsyncButton(_releaseMode ? "Apply Sky" : "Save Skybox", async () => { await SaveSkyboxPlanAsync(); });
         buttons.Children.Add(_skyboxSaveButton);
         if (!_releaseMode)
         {
             _skyboxCreateTestButton = NewAsyncButton("Create Sky Test", async () => await CreateSkyboxCueAsync());
             buttons.Children.Add(_skyboxCreateTestButton);
         }
-        _skyboxResetButton = NewButton("Reset to Normal Level Palette and Skybox", ResetSkyboxPlan);
-        _skyboxResetButton.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _skyboxResetButton = NewButton(_releaseMode ? "Restore Original Sky" : "Reset to Normal Level Palette and Skybox", ResetSkyboxPlan);
+        _skyboxResetButton.HorizontalAlignment = _releaseMode ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
         _skyboxResetButton.HorizontalContentAlignment = HorizontalAlignment.Center;
-        _skyboxResetButton.MinHeight = 40;
+        _skyboxResetButton.MinHeight = _releaseMode ? 32 : 40;
         _skyboxResetButton.FontSize = 12;
 
         panel.Children.Add(_skyboxDetails);
@@ -1780,7 +1780,7 @@ public sealed partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 6
         };
-        _levelTextSaveButton = NewAsyncButton("Save Name", async () => await SaveLevelTextPlanAsync());
+        _levelTextSaveButton = NewAsyncButton(_releaseMode ? "Apply Name" : "Save Name", async () => await SaveLevelTextPlanAsync());
         _levelTextResetButton = NewButton("Reset", ResetLevelTextPlan);
         buttons.Children.Add(_levelTextSaveButton);
         buttons.Children.Add(_levelTextResetButton);
@@ -1809,7 +1809,7 @@ public sealed partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 6
         };
-        _levelMusicSaveButton = NewAsyncButton("Save Music", async () => await SaveLevelMusicPlanAsync());
+        _levelMusicSaveButton = NewAsyncButton(_releaseMode ? "Apply Music" : "Save Music", async () => await SaveLevelMusicPlanAsync());
         _levelMusicSaveButton.Name = "LevelMusicSaveButton";
         _levelMusicResetButton = NewButton("Reset", ResetLevelMusicPlan);
         _levelMusicResetButton.Name = "LevelMusicResetButton";
@@ -1834,7 +1834,7 @@ public sealed partial class MainWindow : Window
 
         WrapPanel buttons = new() { Orientation = Orientation.Horizontal };
         Button selectEntry = NewButton("Select Portal");
-        Button frameSet = NewButton("Frame Set");
+        Button frameSet = NewButton(_releaseMode ? "Show in View" : "Frame Set");
         selectEntry.Click += (_, _) => SelectPortalControlSet();
         frameSet.Click += (_, _) => FrameSelectedPortalControlSet();
         buttons.Children.Add(selectEntry);
@@ -3243,7 +3243,9 @@ public sealed partial class MainWindow : Window
         RefreshCurrentLevelDetails();
         RefreshTerrainProofQueueHint();
         UpdateLevelToolPanels(level);
-        _statusText.Text = $"{level.DisplayName}: {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces, {_viewport.Mobys.Count} objects";
+        _statusText.Text = _releaseMode
+            ? $"{level.DisplayName} loaded: {_viewport.Geometry?.Polygons.Count ?? 0:N0} terrain tiles, {_viewport.Mobys.Count(moby => !moby.IsEditorControl):N0} objects."
+            : $"{level.DisplayName}: {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces, {_viewport.Mobys.Count} objects";
         RefreshDiagnosticContext();
         EditorDiagnostics.RecordAction("Level loaded", $"{level.DisplayName} ({level.Key}); {_viewport.Mobys.Count} mobys; {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces");
         if (_currentGeometry != null || _currentMobys.Count > 0)
@@ -4194,7 +4196,9 @@ public sealed partial class MainWindow : Window
             string nativeMovement = nativePathCount + dragonRunToCount > 0
                 ? $"; native movement {nativePathCount + dragonRunToCount}"
                 : "";
-            _statusText.Text = $"Saved {mobyCount} object edit(s){nativeMovement}. Terrain: {BuildTerrainEditSummary()}{customArt}{nativeTextureSwaps}.";
+            _statusText.Text = _releaseMode
+                ? $"Saved {operation.Level.DisplayName}."
+                : $"Saved {mobyCount} object edit(s){nativeMovement}. Terrain: {BuildTerrainEditSummary()}{customArt}{nativeTextureSwaps}.";
             RefreshDiagnosticContext(includeSavedEdits: true);
             EditorDiagnostics.RecordAction("Saved level edits", $"{operation.Level.DisplayName}: {mobyCount} object edit(s){nativeMovement}; {BuildTerrainEditSummary()}{customArt}{nativeTextureSwaps}");
             // Find terrain the game can't hold right after the save that introduced it, not at export time.
@@ -10544,15 +10548,11 @@ public sealed partial class MainWindow : Window
                 ? hasUnsavedTerrainEdits ? "Save Terrain Changes *" : "Save Terrain Changes"
                 : hasUnsavedTerrainEdits ? "Save Terrain *" : "Save Terrain";
         }
-        _gemCounterText.Text = BuildLevelGemCounter();
+        _gemCounterText.Text = _releaseMode ? BuildPlainTreasureLine() : BuildLevelGemCounter();
         int visibleObjects = _currentMobys.Count(moby => !moby.IsRemoved && !moby.IsEditorControl);
         int visibleEntryControls = _currentMobys.Count(moby => !moby.IsRemoved && moby.IsFlyInLandingControl);
         _levelDetails.Text = _releaseMode
-            ? $"Terrain faces: {_currentGeometry?.Polygons.Count ?? 0}\n" +
-              $"Objects: {visibleObjects}\n" +
-              (visibleEntryControls > 0 ? $"Level entry markers: {visibleEntryControls}\n" : "") +
-              $"Object edits: {BuildMobyEditSummary()}\n" +
-              $"Terrain edits: {BuildTerrainEditSummary()}"
+            ? BuildPlainLevelDetails(visibleObjects, visibleEntryControls)
             : $"Terrain faces: {_currentGeometry?.Polygons.Count ?? 0}\n" +
               $"Objects: {visibleObjects}\n" +
               (visibleEntryControls > 0 ? $"Level entry markers: {visibleEntryControls}\n" : "") +
@@ -17751,7 +17751,7 @@ public sealed partial class MainWindow : Window
             RefreshActionAvailability();
             RefreshContextualViewportAction();
             _statusText.Text = activeProofTarget == null
-                ? $"Selected terrain face {selection.TerrainIndex}."
+                ? _releaseMode ? "Tile selected." : $"Selected terrain face {selection.TerrainIndex}."
                 : $"Selected terrain face {selection.TerrainIndex} for {activeProofTarget.Target.CaptureKind} {SelectedProofTargetRole(activeProofTarget)} capture.";
             RefreshDiagnosticContext();
             return;
@@ -20903,7 +20903,7 @@ public sealed partial class MainWindow : Window
     {
         if (_selectedTerrain == null || _currentLevel == null || _currentGeometry == null)
         {
-            _statusText.Text = "Select an existing HP terrain face before undoing its height.";
+            _statusText.Text = _releaseMode ? "Select a tile first." : "Select an existing HP terrain face before undoing its height.";
             return;
         }
 
@@ -20912,7 +20912,7 @@ public sealed partial class MainWindow : Window
 
         if (!_selectedTerrain.HasHeightEdit)
         {
-            _statusText.Text = "The selected terrain face has no height edit to undo.";
+            _statusText.Text = _releaseMode ? "This tile is already at its original height." : "The selected terrain face has no height edit to undo.";
             return;
         }
 
@@ -20956,9 +20956,10 @@ public sealed partial class MainWindow : Window
         RefreshTerrainReadinessHint();
         RefreshTerrainPointControls();
         RefreshId65BlankLabUi();
-        _statusText.Text =
-            $"Undid only the height edit on terrain face {_selectedTerrainIndex} and saved it. " +
-            $"Texture, surface, position, and structural edits were preserved ({savedEdits} terrain edit(s) remain).";
+        _statusText.Text = _releaseMode
+            ? "Tile height reset and saved. Its texture and other changes were kept."
+            : $"Undid only the height edit on terrain face {_selectedTerrainIndex} and saved it. " +
+              $"Texture, surface, position, and structural edits were preserved ({savedEdits} terrain edit(s) remain).";
     }
 
     private void NudgeSelectedTerrainPosition(float dx, float dy)
@@ -25339,8 +25340,8 @@ public sealed partial class MainWindow : Window
                 return template.TemplateNote;
 
             return template.FromLevelTemplate
-                ? "Uses a matching object already present in this level. Create BIN reuses a compatible source slot when one is available."
-                : "Ready for normal Create BIN.";
+                ? "A copy of something already in this level."
+                : "A standard pickup that works in every level.";
         }
 
         List<string> lines =
@@ -30947,7 +30948,8 @@ public sealed partial class MainWindow : Window
             : $"{visible.Count} of {all.Count} shown for {category.ToLowerInvariant()}";
 
         if (_releaseMode)
-            return $"{scope}. Editor treasure {treasure}; edited {edited}.";
+            return BuildPlainObjectListLine(nativeObjects, visible.Count, all.Count, edited,
+                !(string.IsNullOrWhiteSpace(filter) && categoryIndex <= 0));
 
         string priorityHint = "";
         if (IsNeedsIdCategory(categoryIndex) && visible.Count > 0)

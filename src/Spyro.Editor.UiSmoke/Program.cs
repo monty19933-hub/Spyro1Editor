@@ -786,15 +786,15 @@ void RunWorkspaceShellOnly()
         Button raiseTerrain = FindNamedUnique<Button>(window, "ReleaseTerrainRaiseSelectedFaceButton");
         Button lowerTerrain = FindNamedUnique<Button>(window, "ReleaseTerrainLowerSelectedFaceButton");
         Button undoHeight = FindNamedUnique<Button>(window, "ReleaseTerrainUndoHeightButton");
-        Button saveTerrain = FindNamedUnique<Button>(window, "ReleaseTerrainSaveButton");
+        Button saveTerrain = FindNamedUnique<Button>(window, "SaveLevelButton");
         TextBlock statusText = (TextBlock)(typeof(MainWindow).GetField(
                 "_statusText",
                 BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(window)
             ?? throw new InvalidOperationException("The workspace shell smoke could not inspect the status line."));
-        TextBlock heightHint = FindNamedUnique<TextBlock>(window, "ReleaseTerrainHeightHint");
+        TextBlock heightHint = FindNamedUnique<TextBlock>(window, "TerrainPanelSelection");
         if (raiseTerrain.IsEnabled || lowerTerrain.IsEnabled || undoHeight.IsEnabled)
             throw new InvalidOperationException("Release terrain-height controls enabled without an HP terrain selection.");
-        if (!(heightHint.Text ?? string.Empty).Contains("Select an existing HP terrain face", StringComparison.Ordinal))
+        if (!(heightHint.Text ?? string.Empty).Contains("Click a tile in the view to select it", StringComparison.Ordinal))
             throw new InvalidOperationException("Release terrain-height controls did not explain their disabled no-selection state.");
         GeometryCandidate buildingGeometry = building.CurrentGeometry
             ?? throw new InvalidOperationException("The release terrain-height fixture lost its loaded geometry.");
@@ -893,10 +893,10 @@ void RunWorkspaceShellOnly()
                 return File.Exists(terrainEditsPath) &&
                     !terrain.HasHeightEdit &&
                     !undoHeight.IsEnabled &&
-                    (statusText.Text ?? string.Empty).Contains("Undid only the height edit", StringComparison.Ordinal);
+                    (statusText.Text ?? string.Empty).Contains("Tile height reset and saved", StringComparison.Ordinal);
             },
             TimeSpan.FromSeconds(10),
-            () => "clicking Undo Height Only and refreshing its final disabled state");
+            () => "clicking Reset Height and refreshing its final disabled state");
         if (terrain.HasHeightEdit || terrain.SurfaceBehaviorEdit != retainedSurface)
             throw new InvalidOperationException("Undo Height Only changed a non-height terrain edit or failed to clear Z.");
 
@@ -926,11 +926,11 @@ void RunWorkspaceShellOnly()
             () =>
             {
                 return File.Exists(terrainEditsPath) &&
-                    !saveTerrain.IsEnabled &&
-                    (statusText.Text ?? string.Empty).Contains("Saved terrain edits", StringComparison.Ordinal);
+                    !window.CaptureEditorShellSessionSnapshotForTesting().HasUnsavedTerrainEdits &&
+                    (statusText.Text ?? string.Empty).StartsWith("Saved ", StringComparison.Ordinal);
             },
             TimeSpan.FromSeconds(10),
-            () => "clicking the shared Save Terrain Changes button and refreshing its final disabled state");
+            () => "clicking the toolbar Save button and clearing the unsaved terrain state");
         using (JsonDocument saveDocument = JsonDocument.Parse(File.ReadAllText(terrainEditsPath)))
         {
             JsonElement saved = saveDocument.RootElement.GetProperty("edits")
@@ -1240,10 +1240,14 @@ void RunDeferredReleaseUiPolicy()
             window.GetLogicalDescendants().OfType<CheckBox>().Any(c => c.Content?.ToString()?.Contains("Fly Anywhere", StringComparison.OrdinalIgnoreCase) == true))
             throw new InvalidOperationException("Deferred research controls leaked into the normal release editor.");
         var before = window.CaptureEditorShellSessionSnapshotForTesting();
-        ComboBox file = window.GetLogicalDescendants().OfType<ComboBox>().Single(c =>
-            c.ItemsSource?.Cast<object>().Any(i => i.ToString() == "New Level") == true);
-        // Exercise the toolbar SelectionChanged callback, rather than invoke the private command.
-        file.SelectedItem = file.ItemsSource!.Cast<object>().Single(i => i.ToString() == "New Level");
+        Button file = FindNamedUnique<Button>(window, "EditorFileMenu");
+        // Exercise the File menu item's own Click handler, rather than invoke the private command.
+        MenuItem newLevel = ((MenuFlyout)file.Flyout!).Items.OfType<MenuItem>().Single(i => i.Header?.ToString() == "New Level…");
+        newLevel.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, newLevel));
+        WaitForCondition(
+            () => window.CaptureEditorShellSessionSnapshotForTesting().CurrentLevel?.Key == "authored65",
+            TimeSpan.FromSeconds(20),
+            () => "File > New Level… entering the new level");
         FlushUi();
         var authored = window.CaptureEditorShellSessionSnapshotForTesting();
         if (!ReferenceEquals(before.Viewport, authored.Viewport) || authored.CurrentLevel?.Key != "authored65" ||

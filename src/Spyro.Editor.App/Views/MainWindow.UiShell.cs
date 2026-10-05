@@ -737,8 +737,79 @@ public sealed partial class MainWindow
         };
     }
 
+    private Control? _objectUniversalAddPanel;
+    private Grid? _objectPrimaryGrid;
+    private Grid? _objectSecondaryGrid;
+    private Control? _objectPositionDisclosure;
+    private Control? _objectReplaceFlightGateButton;
+    private Expander? _objectRecoveryExpander;
+    private Border? _objectActionHintBorder;
+
+    /// <summary>
+    /// Shipping Objects tab: an "Add" card, a "Selected object" card with everything that acts on the
+    /// selection, then the list of what is in the level. Same controls as the development layout.
+    /// </summary>
+    private Control BuildReleaseObjectWorkspace()
+    {
+        Control selection = BuildModernSelectionSummary();
+        _ = BuildModernPrimaryObjectControls();
+        StackPanel root = new() { Name = "ObjectsPanel", Spacing = 12, Margin = new Thickness(0, 10, 0, 0) };
+
+        StackPanel add = new();
+        if (_objectUniversalAddPanel != null) add.Children.Add(Detach(_objectUniversalAddPanel));
+        if (_objectAddButton != null)
+        {
+            Detach(_objectAddButton);
+            _objectAddButton.Content = "Add a gem or copy an object…";
+            _objectAddButton.HorizontalAlignment = HorizontalAlignment.Stretch;
+            ToolTip.SetTip(_objectAddButton, "Quickly add a gem of any value, or another copy of something already in this level.");
+            add.Children.Add(_objectAddButton);
+        }
+        root.Children.Add(TerrainCard("Add to this level", add));
+
+        StackPanel selected = new();
+        if (selection is StackPanel summary && summary.Children.Count > 0)
+            summary.Children.RemoveAt(0); // its own "Selection" heading; the card has one
+        selected.Children.Add(selection);
+        if (_objectPrimaryGrid != null && _objectEditButton != null && _objectSwapCatalogButton != null)
+        {
+            Grid actions = TwoColumnGrid(1);
+            Place(actions, _objectEditButton, 0, 0, "Edit…", "Change this object's name, value, position and facing. Double-clicking it does the same.");
+            Place(actions, _objectSwapCatalogButton, 1, 0, "Replace…");
+            selected.Children.Add(actions);
+        }
+        if (_objectReplaceFlightGateButton != null) selected.Children.Add(Detach(_objectReplaceFlightGateButton));
+        if (_objectSecondaryGrid != null) selected.Children.Add(Detach(_objectSecondaryGrid));
+        if (_objectUndoRemoveButton != null) selected.Children.Add(Detach(_objectUndoRemoveButton));
+        if (_objectPositionDisclosure != null) selected.Children.Add(Detach(_objectPositionDisclosure));
+        if (_objectActionHintBorder != null) selected.Children.Add(Detach(_objectActionHintBorder));
+        root.Children.Add(TerrainCard("Selected object", selected));
+
+        root.Children.Add(BuildModernMobyBrowser());
+        if (_objectRecoveryExpander != null) root.Children.Add(Detach(_objectRecoveryExpander));
+
+        var checks = (Expander)BuildModernDisclosure("Export checks", BuildModernBuildSafetyPanel(), false);
+        var checkSummary = new TextBlock { Name = "ExportCheckSummary", TextWrapping = TextWrapping.Wrap, FontSize = 12 };
+        void RefreshCheckSummary()
+        {
+            checkSummary.Text = "Export checks · " + _buildSafetySummaryText.Text;
+            checkSummary.Foreground = _buildSafetySummaryText.Foreground;
+        }
+        _buildSafetySummaryText.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == TextBlock.TextProperty || e.Property == TextBlock.ForegroundProperty)
+                RefreshCheckSummary();
+        };
+        RefreshCheckSummary(); checks.Header = checkSummary;
+        root.Children.Add(checks);
+        ShowSelection(ViewportSelectionChangedEventArgs.None);
+        return root;
+    }
+
     private Control BuildModernObjectWorkspace()
     {
+        if (_releaseMode)
+            return BuildReleaseObjectWorkspace();
         StackPanel panel = new() { Spacing = 10 };
         panel.Children.Add(BuildModernSelectionSummary());
         panel.Children.Add(ModernDivider());
@@ -812,14 +883,17 @@ public sealed partial class MainWindow
         StyleModernPrimaryButton(_objectEditButton, ModernBlue);
         StyleModernPrimaryButton(_objectSwapCatalogButton, ModernTeal);
 
-        panel.Children.Add(BuildUniversalAddButtons());
+        _objectUniversalAddPanel = BuildUniversalAddButtons();
+        panel.Children.Add(_objectUniversalAddPanel);
         Grid primary = NewEqualButtonGrid(3);
         AddModernGridButton(primary, _objectEditButton, 0);
         AddModernGridButton(primary, _objectSwapCatalogButton, 1);
         AddModernGridButton(primary, _objectAddButton, 2);
+        _objectPrimaryGrid = primary;
         panel.Children.Add(primary);
         var replaceFlightGate = BuildReplaceFlightGateButton();
         StyleModernPrimaryButton(replaceFlightGate, ModernTeal);
+        _objectReplaceFlightGateButton = replaceFlightGate;
         panel.Children.Add(replaceFlightGate);
 
         _objectNativeMovementButton = NewAsyncButton("Edit Native Movement", EditSelectedNativeMovementAsync);
@@ -846,6 +920,7 @@ public sealed partial class MainWindow
         AddModernGridButton(secondary, _objectPasteButton, 1);
         AddModernGridButton(secondary, _objectUndoButton, 2);
         AddModernGridButton(secondary, _objectRemoveButton, 3);
+        _objectSecondaryGrid = secondary;
         panel.Children.Add(secondary);
 
         var positionTools = new StackPanel { Spacing = 8 };
@@ -879,7 +954,8 @@ public sealed partial class MainWindow
         AddModernGridButton(layerRow, _objectLayerDownButton, 1);
         AddModernGridButton(layerRow, _objectLayerUpButton, 2);
         positionTools.Children.Add(layerRow);
-        panel.Children.Add(BuildModernDisclosure("Position & snapping", positionTools, false));
+        _objectPositionDisclosure = BuildModernDisclosure("Position & snapping", positionTools, false);
+        panel.Children.Add(_objectPositionDisclosure);
 
         _objectSwapTestButton = NewAsyncButton("Create Swap Test", CreateObjectCandidateBinAsync);
         StyleModernPrimaryButton(_objectSwapTestButton, Color.FromRgb(176, 103, 20));
@@ -899,18 +975,21 @@ public sealed partial class MainWindow
         recovery.Children.Add(_objectRestoreLevelButton);
         var beforeClear=NewAsyncButton("Restore Before Clear…",RestoreBeforeClearAsync);beforeClear.Name="RestoreBeforeClear";
         StyleModernSecondaryButton(beforeClear);recovery.Children.Add(beforeClear);
-        panel.Children.Add(new Expander
+        _objectRecoveryExpander = new Expander
         {
             Header = "Recovery",
             IsExpanded = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Content = recovery
-        });
+        };
+        panel.Children.Add(_objectRecoveryExpander);
 
         _objectActionHint.TextWrapping = TextWrapping.Wrap;
         _objectActionHint.Foreground = new SolidColorBrush(Color.FromRgb(63, 75, 86));
         _objectActionHint.FontSize = 12;
         _objectActionHint.LineHeight = 17;
-        panel.Children.Add(new Border
+        _objectActionHintBorder = new Border
         {
             Background = new SolidColorBrush(Color.FromRgb(237, 244, 249)),
             BorderBrush = new SolidColorBrush(Color.FromRgb(195, 212, 224)),
@@ -918,7 +997,8 @@ public sealed partial class MainWindow
             CornerRadius = new CornerRadius(5),
             Padding = new Thickness(9, 7),
             Child = _objectActionHint
-        });
+        };
+        panel.Children.Add(_objectActionHintBorder);
 
         RefreshActionAvailability();
         return panel;
@@ -960,8 +1040,8 @@ public sealed partial class MainWindow
         _mobyListHint.FontSize = 11;
         panel.Children.Add(_mobyListHint);
 
-        _mobyList.MinHeight = 240;
-        _mobyList.MaxHeight = 420;
+        _mobyList.MinHeight = _releaseMode ? 320 : 240;
+        _mobyList.MaxHeight = _releaseMode ? 520 : 420;
         _mobyList.Background = Brushes.White;
         _mobyList.BorderThickness = new Thickness(0);
         _mobyList.ItemTemplate = new FuncDataTemplate<Moby>((moby, _) => BuildMobyListItemControl(moby));
@@ -991,6 +1071,14 @@ public sealed partial class MainWindow
     {
         StackPanel panel = new() { Spacing = 8 };
         panel.Children.Add(ModernSectionHeading("Level settings"));
+        if (_releaseMode)
+            panel.Children.Add(new TextBlock
+            {
+                Text = "Names, music and portal routes are kept in your project as soon as you apply them. Create BIN puts them in the game.",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                Foreground = new SolidColorBrush(ModernMutedInk)
+            });
         panel.Children.Add(BuildFreshDocumentSettings());
         _retailNameDisclosure=BuildModernDisclosure("Level name", BuildLevelTextPanel(), true);
         _retailMusicDisclosure=BuildModernDisclosure("Music", BuildLevelMusicPanel(), false);
@@ -1055,6 +1143,9 @@ public sealed partial class MainWindow
                 Foreground = new SolidColorBrush(ModernInk)
             },
             IsExpanded = expanded,
+            // Every section spans the panel, so a column of them lines up instead of following its contents.
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Content = new Border
             {
                 Padding = new Thickness(0, 8, 0, 4),
@@ -1332,7 +1423,9 @@ public sealed partial class MainWindow
             Spacing = 14,
             Margin = new Thickness(20, 18, 20, 16)
         };
-        body.Children.Add(BuildModernDialogHeader("Add object", "Create a new level object."));
+        body.Children.Add(_releaseMode
+            ? BuildModernDialogHeader("Add a gem or copy an object", "Pick what to add, then click in the view where it should go.")
+            : BuildModernDialogHeader("Add object", "Create a new level object."));
         Button chooseObjectButton = NewButton("");
         chooseObjectButton.Name = "ObjectGalleryButton";
         chooseObjectButton.HorizontalContentAlignment = HorizontalAlignment.Left;
@@ -1368,6 +1461,8 @@ public sealed partial class MainWindow
             var chosen = await ShowNativeMobyLibraryAsync(dialog, templates);
             if (chosen != null) kindBox.SelectedItem = chosen;
         };
+        // The main window's Add object… is the one catalogue in shipping builds.
+        nativeLibraryButton.IsVisible = !_releaseMode;
         body.Children.Add(nativeLibraryButton);
         Button universalButton = NewButton("Any object from any level…");
         universalButton.Name = "AddUniversalMobyLibraryButton";
@@ -1377,6 +1472,7 @@ public sealed partial class MainWindow
             dialog.Close(false);
             await ShowUniversalMobyLibraryAsync(this);
         };
+        universalButton.IsVisible = !_releaseMode;
         body.Children.Add(universalButton);
 
         Control gemField = BuildModernDialogField("Gem value", gemBox);
