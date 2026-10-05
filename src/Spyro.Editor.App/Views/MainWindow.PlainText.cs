@@ -133,6 +133,19 @@ public sealed partial class MainWindow
         (Rule(@"^Select an object before using XYZ nudges\.$"), _ => "Select an object first."),
         (Rule(@"^The terrain brush did not touch any editable vertices\. Move onto terrain or increase Size\.$"),
             _ => "The brush did not reach any ground. Move it onto the ground or increase Size."),
+        // Height and ground.
+        (Rule(@"^Set (.+) Z to (-?[\d.,]+) with (\d+) linked object\(s\)\.$"),
+            m => $"Set the height of {m.Groups[1].Value} to {m.Groups[2].Value}. {Count(int.Parse(m.Groups[3].Value), "linked object")} moved with it."),
+        (Rule(@"^Set (.+) Z to (-?[\d.,]+)\.$"), m => $"Set the height of {m.Groups[1].Value} to {m.Groups[2].Value}."),
+        (Rule(@"^Snapped (.+) and (\d+) linked object\(s\) to terrain Z\.$"),
+            m => $"{m.Groups[1].Value} and {Count(int.Parse(m.Groups[2].Value), "linked object")} now sit on the ground."),
+        (Rule(@"^Snapped (.+) to terrain Z\.$"), m => $"{m.Groups[1].Value} now sits on the ground."),
+        (Rule(@"^Terrain Z snapping is enabled for (.+)\.$"), m => $"{m.Groups[1].Value} will stay on the ground when you move it."),
+        (Rule(@"^Terrain Z snapping is off for (.+); horizontal movement will preserve its current Z\.$"),
+            m => $"{m.Groups[1].Value} keeps its height when you move it."),
+        // "3 linked object(s)" and the like: say the number properly.
+        (Rule(@"\b(\d+) ((?:[a-z]+ ){0,2})(object|file|level|tile|placement)\(s\)"),
+            m => Count(int.Parse(m.Groups[1].Value), m.Groups[2].Value + m.Groups[3].Value)),
         // Words that remain in less common messages.
         (Rule(@" Save Terrain(?: Changes)? and Create BIN will include the moved vertices\."), _ => ""),
         (Rule(@"\bterrain faces\b"), _ => "tiles"),

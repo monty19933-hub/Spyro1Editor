@@ -231,11 +231,15 @@ public sealed partial class MainWindow
             if (supportsSnap && TryFindTerrainZAt(selected.Position.X, selected.Position.Y, selected.Position.Z, out float terrainZ))
             {
                 float offset = selected.Position.Z - terrainZ;
-                ToolTip.SetTip(_selectedMobyZValueText, $"Current Z {selected.Position.Z:0.###}; nearest terrain offset {offset:+0.###;-0.###;0}.");
+                ToolTip.SetTip(_selectedMobyZValueText, _releaseMode
+                    ? Math.Abs(offset) < 0.5f
+                        ? $"Height {selected.Position.Z:0.#}: on the ground."
+                        : $"Height {selected.Position.Z:0.#}: {Math.Abs(offset):0.#} {(offset > 0 ? "above" : "below")} the ground."
+                    : $"Current Z {selected.Position.Z:0.###}; nearest terrain offset {offset:+0.###;-0.###;0}.");
             }
             else
             {
-                ToolTip.SetTip(_selectedMobyZValueText, $"Current Z {selected.Position.Z:0.###}.");
+                ToolTip.SetTip(_selectedMobyZValueText, _releaseMode ? $"Height {selected.Position.Z:0.#}." : $"Current Z {selected.Position.Z:0.###}.");
             }
         }
         finally

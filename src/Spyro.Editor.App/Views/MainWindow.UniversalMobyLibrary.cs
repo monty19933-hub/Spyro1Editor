@@ -811,7 +811,7 @@ public sealed partial class MainWindow
             }
             var trial = existing.Concat(TrialFor(v)).ToList();
             if (trial.Count > existing.Count + 1)
-                details.Text += $"\nIncludes {trial.Count - existing.Count - 1} required linked object(s). They move, copy and remove together.";
+                details.Text += $"\nIncludes {Count(trial.Count - existing.Count - 1, "required linked object")}. They move, copy and remove together.";
             if (!dryRuns.TryGetValue(v, out var dry))
             {
                 fit.Text = "Checking whether this object fits… You can keep browsing.";
@@ -851,7 +851,7 @@ public sealed partial class MainWindow
                     BitConverter.ToUInt16(lib.Get(p.SourceLevelKey).Data.Row(p.SourceRowIndex), 0x36) == 0x7A))
                 details.Text += "\n" + lanternNote;
             fit.Text = e.Native ? $"✓ Already part of {destination.DisplayName} — ready to place." : $"✓ Fits in {destination.DisplayName} — ready to place." +
-                (dry.Result.Classes.Count(c => c.DependencyOnly) is int deps and > 0 ? $" It brings {deps} small helper object(s) it needs along with it." : "");
+                (dry.Result.Classes.Count(c => c.DependencyOnly) is int deps and > 0 ? $" It brings {Count(deps, "small helper object")} it needs along with it." : "");
             if (dry.Result.ParticleDependencies.Any(p => p.Status == "dependency-unverified"))
                 fit.Text += "\nIts special effects still need a playtest in this level.";
             if (dry.Result.ParticleDependencies.Any(p => p.Status == "dependency-unverified"))
@@ -868,7 +868,7 @@ public sealed partial class MainWindow
         {
             Text = choice == null ? "" : choice.Plan == null
                 ? $"{VersionName(choice.Variant)} — fits without further removals"
-                : $"{VersionName(choice.Variant)}: remove {choice.Plan.AdditionalRows.Count} object(s)\n" +
+                : $"{VersionName(choice.Variant)}: remove {Count(choice.Plan.AdditionalRows.Count, "object")}\n" +
                   string.Join(" + ", choice.Plan.Groups.Select(g => $"{g.Name} ({g.AdditionalRows.Count})")) +
                   $"\nSpace after placement: {choice.Plan.FinalRamHeadroom / 1024.0:0.0} KB game memory left; {choice.Plan.ReclaimedVramBytes / 1024.0:0.0} KB texture space freed" +
                   (choice.Plan.ParticleBehaviorUnverified ? "\nParticle behavior still needs a playtest." : "\nGameplay still needs a playtest."),

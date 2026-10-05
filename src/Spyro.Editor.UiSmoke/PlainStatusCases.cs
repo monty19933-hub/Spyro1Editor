@@ -35,6 +35,14 @@ internal static class PlainStatusCases
             ("Select a terrain face before moving terrain.", "Select a tile before moving terrain."),
             ("That terrain face is no longer available in the loaded level.", "That tile is no longer available in the loaded level."),
             ("Updated terrain face 7.", "Tile updated."),
+            ("Set Red gem (1) Z to 447.0.", "Set the height of Red gem (1) to 447.0."),
+            ("Set Dragon Z to 512.5 with 2 linked object(s).", "Set the height of Dragon to 512.5. 2 linked objects moved with it."),
+            ("Snapped Sheep to terrain Z.", "Sheep now sits on the ground."),
+            ("Snapped Dragon and 1 linked object(s) to terrain Z.", "Dragon and 1 linked object now sit on the ground."),
+            ("Terrain Z snapping is enabled for Sheep.", "Sheep will stay on the ground when you move it."),
+            ("Terrain Z snapping is off for Sheep; horizontal movement will preserve its current Z.", "Sheep keeps its height when you move it."),
+            ("Removed Dragon and 2 linked object(s). Use Undo last removal to restore them.", "Removed Dragon and 2 linked objects. Use Undo last removal to restore them."),
+            ("Restored Dragon and 1 linked object(s).", "Restored Dragon and 1 linked object."),
             // Already plain messages pass through untouched.
             ("Removed Red gem (1). Undo last removal brings it back.", "Removed Red gem (1). Undo last removal brings it back."),
             ("Tile selected.", "Tile selected."),
@@ -49,7 +57,7 @@ internal static class PlainStatusCases
                 throw new InvalidOperationException($"Plain status: \"{raw}\" is shown as \"{actual}\", expected \"{shown}\".");
             checks++;
         }
-        string[] forbidden = ["terrain face", "vertices", "vertex", " Z +", "moby"];
+        string[] forbidden = ["terrain face", "vertices", "vertex", " Z +", "moby", "(s)", "terrain Z", " Z to "];
         foreach ((string raw, _) in cases)
         {
             string actual = (string)plain.Invoke(null, [raw])!;

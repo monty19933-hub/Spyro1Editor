@@ -349,12 +349,12 @@ public sealed partial class MainWindow
                 _previousBetaProjectReminder.IsVisible = false;
             string conflictNote = result.ConflictCount == 0
                 ? "No files were overwritten."
-                : $" {result.ConflictCount} differing existing file(s) were preserved under _migration/conflicts.";
+                : $" {Count(result.ConflictCount, "file")} that differed from yours were kept separately in the project's _migration/conflicts folder.";
             if (resultText != null)
             {
                 resultText.Text =
-                    $"Imported {result.CopiedCount} file(s), kept {result.ExistingCount} identical file(s), and skipped {result.SkippedCount} application/cache/game file(s)." +
-                    conflictNote + $" Migration report: {result.ReportPath}";
+                    $"Brought over {Count(result.CopiedCount, "file")}. {Count(result.ExistingCount, "file")} were already here, and {Count(result.SkippedCount, "file")} that belong to the old app (program, cache, game data) were left out. " +
+                    conflictNote + $" Report: {result.ReportPath}";
             }
             _nativeSkyReport = null;
             _nativeSkyReportSourcePath = "";
