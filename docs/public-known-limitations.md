@@ -128,8 +128,9 @@
 - The macOS arm64 package was opened and used on the build Mac. It is signed
   but not notarized, so on another Mac macOS asks for confirmation the first
   time (see `MACOS-OPEN-INSTRUCTIONS.txt`). macOS also asks once whether the
-  editor may use the Documents folder, where projects are kept; the editor's
-  window appears after that question is answered. The Windows x64 package
+  editor may use the Documents folder, where projects are kept, and the folder
+  your disc image is in (Desktop, Downloads); the editor's window appears after
+  the first question is answered. The Windows x64 package
   structure is checked; the Windows build was not run, because no Windows
   machine was available.
 - Create BIN wants about 2.1 GB of free disk space (3.3 GB with a level you

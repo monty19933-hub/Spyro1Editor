@@ -560,6 +560,9 @@ QUICK START
 GOOD TO KNOW
 
 - Your original disc image is never changed.
+- On a Mac, macOS asks once whether the editor may use your Documents folder
+  (and the folder your disc image is in). Choose Allow; the editor's window
+  appears after you answer.
 - Your projects live in Documents/Spyro Editor, outside this folder, so
   replacing the app with a newer version keeps your work.
 - If something cannot be put in the game, the editor tells you what and where,

@@ -19,7 +19,9 @@ writes to your own disc image, and it does not include the game.
 Projects and backups are stored outside the application folder (in
 `Documents/Spyro Editor`), so replacing the app with a newer one keeps your work.
 On a Mac, macOS asks once whether Spyro Editor may use your Documents folder;
-choose **Allow**. The editor's window appears after you answer.
+choose **Allow**. The editor's window appears after you answer. It asks the
+same for the Desktop or Downloads folder if your disc image is kept there. If
+access was refused, the editor opens a small window that says where to allow it.
 
 ## Save and Create BIN
 
