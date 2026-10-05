@@ -1,3 +1,60 @@
+# Spyro Editor 1.1 release-readiness pass — 5 October 2026
+
+Version 1.1 (internal `1.1.0`; Claude; branch `release/release-ready-20261004`,
+started from 1.0.10) is a whole-editor pass: interface, bugs, unfinished
+features, verification and packaging. The authoritative worklist with every
+finding is task-root `work/release-ready-20261004/WORKLIST.md`; the packages,
+checksums, quick start, release notes, playtest checklist and the engineering
+report are in task-root `outputs/SpyroEditor-V1.1-release`.
+
+Interface. First launch shows a welcome with one **Open Game…** action and no
+tools until a game is open; the editor reopens the last level. Objects and
+Terrain are grouped into cards (Add to this level / Selected object / Recovery;
+Tiles / Brush / Textures / Corner by corner). Addresses, class numbers, slot
+names and research wording are gone from release mode (object rows, selection
+details, statuses, dialogs, portal lists, Start Blank, Create BIN). There is one
+Save and one Create BIN; **Show Game File** reveals the exported CUE; **Export
+Check** replaces Build Safety and runs the same terrain check Create BIN uses.
+Delete, Undo and Redo work in the view and never while typing in a field. New
+Level asks before replacing a created level and keeps a backup. Help is
+rewritten. The layout was checked at 1440x900 and 1024x700.
+
+Bugs fixed. Add object / egg / sign no longer blocked by a terrain export error;
+a red bar explains terrain the game cannot stand on, selects it and undoes it.
+Create BIN no longer leaves 1.3–2.6 GB working copies per run (both export
+paths), and a failed export leaves the last good BIN/CUE byte-identical. Two
+export failures on the user's real project copy (moved portal with terrain
+changes; changed gem totals with terrain changes) are fixed. A painted tile
+wider than 255 units (the 384-wide starting floor of a blank level) can now be
+exported. Six stale UI tests and two stale regression pins were repaired.
+
+Fly Anywhere ships as one saved whole-game switch, off by default, in Game
+Settings. A crash found in the emulator (entering a portal while the flight
+permission was set called into the level overlay being replaced) is fixed by
+withdrawing the permission whenever the game is not in normal gameplay. Played
+in an isolated emulator: Artisans, Stone Hill and Toasty through portals, Doctor
+Shemp (demo), Exit Level while flying, death and respawn while flying; the Icy
+Flight demo is frame-identical on and off; the OFF export is byte-identical to a
+project that never used the option. The other 26 normal levels and Gnasty's Loot
+were not played with it.
+
+Dragonfly eggs (four colours seen in game, pickup, inventory 1/4, save at a
+fairy, cold restart and Load Game), signs (message shown in game; edit, save and
+reopen in the UI test) and Start Blank (dialog, painted floor, egg, sign and
+enemy added, save, reopen, export; played: portal entry, sign, egg, death and
+respawn, Exit Level, re-entry) were verified on this branch. The universal
+object coverage matrix (35 levels x the 209-object catalogue, exact trial
+composition) and its summary are in the engineering report; it measures whether
+an object can be composed into a level, not how it behaves there.
+
+Not verified: the Windows package was built and structure-checked but never
+run; the Mac package is not notarized; no whole-campaign playthrough; universal
+object behaviour beyond the documented runtime checks. The default no-argument
+UiSmoke and the later stages of `--fresh-main-ui-only` are stale tests outside
+the gate. The package is therefore a release candidate for the owner's hands-on
+review, not a public release. Original discs, the owner's project, settings,
+saves and earlier packages are untouched.
+
 # Terrain brush stays in the Terrain tab — 4 October 2026
 
 Version 1.0.10 (Claude) turns the terrain brush and texture painting off when the
