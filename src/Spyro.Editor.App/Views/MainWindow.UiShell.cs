@@ -849,6 +849,13 @@ public sealed partial class MainWindow
         _selectionDetails.Foreground = new SolidColorBrush(ModernMutedInk);
         _selectionDetails.FontSize = 12;
         _selectionDetails.LineHeight = 17;
+        // No empty gap under "Nothing selected".
+        _selectionDetails.IsVisible = !string.IsNullOrWhiteSpace(_selectionDetails.Text);
+        _selectionDetails.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == TextBlock.TextProperty)
+                _selectionDetails.IsVisible = !string.IsNullOrWhiteSpace(_selectionDetails.Text);
+        };
         panel.Children.Add(_selectionTitle);
         panel.Children.Add(_selectionDetails);
 

@@ -9,36 +9,36 @@ or copied game asset. Users must provide their own legally obtained disc image.
 
 ## Releases
 
-The current release target is **Spyro Editor 1.0.10**. Existing and fresh levels
-share terrain and object controls. Create BIN/CUE includes both saved scenes and
-lets you choose the New Game starting level. Cross-level objects have a capacity
-planner that names removals which would make an import fit. Start Blank clears a
-supported current level with a recoverable snapshot, safe start and removable
-floor, then rebuilds its exported terrain, collision and object data. Portal
-destinations and Return Home doorways are editable, and missing original terrain
-textures repair automatically without removing terrain controls. Teal gems worth
-50 and rainbow gems worth 100 are placeable from Collectibles → Gems and count
-toward collected treasure and the level's available total. Fly Anywhere is
-deferred. See the [user guide](docs/public-user-guide.md),
+The current release target is **Spyro Editor 1.1**. It reorganizes the editor
+around the user's journey (open your game, edit, Save, Create BIN) with a
+first-run welcome, carded Objects and Terrain tabs and everyday wording, and it
+ships **Fly Anywhere**: one switch in Game Settings, off by default, that lets
+Spyro fly in every normal level of the exported game. Existing and created
+levels share the terrain and object controls. Create BIN includes every saved
+level and lets you choose where New Game starts. Objects from other levels have
+a capacity planner that names removals which would make an import fit. Start
+Blank clears a supported level with a recoverable copy. Portal destinations and
+Return Home doorways are editable. Dragonfly eggs, readable signs and teal and
+rainbow gems are placeable. See the [user guide](docs/public-user-guide.md),
 [supported scope](docs/public-known-limitations.md) and
 [current verification status](RELEASE_STATUS.md).
 
 The self-contained release packages are named:
 
-- `SpyroEditor-V1.0.10-osx-arm64.zip`
-- `SpyroEditor-V1.0.10-win-x64.zip`
+- `SpyroEditor-V1.1-osx-arm64.zip`
+- `SpyroEditor-V1.1-win-x64.zip`
 
-Stable builds use the `v1.0.10` identity, schema-3 package manifests and the stable
+Stable builds use the `v1.1` identity, schema-3 package manifests and the stable
 update channel. They do not select beta releases as updates. Earlier numbered
 and dotted beta packages retain their existing compatibility rules and must not
-be replaced or retagged. Source builds default to V1.0.10 stable; the release script accepts an explicit
+be replaced or retagged. Source builds default to V1.1 stable; the release script accepts an explicit
 identity for reproducible packaging:
 
 ```sh
 SPYRO_EDITOR_RELEASE_CHANNEL=stable \
-SPYRO_EDITOR_STABLE_VERSION=1.0.10 \
-SPYRO_EDITOR_STABLE_INTERNAL_VERSION=1.0.10 \
-tools/Build-SpyroEditorRelease.sh SpyroEditor-V1.0.10
+SPYRO_EDITOR_STABLE_VERSION=1.1 \
+SPYRO_EDITOR_STABLE_INTERNAL_VERSION=1.1.0 \
+tools/Build-SpyroEditorRelease.sh SpyroEditor-V1.1
 ```
 
 The updater checks release identity, platform, packaged application and manifest,
@@ -48,8 +48,8 @@ release, creating a remote tag or replacing older assets.
 
 Unzip the package, open `Spyro Editor.app` directly on macOS (there is no
 separate `.command` launcher), or open `Launch Spyro Editor.bat` on Windows.
-Choose your own BIN/CUE, then use
-`Create BIN` to write local patched test output. Release builds keep the active
+Choose **Open Game…**, select your own BIN/CUE, then use
+`Create BIN` to write a playable copy. Release builds keep the active
 project under the user's Documents folder instead of inside the replaceable app
 folder. Generated output stays on the user's machine and should not be uploaded
 to GitHub.

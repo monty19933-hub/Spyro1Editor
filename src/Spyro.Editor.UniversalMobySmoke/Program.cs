@@ -160,8 +160,9 @@ if (args[0] is "--coverage" or "--catalog-coverage")
         }
         codeFingerprint = Convert.ToHexStringLower(hash.GetHashAndReset());
     }
+    // The source library supplies the teal and rainbow gems (built from the USA disc), the Japanese disc the eggs and signs.
     var coverage = UniversalMobyCoverage.Run(lib, catalog, args[0] == "--coverage", Console.WriteLine, destinations,
-        UniversalMobyExport.SpecialProvider(japanese)) with { SourceCodeFingerprint = codeFingerprint };
+        UniversalMobyExport.SpecialProvider(japanese, lib)) with { SourceCodeFingerprint = codeFingerprint };
     using (var file = File.Create(args[3]))
     {
         if (args[3].EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
