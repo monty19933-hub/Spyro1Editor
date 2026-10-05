@@ -28,6 +28,7 @@ internal static class TerrainProblemUiCases
         Environment.SetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE", workspace);
         Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "1");
         Environment.SetEnvironmentVariable("SPYRO_EDITOR_DATA_ROOT", Path.Combine(outDir, "data-root"));
+        Environment.SetEnvironmentVariable("SPYRO_EDITOR_DIAGNOSTICS_DIR", Path.Combine(outDir, "logs"));
         Environment.CurrentDirectory = workspace;
         MainWindow window = new() { Width = 1440, Height = 900 };
         window.Show();

@@ -345,6 +345,33 @@ public sealed partial class MainWindow
         return report with { Status = MobyBuildSafetyStatus.Blocked, Levels = levels };
     }
 
+    /// <summary>After Create BIN failed, find which saved level's terrain is refused and raise the bar for it.</summary>
+    private async Task ReportTerrainProblemAfterFailedExportAsync()
+    {
+        try
+        {
+            string sourceImage = FirstExistingDiscImagePath(
+                _discImagePathBox.Text,
+                _skyboxDiscImagePathBox.Text,
+                DiscImageLocator.FindImage(_workspace));
+            if (!File.Exists(sourceImage))
+                return;
+            foreach (EditedLevelExportTarget target in FindEditedLevelExportTargets().Where(candidate => candidate.HasTerrainEdits))
+            {
+                TerrainExportProblem? problem = await CheckSavedTerrainExportAsync(target.Level, sourceImage);
+                if (problem == null)
+                    continue;
+                ReportTerrainExportProblem(target.Level, problem.TechnicalMessage, "Create BIN");
+                _statusText.Text = "Could not create BIN. " + _statusText.Text;
+                return;
+            }
+        }
+        catch (Exception exception)
+        {
+            EditorDiagnostics.RecordException("locating a terrain problem after a failed export", exception);
+        }
+    }
+
     private static bool IsTerrainShapeBuildSafetyIssue(MobyBuildSafetyIssue issue) =>
         issue.Code.StartsWith(TerrainGeometryBuildSafetyCodePrefix, StringComparison.Ordinal);
 

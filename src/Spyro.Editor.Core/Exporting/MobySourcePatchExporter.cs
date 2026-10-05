@@ -5955,7 +5955,16 @@ public static class MobySourcePatchExporter
             if (rebuiltIndex.TreeBytes.Length > collision.BlockTreeByteCapacity)
                 rebuiltBlocksWadOffset = AlignUp(collision.BlockTreeWadOffset + rebuiltIndex.TreeBytes.Length, 4);
             int rebuiltBlockCapacity = checked((int)(collision.TriangleTableWadOffset - rebuiltBlocksWadOffset));
-            if (rebuiltBlockCapacity < rebuiltIndex.BlockBytes.Length)
+            // The rebuilt lookup is shorter than the original. Close it with the native end marker and clear
+            // the rest of the region: stale groups left behind would be read as part of the last cell and make
+            // the level's lookup unreadable for a later terrain add/remove in the same export.
+            byte[] rebuiltBlockRegion = new byte[rebuiltBlockCapacity < 0 ? 0 : rebuiltBlockCapacity];
+            if (rebuiltBlockCapacity >= rebuiltIndex.BlockBytes.Length + 2)
+            {
+                rebuiltIndex.BlockBytes.CopyTo(rebuiltBlockRegion, 0);
+                rebuiltBlockRegion[rebuiltIndex.BlockBytes.Length + 1] = 0x80;
+            }
+            if (rebuiltBlockCapacity < rebuiltIndex.BlockBytes.Length + 2)
             {
                 throw new InvalidOperationException(
                     $"{level.DisplayName}'s moved portal collision index needs {rebuiltIndex.TreeBytes.Length + rebuiltIndex.BlockBytes.Length} bytes, but its native tree/block region has {combinedCollisionIndexCapacity} bytes.");
@@ -5992,7 +6001,7 @@ public static class MobySourcePatchExporter
                 layout,
                 level,
                 rebuiltBlocksWadOffset,
-                rebuiltIndex.BlockBytes,
+                rebuiltBlockRegion,
                 "portal-entry-collision-index-blocks",
                 "Portal entry collision lookup",
                 "collision-blocks",

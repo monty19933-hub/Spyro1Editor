@@ -40,6 +40,24 @@ internal static class NativeId65AuthoredSurfaceConsumers
             "33169ab3b5b0c9183354b7475005f25ac6c5d46d524ec3219d75f18650a46eb1")
     ];
 
+    /// <summary>
+    /// For an executable that an earlier stage of the same export has already edited (gem totals, level
+    /// names, object tables): every routine that reads terrain, collision and sky data must still be the
+    /// original code, but unrelated data may differ, so the whole-file identity is not required.
+    /// </summary>
+    internal static IReadOnlyList<NativeId65SurfaceConsumerEvidence> CaptureConsumerSpans(ReadOnlySpan<byte> executable)
+    {
+        if (executable.Length != ExecutableByteLength)
+            throw new InvalidDataException("The game executable is not the USA size; terrain cannot be rebuilt for it.");
+        foreach (var span in Spans)
+        {
+            if ((long)span.ExecutableFileOffset + 0x8000F800L != span.RuntimeAddress ||
+                Hash(executable.Slice(span.ExecutableFileOffset, span.ByteLength)) != span.Sha256)
+                throw new InvalidDataException("The game's terrain or collision code was changed by an earlier step, so terrain cannot be rebuilt safely.");
+        }
+        return Array.AsReadOnly(Spans.ToArray());
+    }
+
     internal static IReadOnlyList<NativeId65SurfaceConsumerEvidence> Capture(ReadOnlySpan<byte> executable)
     {
         if (executable.Length != ExecutableByteLength || Hash(executable) != ExecutableSha256)

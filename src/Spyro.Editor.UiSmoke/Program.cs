@@ -31,6 +31,14 @@ if (args.Contains("--ui-audit", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Contains("--export-workflow-ui", StringComparer.Ordinal))
+{
+    if (args.Length != 3) throw new ArgumentException("Usage: UiSmoke --export-workflow-ui <project folder> <output folder>");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    ExportWorkflowUiCases.Run(args[1], args[2]);
+    return 0;
+}
+
 if (args.Contains("--terrain-problem-ui", StringComparer.Ordinal))
 {
     if (args.Length != 3) throw new ArgumentException("Usage: UiSmoke --terrain-problem-ui <project folder> <output folder>");

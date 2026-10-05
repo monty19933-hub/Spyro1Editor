@@ -13277,6 +13277,9 @@ public sealed partial class MainWindow : Window
             _statusText.Text = $"Could not create BIN: {ex.Message}";
             if (!string.IsNullOrWhiteSpace(reportPath))
                 _statusText.Text += $" Diagnostic report: {reportPath}";
+            // A terrain refusal is something the user can fix: name the level and offer Show it / Undo.
+            if (LooksLikeTerrainExportRefusal(ex) || ex.Message.Contains("Saved changes could not be included", StringComparison.Ordinal))
+                await ReportTerrainProblemAfterFailedExportAsync();
         }
         finally
         {

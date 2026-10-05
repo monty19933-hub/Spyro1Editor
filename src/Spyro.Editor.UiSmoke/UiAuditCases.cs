@@ -29,6 +29,7 @@ internal static class UiAuditCases
         Environment.SetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE", Path.GetFullPath(workspace));
         Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "1");
         Environment.SetEnvironmentVariable("SPYRO_EDITOR_DATA_ROOT", Path.Combine(_out, "data-root"));
+        Environment.SetEnvironmentVariable("SPYRO_EDITOR_DIAGNOSTICS_DIR", Path.Combine(_out, "logs"));
         Environment.CurrentDirectory = Path.GetFullPath(workspace);
         MainWindow window = new() { Width = 1440, Height = 900 };
         window.Show();

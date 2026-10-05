@@ -233,7 +233,9 @@ public static partial class TerrainPatchExporter
         // the actual native loader binding and retain the normal buffer floor.
         var exeOwner=DiscImage.FindRootFileRecord(image,layout,n=>n.Equals("SCUS_942.28",StringComparison.OrdinalIgnoreCase));
         byte[] executable=DiscImage.ReadFileBytes(image,layout,exeOwner.Lba,0,exeOwner.Size);
-        _=NativeId65AuthoredSurfaceConsumers.Capture(executable);
+        // An object step may already have edited this image's executable data (gem totals, portals).
+        // The terrain consumers themselves must be untouched.
+        _=NativeId65AuthoredSurfaceConsumers.CaptureConsumerSpans(executable);
         uint copyBuffer=UniversalExeBindings.Read(executable,level.LevelId)[UniversalExeBindings.CopyBufferGlobal].Value;
         byte[] emittedEntry=originalEntry.ToArray();
         foreach(var patch in patches.Values)
