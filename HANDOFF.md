@@ -3,10 +3,11 @@
 ## Where
 - Worktree `/Users/john/Documents/Codex/2026-09-29/files-pasted-by-the-user-spyro/outputs/SpyroEditor-source`,
   branch `release/release-ready-20261004` (from `release/universal-gameplay-20261002` + 1.0.10). Nothing is pushed.
-- Packages and release documents: task-root `outputs/SpyroEditor-V1.1-release` (`ENGINEERING-REPORT.md` has the
-  product source revision, zip checksums and every verification result). 1.0.9 and 1.0.10 packages are untouched.
+- Packages (built from `3353dd6`) and release documents: task-root `outputs/SpyroEditor-V1.1-release`.
+  `ENGINEERING-REPORT.md` there has the checksums and every verification result. Later commits touch only
+  `RELEASE_STATUS.md` and `HANDOFF.md`. 1.0.9 and 1.0.10 packages are untouched.
 - Worklist, evidence, test projects, emulator harness: task-root `work/release-ready-20261004`
-  (`WORKLIST.md`, `evidence/`, `projects/`, `runtime/`, `tools/`, `gui-final/`).
+  (`WORKLIST.md`, `evidence/`, `projects/`, `runtime/`, `tools/`, `gui-final/`, `cleanup/`).
 
 ## What changed (release mode unless noted)
 - Shell and wording: `MainWindow.UiShell.cs`, `MainWindow.PlainText.cs`, `MainWindow.Navigation.cs`,
@@ -25,10 +26,20 @@
   `Spyro.Editor.NativeFreeFlightSmoke`.
 - Built levels: `NativeAuthoredMesh.AppendLattice` splits painted faces wider than 255 units for collision only.
 - New Level confirmation and backup: `MainWindow.SceneDocument.cs` (`--new-level-confirm-ui`).
+- Pointer and selection rules: `EditorViewport.cs` (object and facing drags share the 5-pixel dead zone;
+  camera keys ignore Command/Control/Alt), `MainWindow.cs` `RemoveSelectedMoby` (nothing selected afterwards in
+  release mode), `MainWindow.UiShell.cs` (list selection does not scroll the side panel).
+- Status wording: `MainWindow.PlainText.cs` `PlainStatusForRelease` rewrites working messages for the status
+  bar only (`--plain-status-only`). Add new technical messages there or write them plainly.
+- Create BIN free-space rule: `ExportScratchSpace.RequiredFreeBytes` / `DescribeShortage`, used at the start of
+  `CreateObjectTestBinCoreAsync` (three working copies for ordinary edits, five with built levels).
+- Start-up problems: `StartupProblemWindow.cs` + `Program.cs` / `App.cs` (`--startup-problem-ui`).
 - Version: `Spyro.Editor.App.csproj` 1.1 / 1.1.0, previous stable 1.0.10.
 
 ## Tests
-- Gate: `python3 tools/Run-SpyroEditorRegression.py` (result for this commit is in the engineering report).
+- Gate: `python3 tools/Run-SpyroEditorRegression.py` (352/352 on `3353dd6`).
+- Everything in one go: task-root `work/release-ready-20261004/tools/final_chain.sh <log folder>` (UI modes with
+  a real export, the Fly Anywhere and Start Blank export tests, start-up and wording tests, then the gate).
 - UI modes: task-root `work/release-ready-20261004/tools/run_ui_modes.sh --with-export` (18 modes; the
   project-bound ones use `projects/existing-copy`, whose discs point at verified local USA and Japanese images).
   `--fly-anywhere-ui` and `--start-blank-export-ui <project> <out> [level]` export real games and run separately.
@@ -36,6 +47,11 @@
 - Emulator: `work/release-ready-20261004/runtime` (isolated DuckStation, GDB port 2470, its own memory card;
   `run.py`, `gdb.py`, `flytest.py`, `flylevels.py`, `eggsave_a.py`/`eggsave_b.py`, `signtest.py`, `blanktest.py`).
   One emulator at a time. Never use the owner's DuckStation profile or any other running emulator.
+- Packaged app by hand: `gui-final/tools/launch.sh <profile>` starts the unzipped package through LaunchServices
+  with an isolated profile in a folder outside Documents (inside Documents macOS asks for folder access and the
+  app waits without a window). `gui.py` sends real input only where the system's hit-test says the editor's own
+  window is under the pointer.
+- Some headless audit runs open real Finder windows on temporary folders; close them afterwards.
 - Any launch of the app or a UI test must set `SPYRO_EDITOR_WORKSPACE`, `SPYRO_EDITOR_DATA_ROOT`,
   `SPYRO_EDITOR_PROJECTS_ROOT` and `SPYRO_EDITOR_DIAGNOSTICS_DIR` so the owner's project and settings are not
   touched. A copied settings profile must have `Settings/current-project.json` `projectRoot` rewritten first.
@@ -46,8 +62,16 @@
   safe-start rule rejects.
 
 ## Not verified
-- Windows package never run. Mac package not notarized. Fly Anywhere not played in the other 26 normal levels
-  (Gnasty's Loot among them). No whole-campaign playthrough. Universal object behaviour beyond the documented checks.
+- Windows package never run. Mac package signed with the Developer ID found on the build Mac, not notarized.
+- Fly Anywhere not played in the other 26 normal levels (Gnasty's Loot among them). Red and pink eggs not seen
+  in game in this pass. Start Blank played in Stone Hill only. No whole-campaign playthrough. Universal object
+  behaviour beyond the documented checks.
+- A real macOS refusal of folder access (the start-up message was tested with an unreadable project instead).
+
+## Small things left as they are
+- Create BIN with nothing changed: "No saved edits were found. Change a level name, music track, skybox, object,
+  or terrain first."
+- The start-up message window logs "session ended cleanly" twice.
 
 ## Next (only if the owner asks)
 - Owner's hands-on review with `PLAYTEST-CHECKLIST.md`; fix what it finds.
