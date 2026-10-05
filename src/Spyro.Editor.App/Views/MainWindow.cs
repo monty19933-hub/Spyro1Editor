@@ -13285,6 +13285,7 @@ public sealed partial class MainWindow : Window
         }
 
         _createBinBusy = true;
+        string createBinWorkspace = _workspace.RootPath;
         RefreshActionAvailability();
         RefreshPortalRouteAvailability();
         RefreshFreeFlightSettingsAvailability();
@@ -13312,6 +13313,9 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
+            // Whatever happened, no staged disc image is needed any more.
+            if (_releaseMode)
+                ExportScratchSpace.DeleteStagedImages(Path.Combine(createBinWorkspace, "output"));
             _createBinBusy = false;
             RefreshActionAvailability();
             RefreshPortalRouteAvailability();
@@ -13735,9 +13739,26 @@ public sealed partial class MainWindow : Window
         IReadOnlyList<(int LevelIndex, int Row, int Colour)> activeDragonflyEggs = [];
         IReadOnlySet<string> signLevelKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         Dictionary<int, IReadOnlyList<NativePortalReturnClass>> returnClasses = [];
-        NativeFreeFlightCompositionPlan? globalFlight = flightIntent?.RequiresRebuild==true
-            ? await NativeFreeFlightCompositionPlan.CaptureAsync(sourceImage, flightIntent?.Enabled==true)
-            : null;
+        // An explicit "off" needs its own rebuild only when it is the whole export (so a game made
+        // earlier with flight on is replaced). With other saved changes the output is rebuilt from the
+        // original disc anyway, and the flight plan's exact-reference-disc requirement would add
+        // nothing. Developer builds keep the stricter original behaviour.
+        bool flightPlanNeeded = flightIntent.RequiresRebuild &&
+            (flightIntent.Enabled || !_releaseMode ||
+             (!targets.Any(HasOrdinarySavedEdits) && !portalSnapshot.Document.HasEdits));
+        NativeFreeFlightCompositionPlan? globalFlight = null;
+        if (flightPlanNeeded)
+        {
+            try { globalFlight = await NativeFreeFlightCompositionPlan.CaptureAsync(sourceImage, flightIntent.Enabled); }
+            catch (InvalidDataException e) when (_releaseMode)
+            {
+                throw new InvalidDataException(flightIntent.Enabled
+                    ? "Fly Anywhere needs the unchanged original USA disc image, and the game you opened is different. " +
+                      "Open the original disc with Open Game…, or untick Fly Anywhere in Game Settings. (" + e.Message + ")"
+                    : "The only thing to export is Fly Anywhere being switched off, and rebuilding the plain game needs the " +
+                      "unchanged original USA disc image; the game you opened is different. (" + e.Message + ")", e);
+            }
+        }
         List<(LockedChestRuntimeBundleDestinationProfile Profile, LockedChestRuntimeBundleIntent Intent, string LevelName)>
             lockedChestRuntimeBundles = [];
         bool incompatibleStructuralWadRelocationApplied = false;
@@ -14471,9 +14492,11 @@ public sealed partial class MainWindow : Window
         }
 
         return new CombinedTestBinResult(finalImage, finalCue, objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, true, tempDir)
-        { FreeFlightSummary = globalFlight == null ? "" : flightIntent?.Enabled==true
-            ? _releaseMode ? " Fly Anywhere is on in this game." : " Fly Anywhere ON: all normal levels; gameplay validation pending."
-            : _releaseMode ? " Fly Anywhere is off in this game." : " Fly Anywhere OFF: original normal movement restored.",
+        { FreeFlightSummary = _releaseMode
+            ? !flightIntent.RequiresRebuild ? "" : flightIntent.Enabled ? " Fly Anywhere is on in this game." : " Fly Anywhere is off in this game."
+            : globalFlight == null ? "" : flightIntent.Enabled
+                ? " Fly Anywhere ON: all normal levels; gameplay validation pending."
+                : " Fly Anywhere OFF: original normal movement restored.",
             PortalRoutePatches = portalRoutePatches,
             ActiveDragonflyEggs = activeDragonflyEggs, SignLevelKeys = signLevelKeys, ReturnClasses = returnClasses,
             DeferredLevelNames = deferSharedRuntimeHooks ? levelTextEdits.ToArray() : [] };
@@ -28075,7 +28098,8 @@ public sealed partial class MainWindow : Window
         {
             try
             {
-                long freed = ExportScratchSpace.SweepStale(workspace, TimeSpan.FromHours(1));
+                long freed = ExportScratchSpace.SweepStale(workspace, TimeSpan.FromHours(1)) +
+                    ExportScratchSpace.DeleteStagedImages(Path.Combine(workspace, "output"));
                 if (freed > 0)
                     EditorDiagnostics.RecordAction("Removed leftover Create BIN working copies", $"{freed / (1024 * 1024)} MB freed in {workspace}");
             }

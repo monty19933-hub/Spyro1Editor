@@ -198,9 +198,9 @@ public sealed partial class MainWindow
     {
         var scene=CaptureFreshScene() with {Objects=[],Ledger=UniversalPlacementLedger.Empty};
         string sourceImage = ResolveUniversalSourceDisc();
-        // No flight plan at all until the project holds an explicit Fly Anywhere choice.
+        // No flight plan at all unless Fly Anywhere is on.
         var flightSettings = NativeFreeFlightSettingsStore.Capture(_workspace.RootPath);
-        bool flightEnabled = flightSettings.GlobalEnabled, flightChosen = !_releaseMode || flightSettings.Preferences.Count != 0;
+        bool flightEnabled = flightSettings.GlobalEnabled, flightChosen = !_releaseMode || flightEnabled;
         string key=scene.Fingerprint()+"|"+sourceImage+"|flight="+(flightChosen?flightEnabled.ToString():"unset");
         if(_freshNativeCompilation==null||_freshNativeCompilation.IsFaulted||_freshNativeCompilationKey!=key)
         {
@@ -274,7 +274,14 @@ public sealed partial class MainWindow
         string output=Path.Combine(outputFolder,"Spyro Editor - Authored Level.bin");
         string hash=await Task.Run(async()=>
         {
-            var flight=!_releaseMode||flightIntent.RequiresRebuild?await NativeFreeFlightCompositionPlan.CaptureAsync(original,flightIntent.Enabled):null;
+            // A level you built is always rebuilt from the original disc, so "off" needs no flight plan.
+            NativeFreeFlightCompositionPlan? flight=null;
+            if(!_releaseMode||flightIntent.Enabled)
+            {
+                try{flight=await NativeFreeFlightCompositionPlan.CaptureAsync(original,flightIntent.Enabled);}
+                catch(InvalidDataException e)when(_releaseMode)
+                {throw new InvalidDataException("Fly Anywhere needs the unchanged original USA disc image, and the game you opened is different. Open the original disc with Open Game…, or untick Fly Anywhere in Game Settings. ("+e.Message+")",e);}
+            }
             return await NativeAuthoredProjectExporter.ExportAsync(donors,_retailCatalog,plans,japanese,output,workspacePath,startLevelId.Value,
                 requireCurrent:()=>Dispatcher.UIThread.InvokeAsync(RequireOwner).GetAwaiter().GetResult(),
                 stagedRetailImage:retail?.WroteImage==true?retail.OutputImagePath:null,retailEggs:retail?.ActiveDragonflyEggs,

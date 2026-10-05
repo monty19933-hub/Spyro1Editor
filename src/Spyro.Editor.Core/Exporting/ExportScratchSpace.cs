@@ -50,6 +50,36 @@ public static class ExportScratchSpace
         return freed;
     }
 
+    /// <summary>
+    /// The ordinary export stages its disc images under <c>&lt;output&gt;/_combined-build/run-*</c>. A finished
+    /// export has published or abandoned them, so any image still there is dead weight (about 660 MB each).
+    /// The small reports beside them are kept. Call only when no export is running. Returns the bytes freed.
+    /// </summary>
+    public static long DeleteStagedImages(string outputDirectory, long smallestImageBytes = 1_000_000)
+    {
+        long freed = 0;
+        try
+        {
+            string root = Path.Combine(outputDirectory, "_combined-build");
+            if (!Directory.Exists(root))
+                return 0;
+            foreach (string file in Directory.EnumerateFiles(root, "*.bin", SearchOption.AllDirectories).ToArray())
+            {
+                try
+                {
+                    long size = new FileInfo(file).Length;
+                    if (size < smallestImageBytes)
+                        continue;
+                    File.Delete(file);
+                    freed += size;
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
+        return freed;
+    }
+
     /// <summary>Keeps only the newest cached baseline image for an authored level; older fingerprints are dead.</summary>
     public static long PruneAuthoredBaselines(string workspace, string keepPath)
     {

@@ -101,28 +101,33 @@ internal static class PublishedDiagnosticsCases
                     "Creating an inventory-only support ZIP changed a retained local report.");
             }
 
-            // Deferred flight preferences remain research state even when saved
-            // at the final asynchronous boundary of a normal release export.
+            // Fly Anywhere is part of the release export. A choice saved while Create BIN is at its last
+            // asynchronous boundary must stop that export, keep the new choice and leave the published
+            // game exactly as it was, rather than publish a game that disagrees with the project.
             var flightDelay = typeof(MainWindow).GetProperty("FreeFlightExportDelayOverrideForTesting", BindingFlags.Instance | BindingFlags.NonPublic)!;
             flightDelay.SetValue(window, (Func<string, Task>)(_ =>
             {
                 NativeFreeFlightSettingsStore.Save(NativeFreeFlightSettingsStore.Capture(workspace), 14, true);
                 return Task.CompletedTask;
             }));
-            bool deferredPreferencePreserved = false;
+            bool lateChoiceRefused = false, lateChoicePreserved = false;
             try
             {
                 Complete((Task)Invoke(window, "CreateAllSavedEditsTestAsync", sourceImage, sourceCue, output, targets)!);
-                deferredPreferencePreserved = NativeFreeFlightSettingsStore.Capture(workspace).GlobalEnabled;
+            }
+            catch (InvalidDataException error) when (error.Message.Contains("Fly Anywhere settings changed during export", StringComparison.Ordinal))
+            {
+                lateChoiceRefused = true;
             }
             finally
             {
+                lateChoicePreserved = NativeFreeFlightSettingsStore.Capture(workspace).GlobalEnabled;
                 flightDelay.SetValue(window, null);
                 File.Delete(Path.Combine(workspace, NativeFreeFlightSettingsStore.FileName));
             }
-            Require(deferredPreferencePreserved && File.ReadAllBytes(finalPrefix + ".bin").AsSpan().SequenceEqual(publishedImage) &&
+            Require(lateChoiceRefused && lateChoicePreserved && File.ReadAllBytes(finalPrefix + ".bin").AsSpan().SequenceEqual(publishedImage) &&
                 File.ReadAllText(finalPrefix + ".cue") == publishedCue,
-                "A deferred research preference changed the release image or was overwritten during publication.");
+                "A Fly Anywhere choice saved during publication must stop the export and leave the published game unchanged.");
 
             if (!OperatingSystem.IsWindows())
             {

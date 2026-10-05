@@ -73,9 +73,13 @@ try
         Exception? failure = null;
         try { Complete((Task)build.Invoke(window, [sourceImage, sourceCue, output, Array.CreateInstance(targetType, 0)])!); }
         catch (Exception error) { failure = error; }
-        Require(failure == null, "Deferred release flight preferences must not start a source export by themselves.");
+        // Fly Anywhere ships: a saved choice with nothing else to export asks for a rebuild, which needs
+        // the exact original disc. This fixture is not one, so the export must refuse, and refuse cleanly.
+        string refusal = (failure is System.Reflection.TargetInvocationException wrapped ? wrapped.InnerException : failure)?.ToString() ?? "";
+        Require(failure != null && refusal.Contains("unchanged original USA disc image", StringComparison.Ordinal),
+            "A saved Fly Anywhere choice must be refused for a source that is not the exact original disc: " + refusal);
         Require(NativeFreeFlightSettingsStore.Capture(fixtureRoot).ContentSha256 == preference.ContentSha256,
-            "Release export must preserve the saved research flight preference.");
+            "A refused export must preserve the saved flight preference.");
         foreach (var artifact in previous)
             Require(File.ReadAllText(artifact.Key) == artifact.Value, "Rejected flight source replaced previous output.");
     }
@@ -162,6 +166,18 @@ static void VerifyExportScratchSpace()
                 File.Exists(keep) && !File.Exists(dead), "Only the newest authored baseline image may remain.");
         Require(Spyro.Editor.Core.Exporting.ExportScratchSpace.SweepStale(Path.Combine(workspace, "missing"), TimeSpan.Zero) == 0,
             "Sweeping a project without working copies must be a no-op.");
+        // The ordinary export stages images under output/_combined-build/run-*: images go, reports and the game stay.
+        string output = Path.Combine(workspace, "output"), run = Path.Combine(output, "_combined-build", "run-abc");
+        Directory.CreateDirectory(run);
+        string game = Path.Combine(output, "Spyro Editor - All Saved Edits.bin"), staged = Path.Combine(run, "03-terrain.bin"),
+            report = Path.Combine(run, "current.build-safety.json"), tiny = Path.Combine(run, "note.bin");
+        File.WriteAllBytes(game, new byte[4096]); File.WriteAllBytes(staged, new byte[3000]);
+        File.WriteAllText(report, "{}"); File.WriteAllBytes(tiny, new byte[10]);
+        Require(Spyro.Editor.Core.Exporting.ExportScratchSpace.DeleteStagedImages(output, smallestImageBytes: 1000) == 3000 &&
+                !File.Exists(staged) && File.Exists(report) && File.Exists(tiny) && File.Exists(game),
+            "Only staged disc images may be removed from the ordinary export's working folder.");
+        Require(Spyro.Editor.Core.Exporting.ExportScratchSpace.DeleteStagedImages(Path.Combine(workspace, "no-output")) == 0,
+            "Cleaning a project that never exported must be a no-op.");
     }
     finally
     {
