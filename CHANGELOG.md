@@ -26,6 +26,7 @@ Fixed
 - Create BIN left 1.3 to 2.6 GB of working copies in the project folder every time. They are now removed after every export, also when the export fails, and old ones are cleaned up at start.
 - Create BIN failed with "collision block storage contains unreferenced groups" in a project that both moved a portal and added or removed terrain in the same level.
 - Create BIN failed with "authored surface consumer authority requires the complete exact original USA executable" when a level had both changed gem totals and added or removed terrain.
+- In a level you built yourself (New Level or Start Blank), painting a texture on the starting floor, or on any tile wider than 255 units, made Create BIN refuse the level. Large painted tiles now export.
 - A failed Create BIN never touches the game you created before; this is now tested.
 - A single-letter key (C or V) could copy and paste a tile's look without any hint. That shortcut is off.
 
