@@ -50,7 +50,10 @@ internal static class ExportWorkflowUiCases
             TextBlock status = Get<TextBlock>(window, "_statusText");
 
             // 1. With the folded corner still saved, Create BIN must refuse cleanly.
+            string terrainFile = Path.Combine(workspace, "artisans-terrain-edits.json");
+            byte[]? refusingTerrain = File.Exists(terrainFile) ? File.ReadAllBytes(terrainFile) : null;
             bool hadProblem = RunCreateBin(window, out string firstStatus);
+            bool refusedFirst = window.CurrentTerrainExportProblemForTesting != null;
             if (window.CurrentTerrainExportProblemForTesting != null)
             {
                 Check(Published().Length == 0, "a refused export publishes no BIN");
@@ -81,14 +84,45 @@ internal static class ExportWorkflowUiCases
             Check(Staged() == 0, "a successful export leaves no working copies behind");
             Check(!Directory.GetFiles(output, "*.pending-*").Any(), "no pending files remain beside the output");
             Snapshot(window, Path.Combine(outDir, "2-export-created.png"));
-            using var stream = File.OpenRead(bin);
-            string hash = Convert.ToHexStringLower(SHA256.HashData(stream));
-            Console.WriteLine($"EXPORT_WORKFLOW_UI_OK checks={_checks} bin={bin} sha256={hash} status={status.Text}");
+            string hash = Sha(bin);
+            string cueBefore = File.ReadAllText(cue);
+
+            // 3. A later export that fails must leave the last good game untouched.
+            if (refusedFirst && refusingTerrain != null)
+            {
+                window.Close(); Pump(10);
+                File.WriteAllBytes(terrainFile, refusingTerrain);
+                window = new MainWindow { Width = 1440, Height = 900 };
+                window.Show();
+                WaitIdle(window);
+                artisans = Get<LevelCatalog>(window, "_retailCatalog").FindByKey("artisans")!;
+                if (window.CaptureEditorShellSessionSnapshotForTesting().CurrentLevel?.Key != "artisans")
+                {
+                    var load = (Task)Invoke(window, "SelectLevelAsync", artisans, null)!;
+                    Wait(() => load.IsCompleted, "reload Artisans", 300);
+                    WaitIdle(window);
+                }
+                RunCreateBin(window, out string failedStatus);
+                Check(failedStatus.StartsWith("Could not create BIN", StringComparison.Ordinal),
+                    "the failed export says so: " + failedStatus);
+                Check(Published().Length == 1 && Sha(bin) == hash && File.ReadAllText(cue) == cueBefore,
+                    "the last good BIN and CUE are byte-for-byte unchanged after a failed export");
+                Check(Staged() == 0 && !Directory.GetFiles(output, "*.pending-*").Any(),
+                    "the failed export leaves no working copies or pending files");
+                Snapshot(window, Path.Combine(outDir, "3-later-export-refused.png"));
+            }
+            Console.WriteLine($"EXPORT_WORKFLOW_UI_OK checks={_checks} bin={bin} sha256={hash} status={Get<TextBlock>(window, "_statusText").Text}");
         }
         finally
         {
             window.Close(); Pump(10);
         }
+    }
+
+    private static string Sha(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexStringLower(SHA256.HashData(stream));
     }
 
     /// <summary>Presses Create BIN, confirms the scope dialog when it appears and waits for the command to end.</summary>

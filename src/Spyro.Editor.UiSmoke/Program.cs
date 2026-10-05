@@ -47,6 +47,14 @@ if (args.Contains("--terrain-problem-ui", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Contains("--keyboard-ui", StringComparer.Ordinal))
+{
+    if (args.Length != 3) throw new ArgumentException("Usage: UiSmoke --keyboard-ui <project folder> <output folder>");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    KeyboardUiCases.Run(args[1], args[2]);
+    return 0;
+}
+
 if (args.Contains("--fly-anywhere-ui", StringComparer.Ordinal))
 {
     if (args.Length is not (3 or 4)) throw new ArgumentException("Usage: UiSmoke --fly-anywhere-ui <project folder> <output folder> [--settings-only]");

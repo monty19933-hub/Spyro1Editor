@@ -120,12 +120,8 @@ internal static class NativeFreeFlightPatchBuilder
                 .Select(i => BinaryPrimitives.ReadUInt32LittleEndian(window.After.AsSpan(i * 4, 4))).ToArray();
             if (window.Name == "permission")
             {
-                // Native64 first, otherwise normal classifier; retain ground
-                // guard and the native existing permission field. The ground
-                // load is separated from its consumer on both branch paths.
-                words = [Lui(3, 0x8007), Lw(2, 3, 0x596C), Lw(3, 3, 0x5690), Li(1, 64),
-                    Beq(2, 1, 4, 7), Lui(1, 0x8008), Bne(3, 0, 6, 12), Lw(2, 1, -0x750C),
-                    0, Bne(2, 0, 9, 12), Li(2, 1), Sw(2, 1, -0x735C)];
+                windows.Add(BuildGlobalPermission(window));
+                continue;
             }
             else if (window.Name == "enter-cross")
             {
@@ -155,6 +151,37 @@ internal static class NativeFreeFlightPatchBuilder
         return windows.AsReadOnly();
     }
 
+    /// <summary>
+    /// The movement routine tests the game state just before the native permission rule and skips the
+    /// rule outside normal gameplay, so the flag set in a level survives into the level change that
+    /// follows. With the flag set the glide code draws the wing-trail effects by calling into the level
+    /// overlay, and the scripted glide through a portal runs while the next level is being read over
+    /// that overlay. The original game never has the flag set in a level that owns a portal glide.
+    /// This window therefore starts two instructions earlier, at that game-state test, and withdraws
+    /// the permission whenever the game is not in normal gameplay.
+    ///   v1 = game state on entry (0 = normal gameplay); the displaced addu keeps its place and inputs.
+    ///   Flight courses (classifier set) are left alone: their loader owns the flag.
+    ///   Elsewhere (the classifier is 0 in Gnasty's Loot too): store (game state == 0) when airborne
+    ///   or not in normal gameplay; on the ground in normal gameplay nothing is written.
+    /// </summary>
+    private static NativeFreeFlightWindow BuildGlobalPermission(NativeFreeFlightWindow native)
+    {
+        const uint address = 0x80044038;
+        if (native.Address != address + 8)
+            throw new InvalidDataException("Free Flight permission window moved.");
+        byte[] before = [.. Convert.FromHexString("0d00601421984400"), .. native.Before];
+        uint[] words = [Lui(1, 0x8007), 0x00449821 /* addu s3, v0, a0 */, Lw(2, 1, 0x5690), Lui(1, 0x8008),
+            Bne(2, 0, 4, 14), Lw(2, 1, -0x750C), 0, Sltiu(2, 2, 1),
+            Or(2, 2, 3), Beq(2, 0, 9, 14), Sltiu(2, 3, 1), Sw(2, 1, -0x735C), 0, 0];
+        byte[] after = new byte[words.Length * 4];
+        for (int i = 0; i < words.Length; i++)
+            BinaryPrimitives.WriteUInt32LittleEndian(after.AsSpan(i * 4, 4), words[i]);
+        if (before.Length != after.Length)
+            throw new InvalidDataException("Free Flight instruction window size changed: permission");
+        ExecutablePatchSafety.GuardPatchRange(address, after.Length, "Free Flight permission");
+        return new("permission", address, before, after);
+    }
+
     private static uint I(int op, int rs, int rt, int immediate) =>
         ((uint)op << 26) | ((uint)rs << 21) | ((uint)rt << 16) | unchecked((ushort)immediate);
     private static uint R(int rs, int rt, int rd, int shift, int fn) =>
@@ -165,6 +192,8 @@ internal static class NativeFreeFlightPatchBuilder
     private static uint Li(int rt, int value) => I(9, 0, rt, value);
     private static uint Addiu(int rt, int rs, int value) => I(9, rs, rt, value);
     private static uint Slti(int rt, int rs, int value) => I(10, rs, rt, value);
+    private static uint Sltiu(int rt, int rs, int value) => I(11, rs, rt, value);
+    private static uint Or(int rd, int rs, int rt) => R(rs, rt, rd, 0, 0x25);
     private static uint Sra(int rd, int rt, int shift) => R(0, rt, rd, shift, 3);
     private static uint Addu(int rd, int rs, int rt) => R(rs, rt, rd, 0, 0x21);
     private static uint Subu(int rd, int rs, int rt) => R(rs, rt, rd, 0, 0x23);

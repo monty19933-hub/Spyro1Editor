@@ -147,6 +147,7 @@ public sealed partial class MainWindow
                 {
                     new ColumnDefinition(new GridLength(10)),
                     new ColumnDefinition(GridLength.Star),
+                    new ColumnDefinition(GridLength.Auto),
                     new ColumnDefinition(GridLength.Auto)
                 },
                 ColumnSpacing = 8,
@@ -161,10 +162,12 @@ public sealed partial class MainWindow
                         VerticalAlignment = VerticalAlignment.Center
                     },
                     _visibleStatusText,
+                    BuildShowExportedGameButton(),
                     NewAsyncButton("Details", ShowStatusDetailsAsync)
                 }
             }
         };
+        Grid.SetColumn(((Grid)status.Child!).Children[2], 2);
         _visibleStatusText.Foreground = new SolidColorBrush(Color.FromRgb(59, 68, 78));
         _visibleStatusText.FontSize = 12;
         _visibleStatusText.VerticalAlignment = VerticalAlignment.Center;
@@ -177,7 +180,7 @@ public sealed partial class MainWindow
         };
         _visibleStatusText.Text = VisibleEditorStatus(_statusText.Text ?? "");
         Grid.SetColumn(_visibleStatusText, 1);
-        Grid.SetColumn(((Grid)status.Child!).Children[^1], 2);
+        Grid.SetColumn(((Grid)status.Child!).Children[^1], 3);
         Grid.SetRow(status, 3);
         root.Children.Add(status);
 

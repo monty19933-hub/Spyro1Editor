@@ -108,7 +108,7 @@ internal static class EditorNavigationUiCases
             geometry.Polygons[0].ApplyTerrainDeltaZ(24);
             var status = Get<TextBlock>(window, "_statusText");
             status.Text = "Created all-edits test game.cue: 2 object patch(es). Exported treasure target: 250."; Pump();
-            Check(Find<TextBlock>(window, "EditorStatusSummary").Text!.StartsWith("Game exported.") && status.Text.Contains("250"), "Export summary is readable while Details retains exact totals.");
+            Check(Find<TextBlock>(window, "EditorStatusSummary").Text!.StartsWith("Game exported") && status.Text.Contains("250"), "Export summary is readable while Details retains exact totals.");
             status.Text = "Created all-edits test game.cue. Skipped 1 edit: missing source."; Pump();
             Check(Find<TextBlock>(window, "EditorStatusSummary").Text == status.Text, "Partial-export warnings remain visible.");
             status.Text = "Could not create BIN: missing floor."; Pump();

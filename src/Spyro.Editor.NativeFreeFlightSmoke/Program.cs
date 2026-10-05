@@ -393,6 +393,7 @@ static class Machine
                 case 0 when fn == 3: Set(rd, r[rt] >> shift); break;
                 case 0 when fn == 0x21: Set(rd, unchecked(r[rs] + r[rt])); break;
                 case 0 when fn == 0x23: Set(rd, unchecked(r[rs] - r[rt])); break;
+                case 0 when fn == 0x25: Set(rd, r[rs] | r[rt]); break;
                 case 0 when fn == 0x2A: Set(rd, r[rs] < r[rt] ? 1 : 0); break;
                 case 1 when rt == 1: branch = r[rs] >= 0 ? unchecked(pc + 4 + (uint)(immediate * 4)) : pc + 8; break;
                 case 2: branch = ((pc + 4) & 0xF0000000) | ((word & 0x03FFFFFF) << 2); break;
@@ -400,6 +401,7 @@ static class Machine
                 case 5: branch = r[rs] != r[rt] ? unchecked(pc + 4 + (uint)(immediate * 4)) : pc + 8; break;
                 case 9: Set(rt, unchecked(r[rs] + immediate)); break;
                 case 10: Set(rt, r[rs] < immediate ? 1 : 0); break;
+                case 11: Set(rt, unchecked((uint)r[rs]) < unchecked((uint)immediate) ? 1 : 0); break;
                 case 15: Set(rt, unchecked((int)(word << 16))); break;
                 case 35:
                     if (!memory.TryGetValue(address, out int value)) throw new InvalidDataException($"Unbound read {address:X8}");

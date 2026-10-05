@@ -201,6 +201,15 @@ public sealed partial class EditorViewport : Control
     public event EventHandler? ObjectPlacementCanceled;
     public event EventHandler? ObjectCopyRequested;
     public event EventHandler<ViewportObjectPasteRequestedEventArgs>? ObjectPasteRequested;
+    /// <summary>Delete or Backspace with an object selected (the view has keyboard focus).</summary>
+    public event EventHandler? ObjectRemoveRequested;
+    /// <summary>Ctrl/Cmd+Z in the view.</summary>
+    public event EventHandler? UndoRequested;
+    /// <summary>Ctrl/Cmd+Shift+Z or Ctrl+Y in the view.</summary>
+    public event EventHandler? RedoRequested;
+    /// <summary>Plain C / V copy and paste a tile's look. Off in the shipping editor: an unannounced
+    /// single-letter key should not repaint terrain.</summary>
+    public bool AllowTerrainLookKeys { get; set; } = true;
     public event EventHandler<ViewportViewMode>? ViewModeChanged;
 
     public string EmptyMessage
@@ -2100,13 +2109,17 @@ public sealed partial class EditorViewport : Control
             return;
         }
 
+        if (TryRequestUndoRedo(e))
+            return;
         if (TryRequestTerrainBrushMode(e))
             return;
         if (TryRequestTerrainRemoval(e))
             return;
+        if (TryRequestObjectRemoval(e))
+            return;
         if (TryRequestObjectCopyPaste(e))
             return;
-        if (TryRequestTerrainLookShortcut(e))
+        if (AllowTerrainLookKeys && TryRequestTerrainLookShortcut(e))
             return;
 
         if (_viewMode != ViewportViewMode.Fly3D)
@@ -2178,6 +2191,32 @@ public sealed partial class EditorViewport : Control
         _isPanning = false;
         if (interruptedFlyNavigation)
             ScheduleFlyNavigationMaterialSettle();
+    }
+
+    private bool TryRequestUndoRedo(KeyEventArgs e)
+    {
+        if (!IsPlatformCopyPasteModifier(e.KeyModifiers) || (e.KeyModifiers & KeyModifiers.Alt) != 0)
+            return false;
+        bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
+        if (e.Key == Key.Z && !shift)
+            UndoRequested?.Invoke(this, EventArgs.Empty);
+        else if (e.Key == Key.Z || e.Key == Key.Y)
+            RedoRequested?.Invoke(this, EventArgs.Empty);
+        else
+            return false;
+        e.Handled = true;
+        return true;
+    }
+
+    private bool TryRequestObjectRemoval(KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Delete or Key.Back) || e.KeyModifiers != KeyModifiers.None)
+            return false;
+        if (_selectedMobyIndex < 0 || _selectedMobyIndex >= Mobys.Count || Mobys[_selectedMobyIndex].IsRemoved)
+            return false;
+        ObjectRemoveRequested?.Invoke(this, EventArgs.Empty);
+        e.Handled = true;
+        return true;
     }
 
     private bool TryRequestObjectCopyPaste(KeyEventArgs e)

@@ -284,6 +284,7 @@ public sealed partial class MainWindow
         RequireOwner();
         string startName=saved.FirstOrDefault(s=>s.ResolveTarget(_retailCatalog).LevelId==startLevelId)?.Name??"Artisans";
         string flightNote=!flightIntent.RequiresRebuild?"":flightIntent.Enabled?" Fly Anywhere is on in this game.":" Fly Anywhere is off in this game.";
+        RememberExportedGame(Path.ChangeExtension(output,".cue"));
         _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. All saved level replacements and other saved edits are included."+flightNote+PreservedResearchExportNote();
         }
         // The merged retail image is a working copy for this export only.

@@ -461,6 +461,17 @@ public sealed partial class MainWindow : Window
         };
         _viewport.ObjectPlacementCanceled += (_, _) => CancelPendingMobyPlacement();
         _viewport.ObjectCopyRequested += (_, _) => CopySelectedMoby();
+        _viewport.AllowTerrainLookKeys = !_releaseMode;
+        _viewport.ObjectRemoveRequested += (_, _) =>
+        {
+            // Same rules as the Remove button: nothing happens for objects that cannot be removed.
+            if (_objectRemoveButton?.IsEnabled == true)
+                RemoveSelectedMoby();
+            else if (_selectedMoby != null)
+                _statusText.Text = $"{PlainObjectName(_selectedMoby)} cannot be removed.";
+        };
+        _viewport.UndoRequested += (_, _) => UndoFromKeyboard();
+        _viewport.RedoRequested += (_, _) => RedoFromKeyboard();
         _viewport.ObjectPasteRequested += async (_, e) =>
         {
             if (!TryBlockId65ObjectMutation("Viewport object paste"))
@@ -2694,6 +2705,7 @@ public sealed partial class MainWindow : Window
 
                 _levelLoadRequestId++;
                 _workspace = preparedWorkspace;
+                RememberExportedGame(null);
                 ClearLoadedSceneForWorkspaceCommit();
                 _terrainTexturePreviewBundleCache.Clear();
                 ClearPrivateTexturePreflightSessionCache();
@@ -13510,6 +13522,7 @@ public sealed partial class MainWindow : Window
             : $" for {FormatShortList(result.PatchedLevelNames, 4)}";
         string treasureSummary = BuildExportedTreasureStatus(result.ExportedTreasureTargets);
         string skippedSummary = BuildSkippedExportStatus(result.SkippedEdits, result.SkippedEditDetails);
+        RememberExportedGame(result.OutputCuePath);
         string successStatus = $"Created all-edits test {Path.GetFileName(result.OutputCuePath)}{levelSummary}: {result.ObjectPatches} object patch(es), {result.TerrainPatches} terrain patch(es), {result.EnvironmentGradePatches} environment patch(es), {result.SkyboxPatches} sky block patch(es), {result.LevelNamePatches} level name(s), {result.MusicLevelPatches} music level(s), {result.PortalRoutePatches} portal route(s).{treasureSummary}{skippedSummary}{result.FreeFlightSummary}{PreservedResearchExportNote()}";
         _statusText.Text = successStatus;
         try
@@ -27045,77 +27058,69 @@ public sealed partial class MainWindow : Window
 
         panel.Children.Add(new TextBlock
         {
-            Text = "Spyro Editor Controls",
+            Text = "How to use the editor",
             FontSize = 20,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 38, 45))
         });
 
-        AddHelpSection(panel, "Start", [
-            "Open Game: choose your original Spyro BIN or CUE disc image.",
-            "Level list: choose the level to load objects and map data from that disc.",
-            "Objects, Terrain, Game Settings, and Environment organize the editing tools.",
-            "Save (⌘S on Mac, Ctrl+S on Windows): save the current level. Create BIN exports a playable copy.",
-            "File > New Level creates a new level; Start Blank clears the current level after confirmation and saves a recovery snapshot.",
-            "Create BIN: build one patched disc from all saved level-name, object, terrain, texture, music, and environment edits.",
-            "Build Safety: review any edit that needs attention. Double-click an affected item to select and center it."
+        string mod = OperatingSystem.IsMacOS() ? "⌘" : "Ctrl+";
+        AddHelpSection(panel, "Getting started", [
+            "Open Game…: choose your own original Spyro the Dragon disc image (BIN or CUE). The editor reads it and never changes it.",
+            "Pick a level from the list at the top left.",
+            "Change things in the four tabs on the right — Objects, Terrain, Game Settings, Environment — then Save, then Create BIN."
         ]);
 
-        AddHelpSection(panel, "Level Names", [
-            "Choose any catalog level in Level Name, enter a name that fits the shown maximum, then use Save Name.",
-            "Regular level names change portal lettering, transition text, and the guidebook together.",
-            "Names support uppercase letters, spaces, and apostrophes."
+        AddHelpSection(panel, "Save and Create BIN", [
+            $"Save ({mod}S) keeps the open level's changes in your project. It does not make a game.",
+            "Create BIN saves first, then builds a new playable game — a BIN and a CUE — from everything saved in the project. The files go in the project's output folder; open the CUE in your emulator.",
+            "Your original disc image is never written to.",
+            "If something cannot be put in the game, the editor says what and where. More ▾ > Check for Export Issues… runs the same check without building."
         ]);
 
-        AddHelpSection(panel, "View", [
-            "Edit Map: the complete top-down editor. All captured editable terrain remains visible and selectable.",
-            "Fit All: re-center Edit Map on the whole level.",
-            "Game Camera: move through the level from its normal entry point.",
-            "Frame Selection: when an object is selected, move Game Camera to it without changing scene contents.",
-            "Return to Entry: when nothing is selected, reset Game Camera to the level entry."
+        AddHelpSection(panel, "The view", [
+            "Edit Map looks straight down at the whole level. Game Camera flies through it. Fit All, Frame Selection and Return to Entry bring the view back.",
+            "Click selects. Drag moves what you selected. Double-click opens its settings.",
+            "Right-drag (or middle-drag) pans the map or looks around. The mouse wheel zooms the map or moves the camera forward and back.",
+            "Game Camera keys, after clicking in the view: W A S D fly, Q and E go up and down, the arrow keys turn."
         ]);
 
-        AddHelpSection(panel, "Mouse", [
-            "Left click: select an object.",
-            "Left drag: move the selected object.",
-            "Double click: edit the object under the cursor.",
-            "Right drag or middle drag: pan Edit Map or look around with Game Camera.",
-            "Mouse wheel: zoom Edit Map or move Game Camera forward/back."
+        AddHelpSection(panel, "Objects tab", [
+            "Add object…: everything from every level. Choose one, then click in the view where it should go. Esc cancels.",
+            "Add dragonfly egg and Add sign place the editor's own collectibles and readable signs.",
+            "Add a gem or copy an object… offers the standard gems and copies of what is already in the level.",
+            "Edit…: name, gem or reward value, position and facing. Replace…: swap a chest or enemy for another that is known to work here.",
+            $"Copy and Paste ({mod}C, {mod}V in the view) duplicate the selected object at the pointer.",
+            $"Remove (or Delete in the view) takes the object out; Undo last removal ({mod}Z in the view) brings it back.",
+            "Undo puts the selected object back the way it is in the original game.",
+            "Height and ground: slide the object up or down, keep it on the ground while you drag it, or jump it to the floor above or below.",
+            "Dragons keep their pedestal and rescue scene with them when moved. The ENTRY marker is where Spyro lands when he flies into the level."
         ]);
 
-        AddHelpSection(panel, "Game Camera", [
-            "Windows and Mac: W/A/S/D move forward, left, back, and right.",
-            "Windows and Mac: Q/E move up and down.",
-            "Windows and Mac: arrow keys turn and tilt the camera."
+        AddHelpSection(panel, "Terrain tab", [
+            $"Tiles: click a tile to select it, {(OperatingSystem.IsMacOS() ? "⌘" : "Ctrl")}-click to select several, drag to move, Shift-drag to change height. Move Tile… and Edit Corner… take exact amounts.",
+            "Add Terrain copies the selected tile so you can move the copy into place. Remove Terrain (or Delete in the view) takes tiles out; Undo Terrain puts the selected tile back or brings removed tiles back.",
+            $"Brush: Raise, Lower, Smooth, Level or Restore the ground under the circle. Keys 1 to 5 choose a brush, 0 or Esc switches it off. Undo Stroke is {mod}Z in the view, Redo Stroke is {(OperatingSystem.IsMacOS() ? "⇧⌘Z" : "Ctrl+Y")}.",
+            "Textures: Choose Texture…, then click tiles to paint them. Esc stops painting.",
+            "If a shape cannot be exported, a red bar says so, with Show it and Undo that change."
         ]);
 
-        AddHelpSection(panel, "Objects", [
-            "Add object: search the whole game catalog, choose a version, then place it in Edit Map or Game Camera.",
-            "Objects in this level: find objects you already placed. Quick Add offers standard gems and local copies.",
-            "Position & snapping: adjust height or snap an object to terrain.",
-            "Copy and Paste: duplicate the selected object's editable data at the cursor.",
-            "Edit: change the name, gem or reward value, position, and facing.",
-            "Replace: choose from the replacements currently available for the selected chest or enemy.",
-            "Fly-in Landing: destination levels show one ENTRY marker for where Spyro finishes the flight from a homeworld. Moving it does not change return-home travel.",
-            "Dragons: moving an existing dragon keeps its pedestal and scene link aligned, and Create BIN moves both the approach camera and later rescue cinematic by the same amount.",
-            "Remove: stages the selected object for removal.",
-            "Undo: clears staged changes on the selected object."
+        AddHelpSection(panel, "Game Settings and Environment", [
+            "Level name changes the name on portals, loading screens and in the guidebook. Music picks the level's track.",
+            "Fly Anywhere (whole game): tick it and the game you export lets Spyro fly in every normal level — jump, then press ✕ again in the air. It is off unless you turn it on, and it is separate from the editor's Game Camera.",
+            "Portals & Return Home: choose where each portal leads and where Return Home goes.",
+            "Environment: recolor the sky, borrow another level's sky, or use a ready-made one."
         ]);
 
-        AddHelpSection(panel, "Terrain Textures", [
-            "Choose Texture & Start Painting opens the current level first. Choose another level only when you want its textures.",
-            "Double-click a texture, then click terrain to paint.",
-            "Return to Texture Palette keeps loaded texture levels available while you choose another brush.",
-            "When a single-tile slot is available, only the clicked section changes. Otherwise the editor shows how many linked sections will change and asks first.",
-            "Save Terrain Changes keeps the changes in your project. Create BIN checks them again before writing the disc."
+        AddHelpSection(panel, "Levels of your own", [
+            "File ▾ > New Level… starts a level of your own that opens when you choose New Game. A project holds one; the editor asks before replacing it and keeps a copy in the project's backups folder.",
+            "File ▾ > Start Blank in Current Level… empties the open level down to a small floor so you can rebuild it. Restore Before Clear… brings the previous version back.",
+            "File ▾ > Open Created Level… reopens the level you made."
         ]);
 
-        AddHelpSection(panel, "Keyboard", [
-            "Windows: Ctrl+C copies the selected object.",
-            "Windows: Ctrl+V pastes the copied object at the cursor.",
-            "Mac: Command+C copies the selected object.",
-            "Mac: Command+V pastes the copied object at the cursor.",
-            "Escape: cancels Add Object placement."
+        AddHelpSection(panel, "Typing and shortcuts", [
+            "Shortcuts for the level only work after you click in the view. While you are typing in a box, keys only affect that box.",
+            $"{mod}S saves from anywhere."
         ]);
 
         if (!_releaseMode)

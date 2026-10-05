@@ -29,17 +29,39 @@ internal static class GlobalFreeFlightCases
                     Check(before.Exit == after.Exit && (window.Name == "enter-cross" || before.Registers[4] == after.Registers[4]),
                         "native flight and64 entry preserved");
             }
+            // Game state 0 is normal gameplay; anything else is a menu, cutscene or level change.
             foreach (int ground in new[] { 0, 1, -1, int.MinValue, int.MaxValue })
+            foreach (int gameState in new[] { 0, 1, 2, 13, -1, int.MinValue, int.MaxValue })
+            foreach (int held in new[] { 0, 1 })
             {
-                memory[0x80078AF4] = ground;
+                memory[0x80078AF4] = ground; memory[0x800757D8] = gameState; memory[0x80078CA4] = held;
                 var permission = windows.Single(w => w.Name == "permission");
-                var before = Machine.Run(permission.Address, permission.Before, memory, Registers());
-                var after = Machine.Run(permission.Address, permission.After, memory, Registers());
-                Check(after.Memory[0x80078CA4] == ((classification == 0 || level == 64) && ground == 0 ? 1 : 0),
-                    "normal/native64 permission with both load delays");
+                Check(permission.Address == 0x80044038 && permission.Before.Length == 56,
+                    "permission window starts at the routine's own game-state test");
+                // The routine has the game state in v1 when it reaches this window.
+                int[] registers = Registers(); registers[3] = gameState;
+                var before = Machine.Run(permission.Address, permission.Before, memory, registers);
+                var after = Machine.Run(permission.Address, permission.After, memory, registers);
+                Check(before.Exit == 0x80044070 && after.Exit == 0x80044070, "both versions leave at the state dispatch");
+                Check(before.Memory[0x80078CA4] == (gameState == 0 && level == 64 && ground == 0 ? 1 : held),
+                    "native rule oracle: Gnasty's Loot, airborne, normal gameplay");
+                // Flight courses: untouched. Elsewhere: granted while airborne in normal gameplay,
+                // kept on the ground, and withdrawn whenever the game is not in normal gameplay.
+                int expected = classification != 0 ? held : gameState != 0 ? 0 : ground == 0 ? 1 : held;
+                Check(after.Memory[0x80078CA4] == expected,
+                    "permission: normal gameplay only, with both load delays");
+                if (classification != 0)
+                    Check(after.Writes.Count == 0, "flight courses keep their loader-owned permission");
+                if (level == 64 && classification == 0 && gameState == 0)
+                    Check(after.Memory[0x80078CA4] == before.Memory[0x80078CA4], "native 64 rule in normal gameplay");
+                if (gameState != 0 && classification == 0)
+                    Check(after.Memory[0x80078CA4] == 0, "no flight effects can run between levels");
+                Check(after.Registers[19] == before.Registers[19] &&
+                      after.Registers[19] == unchecked(registers[2] + registers[4]), "the displaced addu keeps its inputs and result");
                 Same(before, after, [1, 2, 3]);
                 Check(after.Writes.All(a => a == 0x80078CA4), "only native permission field");
             }
+            memory[0x800757D8] = 0; memory[0x80078CA4] = 0;
             foreach (var height in windows.Where(w => w.Name.StartsWith("height-", StringComparison.Ordinal)))
             foreach (int substate in new[] { 0, 1, -1 })
             foreach (int delta in new[] { int.MinValue, -513, 0, 512, 513, int.MaxValue })
@@ -170,7 +192,7 @@ internal static class GlobalFreeFlightCases
 
     private static Dictionary<uint, int> Memory(int level, int classifier) => new()
     {
-        [0x8007596C] = level, [0x80075690] = classifier, [0x80078AF4] = 0, [0x80078CA4] = 0,
+        [0x8007596C] = level, [0x80075690] = classifier, [0x800757D8] = 0, [0x80078AF4] = 0, [0x80078CA4] = 0,
         [0x80078AD4] = 0, [0x80078A60] = 0, [0x80078BB0] = 0, [0x80078B78] = 0
     };
     private static int[] Registers() => Enumerable.Range(0, 32)
