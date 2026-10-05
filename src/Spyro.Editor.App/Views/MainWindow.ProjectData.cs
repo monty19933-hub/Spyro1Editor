@@ -86,9 +86,10 @@ public sealed partial class MainWindow
         // can still copy their old project into protected storage. Users who
         // already handled the reminder in V2 retain the same marker and will
         // not see it again.
-        if (!_releaseMode || AppReleaseIdentity.BetaVersion.Major < 2 || ReleaseProjectBootstrap.Current == null)
-            return;
-        _ = ShowPreviousBetaProjectReminderOnceAsync();
+        // The first screen of a new installation is for opening a game, not for migrating a 2025 beta.
+        // The same import stays available under More > Project Data, so the banner is no longer raised
+        // automatically; ShowPreviousBetaProjectReminderOnceAsync is kept for that explicit path.
+        return;
     }
 
     private async Task ShowPreviousBetaProjectReminderOnceAsync()

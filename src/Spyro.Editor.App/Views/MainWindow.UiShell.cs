@@ -114,6 +114,9 @@ public sealed partial class MainWindow
 
         Grid.SetColumn(_viewport, 0);
         body.Children.Add(_viewport);
+        Control welcome = BuildWelcomeOverlay();
+        Grid.SetColumn(welcome, 0);
+        body.Children.Add(welcome);
 
         GridSplitter splitter = new()
         {
@@ -127,6 +130,7 @@ public sealed partial class MainWindow
         body.Children.Add(splitter);
 
         Control sidebar = BuildModernSidebar();
+        _modernSidebarHost = sidebar;
         Grid.SetColumn(sidebar, 2);
         body.Children.Add(sidebar);
         root.Children.Add(body);
@@ -169,9 +173,9 @@ public sealed partial class MainWindow
         _statusText.PropertyChanged += (_, e) =>
         {
             if (e.Property == TextBlock.TextProperty)
-                _visibleStatusText.Text = SummarizeEditorStatus(_statusText.Text ?? "");
+                _visibleStatusText.Text = VisibleEditorStatus(_statusText.Text ?? "");
         };
-        _visibleStatusText.Text = SummarizeEditorStatus(_statusText.Text ?? "");
+        _visibleStatusText.Text = VisibleEditorStatus(_statusText.Text ?? "");
         Grid.SetColumn(_visibleStatusText, 1);
         Grid.SetColumn(((Grid)status.Child!).Children[^1], 2);
         Grid.SetRow(status, 3);

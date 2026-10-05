@@ -208,7 +208,7 @@ public sealed partial class EditorViewport : Control
         get => _emptyMessage;
         set
         {
-            _emptyMessage = string.IsNullOrWhiteSpace(value) ? "No captured level data loaded." : value;
+            _emptyMessage = string.IsNullOrWhiteSpace(value) ? "Nothing is loaded yet." : value;
             InvalidateVisual();
         }
     }
@@ -2613,12 +2613,26 @@ public sealed partial class EditorViewport : Control
             context.DrawLine(Math.Abs(y % (spacing * 4)) < 1 ? major : minor, new Point(bounds.Left, y), new Point(bounds.Right, y));
     }
 
+    /// <summary>Heading above the empty-scene message.</summary>
+    public string EmptyHeading { get; set; } = "Nothing to show yet";
+
+    /// <summary>
+    /// Shipping builds label things the way a player would: no internal object or tile numbers and no
+    /// engine vocabulary in the on-canvas hints. Development builds keep the technical labels.
+    /// </summary>
+    public bool PlainLabels { get; set; }
+
+    /// <summary>Set while a welcome card covers the empty viewport, so the same advice is not drawn twice.</summary>
+    public bool HideEmptyMessage { get; set; }
+
     private void DrawEmptyScene(DrawingContext context, Rect bounds, string message)
     {
+        if (HideEmptyMessage)
+            return;
         Typeface headingTypeface = new("Inter", FontStyle.Normal, FontWeight.SemiBold);
         Typeface bodyTypeface = new("Inter");
         FormattedText heading = new(
-            "No captured level data loaded",
+            EmptyHeading,
             System.Globalization.CultureInfo.CurrentCulture,
             FlowDirection.LeftToRight,
             headingTypeface,
@@ -8229,11 +8243,17 @@ public sealed partial class EditorViewport : Control
         return true;
     }
 
-    private static string BuildMobyMapLabel(Moby moby, bool includeIndex)
+    private string BuildMobyMapLabel(Moby moby, bool includeIndex)
     {
         string label = ShortMobyLabel(moby);
         if (string.IsNullOrWhiteSpace(label))
-            label = moby.VisualKind == MobyVisualKind.Unknown ? "Unknown moby" : moby.VisualKind.ToString();
+            label = moby.VisualKind == MobyVisualKind.Unknown ? (PlainLabels ? "Object" : "Unknown moby") : moby.VisualKind.ToString();
+        if (PlainLabels)
+        {
+            if (label.StartsWith("Needs ID", StringComparison.Ordinal))
+                label = label.Contains(':') ? "Unnamed " + label[(label.IndexOf(':') + 1)..].Trim().ToLowerInvariant() : "Unnamed object";
+            return moby.IsAdded && includeIndex ? "New: " + label : label;
+        }
 
         return includeIndex
             ? $"{moby.DisplayIndex} {label}"
@@ -8295,6 +8315,8 @@ public sealed partial class EditorViewport : Control
 
     private string BuildViewportHelpText(string brushSafety)
     {
+        if (PlainLabels)
+            return BuildPlainViewportHelpText();
         bool flyView = _viewMode == ViewportViewMode.Fly3D;
         string mode = flyView ? "Game Camera" : "Edit Map";
         string gameTerrainStatus = flyView && _flipMapY
@@ -8325,6 +8347,29 @@ public sealed partial class EditorViewport : Control
         return flyView
             ? $"Game Camera: W/A/S/D move    Q up / E down (fine)    right-drag look    drag objects to move{gameTerrainStatus}"
             : "Edit Map: scroll zoom    right/middle drag pan    click object select";
+    }
+
+    /// <summary>One short line of what the mouse and keys do right now.</summary>
+    private string BuildPlainViewportHelpText()
+    {
+        if (Geometry == null || Geometry.Polygons.Count == 0)
+            return "";
+        bool flyView = _viewMode == ViewportViewMode.Fly3D;
+        string move = flyView
+            ? "W A S D fly  ·  Q / E up and down  ·  right-drag to look"
+            : "Scroll to zoom  ·  right-drag to pan";
+        if (_terrainTexturePaintMode)
+        {
+            string paint = string.IsNullOrWhiteSpace(_terrainTexturePaintHint) ? "the chosen texture" : _terrainTexturePaintHint;
+            return _terrainTexturePaintBusy
+                ? $"Painting {paint}…"
+                : $"Painting {paint}: click tiles to paint them  ·  Esc stops  ·  {move}";
+        }
+        if (_terrainBrushAction != TerrainBrushAction.Off)
+            return $"{TerrainBrushActionLabel(_terrainBrushAction)}: drag over the ground  ·  keys 1–5 change brush, 0 turns it off  ·  {move}";
+        if (IsTerrainVisualFocusActive())
+            return $"Click a tile to select it  ·  drag to move  ·  Shift-drag changes height  ·  {(OperatingSystem.IsMacOS() ? "⌘" : "Ctrl")}-click selects several  ·  {move}";
+        return $"Click an object to select it  ·  drag to move  ·  double-click to edit  ·  {move}";
     }
 
     private void DrawTerrainTargetReadout(DrawingContext context, Rect bounds)
@@ -8461,9 +8506,30 @@ public sealed partial class EditorViewport : Control
             (TerrainPatchSafetyKind.UnknownHeight, "Unknown"),
             (TerrainPatchSafetyKind.TextureOnly, "Texture")
         ];
+        if (PlainLabels)
+        {
+            // Only while working on terrain, only the kinds of change this level actually has, in plain words.
+            if (!IsTerrainVisualFocusActive())
+                return;
+            HashSet<TerrainPatchSafetyKind> present = geometry.Polygons
+                .Where(polygon => polygon.IsTerrainEdited)
+                .Select(TerrainPatchSafetyFor)
+                .ToHashSet();
+            items = new (TerrainPatchSafetyKind Kind, string Label)[]
+            {
+                (TerrainPatchSafetyKind.Structural, "Added or removed"),
+                (TerrainPatchSafetyKind.PlayableHeight, "Reshaped, solid"),
+                (TerrainPatchSafetyKind.PartialHeight, "Reshaped, partly solid"),
+                (TerrainPatchSafetyKind.VisualOnlyHeight, "Reshaped, looks only"),
+                (TerrainPatchSafetyKind.UnknownHeight, "Reshaped, not checked"),
+                (TerrainPatchSafetyKind.TextureOnly, "Repainted")
+            }.Where(item => present.Contains(item.Kind)).ToArray();
+            if (items.Length == 0)
+                return;
+        }
 
         double rowHeight = 18;
-        double width = 136;
+        double width = PlainLabels ? 172 : 136;
         double height = 12 + (items.Length * rowHeight);
         Rect panel = new(bounds.Right - width - 14, bounds.Bottom - height - 14, width, height);
         if (panel.Left < bounds.Left + 18 || panel.Top < bounds.Top + 42)
@@ -10295,7 +10361,9 @@ public sealed partial class EditorViewport : Control
             return;
 
         string role = IsMapUnderlaySurface(face.Polygon.Surface) ? "underlay" : "foreground";
-        string label = $"{TerrainMaterialClassifier.FormatSurface(face.Polygon.Surface)} {role}  F{terrainIndex}";
+        string label = PlainLabels
+            ? TerrainMaterialClassifier.FormatSurface(face.Polygon.Surface)
+            : $"{TerrainMaterialClassifier.FormatSurface(face.Polygon.Surface)} {role}  F{terrainIndex}";
         FormattedText text = new(
             label,
             System.Globalization.CultureInfo.CurrentCulture,

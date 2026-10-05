@@ -50,8 +50,12 @@ public sealed partial class MainWindow
         _terrainTexturePaintBusy || _terrainTextureRelocationBusy || _terrainTexturePaintHistoryRestoreBusy ||
         _id65BlankLabBusy || _nativeLevelReplacementBusy || _handlingLevelSelection || _levelSelectionAsyncInFlight > 0;
 
+    /// <summary>A level (or an authored scene) is actually open; false on the first-run screen.</summary>
+    private bool HasLoadedSceneContent =>
+        !_releaseMode || _freshSceneDocument != null || _currentGeometry != null || _currentMobys.Count > 0;
+
     private void RefreshToolbarSaveAvailability() =>
-        SetButtonEnabled(_toolbarSaveButton, _currentLevel != null && !_saveCommandRunning && !ToolbarSaveBlocked);
+        SetButtonEnabled(_toolbarSaveButton, _currentLevel != null && HasLoadedSceneContent && !_saveCommandRunning && !ToolbarSaveBlocked);
 
     private async Task SaveFromToolbarAsync()
     {

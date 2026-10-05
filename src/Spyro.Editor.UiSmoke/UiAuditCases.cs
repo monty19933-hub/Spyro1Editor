@@ -33,6 +33,28 @@ internal static class UiAuditCases
         Environment.CurrentDirectory = Path.GetFullPath(workspace);
         MainWindow window = new() { Width = 1440, Height = 900 };
         window.Show();
+        if (levelKeys.Length == 1 && levelKeys[0] == "--first-run")
+        {
+            // A new installation: no disc chosen, nothing cached. Only the first screen exists.
+            try
+            {
+                Pump(400);
+                Section("FIRST RUN (no disc chosen)");
+                Line("title: " + window.Title);
+                Line("status: " + Get<TextBlock>(window, "_statusText").Text);
+                Shot(window, "first-run");
+                window.Width = 1100; window.Height = 700; Pump(20);
+                Shot(window, "first-run-1100x700");
+                foreach (Control c in window.GetLogicalDescendants().OfType<Control>().Where(c => c.IsEffectivelyVisible)) Describe(c);
+            }
+            finally
+            {
+                File.WriteAllText(Path.Combine(_out, "inventory.txt"), Log.ToString());
+                try { window.Close(); Pump(5); } catch { }
+            }
+            Console.WriteLine($"UI_AUDIT_OK shots={_shot} inventory={Path.Combine(_out, "inventory.txt")}");
+            return;
+        }
         try
         {
             WaitIdle(window);

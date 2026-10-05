@@ -372,6 +372,7 @@ public sealed partial class MainWindow : Window
     {
         _workspace = EditorWorkspace.Find();
         _releaseMode = IsReleaseMode(_workspace);
+        _viewport.PlainLabels = _releaseMode;
         BeginExportScratchSweep();
         _retailCatalog = LevelCatalog.Load(_workspace.RootPath);
         _catalog = ResetCatalogForDeferredId65BlankLabValidation(_retailCatalog);
@@ -1892,7 +1893,9 @@ public sealed partial class MainWindow : Window
         _levelList.ItemsSource = _catalog.Levels;
         _levelJumpBox.ItemsSource = _catalog.Levels;
         _statusText.Text = $"Loaded {_catalog.Levels.Count} levels from {_workspace.RootPath}";
-        LevelDefinition? initialLevel = _catalog.FindByKey("stonehill") ?? _catalog.Levels.FirstOrDefault();
+        LevelDefinition? initialLevel = _releaseMode
+            ? ResolveStartupLevel()
+            : _catalog.FindByKey("stonehill") ?? _catalog.Levels.FirstOrDefault();
         SyncLevelPickers(initialLevel);
         _currentLevel = initialLevel;
         _levelTitle.Text = initialLevel?.DisplayName ?? "No level selected";
@@ -3243,6 +3246,9 @@ public sealed partial class MainWindow : Window
         _statusText.Text = $"{level.DisplayName}: {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces, {_viewport.Mobys.Count} objects";
         RefreshDiagnosticContext();
         EditorDiagnostics.RecordAction("Level loaded", $"{level.DisplayName} ({level.Key}); {_viewport.Mobys.Count} mobys; {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces");
+        if (_currentGeometry != null || _currentMobys.Count > 0)
+            RememberLastLevel(level);
+        RefreshWelcomeOverlay();
         _id65FreshDocumentProjectionSynchronized = exactId65BlankLab;
         RefreshId65BlankLabUi();
     }
@@ -10562,6 +10568,7 @@ public sealed partial class MainWindow : Window
 
     private void RefreshActionAvailability()
     {
+        RefreshWelcomeOverlay();
         RefreshPortalRouteAvailability();
         bool hasLevel = _currentLevel != null;
         bool manualId65OperationActive = _id65BlankLabBusy &&
@@ -10623,7 +10630,7 @@ public sealed partial class MainWindow : Window
             _objectUndoRemoveButton.IsVisible = _lastRemovedMoby != null;
         SetButtonEnabled(
             _toolbarCreateBinButton,
-            hasLevel && !IsCurrentId65BlankLab() && !_createBinBusy && !editorMutationOperationActive);
+            hasLevel && HasLoadedSceneContent && !IsCurrentId65BlankLab() && !_createBinBusy && !editorMutationOperationActive);
         SetButtonEnabled(_toolbarOpenDiscImageButton, sourceCommandEnabled);
         RefreshToolbarSaveAvailability();
         if (_toolbarFileMenu != null) _toolbarFileMenu.IsEnabled = !editorMutationOperationActive && !_createBinBusy;
@@ -28128,7 +28135,7 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            _sourceDiscStatusText.Text = "No BIN/CUE selected";
+            _sourceDiscStatusText.Text = _releaseMode ? "No game opened yet" : "No BIN/CUE selected";
             _sourceDiscStatusText.Foreground = new SolidColorBrush(Color.FromRgb(150, 83, 41));
         }
     }
@@ -32189,11 +32196,11 @@ public sealed partial class MainWindow : Window
         if (missing.Count == 0)
             return "";
 
+        if (_releaseMode)
+            return "This level has not been read from your disc yet. Choose Open Game… and select your Spyro the Dragon (USA) disc image to read it.";
         return "This level is in the catalog, but captured editor data is not loaded yet: "
             + string.Join(", ", missing)
-            + (_releaseMode
-                ? ". Click Open BIN/CUE to build terrain and object maps from your Spyro disc."
-                : ". Click Open BIN/CUE to build terrain and object maps from your Spyro disc. If you already selected a disc, run Build Local Editor Cache or Advanced > Map > Build Local Cache.");
+            + ". Click Open BIN/CUE to build terrain and object maps from your Spyro disc. If you already selected a disc, run Build Local Editor Cache or Advanced > Map > Build Local Cache.";
     }
 
     private static string BuildSurfaceSummary(GeometryCandidate? geometry)
