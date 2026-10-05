@@ -133,6 +133,8 @@ public sealed partial class MainWindow
         StackPanel content = new();
         _terrainPanelSelectionText = TerrainNote();
         _terrainPanelSelectionText.Name = "TerrainPanelSelection";
+        // Room for two lines, so the buttons below do not jump when the note gets longer on selection.
+        _terrainPanelSelectionText.MinHeight = 36;
         content.Children.Add(_terrainPanelSelectionText);
 
         Grid shape = TwoColumnGrid(1);

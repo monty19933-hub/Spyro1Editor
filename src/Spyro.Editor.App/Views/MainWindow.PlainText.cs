@@ -69,7 +69,7 @@ public sealed partial class MainWindow
                 : $"Removed {PlainObjectName(_lastRemovedMoby)}. Undo last removal brings it back.";
         Moby moby = _selectedMoby!;
         string name = PlainObjectName(moby);
-        string changed = objectHasEdits ? " Changed from the original; Undo puts it back." : "";
+        string changed = moby.IsAdded ? "" : objectHasEdits ? " Changed from the original; Undo puts it back." : "";
         if (moby.IsFlyInLandingControl)
             return "This is where Spyro lands when he flies into the level. His approach path moves with it." + changed;
         if (IsMappedPortalControlMoby(moby))
@@ -78,6 +78,10 @@ public sealed partial class MainWindow
             return "This is a hidden helper the game needs. It can be moved, but not copied or removed." + changed;
         if (IsCrossLevelExistingSlotSwapEdit(moby))
             return $"{name} was swapped in with Replace. Undo puts the original back.";
+        if (moby.IsAdded)
+            return IsUniversalSign(moby)
+                ? $"{name}: added by you. Edit… types its message; Undo takes it out again."
+                : $"{name}: added by you. Drag it to move it; Undo takes it out again.";
         if (objectHasEdits)
             return $"{name}: changed from the original. Undo puts it back.";
         if (!moby.IsAdded && moby.TrueIndex >= 0 &&
@@ -85,6 +89,60 @@ public sealed partial class MainWindow
             return $"{name} selected. Replace… can swap it for a different {(category == CrossLevelSwapCategory.Enemy ? "enemy" : "chest")}.";
         return $"{name} selected. Drag it in the view to move it.";
     }
+
+    /// <summary>
+    /// The status line as a player reads it. The working messages name internal things (terrain face 909,
+    /// Z +32, vertices); the bar at the bottom says the same in everyday words. Details keeps the original.
+    /// </summary>
+    internal static string PlainStatusForRelease(string message)
+    {
+        if (string.IsNullOrEmpty(message))
+            return message;
+        foreach ((System.Text.RegularExpressions.Regex pattern, Func<System.Text.RegularExpressions.Match, string> rewrite) in PlainStatusRules)
+            message = pattern.Replace(message, match => rewrite(match));
+        return message;
+    }
+
+    private static string Tiles(string digits) =>
+        int.TryParse(digits.Replace(",", ""), out int count) ? Count(count, "tile") : digits + " tiles";
+
+    private static System.Text.RegularExpressions.Regex Rule(string pattern) =>
+        new(pattern, System.Text.RegularExpressions.RegexOptions.CultureInvariant | System.Text.RegularExpressions.RegexOptions.Singleline);
+
+    private static readonly (System.Text.RegularExpressions.Regex Pattern, Func<System.Text.RegularExpressions.Match, string> Rewrite)[] PlainStatusRules =
+    [
+        // Whole sentences the Terrain tab produces.
+        (Rule(@"^(Raised|Lowered) terrain face \d+ by Z [+-]?(\d+) without flattening its existing shape\..*$"),
+            m => $"{m.Groups[1].Value} the tile by {m.Groups[2].Value}."),
+        (Rule(@"^Moved terrain face \d+ by X [^,]+, Y [^.]+\..*$"), _ => "Moved the tile."),
+        (Rule(@"^Moved terrain face \d+: X [^,]+, Y [^,]+, Z [^.]+\..*$"), _ => "Moved the tile."),
+        (Rule(@"^(Raise|Lower|Smooth|Level|Restore)\w* terrain stroke finished: changed [\d,]+ vert(?:ex|ices) across ([\d,]+) terrain faces?\.$"),
+            m => $"{m.Groups[1].Value} brush: reshaped {Tiles(m.Groups[2].Value)}. Undo Stroke takes it back."),
+        (Rule(@"^Undid a terrain brush stroke across ([\d,]+) terrain faces?\.(?: (\d+) more stroke undo\(s\) available\.)?$"),
+            m => $"Undid the brush stroke ({Tiles(m.Groups[1].Value)})." +
+                 (m.Groups[2].Success ? $" {Count(int.Parse(m.Groups[2].Value), "earlier stroke")} can still be undone." : "")),
+        (Rule(@"^Redid a terrain brush stroke across ([\d,]+) terrain faces?\.(?: (\d+) more stroke \w+\(s\) available\.)?$"),
+            m => $"Redid the brush stroke ({Tiles(m.Groups[1].Value)})."),
+        (Rule(@"^There is no terrain brush stroke to (undo|redo)(?: yet)?\.$"), m => $"No brush stroke to {m.Groups[1].Value}."),
+        (Rule(@"^Staged terrain face \d+ as an added copy\..*$"), _ => "Added a copy of the tile. Drag the copy to where it should go."),
+        (Rule(@"^\w+ a copied terrain face from \d+:.*$"), _ => "Moved the copied tile. Drag it to place it; Shift-drag changes its height."),
+        (Rule(@"^Undid terrain face \d+ and saved the removal \(.*\)\.$"), _ => "Put the tile back the way it was."),
+        (Rule(@"^Updated terrain face \d+\.$"), _ => "Tile updated."),
+        (Rule(@"^Found edited terrain face \d+ \((\d+)/(\d+)\)\.$"), m => $"Changed tile {m.Groups[1].Value} of {m.Groups[2].Value}."),
+        (Rule(@"^Select a terrain face before using height nudges\.$"), _ => "Select a tile first, then use Raise or Lower."),
+        (Rule(@"^Select an object before using XYZ nudges\.$"), _ => "Select an object first."),
+        (Rule(@"^The terrain brush did not touch any editable vertices\. Move onto terrain or increase Size\.$"),
+            _ => "The brush did not reach any ground. Move it onto the ground or increase Size."),
+        // Words that remain in less common messages.
+        (Rule(@" Save Terrain(?: Changes)? and Create BIN will include the moved vertices\."), _ => ""),
+        (Rule(@"\bterrain faces\b"), _ => "tiles"),
+        (Rule(@"\bterrain face \d+\b"), _ => "the tile"),
+        (Rule(@"\bterrain face\b"), _ => "tile"),
+        (Rule(@"\bvertices\b"), _ => "corners"),
+        (Rule(@"\bvertex\b"), _ => "corner"),
+        (Rule(@"\b[Mm]obys\b"), _ => "objects"),
+        (Rule(@"\b[Mm]oby\b"), _ => "object"),
+    ];
 
     private static string PlainObjectName(Moby moby) =>
         string.IsNullOrWhiteSpace(moby.DisplayLabel) ? "the object" : moby.DisplayLabel;

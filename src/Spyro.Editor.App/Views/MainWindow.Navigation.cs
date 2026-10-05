@@ -187,6 +187,6 @@ public sealed partial class MainWindow
             string start = end > at ? message[at..(end + 1)] : "";
             return $"Game exported{file}. {start} Open the CUE in your emulator.{find}{flight}";
         }
-        return message;
+        return _releaseMode ? PlainStatusForRelease(message) : message;
     }
 }

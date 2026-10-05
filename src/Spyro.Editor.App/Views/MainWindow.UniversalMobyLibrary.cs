@@ -652,8 +652,10 @@ public sealed partial class MainWindow
         });
         categories.ItemTemplate = new FuncDataTemplate<(string, string, int)>((c, _) => new TextBlock
         {
-            Text = (c.Item2.Length > 0 ? "    " + c.Item2 : FriendlyCategory(c.Item1)) + $"  ({c.Item3})",
-            FontWeight = c.Item2.Length > 0 ? FontWeight.Normal : FontWeight.SemiBold, Margin = new Thickness(4, 3),
+            // Sub-groups are indented with a margin, so a name that wraps stays lined up under itself.
+            Text = (c.Item2.Length > 0 ? c.Item2 : FriendlyCategory(c.Item1)) + $"\u00A0\u00A0({c.Item3})",
+            FontWeight = c.Item2.Length > 0 ? FontWeight.Normal : FontWeight.SemiBold,
+            Margin = new Thickness(c.Item2.Length > 0 ? 20 : 4, 3, 4, 3),
             TextWrapping = TextWrapping.Wrap, MaxWidth = 200
         });
         variants.ItemTemplate = new FuncDataTemplate<UniversalMobyVariant>((v, _) =>
@@ -768,7 +770,10 @@ public sealed partial class MainWindow
                 new UniversalDestinationEstimate(false, v.HasLocalModel, v.HasBehavior, 0, 0, false, "Checking…");
             bool isSpecial = UniversalSpecialCatalog.IsSpecial(v);
             variantLabel.Text = entry.SubCategory == "Dragonfly Eggs" ? "Color" : "Source version";
-            details.Text = $"{DisplaySourceName(entry,v)}\nFrom {LevelName(v.SourceLevelKey)}.\n" +
+            // The heading already names the object; repeat the source's own name only when it differs.
+            string sourceName = DisplaySourceName(entry, v);
+            details.Text = (string.Equals(sourceName, title.Text, StringComparison.OrdinalIgnoreCase) ? "" : sourceName + "\n") +
+                $"From {LevelName(v.SourceLevelKey)}.\n" +
                 (isSpecial && entry.Notes is { Length: > 0 } friendly ? friendly :
                     e.Native ? "This object already belongs to this level." : "Its appearance and game behavior are copied when you create the BIN. Playtest your exported level to check it in its new surroundings.");
             technical.Text =
@@ -1012,7 +1017,7 @@ public sealed partial class MainWindow
         WrapPanel filters = new() { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8 };
         filters.Children.Add(fitFilter); filters.Children.Add(sourceFilter);
         Grid.SetRow(filters, 1); Grid.SetColumnSpan(filters, 2); top.Children.Add(filters);
-        StackPanel right = new() { Spacing = 10, Margin = new Thickness(12, 0, 0, 0) };
+        StackPanel right = new() { Spacing = 10, Margin = new Thickness(12, 0, 16, 0) };
         right.Children.Add(title);
         right.Children.Add(modelPreview);
         right.Children.Add(variantLabel);
@@ -1024,7 +1029,8 @@ public sealed partial class MainWindow
         right.Children.Add(new Expander { Header = "Technical details", IsExpanded = false, Content = technical, HorizontalAlignment = HorizontalAlignment.Stretch });
         WrapPanel buttons = new() { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8 };
         buttons.Children.Add(place); buttons.Children.Add(addHere); buttons.Children.Add(close);
-        Grid body = new() { ColumnDefinitions = new ColumnDefinitions("165,*,310"), ColumnSpacing = 8 };
+        // Wide enough for "Fodder & Animals (17)" on one line; the right column leaves room for its scroll bar.
+        Grid body = new() { ColumnDefinitions = new ColumnDefinitions("200,*,320"), ColumnSpacing = 8 };
         body.Children.Add(new ScrollViewer { Content = categories });
         Grid listHost = new(); listHost.Children.Add(list); listHost.Children.Add(empty);
         Grid.SetColumn(listHost, 1); body.Children.Add(listHost);

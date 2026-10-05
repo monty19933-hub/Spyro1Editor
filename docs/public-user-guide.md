@@ -18,6 +18,8 @@ writes to your own disc image, and it does not include the game.
 
 Projects and backups are stored outside the application folder (in
 `Documents/Spyro Editor`), so replacing the app with a newer one keeps your work.
+On a Mac, macOS asks once whether Spyro Editor may use your Documents folder;
+choose **Allow**. The editor's window appears after you answer.
 
 ## Save and Create BIN
 
@@ -46,7 +48,8 @@ view back.
   go up and down, the arrow keys turn.
 
 Shortcuts for the level only work after you click in the view. While you are
-typing in a box, keys only affect that box.
+typing in a box, keys only affect that box. Changes to objects are written when
+you leave a level or close the editor; terrain changes ask first.
 
 ## Objects tab
 
@@ -67,8 +70,9 @@ typing in a box, keys only affect that box.
 - **Replace…** swaps a chest or enemy for another kind known to work in this level.
 - **Copy** and **Paste** (⌘C / ⌘V, or Ctrl+C / Ctrl+V, in the view) duplicate the
   selected object at the pointer.
-- **Remove** (or the Delete key in the view) takes the object out. **Undo last
-  removal** (⌘Z / Ctrl+Z in the view) brings it back.
+- **Remove** (or the Delete key in the view) takes the object out and leaves
+  nothing selected. **Undo last removal** (⌘Z / Ctrl+Z in the view) brings it
+  back.
 - **Undo** puts the selected object back the way it is in the original game.
 - **Height and ground** slides the object up or down, keeps it on the ground
   while you drag it, or jumps it to the floor above or below.

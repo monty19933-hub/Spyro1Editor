@@ -47,6 +47,12 @@ if (args.Contains("--terrain-problem-ui", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Contains("--plain-status-only", StringComparer.Ordinal))
+{
+    PlainStatusCases.Run();
+    return 0;
+}
+
 if (args.Contains("--catalog-dump", StringComparer.Ordinal))
 {
     if (args.Length != 3) throw new ArgumentException("Usage: UiSmoke --catalog-dump <project folder> <output json>");

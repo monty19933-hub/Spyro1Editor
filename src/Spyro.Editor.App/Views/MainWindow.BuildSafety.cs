@@ -1028,6 +1028,7 @@ public sealed partial class MainWindow
             Button create = NewButton("Create BIN Anyway");
             create.Background = new SolidColorBrush(ModernBlue);
             create.Foreground = Brushes.White;
+            KeepButtonColorUnderPointer(create, ModernBlue, Colors.White);
             create.Click += (_, _) => dialog.Close(BuildSafetyDecision.Create);
             actions.Children.Add(create);
         }

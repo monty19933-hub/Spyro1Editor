@@ -19,6 +19,12 @@ Clearer
 - Everyday wording throughout: level details, treasure line, save and load messages, export results, object kinds, the Start Blank and Create BIN questions. "Build Safety" is now "Export Check".
 - The view shows object names without internal numbers, a short hint line that fits the window, and a legend only while you work on terrain.
 - Help is rewritten for the current layout.
+- The status bar describes terrain work in plain words ("Raised the tile by 32", "Undid the brush stroke"). Details keeps the full technical text.
+- Selecting an object in the view keeps its card (Edit…, Remove) on screen instead of scrolling the panel down to the list.
+- The view stays where it is when you place or paste an object by clicking; it no longer jumps to the new object.
+- Coloured buttons keep their colour under the pointer instead of turning grey.
+- While the game is being read for the first time the view says so, and the result is reported in one plain sentence.
+- The question asked when you close with unsaved terrain explains that object changes are kept automatically.
 
 Fixed
 
@@ -29,6 +35,8 @@ Fixed
 - In a level you built yourself (New Level or Start Blank), painting a texture on the starting floor, or on any tile wider than 255 units, made Create BIN refuse the level. Large painted tiles now export.
 - A failed Create BIN never touches the game you created before; this is now tested.
 - A single-letter key (C or V) could copy and paste a tile's look without any hint. That shortcut is off.
+- After removing an object the editor selected the first object in the list by itself, so a second press of Delete would have removed something you never chose. Nothing is selected after a removal now.
+- The camera keys (W A S D Q E and the arrows) also reacted while Command, Control or Alt was held, so a shortcut could nudge the view. They are bare keys only now.
 
 All existing gameplay limits are retained; see the known limitations. The Mac package is not notarized; the Windows package has not been run on Windows.
 

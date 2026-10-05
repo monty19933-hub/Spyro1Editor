@@ -2124,6 +2124,10 @@ public sealed partial class EditorViewport : Control
 
         if (_viewMode != ViewportViewMode.Fly3D)
             return;
+        // Camera keys are bare keys. With Command, Control or Alt held the key belongs to a shortcut
+        // (or to the system), so it must not also push the camera sideways.
+        if ((e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control | KeyModifiers.Alt)) != 0)
+            return;
 
         const double turnStep = 0.08;
         bool handled = true;
@@ -4146,7 +4150,7 @@ public sealed partial class EditorViewport : Control
         }
     }
 
-    private static void DrawTerrainBrushPreviewChip(
+    private void DrawTerrainBrushPreviewChip(
         DrawingContext context,
         Rect bounds,
         Point center,
@@ -4157,7 +4161,11 @@ public sealed partial class EditorViewport : Control
         if (bounds.Width < 180 || bounds.Height < 120)
             return;
 
-        string label = TerrainBrushPreviewAnalyzer.FormatSummary(stats);
+        string label = PlainLabels
+            ? stats.TotalVertices == 0 ? "Nothing to shape here"
+              : stats.EditableVertices == 0 ? "Looks only: Spyro cannot stand here"
+              : $"{stats.EditableVertices + stats.VisualOnlyVertices}{(stats.Clipped ? "+" : "")} corners"
+            : TerrainBrushPreviewAnalyzer.FormatSummary(stats);
         FormattedText text = new(
             label,
             System.Globalization.CultureInfo.CurrentCulture,

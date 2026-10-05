@@ -1061,6 +1061,12 @@ public sealed partial class MainWindow
                 return;
             _viewport.SelectMoby(moby, true);
         };
+        // Rows take the width of the list (no sideways scrolling), so the selection colour covers the whole
+        // row instead of only the part behind the text.
+        ScrollViewer.SetHorizontalScrollBarVisibility(_mobyList, Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled);
+        // Selecting a row scrolls the list itself. It must not also drag the whole side panel down and
+        // carry the Selected object card (Edit…, Remove) off the screen.
+        _mobyList.AddHandler(RequestBringIntoViewEvent, (_, e) => e.Handled = true);
         _mobyList.DoubleTapped += async (_, _) =>
         {
             if (_mobyList.SelectedItem is Moby moby)
@@ -1227,6 +1233,23 @@ public sealed partial class MainWindow
         button.Background = new SolidColorBrush(background);
         button.Foreground = Brushes.White;
         button.HorizontalContentAlignment = HorizontalAlignment.Center;
+        KeepButtonColorUnderPointer(button, background, Colors.White);
+    }
+
+    /// <summary>
+    /// The stock theme repaints a hovered or pressed button in its own grey, so a coloured button looks
+    /// switched off just as the pointer reaches it. Keep the colour, a shade darker, instead.
+    /// </summary>
+    private static void KeepButtonColorUnderPointer(Button button, Color background, Color foreground)
+    {
+        const string prefix = "Button";
+        static Color Shade(Color color, double factor) =>
+            Color.FromRgb((byte)(color.R * factor), (byte)(color.G * factor), (byte)(color.B * factor));
+        IBrush text = new SolidColorBrush(foreground);
+        button.Resources[prefix + "BackgroundPointerOver"] = new SolidColorBrush(Shade(background, 0.90));
+        button.Resources[prefix + "BackgroundPressed"] = new SolidColorBrush(Shade(background, 0.80));
+        button.Resources[prefix + "ForegroundPointerOver"] = text;
+        button.Resources[prefix + "ForegroundPressed"] = text;
     }
 
     private static void StyleModernSecondaryButton(Button button, Color? foreground = null)

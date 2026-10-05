@@ -2381,8 +2381,8 @@ public sealed partial class MainWindow : Window
         Window dialog = new()
         {
             Title = "Unsaved Terrain",
-            Width = 500,
-            Height = 245,
+            Width = _releaseMode ? 560 : 500,
+            Height = _releaseMode ? 270 : 245,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = true
         };
@@ -2430,7 +2430,7 @@ public sealed partial class MainWindow : Window
         RefreshToolbarSaveAvailability();
     }
 
-    private static Control BuildUnsavedTerrainDialogContent(Window dialog, string heading, string message)
+    private Control BuildUnsavedTerrainDialogContent(Window dialog, string heading, string message)
     {
         StackPanel panel = new()
         {
@@ -2458,9 +2458,25 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Spacing = 8
         };
+        if (_releaseMode)
+        {
+            // Objects are written when a level is left; only terrain waits for this answer. Say so, or
+            // "without saving" reads as if the objects were dropped too.
+            panel.Children.Add(new TextBlock
+            {
+                Name = "UnsavedTerrainObjectsNote",
+                Text = "Changes to objects are kept automatically when you leave. This question is only about the terrain.",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(96, 106, 118))
+            });
+        }
         Button cancel = NewButton("Stay Here");
-        Button discard = NewButton("Leave Without Saving");
+        Button discard = NewButton(_releaseMode ? "Discard Terrain Changes" : "Leave Without Saving");
         Button save = NewButton("Save Terrain Changes");
+        cancel.Name = "UnsavedTerrainStay"; discard.Name = "UnsavedTerrainDiscard"; save.Name = "UnsavedTerrainSave";
+        if (_releaseMode)
+            StyleModernPrimaryButton(save, ModernBlue);
         cancel.Click += (_, _) => dialog.Close(UnsavedTerrainDecision.Cancel);
         discard.Click += (_, _) => dialog.Close(UnsavedTerrainDecision.Discard);
         save.Click += (_, _) => dialog.Close(UnsavedTerrainDecision.Save);
@@ -3927,8 +3943,17 @@ public sealed partial class MainWindow : Window
         RefreshLevelSelectionAvailability();
         RefreshActionAvailability();
         _statusText.Text = triggeredByDiscSelection
-            ? "Building level maps and objects from the selected Spyro disc..."
+            ? _releaseMode ? "Reading your game. This takes a moment the first time…" : "Building level maps and objects from the selected Spyro disc..."
             : "Building portable cache from selected disc, copied RAM, and overlay files...";
+        string emptyHeadingBefore = _viewport.EmptyHeading;
+        string emptyMessageBefore = _viewport.EmptyMessage;
+        if (_releaseMode && triggeredByDiscSelection)
+        {
+            // Until the levels are read the view is empty; say why instead of asking for a disc again.
+            _viewport.EmptyHeading = "Reading your game…";
+            _viewport.EmptyMessage = "The levels are being read from your disc. This takes a moment the first time; the level appears here when it is ready.";
+            _viewport.InvalidateVisual();
+        }
         try
         {
             PortableEditorCacheResult result = await Task.Run(() =>
@@ -3960,7 +3985,11 @@ public sealed partial class MainWindow : Window
             string objectNote = result.MobyCacheCount == 0
                 ? " Object placement could not be decoded from the selected disc."
                 : "";
-            _statusText.Text = AppendRetailTerrainTextureWarning(triggeredByDiscSelection
+            _statusText.Text = AppendRetailTerrainTextureWarning(_releaseMode && triggeredByDiscSelection
+                ? result.MobyCacheCount == 0
+                    ? "Your game was opened, but its objects could not be read. Make sure it is the unchanged USA disc image."
+                    : $"Your game is ready: {result.LevelCount} levels. Pick a level at the top left and start editing."
+                : triggeredByDiscSelection
                 ? result.ReusedExistingCache
                     ? $"Selected disc and reused existing level maps: {result.OverlayCacheCount}/{result.LevelCount} terrain map(s), {result.MobyCacheCount}/{result.LevelCount} object cache(s), {result.TexturePreviewCount} native terrain texture(s).{objectNote}"
                     : $"Selected disc and rebuilt level maps from that BIN/CUE: {result.OverlayCacheCount}/{result.LevelCount} terrain map(s), {result.MobyCacheCount}/{result.LevelCount} object cache(s), {result.TexturePreviewCount} native terrain texture(s).{objectNote}"
@@ -3975,10 +4004,17 @@ public sealed partial class MainWindow : Window
                     allowPortableCacheBuild: true))
                 return;
             Debug.WriteLine(ex);
-            _statusText.Text = $"Could not build cache: {ex.Message}";
+            _statusText.Text = _releaseMode ? $"Could not read the game: {ex.Message}" : $"Could not build cache: {ex.Message}";
         }
         finally
         {
+            if (_viewport.EmptyHeading == "Reading your game…")
+            {
+                _viewport.EmptyHeading = emptyHeadingBefore;
+                if (_viewport.EmptyMessage.StartsWith("The levels are being read", StringComparison.Ordinal))
+                    _viewport.EmptyMessage = emptyMessageBefore;
+                _viewport.InvalidateVisual();
+            }
             if (generation == _portableCacheBuildGeneration)
             {
                 _buildingPortableCache = false;
@@ -17703,7 +17739,9 @@ public sealed partial class MainWindow : Window
                       $"Position: {moby.Position.X:0.0}, {moby.Position.Y:0.0}, {moby.Position.Z:0.0}\n" +
                       $"Facing: {FlyInLandingEditorControl.HeadingByteToDegrees(moby.YawByte):0.#}°\n" +
                       (moby.HasAnyEdit ? "Changed from the original" : "Not changed")
-                    : $"{BuildFriendlyMobySummary(moby)}\n" +
+                    : (string.Equals(BuildFriendlyMobySummary(moby), moby.DisplayLabel, StringComparison.OrdinalIgnoreCase)
+                          ? moby.TreasureValue > 0 ? $"Worth {moby.TreasureValue:N0} treasure\n" : ""
+                          : $"{BuildFriendlyMobySummary(moby)}\n") +
                       $"Position: {moby.Position.X:0.0}, {moby.Position.Y:0.0}, {moby.Position.Z:0.0}\n" +
                       $"Facing: {Moby.YawByteToDegrees(moby.YawByte):0.#}°\n" +
                       (moby.IsAdded ? "Added by you" : moby.HasAnyEdit ? "Changed from the original" : "Not changed")
@@ -20579,7 +20617,7 @@ public sealed partial class MainWindow : Window
         _viewport.InvalidateVisual();
         ShowSelection(ViewportSelectionChangedEventArgs.ForMoby(_selectedMoby));
         RefreshMobyList(_selectedMoby);
-        string snapText = snapped ? " Snapped the linked scene to terrain Z." : "";
+        string snapText = snapped ? _releaseMode ? " It follows the ground." : " Snapped the linked scene to terrain Z." : "";
         _statusText.Text = moved.Count > 1
             ? $"Moved {_selectedMoby.DisplayLabel} with {moved.Count - 1} linked object(s).{snapText}"
             : $"Moved {_selectedMoby.DisplayLabel}.{snapText}";
@@ -20599,7 +20637,7 @@ public sealed partial class MainWindow : Window
         _viewport.InvalidateVisual();
         ShowSelection(ViewportSelectionChangedEventArgs.ForMoby(e.Moby));
         RefreshMobyList(e.Moby);
-        string snapText = snapped ? " Snapped the linked scene to terrain Z." : "";
+        string snapText = snapped ? _releaseMode ? " It follows the ground." : " Snapped the linked scene to terrain Z." : "";
         _statusText.Text = moved.Count > 1
             ? $"Moved {e.Moby.DisplayLabel} with {moved.Count - 1} linked object(s).{snapText}"
             : $"Moved {e.Moby.DisplayLabel}.{snapText}";
@@ -24298,7 +24336,9 @@ public sealed partial class MainWindow : Window
         _pendingMobyAdd = pending with { FallbackPosition = fallbackPosition };
         _viewport.ObjectPlacementMode = true;
         RefreshActionAvailability();
-        _statusText.Text = $"Click Edit Map or Game Camera to place {pending.Label}. Press Escape to cancel.";
+        _statusText.Text = _releaseMode
+            ? $"Click in the view where the new {pending.Label} should go. Press Esc to cancel."
+            : $"Click Edit Map or Game Camera to place {pending.Label}. Press Escape to cancel.";
     }
 
     private async Task PlacePendingMobyAtViewportAsync(Point screenPoint)
@@ -24322,7 +24362,7 @@ public sealed partial class MainWindow : Window
 
         _pendingMobyAdd = null;
         _viewport.ObjectPlacementMode = false;
-        await AddPendingMobyAtPositionAsync(pending, position);
+        await AddPendingMobyAtPositionAsync(pending, position, placedByPointer: true);
     }
 
     private void CancelPendingMobyPlacement()
@@ -24337,7 +24377,7 @@ public sealed partial class MainWindow : Window
         _statusText.Text = $"Canceled placement for {label}.";
     }
 
-    private async Task AddPendingMobyAtPositionAsync(PendingMobyAdd pending, Vector3f position)
+    private async Task AddPendingMobyAtPositionAsync(PendingMobyAdd pending, Vector3f position, bool placedByPointer = false)
     {
         if (TryBlockId65ObjectMutation("Object insertion"))
             return;
@@ -24444,7 +24484,9 @@ public sealed partial class MainWindow : Window
         _viewport.Mobys = _currentMobys;
         RefreshMobyList(moby);
         RefreshCurrentLevelDetails();
-        _viewport.SelectMoby(moby, true);
+        // An object placed by clicking in the view is already where the user is looking; moving the
+        // camera to it would only make the scene jump.
+        _viewport.SelectMoby(moby, focus: !(_releaseMode && placedByPointer));
         string candidateNote = selectedTemplate.FromCrossLevelTemplate && !selectedTemplate.CurrentLevelReady && selectedTemplate.CurrentLevelPlaceable
             ? " Use Object Tests > Create Candidate BIN to make a disposable test disc for it."
             : "";
@@ -24582,7 +24624,7 @@ public sealed partial class MainWindow : Window
         _viewport.Mobys = _currentMobys;
         RefreshMobyList(pasted);
         RefreshCurrentLevelDetails();
-        _viewport.SelectMoby(pasted, true);
+        _viewport.SelectMoby(pasted, focus: !_releaseMode);
         string exportSlotNote = BuildPastedExportSlotStatus(pasted);
         _statusText.Text = pastedMobys.Count > 1
             ? $"Pasted {pasted.DisplayLabel} and {pastedMobys.Count - 1} linked companion object(s) at the cursor.{exportSlotNote}"
@@ -25994,7 +26036,9 @@ public sealed partial class MainWindow : Window
             MobyRelationshipRepair.RepairChestContentLinks(_currentLevel.Key, _currentMobys);
         InvalidateBuildSafetySummary();
 
-        Moby? next = _currentMobys.FirstOrDefault(moby => !moby.IsRemoved);
+        // The shipping editor leaves nothing selected after a removal: selecting some other object by
+        // itself would let a second press of Delete remove something the user never chose.
+        Moby? next = _releaseMode ? null : _currentMobys.FirstOrDefault(moby => !moby.IsRemoved);
         _selectedMoby = null;
         _viewport.Mobys = _currentMobys;
         RefreshMobyList(next);
@@ -26006,7 +26050,9 @@ public sealed partial class MainWindow : Window
 
         _statusText.Text = removalGroup.Count > 1
             ? $"Removed {removed.DisplayLabel} and {removalGroup.Count - 1} linked object(s). Use Undo last removal to restore them."
-            : "Removed object from this level edit.";
+            : _releaseMode
+                ? $"Removed {PlainObjectName(removed)}. Undo last removal brings it back."
+                : "Removed object from this level edit.";
         EditorDiagnostics.RecordAction("Object removed", $"{_currentLevel?.DisplayName}: {BuildMobyDiagnosticSummary(removed)}");
         RefreshDiagnosticContext();
     }
