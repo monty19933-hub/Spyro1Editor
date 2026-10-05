@@ -23,6 +23,22 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+if (args.Contains("--ui-audit", StringComparer.Ordinal))
+{
+    if (args.Length < 3) throw new ArgumentException("Usage: UiSmoke --ui-audit <project copy> <output folder> [level keys…]");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    UiAuditCases.Run(args[1], args[2], args.Length > 3 ? args[3..] : ["artisans"]);
+    return 0;
+}
+
+if (args.Contains("--terrain-problem-ui", StringComparer.Ordinal))
+{
+    if (args.Length != 3) throw new ArgumentException("Usage: UiSmoke --terrain-problem-ui <project folder> <output folder>");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    TerrainProblemUiCases.Run(args[1], args[2]);
+    return 0;
+}
+
 if (args.Contains("--magic-artisans-capacity-ui", StringComparer.Ordinal))
 {
     if (args.Length != 3) throw new ArgumentException("Usage: UiSmoke --magic-artisans-capacity-ui <USA.bin> <catalog root>");

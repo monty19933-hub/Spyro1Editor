@@ -4169,6 +4169,7 @@ public sealed partial class MainWindow : Window
                 : await PersistCurrentTerrainEditsAsync(operation);
             RequireCurrentRegularEditorPersistenceOperation(operation);
 
+            bool terrainChangedInThisSave = !string.Equals(_savedTerrainEditSignature, operation.TerrainEditSignature, StringComparison.Ordinal);
             _loadedMobyEdits = mobyCount;
             _loadedTerrainEdits = terrainCount;
             _savedMobyEditSignature = operation.MobyEditSignature;
@@ -4189,6 +4190,10 @@ public sealed partial class MainWindow : Window
             _statusText.Text = $"Saved {mobyCount} object edit(s){nativeMovement}. Terrain: {BuildTerrainEditSummary()}{customArt}{nativeTextureSwaps}.";
             RefreshDiagnosticContext(includeSavedEdits: true);
             EditorDiagnostics.RecordAction("Saved level edits", $"{operation.Level.DisplayName}: {mobyCount} object edit(s){nativeMovement}; {BuildTerrainEditSummary()}{customArt}{nativeTextureSwaps}");
+            // Find terrain the game can't hold right after the save that introduced it, not at export time.
+            if (terrainCount > 0 && (terrainChangedInThisSave ||
+                    _terrainExportProblem != null && string.Equals(_terrainExportProblem.Level.Key, operation.Level.Key, StringComparison.OrdinalIgnoreCase)))
+                BeginTerrainExportCheckAfterSave(operation.Level);
             return true;
         }
         catch (OperationCanceledException) when (!IsCurrentRegularEditorPersistenceOperation(operation))

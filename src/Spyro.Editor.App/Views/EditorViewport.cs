@@ -2394,6 +2394,20 @@ public sealed partial class EditorViewport : Control
     /// <summary>Tiles currently in the multi-selection (empty when only one tile is selected).</summary>
     public IReadOnlyCollection<int> MultiSelectedTerrainIndexes => _multiSelectedTerrain;
 
+    /// <summary>Replaces the multi-selection, e.g. to point at the tiles involved in an export problem.</summary>
+    public void SetTerrainMultiSelection(IEnumerable<int> indexes)
+    {
+        _multiSelectedTerrain.Clear();
+        if (Geometry != null)
+            foreach (int index in indexes)
+                if (index >= 0 && index < Geometry.Polygons.Count)
+                    _multiSelectedTerrain.Add(index);
+        if (_multiSelectedTerrain.Count < 2)
+            _multiSelectedTerrain.Clear();
+        TerrainMultiSelectionChanged?.Invoke(this, EventArgs.Empty);
+        InvalidateVisual();
+    }
+
     public void ClearTerrainMultiSelection()
     {
         if (_multiSelectedTerrain.Count == 0)

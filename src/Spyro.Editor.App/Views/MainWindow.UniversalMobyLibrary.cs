@@ -274,7 +274,8 @@ public sealed partial class MainWindow
     private static string FriendlyCategory(string c) => c switch { "Other / Unknown" => "Other", "All Mobys" => "All objects", _ => c };
 
     private async Task<(UniversalCompositionHost Host,NativeTerrainTexturePrivateRecordBatchRequest? PrivateRequest)> CaptureUniversalRetailHostAsync(UniversalSourceLibrary library, LevelDefinition level,
-        IReadOnlyList<UniversalMobyPlacement> placements, IReadOnlyCollection<int> removed, Func<string,UniversalSpecialAsset?>? special)
+        IReadOnlyList<UniversalMobyPlacement> placements, IReadOnlyCollection<int> removed, Func<string,UniversalSpecialAsset?>? special,
+        bool ignoreTerrainShapeEdits = false)
     {
         // The modal prevents scene edits while this snapshot is captured. All derived files stay
         // in a disposable directory; fit checks never save/overwrite the user's edit manifests.
@@ -285,7 +286,10 @@ public sealed partial class MainWindow
             string edits = Path.Combine(scratch,"terrain-edits.json");
             var geometry = _currentGeometry;
             string savedEdits = Path.Combine(_workspace.RootPath,$"{level.Key}-terrain-edits.json");
-            if (geometry != null) await TerrainEditStore.SaveAsync(edits,geometry.Polygons,level.DisplayName);
+            // When a saved terrain change cannot be exported, the browser still has to work: space is then
+            // measured against the level without terrain shape changes and the caller explains that.
+            if (ignoreTerrainShapeEdits) await TerrainEditStore.SaveAsync(edits,Array.Empty<TerrainPolygon>(),level.DisplayName);
+            else if (geometry != null) await TerrainEditStore.SaveAsync(edits,geometry.Polygons,level.DisplayName);
             else if (File.Exists(savedEdits)) File.Copy(savedEdits,edits);
             string custom = "", customSource = CustomTerrainTextureStore.ManifestPath(_workspace.RootPath,level.Key);
             var imports = _customTerrainTextures.Count > 0 ? _customTerrainTextures.ToArray()
@@ -449,6 +453,11 @@ public sealed partial class MainWindow
         };
         TextBlock summary = NewSmallNote("Loading the game-wide object catalog from your disc… (first time takes a few seconds)");
         summary.Name = "UniversalMobySummary";
+        TextBlock terrainNotice = new()
+        {
+            Name = "UniversalMobyTerrainNotice", IsVisible = false, TextWrapping = TextWrapping.Wrap, FontSize = 12,
+            Foreground = new SolidColorBrush(Color.FromRgb(110, 32, 32)), Margin = new Thickness(0, 2, 0, 2)
+        };
         TextBox search = new() { Name = "UniversalMobySearch", PlaceholderText = "Search by object name, level or type…", MinHeight = 34 };
         ComboBox fitFilter = new() { Name = "UniversalMobyFit", ItemsSource = new[] { "Show everything", "Only what fits here", "Only this level's own objects" }, SelectedIndex = 0, MinWidth = 170 };
         ComboBox sourceFilter = new() { Name = "UniversalMobySourceLevel", MinWidth = 180 };
@@ -1023,7 +1032,7 @@ public sealed partial class MainWindow
         DockPanel root = new() { Margin = new Thickness(14) };
         StackPanel header = new() { Spacing = 8, Margin = new Thickness(0, 0, 0, 10) };
         header.Children.Add(new TextBlock { Text = $"Add an object to {destination.DisplayName}", TextWrapping = TextWrapping.Wrap, FontSize = 20, FontWeight = FontWeight.SemiBold });
-        header.Children.Add(top); header.Children.Add(summary); header.Children.Add(jpBanner);
+        header.Children.Add(top); header.Children.Add(summary); header.Children.Add(terrainNotice); header.Children.Add(jpBanner);
         DockPanel.SetDock(header, Dock.Top); root.Children.Add(header);
         Border footer = new() { Name = "UniversalMobyFooter", Padding = new Thickness(0, 10, 0, 0), Child = buttons };
         buttons.HorizontalAlignment = HorizontalAlignment.Right;
@@ -1076,7 +1085,19 @@ public sealed partial class MainWindow
                 var es = entries = [.. usa, .. UniversalSpecialCatalog.Entries(japanese != null)];
                 lib = l;
                 if (_freshSceneDocument != null) freshCompilation = await CaptureFreshNativeAsync();
-                else (retailHost,retailPrivateRequest) = await CaptureUniversalRetailHostAsync(l,destination,existing,removedRows,special);
+                else
+                {
+                    try { (retailHost,retailPrivateRequest) = await CaptureUniversalRetailHostAsync(l,destination,existing,removedRows,special); }
+                    catch (Exception terrainRefusal) when (LooksLikeTerrainExportRefusal(terrainRefusal))
+                    {
+                        // One unexportable terrain change must not hide the whole catalogue.
+                        (retailHost,retailPrivateRequest) = await CaptureUniversalRetailHostAsync(l,destination,existing,removedRows,special,ignoreTerrainShapeEdits:true);
+                        ReportTerrainExportProblem(destination,terrainRefusal.Message,"object browser");
+                        terrainNotice.Text = "Space checks here ignore this level's terrain changes, because one of them can't be exported yet. " +
+                            "You can still add objects. Close this window and use the red bar to fix the terrain.";
+                        terrainNotice.IsVisible = true;
+                    }
+                }
                 if (browserCancellation.IsCancellationRequested) return;
                 planned = await Task.Run(() => PlannedUniversalBytes(l));
                 await Task.Run(() => { foreach (var e in es) Est(e.Default); });

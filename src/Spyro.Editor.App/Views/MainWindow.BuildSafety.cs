@@ -221,6 +221,7 @@ public sealed partial class MainWindow
             report,
             targets,
             sourceImage);
+        report = await AddTerrainShapeBuildSafetyAsync(report, targets, sourceImage);
         string reportPrefix = Path.Combine(outputDirectory, "Spyro Editor - All Saved Edits.build-safety");
         MobyBuildSafetyWriteResult written = await MobyBuildSafetyReportWriter.WriteAsync(
             report,
@@ -816,8 +817,14 @@ public sealed partial class MainWindow
             AppendedPrivateTerrainBuildSafetyCodePrefix,
             StringComparison.Ordinal);
 
+    /// <summary>Texture or shape: any issue whose target is a terrain tile rather than an object.</summary>
+    private static bool IsTerrainBuildSafetyIssue(MobyBuildSafetyIssue issue) =>
+        IsTerrainTextureBuildSafetyIssue(issue) || IsTerrainShapeBuildSafetyIssue(issue);
+
     private string BuildSafetyIssueTargetLabel(MobyBuildSafetyIssue issue) =>
-        IsTerrainTextureBuildSafetyIssue(issue)
+        IsTerrainShapeBuildSafetyIssue(issue)
+            ? "Terrain shape"
+            : IsTerrainTextureBuildSafetyIssue(issue)
             ? issue.CanNavigate
                 ? _releaseMode ? "Terrain section" : $"Terrain section {issue.MobyLabel}"
                 : _releaseMode ? "Terrain texture edit" : "Terrain texture manifest"
@@ -825,6 +832,13 @@ public sealed partial class MainWindow
 
     private string BuildSafetyIssueMessage(MobyBuildSafetyIssue issue)
     {
+        if (IsTerrainShapeBuildSafetyIssue(issue))
+        {
+            return _releaseMode
+                ? DescribeTerrainExportRefusal(issue.Message, out _) + " Double-click to see the tiles, or use Undo that change in the red bar."
+                : issue.Message;
+        }
+
         if (!_releaseMode)
             return issue.Message;
 
@@ -1070,7 +1084,7 @@ public sealed partial class MainWindow
             content.Children.Add(new TextBlock
             {
                 Text = level.Issues.Any(issue =>
-                        issue.CanNavigate && IsTerrainTextureBuildSafetyIssue(issue))
+                        issue.CanNavigate && IsTerrainBuildSafetyIssue(issue))
                     ? "Issues — double-click an object or terrain section to locate it"
                     : level.Issues.Any(issue => issue.CanNavigate)
                         ? "Issues — double-click an object to locate it"
@@ -1141,7 +1155,7 @@ public sealed partial class MainWindow
         {
             text.Children.Add(new TextBlock
             {
-                Text = IsTerrainTextureBuildSafetyIssue(issue)
+                Text = IsTerrainBuildSafetyIssue(issue)
                     ? "Double-click to select and center this terrain section"
                     : "Double-click to select and center this object",
                 FontSize = 10,
@@ -1207,7 +1221,14 @@ public sealed partial class MainWindow
                 }
             }
 
-            if (IsTerrainTextureBuildSafetyIssue(issue))
+            if (IsTerrainShapeBuildSafetyIssue(issue) && _terrainExportProblem != null &&
+                string.Equals(_terrainExportProblem.Level.Key, level.Key, StringComparison.OrdinalIgnoreCase))
+            {
+                ShowTerrainExportProblem();
+                return;
+            }
+
+            if (IsTerrainBuildSafetyIssue(issue))
             {
                 if (_currentGeometry == null)
                 {

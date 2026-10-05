@@ -26,6 +26,7 @@ public sealed partial class MainWindow
         StackPanel notifications = new();
         notifications.Children.Add(BuildPreviousBetaProjectReminder());
         notifications.Children.Add(BuildUpdateNotificationBanner());
+        notifications.Children.Add(BuildTerrainProblemBar());
         return notifications;
     }
 
