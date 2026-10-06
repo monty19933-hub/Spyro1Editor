@@ -32,6 +32,7 @@ internal static partial class NewLevelBuildCases
             case "frost-probe": FrostProbe(window); return true;
             case "frost-probe2": FrostProbe2(window); return true;
             case "frost-update": FrostUpdate(window); return true;
+            case "frost-snow": FrostSnowStep(window, outDir); return true;
             case "blank-trial": BlankTrial(window); return true;
             case "sky-build": SkyBuild(window); return true;
             case "sky-objects": SkyObjectsStep(window); return true;
@@ -138,6 +139,21 @@ internal static partial class NewLevelBuildCases
         Console.WriteLine("apply sky: " + save.Result + " — " + Status(window));
         Snapshot(window, Path.Combine(outDir, "environment.png"));
         Console.WriteLine("NEW_LEVEL_ENVIRONMENT_OK");
+    }
+
+    // Frostbite round 3: snowy trees, set the way a user would (Environment tab, tick the box, Apply Sky).
+    private static void FrostSnowStep(MainWindow window, string outDir)
+    {
+        Load(window, "stonehill");
+        SelectTab(window, "Environment");
+        var snow = Get<Avalonia.Controls.CheckBox>(window, "_skyboxEnvironmentSnowBox");
+        Console.WriteLine($"snow box enabled {snow.IsEnabled}, checked {snow.IsChecked}");
+        snow.IsChecked = true; Pump(10);
+        var save = (Task<bool>)Invoke(window, "SaveSkyboxPlanAsync")!;
+        Wait(() => save.IsCompleted, "apply sky", 900);
+        Console.WriteLine("apply sky: " + save.Result + " - " + Status(window));
+        Snapshot(window, Path.Combine(outDir, "environment-snow.png"));
+        Console.WriteLine("NEW_LEVEL_FROSTSNOW_OK");
     }
 
     private static void Settings(MainWindow window, string outDir)
