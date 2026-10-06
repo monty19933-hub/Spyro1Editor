@@ -22,7 +22,7 @@ internal static class ProjectExportIntentCases
             check(on.RequiresRebuild && on.EnabledLevelId == NativeFreeFlightProjectExportIntent.SupportedEnabledLevelId && on.HasExplicitSelection(14), "actual saved Toasty intent requires enabled rebuild");
             on.RequireOrdinaryEditCompatibility(false);
             on.RequireOrdinaryEditCompatibility(true);
-            check(on.Enabled && on.EnabledLevelIds.Count == 30, "legacy ON upgrades to global composition intent");
+            check(on.Enabled && on.EnabledLevelIds.SequenceEqual([14]) && !on.WholeGame, "a saved single-level ON is that level only (per-level Fly Anywhere, 1.2)");
             byte[] exactOn = File.ReadAllBytes(saved.Path);
             NativeFreeFlightSettingsStore.Save(NativeFreeFlightSettingsStore.Capture(second), 14, true);
             refuse(() => on.RequireCurrent(second), "equal saved bytes in another project do not transfer ownership");

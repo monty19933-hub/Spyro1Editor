@@ -33,8 +33,8 @@ public sealed class NativeFreeFlightProjectExportIntent
     {
         string root = Normalize(workspaceRoot);
         var snapshot = NativeFreeFlightSettingsStore.Capture(root);
-        // An older explicit per-level ON is retained as an enabled choice and
-        // upgraded to the global normal-player policy; it is never silently OFF.
+        // A per-level ON is exported for exactly the saved levels (1.2); the
+        // complete set of normal levels is the whole-game policy. Never silently OFF.
         return new(root, snapshot, snapshot.GlobalEnabled ? SupportedEnabledLevelId : null);
     }
 

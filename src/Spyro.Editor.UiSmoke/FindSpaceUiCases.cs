@@ -102,7 +102,7 @@ internal static class FindSpaceUiCases
             Pump(20);
             Console.WriteLine("final explanation: " + (explanation.Text ?? "").Replace('\n', ' '));
             Check(maxGap < 1500, $"the window stayed responsive (longest stall {maxGap} ms)");
-            Console.WriteLine($"FIND_SPACE_UI_DONE seconds={clock.Elapsed.TotalSeconds:0} finished={findRoom.IsEnabled} longestStallMs={maxGap} checks={_checks}");
+            Console.WriteLine($"FIND_SPACE_UI_OK seconds={clock.Elapsed.TotalSeconds:0} finished={findRoom.IsEnabled} longestStallMs={maxGap} checks={_checks}");
             Console.WriteLine("technical: " + string.Join(" | ", (technical.Text ?? "").Split('\n').Where(l => l.Contains("Space search", StringComparison.Ordinal) || l.Contains(" T", StringComparison.Ordinal)).Take(6)));
             ListBox plans = Find<ListBox>(browser, "UniversalMobyRemovalPlans");
             Console.WriteLine("plans visible: " + plans.IsVisible + " count: " + plans.ItemCount);
