@@ -38,6 +38,7 @@ internal static partial class NewLevelBuildCases
             case "sky-update": SkyUpdateStep(window); return true;
             case "sky-update2": SkyUpdate2Step(window); return true;
             case "sky-update3": SkyUpdate3Step(window); return true;
+            case "sky-picker": SkyPickerStep(window); return true;
             default: return false;
         }
     }

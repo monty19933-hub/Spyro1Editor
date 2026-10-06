@@ -238,6 +238,24 @@ internal static partial class NewLevelBuildCases
         Console.WriteLine("NEW_LEVEL_SKYUPDATE_OK");
     }
 
+    // Drives the level-settings Skybox picker and button as a user would; nothing is saved.
+    private static void SkyPickerStep(MainWindow window)
+    {
+        Load(window, "townsquare");
+        if (window.FreshSceneForTesting == null) throw new InvalidOperationException("Town Square is not blank");
+        var panel = Get<StackPanel>(window, "_freshSettingsPanel");
+        var picker = Find<ComboBox>(panel, "FreshMainSkySource");
+        var apply = Find<Button>(panel, "FreshMainSetSkySource");
+        var levels = picker.ItemsSource!.Cast<object>().ToList();
+        Console.WriteLine($"picker: {levels.Count} choices, selected {picker.SelectedItem}, flight offered {levels.OfType<LevelDefinition>().Any(l => l.Key.EndsWith("flight"))}");
+        var donor = levels.OfType<LevelDefinition>().First(l => l.Key == "clifftown");
+        picker.SelectedItem = donor; Pump(); Click(apply);
+        Console.WriteLine($"after Use this skybox: SkySourceWadEntry {window.FreshSceneForTesting!.SkySourceWadEntry} (Cliff Town is {donor.SourceWadEntry}); status: {Status(window)}");
+        picker.SelectedItem = levels[0]; Pump(); Click(apply);
+        Console.WriteLine($"after plain color: SkySourceWadEntry {window.FreshSceneForTesting!.SkySourceWadEntry?.ToString() ?? "none"}; status: {Status(window)}");
+        Console.WriteLine("NEW_LEVEL_SKYPICKER_OK");
+    }
+
     // Dark Passage enemies cannot export beside recoloured dragons (both own code near 0x80017188), so the
     // meadow uses a Tin Soldier (Haunted Towers) and a Bull (Town Square's own) instead.
     private static void SkyUpdate2Step(MainWindow window)
