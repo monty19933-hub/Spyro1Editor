@@ -4230,31 +4230,41 @@ public static partial class TerrainPatchExporter
             return;
         }
 
+        // A native quad may be cut along either diagonal; the first triangulation that maps 1:1 wins, as in
+        // the surface catalogue the editor showed the user.
         List<NativeCollisionSurfaceTriangle> targetTriangles = [];
-        for (int i = 1; i < pointCount - 1; i++)
+        string blockedReason = "";
+        foreach (int[][] triangulation in NativeTerrainSurfaceCatalogBuilder.VisualTriangulations(pointCount))
         {
-            string triangleKey = string.Join("|", new[]
+            List<NativeCollisionSurfaceTriangle> matchesForTriangulation = [];
+            blockedReason = "";
+            for (int t = 0; t < triangulation.Length; t++)
             {
-                NativeTerrainSurfaceCatalogBuilder.PointKey(originalPoints[0].X, originalPoints[0].Y, originalZ[0]),
-                NativeTerrainSurfaceCatalogBuilder.PointKey(originalPoints[i].X, originalPoints[i].Y, originalZ[i]),
-                NativeTerrainSurfaceCatalogBuilder.PointKey(originalPoints[i + 1].X, originalPoints[i + 1].Y, originalZ[i + 1])
-            }.OrderBy(value => value, StringComparer.Ordinal));
-            if (!nativeTrianglesByKey.TryGetValue(triangleKey, out NativeCollisionSurfaceTriangle[]? matches) || matches.Length != 1)
-            {
-                AddAtomicTerrainSwapBlock(
-                    skippedEdits,
-                    $"{runtimeKey}: native behavior transfer blocked because visible triangle {i}/{pointCount - 2} does not have exactly one collision match.");
-                return;
+                int[] corners = triangulation[t];
+                string triangleKey = string.Join("|", corners
+                    .Select(corner => NativeTerrainSurfaceCatalogBuilder.PointKey(originalPoints[corner].X, originalPoints[corner].Y, originalZ[corner]))
+                    .OrderBy(value => value, StringComparer.Ordinal));
+                if (!nativeTrianglesByKey.TryGetValue(triangleKey, out NativeCollisionSurfaceTriangle[]? matches) || matches.Length != 1)
+                {
+                    blockedReason = $"{runtimeKey}: native behavior transfer blocked because visible triangle {t + 1}/{triangulation.Length} does not have exactly one collision match.";
+                    break;
+                }
+                matchesForTriangulation.Add(matches[0]);
             }
-
-            targetTriangles.Add(matches[0]);
+            if (blockedReason.Length == 0 &&
+                matchesForTriangulation.Select(triangle => triangle.TriangleIndex).Distinct().Count() != matchesForTriangulation.Count)
+            {
+                blockedReason = $"{runtimeKey}: native behavior transfer blocked because collision matches are not one-to-one.";
+            }
+            if (blockedReason.Length == 0)
+            {
+                targetTriangles = matchesForTriangulation;
+                break;
+            }
         }
-
-        if (targetTriangles.Select(triangle => triangle.TriangleIndex).Distinct().Count() != targetTriangles.Count)
+        if (blockedReason.Length > 0)
         {
-            AddAtomicTerrainSwapBlock(
-                skippedEdits,
-                $"{runtimeKey}: native behavior transfer blocked because collision matches are not one-to-one.");
+            AddAtomicTerrainSwapBlock(skippedEdits, blockedReason);
             return;
         }
 

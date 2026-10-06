@@ -137,9 +137,12 @@ public sealed partial class MainWindow
         _terrainPanelSelectionText.MinHeight = 36;
         content.Children.Add(_terrainPanelSelectionText);
 
-        Grid shape = TwoColumnGrid(1);
+        Grid shape = TwoColumnGrid(2);
         Place(shape, _terrainTaskMoveFaceButton, 0, 0, "Move Tile…", "Move the whole selected tile by exact amounts. You can also drag it in the view.");
         Place(shape, _terrainTaskSinglePointButton, 1, 0, "Edit Corner…", "Move one corner of the selected tile by exact amounts.");
+        _terrainTileTypeButton ??= NewAsyncButton("Tile Type…", ChangeSelectedTileTypeAsync);
+        _terrainTileTypeButton.Name = "TerrainTileType";
+        Place(shape, _terrainTileTypeButton, 0, 1, "Tile Type…", "Choose what Spyro finds on the selected tiles: solid ground, water that hurts, lava, a supercharge ramp… The picture stays; the ground behaves differently.", span: 2);
         content.Children.Add(shape);
 
         Grid height = TwoColumnGrid(1);
@@ -300,7 +303,7 @@ public sealed partial class MainWindow
         if (_currentGeometry == null)
             _terrainPanelSelectionText.Text = "Open a level to edit its terrain.";
         else if (multi >= 2)
-            _terrainPanelSelectionText.Text = $"{multi} tiles selected. Remove Terrain removes them together; Undo Terrain brings removed ones back.";
+            _terrainPanelSelectionText.Text = $"{multi} tiles selected. Tile Type… changes them together; Remove Terrain removes them; Undo Terrain brings removed ones back.";
         else if (_selectedTerrain == null)
             _terrainPanelSelectionText.Text = $"Click a tile in the view to select it. {several} selects several.";
         else
@@ -313,8 +316,13 @@ public sealed partial class MainWindow
                     : _selectedTerrain.IsTerrainEdited
                         ? " You have changed it."
                         : "";
-            _terrainPanelSelectionText.Text = $"{tile} selected.{state} Drag it in the view to move it, or use the buttons.";
+            if (_freshSceneDocument == null && !_selectedTerrain.IsTerrainAddClone)
+                TileTypeCatalog(out _);
+            string? kind = _selectedTerrain.IsTerrainAddClone ? null : DescribeSelectedTileType(_selectedTerrain);
+            _terrainPanelSelectionText.Text = $"{tile} selected{(kind == null ? "" : $" — {kind}")}.{state} Drag it in the view to move it, or use the buttons.";
         }
+        if (_terrainTileTypeButton != null)
+            _terrainTileTypeButton.IsEnabled = _currentGeometry != null && _freshSceneDocument == null && SelectedTilesForTypeChange().Count > 0;
 
         if (_terrainPanelHeightRow != null)
             _terrainPanelHeightRow.IsVisible = _freshSceneDocument == null;

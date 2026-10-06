@@ -409,25 +409,37 @@ public static class NativeTerrainSurfaceCatalogBuilder
             int matchedVisualTriangleCount = 0;
             bool hasAnyCollisionCandidate = false;
             List<NativeCollisionSurfaceTriangle> nativeTriangles = [];
-            bool exact = true;
-            for (int i = 1; i < face.OriginalPoints.Count - 1; i++)
+            bool exact = false;
+            // A native quad may be cut along either diagonal; take the first triangulation that maps 1:1.
+            foreach (int[][] triangulation in VisualTriangulations(face.OriginalPoints.Count))
             {
-                string key = VisualTriangleKey(face, 0, i, i + 1);
-                if (!nativeByTriangleKey.TryGetValue(key, out NativeCollisionSurfaceTriangle[]? candidates) || candidates.Length != 1)
+                int matched = 0;
+                bool anyCandidate = false;
+                List<NativeCollisionSurfaceTriangle> matches = [];
+                foreach (int[] triangle in triangulation)
                 {
-                    hasAnyCollisionCandidate |= candidates is { Length: > 0 };
-                    exact = false;
-                    continue;
+                    string key = VisualTriangleKey(face, triangle[0], triangle[1], triangle[2]);
+                    if (!nativeByTriangleKey.TryGetValue(key, out NativeCollisionSurfaceTriangle[]? candidates) || candidates.Length != 1)
+                    {
+                        anyCandidate |= candidates is { Length: > 0 };
+                        continue;
+                    }
+                    anyCandidate = true;
+                    matched++;
+                    matches.Add(candidates[0]);
                 }
-
-                hasAnyCollisionCandidate = true;
-                matchedVisualTriangleCount++;
-                nativeTriangles.Add(candidates[0]);
+                bool complete = matched == visualTriangleCount &&
+                    matches.Select(triangle => triangle.TriangleIndex).Distinct().Count() == matches.Count;
+                if (complete || matched > matchedVisualTriangleCount || nativeTriangles.Count == 0)
+                {
+                    matchedVisualTriangleCount = matched;
+                    hasAnyCollisionCandidate = anyCandidate || hasAnyCollisionCandidate;
+                    nativeTriangles = matches;
+                    exact = complete;
+                }
+                if (complete)
+                    break;
             }
-
-            if (nativeTriangles.Select(triangle => triangle.TriangleIndex).Distinct().Count() != nativeTriangles.Count)
-                exact = false;
-            exact &= matchedVisualTriangleCount == visualTriangleCount;
 
             NativeTerrainSurfaceSignature[] signatures = nativeTriangles
                 .Select(SignatureFor)
@@ -518,5 +530,16 @@ public static class NativeTerrainSurfaceCatalogBuilder
     public static string PointKey(float x, float y, float z)
     {
         return $"{MathF.Round(x)},{MathF.Round(y)},{MathF.Round(z)}";
+    }
+
+    /// <summary>
+    /// The ways a visible face may be cut into collision triangles: both diagonals for a quad, the fan
+    /// otherwise. Create BIN and the catalogue agree on this order.
+    /// </summary>
+    public static IReadOnlyList<int[][]> VisualTriangulations(int pointCount)
+    {
+        if (pointCount == 4)
+            return [[[0, 1, 2], [0, 2, 3]], [[0, 1, 3], [1, 2, 3]]];
+        return [Enumerable.Range(1, Math.Max(0, pointCount - 2)).Select(i => new[] { 0, i, i + 1 }).ToArray()];
     }
 }
