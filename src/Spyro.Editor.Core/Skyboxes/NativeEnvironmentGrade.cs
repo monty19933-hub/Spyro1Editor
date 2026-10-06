@@ -17,7 +17,8 @@ public sealed record NativeEnvironmentGradePlan(
     bool GradeActors,
     bool GradeChests,
     bool GradeScenery,
-    bool GradeDragons)
+    bool GradeDragons,
+    bool SnowOnPlants = false)
 {
     public const string MatchSkySourceMode = "match-sky-source";
     public const bool SupportsObjectPaletteMatching = true;

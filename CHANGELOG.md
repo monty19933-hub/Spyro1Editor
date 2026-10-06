@@ -7,6 +7,7 @@ New
 - Tile Type…: in the Terrain tab's Tiles card, choose what Spyro finds on the selected tiles — solid ground, water or lava that hurts, a supercharge ramp, and whatever else the level already defines. The picture stays; the ground behaves differently. The Tiles card names the kind of the selected tile. Undo Terrain puts it back.
 - Fly Anywhere can be limited to chosen levels: open "Choose levels" under the whole-game switch and tick the levels you want. Everywhere else Spyro moves as in the original game. A level of your own flies whenever at least one level is ticked.
 - A level you build, or clear with Start Blank, can use another level's skybox: in its level settings, pick a level under "Skybox (borrow a level's sky)" and press Use this skybox. Flight levels' skies are not offered.
+- Snow on trees and plants: on the Environment tab, a level whose look is matched to another level can have its trees and plants turn snow white where the light hits them and frosty blue in shade, close up and far away. Trunks keep their colour.
 - Lower now works on tiles at the floor of their part of the level. The game stores each part's heights within a band that used to start exactly at the lowest tile; Create BIN now moves the band when a lowered corner needs it.
 
 Clearer
@@ -21,6 +22,9 @@ Fixed
 
 - Giving a level another level's look (the environment recolour) left far hills, and grass seen from afar, in their old green. Grass and distant scenery now take the colour of the level the look comes from, unless that level is green itself.
 - Create BIN refused enemies from Dark Passage, Haunted Towers, Terrace Village and Twilight Harbor ("… lost native … owner") in a game that also had recoloured dragons or removed objects.
+- Rescuing a dragon could crash the game in a level where whole object families (such as Stone Hill's rams and shepherds) were removed and objects from other levels were added. The rescue scene ran out of room below the dragon statue. Create BIN now measures the whole rescue scene, places imported models where the game reloads them after a rescue, and refuses a level that still lacks room.
+- Recoloured dragons turned back to green crystal in their rescue scene. When every statue in a level has the same colour, the scene now shows it too.
+- Applying a sky in a mode other than Swap From Level switched off the level's matched look (terrain lighting). It is kept now.
 - Copied terrain (Add Terrain) now appears in the game. The copies were saved, but the game never drew them.
 - Decorative tiles that Spyro never touches, such as the trim around a doorway, can now be removed and copied too.
 - Create BIN could fail with "LP color … command byte" when one level's added or removed tiles made its data grow while another level in the same game had terrain, colour or sky changes.

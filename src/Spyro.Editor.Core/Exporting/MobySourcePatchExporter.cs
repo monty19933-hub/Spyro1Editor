@@ -1441,7 +1441,10 @@ public static class MobySourcePatchExporter
                 !JsonValue.GetBoolean(edit, "removed") && DragonStatueColor.Read(edit) != null)
             .Select(edit => JsonValue.GetInt32(edit, "trueIndex", -1)).ToHashSet();
         if (editOutcomes.Any(outcome => colouredRows.Contains(outcome.EditorTrueIndex) && outcome.PatchKinds.Count > 0))
-            AddDragonColourRenderer(imageStream, layout, level, patches);
+            AddDragonColourRenderer(imageStream, layout, level, patches, editsElement.EnumerateArray()
+                .Where(edit => !Spyro.Editor.Core.Universal.UniversalPlacementReader.IsUniversalEdit(edit) &&
+                    !JsonValue.GetBoolean(edit, "removed") && DragonStatueColor.Read(edit) != null)
+                .Select(edit => (JsonValue.GetInt32(edit, "trueIndex", -1), DragonStatueColor.Read(edit)!.Value)).ToArray());
 
         return new MobySourcePatchPlan(
             GeneratedAt: DateTimeOffset.UtcNow,
@@ -7136,7 +7139,7 @@ public static class MobySourcePatchExporter
     }
 
     private static void AddDragonColourRenderer(FileStream stream, DiscLayout layout, LevelDefinition level,
-        List<MobySourcePatch> patches)
+        List<MobySourcePatch> patches, IReadOnlyList<(int Row, ColorRgba Colour)> statues)
     {
         byte[] entry = ReadWadBytes(stream, layout, level.SourceWadEntry * 8L, 8);
         int offset = BinaryPrimitives.ReadInt32LittleEndian(entry), length = BinaryPrimitives.ReadInt32LittleEndian(entry.AsSpan(4));
@@ -7152,6 +7155,21 @@ public static class MobySourcePatchExporter
             patches.Add(new MobySourcePatch($"{level.Key}-dragon-colour-{patch.Address:X8}", "dragon-colour-renderer",
                 level.Key, "Dragon colour", -1, "", $"exe:0x{patch.Address:X8}", $"0x{imageOffset:X}", patch.After.Length,
                 ToHex(patch.Before), ToHex(patch.After), "Render each customised dragon statue in its chosen colour."));
+        }
+        // The rescue scene draws the statue model without the per-statue renderer, so it showed the original crystal.
+        // When every statue in the level has the same colour, the model's own palettes take that colour too.
+        var colours = statues.Select(s => s.Colour).Distinct().ToArray();
+        var statueRows = Enumerable.Range(0, data.Scene().RowCount)
+            .Where(r => BinaryPrimitives.ReadUInt16LittleEndian(data.Row(r).AsSpan(0x36)) == 0xFA).ToHashSet();
+        if (colours.Length != 1 || !statueRows.SetEquals(statues.Select(s => s.Row))) return;
+        int root = data.Registrations().Single(r => r.ClassId == 0xFA).Root;
+        foreach (var change in NativeModelPalettes.Hue(data.Package(0xFA), colours[0]))
+        {
+            long wadOffset = offset + root + change.Offset;
+            patches.Add(new MobySourcePatch($"{level.Key}-dragon-colour-model-{change.Offset:X}", "dragon-colour-model-palette",
+                level.Key, "Dragon colour", -1, "", $"0x{wadOffset:X}", $"0x{ConvertWadOffsetToImageOffset(layout, wadOffset):X}",
+                change.After.Length, ToHex(change.Before), ToHex(change.After),
+                "Give the dragon statue model the statues' colour, so the rescue scene shows it too."));
         }
     }
 

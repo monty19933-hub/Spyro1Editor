@@ -591,6 +591,9 @@ public static class NativeEnvironmentGradeExporter
                 }
             }
 
+            if (grade.SnowOnPlants)
+                AddPlantSnowPatches(image, discLayout, assets, edit.Level, donor, targetData.TexturePalettes, writtenRanges, patches, payloads);
+
             if (grade.GradeAnyMobys)
             {
                 if (edit.Level.LevelId is < 0 or > MaxLevelId)
@@ -934,6 +937,55 @@ public static class NativeEnvironmentGradeExporter
     }
 
     private static bool IsGreenDominant(ColorRgba color) => color.G - Math.Max(color.R, color.B) > 8;
+
+    /// <summary>Snow on trees and plants: every static green object model of the level (see
+    /// <see cref="NativeModelPalettes.Snow"/>) except the dragon statue and its rescue model.</summary>
+    private static void AddPlantSnowPatches(FileStream image, DiscLayout discLayout, NativeAssetCatalog assets, LevelDefinition level,
+        LevelDefinition donor, IReadOnlyList<TexturePaletteTable> landscapePalettes, GradeWriteRangeTracker writtenRanges,
+        List<NativeEnvironmentGradePatch> patches, List<GradePayload> payloads)
+    {
+        LevelAssetLayout asset = assets.Levels[level.SourceWadEntry];
+        NativeSubfile models = asset.SceneryModels
+            ?? throw new InvalidOperationException($"{level.DisplayName}'s object models are missing from the disc analysis; rebuild it before adding snow.");
+        byte[] header = DiscImage.ReadFileBytes(image, discLayout, assets.WadLba, asset.EntryOffset, 0x200);
+        int U32(int at) => BinaryPrimitives.ReadInt32LittleEndian(header.AsSpan(at));
+        if (U32(8 * SceneryModelSubfileIndex) != models.RelativeOffset || U32(8 * SceneryModelSubfileIndex + 4) != models.Size)
+            throw new InvalidOperationException($"{level.DisplayName}'s object models moved since the disc analysis; rebuild it before adding snow.");
+        byte[] modelBytes = DiscImage.ReadFileBytes(image, discLayout, assets.WadLba, models.WadOffset, models.Size);
+        List<(int ClassId, int Root)> registrations = [];
+        for (int slot = 1; slot < 64 && U32(0x50 + 4 * slot) > 0; slot++)
+            registrations.Add((BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(0x150 + 2 * slot)), U32(0x50 + 4 * slot)));
+        registrations.Sort((a, b) => a.Root.CompareTo(b.Root));
+        HashSet<int> plantPalettes = [], otherPalettes = [];
+        for (int i = 0; i < registrations.Count; i++)
+        {
+            var (classId, root) = registrations[i];
+            long start = root - models.RelativeOffset, end = i + 1 < registrations.Count ? registrations[i + 1].Root - models.RelativeOffset : models.Size;
+            if (start < 0 || end > models.Size || end <= start) continue;
+            byte[] package = modelBytes.AsSpan((int)start, (int)(end - start)).ToArray();
+            var snow = classId is 0xFA or 0xFB ? null : NativeModelPalettes.Snow(package);
+            // Up close a plant is textured; collect the texture palettes it and every other model use.
+            try
+            {
+                foreach (var reference in Spyro.Editor.Core.Analysis.NativeMobyModelTextureLayout.Decode(package).References)
+                    (snow != null ? plantPalettes : otherPalettes).Add((reference.Palette >> 6 & 0x1FF) * PackedTexturePageRowByteLength + ((reference.Palette & 0x3F) * 16 - PackedTexturePageVramXOrigin) * 2);
+            }
+            catch (InvalidDataException) { }
+            foreach (var change in snow ?? [])
+                AddPatch(level, donor, assets.WadLba, models.WadOffset + start + change.Offset, "environment-plant-snow",
+                    $"class-{classId:X}-{change.Offset:X}", change.After.Length / 4, change.Before, change.After,
+                    discLayout, writtenRanges, patches, payloads);
+        }
+        // Their foliage texture palettes snow too, unless the landscape or another model also uses that palette.
+        byte[] textures = DiscImage.ReadFileBytes(image, discLayout, assets.WadLba, asset.TexturePages.WadOffset, asset.TexturePages.Size);
+        foreach (int palette in plantPalettes.Except(otherPalettes).Where(p => p >= 0 && p + 32 <= textures.Length).Order())
+        {
+            if (landscapePalettes.Any(t => t.Offset < palette + 32 && palette < t.Offset + t.Bytes.Length)) continue;
+            byte[] before = textures.AsSpan(palette, 32).ToArray();
+            AddPatch(level, donor, assets.WadLba, asset.TexturePages.WadOffset + palette, "environment-plant-snow-texture",
+                $"palette-{palette:X}", 16, before, NativeModelPalettes.SnowClut(before), discLayout, writtenRanges, patches, payloads);
+        }
+    }
 
     private static NativeEnvironmentColorStatistics SceneColorStatistics(LevelColorData data, string detail) =>
         NativeEnvironmentColorStatistics.FromColors(

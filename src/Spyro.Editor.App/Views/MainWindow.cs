@@ -158,6 +158,7 @@ public sealed partial class MainWindow : Window
     private readonly CheckBox _skyboxEnvironmentChestBox = new() { Content = "Chests", IsVisible = NativeEnvironmentGradePlan.SupportsScopedObjectPaletteMatching };
     private readonly CheckBox _skyboxEnvironmentSceneryBox = new() { Content = "Scenery", IsVisible = NativeEnvironmentGradePlan.SupportsScopedObjectPaletteMatching };
     private readonly CheckBox _skyboxEnvironmentDragonBox = new() { Content = "Dragons and pedestals", IsVisible = NativeEnvironmentGradePlan.SupportsScopedObjectPaletteMatching };
+    private readonly CheckBox _skyboxEnvironmentSnowBox = new() { Name = "SkyboxEnvironmentSnow", Content = "Snow on trees and plants", IsChecked = false };
     private Button? _skyboxPaletteImportButton;
     private Button? _skyboxCustomImportButton;
     private Button? _skyboxMatchEnvironmentButton;
@@ -1628,6 +1629,23 @@ public sealed partial class MainWindow : Window
         panel.Children.Add(_skyboxSwapPanel);
         panel.Children.Add(_skyboxOriginalPresetPanel);
         panel.Children.Add(_skyboxImportPanel);
+        // Shown in every sky mode: it belongs to the level's look (environment match), which other modes keep.
+        panel.Children.Add(new StackPanel
+        {
+            Spacing = 3,
+            Children =
+            {
+                _skyboxEnvironmentSnowBox,
+                new TextBlock
+                {
+                    Text = "Trees and plants turn snow white where the sun hits them and frosty blue in shade; trunks keep their colour. " +
+                        "Needs the level's look matched to another level (Swap From Level, then Match Level Terrain Palette).",
+                    Foreground = new SolidColorBrush(Color.FromRgb(62, 76, 88)),
+                    FontSize = 11,
+                    TextWrapping = TextWrapping.Wrap
+                }
+            }
+        });
         panel.Children.Add(buttons);
         panel.Children.Add(_skyboxResetButton);
         RefreshOriginalSkyPresetPreview();
@@ -1706,6 +1724,7 @@ public sealed partial class MainWindow : Window
         _skyboxEnvironmentEnabledBox.IsCheckedChanged += (_, _) => Changed();
         _skyboxEnvironmentSceneBox.IsCheckedChanged += (_, _) => Changed();
         _skyboxEnvironmentTextureBox.IsCheckedChanged += (_, _) => Changed();
+        _skyboxEnvironmentSnowBox.IsCheckedChanged += (_, _) => Changed();
         _skyboxEnvironmentMobyBox.IsCheckedChanged += (_, _) =>
         {
             if (_syncingSkyboxControls)
@@ -12189,6 +12208,7 @@ public sealed partial class MainWindow : Window
         _skyboxEnvironmentChestBox.IsEnabled = enabled;
         _skyboxEnvironmentSceneryBox.IsEnabled = enabled;
         _skyboxEnvironmentDragonBox.IsEnabled = enabled;
+        _skyboxEnvironmentSnowBox.IsEnabled = enabled;
         if (_skyboxPaletteImportButton != null)
             _skyboxPaletteImportButton.IsEnabled = enabled;
         if (_skyboxCustomImportButton != null)
@@ -12376,7 +12396,8 @@ public sealed partial class MainWindow : Window
             GradeActors: gradeObjects,
             GradeChests: gradeObjects,
             GradeScenery: gradeObjects,
-            GradeDragons: gradeObjects)
+            GradeDragons: gradeObjects,
+            SnowOnPlants: _skyboxEnvironmentSnowBox.IsChecked == true)
             .Normalize(donorLevelKey);
     }
 
@@ -12391,6 +12412,7 @@ public sealed partial class MainWindow : Window
         _skyboxEnvironmentTintStrengthSlider.Value = normalized.TintStrengthPercent;
         _skyboxEnvironmentSceneBox.IsChecked = normalized.GradeSceneColors;
         _skyboxEnvironmentTextureBox.IsChecked = normalized.GradeTexturePalettes;
+        _skyboxEnvironmentSnowBox.IsChecked = normalized.SnowOnPlants;
         bool gradeObjects = normalized.GradeAnyMobys;
         _skyboxEnvironmentActorBox.IsChecked = gradeObjects;
         _skyboxEnvironmentChestBox.IsChecked = gradeObjects;
@@ -12926,6 +12948,12 @@ public sealed partial class MainWindow : Window
             else if (!string.Equals(mode, NativeSkyEditPlan.PaletteMode, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException($"Unknown skybox edit mode '{mode}'.");
+            }
+            if (!string.Equals(mode, NativeSkyEditPlan.SwapMode, StringComparison.OrdinalIgnoreCase) &&
+                NativeSkyEditStore.Load(capturedScene.WorkspaceRoot, capturedLevel)?.EnvironmentGrade is { Enabled: true } savedGrade)
+            {
+                // Only Swap From Level edits the level's look; other sky modes keep the saved one and its snow choice.
+                environmentGrade = savedGrade with { SnowOnPlants = _skyboxEnvironmentSnowBox.IsChecked == true };
             }
 
             if (!string.Equals(mode, NativeSkyEditPlan.PaletteMode, StringComparison.OrdinalIgnoreCase))

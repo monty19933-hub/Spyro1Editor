@@ -108,7 +108,8 @@ public static class NativeSkyEditStore
             GradeActors: JsonValue.GetBoolean(grade, "gradeActors"),
             GradeChests: JsonValue.GetBoolean(grade, "gradeChests"),
             GradeScenery: JsonValue.GetBoolean(grade, "gradeScenery"),
-            GradeDragons: JsonValue.GetBoolean(grade, "gradeDragons"))
+            GradeDragons: JsonValue.GetBoolean(grade, "gradeDragons"),
+            SnowOnPlants: JsonValue.GetBoolean(grade, "snowOnPlants"))
             .Normalize(skyDonorLevelKey);
     }
 
