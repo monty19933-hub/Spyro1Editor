@@ -39,7 +39,7 @@ identity for reproducible packaging:
 ```sh
 SPYRO_EDITOR_RELEASE_CHANNEL=stable \
 SPYRO_EDITOR_STABLE_VERSION=1.2 \
-SPYRO_EDITOR_STABLE_INTERNAL_VERSION=1.2.1 \
+SPYRO_EDITOR_STABLE_INTERNAL_VERSION=1.2.0 \
 tools/Build-SpyroEditorRelease.sh SpyroEditor-V1.2
 ```
 
