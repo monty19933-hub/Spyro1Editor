@@ -29,9 +29,15 @@ internal static partial class NewLevelBuildCases
             case "fitmix": FitMix(window); return true;
             case "eggs-fix": EggsFix(window); return true;
             case "gems": Gems(window); return true;
+            case "frost-probe": FrostProbe(window); return true;
+            case "frost-probe2": FrostProbe2(window); return true;
+            case "frost-update": FrostUpdate(window); return true;
             case "blank-trial": BlankTrial(window); return true;
             case "sky-build": SkyBuild(window); return true;
             case "sky-objects": SkyObjectsStep(window); return true;
+            case "sky-update": SkyUpdateStep(window); return true;
+            case "sky-update2": SkyUpdate2Step(window); return true;
+            case "sky-update3": SkyUpdate3Step(window); return true;
             default: return false;
         }
     }

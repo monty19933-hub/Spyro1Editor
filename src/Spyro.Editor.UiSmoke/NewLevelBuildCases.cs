@@ -24,6 +24,7 @@ internal static partial class NewLevelBuildCases
         Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "1");
         Environment.SetEnvironmentVariable("SPYRO_EDITOR_DATA_ROOT", Path.Combine(outDir, "data-root"));
         Environment.SetEnvironmentVariable("SPYRO_EDITOR_DIAGNOSTICS_DIR", Path.Combine(outDir, "logs"));
+        Environment.SetEnvironmentVariable("SPYRO_EDITOR_PROJECTS_ROOT", Path.GetDirectoryName(project));
         Environment.CurrentDirectory = project;
         // Create BIN ends by opening its output folder in Finder; keep that off the desktop during these runs.
         Environment.SetEnvironmentVariable("PATH", "/nonexistent");

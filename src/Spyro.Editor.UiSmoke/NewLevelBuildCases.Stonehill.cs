@@ -231,3 +231,161 @@ internal static partial class NewLevelBuildCases
         Console.WriteLine("NEW_LEVEL_GEMS_OK");
     }
 }
+
+internal static partial class NewLevelBuildCases
+{
+    private static void FrostProbe(MainWindow window)
+    {
+        Load(window, "stonehill");
+        var (browser, entries) = OpenBrowser(window); browser.Close(); Pump(10);
+        var lib = Library(window);
+        var japanese = (UniversalJapaneseSource?)Invoke(window, "ResolveUniversalJapaneseSource");
+        LevelDefinition stone = Get<LevelCatalog>(window, "_retailCatalog").FindByKey("stonehill")!;
+        var removed = (List<int>)Invoke(window, "CurrentRemovedNativeRows")!;
+        var placements = (List<UniversalMobyPlacement>)Invoke(window, "CurrentUniversalPlacements")!;
+        var special = UniversalMobyExport.SpecialProvider(japanese, lib);
+        string Try(IReadOnlyList<UniversalMobyPlacement> list)
+        {
+            var task = Task.Run(() => UniversalMobyCatalogBuilder.DryRun(lib, stone, list, special, removed));
+            Wait(() => task.IsCompleted, "dry run", 900);
+            return task.Result.Error ?? $"fits, RAM headroom {task.Result.Result?.Ram.FinalHeadroom}";
+        }
+        Console.WriteLine("current: " + Try(placements));
+        foreach (var (hex, src) in new[] { ("0x0E3", "highcaves"), ("0x08E", "hauntedtowers"), ("0x0F1", "hauntedtowers") })
+        {
+            var e = entries.FirstOrDefault(x => x.ClassId == Convert.ToInt32(hex, 16) && x.SourceLevels.Contains(src));
+            if (e == null) { Console.WriteLine($"{hex} {src}: not in catalogue"); continue; }
+            var p = Trial(window, e, placements.Count, new Vector3f(12450, 9300, 1240));
+            Console.WriteLine($"+ {e.Name} ({src}, model {e.Default.ModelBytes}): " + Try([.. placements, p]));
+        }
+        int spider = 0x131;
+        var noSpiders = placements.Where(p => !(p.SourceLevelKey == "highcaves" && lib.Get("highcaves").Data.Row(p.SourceRowIndex) is var r && BitConverter.ToUInt16(r, 0x36) == spider)).ToList();
+        Console.WriteLine($"without the {placements.Count - noSpiders.Count} spiders: " + Try(noSpiders));
+        foreach (var m in Mobys(window).Where(m => DragonStatueColor.IsStatue(m)))
+            Console.WriteLine($"dragon statue row {m.TrueIndex} {m.DisplayLabel} at ({m.Position.X:0},{m.Position.Y:0},{m.Position.Z:0}) colour {DragonStatueColor.Hex(m.DragonColor) ?? "original"}");
+        var gems = Mobys(window).Where(m => !m.IsAdded && m.IsVisibleGem).ToList();
+        Console.WriteLine($"native loose gems: {gems.Count}, total value {gems.Sum(g => g.TreasureValue)}: " + string.Join(", ", gems.GroupBy(g => g.TreasureValue).Select(g => $"{g.Count()}x{g.Key}")));
+        Console.WriteLine("NEW_LEVEL_FROSTPROBE_OK");
+    }
+}
+
+internal static partial class NewLevelBuildCases
+{
+    private static void FrostProbe2(MainWindow window)
+    {
+        Load(window, "stonehill");
+        var (browser, entries) = OpenBrowser(window); browser.Close(); Pump(10);
+        var lib = Library(window);
+        var japanese = (UniversalJapaneseSource?)Invoke(window, "ResolveUniversalJapaneseSource");
+        LevelDefinition stone = Get<LevelCatalog>(window, "_retailCatalog").FindByKey("stonehill")!;
+        var removed = (List<int>)Invoke(window, "CurrentRemovedNativeRows")!;
+        var placements = (List<UniversalMobyPlacement>)Invoke(window, "CurrentUniversalPlacements")!;
+        var special = UniversalMobyExport.SpecialProvider(japanese, lib);
+        string Try(IReadOnlyList<UniversalMobyPlacement> list)
+        {
+            var task = Task.Run(() => UniversalMobyCatalogBuilder.DryRun(lib, stone, list, special, removed));
+            Wait(() => task.IsCompleted, "dry run", 900);
+            return task.Result.Error ?? $"fits, RAM headroom {task.Result.Result?.Ram.FinalHeadroom}, treasure delta {task.Result.Result?.TreasureDelta}";
+        }
+        bool IsSpider(UniversalMobyPlacement p) => p.SourceLevelKey == "highcaves" && BitConverter.ToUInt16(lib.Get("highcaves").Data.Row(p.SourceRowIndex), 0x36) == 0x131;
+        foreach (var (hex, src) in new[] { ("0x042", "wizardpeak"), ("0x0A5", "darkhollow"), ("0x073", "darkhollow"), ("0x0A6", "darkhollow"), ("0x0CB", "hauntedtowers"), ("0x11C", "wizardpeak"), ("0x0D3", "icecavern"), ("0x0D4", "icecavern") })
+        {
+            var e = entries.FirstOrDefault(x => x.ClassId == Convert.ToInt32(hex, 16) && x.SourceLevels.Contains(src));
+            if (e == null) { Console.WriteLine($"{hex} {src}: not in catalogue"); continue; }
+            var v = e.Variants.FirstOrDefault(x => x.SourceLevelKey == src) ?? e.Default;
+            var list = placements.Select(p => IsSpider(p) ? p with { SourceLevelKey = v.SourceLevelKey, SourceRowIndex = v.SourceRow } : p).ToList();
+            Console.WriteLine($"spiders -> {e.Name} ({src}, model {v.ModelBytes}): " + Try(list));
+        }
+        var regs = lib.Get("stonehill").Data.Registrations().Select(r => r.ClassId).ToHashSet();
+        Console.WriteLine("Stone Hill registers gem classes: " + string.Join(", ", new[] { 0x53, 0x54, 0x55, 0x56, 0x57 }.Where(regs.Contains).Select(c => $"0x{c:X}")));
+        Console.WriteLine("NEW_LEVEL_FROSTPROBE2_OK");
+    }
+}
+
+internal static partial class NewLevelBuildCases
+{
+    private static void FrostUpdate(MainWindow window)
+    {
+        Load(window, "stonehill");
+        var (browser, entries) = OpenBrowser(window); browser.Close(); Pump(10);
+        var lib = Library(window);
+        var japanese = (UniversalJapaneseSource?)Invoke(window, "ResolveUniversalJapaneseSource");
+        var tryZ = typeof(MainWindow).GetMethod("TryFindTerrainZAt", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        float? Ground(float x, float y, float refZ)
+        {
+            var args = new object?[] { x, y, refZ, 0f, -1, false };
+            return (bool)tryZ.Invoke(window, args)! ? (float)args[3]! : null;
+        }
+        // 1. Every dragon statue a cool purple.
+        foreach (var m in Mobys(window).Where(DragonStatueColor.IsStatue))
+        { m.DragonColor = Spyro.Editor.Core.Primitives.ColorRgba.FromRgb(138, 80, 255); Console.WriteLine($"  dragon row {m.TrueIndex} -> #8A50FF"); }
+
+        // 2. Metalback Spiders need a superflame fairy, which does not fit; snowballers take their places.
+        var spiders = Mobys(window).Where(m => m.IsAdded && !m.IsRemoved && m.DisplayLabel.Contains("Metalback", StringComparison.OrdinalIgnoreCase)).ToList();
+        int k = 0;
+        foreach (var spider in spiders)
+        {
+            var (hex, name) = k++ % 2 == 0 ? ("0x0D3", "Snowballer") : ("0x0D4", "Agile Snowballer");
+            var entry = Entry(entries, hex, "icecavern");
+            var before = Mobys(window).ToHashSet();
+            SetField(window, "_selectedMoby", spider);
+            var add = (Task)Invoke(window, "AddUniversalMobyAsync", lib, entry, entry.Variants.First(v => v.SourceLevelKey == "icecavern"), false, japanese)!;
+            Wait(() => add.IsCompleted, "add " + name, 120);
+            var added = Mobys(window).Single(m => !before.Contains(m));
+            SetField(window, "_selectedMoby", added);
+            Invoke(window, "NudgeSelectedMoby", spider.Position.X - added.Position.X, spider.Position.Y - added.Position.Y, 0f);
+            SetField(window, "_selectedMoby", spider); Invoke(window, "RemoveSelectedMoby");
+            Console.WriteLine($"  spider at ({spider.Position.X:0},{spider.Position.Y:0}) -> {added.DisplayLabel} at ({added.Position.X:0},{added.Position.Y:0},{added.Position.Z:0})");
+        }
+
+        // 3. Gems: sixteen native red gems become yellow, blue and green and move beside trees around the level.
+        var reds = Mobys(window).Where(m => !m.IsAdded && !m.IsRemoved && m.IsVisibleGem && m.TreasureValue == 1).OrderBy(m => m.TrueIndex).ToList();
+        var picks = Enumerable.Range(0, 16).Select(i => reds[(i * reds.Count) / 16]).ToList();
+        var trees = Mobys(window).Where(m => !m.IsAdded && m.TrueIndex is >= 45 and <= 67).OrderBy(m => m.TrueIndex).ToList();
+        GemValue[] values = [.. Enumerable.Repeat(GemValue.Yellow, 8), .. Enumerable.Repeat(GemValue.Blue, 4), .. Enumerable.Repeat(GemValue.Green, 4)];
+        int t = 0;
+        for (int i = 0; i < picks.Count; i++)
+        {
+            var gem = picks[i];
+            gem.ApplyGem(values[i]);
+            (float X, float Y, float Z)? target = null;
+            for (int tries = 0; tries < trees.Count && target == null; tries++)
+            {
+                var tree = trees[t++ % trees.Count];
+                float treeGround = Ground(tree.Position.X, tree.Position.Y, tree.Position.Z) ?? tree.Position.Z;
+                foreach (var (dx, dy) in EggTries)
+                {
+                    float x = tree.Position.X + dx * 1.3f, y = tree.Position.Y + dy * 1.3f;
+                    if (Ground(x, y, treeGround) is float gz && Math.Abs(gz - treeGround) <= 25 &&
+                        Mobys(window).All(o => o.IsRemoved || Math.Abs(o.Position.X - x) + Math.Abs(o.Position.Y - y) > 50))
+                    { target = (x, y, gz); break; }
+                }
+            }
+            if (target == null) { Console.WriteLine($"  gem row {gem.TrueIndex}: no free spot"); continue; }
+            float lift = gem.Position.Z - (Ground(gem.Position.X, gem.Position.Y, gem.Position.Z) ?? gem.Position.Z);
+            SetField(window, "_selectedMoby", gem);
+            Invoke(window, "NudgeSelectedMoby", target.Value.X - gem.Position.X, target.Value.Y - gem.Position.Y, target.Value.Z + Math.Max(lift, 0) - gem.Position.Z + 0.001f);
+            Console.WriteLine($"  gem row {gem.TrueIndex} -> {values[i].Name} ({values[i].Value}) at ({gem.Position.X:0},{gem.Position.Y:0},{gem.Position.Z:0})");
+        }
+        int native = Mobys(window).Where(m => !m.IsAdded && !m.IsRemoved && m.IsVisibleGem).Sum(m => m.TreasureValue);
+        Console.WriteLine($"native loose gem value now {native}");
+
+        LevelDefinition stone = Get<LevelCatalog>(window, "_retailCatalog").FindByKey("stonehill")!;
+        var placements = (List<UniversalMobyPlacement>)Invoke(window, "CurrentUniversalPlacements")!;
+        var removed = (List<int>)Invoke(window, "CurrentRemovedNativeRows")!;
+        var task = Task.Run(() => UniversalMobyCatalogBuilder.DryRun(lib, stone, placements, UniversalMobyExport.SpecialProvider(japanese, lib), removed));
+        Wait(() => task.IsCompleted, "dry run", 900);
+        Console.WriteLine($"fit check: {(task.Result.Error ?? $"fits, RAM headroom {task.Result.Result?.Ram.FinalHeadroom}")}");
+        if (task.Result.Error != null) throw new InvalidOperationException(task.Result.Error);
+        Save(window);
+        using (var w = new StreamWriter(Path.Combine(Environment.GetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE")!, "..", "..", "runtime", "stonehill-spec.json")))
+        {
+            var added = Mobys(window).Where(m => m.IsAdded && !m.IsRemoved).ToList();
+            string J(Moby m, string key, string val) => $"{{\"{key}\":\"{val}\",\"x\":{m.Position.X:0},\"y\":{m.Position.Y:0},\"z\":{m.Position.Z:0}}}";
+            w.Write("{\"enemies\":[" + string.Join(",", added.Where(m => m.DisplayLabel.Contains("Snowballer")).Select(m => J(m, "name", m.DisplayLabel))) + "],");
+            w.Write("\"eggs\":[" + string.Join(",", added.Where(m => m.DisplayLabel.Contains("Egg")).Select(m => J(m, "colour", m.DisplayLabel))) + "],");
+            w.Write("\"gems\":[" + string.Join(",", picks.Select(m => J(m, "name", m.DisplayLabel))) + "]}");
+        }
+        Console.WriteLine("NEW_LEVEL_FROSTUPDATE_OK");
+    }
+}

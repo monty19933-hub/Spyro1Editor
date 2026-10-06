@@ -66,9 +66,9 @@ internal static partial class NewLevelBuildCases
 internal static partial class NewLevelBuildCases
 {
     internal const float T = 240;
-    // Island tops are grass (edge tiles fade into cloud) or pale stone; every outside edge hangs a cloud "drip".
-    // Walls and drips are drawn on the right-hand side of a->b, so island edges run counter-clockwise.
-    internal static void Island(SceneBuilder b, float x0, float y0, int nx, int ny, float z, bool grass, int seed, int stoneTex = 35)
+    // Island tops are grass (edge tiles fade into cloud) or pale stone; every outside edge hangs a cloud side.
+    // Walls and sides are drawn on the right-hand side of a->b, so island edges run counter-clockwise.
+    internal static void Island(SceneBuilder b, float x0, float y0, int nx, int ny, float z, bool grass, int seed, int stoneTex = 35, bool cap = true)
     {
         var rnd = new Random(seed);
         ColorRgba top = new(150, 150, 150), under = new(118, 122, 150);
@@ -89,7 +89,12 @@ internal static partial class NewLevelBuildCases
             Vector3f[] v = Enumerable.Range(0, 4).Select(k => corners[(k + rot) % 4]).ToArray();
             b.Raw(v, b.Mat(tex), top);
         }
-        // Perimeter, counter-clockwise seen from above.
+        // Underside: an inverted, closed frustum of cloud like a floating island. Each outside edge tile hangs one
+        // planar quad whose bottom edge is pulled in toward the middle; neighbours share their bottom corners.
+        // Quad corners 2-3 are the texture's bottom edge, so the cloud's puffy edge hangs at the bottom.
+        float inset = Math.Min(233, Math.Min(nx, ny) * T / 2 - 10), depth = 250;
+        float bx0 = x0 + inset, by0 = y0 + inset, bx1 = x0 + nx * T - inset, by1 = y0 + ny * T - inset, zb = z - depth;
+        Vector3f Under(float x, float y) => new(Math.Clamp(x, bx0, bx1), Math.Clamp(y, by0, by1), zb);
         List<(Vector3f A, Vector3f B)> edges = [];
         for (int i = 0; i < nx; i++) edges.Add((new(x0 + i * T, y0, z), new(x0 + (i + 1) * T, y0, z)));
         for (int j = 0; j < ny; j++) edges.Add((new(x0 + nx * T, y0 + j * T, z), new(x0 + nx * T, y0 + (j + 1) * T, z)));
@@ -97,11 +102,14 @@ internal static partial class NewLevelBuildCases
         for (int j = ny; j > 0; j--) edges.Add((new(x0, y0 + j * T, z), new(x0, y0 + (j - 1) * T, z)));
         foreach (var (A, B) in edges)
         {
-            float depth = 150 + rnd.Next(0, 80);
-            Vector3f mid = new((A.X + B.X) / 2, (A.Y + B.Y) / 2, z - depth);
-            b.Surfaces.Add(new(Guid.NewGuid().ToString("N"), [A, mid, B], top, b.Mat(rnd.Next(2) == 0 ? 30 : 31),
-                [top, under, top], [top, under, top]));
+            Vector3f a = Under(A.X, A.Y), bb = Under(B.X, B.Y);
+            b.Surfaces.Add(new(Guid.NewGuid().ToString("N"), [B, A, a, bb], top, b.Mat(rnd.Next(2) == 0 ? 30 : 31),
+                [top, top, under, under], [top, top, under, under]));
         }
+        // Close the bottom when the remaining hole is a real face (at most 255 units, one collision pair).
+        if (cap && bx1 - bx0 >= 64 && by1 - by0 >= 64)
+            b.Surfaces.Add(new(Guid.NewGuid().ToString("N"), [new(bx0, by0, zb), new(bx0, by1, zb), new(bx1, by1, zb), new(bx1, by0, zb)],
+                under, b.Mat(31), null, null));
     }
 
     // A square pillar (footprint w x w) with brick walls facing out and a stone cap.
@@ -114,7 +122,7 @@ internal static partial class NewLevelBuildCases
         b.Floor(x, y, x + w, y + w, z1, b.Mat(35), lit);
     }
 
-    internal static SceneDocument Cloudspire(SceneDocument blank, int dream)
+    internal static SceneDocument Cloudspire(SceneDocument blank, int dream, int? skyWad = null)
     {
         var b = new SceneBuilder(dream);
         ColorRgba lit = new(150, 150, 150);
@@ -135,7 +143,7 @@ internal static partial class NewLevelBuildCases
         {
             ColorRgba dark = new(90, 85, 100);
             void Wall(float ax, float ay, float bx, float by) => b.Surfaces.Add(new(Guid.NewGuid().ToString("N"),
-                [new(ax, ay, 1600), new(bx, by, 1600), new(bx, by, 1840), new(ax, ay, 1840)], lit, b.Mat(27), [dark, dark, lit, lit], [dark, dark, lit, lit]));
+                [new(ax, ay, 1600), new(bx, by, 1600), new(bx, by, 1840), new(ax, ay, 1840)], lit, b.Mat(36), [dark, dark, lit, lit], [dark, dark, lit, lit]));
             Wall(4290, 3960, 4530, 3960); Wall(4530, 3960, 4530, 4200); Wall(4530, 4200, 4290, 4200); Wall(4290, 4200, 4290, 3960);
         }
         // D  Cloud Garden: a straight glide from the tower lands here (Spyro's glide sinks about 1 in 10)
@@ -151,7 +159,7 @@ internal static partial class NewLevelBuildCases
         return blank with
         {
             Name = "CLOUDSPIRE ISLES", Spawn = new(3000, 3000, 1632), Heading = 0,
-            SkyColor = new(130, 150, 235), MusicTrack = 14, Surfaces = b.Surfaces
+            SkyColor = new(130, 150, 235), MusicTrack = 14, Surfaces = b.Surfaces, SkySourceWadEntry = skyWad
         };
     }
 
@@ -159,7 +167,9 @@ internal static partial class NewLevelBuildCases
     {
         StartBlank(window, "townsquare");
         var catalog = Get<LevelCatalog>(window, "_retailCatalog");
-        var doc = Cloudspire(window.FreshSceneForTesting!, catalog.FindByKey("dreamweavers")!.SourceWadEntry);
+        string skyKey = Environment.GetEnvironmentVariable("CLOUDSPIRE_SKY") ?? "dreamweavers";
+        var doc = Cloudspire(window.FreshSceneForTesting!, catalog.FindByKey("dreamweavers")!.SourceWadEntry,
+            skyKey == "none" ? null : catalog.FindByKey(skyKey)!.SourceWadEntry);
         Console.WriteLine($"faces {doc.Surfaces.Count}, textured {doc.Surfaces.Count(s => s.Material != null)}");
         ApplyScene(window, doc);
         Console.WriteLine("NEW_LEVEL_SKYBUILD_OK");
@@ -207,10 +217,61 @@ internal static partial class NewLevelBuildCases
         ("egg:dragonfly-egg-purple", 0x1E9, "japan", 2700, 2200, 1600),
     ];
 
+    // Round 4: the Fat Bats flee and never return, so ground enemies take their place; scenery is added.
+    // Only these are added: every object ever placed keeps a save row, and re-adding all would overflow them.
+    private static readonly (string What, int Class, string Source, float X, float Y, float Z)[] SkyUpdates =
+    [
+        ("enemy", 0x07A, "darkpassage", 2850, 1950, 1600), ("enemy", 0x032, "darkpassage", 3150, 2160, 1600),
+        ("prop", 0x163, "artisans", 2710, 2710, 1600), ("prop", 0x164, "artisans", 2710, 3290, 1600),
+        ("prop", 0x156, "artisans", 3290, 3290, 1600), ("prop", 0x156, "artisans", 3810, 4000, 1790),
+        ("prop", 0x162, "artisans", 2700, 2010, 1600), ("prop", 0x156, "artisans", 3300, 2010, 1600),
+        ("prop", 0x0AC, "artisans", 4500, 4170, 1840), ("chest", 0x1A5, "artisans", 4720, 2700, 1600),
+    ];
+
+    private static void SkyUpdateStep(MainWindow window)
+    {
+        Load(window, "townsquare");
+        if (window.FreshSceneForTesting == null) throw new InvalidOperationException("Town Square is not blank");
+        foreach (var bat in Mobys(window).Where(m => m.IsAdded && !m.IsRemoved && m.DisplayLabel.StartsWith("Fat Bat")).ToList())
+        { SetField(window, "_selectedMoby", bat); Invoke(window, "RemoveSelectedMoby"); Console.WriteLine("  removed " + bat.DisplayLabel); }
+        AddSkyObjects(window, SkyUpdates, removeAll: false);
+        Console.WriteLine("NEW_LEVEL_SKYUPDATE_OK");
+    }
+
+    // Dark Passage enemies cannot export beside recoloured dragons (both own code near 0x80017188), so the
+    // meadow uses a Tin Soldier (Haunted Towers) and a Bull (Town Square's own) instead.
+    private static void SkyUpdate2Step(MainWindow window)
+    {
+        Load(window, "townsquare");
+        if (window.FreshSceneForTesting == null) throw new InvalidOperationException("Town Square is not blank");
+        foreach (var m in Mobys(window).Where(m => m.IsAdded && !m.IsRemoved && (m.DisplayLabel.StartsWith("Lamp Fool") || m.DisplayLabel.StartsWith("Puppy"))).ToList())
+        { SetField(window, "_selectedMoby", m); Invoke(window, "RemoveSelectedMoby"); Console.WriteLine("  removed " + m.DisplayLabel); }
+        AddSkyObjects(window, [("enemy", 0x0CB, "hauntedtowers", 2850, 1950, 1600), ("enemy", 0x017, "townsquare", 3150, 2160, 1600)], removeAll: false);
+        Console.WriteLine("NEW_LEVEL_SKYUPDATE2_OK");
+    }
+
+    // A Tin Soldier cannot export beside the project's save-row compaction (its helper proof covers that code),
+    // so the meadow keeps the Bull and gets a Lamp Fool; Dark Passage enemies now export beside recoloured dragons.
+    private static void SkyUpdate3Step(MainWindow window)
+    {
+        Load(window, "townsquare");
+        if (window.FreshSceneForTesting == null) throw new InvalidOperationException("Town Square is not blank");
+        foreach (var m in Mobys(window).Where(m => m.IsAdded && !m.IsRemoved && m.DisplayLabel.StartsWith("Tin Soldier")).ToList())
+        { SetField(window, "_selectedMoby", m); Invoke(window, "RemoveSelectedMoby"); Console.WriteLine("  removed " + m.DisplayLabel); }
+        AddSkyObjects(window, [("enemy", 0x07A, "darkpassage", 2850, 1950, 1600)], removeAll: false);
+        Console.WriteLine("NEW_LEVEL_SKYUPDATE3_OK");
+    }
+
     private static void SkyObjectsStep(MainWindow window)
     {
         Load(window, "townsquare");
         if (window.FreshSceneForTesting == null) throw new InvalidOperationException("Town Square is not blank");
+        AddSkyObjects(window, SkyObjects, removeAll: true);
+        Console.WriteLine("NEW_LEVEL_SKYOBJECTS_OK");
+    }
+
+    private static void AddSkyObjects(MainWindow window, (string What, int Class, string Source, float X, float Y, float Z)[] objects, bool removeAll)
+    {
         var (browser, entries) = OpenBrowser(window); browser.Close(); Pump(10);
         var lib = Library(window);
         var japanese = (Spyro.Editor.Core.Universal.UniversalJapaneseSource?)Invoke(window, "ResolveUniversalJapaneseSource");
@@ -220,9 +281,10 @@ internal static partial class NewLevelBuildCases
             var args = new object?[] { x, y, refZ, 0f, -1, false };
             return (bool)tryZ.Invoke(window, args)! ? (float)args[3]! : null;
         }
-        foreach (var m in Mobys(window).Where(m => m.IsAdded && !m.IsRemoved).ToList())
-        { SetField(window, "_selectedMoby", m); Invoke(window, "RemoveSelectedMoby"); }
-        foreach (var o in SkyObjects)
+        if (removeAll)
+            foreach (var m in Mobys(window).Where(m => m.IsAdded && !m.IsRemoved).ToList())
+            { SetField(window, "_selectedMoby", m); Invoke(window, "RemoveSelectedMoby"); }
+        foreach (var o in objects)
         {
             var entry = entries.First(e => e.ClassId == o.Class && e.SourceLevels.Contains(o.Source));
             var variant = entry.Variants.FirstOrDefault(v => v.SourceLevelKey == o.Source) ?? entry.Default;
@@ -247,6 +309,5 @@ internal static partial class NewLevelBuildCases
         int treasure = Mobys(window).Where(m => m.IsAdded && !m.IsRemoved).Sum(m => m.TreasureValue);
         Console.WriteLine($"objects {Mobys(window).Count(m => m.IsAdded && !m.IsRemoved)}, editor-known treasure {treasure}");
         Save(window);
-        Console.WriteLine("NEW_LEVEL_SKYOBJECTS_OK");
     }
 }
