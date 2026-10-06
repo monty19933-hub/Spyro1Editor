@@ -1,3 +1,14 @@
+# 1.2 packages rebuilt with the terrain fixes — 6 October 2026
+
+Packages for 1.2 (internal 1.2.0) rebuilt from `a265f53` into task-root
+`outputs/SpyroEditor-V1.2-rebuild-20261006` (Mac zip a8b41dea…1eb9, Windows zip
+19958b06…a2c5). The first 1.2 packages stay in `outputs/SpyroEditor-V1.2-release`.
+Gate 352/0; package verifier passed; packaged Mac app launched in isolation.
+An internal 1.2.1 was tried and rejected by the app's stable identity rule
+(stable 1.2 must be 1.2.0). Also built with this source: Cloudspire Isles, a
+level made from scratch in cleared Town Square (task-root
+`outputs/CloudspireIsles-20261006`).
+
 # Terrain copy/remove fixes found while building a new level — 6 October 2026
 
 Unreleased (Claude; branch `release/release-ready-20261004`, after 1.2). Building
