@@ -534,14 +534,19 @@ public static class NativeEnvironmentGradeExporter
 
             if (grade.GradeSceneColors)
             {
+                (ColorRgba From, ColorRgba To)? distant = DistantSceneryMeans(targetData, donorData);
                 foreach (SceneColorTable table in targetData.SceneColorTables)
                 {
                     byte[] before = table.Bytes;
-                    byte[] after = TransformSceneColorTable(
-                        before,
-                        table,
-                        match.SceneTransform,
-                        smoothTerrain: true);
+                    byte[] after = table.Distant && distant is { } means
+                        ? RecolorDistantScenery(before, table, means.From, means.To)
+                        : TransformSceneColorTable(
+                            before,
+                            table,
+                            match.SceneTransform,
+                            smoothTerrain: true);
+                    if (!table.Distant && distant is { } greenery && !IsGreenDominant(greenery.To))
+                        after = RecolorGreenery(before, after, table, greenery.From, greenery.To);
                     AddPatch(
                         edit.Level,
                         donor,
@@ -860,6 +865,76 @@ public static class NativeEnvironmentGradeExporter
             DonorMeanGreen: texture.MeanGreen,
             DonorMeanBlue: texture.MeanBlue);
 
+    /// <summary>
+    /// Distant scenery (sectors without high-detail faces) has no texture, so its vertex colors are all the
+    /// player sees of it, and the level-wide transform (whose channel balance is clamped) leaves strongly
+    /// colored hills in their old hue, e.g. green hills around a level re-themed as snow. These tables take the
+    /// donor's distant-scenery color (or its low-detail terrain color when it has none) and keep each color's
+    /// brightness relative to the target's distant-scenery average.
+    /// </summary>
+    private static (ColorRgba From, ColorRgba To)? DistantSceneryMeans(LevelColorData target, LevelColorData donor)
+    {
+        static ColorRgba? Mean(IEnumerable<ColorRgba> colors)
+        {
+            long r = 0, g = 0, b = 0, n = 0;
+            foreach (var c in colors) { r += c.R; g += c.G; b += c.B; n++; }
+            return n == 0 ? null : ColorRgba.FromRgb((byte)(r / n), (byte)(g / n), (byte)(b / n));
+        }
+        ColorRgba? from = Mean(target.SceneColorTables.Where(t => t.Distant).SelectMany(t => ReadSceneColors(t.Bytes, t)));
+        ColorRgba? to = Mean(donor.SceneColorTables.Where(t => t.Distant).SelectMany(t => ReadSceneColors(t.Bytes, t)))
+            ?? Mean(donor.SceneColorTables.Where(t => t.Detail == "lp").SelectMany(t => ReadSceneColors(t.Bytes, t)));
+        return from is { } f && to is { } t2 ? (f, t2) : null;
+    }
+
+    private static byte[] RecolorDistantScenery(byte[] before, SceneColorTable table, ColorRgba from, ColorRgba to)
+    {
+        static double Luminance(double r, double g, double b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        double fromLuminance = Math.Max(4, Luminance(from.R, from.G, from.B));
+        byte[] after = before.ToArray();
+        for (int index = 0; index < table.ColorCount; index++)
+        {
+            foreach (int rgbOffset in table.RgbOffsets)
+            {
+                int offset = (index * table.EntryBytes) + rgbOffset;
+                double scale = Math.Clamp(Luminance(after[offset], after[offset + 1], after[offset + 2]) / fromLuminance, 0.25, 2.5);
+                after[offset] = (byte)Math.Clamp(Math.Round(to.R * scale), 0, 255);
+                after[offset + 1] = (byte)Math.Clamp(Math.Round(to.G * scale), 0, 255);
+                after[offset + 2] = (byte)Math.Clamp(Math.Round(to.B * scale), 0, 255);
+            }
+        }
+        return after;
+    }
+
+    /// <summary>
+    /// Grass keeps its green under the clamped level-wide transform too, and every sector's low-detail colors are
+    /// what the player sees of it from afar. Green-dominant colors (near and far detail alike, so nothing changes
+    /// color on approach) are blended toward the same donor distant-scenery color, by how strongly green they are.
+    /// </summary>
+    private static byte[] RecolorGreenery(byte[] before, byte[] graded, SceneColorTable table, ColorRgba from, ColorRgba to)
+    {
+        static double Luminance(double r, double g, double b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        double fromLuminance = Math.Max(4, Luminance(from.R, from.G, from.B));
+        byte[] after = graded.ToArray();
+        for (int index = 0; index < table.ColorCount; index++)
+        {
+            foreach (int rgbOffset in table.RgbOffsets)
+            {
+                int offset = (index * table.EntryBytes) + rgbOffset;
+                byte r = before[offset], g = before[offset + 1], b = before[offset + 2];
+                double weight = Math.Clamp((g - Math.Max(r, b) - 8) / 24.0, 0, 1);
+                if (weight == 0)
+                    continue;
+                double scale = Math.Clamp(Luminance(r, g, b) / fromLuminance, 0.25, 2.5);
+                after[offset] = (byte)Math.Clamp(Math.Round(after[offset] + (to.R * scale - after[offset]) * weight), 0, 255);
+                after[offset + 1] = (byte)Math.Clamp(Math.Round(after[offset + 1] + (to.G * scale - after[offset + 1]) * weight), 0, 255);
+                after[offset + 2] = (byte)Math.Clamp(Math.Round(after[offset + 2] + (to.B * scale - after[offset + 2]) * weight), 0, 255);
+            }
+        }
+        return after;
+    }
+
+    private static bool IsGreenDominant(ColorRgba color) => color.G - Math.Max(color.R, color.B) > 8;
+
     private static NativeEnvironmentColorStatistics SceneColorStatistics(LevelColorData data, string detail) =>
         NativeEnvironmentColorStatistics.FromColors(
             data.SceneColorTables
@@ -1067,7 +1142,8 @@ public static class NativeEnvironmentGradeExporter
     {
         int dataStart = sector.Offset + 28;
         int lpStart = dataStart + (sector.NumLpVertices * 4);
-        TryAddColorTable(modelBytes, sector.SectorIndex, "lp", lpStart, sector.NumLpColours, 4, [0], result);
+        // A sector without high-detail faces is distant scenery (far hills, mountains), drawn only from these colors.
+        TryAddColorTable(modelBytes, sector.SectorIndex, "lp", lpStart, sector.NumLpColours, 4, [0], result, sector.NumHpFaces == 0);
 
         int hpVertexStartWords = sector.NumLpVertices + sector.NumLpColours + (sector.NumLpFaces * 2);
         int hpColorStart = dataStart + ((hpVertexStartWords + sector.NumHpVertices) * 4);
@@ -1106,7 +1182,8 @@ public static class NativeEnvironmentGradeExporter
         int count,
         int entryBytes,
         IReadOnlyList<int> rgbOffsets,
-        List<SceneColorTable> result)
+        List<SceneColorTable> result,
+        bool distant = false)
     {
         int byteLength = count * entryBytes;
         if (!IsValidatedColorTable(modelBytes, offset, count, entryBytes, rgbOffsets))
@@ -1118,7 +1195,8 @@ public static class NativeEnvironmentGradeExporter
             EntryBytes: entryBytes,
             RgbOffsets: rgbOffsets,
             ColorCount: count,
-            Bytes: modelBytes.AsSpan(offset, byteLength).ToArray()));
+            Bytes: modelBytes.AsSpan(offset, byteLength).ToArray(),
+            Distant: distant));
     }
 
     private static bool IsValidatedColorTable(
@@ -2149,7 +2227,8 @@ public static class NativeEnvironmentGradeExporter
         int EntryBytes,
         IReadOnlyList<int> RgbOffsets,
         int ColorCount,
-        byte[] Bytes);
+        byte[] Bytes,
+        bool Distant = false);
     private sealed record TexturePaletteCandidate(int ByteLength, bool IsRuntimeVariant);
     private sealed record TexturePaletteCandidateRange(int Offset, int ByteLength);
     private sealed record TexturePaletteTable(int Offset, int NonZeroColorCount, bool IsRuntimeVariant, byte[] Bytes);
