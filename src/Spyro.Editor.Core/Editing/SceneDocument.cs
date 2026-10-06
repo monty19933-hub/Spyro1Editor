@@ -21,6 +21,9 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
 {
     public const string FileName = "fresh-level.scene.json";
     public SceneTargetBinding? TargetBinding { get; init; }
+    /// <summary>WAD entry of the retail level whose sky this scene borrows; null keeps the plain sky color.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? SkySourceWadEntry { get; init; }
     public LevelDefinition ResolveTarget(LevelCatalog catalog) => TargetBinding == null
         ? NativeTarget(Name) : TargetBinding.Resolve(catalog) with { DisplayName = Name, SourceRecordCount = 0 };
     public static string PathForTarget(string workspace, string key) => SceneDocumentStore.PathForTarget(workspace, key);
@@ -123,6 +126,8 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
             throw new InvalidDataException("Fresh scene document identity, surfaces or settings are invalid.");
         Ledger.Validate();
         TargetBinding?.Validate();
+        if (SkySourceWadEntry is int sky && (sky is < 10 or > 78 || sky % 2 != 0))
+            throw new InvalidDataException("The scene's sky source is not a retail level.");
         if ((TargetBinding?.NativePrefixRows ?? 0) + Ledger.Entries.Count > 256)
             throw new InvalidDataException("The cleared level's previous collectible identities fill the native save rows. Restore before clear or use a new project.");
         if (Surfaces.Select(s => s.Id).Distinct().Count() != Surfaces.Count || Objects.Select(o => o.Identity).Distinct().Count() != Objects.Count)

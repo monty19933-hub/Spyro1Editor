@@ -57,6 +57,7 @@ Supported(seed with {Surfaces=[..seed.Surfaces,Rectangle(528,528,656,656)]},"ove
 Supported(seed with {Spawn=new(560.249f,560,576),Surfaces=[Rectangle(538,528,620,656)]},"support uses exact native rounded spawn rather than uncompiled coordinates");
 
 MeshFaceCacheCases.Run(Check);
+SkySourceCases.Run(Check);
 SubdivisionCases.Run(Check);
 RendererQueueCases.Run(Check);
 NativeBatchCases.Run(Check);

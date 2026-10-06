@@ -309,6 +309,13 @@ public static class Spyro1SkyBlockAnalyzer
         return true;
     }
 
+    /// <summary>The level's own sky block (the first one in its model subfile), or null when it has none.</summary>
+    internal static byte[]? ReadPrimarySkyBlock(byte[] modelSubfile)
+    {
+        var (_, first, blocks) = ParseSkyBlocks(modelSubfile);
+        return first < 0 ? null : modelSubfile.AsSpan(blocks[0].BlockOffset, blocks[0].ByteLength).ToArray();
+    }
+
     public static bool IsValidStandaloneSkyBlock(byte[] bytes)
     {
         return TryParseSkyBlock(bytes, 0, out ParsedSkyBlock? block) && block?.ByteLength == bytes.Length;

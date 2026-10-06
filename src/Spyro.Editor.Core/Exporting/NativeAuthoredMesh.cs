@@ -10,7 +10,9 @@ namespace Spyro.Editor.Core.Exporting;
 internal static class NativeAuthoredMesh
 {
     internal sealed record Triangle(Vector3f A, Vector3f B, Vector3f C, ColorRgba Color, int Material, ColorRgba[] Near, ColorRgba[] Far);
-    internal static byte[] Compile(SceneDocument document, IReadOnlyList<AuthoredMaterial> materials)
+    internal static byte[] Compile(SceneDocument document, IReadOnlyList<AuthoredMaterial> materials) => CompileWithSky(document, materials, null);
+    /// <summary>As <see cref="Compile"/>, with an optional borrowed retail sky block in place of the plain sky color.</summary>
+    internal static byte[] CompileWithSky(SceneDocument document, IReadOnlyList<AuthoredMaterial> materials, byte[]? skyBlock)
     {
         document.Validate();
         List<Triangle> triangles = [];
@@ -92,9 +94,35 @@ internal static class NativeAuthoredMesh
         }
         collision.AsSpan(flags,n).Fill(0x3F);
         byte[] sky=new byte[16];W(sky,0,16);W(sky,4,Rgb(document.SkyColor));
+        if(skyBlock!=null){sky=skyBlock;visibility=WithSkyParts(visibility,skyBlock);}
         byte[] bundle=[..environment,..visibility,..special,..collision,..sky];
         if(bundle.Length>0x20000)throw new InvalidDataException("Authored surface exceeds the bounded native surface allocation.");
         return bundle;
+    }
+    /// <summary>Reads the sky of a retail level for a scene that borrows it. The block is copied whole; its part
+    /// pointers are relative to the block, so it needs no relocation.</summary>
+    internal static byte[]? CaptureSky(string originalUSA, SceneDocument document)
+    {
+        if (document.SkySourceWadEntry is not int entry) return null;
+        var level=new Spyro.Editor.Core.Universal.UniversalLevelData(Spyro.Editor.Core.Universal.UniversalDiscImage.Read(originalUSA).EntryBytes(entry));
+        var model=level.Subfiles()[1];
+        return Spyro1SkyBlockAnalyzer.ReadPrimarySkyBlock(level.Bytes.AsSpan(model.Offset,model.Length).ToArray())
+            ?? throw new InvalidDataException("The chosen sky level has no native sky.");
+    }
+    /// <summary>A built level has one view group, so its sky group lists every part of the borrowed sky.
+    /// Retail groups use the same form: part ids terminated by 255, padded to a word.</summary>
+    private static byte[] WithSkyParts(byte[] visibility,byte[] skyBlock)
+    {
+        if(!Spyro1SkyBlockAnalyzer.IsValidStandaloneSkyBlock(skyBlock))throw new InvalidDataException("The borrowed sky is not one native sky block.");
+        int parts=(int)BinaryPrimitives.ReadUInt32LittleEndian(skyBlock.AsSpan(8));
+        if(parts>254)throw new InvalidDataException("The borrowed sky has more parts than one view group can list.");
+        int skyAt=4+(int)BinaryPrimitives.ReadUInt32LittleEndian(visibility.AsSpan(4));
+        if(skyAt!=visibility.Length-12)throw new InvalidDataException("The built level's view groups changed shape.");
+        int list=Align4(parts+1);
+        byte[] result=new byte[skyAt+8+list];visibility.AsSpan(0,skyAt).CopyTo(result);
+        W(result,0,(uint)result.Length);W(result,skyAt,1);W(result,skyAt+4,8);
+        result.AsSpan(skyAt+8,list).Fill(255);for(int i=0;i<parts;i++)result[skyAt+8+i]=(byte)i;
+        return result;
     }
     /// <summary>Splits a triangle into an even lattice whose pieces span at most <paramref name="cell"/> units per
     /// axis. 64 is the direct untextured renderer's limit: those pieces are drawn and collided with, so their
