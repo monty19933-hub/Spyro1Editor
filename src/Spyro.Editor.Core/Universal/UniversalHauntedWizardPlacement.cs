@@ -132,6 +132,8 @@ public static class UniversalHauntedWizardPlacement
         // Entire native moby helper owner contains timer37F90, rotated rectangle
         // 38C4C and path39E94, including their helper bodies. Source path flags
         // retain waitFF/no pod wait and collision bounds0.
+        // An installed save map keeps these routines' native behaviour; prove the original code beneath it.
+        exe=Spyro.Editor.Core.Exporting.NativeMobySaveMap.OriginalView(exe);
         if (exe.Length < 0x2AF20 || Convert.ToHexStringLower(SHA256.HashData(exe.AsSpan(0x28790,10128))) != "5b7e67a79df04ef66ee63fda7d084b73989a87a7886cce5de46db1ad6e93b222")
             throw new InvalidDataException("Haunted placement lost its native timer, rectangle or path helper owner.");
     }

@@ -31,6 +31,8 @@ internal static class UniversalDarkPassageShapeshifterOwnership
   RequireSource(source);
   if(!classes.Contains(0x35)||!classes.Contains(0x36)||!classes.Contains(0x9B)||!map.ContainsKey(0x35)||!map.ContainsKey(0x36)||!map.ContainsKey(0x9B)||map[0x35]==map[0x36]||map[0x35] is <=0 or >=0x200||map[0x36] is <=0 or >=0x200||map[0x9B] is <=0 or >=0x200||new[]{map[0x35],map[0x36],map[0x9B]}.Distinct().Count()!=3)
    throw new InvalidDataException("Copied Dark Passage dog behavior requires both source-owned transition classes and the child attack class, models and handlers.");
+  // An installed save map keeps these routines' native behaviour; prove the original code beneath it.
+  exe=Spyro.Editor.Core.Exporting.NativeMobySaveMap.OriginalView(exe);
   RequireNative(exe,0x80051FEC,724,"70dc8c577dc54c205c8891cae9375af93a242f95ef37ab77bf0318a01e319d96");
   RequireNative(exe,0x8003AA84,316,"fd5a362fc588edfa15548b62c3b50fda15fd1f2e58b9dedd7b793082e8fde72d");
   RequireNative(exe,0x80037F90,10128,"5b7e67a79df04ef66ee63fda7d084b73989a87a7886cce5de46db1ad6e93b222");

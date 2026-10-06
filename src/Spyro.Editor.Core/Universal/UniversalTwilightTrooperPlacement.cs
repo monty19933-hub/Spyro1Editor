@@ -27,6 +27,8 @@ public static class UniversalTwilightTrooperPlacement
     {
         // Complete native moby helpers, including rotated rectangle38C4C and
         // PathData39E94. The caller packets are authenticated in the copied helper.
+        // An installed save map keeps these routines' native behaviour; prove the original code beneath it.
+        exe=Spyro.Editor.Core.Exporting.NativeMobySaveMap.OriginalView(exe);
         Require(exe.Length>=0x2AF20&&H(exe.AsSpan(0x28790,10128))=="5b7e67a79df04ef66ee63fda7d084b73989a87a7886cce5de46db1ad6e93b222","native rectangle/path/helper owner changed");
         foreach(var owner in new[]{(0x8006CBF8u,640,"795a93bee7b4d49bef89d4df8c8628a4b4b3a91d694053dbc2b26b4293d4fa55"),(0x8003A720u,124,"e2d690c6097745e4fb354355436805a619c7f31b9d96fa088b90c0518bc6b056"),(0x800524C4u,164,"6625282792e81215f1f35e1aa8b4240937206bcc8bd494eef9e000f65a4bbf9e"),(0x800526A8u,804,"5483d5e337730567fd89f6118036d31f8c3a93fd281ff444b5d8149b4e2f03d5")})
         {int at=checked((int)(owner.Item1-UniversalExeBindings.ExeBase));Require(at>=0&&at+owner.Item2<=exe.Length&&H(exe.AsSpan(at,owner.Item2))==owner.Item3,"native dynamic allocation/default initializer/model activation owner changed");}

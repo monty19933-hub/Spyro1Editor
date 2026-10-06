@@ -45,6 +45,8 @@ public static class UniversalTwilightTrooperParticles
    Require(o.Bindings.TryGetValue(b.Global,out var got)&&got==b&&(exe==null||UniversalExeBindings.Read(exe,12)[b.Global]==b),"destination particle callback/executable identity changed");
   foreach(var owner in HostOwners)RequireOwner(o,owner.Pc,owner.Length,owner.Sha);
   Require(o.Word(0x8007ACB8+13*4)==0x8008553C&&o.Word(0x8007AB74+13*4)==0x80084450,"destination13 must remain its exact native no-op loop tail");
+  // Recoloured dragons reuse four certified-unused math functions inside these owners; prove the native code beneath them.
+  if(exe!=null)exe=Spyro.Editor.Core.Exporting.NativeDragonStatueColors.OriginalRendererView(exe);
   if(exe!=null)foreach(var owner in Native)
   {int at=checked((int)(owner.Pc-UniversalExeBindings.ExeBase));Require(at>=0&&at+owner.Length<=exe.Length&&Hash(exe.AsSpan(at,owner.Length))==owner.Sha,"native allocator/free/vector/RNG/renderer owner changed");}
  }

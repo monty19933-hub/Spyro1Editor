@@ -51,6 +51,8 @@ public static class UniversalTerraceLineParticle77
   RequireOwner(destination,0x80083274,4652,"42568934fe492f56cb58c8d22e803ccfb605b994789d917c86ae8a245b074af8");
   RequireOwner(destination,0x8007ACB8,324,"3d7229fa46f8f21d4d3dd07f28fb18cbfa0872c445aa24ae571eb1975243c4c6");
   RequireOwner(destination,0x8007AB74,324,"138aafd4977dd3327e9283992d2082469c5d064b08b373848f2101d53cce3997");
+  // Recoloured dragons reuse four certified-unused math functions inside these owners; prove the native code beneath them.
+  exe=Spyro.Editor.Core.Exporting.NativeDragonStatueColors.OriginalRendererView(exe);
   foreach(var n in Native)
    if(n.Pc<UniversalExeBindings.ExeBase || (ulong)n.Pc-UniversalExeBindings.ExeBase+(uint)n.Length>(uint)exe.Length || Hash(exe.AsSpan((int)(n.Pc-UniversalExeBindings.ExeBase),n.Length))!=n.Sha)
     throw new InvalidDataException("Native line particle allocator, vectors, RNG, trig or LINE_G2 renderer changed.");

@@ -78,6 +78,8 @@ public static class UniversalDarkPassageProjectileParticles
  }
  internal static void RequireNative(byte[] exe)
  {
+  // Recoloured dragons reuse four certified-unused math functions inside these owners; prove the native code beneath them.
+  exe=Spyro.Editor.Core.Exporting.NativeDragonStatueColors.OriginalRendererView(exe);
   foreach(var n in Native)if(n.Pc<UniversalExeBindings.ExeBase||(ulong)n.Pc-UniversalExeBindings.ExeBase+(uint)n.Length>(uint)exe.Length||Hash(exe.AsSpan((int)(n.Pc-UniversalExeBindings.ExeBase),n.Length))!=n.Sha)throw new InvalidDataException("Projectile particles lost native allocator/free, vector, RNG, trig or rotated-quad renderer ownership.");
  }
  internal static void RequireCopiedCalls(UniversalAsmPart part,UniversalOverlay source)

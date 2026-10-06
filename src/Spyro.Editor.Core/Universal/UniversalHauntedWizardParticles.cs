@@ -48,6 +48,8 @@ public static class UniversalHauntedWizardParticles
  internal static void RequireNative(byte[] exe)
  {
   UniversalHauntedWizardPlacement.RequireNative(exe);
+  // Recoloured dragons reuse four certified-unused math functions inside these owners; prove the native code beneath them.
+  exe=Spyro.Editor.Core.Exporting.NativeDragonStatueColors.OriginalRendererView(exe);
   foreach(var owner in Native)
    if(owner.Pc<UniversalExeBindings.ExeBase || (ulong)owner.Pc-UniversalExeBindings.ExeBase+(uint)owner.Length>(uint)exe.Length || Convert.ToHexStringLower(SHA256.HashData(exe.AsSpan((int)(owner.Pc-UniversalExeBindings.ExeBase),owner.Length)))!=owner.Sha)
     throw new InvalidDataException("Haunted resurrection lost a native allocator, vector, RNG, renderer or texture-loader owner.");
