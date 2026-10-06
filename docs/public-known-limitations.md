@@ -96,6 +96,10 @@
   for rebuilt retail levels and portal-accessible fresh levels. Older small
   starter floors may need enlarging. This checks floor coverage; keep the
   arrival area clear of walls and objects and test the finished route in-game.
+- A copied tile is drawn from one side only, like the tile it was copied from, and a
+  copy can be turned at most 90 degrees from its original (its collision would
+  otherwise face the wrong way). Turn a copy so its visible side faces where
+  players will look; copy a different tile for the other side.
 - Existing-level terrain supports guarded XYZ edits, face copying, face removal
   and texture painting through the shared editor controls. Close and distant
   geometry, visibility and native collision are updated together. The editor

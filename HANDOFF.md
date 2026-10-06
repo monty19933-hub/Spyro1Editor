@@ -34,7 +34,7 @@
   `MainWindow.SceneDocument.cs`, `MainWindow.ExportScope.cs`. Oracle `NativeFreeFlightSmoke` (`LevelSetFreeFlightCases`,
   plus `--dump-native`, `--find-imm`, `--zero-runs`, `--refs-into`, `--level-animations`, `--loader-spare` probes).
   Test `--fly-anywhere-ui` (per-level ticks; exports a two-level game); emulator `runtime/flytest.py`, `flylevels.py`.
-- Version: `Spyro.Editor.App.csproj` 1.2 / 1.2.0, previous stable 1.1.
+- Version: `Spyro.Editor.App.csproj` 1.2 / 1.2.1 (rebuild of 1.2 with the 6 October terrain fixes), previous stable 1.1.
 
 ## Pitfalls met
 - A UiSmoke case must `Path.GetFullPath` its arguments before setting the workspace: relative paths resolve against the

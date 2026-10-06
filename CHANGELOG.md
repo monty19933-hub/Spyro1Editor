@@ -18,6 +18,9 @@ Clearer
 
 Fixed
 
+- Copied terrain (Add Terrain) now appears in the game. The copies were saved, but the game never drew them.
+- Decorative tiles that Spyro never touches, such as the trim around a doorway, can now be removed and copied too.
+- Create BIN could fail with "LP color … command byte" when one level's added or removed tiles made its data grow while another level in the same game had terrain, colour or sky changes.
 - Find space for this object… could appear stuck for minutes on a static message with no way out.
 - Create BIN's "visual-only geometry edit" warning appeared for tiles whose moved corners all have collision; the warning now looks at the corners that moved.
 - Tiles cut along the other diagonal than their collision triangles can now take a texture's kind (and Tile Type…).
