@@ -9,11 +9,13 @@ or copied game asset. Users must provide their own legally obtained disc image.
 
 ## Releases
 
-The current release target is **Spyro Editor 1.1**. It reorganizes the editor
-around the user's journey (open your game, edit, Save, Create BIN) with a
-first-run welcome, carded Objects and Terrain tabs and everyday wording, and it
-ships **Fly Anywhere**: one switch in Game Settings, off by default, that lets
-Spyro fly in every normal level of the exported game. Existing and created
+The current release target is **Spyro Editor 1.2**. It builds on 1.1 (a
+first-run welcome, carded Objects and Terrain tabs, everyday wording, Fly
+Anywhere) with **Tile Type…** (choose what Spyro finds on a tile: solid ground,
+water, lava, supercharge…), Fly Anywhere for **chosen levels**, terrain edits
+that are refused at the moment you make them when the game's level format
+cannot hold them, Lower working on floor tiles, and a **Find space** search with
+progress and a Stop button. Existing and created
 levels share the terrain and object controls. Create BIN includes every saved
 level and lets you choose where New Game starts. Objects from other levels have
 a capacity planner that names removals which would make an import fit. Start
@@ -25,20 +27,20 @@ rainbow gems are placeable. See the [user guide](docs/public-user-guide.md),
 
 The self-contained release packages are named:
 
-- `SpyroEditor-V1.1-osx-arm64.zip`
-- `SpyroEditor-V1.1-win-x64.zip`
+- `SpyroEditor-V1.2-osx-arm64.zip`
+- `SpyroEditor-V1.2-win-x64.zip`
 
-Stable builds use the `v1.1` identity, schema-3 package manifests and the stable
+Stable builds use the `v1.2` identity, schema-3 package manifests and the stable
 update channel. They do not select beta releases as updates. Earlier numbered
 and dotted beta packages retain their existing compatibility rules and must not
-be replaced or retagged. Source builds default to V1.1 stable; the release script accepts an explicit
+be replaced or retagged. Source builds default to V1.2 stable; the release script accepts an explicit
 identity for reproducible packaging:
 
 ```sh
 SPYRO_EDITOR_RELEASE_CHANNEL=stable \
-SPYRO_EDITOR_STABLE_VERSION=1.1 \
-SPYRO_EDITOR_STABLE_INTERNAL_VERSION=1.1.0 \
-tools/Build-SpyroEditorRelease.sh SpyroEditor-V1.1
+SPYRO_EDITOR_STABLE_VERSION=1.2 \
+SPYRO_EDITOR_STABLE_INTERNAL_VERSION=1.2.0 \
+tools/Build-SpyroEditorRelease.sh SpyroEditor-V1.2
 ```
 
 The updater checks release identity, platform, packaged application and manifest,
