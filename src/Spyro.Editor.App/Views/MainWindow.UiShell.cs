@@ -1107,7 +1107,7 @@ public sealed partial class MainWindow
         else
         {
             // One switch for the whole exported game, off unless the user turns it on.
-            var flight = BuildModernDisclosure("Fly Anywhere (whole game)", BuildFreeFlightSettingsPanel(), true);
+            var flight = BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), true);
             flight.Name = "FlyAnywhereSection";
             panel.Children.Add(flight);
         }

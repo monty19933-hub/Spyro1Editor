@@ -20,6 +20,8 @@ public sealed class NativeFreeFlightSettingsSnapshot
     public bool IsEnabled(int levelId) => Preferences.Any(p => p.LevelId == levelId && p.EnableFreeFlight);
     public bool HasExplicitSelection(int levelId) => Preferences.Any(p => p.LevelId == levelId);
     public bool GlobalEnabled => Preferences.Any(p => p.EnableFreeFlight);
+    public IReadOnlyList<int> EnabledLevelIds => Preferences.Where(p => p.EnableFreeFlight).Select(p => p.LevelId).Distinct().Order().ToArray();
+    public bool WholeGame => Enumerable.Range(10, 55).Where(NativeFreeFlightCompositionPlan.IsNormalLevel).All(IsEnabled);
     public bool NativeExportApproved => false;
 }
 

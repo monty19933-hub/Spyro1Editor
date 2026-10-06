@@ -33,6 +33,10 @@ public sealed class NativeFreeFlightCompositionPlan
     public bool Enabled => ExecutablePatch.Enabled;
     public NativeFreeFlightPatchPlan ExecutablePatch { get; }
     public IReadOnlyList<int> NormalLevelIds { get; }
+    /// <summary>The levels where the exported game lets Spyro fly: every normal level for the whole-game
+    /// choice, or the chosen ones.</summary>
+    public IReadOnlyList<int> EnabledLevelIds => ExecutablePatch.EnabledLevelIds;
+    public bool IsLevelEnabled(int levelId) => Enabled && EnabledLevelIds.Contains(levelId);
     public string SourceImageSha256 => NativeFreeFlightPatchPlan.SourceImageSha256;
     public string SharedGeometrySha256 { get; }
     public bool RuntimeVerified => false;
@@ -40,11 +44,21 @@ public sealed class NativeFreeFlightCompositionPlan
     public static bool IsNormalLevel(int levelId) =>
         levelId >= 10 && levelId <= 64 && levelId % 10 <= 4;
 
+    public static Task<NativeFreeFlightCompositionPlan> CaptureAsync(string originalImagePath,
+        bool enabled, CancellationToken cancellationToken = default) =>
+        CaptureAsync(originalImagePath, enabled ? Enumerable.Range(10, 55).Where(IsNormalLevel).ToArray() : [], cancellationToken);
+
+    /// <summary>Whole game when every normal level is chosen; otherwise the level-set executable.</summary>
     public static async Task<NativeFreeFlightCompositionPlan> CaptureAsync(string originalImagePath,
-        bool enabled, CancellationToken cancellationToken = default)
+        IReadOnlyCollection<int> enabledLevelIds, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(enabledLevelIds);
+        int[] chosen = enabledLevelIds.Where(id => IsNormalLevel(id) || id == 65).Distinct().Order().ToArray();
+        bool wholeGame = Enumerable.Range(10, 55).Where(IsNormalLevel).All(chosen.Contains);
         var source = await NativePlayerAnimationSource.CaptureAsync(originalImagePath, cancellationToken);
-        var executable = await NativeFreeFlightPatchPlan.CaptureGlobalAsync(originalImagePath, enabled, cancellationToken);
+        var executable = wholeGame || chosen.Length == 0
+            ? await NativeFreeFlightPatchPlan.CaptureGlobalAsync(originalImagePath, chosen.Length > 0, cancellationToken)
+            : await NativeFreeFlightPatchPlan.CaptureLevelSetAsync(originalImagePath, chosen, cancellationToken);
         using FileStream image = new(originalImagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         DiscLayout layout = DiscImage.DetectLayout(originalImagePath);
         byte[] package = DiscImage.ReadFileBytes(image, layout, 37,
@@ -83,7 +97,8 @@ public sealed class NativeFreeFlightCompositionPlan
         bool nativeCourse = levelId is 15 or 25 or 35 or 45 or 55;
         if (!retail && !nativeCourse && levelId != 65)
             throw new InvalidDataException("Flight composition requires a captured retail level or an issued fresh normal ID65 body.");
-        if (!Enabled || nativeCourse)
+        // Levels outside the chosen set keep the native loader behaviour, so their stream needs no proof.
+        if (!Enabled || nativeCourse || !IsLevelEnabled(levelId))
             return new(levelId, stagedData.ToArray(), null, nativeCourse, retail, Hash(stagedData));
         if (stagedData.Length < 0x2800 || stagedData.Length > 0x800000 || stagedData.Length % 0x800 != 0)
             throw new InvalidDataException("Global flight requires a complete bounded sector-aligned native level body.");
@@ -137,7 +152,7 @@ public sealed class NativeFreeFlightCompositionPlan
     public NativeFreeFlightMemoryEvidence RequireFinalLevelClosure(int levelId, ReadOnlySpan<byte> levelData,
         ReadOnlySpan<byte> executable)
     {
-        if (!Enabled || !IsNormalLevel(levelId) && levelId != 65)
+        if (!Enabled || !IsNormalLevel(levelId) && levelId != 65 || !IsLevelEnabled(levelId))
             throw new InvalidDataException("Final flight closure requires an enabled normal-player owner.");
         var closure = MergeLevelData(levelId, levelData);
         if (closure.ExactInsertedByteLength != 0 || !closure.CopyLevelData().AsSpan().SequenceEqual(levelData))

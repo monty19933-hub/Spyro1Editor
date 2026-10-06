@@ -1,4 +1,4 @@
-# Spyro Editor 1.1
+# Spyro Editor 1.2
 
 Spyro Editor changes the levels of the original PlayStation game *Spyro the Dragon*
 (USA) and builds a new, playable copy of the game from your changes. It never
@@ -96,10 +96,13 @@ sounds or helper objects the destination level has no room for; the window
 explains those cases.
 
 If an object does not fit, choose **Find space for this object…**. The editor
-names objects whose removal would make room and reports what would be left.
+tries the object's versions one by one, shows its progress, and lists each way
+to make room as soon as it finds one; **Stop searching** ends the search early.
 Nothing is removed automatically: remove what you choose, then open
-**Add object…** again. **Only what fits here** lists only objects whose check
-has finished successfully.
+**Add object…** again. When no combination of original objects would make
+room, it says so, and removing objects you added or choosing a smaller object
+is the way forward. **Only what fits here** lists only objects whose check has
+finished successfully.
 
 Removing one copy of an object frees its slot, but its model and textures may
 still be needed by other copies. That is why the number of removed objects alone
@@ -138,7 +141,16 @@ Pick a replacement, review its time bonus and fit check, then choose
 - **Tiles**: click a tile to select it; ⌘-click (Ctrl-click on Windows) selects
   several; drag to move; Shift-drag to change height. **Move Tile…** and
   **Edit Corner…** take exact amounts. **Raise**, **Lower** and **Reset Height**
-  work on the selected tile.
+  work on the selected tile. Corners that several tiles share move together,
+  as they do in the game. The Tiles card names the selected tile's kind (solid
+  ground, water that hurts, …).
+- **Tile Type…** changes what Spyro finds on the selected tiles: solid ground,
+  water or lava that hurts, a supercharge ramp, and whatever else the level
+  already defines. The picture of the tile stays; use **Choose Texture…** for
+  that. Changing a pond tile to solid ground lets Spyro stand on it unharmed;
+  changing grass to water makes it hurt him. **Undo Terrain** puts the kind
+  back. Only tiles whose collision matches the tile can be changed; the editor
+  says so otherwise.
 - **Add Terrain** copies the selected tile so you can move the copy into place.
   **Remove Terrain** (or Delete in the view) takes the selected tiles out.
   **Undo Terrain** puts the selected tile back the way it was, or brings removed
@@ -155,22 +167,42 @@ Pick a replacement, review its time bonus and fit check, then choose
 
 The exporter updates what you see, the distant version of the level, visibility
 and collision together. A corner shared by several tiles moves with all of them.
-The game has limits on coordinates, collision and memory; if a shape cannot be
-represented safely the editor explains why and nothing half-patched is produced.
-Translucent original tiles cannot currently be copied or removed.
+The game's level format has limits, and the editor now refuses a change at the
+moment you make it, in plain words, rather than at Create BIN:
+
+- A tile the game has no collision under (scenery: walls, decoration, the
+  underside of things) cannot be moved; Spyro never touches it, and the game
+  cannot store a change to the picture alone.
+- Within one piece of collision, corners can differ by at most 255 in height.
+  To go higher or lower, raise or lower the neighbouring tiles too, or use the
+  brush for a slope. Ground must not fold over itself.
+- Ground needs 64 units of clear space under anything above it, so a tile
+  under a low bridge or arch cannot be changed.
+- The game looks ground up in a grid of 256-unit cells and keeps a fixed-size
+  table for it; a tile cannot cross into another cell when the level's table
+  has no spare room. The message tells you the range it can stay in.
+- Each part of the level stores its heights within a band of 1023 and its
+  sideways positions within 2047; Lower now works down to the bottom of that
+  band, because the editor moves the band when needed.
+
+A brush stroke simply leaves the corners it cannot move where they are and
+says how many. Translucent original tiles cannot currently be copied or removed.
 
 ## Game Settings tab
 
 - **Level name** changes the name on portals, loading screens and in the
   guidebook (capital letters, spaces and apostrophes).
 - **Music** picks the level's track.
-- **Fly Anywhere (whole game)**: tick **Let Spyro fly in every level** and the
-  game you export lets Spyro fly in every normal level the way he does in
-  Gnasty's Loot: jump, then press ✕ again in the air. Steer with the direction
-  buttons; land by flying down to the ground. It is off unless you turn it on,
-  it is saved with the project, and unticking it gives back the game's normal
-  gliding in the next Create BIN. The five flight levels keep their own rules.
-  This is separate from the editor's **Game Camera**, which always flies.
+- **Fly Anywhere**: tick **Let Spyro fly in every level** and the game you
+  export lets Spyro fly in every normal level the way he does in Gnasty's Loot:
+  jump, then press ✕ again in the air. Steer with the direction buttons; land by
+  flying down to the ground. Open **Choose levels** to tick only the levels you
+  want instead; everywhere else Spyro moves as in the original game. A level of
+  your own flies whenever at least one level is ticked. It is off unless you
+  turn it on, it is saved with the project, and unticking everything gives back
+  the game's normal gliding in the next Create BIN. The five flight levels keep
+  their own rules. This is separate from the editor's **Game Camera**, which
+  always flies.
 - **Portals & Return Home**: choose where each portal leads and where Return
   Home goes. **Select Portal** moves the trigger, lettering and travel path
   together; move the stone arch with the terrain tools.

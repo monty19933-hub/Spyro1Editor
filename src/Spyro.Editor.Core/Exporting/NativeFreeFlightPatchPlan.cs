@@ -22,19 +22,34 @@ public sealed class NativeFreeFlightPatchPlan
     private readonly IReadOnlyList<NativeFreeFlightWindow> _windows;
     private readonly bool _globalNormalPolicy;
 
-    private NativeFreeFlightPatchPlan(byte[] executable, int target, bool enabled, bool global = false)
+    private NativeFreeFlightPatchPlan(byte[] executable, int target, bool enabled, bool global = false,
+        IReadOnlyCollection<int>? levelSet = null)
     {
         _sourceExecutable = executable.ToArray();
-        _windows = global ? NativeFreeFlightPatchBuilder.BuildGlobalNormal() : NativeFreeFlightPatchBuilder.Build(target);
+        _windows = levelSet != null ? NativeFreeFlightPatchBuilder.BuildLevelSet(levelSet)
+            : global ? NativeFreeFlightPatchBuilder.BuildGlobalNormal() : NativeFreeFlightPatchBuilder.Build(target);
         GlobalNormalLevelsEnabled = global && enabled;
-        _globalNormalPolicy = global;
+        // The level-set plan is the global normal-player composition narrowed to chosen levels.
+        _globalNormalPolicy = global || levelSet != null;
         TargetLevelId = target;
         Enabled = enabled;
-        RequiredPlayerAnimationIds = Array.AsReadOnly(enabled ? (global ? new[] { 16 } : new[] { 33, 34, 35 }) : []);
+        // The level of your own (65) shares the normal-player contract: it flies with the whole game, and
+        // with a chosen set whenever at least one level is chosen.
+        EnabledLevelIds = Array.AsReadOnly(!enabled ? []
+            : levelSet != null ? levelSet.Append(65).Distinct().Order().ToArray()
+            : global ? Enumerable.Range(10, 55).Where(NativeFreeFlightCompositionPlan.IsNormalLevel).Append(65).ToArray()
+            : [target]);
+        RequiredPlayerAnimationIds = Array.AsReadOnly(enabled ? (global || levelSet != null ? new[] { 16 } : new[] { 33, 34, 35 }) : []);
         Instructions = Array.AsReadOnly((enabled ? _windows : [])
             .Select(w => new NativeFreeFlightInstructionEvidence(w.Name, w.Address, w.Offset,
                 w.Before.Length, Convert.ToHexStringLower(w.Before), Convert.ToHexStringLower(w.After))).ToArray());
-        PlanSha256 = global
+        PlanSha256 = levelSet != null
+            ? Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                Profile, SourceImageSha256, SourceExecutableSha256, EnabledLevelIds, Enabled,
+                Instructions, RequiredPlayerAnimationIds, PublicationAuthorized, RuntimeVerified
+            }))
+            : global
             ? Hash(JsonSerializer.SerializeToUtf8Bytes(new
             {
                 Profile, SourceImageSha256, SourceExecutableSha256, TargetLevelId, Enabled,
@@ -50,6 +65,8 @@ public sealed class NativeFreeFlightPatchPlan
     public int TargetLevelId { get; }
     public bool Enabled { get; }
     public bool GlobalNormalLevelsEnabled { get; }
+    /// <summary>The normal levels (and 65 when chosen) where the exported game lets Spyro fly.</summary>
+    public IReadOnlyList<int> EnabledLevelIds { get; }
     public string PlanSha256 { get; }
     public IReadOnlyList<NativeFreeFlightInstructionEvidence> Instructions { get; }
     public IReadOnlyList<int> RequiredPlayerAnimationIds { get; }
@@ -84,6 +101,18 @@ public sealed class NativeFreeFlightPatchPlan
     {
         var original = await CaptureAsync(originalImagePath, 14, enabled, cancellationToken);
         return new(original.CopySourceExecutable(), 14, enabled, global: true);
+    }
+
+    /// <summary>Fly Anywhere in the chosen normal levels only (the global policy narrowed by the level-set
+    /// loader and entry windows). An empty set is the exact original executable.</summary>
+    public static async Task<NativeFreeFlightPatchPlan> CaptureLevelSetAsync(string originalImagePath,
+        IReadOnlyCollection<int> levelIds, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(levelIds);
+        var original = await CaptureAsync(originalImagePath, 14, enabled: levelIds.Count > 0, cancellationToken);
+        return levelIds.Count == 0
+            ? new(original.CopySourceExecutable(), 14, false, global: true)
+            : new(original.CopySourceExecutable(), 14, true, global: false, levelSet: levelIds);
     }
 
     public byte[] ApplyToExecutable(ReadOnlySpan<byte> composedExecutable)

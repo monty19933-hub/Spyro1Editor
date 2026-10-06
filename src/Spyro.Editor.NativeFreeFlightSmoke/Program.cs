@@ -19,6 +19,135 @@ if (args.Length == 4 && args[0] == "--apply-global")
     return;
 }
 
+if (args.Length == 4 && args[0] == "--dump-native")
+{
+    // --dump-native <original.bin> <runtime address hex> <word count>: raw executable words with a light decode.
+    var plan = await NativeFreeFlightCompositionPlan.CaptureAsync(args[1], true);
+    byte[] exe = plan.ExecutablePatch.CopySourceExecutable();
+    uint address = Convert.ToUInt32(args[2], 16);
+    int count = int.Parse(args[3]);
+    string[] regs = ["zero","at","v0","v1","a0","a1","a2","a3","t0","t1","t2","t3","t4","t5","t6","t7","s0","s1","s2","s3","s4","s5","s6","s7","t8","t9","k0","k1","gp","sp","fp","ra"];
+    for (int i = 0; i < count; i++)
+    {
+        uint a = address + (uint)(i * 4);
+        uint w = BinaryPrimitives.ReadUInt32LittleEndian(exe.AsSpan((int)(a - 0x8000F800), 4));
+        int op = (int)(w >> 26), rs = (int)((w >> 21) & 31), rt = (int)((w >> 16) & 31), rd = (int)((w >> 11) & 31), sh = (int)((w >> 6) & 31), fn = (int)(w & 63);
+        short imm = unchecked((short)(w & 0xFFFF));
+        string text = op switch
+        {
+            0 => w == 0 ? "nop" : fn switch { 0x21 => $"addu {regs[rd]},{regs[rs]},{regs[rt]}", 0x23 => $"subu {regs[rd]},{regs[rs]},{regs[rt]}", 0x25 => $"or {regs[rd]},{regs[rs]},{regs[rt]}", 0x24 => $"and {regs[rd]},{regs[rs]},{regs[rt]}", 0x2A => $"slt {regs[rd]},{regs[rs]},{regs[rt]}", 0x2B => $"sltu {regs[rd]},{regs[rs]},{regs[rt]}", 0 => $"sll {regs[rd]},{regs[rt]},{sh}", 3 => $"sra {regs[rd]},{regs[rt]},{sh}", 2 => $"srl {regs[rd]},{regs[rt]},{sh}", 8 => $"jr {regs[rs]}", 9 => $"jalr {regs[rd]},{regs[rs]}", _ => $"R fn={fn:X}" },
+            2 => $"j 0x{((a + 4) & 0xF0000000) | ((w & 0x03FFFFFF) << 2):X8}",
+            3 => $"jal 0x{((a + 4) & 0xF0000000) | ((w & 0x03FFFFFF) << 2):X8}",
+            4 => $"beq {regs[rs]},{regs[rt]} -> 0x{a + 4 + (uint)(imm * 4):X8}",
+            5 => $"bne {regs[rs]},{regs[rt]} -> 0x{a + 4 + (uint)(imm * 4):X8}",
+            1 => $"b{(rt == 0 ? "ltz" : rt == 1 ? "gez" : rt == 16 ? "ltzal" : "gezal")} {regs[rs]} -> 0x{a + 4 + (uint)(imm * 4):X8}",
+            6 => $"blez {regs[rs]} -> 0x{a + 4 + (uint)(imm * 4):X8}",
+            7 => $"bgtz {regs[rs]} -> 0x{a + 4 + (uint)(imm * 4):X8}",
+            9 => $"addiu {regs[rt]},{regs[rs]},{imm}",
+            10 => $"slti {regs[rt]},{regs[rs]},{imm}",
+            11 => $"sltiu {regs[rt]},{regs[rs]},{imm}",
+            12 => $"andi {regs[rt]},{regs[rs]},0x{w & 0xFFFF:X}",
+            13 => $"ori {regs[rt]},{regs[rs]},0x{w & 0xFFFF:X}",
+            15 => $"lui {regs[rt]},0x{w & 0xFFFF:X}",
+            32 => $"lb {regs[rt]},{imm}({regs[rs]})",
+            33 => $"lh {regs[rt]},{imm}({regs[rs]})",
+            35 => $"lw {regs[rt]},{imm}({regs[rs]})",
+            36 => $"lbu {regs[rt]},{imm}({regs[rs]})",
+            37 => $"lhu {regs[rt]},{imm}({regs[rs]})",
+            40 => $"sb {regs[rt]},{imm}({regs[rs]})",
+            41 => $"sh {regs[rt]},{imm}({regs[rs]})",
+            43 => $"sw {regs[rt]},{imm}({regs[rs]})",
+            _ => $"op={op}"
+        };
+        Console.WriteLine($"{a:X8}  {w:X8}  {text}");
+    }
+    return;
+}
+
+if (args.Length == 3 && args[0] == "--find-imm")
+{
+    // --find-imm <original.bin> <imm16 hex>: every lw/sw/lb/sb/lh/sh/addiu whose immediate is that value.
+    var plan = await NativeFreeFlightCompositionPlan.CaptureAsync(args[1], true);
+    byte[] exe = plan.ExecutablePatch.CopySourceExecutable();
+    ushort wanted = Convert.ToUInt16(args[2], 16);
+    for (int offset = 0; offset + 4 <= exe.Length; offset += 4)
+    {
+        uint w = BinaryPrimitives.ReadUInt32LittleEndian(exe.AsSpan(offset, 4));
+        int op = (int)(w >> 26);
+        if ((w & 0xFFFF) != wanted || op is not (9 or 32 or 33 or 35 or 36 or 37 or 40 or 41 or 43))
+            continue;
+        uint a = 0x8000F800 + (uint)offset;
+        Console.WriteLine($"{a:X8}  {w:X8}  op={op} rs={(w >> 21) & 31} rt={(w >> 16) & 31}");
+    }
+    return;
+}
+
+if (args.Length == 3 && args[0] == "--zero-runs")
+{
+    // --zero-runs <original.bin> <min bytes>: zero-filled runs inside the loaded executable image.
+    var plan = await NativeFreeFlightCompositionPlan.CaptureAsync(args[1], true);
+    byte[] exe = plan.ExecutablePatch.CopySourceExecutable();
+    int min = int.Parse(args[2]);
+    Console.WriteLine($"executable image {exe.Length} bytes: 0x8000F800..0x{0x8000F800 + exe.Length:X8}");
+    int start = -1;
+    for (int i = 0; i <= exe.Length; i++)
+    {
+        bool zero = i < exe.Length && exe[i] == 0;
+        if (zero && start < 0) start = i;
+        if (!zero && start >= 0)
+        {
+            if (i - start >= min) Console.WriteLine($"0x{0x8000F800 + start:X8}..0x{0x8000F800 + i - 1:X8}  {i - start} bytes");
+            start = -1;
+        }
+    }
+    return;
+}
+
+if (args.Length == 4 && args[0] == "--refs-into")
+{
+    // --refs-into <original.bin> <start hex> <end hex>: immediates and pointer words that could address the range.
+    var plan = await NativeFreeFlightCompositionPlan.CaptureAsync(args[1], true);
+    byte[] exe = plan.ExecutablePatch.CopySourceExecutable();
+    uint lo = Convert.ToUInt32(args[2], 16), hi = Convert.ToUInt32(args[3], 16);
+    int pointerWords = 0, immediates = 0;
+    for (int offset = 0; offset + 4 <= exe.Length; offset += 4)
+    {
+        uint w = BinaryPrimitives.ReadUInt32LittleEndian(exe.AsSpan(offset, 4));
+        uint a = 0x8000F800 + (uint)offset;
+        if (w >= lo && w <= hi) { pointerWords++; Console.WriteLine($"pointer word {a:X8}: {w:X8}"); }
+        int op = (int)(w >> 26);
+        if (op is 9 or 32 or 33 or 35 or 36 or 37 or 40 or 41 or 43 or 13)
+        {
+            short imm = unchecked((short)(w & 0xFFFF));
+            // any 0x8007 base: hi half 0x8007 → address 0x80070000 + imm (signed); 0x8008 base with negative imm too
+            foreach (uint baseHi in new uint[] { 0x80070000, 0x80080000 })
+            {
+                long addr = baseHi + imm;
+                if (addr >= lo && addr <= hi) { immediates++; Console.WriteLine($"immediate {a:X8}: {w:X8} -> {addr:X8}"); }
+            }
+        }
+    }
+    Console.WriteLine($"pointer words {pointerWords}, immediates {immediates}");
+    return;
+}
+
+if (args.Length == 2 && args[0] == "--level-animations")
+{
+    // --level-animations <original.bin>: which player animation records each level's local stream holds.
+    var source = await NativePlayerAnimationSource.CaptureAsync(args[1]);
+    Console.WriteLine("shared: " + string.Join(",", source.SharedAnimationIds));
+    foreach (var level in source.Levels.OrderBy(l => l.LevelId))
+        Console.WriteLine($"level {level.LevelId}: {string.Join(",", level.Stream.Records.Select(r => r.AnimationId).Order())}");
+    return;
+}
+
+if (args.Length == 1 && args[0] == "--loader-spare")
+{
+    _ = NativeFreeFlightAirborneLoader.Build();
+    Console.WriteLine($"loader used {NativeFreeFlightAirborneLoader.UsedBytes} of {NativeFreeFlightAirborneLoader.ByteLength} bytes; spare {NativeFreeFlightAirborneLoader.ByteLength - NativeFreeFlightAirborneLoader.UsedBytes}");
+    return;
+}
+
 if (args.Length == 1 && args[0] == "--emit-global")
 {
     Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(NativeFreeFlightPatchBuilder.BuildGlobalNormal().Select(w => new { w.Name, address = w.Address, before = Convert.ToHexStringLower(w.Before), after = Convert.ToHexStringLower(w.After) })));
@@ -119,6 +248,7 @@ foreach (int invalid in new[] { -1, 0, 5, 9, 15, 25, 35, 45, 55, 65, 99, int.Max
     Reject(() => NativeFreeFlightPatchBuilder.Build(invalid), "unsupported destination");
 
 checks += GlobalFreeFlightCases.Run();
+checks += LevelSetFreeFlightCases.Run();
 
 if (args.Length >= 1)
 {
@@ -364,7 +494,8 @@ static class ExitLiveness
 static class Machine
 {
     internal sealed record Result(uint Exit, int[] Registers, Dictionary<uint, int> Memory, HashSet<uint> Writes);
-    internal static Result Run(uint start, byte[] code, Dictionary<uint, int> source, int[]? initial = null)
+    internal static Action<string>? Trace;
+    internal static Result Run(uint start, byte[] code, Dictionary<uint, int> source, int[]? initial = null, int maxSteps = 128)
     {
         int[] r = initial?.ToArray() ?? new int[32];
         Dictionary<uint, int> memory = new(source);
@@ -372,11 +503,12 @@ static class Machine
         uint pc = start;
         uint? branch = null;
         (int Register, int Value)? load = null;
-        for (int step = 0; step < 128; step++)
+        for (int step = 0; step < maxSteps; step++)
         {
             if (pc < start || pc >= start + code.Length)
                 return new(pc, r, memory, writes);
             uint word = BinaryPrimitives.ReadUInt32LittleEndian(code.AsSpan(checked((int)(pc - start)), 4));
+            Trace?.Invoke($"{pc:X8} {word:X8} v0={r[2]:X8} v1={r[3]:X8} a0={r[4]} a1={r[5]:X8} t1={r[9]} t2={r[10]}");
             int op = (int)(word >> 26), rs = (int)(word >> 21 & 31), rt = (int)(word >> 16 & 31);
             int rd = (int)(word >> 11 & 31), shift = (int)(word >> 6 & 31), fn = (int)(word & 63);
             int immediate = unchecked((short)word);
@@ -395,6 +527,12 @@ static class Machine
                 case 0 when fn == 0x23: Set(rd, unchecked(r[rs] - r[rt])); break;
                 case 0 when fn == 0x25: Set(rd, r[rs] | r[rt]); break;
                 case 0 when fn == 0x2A: Set(rd, r[rs] < r[rt] ? 1 : 0); break;
+                case 0 when fn == 6: Set(rd, unchecked((int)((uint)r[rt] >> (r[rs] & 31)))); break; // srlv
+                case 0 when fn == 0x2B: Set(rd, unchecked((uint)r[rs]) < unchecked((uint)r[rt]) ? 1 : 0); break; // sltu
+                case 0 when fn == 0x24: Set(rd, r[rs] & r[rt]); break;
+                case 12: Set(rt, r[rs] & (int)(word & 0xFFFF)); break; // andi
+                case 13: Set(rt, r[rs] | (int)(word & 0xFFFF)); break; // ori
+                case 14: Set(rt, r[rs] ^ (int)(word & 0xFFFF)); break; // xori
                 case 1 when rt == 1: branch = r[rs] >= 0 ? unchecked(pc + 4 + (uint)(immediate * 4)) : pc + 8; break;
                 case 2: branch = ((pc + 4) & 0xF0000000) | ((word & 0x03FFFFFF) << 2); break;
                 case 4: branch = r[rs] == r[rt] ? unchecked(pc + 4 + (uint)(immediate * 4)) : pc + 8; break;

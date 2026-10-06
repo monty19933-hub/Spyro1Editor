@@ -18,10 +18,13 @@ public sealed partial class MainWindow
         var targets = FindEditedLevelExportTargets();
         // Fly Anywhere touches every level; listing all of them as "your changes" hides the ones that are.
         var listed = _releaseMode ? targets.Where(HasOrdinarySavedEdits).ToList() : targets.ToList();
-        bool flightOn = _releaseMode && Spyro.Editor.Core.Persistence.NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath).Enabled;
+        var flightIntent = _releaseMode ? Spyro.Editor.Core.Persistence.NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath) : null;
+        string flightLine = flightIntent is not { Enabled: true } ? ""
+            : flightIntent.WholeGame ? "\nFly Anywhere is on: Spyro can fly in every level of this game."
+            : "\nFly Anywhere is on in " + DescribeFlightLevels(flightIntent.EnabledLevelIds) + ".";
         string existing = (listed.Count == 0 ? "No saved changes to existing levels." :
             (_releaseMode ? "Includes your saved changes to: " : "Saved changes: ") + string.Join(", ", listed.Select(t => t.Level.DisplayName)) + ".") +
-            (flightOn ? "\nFly Anywhere is on: Spyro can fly in every level of this game." : "");
+            flightLine;
         var choices = new[] { (Id:10, Name:scenes.FirstOrDefault(s=>s.TargetBinding?.LevelId==10)?.Name??"Artisans") }
             .Concat(scenes.Where(s=>s.ResolveTarget(_retailCatalog).LevelId!=10).Select(s=>(Id:s.ResolveTarget(_retailCatalog).LevelId,Name:s.Name))).ToArray();
         var start = new ComboBox

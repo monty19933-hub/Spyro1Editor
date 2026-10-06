@@ -152,6 +152,70 @@ internal static class NativeFreeFlightPatchBuilder
     }
 
     /// <summary>
+    /// Flight in a chosen set of normal levels. The level-set loader fills the resident airborne slots 33..35
+    /// only for the chosen levels (and native64), so "slot 33 is present" is the per-level decision the
+    /// movement code can read in two instructions, from the player's animation table at 80076378 + 0xBC:
+    /// the five entry consumers grant the flight state when it is present (after the unchanged native
+    /// flight-course term), and the permission rule grants the flag when it is present, in normal gameplay.
+    /// The ceiling and pitch windows are the global ones: they only matter once a flight state exists.
+    /// </summary>
+    internal static IReadOnlyList<NativeFreeFlightWindow> BuildLevelSet(IReadOnlyCollection<int> levelIds)
+    {
+        ArgumentNullException.ThrowIfNull(levelIds);
+        if (levelIds.Count == 0 || levelIds.Any(id => !NativeFreeFlightCompositionPlan.IsNormalLevel(id) && id != 65))
+            throw new ArgumentException("Free Flight level sets hold retail normal levels (and the level of your own) only.", nameof(levelIds));
+        const uint rootTable = 0x6378;   // player animation table pointer, 80076378
+        const int slot33 = 0x38 + 33 * 4; // entry of animation slot 33 inside that table
+        List<NativeFreeFlightWindow> windows = [];
+        foreach (var window in BuildGlobalNormal())
+        {
+            if (window.Name == "normal-resident-airborne-loader")
+                continue;
+            uint[] words = Enumerable.Range(0, window.After.Length / 4)
+                .Select(i => BinaryPrimitives.ReadUInt32LittleEndian(window.After.AsSpan(i * 4, 4))).ToArray();
+            if (window.Name == "permission")
+            {
+                // v1 holds the game state on entry; the displaced addu keeps its place. Flight courses leave.
+                // Then: slot 33 absent -> leave; present -> flag = (game state == 0). The native64 rule also
+                // held the previous flag on the ground; here the flag is simply current in normal gameplay.
+                words =
+                [
+                    Lui(1, 0x8007), 0x00449821 /* addu s3, v0, a0 */, Lw(2, 1, 0x5690), Lw(1, 1, (int)rootTable),
+                    Bne(2, 0, 4, 14), Lw(2, 1, slot33), Lui(1, 0x8008), Beq(2, 0, 7, 14),
+                    Sltiu(2, 3, 1), Sw(2, 1, -0x735C), 0, 0, 0, 0
+                ];
+            }
+            else if (window.Name == "enter-cross")
+            {
+                words =
+                [
+                    Lui(3, 0x8007), Lw(2, 3, 0x5690), Lw(3, 3, (int)rootTable),
+                    BranchTo(5, 2, 0, 0x80041F90, 0x80041FAC), Lw(2, 3, slot33), 0,
+                    BranchTo(4, 2, 0, 0x80041F9C, 0x80041FE0), 0, 0, 0
+                ];
+            }
+            else if (window.Name.StartsWith("enter-", StringComparison.Ordinal))
+            {
+                uint address = window.Address;
+                words =
+                [
+                    Lui(3, 0x8007), Lw(2, 3, 0x5690), Lw(3, 3, (int)rootTable),
+                    BranchTo(5, 2, 0, address + 12, 0x80043FC0), Li(4, 32), Lw(2, 3, slot33), 0,
+                    BranchTo(5, 2, 0, address + 28, 0x80043FC0), 0, Jump(0x80043FC0), Li(4, 15), 0
+                ];
+            }
+            byte[] after = new byte[window.After.Length];
+            if (words.Length * 4 != after.Length)
+                throw new InvalidDataException("Free Flight level-set window size changed: " + window.Name);
+            for (int i = 0; i < words.Length; i++)
+                BinaryPrimitives.WriteUInt32LittleEndian(after.AsSpan(i * 4, 4), words[i]);
+            windows.Add(window with { After = after });
+        }
+        windows.Add(NativeFreeFlightAirborneLoader.Build(NativeFreeFlightAirborneLoader.LevelMask(levelIds.Append(64).Append(65).Distinct())));
+        return windows.AsReadOnly();
+    }
+
+    /// <summary>
     /// The movement routine tests the game state just before the native permission rule and skips the
     /// rule outside normal gameplay, so the flag set in a level survives into the level change that
     /// follows. With the flag set the glide code draws the wing-trail effects by calling into the level

@@ -20,8 +20,13 @@ public sealed class NativeFreeFlightProjectExportIntent
     // exports consume Enabled and the global composition contract.
     public int? EnabledLevelId { get; }
     public bool Enabled => _snapshot.GlobalEnabled;
-    public IReadOnlyList<int> EnabledLevelIds => Array.AsReadOnly(Enabled
-        ? Enumerable.Range(10, 55).Where(NativeFreeFlightCompositionPlan.IsNormalLevel).ToArray() : []);
+    /// <summary>The saved choice, level by level: every normal level for the whole-game switch, or the
+    /// chosen ones. The composition plan treats the complete set as the whole game.</summary>
+    public IReadOnlyList<int> EnabledLevelIds => Array.AsReadOnly(_snapshot.Preferences
+        .Where(p => p.EnableFreeFlight && NativeFreeFlightCompositionPlan.IsNormalLevel(p.LevelId))
+        .Select(p => p.LevelId).Distinct().Order().ToArray());
+    public bool WholeGame => Enabled &&
+        Enumerable.Range(10, 55).Where(NativeFreeFlightCompositionPlan.IsNormalLevel).All(EnabledLevelIds.Contains);
     public bool HasExplicitSelection(int levelId) => _snapshot.HasExplicitSelection(levelId);
 
     public static NativeFreeFlightProjectExportIntent Capture(string workspaceRoot)

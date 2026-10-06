@@ -19,6 +19,8 @@ public sealed partial class MainWindow
     private string _freeFlightError = "";
     private int _freeFlightGeneration, _freeFlightLevelLoadRequest;
     private bool _syncingFreeFlight, _freeFlightDraft;
+    private readonly Dictionary<int, CheckBox> _freeFlightLevelBoxes = new();
+    private Expander? _freeFlightLevelsSection;
 
     private Control BuildFreeFlightSettingsPanel()
     {
@@ -47,13 +49,14 @@ public sealed partial class MainWindow
                     EditorDiagnostics.RecordException("saving the Fly Anywhere choice", error);
                     _statusText.Text = "Could not save the Fly Anywhere choice: " + error.Message;
                 }
-                if (_freeFlightSnapshot != null && _freeFlightDraft != _freeFlightSnapshot.GlobalEnabled)
+                if (_freeFlightSnapshot != null && (_freeFlightEnabled.IsChecked == true) != _freeFlightSnapshot.WholeGame)
                 {
                     // Not saved (busy or failed): show what the project really holds.
                     _freeFlightDraft = _freeFlightSnapshot.GlobalEnabled;
                     _syncingFreeFlight = true;
-                    try { _freeFlightEnabled.IsChecked = _freeFlightDraft; }
+                    try { _freeFlightEnabled.IsChecked = _freeFlightSnapshot.WholeGame; }
                     finally { _syncingFreeFlight = false; }
+                    SyncFreeFlightLevelBoxes();
                     RefreshFreeFlightSettingsAvailability();
                 }
             }
@@ -66,7 +69,149 @@ public sealed partial class MainWindow
         if (!_releaseMode)
             panel.Children.Add(new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 8,
                 Children = { _freeFlightSave, _freeFlightRevert } });
+        panel.Children.Add(BuildFreeFlightLevelChooser());
         return panel;
+    }
+
+    /// <summary>One box per normal level, grouped by home world; each tick is saved at once.</summary>
+    private Control BuildFreeFlightLevelChooser()
+    {
+        StackPanel content = new() { Spacing = 6, Margin = new Avalonia.Thickness(2, 4, 2, 2) };
+        content.Children.Add(new TextBlock
+        {
+            Name = "FreeFlightLevelsNote",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            Foreground = new SolidColorBrush(ModernMutedInk),
+            Text = "Tick the levels where Spyro may fly. The box above ticks them all. A level of your own flies whenever at least one level is ticked."
+        });
+        var worlds = _retailCatalog.Levels
+            .Where(level => Spyro.Editor.Core.Exporting.NativeFreeFlightCompositionPlan.IsNormalLevel(level.LevelId))
+            .GroupBy(level => level.LevelId / 10)
+            .OrderBy(group => group.Key);
+        foreach (var world in worlds)
+        {
+            LevelDefinition? home = world.FirstOrDefault(level => level.LevelId % 10 == 0);
+            content.Children.Add(new TextBlock
+            {
+                Text = home?.DisplayName ?? $"World {world.Key}",
+                FontWeight = FontWeight.SemiBold,
+                FontSize = 12,
+                Margin = new Avalonia.Thickness(0, 6, 0, 0)
+            });
+            WrapPanel row = new() { Orientation = Avalonia.Layout.Orientation.Horizontal };
+            foreach (LevelDefinition level in world.OrderBy(level => level.LevelId))
+            {
+                int id = level.LevelId;
+                CheckBox box = new() { Name = "FreeFlightLevel" + id, Content = level.DisplayName, Margin = new Avalonia.Thickness(0, 0, 14, 2), MinWidth = 150 };
+                ToolTip.SetTip(box, $"Let Spyro fly in {level.DisplayName} in the game you export.");
+                box.PropertyChanged += async (_, change) =>
+                {
+                    if (_syncingFreeFlight || change.Property != ToggleButton.IsCheckedProperty) return;
+                    try { await SaveFreeFlightLevelAsync(id, box.IsChecked == true); }
+                    catch (Exception error)
+                    {
+                        EditorDiagnostics.RecordException("saving a Fly Anywhere level choice", error);
+                        _statusText.Text = "Could not save the Fly Anywhere choice: " + error.Message;
+                        SyncFreeFlightLevelBoxes();
+                    }
+                };
+                _freeFlightLevelBoxes[id] = box;
+                row.Children.Add(box);
+            }
+            content.Children.Add(row);
+        }
+        _freeFlightLevelsSection = BuildCollapsedPanel("Choose levels", content);
+        _freeFlightLevelsSection.Name = "FreeFlightLevelsSection";
+        _freeFlightLevelsSection.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        return _freeFlightLevelsSection;
+    }
+
+    private void SyncFreeFlightLevelBoxes()
+    {
+        _syncingFreeFlight = true;
+        try
+        {
+            foreach ((int id, CheckBox box) in _freeFlightLevelBoxes)
+                box.IsChecked = _freeFlightSnapshot?.IsEnabled(id) == true;
+        }
+        finally { _syncingFreeFlight = false; }
+    }
+
+    /// <summary>Saves one level's choice at once (the shipping editor has no separate flight draft).</summary>
+    private async Task SaveFreeFlightLevelAsync(int levelId, bool enabled)
+    {
+        if (FreeFlightOperationBusy())
+        {
+            _statusText.Text = "Wait for the current operation to finish, then tick the level again.";
+            SyncFreeFlightLevelBoxes();
+            return;
+        }
+        if (!IsCurrentFreeFlightBinding() || _freeFlightSnapshot == null || _freeFlightError.Length != 0)
+        {
+            _statusText.Text = _freeFlightError.Length != 0
+                ? "Fly Anywhere settings unavailable: " + _freeFlightError
+                : "Fly Anywhere settings are not loaded for this project yet. Open a level and try again.";
+            SyncFreeFlightLevelBoxes();
+            return;
+        }
+        NativeFreeFlightSettingsSnapshot expected = _freeFlightSnapshot;
+        int generation = ++_freeFlightGeneration;
+        if (!TryBeginRegularEditorPersistenceOperation("saving a Fly Anywhere level choice", out var operation) || operation == null)
+        {
+            SyncFreeFlightLevelBoxes();
+            return;
+        }
+        RefreshFreeFlightSettingsAvailability();
+        try
+        {
+            RequireCurrentRegularEditorPersistenceOperation(operation);
+            if (!IsCurrentFreeFlightBinding() || !ReferenceEquals(expected, _freeFlightSnapshot))
+                throw new OperationCanceledException("The project or level changed before the choice was saved.");
+            var saved = NativeFreeFlightSettingsStore.Save(expected, levelId, enabled);
+            _freeFlightSnapshot = saved;
+            _freeFlightDraft = saved.GlobalEnabled;
+            _syncingFreeFlight = true;
+            try { _freeFlightEnabled.IsChecked = saved.WholeGame; }
+            finally { _syncingFreeFlight = false; }
+            string name = _retailCatalog.Levels.FirstOrDefault(level => level.LevelId == levelId)?.DisplayName ?? $"level {levelId}";
+            int count = saved.EnabledLevelIds.Count;
+            _statusText.Text = enabled
+                ? $"Fly Anywhere is on in {name}. {DescribeFlightCount(count)} The next Create BIN includes it."
+                : $"Fly Anywhere is off in {name}. {DescribeFlightCount(count)}";
+            EditorDiagnostics.RecordAction("Fly Anywhere level choice", $"level {levelId} {(enabled ? "on" : "off")}; now {count} level(s)");
+        }
+        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or OperationCanceledException)
+        {
+            if (generation == _freeFlightGeneration) _freeFlightError = error is OperationCanceledException ? "" : error.Message;
+            _statusText.Text = "Could not save the Fly Anywhere choice: " + error.Message;
+        }
+        finally
+        {
+            CompleteRegularEditorPersistenceOperation(operation);
+            SyncFreeFlightLevelBoxes();
+            RefreshFreeFlightSettingsAvailability();
+        }
+    }
+
+    private static string DescribeFlightCount(int count) => count switch
+    {
+        0 => "No level has it now.",
+        30 => "Every level has it now.",
+        1 => "1 level has it now.",
+        _ => $"{count} levels have it now."
+    };
+
+    private string DescribeFlightLevels(IReadOnlyList<int> levelIds)
+    {
+        string[] names = levelIds.Select(id => _retailCatalog.Levels.FirstOrDefault(level => level.LevelId == id)?.DisplayName ?? $"level {id}").ToArray();
+        return names.Length switch
+        {
+            0 => "no level",
+            1 => names[0],
+            <= 4 => string.Join(", ", names[..^1]) + " and " + names[^1],
+            _ => $"{names.Length} levels ({string.Join(", ", names.Take(3))}, …)"
+        };
     }
 
     internal void RefreshFreeFlightSettingsEditor(LevelDefinition? level)
@@ -86,8 +231,9 @@ public sealed partial class MainWindow
             { _freeFlightError = error.Message; }
         }
         _syncingFreeFlight = true;
-        try { _freeFlightEnabled.IsChecked = _freeFlightDraft; }
+        try { _freeFlightEnabled.IsChecked = _releaseMode ? _freeFlightSnapshot?.WholeGame == true : _freeFlightDraft; }
         finally { _syncingFreeFlight = false; }
+        SyncFreeFlightLevelBoxes();
         RefreshFreeFlightSettingsAvailability();
     }
 
@@ -128,6 +274,7 @@ public sealed partial class MainWindow
             // owner; no await separates the last current check from publication.
             var saved = NativeFreeFlightSettingsStore.SaveGlobal(expected, enabled);
             _freeFlightSnapshot = saved;
+            SyncFreeFlightLevelBoxes();
             _statusText.Text = _releaseMode
                 ? enabled
                     ? "Fly Anywhere is on for this project. The next Create BIN makes a game where Spyro can fly in every level."
@@ -206,9 +353,15 @@ public sealed partial class MainWindow
             _freeFlightDetails.Text = _freeFlightError.Length != 0
                 ? "This setting could not be read, so it is left as it was: " + _freeFlightError
                 : !retail ? "Open a level to change this setting."
+                : _freeFlightSnapshot?.WholeGame == true
+                    ? "On in every level. The next Create BIN includes it. In the game you export, " + how
                 : _freeFlightSnapshot?.GlobalEnabled == true
-                    ? "On. The next Create BIN includes it. In the game you export, " + how
-                    : "Off. Spyro moves as in the original game. Tick the box and, in the next game you export, " + how;
+                    ? $"On in {DescribeFlightLevels(_freeFlightSnapshot.EnabledLevelIds)}; everywhere else Spyro moves as in the original game. The next Create BIN includes it. In those levels, " + how
+                    : "Off. Spyro moves as in the original game. Tick the box, or choose levels below, and in the next game you export, " + how;
+            if (_freeFlightLevelsSection != null)
+                _freeFlightLevelsSection.IsEnabled = usable && !busy;
+            foreach (CheckBox box in _freeFlightLevelBoxes.Values)
+                box.IsEnabled = usable && !busy;
             return;
         }
         if (_freeFlightError.Length != 0) _freeFlightDetails.Text = "Fly Anywhere settings unavailable: " + _freeFlightError;

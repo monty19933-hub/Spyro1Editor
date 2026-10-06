@@ -112,7 +112,7 @@ internal static class TerrainMultiEditUiCases
             Save(window); Report("after a brush stroke");
             Snapshot(window, Path.Combine(outDir, "3-brushed.png"));
             int edited = geometry.Polygons.Count(p => p.IsTerrainEdited);
-            Console.WriteLine($"TERRAIN_MULTI_EDIT_UI_DONE editedTiles={edited} checks={_checks}");
+            Console.WriteLine($"TERRAIN_MULTI_EDIT_UI_OK editedTiles={edited} checks={_checks}");
         }
         finally { window.Close(); Pump(10); }
     }

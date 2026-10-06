@@ -55,7 +55,9 @@ internal static class FlyAnywhereUiCases
             Snapshot(window, Path.Combine(outDir, "1-fly-anywhere-off.png"));
             box.IsChecked = true;
             Wait(() => File.Exists(settingsPath) && NativeFreeFlightSettingsStore.Capture(workspace).GlobalEnabled, "ticking the box saves the choice", 30);
-            Wait(() => details.Text!.StartsWith("On.", StringComparison.Ordinal), "the note says it is on", 10);
+            Wait(() => details.Text!.StartsWith("On in every level.", StringComparison.Ordinal), "the note says it is on in every level", 10);
+            Check(window.GetLogicalDescendants().OfType<CheckBox>().Where(b => b.Name?.StartsWith("FreeFlightLevel", StringComparison.Ordinal) == true).All(b => b.IsChecked == true),
+                "every level box follows the whole-game tick");
             Check(Get<TextBlock>(window, "_statusText").Text!.Contains("Fly Anywhere is on", StringComparison.Ordinal), "the status line confirms it");
             Snapshot(window, Path.Combine(outDir, "2-fly-anywhere-on.png"));
             sourceImage = (string)Invoke(window, "ResolveUniversalSourceDisc")!;
@@ -68,13 +70,44 @@ internal static class FlyAnywhereUiCases
         {
             CheckBox box = Find<CheckBox>(window, "FreeFlightEnabled");
             Check(box.IsChecked == true, "a reopened editor shows Fly Anywhere on");
+            TextBlock details = Find<TextBlock>(window, "FreeFlightDetails");
+
+            // 2b. Choosing levels: unticking one level leaves the others on; the whole-game box clears.
+            CheckBox stoneHill = Find<CheckBox>(window, "FreeFlightLevel11");
+            stoneHill.IsChecked = false;
+            Wait(() => NativeFreeFlightSettingsStore.Capture(workspace).EnabledLevelIds.Count == 29, "unticking one level saves 29 levels", 30);
+            Check(box.IsChecked == false && details.Text!.StartsWith("On in 29 levels", StringComparison.Ordinal), "the note names 29 levels and the whole-game box clears: " + details.Text);
+            Check(Get<TextBlock>(window, "_statusText").Text!.Contains("off in Stone Hill", StringComparison.Ordinal), "the status line names the level: " + Get<TextBlock>(window, "_statusText").Text);
+            // Down to two levels: untick the rest, then tick Town Square back on.
+            foreach (CheckBox level in window.GetLogicalDescendants().OfType<CheckBox>().Where(b => b.Name is not null && b.Name.StartsWith("FreeFlightLevel", StringComparison.Ordinal) && b.Name != "FreeFlightLevel10" && b.IsChecked == true).ToArray())
+            {
+                level.IsChecked = false;
+                string name = level.Name!;
+                Wait(() => !NativeFreeFlightSettingsStore.Capture(workspace).IsEnabled(int.Parse(name["FreeFlightLevel".Length..])), "untick " + name, 30);
+            }
+            Find<CheckBox>(window, "FreeFlightLevel13").IsChecked = true;
+            Wait(() => NativeFreeFlightSettingsStore.Capture(workspace).EnabledLevelIds.SequenceEqual([10, 13]), "Artisans and Town Square are the chosen levels", 30);
+            Check(details.Text!.StartsWith("On in Artisans and Town Square", StringComparison.Ordinal), "the note names the two levels: " + details.Text);
+            SelectTab(window, "Game Settings");
+            if (window.GetLogicalDescendants().OfType<Expander>().FirstOrDefault(e => e.Name == "FreeFlightLevelsSection") is { } section)
+            {
+                section.IsExpanded = true;
+                Pump(20);
+                section.BringIntoView();
+                Pump(10);
+            }
+            Snapshot(window, Path.Combine(outDir, "2b-two-levels.png"));
             if (settingsOnly)
             {
+                box.IsChecked = true;
+                Wait(() => NativeFreeFlightSettingsStore.Capture(workspace).WholeGame, "ticking the whole-game box turns every level on again", 30);
                 box.IsChecked = false;
                 Wait(() => !NativeFreeFlightSettingsStore.Capture(workspace).GlobalEnabled, "unticking the box saves the choice", 30);
+                Check(window.GetLogicalDescendants().OfType<CheckBox>().Where(b => b.Name?.StartsWith("FreeFlightLevel", StringComparison.Ordinal) == true).All(b => b.IsChecked == false), "every level box clears with the whole-game box");
                 Console.WriteLine($"FLY_ANYWHERE_UI_OK checks={_checks} exports=0");
                 return;
             }
+            // The export below is the two-level game; the whole-game plan is only used for the reverting check.
 
             // 3. Create BIN with it on.
             FixTerrainProblemIfAny(window);
@@ -83,17 +116,20 @@ internal static class FlyAnywhereUiCases
             string[] bins = Directory.Exists(output) ? Directory.GetFiles(output, "*.bin") : [];
             Check(bins.Length == 1, "Create BIN with Fly Anywhere on publishes one BIN: " + onStatus);
             // Off the UI thread: the capture awaits, and its continuations must not wait for this blocked thread.
-            var plan = Task.Run(() => NativeFreeFlightCompositionPlan.CaptureAsync(sourceImage, true)).GetAwaiter().GetResult();
+            var plan = Task.Run(() => NativeFreeFlightCompositionPlan.CaptureAsync(sourceImage, new[] { 10, 13 })).GetAwaiter().GetResult();
+            Check(plan.EnabledLevelIds.SequenceEqual([10, 13, 65]) && !plan.ExecutablePatch.GlobalNormalLevelsEnabled, "the two-level plan is the level-set executable");
             byte[] onExe = UniversalDiscImage.Read(bins[0]).Exe;
             byte[] reverted = plan.ExecutablePatch.RevertExecutable(onExe);
-            Check(!reverted.AsSpan().SequenceEqual(onExe), "the exported game contains the flight change");
-            Check(Details(window).Contains("Fly Anywhere is on", StringComparison.Ordinal), "the export summary says Fly Anywhere is on: " + Details(window));
+            Check(!reverted.AsSpan().SequenceEqual(onExe), "the exported game contains the two-level flight change");
+            Check(Details(window).Contains("Fly Anywhere is on in Artisans and Town Square", StringComparison.Ordinal), "the export summary names the two levels: " + Details(window));
             string onCopy = Path.Combine(outDir, "fly-on.bin");
             File.Copy(bins[0], onCopy, overwrite: true);
             File.WriteAllText(Path.ChangeExtension(onCopy, ".cue"), "FILE \"fly-on.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n");
             Snapshot(window, Path.Combine(outDir, "3-exported-on.png"));
 
             // 4. Turn it off and export again: the movement code is the original again.
+            box.IsChecked = true;
+            Wait(() => NativeFreeFlightSettingsStore.Capture(workspace).WholeGame, "ticking the whole-game box turns every level on", 30);
             box.IsChecked = false;
             Wait(() => !NativeFreeFlightSettingsStore.Capture(workspace).GlobalEnabled, "unticking the box saves the choice", 30);
             RunCreateBin(window, out string offStatus);

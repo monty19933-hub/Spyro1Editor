@@ -1,3 +1,58 @@
+# Spyro Editor 1.2 — owner feedback on 1.1 — 5 October 2026
+
+Version 1.2 (internal `1.2.0`; Claude; same branch `release/release-ready-20261004`)
+answers four points the owner raised after using 1.1: "Find space for this
+object…" got stuck; Fly Anywhere should be per level; editing several terrain
+tiles gave errors for all of them; and there was no way to change a tile's type
+(water to grass). Worklist section E in task-root
+`work/release-ready-20261004/WORKLIST.md` carries the evidence paths.
+
+Find space. The search reports which version and option it is trying, lists each
+way to make room as soon as it is found, has a Stop button, and is bounded (6
+versions × 48 options). When no combination of original objects would make room
+it says so (the owner's Artisans has 11 added and 9 removed objects; that is the
+case there) instead of searching for minutes.
+
+Terrain. Four limits of the game's level format caused the errors: tiles the game
+has no collision under (23% of Artisans faces) cannot be changed at all; corners
+of one collision triangle may differ by at most 255; ground needs 64 units under
+other ground; and moving ground across a 256-unit collision lookup cell overflows
+the level's fixed lookup table. A fifth, Lower, was impossible for 31% of tiles
+because a sector's stored origin equals its lowest tile. The editor now refuses
+the first four at the moment of the edit in plain words (Raise, Lower, drags,
+corner moves and brush strokes; a brush leaves the offending corners where they
+are), moves shared corners together as the game does, and Create BIN re-bases a
+sector's origin so Lower works. Emulator: Artisans tile 80:7:hp lowered 384→288,
+Spyro stands on it at the new height (310 vs 407 on an unchanged 384 tile), 600
+stable frames.
+
+Tile Type…. A dialog in the Tiles card lists solid ground and the level's own
+kinds (water hurts/deadly, lava, ooze, supercharge, invisible wall, electric
+floor) and applies the choice to the selected tiles through the native
+surface-flag patch texture painting already used; tiles cut along the other
+diagonal now match. Emulator: an Artisans pond tile made solid was stood on
+without harm; a grass tile made water put Spyro in the water state and cost a
+life.
+
+Fly Anywhere per level. A level-set executable: the rewritten animation loader
+fills the flight animation slots only for the chosen levels (a 56-bit mask of
+level IDs, plus Gnasty's Loot and the level of your own), and the five entry
+windows and the permission rule read "slot 33 present" from the player's
+animation table instead of "any normal level". Ceiling and pitch windows are the
+whole-game ones. No new bytes, code cave or RAM field. The CPU oracle covers the
+entry, permission and loader-classification windows for several level sets
+(530 493 checks with the existing global cases). Emulator on a game with
+Artisans and Town Square chosen: flight in Artisans (state 32, climb, dive,
+landing, 600 stable frames); through the Stone Hill portal a second ✕ only
+glides (state 15); through the Toasty portal likewise. A first version of the
+level-set loader let Stone Hill inherit the resident flight slot a chosen level
+had filled; the emulator caught it and the loader now clears the flight slots of
+unlisted levels (oracle extended to the slot loop).
+
+Not verified: see 1.1 below; in addition, Tile Type… and the sector re-base were
+played in Artisans only; per-level flight in the two chosen levels and two
+unchosen ones only.
+
 # Spyro Editor 1.1 release-readiness pass — 5 October 2026
 
 Version 1.1 (internal `1.1.0`; Claude; branch `release/release-ready-20261004`,

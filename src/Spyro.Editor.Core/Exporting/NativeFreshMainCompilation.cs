@@ -152,7 +152,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         if (_flight != null) exe = _flight.ApplyToExecutable(exe);
         var title = new TextTargetEntry(Target.Key, Target.ScriptKey, Document.Name, "LAB", 3, 19, LevelTextTableKind.LevelNames, 35);
         exe = LevelTextPatchExporter.ComposeStagedExecutable(stagedRetailImage??_baseline, exe, [..retailNames??[],new(title, Document.Name)]);
-        if (_flight?.Enabled == true) _ = _flight.RequireFinalLevelClosure(65, levelData, exe);
+        if (_flight?.IsLevelEnabled(65) == true) _ = _flight.RequireFinalLevelClosure(65, levelData, exe);
         uint runtimeEnd = UniversalMobyComposer.RuntimeEnd(new UniversalLevelData(levelData), new UniversalOverlay(overlayData,UniversalExeBindings.Read(exe,65)).CopyBuffer);
         if(runtimeEnd > UniversalMobyComposer.NormalBufferFloor-UniversalMobyComposer.RamSafetyMargin)
             throw new InvalidDataException("The complete authored scene exceeds the native normal-buffer memory budget.");
@@ -162,7 +162,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
             UniversalMobyExport.RequireSignMarkersOnlyIn(exe,new LevelCatalog(nativeCatalog.Levels.Where(l=>l.LevelId!=65).Append(Target)),signLevels,
                 entry=>replacements.TryGetValue(entry,out var bytes)?bytes:baseline.EntryBytes(entry));
         if(_flight?.Enabled==true)
-            foreach(var level in nativeCatalog.Levels.Where(l=>NativeFreeFlightCompositionPlan.IsNormalLevel(l.LevelId)))
+            foreach(var level in nativeCatalog.Levels.Where(l=>NativeFreeFlightCompositionPlan.IsNormalLevel(l.LevelId) && _flight.IsLevelEnabled(l.LevelId)))
                 _=_flight.RequireFinalLevelClosure(level.LevelId,baseline.EntryBytes(level.SourceWadEntry),exe);
         var freshParticleBinding=compose?.FreshParticleBinding;
         if(portalRoutes?.HasEdits==true)

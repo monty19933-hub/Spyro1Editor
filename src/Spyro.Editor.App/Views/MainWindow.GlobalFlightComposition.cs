@@ -39,7 +39,7 @@ public sealed partial class MainWindow
             flight.RequireResidentEntry8(disc.EntryBytes(8));
             byte[] exe=flight.ApplyToExecutable(disc.Exe);
             if (flight.Enabled)
-                foreach(var level in _retailCatalog.Levels.Where(l=>NativeFreeFlightCompositionPlan.IsNormalLevel(l.LevelId)))
+                foreach(var level in _retailCatalog.Levels.Where(l=>NativeFreeFlightCompositionPlan.IsNormalLevel(l.LevelId) && flight.IsLevelEnabled(l.LevelId)))
                     _ = flight.RequireFinalLevelClosure(level.LevelId,disc.EntryBytes(level.SourceWadEntry),exe);
             disc.WriteImage(image,disc.Wad,exe);
             if(!UniversalDiscImage.Read(image).Exe.AsSpan().SequenceEqual(exe))throw new InvalidDataException("Global flight executable readback changed.");

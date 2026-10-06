@@ -1,3 +1,51 @@
+# Handoff — Spyro Editor 1.2 (owner feedback on 1.1) — 2026-10-05, Claude
+
+## Where
+- Same worktree and branch as 1.1 (`release/release-ready-20261004`); nothing is pushed. Packages and documents:
+  task-root `outputs/SpyroEditor-V1.2-release` (1.1 and earlier packages untouched). Worklist section E, evidence
+  and emulator logs: task-root `work/release-ready-20261004` (`WORKLIST.md`, `evidence/terrain-*`, `evidence/tile-type`,
+  `evidence/fly-levels`, `evidence/find-space`, `evidence/runtime/{lower-*,tiletype-*,flytwo-*}`).
+
+## What changed
+- Find space: `UniversalCapacityPlanner.Analyze` takes a progress callback and a cancellation token;
+  `MainWindow.UniversalMobyLibrary.cs` shows progress, live plans and a Stop button, bounded 6 versions × 48 options.
+  Test `--find-space-ui`.
+- Terrain limits at edit time (`MainWindow.cs`): `TryPlanTerrainTileMove` / `ApplyTerrainTileMove` (Raise, Lower,
+  drags: collision corners only, shared corners joined), `TryCheckTerrainSectorRoom` (sector bands),
+  `CollectCollisionTriangleOffenders` (255 step, ±255 sideways, winding), `CollectTerrainExposureOffenders`
+  (`TerrainPatchExporter.FindTerrainExposureConflict`), `CollectCollisionIndexOffenders`
+  (`TerrainPatchExporter.TryCheckCollisionIndexCapacity` + `TryLoadCollisionLookupFromSource`),
+  `TrimTerrainBrushDeltasToFormatLimits` for the brush, `AddJoinedTerrainFollowers`, coverage extended with collision
+  corners (`WithCollisionCorners`), `ClassifyTerrainPatchSafety` judged by moved corners.
+  Exporter: `PlanSceneSectorRebases` / `RebasedSceneSectorHeader` / `AddSceneSectorRebasePatches` (sector origin
+  re-base so a lowered corner can be stored), collision-index refusal names the affected faces; plain wording in
+  `MainWindow.TerrainProblems.cs`. Tests `--terrain-multi-edit-ui`, `--terrain-lower-ui` (export + emulator spec),
+  `--terrain-survey`, `--collision-lookup-probe`; emulator `runtime/lowertest.py`.
+- Tile Type: `MainWindow.TileType.cs` (dialog, plain names, apply through `ApplyNativeTerrainBehaviorToFace`),
+  Tiles card button and kind text in `MainWindow.TerrainPanel.cs`; `NativeTerrainSurfaceCatalogBuilder.VisualTriangulations`
+  (either quad diagonal) used by the catalogue and `TerrainPatchExporter.AddNativeSurfaceBehaviorPatches`.
+  Test `--tile-type-ui` (export + emulator spec); emulator `runtime/tiletypetest.py`.
+- Fly Anywhere per level: `NativeFreeFlightAirborneLoader.Build(mask)` (56-bit level mask classification; unlisted
+  levels clear inherited flight slots), `NativeFreeFlightPatchBuilder.BuildLevelSet` (entry windows and permission read
+  slot 33 at `*(80076378)+0xBC`), `NativeFreeFlightPatchPlan.CaptureLevelSetAsync` / `EnabledLevelIds`,
+  `NativeFreeFlightCompositionPlan.CaptureAsync(path, levelIds)` (whole game when all 30 chosen), intent
+  `EnabledLevelIds` / `WholeGame`, settings snapshot `EnabledLevelIds` / `WholeGame`, UI `MainWindow.FreeFlight.cs`
+  (`BuildFreeFlightLevelChooser`, `SaveFreeFlightLevelAsync`), export wording in `MainWindow.cs`,
+  `MainWindow.SceneDocument.cs`, `MainWindow.ExportScope.cs`. Oracle `NativeFreeFlightSmoke` (`LevelSetFreeFlightCases`,
+  plus `--dump-native`, `--find-imm`, `--zero-runs`, `--refs-into`, `--level-animations`, `--loader-spare` probes).
+  Test `--fly-anywhere-ui` (per-level ticks; exports a two-level game); emulator `runtime/flytest.py`, `flylevels.py`.
+- Version: `Spyro.Editor.App.csproj` 1.2 / 1.2.0, previous stable 1.1.
+
+## Pitfalls met
+- A UiSmoke case must `Path.GetFullPath` its arguments before setting the workspace: relative paths resolve against the
+  cloned project once `Environment.CurrentDirectory` changes, and a non-existent workspace path makes the app fall back
+  to the current folder (it wrote terrain edits into the source checkout and into `evidence/work/...`).
+- Release projects have no RAM capture: the editor must read the collision lookup from the disc the way Create BIN
+  does (`TryLoadCollisionLookupFromSource`), and `SpyroCollisionDecoder.Decode` must never be fed a subfile.
+- The level-set loader's first version let a level after a chosen one inherit the resident flight pointer (the native
+  stale test keeps valid resident addresses); the fix clears slots 33..35 in unlisted levels, and the oracle now
+  simulates the slot loop.
+
 # Handoff — Spyro Editor 1.1 release-readiness pass (2026-10-05, Claude)
 
 ## Where

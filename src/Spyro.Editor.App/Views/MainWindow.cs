@@ -13817,7 +13817,7 @@ public sealed partial class MainWindow : Window
         NativeFreeFlightCompositionPlan? globalFlight = null;
         if (flightPlanNeeded)
         {
-            try { globalFlight = await NativeFreeFlightCompositionPlan.CaptureAsync(sourceImage, flightIntent.Enabled); }
+            try { globalFlight = await NativeFreeFlightCompositionPlan.CaptureAsync(sourceImage, flightIntent.EnabledLevelIds); }
             catch (InvalidDataException e) when (_releaseMode)
             {
                 throw new InvalidDataException(flightIntent.Enabled
@@ -14561,9 +14561,13 @@ public sealed partial class MainWindow : Window
 
         return new CombinedTestBinResult(finalImage, finalCue, objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, true, tempDir)
         { FreeFlightSummary = _releaseMode
-            ? !flightIntent.RequiresRebuild ? "" : flightIntent.Enabled ? " Fly Anywhere is on in this game." : " Fly Anywhere is off in this game."
+            ? !flightIntent.RequiresRebuild ? ""
+                : !flightIntent.Enabled ? " Fly Anywhere is off in this game."
+                : flightIntent.WholeGame ? " Fly Anywhere is on in this game."
+                : " Fly Anywhere is on in " + DescribeFlightLevels(flightIntent.EnabledLevelIds) + "."
             : globalFlight == null ? "" : flightIntent.Enabled
-                ? " Fly Anywhere ON: all normal levels; gameplay validation pending."
+                ? (flightIntent.WholeGame ? " Fly Anywhere ON: all normal levels; gameplay validation pending."
+                    : $" Fly Anywhere ON in levels {string.Join(",", flightIntent.EnabledLevelIds)}; gameplay validation pending.")
                 : " Fly Anywhere OFF: original normal movement restored.",
             PortalRoutePatches = portalRoutePatches,
             ActiveDragonflyEggs = activeDragonflyEggs, SignLevelKeys = signLevelKeys, ReturnClasses = returnClasses,
@@ -27942,7 +27946,7 @@ public sealed partial class MainWindow : Window
 
         AddHelpSection(panel, "Game Settings and Environment", [
             "Level name changes the name on portals, loading screens and in the guidebook. Music picks the level's track.",
-            "Fly Anywhere (whole game): tick it and the game you export lets Spyro fly in every normal level — jump, then press ✕ again in the air. It is off unless you turn it on, and it is separate from the editor's Game Camera.",
+            "Fly Anywhere: tick it and the game you export lets Spyro fly in every normal level — jump, then press ✕ again in the air — or open Choose levels and tick only the levels you want. It is off unless you turn it on, and it is separate from the editor's Game Camera.",
             "Portals & Return Home: choose where each portal leads and where Return Home goes.",
             "Environment: recolor the sky, borrow another level's sky, or use a ready-made one."
         ]);

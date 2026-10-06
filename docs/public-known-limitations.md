@@ -1,5 +1,14 @@
-# Spyro Editor 1.1 — supported scope and limitations
+# Spyro Editor 1.2 — supported scope and limitations
 
+- Version 1.2 makes terrain editing refuse, at the moment of the change and in
+  plain words, what Create BIN would refuse later (scenery without collision,
+  the 255-unit step inside one piece of collision, folded ground, a surface
+  within 64 above, the 256-unit collision lookup cells, the sector height and
+  width bands); Raise, Lower and drags move shared corners together; Lower
+  works down to the floor of a sector, which the game's stored origin used to
+  forbid. **Tile Type…** changes what Spyro finds on a tile. **Fly Anywhere**
+  can be limited to chosen levels. **Find space for this object…** shows its
+  progress, lists results as it finds them and can be stopped.
 - Version 1.1 reorganizes the interface (first-run welcome, carded Objects and
   Terrain tabs, plain wording, one Export Check), adds **Fly Anywhere**, a red
   bar that explains and undoes terrain the game cannot stand on, **Show Game
@@ -89,11 +98,26 @@
   arrival area clear of walls and objects and test the finished route in-game.
 - Existing-level terrain supports guarded XYZ edits, face copying, face removal
   and texture painting through the shared editor controls. Close and distant
-  geometry, visibility and native collision are updated together. Native
-  coordinate, collision, memory and ownership checks can refuse a particular
-  edit. Translucent source faces and ambiguous collision ownership are not
-  supported by structural terrain editing. These limits are separate from the
-  fresh-level triangle limit.
+  geometry, visibility and native collision are updated together. The editor
+  applies the game's limits as you edit: no change to tiles without collision,
+  at most 255 height difference inside one collision triangle, no folding, 64
+  units of clear space under other ground, no crossing into another 256-unit
+  collision lookup cell (the level's lookup table cannot grow), and a 1023-high
+  / 2047-wide band per scene sector. Create BIN moves a sector's stored origin
+  down when a lowered corner needs it and re-encodes the sector's other vertices
+  in place; this was played in the emulator for one Artisans floor tile (Spyro
+  stands at the new height) and is not a certificate for every sector. Large
+  brush strokes may still exceed the lookup table; the brush then leaves those
+  corners unchanged and says so. Translucent source faces and ambiguous
+  collision ownership are not supported by structural terrain editing. These
+  limits are separate from the fresh-level triangle limit.
+- **Tile Type…** writes the chosen kind into the tile's matched collision
+  triangles through the same native surface-flag patch texture painting uses.
+  Only kinds the level already defines are offered; portal and level-linked
+  surfaces are never offered; a tile whose collision is cut differently from its
+  picture cannot be changed on its own. In the emulator an Artisans pond tile
+  made solid was stood on unharmed and a grass tile made water put Spyro in the
+  water and cost a life. Other levels and kinds were not played.
 - Removed objects free reusable physical slots. Models and textures are shared:
   deleting one copy will not free artwork still used by other copies or linked
   objects. **Find space for this object…** names proposed removals and checks
@@ -111,9 +135,12 @@
   objects and private terrain texture. The saved fresh level also passed native
   New Game, walking, jumping and egg collection with its 1/1 inventory count.
   This does not certify every authored scene or a complete campaign.
-- **Fly Anywhere** is one switch for the whole exported game, off by default.
-  With it on, Spyro can fly in every normal level (jump, then ✕ again in the
-  air); the five flight levels keep their own rules. It was played in the
+- **Fly Anywhere** is off by default. With **Let Spyro fly in every level** on,
+  Spyro can fly in every normal level (jump, then ✕ again in the air); with
+  levels chosen in **Choose levels**, only in those (the game's loader gives
+  only chosen levels the flight animation slots, and the movement code reads
+  that). A level of your own flies whenever at least one level is chosen. The
+  five flight levels keep their own rules. It was played in the
   emulator in Artisans, Stone Hill, Toasty and Doctor Shemp: take-off, climbing,
   turning, landing, entering levels through portals, Exit Level while flying,
   and a death and respawn while flying. The Icy Flight demo plays frame for

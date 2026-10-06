@@ -201,7 +201,8 @@ public sealed partial class MainWindow
         // No flight plan at all unless Fly Anywhere is on.
         var flightSettings = NativeFreeFlightSettingsStore.Capture(_workspace.RootPath);
         bool flightEnabled = flightSettings.GlobalEnabled, flightChosen = !_releaseMode || flightEnabled;
-        string key=scene.Fingerprint()+"|"+sourceImage+"|flight="+(flightChosen?flightEnabled.ToString():"unset");
+        IReadOnlyList<int> flightLevels = flightSettings.EnabledLevelIds;
+        string key=scene.Fingerprint()+"|"+sourceImage+"|flight="+(flightChosen?string.Join(",",flightLevels):"unset");
         if(_freshNativeCompilation==null||_freshNativeCompilation.IsFaulted||_freshNativeCompilationKey!=key)
         {
             _freshNativeCompilationKey=key;
@@ -209,7 +210,7 @@ public sealed partial class MainWindow
             ExportScratchSpace.PruneAuthoredBaselines(_workspace.RootPath,baseline);
             _freshNativeCompilation=Task.Run<INativeAuthoredCompilation>(async () =>
             {
-                var flight = flightChosen ? await NativeFreeFlightCompositionPlan.CaptureAsync(sourceImage, flightEnabled) : null;
+                var flight = flightChosen ? await NativeFreeFlightCompositionPlan.CaptureAsync(sourceImage, flightLevels) : null;
                 return scene.TargetBinding==null
                     ? await NativeFreshMainCompilation.CaptureAsync(sourceImage,scene,baseline,flight:flight)
                     : await NativeClearedLevelCompilation.CaptureAsync(sourceImage,scene,_retailCatalog,baseline);
@@ -278,7 +279,7 @@ public sealed partial class MainWindow
             NativeFreeFlightCompositionPlan? flight=null;
             if(!_releaseMode||flightIntent.Enabled)
             {
-                try{flight=await NativeFreeFlightCompositionPlan.CaptureAsync(original,flightIntent.Enabled);}
+                try{flight=await NativeFreeFlightCompositionPlan.CaptureAsync(original,flightIntent.EnabledLevelIds);}
                 catch(InvalidDataException e)when(_releaseMode)
                 {throw new InvalidDataException("Fly Anywhere needs the unchanged original USA disc image, and the game you opened is different. Open the original disc with Open Game…, or untick Fly Anywhere in Game Settings. ("+e.Message+")",e);}
             }
@@ -290,7 +291,8 @@ public sealed partial class MainWindow
         });
         RequireOwner();
         string startName=saved.FirstOrDefault(s=>s.ResolveTarget(_retailCatalog).LevelId==startLevelId)?.Name??"Artisans";
-        string flightNote=!flightIntent.RequiresRebuild?"":flightIntent.Enabled?" Fly Anywhere is on in this game.":" Fly Anywhere is off in this game.";
+        string flightNote=!flightIntent.RequiresRebuild?"":!flightIntent.Enabled?" Fly Anywhere is off in this game."
+            :flightIntent.WholeGame?" Fly Anywhere is on in this game.":" Fly Anywhere is on in "+DescribeFlightLevels(flightIntent.EnabledLevelIds)+".";
         RememberExportedGame(Path.ChangeExtension(output,".cue"));
         _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. All saved level replacements and other saved edits are included."+flightNote+PreservedResearchExportNote();
         }
