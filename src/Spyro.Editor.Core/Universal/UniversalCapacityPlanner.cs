@@ -14,7 +14,15 @@ public sealed record UniversalRemovalPlan(IReadOnlyList<UniversalRemovalGroup> G
 
 public sealed record UniversalCapacityAdvice(string? CurrentError, int NativeRows, int RemovedRows,
     int ActiveImports, int RetiredIdentities, int? CurrentRamHeadroom, IReadOnlyList<UniversalRemovalGroup> Candidates,
-    IReadOnlyList<UniversalRemovalPlan> Plans, int Checks, bool SearchTruncated);
+    IReadOnlyList<UniversalRemovalPlan> Plans, int Checks, bool SearchTruncated)
+{
+    /// <summary>True when the caller stopped the search before it ran out of options or checks.</summary>
+    public bool Stopped { get; init; }
+}
+
+/// <summary>What the search is doing right now: how many exact checks ran, the most it will run, how many
+/// removal options there are, and a plan the moment one is proved. Reported from the search thread.</summary>
+public sealed record UniversalSearchProgress(int Checks, int MaximumChecks, int Options, UniversalRemovalPlan? Found);
 
 public static class UniversalCapacityPlanner
 {
@@ -24,7 +32,8 @@ public static class UniversalCapacityPlanner
         IReadOnlyList<UniversalMobyPlacement> trial, IReadOnlyCollection<int> alreadyRemoved,
         Func<int, (string Name, string Kind)>? names = null, Func<string, UniversalSpecialAsset?>? special = null,
         int maximumChecks = 128, CancellationToken cancellationToken = default, UniversalCompositionHost? host = null,
-        Func<IReadOnlyCollection<int>, (UniversalComposeResult? Result, string? Error)>? compositionCheck = null)
+        Func<IReadOnlyCollection<int>, (UniversalComposeResult? Result, string? Error)>? compositionCheck = null,
+        Action<UniversalSearchProgress>? progress = null, CancellationToken stop = default)
     {
         if (maximumChecks < 1) throw new ArgumentOutOfRangeException(nameof(maximumChecks));
         var native = library.Get(destination.Key);
@@ -86,23 +95,33 @@ public static class UniversalCapacityPlanner
             .ThenBy(gs => gs.Max(g => g.EffectPriority)).ThenByDescending(gs => gs.Sum(g => g.ModelBytes)).ToList();
         var plans = new List<UniversalRemovalPlan>();
         int checks = 1;
+        bool stopped = false;
+        progress?.Invoke(new UniversalSearchProgress(checks, maximumChecks, combinations.Count, null));
         foreach (var combination in combinations)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            // The caller's Stop keeps what has been proved so far instead of throwing it away.
+            if (stop.IsCancellationRequested) { stopped = true; break; }
             if (checks >= maximumChecks) break;
             int[] additional = combination.SelectMany(g => g.AdditionalRows).Order().ToArray();
             // A larger plan containing an already proved plan needlessly removes more objects.
             if (plans.Any(p => p.AdditionalRows.All(additional.Contains))) continue;
             var result = Compose(removed.Concat(additional).ToArray());
             checks++;
-            if (result.Error != null) continue;
+            if (result.Error != null)
+            {
+                progress?.Invoke(new UniversalSearchProgress(checks, maximumChecks, combinations.Count, null));
+                continue;
+            }
             var r = result.Result!;
-            plans.Add(new(combination, additional, r.DroppedModelBytes, r.ReclaimedVramBytes, r.Ram.FinalHeadroom,
-                r.ArenaSlotsRemaining, r.DroppedModelClasses.ToArray(), r.ParticleDependencies.Any(p => p.Status == "dependency-unverified")));
+            var plan = new UniversalRemovalPlan(combination, additional, r.DroppedModelBytes, r.ReclaimedVramBytes, r.Ram.FinalHeadroom,
+                r.ArenaSlotsRemaining, r.DroppedModelClasses.ToArray(), r.ParticleDependencies.Any(p => p.Status == "dependency-unverified"));
+            plans.Add(plan);
+            progress?.Invoke(new UniversalSearchProgress(checks, maximumChecks, combinations.Count, plan));
             if (plans.Count >= 3) break;
         }
         return new(current.Error, count, removed.Count, trial.Count(p => !p.Retired), trial.Count(p => p.Retired), null,
-            groups, plans, checks, checks >= maximumChecks || plans.Count >= 3);
+            groups, plans, checks, stopped || checks >= maximumChecks || plans.Count >= 3) { Stopped = stopped };
     }
 
     public static bool IsCapacityFailure(string error) =>

@@ -298,6 +298,15 @@ public sealed partial class MainWindow : Window
     private GeometryCandidate? _terrainCoverageGeometry;
     private HashSet<string>? _terrainCoverageKeys;
     private readonly Dictionary<TerrainPolygon, TerrainCollisionCoverage> _terrainCoverageCache = new();
+    private HashSet<string>? _terrainCollisionPointKeys;
+    private HashSet<string>? _terrainCollisionPointKeysSource;
+    private List<SpyroCollisionPoint[]>? _terrainCollisionTriangles;
+    private Dictionary<string, List<int>>? _terrainCollisionTrianglesByPoint;
+    private HashSet<string>? _terrainCollisionTrianglesSource;
+    private string? _terrainCollisionTableLevelKey;
+    private byte[]? _terrainCollisionTableRam;
+    private SpyroCollisionTable? _terrainCollisionTable;
+    private Dictionary<string, List<(int Index, SpyroCollisionPoint[] Points)>>? _terrainCollisionTableByPoint;
     private string _terrainCollisionReadinessMessage = "Playable terrain collision: not checked";
     private int _terrainCollisionMatchedFaces;
     private Dictionary<TerrainPolygon, float[]>? _activeTerrainBrushUndo;
@@ -11606,13 +11615,13 @@ public sealed partial class MainWindow : Window
                 continue;
             }
 
-            TerrainCollisionCoverage coverage = GetTerrainCollisionCoverage(polygon);
-            if (coverage.MatchedTriangles == 0)
-                visualOnlyHeight++;
-            else if (coverage.MatchedTriangles < coverage.TotalTriangles)
-                partialHeight++;
-            else
-                playableHeight++;
+            switch (ClassifyTerrainPatchSafety(polygon))
+            {
+                case TerrainPatchSafetyKind.VisualOnlyHeight: visualOnlyHeight++; break;
+                case TerrainPatchSafetyKind.PartialHeight: partialHeight++; break;
+                case TerrainPatchSafetyKind.UnknownHeight: unknownHeight++; break;
+                default: playableHeight++; break;
+            }
         }
 
         return new TerrainEditSafetySummary(edited.Count, height, position, texture, structural, playableHeight, partialHeight, visualOnlyHeight, unknownHeight);
@@ -19497,8 +19506,42 @@ public sealed partial class MainWindow : Window
             _terrainCoverageGeometry=_currentGeometry;_terrainCoverageKeys=_terrainCollisionTriangleKeys;_terrainCoverageCache.Clear();
         }
         if (!_terrainCoverageCache.TryGetValue(terrain,out TerrainCollisionCoverage coverage))
-            _terrainCoverageCache[terrain]=coverage=GetTerrainCollisionCoverage(terrain,_terrainCollisionTriangleKeys);
+            _terrainCoverageCache[terrain]=coverage=WithCollisionCorners(terrain,GetTerrainCollisionCoverage(terrain,_terrainCollisionTriangleKeys),TerrainCollisionPointKeys());
         return coverage;
+    }
+
+    /// <summary>Every corner of the level's collision mesh, keyed like <see cref="VisualPointKey"/>.</summary>
+    private HashSet<string> TerrainCollisionPointKeys()
+    {
+        if (_terrainCollisionPointKeys == null || !ReferenceEquals(_terrainCollisionPointKeysSource, _terrainCollisionTriangleKeys))
+        {
+            _terrainCollisionPointKeysSource = _terrainCollisionTriangleKeys;
+            _terrainCollisionPointKeys = _terrainCollisionTriangleKeys
+                .SelectMany(key => key.Split('|'))
+                .ToHashSet(StringComparer.Ordinal);
+        }
+        return _terrainCollisionPointKeys;
+    }
+
+    /// <summary>
+    /// Create BIN can move a corner whenever the collision mesh has a point there, even when the tile's own
+    /// triangles are cut differently from the collision triangles. Those corners count as editable too, so the
+    /// editor refuses exactly what the exporter would refuse.
+    /// </summary>
+    private static TerrainCollisionCoverage WithCollisionCorners(TerrainPolygon terrain, TerrainCollisionCoverage coverage, HashSet<string> collisionPoints)
+    {
+        if (collisionPoints.Count == 0 || terrain.OriginalZValues.Length < terrain.Points.Count)
+            return coverage;
+        var points = terrain.OriginalPoints.Count == terrain.Points.Count ? terrain.OriginalPoints : terrain.Points;
+        HashSet<int>? extended = null;
+        for (int i = 0; i < terrain.Points.Count; i++)
+        {
+            if (coverage.VertexIndexes.Contains(i) || !collisionPoints.Contains(VisualPointKey(points[i].X, points[i].Y, terrain.OriginalZValues[i])))
+                continue;
+            extended ??= new HashSet<int>(coverage.VertexIndexes);
+            extended.Add(i);
+        }
+        return extended == null ? coverage : new TerrainCollisionCoverage(coverage.MatchedTriangles, Math.Max(coverage.TotalTriangles, terrain.Points.Count - 2), extended);
     }
 
     private static TerrainCollisionCoverage GetTerrainCollisionCoverage(TerrainPolygon terrain, IReadOnlySet<string> triangleKeys)
@@ -20486,10 +20529,27 @@ public sealed partial class MainWindow : Window
         if (_terrainCollisionTriangleKeys.Count == 0 || _terrainCollisionMatchedFaces == 0)
             return TerrainPatchSafetyKind.UnknownHeight;
 
+        // Judge the corners that actually moved: Create BIN moves a corner whenever the collision mesh has a
+        // point there, so an edit is playable when every moved corner is such a point.
         TerrainCollisionCoverage coverage = GetTerrainCollisionCoverage(terrain);
-        if (coverage.MatchedTriangles == 0)
+        IReadOnlyList<float> heightDeltas = terrain.TerrainVertexDeltas();
+        IReadOnlyList<Vector2f> sideDeltas = terrain.TerrainVertexXYDeltas();
+        int moved = 0, movedWithCollision = 0;
+        for (int i = 0; i < Math.Max(heightDeltas.Count, sideDeltas.Count); i++)
+        {
+            bool changed = (i < heightDeltas.Count && Math.Abs(heightDeltas[i]) > 0.001f) ||
+                           (i < sideDeltas.Count && (Math.Abs(sideDeltas[i].X) > 0.001f || Math.Abs(sideDeltas[i].Y) > 0.001f));
+            if (!changed)
+                continue;
+            moved++;
+            if (coverage.VertexIndexes.Contains(i))
+                movedWithCollision++;
+        }
+        if (moved == 0)
+            return coverage.VertexIndexes.Count == 0 ? TerrainPatchSafetyKind.VisualOnlyHeight : TerrainPatchSafetyKind.PlayableHeight;
+        if (movedWithCollision == 0)
             return TerrainPatchSafetyKind.VisualOnlyHeight;
-        if (coverage.MatchedTriangles < coverage.TotalTriangles)
+        if (movedWithCollision < moved)
             return TerrainPatchSafetyKind.PartialHeight;
         return TerrainPatchSafetyKind.PlayableHeight;
     }
@@ -20998,17 +21058,675 @@ public sealed partial class MainWindow : Window
         if (TryBlockId65UnsupportedTerrainMutation(_selectedTerrain, "Low-detail terrain height editing"))
             return;
 
+        if (!TryPlanTerrainTileMove(_selectedTerrain, 0, 0, dz, requireAllCorners: false, out List<TerrainTileMoveTarget> targets, out int skippedCorners, out string refusal))
+        {
+            _statusText.Text = refusal;
+            return;
+        }
+
         ClearTerrainBrushUndoHistory();
-        float[] deltas = _selectedTerrain.TerrainVertexDeltas()
-            .Select(value => value + dz)
-            .ToArray();
-        _selectedTerrain.ApplyTerrainVertexDeltas(deltas);
+        int followers = ApplyTerrainTileMove(targets, 0, 0, dz);
         _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         RefreshCurrentLevelDetails();
         RefreshTerrainReadinessHint();
         RefreshTerrainPointControls();
-        _statusText.Text = $"{(dz >= 0 ? "Raised" : "Lowered")} terrain face {_selectedTerrainIndex} by Z {dz:+0;-0;0} without flattening its existing shape. Save Terrain Changes and Create BIN will include the moved vertices.";
+        string verb = dz >= 0 ? "Raised" : "Lowered";
+        _statusText.Text = _releaseMode
+            ? $"{verb} the tile by {Math.Abs(dz):0}; it is now {DescribeTerrainHeightOffset(_selectedTerrain)}.{DescribeTerrainTileMoveExtras(skippedCorners, followers)}"
+            : $"{verb} terrain face {_selectedTerrainIndex} by Z {dz:+0;-0;0} without flattening its existing shape.{DescribeTerrainTileMoveExtras(skippedCorners, followers)} Save Terrain Changes and Create BIN will include the moved vertices.";
+    }
+
+    private static string DescribeTerrainHeightOffset(TerrainPolygon tile)
+    {
+        IReadOnlyList<float> deltas = tile.TerrainVertexDeltas();
+        float offset = deltas.Count == 0 ? 0 : deltas.Average();
+        return Math.Abs(offset) < 0.5f ? "at its original height" : $"{Math.Abs(offset):0} {(offset > 0 ? "higher" : "lower")} than the original";
+    }
+
+    private static string DescribeTerrainSideOffset(TerrainPolygon tile)
+    {
+        IReadOnlyList<Vector2f> deltas = tile.TerrainVertexXYDeltas();
+        float x = deltas.Count == 0 ? 0 : deltas.Average(delta => delta.X);
+        float y = deltas.Count == 0 ? 0 : deltas.Average(delta => delta.Y);
+        return Math.Abs(x) < 0.5f && Math.Abs(y) < 0.5f ? "back in its original place" : $"X {x:+0;-0;0}, Y {y:+0;-0;0} from its original place";
+    }
+
+    private readonly record struct TerrainTileMoveTarget(TerrainPolygon Polygon, int Index);
+
+    /// <summary>
+    /// Which corners a Raise, Lower or sideways move of one tile may touch, and whether the game's level
+    /// format can hold the result. Corners without a point in the collision mesh stay where they are (Create
+    /// BIN cannot move the visible mesh alone), and with "Keep ground edges joined" the corners other tiles
+    /// share move too, which is what Create BIN does in any case. The refusal is written for the status line.
+    /// </summary>
+    private bool TryPlanTerrainTileMove(
+        TerrainPolygon tile, float dx, float dy, float dz, bool requireAllCorners,
+        out List<TerrainTileMoveTarget> targets, out int skippedCorners, out string refusal)
+    {
+        targets = new List<TerrainTileMoveTarget>();
+        skippedCorners = 0;
+        refusal = "";
+        int pointCount = EditableTerrainPointCount(tile);
+        if (pointCount <= 0)
+        {
+            refusal = "Selected terrain does not expose editable points.";
+            return false;
+        }
+        if (tile.IsTerrainAddClone)
+        {
+            // An added copy is written as a new face; it has no shared corners and no collision match yet.
+            for (int i = 0; i < pointCount; i++)
+                targets.Add(new TerrainTileMoveTarget(tile, i));
+            return true;
+        }
+
+        bool playableOnly = IsPlayableTerrainOnlyEnabled();
+        TerrainCollisionCoverage coverage = playableOnly ? GetTerrainCollisionCoverage(tile) : TerrainCollisionCoverage.Empty;
+        List<int> movable = new();
+        for (int i = 0; i < pointCount; i++)
+        {
+            if (!playableOnly || coverage.VertexIndexes.Contains(i))
+                movable.Add(i);
+            else
+                skippedCorners++;
+        }
+        if (movable.Count == 0)
+        {
+            refusal = _releaseMode
+                ? "This tile is scenery: the game has no collision under it, so Create BIN can't move it. Choose a tile Spyro can stand on."
+                : "No corner of this face is matched to native collision, so a Create BIN geometry patch is impossible (visual-only export is blocked). Choose a playable face.";
+            return false;
+        }
+        if (requireAllCorners && skippedCorners > 0)
+        {
+            refusal = _releaseMode
+                ? $"This tile can't move sideways: {skippedCorners} of its {pointCount} corners {(skippedCorners == 1 ? "is" : "are")} scenery with no collision in the game. Raise and Lower still work on its solid corners."
+                : $"Only edit playable ground is on, and {skippedCorners} of this face's {pointCount} corners are not matched to collision; XY moves need every corner. Height nudges still move the matched corners.";
+            return false;
+        }
+
+        foreach (int i in movable)
+            targets.Add(new TerrainTileMoveTarget(tile, i));
+        if (IsTerrainSeamJoiningEnabled() && _currentGeometry != null)
+        {
+            HashSet<string> keys = movable.Select(i => TerrainVertexKey(tile, i)).ToHashSet(StringComparer.Ordinal);
+            foreach (TerrainPolygon polygon in _currentGeometry.Polygons)
+            {
+                if (ReferenceEquals(polygon, tile) || polygon.IsTerrainRemoved || polygon.IsTerrainAddClone || !_viewport.IsTerrainPresentedForEditing(polygon))
+                    continue;
+                if (IsCurrentId65BlankLab() && !string.Equals(polygon.Detail, "hp", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                int count = EditableTerrainPointCount(polygon);
+                for (int i = 0; i < count; i++)
+                {
+                    if (keys.Contains(TerrainVertexKey(polygon, i)))
+                        targets.Add(new TerrainTileMoveTarget(polygon, i));
+                }
+            }
+        }
+        return TryCheckTerrainSectorRoom(targets, dx, dy, dz, out refusal) && TryCheckCollisionTriangleRoom(targets, dx, dy, dz, out refusal);
+    }
+
+    /// <summary>
+    /// The game stores every corner relative to its scene sector's origin in 11-bit X/Y and 10-bit Z fields.
+    /// Create BIN moves the origin down when a corner needs it, so the real limit is the span of each sector:
+    /// at most 2047 sideways and 1023 in height between its lowest and highest corner.
+    /// </summary>
+    private bool TryCheckTerrainSectorRoom(List<TerrainTileMoveTarget> targets, float dx, float dy, float dz, out string refusal)
+    {
+        refusal = "";
+        if (_currentGeometry == null || _freshSceneDocument != null)
+            return true;
+        const float sideLimit = 2047f, heightLimit = 1023f;
+        foreach (IGrouping<int, TerrainTileMoveTarget> sector in targets.GroupBy(target => target.Polygon.SectorOffset))
+        {
+            float minX = float.MaxValue, maxX = float.MinValue, minY = float.MaxValue, maxY = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
+            void Extend(float x, float y, float z)
+            {
+                minX = Math.Min(minX, x); maxX = Math.Max(maxX, x); minY = Math.Min(minY, y); maxY = Math.Max(maxY, y); minZ = Math.Min(minZ, z); maxZ = Math.Max(maxZ, z);
+            }
+            SceneSectorRenderMetadata? metadata = _currentGeometry.SourceSectors.FirstOrDefault(candidate => candidate.SectorOffset == sector.Key);
+            if (metadata?.HighPolyCoordinates is { } origin)
+                Extend(origin.DecodedOriginX, origin.DecodedOriginY, origin.DecodedOriginZ);
+            foreach (TerrainPolygon polygon in _currentGeometry.Polygons)
+            {
+                if (polygon.SectorOffset != sector.Key || polygon.IsTerrainAddClone)
+                    continue;
+                int count = Math.Min(polygon.Points.Count, polygon.ZValues.Length);
+                for (int i = 0; i < count; i++)
+                    Extend(polygon.Points[i].X, polygon.Points[i].Y, polygon.ZValues[i]);
+            }
+            foreach (LowDetailTerrainPolygon polygon in _currentGeometry.LowDetailPolygons)
+            {
+                if (polygon.SectorOffset != sector.Key)
+                    continue;
+                int count = Math.Min(polygon.Points.Count, polygon.ZValues.Count);
+                for (int i = 0; i < count; i++)
+                    Extend(polygon.Points[i].X, polygon.Points[i].Y, polygon.ZValues[i]);
+            }
+            float movedMinX = float.MaxValue, movedMaxX = float.MinValue, movedMinY = float.MaxValue, movedMaxY = float.MinValue, movedMinZ = float.MaxValue, movedMaxZ = float.MinValue;
+            foreach (TerrainTileMoveTarget target in sector)
+            {
+                float x = target.Polygon.Points[target.Index].X + dx, y = target.Polygon.Points[target.Index].Y + dy, z = target.Polygon.ZValues[target.Index] + dz;
+                movedMinX = Math.Min(movedMinX, x); movedMaxX = Math.Max(movedMaxX, x); movedMinY = Math.Min(movedMinY, y); movedMaxY = Math.Max(movedMaxY, y); movedMinZ = Math.Min(movedMinZ, z); movedMaxZ = Math.Max(movedMaxZ, z);
+            }
+            if (movedMinX < 0 || movedMinY < 0 || movedMinZ < 0)
+            {
+                refusal = _releaseMode ? "This tile can't move past the edge of the game's world." : "That move would put a corner at a negative world coordinate, which the scene format cannot store.";
+                return false;
+            }
+            string Range(float low, float high) => $"{MathF.Round(low):0} to {MathF.Round(high):0}";
+            if (Math.Max(maxZ, movedMaxZ) - Math.Min(minZ, movedMinZ) > heightLimit)
+            {
+                refusal = _releaseMode
+                    ? $"This tile can't go that far {(dz < 0 ? "down" : "up")}. The game stores this part of the level within a height range of {heightLimit:0}, and it already reaches from {Range(minZ, maxZ)}."
+                    : $"That height would make scene sector 0x{sector.Key:X} span more than {heightLimit:0} Z units (it currently covers {Range(minZ, maxZ)}); the 10-bit vertex Z field cannot hold it even after re-basing the sector origin.";
+                return false;
+            }
+            if (Math.Max(maxX, movedMaxX) - Math.Min(minX, movedMinX) > sideLimit || Math.Max(maxY, movedMaxY) - Math.Min(minY, movedMinY) > sideLimit)
+            {
+                refusal = _releaseMode
+                    ? $"This tile can't move that far sideways. The game stores this part of the level within {sideLimit:0} units each way, and it already reaches from {Range(minX, maxX)} across and {Range(minY, maxY)} along."
+                    : $"That move would make scene sector 0x{sector.Key:X} span more than {sideLimit:0} X or Y units (it currently covers X {Range(minX, maxX)}, Y {Range(minY, maxY)}); the 11-bit vertex fields cannot hold it even after re-basing the sector origin.";
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>The level's collision triangles (original corners), indexed by corner key.</summary>
+    private (List<SpyroCollisionPoint[]> Triangles, Dictionary<string, List<int>> ByPoint) TerrainCollisionTriangles()
+    {
+        if (_terrainCollisionTriangles == null || _terrainCollisionTrianglesByPoint == null || !ReferenceEquals(_terrainCollisionTrianglesSource, _terrainCollisionTriangleKeys))
+        {
+            _terrainCollisionTrianglesSource = _terrainCollisionTriangleKeys;
+            _terrainCollisionTriangles = new List<SpyroCollisionPoint[]>();
+            _terrainCollisionTrianglesByPoint = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+            foreach (string key in _terrainCollisionTriangleKeys)
+            {
+                string[] corners = key.Split('|');
+                if (corners.Length != 3)
+                    continue;
+                SpyroCollisionPoint[] triangle = new SpyroCollisionPoint[3];
+                bool parsed = true;
+                for (int i = 0; i < 3 && parsed; i++)
+                {
+                    string[] parts = corners[i].Split(',');
+                    parsed = parts.Length == 3 && int.TryParse(parts[0], out int x) && int.TryParse(parts[1], out int y) && int.TryParse(parts[2], out int z);
+                    if (parsed)
+                        triangle[i] = new SpyroCollisionPoint(int.Parse(parts[0]), int.Parse(parts[1]), int.Parse(parts[2]));
+                }
+                if (!parsed)
+                    continue;
+                int index = _terrainCollisionTriangles.Count;
+                _terrainCollisionTriangles.Add(triangle);
+                foreach (string corner in corners)
+                {
+                    if (!_terrainCollisionTrianglesByPoint.TryGetValue(corner, out List<int>? list))
+                        _terrainCollisionTrianglesByPoint[corner] = list = new List<int>();
+                    list.Add(index);
+                }
+            }
+        }
+        return (_terrainCollisionTriangles, _terrainCollisionTrianglesByPoint);
+    }
+
+    /// <summary>Where each original corner currently is, from the loaded faces (joined edges agree).</summary>
+    private Dictionary<string, Vector3f> CurrentTerrainCornerPositions()
+    {
+        Dictionary<string, Vector3f> current = new(StringComparer.Ordinal);
+        if (_currentGeometry == null)
+            return current;
+        foreach (TerrainPolygon polygon in _currentGeometry.Polygons)
+        {
+            if (polygon.IsTerrainAddClone)
+                continue;
+            int count = EditableTerrainPointCount(polygon);
+            for (int i = 0; i < count; i++)
+                current.TryAdd(TerrainVertexKey(polygon, i), new Vector3f(polygon.Points[i].X, polygon.Points[i].Y, polygon.ZValues[i]));
+        }
+        return current;
+    }
+
+    private bool TryCheckCollisionTriangleRoom(List<TerrainTileMoveTarget> targets, float dx, float dy, float dz, out string refusal)
+    {
+        Dictionary<string, Vector3f> moved = new(StringComparer.Ordinal);
+        foreach (TerrainTileMoveTarget target in targets)
+        {
+            if (target.Polygon.IsTerrainAddClone)
+                continue;
+            moved.TryAdd(TerrainVertexKey(target.Polygon, target.Index),
+                new Vector3f(target.Polygon.Points[target.Index].X + dx, target.Polygon.Points[target.Index].Y + dy, target.Polygon.ZValues[target.Index] + dz));
+        }
+        HashSet<string> offenders = new(StringComparer.Ordinal);
+        Lazy<Dictionary<string, Vector3f>> current = new(CurrentTerrainCornerPositions);
+        return CollectCollisionTriangleOffenders(moved, offenders, current, out refusal) &&
+               CollectTerrainExposureOffenders(moved, offenders, out refusal) &&
+               CollectCollisionIndexOffenders(moved, offenders, current, out refusal);
+    }
+
+    /// <summary>The level's native collision table (from its RAM capture) indexed by corner key, for the lookup-capacity check.</summary>
+    private (byte[] Ram, SpyroCollisionTable Table, Dictionary<string, List<(int Index, SpyroCollisionPoint[] Points)>> ByPoint)? TerrainCollisionTableForChecks()
+    {
+        if (_currentLevel == null || _currentGeometry == null || _freshSceneDocument != null)
+            return null;
+        if (string.Equals(_terrainCollisionTableLevelKey, _currentLevel.Key, StringComparison.OrdinalIgnoreCase) && _terrainCollisionTableRam != null && _terrainCollisionTable != null && _terrainCollisionTableByPoint != null)
+            return (_terrainCollisionTableRam, _terrainCollisionTable, _terrainCollisionTableByPoint);
+        _terrainCollisionTableLevelKey = _currentLevel.Key;
+        _terrainCollisionTableRam = null;
+        _terrainCollisionTable = null;
+        _terrainCollisionTableByPoint = null;
+        try
+        {
+            // Create BIN uses the RAM capture when the project has one (development projects) and otherwise
+            // reads the collision lookup from the disc; the check must judge against the same bytes.
+            string ramPath = TerrainPatchDataLocator.FindRamDump(_workspace, _currentLevel.Key);
+            byte[] ram;
+            SpyroCollisionTable table;
+            if (File.Exists(ramPath))
+            {
+                ram = File.ReadAllBytes(ramPath);
+                table = SpyroCollisionDecoder.Decode(ram);
+            }
+            else
+            {
+                string sourceImage = ResolveTerrainTextureSourceImage(_currentLevel);
+                var fromSource = string.IsNullOrWhiteSpace(sourceImage) || !File.Exists(sourceImage)
+                    ? null
+                    : TerrainPatchExporter.TryLoadCollisionLookupFromSource(sourceImage, _currentLevel);
+                if (fromSource == null)
+                {
+                    EditorDiagnostics.RecordAction("Terrain lookup table missing", $"level {_currentLevel.Key}: no RAM capture and no readable collision lookup in the source disc");
+                    return null;
+                }
+                (ram, table) = fromSource.Value;
+            }
+            Dictionary<string, List<(int Index, SpyroCollisionPoint[] Points)>> byPoint = new(StringComparer.Ordinal);
+            foreach (SpyroCollisionTriangle triangle in table.Triangles)
+            {
+                SpyroCollisionPoint[] points = triangle.Points.ToArray();
+                foreach (SpyroCollisionPoint point in points)
+                {
+                    string key = VisualPointKey(point.X, point.Y, point.Z);
+                    if (!byPoint.TryGetValue(key, out List<(int Index, SpyroCollisionPoint[] Points)>? list))
+                        byPoint[key] = list = new List<(int Index, SpyroCollisionPoint[] Points)>();
+                    if (list.Count == 0 || list[^1].Index != triangle.Index)
+                        list.Add((triangle.Index, points));
+                }
+            }
+            _terrainCollisionTableRam = ram;
+            _terrainCollisionTable = table;
+            _terrainCollisionTableByPoint = byPoint;
+            return (ram, table, byPoint);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or UnauthorizedAccessException or ArgumentException or IndexOutOfRangeException)
+        {
+            EditorDiagnostics.RecordAction("Terrain lookup table unreadable", $"level {_currentLevel.Key}: {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The game looks ground up in a fixed-size index of 256-unit cells. Create BIN rebuilds that index for
+    /// moved triangles but cannot grow it, so a triangle that starts spanning an extra cell is refused when
+    /// the level's index has no spare room. Same check, before the change.
+    /// </summary>
+    private bool CollectCollisionIndexOffenders(Dictionary<string, Vector3f> moved, HashSet<string> offenders, Lazy<Dictionary<string, Vector3f>> currentCorners, out string refusal)
+    {
+        refusal = "";
+        if (moved.Count == 0)
+            return true;
+        var tableData = TerrainCollisionTableForChecks();
+        if (tableData == null)
+        {
+            EditorDiagnostics.RecordAction("Terrain lookup check skipped", $"level {_currentLevel?.Key}: no native collision table for the edit-time lookup-capacity check");
+            return true;
+        }
+        (byte[] ram, SpyroCollisionTable table, var byPoint) = tableData.Value;
+        Dictionary<int, SpyroCollisionPoint[]> originals = new();
+        List<(int Index, IReadOnlyList<SpyroCollisionPoint> Points)> targets = new();
+        foreach (string key in moved.Keys)
+        {
+            if (!byPoint.TryGetValue(key, out List<(int Index, SpyroCollisionPoint[] Points)>? triangles))
+                continue;
+            foreach ((int index, SpyroCollisionPoint[] original) in triangles)
+            {
+                if (originals.ContainsKey(index))
+                    continue;
+                originals[index] = original;
+                SpyroCollisionPoint[] target = new SpyroCollisionPoint[3];
+                for (int i = 0; i < 3; i++)
+                {
+                    string cornerKey = VisualPointKey(original[i].X, original[i].Y, original[i].Z);
+                    Vector3f position;
+                    if (!moved.TryGetValue(cornerKey, out position) && !currentCorners.Value.TryGetValue(cornerKey, out position))
+                        position = new Vector3f(original[i].X, original[i].Y, original[i].Z);
+                    target[i] = new SpyroCollisionPoint((int)MathF.Round(position.X), (int)MathF.Round(position.Y), (int)MathF.Round(position.Z));
+                }
+                targets.Add((index, target));
+            }
+        }
+        if (targets.Count == 0)
+        {
+            EditorDiagnostics.RecordAction("Terrain lookup check", $"level {_currentLevel?.Key}: {moved.Count} moved corner(s) touch no native collision triangle");
+            return true;
+        }
+        if (TerrainPatchExporter.TryCheckCollisionIndexCapacity(ram, table, targets, out string reason, out IReadOnlyList<int> crossing))
+        {
+            EditorDiagnostics.RecordAction("Terrain lookup check", $"level {_currentLevel?.Key}: {targets.Count} triangle(s) re-indexed, {crossing.Count} crossing cells; fits");
+            return true;
+        }
+        EditorDiagnostics.RecordAction("Terrain lookup check refused", $"level {_currentLevel?.Key}: {targets.Count} triangle(s), {crossing.Count} crossing cells; {reason}");
+        int lowZ = int.MaxValue, highZ = int.MinValue;
+        foreach (int index in crossing)
+        {
+            SpyroCollisionPoint[] original = originals[index];
+            foreach (SpyroCollisionPoint point in original)
+            {
+                string cornerKey = VisualPointKey(point.X, point.Y, point.Z);
+                if (moved.ContainsKey(cornerKey))
+                    offenders.Add(cornerKey);
+            }
+            lowZ = Math.Min(lowZ, (original.Min(point => point.Z) >> 8) << 8);
+            highZ = Math.Max(highZ, (((original.Max(point => point.Z) >> 8) + 1) << 8) - 1);
+        }
+        if (offenders.Count == 0)
+        {
+            // Nothing crossed a cell boundary; the index itself cannot be rebuilt (rare). Blame every moved corner.
+            offenders.UnionWith(moved.Keys);
+        }
+        refusal = _releaseMode
+            ? $"This can't go that far: the game looks up ground in a grid of 256-unit cells, and this level's lookup table has no spare room for ground that crosses into another cell. Keep the change between heights {Math.Max(lowZ, 0)} and {highZ} (and within the same 256-unit square sideways)."
+            : $"The native collision lookup index cannot hold this movement ({reason}); {crossing.Count} triangle(s) would change their 256-unit cell membership (current Z band {Math.Max(lowZ, 0)}–{highZ}).";
+        return false;
+    }
+
+    /// <summary>
+    /// A brush step keeps every corner the game's format can hold and puts the others back: the collision
+    /// triangle limits and the exposure rule are re-checked until nothing offends. Returns how many corners
+    /// were put back; the status line explains them.
+    /// </summary>
+    private int TrimTerrainBrushDeltasToFormatLimits(
+        Dictionary<TerrainPolygon, float[]> pendingDeltas,
+        Dictionary<TerrainPolygon, float[]> originalDeltasByPolygon,
+        Dictionary<TerrainPolygon, HashSet<int>> touchedVertexIndexes)
+    {
+        int skipped = 0;
+        for (int round = 0; round < 12 && pendingDeltas.Count > 0; round++)
+        {
+            Dictionary<string, Vector3f> moved = new(StringComparer.Ordinal);
+            foreach ((TerrainPolygon polygon, float[] deltas) in pendingDeltas)
+            {
+                if (polygon.IsTerrainAddClone)
+                    continue;
+                int count = Math.Min(EditableTerrainPointCount(polygon), deltas.Length);
+                for (int i = 0; i < count; i++)
+                {
+                    if (Math.Abs(deltas[i] - originalDeltasByPolygon[polygon][i]) > 0.001f)
+                        moved.TryAdd(TerrainVertexKey(polygon, i), new Vector3f(polygon.Points[i].X, polygon.Points[i].Y, polygon.OriginalZValues[i] + deltas[i]));
+                }
+            }
+            HashSet<string> offenders = new(StringComparer.Ordinal);
+            Lazy<Dictionary<string, Vector3f>> current = new(CurrentTerrainCornerPositions);
+            CollectCollisionTriangleOffenders(moved, offenders, current, out _);
+            CollectTerrainExposureOffenders(moved, offenders, out _);
+            if (offenders.Count == 0)
+                CollectCollisionIndexOffenders(moved, offenders, current, out _);
+            if (offenders.Count == 0)
+                break;
+            skipped += offenders.Count;
+            foreach (TerrainPolygon polygon in pendingDeltas.Keys.ToArray())
+            {
+                float[] deltas = pendingDeltas[polygon];
+                float[] original = originalDeltasByPolygon[polygon];
+                int count = Math.Min(EditableTerrainPointCount(polygon), deltas.Length);
+                bool any = false;
+                for (int i = 0; i < count; i++)
+                {
+                    if (!offenders.Contains(TerrainVertexKey(polygon, i)))
+                    {
+                        any |= Math.Abs(deltas[i] - original[i]) > 0.001f;
+                        continue;
+                    }
+                    deltas[i] = original[i];
+                    if (touchedVertexIndexes.TryGetValue(polygon, out HashSet<int>? touched))
+                        touched.Remove(i);
+                }
+                if (!any)
+                {
+                    pendingDeltas.Remove(polygon);
+                    touchedVertexIndexes.Remove(polygon);
+                }
+            }
+        }
+        return skipped;
+    }
+
+    /// <summary>
+    /// Create BIN refuses a changed face when an unchanged face sits within 64 units above it where the two
+    /// overlap (the game could not tell which one is the ground). Same rule, applied before the change.
+    /// </summary>
+    private bool CollectTerrainExposureOffenders(Dictionary<string, Vector3f> moved, HashSet<string> offenders, out string refusal)
+    {
+        refusal = "";
+        if (moved.Count == 0 || _currentGeometry == null || _freshSceneDocument != null || _terrainCollisionTriangleKeys.Count == 0)
+            return true;
+        bool ok = true;
+        List<TerrainPolygon> affected = new();
+        foreach (TerrainPolygon polygon in _currentGeometry.Polygons)
+        {
+            if (polygon.IsTerrainRemoved || polygon.IsTerrainAddClone || !string.Equals(polygon.Detail, "hp", StringComparison.OrdinalIgnoreCase))
+                continue;
+            int count = EditableTerrainPointCount(polygon);
+            for (int i = 0; i < count; i++)
+            {
+                if (moved.ContainsKey(TerrainVertexKey(polygon, i)))
+                {
+                    affected.Add(polygon);
+                    break;
+                }
+            }
+        }
+        HashSet<TerrainPolygon> affectedSet = affected.ToHashSet();
+        foreach (TerrainPolygon polygon in affected)
+        {
+            int count = EditableTerrainPointCount(polygon);
+            SpyroCollisionPoint[] source = new SpyroCollisionPoint[count];
+            SpyroCollisionPoint[] target = new SpyroCollisionPoint[count];
+            float minX = float.MaxValue, maxX = float.MinValue, minY = float.MaxValue, maxY = float.MinValue;
+            for (int i = 0; i < count; i++)
+            {
+                source[i] = new SpyroCollisionPoint((int)MathF.Round(polygon.OriginalPoints[i].X), (int)MathF.Round(polygon.OriginalPoints[i].Y), (int)MathF.Round(polygon.OriginalZValues[i]));
+                Vector3f position = moved.TryGetValue(TerrainVertexKey(polygon, i), out Vector3f movedPosition)
+                    ? movedPosition
+                    : new Vector3f(polygon.Points[i].X, polygon.Points[i].Y, polygon.ZValues[i]);
+                target[i] = new SpyroCollisionPoint((int)MathF.Round(position.X), (int)MathF.Round(position.Y), (int)MathF.Round(position.Z));
+                minX = Math.Min(minX, Math.Min(source[i].X, target[i].X)); maxX = Math.Max(maxX, Math.Max(source[i].X, target[i].X));
+                minY = Math.Min(minY, Math.Min(source[i].Y, target[i].Y)); maxY = Math.Max(maxY, Math.Max(source[i].Y, target[i].Y));
+            }
+            foreach (TerrainPolygon other in _currentGeometry.Polygons)
+            {
+                if (affectedSet.Contains(other) || other.IsTerrainAddClone || other.HasPositionEdit || other.HasHeightEdit ||
+                    !string.Equals(other.Detail, "hp", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                int otherCount = EditableTerrainPointCount(other);
+                if (otherCount < 3)
+                    continue;
+                Rect2f bounds = other.Bounds;
+                if (bounds.Right < minX || bounds.Left > maxX || bounds.Bottom < minY || bounds.Top > maxY)
+                    continue;
+                SpyroCollisionPoint[] otherPoints = new SpyroCollisionPoint[otherCount];
+                for (int i = 0; i < otherCount; i++)
+                    otherPoints[i] = new SpyroCollisionPoint((int)MathF.Round(other.OriginalPoints[i].X), (int)MathF.Round(other.OriginalPoints[i].Y), (int)MathF.Round(other.OriginalZValues[i]));
+                var conflict = TerrainPatchExporter.FindTerrainExposureConflict(source, target, otherPoints);
+                if (conflict == null)
+                    continue;
+                if (refusal.Length == 0)
+                    refusal = _releaseMode
+                        ? $"This can't be changed here: another surface is only {conflict.Value.OtherZ - conflict.Value.TargetZ:0} above {(ReferenceEquals(polygon, _selectedTerrain) ? "this tile" : "a tile that shares a corner with it")}, and the game can't tell the two apart. Ground needs at least 64 of clear space under anything above it."
+                        : $"{polygon.RuntimeKey}: the edited surface would be vertically shadowed near X {conflict.Value.X:0}, Y {conflict.Value.Y:0} by {other.RuntimeKey} at Z {conflict.Value.OtherZ:0} (edited surface Z {conflict.Value.TargetZ:0}); Create BIN blocks surfaces within 64 units below other terrain.";
+                for (int i = 0; i < count; i++)
+                {
+                    string key = TerrainVertexKey(polygon, i);
+                    if (moved.ContainsKey(key))
+                        offenders.Add(key);
+                }
+                ok = false;
+                break;
+            }
+        }
+        return ok;
+    }
+
+    /// <summary>
+    /// The game stores a collision triangle as one corner plus offsets to the other two: at most 255 up from
+    /// the lowest corner and within ±255 sideways, and the triangle must keep facing the same way. These are
+    /// the limits Create BIN would otherwise report after the fact ("folds over itself", "cannot encode").
+    /// </summary>
+    private bool CollectCollisionTriangleOffenders(Dictionary<string, Vector3f> moved, HashSet<string> offenders, Lazy<Dictionary<string, Vector3f>> currentCorners, out string refusal)
+    {
+        refusal = "";
+        if (moved.Count == 0 || _terrainCollisionTriangleKeys.Count == 0 || _freshSceneDocument != null)
+            return true;
+        const int limit = 255;
+        bool ok = true;
+        void Offend(SpyroCollisionPoint[] original)
+        {
+            foreach (SpyroCollisionPoint corner in original)
+            {
+                string cornerKey = VisualPointKey(corner.X, corner.Y, corner.Z);
+                if (moved.ContainsKey(cornerKey))
+                    offenders.Add(cornerKey);
+            }
+            ok = false;
+        }
+        (List<SpyroCollisionPoint[]> triangles, Dictionary<string, List<int>> byPoint) = TerrainCollisionTriangles();
+        HashSet<int> seen = new();
+        foreach (string key in moved.Keys)
+        {
+            if (!byPoint.TryGetValue(key, out List<int>? indexes))
+                continue;
+            foreach (int index in indexes)
+            {
+                if (!seen.Add(index))
+                    continue;
+                SpyroCollisionPoint[] original = triangles[index];
+                SpyroCollisionPoint[] target = new SpyroCollisionPoint[3];
+                for (int i = 0; i < 3; i++)
+                {
+                    string cornerKey = VisualPointKey(original[i].X, original[i].Y, original[i].Z);
+                    Vector3f position;
+                    if (!moved.TryGetValue(cornerKey, out position) && !currentCorners.Value.TryGetValue(cornerKey, out position))
+                        position = new Vector3f(original[i].X, original[i].Y, original[i].Z);
+                    target[i] = new SpyroCollisionPoint((int)MathF.Round(position.X), (int)MathF.Round(position.Y), (int)MathF.Round(position.Z));
+                }
+                int minZ = target.Min(point => point.Z), maxZ = target.Max(point => point.Z);
+                if (maxZ - minZ > limit)
+                {
+                    if (refusal.Length == 0)
+                        refusal = _releaseMode
+                            ? $"This can't go that far: the game's collision allows at most {limit} height difference inside one ground triangle, and this would make it {maxZ - minZ}. Raise or lower the tiles around it as well, or use the brush for a slope."
+                            : $"Collision triangle {index} would span {maxZ - minZ} Z units; the native fan format allows at most {limit} above its lowest corner. Reduce the height step or move the neighbours too.";
+                    Offend(original);
+                    continue;
+                }
+                bool sidewaysOk = false;
+                for (int first = 0; first < 3 && !sidewaysOk; first++)
+                {
+                    if (target[first].Z != minZ)
+                        continue;
+                    sidewaysOk = Enumerable.Range(0, 3).All(other =>
+                        target[other].X - target[first].X is >= -256 and <= limit &&
+                        target[other].Y - target[first].Y is >= -256 and <= limit);
+                }
+                if (!sidewaysOk)
+                {
+                    if (refusal.Length == 0)
+                        refusal = _releaseMode
+                            ? $"This can't move that far sideways: the game's collision allows at most {limit} units between the corners of one ground triangle."
+                            : $"Collision triangle {index} would need an X or Y offset beyond ±{limit} from its lowest corner; the native fan format cannot encode it.";
+                    Offend(original);
+                    continue;
+                }
+                (long X, long Y, long Z) before = TerrainCollisionNormal(original[0], original[1], original[2]);
+                (long X, long Y, long Z) after = TerrainCollisionNormal(target[0], target[1], target[2]);
+                if (after == (0L, 0L, 0L) || (before.X * after.X) + (before.Y * after.Y) + (before.Z * after.Z) <= 0)
+                {
+                    if (refusal.Length == 0)
+                        refusal = _releaseMode
+                            ? "This can't go that way: a strip of ground next to it would end up folded over itself, which the game can't stand on. Change the tiles around it first, or use the brush."
+                            : $"Collision triangle {index} would become flat or reverse its winding; reduce the movement or move its other corners first.";
+                    Offend(original);
+                }
+            }
+        }
+        return ok;
+    }
+
+    private static (long X, long Y, long Z) TerrainCollisionNormal(SpyroCollisionPoint a, SpyroCollisionPoint b, SpyroCollisionPoint c)
+    {
+        long abX = b.X - a.X, abY = b.Y - a.Y, abZ = b.Z - a.Z;
+        long acX = c.X - a.X, acY = c.Y - a.Y, acZ = c.Z - a.Z;
+        return ((abY * acZ) - (abZ * acY), (abZ * acX) - (abX * acZ), (abX * acY) - (abY * acX));
+    }
+
+    /// <summary>Applies one delta to every planned corner; returns how many corners on other tiles followed.</summary>
+    private int ApplyTerrainTileMove(List<TerrainTileMoveTarget> targets, float dx, float dy, float dz)
+    {
+        int followers = 0;
+        bool movesXY = Math.Abs(dx) > 0.0001f || Math.Abs(dy) > 0.0001f;
+        bool movesZ = Math.Abs(dz) > 0.0001f;
+        foreach (IGrouping<TerrainPolygon, TerrainTileMoveTarget> group in targets.GroupBy(target => target.Polygon))
+        {
+            TerrainPolygon polygon = group.Key;
+            if (!ReferenceEquals(polygon, _selectedTerrain))
+                followers += group.Count();
+            if (movesZ)
+            {
+                float[] deltas = polygon.TerrainVertexDeltas().ToArray();
+                foreach (TerrainTileMoveTarget target in group)
+                {
+                    if (target.Index < deltas.Length)
+                        deltas[target.Index] += dz;
+                }
+                if (_freshSceneDocument != null)
+                    for (int i = 0; i < deltas.Length; i++)
+                        deltas[i] = MathF.Round(polygon.OriginalZValues[i] + deltas[i]) - polygon.OriginalZValues[i];
+                polygon.ApplyTerrainVertexDeltas(deltas);
+            }
+            if (movesXY)
+            {
+                Vector2f[] deltas = polygon.TerrainVertexXYDeltas().ToArray();
+                foreach (TerrainTileMoveTarget target in group)
+                {
+                    if (target.Index < deltas.Length)
+                        deltas[target.Index] = new Vector2f(deltas[target.Index].X + dx, deltas[target.Index].Y + dy);
+                }
+                if (_freshSceneDocument != null)
+                    deltas = deltas.Select((v, i) => new Vector2f(MathF.Round(polygon.OriginalPoints[i].X + v.X) - polygon.OriginalPoints[i].X, MathF.Round(polygon.OriginalPoints[i].Y + v.Y) - polygon.OriginalPoints[i].Y)).ToArray();
+                polygon.ApplyTerrainVertexXYDeltas(deltas);
+            }
+        }
+        return followers;
+    }
+
+    private string DescribeTerrainTileMoveExtras(int skippedCorners, int followers)
+    {
+        string text = "";
+        if (skippedCorners > 0)
+        {
+            text += _releaseMode
+                ? $" {skippedCorners} corner{(skippedCorners == 1 ? "" : "s")} stayed: the game has no collision there (scenery), so Create BIN can't move {(skippedCorners == 1 ? "it" : "them")}."
+                : $" {skippedCorners} unmatched corner(s) stayed (visual-only export is blocked).";
+        }
+        if (followers > 0)
+        {
+            text += _releaseMode
+                ? $" {followers} shared corner{(followers == 1 ? "" : "s")} on neighbouring tiles moved with it."
+                : $" Kept {followers} shared corner(s) on other faces joined.";
+        }
+        return text;
     }
 
     private async Task UndoSelectedTerrainHeightAsync()
@@ -21103,27 +21821,22 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        TerrainCollisionCoverage coverage = IsPlayableTerrainOnlyEnabled()
-            ? GetTerrainCollisionCoverage(_selectedTerrain)
-            : TerrainCollisionCoverage.Empty;
-        if (IsPlayableTerrainOnlyEnabled() && coverage.VertexIndexes.Count < pointCount)
+        if (!TryPlanTerrainTileMove(_selectedTerrain, dx, dy, 0, requireAllCorners: true, out List<TerrainTileMoveTarget> targets, out int skippedCorners, out string refusal))
         {
-            _statusText.Text = "Only edit playable ground is on, and this face is not fully matched to playable collision. Turn that off to move the visible mesh only.";
+            _statusText.Text = refusal;
             return;
         }
 
         ClearTerrainBrushUndoHistory();
-        Vector2f[] deltas = _selectedTerrain.TerrainVertexXYDeltas().ToArray();
-        for (int i = 0; i < deltas.Length; i++)
-            deltas[i] = new Vector2f(deltas[i].X + dx, deltas[i].Y + dy);
-
-        _selectedTerrain.ApplyTerrainVertexXYDeltas(deltas);
+        int followers = ApplyTerrainTileMove(targets, dx, dy, 0);
         _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         RefreshCurrentLevelDetails();
         RefreshTerrainReadinessHint();
         RefreshTerrainPointControls();
-        _statusText.Text = $"Moved terrain face {_selectedTerrainIndex} by X {dx:+0;-0;0}, Y {dy:+0;-0;0}. Save Terrain and Create BIN will include the moved vertices.";
+        _statusText.Text = _releaseMode
+            ? $"Moved the tile; it is now {DescribeTerrainSideOffset(_selectedTerrain)}.{DescribeTerrainTileMoveExtras(skippedCorners, followers)}"
+            : $"Moved terrain face {_selectedTerrainIndex} by X {dx:+0;-0;0}, Y {dy:+0;-0;0}.{DescribeTerrainTileMoveExtras(skippedCorners, followers)} Save Terrain and Create BIN will include the moved vertices.";
     }
 
     private void MoveTerrainFromViewport(ViewportTerrainMoveRequestedEventArgs e)
@@ -22737,7 +23450,7 @@ public sealed partial class MainWindow : Window
             bool touchesBrush = TouchesTerrainBrush(polygon, center, safeRadius);
             if (touchesBrush)
                 touchedFaces++;
-            if (playableOnly && coverage.MatchedTriangles == 0)
+            if (playableOnly && coverage.VertexIndexes.Count == 0)
             {
                 if (touchesBrush)
                     skippedVisualOnlyFaces++;
@@ -22785,13 +23498,26 @@ public sealed partial class MainWindow : Window
         TerrainVertexSeamAlignResult seamResult = IsTerrainSeamJoiningEnabled()
             ? TerrainVertexSeamAligner.Align(pendingDeltas, touchedVertexIndexes.ToDictionary(pair => pair.Key, pair => (IReadOnlySet<int>)pair.Value))
             : new TerrainVertexSeamAlignResult(0, 0);
-        if (playableOnly)
+        if (playableOnly || IsTerrainSeamJoiningEnabled())
         {
-            (followedVisualFaces, followedVisualVertices) = AddVisualOnlyTerrainFollowers(
+            (followedVisualFaces, followedVisualVertices) = AddJoinedTerrainFollowers(
                 pendingDeltas,
                 originalDeltasByPolygon,
                 touchedVertexIndexes);
         }
+        _terrainBrushLimitSkips = TrimTerrainBrushDeltasToFormatLimits(pendingDeltas, originalDeltasByPolygon, touchedVertexIndexes);
+        if (pendingDeltas.Count == 0)
+        {
+            _terrainBrushRefusal = _terrainBrushLimitSkips > 0
+                ? (_releaseMode
+                    ? "The brush changed nothing here: the game's format can't hold it (another surface is within 64 above, a step would exceed 255, ground would fold, or the ground would cross into another 256-unit lookup cell). Try elsewhere or a gentler stroke."
+                    : "Every brushed corner was put back: collision fan limits (255 step, winding) or the 64-unit exposure rule would be violated.")
+                : null;
+            return new TerrainBrushResult(0, 0, touchedFaces, editableVerticesInRadius, skippedVisualOnlyFaces, skippedVisualOnlyVertices, 0, 0, 0, 0);
+        }
+        _terrainBrushRefusal = null;
+        affectedFaces = pendingDeltas.Count;
+        affectedVertices = touchedVertexIndexes.Where(pair => pendingDeltas.ContainsKey(pair.Key)).Sum(pair => pair.Value.Count);
 
         foreach ((TerrainPolygon polygon, float[] deltas) in pendingDeltas)
         {
@@ -22815,7 +23541,12 @@ public sealed partial class MainWindow : Window
             followedVisualVertices);
     }
 
-    private (int Faces, int Vertices) AddVisualOnlyTerrainFollowers(
+    /// <summary>
+    /// Every corner the stroke moved is one point in the game, however many faces draw it. Faces the brush did
+    /// not touch (whole-tile strokes), faces whose own triangles are scenery, and untouched corners of touched
+    /// faces all take the moved corner's height, which is what Create BIN writes in any case.
+    /// </summary>
+    private (int Faces, int Vertices) AddJoinedTerrainFollowers(
         Dictionary<TerrainPolygon, float[]> pendingDeltas,
         Dictionary<TerrainPolygon, float[]> originalDeltasByPolygon,
         Dictionary<TerrainPolygon, HashSet<int>> touchedVertexIndexes)
@@ -22826,9 +23557,6 @@ public sealed partial class MainWindow : Window
         Dictionary<string, float> playableAnchors = new(StringComparer.Ordinal);
         foreach ((TerrainPolygon polygon, float[] deltas) in pendingDeltas)
         {
-            TerrainCollisionCoverage coverage = GetTerrainCollisionCoverage(polygon);
-            if (coverage.MatchedTriangles == 0)
-                continue;
             if (!touchedVertexIndexes.TryGetValue(polygon, out HashSet<int>? touchedIndexes))
                 continue;
 
@@ -22848,8 +23576,7 @@ public sealed partial class MainWindow : Window
         int followedVertices = 0;
         foreach (TerrainPolygon polygon in _currentGeometry.Polygons)
         {
-            if (polygon.IsTerrainRemoved ||
-                pendingDeltas.ContainsKey(polygon) ||
+            if (polygon.IsTerrainRemoved || polygon.IsTerrainAddClone ||
                 !_viewport.IsTerrainPresentedForEditing(polygon))
                 continue;
             if (IsCurrentId65BlankLab() &&
@@ -22858,19 +23585,19 @@ public sealed partial class MainWindow : Window
                 continue;
             }
 
-            TerrainCollisionCoverage coverage = GetTerrainCollisionCoverage(polygon);
-            if (coverage.MatchedTriangles > 0)
-                continue;
-
             int pointCount = EditableTerrainPointCount(polygon);
             if (pointCount <= 0)
                 continue;
 
-            float[] originalDeltas = polygon.TerrainVertexDeltas().ToArray();
-            float[] deltas = originalDeltas.ToArray();
+            bool pending = pendingDeltas.TryGetValue(polygon, out float[]? pendingPolygonDeltas);
+            HashSet<int>? touched = pending && touchedVertexIndexes.TryGetValue(polygon, out HashSet<int>? touchedIndexes) ? touchedIndexes : null;
+            float[] originalDeltas = pending ? originalDeltasByPolygon[polygon] : polygon.TerrainVertexDeltas().ToArray();
+            float[] deltas = pending ? pendingPolygonDeltas! : originalDeltas.ToArray();
             HashSet<int> followedIndexes = new();
             for (int i = 0; i < pointCount && i < deltas.Length; i++)
             {
+                if (touched != null && touched.Contains(i))
+                    continue;
                 if (!playableAnchors.TryGetValue(TerrainVertexKey(polygon, i), out float targetDelta))
                     continue;
                 if (Math.Abs(deltas[i] - targetDelta) <= 0.001f)
@@ -22885,8 +23612,12 @@ public sealed partial class MainWindow : Window
 
             originalDeltasByPolygon[polygon] = originalDeltas;
             pendingDeltas[polygon] = deltas;
-            touchedVertexIndexes[polygon] = followedIndexes;
-            followedFaces++;
+            if (touched != null)
+                touched.UnionWith(followedIndexes);
+            else
+                touchedVertexIndexes[polygon] = followedIndexes;
+            if (!pending)
+                followedFaces++;
             followedVertices += followedIndexes.Count;
         }
 
@@ -23078,6 +23809,9 @@ public sealed partial class MainWindow : Window
             .ToDictionary(target => (target.FaceIndex, target.VertexIndex), target => target.TargetZ);
     }
 
+    private string? _terrainBrushRefusal;
+    private int _terrainBrushLimitSkips;
+
     private void RefreshAfterTerrainBrush(TerrainBrushResult result, string verb)
     {
         _viewport.NotifyTerrainPresentationDataChanged();
@@ -23087,7 +23821,7 @@ public sealed partial class MainWindow : Window
         RefreshTerrainReadinessHint();
         if (result.AffectedFaces == 0)
         {
-            _lastTerrainBrushSummary = BuildEmptyTerrainBrushSummary(result);
+            _lastTerrainBrushSummary = _terrainBrushRefusal ?? BuildEmptyTerrainBrushSummary(result);
             RefreshTerrainBrushHistoryText();
             _statusText.Text = _lastTerrainBrushSummary;
             return;
@@ -23112,7 +23846,7 @@ public sealed partial class MainWindow : Window
         return "The terrain brush did not touch any editable vertices. Move onto terrain or increase Size.";
     }
 
-    private static string BuildTerrainBrushResultSummary(TerrainBrushResult result, string verb)
+    private string BuildTerrainBrushResultSummary(TerrainBrushResult result, string verb)
     {
         int skippedVisualOnly = result.SkippedVisualOnlyFaces + result.SkippedVisualOnlyVertices;
         string skipped = skippedVisualOnly > 0
@@ -23122,9 +23856,12 @@ public sealed partial class MainWindow : Window
             ? $" Aligned {result.SeamAdjustedVertices} shared {Plural(result.SeamAdjustedVertices, "vertex", "vertices")} so neighboring faces stay together."
             : string.Empty;
         string followers = result.FollowedVisualVertices > 0
-            ? $" Kept {result.FollowedVisualVertices} visual side {Plural(result.FollowedVisualVertices, "vertex", "vertices")} attached to the playable terrain."
+            ? $" Kept {result.FollowedVisualVertices} shared {Plural(result.FollowedVisualVertices, "corner", "corners")} on neighbouring tiles joined."
             : string.Empty;
-        return $"{verb} {result.AffectedVertices} {Plural(result.AffectedVertices, "vertex", "vertices")} across {result.AffectedFaces} {Plural(result.AffectedFaces, "terrain face", "terrain faces")} with a soft brush.{seams}{followers}{skipped}";
+        string limits = _terrainBrushLimitSkips > 0
+            ? $" Left {_terrainBrushLimitSkips} {Plural(_terrainBrushLimitSkips, "corner", "corners")} unchanged where the game's format can't hold the change (another surface within 64 above, a step over 255, ground folding, or crossing a 256-unit lookup cell)."
+            : string.Empty;
+        return $"{verb} {result.AffectedVertices} {Plural(result.AffectedVertices, "vertex", "vertices")} across {result.AffectedFaces} {Plural(result.AffectedFaces, "terrain face", "terrain faces")} with a soft brush.{seams}{followers}{skipped}{limits}";
     }
 
     private static string TerrainBrushActionStrokeVerb(TerrainBrushAction action)

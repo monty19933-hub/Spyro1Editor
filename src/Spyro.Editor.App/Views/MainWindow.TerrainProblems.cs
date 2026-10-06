@@ -113,6 +113,16 @@ public sealed partial class MainWindow
         shapeOnly = true;
         if (Has("flat or reverse") || Has("winding"))
             return "A corner was moved so far that the ground folds over itself, which the game can't stand on.";
+        if (Has("no referenced native collision fan"))
+            return "A corner was moved where the game has no collision (scenery), so Create BIN can't move it.";
+        if (Has("height units") || Has("fine-height"))
+            return "A corner was moved further up or down than this part of the level can hold (the game allows a height range of 1023 in one area).";
+        if (Has("span more than"))
+            return "A corner was moved further sideways than this part of the level can hold (the game allows 2047 units in one area).";
+        if (Has("edge of the game's world"))
+            return "A corner was moved past the edge of the game's world.";
+        if (Has("collision lookup") || Has("collision index"))
+            return "The changed ground covers more of the level than the game's collision lookup table can hold. Undo part of the change, or keep terrain changes smaller.";
         if (Has("vertically shadowed") || Has("vertically overlapping"))
             return "A changed tile sits directly above or below other ground, and the game can't tell the two apart.";
         if (Has("independent HP vertex slots") || Has("alias"))

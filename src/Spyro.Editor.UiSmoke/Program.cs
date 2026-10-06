@@ -47,6 +47,65 @@ if (args.Contains("--terrain-problem-ui", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Contains("--terrain-multi-edit-ui", StringComparer.Ordinal))
+{
+    if (args.Length < 3) throw new ArgumentException("Usage: UiSmoke --terrain-multi-edit-ui <project folder> <output folder> [level key]");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    TerrainMultiEditUiCases.Run(args[1], args[2], args.Length > 3 ? args[3] : "artisans");
+    return 0;
+}
+
+if (args.Contains("--collision-lookup-probe", StringComparer.Ordinal))
+{
+    // Usage: --collision-lookup-probe <USA.bin> <level key> <x,y,z of a corner> [dz]
+    var catalog = Spyro.Editor.Core.Levels.LevelCatalog.Load(args.Length > 5 ? args[5] : Environment.CurrentDirectory);
+    var level = catalog.FindByKey(args[2])!;
+    var lookup = Spyro.Editor.Core.Exporting.TerrainPatchExporter.TryLoadCollisionLookupFromSource(args[1], level);
+    if (lookup == null) { Console.WriteLine("no lookup"); return 1; }
+    var (bytes, table) = lookup.Value;
+    var counts = Spyro.Editor.Core.Exporting.TerrainPatchExporter.CountCollisionLookupReferences(bytes, table);
+    Console.WriteLine($"triangles {table.TriangleCount}, tree {table.BlocksOffset - table.BlockTreeOffset} bytes, blocks {table.TriangleOffset - table.BlocksOffset} bytes, referenced triangles {counts.Count}, references {counts.Values.Sum()}");
+    int[] c = args[3].Split(',').Select(int.Parse).ToArray();
+    var point = new Spyro.Editor.Core.Scene.SpyroCollisionPoint(c[0], c[1], c[2]);
+    int dz = args.Length > 4 ? int.Parse(args[4]) : -96;
+    // Triangles whose plan-view bounding box holds the point and that touch its height.
+    var hits = table.Triangles.Where(t => t.Points.Min(p => p.X) <= point.X && t.Points.Max(p => p.X) >= point.X && t.Points.Min(p => p.Y) <= point.Y && t.Points.Max(p => p.Y) >= point.Y && t.Points.Any(p => Math.Abs(p.Z - point.Z) <= 2)).ToList();
+    Console.WriteLine($"triangles under {point}: {string.Join(", ", hits.Select(t => $"#{t.Index} refs={counts.GetValueOrDefault(t.Index)} [{string.Join("; ", t.Points.Select(p => $"{p.X},{p.Y},{p.Z}"))}]"))}");
+    var cornerSet = hits.SelectMany(t => t.Points).Where(p => Math.Abs(p.Z - point.Z) <= 2).ToHashSet();
+    var all = table.Triangles.Where(t => t.Points.Any(cornerSet.Contains)).ToList();
+    Console.WriteLine($"triangles sharing those corners: {all.Count}");
+    var moved = all.Select(t => (t.Index, (IReadOnlyList<Spyro.Editor.Core.Scene.SpyroCollisionPoint>)t.Points.Select(p => cornerSet.Contains(p) ? new Spyro.Editor.Core.Scene.SpyroCollisionPoint(p.X, p.Y, p.Z + dz) : p).ToList())).ToList();
+    foreach (var (index, pts) in moved.Take(3))
+        Console.WriteLine($"  #{index}: native cells {Spyro.Editor.Core.Exporting.TerrainPatchExporter.DescribeCollisionReferences(bytes, table, index)}; original touches {Spyro.Editor.Core.Exporting.TerrainPatchExporter.DescribeCollisionCells(table.Triangles[index].Points)}; moved touches {Spyro.Editor.Core.Exporting.TerrainPatchExporter.DescribeCollisionCells(pts)}");
+    bool ok = Spyro.Editor.Core.Exporting.TerrainPatchExporter.TryCheckCollisionIndexCapacity(bytes, table, moved, out string reason, out var crossing);
+    Console.WriteLine($"move corner by dz {dz}: fits={ok} crossing={crossing.Count} reason={reason}");
+    return 0;
+}
+
+if (args.Contains("--terrain-lower-ui", StringComparer.Ordinal))
+{
+    if (args.Length < 3) throw new ArgumentException("Usage: UiSmoke --terrain-lower-ui <project folder> <output folder> [level key] [steps]");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    TerrainLowerUiCases.Run(args[1], args[2], args.Length > 3 ? args[3] : "artisans", args.Length > 4 ? int.Parse(args[4]) : 3);
+    return 0;
+}
+
+if (args.Contains("--terrain-survey", StringComparer.Ordinal))
+{
+    if (args.Length < 3) throw new ArgumentException("Usage: UiSmoke --terrain-survey <project folder> <output folder> [level key]");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    TerrainSurveyCases.Run(args[1], args[2], args.Length > 3 ? args[3] : "artisans");
+    return 0;
+}
+
+if (args.Contains("--find-space-ui", StringComparer.Ordinal))
+{
+    if (args.Length < 3) throw new ArgumentException("Usage: UiSmoke --find-space-ui <project folder> <output folder> [object name] [level key] [minutes]");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    FindSpaceUiCases.Run(args[1], args[2], args.Length > 3 ? args[3] : "Armored Gnorc", args.Length > 4 ? args[4] : "artisans", args.Length > 5 ? int.Parse(args[5]) : 20, args.Length > 6 ? int.Parse(args[6]) : 0);
+    return 0;
+}
+
 if (args.Contains("--startup-problem-ui", StringComparer.Ordinal))
 {
     if (args.Length != 2) throw new ArgumentException("Usage: UiSmoke --startup-problem-ui <output folder>");

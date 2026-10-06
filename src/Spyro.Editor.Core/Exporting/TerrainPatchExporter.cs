@@ -1261,6 +1261,7 @@ public static partial class TerrainPatchExporter
                 patchesByWadOffset);
             AddLowDetailGeometryCompanionPatches(imageStream, layout, ram, sourceSectorHits, collisionFanBatch, patchesByWadOffset);
             AddTerrainBoundsCompanionPatches(imageStream, layout, ram, sourceSectorHits, collisionFanBatch, patchesByWadOffset);
+            AddSceneSectorRebasePatches(imageStream, layout, ram, collisionFanBatch, patchesByWadOffset);
             AddCollisionFanPatches(
                 imageStream,
                 layout,
@@ -5496,14 +5497,50 @@ public static partial class TerrainPatchExporter
         }
     }
 
+    /// <summary>
+    /// The level's native collision lookup (tree, blocks, triangles) read straight from the disc's model
+    /// subfile, the way Create BIN reads it for a project without a RAM capture. Offsets in the table are
+    /// relative to the returned bytes, which hold only that subfile.
+    /// </summary>
+    public static (byte[] Bytes, SpyroCollisionTable Table)? TryLoadCollisionLookupFromSource(string sourceImagePath, LevelDefinition level)
+    {
+        try
+        {
+            DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
+            using FileStream imageStream = File.OpenRead(sourceImagePath);
+            AssetSubfileInfo model = GetAssetSubfileInfo(imageStream, layout, TextureAssetWadIndexForLevel(level), ModelSubfileIndex);
+            if (model.SubfileSize <= 0 || model.SubfileSize > 64 * 1024 * 1024)
+                return null;
+            byte[] subfile = ReadWadBytes(imageStream, layout, model.AbsoluteWadOffset, (int)model.SubfileSize);
+            return TryBuildNativeSourceDerivedCollisionPatchContext(subfile, 0, subfile.Length, out CollisionPatchContext? context) && context != null
+                ? (subfile, context.Table)
+                : null;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
     private static bool TryBuildNativeSourceDerivedCollisionPatchContext(
         byte[] wad,
         AssetSubfileInfo modelSubfileInfo,
         out CollisionPatchContext? context)
     {
+        return TryBuildNativeSourceDerivedCollisionPatchContext(
+            wad,
+            modelSubfileInfo.AbsoluteWadOffset,
+            modelSubfileInfo.AbsoluteWadOffset + modelSubfileInfo.SubfileSize,
+            out context);
+    }
+
+    private static bool TryBuildNativeSourceDerivedCollisionPatchContext(
+        byte[] wad,
+        long modelStartLong,
+        long modelEndLong,
+        out CollisionPatchContext? context)
+    {
         context = null;
-        long modelStartLong = modelSubfileInfo.AbsoluteWadOffset;
-        long modelEndLong = modelStartLong + modelSubfileInfo.SubfileSize;
         if (modelStartLong < 0 ||
             modelEndLong <= modelStartLong ||
             modelEndLong > wad.Length ||
@@ -7341,7 +7378,8 @@ public static partial class TerrainPatchExporter
     private static void PropagateEditedPointsToNativeAliases(
         byte[] ram,
         TerrainHpTopologyInventory topology,
-        Dictionary<long, TerrainPhysicalVertexTransformBuilder> physicalTransforms)
+        Dictionary<long, TerrainPhysicalVertexTransformBuilder> physicalTransforms,
+        IReadOnlyList<SceneSectorRebase> rebases)
     {
         foreach (IGrouping<string, TerrainPhysicalVertexTransformBuilder> group in physicalTransforms.Values
             .GroupBy(transform => CollisionPointKey(transform.Source.Point.X, transform.Source.Point.Y, transform.Source.Point.Z), StringComparer.Ordinal)
@@ -7353,7 +7391,7 @@ public static partial class TerrainPatchExporter
             if (edited.Select(transform => transform.Target).Distinct().Count() != 1)
                 continue; // conflicting targets keep their explicit refusal
             TerrainPhysicalVertexTransformBuilder first = edited[0];
-            Vector3f target = DecodeSceneVertex(first.NewWord, ReadSceneSectorHeader(ram, first.Source.RuntimeSectorOffset));
+            Vector3f target = DecodeSceneVertex(first.NewWord, RebasedSceneSectorHeader(ReadSceneSectorHeader(ram, first.Source.RuntimeSectorOffset), rebases));
             List<TerrainPhysicalVertexTransformBuilder> added = [];
             bool complete = true;
             foreach (TerrainHpVertexReference alias in aliases)
@@ -7361,20 +7399,21 @@ public static partial class TerrainPatchExporter
                 if (physicalTransforms.ContainsKey(alias.WadOffset))
                     continue;
                 SceneSectorHeader sector = ReadSceneSectorHeader(ram, alias.RuntimeSectorOffset);
+                SceneSectorHeader encodeSector = RebasedSceneSectorHeader(sector, rebases);
                 int vertexOffset = GetSceneVertexOffset(sector, "hp", alias.VertexIndex);
                 if (vertexOffset < 0) { complete = false; break; }
                 uint oldWord = ReadUInt32(ram, vertexOffset);
                 uint newWord;
                 try
                 {
-                    newWord = SetSceneVertexWord(oldWord, sector, new Vector2f(target.X, target.Y), target.Z);
+                    newWord = SetSceneVertexWord(oldWord, encodeSector, new Vector2f(target.X, target.Y), target.Z);
                 }
                 catch (InvalidOperationException)
                 {
                     complete = false;
                     break;
                 }
-                if (ToCollisionPoint(DecodeSceneVertex(newWord, sector)) != first.Target) { complete = false; break; }
+                if (ToCollisionPoint(DecodeSceneVertex(newWord, encodeSector)) != first.Target) { complete = false; break; }
                 TerrainPhysicalVertexTransformBuilder copy = new(alias, first.Target, oldWord, newWord);
                 foreach (TerrainPhysicalVertexTransformBuilder transform in edited)
                     copy.RuntimeKeys.UnionWith(transform.RuntimeKeys);
@@ -7385,6 +7424,33 @@ public static partial class TerrainPatchExporter
             foreach (TerrainPhysicalVertexTransformBuilder copy in added)
                 physicalTransforms[copy.Source.WadOffset] = copy;
         }
+    }
+
+    /// <summary>
+    /// The exposure rule Create BIN applies to a changed face: another, unchanged face may not sit between
+    /// 0.5 and 64 units above the changed surface anywhere the two overlap in plan, because the game could not
+    /// tell which one Spyro stands on. Returns the offending sample, or null when the face is clear.
+    /// </summary>
+    public static (double X, double Y, double OtherZ, double TargetZ)? FindTerrainExposureConflict(
+        IReadOnlyList<SpyroCollisionPoint> source,
+        IReadOnlyList<SpyroCollisionPoint> target,
+        IReadOnlyList<SpyroCollisionPoint> other)
+    {
+        if (!TryFindProjectedInteriorOverlapSamples(target, other, out IReadOnlyList<(double X, double Y)> samples))
+            return null;
+        foreach ((double x, double y) in samples)
+        {
+            if (!TryInterpolateTerrainFaceHeight(source, x, y, out double sourceZ) ||
+                !TryInterpolateTerrainFaceHeight(target, x, y, out double targetZ) ||
+                !TryInterpolateTerrainFaceHeight(other, x, y, out double otherZ))
+            {
+                continue;
+            }
+            double closeUpperLimit = Math.Max(sourceZ, targetZ) + 64.0;
+            if (otherZ > targetZ + 0.5 && otherZ <= closeUpperLimit)
+                return (x, y, otherZ, targetZ);
+        }
+        return null;
     }
 
     private static void ValidateTopologySafeTerrainExposure(
@@ -7605,6 +7671,213 @@ public static partial class TerrainPatchExporter
         return false;
     }
 
+    /// <summary>The header to encode new vertex words against: the re-based origin when the sector has one.</summary>
+    private static SceneSectorHeader RebasedSceneSectorHeader(SceneSectorHeader sector, IReadOnlyList<SceneSectorRebase> rebases)
+    {
+        SceneSectorRebase? rebase = rebases.FirstOrDefault(candidate => candidate.RuntimeSectorOffset == sector.Offset);
+        return rebase == null ? sector : sector with { XyPos = rebase.NewXyWord, ZPos = rebase.NewZWord };
+    }
+
+    private const int MaximumSceneSectorLocalXY = 2047;
+    private const int MaximumSceneSectorLocalZ = 1023;
+
+    /// <summary>
+    /// Retail sectors store every vertex relative to an origin that usually equals the lowest corner of the
+    /// sector, so a tile on the floor of its sector could never be lowered and an edge tile could never be
+    /// dragged outward. This plans a lower origin for each sector that needs one (including sectors that hold
+    /// an alias or low-detail copy of an edited corner) and refuses when the sector's full span would no longer
+    /// fit the vertex word.
+    /// </summary>
+    private static IReadOnlyList<SceneSectorRebase> PlanSceneSectorRebases(
+        byte[] ram,
+        IReadOnlyDictionary<string, SourceSectorLocation> sourceSectorHits,
+        TerrainHpTopologyInventory topology,
+        JsonElement[] geometryEdits)
+    {
+        // 1. Every edited corner's rounded target, keyed by its original point.
+        Dictionary<string, (SpyroCollisionPoint Target, HashSet<string> Keys)> targetsByPointKey = new(StringComparer.Ordinal);
+        foreach (JsonElement edit in geometryEdits)
+        {
+            string runtimeKey = JsonValue.GetString(edit, "runtimeKey");
+            int sectorOffset = JsonValue.GetInt32(edit, "sectorOffset", -1);
+            if (sectorOffset < 0 || sectorOffset + 28 > ram.Length)
+                continue; // the main pass reports stale offsets
+            SceneSectorHeader sector = ReadSceneSectorHeader(ram, sectorOffset);
+            IReadOnlyList<float> editedZ = ReadFloatArray(edit, "editedZ");
+            IReadOnlyList<float> originalZ = ReadFloatArray(edit, "originalZ");
+            IReadOnlyList<Vector2f> editedPoints = ReadVector2Array(edit, "editedPoints");
+            IReadOnlyList<Vector2f> originalPoints = ReadVector2Array(edit, "originalPoints");
+            int valueCount = MaxValueCount(editedZ.Count, originalZ.Count, editedPoints.Count, originalPoints.Count);
+            IReadOnlyList<int> vertexIndexes = NormalizeVertexIndexes(ReadIntArray(edit, "vertexIndexes"), valueCount);
+            int vertexCount = Math.Min(vertexIndexes.Count, Math.Max(editedZ.Count, editedPoints.Count));
+            for (int i = 0; i < vertexCount; i++)
+            {
+                bool zChanged = IsZEditedAt(originalZ, editedZ, i);
+                bool pointChanged = IsPointEditedAt(originalPoints, editedPoints, i);
+                if (!zChanged && !pointChanged)
+                    continue;
+                int vertexOffset = GetSceneVertexOffset(sector, "hp", vertexIndexes[i]);
+                if (vertexOffset < 0)
+                    continue;
+                Vector3f original = DecodeSceneVertex(ReadUInt32(ram, vertexOffset), sector);
+                Vector2f targetXY = pointChanged && i < editedPoints.Count ? editedPoints[i] : new Vector2f(original.X, original.Y);
+                float targetZ = i < editedZ.Count ? editedZ[i] : original.Z;
+                SpyroCollisionPoint target = ToCollisionPoint(new Vector3f(targetXY.X, targetXY.Y, targetZ));
+                SpyroCollisionPoint originalPoint = ToCollisionPoint(original);
+                string key = CollisionPointKey(originalPoint.X, originalPoint.Y, originalPoint.Z);
+                if (!targetsByPointKey.TryGetValue(key, out var entry))
+                    targetsByPointKey[key] = entry = (target, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                entry.Keys.Add(runtimeKey);
+            }
+        }
+        if (targetsByPointKey.Count == 0)
+            return Array.Empty<SceneSectorRebase>();
+
+        // 2. Which sectors must be able to encode which targets: the edited vertex's own sector, every sector
+        //    holding another HP copy of the same point, and every sector whose low-detail mesh has that point.
+        SourceSectorLocation[] sectors = sourceSectorHits.Values
+            .GroupBy(location => location.WadOffset)
+            .Select(group => group.First())
+            .OrderBy(location => location.WadOffset)
+            .ToArray();
+        Dictionary<int, List<(SpyroCollisionPoint Target, HashSet<string> Keys)>> requiredBySector = new();
+        void Require(int sectorOffset, (SpyroCollisionPoint Target, HashSet<string> Keys) entry)
+        {
+            if (!requiredBySector.TryGetValue(sectorOffset, out var list))
+                requiredBySector[sectorOffset] = list = new();
+            list.Add(entry);
+        }
+        foreach ((string key, var entry) in targetsByPointKey)
+        {
+            if (topology.VerticesByPointKey.TryGetValue(key, out IReadOnlyList<TerrainHpVertexReference>? copies))
+                foreach (TerrainHpVertexReference copy in copies)
+                    Require(copy.RuntimeSectorOffset, entry);
+        }
+        foreach (SourceSectorLocation location in sectors)
+        {
+            int runtime = checked((int)ParseRequiredLong(location.SectorOffset, "sectorOffset"));
+            SceneSectorHeader sector = ReadSceneSectorHeader(ram, runtime);
+            for (int i = 0; i < sector.NumLpVertices; i++)
+            {
+                SpyroCollisionPoint point = ToCollisionPoint(DecodeSceneVertex(ReadUInt32(ram, GetSceneVertexOffset(sector, "lp", i)), sector));
+                if (targetsByPointKey.TryGetValue(CollisionPointKey(point.X, point.Y, point.Z), out var entry))
+                    Require(runtime, entry);
+            }
+        }
+
+        // 3. A new origin per sector that cannot hold its targets as stored.
+        List<SceneSectorRebase> rebases = new();
+        foreach ((int runtime, var required) in requiredBySector.OrderBy(pair => pair.Key))
+        {
+            SceneSectorHeader sector = ReadSceneSectorHeader(ram, runtime);
+            int originX = (int)((sector.XyPos >> 16) & 0xFFFF);
+            int originY = (int)(sector.XyPos & 0xFFFF);
+            int originZ = GetSceneSectorBaseZ(sector);
+            int minX = required.Min(entry => entry.Target.X), minY = required.Min(entry => entry.Target.Y), minZ = required.Min(entry => entry.Target.Z);
+            if (minX >= originX && minY >= originY && minZ >= originZ)
+                continue; // the ordinary encode either fits or reports the upper limit itself
+            string keys = string.Join(", ", required.SelectMany(entry => entry.Keys).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value, StringComparer.OrdinalIgnoreCase));
+            if (IsFlatSceneSector(sector))
+            {
+                throw new InvalidOperationException(
+                    $"{keys}: this corner would go below the lowest height its part of the level can store, and that part uses the game's fine-height storage, which cannot be re-based; no terrain BIN was built.");
+            }
+            int newOriginX = Math.Min(originX, minX), newOriginY = Math.Min(originY, minY), newOriginZ = Math.Min(originZ, minZ);
+            if (newOriginX < 0 || newOriginY < 0 || newOriginZ < 0)
+            {
+                throw new InvalidOperationException(
+                    $"{keys}: a corner was moved below the edge of the game's world (negative coordinates cannot be stored); no terrain BIN was built.");
+            }
+            // The renderer takes the high-poly X origin from xyPos >> 14, so Y's two top bits act as X's
+            // fractional residue; keep them unchanged so no other vertex in the sector shifts.
+            if (((newOriginY ^ originY) & 0xC000) != 0)
+            {
+                throw new InvalidOperationException(
+                    $"{keys}: moving this corner would change the stored origin of its part of the level across a 16384-unit boundary, which the game's renderer cannot follow; no terrain BIN was built.");
+            }
+            int maxX = minX, maxY = minY, maxZ = minZ;
+            foreach (var entry in required)
+            {
+                maxX = Math.Max(maxX, entry.Target.X); maxY = Math.Max(maxY, entry.Target.Y); maxZ = Math.Max(maxZ, entry.Target.Z);
+            }
+            foreach ((string detail, int count) in new[] { ("hp", sector.NumHpVertices), ("lp", sector.NumLpVertices) })
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    SpyroCollisionPoint point = ToCollisionPoint(DecodeSceneVertex(ReadUInt32(ram, GetSceneVertexOffset(sector, detail, i)), sector));
+                    maxX = Math.Max(maxX, point.X); maxY = Math.Max(maxY, point.Y); maxZ = Math.Max(maxZ, point.Z);
+                }
+            }
+            if (maxX - newOriginX > MaximumSceneSectorLocalXY || maxY - newOriginY > MaximumSceneSectorLocalXY)
+            {
+                throw new InvalidOperationException(
+                    $"{keys}: moving this corner that far sideways would make its part of the level span more than {MaximumSceneSectorLocalXY} units, which one sector of the game's level format cannot hold; no terrain BIN was built.");
+            }
+            if (maxZ - newOriginZ > MaximumSceneSectorLocalZ)
+            {
+                throw new InvalidOperationException(
+                    $"{keys}: lowering this corner to Z {minZ} would make its part of the level span {maxZ - newOriginZ} height units, but one sector of the game's level format holds at most {MaximumSceneSectorLocalZ}; no terrain BIN was built.");
+            }
+            SourceSectorLocation location = sectors.First(candidate => ParseRequiredLong(candidate.SectorOffset, "sectorOffset") == runtime);
+            uint newXy = ((uint)newOriginX << 16) | (uint)newOriginY;
+            uint newZ = (sector.ZPos & 0xC000FFFFu) | ((uint)(newOriginZ & 0x3FFF) << 16);
+            rebases.Add(new SceneSectorRebase(runtime, location.WadOffset, sector.XyPos, newXy, sector.ZPos, newZ,
+                required.SelectMany(entry => entry.Keys).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray()));
+        }
+        return rebases;
+    }
+
+    /// <summary>
+    /// Writes a re-based sector: its two origin words and every vertex the edits did not already move, each
+    /// re-encoded so it keeps its world position. Called after the edited HP and LP vertices were patched, so
+    /// those offsets are skipped here.
+    /// </summary>
+    private static void AddSceneSectorRebasePatches(
+        FileStream imageStream,
+        DiscLayout layout,
+        byte[] ram,
+        TerrainCollisionFanBatch batch,
+        Dictionary<long, TerrainPatch> patches)
+    {
+        foreach (SceneSectorRebase rebase in batch.Rebases)
+        {
+            SceneSectorHeader sector = ReadSceneSectorHeader(ram, rebase.RuntimeSectorOffset);
+            SceneSectorHeader rebased = sector with { XyPos = rebase.NewXyWord, ZPos = rebase.NewZWord };
+            string runtimeKey = rebase.RuntimeKeys.FirstOrDefault() ?? "terrain-sector-rebase";
+            string origin = $"origin ({(sector.XyPos >> 16) & 0xFFFF},{sector.XyPos & 0xFFFF},{GetSceneSectorBaseZ(sector)}) to " +
+                            $"({(rebased.XyPos >> 16) & 0xFFFF},{rebased.XyPos & 0xFFFF},{GetSceneSectorBaseZ(rebased)})";
+            if (rebase.NewXyWord != rebase.OldXyWord)
+            {
+                AddPatch(imageStream, layout, patches, rebase.WadOffset + 8, BitConverter.GetBytes(rebase.OldXyWord), BitConverter.GetBytes(rebase.NewXyWord),
+                    "terrain-sector-origin", runtimeKey, $"Move native scene sector 0x{sector.Offset:X} {origin} so edited corners outside the original local range can be stored.");
+            }
+            if (rebase.NewZWord != rebase.OldZWord)
+            {
+                AddPatch(imageStream, layout, patches, rebase.WadOffset + 12, BitConverter.GetBytes(rebase.OldZWord), BitConverter.GetBytes(rebase.NewZWord),
+                    "terrain-sector-origin", runtimeKey, $"Move native scene sector 0x{sector.Offset:X} {origin} so edited corners outside the original local range can be stored.");
+            }
+            foreach ((string detail, int count) in new[] { ("hp", sector.NumHpVertices), ("lp", sector.NumLpVertices) })
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    int vertexOffset = GetSceneVertexOffset(sector, detail, i);
+                    long wadOffset = checked(rebase.WadOffset + (vertexOffset - sector.Offset));
+                    if (patches.ContainsKey(wadOffset))
+                        continue; // an edited corner or its low-detail companion, already encoded against the new origin
+                    uint before = ReadUInt32(ram, vertexOffset);
+                    Vector3f point = DecodeSceneVertex(before, sector);
+                    uint after = SetSceneVertexWord(before, rebased, new Vector2f(point.X, point.Y), point.Z);
+                    if (DecodeSceneVertex(after, rebased) != point)
+                        throw new InvalidOperationException($"Re-basing scene sector 0x{sector.Offset:X} would move {detail} vertex {i}; no terrain BIN was built.");
+                    if (after == before)
+                        continue;
+                    AddPatch(imageStream, layout, patches, wadOffset, BitConverter.GetBytes(before), BitConverter.GetBytes(after),
+                        $"terrain-sector-rebase-{detail}", runtimeKey, $"Re-encode unchanged {detail} vertex {i} of scene sector 0x{sector.Offset:X} against its moved origin; its world position is unchanged.");
+                }
+            }
+        }
+    }
+
     private static TerrainCollisionFanBatch BuildTerrainCollisionFanBatch(
         FileStream imageStream,
         DiscLayout layout,
@@ -7653,6 +7926,7 @@ public static partial class TerrainPatchExporter
             layout,
             ram,
             sourceSectorHits);
+        IReadOnlyList<SceneSectorRebase> rebases = PlanSceneSectorRebases(ram, sourceSectorHits, topology, geometryEdits);
         Dictionary<long, TerrainPhysicalVertexTransformBuilder> physicalTransforms = new();
         foreach (JsonElement edit in geometryEdits)
         {
@@ -7673,6 +7947,7 @@ public static partial class TerrainPatchExporter
             }
 
             SceneSectorHeader sector = ReadSceneSectorHeader(ram, sectorOffset);
+            SceneSectorHeader encodeSector = RebasedSceneSectorHeader(sector, rebases);
             const string detail = "hp";
             int faceOffset = JsonValue.GetInt32(edit, "faceOffset", -1);
             int faceIndex = JsonValue.GetInt32(edit, "faceIndex", -1);
@@ -7749,12 +8024,13 @@ public static partial class TerrainPatchExporter
                         $"{runtimeKey}: saved original point {i + 1} no longer exactly matches HP vertex {vertexIndex}; no terrain BIN was built.");
                 }
                 float targetZ = i < editedZ.Count ? editedZ[i] : original.Z;
+                // Always a full re-encode: when the sector's origin was re-based the unchanged X/Y bits of the
+                // old word would be wrong too.
+                Vector2f targetXY = pointChanged && i < editedPoints.Count ? editedPoints[i] : new Vector2f(original.X, original.Y);
                 uint newWord;
                 try
                 {
-                    newWord = pointChanged && i < editedPoints.Count
-                        ? SetSceneVertexWord(oldWord, sector, editedPoints[i], targetZ)
-                        : SetSceneVertexZWord(oldWord, sector, targetZ);
+                    newWord = SetSceneVertexWord(oldWord, encodeSector, targetXY, targetZ);
                 }
                 catch (InvalidOperationException ex)
                 {
@@ -7764,7 +8040,7 @@ public static partial class TerrainPatchExporter
                 }
 
                 SpyroCollisionPoint originalPoint = ToCollisionPoint(original);
-                SpyroCollisionPoint targetCollisionPoint = ToCollisionPoint(DecodeSceneVertex(newWord, sector));
+                SpyroCollisionPoint targetCollisionPoint = ToCollisionPoint(DecodeSceneVertex(newWord, encodeSector));
                 if (originalPoint == targetCollisionPoint)
                     continue;
 
@@ -7813,7 +8089,7 @@ public static partial class TerrainPatchExporter
                 "The requested HP Z edit rounded back to the original packed vertices. No terrain BIN was built.");
         }
 
-        PropagateEditedPointsToNativeAliases(ram, topology, physicalTransforms);
+        PropagateEditedPointsToNativeAliases(ram, topology, physicalTransforms, rebases);
 
         Dictionary<string, TerrainCollisionPointTransformBuilder> transforms = new(StringComparer.Ordinal);
         foreach (IGrouping<string, TerrainPhysicalVertexTransformBuilder> group in physicalTransforms.Values
@@ -8036,7 +8312,8 @@ public static partial class TerrainPatchExporter
                         .ToArray()))
                 .ToArray(),
             patches,
-            requiresIndexRebuild);
+            requiresIndexRebuild,
+            rebases);
     }
 
     private static void AddTopologySafeVisualPatches(
@@ -8071,9 +8348,10 @@ public static partial class TerrainPatchExporter
         {
             SourceSectorLocation owner=locations.Values.First(location=>location.WadOffset==group.Key);
             SceneSectorHeader sector=ReadSceneSectorHeader(ram,checked((int)ParseRequiredLong(owner.SectorOffset,"sector offset")));
+            SceneSectorHeader rebased=RebasedSceneSectorHeader(sector,batch.Rebases);
             int movement=checked((int)Math.Ceiling(group.Max(visual=>
             {
-                Vector3f before=DecodeSceneVertex(visual.OldWord,sector),after=DecodeSceneVertex(visual.NewWord,sector);
+                Vector3f before=DecodeSceneVertex(visual.OldWord,sector),after=DecodeSceneVertex(visual.NewWord,rebased);
                 return Math.Abs(after.X-before.X)+Math.Abs(after.Y-before.Y)+Math.Abs(after.Z-before.Z);
             })));
             uint original=ReadUInt32(ram,sector.Offset+4);
@@ -8098,7 +8376,7 @@ public static partial class TerrainPatchExporter
                 visual.WadOffset >= location.WadOffset && visual.WadOffset < location.WadOffset + location.SizeBytes);
             SceneSectorHeader sector = ReadSceneSectorHeader(ram, checked((int)ParseRequiredLong(owner.SectorOffset, "sectorOffset")));
             SpyroCollisionPoint source = ToCollisionPoint(DecodeSceneVertex(visual.OldWord, sector));
-            SpyroCollisionPoint target = ToCollisionPoint(DecodeSceneVertex(visual.NewWord, sector));
+            SpyroCollisionPoint target = ToCollisionPoint(DecodeSceneVertex(visual.NewWord, RebasedSceneSectorHeader(sector, batch.Rebases)));
             if (targets.TryGetValue(source, out SpyroCollisionPoint? previous) && previous != target)
                 throw new InvalidOperationException("Low-detail terrain companions have conflicting native targets. No terrain BIN was built.");
             targets[source] = target;
@@ -8107,15 +8385,16 @@ public static partial class TerrainPatchExporter
         {
             int runtime = checked((int)ParseRequiredLong(location.SectorOffset, "sectorOffset"));
             SceneSectorHeader sector = ReadSceneSectorHeader(ram, runtime);
+            SceneSectorHeader rebased = RebasedSceneSectorHeader(sector, batch.Rebases);
             for (int i = 0; i < sector.NumLpVertices; i++)
             {
                 int offset = GetSceneVertexOffset(sector, "lp", i);
                 uint before = ReadUInt32(ram, offset);
                 if (!targets.TryGetValue(ToCollisionPoint(DecodeSceneVertex(before, sector)), out SpyroCollisionPoint? target)) continue;
                 uint after;
-                try { after = SetSceneVertexWord(before, sector, new Vector2f(target.X, target.Y), target.Z); }
+                try { after = SetSceneVertexWord(before, rebased, new Vector2f(target.X, target.Y), target.Z); }
                 catch (InvalidOperationException ex) { throw new InvalidOperationException($"The exact low-detail companion LP vertex {i} cannot encode the edited terrain: {ex.Message} No terrain BIN was built.", ex); }
-                if (ToCollisionPoint(DecodeSceneVertex(after, sector)) != target)
+                if (ToCollisionPoint(DecodeSceneVertex(after, rebased)) != target)
                     throw new InvalidOperationException("The exact LP terrain companion rounded to a different target. No terrain BIN was built.");
                 AddPatch(imageStream, layout, patches, location.WadOffset + offset - runtime,
                     BitConverter.GetBytes(before), BitConverter.GetBytes(after), "visual-lp-topology-safe",
@@ -8165,6 +8444,124 @@ public static partial class TerrainPatchExporter
             AddExistingFanCollisionIndexPatches(imageStream, layout, ram, collisionContext, batch, patchesByWadOffset);
     }
 
+    /// <summary>
+    /// Rebuilds the level's fixed-size collision lookup index for triangles moved to new corners, exactly as
+    /// Create BIN does, without writing anything. The editor uses it to refuse a change before it is made.
+    /// Returns false with the reason when the index cannot hold the result; crossing lists the triangles
+    /// whose set of 256-unit lookup cells changed.
+    /// </summary>
+    public static bool TryCheckCollisionIndexCapacity(
+        byte[] ram,
+        SpyroCollisionTable table,
+        IReadOnlyList<(int Index, IReadOnlyList<SpyroCollisionPoint> Points)> movedTriangles,
+        out string reason,
+        out IReadOnlyList<int> crossing)
+    {
+        reason = "";
+        List<int> crossed = [];
+        crossing = crossed;
+        try
+        {
+            RebuildCollisionIndex(ram, table, movedTriangles, crossed, out _, out _, out _, out _);
+            return true;
+        }
+        catch (InvalidDataException ex)
+        {
+            reason = ex.Message;
+            return false;
+        }
+    }
+
+    /// <summary>Diagnostic: the 256-unit lookup cells a triangle at these corners touches.</summary>
+    public static string DescribeCollisionCells(IReadOnlyList<SpyroCollisionPoint> points) =>
+        FormatCollisionCells(CollisionTouchedCellsFor(points));
+
+    /// <summary>Diagnostic: the cells that reference a triangle index in the native lookup.</summary>
+    public static string DescribeCollisionReferences(byte[] ram, SpyroCollisionTable table, int triangleIndex)
+    {
+        int treeLength = table.BlocksOffset - table.BlockTreeOffset;
+        int blockLength = table.TriangleOffset - table.BlocksOffset;
+        byte[] originalTree = ram.AsSpan(table.BlockTreeOffset, treeLength).ToArray();
+        byte[] originalBlocks = ram.AsSpan(table.BlocksOffset, blockLength).ToArray();
+        int usedBlockBytes = originalBlocks.Length;
+        while (usedBlockBytes >= 2 && BinaryPrimitives.ReadUInt16LittleEndian(originalBlocks.AsSpan(usedBlockBytes - 2)) == 0)
+            usedBlockBytes -= 2;
+        NativeCollisionIndexSnapshot original = NativeCollisionIndexCodec.Decode(originalTree, originalBlocks, usedBlockBytes, table.TriangleCount, requireDescendingOrder: false);
+        return string.Join(", ", original.Cells.Where(pair => pair.Value.OrderedTriangleIndexes.Contains(triangleIndex)).Select(pair => $"{pair.Key.X}/{pair.Key.Y}/{pair.Key.Z}"));
+    }
+
+    /// <summary>Diagnostic: lookup-cell references per triangle index, from the same decode Create BIN uses.</summary>
+    public static IReadOnlyDictionary<int, int> CountCollisionLookupReferences(byte[] ram, SpyroCollisionTable table)
+    {
+        int treeLength = table.BlocksOffset - table.BlockTreeOffset;
+        int blockLength = table.TriangleOffset - table.BlocksOffset;
+        byte[] originalTree = ram.AsSpan(table.BlockTreeOffset, treeLength).ToArray();
+        byte[] originalBlocks = ram.AsSpan(table.BlocksOffset, blockLength).ToArray();
+        int usedBlockBytes = originalBlocks.Length;
+        while (usedBlockBytes >= 2 && BinaryPrimitives.ReadUInt16LittleEndian(originalBlocks.AsSpan(usedBlockBytes - 2)) == 0)
+            usedBlockBytes -= 2;
+        NativeCollisionIndexSnapshot original = NativeCollisionIndexCodec.Decode(originalTree, originalBlocks, usedBlockBytes, table.TriangleCount, requireDescendingOrder: false);
+        Dictionary<int, int> counts = new();
+        foreach (var cell in original.Cells.Values)
+            foreach (int index in cell.OrderedTriangleIndexes)
+                counts[index] = counts.GetValueOrDefault(index) + 1;
+        return counts;
+    }
+
+    private static void RebuildCollisionIndex(
+        byte[] ram,
+        SpyroCollisionTable table,
+        IEnumerable<(int Index, IReadOnlyList<SpyroCollisionPoint> Points)> movedTriangles,
+        List<int>? crossing,
+        out NativeCollisionIndexSnapshot original,
+        out NativeCollisionIndexSnapshot rebuilt,
+        out int treeLength,
+        out int blockLength)
+    {
+        treeLength = table.BlocksOffset - table.BlockTreeOffset;
+        blockLength = table.TriangleOffset - table.BlocksOffset;
+        byte[] originalTree = ram.AsSpan(table.BlockTreeOffset, treeLength).ToArray();
+        byte[] originalBlocks = ram.AsSpan(table.BlocksOffset, blockLength).ToArray();
+        // The source has an exact terminating marker followed by zero capacity.
+        // Do not register spare nonzero collision triangles or recalculate other
+        // actors' native memberships while rebuilding the edited fan.
+        int usedBlockBytes = originalBlocks.Length;
+        while (usedBlockBytes >= 2 && BinaryPrimitives.ReadUInt16LittleEndian(originalBlocks.AsSpan(usedBlockBytes - 2)) == 0)
+            usedBlockBytes -= 2;
+        original = NativeCollisionIndexCodec.Decode(originalTree, originalBlocks, usedBlockBytes, table.TriangleCount, requireDescendingOrder: false);
+        Dictionary<NativeCollisionCell, List<int>> desired = original.Cells.ToDictionary(
+            pair => pair.Key, pair => pair.Value.OrderedTriangleIndexes.ToList());
+        foreach ((int index, IReadOnlyList<SpyroCollisionPoint> points) in movedTriangles)
+        {
+            HashSet<NativeCollisionCell> touchedCells = CollisionTouchedCellsFor(points)
+                .Select(cell => new NativeCollisionCell(cell.X, cell.Y, cell.Z)).ToHashSet();
+            HashSet<NativeCollisionCell> before = desired.Where(pair => pair.Value.Contains(index)).Select(pair => pair.Key).ToHashSet();
+            if (before.Count == 0)
+                continue; // not referenced by the lookup at all: Create BIN never re-registers such a row
+            if (crossing != null && !before.SetEquals(touchedCells))
+                crossing.Add(index);
+            foreach (var (cell, triangles) in desired)
+                if (!touchedCells.Contains(cell)) triangles.RemoveAll(candidate => candidate == index);
+            foreach (NativeCollisionCell key in touchedCells)
+            {
+                if (!desired.TryGetValue(key, out List<int>? triangles)) desired[key] = triangles = [];
+                if (!triangles.Contains(index)) triangles.Add(index);
+            }
+        }
+        Dictionary<NativeCollisionCell, IReadOnlyList<int>> sequences = desired.Where(pair => pair.Value.Count > 0)
+            .ToDictionary(pair => pair.Key, pair => (IReadOnlyList<int>)pair.Value.ToArray());
+        // Create a distinct tree where native sharing would otherwise make
+        // two edited cells aliases. All memberships are explicit and checked.
+        try { rebuilt = NativeCollisionIndexCodec.Rebuild(original, sequences); }
+        catch (InvalidDataException) { rebuilt = NativeCollisionIndexCodec.Create(sequences, original.TriangleCount, requireDescendingOrder: false); }
+        if (rebuilt.CopyTree().Length > treeLength || rebuilt.CopyBlocks().Length > blockLength)
+            throw new InvalidDataException("Edited collision lookup exceeds its fixed native capacity.");
+        HashSet<int> beforeRows = original.Cells.Values.SelectMany(cell => cell.OrderedTriangleIndexes).ToHashSet();
+        HashSet<int> afterRows = rebuilt.Cells.Values.SelectMany(cell => cell.OrderedTriangleIndexes).ToHashSet();
+        if (!beforeRows.SetEquals(afterRows))
+            throw new InvalidDataException("Edited collision lookup changed the set of active native triangle rows.");
+    }
+
     private static void AddExistingFanCollisionIndexPatches(
         FileStream imageStream, DiscLayout layout, byte[] ram,
         CollisionPatchContext context, TerrainCollisionFanBatch batch,
@@ -8174,49 +8571,25 @@ public static partial class TerrainPatchExporter
         int blockLength = context.Table.TriangleOffset - context.Table.BlocksOffset;
         byte[] originalTree = ram.AsSpan(context.Table.BlockTreeOffset, treeLength).ToArray();
         byte[] originalBlocks = ram.AsSpan(context.Table.BlocksOffset, blockLength).ToArray();
-        // The source has an exact terminating marker followed by zero capacity.
-        // Do not register spare nonzero collision triangles or recalculate other
-        // actors' native memberships while rebuilding the edited fan.
-        int usedBlockBytes = originalBlocks.Length;
-        while (usedBlockBytes >= 2 && BinaryPrimitives.ReadUInt16LittleEndian(originalBlocks.AsSpan(usedBlockBytes - 2)) == 0)
-            usedBlockBytes -= 2;
         NativeCollisionIndexSnapshot original;
         NativeCollisionIndexSnapshot rebuilt;
         try
         {
-            original = NativeCollisionIndexCodec.Decode(originalTree, originalBlocks, usedBlockBytes, context.Table.TriangleCount, requireDescendingOrder: false);
-            Dictionary<NativeCollisionCell, List<int>> desired = original.Cells.ToDictionary(
-                pair => pair.Key, pair => pair.Value.OrderedTriangleIndexes.ToList());
-            foreach (TerrainCollisionFanPatch patch in batch.Patches)
-            {
-                SpyroCollisionTriangle target = BuildCollisionTriangleFromWords(patch.Triangle.Index, patch.Triangle.Offset,
-                    patch.XWord, patch.YWord, patch.ZWord);
-                HashSet<NativeCollisionCell> touchedCells = CollisionTouchedCellsFor(target.Points)
-                    .Select(cell => new NativeCollisionCell(cell.X, cell.Y, cell.Z)).ToHashSet();
-                foreach (var (cell, triangles) in desired)
-                    if (!touchedCells.Contains(cell)) triangles.RemoveAll(index => index == patch.Triangle.Index);
-                foreach (NativeCollisionCell key in touchedCells)
-                {
-                    if (!desired.TryGetValue(key, out List<int>? triangles)) desired[key] = triangles = [];
-                    if (!triangles.Contains(patch.Triangle.Index)) triangles.Add(patch.Triangle.Index);
-                }
-            }
-            Dictionary<NativeCollisionCell, IReadOnlyList<int>> sequences = desired.Where(pair => pair.Value.Count > 0)
-                .ToDictionary(pair => pair.Key, pair => (IReadOnlyList<int>)pair.Value.ToArray());
-            // Create a distinct tree where native sharing would otherwise make
-            // two edited cells aliases. All memberships are explicit and checked.
-            try { rebuilt = NativeCollisionIndexCodec.Rebuild(original, sequences); }
-            catch (InvalidDataException) { rebuilt = NativeCollisionIndexCodec.Create(sequences, original.TriangleCount, requireDescendingOrder: false); }
-            if (rebuilt.CopyTree().Length > treeLength || rebuilt.CopyBlocks().Length > blockLength)
-                throw new InvalidDataException("Edited collision lookup exceeds its fixed native capacity.");
-            HashSet<int> beforeRows = original.Cells.Values.SelectMany(cell => cell.OrderedTriangleIndexes).ToHashSet();
-            HashSet<int> afterRows = rebuilt.Cells.Values.SelectMany(cell => cell.OrderedTriangleIndexes).ToHashSet();
-            if (!beforeRows.SetEquals(afterRows))
-                throw new InvalidDataException("Edited collision lookup changed the set of active native triangle rows.");
+            RebuildCollisionIndex(
+                ram,
+                context.Table,
+                batch.Patches.Select(patch => (patch.Triangle.Index,
+                    (IReadOnlyList<SpyroCollisionPoint>)BuildCollisionTriangleFromWords(patch.Triangle.Index, patch.Triangle.Offset, patch.XWord, patch.YWord, patch.ZWord).Points)),
+                null,
+                out original,
+                out rebuilt,
+                out _,
+                out _);
         }
         catch (InvalidDataException ex)
         {
-            throw new InvalidOperationException($"The complete native collision index cannot safely fit this terrain movement: {ex.Message} No terrain BIN was built.", ex);
+            string faces = string.Join(", ", batch.AffectedFaces);
+            throw new InvalidOperationException($"The complete native collision index cannot safely fit this terrain movement ({batch.AffectedFaces.Count} affected faces: {faces}): {ex.Message} No terrain BIN was built.", ex);
         }
         byte[] tree = new byte[treeLength], blocks = new byte[blockLength];
         rebuilt.CopyTree().CopyTo(tree, 0); rebuilt.CopyBlocks().CopyTo(blocks, 0);
@@ -10492,7 +10865,8 @@ public static partial class TerrainPatchExporter
         IReadOnlyList<string> AffectedFaces,
         IReadOnlyList<TerrainVisualVertexFanPatch> VisualPatches,
         IReadOnlyList<TerrainCollisionFanPatch> Patches,
-        bool RequiresIndexRebuild)
+        bool RequiresIndexRebuild,
+        IReadOnlyList<SceneSectorRebase> Rebases)
     {
         public static TerrainCollisionFanBatch Empty { get; } = new(
             false,
@@ -10501,8 +10875,23 @@ public static partial class TerrainPatchExporter
             Array.Empty<string>(),
             Array.Empty<TerrainVisualVertexFanPatch>(),
             Array.Empty<TerrainCollisionFanPatch>(),
-            false);
+            false,
+            Array.Empty<SceneSectorRebase>());
     }
+
+    /// <summary>
+    /// A scene sector whose stored origin (header words +0x08 xyPos and +0x0C zPos) moves so that an edited
+    /// corner outside the original 2047×2047×1023 local range can still be encoded. Every other vertex of the
+    /// sector is re-encoded against the new origin and keeps its world position.
+    /// </summary>
+    private sealed record SceneSectorRebase(
+        int RuntimeSectorOffset,
+        long WadOffset,
+        uint OldXyWord,
+        uint NewXyWord,
+        uint OldZWord,
+        uint NewZWord,
+        IReadOnlyList<string> RuntimeKeys);
 
     private readonly record struct CollisionLookupCell(int X, int Y, int Z);
 

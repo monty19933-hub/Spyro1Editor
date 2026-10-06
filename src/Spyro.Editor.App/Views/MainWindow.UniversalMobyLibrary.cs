@@ -498,6 +498,9 @@ public sealed partial class MainWindow
         CancellationToken browserCancellation = roomCancellation.Token;
         dialog.Closed += (_, _) => roomCancellation.Cancel();
         bool findingRoom = false;
+        // Pressing the button again while a search runs stops the search and keeps what it found so far.
+        CancellationTokenSource? activeSearchStop = null;
+        string spaceSearchNote = "";
         Button close = NewButton("Close"); close.Name = "UniversalMobyClose"; StyleModernSecondaryButton(close);
         ToolTip.SetTip(place, "Close this browser, then click the terrain in the 3D view to place the object.");
         ToolTip.SetTip(addHere, "Place the object beside the current selection, or at the default position when nothing is selected.");
@@ -728,8 +731,9 @@ public sealed partial class MainWindow
         {
             place.IsEnabled = addHere.IsEnabled = false;
             magicRoom.IsVisible = magicPair.IsVisible = false;
-            findRoom.Content = "Find space for this object…";
-            findRoom.IsEnabled = !findingRoom && lib != null && freshCompilation == null && list.SelectedItem is UniversalMobyCatalogEntry;
+            // While a search runs the button is its Stop button; a refresh must not take that away.
+            findRoom.Content = findingRoom ? "Stop searching" : "Find space for this object…";
+            findRoom.IsEnabled = findingRoom || (lib != null && freshCompilation == null && list.SelectedItem is UniversalMobyCatalogEntry);
             if (lib == null || list.SelectedItem is not UniversalMobyCatalogEntry entry)
             {
                 title.Text = "Choose an object"; details.Text = "Select an object from the list to see its preview and check whether it fits this level."; fit.Text = ""; technical.Text = "";
@@ -756,14 +760,14 @@ public sealed partial class MainWindow
             {
                 magicRoom.Text = MagicArtisansRoomText(v); magicRoom.IsVisible = true;
                 magicPair.IsVisible = !IsMagicArtisansPairChoice(v) && entry.Variants.Any(p => p.SourceLevelKey == "magiccrafters" && p.SourceRow is 12 or 13);
-                findRoom.Content = "Review the six Gnorcs to make room…";
-                findRoom.IsEnabled = !findingRoom && IsMagicArtisansPairChoice(v);
+                findRoom.Content = findingRoom ? "Stop searching" : "Review the six Gnorcs to make room…";
+                findRoom.IsEnabled = findingRoom || IsMagicArtisansPairChoice(v);
             }
             bool alpineArtisans = freshCompilation == null && UniversalAlpineArtisansRemovalAdvice.IsChoice(destination.Key,v.SourceLevelKey,v.SourceRow);
             if (alpineArtisans)
             {
                 magicRoom.Text = UniversalAlpineArtisansRemovalAdvice.Explanation; magicRoom.IsVisible = true;
-                findRoom.Content = "Review the objects needed to make room…";
+                findRoom.Content = findingRoom ? "Stop searching" : "Review the objects needed to make room…";
             }
             // Source-version estimates can also decode models; populate those on the worker.
             var e = estimates.TryGetValue(v, out var estimate) ? estimate :
@@ -886,6 +890,13 @@ public sealed partial class MainWindow
         };
         findRoom.Click += async (_, _) =>
         {
+            if (findingRoom)
+            {
+                if (activeSearchStop == null) return; // the short Magic Crafters pair check cannot be stopped
+                activeSearchStop.Cancel(); findRoom.IsEnabled = false;
+                roomExplanation.Text = "Stopping… what has been found so far is kept.";
+                return;
+            }
             if (lib == null || freshCompilation != null || list.SelectedItem is not UniversalMobyCatalogEntry selectedEntry) return;
             var magicSelected = variants.SelectedItem as UniversalMobyVariant ?? selectedEntry.Default;
             if (IsMagicArtisansRoomChoice(destination.Key, magicSelected))
@@ -920,24 +931,47 @@ public sealed partial class MainWindow
                 finally { findingRoom = false; if (!browserCancellation.IsCancellationRequested) RefreshDetails(); }
                 return;
             }
-            findingRoom = true; findRoom.IsEnabled = false; roomPlans.IsVisible = inspectPlan.IsVisible = false;
-            roomExplanation.Text = "Checking source versions and groups of objects that could make room…";
+            findingRoom = true; roomPlans.IsVisible = inspectPlan.IsVisible = false;
+            using var searchStop = CancellationTokenSource.CreateLinkedTokenSource(browserCancellation);
+            activeSearchStop = searchStop;
+            findRoom.Content = "Stop searching"; findRoom.IsEnabled = true;
             var selected = variants.SelectedItem as UniversalMobyVariant ?? selectedEntry.Default;
+            // Six versions and 48 exact checks each: the exhaustive 12 x 128 search ran for minutes with a
+            // static message and rarely found more than the first few options do.
+            const int maximumChecks = 48;
             var candidates = selectedEntry.Variants.Where(v => v.Extractable)
                 .GroupBy(v => (v.SourceLevelKey, v.PropertiesBytes)).Select(g => g.First())
-                .OrderBy(v => v == selected ? 0 : 1).Take(12).ToList();
+                .OrderBy(v => v == selected ? 0 : 1).Take(6).ToList();
             if (!candidates.Contains(selected)) candidates.Insert(0, selected);
             var labels = _currentMobys.Where(m => !m.IsAdded && m.TrueIndex >= 0)
                 .GroupBy(m => m.TrueIndex).ToDictionary(g => g.Key, g => (g.First().DisplayLabel, g.First().CandidateKind));
             var trials = candidates.Select(v => (Variant: v, Trial: existing.Concat(TrialFor(v)).ToList())).ToList();
+            var liveChoices = new System.Collections.ObjectModel.ObservableCollection<UniversalFitChoice>();
+            roomPlans.ItemsSource = liveChoices;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            int currentCopies = existing.Count(p => !p.Retired);
+            string Elapsed() => clock.Elapsed.TotalSeconds < 60 ? $"{clock.Elapsed.TotalSeconds:0} s" : $"{(int)clock.Elapsed.TotalMinutes}:{clock.Elapsed.Seconds:00} min";
+            void ShowProgress(int version, int versions, string versionName, UniversalSearchProgress? p)
+            {
+                string where = versions > 1 ? $"version {version} of {versions} ({versionName}), " : "";
+                string count = p == null ? "preparing…" : $"option {Math.Max(1, p.Checks - 1)} of up to {Math.Min(p.MaximumChecks - 1, p.Options)}";
+                roomExplanation.Text = $"Looking for a way to make room: {where}{count}, {Elapsed()}. " +
+                    (liveChoices.Count > 0 ? $"{Count(liveChoices.Count, "way")} found so far. " : "") +
+                    "Each option is a complete export check, so this can take a while. Stop searching keeps what has been found.";
+            }
+            ShowProgress(1, trials.Count, LevelName(trials[0].Variant.SourceLevelKey), null);
             try
             {
                 var reports = await Task.Run(() =>
                 {
                     var found = new List<(UniversalMobyVariant Variant, UniversalCapacityAdvice Advice)>();
+                    int version = 0;
                     foreach (var item in trials)
                     {
                         browserCancellation.ThrowIfCancellationRequested();
+                        if (searchStop.IsCancellationRequested) break;
+                        version++;
+                        int versionNow = version;
                         (UniversalComposeResult? Result,string? Error) ExactCheck(IReadOnlyCollection<int> gone)
                         {
                             var result = ExactRetailCheck(lib,item.Trial,gone);
@@ -946,9 +980,16 @@ public sealed partial class MainWindow
                         }
                         var advice = UniversalCapacityPlanner.Analyze(lib, destination, item.Trial, removedRows,
                             row => labels.GetValueOrDefault(row, ($"Object T{row}", "unknown")), special,
-                            cancellationToken: roomCancellation.Token, host: retailHost, compositionCheck:ExactCheck);
+                            maximumChecks: maximumChecks, cancellationToken: roomCancellation.Token, host: retailHost, compositionCheck:ExactCheck,
+                            progress: p => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                            {
+                                // A report that arrives after the search ended must not overwrite its result.
+                                if (browserCancellation.IsCancellationRequested || !ReferenceEquals(activeSearchStop, searchStop)) return;
+                                if (p.Found != null) { liveChoices.Add(new UniversalFitChoice(item.Variant, p.Found)); roomPlans.IsVisible = true; if (roomPlans.SelectedIndex < 0) roomPlans.SelectedIndex = 0; }
+                                ShowProgress(versionNow, trials.Count, LevelName(item.Variant.SourceLevelKey), p);
+                            }), stop: searchStop.Token);
                         found.Add((item.Variant, advice));
-                        if (advice.CurrentError == null || advice.Plans.Count > 0) break;
+                        if (advice.CurrentError == null || advice.Plans.Count > 0 || advice.Stopped) break;
                     }
                     return found;
                 }, browserCancellation);
@@ -959,11 +1000,18 @@ public sealed partial class MainWindow
                     ? new[] { new UniversalFitChoice(r.Variant, null) }
                     : r.Advice.Plans.Select(p => new UniversalFitChoice(r.Variant, p))).ToList();
                 roomPlans.ItemsSource = choices; roomPlans.IsVisible = choices.Count > 0;
-                int currentCopies = existing.Count(p => !p.Retired), checks = reports.Sum(r => r.Advice.Checks);
-                roomExplanation.Text = $"Current changes: {removedRows.Count} original objects removed, {currentCopies} objects added. Removing an object makes room for another placement. To free its appearance and texture space, every copy of that object must be removed. Some resources are shared and stay in use.\n" +
-                    (choices.Count > 0 ? "Choose a checked plan below, then inspect the named objects. You decide which objects to remove." : "No removal plan found among the versions checked. Try removing added object types or choosing another source version.") +
-                    "";
-                technical.Text += $"\nSpace search: {checks} complete export checks; bounded to three native type groups per plan.";
+                int checks = reports.Sum(r => r.Advice.Checks);
+                bool stopped = reports.Any(r => r.Advice.Stopped);
+                string situation = $"This level already has {Count(currentCopies, "object")} added by you and {Count(removedRows.Count, "original object")} removed.";
+                roomExplanation.Text = choices.Count > 0
+                    ? $"{Count(choices.Count, "way")} to make room {(choices.Count == 1 ? "was" : "were")} found ({Count(checks, "export check")}, {Elapsed()}{(stopped ? ", stopped early" : "")}). " +
+                      "Choose one below, then inspect the named objects. Removing an object frees its own slot; its appearance and texture space are freed only when every copy is removed. You decide which objects to remove."
+                    : stopped
+                        ? $"Stopped after {Count(checks, "export check")} ({Elapsed()}) without finding a way to make room. {situation}"
+                        : $"No way to make room was found: {Count(checks, "export check")} across {Count(reports.Count, "source version")} in {Elapsed()}. {situation} " +
+                          "Removing objects you added, choosing a smaller object, or trying another version of this one is more likely to work.";
+                spaceSearchNote = $"Space search: {checks} complete export checks across {reports.Count} version(s) in {Elapsed()}; up to {maximumChecks - 1} removal options of one to three native type groups per version" + (stopped ? "; stopped by the user." : ".");
+                technical.Text += "\n" + spaceSearchNote;
                 foreach (var report in reports.Where(r => r.Advice.Plans.Count == 0 && r.Advice.CurrentError != null && !UniversalCapacityPlanner.IsCapacityFailure(r.Advice.CurrentError)))
                 {
                     if (UniversalAlpineArtisansRemovalAdvice.IsChoice(destination.Key,report.Variant.SourceLevelKey,report.Variant.SourceRow))
@@ -979,7 +1027,19 @@ public sealed partial class MainWindow
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { roomExplanation.Text = ex.Message; }
-            finally { findingRoom = false; if (!browserCancellation.IsCancellationRequested) RefreshDetails(); }
+            finally
+            {
+                findingRoom = false; activeSearchStop = null; findRoom.Content = "Find space for this object…";
+                if (!browserCancellation.IsCancellationRequested)
+                {
+                    string keep = roomExplanation.Text ?? ""; var keepPlans = roomPlans.ItemsSource; bool keepVisible = roomPlans.IsVisible;
+                    RefreshDetails();
+                    // RefreshDetails rebuilds the texts for the selection; the search result must survive it.
+                    roomExplanation.Text = keep; roomPlans.ItemsSource = keepPlans; roomPlans.IsVisible = keepVisible;
+                    inspectPlan.IsVisible = roomPlans.SelectedItem is UniversalFitChoice { Plan: not null };
+                    if (spaceSearchNote.Length > 0 && !(technical.Text ?? "").Contains(spaceSearchNote, StringComparison.Ordinal)) technical.Text += "\n" + spaceSearchNote;
+                }
+            }
         };
 
         async Task AddAsync(bool clickToPlace)
