@@ -144,7 +144,7 @@ public sealed partial class MainWindow
             Title = "Tile Type",
             Name = "TileTypeDialog",
             Width = 440,
-            Height = 360,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = true
         };
