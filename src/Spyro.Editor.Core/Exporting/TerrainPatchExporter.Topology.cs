@@ -81,6 +81,7 @@ public static partial class TerrainPatchExporter
         List<(byte[] Words,byte Assignment,byte Flag,string Key)> appendedTriangles=[];
         List<(byte[] Bytes,int SourceSector)> newSectors=[];
         Dictionary<int,(SceneSectorHeader Header,int ModelOffset)> lpRebuilds=geometryLpOwners;
+        HashSet<int>? portalWalkIn=null;
         foreach(JsonElement edit in structural)
         {
             string key=JsonValue.GetString(edit,"runtimeKey");
@@ -105,8 +106,17 @@ public static partial class TerrainPatchExporter
             int[][][] partitions=oldPoints.Length==3 ? [[[0,1,2]]] : [[[0,1,2],[0,2,3]],[[0,1,3],[1,2,3]]];
             int[][]? partition=partitions.FirstOrDefault(parts=>parts.All(part=>context.TrianglesByKey.TryGetValue(
                 CollisionTriangleKey(part.Select(i=>oldPoints[i]).ToArray()),out var hits)&&hits.Count(t=>context.GroupIndexesByTriangleIndex.ContainsKey(t.Index)&&!IsZeroAreaCollisionTriangle3D(t))==1));
-            if(partition==null)throw new InvalidOperationException($"{key}: every visible triangle needs an exact native collision owner; no terrain BIN was built.");
-            foreach(int[] part in partition)
+            if(partition==null)
+            {
+                // Scenery (trim, wall decoration): the game has no collision on this face at all, so removing or
+                // copying it changes only what is drawn. A face with any collision on it still needs its owner.
+                bool ownTriangle=partitions.SelectMany(parts=>parts).Any(part=>context.TrianglesByKey.ContainsKey(CollisionTriangleKey(part.Select(i=>oldPoints[i]).ToArray())));
+                portalWalkIn??=PortalWalkInTriangleIndexes(image,layout,level);
+                if(ownTriangle||!TerrainSceneryFaceRule.HasNoCollisionOnFace(oldPoints.Select(p=>((double)p.X,(double)p.Y,(double)p.Z)).ToArray(),
+                    context.Table.Triangles.Where(t=>!portalWalkIn.Contains(t.Index)).Select(t=>t.Points)))
+                    throw new InvalidOperationException($"{key}: every visible triangle needs an exact native collision owner; no terrain BIN was built.");
+            }
+            foreach(int[] part in partition??[])
             {
                 var source=context.TrianglesByKey[CollisionTriangleKey(part.Select(i=>oldPoints[i]).ToArray())]
                     .Single(t=>context.GroupIndexesByTriangleIndex.ContainsKey(t.Index)&&!IsZeroAreaCollisionTriangle3D(t));
@@ -187,6 +197,7 @@ public static partial class TerrainPatchExporter
         // Commit staged remove-face words into the original environment before
         // extending its authenticated pointer directory.
         environment=staged.AsSpan(offsets[1],components[1].Length).ToArray();
+        AssignCoupledFaceCache(environment,newSectors.Select(s=>s.Bytes).ToArray());
         components[1]=AppendCoupledSectors(ReplaceCoupledSectors(environment,sectorReplacements),newSectors.Select(s=>s.Bytes).ToArray());
         components[2]=AppendCoupledVisibility(visibility,sourceSectors,newSectors.Select(s=>s.SourceSector).ToArray());
         Dictionary<NativeCollisionCell,IReadOnlyList<int>> sequences=cells.Where(p=>p.Value.Count>0).ToDictionary(p=>p.Key,p=>(IReadOnlyList<int>)p.Value.ToArray());
@@ -261,6 +272,23 @@ public static partial class TerrainPatchExporter
         AddPatch(image,layout,patches,modelInfo.AbsoluteWadOffset,before,after,"terrain-coupled-topology","terrain-topology",
             $"Compose {structural.Length} terrain add/remove edit(s) and {geometryLpOwners.Count} distant-sector geometry rebuild(s) with HP/LP geometry, native visibility and collision lookup; preserve fixed subfile allocation.");
         return null;
+    }
+
+    /// <summary>
+    /// Portal walk-in triangles (special surface type 6): the invisible plane across a portal's doorway. They are
+    /// not ground or wall, and they move with the portal, so they do not make the doorway's trim faces solid.
+    /// </summary>
+    private static HashSet<int> PortalWalkInTriangleIndexes(FileStream image,DiscLayout layout,LevelDefinition level)
+    {
+        try
+        {
+            return PortalSourceDataLocator.LocateTerrainSurfaces(image,layout,level).CollisionSurfaceTriangles
+                .Where(t=>t.HasSpecialSurface&&t.SurfaceType==6).Select(t=>t.TriangleIndex).ToHashSet();
+        }
+        catch(Exception ex) when (ex is InvalidDataException or InvalidOperationException or IOException)
+        {
+            return [];
+        }
     }
 
     private static byte[] BuildCoupledCopiedSector(byte[] ram,SceneSectorHeader source,byte[] face,IReadOnlyList<int> ids,SpyroCollisionPoint[] points)
@@ -431,6 +459,31 @@ public static partial class TerrainPatchExporter
         byte[] result=new byte[8+4*count+sectors.Sum(s=>s.Length)];Put(result,0,(uint)result.Length);Put(result,4,(uint)count);
         int cursor=8+4*count;for(int i=0;i<count;i++){Put(result,8+4*i,(uint)(cursor-4));sectors[i].CopyTo(result,cursor);cursor+=sectors[i].Length;}
         return result;
+    }
+
+    /// <summary>
+    /// The low half of a sector header's Z word (+0x0C) is the sector's first index in the renderer's per-face
+    /// cache: 1-based and contiguous over the high-detail faces of the retail sectors, 0xFFFF for a sector
+    /// without high-detail faces. The game prepares that cache when the level loads, so an appended sector that
+    /// shares an index (the writer used to leave 0) is never drawn. Each appended sector gets its own range
+    /// after the level's last one, the way the authored-level writer numbers its sectors.
+    /// </summary>
+    private static void AssignCoupledFaceCache(byte[] environment,IReadOnlyList<byte[]> appended)
+    {
+        int count=Read(environment,4),next=1;
+        for(int i=0;i<count;i++)
+        {
+            int at=4+Read(environment,8+4*i);
+            int first=BinaryPrimitives.ReadUInt16LittleEndian(environment.AsSpan(at+12)),faces=environment[at+22];
+            if(faces>0&&first!=0xFFFF)next=Math.Max(next,first+faces);
+        }
+        foreach(byte[] sector in appended)
+        {
+            int faces=sector[22];
+            if(faces==0){BinaryPrimitives.WriteUInt16LittleEndian(sector.AsSpan(12),0xFFFF);continue;}
+            if(next+faces>0xFFFF)throw new InvalidOperationException("The renderer's face cache cannot number another terrain sector; no terrain BIN was built.");
+            BinaryPrimitives.WriteUInt16LittleEndian(sector.AsSpan(12),(ushort)next);next+=faces;
+        }
     }
 
     private static byte[] AppendCoupledSectors(byte[] original,IReadOnlyList<byte[]> sectors)

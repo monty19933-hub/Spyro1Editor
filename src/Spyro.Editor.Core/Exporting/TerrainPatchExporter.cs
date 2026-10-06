@@ -52,6 +52,28 @@ public static partial class TerrainPatchExporter
         [2, 0, 1]
     ];
 
+    /// <summary>
+    /// Where the level's terrain subfile starts in the WAD of the given image. Source-sector maps hold
+    /// absolute WAD offsets of the original disc, so a terrain plan is only valid while this is unchanged.
+    /// </summary>
+    public static long TerrainSubfileWadOffset(string imagePath, LevelDefinition level)
+    {
+        DiscLayout layout = DiscImage.DetectLayout(imagePath);
+        using FileStream stream = File.OpenRead(imagePath);
+        return GetAssetSubfileInfo(stream, layout, TextureAssetWadIndexForLevel(level), ModelSubfileIndex).AbsoluteWadOffset;
+    }
+
+    /// <summary>True when the saved terrain edits add or remove faces (these may grow the level's data).</summary>
+    public static bool HasStructuralTerrainEdits(string terrainEditsPath)
+    {
+        if (!File.Exists(terrainEditsPath))
+            return false;
+        using FileStream stream = File.OpenRead(terrainEditsPath);
+        using JsonDocument document = JsonDocument.Parse(stream);
+        return document.RootElement.TryGetProperty("edits", out JsonElement edits) && edits.ValueKind == JsonValueKind.Array &&
+            edits.EnumerateArray().Any(edit => IsStructuralTerrainEdit(JsonValue.GetString(edit, "structureEditMode")));
+    }
+
     public static int TextureAssetWadIndexForLevel(LevelDefinition level)
     {
         if (level.SourceWadEntry >= 0)

@@ -1,3 +1,34 @@
+# Terrain copy/remove fixes found while building a new level — 6 October 2026
+
+Unreleased (Claude; branch `release/release-ready-20261004`, after 1.2). Building
+"Frostbite Fields" from Stone Hill with the editor (owner's request: new level,
+new Artisans portal entrance, mixed enemies, dragonfly eggs; result in task-root
+`outputs/FrostbiteFields-20261006`) exposed three defects in Add Terrain Copy and
+Remove Terrain on source-derived levels. All three are fixed here; the packages
+in `outputs/SpyroEditor-V1.2-release` do not contain them.
+
+- Copied terrain was never drawn in the game. A sector header's +0x0C low half is
+  the sector's first index in the renderer's per-face scratch (retail: 1-based,
+  contiguous over HP faces; 0xFFFF without HP faces). Copies all used 0. They now
+  get their own range after the level's last one (`AssignCoupledFaceCache`).
+  Copies are one-sided like the source faces, and a copy may turn at most 90
+  degrees from its source (existing winding rule), so face a copy the way its
+  source faced the open ground.
+- Scenery tiles (no collision of their own, e.g. a doorway's trim) could not be
+  removed or copied. `TerrainSceneryFaceRule` admits a face only when no collision
+  triangle lies on it (portal walk-in triangles excluded); editor and Create BIN
+  use the same rule.
+- A terrain add/remove that grows its level shifted every later level in the WAD,
+  so another level's terrain, environment or sky step in the same Create BIN read
+  the wrong bytes ("LP color … command byte"). Such terrain steps now run after
+  the other levels' offset-based steps, last WAD entry first, and refuse clearly
+  if their level moved anyway.
+
+Emulator (isolated): Artisans with the Stone Hill tower removed, Town Square and
+Dark Hollow doorways copied and the portal moved; walk-in loads Stone Hill; 900
+stable frames; copied stonework visible from both sides. Regression gate
+`tools/Run-SpyroEditorRegression.py`: 352 checks, 0 failed.
+
 # Spyro Editor 1.2 — owner feedback on 1.1 — 5 October 2026
 
 Version 1.2 (internal `1.2.0`; Claude; same branch `release/release-ready-20261004`)

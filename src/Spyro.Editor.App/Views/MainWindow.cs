@@ -298,6 +298,7 @@ public sealed partial class MainWindow : Window
     private GeometryCandidate? _terrainCoverageGeometry;
     private HashSet<string>? _terrainCoverageKeys;
     private readonly Dictionary<TerrainPolygon, TerrainCollisionCoverage> _terrainCoverageCache = new();
+    private readonly Dictionary<TerrainPolygon, bool> _terrainSceneryCache = new();
     private HashSet<string>? _terrainCollisionPointKeys;
     private HashSet<string>? _terrainCollisionPointKeysSource;
     private List<SpyroCollisionPoint[]>? _terrainCollisionTriangles;
@@ -6094,7 +6095,9 @@ public sealed partial class MainWindow : Window
                 ? "visible face is not source-mapped yet"
                 : "source-search map is missing";
         string collision = readiness.CanRemoveCollision
-            ? $"matched collision can be neutralized ({readiness.MatchedCollisionTriangles}/{readiness.TotalCollisionTriangles} triangle(s))"
+            ? readiness.MatchedCollisionTriangles == 0
+                ? "scenery face with no collision on it, so only the picture is removed"
+                : $"matched collision can be neutralized ({readiness.MatchedCollisionTriangles}/{readiness.TotalCollisionTriangles} triangle(s))"
             : readiness.HasCollisionData
                 ? readiness.TotalCollisionTriangles > 0
                     ? "no matching collision triangles for this face"
@@ -6109,7 +6112,8 @@ public sealed partial class MainWindow : Window
         if (hasSourceDerivedFace)
         {
             TerrainCollisionCoverage native = GetTerrainCollisionCoverage(terrain);
-            return new(true,true,true,_terrainCollisionTriangleKeys.Count>0,native.MatchedTriangles,native.TotalTriangles,true,native.MatchedTriangles>0);
+            return new(true,true,true,_terrainCollisionTriangleKeys.Count>0,native.MatchedTriangles,native.TotalTriangles,true,
+                native.MatchedTriangles>0 || IsSourceDerivedSceneryTerrainFace(terrain));
         }
         bool hasSourceSearch = TryBuildTerrainSectorAppendSlack(out Dictionary<int, int> sectorSlack);
         bool hasSourceSector = (hasSourceSearch && terrain.SectorOffset >= 0 && sectorSlack.ContainsKey(terrain.SectorOffset)) || hasSourceDerivedFace;
@@ -6142,7 +6146,9 @@ public sealed partial class MainWindow : Window
             TerrainCollisionCoverage coverage = GetTerrainCollisionCoverage(terrain);
             return coverage.TotalTriangles > 0 && coverage.MatchedTriangles == coverage.TotalTriangles
                 ? "This source face can be copied with its gameplay collision. Move or reshape the copy, then Create BIN checks the final terrain and memory capacity."
-                : "Choose a high-detail face whose complete gameplay collision is matched before copying terrain.";
+                : IsSourceDerivedSceneryTerrainFace(terrain)
+                    ? "This face is scenery: the game has no collision on it, so the copy is decoration Spyro passes through. Create BIN checks the final terrain and memory capacity."
+                    : "Choose a high-detail face whose complete gameplay collision is matched before copying terrain.";
         }
         TerrainAddCopyFaceReadiness readiness = GetTerrainAddCopyFaceReadiness(terrain);
         string detail = readiness.IsHighDetail
@@ -6180,7 +6186,7 @@ public sealed partial class MainWindow : Window
             TerrainCollisionCoverage native = GetTerrainCollisionCoverage(terrain);
             bool hp=string.Equals(terrain.Detail,"hp",StringComparison.OrdinalIgnoreCase);
             return new(hp,true,true,0,requiredSlack,native.MatchedTriangles>0,native.MatchedTriangles,native.TotalTriangles,
-                hp&&native.TotalTriangles>0&&native.MatchedTriangles==native.TotalTriangles);
+                hp&&(native.TotalTriangles>0&&native.MatchedTriangles==native.TotalTriangles || IsSourceDerivedSceneryTerrainFace(terrain)));
         }
         bool hasSourceSearch = TryBuildTerrainSectorAppendSlack(out Dictionary<int, int> sectorSlack);
         int availableSlack = terrain.SectorOffset >= 0 && sectorSlack.TryGetValue(terrain.SectorOffset, out int slack)
@@ -13988,6 +13994,7 @@ public sealed partial class MainWindow : Window
             }
         }
 
+        List<EditedLevelExportTarget> deferredStructuralTerrainTargets = [];
         foreach (EditedLevelExportTarget target in targets)
         {
             bool patchedThisLevel = false;
@@ -14074,8 +14081,18 @@ public sealed partial class MainWindow : Window
                 }
             }
 
-            if ((target.HasTerrainEdits || target.HasCustomTerrainTextures || target.HasNativeTerrainTextureRelocations) &&
-                !privateTextureTerrainPrepassLevels.Contains(LevelCatalog.NormalizeKey(target.Level.Key)))
+            bool terrainStage = (target.HasTerrainEdits || target.HasCustomTerrainTextures || target.HasNativeTerrainTextureRelocations) &&
+                !privateTextureTerrainPrepassLevels.Contains(LevelCatalog.NormalizeKey(target.Level.Key));
+            if (terrainStage && target.HasTerrainEdits &&
+                TerrainPatchExporter.HasStructuralTerrainEdits(Path.Combine(_workspace.RootPath, $"{target.Level.Key}-terrain-edits.json")))
+            {
+                // Adding or removing tiles can grow this level's data, which moves every later level in the
+                // WAD. The other levels' terrain, environment, sky, name and music steps locate their bytes by
+                // original-disc offsets, so this level's terrain runs after them (see below).
+                deferredStructuralTerrainTargets.Add(target);
+                terrainStage = false;
+            }
+            if (terrainStage)
             {
                 string outputName = $"{++step:00}-{SafeOutputPart(target.Level.DisplayName)}-terrain";
                 TerrainPatchResult? terrainResult = await TryCreateTerrainTestAsync(
@@ -14367,6 +14384,46 @@ public sealed partial class MainWindow : Window
             RequireFreeFlightExportOwner(flightIntent, flightOwner, flightImageSelection, flightSkyImageSelection);
             stepSummaries.Add(new { kind = "global-free-flight", enabled = flightIntent?.Enabled==true,
                 levels = "30 normal retail levels; native flight courses unchanged", nativeGameplayAcceptance = false });
+        }
+
+        // Terrain that adds or removes tiles, deferred from the level loop. Later WAD entries go first so a
+        // level whose data grows never moves a level still waiting for its own terrain step.
+        foreach (EditedLevelExportTarget target in deferredStructuralTerrainTargets.OrderByDescending(t => TerrainPatchExporter.TextureAssetWadIndexForLevel(t.Level)))
+        {
+            long originalAt = await Task.Run(() => TerrainPatchExporter.TerrainSubfileWadOffset(sourceImage, target.Level));
+            long currentAt = await Task.Run(() => TerrainPatchExporter.TerrainSubfileWadOffset(currentImage, target.Level));
+            if (originalAt != currentAt)
+                throw new InvalidOperationException(
+                    $"{target.Level.DisplayName}'s terrain data moved in this build (another edit grew an earlier part of the disc), so its added or removed tiles cannot be placed safely. Build {target.Level.DisplayName}'s terrain in a separate Create BIN.");
+            string outputName = $"{++step:00}-{SafeOutputPart(target.Level.DisplayName)}-terrain";
+            TerrainPatchResult? terrainResult = await TryCreateTerrainTestAsync(
+                target.Level,
+                currentImage,
+                currentCue,
+                tempDir,
+                outputName,
+                consumeDisposableSourceImage:
+                    IsDisposableCombinedBuildImage(currentImage, tempDir));
+            if (terrainResult == null)
+                continue;
+            terrainPatches += terrainResult.Plan.PatchCount;
+            skippedEdits += terrainResult.Plan.SkippedEdits.Count;
+            skippedEditDetails.AddRange(terrainResult.Plan.SkippedEdits.Select(skipped => $"{target.Level.DisplayName}: {skipped}"));
+            stepSummaries.Add(new
+            {
+                level = target.Level.DisplayName,
+                kind = "terrain",
+                terrainResult.Plan.PatchCount,
+                skipped = terrainResult.Plan.SkippedEdits.Count,
+                plan = terrainResult.OutputPlanPath
+            });
+            if (terrainResult.WroteImage)
+            {
+                currentImage = terrainResult.OutputImagePath;
+                currentCue = terrainResult.OutputCuePath;
+                if (!patchedLevelNames.Contains(target.Level.DisplayName, StringComparer.OrdinalIgnoreCase))
+                    patchedLevelNames.Add(target.Level.DisplayName);
+            }
         }
 
         // Universal cross-level Moby imports run last: they may grow level data and overlay WAD
@@ -19507,12 +19564,65 @@ public sealed partial class MainWindow : Window
             return new(Math.Max(0,terrain.Points.Count-2),Math.Max(0,terrain.Points.Count-2),Enumerable.Range(0,terrain.Points.Count).ToHashSet());
         if (!ReferenceEquals(_terrainCoverageGeometry,_currentGeometry) || !ReferenceEquals(_terrainCoverageKeys,_terrainCollisionTriangleKeys))
         {
-            _terrainCoverageGeometry=_currentGeometry;_terrainCoverageKeys=_terrainCollisionTriangleKeys;_terrainCoverageCache.Clear();
+            _terrainCoverageGeometry=_currentGeometry;_terrainCoverageKeys=_terrainCollisionTriangleKeys;_terrainCoverageCache.Clear();_terrainSceneryCache.Clear();
         }
         if (!_terrainCoverageCache.TryGetValue(terrain,out TerrainCollisionCoverage coverage))
             _terrainCoverageCache[terrain]=coverage=WithCollisionCorners(terrain,GetTerrainCollisionCoverage(terrain,_terrainCollisionTriangleKeys),TerrainCollisionPointKeys());
         return coverage;
     }
+
+    /// <summary>
+    /// A high-detail face of a source-derived level with no collision on it at all (see
+    /// <see cref="TerrainSceneryFaceRule"/>). Create BIN can remove or copy it as a picture only.
+    /// </summary>
+    private bool IsSourceDerivedSceneryTerrainFace(TerrainPolygon terrain)
+    {
+        if (!IsSourceDerivedVisibleTerrainFace(terrain) || !string.Equals(terrain.Detail, "hp", StringComparison.OrdinalIgnoreCase) ||
+            _terrainCollisionTriangleKeys.Count == 0 || terrain.Points.Count is < 3 or > 4 || terrain.OriginalZValues.Length < terrain.Points.Count)
+            return false;
+        if (GetTerrainCollisionCoverage(terrain).MatchedTriangles > 0)
+            return false;
+        if (_terrainSceneryCache.TryGetValue(terrain, out bool cached))
+            return cached;
+        var points = terrain.OriginalPoints.Count == terrain.Points.Count ? terrain.OriginalPoints : terrain.Points;
+        var face = Enumerable.Range(0, terrain.Points.Count).Select(i => ((double)points[i].X, (double)points[i].Y, (double)terrain.OriginalZValues[i])).ToArray();
+        HashSet<string> portalWalkIn = PortalWalkInTriangleKeys();
+        bool scenery = TerrainSceneryFaceRule.HasNoCollisionOnFace(face, TerrainCollisionTriangles().Triangles
+            .Where(triangle => portalWalkIn.Count == 0 || !portalWalkIn.Contains(CollisionPointsKey(triangle))));
+        _terrainSceneryCache[terrain] = scenery;
+        return scenery;
+    }
+
+    /// <summary>The level's portal walk-in triangles (surface type 6), which Create BIN also leaves out of the scenery rule.</summary>
+    private HashSet<string> PortalWalkInTriangleKeys()
+    {
+        if (_currentLevel == null || _currentGeometry == null)
+            return [];
+        try
+        {
+            string sourceImage = ResolveTerrainTextureSourceImage(_currentLevel);
+            if (string.IsNullOrWhiteSpace(sourceImage) || !File.Exists(sourceImage))
+                return [];
+            string levelKey = LevelCatalog.NormalizeKey(_currentLevel.Key);
+            if (!_nativeTerrainSurfaceSources.TryGetValue(levelKey, out NativeTerrainSurfaceSourceData? source))
+            {
+                if (TryBuildNativeTerrainSurfaceCatalog(_currentLevel, _currentGeometry, out _) == null ||
+                    !_nativeTerrainSurfaceSources.TryGetValue(levelKey, out source))
+                    return [];
+            }
+            return source.CollisionSurfaceTriangles
+                .Where(triangle => triangle.HasSpecialSurface && triangle.SurfaceType == 6)
+                .Select(triangle => CollisionPointsKey([new(triangle.P1.X, triangle.P1.Y, triangle.P1.Z), new(triangle.P2.X, triangle.P2.Y, triangle.P2.Z), new(triangle.P3.X, triangle.P3.Y, triangle.P3.Z)]))
+                .ToHashSet(StringComparer.Ordinal);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or IOException)
+        {
+            return [];
+        }
+    }
+
+    private static string CollisionPointsKey(IReadOnlyList<SpyroCollisionPoint> points) =>
+        string.Join("|", points.Select(point => VisualPointKey(point.X, point.Y, point.Z)).OrderBy(value => value, StringComparer.Ordinal));
 
     /// <summary>Every corner of the level's collision mesh, keyed like <see cref="VisualPointKey"/>.</summary>
     private HashSet<string> TerrainCollisionPointKeys()
@@ -23067,7 +23177,9 @@ public sealed partial class MainWindow : Window
         string collision = FormatTerrainCollisionReadiness(terrain);
         TerrainRemoveFaceReadiness readiness = GetTerrainRemoveFaceReadiness(terrain);
         string export = CanRemoveTerrainForGameplay(readiness)
-            ? "Create BIN can neutralize the visible face and the matched playable collision triangle(s)."
+            ? readiness.MatchedCollisionTriangles == 0
+                ? "Create BIN can remove the visible face. It is scenery with no collision on it, so gameplay is unchanged."
+                : "Create BIN can neutralize the visible face and the matched playable collision triangle(s)."
             : $"Remove Terrain will stay disabled until this is gameplay-safe. {BuildTerrainRemoveGameplayBlockedHint(terrain)}";
         string existingEdits = terrain.IsTerrainEdited
             ? $"Existing staged edits on this face will be included with the remove-face edit. Current readiness: {FormatTerrainPatchReadiness(terrain)}."

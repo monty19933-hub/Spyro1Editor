@@ -82,6 +82,14 @@ if (args.Contains("--collision-lookup-probe", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Contains("--new-level", StringComparer.Ordinal))
+{
+    if (args.Length < 4) throw new ArgumentException("Usage: UiSmoke --new-level <project folder> <output folder> <step>");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    NewLevelBuildCases.Run(args[1], args[2], args[3]);
+    return 0;
+}
+
 if (args.Contains("--tile-type-ui", StringComparer.Ordinal))
 {
     if (args.Length < 3) throw new ArgumentException("Usage: UiSmoke --tile-type-ui <project folder> <output folder> [level key] [--no-bin]");
