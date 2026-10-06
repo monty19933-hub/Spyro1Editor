@@ -49,6 +49,14 @@ level-set loader let Stone Hill inherit the resident flight slot a chosen level
 had filled; the emulator caught it and the loader now clears the flight slots of
 unlisted levels (oracle extended to the slot loop).
 
+Packages: task-root `outputs/SpyroEditor-V1.2-release`, built from `6213733`
+(macOS zip SHA-256 `e1a03758…f42fb3`, Windows zip `6941e6e8…327e92`; full sums in
+`SHA256SUMS.txt`), Developer ID signed, not notarized; release verifier passes.
+Checks on the final tree: 18/18 UI modes, the four new UI tests, regression gate
+352/352, flight oracle 530 679 checks; the packaged app was opened through
+LaunchServices with real mouse input (Tile Type…, the 64-unit refusal, Choose
+levels).
+
 Not verified: see 1.1 below; in addition, Tile Type… and the sector re-base were
 played in Artisans only; per-level flight in the two chosen levels and two
 unchosen ones only.
