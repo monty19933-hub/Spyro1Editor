@@ -155,6 +155,42 @@ public sealed class UniversalLevelData
         return slots;
     }
 
+    /// <summary>Moves the packages of <paramref name="classIds"/>, all located after <paramref name="anchorClassId"/>'s
+    /// package, to just before it, in their current order. Every package keeps its bytes and its alignment mod 8; the
+    /// model subfile grows by whole sectors only if realignment needs room, and registrations stay in root order.
+    /// Returns the bytes the level data grew by.</summary>
+    public int MoveModelsBefore(int anchorClassId, IReadOnlyCollection<int> classIds)
+    {
+        if (classIds.Count == 0) return 0;
+        var regs = Registrations();
+        var (mo, ml) = Subfiles()[2];
+        var anchor = regs.Single(r => r.ClassId == anchorClassId);
+        var tail = regs.Where(r => r.Root >= anchor.Root).OrderBy(r => r.Root).ToList();
+        if (classIds.Contains(anchorClassId) || classIds.Any(c => !tail.Any(r => r.ClassId == c)))
+            throw new InvalidDataException("Only packages after the anchor model can move before it.");
+        using MemoryStream body = new();
+        Dictionary<int, int> newRoot = [];
+        foreach (var r in tail.Where(r => classIds.Contains(r.ClassId)).Concat(tail.Where(r => !classIds.Contains(r.ClassId))))
+        {
+            int i = tail.IndexOf(r), end = i + 1 < tail.Count ? tail[i + 1].Root : mo + ml;
+            int pos = anchor.Root + (int)body.Length;
+            body.Write(new byte[((r.Root - pos) % 8 + 8) % 8]);
+            newRoot[r.Slot] = anchor.Root + (int)body.Length;
+            body.Write(_data, r.Root, end - r.Root);
+        }
+        int growth = Align(Math.Max(0, anchor.Root + (int)body.Length - (mo + ml)), 0x800);
+        if (growth > 0) GrowSubfile(2, growth);
+        _data.AsSpan(anchor.Root, mo + ml + growth - anchor.Root).Clear();
+        body.ToArray().CopyTo(_data, anchor.Root);
+        var ordered = regs.Select(r => (r.ClassId, Root: newRoot.TryGetValue(r.Slot, out int moved) ? moved : r.Root)).OrderBy(r => r.Root).ToList();
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            Put32(0x50 + 4 * (i + 1), ordered[i].Root);
+            BinaryPrimitives.WriteUInt16LittleEndian(_data.AsSpan(0x150 + 2 * (i + 1)), (ushort)ordered[i].ClassId);
+        }
+        return growth;
+    }
+
     /// <summary>Removes the model packages of <paramref name="classIds"/>: later packages move down (keeping
     /// their alignment mod 8), the model subfile shrinks by whole sectors, later subfiles and roots shift,
     /// and the registration table is compacted. Returns the bytes the level data shrank by.</summary>

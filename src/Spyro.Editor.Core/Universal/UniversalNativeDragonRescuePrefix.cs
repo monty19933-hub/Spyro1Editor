@@ -7,7 +7,11 @@ internal sealed record UniversalNativeDragonRescueBudget(int RequiredPrefix,int 
 
 /// <summary>The original dragon loader uses the registered250 model as the
 /// end of temporary stream storage. Model removal can preserve every remaining
-/// package yet shrink that live reservation enough to underflow native memcpy.</summary>
+/// package yet shrink that live reservation enough to underflow native memcpy.
+/// A stream that does not fit whole is read in two parts: the first fills the
+/// reservation (its sound prefix goes to the SPU), the rest of the stream is then
+/// moved down and the remainder read behind it, ending at modelbase+size-prefix.
+/// Both the sound prefix and that remainder must fit below the live statue.</summary>
 internal static class UniversalNativeDragonRescuePrefix
 {
     private static readonly IReadOnlyDictionary<string,string> OriginalHosts=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase)
@@ -46,6 +50,13 @@ internal static class UniversalNativeDragonRescuePrefix
     private static void Require(bool ok,string why){if(!ok)throw new InvalidDataException("Dragon rescue capacity: "+why);}
     internal static UniversalNativeDragonRescueBudget? RequireSafe(string key,string name,UniversalLevelData original,UniversalLevelData written,byte[] exe)
     {
+        var budget=Measure(key,name,original,written,exe);
+        Require(budget==null||budget.Deficit==0,$"{name}'s remaining dragon rescues need {budget?.Deficit:N0} more bytes in their temporary area. Restore some removed native object families before exporting; that reserved space cannot be reclaimed.");
+        return budget;
+    }
+    /// <summary>The rescue reservation below the statue against the largest stream's need, or null without a statue.</summary>
+    internal static UniversalNativeDragonRescueBudget? Measure(string key,string name,UniversalLevelData original,UniversalLevelData written,byte[] exe)
+    {
         var statue=written.Registrations().SingleOrDefault(r=>r.ClassId==250);
         bool live=Enumerable.Range(0,written.Scene().RowCount).Any(r=>BinaryPrimitives.ReadUInt16LittleEndian(written.Row(r).AsSpan(54))==250);
         if(statue==null){Require(!live,name+" has a remaining dragon statue without its complete native model.");return null;}
@@ -61,11 +72,11 @@ internal static class UniversalNativeDragonRescuePrefix
             // Native14C04 sector-rounds pointer250-modelbase. Native14DF8
             // then copies readBytes-header[12], so the full sound prefix must
             // be present BEFORE the first partial-stream copy.
-            need=Math.Max(need,UniversalLevelData.Align(I(original.Bytes,a.Offset+12),2048));count++;
+            // Native14E6C then reads the rest of the stream behind the moved part, up to modelbase+size-prefix.
+            int prefix=I(original.Bytes,a.Offset+12);
+            need=Math.Max(need,Math.Max(UniversalLevelData.Align(prefix,2048),UniversalLevelData.Align(a.Length-prefix,2048)));count++;
         }
         Require(count>0,"no retained rescue stream was authenticated.");var models=final[2];Require(statue!.Root>=models.Offset&&statue.Root<models.Offset+models.Length,"the registered dragon statue model leaves its owned model subfile.");int available=(statue.Root-models.Offset)/2048*2048;
-        var budget=new UniversalNativeDragonRescueBudget(need,available,count);
-        Require(budget.Deficit==0,$"{name}'s remaining dragon rescues need {budget.Deficit:N0} more bytes in their temporary area. Restore some removed native object families before exporting; that reserved space cannot be reclaimed.");
-        return budget;
+        return new UniversalNativeDragonRescueBudget(need,available,count);
     }
 }

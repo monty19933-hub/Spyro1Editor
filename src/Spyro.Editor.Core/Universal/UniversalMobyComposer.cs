@@ -834,6 +834,18 @@ public static class UniversalMobyComposer
         linkedWorld?.RequireFinal(dest,new(overlay,UniversalExeBindings.Read(exe,destination.LevelId)),exe,rows,newRows);
         greenWorld?.RequireFinal(dest,new(overlay,UniversalExeBindings.Read(exe,destination.LevelId)),exe,rows,newRows);
         highCavesWorld?.RequireFinal(dest,new(overlay,UniversalExeBindings.Read(exe,destination.LevelId)),exe,rows,newRows);
+        // A dragon rescue streams into the model area below the statue. When removed native models leave too little
+        // room there, imported models move below the statue too; the game reloads that area after every rescue.
+        // Compositions whose model layout is certified exactly above keep it and are refused instead.
+        if (magicChain == null && magicOriginal == null && magicPair == null && linkedWorld == null && greenWorld == null &&
+            highCavesWorld == null && flightGate == null && flightChest == null &&
+            UniversalNativeDragonRescuePrefix.Measure(destination.Key, destination.DisplayName, originalDestination.Data, dest, exe) is { Deficit: > 0 })
+        {
+            var original = originalDestination.Data.Registrations();
+            int originalStatue = original.Single(r => r.ClassId == 250).Root, statue = dest.Registrations().Single(r => r.ClassId == 250).Root;
+            var nativeTail = original.Where(r => r.Root > originalStatue).Select(r => r.ClassId).ToHashSet();
+            modelGrowth += dest.MoveModelsBefore(250, dest.Registrations().Where(r => r.Root > statue && !nativeTail.Contains(r.ClassId)).Select(r => r.ClassId).ToArray());
+        }
         UniversalNativeDragonRescuePrefix.RequireSafe(destination.Key,destination.DisplayName,originalDestination.Data,dest,exe);
         uint finalEnd = RuntimeEnd(dest, copyBuffer);
         uint limit = NormalBufferFloor - RamSafetyMargin;
