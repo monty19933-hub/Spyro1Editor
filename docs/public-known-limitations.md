@@ -9,6 +9,9 @@
   forbid. **Tile Type…** changes what Spyro finds on a tile. **Fly Anywhere**
   can be limited to chosen levels. **Find space for this object…** shows its
   progress, lists results as it finds them and can be stopped.
+- Dragons cannot be added to a level you build or clear with Start Blank. A
+  dragon's rescue (cutscene, speech, camera) belongs to the level that owns it,
+  and a built level has none of its own.
 - Version 1.1 reorganizes the interface (first-run welcome, carded Objects and
   Terrain tabs, plain wording, one Export Check), adds **Fly Anywhere**, a red
   bar that explains and undoes terrain the game cannot stand on, **Show Game

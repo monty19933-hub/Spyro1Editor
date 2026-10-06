@@ -6,6 +6,7 @@ New
 
 - Tile Type…: in the Terrain tab's Tiles card, choose what Spyro finds on the selected tiles — solid ground, water or lava that hurts, a supercharge ramp, and whatever else the level already defines. The picture stays; the ground behaves differently. The Tiles card names the kind of the selected tile. Undo Terrain puts it back.
 - Fly Anywhere can be limited to chosen levels: open "Choose levels" under the whole-game switch and tick the levels you want. Everywhere else Spyro moves as in the original game. A level of your own flies whenever at least one level is ticked.
+- A level you build, or clear with Start Blank, can use another level's skybox: in its level settings, pick a level under "Skybox (borrow a level's sky)" and press Use this skybox. Flight levels' skies are not offered.
 - Lower now works on tiles at the floor of their part of the level. The game stores each part's heights within a band that used to start exactly at the lowest tile; Create BIN now moves the band when a lowered corner needs it.
 
 Clearer
@@ -18,6 +19,8 @@ Clearer
 
 Fixed
 
+- Giving a level another level's look (the environment recolour) left far hills, and grass seen from afar, in their old green. Grass and distant scenery now take the colour of the level the look comes from, unless that level is green itself.
+- Create BIN refused enemies from Dark Passage, Haunted Towers, Terrace Village and Twilight Harbor ("… lost native … owner") in a game that also had recoloured dragons or removed objects.
 - Copied terrain (Add Terrain) now appears in the game. The copies were saved, but the game never drew them.
 - Decorative tiles that Spyro never touches, such as the trim around a doorway, can now be removed and copied too.
 - Create BIN could fail with "LP color … command byte" when one level's added or removed tiles made its data grow while another level in the same game had terrain, colour or sky changes.

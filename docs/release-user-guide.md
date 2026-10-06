@@ -288,6 +288,10 @@ contain copied disc data.
 - Choosing music for any level from the 46 built-in tracks present on the
   user's disc. A saved choice keeps looping instead of switching back to that
   level's native late-play alternates after 8-12 minutes.
+- A level built from nothing, or cleared with Start Blank, can borrow the sky of
+  any non-flight retail level from its level settings (`Skybox (borrow a level's
+  sky)`). The donor's sky block is copied whole into the built level, including
+  its background color, which then replaces the plain sky color.
 - Editing the native sky in every level from the release-visible `Skybox`
   panel. `Recolor` preserves native geometry and accepts Night, Dusk, manual
   colors, or colors sampled from a user PNG. `Swap From Level` lists skies from
