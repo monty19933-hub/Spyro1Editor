@@ -279,6 +279,13 @@ internal static partial class NewLevelBuildCases
             if (scope != null && !confirmed)
             {
                 Console.WriteLine("scope dialog: " + string.Join(" | ", Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(scope).OfType<TextBlock>().Select(t => t.Text).Where(t => !string.IsNullOrWhiteSpace(t)).Take(30)));
+                var start = Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(scope).OfType<ComboBox>().FirstOrDefault(c => c.Name == "ExportStartLevel");
+                if (start != null)
+                {
+                    Console.WriteLine("start level choices: " + string.Join(" | ", start.ItemsSource!.Cast<object>()));
+                    start.SelectedIndex = 0; Pump(5);
+                    Console.WriteLine("New Game starts in: " + start.SelectedItem);
+                }
                 Click(Find<Button>(scope, "ExportCreate"));
                 confirmed = true;
             }

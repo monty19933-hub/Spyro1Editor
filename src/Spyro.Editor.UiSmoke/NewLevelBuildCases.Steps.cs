@@ -29,6 +29,9 @@ internal static partial class NewLevelBuildCases
             case "fitmix": FitMix(window); return true;
             case "eggs-fix": EggsFix(window); return true;
             case "gems": Gems(window); return true;
+            case "blank-trial": BlankTrial(window); return true;
+            case "sky-build": SkyBuild(window); return true;
+            case "sky-objects": SkyObjectsStep(window); return true;
             default: return false;
         }
     }
@@ -132,11 +135,13 @@ internal static partial class NewLevelBuildCases
 
     private static void Settings(MainWindow window, string outDir)
     {
-        Load(window, "stonehill");
+        Load(window, System.Environment.GetEnvironmentVariable("NEW_LEVEL_SETTINGS_LEVEL") ?? "stonehill");
         SelectTab(window, "Game Settings");
         string name = System.Environment.GetEnvironmentVariable("NEW_LEVEL_NAME") ?? "FROSTBITE FIELDS";
         var target = Get<Avalonia.Controls.ComboBox>(window, "_levelTextTargetBox");
-        var stoneTarget = target.Items.Cast<object>().First(o => o.ToString()!.Contains("Stone Hill", StringComparison.OrdinalIgnoreCase));
+        Console.WriteLine("name targets: " + string.Join(" | ", target.Items.Cast<object>()));
+        string targetName = System.Environment.GetEnvironmentVariable("NEW_LEVEL_TEXT_TARGET") ?? "Stone Hill";
+        var stoneTarget = target.Items.Cast<object>().First(o => o.ToString()!.Contains(targetName, StringComparison.OrdinalIgnoreCase));
         target.SelectedItem = stoneTarget; Pump(20);
         Console.WriteLine("name target: " + stoneTarget + " — " + Get<Avalonia.Controls.TextBlock>(window, "_levelTextDetails").Text?.Replace('\n', ' '));
         Get<Avalonia.Controls.TextBox>(window, "_levelTextReplacementBox").Text = name; Pump(10);
