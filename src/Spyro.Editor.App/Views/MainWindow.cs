@@ -14476,6 +14476,8 @@ public sealed partial class MainWindow : Window
             string donorImage = sourceImage;
             bool needsJapanese = universalPlacements.Values.Any(list => list.Any(p => UniversalSpecialCatalog.RequiresJapaneseSource(p.SpecialId)));
             string japaneseImage = needsJapanese ? UniversalJapaneseDiscLocator.Find(_workspace) : "";
+            bool needsCrash = universalPlacements.Values.Any(list => list.Any(p => UniversalSpecialCatalog.RequiresCrashSource(p.SpecialId)));
+            string crashImage = needsCrash ? Spyro.Editor.Core.Crash.CrashWarpedDiscLocator.Find(_workspace) : "";
             UniversalExportResult universal = await Task.Run(() =>
             {
                 UniversalSourceLibrary.RequireOriginal(donorImage);
@@ -14487,7 +14489,14 @@ public sealed partial class MainWindow : Window
                         throw new InvalidDataException("Dragonfly eggs and signs are copied from the unchanged original Spyro the Dragon (Japan) disc. Choose it with \"Japanese disc…\" in the Add Moby browser.");
                     japanese = new UniversalJapaneseSource(japaneseImage);
                 }
-                return UniversalMobyExport.Apply(library, currentImage, universalImage, _retailCatalog, universalPlacements, japanese: japanese,
+                Spyro.Editor.Core.Crash.CrashWarpedDisc? crash = null;
+                if (needsCrash)
+                {
+                    if (!Spyro.Editor.Core.Crash.CrashWarpedDiscLocator.IsUsable(crashImage))
+                        throw new InvalidDataException("Crash crates, TNT and Nitro use box art and sounds from your Crash Bandicoot: Warped (USA) disc. Choose it with \"Crash disc…\" in the Add Object browser.");
+                    crash = new Spyro.Editor.Core.Crash.CrashWarpedDisc(crashImage);
+                }
+                return UniversalMobyExport.Apply(library, currentImage, universalImage, _retailCatalog, universalPlacements, japanese: japanese, crash: crash,
                     removedRowsByLevel: universalRemoved, identityWorkspace: _workspace.RootPath,
                     deferSpecialHooks: deferSharedRuntimeHooks,
                     // The completed ordinary object stage already adjusted native removal rewards.

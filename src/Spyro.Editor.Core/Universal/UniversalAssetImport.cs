@@ -264,11 +264,17 @@ public static class UniversalAssetImport
         }
         Dictionary<string, int> clutByContent = [];
         List<TexRequest> placed = [];
+        // Packages that share one source VRAM image (the editor's Crash boxes) reuse a region already copied
+        // from the same source rectangle and palette instead of copying it again.
+        Dictionary<(byte[] Source, int Page, int Pal, int Bx0, int MinV, int W, int H), (int X, int Y)> sharedRegions =
+            new(new SharedRegionComparer());
         var queue = new List<TexRequest>(pending.OrderByDescending(r => r.W * r.H).ThenByDescending(r => r.H));
         while (queue.Count > 0)
         {
             var r = queue[0]; queue.RemoveAt(0);
-            var found = alloc.Rectangle(r.W, r.H, 128 << r.Depth);
+            var regionKey = (items[r.Item].SourceVram, r.Page, r.Pal, r.Bx0, r.MinV, r.W, r.H);
+            bool shared = sharedRegions.TryGetValue(regionKey, out var sharedAt);
+            var found = shared ? sharedAt : alloc.Rectangle(r.W, r.H, 128 << r.Depth);
             if (found == null)
             {
                 var pkg = items[r.Item].Pkg;
@@ -282,8 +288,13 @@ public static class UniversalAssetImport
                 throw new InvalidDataException($"Not enough free texture memory in the destination level for a {(r.Depth == 0 ? r.W * 2 : r.W >> (r.Depth - 1))}x{r.H} texture region ({items[r.Item].Label}).");
             }
             var (x, y) = found.Value;
-            for (int row = 0; row < r.H; row++) r.Rect.AsSpan(row * r.W, r.W).CopyTo(destVram.Slice((y + row) * 1024 + x, r.W));
-            pixelBytes[r.Item] += r.W * r.H;
+            if (shared) reused[r.Item]++;
+            else
+            {
+                for (int row = 0; row < r.H; row++) r.Rect.AsSpan(row * r.W, r.W).CopyTo(destVram.Slice((y + row) * 1024 + x, r.W));
+                pixelBytes[r.Item] += r.W * r.H;
+                if (items.Count(i => ReferenceEquals(i.SourceVram, items[r.Item].SourceVram)) > 1) sharedRegions[regionKey] = (x, y);
+            }
             int newPal = r.Pal, paletteBytes = PaletteBytes(r.Depth);
             if (paletteBytes > 0)
             {
@@ -317,6 +328,14 @@ public static class UniversalAssetImport
         if (metalCertificates != null)
             foreach (var (index, certificate) in metalCertificates) certificate.RequireShaderFields(items[index].Pkg);
         return Enumerable.Range(0, items.Count).Select(i => new UniversalTextureReport(groupCount[i], pixelBytes[i], cluts[i], reused[i])).ToList();
+    }
+
+    private sealed class SharedRegionComparer : IEqualityComparer<(byte[] Source, int Page, int Pal, int Bx0, int MinV, int W, int H)>
+    {
+        public bool Equals((byte[] Source, int Page, int Pal, int Bx0, int MinV, int W, int H) a, (byte[] Source, int Page, int Pal, int Bx0, int MinV, int W, int H) b) =>
+            ReferenceEquals(a.Source, b.Source) && (a.Page, a.Pal, a.Bx0, a.MinV, a.W, a.H) == (b.Page, b.Pal, b.Bx0, b.MinV, b.W, b.H);
+        public int GetHashCode((byte[] Source, int Page, int Pal, int Bx0, int MinV, int W, int H) k) =>
+            HashCode.Combine(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(k.Source), k.Page, k.Pal, k.Bx0, k.MinV, k.W, k.H);
     }
 
     private static TexRequest MakeRequest(int item, byte[] pkg, byte[] src, int page, int pal, List<int> refs)

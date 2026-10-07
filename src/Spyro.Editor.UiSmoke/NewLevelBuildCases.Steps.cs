@@ -40,6 +40,9 @@ internal static partial class NewLevelBuildCases
             case "sky-update2": SkyUpdate2Step(window); return true;
             case "sky-update3": SkyUpdate3Step(window); return true;
             case "sky-picker": SkyPickerStep(window); return true;
+            case "crash-disc": CrashDisc(window); return true;
+            case "crash-textures": CrashTextures(window); return true;
+            case "crash-objects": CrashObjects(window); return true;
             default: return false;
         }
     }
@@ -172,6 +175,7 @@ internal static partial class NewLevelBuildCases
         Wait(() => saveName.IsCompleted, "apply name", 300);
         Console.WriteLine("apply name: " + Status(window));
         string track = System.Environment.GetEnvironmentVariable("NEW_LEVEL_MUSIC") ?? "Icy Flight";
+        if (track == "keep") { Snapshot(window, Path.Combine(outDir, "settings.png")); Console.WriteLine("NEW_LEVEL_SETTINGS_OK"); return; }
         var music = Get<Avalonia.Controls.ComboBox>(window, "_levelMusicTrackBox");
         music.SelectedItem = music.Items.Cast<object>().First(o => o.ToString()!.StartsWith(track, StringComparison.Ordinal)); Pump(10);
         var saveMusic = (Task)Invoke(window, "SaveLevelMusicPlanAsync")!;

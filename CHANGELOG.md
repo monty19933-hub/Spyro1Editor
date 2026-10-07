@@ -8,6 +8,12 @@ New
 - Fly Anywhere can be limited to chosen levels: open "Choose levels" under the whole-game switch and tick the levels you want. Everywhere else Spyro moves as in the original game. A level of your own flies whenever at least one level is ticked.
 - A level you build, or clear with Start Blank, can use another level's skybox: in its level settings, pick a level under "Skybox (borrow a level's sky)" and press Use this skybox. Flight levels' skies are not offered.
 - Snow on trees and plants: on the Environment tab, a level whose look is matched to another level can have its trees and plants turn snow white where the light hits them and frosty blue in shade, close up and far away. Trunks keep their colour.
+- Crash Bandicoot boxes (needs your Crash Bandicoot: Warped (USA) disc; choose it once with "Choose Crash disc…" in the Add Object browser, it is only read). In any ground level:
+  - Crash crate: breaks when Spyro flames it, charges it or jumps on it (he bounces off, Crash style). Choose what is inside: a red, green, blue, gold or purple gem (counted in the level's treasure) or a butterfly.
+  - TNT crate: jump on it and it counts down 3, 2, 1 with Crash's beeps, then explodes. Flaming or charging it sets it off at once. The blast costs Spyro one Sparx level if he is close, and breaks crates, baskets, TNT and Nitro nearby.
+  - Nitro crate: hops and rattles, and explodes when anything touches it, taking all of Spyro's health. Flame it from a distance or set it off with TNT.
+  - The boxes use Crash 3's own box art and sounds from your disc.
+- Terrain textures from your own pictures: images added in the Terrain tab are now written into the game in every detail level (far, normal and close up), with the fade into the distance kept. Textures that share pixels in the level take new images together; the editor says which.
 - Lower now works on tiles at the floor of their part of the level. The game stores each part's heights within a band that used to start exactly at the lowest tile; Create BIN now moves the band when a lowered corner needs it.
 
 Clearer

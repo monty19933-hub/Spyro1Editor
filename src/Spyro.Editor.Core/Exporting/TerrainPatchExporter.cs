@@ -8945,6 +8945,7 @@ public static partial class TerrainPatchExporter
         TextureRecordIndex textureIndex = DecodeTextureRecords(modelBytes);
 
         List<CustomTerrainTexturePatchSummary> summaries = new();
+        List<(CustomTerrainTextureImport Import, string Path)> pngImports = new();
         foreach (CustomTerrainTextureImport import in imports)
         {
             if (UsesBlockedLegacyTerrainTexturePath(import, out string legacyBlockReason))
@@ -8973,6 +8974,13 @@ public static partial class TerrainPatchExporter
                 AddAtomicTerrainSwapBlock(
                     skippedEdits,
                     $"texture {import.TextureId}: custom texture import blocked because the source image is missing at {sourcePath}; no texture patches were applied.");
+                continue;
+            }
+
+            if (!useNativeRawTransplant)
+            {
+                // PNG art: written together below by the packed-layout writer (shared textures need one palette).
+                pngImports.Add((import, sourcePath));
                 continue;
             }
 
@@ -9244,7 +9252,73 @@ public static partial class TerrainPatchExporter
             summaries.AddRange(importSummaries);
         }
 
+        if (pngImports.Count > 0)
+            summaries.AddRange(AddPngTexturePatches(imageStream, layout, texturePagesInfo, modelBytes, pngImports, patchesByWadOffset, skippedEdits));
         return summaries;
+    }
+
+    /// <summary>PNG terrain art through <see cref="NativeTerrainTextureImageWriter"/>: every tier (normal, close,
+    /// far with its distance palettes) in the level's packed layout, as byte patches of the changed VRAM runs.
+    /// All imports of the level are written at once; a refusal blocks them all and applies nothing.</summary>
+    private static IReadOnlyList<CustomTerrainTexturePatchSummary> AddPngTexturePatches(
+        FileStream imageStream,
+        DiscLayout layout,
+        AssetSubfileInfo texturePagesInfo,
+        byte[] modelBytes,
+        IReadOnlyList<(CustomTerrainTextureImport Import, string Path)> pngImports,
+        Dictionary<long, TerrainPatch> patchesByWadOffset,
+        List<string> skippedEdits)
+    {
+        string ids = string.Join(", ", pngImports.Select(p => p.Import.TextureId).Distinct());
+        byte[] before;
+        byte[] after;
+        try
+        {
+            before = ReadWadBytes(imageStream, layout, texturePagesInfo.AbsoluteWadOffset, 0x80000);
+            Dictionary<int, NativeTerrainTextureImageWriter.Image> images = new();
+            foreach (var (import, path) in pngImports)
+                images[import.TextureId] = new(
+                    PngRgbaImage.ReadResizedRgba(path, NativeTerrainTextureImageWriter.NormalSide, NativeTerrainTextureImageWriter.NormalSide),
+                    PngRgbaImage.ReadResizedRgba(path, NativeTerrainTextureImageWriter.CloseSide, NativeTerrainTextureImageWriter.CloseSide));
+            after = NativeTerrainTextureImageWriter.Write(before, modelBytes, images);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            AddAtomicTerrainSwapBlock(skippedEdits, $"textures {ids}: custom texture images blocked because {ex.Message} No texture patches were applied.");
+            return Array.Empty<CustomTerrainTexturePatchSummary>();
+        }
+
+        Dictionary<long, TerrainPatch> staged = new();
+        int runs = 0;
+        for (int start = 0; start < after.Length;)
+        {
+            if (after[start] == before[start]) { start++; continue; }
+            int end = start;
+            while (end < after.Length && end - start < 1024 && after[end] != before[end]) end++;
+            if (!TryAddTemporaryCustomTexturePatch(imageStream, layout, staged, texturePagesInfo.AbsoluteWadOffset + start,
+                    before[start..end], after[start..end], "custom-texture-image", $"textures-{ids}",
+                    $"Replace terrain texture art (textures {ids}).", out string conflict))
+            {
+                AddAtomicTerrainSwapBlock(skippedEdits, $"textures {ids}: custom texture images blocked because {conflict}; no texture patches were applied.");
+                return Array.Empty<CustomTerrainTexturePatchSummary>();
+            }
+            runs++;
+            start = end;
+        }
+        foreach ((long wadOffset, TerrainPatch patch) in staged)
+            if (patchesByWadOffset.TryGetValue(wadOffset, out TerrainPatch? existing) &&
+                !string.Equals(existing.AfterHexPreview, patch.AfterHexPreview, StringComparison.OrdinalIgnoreCase))
+            {
+                AddAtomicTerrainSwapBlock(skippedEdits, $"textures {ids}: custom texture images blocked because a staged patch conflicts with {existing.Kind} at WAD offset 0x{wadOffset:X}; no texture patches were applied.");
+                return Array.Empty<CustomTerrainTexturePatchSummary>();
+            }
+        foreach ((long wadOffset, TerrainPatch patch) in staged)
+            patchesByWadOffset.TryAdd(wadOffset, patch);
+        return pngImports.Select(p => new CustomTerrainTexturePatchSummary(
+            TextureId: p.Import.TextureId, SourceImagePath: p.Path, SourceImageName: p.Import.SourceImageName, DescriptorTier: "all",
+            TileSize: NativeTerrainTextureImageWriter.NormalSide, DescriptorCount: 23, PixelPatchCount: runs, PalettePatchCount: 0,
+            TexelBytesPerPixel: 1, BitsPerPixel: 8, PaletteColorCount: 256, SourceTexelUniqueCount: 0, SourceTexelMax: 0,
+            SourcePaletteUniqueColorCount: 0, SourcePaletteNonZeroColorCount: 0, PaletteByteStarts: Array.Empty<string>())).ToArray();
     }
 
     private static bool UsesBlockedLegacyTerrainTexturePath(
@@ -9267,9 +9341,9 @@ public static partial class TerrainPatchExporter
             return true;
         }
 
-        reason =
-            "custom PNG terrain art is blocked because this manifest would use the obsolete 0x800-row and fixed 4-bpp close-detail writer instead of the verified packed layout";
-        return true;
+        // PNG art goes through the packed-layout writer (NativeTerrainTextureImageWriter).
+        reason = "";
+        return false;
     }
 
     private static bool TryBuildNativeCrossLevelTexturePatches(

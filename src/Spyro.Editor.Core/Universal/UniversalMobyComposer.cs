@@ -252,12 +252,14 @@ public static class UniversalMobyComposer
                     $"'{p.SpecialId}' needs its original source disc. Select that disc in the editor settings.");
                 byte[] row = asset.RowTemplate.ToArray();
                 BinaryPrimitives.WriteUInt16LittleEndian(row.AsSpan(0x36), (ushort)asset.ClassId);
-                row[0x53] = 0xFF; // no gem reward
+                if (asset.Behavior != UniversalSpecialBehavior.CrashBox)
+                    row[0x53] = 0xFF; // no gem reward; a Crash crate keeps its native reward (a gem or a butterfly)
                 byte[] props = asset.Behavior == UniversalSpecialBehavior.Sign
                     ? UniversalSpecialBehaviors.EncodeSignText(p.Text ?? [])
                     : new byte[16];
                 templates.Add(new UniversalRowTemplate(asset.SourceKey, -1, row, props, [], 0));
                 specialClasses[asset.ClassId] = asset;
+                foreach (var companion in asset.Companions) specialClasses[companion.ClassId] = companion;
                 continue;
             }
             var s = source(p.SourceLevelKey);
@@ -617,6 +619,8 @@ public static class UniversalMobyComposer
             }
             else if (UniversalHighValueGems.IsId(p.SpecialId))
                 treasure = checked(treasure + UniversalHighValueGems.ValueForClass(t.ClassId));
+            else if (UniversalCrashBoxes.IsId(p.SpecialId))
+                treasure = checked(treasure + UniversalCrashBoxes.TreasureValue(t.ClassId));
             rows.Add((r, t));
         }
         foreach(var context in darkLanternContexts.Values)context.RequireGroups(rows);
@@ -678,7 +682,8 @@ public static class UniversalMobyComposer
         // not certify unrelated copied callbacks that also request particle 12.
         var collectionStars = classes.Keys.Where(k => k.Class is >= 0x53 and <= 0x57)
             .Select(k => k.Source)
-            .Concat(rows.Where(r => r.Item1[0x53] is >= 0x53 and <= 0x57)
+            // A Crash crate's gem is spawned by the destination's own reward path, like its native enemies' gems.
+            .Concat(rows.Where(r => r.Item1[0x53] is >= 0x53 and <= 0x57 && r.Item2.SourceLevelKey != UniversalCrashBoxes.SourceKey)
                 .Select(r => r.Item2.SourceLevelKey))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(key =>
@@ -704,18 +709,20 @@ public static class UniversalMobyComposer
         var eggClasses = specialClasses.Values.Where(a => a.Behavior == UniversalSpecialBehavior.DragonflyEgg).Select(a => a.ClassId).Order().ToList();
         var signClasses = specialClasses.Values.Where(a => a.Behavior == UniversalSpecialBehavior.Sign).Select(a => a.ClassId).Order().ToList();
         var highValueGemClasses = specialClasses.Values.Where(a => a.Behavior == UniversalSpecialBehavior.HighValueGem).Select(a => a.ClassId).Order().ToList();
+        var crashBoxClasses = specialClasses.Values.Where(a => a.Behavior == UniversalSpecialBehavior.CrashBox).Select(a => a.ClassId).Order().ToList();
+        if (crashBoxClasses.Count > 0) UniversalCrashBoxes.RequireDestination(destOverlay, exe);
         if (highValueGemClasses.Count > 0)
         {
             UniversalHighValueGems.RequireNativeOwner(exe);
             UniversalHighValueGems.RequireDestinationParticleOwner(destOverlay);
         }
-        if (byBehaviorSource.Count > 0 || eggClasses.Count > 0 || signClasses.Count > 0 || highValueGemClasses.Count > 0)
+        if (byBehaviorSource.Count > 0 || eggClasses.Count > 0 || signClasses.Count > 0 || highValueGemClasses.Count > 0 || crashBoxClasses.Count > 0)
         {
             uint baseAddress = checked(((copyBuffer + 7) & ~7u) + (uint)magicPairBundlePaddingBytes);
             var classMaps = classes.GroupBy(k => k.Key.Source).ToDictionary(g => g.Key,
                 g => (IReadOnlyDictionary<int, int>)g.ToDictionary(k => k.Key.Class, k => k.Value.DestinationClass));
             var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps, remapSaveRows, nativeExecutable: exe,
-                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles,magicPair:magicPair,darkLanternContexts:darkLanternContexts,darkProjectileParticles:darkProjectileParticles,magicChain:magicChain,highCavesSpellParticles:highCavesSpellParticles,magicOriginal:magicOriginal,highCavesWorld:highCavesWorld,greenDruidWorld:greenWorld,greenDruidLinkedWorld:linkedWorld);
+                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles,magicPair:magicPair,darkLanternContexts:darkLanternContexts,darkProjectileParticles:darkProjectileParticles,magicChain:magicChain,highCavesSpellParticles:highCavesSpellParticles,magicOriginal:magicOriginal,highCavesWorld:highCavesWorld,greenDruidWorld:greenWorld,greenDruidLinkedWorld:linkedWorld,crashBoxClasses:crashBoxClasses);
             uint newCopy = (uint)((baseAddress + bundle.Code.Length + 15) & ~15);
             int keep = (int)(copyBuffer - UniversalOverlay.Base);
             byte[] ov = new byte[UniversalLevelData.Align((int)(newCopy - UniversalOverlay.Base), 0x800)];

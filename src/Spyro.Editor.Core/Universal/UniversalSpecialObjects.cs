@@ -2,13 +2,16 @@ using System.Buffers.Binary;
 
 namespace Spyro.Editor.Core.Universal;
 
-public enum UniversalSpecialBehavior { DragonflyEgg, Sign, HighValueGem }
+public enum UniversalSpecialBehavior { DragonflyEgg, Sign, HighValueGem, CrashBox }
 
 /// <summary>A placeable object recovered from the Japanese release (not present in the USA game).</summary>
 public sealed record UniversalSpecialAsset(string Id, string Name, int ClassId, UniversalSpecialBehavior Behavior,
     byte[] Package, byte[] SourceVram, UniversalLevelData SourceData, byte[] RowTemplate)
 {
     public string SourceKey { get; init; } = UniversalSpecialCatalog.SourceKey;
+    /// <summary>Further classes the object switches to at run time (a TNT crate's 3-2-1 faces); their models are
+    /// added with it.</summary>
+    public IReadOnlyList<UniversalSpecialAsset> Companions { get; init; } = [];
 }
 
 /// <summary>Dragonfly egg colour variants. Native is the Japanese model's own palette; the others are

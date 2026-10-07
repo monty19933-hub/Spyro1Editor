@@ -66,7 +66,8 @@ public static class UniversalBehaviorBundleBuilder
         UniversalOverlay? nativeDestinationOwner = null, IReadOnlyList<int>? highValueGemClasses = null,
         IReadOnlyDictionary<string, UniversalWhirlwindSoundBinding>? whirlwindSounds = null,
         IReadOnlyDictionary<string, UniversalDryCanyonBirdCertificate>? dryCanyonBirdBranches = null,
-        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null,IReadOnlyList<UniversalOwnedParticleCertificate>? ownedParticles = null, UniversalMagicPairCertificate? magicPair = null,IReadOnlyDictionary<string,UniversalDarkPassageLanternContext>? darkLanternContexts = null,IReadOnlyDictionary<string,UniversalDarkPassageProjectileParticleCertificate>? darkProjectileParticles = null, UniversalMagicDruidChainCertificate? magicChain = null,IReadOnlyDictionary<string,UniversalHighCavesSpellParticleCertificate>? highCavesSpellParticles = null,UniversalMagicDruidOriginalCertificate? magicOriginal = null,UniversalHighCavesWorldInstallation? highCavesWorld=null,UniversalGreenDruidWorldInstallation? greenDruidWorld=null,UniversalGreenDruidLinkedWorldInstallation? greenDruidLinkedWorld=null)
+        IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null,IReadOnlyList<UniversalOwnedParticleCertificate>? ownedParticles = null, UniversalMagicPairCertificate? magicPair = null,IReadOnlyDictionary<string,UniversalDarkPassageLanternContext>? darkLanternContexts = null,IReadOnlyDictionary<string,UniversalDarkPassageProjectileParticleCertificate>? darkProjectileParticles = null, UniversalMagicDruidChainCertificate? magicChain = null,IReadOnlyDictionary<string,UniversalHighCavesSpellParticleCertificate>? highCavesSpellParticles = null,UniversalMagicDruidOriginalCertificate? magicOriginal = null,UniversalHighCavesWorldInstallation? highCavesWorld=null,UniversalGreenDruidWorldInstallation? greenDruidWorld=null,UniversalGreenDruidLinkedWorldInstallation? greenDruidLinkedWorld=null,
+        IReadOnlyList<int>? crashBoxClasses = null)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
         int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
@@ -117,6 +118,11 @@ public static class UniversalBehaviorBundleBuilder
         if (hasHighValueGems)
         {
             w.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: "high_gem_upd"));
+            w.Emit(UniversalMips.Nop);
+        }
+        if (crashBoxClasses is { Count: > 0 })
+        {
+            w.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: "crash_box_upd"));
             w.Emit(UniversalMips.Nop);
         }
         w.Emit(UniversalMips.EncodeI(35, 29, 31, 0x10));
@@ -295,6 +301,8 @@ public static class UniversalBehaviorBundleBuilder
             parts.Add(UniversalSpecialBehaviors.HighValueGemUpdate(highValueGemClasses!, "high_gem_upd", remapSaveRows));
         if (signClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.SignDraw(signClasses, "sign_draw"));
+        if (crashBoxClasses is { Count: > 0 })
+            parts.Add(UniversalSpecialBehaviors.CrashBoxUpdate(crashBoxClasses, "crash_box_upd"));
         var (code, labels) = Assemble(parts, baseAddress);
         greenDruidWorld?.RequireCompiled(code,baseAddress,parts,labels);
         greenDruidLinkedWorld?.RequireCompiled(code,baseAddress,parts,labels);

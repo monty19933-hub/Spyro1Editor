@@ -12,9 +12,11 @@ public static class UniversalSpecialCatalog
     public const string TemplatePrefix = "special:";
     private const int EggModelBytes = 2056, SignModelBytes = 2664, EggCodeBytes = 0x150, SignCodeBytes = 0x1C0;
 
-    public static bool IsSpecial(UniversalMobyVariant v) => v.SourceLevelKey is SourceKey or UniversalHighValueGems.SourceKey;
+    public static bool IsSpecial(UniversalMobyVariant v) => v.SourceLevelKey is SourceKey or UniversalHighValueGems.SourceKey or UniversalCrashBoxes.SourceKey;
 
-    public static bool RequiresJapaneseSource(string? id) => id != null && !UniversalHighValueGems.IsId(id);
+    public static bool RequiresJapaneseSource(string? id) => id != null && !UniversalHighValueGems.IsId(id) && !UniversalCrashBoxes.IsId(id);
+
+    public static bool RequiresCrashSource(string? id) => UniversalCrashBoxes.IsId(id);
 
     public static bool NeedsRenderHook(string? id) => id == UniversalDragonflyEggs.SignId;
 
@@ -22,15 +24,17 @@ public static class UniversalSpecialCatalog
         classId == UniversalHighValueGems.TealClass ? UniversalHighValueGems.TealId
         : classId == UniversalHighValueGems.RainbowClass ? UniversalHighValueGems.RainbowId
         : classId == UniversalDragonflyEggs.SignClass ? UniversalDragonflyEggs.SignId
+        : UniversalCrashBoxes.IsPlaceableClass(classId) ? UniversalCrashBoxes.IdForClass(classId)
         : UniversalDragonflyEggs.Variants.FirstOrDefault(v => v.Class == classId).Id;
 
     public static string DisplayName(int classId) =>
         classId == UniversalHighValueGems.TealClass ? "Teal gem (50)"
         : classId == UniversalHighValueGems.RainbowClass ? "Rainbow gem (100)"
         : classId == UniversalDragonflyEggs.SignClass ? "Sign"
+        : UniversalCrashBoxes.NameForClass(classId) is { } crashName ? crashName
         : UniversalDragonflyEggs.Variants.FirstOrDefault(v => v.Class == classId).Name ?? $"Object 0x{classId:X3}";
 
-    public static IReadOnlyList<UniversalMobyCatalogEntry> Entries(bool japaneseDiscAvailable)
+    public static IReadOnlyList<UniversalMobyCatalogEntry> Entries(bool japaneseDiscAvailable, bool crashDiscAvailable = false)
     {
         string? restriction = japaneseDiscAvailable ? null :
             "This comes from the Japanese version of Spyro. Press \"Choose Japanese disc…\" at the top of this window to unlock it.";
@@ -46,7 +50,27 @@ public static class UniversalSpecialCatalog
                 "Choose its color above. When Spyro picks it up, the inventory counts it for this level and for the whole game, the memory card remembers it, and it counts toward completing the game. The bonus level also needs every dragonfly egg you placed."),
             new(sign.ClassId, "Sign", "Interactive", "Signs", [sign], sign, [SourceKey], restriction,
                 "When Spyro stands next to it, your message (up to three short lines) appears on screen. After placing it, select it and press Edit to type the message."),
+            .. CrashEntries(crashDiscAvailable)
         ];
+    }
+
+    public const int CrashBoxModelBytes = 1000, CrashBoxCodeBytes = 0x900;
+
+    private static IEnumerable<UniversalMobyCatalogEntry> CrashEntries(bool crashDiscAvailable)
+    {
+        string? restriction = crashDiscAvailable ? null :
+            "This uses box art from Crash Bandicoot: Warped. Press \"Crash disc…\" at the top of this window to choose your copy.";
+        UniversalMobyVariant Variant(int cls) => new(cls, UniversalCrashBoxes.SourceKey, -1, 16, CrashBoxModelBytes, CrashBoxCodeBytes, true, false, true);
+        var crates = UniversalCrashBoxes.Crates.Select(c => Variant(c.Class)).ToList();
+        var tnt = Variant(UniversalCrashBoxes.TntClass);
+        var nitro = Variant(UniversalCrashBoxes.NitroClass);
+        string[] sources = [UniversalCrashBoxes.SourceKey];
+        yield return new(crates[1].ClassId, "Crash crate", "Interactive", "Crash Bandicoot", crates, crates[1], sources, restriction,
+            "Breaks when Spyro flames it, charges it or jumps on it (he bounces off, Crash style), and drops what you chose above: a gem, which counts toward the level's treasure, or a butterfly. Stays broken like Spyro's baskets.");
+        yield return new(tnt.ClassId, "TNT crate", "Interactive", "Crash Bandicoot", [tnt], tnt, sources, restriction,
+            "Jump on it and it counts down 3, 2, 1, then explodes. Flaming or charging it sets it off at once. The blast costs Spyro one Sparx level if he's close, and breaks nearby crates and sets off other TNT and Nitro.");
+        yield return new(nitro.ClassId, "Nitro crate", "Interactive", "Crash Bandicoot", [nitro], nitro, sources, restriction,
+            "Hops in place and explodes when anything touches it, taking all of Spyro's health: touching or charging it is fatal. Flame it from a distance, or set it off with a TNT blast.");
     }
 
     private static UniversalMobyCatalogEntry HighValueGemEntry(int classId, string name, int value)

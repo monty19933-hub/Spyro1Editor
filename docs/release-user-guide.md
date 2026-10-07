@@ -201,8 +201,9 @@ contain copied disc data.
   classes in any level, importing model, textures, sounds, behavior and spawned
   helper objects from the unchanged original USA disc at Create BIN. Dragonfly
   eggs (seven colours) and editable signs need the unchanged Japanese disc,
-  selected with **Choose Japanese disc…**. See Known Limitations → Universal Moby
-  placement for the per-level limits.
+  selected with **Choose Japanese disc…**. Crash crates, TNT and Nitro need your
+  Crash Bandicoot: Warped (USA) disc, selected with **Choose Crash disc…**. See Known
+  Limitations → Universal Moby placement for the per-level limits.
 
 - Level browsing from the bundled Spyro level catalog.
 - **Edit Map** and **Game Camera** viewing. Every captured editable source-terrain

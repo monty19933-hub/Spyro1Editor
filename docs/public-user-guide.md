@@ -122,6 +122,25 @@ own unchanged Japanese disc the first time.
   lowercase is shown in capitals). Select a sign and choose **Edit…** to type it.
   When several signs are close together the game shows one message at a time.
 
+### Crash Bandicoot boxes
+
+**Crash crate**, **TNT crate** and **Nitro crate** (Interactive › Crash Bandicoot) use
+box art and sounds from Crash Bandicoot: Warped (USA). Press **Choose Crash disc…**
+in the Add Object browser once and pick your copy; it is only read. They can go in
+any ground level (not the flight levels).
+
+- **Crash crate** breaks when Spyro flames it, charges it or lands on it (he
+  bounces, Crash style). Choose its contents in the list: a red, green, blue, gold
+  or purple gem, which counts toward the level's treasure, or a butterfly. Broken
+  crates stay broken, like Spyro's baskets.
+- **TNT crate**: landing on it bounces Spyro and starts 3, 2, 1, with beeps; then it
+  explodes. Flame or charge sets it off at once. Spyro loses one Sparx level if he
+  is within about two crate widths. The blast breaks nearby crates and baskets and
+  sets off nearby TNT and Nitro.
+- **Nitro crate** hops and rattles. Anything touching it (walking into it, charging,
+  landing on it) makes it explode and takes all of Spyro's health. Flame it from a
+  distance, or set it off with a TNT blast.
+
 Use a separate memory card for each edited game.
 
 ### Teal and rainbow gems

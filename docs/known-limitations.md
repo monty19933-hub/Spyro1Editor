@@ -823,10 +823,15 @@ visual rather than the scrolling waterfall record.
 
 All complete native rows are selectable as donors. Seventy native records remain
 blocked only when used as static destinations because animation or scrolling
-controllers would overwrite the transplanted art after level load. Arbitrary
-custom PNG manifests are
-also blocked because the old fixed-layout normal/close-detail writer does not
-match the verified packed layout.
+controllers would overwrite the transplanted art after level load. Custom PNG
+images are written by `NativeTerrainTextureImageWriter` in the packed layout:
+normal quarters (8 bpp), the sixteen close tiles in the native interleaved
+order (16x16 windows onto the normal pixels or separate 32x32 pieces), and the
+4-bpp far tile with its sixteen distance-palette rows refitted per channel.
+Textures whose pixels or palettes overlap are written together with one
+palette and must all receive images; mirrored quarters keep showing their
+partner's pixels. Animated textures and records outside the static 4/8-bpp
+page layout cannot take images.
 
 Structural coverage is not the same as live gameplay proof for every possible
 target/donor combination. The retained Artisans dragon-to-Gnasty-metal and
