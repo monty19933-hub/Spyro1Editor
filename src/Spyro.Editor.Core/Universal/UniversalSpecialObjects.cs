@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 
 namespace Spyro.Editor.Core.Universal;
 
-public enum UniversalSpecialBehavior { DragonflyEgg, Sign, HighValueGem, CrashBox }
+public enum UniversalSpecialBehavior { DragonflyEgg, Sign, HighValueGem, CrashBox, CrashEnemy }
 
 /// <summary>A placeable object recovered from the Japanese release (not present in the USA game).</summary>
 public sealed record UniversalSpecialAsset(string Id, string Name, int ClassId, UniversalSpecialBehavior Behavior,

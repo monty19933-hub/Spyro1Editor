@@ -24,7 +24,7 @@ foreach (int c in all.Where(UniversalCrashBoxes.IsPlaceableClass))
     Check(UniversalCrashBoxes.IsId(id) && UniversalSpecialCatalog.RequiresCrashSource(id) && !UniversalSpecialCatalog.RequiresJapaneseSource(id), $"{id} needs the Crash disc only");
 }
 Check(UniversalCrashBoxes.TntClasses.Skip(1).All(c => !UniversalCrashBoxes.IsPlaceableClass(c)), "countdown faces are not placeable on their own");
-var entries = UniversalSpecialCatalog.Entries(true, true).Where(e => e.Default.SourceLevelKey == UniversalCrashBoxes.SourceKey).ToList();
+var entries = UniversalSpecialCatalog.Entries(true, true).Where(e => e.Default.SourceLevelKey == UniversalCrashBoxes.SourceKey && UniversalCrashBoxes.IsClass(e.ClassId)).ToList();
 Check(entries.Count == 3 && entries[0].Variants.Count == 6 && entries.All(e => e.RestrictionReason == null), "catalog: crate (6 contents), TNT, Nitro");
 Check(UniversalSpecialCatalog.Entries(true).Where(e => e.Default.SourceLevelKey == UniversalCrashBoxes.SourceKey).All(e => e.RestrictionReason != null), "without the Crash disc the boxes explain what is needed");
 Check(Refuses(() => UniversalSpecialBehaviors.CrashBoxUpdate([0x57], "bad")), "retail class refused");

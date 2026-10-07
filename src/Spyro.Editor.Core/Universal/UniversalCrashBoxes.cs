@@ -105,7 +105,7 @@ public static class UniversalCrashBoxes
             faces[i].Clut.CopyTo(vram.AsSpan((ClutRow + i) * 1024));
         }
 
-        var sounds = SoundSource(dark, nsf);
+        var sounds = SoundSource(dark, [.. SoundNames.Select(nsf.Sound)]);
         UniversalSpecialAsset Asset(string id, string name, int cls, Kind kind, byte reward)
         {
             byte[] template = row.ToArray();
@@ -185,18 +185,17 @@ public static class UniversalCrashBoxes
     public static readonly string[] SoundNames = ["brk0A", "tnt0A", "Ttb0A", "nbr0A", "nbu0A"];
     private const ushort SoundPitch = 0x400;
 
-    /// <summary>A copy of Dark Hollow's data whose first sound descriptors and SPU bank hold the Crash sounds, so the
-    /// editor's ordinary sound import copies them into the destination like any imported object's sounds.</summary>
-    private static UniversalLevelData SoundSource(UniversalLevelData dark, CrashNsf nsf)
+    /// <summary>A copy of Dark Hollow's data whose first sound descriptors and SPU bank hold the given Crash sounds,
+    /// so the editor's ordinary sound import copies them into the destination like any imported object's sounds.</summary>
+    internal static UniversalLevelData SoundSource(UniversalLevelData dark, IReadOnlyList<byte[]> samples)
     {
         byte[] data = dark.Bytes.ToArray();
         var layout = new Spyro.Editor.Core.Exporting.NativeLevelSoundLayout(data);
         int count = layout.Sound.Descriptors.Count, bank = layout.Sound.BankByteLength, cursor = 0;
-        if (count < SoundNames.Length) throw new InvalidDataException("Dark Hollow's sound table is too small to carry the Crash sounds.");
-        byte[][] samples = [.. SoundNames.Select(nsf.Sound)];
+        if (count < samples.Count) throw new InvalidDataException("Dark Hollow's sound table is too small to carry the Crash sounds.");
         data.AsSpan(layout.BankOffset, bank).Clear();
-        int[] offsets = new int[samples.Length];
-        for (int i = 0; i < samples.Length; i++)
+        int[] offsets = new int[samples.Count];
+        for (int i = 0; i < samples.Count; i++)
         {
             if (cursor + samples[i].Length > bank) throw new InvalidDataException("The Crash sounds do not fit a sound bank.");
             offsets[i] = cursor;
@@ -209,12 +208,12 @@ public static class UniversalCrashBoxes
             // past the Crash sounds repeat the first one so the table keeps its length.
             var d = data.AsSpan(layout.SoundOffset + 0x108 + i * 20, 20);
             d.Clear();
-            BinaryPrimitives.WriteInt32LittleEndian(d, offsets[i < samples.Length ? i : 0]);
+            BinaryPrimitives.WriteInt32LittleEndian(d, offsets[i < samples.Count ? i : 0]);
             d[8] = 0x32;
             BinaryPrimitives.WriteUInt16LittleEndian(d[10..], SoundPitch);
         }
         var check = new Spyro.Editor.Core.Exporting.NativeLevelSoundLayout(data);
-        if (check.Sound.Descriptors.Take(samples.Length).Any(d => !d.IsSupportedOneShot))
+        if (check.Sound.Descriptors.Take(samples.Count).Any(d => !d.IsSupportedOneShot))
             throw new InvalidDataException("The Crash sounds did not become native one-shot sounds.");
         return new UniversalLevelData(data);
     }

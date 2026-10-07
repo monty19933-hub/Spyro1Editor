@@ -196,6 +196,16 @@ Signs: one message is shown at a time (the nearest sign in the object list
 order); text uses the USA HUD letters, so lowercase appears in capitals and
 other punctuation is dropped. Both need the unchanged Japanese disc.
 
+Crash Bandicoot boxes and enemies need the user's Crash Bandicoot: Warped (USA)
+disc and work only in ground levels. The enemies are converted from Crash 3's
+models: their sizes are scaled to sit next to Spyro (frogs 0.6, knights and wizards
+0.8 of Crash's own proportions), and Crash's drop shadows and the knight's sword
+blur are left out (Spyro objects draw opaque). Their movement is the editor's own
+Spyro behaviour, not Crash's GOOL code: frogs and knights move in straight lines
+within about 100 units of their spot and keep their height (no ground following or
+wall collision), so place them on level ground. Played in the emulator in Dark
+Hollow (Bandicoot Keep) only.
+
 ## Object Editing
 
 ### Native Movement Controls

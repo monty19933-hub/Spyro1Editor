@@ -51,6 +51,15 @@ public sealed class CrashWarpedDisc
         return new CrashNsf(bytes);
     }
 
+    /// <summary>A level file checked against the original bytes (so converted art is always the same).</summary>
+    public CrashNsf Level(string file, string sha256)
+    {
+        byte[] bytes = ReadFile(file);
+        if (Convert.ToHexStringLower(SHA256.HashData(bytes)) != sha256)
+            throw new InvalidDataException($"The Crash disc's {file} differs from the original Crash Bandicoot: Warped (USA) release.");
+        return new CrashNsf(bytes);
+    }
+
     private void Walk(Stream fs, int lba, int size, string prefix, int depth)
     {
         if (depth > 8) return;
@@ -126,6 +135,7 @@ public sealed class CrashNsf
     public byte[] Page(string name) => _pages.TryGetValue(name, out var p) ? p
         : throw new InvalidDataException($"The Crash level file has no texture page {name}.");
     public IEnumerable<CrashEntry> Entries => _entries.Values;
+    public bool Has(string name, int type) => _entries.TryGetValue(name, out var e) && e.Type == type;
 
     /// <summary>A sound effect (entry type 12, one item of SPU ADPCM) as a native one-shot: frames up to the one
     /// flagged as the end; the trailing silent loop frame Crash adds is dropped. Crash plays these at 11025 Hz.</summary>

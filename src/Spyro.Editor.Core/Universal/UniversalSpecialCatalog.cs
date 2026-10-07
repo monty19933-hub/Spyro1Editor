@@ -14,9 +14,9 @@ public static class UniversalSpecialCatalog
 
     public static bool IsSpecial(UniversalMobyVariant v) => v.SourceLevelKey is SourceKey or UniversalHighValueGems.SourceKey or UniversalCrashBoxes.SourceKey;
 
-    public static bool RequiresJapaneseSource(string? id) => id != null && !UniversalHighValueGems.IsId(id) && !UniversalCrashBoxes.IsId(id);
+    public static bool RequiresJapaneseSource(string? id) => id != null && !UniversalHighValueGems.IsId(id) && !RequiresCrashSource(id);
 
-    public static bool RequiresCrashSource(string? id) => UniversalCrashBoxes.IsId(id);
+    public static bool RequiresCrashSource(string? id) => UniversalCrashBoxes.IsId(id) || UniversalCrashEnemies.IsId(id);
 
     public static bool NeedsRenderHook(string? id) => id == UniversalDragonflyEggs.SignId;
 
@@ -25,6 +25,7 @@ public static class UniversalSpecialCatalog
         : classId == UniversalHighValueGems.RainbowClass ? UniversalHighValueGems.RainbowId
         : classId == UniversalDragonflyEggs.SignClass ? UniversalDragonflyEggs.SignId
         : UniversalCrashBoxes.IsPlaceableClass(classId) ? UniversalCrashBoxes.IdForClass(classId)
+        : UniversalCrashEnemies.IsPlaceableClass(classId) ? UniversalCrashEnemies.IdForClass(classId)
         : UniversalDragonflyEggs.Variants.FirstOrDefault(v => v.Class == classId).Id;
 
     public static string DisplayName(int classId) =>
@@ -32,6 +33,7 @@ public static class UniversalSpecialCatalog
         : classId == UniversalHighValueGems.RainbowClass ? "Rainbow gem (100)"
         : classId == UniversalDragonflyEggs.SignClass ? "Sign"
         : UniversalCrashBoxes.NameForClass(classId) is { } crashName ? crashName
+        : UniversalCrashEnemies.NameForClass(classId) is { } enemyName ? enemyName
         : UniversalDragonflyEggs.Variants.FirstOrDefault(v => v.Class == classId).Name ?? $"Object 0x{classId:X3}";
 
     public static IReadOnlyList<UniversalMobyCatalogEntry> Entries(bool japaneseDiscAvailable, bool crashDiscAvailable = false)
@@ -54,7 +56,10 @@ public static class UniversalSpecialCatalog
         ];
     }
 
-    public const int CrashBoxModelBytes = 1000, CrashBoxCodeBytes = 0x900;
+    public const int CrashBoxModelBytes = 1000, CrashBoxCodeBytes = 0x900, CrashEnemyCodeBytes = 0x1400;
+    /// <summary>Model bytes per enemy, its robe-off model included (the converted packages are a little smaller).</summary>
+    public static int CrashEnemyModelBytes(UniversalCrashEnemies.Enemy e) =>
+        e == UniversalCrashEnemies.Frog ? 15000 : e == UniversalCrashEnemies.Knight ? 28000 : 41000;
 
     private static IEnumerable<UniversalMobyCatalogEntry> CrashEntries(bool crashDiscAvailable)
     {
@@ -71,6 +76,19 @@ public static class UniversalSpecialCatalog
             "Jump on it and it counts down 3, 2, 1, then explodes. Flaming or charging it sets it off at once. The blast costs Spyro one Sparx level if he's close, and breaks nearby crates and sets off other TNT and Nitro.");
         yield return new(nitro.ClassId, "Nitro crate", "Interactive", "Crash Bandicoot", [nitro], nitro, sources, restriction,
             "Hops in place and explodes when anything touches it, taking all of Spyro's health: touching or charging it is fatal. Flame it from a distance, or set it off with a TNT blast.");
+        string? enemyRestriction = crashDiscAvailable ? null :
+            "This enemy comes from Crash Bandicoot: Warped. Press \"Crash disc…\" at the top of this window to choose your copy.";
+        UniversalMobyVariant Enemy(UniversalCrashEnemies.Enemy e) =>
+            new(e.Class, UniversalCrashEnemies.SourceKey, -1, 16, CrashEnemyModelBytes(e), CrashEnemyCodeBytes, true, false, true);
+        var frog = Enemy(UniversalCrashEnemies.Frog);
+        var knight = Enemy(UniversalCrashEnemies.Knight);
+        var wizard = Enemy(UniversalCrashEnemies.Wizard);
+        yield return new(frog.ClassId, UniversalCrashEnemies.Frog.Name, "Enemies", "Crash Bandicoot", [frog], frog, sources, enemyRestriction,
+            "A Toad Village frog. It sits croaking, then hops towards Spyro when it sees him; touching it costs a Sparx level. Flame it, charge it or jump on it and it is knocked flying, Crash style, leaving a butterfly.");
+        yield return new(knight.ClassId, UniversalCrashEnemies.Knight.Name, "Enemies", "Crash Bandicoot", [knight], knight, sources, enemyRestriction,
+            "A Toad Village knight. He guards his spot, marches up to Spyro and swings his sword (a hit costs a Sparx level), and walks back when Spyro gets away. Flame him, charge him or jump on his head to knock him flying; he drops a green gem (2), which counts toward the level's treasure.");
+        yield return new(wizard.ClassId, UniversalCrashEnemies.Wizard.Name, "Enemies", "Crash Bandicoot", [wizard], wizard, sources, enemyRestriction,
+            "A Gee Wiz lab assistant in wizard's robes. He turns to face Spyro and casts a zap when Spyro is close and in front of him. Flame him, charge him or jump on him and his robe blows off before he is knocked flying; he drops a blue gem (5), which counts toward the level's treasure.");
     }
 
     private static UniversalMobyCatalogEntry HighValueGemEntry(int classId, string name, int value)

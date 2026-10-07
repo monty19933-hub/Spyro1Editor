@@ -43,6 +43,7 @@ internal static partial class NewLevelBuildCases
             case "crash-disc": CrashDisc(window); return true;
             case "crash-textures": CrashTextures(window); return true;
             case "crash-objects": CrashObjects(window); return true;
+            case "crash-enemies": CrashEnemies(window); return true;
             default: return false;
         }
     }

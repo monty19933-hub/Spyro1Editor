@@ -14493,7 +14493,7 @@ public sealed partial class MainWindow : Window
                 if (needsCrash)
                 {
                     if (!Spyro.Editor.Core.Crash.CrashWarpedDiscLocator.IsUsable(crashImage))
-                        throw new InvalidDataException("Crash crates, TNT and Nitro use box art and sounds from your Crash Bandicoot: Warped (USA) disc. Choose it with \"Crash disc…\" in the Add Object browser.");
+                        throw new InvalidDataException("Crash crates, TNT, Nitro and the Crash enemies use art and sounds from your Crash Bandicoot: Warped (USA) disc. Choose it with \"Crash disc…\" in the Add Object browser.");
                     crash = new Spyro.Editor.Core.Crash.CrashWarpedDisc(crashImage);
                 }
                 return UniversalMobyExport.Apply(library, currentImage, universalImage, _retailCatalog, universalPlacements, japanese: japanese, crash: crash,

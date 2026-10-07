@@ -13,6 +13,12 @@ New
   - TNT crate: jump on it and it counts down 3, 2, 1 with Crash's beeps, then explodes. Flaming or charging it sets it off at once. The blast costs Spyro one Sparx level if he is close, and breaks crates, baskets, TNT and Nitro nearby.
   - Nitro crate: hops and rattles, and explodes when anything touches it, taking all of Spyro's health. Flame it from a distance or set it off with TNT.
   - The boxes use Crash 3's own box art and sounds from your disc.
+- Crash Bandicoot enemies (same disc, under Enemies › Crash Bandicoot), with their own Crash 3 models, textures, animations and sounds:
+  - Crash frog (Toad Village): sits croaking, then hops towards Spyro when it sees him. Touching it costs a Sparx level. Leaves a butterfly.
+  - Crash knight (Toad Village): turns to face Spyro, marches up to him and swings his sword (a hit costs a Sparx level), and walks back to his spot when Spyro gets away. Drops a green gem (2).
+  - Crash wizard (Gee Wiz lab assistant): turns to face Spyro and casts a zap when Spyro is close and in front of him. Drops a blue gem (5).
+  - Flame, charge or jump on any of them and they are knocked flying, Crash style (jumping on them bounces Spyro off). The wizard's robe blows off first. The gems count toward the level's treasure.
+  - Frogs and knights stay within about 100 units of where you put them; place them on level ground (they keep their height).
 - Terrain textures from your own pictures: images added in the Terrain tab are now written into the game in every detail level (far, normal and close up), with the fade into the distance kept. Textures that share pixels in the level take new images together; the editor says which.
 - Lower now works on tiles at the floor of their part of the level. The game stores each part's heights within a band that used to start exactly at the lowest tile; Create BIN now moves the band when a lowered corner needs it.
 

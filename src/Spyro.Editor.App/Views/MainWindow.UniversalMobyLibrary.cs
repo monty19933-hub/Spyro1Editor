@@ -542,12 +542,12 @@ public sealed partial class MainWindow
             Background = new SolidColorBrush(Color.FromRgb(255, 244, 214)), Child = jpRow
         };
         Button crashDisc = NewButton("Choose Crash disc…"); crashDisc.Name = "UniversalMobyCrashDisc"; StyleModernSecondaryButton(crashDisc);
-        ToolTip.SetTip(crashDisc, "Crash crates, TNT and Nitro use box art and sounds from your Crash Bandicoot: Warped (USA) disc. It is only read, never modified.");
+        ToolTip.SetTip(crashDisc, "Crash crates, TNT, Nitro and the Crash enemies use art, models and sounds from your Crash Bandicoot: Warped (USA) disc. It is only read, never modified.");
         CrashWarpedDisc? crash = null;
         Grid crashRow = new() { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 12 };
         crashRow.Children.Add(new TextBlock
         {
-            Text = "Crash crates, TNT and Nitro use box art and sounds from Crash Bandicoot: Warped. Choose your copy of that disc once to unlock them (it is only read, never changed).",
+            Text = "Crash crates, TNT, Nitro and the Crash enemies (frog, knight, wizard) use art, models and sounds from Crash Bandicoot: Warped. Choose your copy of that disc once to unlock them (it is only read, never changed).",
             TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center
         });
         Grid.SetColumn(crashDisc, 1); crashRow.Children.Add(crashDisc);
@@ -1201,7 +1201,7 @@ public sealed partial class MainWindow
                         listDry[e.Default] = (null, (await CheckVariantAsync(e.Default)).Error);
                 previewVariant = null;
                 RefreshList(); RefreshDetails();
-                summary.Text = "Crash disc found — Crash crates, TNT and Nitro are ready to use.";
+                summary.Text = "Crash disc found — Crash crates, TNT, Nitro and the Crash enemies are ready to use.";
                 crashBanner.IsVisible = false;
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)

@@ -203,7 +203,10 @@ public static class UniversalMobyExport
             sources == null ? [] : UniversalHighValueGems.Assets(sources).ToDictionary(a => a.Id));
         var boxes = new Lazy<Dictionary<string, UniversalSpecialAsset>>(() =>
             sources == null || crash == null ? [] : UniversalCrashBoxes.Assets(sources, crash).ToDictionary(a => a.Id));
-        return id => (UniversalHighValueGems.IsId(id) ? gems.Value : UniversalCrashBoxes.IsId(id) ? boxes.Value : japaneseAssets.Value).GetValueOrDefault(id);
+        var enemies = new Lazy<Dictionary<string, UniversalSpecialAsset>>(() =>
+            sources == null || crash == null ? [] : UniversalCrashEnemies.Assets(sources, crash).ToDictionary(a => a.Id));
+        return id => (UniversalHighValueGems.IsId(id) ? gems.Value : UniversalCrashBoxes.IsId(id) ? boxes.Value
+            : UniversalCrashEnemies.IsId(id) ? enemies.Value : japaneseAssets.Value).GetValueOrDefault(id);
     }
 
 

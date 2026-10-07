@@ -141,6 +141,26 @@ any ground level (not the flight levels).
   landing on it) makes it explode and takes all of Spyro's health. Flame it from a
   distance, or set it off with a TNT blast.
 
+### Crash Bandicoot enemies
+
+**Crash frog**, **Crash knight** and **Crash wizard** (Enemies › Crash Bandicoot) are
+Crash Bandicoot: Warped's medieval enemies, converted from your Crash disc with their
+own models, textures, animations and sounds (choose the disc as for the boxes). They
+can go in any ground level.
+
+- **Crash frog** sits croaking, then hops towards Spyro when it sees him. Touching it
+  costs a Sparx level. It leaves a butterfly.
+- **Crash knight** turns to face Spyro, marches up to him and swings his sword; a hit
+  costs a Sparx level. He walks back to his spot when Spyro gets away. He drops a
+  green gem (2).
+- **Crash wizard** stands his ground, turns to face Spyro and casts a zap when Spyro
+  is close and in front of him; it costs a Sparx level. He drops a blue gem (5).
+- Flame, charge or jump on any of them and they are knocked flying, Crash style
+  (jumping on one bounces Spyro off). The wizard's robe blows off first. Their gems
+  count toward the level's treasure.
+- Frogs and knights move up to about 100 units from where you put them and keep
+  their height, so place them on level ground away from edges. Wizards do not move.
+
 Use a separate memory card for each edited game.
 
 ### Teal and rainbow gems
