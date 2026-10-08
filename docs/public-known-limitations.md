@@ -9,6 +9,19 @@
   forbid. **Tile Type…** changes what Spyro finds on a tile. **Fly Anywhere**
   can be limited to chosen levels. **Find space for this object…** shows its
   progress, lists results as it finds them and can be stopped.
+- Levels you build or clear with Start Blank (sixth rebuild, 7 October 2026):
+  walls now stop Spyro from the side you can see them; such levels keep the
+  game's 91 spare object slots for drops (they had 16, and many drops at once
+  could crash the game); Crash crates and enemies export in them; they hold up to
+  4,096 terrain tiles. Played in the emulator in Wumpa Village (Dark Hollow's
+  slot) and Cloudspire Isles (Town Square's) only.
+- Objects added to an original level use up that level's 91 spare object slots
+  (for example Dark Hollow with 49 added objects keeps 52). The game does not
+  check the end of that space when enemies and crates drop gems, so keep added
+  enemies and crates in an original level well below its remaining slots.
+- A built level's terrain can carry your own PNG pictures, but only through the
+  level's scene file; the editor window has no picture chooser for built levels
+  yet, and its 3D view shows the underlying texture's colours.
 - Dragons cannot be added to a level you build or clear with Start Blank. A
   dragon's rescue (cutscene, speech, camera) belongs to the level that owns it,
   and a built level has none of its own.
@@ -77,8 +90,12 @@
   This verifies those exact variants and destination, not every source/level pair.
 - Fresh levels use the regular editor and normal Create BIN, with authored
   geometry, collision, static native materials and Mobys. This build supports
-  one fresh level in slot 65, at most 255 generated triangles, and the native coordinate,
-  collision and memory limits. Vertices use whole editor units; collision vertices
+  one fresh level in slot 65, up to 4,096 authored faces (5,000 drawn faces, 127
+  sectors, 8,192 collision triangles), and the native coordinate,
+  collision and memory limits. When textured faces are crowded, Create BIN checks
+  the game's close-up texture queues for camera positions over the whole level
+  (a simulation of the game's tests, with a margin) and names the place that is
+  too dense; it can refuse a dense level the game would still draw. Vertices use whole editor units; collision vertices
   must stay within the native relative-coordinate range. Untextured faces are subdivided
   internally into whole-unit triangles no wider than 64 units per axis. Exact
   subdivision can require more triangles than the visible editor faces;
@@ -87,10 +104,13 @@
   Multiple placed objects retain the native dynamic-object reserve. A six-object
   scene passed collection, jumping and landing with 43/43 gems and one egg.
 - **Start Blank in Current Level** saves a recovery snapshot and replaces terrain,
-  collision and placed objects with an editable starter floor. It supports
-  Artisans, Stone Hill, Town Square, Peace Keepers, Dry Canyon, Cliff Town, Magic
-  Crafters, Beast Makers, Dream Weavers and Gnasty's World, plus the fresh level.
-  Other slots remain unsupported. Cleared Town Square and the separate fresh
+  collision and placed objects with an editable starter floor. It supports every
+  normal (non-flight) level plus the fresh level. Artisans, Stone Hill, Town
+  Square, Peace Keepers, Dry Canyon, Cliff Town, Magic Crafters, Beast Makers,
+  Dream Weavers and Gnasty's World can all be cleared together; the other twenty
+  (Dark Hollow, Toasty and the rest) use one of two spare places in the game for
+  their start-up, so at most two of them can be cleared in one game (played in
+  Dark Hollow only). Cleared Town Square and the separate fresh
   level share game initialization storage and cannot be combined in one export.
   Player/companion models, the engine overlay, shared sound and particle support
   remain; this is not a proof of the smallest possible engine footprint.
