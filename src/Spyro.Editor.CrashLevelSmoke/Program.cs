@@ -141,10 +141,9 @@ if (args.Length == 3 && args[0] == "--compare")
     // Which WAD entries and whether the executable differ between two game images: --compare a.bin b.bin
     var a = UniversalDiscImage.Read(args[1]); var b = UniversalDiscImage.Read(args[2]);
     Console.WriteLine($"executable {(a.Exe.AsSpan().SequenceEqual(b.Exe) ? "same" : "DIFFERS")}");
-    for (int e = 0; ; e++)
+    for (int e = 0; e < 256; e++)   // WAD.WAD's table is 0x800 bytes: 256 (offset, length) pairs
     {
-        byte[] x, y;
-        try { x = a.EntryBytes(e); y = b.EntryBytes(e); } catch { break; }
+        byte[] x = a.EntryBytes(e), y = b.EntryBytes(e);
         if (!x.AsSpan().SequenceEqual(y)) Console.WriteLine($"entry {e} differs ({x.Length} vs {y.Length} bytes)");
     }
     return;
