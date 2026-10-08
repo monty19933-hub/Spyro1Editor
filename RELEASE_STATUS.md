@@ -1,3 +1,44 @@
+# Retail-level edits keep their spare object slots — 7 October 2026
+
+Unreleased (Claude; after the sixth 1.2 rebuild, not in its packages). Objects added to a retail level through
+`UniversalMobyComposer.Compose` took their rows out of the level's dynamic arena (allocator 0x800524C4: rows up from
+the placed rows, 0x18-byte records down from the arena end, no bounds check; retail reserve 0x2800 bytes = 91 slots,
+Haunted Towers 272, Gnasty's World / Gnorc Cove / Twilight Harbor / Gnasty's Loot 182). Bandicoot Keep (Dark Hollow,
+128 rows + 49 added) kept 52; the composer only refused below 16.
+
+- `UniversalLevelData.GrowArena` inserts zeroed 0x70-byte slots at the arena end and moves the properties, pod,
+  collision and fixup components with every fixed-up pointer (the scene loader 0x80013F24 derives each base from the
+  lengths before it and the capacity 0x800756A8 from the Moby component's length).
+- `UniversalMobyComposer.RestoreDynamicSlots` grows an ordinary retail edit back to the level's own reserve, as far as
+  the RAM below `NormalBufferFloor - RamSafetyMargin` allows (only the scene's sector-rounded length moves the RAM
+  end). Built levels (prepared arena) and the exactly certified layouts (Magic Crafters druids, Green Druid / linked /
+  High Caves worlds, flight chest and gate) are unchanged.
+- When RAM cannot give the whole reserve back, the export keeps what fits (warning) and refuses, in plain words, only
+  when fewer slots remain than `DropCapableRows` (placed rows with a reward byte, not gems) + 16, capped at the level's
+  own reserve (`RequiredDynamicSlots`). Find space treats that refusal as a capacity failure.
+
+Checks: `RetailDynamicSlotsSmoke` (new; source-free in the gate: synthetic scenes, pointer/component moves, RAM-bounded
+growth, a 49-row append; source mode on a scratch copy of the USA image: every retail level with 49 copies of its own
+droppers — 31 compose with their reserve (Haunted Towers 261 of 272 for RAM), Peace Keepers refuses 49 in plain words
+and takes 8, every native row/property/pod/pointer checked against the retail scene). Source smokes updated for the
+restored slots: `HauntedDarkHollowSmoke` (91 instead of 89, headroom unchanged), `TerraceParticleOwnershipSmoke` (native
+rows identical except the moved properties pointer). Twenty other opt-in source smokes fail identically at 208130d without this
+change (8 of them already at bee3e51).
+Emulator (isolated DuckStation, New Game patched in RAM to start in Dark Hollow, every placed object with a reward
+made to drop it at once through the game's own 0x8003ABC0, then 900 frames watched for CPU faults; script and logs in
+task-root `work/dynamic-slots-20261007/runtime/dynslots.py` and `evidence/emulator`):
+- Dark Hollow + 49 gem vases, this change (BIN 96c7867d…, which `RetailDynamicSlotsSmoke --bin` writes byte for byte):
+  the game's capacity reads 91; 88 drops make 89 live objects with 240 bytes
+  still free between rows and records; 900 frames without a fault.
+- The same 49 vases without it (built with 208130d): capacity 52; rows and records overlap from the 53rd live object
+  and the CPU faults in the drop routine at the 70th drop and again one frame later.
+- The delivered Bandicoot Keep (`outputs/BandicootKeep-enemies-20261007`): capacity 52; its 71 drops overlap by 7,648
+  bytes and the CPU faults on the next frame — the reported crash.
+Not played: an ordinary play-through; the other 30 retail levels were only checked by composition and readback. A
+UiSmoke re-export of the Bandicoot Keep project backup hangs at 0% CPU after the Stone Hill objects stage with or
+without this change (not investigated further). 49 copies of Dark Hollow's enemy row 35 on a 256-unit grid stop
+the level running with or without this change, so the emulator image uses the vase.
+
 # Built-level ground kinds, upright pictures, re-textured levels — 7 October 2026 (evening)
 
 Owner's notes on Wumpa Village and Cloudspire Isles: the textures looked random and the water was harmless.

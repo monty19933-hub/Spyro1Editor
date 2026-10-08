@@ -69,7 +69,12 @@ Check(result.NativeLineParticleProofs.Count==1 && result.ParticleDependencies.Si
 Check(result.ParticleDependencies.Single(p=>p.TypeId==12).Status=="dependency-unverified","type12 remains separate unverified");
 var finalOverlay=new UniversalOverlay(result.Overlay,UniversalExeBindings.Read(result.Executable,12));certificate.RequireDestination(finalOverlay,result.Executable);checks++;
 Check(finalOverlay.Bindings[UniversalExeBindings.ParticleSpawnGlobal].Value==0x800844A0 && finalOverlay.Bindings[UniversalExeBindings.ParticleUpdateGlobal].Value==0x80083274,"no added dispatcher or doubletick");
-for(int n=0;n<128;n++)Check(new UniversalLevelData(result.LevelData).Row(n).SequenceEqual(d.Data.Row(n)),"original native row "+n);
+// The level keeps its 91 spare object slots: the properties move up by the restored slots and each native row's
+// properties pointer moves with them; every other row byte is unchanged.
+var finalData=new UniversalLevelData(result.LevelData);var nativeScene=d.Data.Scene();int moved=finalData.Scene().PropertiesComponent-nativeScene.PropertiesComponent;
+Check(result.ArenaSlotsRemaining==91&&moved==result.ArenaSlotsAdded*UniversalLevelData.ArenaSlotBytes,"Dark Hollow keeps its 91 spare object slots");
+for(int n=0;n<128;n++){byte[] a=finalData.Row(n),b=d.Data.Row(n);int p=BitConverter.ToInt32(b,0);bool owned=nativeScene.Fixups.Contains(nativeScene.RowsOffset+n*UniversalLevelData.RowStride);
+    Check(a.AsSpan(4).SequenceEqual(b.AsSpan(4))&&BitConverter.ToInt32(a,0)==(owned&&p<nativeScene.PropertiesEnd?p+moved:p),"original native row "+n);}
 cases.Add("Ordinary compositor and final callbacks:128 native rows preserved, physical128, existing77 certified,12 unverified, no update chain.");
 Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(args[2]))!);
 File.WriteAllText(args[2],JsonSerializer.Serialize(new{Marker="TERRACE_NATIVE_LINE77_OWNERSHIP_OK",Checks=checks,Proof=certificate.Proof,Cases=cases,Dependencies=result.ParticleDependencies,Classes=result.Classes,Runtime="not-tested;77 is egg completion, not an enemy attack",CoreSha256=Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(typeof(UniversalMobyComposer).Assembly.Location)))},new JsonSerializerOptions{WriteIndented=true}));

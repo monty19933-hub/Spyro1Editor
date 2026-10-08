@@ -427,6 +427,37 @@ public sealed class UniversalLevelData
         return (total, grow, newIdx);
     }
 
+    /// <summary>Bytes one dynamic object takes from the Moby arena: a 0x58-byte row growing up from the placed rows and
+    /// a 0x18-byte record growing down from the arena end (allocator 0x800524C4).</summary>
+    public const int ArenaSlotBytes = RowStride + 0x18;
+
+    /// <summary>Grows the Moby component's dynamic arena by <paramref name="slots"/> zeroed slots inserted at its end.
+    /// The properties, pod, collision and fixup components move up with every fixed-up pointer at or past that point:
+    /// the native scene loader (0x80013F24) derives each component's base from the lengths before it and the arena's
+    /// capacity from the Moby component's length. Rows keep their offsets.</summary>
+    public void GrowArena(int slots)
+    {
+        if (slots <= 0) return;
+        var sc = Scene(); var sf = Subfiles()[3];
+        byte[] original = _data.AsSpan(sf.Offset, sf.Length).ToArray();
+        int growth = checked(slots * ArenaSlotBytes), insert = sc.ArenaEnd;
+        int Move(int v) => v >= insert ? checked(v + growth) : v;
+        byte[] scene = new byte[checked(sc.UsedEnd + growth)];
+        original.AsSpan(0, insert).CopyTo(scene);
+        original.AsSpan(insert, sc.UsedEnd - insert).CopyTo(scene.AsSpan(insert + growth));
+        BinaryPrimitives.WriteInt32LittleEndian(scene.AsSpan(sc.MobyComponent), checked(sc.MobyComponentSize + growth));
+        foreach (int f in sc.Fixups)
+            BinaryPrimitives.WriteInt32LittleEndian(scene.AsSpan(Move(f)), Move(BinaryPrimitives.ReadInt32LittleEndian(original.AsSpan(f))));
+        int table = Move(sc.FixupsOffset);
+        for (int i = 0; i < sc.Fixups.Count; i++) BinaryPrimitives.WriteInt32LittleEndian(scene.AsSpan(table + 4 + 4 * i), Move(sc.Fixups[i]));
+        ReplaceScene(scene);
+        var after = Scene();
+        if (after.RowCount != sc.RowCount || after.ArenaEnd != sc.ArenaEnd + growth || after.PropertiesComponent != sc.PropertiesComponent + growth ||
+            after.PodComponent != sc.PodComponent + growth || after.CollisionComponent != sc.CollisionComponent + growth ||
+            after.FixupsOffset != sc.FixupsOffset + growth || after.Fixups.Count != sc.Fixups.Count)
+            throw new InvalidDataException("Growing the spare object slots lost a scene component.");
+    }
+
     internal void ReplaceScene(ReadOnlySpan<byte> scene)
     {
         var sf = Subfiles(); var old = sf[3];

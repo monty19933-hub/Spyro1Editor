@@ -32,6 +32,7 @@ Fixed
 
 - Walls in levels you build stop Spyro. He used to walk through any wall from the side you can see (the game reads the solid side of a collision triangle from its corner order, and walls were stored the other way round from floors).
 - Levels you build keep the game's 91 spare object slots (they had 16). The game puts every gem an enemy or crate drops, every butterfly and every projectile into those slots without checking the end, so with more than 16 at once it overwrote the level's data and could crash.
+- Objects you add to one of the game's own levels no longer use up its spare object slots. Create BIN gives the level back its 91 (182 or 272 in the few levels that have more) as far as the level's game memory allows. Dark Hollow with 49 added objects used to keep only 52, so defeating many enemies and breaking many crates without collecting what they dropped could crash the game. If a level's memory is too full to give all of them back, Create BIN keeps as many as fit and stops with a message, naming the level, only when fewer would remain than the level's enemies and crates that drop something, plus 16.
 - A large built level's terrain is cut into compact parts like the game's own, each with its true size, so the game can skip the parts out of view (they used to cover large areas and be drawn close up from far away). Small built levels keep their exact earlier layout.
 
 Clearer

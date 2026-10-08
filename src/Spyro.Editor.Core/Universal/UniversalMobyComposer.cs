@@ -39,6 +39,8 @@ public sealed record UniversalComposeResult(
     byte[] LevelData,
     byte[] Executable)
 {
+    /// <summary>Spare object slots added to an edited retail level's arena to keep its own retail reserve.</summary>
+    public int ArenaSlotsAdded { get; init; }
     /// <summary>Native models dropped because every placed copy was removed; with the bytes freed.</summary>
     public IReadOnlyList<int> DroppedModelClasses { get; init; } = [];
     public int DroppedModelBytes { get; init; }
@@ -87,6 +89,46 @@ public static class UniversalMobyComposer
     /// <summary>The spare slots a built level reserves: the retail 91 where the 256-row range allows.</summary>
     public static int BuiltLevelDynamicSlots(int activePlacements) =>
         Math.Max(MinimumDynamicSlots, Math.Min(RetailDynamicSlots, 256 - activePlacements));
+    /// <summary>Spare slots an edited retail level keeps beyond one per object that can drop something
+    /// (projectiles and effects).</summary>
+    public const int DropSlotMargin = MinimumDynamicSlots;
+
+    /// <summary>Placed rows that can put an object into the spare slots when defeated or broken: every row with a
+    /// reward byte (+0x53: a gem, a butterfly or another reward), except visible gems and removed rows.</summary>
+    public static int DropCapableRows(UniversalLevelData d)
+    {
+        var sc = d.Scene(); int rows = d.Subfiles()[3].Offset + sc.RowsOffset, count = 0;
+        for (int i = 0; i < sc.RowCount; i++)
+        {
+            var row = d.Bytes.AsSpan(rows + i * UniversalLevelData.RowStride, UniversalLevelData.RowStride);
+            int c = BinaryPrimitives.ReadUInt16LittleEndian(row[0x36..]);
+            if (row[0x53] != 0xFF && c != InertClass && !GemValue.TryFromIdByte(c, out _) && UniversalHighValueGems.ValueForClass(c) == 0)
+                count++;
+        }
+        return count;
+    }
+
+    /// <summary>The spare slots an edited retail level must keep: one per object that can drop something plus
+    /// <see cref="DropSlotMargin"/>, never more than the level's own retail reserve.</summary>
+    public static int RequiredDynamicSlots(int retailSlots, int dropCapable) =>
+        Math.Min(retailSlots, Math.Max(MinimumDynamicSlots, dropCapable + DropSlotMargin));
+
+    /// <summary>Grows an edited level's spare object slots back towards <paramref name="targetSlots"/>, as many as
+    /// <paramref name="ramRoom"/> bytes of game RAM allow: the scene is loaded last, so only its sector-rounded length
+    /// moves the level's RAM end. Returns the level data to use and the slots added.</summary>
+    public static (UniversalLevelData Data, int Added) RestoreDynamicSlots(UniversalLevelData data, int targetSlots, long ramRoom)
+    {
+        int want = targetSlots - ArenaSlots(data), length = data.Subfiles()[3].Length;
+        if (want <= 0 || ramRoom < 0) return (data, 0);
+        long longest = length + ramRoom / 0x800 * 0x800;
+        for (long slots = Math.Min(want, (longest - data.Scene().UsedEnd) / UniversalLevelData.ArenaSlotBytes); slots > 0; slots--)
+        {
+            var grown = new UniversalLevelData(data.Bytes.ToArray());
+            grown.GrowArena((int)slots);
+            if (grown.Subfiles()[3].Length - length <= ramRoom) return (grown, (int)slots);
+        }
+        return (data, 0);
+    }
 
     public const uint TreasureTableAddress = 0x8006F438;
 
@@ -652,9 +694,6 @@ public static class UniversalMobyComposer
         int[] physicalSaveRows = Enumerable.Range(0, allocation.FinalRowCount).Select(i => permanentlyRemoved.Contains(i) ? -1 : i).ToArray();
         for (int i = 0; i < newRows.Count; i++) physicalSaveRows[newRows[i]] = saveRows[i];
         bool remapSaveRows = physicalSaveRows.Where((logical, physical) => logical != physical).Any();
-        int arena = ArenaSlots(dest);
-        if (arena < MinimumDynamicSlots)
-            throw new InvalidDataException($"Only {arena} dynamic object slots would remain in {destination.DisplayName}; at least {MinimumDynamicSlots} are required.");
 
         List<UniversalOwnedParticleCertificate> ownedParticles=[];
         if(greenWorld!=null){UniversalGreenDruidWorldSpellParticles.RequireTexture(greenDonor.Data!,dest);ownedParticles.Add(greenWorld.Dispatcher());particleDependencies[("alpineridge",8)]=new("alpineridge",8,"source-certified-copied",greenWorld.HasSpellTarget?"Original live-model vertex spell and physical target; native gameplay pending.":"Original no-target druid; complete copied particle owner retained, native target−1 skips emission; native gameplay pending.");}
@@ -855,8 +894,9 @@ public static class UniversalMobyComposer
         // A dragon rescue streams into the model area below the statue. When removed native models leave too little
         // room there, imported models move below the statue too; the game reloads that area after every rescue.
         // Compositions whose model layout is certified exactly above keep it and are refused instead.
-        if (magicChain == null && magicOriginal == null && magicPair == null && linkedWorld == null && greenWorld == null &&
-            highCavesWorld == null && flightGate == null && flightChest == null &&
+        bool certifiedLayout = magicChain != null || magicOriginal != null || magicPair != null || linkedWorld != null ||
+            greenWorld != null || highCavesWorld != null || flightGate != null || flightChest != null;
+        if (!certifiedLayout &&
             UniversalNativeDragonRescuePrefix.Measure(destination.Key, destination.DisplayName, originalDestination.Data, dest, exe) is { Deficit: > 0 })
         {
             var original = originalDestination.Data.Registrations();
@@ -865,8 +905,16 @@ public static class UniversalMobyComposer
             modelGrowth += dest.MoveModelsBefore(250, dest.Registrations().Where(r => r.Root > statue && !nativeTail.Contains(r.ClassId)).Select(r => r.ClassId).ToArray());
         }
         UniversalNativeDragonRescuePrefix.RequireSafe(destination.Key,destination.DisplayName,originalDestination.Data,dest,exe);
-        uint finalEnd = RuntimeEnd(dest, copyBuffer);
         uint limit = NormalBufferFloor - RamSafetyMargin;
+        // Objects added to a retail level take their rows out of its spare object slots, which every gem or butterfly
+        // an enemy or crate drops and every projectile needs while it exists (the allocator checks no end). Grow the
+        // arena back to the level's own retail reserve where game RAM allows. Built levels prepare their arena before
+        // composition, and layouts certified exactly above keep theirs.
+        bool retailEdit = persistentNativePrefixRows == null && nativeRowsBefore > 0 && !certifiedLayout;
+        int retailSlots = retailEdit ? ArenaSlots(originalDestination.Data) : 0, slotsAdded = 0;
+        if (retailEdit && placements.Count > 0)
+            (dest, slotsAdded) = RestoreDynamicSlots(dest, retailSlots, (long)limit - RuntimeEnd(dest, copyBuffer));
+        uint finalEnd = RuntimeEnd(dest, copyBuffer);
         var ram = new UniversalRamBudget(originalEnd, finalEnd, NormalBufferFloor,
             (int)(NormalBufferFloor - originalEnd), (int)((long)NormalBufferFloor - finalEnd),
             (int)(copyBuffer - destOverlay.CopyBuffer), modelGrowth, dest.Subfiles()[3].Length - sceneBefore,
@@ -879,6 +927,21 @@ public static class UniversalMobyComposer
                 $"but the level has {Math.Max(0, (int)(limit - originalEnd)) / 1024.0:0.0} KB available." +
                 (playerAnimationImports.Sum(p => p.ModelGrowthBytes) > 0
                     ? $" This includes {playerAnimationImports.Sum(p => p.ModelGrowthBytes) / 1024.0:0.0} KB for Spyro's reactions to these enemies." : ""), ram);
+        int arena = ArenaSlots(dest);
+        if (arena < MinimumDynamicSlots)
+            throw new InvalidDataException($"Only {arena} dynamic object slots would remain in {destination.DisplayName}; at least {MinimumDynamicSlots} are required.");
+        if (retailEdit && arena < retailSlots)
+        {
+            int drops = DropCapableRows(dest), required = RequiredDynamicSlots(retailSlots, drops);
+            if (arena < required)
+                throw new InvalidDataException(
+                    $"Only {arena} spare object slots would remain in {destination.DisplayName}, and its {drops} enemies and crates that " +
+                    $"drop something need at least {required}. The game puts every dropped gem or butterfly and every projectile in " +
+                    $"one of these slots and does not check for the last one, so more would crash it. There is not enough game " +
+                    $"memory left in this level for more slots: remove some of the objects added to {destination.DisplayName}.");
+            warnings.Add($"{destination.DisplayName} keeps {arena} of its {retailSlots} spare object slots (game memory is short); " +
+                $"its {drops} enemies and crates that drop something need {required}.");
+        }
         int[] mappedRows = Enumerable.Repeat(-1, incomingCount).ToArray(), mappedSaveRows = Enumerable.Repeat(-1, incomingCount).ToArray();
         for (int i = 0; i < newRows.Count; i++) { mappedRows[incomingOrder[i]] = newRows[i]; mappedSaveRows[incomingOrder[i]] = saveRows[i]; }
         if (placements.Any(p => p.DragonColor != null)) NativeDragonStatueColors.Install(exe);
@@ -893,7 +956,7 @@ public static class UniversalMobyComposer
         foreach (var particle in particleDependencies.Values.Where(p => p.Status == "dependency-unverified"))
             warnings.Add($"Particle 0x{particle.TypeId:X2} from {particle.SourceLevelKey}: {particle.Detail}");
         return new(destination.Key, imports, mappedRows, ram, arena, freeBefore - vram.FreeBytes, behavior, warnings,
-            treasure, overlay, dest.Bytes, exe) { DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), CanonicalGemCollectionProofs = collectionStars, FreshParticleBinding = freshParticleBinding, NativeLineParticleProofs=nativeLine77==null?[]:[nativeLine77.Proof], FlightChestParticleProofs = flightParticleProofs.Values.ToArray(), FlightGateParticleProofs = gateParticleProofs.Values.ToArray(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), RestoredIndexedObjectLinks = templates.Sum(t => t.ImportedRowIndices.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports, WhirlwindSoundImports = whirlwindSounds.Values.ToArray(), MetalTextureBindings = metalBindings, DestinationGemCollectionCalls = destinationGemCalls, DestinationGemCollectionExtraBytes = destinationGemBytes, DestinationGemColourLoads = destinationColourLoads, DestinationGemColourExtraBytes = destinationColourBytes, NativeParticleNoOpProofs = particleNoOpProofs };
+            treasure, overlay, dest.Bytes, exe) { ArenaSlotsAdded = slotsAdded, DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), CanonicalGemCollectionProofs = collectionStars, FreshParticleBinding = freshParticleBinding, NativeLineParticleProofs=nativeLine77==null?[]:[nativeLine77.Proof], FlightChestParticleProofs = flightParticleProofs.Values.ToArray(), FlightGateParticleProofs = gateParticleProofs.Values.ToArray(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), RestoredIndexedObjectLinks = templates.Sum(t => t.ImportedRowIndices.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports, WhirlwindSoundImports = whirlwindSounds.Values.ToArray(), MetalTextureBindings = metalBindings, DestinationGemCollectionCalls = destinationGemCalls, DestinationGemCollectionExtraBytes = destinationGemBytes, DestinationGemColourLoads = destinationColourLoads, DestinationGemColourExtraBytes = destinationColourBytes, NativeParticleNoOpProofs = particleNoOpProofs };
     }
 
     /// <summary>Class a fully removed native row is switched to: no model, no behavior in any level, never

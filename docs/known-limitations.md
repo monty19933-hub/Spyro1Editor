@@ -176,8 +176,8 @@ is refused, with the reason, only when the destination cannot hold it:
 - **Texture memory.** Imported textures need free VRAM; levels with little free
   space (Artisans, Lofty Castle, Gnorc Cove, Metalhead, Town Square, Jacques)
   refuse some textured objects. Non-4-bit texture groups are not relocated.
-- **Object limits.** At most 256 placed rows, 63 model slots, and at least 16
-  free dynamic slots must remain.
+- **Object limits.** At most 256 placed rows and 63 model slots; the level keeps
+  its spare object slots (below).
 - Spyro's own animation stream (class 0x000) is not a placeable object.
 - An offline survey of all 7,175 class × level pairs: 4,627 fit alone,
   1,990 exceed RAM, 558 exceed free texture memory.
@@ -210,10 +210,22 @@ draw. A built level's own pictures on terrain (AuthoredMaterial Image) are set i
 scene file; the editor has no picture chooser for built levels yet and its viewport
 shows the carrier texture's colours.
 
-Objects added to a retail level take their rows from that level's 91 spare object
-slots (Bandicoot Keep: 49 added objects leave 52). The game does not check the end of
-that space when enemies and crates drop gems, so keep added enemies and crates in a
-retail level well under its remaining slots. Levels you build always keep 91.
+Spare object slots: every gem or butterfly an enemy or crate drops, and every
+projectile, takes one of the level's spare object slots while it exists, and the game
+does not check for the last one. Retail levels reserve 91 (Haunted Towers 272; Gnasty's
+World, Gnorc Cove, Twilight Harbor and Gnasty's Loot 182). Objects added to a retail
+level take their rows out of that space, so Create BIN grows it back (the level's
+properties, pods and pointers move up) as far as the level's game RAM allows; Dark
+Hollow with 49 added objects keeps 91 instead of 52. In levels with little RAM it keeps
+as many as fit and refuses when fewer remain than the level's objects with a reward
+(+0x53) plus 16, never asking for more than the level's own reserve. Levels with
+little RAM and many such objects (Tree Tops: 75 of them, 4.7 KB free; Misty Bog; Peace
+Keepers) therefore take fewer added objects than before. Layouts that other
+owners certify byte for byte (Magic Crafters druids, Green Druid and High Caves worlds,
+flight chests and gates) keep their own reserve rules. Levels you build keep
+min(91, 256 - objects), at least 16.
+Played in the emulator in Dark Hollow only (88 drops at once with 91 slots; the same level
+with 52 slots crashed).
 
 Crash Bandicoot boxes and enemies need the user's Crash Bandicoot: Warped (USA)
 disc and work only in ground levels. The enemies are converted from Crash 3's

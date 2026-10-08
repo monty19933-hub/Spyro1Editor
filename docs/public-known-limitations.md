@@ -15,10 +15,15 @@
   could crash the game); Crash crates and enemies export in them; they hold up to
   4,096 terrain tiles. Played in the emulator in Wumpa Village (Dark Hollow's
   slot) and Cloudspire Isles (Town Square's) only.
-- Objects added to an original level use up that level's 91 spare object slots
-  (for example Dark Hollow with 49 added objects keeps 52). The game does not
-  check the end of that space when enemies and crates drop gems, so keep added
-  enemies and crates in an original level well below its remaining slots.
+- Objects added to an original level no longer use up its spare object slots
+  (7 October 2026, after the sixth rebuild): Create BIN gives the level back its
+  91 (182 or 272 in a few of the last levels) as far as the level's game memory
+  allows; Dark Hollow with 49 added objects keeps 91 instead of 52. Where memory
+  is short it keeps as many as fit and refuses, naming the level, when fewer
+  would remain than the level's enemies and crates that drop something plus 16.
+  Levels with little memory to spare and many enemies and crates (Tree Tops,
+  Misty Bog, Peace Keepers) therefore take fewer added objects than before.
+  Played in the emulator in Dark Hollow only.
 - A built level's terrain can carry your own PNG pictures, but only through the
   level's scene file; the editor window has no picture chooser for built levels
   yet, and its 3D view shows the underlying texture's colours.

@@ -128,7 +128,8 @@ public static class UniversalCapacityPlanner
         error.Contains("Not enough free texture memory", StringComparison.OrdinalIgnoreCase) ||
         error.Contains("free CLUT", StringComparison.OrdinalIgnoreCase) ||
         System.Text.RegularExpressions.Regex.IsMatch(error,@"\bRAM\b",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant) ||
-        error.Contains("dynamic slots", StringComparison.OrdinalIgnoreCase);
+        error.Contains("dynamic slots", StringComparison.OrdinalIgnoreCase) ||
+        error.Contains("spare object slots", StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<UniversalRemovalGroup[]> Combinations(UniversalRemovalGroup[] groups)
     {
