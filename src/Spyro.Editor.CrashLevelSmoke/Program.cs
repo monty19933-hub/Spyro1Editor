@@ -136,6 +136,19 @@ if (args.Length == 3 && args[0] == "--surfaces")
     }
     return;
 }
+if (args.Length == 3 && args[0] == "--compare")
+{
+    // Which WAD entries and whether the executable differ between two game images: --compare a.bin b.bin
+    var a = UniversalDiscImage.Read(args[1]); var b = UniversalDiscImage.Read(args[2]);
+    Console.WriteLine($"executable {(a.Exe.AsSpan().SequenceEqual(b.Exe) ? "same" : "DIFFERS")}");
+    for (int e = 0; ; e++)
+    {
+        byte[] x, y;
+        try { x = a.EntryBytes(e); y = b.EntryBytes(e); } catch { break; }
+        if (!x.AsSpan().SequenceEqual(y)) Console.WriteLine($"entry {e} differs ({x.Length} vs {y.Length} bytes)");
+    }
+    return;
+}
 if (args.Length == 4 && args[0] == "--dump-entry")
 {
     // A WAD entry's bytes, for the work-folder texture tools: --dump-entry image.bin entry out.bin
