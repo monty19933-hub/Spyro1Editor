@@ -224,8 +224,10 @@ Keepers) therefore take fewer added objects than before. Layouts that other
 owners certify byte for byte (Magic Crafters druids, Green Druid and High Caves worlds,
 flight chests and gates) keep their own reserve rules. Levels you build keep
 min(91, 256 - objects), at least 16.
-Played in the emulator in Dark Hollow only (88 drops at once with 91 slots; the same level
-with 52 slots crashed).
+Played in the emulator in Dark Hollow (88 drops at once with 91 slots; the same level
+with 52 slots crashed; Bandicoot Keep re-exported with 71 droppers ran 900 frames after every
+drop where the copy delivered on 7 October faulted after one) and in an edited Stone Hill
+(64 droppers, 900 frames) only.
 
 Crash Bandicoot boxes and enemies need the user's Crash Bandicoot: Warped (USA)
 disc and work only in ground levels. The enemies are converted from Crash 3's
