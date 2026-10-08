@@ -23,6 +23,7 @@ New
 - Levels you build, or clear with Start Blank, can be much bigger: up to 4,096 terrain tiles (5,000 drawn faces after the game's own splitting, 127 parts) instead of 255. Create BIN checks the game's close-up texture work for camera positions all over the level and, if one place is too crowded with textured tiles, names it.
 - A built level's terrain tiles can show your own PNG pictures (one per material, written at every distance like the Terrain tab's pictures). For now the picture is set in the level's scene file; there is no picture chooser for built levels in the editor yet.
 - Crash boxes and Crash enemies can be placed in levels you build or clear (Create BIN used to stop with "needs its original source disc").
+- Tile Type… works in levels you build or clear with Start Blank: water, lava and ooze (Spyro cannot swim, so they cost a life), a supercharge ramp and an invisible wall. Before, every tile of a built level was solid ground.
 - Example: WUMPA VILLAGE, a Crash Bandicoot: Warped style village built in Dark Hollow's place with Crash 3's textures, crates and enemies.
 - Terrain textures from your own pictures: images added in the Terrain tab are now written into the game in every detail level (far, normal and close up), with the fade into the distance kept. Textures that share pixels in the level take new images together; the editor says which.
 - Lower now works on tiles at the floor of their part of the level. The game stores each part's heights within a band that used to start exactly at the lowest tile; Create BIN now moves the band when a lowered corner needs it.
@@ -35,6 +36,7 @@ Fixed
 
 Clearer
 
+- Tile Type names water, lava and ooze by what they do: Spyro sinks and loses a life (or loses it at once). They were labelled "hurts Spyro", but in Spyro the Dragon they always cost a life.
 - Terrain edits are refused at the moment you make them, in plain words, instead of failing at Create BIN: tiles without collision (scenery), steps over 255 inside one piece of collision, folded ground, a surface within 64 above, crossing into another 256-unit collision cell, and the height and width bands of a part of the level. The message says what to do instead.
 - Raise, Lower and drags move only the corners the game has collision for, and move corners shared with neighbouring tiles along with them, which is what the game does anyway. The status line says how many corners followed or stayed.
 - A brush stroke leaves the corners it cannot move where they are and says how many; whole-tile strokes keep shared corners joined across tiles the brush did not touch.

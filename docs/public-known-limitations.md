@@ -138,6 +138,12 @@
   corners unchanged and says so. Translucent source faces and ambiguous
   collision ownership are not supported by structural terrain editing. These
   limits are separate from the fresh-level triangle limit.
+- In a level you build, **Tile Type…** offers the kinds the game's executable
+  handles everywhere (water, lava and ooze in both forms, supercharge ramp,
+  invisible wall); Create BIN writes them into the level's own surface table.
+  Water was played in Wumpa Village and Cloudspire Isles (Spyro sinks and loses a
+  life) and lava in a test build; ooze, the supercharge ramp and the invisible
+  wall were not played in a built level.
 - **Tile Type…** writes the chosen kind into the tile's matched collision
   triangles through the same native surface-flag patch texture painting uses.
   Only kinds the level already defines are offered; portal and level-linked

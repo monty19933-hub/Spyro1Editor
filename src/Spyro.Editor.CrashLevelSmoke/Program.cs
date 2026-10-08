@@ -90,6 +90,13 @@ if (args.Length == 5 && args[0] == "--village")
         TargetBinding = new(target.Key, target.LevelId, target.SourceWadEntry, target.SourceWadEntry - 1, UniversalSourceLibrary.OriginalUsaSha256, rows),
     };
     var doc = WumpaVillage.Scene(blank, target.SourceWadEntry, catalog.FindByKey("townsquare")!.SourceWadEntry, args[4]);
+    // CRASH_LEVEL_KIND_TEST=water|lava|ooze: the pond's west half is that hazard with Param1 0, its east half Param1 1.
+    if (Environment.GetEnvironmentVariable("CRASH_LEVEL_KIND_TEST") is { } test)
+    {
+        int p2 = test == "lava" ? 1 : test == "ooze" ? 2 : 0;
+        doc = doc with { Surfaces = [.. doc.Surfaces.Select(f => f.Material?.TextureId == 19
+            ? f with { Kind = new AuthoredSurfaceKind(0, f.Vertices.Average(v => v.X) < 1744 ? 0 : 1, p2) } : f)] };
+    }
     var surfaces = doc.Surfaces;
     // Faces as text for a quick top-down check: carrier, then x y z per corner.
     File.WriteAllLines(args[3] + ".faces.txt", surfaces.Select(f => $"{f.Material?.TextureId ?? -1} " + string.Join(" ", f.Vertices.Select(v => $"{v.X} {v.Y} {v.Z}"))));
@@ -109,6 +116,43 @@ if (args.Length == 5 && args[0] == "--village")
         $"{q.X} {q.Y} {q.Z} {q.R}|" + string.Join("|", q.Counts.Select((n, i) => $"{n} " +
             string.Join(" ", q.Corners.Skip(q.Counts.Take(i).Sum() * 3).Take(n * 3)) + " " + string.Join(" ", q.Normals.Skip(i * 3).Take(3))))));
     Console.WriteLine("CRASH_LEVEL_VILLAGE_OK");
+    return;
+}
+if (args.Length == 3 && args[0] == "--surfaces")
+{
+    // Special-surface descriptors of every retail level and how many collision triangles use each:
+    // --surfaces USA.bin workspace
+    var catalog = LevelCatalog.Load(args[2]);
+    foreach (var level in catalog.Levels.Where(l => l.LevelId is >= 10 and <= 64))
+    {
+        try
+        {
+            var src = PortalSourceDataLocator.LocateTerrainSurfaces(args[1], level);
+            var uses = src.CollisionSurfaceTriangles.GroupBy(t => t.SurfaceIndex).ToDictionary(g => g.Key, g => g.Count());
+            foreach (var sf in src.SpecialSurfaces)
+                Console.WriteLine($"{level.Key,-14} #{sf.Index,2} type {sf.Type} p1 {sf.Param1} p2 {sf.Param2} raw {sf.RawHex} triangles {uses.GetValueOrDefault(sf.Index)}");
+        }
+        catch (Exception e) { Console.WriteLine($"{level.Key}: {e.Message}"); }
+    }
+    return;
+}
+if (args.Length == 4 && args[0] == "--dump-entry")
+{
+    // A WAD entry's bytes, for the work-folder texture tools: --dump-entry image.bin entry out.bin
+    File.WriteAllBytes(args[3], UniversalDiscImage.Read(args[1]).EntryBytes(int.Parse(args[2])));
+    return;
+}
+if (args.Length == 3 && args[0] == "--static")
+{
+    // Which textures of a level a built level can copy (animated or scrolling ones cannot): --static USA.bin entry
+    int entry = int.Parse(args[2]); List<int> ok = [], refused = [];
+    for (int id = 0; id < 128; id++)
+    {
+        try { _ = NativeStaticTerrainTextureSource.Capture(args[1], entry, id); ok.Add(id); }
+        catch (InvalidDataException) { refused.Add(id); }
+        catch (ArgumentOutOfRangeException) { break; }
+    }
+    Console.WriteLine($"static: {string.Join(",", ok)}"); Console.WriteLine($"refused: {string.Join(",", refused)}");
     return;
 }
 if (args.Length == 3 && args[0] == "--arena")
@@ -143,5 +187,15 @@ if (args.Length == 3 && args[0] == "--arena")
     Check(UniversalMobyComposer.BuiltLevelDynamicSlots(65) == 91 && UniversalMobyComposer.BuiltLevelDynamicSlots(200) == 56 &&
         UniversalMobyComposer.BuiltLevelDynamicSlots(250) == UniversalMobyComposer.MinimumDynamicSlots, "built-level spare object slots");
     Check(WumpaVillage.Objects.Length <= 71, "village objects fit Dark Hollow's free save rows");
+    // The pond's water: one special-surface record (type 0, 0, 0) and its collision triangles flagged with it.
+    {
+        int I(int at) => BinaryPrimitives.ReadInt32LittleEndian(bundle.AsSpan(at));
+        int special = I(0) + I(I(0)), collision = special + I(special);
+        Check(I(special + 4) == 1 && I(special) == 8 + 4 + 12 && I(special + 8) == 8 && bundle.AsSpan(special + 12, 12).SequenceEqual(new byte[12]),
+            "one water record in the special-surface table");
+        int n = I(collision + 4), flags = collision + 4 + I(collision + 4 + 0x18);
+        int wet = Enumerable.Range(0, n).Count(i => bundle[flags + i] == 0), dry = Enumerable.Range(0, n).Count(i => bundle[flags + i] == 0x3F);
+        Check(wet > 0 && wet + dry == n, "pond triangles flagged as water, the rest solid ground");
+    }
     Console.WriteLine($"CRASH_LEVEL_FREE_OK checks={checks} faces={doc.Surfaces.Count} sectors={sectors} queue={load}");
 }

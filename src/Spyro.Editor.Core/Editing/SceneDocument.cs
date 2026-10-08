@@ -17,7 +17,32 @@ public sealed record AuthoredMaterial(int SourceWadEntry, int TextureId)
     public string? Image { get; init; }
 }
 public sealed record AuthoredSurface(string Id, Vector3f[] Vertices, ColorRgba Color, AuthoredMaterial? Material,
-    ColorRgba[]? NearColors = null, ColorRgba[]? FarColors = null);
+    ColorRgba[]? NearColors = null, ColorRgba[]? FarColors = null)
+{
+    /// <summary>What Spyro finds on this face (water, lava, supercharge…); null is solid ground.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public AuthoredSurfaceKind? Kind { get; init; }
+}
+
+/// <summary>A native special-surface record (type and two parameters, as retail levels store them): type 0 is a
+/// hazard floor (Param1 0 hurts, 1 deadly; Param2 0 water, 1 lava, 2 ooze), 4 a supercharge ramp, 5 an invisible
+/// wall. These kinds are handled by the game's executable, so any level can use them.</summary>
+public sealed record AuthoredSurfaceKind(int Type, int Param1, int Param2)
+{
+    public static readonly AuthoredSurfaceKind Water = new(0, 0, 0), DeadlyWater = new(0, 1, 0), Lava = new(0, 0, 1),
+        DeadlyLava = new(0, 1, 1), Ooze = new(0, 0, 2), DeadlyOoze = new(0, 1, 2), Supercharge = new(4, 0, 0), InvisibleWall = new(5, 0, 0);
+    public static IReadOnlyList<AuthoredSurfaceKind> All { get; } = [Water, DeadlyWater, Lava, DeadlyLava, Ooze, DeadlyOoze, Supercharge, InvisibleWall];
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsSupported => All.Contains(this);
+    /// <summary>The native record: type word, then for hazard floors the two parameter words.</summary>
+    public byte[] NativeRecord()
+    {
+        byte[] r = new byte[Type == 0 ? 12 : 4];
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(r, Type);
+        if (Type == 0) { System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(r.AsSpan(4), Param1); System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(r.AsSpan(8), Param2); }
+        return r;
+    }
+}
 public sealed record AuthoredObject(string Identity, Moby Value);
 
 /// <summary>The main editor's neutral authored scene. Native ID65 is its actual compilation target,
@@ -71,6 +96,10 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
                 nativeFaceWord0:slotWord,nativeFaceWord1:slotWord,nativeFaceWord2:(uint)(s.Material?.TextureId??255),nativeFaceWord3:0x80,
                 nativeMaterialByte:s.Material?.TextureId??255,nativeUntexturedSentinel:s.Material==null,
                 nativePrimitiveSemiTransparent:false,nativeTextureId:s.Material?.TextureId??-1));
+            // A face's ground kind shows in the editor as a staged tile type and comes back through Capture.
+            if (s.Kind is { } kind)
+                geometry.Polygons[^1].ApplySurfaceBehaviorEdit(new(kind.Type, kind.Param1, kind.Param2, "built", s.Id,
+                    new Spyro.Editor.Core.Analysis.NativeTerrainSurfaceSignature(kind.Type, kind.Param1, kind.Param2).Label));
         }
         geometry.Bounds = Surfaces.Count == 0 ? Rect2f.FromBounds(Spawn.X-64, Spawn.Y-64, Spawn.X+64, Spawn.Y+64) : Rect2f.FromBounds(Surfaces.Min(s => s.Vertices.Min(v => v.X)), Surfaces.Min(s => s.Vertices.Min(v => v.Y)),
             Surfaces.Max(s => s.Vertices.Max(v => v.X)), Surfaces.Max(s => s.Vertices.Max(v => v.Y)));
@@ -90,8 +119,9 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
                 material = new(LevelSourceEntry(visual.SourceLevelKey), p.TextureId);
             else if (p.TextureId >= 0 && p.TextureId != old?.Material?.TextureId)
                 material = material == null ? throw new InvalidDataException("Choose a terrain material with an explicit source level before saving this face.") : material with { TextureId = p.TextureId };
-            if (p.HasSurfaceBehaviorEdit)
-                throw new InvalidDataException("This authored compiler has not yet verified native hazard/trigger surface records. Undo that surface behavior before saving; geometry and collision are supported.");
+            AuthoredSurfaceKind? kind = p.SurfaceBehaviorEdit is { } behavior ? new(behavior.SurfaceType, behavior.Param1, behavior.Param2) : null;
+            if (kind is { IsSupported: false })
+                throw new InvalidDataException("This ground kind cannot be used in a level you build. Choose water, lava, ooze, a supercharge ramp, an invisible wall or solid ground.");
             if (p.IsTerrainAddClone && old != null)
                 surfaces.Add((OriginalSurfaces is { } originals && p.SectorIndex < originals.Count ? originals[p.SectorIndex] : old) with { Vertices = p.OriginalPoints.Select((v,i) => new Vector3f(v.X,v.Y,p.OriginalZValues[i])).ToArray() });
             string identity = old?.Id ?? Guid.NewGuid().ToString("N");
@@ -99,7 +129,7 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
             surfaces.Add(new(identity,
                 p.Points.Select((v,i) => new Vector3f(v.X,v.Y,p.ZValues[i])).ToArray(), p.TextureVisualEdit?.AverageNearColor ?? p.FaceColor, material,
                 Enumerable.Range(0,p.Points.Count).Select(i => { int slot=Enumerable.Range(0,p.CornerPointIndexes.Count).FirstOrDefault(k=>p.CornerPointIndexes[k]==i); return p.TextureVisualEdit?.Corners.ElementAtOrDefault(slot)?.NearColor ?? p.NearColors.ElementAtOrDefault(slot); }).ToArray(),
-                Enumerable.Range(0,p.Points.Count).Select(i => { int slot=Enumerable.Range(0,p.CornerPointIndexes.Count).FirstOrDefault(k=>p.CornerPointIndexes[k]==i); return p.TextureVisualEdit?.Corners.ElementAtOrDefault(slot)?.FarColor ?? p.FarColors.ElementAtOrDefault(slot); }).ToArray()));
+                Enumerable.Range(0,p.Points.Count).Select(i => { int slot=Enumerable.Range(0,p.CornerPointIndexes.Count).FirstOrDefault(k=>p.CornerPointIndexes[k]==i); return p.TextureVisualEdit?.Corners.ElementAtOrDefault(slot)?.FarColor ?? p.FarColors.ElementAtOrDefault(slot); }).ToArray()) { Kind = kind });
         }
         var ledger = ReconcileLedger(mobys);
         var captured = this with { Surfaces = surfaces, Objects = mobys.Select(m => new AuthoredObject(m.UniversalPlacementId,m)).ToArray(), Ledger = ledger };
@@ -149,6 +179,8 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
                 if(colors != null && (colors.Length!=s.Vertices.Length || colors.Any(c=>c.A!=255)))
                     throw new InvalidDataException("Authored Gouraud color lanes must match their opaque vertices.");
             foreach (var v in s.Vertices) RequireCoordinate(v);
+            if (s.Kind is { IsSupported: false })
+                throw new InvalidDataException("An authored face has a ground kind the editor does not support.");
         }
         RequireCoordinate(Spawn);
         foreach (var o in Objects) if (!Guid.TryParseExact(o.Identity,"N",out _)) throw new InvalidDataException("An authored object has no stable identity.");

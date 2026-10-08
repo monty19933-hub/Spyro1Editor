@@ -15,7 +15,11 @@ internal static class NativeAuthoredMesh
     /// <summary>Terrain and collision data of a built level. Retail levels carry 150-350 KB; the export's RAM check
     /// decides whether a level fits with its objects.</summary>
     internal const int MaxSurfaceBytes = 0x40000;
-    internal sealed record Triangle(Vector3f A, Vector3f B, Vector3f C, ColorRgba Color, int Material, ColorRgba[] Near, ColorRgba[] Far);
+    internal sealed record Triangle(Vector3f A, Vector3f B, Vector3f C, ColorRgba Color, int Material, ColorRgba[] Near, ColorRgba[] Far)
+    {
+        /// <summary>The face's ground kind (null: solid ground); every lattice piece keeps it.</summary>
+        public AuthoredSurfaceKind? Kind { get; init; }
+    }
     internal static byte[] Compile(SceneDocument document, IReadOnlyList<AuthoredMaterial> materials) => CompileWithSky(document, materials, null);
     /// <summary>As <see cref="Compile"/>, with an optional borrowed retail sky block in place of the plain sky color.</summary>
     internal static byte[] CompileWithSky(SceneDocument document, IReadOnlyList<AuthoredMaterial> materials, byte[]? skyBlock)
@@ -28,8 +32,8 @@ internal static class NativeAuthoredMesh
             if (material < 0) throw new InvalidDataException("An authored material was omitted.");
             var near=s.NearColors??Enumerable.Repeat(s.Color,s.Vertices.Length).ToArray();
             var far=s.FarColors??Enumerable.Repeat(s.Color,s.Vertices.Length).ToArray();
-            triangles.Add(new(s.Vertices[0], s.Vertices[1], s.Vertices[2], s.Color,material,[near[0],near[1],near[2]],[far[0],far[1],far[2]]));
-            if (s.Vertices.Length == 4) triangles.Add(new(s.Vertices[0],s.Vertices[2],s.Vertices[3],s.Color,material,[near[0],near[2],near[3]],[far[0],far[2],far[3]]));
+            triangles.Add(new(s.Vertices[0], s.Vertices[1], s.Vertices[2], s.Color,material,[near[0],near[1],near[2]],[far[0],far[1],far[2]]) { Kind = s.Kind });
+            if (s.Vertices.Length == 4) triangles.Add(new(s.Vertices[0],s.Vertices[2],s.Vertices[3],s.Color,material,[near[0],near[2],near[3]],[far[0],far[2],far[3]]) { Kind = s.Kind });
         }
         List<Triangle> nativeTriangles=[];
         foreach(var triangle in triangles)
@@ -72,7 +76,18 @@ internal static class NativeAuthoredMesh
             visibility.AsSpan(16,list).Fill(255);for(int i=0;i<n;i++)visibility[16+i]=(byte)i;
             W(visibility,skyAt,1);W(visibility,skyAt+4,8);visibility.AsSpan(skyAt+8,4).Fill(255);
         }
-        byte[] special=new byte[8];W(special,0,8);
+        // Special surfaces: the ground kinds the level's faces use, in order of first use. The component is its
+        // length, the record count, one offset per record (from the count word) and the records; a collision
+        // triangle's flag byte names its record (0x3F: solid ground).
+        var kinds=triangles.Select(t=>t.Kind).OfType<AuthoredSurfaceKind>().Distinct().ToList();
+        if(kinds.Count>63)throw new InvalidDataException("A built level can use at most 63 ground kinds.");
+        byte[] special;
+        {
+            var records=kinds.Select(k=>k.NativeRecord()).ToArray();
+            special=new byte[8+4*kinds.Count+records.Sum(r=>r.Length)];W(special,0,(uint)special.Length);W(special,4,(uint)kinds.Count);
+            int at=8+4*kinds.Count;
+            for(int i=0;i<records.Length;i++){W(special,8+4*i,(uint)(at-4));records[i].CopyTo(special,at);at+=records[i].Length;}
+        }
         Dictionary<NativeCollisionCell,List<int>> cells=[];
         for(int i=n-1;i>=0;i--)
         {
@@ -92,7 +107,7 @@ internal static class NativeAuthoredMesh
             var t=triangles[i];var (a,b,c)=CollisionWinding(t.A,t.B,t.C);
             W(collision,start+i*12,Axis(a.X,b.X,c.X));W(collision,start+i*12+4,Axis(a.Y,b.Y,c.Y));W(collision,start+i*12+8,HeightAxis(a.Z,b.Z,c.Z));
         }
-        collision.AsSpan(flags,n).Fill(0x3F);
+        for(int i=0;i<n;i++)collision[flags+i]=(byte)(triangles[i].Kind is {} kind?kinds.IndexOf(kind):0x3F);
         byte[] sky=new byte[16];W(sky,0,16);W(sky,4,Rgb(document.SkyColor));
         if(skyBlock!=null){sky=skyBlock;visibility=WithSkyParts(visibility,skyBlock);}
         byte[] bundle=[..environment,..visibility,..special,..collision,..sky];
@@ -185,7 +200,7 @@ internal static class NativeAuthoredMesh
             }
             output.Add(new(pa,pb,pc,t.Color,t.Material,
                 [Color(t.Near,a.I,a.J),Color(t.Near,b.I,b.J),Color(t.Near,c.I,c.J)],
-                [Color(t.Far,a.I,a.J),Color(t.Far,b.I,b.J),Color(t.Far,c.I,c.J)]));
+                [Color(t.Far,a.I,a.J),Color(t.Far,b.I,b.J),Color(t.Far,c.I,c.J)]) { Kind = t.Kind });
         }
         for(int i=0;i<divisions;i++)for(int j=0;j<divisions-i;j++)
         {

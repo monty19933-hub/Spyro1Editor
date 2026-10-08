@@ -182,14 +182,17 @@ Pick a replacement, review its time bonus and fit check, then choose
   **Edit Corner…** take exact amounts. **Raise**, **Lower** and **Reset Height**
   work on the selected tile. Corners that several tiles share move together,
   as they do in the game. The Tiles card names the selected tile's kind (solid
-  ground, water that hurts, …).
+  ground, water, …).
 - **Tile Type…** changes what Spyro finds on the selected tiles: solid ground,
-  water or lava that hurts, a supercharge ramp, and whatever else the level
-  already defines. The picture of the tile stays; use **Choose Texture…** for
-  that. Changing a pond tile to solid ground lets Spyro stand on it unharmed;
-  changing grass to water makes it hurt him. **Undo Terrain** puts the kind
-  back. Only tiles whose collision matches the tile can be changed; the editor
-  says so otherwise.
+  water, lava or ooze, a supercharge ramp, and whatever else the level already
+  defines. Spyro cannot swim: water, lava and ooze cost him a life (he sinks; the
+  "at once" kinds take it immediately). The picture of the tile stays; use
+  **Choose Texture…** for that. Changing a pond tile to solid ground lets Spyro
+  stand on it unharmed; changing grass to water makes him sink. **Undo Terrain**
+  puts the kind back. Only tiles whose collision matches the tile can be changed;
+  the editor says so otherwise. In a level you build (New Level or Start Blank)
+  Tile Type offers water, lava, ooze, a supercharge ramp and an invisible wall,
+  which the game handles in any level.
 - **Add Terrain** copies the selected tile so you can move the copy into place.
   **Remove Terrain** (or Delete in the view) takes the selected tiles out.
   **Undo Terrain** puts the selected tile back the way it was, or brings removed

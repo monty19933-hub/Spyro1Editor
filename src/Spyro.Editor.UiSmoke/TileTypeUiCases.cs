@@ -56,7 +56,7 @@ internal static class TileTypeUiCases
             // 1. A water tile becomes solid ground.
             int water = PickTile(window, geometry, "water", "water", viewport, selection);
             Console.WriteLine($"water tile {water} ({geometry.Polygons[water].RuntimeKey}): {selection.Text}");
-            Check(selection.Text!.Contains("hurts Spyro", StringComparison.Ordinal) || selection.Text.Contains("deadly", StringComparison.Ordinal), "the Tiles card names the water tile's kind: " + selection.Text);
+            Check(selection.Text!.Contains("costs a life", StringComparison.Ordinal), "the Tiles card names the water tile's kind: " + selection.Text);
             Check(typeButton.IsEnabled, "Tile Type… is enabled with a tile selected");
             ChooseTileType(window, typeButton, "Solid ground", out string intro, out List<string> offered);
             Console.WriteLine("dialog offered: " + string.Join(" | ", offered) + " — " + intro);
@@ -67,8 +67,8 @@ internal static class TileTypeUiCases
             Check(geometry.Polygons[water].HasSurfaceBehaviorEdit && selection.Text!.Contains("solid ground", StringComparison.Ordinal), "the water tile now reads as solid ground");
             Snapshot(window, Path.Combine(outDir, "1-water-to-solid.png"));
 
-            // 2. A grass tile becomes water (hurts). Not every tile maps 1:1 onto collision triangles, so try a few.
-            string waterChoice = offered.First(o => o.StartsWith("Water", StringComparison.Ordinal) && o.Contains("hurts", StringComparison.Ordinal));
+            // 2. A grass tile becomes water (Spyro sinks). Not every tile maps 1:1 onto collision triangles, so try a few.
+            string waterChoice = offered.First(o => o.StartsWith("Water", StringComparison.Ordinal) && o.Contains("sinks", StringComparison.Ordinal));
             int grass = -1;
             int tried = 0;
             foreach (int candidate in GrassCandidates(window, geometry, viewport, selection))
@@ -138,7 +138,7 @@ internal static class TileTypeUiCases
             if (p.OriginalZValues.Take(4).Max() - p.OriginalZValues.Take(4).Min() > 4)
                 continue;
             viewport.SelectTerrainForTesting(i); Pump(10);
-            if (selection.Text!.Contains(expectedKind, StringComparison.OrdinalIgnoreCase) || (expectedKind == "water" && (selection.Text.Contains("hurts", StringComparison.Ordinal) || selection.Text.Contains("deadly", StringComparison.Ordinal))))
+            if (selection.Text!.Contains(expectedKind, StringComparison.OrdinalIgnoreCase) || (expectedKind == "water" && selection.Text.Contains("costs a life", StringComparison.Ordinal)))
                 return i;
         }
         throw new InvalidOperationException($"No {surface} tile with a known kind was found.");

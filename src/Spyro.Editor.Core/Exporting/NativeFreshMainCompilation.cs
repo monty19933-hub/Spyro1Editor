@@ -64,8 +64,12 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
                 if(materials[i].Image is {} path)
                 {
                     if(!File.Exists(path))throw new InvalidDataException($"A terrain picture of this level is missing: {path}");
-                    images[i]=new(PngRgbaImage.ReadResizedRgba(path,NativeTerrainTextureImageWriter.NormalSide,NativeTerrainTextureImageWriter.NormalSide),
-                        PngRgbaImage.ReadResizedRgba(path,NativeTerrainTextureImageWriter.CloseSide,NativeTerrainTextureImageWriter.CloseSide));
+                    // The compiled face lists its corners in reverse (NativeAuthoredMeshRenderer.Encode, for the game's
+                    // back-face test), so the game draws the texture's top along the face's corners 2-3. The picture is
+                    // stored upside down so its bottom row lands on corners 2-3, the bottom edge the scene documents.
+                    static Rgba32[] Upright(Rgba32[] p,int side){var r=new Rgba32[p.Length];for(int y=0;y<side;y++)p.AsSpan((side-1-y)*side,side).CopyTo(r.AsSpan(y*side,side));return r;}
+                    images[i]=new(Upright(PngRgbaImage.ReadResizedRgba(path,NativeTerrainTextureImageWriter.NormalSide,NativeTerrainTextureImageWriter.NormalSide),NativeTerrainTextureImageWriter.NormalSide),
+                        Upright(PngRgbaImage.ReadResizedRgba(path,NativeTerrainTextureImageWriter.CloseSide,NativeTerrainTextureImageWriter.CloseSide),NativeTerrainTextureImageWriter.CloseSide));
                 }
             // The upload is the 512 KB VRAM image followed by the sound bank; pictures go into the VRAM image.
             if(images.Count>0)NativeTerrainTextureImageWriter.Write(upload.AsSpan(0,0x80000),metadata,images).CopyTo(upload,0);

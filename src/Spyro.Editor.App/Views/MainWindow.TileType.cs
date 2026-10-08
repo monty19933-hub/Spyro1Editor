@@ -10,7 +10,7 @@ using Spyro.Editor.Core.Scene;
 namespace Spyro.Editor.App.Views;
 
 /// <summary>
-/// "Tile Type…": what Spyro finds when he touches a tile (solid ground, water that hurts, lava, supercharge…).
+/// "Tile Type…": what Spyro finds when he touches a tile (solid ground, water or lava that cost a life, supercharge…).
 /// The game keeps this in the collision triangles' surface flags, separately from the picture of the tile.
 /// The choice is written by Create BIN through the same native surface-flag patch that texture painting
 /// uses, so only the kinds this level already defines can be chosen.
@@ -34,7 +34,9 @@ public sealed partial class MainWindow
         return signature.SurfaceType switch
         {
             0 => (signature.Param2 switch { 0 => "Water", 1 => "Lava", 2 => "Ooze", _ => "Hazard floor" }) +
-                 (signature.Param1 == 0 ? " (hurts Spyro)" : " (deadly)"),
+                 // Played: Spyro sinks and loses a life either way (Spyro cannot swim); with 0 the first touch costs a
+                 // Sparx level and the life goes about three seconds later, with 1 at once.
+                 (signature.Param1 == 0 ? " (Spyro sinks, costs a life)" : " (costs a life at once)"),
             1 => "Damaging surface (hurts Spyro)",
             4 => "Supercharge ramp",
             5 => "Invisible wall",
@@ -43,7 +45,7 @@ public sealed partial class MainWindow
         };
     }
 
-    /// <summary>"Water (hurts Spyro)" → "water (hurts Spyro)": only the first letter changes.</summary>
+    /// <summary>"Water (Spyro sinks, costs a life)" → "water (…)": only the first letter changes.</summary>
     private static string LowerFirst(string text) => text.Length == 0 ? text : char.ToLowerInvariant(text[0]) + text[1..];
 
     /// <summary>Behaviour word for the viewport legend ("solid ground", "hurts Spyro", "special surface").</summary>
@@ -74,9 +76,12 @@ public sealed partial class MainWindow
         return binding?.Signature;
     }
 
-    /// <summary>Short text for the Tiles card: "solid ground", "water (hurts Spyro)"…, or null when unknown.</summary>
+    /// <summary>Short text for the Tiles card: "solid ground", "water (Spyro sinks, costs a life)"…, or null when unknown.</summary>
     private string? DescribeSelectedTileType(TerrainPolygon face)
     {
+        if (_freshSceneDocument != null)
+            return LowerFirst(PlainTileTypeName(face.SurfaceBehaviorEdit is { } built
+                ? new NativeTerrainSurfaceSignature(built.SurfaceType, built.Param1, built.Param2) : NativeTerrainSurfaceSignature.Ordinary));
         NativeTerrainSurfaceLevelCatalog? catalog = _tileTypeCatalog;
         if (catalog == null || !ReferenceEquals(_tileTypeCatalogGeometry, _currentGeometry))
             return null;
@@ -109,15 +114,15 @@ public sealed partial class MainWindow
             _statusText.Text = "Open a level first.";
             return;
         }
-        if (_freshSceneDocument != null)
-        {
-            _statusText.Text = "Tiles in a level of your own are solid ground; other kinds are not available there yet.";
-            return;
-        }
         List<TerrainPolygon> faces = SelectedTilesForTypeChange();
         if (faces.Count == 0)
         {
             _statusText.Text = "Select a tile first (⌘-click selects several).";
+            return;
+        }
+        if (_freshSceneDocument != null)
+        {
+            await ChangeBuiltTileTypeAsync(faces);
             return;
         }
         NativeTerrainSurfaceLevelCatalog? catalog = TileTypeCatalog(out string error);
@@ -184,6 +189,67 @@ public sealed partial class MainWindow
         if (!accepted || list.SelectedItem is not ListBoxItem { Tag: NativeTerrainSurfaceSignature chosen })
             return;
         await ApplyTileTypeAsync(faces, chosen, catalog);
+    }
+
+    /// <summary>A level you built has no ground kinds of its own: it offers the kinds the game itself handles in any
+    /// level. Create BIN writes them into the level's surface table (see AuthoredSurfaceKind).</summary>
+    private async Task ChangeBuiltTileTypeAsync(IReadOnlyList<TerrainPolygon> faces)
+    {
+        List<NativeTerrainSurfaceSignature> choices = [NativeTerrainSurfaceSignature.Ordinary,
+            .. Spyro.Editor.Core.Editing.AuthoredSurfaceKind.All.Select(k => new NativeTerrainSurfaceSignature(k.Type, k.Param1, k.Param2))];
+        NativeTerrainSurfaceSignature Current(TerrainPolygon face) => face.SurfaceBehaviorEdit is { } e
+            ? new(e.SurfaceType, e.Param1, e.Param2) : NativeTerrainSurfaceSignature.Ordinary;
+        NativeTerrainSurfaceSignature? current = faces.Select(Current).Distinct().Count() == 1 ? Current(faces[0]) : null;
+        Window dialog = new()
+        {
+            Title = "Tile Type", Name = "TileTypeDialog", Width = 440, SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, CanResize = true
+        };
+        ListBox list = new() { Name = "TileTypeList", MaxHeight = 220 };
+        foreach (NativeTerrainSurfaceSignature choice in choices)
+            list.Items.Add(new ListBoxItem { Content = PlainTileTypeName(choice), Tag = choice });
+        list.SelectedIndex = current == null ? 0 : Math.Max(0, choices.IndexOf(current));
+        TextBlock intro = new()
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Text = faces.Count == 1 ? "What should Spyro find on this tile?" : $"What should Spyro find on these {faces.Count} tiles?"
+        };
+        TextBlock note = new()
+        {
+            TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(90, 99, 110)),
+            Text = "This changes how the ground behaves, not how it looks. In Spyro the Dragon water and lava cost a life: Spyro cannot swim."
+        };
+        Button apply = NewButton(faces.Count == 1 ? "Change tile" : $"Change {faces.Count} tiles", () => dialog.Close(true));
+        apply.Name = "TileTypeApply";
+        Button cancel = NewButton("Cancel", () => dialog.Close(false));
+        StackPanel buttons = new() { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
+        buttons.Children.Add(cancel);
+        buttons.Children.Add(apply);
+        StackPanel content = new() { Spacing = 10, Margin = new Thickness(16) };
+        content.Children.Add(intro);
+        content.Children.Add(list);
+        content.Children.Add(note);
+        content.Children.Add(buttons);
+        dialog.Content = content;
+        if (!await dialog.ShowDialog<bool>(this) || list.SelectedItem is not ListBoxItem { Tag: NativeTerrainSurfaceSignature chosen })
+            return;
+        ApplyBuiltTileType(faces, chosen);
+        if (await SaveFreshSceneAsync())
+            _statusText.Text = faces.Count == 1 ? $"This tile is {LowerFirst(PlainTileTypeName(chosen))} now." : $"These {faces.Count} tiles are {LowerFirst(PlainTileTypeName(chosen))} now.";
+    }
+
+    /// <summary>Sets a built level's tiles to a ground kind (or back to solid ground) and updates the view.</summary>
+    internal void ApplyBuiltTileType(IReadOnlyList<TerrainPolygon> faces, NativeTerrainSurfaceSignature chosen)
+    {
+        foreach (TerrainPolygon face in faces)
+        {
+            if (chosen.IsOrdinary) face.ClearSurfaceBehaviorEdit();
+            else face.ApplySurfaceBehaviorEdit(new TerrainSurfaceBehaviorEdit(chosen.SurfaceType, chosen.Param1, chosen.Param2, "built", face.RuntimeKey, chosen.Label));
+            face.SetBehavior(LegendBehaviorForTileType(chosen), "tile type chosen in the editor", "exact",
+                chosen.IsOrdinary ? "" : $"Create BIN makes this tile {LowerFirst(PlainTileTypeName(chosen))}.");
+        }
+        _viewport.NotifyTerrainPresentationDataChanged();
+        RefreshCurrentLevelDetails();
     }
 
     /// <summary>Stages the kind on every selected tile the game can take it on, saves, and says what happened.</summary>

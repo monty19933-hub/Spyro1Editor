@@ -8,10 +8,13 @@ using Spyro.Editor.Core.Universal;
 
 internal static partial class NewLevelBuildCases
 {
-    internal sealed class SceneBuilder(int dream)
+    internal sealed class SceneBuilder(int dream, string? pictures = null)
     {
         public readonly List<AuthoredSurface> Surfaces = [];
         public AuthoredMaterial Mat(int texture, int wad = -1) => new(wad < 0 ? dream : wad, texture);
+        /// <summary>A Dream Weavers texture slot carrying one of the level's own pictures (pictures/name.png).</summary>
+        public AuthoredMaterial Picture(int carrier, string name) =>
+            new(dream, carrier) { Image = Path.GetFullPath(Path.Combine(pictures ?? throw new InvalidOperationException("No pictures folder."), name + ".png")) };
         static string Id() => Guid.NewGuid().ToString("N");
         // Horizontal tile; counter-clockwise seen from above.
         public void Floor(float x0, float y0, float x1, float y1, float z, AuthoredMaterial? m, ColorRgba? c = null) =>
@@ -67,28 +70,38 @@ internal static partial class NewLevelBuildCases
 internal static partial class NewLevelBuildCases
 {
     internal const float T = 240;
-    // Island tops are grass (edge tiles fade into cloud) or pale stone; every outside edge hangs a cloud side.
-    // Walls and sides are drawn on the right-hand side of a->b, so island edges run counter-clockwise.
+    // Island tops are Dream Weavers grass whose edge tiles puff into cloud (the level's own fringe pictures, made from
+    // Dream Weavers' grass and cloud), or pale stone; every outside edge hangs a cloud side. Walls and sides are
+    // drawn on the right-hand side of a->b, so island edges run counter-clockwise.
     internal static void Island(SceneBuilder b, float x0, float y0, int nx, int ny, float z, bool grass, int seed, int stoneTex = 35, bool cap = true)
     {
         var rnd = new Random(seed);
-        ColorRgba top = new(150, 150, 150), under = new(118, 122, 150);
+        ColorRgba under = new(118, 122, 150);
+        // Soft light and shade across the top so it does not read as one flat colour.
+        ColorRgba Top(Vector3f p) { int v = 146 + (int)(10 * Math.Sin(p.X * 0.011 + p.Y * 0.007) + 6 * Math.Sin(p.X * 0.005 - p.Y * 0.013)); return new((byte)v, (byte)v, (byte)Math.Min(255, v + 4)); }
+        ColorRgba top = new(150, 150, 150);
         for (int i = 0; i < nx; i++) for (int j = 0; j < ny; j++)
         {
             float a = x0 + i * T, c = y0 + j * T, bb = a + T, d = c + T;
             Vector3f p00 = new(a, c, z), p10 = new(bb, c, z), p11 = new(bb, d, z), p01 = new(a, d, z);
             Vector3f[] corners = [p00, p10, p11, p01];
-            int tex; int rot = 0;
+            AuthoredMaterial m; int rot = 0;
             bool s = j == 0, n = j == ny - 1, w = i == 0, e = i == nx - 1;
-            if (!grass) tex = (i + j) % 3 == 0 ? 46 : stoneTex;
-            else if (!(s || n || w || e)) tex = 4;
+            if (!grass) m = b.Mat(stoneTex);
+            else if (!(s || n || w || e) || nx == 1 && ny == 1) m = b.Mat(4);   // inner tiles and one-tile islets: plain grass
+            else if ((s || n) && (w || e))
+            {
+                // Corner: the picture puffs along its bottom and right edges, turned so that corner is the island's.
+                m = b.Picture(1, "fringecorner");
+                rot = s ? (w ? 2 : 3) : (w ? 1 : 0);
+            }
             else
             {
-                tex = rnd.Next(0, 3);   // cloud-fringed grass; its cloud edge is the texture's bottom (corners 2-3)
+                m = b.Picture(0, "fringe");   // its cloud edge is the texture's bottom (corners 2-3)
                 rot = n ? 0 : s ? 2 : w ? 1 : 3;
             }
             Vector3f[] v = Enumerable.Range(0, 4).Select(k => corners[(k + rot) % 4]).ToArray();
-            b.Raw(v, b.Mat(tex), top);
+            b.Surfaces.Add(new(Guid.NewGuid().ToString("N"), v, top, m, v.Select(Top).ToArray(), v.Select(Top).ToArray()));
         }
         // Underside: an inverted, closed frustum of cloud like a floating island. Each outside edge tile hangs one
         // planar quad whose bottom edge is pulled in toward the middle; neighbours share their bottom corners.
@@ -123,9 +136,9 @@ internal static partial class NewLevelBuildCases
         b.Floor(x, y, x + w, y + w, z1, b.Mat(35), lit);
     }
 
-    internal static SceneDocument Cloudspire(SceneDocument blank, int dream, int? skyWad = null)
+    internal static SceneDocument Cloudspire(SceneDocument blank, int dream, int? skyWad = null, string? pictures = null)
     {
-        var b = new SceneBuilder(dream);
+        var b = new SceneBuilder(dream, pictures);
         ColorRgba lit = new(150, 150, 150);
         // A  Sunrise Isle (start)
         Island(b, 2640, 2640, 3, 3, 1600, true, 1);
@@ -140,15 +153,26 @@ internal static partial class NewLevelBuildCases
         // cloud stair B -> Tower: 6 steps of 40 rising north
         for (int k = 1; k <= 6; k++) b.Floor(4290, 3360 + (k - 1) * 100, 4530, 3360 + k * 100, 1600 + 40 * k, b.Mat(k % 2 == 0 ? 30 : 31), lit);
         // T  Sky Tower top, brick walls below
-        b.Floor(4290, 3960, 4530, 4200, 1840, b.Mat(46), lit);
+        b.Floor(4290, 3960, 4530, 4200, 1840, b.Mat(35), lit);
         {
             ColorRgba dark = new(90, 85, 100);
             void Wall(float ax, float ay, float bx, float by) => b.Surfaces.Add(new(Guid.NewGuid().ToString("N"),
                 [new(ax, ay, 1600), new(bx, by, 1600), new(bx, by, 1840), new(ax, ay, 1840)], lit, b.Mat(36), [dark, dark, lit, lit], [dark, dark, lit, lit]));
             Wall(4290, 3960, 4530, 3960); Wall(4530, 3960, 4530, 4200); Wall(4530, 4200, 4290, 4200); Wall(4290, 4200, 4290, 3960);
         }
-        // D  Cloud Garden: a straight glide from the tower lands here (Spyro's glide sinks about 1 in 10)
+        // D  Cloud Garden: a straight glide from the tower lands here (Spyro's glide sinks about 1 in 10). A raised
+        // pool of Dream Weavers water (a still frame: its own water texture animates) is the game's water: it costs
+        // Spyro a life.
         Island(b, 3120, 3760, 3, 2, 1790, true, 3);
+        {
+            const float px0 = 3410, py0 = 3930, px1 = 3550, py1 = 4070, pz = 1814;
+            ColorRgba dark = new(100, 100, 120);
+            void Rim(float ax, float ay, float bx, float by) => b.Surfaces.Add(new(Guid.NewGuid().ToString("N"),
+                [new(bx, by, pz), new(ax, ay, pz), new(ax, ay, 1790), new(bx, by, 1790)], lit, b.Mat(35), [lit, lit, dark, dark], [lit, lit, dark, dark]));
+            Rim(px0, py0, px1, py0); Rim(px1, py0, px1, py1); Rim(px1, py1, px0, py1); Rim(px0, py1, px0, py0);
+            b.Surfaces.Add(new(Guid.NewGuid().ToString("N"), [new(px0, py0, pz), new(px1, py0, pz), new(px1, py1, pz), new(px0, py1, pz)],
+                lit, b.Picture(2, "water")) { Kind = AuthoredSurfaceKind.Water });
+        }
         // cloud stair from the garden down to Sunrise Isle: 5 steps of 38
         for (int k = 1; k <= 5; k++) b.Floor(3120, 3760 - k * 80, 3360, 3760 - (k - 1) * 80, 1790 - 38 * k, b.Mat(k % 2 == 0 ? 30 : 31), lit);
         // E  Egg Islet, a cloud stair below the garden
@@ -170,7 +194,8 @@ internal static partial class NewLevelBuildCases
         var catalog = Get<LevelCatalog>(window, "_retailCatalog");
         string skyKey = Environment.GetEnvironmentVariable("CLOUDSPIRE_SKY") ?? "dreamweavers";
         var doc = Cloudspire(window.FreshSceneForTesting!, catalog.FindByKey("dreamweavers")!.SourceWadEntry,
-            skyKey == "none" ? null : catalog.FindByKey(skyKey)!.SourceWadEntry);
+            skyKey == "none" ? null : catalog.FindByKey(skyKey)!.SourceWadEntry,
+            Path.Combine(Workspace(window).RootPath, "custom-terrain-textures", "cloudspire"));
         Console.WriteLine($"faces {doc.Surfaces.Count}, textured {doc.Surfaces.Count(s => s.Material != null)}");
         ApplyScene(window, doc);
         Console.WriteLine("NEW_LEVEL_SKYBUILD_OK");

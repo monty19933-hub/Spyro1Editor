@@ -1,3 +1,22 @@
+# Built-level ground kinds, upright pictures, re-textured levels — 7 October 2026 (evening)
+
+Owner's notes on Wumpa Village and Cloudspire Isles: the textures looked random and the water was harmless.
+- `AuthoredSurfaceKind` (type, param1, param2; water/lava/ooze in both forms, supercharge, invisible wall) on
+  `AuthoredSurface.Kind`; `NativeAuthoredMesh` writes the special-surface table (length, count, offsets from the
+  count word, 12/4-byte records) and each collision triangle's flag byte (0x3F solid). `SceneDocument.Capture` maps
+  a staged tile type to the kind instead of refusing; Tile Type… works in built levels (fixed list) and the Tiles
+  card names the kind. Played: type 0 water costs a life (param1 0: a Sparx level, then Spyro sinks for about
+  three seconds; 1: at once); lava the same. Names changed from "hurts Spyro" to what the game does.
+- Built-level pictures were drawn upside down: the HP face lists corners reversed (Encode), so the game puts the
+  texture's top on corners 2-3. `NativeFreshMainCompilation` now stores pictures flipped so their bottom row lands
+  on corners 2-3 as documented (Wumpa's symmetric v1 pictures hid it).
+- Retail textures that animate (Dream Weavers water 12/13) cannot be copied; a still frame goes in as a picture.
+- Level content (UiSmoke builders): Wumpa Village uses Crash 3 texture families with tufted wall bases and sun
+  shading, its pond is water; Cloudspire's mosaic fringe textures replaced by cloud-fringe pictures made from
+  Dream Weavers grass and cloud, plus a water pool. New UiSmoke step wumpa-tiletype (editor round trip).
+Gate 360/0; CrashLevelSmoke 10 checks (surface table). Emulator: both hazards cost a life and respawn; walls,
+ramps, glides unchanged; Cloudspire 57/57 objects.
+
 # Built-level fixes found while building Wumpa Village — 7 October 2026
 
 Unreleased until the sixth 1.2 rebuild (Claude; branch `release/release-ready-20261004`). The owner asked for a

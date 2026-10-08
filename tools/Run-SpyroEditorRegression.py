@@ -204,7 +204,7 @@ CORE_CASES = (
     ("UniversalHighValueGemSmoke", "HIGH_VALUE_GEM_FREE_OK"),
     ("CrashBoxSmoke", "CRASH_BOX_FREE_OK"),
     ("CrashEnemySmoke", "CRASH_ENEMY_FREE_OK"),
-    ("CrashLevelSmoke", "CRASH_LEVEL_FREE_OK checks=8"),
+    ("CrashLevelSmoke", "CRASH_LEVEL_FREE_OK checks=10"),
     ("TerrainImageWriterSmoke", "TERRAIN_IMAGE_FREE_OK"),
     ("UniversalClassOwnershipSmoke", "UNIVERSAL_CLASS_OWNERSHIP_FREE_OK"),
     ("UniversalModelTailSmoke", "UNIVERSAL_MODEL_TAIL_FREE_OK"),
