@@ -1,3 +1,34 @@
+# Built-level fixes found while building Wumpa Village — 7 October 2026
+
+Unreleased until the sixth 1.2 rebuild (Claude; branch `release/release-ready-20261004`). The owner asked for a
+new Crash-3-style level in Dark Hollow's place, built with the editor, in the Frostbite Fields / Cloudspire Isles
+project. Result: task-root `outputs/WumpaVillage-20261007` (Start Blank in Dark Hollow, 708 terrain tiles with
+Crash 3 pictures, 65 objects, treasure 200). Driving it through the editor found these defects in levels built
+with New Level or Start Blank (Cloudspire Isles had the first two as well):
+
+- Walls had no collision from their visible side. `NativeAuthoredMesh.CollisionWinding` stores vertical
+  triangles reversed from their visible side, like floors (clockwise from above); played: every wall stops Spyro.
+- Only 16 spare object slots (`MinimumDynamicSlots`). The allocator 0x800524C4 grows rows up and 0x18-byte records
+  down with no bounds check; every retail level reserves 91. The 17th live drop overwrote level data (bus error
+  after a full play-through). Built levels now take `BuiltLevelDynamicSlots` = min(91, 256 - placed), at least 16.
+  Retail-level additions still consume their level's 91 (Bandicoot Keep keeps 52): see known limitations.
+- Crash crates/enemies in a built level failed Create BIN: the authored exporters now receive the Crash disc.
+- Start Blank refused the 20 short-initializer levels; `NativeClearedRetailBinding.PrepareRelocated` copies the
+  neutral Town initializer into one of two unreferenced libgpu slots (0x8005E8D8, 0x8005E970) and repoints the
+  jump entry (two such levels per game; Dark Hollow played).
+- 255-face limit replaced: 4,096 authored faces, 5,000 drawn, 127 sectors, collision 8,192 triangles, data
+  0x40000. When the original bucket packing lets every textured face plus one header per textured sector fit a
+  127-entry queue, the level keeps that packing byte for byte (exact proof). Otherwise sectors are split compactly
+  (median split to 640 units) with the true bounding radius (retail headers store it; the old value was the sum of
+  extents) and the subdivision queues are checked by simulating the sector frustum test, near-detail distance,
+  NCLIP and SZ sums over camera poses (`RequireSubdivisionQueues`); measured in the emulator the real queues stayed
+  at or below the model at all 128 poses compared.
+- Authored materials can carry a PNG (`AuthoredMaterial.Image`), written at every tier.
+
+Gate 360/0. Checks: `CrashLevelSmoke` (new, in the gate: village compiles in limits, collision winding, slot rule),
+`NativeClearedRetailBindingSmoke` (short levels relocated; 12.5M source checks). Emulator results in the
+deliverable's `TEST-RESULTS.txt`.
+
 # 1.2 packages rebuilt with the terrain fixes — 6 October 2026
 
 Packages for 1.2 (internal 1.2.0) rebuilt from `a265f53` into task-root

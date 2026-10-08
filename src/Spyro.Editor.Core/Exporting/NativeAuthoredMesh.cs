@@ -9,6 +9,12 @@ namespace Spyro.Editor.Core.Exporting;
 /// Sector guards, full cell membership and per-face material bindings are generated together.</summary>
 internal static class NativeAuthoredMesh
 {
+    /// <summary>Collision triangles for a whole built level. The lookup index takes 15-bit triangle numbers; the
+    /// game's own levels use a few thousand (Dark Hollow about 3,000).</summary>
+    internal const int MaxCollisionTriangles = 8192;
+    /// <summary>Terrain and collision data of a built level. Retail levels carry 150-350 KB; the export's RAM check
+    /// decides whether a level fits with its objects.</summary>
+    internal const int MaxSurfaceBytes = 0x40000;
     internal sealed record Triangle(Vector3f A, Vector3f B, Vector3f C, ColorRgba Color, int Material, ColorRgba[] Near, ColorRgba[] Far);
     internal static byte[] Compile(SceneDocument document, IReadOnlyList<AuthoredMaterial> materials) => CompileWithSky(document, materials, null);
     /// <summary>As <see cref="Compile"/>, with an optional borrowed retail sky block in place of the plain sky color.</summary>
@@ -36,10 +42,10 @@ internal static class NativeAuthoredMesh
             // 255 units per axis, so a larger textured face is split here for collision alone.
             if(triangle.Material==255) AppendLattice(nativeTriangles,triangle,64);
             else AppendLattice(nativeTriangles,triangle,255);
-            if(nativeTriangles.Count>255)throw new InvalidDataException("Authored geometry exceeds the bounded 255 generated collision-triangle allocation; reduce geometry.");
+            if(nativeTriangles.Count>MaxCollisionTriangles)throw new InvalidDataException($"The level needs more than {MaxCollisionTriangles} collision triangles; reduce geometry.");
         }
         triangles=nativeTriangles;
-        if (triangles.Count is < 1 or > 255) throw new InvalidDataException("Authored geometry requires 1 to 255 generated collision triangles.");
+        if (triangles.Count < 1 || triangles.Count > MaxCollisionTriangles) throw new InvalidDataException($"Authored geometry requires 1 to {MaxCollisionTriangles} generated collision triangles.");
         foreach(var t in triangles)
         {
             var a=new Vector3f(t.B.X-t.A.X,t.B.Y-t.A.Y,t.B.Z-t.A.Z);var b=new Vector3f(t.C.X-t.A.X,t.C.Y-t.A.Y,t.C.Z-t.A.Z);
@@ -83,21 +89,27 @@ internal static class NativeAuthoredMesh
         tree.CopyTo(collision,32);blocks.CopyTo(collision,32+tree.Length);
         for(int i=0;i<n;i++)
         {
-            var t=triangles[i];var a=t.A;var b=t.B;var c=t.C;
-            if((b.X-a.X)*(c.Y-a.Y)-(b.Y-a.Y)*(c.X-a.X)>0)(b,c)=(c,b);
-            // Native collision Z has unsigned byte deltas at16/24, unlike
-            // the signed9-bit X/Y deltas at14/23. Rotate cyclically so the
-            // minimum Z is the origin without reversing upward winding.
-            if(b.Z<a.Z&&b.Z<=c.Z)(a,b,c)=(b,c,a);
-            else if(c.Z<a.Z&&c.Z<b.Z)(a,b,c)=(c,a,b);
+            var t=triangles[i];var (a,b,c)=CollisionWinding(t.A,t.B,t.C);
             W(collision,start+i*12,Axis(a.X,b.X,c.X));W(collision,start+i*12+4,Axis(a.Y,b.Y,c.Y));W(collision,start+i*12+8,HeightAxis(a.Z,b.Z,c.Z));
         }
         collision.AsSpan(flags,n).Fill(0x3F);
         byte[] sky=new byte[16];W(sky,0,16);W(sky,4,Rgb(document.SkyColor));
         if(skyBlock!=null){sky=skyBlock;visibility=WithSkyParts(visibility,skyBlock);}
         byte[] bundle=[..environment,..visibility,..special,..collision,..sky];
-        if(bundle.Length>0x20000)throw new InvalidDataException("Authored surface exceeds the bounded native surface allocation.");
+        if(bundle.Length>MaxSurfaceBytes)throw new InvalidDataException("The level's terrain and collision data is larger than the game can load; reduce geometry.");
         return bundle;
+    }
+    /// <summary>A collision triangle's stored corner order. The game takes the solid side from the winding:
+    /// floors are stored clockwise seen from above, and a wall must be stored the same way round (reversed from its
+    /// visible side), or Spyro walks through it from the side he can see. Native collision Z has unsigned byte deltas
+    /// at 16/24, unlike the signed 9-bit X/Y deltas at 14/23, so the order is then rotated cyclically to put the
+    /// lowest corner first without reversing it.</summary>
+    internal static (Vector3f A,Vector3f B,Vector3f C) CollisionWinding(Vector3f a,Vector3f b,Vector3f c)
+    {
+        if((b.X-a.X)*(c.Y-a.Y)-(b.Y-a.Y)*(c.X-a.X)>=0)(b,c)=(c,b);
+        if(b.Z<a.Z&&b.Z<=c.Z)(a,b,c)=(b,c,a);
+        else if(c.Z<a.Z&&c.Z<b.Z)(a,b,c)=(c,a,b);
+        return (a,b,c);
     }
     /// <summary>Reads the sky of a retail level for a scene that borrows it. The block is copied whole; its part
     /// pointers are relative to the block, so it needs no relocation.</summary>
@@ -143,10 +155,10 @@ internal static class NativeAuthoredMesh
             // Collision only: one unit of headroom so rounding cannot push a piece past the 255-unit range.
             divisions=Math.Max(1,(extent+253)/254);rounded=true;
         }
-        if(divisions>15||output.Count+divisions*divisions>255)
+        if(divisions>15||output.Count+divisions*divisions>MaxCollisionTriangles)
             throw new InvalidDataException(cell==64
-                ?"Untextured authored faces need exact whole-unit subdivision to at most64 units per axis within255 native triangles. This face cannot fit that lattice; change its vertices or reduce geometry."
-                :"The level's textured tiles need more collision pieces than the game allows (255 for the whole level). Use fewer or smaller textured tiles.");
+                ?"Untextured authored faces need exact whole-unit subdivision to at most 64 units per axis. This face cannot fit that lattice; change its vertices or reduce geometry."
+                :$"The level's textured tiles need more collision pieces than the game allows ({MaxCollisionTriangles} for the whole level). Use fewer or smaller textured tiles.");
         if(divisions==1){output.Add(t);return;}
         Vector3f Point(int i,int j)=>rounded
             ?new(MathF.Round(v[0][0]+((v[1][0]-v[0][0])*i+(v[2][0]-v[0][0])*j)/(float)divisions),

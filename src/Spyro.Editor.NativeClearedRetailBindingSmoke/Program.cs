@@ -43,7 +43,21 @@ foreach(var profile in census)
     var target=Target(profile.LevelId);
     if(!profile.NineSettersSupported)
     {
-        Refuse(()=>NativeClearedRetailBinding.Prepare(exe,exe,target),"Short owner must not overwrite neighbor");
+        // Short owners get a neutral Town copy in a free relocation slot; their own initializer stays untouched.
+        var moved=NativeClearedRetailBinding.Prepare(exe,exe,target);
+        uint entry=Word(moved,0x1BA4+target.LevelId*4);
+        Check(NativeClearedRetailBinding.RelocationSlots.Contains(entry),"Short owner moves to a relocation slot");
+        int slotAt=(int)(entry-UniversalExeBindings.ExeBase),shortAt=(int)(profile.InitializerAddress-UniversalExeBindings.ExeBase),idx=profile.ContinuousIndex;
+        Check(moved.AsSpan(slotAt,0x98).SequenceEqual(exe.AsSpan(0x4B098,0x98)),"Relocated neutral Town copy");
+        Check(moved.AsSpan(shortAt,profile.InitializerByteLength).SequenceEqual(exe.AsSpan(shortAt,profile.InitializerByteLength)),"Short initializer untouched");
+        for(int at=0;at<moved.Length;at++)
+        {
+            bool owned=at>=slotAt&&at<slotAt+0x98 || at>=0x1BA4+target.LevelId*4&&at<0x1BA8+target.LevelId*4 ||
+                at==0x5FC14+idx || at>=0x5FC38+idx*2&&at<0x5FC3A+idx*2 || idx<18&&at==0x5FC80+idx;
+            if(!owned)Check(moved[at]==exe[at],"Relocation complement exact");
+        }
+        Check(UniversalExeBindings.Read(moved,target.LevelId).Count==9,"Relocated nine native bindings");
+        Check(NativeClearedRetailBinding.Prepare(exe,moved,target).SequenceEqual(moved),"Relocated state idempotent");
         continue;
     }
     byte[] staged=exe.ToArray();staged[0x100]=0xA5;
@@ -84,6 +98,16 @@ foreach(var profile in census)
     var summary=NativeClearedRetailBinding.Summarize(exe,staged,target);
     Check(summary.Target==profile && summary.ProfileId==NativeClearedRetailBinding.ProfileId,"Code-owned summary");
 }
+{
+    // Two short levels take the two slots; a third is refused, and no slot is ever shared.
+    var shorts=census.Where(p=>!p.NineSettersSupported).Take(3).ToArray();
+    var first=NativeClearedRetailBinding.Prepare(exe,exe,Target(shorts[0].LevelId));
+    var second=NativeClearedRetailBinding.Prepare(exe,first,Target(shorts[1].LevelId));
+    Check(Word(second,0x1BA4+shorts[0].LevelId*4)!=Word(second,0x1BA4+shorts[1].LevelId*4),"Distinct relocation slots");
+    Refuse(()=>NativeClearedRetailBinding.Prepare(exe,second,Target(shorts[2].LevelId)),"Third short level refused when both slots are used");
+    var shared=first.ToArray();Put(shared,0x1BA4+shorts[1].LevelId*4,Word(first,0x1BA4+shorts[0].LevelId*4));
+    Refuse(()=>NativeClearedRetailBinding.Prepare(exe,shared,Target(shorts[1].LevelId)),"Shared relocation slot refused");
+}
 foreach(int id in census.Select(p=>p.LevelId).Append(65))
 {
     var staged=exe.ToArray();NativeClearedRetailBinding.ApplyNewGameStart(exe,staged,id);
@@ -108,4 +132,4 @@ if(args.Length>1)
     Directory.CreateDirectory(args[1]);
     File.WriteAllText(Path.Combine(args[1],"binding-census.json"),JsonSerializer.Serialize(new{checks,profiles=census,summary=NativeClearedRetailBinding.Summarize(exe,exe,Target(10)),runtime="not-tested"},new JsonSerializerOptions{WriteIndented=true}));
 }
-Console.WriteLine($"NATIVE_CLEARED_RETAIL_BINDING_SOURCE_OK {checks} checks;10full slots supported,20short slots bounded refused; runtime not-tested.");
+Console.WriteLine($"NATIVE_CLEARED_RETAIL_BINDING_SOURCE_OK {checks} checks;10full slots supported,20short slots relocated (two at a time); Dark Hollow runtime tested in the emulator.");

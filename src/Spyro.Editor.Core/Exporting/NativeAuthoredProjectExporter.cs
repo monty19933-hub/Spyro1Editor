@@ -19,14 +19,15 @@ public static class NativeAuthoredProjectExporter
         string? stagedRetailImage=null,IReadOnlyList<(int LevelIndex,int Row,int Colour)>? retailEggs=null,
         IReadOnlySet<string>? retailSignLevels=null,IReadOnlyList<LevelTextReplacement>? retailNames=null,
         NativeFreeFlightCompositionPlan? flight=null,PortalRouteDocument? portalRoutes=null,
-        IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses=null)
+        IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses=null,
+        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash=null)
     {
         // The staged disc images are working copies; remove them whether the export succeeds or fails.
         string scratch=Path.Combine(ExportScratchSpace.AggregateRoot(workspace),Guid.NewGuid().ToString("N"));
         try
         {
             return await ExportCoreAsync(donors,catalog,scenes,japanese,outputImage,workspace,startLevelId,scratch,token,requireCurrent,
-                stagedRetailImage,retailEggs,retailSignLevels,retailNames,flight,portalRoutes,retailReturnClasses);
+                stagedRetailImage,retailEggs,retailSignLevels,retailNames,flight,portalRoutes,retailReturnClasses,crash);
         }
         finally{ExportScratchSpace.Delete(scratch);}
     }
@@ -37,7 +38,8 @@ public static class NativeAuthoredProjectExporter
         string? stagedRetailImage,IReadOnlyList<(int LevelIndex,int Row,int Colour)>? retailEggs,
         IReadOnlySet<string>? retailSignLevels,IReadOnlyList<LevelTextReplacement>? retailNames,
         NativeFreeFlightCompositionPlan? flight,PortalRouteDocument? portalRoutes,
-        IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses)
+        IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses,
+        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash)
     {
         if(scenes.Count==0)throw new InvalidDataException("No authored scenes were selected for export.");
         // ID65 is source-issued through Town's initializer. Composing two
@@ -69,7 +71,8 @@ public static class NativeAuthoredProjectExporter
         HashSet<string> signs=new(retailSignLevels??new HashSet<string>(),StringComparer.OrdinalIgnoreCase);
         List<LevelTextReplacement> names=[..retailNames??[]];
         List<(string Key,int Prefix)> identities=[];
-        var special=UniversalMobyExport.SpecialProvider(japanese,donors);
+        // The user's Crash disc supplies Crash boxes and enemies, as in the retail-level export.
+        var special=UniversalMobyExport.SpecialProvider(japanese,donors,crash);
         foreach(var scene in scenes.Where(s=>s.Document.TargetBinding!=null).OrderBy(s=>s.Document.TargetBinding!.LevelId))
         {
             token.ThrowIfCancellationRequested();requireCurrent?.Invoke();
@@ -121,7 +124,7 @@ public static class NativeAuthoredProjectExporter
                 foreach(var identity in identities)UniversalNativeLayoutStore.Bind(workspace,identity.Key,identity.Prefix);
             }
             string hash=await compilation.ExportAsync(donors,fresh.Placements,japanese,outputImage,workspace,catalog,token,
-                RequirePublication,stage,eggs,signs,names,startLevelId==65,startLevelId,portalRoutes,returnClasses);
+                RequirePublication,stage,eggs,signs,names,startLevelId==65,startLevelId,portalRoutes,returnClasses,crash);
             return hash;
         }
         NativeClearedRetailBinding.ApplyNewGameStart(donors.Disc.Exe,exe,startLevelId);

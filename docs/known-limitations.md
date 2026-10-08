@@ -196,6 +196,25 @@ Signs: one message is shown at a time (the nearest sign in the object list
 order); text uses the USA HUD letters, so lowercase appears in capitals and
 other punctuation is dropped. Both need the unchanged Japanese disc.
 
+Start Blank in the twenty levels with short start-up code (Dark Hollow, Toasty and
+the rest of each world's other levels) moves the cleared level's start-up into one of
+two spare places in the game, so at most two of them can be cleared in one game.
+Played in the emulator in Dark Hollow only.
+
+Built levels: the close-up texture check simulates the game's own tests for camera
+positions on a 128-unit grid with 24 headings and eight pitches, counts every face
+crossing the camera plane, and keeps 16 entries spare; in the emulator the real
+queues were well below its figure (Wumpa Village: at most 20 normal and 15 close-up
+entries where the check allows 110). It can refuse a dense level the game would
+draw. A built level's own pictures on terrain (AuthoredMaterial Image) are set in the
+scene file; the editor has no picture chooser for built levels yet and its viewport
+shows the carrier texture's colours.
+
+Objects added to a retail level take their rows from that level's 91 spare object
+slots (Bandicoot Keep: 49 added objects leave 52). The game does not check the end of
+that space when enemies and crates drop gems, so keep added enemies and crates in a
+retail level well under its remaining slots. Levels you build always keep 91.
+
 Crash Bandicoot boxes and enemies need the user's Crash Bandicoot: Warped (USA)
 disc and work only in ground levels. The enemies are converted from Crash 3's
 models: their sizes are scaled to sit next to Spyro (frogs 0.6, knights and wizards

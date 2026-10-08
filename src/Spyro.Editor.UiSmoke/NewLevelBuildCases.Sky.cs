@@ -4,6 +4,7 @@ using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
+using Spyro.Editor.Core.Universal;
 
 internal static partial class NewLevelBuildCases
 {
@@ -304,8 +305,15 @@ internal static partial class NewLevelBuildCases
             { SetField(window, "_selectedMoby", m); Invoke(window, "RemoveSelectedMoby"); }
         foreach (var o in objects)
         {
-            var entry = entries.First(e => e.ClassId == o.Class && e.SourceLevels.Contains(o.Source));
-            var variant = entry.Variants.FirstOrDefault(v => v.SourceLevelKey == o.Source) ?? entry.Default;
+            UniversalMobyCatalogEntry entry; UniversalMobyVariant variant;
+            if (o.What.StartsWith("crash:"))
+                (entry, variant) = entries.SelectMany(e => e.Variants.Select(v => (e, v)))
+                    .First(p => Spyro.Editor.Core.Universal.UniversalSpecialCatalog.SpecialIdForClass(p.v.ClassId) == o.What[6..]);
+            else
+            {
+                entry = entries.First(e => e.ClassId == o.Class && e.SourceLevels.Contains(o.Source));
+                variant = entry.Variants.FirstOrDefault(v => v.SourceLevelKey == o.Source) ?? entry.Default;
+            }
             string? eggColour = o.What.StartsWith("egg:") ? o.What[4..] : null;
             if (eggColour != null) variant = entry.Variants.First(v => Spyro.Editor.Core.Universal.UniversalSpecialCatalog.SpecialIdForClass(v.ClassId) == eggColour);
             var before = Mobys(window).ToHashSet();
@@ -322,6 +330,7 @@ internal static partial class NewLevelBuildCases
             Invoke(window, "NudgeSelectedMoby", o.X - moby.Position.X, o.Y - moby.Position.Y, ground + Math.Max(lift, 0) - moby.Position.Z + 0.001f);
             if (eggColour != null) Invoke(window, "SetUniversalEggColour", moby, eggColour);
             if (o.What == "sign") Invoke(window, "SetUniversalSignText", moby, "WELCOME TO\nCLOUDSPIRE ISLES");
+            if (o.What.StartsWith("sign:")) Invoke(window, "SetUniversalSignText", moby, o.What[5..].Replace("\\n", "\n"));
             Console.WriteLine($"  {moby.DisplayLabel,-34} ({moby.Position.X:0},{moby.Position.Y:0},{moby.Position.Z:0}) ground {ground:0} gem {moby.TreasureValue} +{added.Count - 1} linked");
         }
         int treasure = Mobys(window).Where(m => m.IsAdded && !m.IsRemoved).Sum(m => m.TreasureValue);

@@ -80,6 +80,13 @@ public static class UniversalMobyComposer
     public const uint NormalBufferFloor = 0x80187BB0; // lowest normal reserved buffer (see runtime memory ownership)
     public const int RamSafetyMargin = 0x400;
     public const int MinimumDynamicSlots = 16;
+    /// <summary>Spare object slots every retail level reserves (91; a few flight levels more). The allocator
+    /// (0x800524C4) takes the next free row upward and a 0x18-byte record downward with no bounds check, so each
+    /// live drop, butterfly or projectile needs one: past the reserve they overwrite level data.</summary>
+    public const int RetailDynamicSlots = 91;
+    /// <summary>The spare slots a built level reserves: the retail 91 where the 256-row range allows.</summary>
+    public static int BuiltLevelDynamicSlots(int activePlacements) =>
+        Math.Max(MinimumDynamicSlots, Math.Min(RetailDynamicSlots, 256 - activePlacements));
 
     public const uint TreasureTableAddress = 0x8006F438;
 

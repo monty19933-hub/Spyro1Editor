@@ -68,7 +68,8 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
     public UniversalComposeResult ComposeWithExecutable(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements,
         byte[] executable,Func<string,UniversalSpecialAsset?>? special=null)
     {
-        int dynamicSlots=UniversalMobyComposer.MinimumDynamicSlots;
+        // Built levels reserve the retail spare-object arena: drops beyond it would overwrite level data.
+        int dynamicSlots=UniversalMobyComposer.BuiltLevelDynamicSlots(placements.Count(p=>!p.Retired));
         if(UniversalGreenDruidLinkedWorldInstallation.IsRequested(placements))
         {
             var source=donors.Get("alpineridge");

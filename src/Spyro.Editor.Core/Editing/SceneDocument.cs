@@ -8,7 +8,14 @@ using Spyro.Editor.Core.Text;
 
 namespace Spyro.Editor.Core.Editing;
 
-public sealed record AuthoredMaterial(int SourceWadEntry, int TextureId);
+/// <summary>A retail terrain texture (WAD entry, texture id) copied into the built level. With <see cref="Image"/>
+/// (a PNG file, absolute path like the editor's custom terrain textures) the copy carries that picture instead,
+/// written in every detail tier; the retail texture then only lends its layout and distance fade.</summary>
+public sealed record AuthoredMaterial(int SourceWadEntry, int TextureId)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? Image { get; init; }
+}
 public sealed record AuthoredSurface(string Id, Vector3f[] Vertices, ColorRgba Color, AuthoredMaterial? Material,
     ColorRgba[]? NearColors = null, ColorRgba[]? FarColors = null);
 public sealed record AuthoredObject(string Identity, Moby Value);
@@ -118,10 +125,12 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
         var ledger = new UniversalPlacementLedger(1, rows); ledger.Validate(); return ledger;
     }
 
+    /// <summary>Authored faces in one scene (the compiled level holds at most 5,000 drawn faces).</summary>
+    public const int MaxSurfaces = 4096;
     public void Validate()
     {
         if (SchemaVersion != 1 || !Guid.TryParseExact(Id,"N",out _) || string.IsNullOrWhiteSpace(Name) ||
-            Surfaces.Count > 255 || Objects.Count > 256 || Heading is < 0 or > 255 ||
+            Surfaces.Count > MaxSurfaces || Objects.Count > 256 || Heading is < 0 or > 255 ||
             !TextTargetCatalog.IsSafeReplacement(Name,19))
             throw new InvalidDataException("Fresh scene document identity, surfaces or settings are invalid.");
         Ledger.Validate();

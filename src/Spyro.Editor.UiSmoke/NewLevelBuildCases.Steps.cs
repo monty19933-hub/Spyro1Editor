@@ -44,6 +44,8 @@ internal static partial class NewLevelBuildCases
             case "crash-textures": CrashTextures(window); return true;
             case "crash-objects": CrashObjects(window); return true;
             case "crash-enemies": CrashEnemies(window); return true;
+            case "wumpa-build": WumpaBuild(window); return true;
+            case "wumpa-objects": WumpaObjects(window); return true;
             default: return false;
         }
     }

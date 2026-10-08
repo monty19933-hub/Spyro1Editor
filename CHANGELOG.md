@@ -19,8 +19,19 @@ New
   - Crash wizard (Gee Wiz lab assistant): turns to face Spyro and casts a zap when Spyro is close and in front of him. Drops a blue gem (5).
   - Flame, charge or jump on any of them and they are knocked flying, Crash style (jumping on them bounces Spyro off). The wizard's robe blows off first. The gems count toward the level's treasure.
   - Frogs and knights stay within about 100 units of where you put them; place them on level ground (they keep their height).
+- Start Blank works in every normal level, not only the ten it supported before. Dark Hollow, Toasty and the other levels whose start-up code is shorter get a copy of the cleared-level start-up in a spare place in the game; two of these can be cleared in one game (played in Dark Hollow).
+- Levels you build, or clear with Start Blank, can be much bigger: up to 4,096 terrain tiles (5,000 drawn faces after the game's own splitting, 127 parts) instead of 255. Create BIN checks the game's close-up texture work for camera positions all over the level and, if one place is too crowded with textured tiles, names it.
+- A built level's terrain tiles can show your own PNG pictures (one per material, written at every distance like the Terrain tab's pictures). For now the picture is set in the level's scene file; there is no picture chooser for built levels in the editor yet.
+- Crash boxes and Crash enemies can be placed in levels you build or clear (Create BIN used to stop with "needs its original source disc").
+- Example: WUMPA VILLAGE, a Crash Bandicoot: Warped style village built in Dark Hollow's place with Crash 3's textures, crates and enemies.
 - Terrain textures from your own pictures: images added in the Terrain tab are now written into the game in every detail level (far, normal and close up), with the fade into the distance kept. Textures that share pixels in the level take new images together; the editor says which.
 - Lower now works on tiles at the floor of their part of the level. The game stores each part's heights within a band that used to start exactly at the lowest tile; Create BIN now moves the band when a lowered corner needs it.
+
+Fixed
+
+- Walls in levels you build stop Spyro. He used to walk through any wall from the side you can see (the game reads the solid side of a collision triangle from its corner order, and walls were stored the other way round from floors).
+- Levels you build keep the game's 91 spare object slots (they had 16). The game puts every gem an enemy or crate drops, every butterfly and every projectile into those slots without checking the end, so with more than 16 at once it overwrote the level's data and could crash.
+- A large built level's terrain is cut into compact parts like the game's own, each with its true size, so the game can skip the parts out of view (they used to cover large areas and be drawn close up from far away). Small built levels keep their exact earlier layout.
 
 Clearer
 

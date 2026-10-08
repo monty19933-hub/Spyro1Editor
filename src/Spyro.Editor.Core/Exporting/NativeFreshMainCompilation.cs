@@ -58,9 +58,20 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
                 new NativeStaticTerrainTextureInput(i,s.Handle,"source-right-half-vram:wad-"+s.SourceWadEntry,
                     NativeStaticTerrainTextureAllocation.RelocationPolicyId,s.Layout.CopyRecord(),s.CopySourceVram())),0x8000);
             upload=allocation.CopyUploadPayload();metadata=NativeTerrainMaterialTableCodec.Encode(allocation.Records.ToArray());
+            // Materials with their own picture: written into the copied texture at every distance.
+            Dictionary<int,NativeTerrainTextureImageWriter.Image> images=[];
+            for(int i=0;i<materials.Length;i++)
+                if(materials[i].Image is {} path)
+                {
+                    if(!File.Exists(path))throw new InvalidDataException($"A terrain picture of this level is missing: {path}");
+                    images[i]=new(PngRgbaImage.ReadResizedRgba(path,NativeTerrainTextureImageWriter.NormalSide,NativeTerrainTextureImageWriter.NormalSide),
+                        PngRgbaImage.ReadResizedRgba(path,NativeTerrainTextureImageWriter.CloseSide,NativeTerrainTextureImageWriter.CloseSide));
+                }
+            // The upload is the 512 KB VRAM image followed by the sound bank; pictures go into the VRAM image.
+            if(images.Count>0)NativeTerrainTextureImageWriter.Write(upload.AsSpan(0,0x80000),metadata,images).CopyTo(upload,0);
         }
         byte[] data=[..metadata,..mesh,..oldData.AsSpan(oldLayout.Portal.Offset).ToArray()];
-        if(data.Length>0x20000)throw new InvalidDataException("Authored native data exceeds the bounded main-editor allocation.");
+        if(data.Length>NativeAuthoredMesh.MaxSurfaceBytes+0x8000)throw new InvalidDataException("Authored native data exceeds the bounded main-editor allocation.");
         var body=new UniversalLevelData(issued.DiscPlan.CopyBody());
         var dataFile=body.Subfiles()[1];int growth=Math.Max(0,UniversalLevelData.Align(data.Length,0x800)-dataFile.Length);
         if(growth>0)body.GrowSubfile(1,growth);
@@ -111,7 +122,8 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         // The canonical zero-actor scene includes only one spare placed row.
         // Size its owned empty arena before imports consume further placed rows;
         // the ordinary composer still checks the final dynamic reserve and RAM.
-        byte[] prepared = NativeFreshPlacementArena.Prepare(_body, placements.Count(p => !p.Retired));
+        int active = placements.Count(p => !p.Retired);
+        byte[] prepared = NativeFreshPlacementArena.Prepare(_body, active, UniversalMobyComposer.BuiltLevelDynamicSlots(active));
         var composed=UniversalMobyComposer.Compose(Target,prepared,_overlay,actualExecutable,
             key => string.Equals(key, Target.Key, StringComparison.OrdinalIgnoreCase)
                 ? (Target, new UniversalLevelData(prepared), new UniversalOverlay(_overlay, UniversalExeBindings.Read(actualExecutable,65)))
@@ -125,7 +137,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         UniversalJapaneseSource? japanese,string outputImage,string identityWorkspace,LevelCatalog nativeCatalog,CancellationToken token=default,Action? requireDocumentCurrent=null,
         string? stagedRetailImage=null,IReadOnlyList<(int LevelIndex,int Row,int Colour)>? retailEggs=null,IReadOnlySet<string>? retailSignLevels=null,
         IReadOnlyList<LevelTextReplacement>? retailNames=null,bool startInAuthoredLevel=true,int? startLevelId=null,PortalRouteDocument? portalRoutes=null,
-        IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses=null)
+        IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses=null,Spyro.Editor.Core.Crash.CrashWarpedDisc? crash=null)
     {
         if(Path.GetFullPath(outputImage)==Path.GetFullPath(donors.ImagePath))throw new InvalidDataException("Fresh export cannot replace its original source image.");
         if(portalRoutes?.Destinations.Any(d=>d.DestinationLevelId==65)==true)
@@ -138,7 +150,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         NativeFreshTreasureTarget.RequireZeroBaseline(donors.Disc.Exe,stagedExe);
         if(startLevelId is {} chosen) NativeClearedRetailBinding.ApplyNewGameStart(donors.Disc.Exe,stagedExe,chosen);
         else NativeFreshNewGameEntry.Apply(donors.Disc.Exe,stagedExe,startInAuthoredLevel);
-        var compose=placements.Count == 0 ? null : ComposeWithExecutable(donors,placements,stagedExe,UniversalMobyExport.SpecialProvider(japanese,donors));
+        var compose=placements.Count == 0 ? null : ComposeWithExecutable(donors,placements,stagedExe,UniversalMobyExport.SpecialProvider(japanese,donors,crash));
         Dictionary<int,IReadOnlyList<NativePortalReturnClass>> returnClasses=retailReturnClasses?.ToDictionary(p=>p.Key,p=>p.Value)??[];
         returnClasses[65]=compose==null?[]:NativePortalReturnClass.Capture(compose.Classes);
         byte[] levelData=compose?.LevelData ?? _body.ToArray(), overlayData=compose?.Overlay ?? _overlay.ToArray();

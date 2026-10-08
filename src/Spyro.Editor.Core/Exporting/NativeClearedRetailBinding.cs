@@ -40,8 +40,7 @@ public static class NativeClearedRetailBinding
         if (target.SourceWadEntry != 10 + 2 * index)
             throw new InvalidDataException("Start Blank retail identity differs from its source WAD slot.");
         var profile = Inspect(originalExe,target.LevelId);
-        if (!profile.NineSettersSupported)
-            throw new InvalidDataException($"Level {target.LevelId} has a source-owned short initializer; installing nine bindings requires a separate bounded initializer allocation.");
+        if (!profile.NineSettersSupported) return PrepareRelocated(originalExe,stagedExe,target,profile,index);
         // These shared owners are never borrowed for a target-specific rewrite.
         RequireUnchanged(originalExe,stagedExe,JumpTableOffset+target.LevelId*4,4,"target initializer entry");
         RequireUnchanged(originalExe,stagedExe,CommonTailOffset - 8,0x20,"normal initializer tail");
@@ -75,6 +74,60 @@ public static class NativeClearedRetailBinding
             if (!value.SequenceEqual(originalExe.AsSpan(at,length)) && value.ContainsAnyExcept((byte)0))
                 throw new InvalidDataException($"Start Blank conflicts with the staged {goal} goal; authored/imported totals cannot be discarded silently.");
             result.AsSpan(at,length).Clear();
+        }
+    }
+
+    // Levels with the native four-setter short initializer (Dark Hollow, Toasty, ...) have no room for the nine
+    // Town setters. Their copy goes into a slot of retail libgpu functions that nothing in the executable or any
+    // WAD entry calls, jumps or points to (0x8005E8D8..0x8005EA94: three image-transfer wrappers), and the level's
+    // jump-table entry moves there. The short initializer itself stays untouched. Each slot is either retail bytes
+    // (free) or an exact neutral copy owned by the one level whose entry points at it.
+    internal const uint RelocationAreaStart = 0x8005E8D8, RelocationAreaEnd = 0x8005EA94;
+    internal const string RelocationAreaSha256 = "073d8dac8fa86d18fc623f021041d91455830f83893183fc0876c2efc663f171";
+    public static IReadOnlyList<uint> RelocationSlots { get; } = [0x8005E8D8, 0x8005E970];
+
+    private static byte[] PrepareRelocated(byte[] originalExe, byte[] stagedExe, LevelDefinition target,
+        NativeClearedRetailBindingProfile profile, int index)
+    {
+        int area = checked((int)(RelocationAreaStart - UniversalExeBindings.ExeBase));
+        if (Hash(originalExe.AsSpan(area, (int)(RelocationAreaEnd - RelocationAreaStart))) != RelocationAreaSha256)
+            throw new InvalidDataException("Start Blank's initializer area differs from the original executable.");
+        int entryAt = JumpTableOffset + target.LevelId * 4;
+        uint original = Word(originalExe, entryAt), current = Word(stagedExe, entryAt);
+        byte[] neutral = originalExe.AsSpan(TownInitializerOffset, FullLength).ToArray();
+        RequireUnchanged(originalExe, stagedExe, CommonTailOffset - 8, 0x20, "normal initializer tail");
+        RequireGoalConsumers(originalExe, stagedExe);
+        // The short initializer is never rewritten, and no other level may have been moved onto it.
+        int shortAt = checked((int)(profile.InitializerAddress - UniversalExeBindings.ExeBase));
+        RequireUnchanged(originalExe, stagedExe, shortAt, profile.InitializerByteLength, "short initializer");
+        uint slot;
+        if (current == original)
+        {
+            uint? free = RelocationSlots.Cast<uint?>().FirstOrDefault(s => SlotIsRetail(s!.Value) && !Entered(s.Value));
+            slot = free ?? throw new InvalidDataException("Every Start Blank initializer slot for levels like this one is already in use in this game.");
+        }
+        else if (RelocationSlots.Contains(current) && SlotIsNeutral(current)) slot = current;
+        else throw new InvalidDataException("Start Blank conflicts with an already edited initializer entry for this level.");
+        for (int id = 0; id < 66; id++)
+            if (id != target.LevelId && Word(stagedExe, JumpTableOffset + id * 4) is uint other && other >= slot && other < slot + FullLength)
+                throw new InvalidDataException("Start Blank would share an initializer slot with another level.");
+        byte[] result = stagedExe.ToArray();
+        neutral.CopyTo(result.AsSpan(checked((int)(slot - UniversalExeBindings.ExeBase)), FullLength));
+        Put(result, entryAt, slot);
+        Reset(0x5FC14 + index, 1, "dragon");
+        Reset(0x5FC38 + index * 2, 2, "treasure");
+        if (index < 18) Reset(0x5FC80 + index, 1, "retail egg");
+        return result;
+
+        bool SlotIsRetail(uint s) { int o = checked((int)(s - UniversalExeBindings.ExeBase)); return stagedExe.AsSpan(o, FullLength).SequenceEqual(originalExe.AsSpan(o, FullLength)); }
+        bool SlotIsNeutral(uint s) => stagedExe.AsSpan(checked((int)(s - UniversalExeBindings.ExeBase)), FullLength).SequenceEqual(neutral);
+        bool Entered(uint s) => Enumerable.Range(0, 66).Any(id => Word(stagedExe, JumpTableOffset + id * 4) is uint e && e >= s && e < s + FullLength);
+        void Reset(int at, int length, string goal)
+        {
+            var value = stagedExe.AsSpan(at, length);
+            if (!value.SequenceEqual(originalExe.AsSpan(at, length)) && value.ContainsAnyExcept((byte)0))
+                throw new InvalidDataException($"Start Blank conflicts with the staged {goal} goal; authored/imported totals cannot be discarded silently.");
+            result.AsSpan(at, length).Clear();
         }
     }
 

@@ -273,6 +273,7 @@ public sealed partial class MainWindow
         }
         ReportCreateBinProgress("Building levels…","Create BIN: rebuilding geometry, collision, objects and assets…");
         string output=Path.Combine(outputFolder,"Spyro Editor - Authored Level.bin");
+        var crash=ResolveUniversalCrashDisc();
         string hash=await Task.Run(async()=>
         {
             // A level you built is always rebuilt from the original disc, so "off" needs no flight plan.
@@ -287,7 +288,7 @@ public sealed partial class MainWindow
                 requireCurrent:()=>Dispatcher.UIThread.InvokeAsync(RequireOwner).GetAwaiter().GetResult(),
                 stagedRetailImage:retail?.WroteImage==true?retail.OutputImagePath:null,retailEggs:retail?.ActiveDragonflyEggs,
                 retailSignLevels:retail?.SignLevelKeys,retailNames:retail?.DeferredLevelNames,flight:flight,portalRoutes:portalSnapshot.Document,
-                retailReturnClasses:retail?.ReturnClasses);
+                retailReturnClasses:retail?.ReturnClasses,crash:crash);
         });
         RequireOwner();
         string startName=saved.FirstOrDefault(s=>s.ResolveTarget(_retailCatalog).LevelId==startLevelId)?.Name??"Artisans";

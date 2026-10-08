@@ -115,7 +115,9 @@ internal static class SubdivisionCases
             check(refused&&doc.Fingerprint()==before,name+" refuses atomically");
         }
         Refuse(seed with{Surfaces=[Quad(1024)]},"generated per-face visibility budget overflow");
-        Refuse(seed with{Surfaces=Enumerable.Range(0,65).Select(_=>seed.Surfaces[0] with{Id=Guid.NewGuid().ToString("N")}).ToArray()},"combined generated visibility budget overflow");
+        // 230 copies of the starter triangle need 230 x 36 = 8,280 lattice triangles: over the level's 8,192
+        // collision triangles (and 5,000 drawn faces).
+        Refuse(seed with{Surfaces=Enumerable.Range(0,230).Select(_=>seed.Surfaces[0] with{Id=Guid.NewGuid().ToString("N")}).ToArray()},"combined generated collision budget overflow");
         Refuse(seed with{Surfaces=[new(Guid.NewGuid().ToString("N"),[new(520,520,544),new(651,521,544),new(520,584,544)],new(64,160,200),null)]},"long indivisible exact native lattice");
         Refuse(seed with{Surfaces=[Quad(64) with{Vertices=Quad(64).Vertices.Select(p=>p with{X=p.X+0.25f}).ToArray()}]},"fractional native vertices");
     }

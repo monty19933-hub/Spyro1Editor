@@ -270,11 +270,19 @@ Before exporting a rebuilt level, place the player above a solid floor. Levels
 reached through a portal need a continuous landing area at least 384 units wide
 centered on the start; the starting floor provides it.
 
-Start Blank currently supports Artisans, Stone Hill, Town Square, Peace Keepers,
-Dry Canyon, Cliff Town, Magic Crafters, Beast Makers, Dream Weavers and Gnasty's
-World, plus the level of your own. A cleared Town Square and a level of your own
-cannot currently be exported together. Untextured terrain is split into smaller
-triangles automatically and must fit the game's 255-triangle limit.
+Start Blank works in every normal level (not flight levels) and in the level of
+your own. Artisans, Stone Hill, Town Square, Peace Keepers, Dry Canyon, Cliff Town,
+Magic Crafters, Beast Makers, Dream Weavers and Gnasty's World can all be cleared
+together; of the other twenty levels (Dark Hollow, Toasty and most levels of the
+later worlds) two can be cleared in one game. A cleared Town Square and a
+level of your own cannot currently be exported together.
+
+A rebuilt level holds up to 4,096 terrain tiles. Untextured tiles are split into
+smaller triangles automatically. Walls stop Spyro from the side you can see them.
+The game gives close-up detail to the textured tiles near the camera, and only so
+many at once: Create BIN checks camera positions all over the level and names the
+place if textured tiles are too crowded there. Use larger tiles there (a few hundred
+units across, like the game's own) or untextured faces.
 
 ## What this package does not contain
 
