@@ -96,6 +96,33 @@ public sealed class UniversalLevelData
         return insert;
     }
 
+    /// <summary>Appends whole subfiles after the last one (sector aligned), in order: a rebuilt level taking its
+    /// original's dragon rescue streams (subfiles 4 onward, read from the disc only during a rescue).</summary>
+    public void AppendSubfiles(IReadOnlyList<byte[]> files) => ReplaceSubfilesFrom(Subfiles().Count, files);
+
+    /// <summary>Drops subfiles from <paramref name="first"/> on and appends <paramref name="files"/> in their place.</summary>
+    public void ReplaceSubfilesFrom(int first, IReadOnlyList<byte[]> files)
+    {
+        var all = Subfiles();
+        if (first < 1 || first > all.Count) throw new ArgumentOutOfRangeException(nameof(first));
+        for (int i = first; i < 10; i++) { Put32(8 * i, 0); Put32(8 * i + 4, 0); }
+        var sf = all.Take(first).ToList();
+        if (sf.Count + files.Count > 10) throw new InvalidDataException("A level holds at most ten subfiles.");
+        int end = Align(sf[^1].Offset + sf[^1].Length, 0x800);
+        int total = end + files.Sum(f => Align(f.Length, 0x800));
+        byte[] grown = new byte[total];
+        _data.AsSpan(0, Math.Min(_data.Length, end)).CopyTo(grown);
+        int at = end;
+        for (int i = 0; i < files.Count; i++)
+        {
+            files[i].CopyTo(grown, at);
+            BinaryPrimitives.WriteInt32LittleEndian(grown.AsSpan(8 * (sf.Count + i)), at);
+            BinaryPrimitives.WriteInt32LittleEndian(grown.AsSpan(8 * (sf.Count + i) + 4), files[i].Length);
+            at += Align(files[i].Length, 0x800);
+        }
+        _data = grown;
+    }
+
     /// <summary>Inserts a component record within a subfile, preserving every following byte. Only
     /// zero tail padding beyond the caller-certified owned byte range is consumed; otherwise the subfile grows by a sector.</summary>
     public void InsertWithinSubfile(int index, int relativeOffset, ReadOnlySpan<byte> bytes, int usedByteLength)
@@ -189,6 +216,26 @@ public sealed class UniversalLevelData
             BinaryPrimitives.WriteUInt16LittleEndian(_data.AsSpan(0x150 + 2 * (i + 1)), (ushort)ordered[i].ClassId);
         }
         return growth;
+    }
+
+    /// <summary>Inserts <paramref name="bytes"/> (whole sectors) of empty room just before <paramref name="anchorClassId"/>'s
+    /// package: it and every later package move up, keeping their alignment. A rebuilt homeworld uses this for the
+    /// dragon rescue's temporary area below the statue when its own models do not fill it. Returns the growth.</summary>
+    public int ReserveBefore(int anchorClassId, int bytes)
+    {
+        if (bytes <= 0 || bytes % 0x800 != 0) throw new ArgumentException("Reserved model room must be whole sectors.");
+        int anchor = Registrations().Single(r => r.ClassId == anchorClassId).Root;
+        GrowSubfile(2, bytes);
+        var (mo, ml) = Subfiles()[2];
+        _data.AsSpan(anchor, mo + ml - bytes - anchor).CopyTo(_data.AsSpan(anchor + bytes));
+        _data.AsSpan(anchor, bytes).Clear();
+        for (int slot = 1; slot < 64; slot++)
+        {
+            int root = U32(0x50 + 4 * slot);
+            if (root <= 0) break;
+            if (root >= anchor) Put32(0x50 + 4 * slot, root + bytes);
+        }
+        return bytes;
     }
 
     /// <summary>Removes the model packages of <paramref name="classIds"/>: later packages move down (keeping

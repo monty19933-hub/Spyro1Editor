@@ -26,7 +26,7 @@ internal static class SkySourceCases
     internal static void Run(Action<bool,string> check)
     {
         var type=typeof(NativeAuthoredSpawn).Assembly.GetType("Spyro.Editor.Core.Exporting.NativeAuthoredMesh")!;
-        byte[] Compile(SceneDocument d,byte[]? sky)=>(byte[])type.GetMethod("CompileWithSky",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[d,Array.Empty<AuthoredMaterial>(),sky])!;
+        byte[] Compile(SceneDocument d,byte[]? sky)=>(byte[])type.GetMethod("CompileWithSky",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[d,Array.Empty<AuthoredMaterial>(),sky,null])!;
         var doc=SceneDocument.New("Sky Proof");
         check(Spyro1SkyBlockAnalyzer.IsValidStandaloneSkyBlock(SkyBlock(3)),"synthetic sky block parses as one native block");
         byte[] plain=Compile(doc,null);

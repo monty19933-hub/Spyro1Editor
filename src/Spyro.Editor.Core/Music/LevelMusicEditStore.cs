@@ -25,7 +25,7 @@ public static class LevelMusicEditStore
             LevelMusicEditPlan? plan = JsonSerializer.Deserialize<LevelMusicEditPlan>(File.ReadAllText(path), JsonOptions);
             int levelIndex = MusicTrackCatalog.GetLevelIndex(level);
             int nativeTrackId = MusicTrackCatalog.GetNativeTrackId(level);
-            MusicTrackEntry? selected = plan == null ? null : MusicTrackCatalog.Find(plan.SelectedTrackId);
+            MusicTrackEntry? selected = plan == null ? null : MusicTrackCatalog.FindAny(plan.SelectedTrackId);
             if (plan == null ||
                 !string.Equals(LevelCatalog.NormalizeKey(plan.LevelKey), LevelCatalog.NormalizeKey(level.Key), StringComparison.OrdinalIgnoreCase) ||
                 plan.LevelIndex != levelIndex ||
@@ -65,7 +65,7 @@ public static class LevelMusicEditStore
             return path;
         }
 
-        MusicTrackEntry track = MusicTrackCatalog.Find(selectedTrackId)
+        MusicTrackEntry track = MusicTrackCatalog.FindAny(selectedTrackId)
             ?? throw new InvalidOperationException($"Music track {selectedTrackId} does not exist.");
         if (!track.IsSelectable)
             throw new InvalidOperationException($"{track.DisplayName} is reserved for future custom-audio support.");

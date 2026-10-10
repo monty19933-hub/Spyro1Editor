@@ -12,6 +12,12 @@ public sealed record UniversalMobyPlacement(string SourceLevelKey, int SourceRow
 {
     public string? LinkGroupId { get; init; }
     public Spyro.Editor.Core.Primitives.ColorRgba? DragonColor { get; init; }
+    /// <summary>Words of the object's own properties (offsets in its packed properties, as captured) set to new values:
+    /// a moved homeworld doorway's path nodes.</summary>
+    public IReadOnlyDictionary<int, int>? PropertyWordOverrides { get; init; }
+    /// <summary>An explicit save identity (0-255). Below a rebuilt level's original prefix it must be one of
+    /// <see cref="UniversalSaveIdentities.Reusable"/>.</summary>
+    public int? SaveIdentity { get; init; }
 }
 
 public sealed record UniversalClassImport(int ClassId, string SourceLevelKey, bool ModelImported, bool BehaviorImported,
@@ -175,9 +181,10 @@ public static class UniversalMobyComposer
         Func<NativePlayerAnimationSource>? playerAnimationSource = null,
         bool removedTreasureAlreadyApplied = false,
         int? persistentNativePrefixRows = null,
-        UniversalOverlay? nativeDestinationOwner = null, int magicPairBundlePaddingBytes = 0, byte[]? nativeOriginalExecutable = null, byte[]? nativeSharedEntry8 = null)
+        UniversalOverlay? nativeDestinationOwner = null, int magicPairBundlePaddingBytes = 0, byte[]? nativeOriginalExecutable = null, byte[]? nativeSharedEntry8 = null,
+        IReadOnlyList<(int Class, string SourceKey)>? dependencyClasses = null, IReadOnlySet<int>? releasedNativeClasses = null)
     {
-        if (placements.Count == 0 && removedRows is not { Count: > 0 }) throw new ArgumentException("No placements or permanent removals were supplied.");
+        if (placements.Count == 0 && removedRows is not { Count: > 0 } && dependencyClasses is not { Count: > 0 }) throw new ArgumentException("No placements or permanent removals were supplied.");
         if(UniversalAlpineArmInstaller.Requested(placements))return UniversalAlpineArmInstaller.Compose(destination,destinationData,destinationOverlay,executable,source,shared,protectedVram,placements,removedRows,playerAnimationSource,nativeSharedEntry8,persistentNativePrefixRows,magicPairBundlePaddingBytes,protectedVramAfterDrop,removedTreasureAlreadyApplied);
         UniversalHauntedSuperflameFairy.RequirePlacements(destination.Key,placements,source);
         bool hauntedFairy=destination.Key=="darkhollow"&&UniversalHauntedSuperflameFairy.Requested(placements);
@@ -196,11 +203,14 @@ public static class UniversalMobyComposer
         int[] incomingOrder = Enumerable.Range(0, placements.Count).ToArray();
         if (placements.Any(p => p.PersistentSlot != null))
         {
-            if (placements.Any(p => p.PersistentSlot == null || string.IsNullOrWhiteSpace(p.EditorId)) ||
+            // Objects outside the ledger (a homeworld's doorway objects) carry an explicit save identity. A ledger object
+            // may carry one too (a rebuilt homeworld's own dragon keeps its original one); its slot stays reserved.
+            var ledger = placements.Where(p => p.PersistentSlot != null).ToArray();
+            if (placements.Any(p => p.PersistentSlot == null && p.SaveIdentity == null) || placements.Any(p => string.IsNullOrWhiteSpace(p.EditorId)) ||
                 placements.Select(p => p.EditorId).Distinct(StringComparer.Ordinal).Count() != placements.Count ||
-                !placements.Select(p => p.PersistentSlot!.Value).Order().SequenceEqual(Enumerable.Range(0, placements.Count)))
+                !ledger.Select(p => p.PersistentSlot!.Value).Order().SequenceEqual(Enumerable.Range(0, ledger.Length)))
                 throw new InvalidDataException("Persistent placement ledger requires unique IDs and contiguous lifetime slots starting at zero.");
-            incomingOrder = incomingOrder.OrderBy(i => placements[i].PersistentSlot).ToArray();
+            incomingOrder = incomingOrder.OrderBy(i => placements[i].PersistentSlot == null ? 1 : 0).ThenBy(i => placements[i].PersistentSlot ?? i).ToArray();
             placements = incomingOrder.Select(i => placements[i]).ToArray();
         }
         // Lifetime ledger entries reserve save identities, never physical actor rows or properties.
@@ -217,7 +227,20 @@ public static class UniversalMobyComposer
             (nativeRowsBefore != 0 || savePrefix is < 0 or > 256 ||
              savePrefix != source(destination.Key).Data.Scene().RowCount))
             throw new InvalidDataException("A rebuilt empty level must retain its exact original native save prefix.");
-        int[] saveRows = placements.Select((p, i) => checked(savePrefix + (p.PersistentSlot ?? incomingOrder[i]))).ToArray();
+        // Without a ledger, objects take the identities after the prefix in order, skipping those with their own.
+        int[] rank = new int[placements.Count];
+        for (int i = 0, next = 0; i < placements.Count; i++) rank[i] = placements[i].SaveIdentity == null ? next++ : -1;
+        int[] saveRows = placements.Select((p, i) => p.SaveIdentity ?? checked(savePrefix + (p.PersistentSlot ?? rank[i]))).ToArray();
+        if (placements.Any(p => p.SaveIdentity is int id && id < savePrefix))
+        {
+            // Below the prefix: an identity no original object could have set, or the object's own (an original object
+            // put back in its rebuilt level).
+            var reusable = UniversalSaveIdentities.Reusable(source(destination.Key), shared).ToHashSet();
+            bool Own(UniversalMobyPlacement p, int id) => id == p.SourceRowIndex && string.Equals(p.SourceLevelKey, destination.Key, StringComparison.OrdinalIgnoreCase);
+            if (placements.Any(p => p.SaveIdentity is int id && (id < 0 || id < savePrefix && !reusable.Contains(id) && !Own(p, id))))
+                throw new InvalidDataException("An object reuses a save identity that the original level's objects could have set.");
+        }
+        if (saveRows.Distinct().Count() != saveRows.Length) throw new InvalidDataException("Two objects share a save identity.");
         if (saveRows.Any(i => i > 255)) throw new InvalidDataException("An active placement's lifetime save identity exceeds the native 256-bit level bitmap; retired identities cannot be reused on existing cards.");
         byte[] exe = executable.ToArray();
         var bindings = UniversalExeBindings.Read(exe, destination.LevelId);
@@ -229,7 +252,9 @@ public static class UniversalMobyComposer
             throw new InvalidDataException("The rebuilt level's native behavior owner differs from its actual prepared host.");
         uint originalEnd = RuntimeEnd(dest, destOverlay.CopyBuffer);
         var destSwitch = UniversalDispatchAnalysis.FindUpdateSwitch(destOverlay);
-        bool DestHandles(int c) => UniversalDispatchAnalysis.Handles(destOverlay, destSwitch, c);
+        // Released classes (a rebuilt level's own dragons) keep their numbers and run their own imported code; the
+        // destination's switch passes them by (UniversalNativeRelease).
+        bool DestHandles(int c) => releasedNativeClasses?.Contains(c) != true && UniversalDispatchAnalysis.Handles(destOverlay, destSwitch, c);
         HashSet<int> destRegistered = [.. dest.Registrations().Select(r => r.ClassId)];
         List<string> warnings = [];
 
@@ -313,6 +338,9 @@ public static class UniversalMobyComposer
             }
             var s = source(p.SourceLevelKey);
             var t = UniversalIndexedRows.Capture(s.Data, s.Overlay, s.Data.CaptureRow(p.SourceLevelKey, p.SourceRowIndex));
+            // A rebuilt homeworld's own dragons keep naming each other's rows (statue, dragon, pedestal).
+            if (persistentNativePrefixRows != null && string.Equals(p.SourceLevelKey, destination.Key, StringComparison.OrdinalIgnoreCase))
+                t = UniversalDragonRows.Capture(s.Data, t);
             if(destination.Key=="alpineridge"&&UniversalGreenDruidWorldRows.Applies(t))t=UniversalGreenDruidNativeReferences.Capture(dest,s.Data,s.Overlay,t,permanentlyRemoved);
             if(string.Equals(p.SourceLevelKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&string.Equals(destination.Key,"darkpassage",StringComparison.OrdinalIgnoreCase)&&t.ClassId==0x35&&t.SourceRowIndices.Count==1&&
                 destinationData.AsSpan().SequenceEqual(originalDestination.Data.Bytes)&&destinationOverlay.AsSpan().SequenceEqual(originalDestination.Overlay.Bytes))
@@ -337,6 +365,15 @@ public static class UniversalMobyComposer
             templates[i] = UniversalObjectRowLinks.Resolve(UniversalIndexedRows.Resolve(t, templates), templates);
             if (templates[i].DroppedExternalPointers > 0)
                 warnings.Add($"{t.SourceLevelKey} row {t.SourceRowIndex}: {templates[i].DroppedExternalPointers} unresolved source-object link(s) were cleared; each target must be present once in the same linked group.");
+        }
+        // Models the level needs without placing them (a built level's liquid splashes, UniversalLiquidSplashes). The
+        // executable spawns them by their fixed class, so they keep it; a level that already has the model needs nothing.
+        HashSet<(string, int)> fixedDependencies = [];
+        foreach (var (c, sk) in dependencyClasses ?? [])
+        {
+            if (destRegistered.Contains(c)) continue;
+            fixedDependencies.Add((sk.ToLowerInvariant(), c));
+            work.Enqueue((c, sk, true));
         }
         while (work.Count > 0)
         {
@@ -367,6 +404,12 @@ public static class UniversalMobyComposer
                 (!source(other.Key.Source).Data.Bytes.AsSpan().SequenceEqual(source(sk).Data.Bytes) ||
                  !source(other.Key.Source).Overlay.Bytes.SequenceEqual(source(sk).Overlay.Bytes));
             collision |= (DestHandles(c) || destRegistered.Contains(c)) && !EquivalentDestination(c, sk, out _);
+            if (fixedDependencies.Contains(identity))
+            {
+                if (classes.Any(k => k.Value.DestinationClass == c && k.Key != identity))
+                    throw new UniversalSourceCollisionException($"Class 0x{c:X3}, which the game spawns by number, is already taken in {destination.Key}.");
+                collision = false;
+            }
             if (collision)
             {
                 if (shared.Contains(c) && !source(sk).Data.Registrations().Any(r => r.ClassId == c) && sharedModelPackage == null)
@@ -449,12 +492,16 @@ public static class UniversalMobyComposer
         foreach (string sk in classes.Keys.Select(k => k.Source).Distinct().ToArray())
             if (classes.Any(k => k.Key.Source == sk && k.Key.Class != k.Value.DestinationClass))
                 foreach (var key in classes.Keys.Where(k => k.Source == sk).ToArray())
-                    if (classes[key].DestinationClass == key.Class && (DestHandles(key.Class) || (key.Class==0x176 && flightGates.ContainsKey(sk))))
+                    if (classes[key].DestinationClass == key.Class && !fixedDependencies.Contains(key) && (DestHandles(key.Class) || (key.Class==0x176 && flightGates.ContainsKey(sk))))
                         classes[key] = (AllocateClass(sk, key.Class), classes[key].Dependency);
 
         foreach (int c in specialClasses.Keys)
             if (classes.Values.Any(v => v.DestinationClass == c) || destRegistered.Contains(c) || shared.Contains(c) || DestHandles(c))
                 throw new UniversalSourceCollisionException($"Special class 0x{c:X3} collides with a native or imported class in {destination.Key}.");
+        foreach (int c in releasedNativeClasses ?? new HashSet<int>())
+            if (!classes.TryGetValue((destination.Key.ToLowerInvariant(), c), out var released) || released.DestinationClass != c ||
+                classes.Any(k => k.Value.DestinationClass == c && k.Key.Source != destination.Key.ToLowerInvariant()))
+                throw new InvalidDataException($"Released class 0x{c:X3} must be placed from {destination.DisplayName}'s own objects under its own number.");
 
         // 1b. Free the models of native object types the user removed completely (see DroppableClasses).
         var (dropped, inertRows) = DroppableClasses(dest, destOverlay, exe, shared, removedRows,
@@ -537,9 +584,15 @@ public static class UniversalMobyComposer
             foreach (var (key, certificate) in metalModels)
                 if (textured[i].Source == key.Source && textured[i].Class == classes[key].DestinationClass)
                     metalTextureJobs.Add(i, certificate);
+        // A rebuilt homeworld's own dragon rescue scenes (subfiles 4 on) carry models textured from the original
+        // level's VRAM: their regions come along like an imported model's (NativeDragonRescueCamera.Scenes).
+        var rescueScenes = persistentNativePrefixRows != null ? NativeDragonRescueCamera.Scenes(dest) : [];
+        byte[] rescueVram = rescueScenes.Count > 0 ? originalDestination.Data.Vram().ToArray() : [];
         var texReports = UniversalAssetImport.ImportTexturesBatch(textured.Select(j => (j.Pkg, j.Vram,
             $"class 0x{j.Class:X3} from {j.Source}{(j.Dependency ? ", a helper object it spawns" : "")}"))
-            .Concat(particleJobs.Select(j => (j.Package, j.Vram, $"particle 0x{j.Type:X2} from {j.Source}"))).ToList(), dest.Vram(), vram, metalTextureJobs);
+            .Concat(particleJobs.Select(j => (j.Package, j.Vram, $"particle 0x{j.Type:X2} from {j.Source}")))
+            .Concat(rescueScenes.Select(r => (r.Package, rescueVram, "a dragon rescue scene"))).ToList(), dest.Vram(), vram, metalTextureJobs);
+        foreach (var r in rescueScenes) r.Package.CopyTo(dest.Bytes, r.Offset);
         foreach (var particle in particleJobs)
             UniversalParticleDependencies.AppendTexture(dest, particle.Type, particle.Package);
         foreach (var key in particleDependencies.Keys.ToArray())
@@ -606,6 +659,19 @@ public static class UniversalMobyComposer
         for (int i = 0; i < placements.Count; i++)
         {
             var p = placements[i]; var t = templates[i];
+            if (p.PropertyWordOverrides != null)
+            {
+                byte[] props = t.Properties.ToArray();
+                foreach (var (o, v) in p.PropertyWordOverrides)
+                {
+                    if (o < 0 || (o & 3) != 0 || o + 4 > props.Length || t.InternalPointers.Any(x => x.Offset == o))
+                        throw new InvalidDataException("A property override lies outside the object's own data.");
+                    BinaryPrimitives.WriteInt32LittleEndian(props.AsSpan(o), v);
+                }
+                t = t with { Properties = props };
+            }
+            if (t.ClassId == NativeDragonRescueCamera.StatueClass && p.SpecialId == null)
+                t = t with { Properties = NativeDragonRescueCamera.Move(t.Properties.ToArray(), source(p.SourceLevelKey).Data.Row(p.SourceRowIndex), p.X, p.Y, p.Z, p.Yaw ?? t.Row[0x46]) };
             byte[] r = t.Row.ToArray();
             BinaryPrimitives.WriteInt32LittleEndian(r.AsSpan(0x0C), p.X);
             BinaryPrimitives.WriteInt32LittleEndian(r.AsSpan(0x10), p.Y);
@@ -759,6 +825,7 @@ public static class UniversalMobyComposer
         var highValueGemClasses = specialClasses.Values.Where(a => a.Behavior == UniversalSpecialBehavior.HighValueGem).Select(a => a.ClassId).Order().ToList();
         var crashBoxClasses = specialClasses.Values.Where(a => a.Behavior == UniversalSpecialBehavior.CrashBox).Select(a => a.ClassId).Order().ToList();
         var crashEnemyClasses = specialClasses.Values.Where(a => a.Behavior == UniversalSpecialBehavior.CrashEnemy).Select(a => a.ClassId).Order().ToList();
+        var crashPlayerClasses = specialClasses.Values.Where(a => a.Behavior == UniversalSpecialBehavior.CrashPlayer).Select(a => a.ClassId).Order().ToList();
         // Crash enemies call the same engine routines and particles as the boxes.
         if (crashBoxClasses.Count > 0 || crashEnemyClasses.Count > 0) UniversalCrashBoxes.RequireDestination(destOverlay, exe);
         if (highValueGemClasses.Count > 0)
@@ -766,18 +833,24 @@ public static class UniversalMobyComposer
             UniversalHighValueGems.RequireNativeOwner(exe);
             UniversalHighValueGems.RequireDestinationParticleOwner(destOverlay);
         }
-        if (byBehaviorSource.Count > 0 || eggClasses.Count > 0 || signClasses.Count > 0 || highValueGemClasses.Count > 0 || crashBoxClasses.Count > 0 || crashEnemyClasses.Count > 0)
+        if (releasedNativeClasses is { Count: > 0 } && !releasedNativeClasses.All(c => imports.Any(i => i.BehaviorImported && i.DestinationClassId == c &&
+                string.Equals(i.SourceLevelKey, destination.Key, StringComparison.OrdinalIgnoreCase))))
+            throw new InvalidDataException("A released class has no imported behavior to run it.");
+        if (byBehaviorSource.Count > 0 || eggClasses.Count > 0 || signClasses.Count > 0 || highValueGemClasses.Count > 0 || crashBoxClasses.Count > 0 || crashEnemyClasses.Count > 0 || crashPlayerClasses.Count > 0)
         {
             uint baseAddress = checked(((copyBuffer + 7) & ~7u) + (uint)magicPairBundlePaddingBytes);
             var classMaps = classes.GroupBy(k => k.Key.Source).ToDictionary(g => g.Key,
                 g => (IReadOnlyDictionary<int, int>)g.ToDictionary(k => k.Key.Class, k => k.Value.DestinationClass));
             var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps, remapSaveRows, nativeExecutable: exe,
-                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles,magicPair:magicPair,darkLanternContexts:darkLanternContexts,darkProjectileParticles:darkProjectileParticles,magicChain:magicChain,highCavesSpellParticles:highCavesSpellParticles,magicOriginal:magicOriginal,highCavesWorld:highCavesWorld,greenDruidWorld:greenWorld,greenDruidLinkedWorld:linkedWorld,crashBoxClasses:crashBoxClasses,crashEnemyClasses:crashEnemyClasses);
-            uint newCopy = (uint)((baseAddress + bundle.Code.Length + 15) & ~15);
+                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles,magicPair:magicPair,darkLanternContexts:darkLanternContexts,darkProjectileParticles:darkProjectileParticles,magicChain:magicChain,highCavesSpellParticles:highCavesSpellParticles,magicOriginal:magicOriginal,highCavesWorld:highCavesWorld,greenDruidWorld:greenWorld,greenDruidLinkedWorld:linkedWorld,crashBoxClasses:crashBoxClasses,crashEnemyClasses:crashEnemyClasses,crashPlayerClasses:crashPlayerClasses);
+            int releaseBytes = releasedNativeClasses is { Count: > 0 } ? UniversalNativeRelease.Bytes(releasedNativeClasses.Count) : 0;
+            uint releaseStub = (uint)((baseAddress + bundle.Code.Length + 3) & ~3);
+            uint newCopy = (uint)((releaseStub + releaseBytes + 15) & ~15);
             int keep = (int)(copyBuffer - UniversalOverlay.Base);
             byte[] ov = new byte[UniversalLevelData.Align((int)(newCopy - UniversalOverlay.Base), 0x800)];
             destinationOverlay.AsSpan(0, keep).CopyTo(ov);
             bundle.Code.CopyTo(ov, (int)(baseAddress - UniversalOverlay.Base));
+            if (releaseBytes > 0) UniversalNativeRelease.Install(ov, destOverlay, releasedNativeClasses!, releaseStub);
             UniversalDestinationGemCollectionAdapter.Apply(ov, bundle.DestinationGemCollectionCalls);
             UniversalDestinationGemColourAdapter.Apply(ov, bundle.DestinationGemColourLoads);
             destinationColourLoads = bundle.DestinationGemColourLoads;
@@ -903,6 +976,10 @@ public static class UniversalMobyComposer
             int originalStatue = original.Single(r => r.ClassId == 250).Root, statue = dest.Registrations().Single(r => r.ClassId == 250).Root;
             var nativeTail = original.Where(r => r.Root > originalStatue).Select(r => r.ClassId).ToHashSet();
             modelGrowth += dest.MoveModelsBefore(250, dest.Registrations().Where(r => r.Root > statue && !nativeTail.Contains(r.ClassId)).Select(r => r.ClassId).ToArray());
+            // A rebuilt homeworld may hold too few models to fill the area: the rest is reserved as empty room there.
+            if (persistentNativePrefixRows != null &&
+                UniversalNativeDragonRescuePrefix.Measure(destination.Key, destination.DisplayName, originalDestination.Data, dest, exe) is { Deficit: > 0 } still)
+                modelGrowth += dest.ReserveBefore(250, UniversalLevelData.Align(still.Deficit, 0x800));
         }
         UniversalNativeDragonRescuePrefix.RequireSafe(destination.Key,destination.DisplayName,originalDestination.Data,dest,exe);
         uint limit = NormalBufferFloor - RamSafetyMargin;
@@ -926,7 +1003,9 @@ public static class UniversalMobyComposer
                 $"{destination.DisplayName} does not have enough game RAM for these objects: they need {(finalEnd - originalEnd) / 1024.0:0.0} KB " +
                 $"but the level has {Math.Max(0, (int)(limit - originalEnd)) / 1024.0:0.0} KB available." +
                 (playerAnimationImports.Sum(p => p.ModelGrowthBytes) > 0
-                    ? $" This includes {playerAnimationImports.Sum(p => p.ModelGrowthBytes) / 1024.0:0.0} KB for Spyro's reactions to these enemies." : ""), ram);
+                    ? $" This includes {playerAnimationImports.Sum(p => p.ModelGrowthBytes) / 1024.0:0.0} KB for Spyro's reactions to these enemies." : "") +
+                (specialClasses.Values.Any(a => a.Behavior == UniversalSpecialBehavior.CrashPlayer)
+                    ? $" Playing it as Crash takes about {specialClasses.Values.Where(a => a.Behavior == UniversalSpecialBehavior.CrashPlayer).Sum(a => UniversalLevelData.Align(a.Package.Length, 0x800)) / 1024.0:0} KB of that: untick it under Play as Crash, or clear the level with Start Blank to make room." : ""), ram);
         int arena = ArenaSlots(dest);
         if (arena < MinimumDynamicSlots)
             throw new InvalidDataException($"Only {arena} dynamic object slots would remain in {destination.DisplayName}; at least {MinimumDynamicSlots} are required.");
@@ -955,6 +1034,8 @@ public static class UniversalMobyComposer
                 exe, collectionStarContinuation);
         foreach (var particle in particleDependencies.Values.Where(p => p.Status == "dependency-unverified"))
             warnings.Add($"Particle 0x{particle.TypeId:X2} from {particle.SourceLevelKey}: {particle.Detail}");
+        // Playable Crash: Spyro's drawing routine is hooked so he stays hidden in cutscenes too (inert elsewhere).
+        if (specialClasses.Values.Any(a => a.Behavior == UniversalSpecialBehavior.CrashPlayer)) UniversalCrashPlayer.PatchExe(exe);
         return new(destination.Key, imports, mappedRows, ram, arena, freeBefore - vram.FreeBytes, behavior, warnings,
             treasure, overlay, dest.Bytes, exe) { ArenaSlotsAdded = slotsAdded, DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), CanonicalGemCollectionProofs = collectionStars, FreshParticleBinding = freshParticleBinding, NativeLineParticleProofs=nativeLine77==null?[]:[nativeLine77.Proof], FlightChestParticleProofs = flightParticleProofs.Values.ToArray(), FlightGateParticleProofs = gateParticleProofs.Values.ToArray(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), RestoredIndexedObjectLinks = templates.Sum(t => t.ImportedRowIndices.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports, WhirlwindSoundImports = whirlwindSounds.Values.ToArray(), MetalTextureBindings = metalBindings, DestinationGemCollectionCalls = destinationGemCalls, DestinationGemCollectionExtraBytes = destinationGemBytes, DestinationGemColourLoads = destinationColourLoads, DestinationGemColourExtraBytes = destinationColourBytes, NativeParticleNoOpProofs = particleNoOpProofs };
     }

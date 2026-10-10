@@ -235,6 +235,7 @@ public sealed partial class MainWindow
         finally { _syncingFreeFlight = false; }
         SyncFreeFlightLevelBoxes();
         RefreshFreeFlightSettingsAvailability();
+        RefreshCrashPlayerSettings();
     }
 
     internal void RevertFreeFlightSettings()

@@ -252,6 +252,8 @@ ADDITIONAL_CORE_CASES = (
      ["--behavior-free"]),
     ("UiSmoke", "FREE_FLIGHT_UI_OK",
      ["--free-flight-ui-only"]),
+    ("UiSmoke", "PLAY_AS_CRASH_UI_OK checks=",
+     ["--play-as-crash-ui-only"]),
     ("UiSmoke", "LEVEL_PICKER_AUTOMATION_OK",
      ["--level-picker-automation-only"]),
     ("UiSmoke", "AUTHORED_MESH_CHECKS_OK",

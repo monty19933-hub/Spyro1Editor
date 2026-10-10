@@ -40,7 +40,11 @@ public sealed class CrashModel
                 return new Delta(s >> 25 & 0x7F, s >> 9 & 0xFF, s >> 17 & 0xFF, s >> 6 & 7, s & 7, s >> 3 & 7);
             }).ToArray();
         uint[] words = Enumerable.Range(0, structs).Select(i => BinaryPrimitives.ReadUInt32LittleEndian(items[1].AsSpan(4 * i))).ToArray();
-        Triangles = Convert(words, _deltas != null ? SpecialVertexCount : 0);
+        // Item 4: animated textures (Crash's blinking eyes). A triangle with bit 8 set names one of these (from 0)
+        // instead of a texture; each word's low 12 bits are the texture (from 1) of its first frame.
+        uint[] animated = items.Count > 4 ? Enumerable.Range(0, I(0x48)).Where(k => 4 * k + 4 <= items[4].Length)
+            .Select(k => BinaryPrimitives.ReadUInt32LittleEndian(items[4].AsSpan(4 * k))).ToArray() : [];
+        Triangles = Convert(words, _deltas != null ? SpecialVertexCount : 0, animated);
     }
 
     public (int X, int Y, int Z) Scale { get; }
@@ -55,14 +59,17 @@ public sealed class CrashModel
 
     private sealed record Item(bool IsColour, int C1, int C2, int Tex, int Col, int Key, bool Duplicate, int Sub, int Type);
 
-    private static IReadOnlyList<Triangle> Convert(uint[] words, int special)
+    private static IReadOnlyList<Triangle> Convert(uint[] words, int special, IReadOnlyList<uint> animated)
     {
         List<Item> items = [];
         foreach (uint w in words)
         {
             if (w == 0xFFFFFFFF) break;
+            int tex = (int)(w & 0xFF);
+            // An animated texture becomes the texture of its first frame (Spyro objects have no texture animation).
+            if ((w >> 8 & 1) != 0) tex = tex < animated.Count ? (int)(animated[tex] & 0xFFF) : 0;
             items.Add((w & 0xFFFF0000) != 0
-                ? new Item(false, 0, 0, (int)(w & 0xFF), (int)(w >> 9 & 0x7F), (int)(w >> 16 & 0xFF), (w >> 26 & 1) != 0, (int)(w >> 28 & 3), (int)(w >> 30 & 3))
+                ? new Item(false, 0, 0, tex, (int)(w >> 9 & 0x7F), (int)(w >> 16 & 0xFF), (w >> 26 & 1) != 0, (int)(w >> 28 & 3), (int)(w >> 30 & 3))
                 : new Item(true, (int)(w >> 2 & 0x7F), (int)(w >> 9 & 0x7F), 0, 0, 0, false, 0, 0));
         }
         Dictionary<int, int> keys = []; List<int> vtx = []; int v = -special;

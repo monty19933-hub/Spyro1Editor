@@ -4,7 +4,9 @@ namespace Spyro.Editor.Core.Music;
 
 public sealed record MusicTrackEntry(int TrackId, string DisplayName, bool IsSelectable)
 {
-    public override string ToString() => $"{DisplayName} (Track {TrackId:00})";
+    /// <summary>For a song brought in from another game: the unused XA slot the game plays it from.</summary>
+    public int? CustomSlot { get; init; }
+    public override string ToString() => CustomSlot == null ? $"{DisplayName} (Track {TrackId:00})" : DisplayName;
 }
 
 public static class MusicTrackCatalog
@@ -81,6 +83,29 @@ public static class MusicTrackCatalog
 
     public static MusicTrackEntry? Find(int trackId) =>
         trackId >= 0 && trackId < Tracks.Count ? Tracks[trackId] : null;
+
+    /// <summary>The two XA slots no level plays; songs from other games are written into them.</summary>
+    public const int UnusedSlotA = 30, UnusedSlotB = 35;
+
+    /// <summary>Songs from other games, each in its own unused slot so a game can use both: Crash Bandicoot: Warped's
+    /// (rendered from the user's Crash disc at Create BIN) and Spyro: Year of the Dragon's (copied from the user's disc).</summary>
+    public static IReadOnlyList<MusicTrackEntry> CustomTracks { get; } =
+    [
+        .. Crash.CrashMusic.Songs.Select(song => new MusicTrackEntry(song.TrackId, song.Name + " (Crash Bandicoot: Warped)", true) { CustomSlot = UnusedSlotA }),
+        .. YearOfTheDragonDisc.LevelSongs.Select(song => new MusicTrackEntry(song.TrackId, song.Name + " (Spyro: Year of the Dragon)", true) { CustomSlot = UnusedSlotB }),
+    ];
+
+    /// <summary>True for a song copied from Spyro: Year of the Dragon.</summary>
+    public static bool IsYearOfTheDragon(int trackId) => YearOfTheDragonDisc.LevelSongs.Any(song => song.TrackId == trackId);
+
+    /// <summary>What a level can be given: Spyro's own tracks, then the songs from other games.</summary>
+    public static IReadOnlyList<MusicTrackEntry> PickerTracks { get; } = [.. SelectableTracks, .. CustomTracks];
+
+    /// <summary>A built-in track or a song from another game.</summary>
+    public static MusicTrackEntry? FindAny(int trackId) =>
+        Find(trackId) ?? CustomTracks.FirstOrDefault(track => track.TrackId == trackId);
+
+    public static bool IsCustom(int trackId) => CustomTracks.Any(track => track.TrackId == trackId);
 
     public static int GetLevelIndex(LevelDefinition level)
     {

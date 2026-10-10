@@ -27,12 +27,12 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
     public byte[] CopyOverlay()=>_overlay.ToArray();
 
     public static async Task<NativeFreshMainCompilation> CaptureAsync(string originalUSA, SceneDocument document,
-        string scratchBaselinePath, CancellationToken token=default, NativeFreeFlightCompositionPlan? flight=null)
+        string scratchBaselinePath, CancellationToken token=default, NativeFreeFlightCompositionPlan? flight=null, NativeHubPortals? portals=null)
     {
         ExportArtifactTransaction.RequireSourceSeparation(originalUSA,null,scratchBaselinePath);
         NativeAuthoredSpawn.RequireSupported(document);
         var materials=document.Surfaces.Where(s=>s.Material!=null).Select(s=>s.Material!).Distinct().ToArray();
-        byte[] mesh=NativeAuthoredMesh.CompileWithSky(document,materials,NativeAuthoredMesh.CaptureSky(originalUSA,document));
+        byte[] mesh=NativeAuthoredMesh.CompileWithSky(document,materials,NativeAuthoredMesh.CaptureSky(originalUSA,document),portals?.Triggers());
         // Source-issued bootstrap captures the complete player, companion, native audio and zero-actor scene.
         // Its generated surface is discarded in full; final geometry comes only from NativeAuthoredMesh.
         // The throwaway bootstrap floor is fixed; it must not constrain the authored spawn.
@@ -74,8 +74,10 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
             // The upload is the 512 KB VRAM image followed by the sound bank; pictures go into the VRAM image.
             if(images.Count>0)NativeTerrainTextureImageWriter.Write(upload.AsSpan(0,0x80000),metadata,images).CopyTo(upload,0);
         }
-        byte[] data=[..metadata,..mesh,..oldData.AsSpan(oldLayout.Portal.Offset).ToArray()];
-        if(data.Length>NativeAuthoredMesh.MaxSurfaceBytes+0x8000)throw new InvalidDataException("Authored native data exceeds the bounded main-editor allocation.");
+        // A rebuilt homeworld's doorways replace the empty portal table (count 0).
+        byte[] portalSection=portals?.Section()??oldData.AsSpan(oldLayout.Portal.Offset,oldLayout.Portal.ByteLength).ToArray();
+        byte[] data=[..metadata,..mesh,..portalSection,..oldData.AsSpan(oldLayout.Portal.Offset+oldLayout.Portal.ByteLength).ToArray()];
+        if(data.Length>NativeAuthoredMesh.MaxSurfaceBytes+0x8000+portalSection.Length)throw new InvalidDataException("Authored native data exceeds the bounded main-editor allocation.");
         var body=new UniversalLevelData(issued.DiscPlan.CopyBody());
         var dataFile=body.Subfiles()[1];int growth=Math.Max(0,UniversalLevelData.Align(data.Length,0x800)-dataFile.Length);
         if(growth>0)body.GrowSubfile(1,growth);
@@ -132,7 +134,8 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
             key => string.Equals(key, Target.Key, StringComparison.OrdinalIgnoreCase)
                 ? (Target, new UniversalLevelData(prepared), new UniversalOverlay(_overlay, UniversalExeBindings.Read(actualExecutable,65)))
                 : donors.Get(key), donors.SharedClasses,
-            UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,sharedModelPackage: donors.SharedModelPackage, playerAnimationSource: donors.PlayerAnimations,nativeOriginalExecutable:donors.Disc.Exe);
+            UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,sharedModelPackage: donors.SharedModelPackage, playerAnimationSource: donors.PlayerAnimations,nativeOriginalExecutable:donors.Disc.Exe,
+            dependencyClasses:UniversalLiquidSplashes.Dependencies(UniversalLiquidSplashes.Liquids(Document.Surfaces.Select(s=>s.Kind)),null,k=>donors.Get(k).Data));
         RewardFallbacks.RequireInstalled(composed.LevelData);
         return composed;
     }
@@ -154,7 +157,8 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         NativeFreshTreasureTarget.RequireZeroBaseline(donors.Disc.Exe,stagedExe);
         if(startLevelId is {} chosen) NativeClearedRetailBinding.ApplyNewGameStart(donors.Disc.Exe,stagedExe,chosen);
         else NativeFreshNewGameEntry.Apply(donors.Disc.Exe,stagedExe,startInAuthoredLevel);
-        var compose=placements.Count == 0 ? null : ComposeWithExecutable(donors,placements,stagedExe,UniversalMobyExport.SpecialProvider(japanese,donors,crash));
+        bool liquids=UniversalLiquidSplashes.Liquids(Document.Surfaces.Select(s=>s.Kind)).Count>0;
+        var compose=placements.Count == 0 && !liquids ? null : ComposeWithExecutable(donors,placements,stagedExe,UniversalMobyExport.SpecialProvider(japanese,donors,crash));
         Dictionary<int,IReadOnlyList<NativePortalReturnClass>> returnClasses=retailReturnClasses?.ToDictionary(p=>p.Key,p=>p.Value)??[];
         returnClasses[65]=compose==null?[]:NativePortalReturnClass.Capture(compose.Classes);
         byte[] levelData=compose?.LevelData ?? _body.ToArray(), overlayData=compose?.Overlay ?? _overlay.ToArray();

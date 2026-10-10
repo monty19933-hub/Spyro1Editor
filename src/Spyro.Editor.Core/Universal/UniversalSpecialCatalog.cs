@@ -16,7 +16,7 @@ public static class UniversalSpecialCatalog
 
     public static bool RequiresJapaneseSource(string? id) => id != null && !UniversalHighValueGems.IsId(id) && !RequiresCrashSource(id);
 
-    public static bool RequiresCrashSource(string? id) => UniversalCrashBoxes.IsId(id) || UniversalCrashEnemies.IsId(id);
+    public static bool RequiresCrashSource(string? id) => UniversalCrashBoxes.IsId(id) || UniversalCrashEnemies.IsId(id) || UniversalCrashPlayer.IsId(id);
 
     public static bool NeedsRenderHook(string? id) => id == UniversalDragonflyEggs.SignId;
 

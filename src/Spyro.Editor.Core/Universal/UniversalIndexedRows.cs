@@ -33,6 +33,7 @@ public static class UniversalIndexedRows
         template = UniversalHighCavesTornadoPlacement.Capture(data, overlay, template);
         template = UniversalDarkPassageLanternGroups.Capture(data,overlay,template);
         if (template.ClassId == 0x12C) return UniversalWhirlwindIndexedRows.Capture(data, overlay, template);
+        if (template.ClassId == UniversalBalloonistRows.BalloonistClass) return UniversalBalloonistRows.Capture(data, template);
         template = UniversalMagicDruidOriginalRows.IsSupported(template) ? UniversalMagicDruidOriginalRows.CaptureSource(data,overlay,template) : UniversalMagicDruidChainResources.IsChain(template) ? UniversalMagicDruidChainResources.CaptureSource(data,overlay,template) : UniversalMagicPairCertificate.IsPair(template) ? UniversalMagicPairCertificate.CaptureSource(data,overlay,template) : UniversalMagicCraftersDruidIndexedRows.Capture(data, overlay, template);
         if (!string.Equals(template.SourceLevelKey, "gnorccove", StringComparison.OrdinalIgnoreCase) || !IsGnorcIndexedClass(template.ClassId))
             return template;

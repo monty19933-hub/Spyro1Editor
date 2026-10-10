@@ -56,6 +56,9 @@ public static class NativeAuthoredSpawn
             floor=Clip(floor,q=>p.Z-PlayerRadius-(z0+zx*q.X+zy*q.Y));
             floor=Clip(floor,q=>z0+zx*q.X+zy*q.Y-(p.Z-128));
             if (floor.Count<3) return;
+            // A face clear of the square covers none of it; skipping it keeps its edges from splitting the
+            // uncovered fragments (large levels would otherwise exceed the fragment limit).
+            if (floor.Max(q=>q.X)<=-r || floor.Min(q=>q.X)>=r || floor.Max(q=>q.Y)<=-r || floor.Min(q=>q.Y)>=r) return;
             List<List<Point>> next=[];
             foreach (var fragment in uncovered)
             {

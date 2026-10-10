@@ -1102,7 +1102,8 @@ public sealed partial class MainWindow
         if (!_releaseMode) panel.Children.Add(BuildModernDisclosure("Starting Abilities", new StackPanel
         {
             Name = "StartingAbilitiesPanel", Spacing = 8,
-            Children = { BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), true) }
+            Children = { BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), true),
+                BuildModernDisclosure("Play as Crash", BuildCrashPlayerSettingsPanel(), false) }
         }, false));
         else
         {
@@ -1110,6 +1111,9 @@ public sealed partial class MainWindow
             var flight = BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), true);
             flight.Name = "FlyAnywhereSection";
             panel.Children.Add(flight);
+            var crash = BuildModernDisclosure("Play as Crash", BuildCrashPlayerSettingsPanel(), false);
+            crash.Name = "PlayAsCrashSection";
+            panel.Children.Add(crash);
         }
         _homeworldTextGroup = BuildModernDisclosure("Portals & Return Home", BuildPortalControlPanel(), false);
         panel.Children.Add(_homeworldTextGroup);

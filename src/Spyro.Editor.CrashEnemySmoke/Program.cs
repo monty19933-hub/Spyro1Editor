@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using Spyro.Editor.Core.Crash;
 using Spyro.Editor.Core.Levels;
+using Spyro.Editor.Core.Music;
 using Spyro.Editor.Core.Universal;
 
 // Crash enemies (frog, knight, wizard): free checks (behaviour assembles, class IDs, catalog, vertex encoding),
@@ -104,6 +105,56 @@ for (int n = 0; n < 200; n++)
             Math.Abs(z.First.Z - z.Second.Item3) <= Math.Max(4, 1 << shift)), $"vertex round trip (shift {shift})");
     }
 }
+// Playable Crash: the controller assembles for his body and legs only; the placements that add him; his levels.
+Check(UniversalBehaviorBundleBuilder.Assemble([UniversalSpecialBehaviors.CrashPlayerUpdate([UniversalCrashPlayer.BodyClass, UniversalCrashPlayer.LegsClass], "crash_player_upd")], 0x80090000).Code.Length > 0,
+    "playable Crash's controller assembles");
+Check(Refuses(() => UniversalSpecialBehaviors.CrashPlayerUpdate([UniversalCrashPlayer.BodyClass], "bad")), "Crash without his legs refused");
+var plain = new List<UniversalMobyPlacement> { new("darkhollow", 3, 1, 2, 3) };
+var withCrash = UniversalCrashPlayer.WithPlayer(plain);
+Check(withCrash.Count == 3 && withCrash[1].SpecialId == UniversalCrashPlayer.Id && withCrash[2].SpecialId == UniversalCrashPlayer.LegsId &&
+    withCrash.All(p => p.PersistentSlot == null), "Crash joins a level's placements");
+Check(ReferenceEquals(UniversalCrashPlayer.WithPlayer(withCrash), withCrash), "Crash is added once");
+var ledgered = new List<UniversalMobyPlacement> { new("darkhollow", 3, 1, 2, 3, EditorId: "a", PersistentSlot: 0), new("", -1, 0, 0, 0, EditorId: "b", PersistentSlot: 1, Retired: true) };
+var ledgeredCrash = UniversalCrashPlayer.WithPlayer(ledgered);
+Check(ledgeredCrash[2].PersistentSlot == 2 && ledgeredCrash[3].PersistentSlot == 3 && ledgeredCrash.Select(p => p.EditorId).Distinct().Count() == 4,
+    "Crash takes the next two save identities after a ledger");
+Check(UniversalCrashPlayer.IsPlayableLevel(10) && UniversalCrashPlayer.IsPlayableLevel(12) && UniversalCrashPlayer.IsPlayableLevel(64) &&
+    !UniversalCrashPlayer.IsPlayableLevel(15) && !UniversalCrashPlayer.IsPlayableLevel(55) && !UniversalCrashPlayer.IsPlayableLevel(65), "Crash plays every normal level but the flight levels");
+Check(UniversalSpecialCatalog.RequiresCrashSource(UniversalCrashPlayer.Id) && !UniversalSpecialCatalog.RequiresJapaneseSource(UniversalCrashPlayer.LegsId), "Crash needs the Crash disc only");
+Check(Refuses(() => UniversalCrashPlayer.PatchExe(new byte[0x66000])), "the hide-Spyro hook refuses an unknown executable");
+// Crash 3 music in Spyro's unused XA slots: the catalog keeps Spyro's own 48/46 tracks and adds the songs apart.
+Check(MusicTrackCatalog.Tracks.Count == 48 && MusicTrackCatalog.SelectableTracks.Count == 46, "Spyro's own track lists unchanged");
+Check(MusicTrackCatalog.CustomTracks.Count == CrashMusic.Songs.Count + YearOfTheDragonDisc.LevelSongs.Count && MusicTrackCatalog.CustomTracks.All(t => t.IsSelectable && t.TrackId >= 100),
+    "each Crash and Year of the Dragon song is a selectable custom track outside the XA ids");
+Check(MusicTrackCatalog.FindAny(YearOfTheDragonDisc.LostFleet.TrackId)?.CustomSlot == MusicTrackCatalog.UnusedSlotB && MusicTrackCatalog.IsYearOfTheDragon(YearOfTheDragonDisc.LostFleet.TrackId) &&
+    !MusicTrackCatalog.IsYearOfTheDragon(CrashMusic.ToadVillage.TrackId), "Lost Fleet plays from unused slot B, apart from Toad Village");
+Check(Refuses(() => CustomMusicSlots.Encode(MusicTrackCatalog.FindAny(YearOfTheDragonDisc.LostFleet.TrackId)!, null, "/nonexistent.bin")),
+    "a Year of the Dragon song without its disc is refused");
+Check(MusicTrackCatalog.FindAny(CrashMusic.ToadVillage.TrackId)?.CustomSlot == MusicTrackCatalog.UnusedSlotA && MusicTrackCatalog.Find(CrashMusic.ToadVillage.TrackId) == null,
+    "Toad Village plays from unused slot A and is not a built-in track");
+Check(MusicTrackCatalog.PickerTracks.Count == 46 + MusicTrackCatalog.CustomTracks.Count, "the picker offers Spyro's tracks and the Crash songs");
+Check(MusicTrackCatalog.CustomTracks.Select(t => t.CustomSlot).Distinct().Count() == MusicTrackCatalog.CustomTracks.Count, "one slot per song");
+{
+    // XA round trip on a chord with a sweep: the encoder must stay well above 4-bit ADPCM's usual ~30 dB.
+    short[] pcm = new short[2 * XaAudio.FramesPerSector * 4];
+    for (int i = 0; i < pcm.Length / 2; i++)
+    {
+        double t = i / (double)XaAudio.SampleRate;
+        pcm[2 * i] = (short)(9000 * Math.Sin(2 * Math.PI * 220 * t) + 5000 * Math.Sin(2 * Math.PI * (440 + 2000 * t) * t));
+        pcm[2 * i + 1] = (short)(8000 * Math.Sin(2 * Math.PI * 330 * t) + 3000 * Math.Sin(2 * Math.PI * 1250 * t));
+    }
+    var el = new XaAudio.ChannelState(); var er = el; var dl = el; var dr = el;
+    double signal = 0, error = 0; byte[] sector = new byte[XaAudio.SectorDataBytes]; short[] back = new short[2 * XaAudio.FramesPerSector];
+    for (int s = 0; s < 4; s++)
+    {
+        var slice = pcm.AsSpan(2 * s * XaAudio.FramesPerSector, 2 * XaAudio.FramesPerSector);
+        XaAudio.EncodeSector(slice, ref el, ref er, sector);
+        XaAudio.DecodeSector(sector, ref dl, ref dr, back);
+        for (int i = 0; i < back.Length; i++) { signal += (double)slice[i] * slice[i]; error += (double)(back[i] - slice[i]) * (back[i] - slice[i]); }
+    }
+    Check(10 * Math.Log10(signal / error) > 35, $"XA ADPCM round trip ({10 * Math.Log10(signal / error):0.0} dB)");
+    Check(el.Old == dl.Old && er.Older == dr.Older, "encoder and decoder agree on the channel history");
+}
 if (args.Length == 0) { Console.WriteLine($"CRASH_ENEMY_FREE_OK checks={checks}"); return; }
 
 // ---- Source checks: USA.bin catalog-workspace Crash.bin.
@@ -148,6 +199,29 @@ foreach (var (asset, enemy) in assets.SelectMany(a => new[] { a }.Concat(a.Compa
         Check(dsc.IsSupportedOneShot && dsc.Pitch == 0x400 && dsc.Sample.CopyBytes().SequenceEqual(nsf.Sound(enemy.Sounds[i])), $"{asset.Id}: sound {i} is Crash's {enemy.Sounds[i]}");
     }
 }
+// Playable Crash: body and legs from Crash's own model, drawn only, sharing one texture image.
+var player = UniversalCrashPlayer.Assets(library, disc2);
+Check(player.Count == 2 && player[0].ClassId == UniversalCrashPlayer.BodyClass && player[1].ClassId == UniversalCrashPlayer.LegsClass &&
+    player.All(a => a.Behavior == UniversalSpecialBehavior.CrashPlayer) && ReferenceEquals(player[0].SourceVram, player[1].SourceVram), "playable Crash: body and legs, one texture image");
+var toad = disc2.Level(UniversalCrashEnemies.ToadVillageFile, UniversalCrashEnemies.ToadVillageSha256);
+var crashModel = new CrashModel(toad.Entry(UniversalCrashPlayer.ModelName).Items);
+int bodyVertices = Decoded.Read(player[0].Package).Vertices, legVertices = Decoded.Read(player[1].Package).Vertices;
+Check(bodyVertices + legVertices >= crashModel.VertexCount - crashModel.SpecialVertexCount && bodyVertices <= 255 && legVertices <= 255,
+    $"Crash's {crashModel.VertexCount - crashModel.SpecialVertexCount} vertices as {bodyVertices} + {legVertices}");
+foreach (var a in player)
+{
+    var m = Decoded.Read(a.Package);
+    Check(BinaryPrimitives.ReadUInt32LittleEndian(a.Package.AsSpan(0x14)) == 0, $"{a.Id}: no collision (Spyro keeps his own)");
+    Check(m.FacesValid && m.MaxStored <= 1000 && m.FarFaces == m.NearFaces, $"{a.Id}: faces valid, coordinates within the game's range");
+    Check(m.Frames.Select(f => f.Count).SequenceEqual(UniversalCrashPlayer.Animations.Select(an => (toad.Entry(an.Name).Items.Count + an.Step - 1) / an.Step)),
+        $"{a.Id}: every kept frame of each animation");
+}
+Check(player[0].Package.AsSpan(4, 16).ToArray().Select((b, i) => i < UniversalCrashPlayer.Sounds.Length ? b == i : b == 0xFF).All(x => x) &&
+    player[1].Package.AsSpan(4, 16).ToArray().All(b => b == 0xFF), "the body carries Crash's sounds, the legs none");
+byte[] hooked = library.Disc.Exe.ToArray(); UniversalCrashPlayer.PatchExe(hooked);
+byte[] hookedAgain = hooked.ToArray(); UniversalCrashPlayer.PatchExe(hookedAgain);
+int changedBytes = Enumerable.Range(0, hooked.Length).Count(i => hooked[i] != library.Disc.Exe[i]);
+Check(changedBytes is > 0 and <= 48 && hookedAgain.AsSpan().SequenceEqual(hooked), $"the hide-Spyro hook installs once ({changedBytes} bytes)");
 // Class IDs: unused by every retail level's registrations and rows, the shared model table and any small
 // immediate in the executable and every overlay (the boxes' rule).
 HashSet<int> used = [.. library.SharedClasses];
@@ -171,7 +245,44 @@ foreach (var level in catalog2.Levels.Where(l => l.SourceWadEntry > 0))
 }
 Check(levels >= 35, $"every retail level scanned ({levels})");
 Check(all.All(c => !used.Contains(c)), "enemy classes unused by retail code and data: " + string.Join(",", all.Where(used.Contains).Select(c => $"0x{c:X3}")));
+Check(!used.Contains(UniversalCrashPlayer.BodyClass) && !used.Contains(UniversalCrashPlayer.LegsClass), "playable Crash's classes unused by retail code and data");
 UniversalCrashBoxes.RequireDestination(library.Get("darkhollow").Overlay, library.Disc.Exe);
+// Toad Village into a copy of the USA disc's slot A: laid out like Spyro's own tracks, decoding back to the render.
+{
+    string scratch = Path.Combine(Path.GetTempPath(), "spyro-crash-music-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(scratch);
+    try
+    {
+        string image = Path.Combine(scratch, "music.bin");
+        File.Copy(args[0], image);
+        var track = MusicTrackCatalog.FindAny(CrashMusic.ToadVillage.TrackId)!;
+        var (instruments, sequence) = CrashMusic.Load(disc2, CrashMusic.ToadVillage);
+        Check(Math.Abs(CrashMusic.PassSeconds(sequence) - 103.38) < 0.1 && instruments.Programs.Count == 16, "Toad Village: 103 s per pass, 16 instruments");
+        var song = CustomMusicSlots.Install(image, [track], disc2).Single();
+        Check(song.Slot == 30 && song.Passes == 2 && song.Sectors.Length == 3876 && song.EndMark == 31008, $"two passes in slot 30 ({song.Sectors.Length} sectors, mark {song.EndMark})");
+        int lba = 147184, eof = -1, audio = 0, badEdc = 0;
+        var dl = new XaAudio.ChannelState(); var dr = dl;
+        List<short> decoded = []; short[] buffer = new short[2 * XaAudio.FramesPerSector]; byte[] raw = new byte[2352];
+        using (var stream = File.OpenRead(image))
+            for (int k = 6; ; k += 8)
+            {
+                stream.Seek((lba + k) * 2352L, SeekOrigin.Begin); stream.ReadExactly(raw);
+                if ((raw[18] & 4) == 0) break;
+                audio++; if (raw[18] == 0xE4) eof = k;
+                if (BinaryPrimitives.ReadUInt32LittleEndian(raw.AsSpan(2348)) != XaAudio.Form2Edc(raw)) badEdc++;
+                XaAudio.DecodeSector(raw.AsSpan(24), ref dl, ref dr, buffer); decoded.AddRange(buffer);
+            }
+        Check(audio == 3876 && eof == 31006 && badEdc == 0, $"audio sectors, end-of-file flag and EDCs on disc ({audio}, {eof}, {badEdc})");
+        byte[] exe = UniversalDiscImage.Read(image).Exe.ToArray();
+        Check(BinaryPrimitives.ReadInt32LittleEndian(exe.AsSpan(CustomMusicSlots.EndTableOffset(exe.ToArray(), image) + 4 * 30)) == 31008, "slot 30's loop mark in the image's executable");
+        short[] reference = CrashMusic.RenderLoop(instruments, sequence, XaAudio.SampleRate, 2, 1938 * XaAudio.FramesPerSector);
+        double signal = 0, error = 0;
+        for (int i = 0; i < reference.Length; i++) { signal += (double)reference[i] * reference[i]; error += (double)(decoded[i] - reference[i]) * (decoded[i] - reference[i]); }
+        double rms = Math.Sqrt(signal / reference.Length);
+        Check(10 * Math.Log10(signal / error) > 30 && rms is > 4000 and < 9000, $"decodes back to the render ({10 * Math.Log10(signal / error):0.0} dB) at Spyro's loudness (rms {rms:0})");
+    }
+    finally { Directory.Delete(scratch, true); }
+}
 Console.WriteLine($"CRASH_ENEMY_SOURCE_OK checks={checks}");
 
 /// <summary>A Spyro animated object package read back the way the game reads it.</summary>

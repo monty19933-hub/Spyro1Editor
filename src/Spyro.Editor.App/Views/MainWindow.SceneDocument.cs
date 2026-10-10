@@ -252,10 +252,15 @@ public sealed partial class MainWindow
         foreach(var scene in saved)NativeAuthoredSpawn.RequireSupported(scene);
         var(_,donors,_)=await EnsureUniversalCatalogAsync();var japanese=ResolveUniversalJapaneseSource();
         RequireOwner();
+        var crashLevels=CrashPlayerSettings.Load(workspacePath);
         var plans=saved.Select(scene=>
         {
             var objects=scene.ProjectObjects();
-            return new NativeAuthoredExportScene(scene,PlacementsFor(scene.ReconcileLedger(objects),objects));
+            IReadOnlyList<UniversalMobyPlacement> placements=PlacementsFor(scene.ReconcileLedger(objects),objects);
+            var target=scene.ResolveTarget(_retailCatalog);
+            // Play as Crash: his two objects join the level's own.
+            if(crashLevels.Contains(target.Key)&&UniversalCrashPlayer.IsPlayableLevel(target.LevelId))placements=UniversalCrashPlayer.WithPlayer(placements);
+            return new NativeAuthoredExportScene(scene,placements);
         }).ToArray();
         string outputFolder=Path.Combine(workspacePath,"output");Directory.CreateDirectory(outputFolder);
         CombinedTestBinResult? retail=null;
@@ -274,6 +279,7 @@ public sealed partial class MainWindow
         ReportCreateBinProgress("Building levels…","Create BIN: rebuilding geometry, collision, objects and assets…");
         string output=Path.Combine(outputFolder,"Spyro Editor - Authored Level.bin");
         var crash=ResolveUniversalCrashDisc();
+        var yotd=ResolveYearOfTheDragonDisc();
         string hash=await Task.Run(async()=>
         {
             // A level you built is always rebuilt from the original disc, so "off" needs no flight plan.
@@ -288,7 +294,7 @@ public sealed partial class MainWindow
                 requireCurrent:()=>Dispatcher.UIThread.InvokeAsync(RequireOwner).GetAwaiter().GetResult(),
                 stagedRetailImage:retail?.WroteImage==true?retail.OutputImagePath:null,retailEggs:retail?.ActiveDragonflyEggs,
                 retailSignLevels:retail?.SignLevelKeys,retailNames:retail?.DeferredLevelNames,flight:flight,portalRoutes:portalSnapshot.Document,
-                retailReturnClasses:retail?.ReturnClasses,crash:crash);
+                retailReturnClasses:retail?.ReturnClasses,crash:crash,yotd:yotd);
         });
         RequireOwner();
         string startName=saved.FirstOrDefault(s=>s.ResolveTarget(_retailCatalog).LevelId==startLevelId)?.Name??"Artisans";

@@ -22,6 +22,10 @@ public sealed record AuthoredSurface(string Id, Vector3f[] Vertices, ColorRgba C
     /// <summary>What Spyro finds on this face (water, lava, supercharge…); null is solid ground.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public AuthoredSurfaceKind? Kind { get; init; }
+    /// <summary>Faces sharing a number are drawn as one sector, as in the level they were imported from (null: the
+    /// compiler groups the face itself).</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? Sector { get; init; }
 }
 
 /// <summary>A native special-surface record (type and two parameters, as retail levels store them): type 0 is a
@@ -34,16 +38,25 @@ public sealed record AuthoredSurfaceKind(int Type, int Param1, int Param2)
     public static IReadOnlyList<AuthoredSurfaceKind> All { get; } = [Water, DeadlyWater, Lava, DeadlyLava, Ooze, DeadlyOoze, Supercharge, InvisibleWall];
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsSupported => All.Contains(this);
-    /// <summary>The native record: type word, then for hazard floors the two parameter words.</summary>
+    /// <summary>A homeworld doorway's entry (type 6): the destination level and the doorway's index in the level's
+    /// portal table. Built from <see cref="SceneDocument.Portals"/>, never chosen as a tile type.</summary>
+    public static AuthoredSurfaceKind Portal(int destinationLevelId, int portalIndex) => new(6, destinationLevelId, portalIndex);
+    /// <summary>The native record: type word, then for hazard floors and doorways the two parameter words.</summary>
     public byte[] NativeRecord()
     {
-        byte[] r = new byte[Type == 0 ? 12 : 4];
+        byte[] r = new byte[Type is 0 or 6 ? 12 : 4];
         System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(r, Type);
-        if (Type == 0) { System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(r.AsSpan(4), Param1); System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(r.AsSpan(8), Param2); }
+        if (Type is 0 or 6) { System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(r.AsSpan(4), Param1); System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(r.AsSpan(8), Param2); }
         return r;
     }
 }
 public sealed record AuthoredObject(string Identity, Moby Value);
+
+/// <summary>A doorway of a rebuilt homeworld: the original homeworld's portal to <see cref="DestinationLevelId"/>
+/// (its walk-in path, name lettering, return point and the destination's sky seen through it), moved so the bottom
+/// middle of its opening stands at <see cref="Position"/> and Spyro walks in towards <see cref="Heading"/>
+/// (0-255, 0 = +X, 64 = +Y).</summary>
+public sealed record AuthoredPortal(int DestinationLevelId, Vector3f Position, int Heading);
 
 /// <summary>The main editor's neutral authored scene. Native ID65 is its actual compilation target,
 /// never a cache donor. Geometry and actors originate only in this document.</summary>
@@ -53,6 +66,9 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
 {
     public const string FileName = "fresh-level.scene.json";
     public SceneTargetBinding? TargetBinding { get; init; }
+    /// <summary>A rebuilt homeworld's doorways (null: none).</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<AuthoredPortal>? Portals { get; init; }
     /// <summary>WAD entry of the retail level whose sky this scene borrows; null keeps the plain sky color.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public int? SkySourceWadEntry { get; init; }
@@ -129,7 +145,7 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
             surfaces.Add(new(identity,
                 p.Points.Select((v,i) => new Vector3f(v.X,v.Y,p.ZValues[i])).ToArray(), p.TextureVisualEdit?.AverageNearColor ?? p.FaceColor, material,
                 Enumerable.Range(0,p.Points.Count).Select(i => { int slot=Enumerable.Range(0,p.CornerPointIndexes.Count).FirstOrDefault(k=>p.CornerPointIndexes[k]==i); return p.TextureVisualEdit?.Corners.ElementAtOrDefault(slot)?.NearColor ?? p.NearColors.ElementAtOrDefault(slot); }).ToArray(),
-                Enumerable.Range(0,p.Points.Count).Select(i => { int slot=Enumerable.Range(0,p.CornerPointIndexes.Count).FirstOrDefault(k=>p.CornerPointIndexes[k]==i); return p.TextureVisualEdit?.Corners.ElementAtOrDefault(slot)?.FarColor ?? p.FarColors.ElementAtOrDefault(slot); }).ToArray()) { Kind = kind });
+                Enumerable.Range(0,p.Points.Count).Select(i => { int slot=Enumerable.Range(0,p.CornerPointIndexes.Count).FirstOrDefault(k=>p.CornerPointIndexes[k]==i); return p.TextureVisualEdit?.Corners.ElementAtOrDefault(slot)?.FarColor ?? p.FarColors.ElementAtOrDefault(slot); }).ToArray()) { Kind = kind, Sector = old?.Sector });
         }
         var ledger = ReconcileLedger(mobys);
         var captured = this with { Surfaces = surfaces, Objects = mobys.Select(m => new AuthoredObject(m.UniversalPlacementId,m)).ToArray(), Ledger = ledger };
@@ -156,7 +172,9 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
     }
 
     /// <summary>Authored faces in one scene (the compiled level holds at most 5,000 drawn faces).</summary>
-    public const int MaxSurfaces = 4096;
+    /// <summary>The game keeps one cache byte per drawn face in a 0x1C00-byte table (index 0 unused); its own
+    /// levels use up to 7,167 faces (Dark Passage).</summary>
+    public const int MaxSurfaces = 7167;
     public void Validate()
     {
         if (SchemaVersion != 1 || !Guid.TryParseExact(Id,"N",out _) || string.IsNullOrWhiteSpace(Name) ||
@@ -184,6 +202,14 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
         }
         RequireCoordinate(Spawn);
         foreach (var o in Objects) if (!Guid.TryParseExact(o.Identity,"N",out _)) throw new InvalidDataException("An authored object has no stable identity.");
+        if (Portals is { } portals)
+        {
+            if (TargetBinding is not { LevelId: var home } || home % 10 != 0 ||
+                portals.Select(p => p.DestinationLevelId).Distinct().Count() != portals.Count ||
+                portals.Any(p => p.Heading is < 0 or > 255 || HomeworldPortalControlCatalog.All.All(d => d.DestinationLevelId != p.DestinationLevelId || d.HomeworldKey != TargetBinding.LevelKey)))
+                throw new InvalidDataException("Doorways belong to a rebuilt homeworld, one per level that homeworld's original portals lead to.");
+            foreach (var p in portals) RequireCoordinate(p.Position);
+        }
     }
     private static void RequireCoordinate(Vector3f v)
     {

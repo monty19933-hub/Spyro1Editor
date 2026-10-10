@@ -1839,7 +1839,7 @@ public sealed partial class MainWindow : Window
         _levelMusicDetails.Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92));
         _levelMusicDetails.LineHeight = 20;
 
-        _levelMusicTrackBox.ItemsSource = MusicTrackCatalog.SelectableTracks;
+        _levelMusicTrackBox.ItemsSource = MusicTrackCatalog.PickerTracks;
         _levelMusicTrackBox.MinHeight = 34;
         _levelMusicTrackBox.PlaceholderText = "Music track";
         _levelMusicTrackBox.SelectionChanged += (_, _) => RefreshLevelMusicDetails();
@@ -1855,6 +1855,10 @@ public sealed partial class MainWindow : Window
         _levelMusicResetButton.Name = "LevelMusicResetButton";
         buttons.Children.Add(_levelMusicSaveButton);
         buttons.Children.Add(_levelMusicResetButton);
+        Button yotdDisc = NewAsyncButton("Year of the Dragon disc…", ChooseYearOfTheDragonDiscAsync);
+        yotdDisc.Name = "LevelMusicYearOfTheDragonDisc";
+        ToolTip.SetTip(yotdDisc, "Songs marked (Spyro: Year of the Dragon) are copied from your copy of that disc (USA, Rev 1). It is only read, never changed.");
+        buttons.Children.Add(yotdDisc);
 
         panel.Children.Add(_levelMusicTrackBox);
         panel.Children.Add(_levelMusicDetails);
@@ -11863,7 +11867,10 @@ public sealed partial class MainWindow : Window
             _levelMusicTrackBox.IsEnabled = true;
             if (_levelMusicSaveButton != null) _levelMusicSaveButton.IsEnabled = true;
             if (_levelMusicResetButton != null) _levelMusicResetButton.IsEnabled = true;
-            _levelMusicTrackBox.SelectedItem = MusicTrackCatalog.Find(authored.MusicTrack);
+            // The new level (no retail slot) plays only Spyro's own tracks; rebuilt levels can also take a Crash song.
+            var choices = authored.TargetBinding == null ? MusicTrackCatalog.SelectableTracks : MusicTrackCatalog.PickerTracks;
+            if (!ReferenceEquals(_levelMusicTrackBox.ItemsSource, choices)) _levelMusicTrackBox.ItemsSource = choices;
+            _levelMusicTrackBox.SelectedItem = MusicTrackCatalog.FindAny(authored.MusicTrack);
             RefreshLevelMusicDetails(); return;
         }
         bool id65Unavailable = UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level);
@@ -11888,9 +11895,10 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (!ReferenceEquals(_levelMusicTrackBox.ItemsSource, MusicTrackCatalog.PickerTracks)) _levelMusicTrackBox.ItemsSource = MusicTrackCatalog.PickerTracks;
         LevelMusicEditPlan? saved = LevelMusicEditStore.Load(_workspace.RootPath, level);
         int trackId = saved?.SelectedTrackId ?? MusicTrackCatalog.GetNativeTrackId(level);
-        _levelMusicTrackBox.SelectedItem = MusicTrackCatalog.Find(trackId);
+        _levelMusicTrackBox.SelectedItem = MusicTrackCatalog.FindAny(trackId);
         RefreshLevelMusicDetails();
     }
 
@@ -11898,7 +11906,8 @@ public sealed partial class MainWindow : Window
     {
         if (_freshSceneDocument is { } authored)
         {
-            _levelMusicDetails.Text = "Authored music: " + (MusicTrackCatalog.Find(authored.MusicTrack)?.DisplayName ?? authored.MusicTrack.ToString()) + "\nSave Music records the selected built-in track in this document; Create BIN compiles its native playback.";
+            _levelMusicDetails.Text = "Authored music: " + (MusicTrackCatalog.FindAny(authored.MusicTrack)?.DisplayName ?? authored.MusicTrack.ToString()) + "\nSave Music records the selected track in this document; Create BIN compiles its native playback." +
+                CustomMusicNote(_levelMusicTrackBox.SelectedItem as MusicTrackEntry);
             return;
         }
         if (IsCurrentId65BlankLab())
@@ -11927,7 +11936,51 @@ public sealed partial class MainWindow : Window
         string selection = selected.TrackId == nativeTrackId
             ? "Uses this level's original music and late alternate rotation."
             : "Create BIN will keep this track looping during long play.";
-        _levelMusicDetails.Text = $"{current}\nSelected: {selected.DisplayName}\n{selection}";
+        _levelMusicDetails.Text = $"{current}\nSelected: {selected.DisplayName}\n{selection}" + CustomMusicNote(selected);
+    }
+
+    /// <summary>For a song from another game: where its audio comes from.</summary>
+    private static string CustomMusicNote(MusicTrackEntry? track) => track?.CustomSlot == null ? ""
+        : MusicTrackCatalog.IsYearOfTheDragon(track.TrackId)
+        ? "\nCreate BIN copies this song from your Spyro: Year of the Dragon disc (choose it with \"Year of the Dragon disc…\" below) " +
+          "into one of the game's two unused music slots, so the disc stays the same size."
+        : "\nCreate BIN plays this song from your Crash Bandicoot: Warped disc (choose it with \"Crash disc…\" in the Add Object browser) " +
+          "and stores it in one of the game's two unused music slots, so the disc stays the same size.";
+
+    private (string Path, YearOfTheDragonDisc Disc)? _yearOfTheDragon;
+
+    /// <summary>The user's Spyro: Year of the Dragon disc (its music), or null if none is selected.</summary>
+    private YearOfTheDragonDisc? ResolveYearOfTheDragonDisc()
+    {
+        string path = YearOfTheDragonDiscLocator.Find(_workspace);
+        if (_yearOfTheDragon is { } hit && PathsEqual(hit.Path, path)) return hit.Disc;
+        if (!YearOfTheDragonDiscLocator.IsUsable(path)) return null;
+        var disc = new YearOfTheDragonDisc(path);
+        _yearOfTheDragon = (path, disc);
+        return disc;
+    }
+
+    private async Task ChooseYearOfTheDragonDiscAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
+        {
+            Title = "Select your Spyro: Year of the Dragon (USA) disc image (.bin)",
+            AllowMultiple = false
+        });
+        string? picked = files.FirstOrDefault()?.Path.LocalPath;
+        if (picked == null) return;
+        try
+        {
+            string bin = DiscImageLocator.ResolveImagePath(picked);
+            await Task.Run(() => YearOfTheDragonDiscLocator.Configure(_workspace, bin));
+            _yearOfTheDragon = null;
+            RefreshLevelMusicDetails();
+            _levelMusicDetails.Text += "\nYear of the Dragon disc found: its songs are ready for Create BIN.";
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            _levelMusicDetails.Text += "\n" + ex.Message;
+        }
     }
 
     private void RefreshPortalControlPanel()
@@ -13685,6 +13738,7 @@ public sealed partial class MainWindow : Window
         var portalRoutes = PortalRouteStore.Capture(_workspace.RootPath).Document;
         var replacementKeys=SceneDocumentStore.LoadOverrides(_workspace.RootPath,_retailCatalog)
             .Select(d=>d.TargetBinding!.LevelKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var crashLevels = CrashPlayerSettings.Load(_workspace.RootPath);
         List<EditedLevelExportTarget> targets = [];
         foreach (LevelDefinition level in _catalog.Levels)
         {
@@ -13725,7 +13779,8 @@ public sealed partial class MainWindow : Window
             bool hasSkyboxEdit = NativeSkyEditStore.Load(_workspace.RootPath, level) != null;
             bool hasFlightSelection = flightIntent?.HasExplicitSelection(level.LevelId)==true;
             bool hasPortalRoutes = portalRoutes.Destinations.Any(d => d.Portal.HomeworldKey == level.Key) || portalRoutes.Returns.Any(r => r.LevelId == level.LevelId);
-            if (hasPortalRoutes || hasObjectEdits || hasTerrainEdits || hasCustomTerrainTextures || hasNativeTerrainTextureRelocations || hasLevelTextEdit || hasLevelMusicEdit || hasSkyboxEdit || hasFlightSelection)
+            bool hasCrashPlayer = level.HasSourceTable && crashLevels.Contains(level.Key) && UniversalCrashPlayer.IsPlayableLevel(level.LevelId);
+            if (hasPortalRoutes || hasObjectEdits || hasTerrainEdits || hasCustomTerrainTextures || hasNativeTerrainTextureRelocations || hasLevelTextEdit || hasLevelMusicEdit || hasSkyboxEdit || hasFlightSelection || hasCrashPlayer)
             {
                 targets.Add(new EditedLevelExportTarget(
                     level,
@@ -13735,7 +13790,7 @@ public sealed partial class MainWindow : Window
                     hasNativeTerrainTextureRelocations,
                     hasLevelTextEdit,
                     hasLevelMusicEdit,
-                    hasSkyboxEdit) { HasFreeFlightSelection = hasFlightSelection, HasPortalRoutes = hasPortalRoutes });
+                    hasSkyboxEdit) { HasFreeFlightSelection = hasFlightSelection, HasPortalRoutes = hasPortalRoutes, HasCrashPlayer = hasCrashPlayer });
             }
         }
 
@@ -14381,7 +14436,9 @@ public sealed partial class MainWindow : Window
                 Edits: levelMusicEdits,
                 WriteImage: true,
                 ConsumeDisposableSourceImage:
-                    IsDisposableCombinedBuildImage(currentImage, tempDir)));
+                    IsDisposableCombinedBuildImage(currentImage, tempDir),
+                Crash: levelMusicEdits.Any(edit => MusicTrackCatalog.IsCustom(edit.TrackId)) ? ResolveUniversalCrashDisc() : null,
+                Yotd: levelMusicEdits.Any(edit => MusicTrackCatalog.IsYearOfTheDragon(edit.TrackId)) ? ResolveYearOfTheDragonDisc() : null));
             if (musicResult.WroteImage)
                 musicLevelPatches += musicResult.Plan.EditedLevelCount;
             stepSummaries.Add(new
@@ -14461,7 +14518,8 @@ public sealed partial class MainWindow : Window
         foreach (EditedLevelExportTarget target in targets)
         {
             string editsFile = Path.Combine(_workspace.RootPath, $"{target.Level.Key}-native-edits.json");
-            var placed = UniversalPlacementReader.Read(editsFile);
+            IReadOnlyList<UniversalMobyPlacement> placed = UniversalPlacementReader.Read(editsFile);
+            if (target.HasCrashPlayer) placed = UniversalCrashPlayer.WithPlayer(placed);
             var removed=UniversalPlacementReader.ReadRemovedNativeRows(editsFile);
             if (placed.Count > 0 || removed.Count > 0)
             {
@@ -33557,6 +33615,8 @@ public sealed partial class MainWindow : Window
     {
         public bool HasFreeFlightSelection { get; init; }
         public bool HasPortalRoutes { get; init; }
+        /// <summary>Play as Crash is ticked for this level: his objects are added with the imported ones.</summary>
+        public bool HasCrashPlayer { get; init; }
     }
 
     internal sealed record PrivateTextureAggregateSavedWriterScope(

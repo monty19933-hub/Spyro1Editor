@@ -1,3 +1,35 @@
+# Play as Crash, songs from other games, Lost Fleet as a homeworld — 8–9 October 2026
+
+Unreleased (Claude; branch `feature/playable-crash-20261008`, not in any package). Gate 363/0.
+
+- **Play as Crash** (Game Settings, per level): Crash 3's model as two placed objects driven by a bundle controller in
+  the level update; Spyro hidden (exe hook at 0x80023AC4), Square/Circle remapped to Crash's moves. Fixes found on the
+  way: converted Crash models were drawn inside out; Crash 3 animated textures (eyes) were ignored; Start Blank /
+  built levels lost the liquid splash models the executable spawns by number (crash when looking at water).
+- **Songs from other games** in Spyro's two unused XA slots (30, 35), picked in Game Settings → Music:
+  Toad Village (Crash Bandicoot: Warped) is rendered from the user's Crash disc (`CrashMusic`, `XaAudio`,
+  `CustomMusicSlots`); Lost Fleet (Spyro: Year of the Dragon) is copied byte for byte from the user's Year of the
+  Dragon disc (`YearOfTheDragonDisc`: SPEECH.STR is the same stereo 37.8 kHz XA; song table exe 0x55B48, level→song
+  0x5600C). New "Year of the Dragon disc…" button in the music panel.
+- **Rebuilt homeworlds** (`SceneDocument.Portals`, `NativeHubPortals`): doorways copied from the original homeworld
+  and moved/turned to the scene's positions (portal records with the destination sky, entry triangles, path / name /
+  return objects with their save identities taken from never-set original rows), optional frames
+  (`NativeHubPortals.Frame`). Imported levels: guarded subdivision queues (`NativeSubdivisionQueueGuard`), imported
+  sectors and far meshes, 7,167 faces, 15-bit collision, terrain data up to 640 KB (retail Misty Bog 656 KB).
+- **A rebuilt homeworld's own dragons rescue correctly**: the kernel overlay's dragon handlers (0xFA, 0x6E, 0xFB) are
+  released through a switch stub (`UniversalNativeRelease`) so the level's own code runs under the native numbers;
+  rescue streams are carried and the temporary area below the statue reserved; the statue's camera and the stream's
+  camera track move with the statue (`NativeDragonRescueCamera`); the stream models' textures are imported like an
+  object's; dragon rows keep their original save identities and their row links (`UniversalDragonRows`); doorway names
+  get spare slots for their letters. The balloonist's balloon link follows the balloon (`UniversalBalloonistRows`).
+
+Checks: gate 363/0; `CrashEnemySmoke` (music catalog, Crash player, splashes), `NativeClearedLevelCompositionSmoke`.
+Emulator (isolated DuckStation) on the new-level project's export with Lost Fleet in place of Artisans
+(`outputs/LostFleet-20261009`, BIN c47b662a…): music track 35 streams; all five doorways in and back; four dragon
+rescues with the dragons on camera; 53 gems = 89 (+11 gnorc drops = 100); acid death; balloonist to Peace Keepers.
+Not done: dragon row links for cross-level (retail) imports (separate task); Lost Fleet's own sky (Year of the Dragon
+sky format not converted; Peace Keepers' is borrowed); Windows build not run.
+
 # Retail-level edits keep their spare object slots — 7 October 2026
 
 Unreleased (Claude; after the sixth 1.2 rebuild, not in its packages). Objects added to a retail level through

@@ -67,7 +67,7 @@ public static class UniversalBehaviorBundleBuilder
         IReadOnlyDictionary<string, UniversalWhirlwindSoundBinding>? whirlwindSounds = null,
         IReadOnlyDictionary<string, UniversalDryCanyonBirdCertificate>? dryCanyonBirdBranches = null,
         IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null,IReadOnlyList<UniversalOwnedParticleCertificate>? ownedParticles = null, UniversalMagicPairCertificate? magicPair = null,IReadOnlyDictionary<string,UniversalDarkPassageLanternContext>? darkLanternContexts = null,IReadOnlyDictionary<string,UniversalDarkPassageProjectileParticleCertificate>? darkProjectileParticles = null, UniversalMagicDruidChainCertificate? magicChain = null,IReadOnlyDictionary<string,UniversalHighCavesSpellParticleCertificate>? highCavesSpellParticles = null,UniversalMagicDruidOriginalCertificate? magicOriginal = null,UniversalHighCavesWorldInstallation? highCavesWorld=null,UniversalGreenDruidWorldInstallation? greenDruidWorld=null,UniversalGreenDruidLinkedWorldInstallation? greenDruidLinkedWorld=null,
-        IReadOnlyList<int>? crashBoxClasses = null, IReadOnlyList<int>? crashEnemyClasses = null)
+        IReadOnlyList<int>? crashBoxClasses = null, IReadOnlyList<int>? crashEnemyClasses = null, IReadOnlyList<int>? crashPlayerClasses = null)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
         int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
@@ -128,6 +128,11 @@ public static class UniversalBehaviorBundleBuilder
         if (crashEnemyClasses is { Count: > 0 })
         {
             w.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: "crash_enemy_upd"));
+            w.Emit(UniversalMips.Nop);
+        }
+        if (crashPlayerClasses is { Count: > 0 })
+        {
+            w.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: "crash_player_upd"));
             w.Emit(UniversalMips.Nop);
         }
         w.Emit(UniversalMips.EncodeI(35, 29, 31, 0x10));
@@ -310,6 +315,8 @@ public static class UniversalBehaviorBundleBuilder
             parts.Add(UniversalSpecialBehaviors.CrashBoxUpdate(crashBoxClasses, "crash_box_upd"));
         if (crashEnemyClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.CrashEnemyUpdate(crashEnemyClasses, "crash_enemy_upd"));
+        if (crashPlayerClasses is { Count: > 0 })
+            parts.Add(UniversalSpecialBehaviors.CrashPlayerUpdate(crashPlayerClasses, "crash_player_upd"));
         var (code, labels) = Assemble(parts, baseAddress);
         greenDruidWorld?.RequireCompiled(code,baseAddress,parts,labels);
         greenDruidLinkedWorld?.RequireCompiled(code,baseAddress,parts,labels);

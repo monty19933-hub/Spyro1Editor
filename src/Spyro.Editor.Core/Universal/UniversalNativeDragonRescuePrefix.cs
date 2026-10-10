@@ -68,7 +68,8 @@ internal static class UniversalNativeDragonRescuePrefix
         for(int n=4;n<sf.Count;n++)
         {
             var a=sf[n];var b=final[n];Require(a.Length>=36&&I(original.Bytes,a.Offset+4)==36&&I(original.Bytes,a.Offset+8)>0&&I(original.Bytes,a.Offset+12)==36+I(original.Bytes,a.Offset+8)&&I(original.Bytes,a.Offset+12)<=a.Length,"a retained native rescue stream header changed.");
-            Require(a.Length==b.Length&&original.Bytes.AsSpan(a.Offset,a.Length).SequenceEqual(written.Bytes.AsSpan(b.Offset,b.Length)),"a complete retained dragon rescue stream changed.");
+            // A statue placed elsewhere takes its scene's camera track along (NativeDragonRescueCamera); nothing else changes.
+            Require(NativeDragonRescueCamera.SameButCamera(original.Bytes.AsSpan(a.Offset,a.Length),written.Bytes.AsSpan(b.Offset,b.Length)),"a complete retained dragon rescue stream changed.");
             // Native14C04 sector-rounds pointer250-modelbase. Native14DF8
             // then copies readBytes-header[12], so the full sound prefix must
             // be present BEFORE the first partial-stream copy.

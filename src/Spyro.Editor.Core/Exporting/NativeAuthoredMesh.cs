@@ -10,11 +10,11 @@ namespace Spyro.Editor.Core.Exporting;
 internal static class NativeAuthoredMesh
 {
     /// <summary>Collision triangles for a whole built level. The lookup index takes 15-bit triangle numbers; the
-    /// game's own levels use a few thousand (Dark Hollow about 3,000).</summary>
-    internal const int MaxCollisionTriangles = 8192;
-    /// <summary>Terrain and collision data of a built level. Retail levels carry 150-350 KB; the export's RAM check
-    /// decides whether a level fits with its objects.</summary>
-    internal const int MaxSurfaceBytes = 0x40000;
+    /// game's own levels use a few thousand (Dark Hollow about 3,000), imported levels more.</summary>
+    internal const int MaxCollisionTriangles = 0x7FFF;
+    /// <summary>Terrain and collision data of a built level. Retail levels carry up to 656 KB of it in their data
+    /// subfile (Misty Bog; Artisans 566 KB); the export's RAM checks decide whether a level fits with its objects.</summary>
+    internal const int MaxSurfaceBytes = 0xA0000;
     internal sealed record Triangle(Vector3f A, Vector3f B, Vector3f C, ColorRgba Color, int Material, ColorRgba[] Near, ColorRgba[] Far)
     {
         /// <summary>The face's ground kind (null: solid ground); every lattice piece keeps it.</summary>
@@ -22,7 +22,8 @@ internal static class NativeAuthoredMesh
     }
     internal static byte[] Compile(SceneDocument document, IReadOnlyList<AuthoredMaterial> materials) => CompileWithSky(document, materials, null);
     /// <summary>As <see cref="Compile"/>, with an optional borrowed retail sky block in place of the plain sky color.</summary>
-    internal static byte[] CompileWithSky(SceneDocument document, IReadOnlyList<AuthoredMaterial> materials, byte[]? skyBlock)
+    internal static byte[] CompileWithSky(SceneDocument document, IReadOnlyList<AuthoredMaterial> materials, byte[]? skyBlock,
+        IEnumerable<(Vector3f A, Vector3f B, Vector3f C, AuthoredSurfaceKind Kind)>? collisionOnly = null)
     {
         document.Validate();
         List<Triangle> triangles = [];
@@ -76,6 +77,11 @@ internal static class NativeAuthoredMesh
             visibility.AsSpan(16,list).Fill(255);for(int i=0;i<n;i++)visibility[16+i]=(byte)i;
             W(visibility,skyAt,1);W(visibility,skyAt+4,8);visibility.AsSpan(skyAt+8,4).Fill(255);
         }
+        // Collision without a drawn face (a homeworld doorway's entry triangles).
+        foreach (var (a, b, c, kind) in collisionOnly ?? [])
+            triangles.Add(new(a, b, c, new(0, 0, 0), 255, [new(0, 0, 0), new(0, 0, 0), new(0, 0, 0)], [new(0, 0, 0), new(0, 0, 0), new(0, 0, 0)]) { Kind = kind });
+        n = triangles.Count;
+        if (n > MaxCollisionTriangles) throw new InvalidDataException($"The level needs more than {MaxCollisionTriangles} collision triangles; reduce geometry.");
         // Special surfaces: the ground kinds the level's faces use, in order of first use. The component is its
         // length, the record count, one offset per record (from the count word) and the records; a collision
         // triangle's flag byte names its record (0x3F: solid ground).

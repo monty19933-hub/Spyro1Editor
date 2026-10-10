@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Levels;
+using Spyro.Editor.Core.Music;
 using Spyro.Editor.Core.Text;
 using Spyro.Editor.Core.Universal;
 
@@ -20,14 +21,14 @@ public static class NativeAuthoredProjectExporter
         IReadOnlySet<string>? retailSignLevels=null,IReadOnlyList<LevelTextReplacement>? retailNames=null,
         NativeFreeFlightCompositionPlan? flight=null,PortalRouteDocument? portalRoutes=null,
         IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses=null,
-        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash=null)
+        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash=null,Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd=null)
     {
         // The staged disc images are working copies; remove them whether the export succeeds or fails.
         string scratch=Path.Combine(ExportScratchSpace.AggregateRoot(workspace),Guid.NewGuid().ToString("N"));
         try
         {
             return await ExportCoreAsync(donors,catalog,scenes,japanese,outputImage,workspace,startLevelId,scratch,token,requireCurrent,
-                stagedRetailImage,retailEggs,retailSignLevels,retailNames,flight,portalRoutes,retailReturnClasses,crash);
+                stagedRetailImage,retailEggs,retailSignLevels,retailNames,flight,portalRoutes,retailReturnClasses,crash,yotd);
         }
         finally{ExportScratchSpace.Delete(scratch);}
     }
@@ -39,7 +40,7 @@ public static class NativeAuthoredProjectExporter
         IReadOnlySet<string>? retailSignLevels,IReadOnlyList<LevelTextReplacement>? retailNames,
         NativeFreeFlightCompositionPlan? flight,PortalRouteDocument? portalRoutes,
         IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses,
-        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash)
+        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash,Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd)
     {
         if(scenes.Count==0)throw new InvalidDataException("No authored scenes were selected for export.");
         // ID65 is source-issued through Town's initializer. Composing two
@@ -54,6 +55,8 @@ public static class NativeAuthoredProjectExporter
             if(scene.Document.TargetBinding!=null || portalRoutes?.Destinations.Any(d=>d.DestinationLevelId==65)==true)
                 NativeAuthoredSpawn.RequirePortalArrivalSupported(scene.Document);
         }
+        if(scenes.Any(s=>s.Document.TargetBinding==null&&MusicTrackCatalog.IsCustom(s.Document.MusicTrack)))
+            throw new InvalidDataException("The new level can only play Spyro's own music. Choose a Spyro track for it, or give the Crash song to a rebuilt level.");
         var targets=scenes.Select(s=>s.Document.ResolveTarget(catalog)).ToArray();
         if(targets.Select(t=>t.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count()!=targets.Length)
             throw new InvalidDataException("The same level cannot be rebuilt twice in one export.");
@@ -83,7 +86,7 @@ public static class NativeAuthoredProjectExporter
                 throw new InvalidDataException("Saved retail edits must not also target a cleared replacement level.");
             var compiled=await NativeClearedLevelCompilation.CaptureAsync(donors.ImagePath,doc,catalog,Path.Combine(scratch,target.Key+"-host.bin"),token);
             exe=NativeClearedRetailBinding.Prepare(donors.Disc.Exe,exe,target);
-            var result=scene.Placements.Count==0?null:compiled.ComposeWithExecutable(donors,scene.Placements,exe,special);
+            var result=!compiled.NeedsComposition(scene.Placements)?null:compiled.ComposeWithExecutable(donors,scene.Placements,exe,special);
             exe=result?.Executable??exe;
             returnClasses[target.LevelId]=result==null?[]:NativePortalReturnClass.Capture(result.Classes);
             replacements.Add(target.SourceWadEntry,result?.LevelData??compiled.CopyLevelData());
@@ -110,9 +113,17 @@ public static class NativeAuthoredProjectExporter
         // authored65 owner. It is not published or mistaken for a finished game image.
         exe=NativeClearedTitleDemos.Prepare(donors.Disc.Exe,exe,
             scenes.Where(s=>s.Document.TargetBinding!=null).Select(s=>s.Document.TargetBinding!.LevelId).ToHashSet());
+        // Songs from other games (Crash 3's): rendered once, their loop marks set in the executable here, their audio
+        // written into every image this export writes.
+        var songs=scenes.Select(s=>MusicTrackCatalog.FindAny(s.Document.MusicTrack)).OfType<MusicTrackEntry>()
+            .Where(t=>t.CustomSlot!=null).DistinctBy(t=>t.TrackId)
+            .Select(t=>CustomMusicSlots.Encode(t,crash,baseline.Path,yotd)).ToArray();
+        foreach(var song in songs)CustomMusicSlots.PatchEndTable(exe,baseline.Path,song);
+        if(scenes.Any(s=>NativeSubdivisionQueueGuard.Needed(s.Document)))NativeSubdivisionQueueGuard.PatchExe(exe);
         string stage=Path.Combine(scratch,"retail-stage.bin");
         baseline.WriteImage(stage,baseline.RebuildWad(replacements),exe);
         RequireReadback(stage,baseline,replacements,exe);
+        foreach(var song in songs)CustomMusicSlots.WriteAudio(stage,song);
         var fresh=scenes.SingleOrDefault(s=>s.Document.TargetBinding==null);
         if(fresh!=null)
         {
@@ -142,6 +153,7 @@ public static class NativeAuthoredProjectExporter
         {
             baseline.WriteImage(pending,baseline.RebuildWad(replacements),exe);
             RequireReadback(pending,baseline,replacements,exe);
+            foreach(var song in songs)CustomMusicSlots.WriteAudio(pending,song);
             await File.WriteAllLinesAsync(pendingCue,["FILE \""+Path.GetFileName(outputImage)+"\" BINARY","  TRACK 01 MODE2/2352","    INDEX 01 00:00:00"],token);
             requireCurrent?.Invoke();token.ThrowIfCancellationRequested();
             foreach(var identity in identities)UniversalNativeLayoutStore.Bind(workspace,identity.Key,identity.Prefix);

@@ -16,11 +16,21 @@ namespace Spyro.Editor.Core.Crash;
 public static class CrashSpyroModel
 {
     /// <param name="Sounds">(frame, package sound slot) pairs the game plays when the frame comes up.</param>
-    public sealed record Animation(string Name, bool Interpolated, IReadOnlyList<(int Frame, int Slot)>? Sounds = null);
+    /// <param name="Step">Keeps every Step-th stored frame and plays them Step times slower (the game's animation
+    /// step is a phase counter, 64 a frame, and the renderer blends between frames), for less memory.</param>
+    public sealed record Animation(string Name, bool Interpolated, IReadOnlyList<(int Frame, int Slot)>? Sounds = null, int Step = 1);
     /// <param name="UnitsPerSpyroUnit">Crash model-space units per Spyro unit.</param>
     /// <param name="Yaw">Quarter turns about the vertical axis (Crash models face -y).</param>
     /// <param name="Mirror">Mirror the model left to right (faces keep their outward winding).</param>
-    public sealed record Options(double UnitsPerSpyroUnit, int Yaw = 1, bool Mirror = false);
+    public sealed record Options(double UnitsPerSpyroUnit, int Yaw = 1, bool Mirror = false)
+    {
+        /// <summary>Converts only the triangles this keeps (given the first frame's positions), with just the vertices
+        /// they use: one part of a model with more vertices than a Spyro object allows.</summary>
+        public Func<IReadOnlyList<(double X, double Y, double Z)>, CrashModel.Triangle, bool>? Part { get; init; }
+        /// <summary>Writes the collision capsule Spyro's flame, charge and contact tests read; off for a model that is
+        /// only drawn (package +0x14 stays zero, like many of the game's own models).</summary>
+        public bool Collision { get; init; } = true;
+    }
     public sealed record Result(byte[] Package, byte[] Vram, int VertexCount, int FaceCount, int Height, int Radius,
         IReadOnlyList<int> FrameCounts, int ScaleShift);
 
@@ -32,7 +42,8 @@ public static class CrashSpyroModel
         IReadOnlyList<byte>? sounds = null, Art? art = null)
     {
         var model = new CrashModel(nsf.Entry(modelName).Items);
-        var frames = animations.Select(a => nsf.Entry(a.Name).Items).ToArray();
+        if (animations.Any(a => a.Step is < 1 or > 4)) throw new ArgumentException("A frame step is 1 to 4.");
+        var frames = animations.Select(a => (IReadOnlyList<byte[]>)nsf.Entry(a.Name).Items.Where((_, i) => i % a.Step == 0).ToArray()).ToArray();
         if (frames.Any(f => f.Count == 0)) throw new InvalidDataException("A Crash animation has no frames.");
         int special = CrashModel.FrameSpecialVertexCount(frames[0][0]);
 
@@ -47,6 +58,17 @@ public static class CrashSpyroModel
             return (x, options.Mirror ? y : -y, -z);
         }
         var world = frames.Select(fr => fr.Select(f => model.Positions(f).Select(ToSpyro).ToArray()).ToArray()).ToArray();
+        IReadOnlyList<CrashModel.Triangle> triangles = model.Triangles;
+        int[]? part = null;   // model vertex -> this part's vertex (-1: not in the part)
+        if (options.Part != null)
+        {
+            var pose = model.Positions(frames[0][0]);
+            triangles = model.Triangles.Where(t => options.Part(pose, t)).ToArray();
+            int[] used = triangles.SelectMany(t => t.Vertices.Select(v => v + special)).Where(v => v >= 0 && v < pose.Count).Distinct().Order().ToArray();
+            world = world.Select(a => a.Select(f => used.Select(i => f[i]).ToArray()).ToArray()).ToArray();
+            part = Enumerable.Repeat(-1, pose.Count).ToArray();
+            for (int i = 0; i < used.Length; i++) part[used[i]] = i;
+        }
         int vertexCount = world[0][0].Length;
         if (vertexCount > 255) throw new InvalidDataException($"{modelName} has {vertexCount} vertices; Spyro objects allow 255.");
         if (world.SelectMany(a => a).Any(f => f.Length != vertexCount)) throw new InvalidDataException($"{modelName}'s frames disagree on their vertex count.");
@@ -71,7 +93,7 @@ public static class CrashSpyroModel
         using var farFaces = new MemoryStream();
         void Word(Stream s, uint w) { Span<byte> b = stackalloc byte[4]; BinaryPrimitives.WriteUInt32LittleEndian(b, w); s.Write(b); }
         int faces = 0;
-        foreach (var t in model.Triangles)
+        foreach (var t in triangles)
         {
             var tex = t.Texture > 0 ? model.Textures[t.Texture - 1] : null;
             // Crash's subtractive drop shadows (blend 2) and additive motion blurs (blend 1, the knight's sword
@@ -81,7 +103,12 @@ public static class CrashSpyroModel
             // CrashEdit's corner order (front = counter-clockwise); mirrored, b and c swap so the front stays outside.
             int[] order = options.Mirror ? [0, 2, 1] : [0, 1, 2];
             int[] slot = order.Select(i => flip ? 2 - i : i).ToArray();
+            // Spyro's renderer keeps the other side of a one-sided face than CrashEdit's order gives: reversed, so the
+            // outside shows (with CrashEdit's order the game drew every model inside out, the far side showing
+            // through: Crash's face through the back of his head). Each corner keeps its colour and texture position.
+            if (!nocull) (slot[1], slot[2]) = (slot[2], slot[1]);
             int[] v = slot.Select(i => t.Vertices[i] + special).ToArray();
+            if (part != null) v = v.Select(i => i >= 0 && i < part.Length ? part[i] : -1).ToArray();
             if (v.Any(i => i < 0 || i >= vertexCount)) continue;
             var colours = slot.Select(i => t.Colours[i] < model.Colours.Count ? model.Colours[t.Colours[i]] : ((byte)128, (byte)128, (byte)128)).ToArray();
             uint vertices = (uint)(v[0] << 22 | v[1] << 13 | v[2] << 4);
@@ -91,6 +118,7 @@ public static class CrashSpyroModel
             {
                 bool reverse = (t.Type != 2 && !flip) || (t.Type == 2 && t.Subtype == 1);
                 int[] corner = order.Select(i => reverse ? 2 - i : i).ToArray();
+                if (!nocull) (corner[1], corner[2]) = (corner[2], corner[1]);
                 (field, average) = art.Field(model.Pages[tex.Page], tex, corner);
             }
             // Bit 0: drawn from both sides (Crash's no-cull triangles).
@@ -156,11 +184,11 @@ public static class CrashSpyroModel
         int cursor = headerBytes;
         for (int a = 0; a < animations.Count; a++) { animOffsets[a] = cursor; cursor += 0x24 + 8 * frameEntries[a].Count; }
         int md = Align(cursor, 8), trailerAt = Align(md + (int)body.Length, 4);
-        byte[] p = new byte[trailerAt + trailer.Length];
+        byte[] p = new byte[options.Collision ? trailerAt + trailer.Length : md + (int)body.Length];
         BinaryPrimitives.WriteInt32LittleEndian(p, animations.Count);
         p.AsSpan(4, 16).Fill(0xFF);
         if (sounds != null) for (int i = 0; i < Math.Min(16, sounds.Count); i++) p[4 + i] = sounds[i];
-        BinaryPrimitives.WriteUInt32LittleEndian(p.AsSpan(0x14), 0x80000000u | (uint)trailerAt);
+        if (options.Collision) BinaryPrimitives.WriteUInt32LittleEndian(p.AsSpan(0x14), 0x80000000u | (uint)trailerAt);
         BinaryPrimitives.WriteInt32LittleEndian(p.AsSpan(0x34), md);
         for (int a = 0; a < animations.Count; a++)
         {
@@ -170,7 +198,7 @@ public static class CrashSpyroModel
             BinaryPrimitives.WriteUInt16LittleEndian(p.AsSpan(h + 2), (ushort)colourCount);
             p[h + 5] = (byte)scaleShift; p[h + 6] = (byte)(shift - 1); p[h + 7] = (byte)cullRadius;
             p[h + 8] = (byte)vertexCount; p[h + 9] = (byte)vertexCount;
-            p[h + 0xC] = (byte)(animations[a].Interpolated ? 32 : 64);
+            p[h + 0xC] = (byte)((animations[a].Interpolated ? 32 : 64) / animations[a].Step);
             BinaryPrimitives.WriteInt32LittleEndian(p.AsSpan(h + 0x14), offNear);
             BinaryPrimitives.WriteInt32LittleEndian(p.AsSpan(h + 0x18), offNearPalette);
             BinaryPrimitives.WriteInt32LittleEndian(p.AsSpan(h + 0x1C), offFar);
@@ -178,13 +206,14 @@ public static class CrashSpyroModel
             for (int f = 0; f < frameEntries[a].Count; f++)
             {
                 var (offset, absolute, radius) = frameEntries[a][f];
-                int sound = animations[a].Sounds?.FirstOrDefault(x => x.Frame == f) is { Slot: >= 0 } hit && animations[a].Sounds!.Any(x => x.Frame == f) ? hit.Slot : 0xFF;
+                int step = animations[a].Step;
+                int sound = animations[a].Sounds?.FirstOrDefault(x => x.Frame / step == f) is { Slot: >= 0 } hit && animations[a].Sounds!.Any(x => x.Frame / step == f) ? hit.Slot : 0xFF;
                 BinaryPrimitives.WriteUInt32LittleEndian(p.AsSpan(h + 0x24 + 8 * f), (uint)(sound << 24 | offset));
                 BinaryPrimitives.WriteUInt32LittleEndian(p.AsSpan(h + 0x28 + 8 * f), (uint)(absolute << 24 | radius << 16));
             }
         }
         body.ToArray().CopyTo(p, md);
-        trailer.CopyTo(p, trailerAt);
+        if (options.Collision) trailer.CopyTo(p, trailerAt);
         return new(p, art.Vram, vertexCount, faces, height, radius0, frameEntries.Select(f => f.Count).ToArray(), scaleShift);
     }
 

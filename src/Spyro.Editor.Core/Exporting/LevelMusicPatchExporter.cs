@@ -44,8 +44,15 @@ public static class LevelMusicPatchExporter
             JsonSerializer.Serialize(plan, new JsonSerializerOptions { WriteIndented = true }),
             cancellationToken);
 
-        bool wroteImage = request.WriteImage && plan.Patches.Count > 0;
+        // Songs from other games are written into their unused slot; the plan maps the levels to it.
+        MusicTrackEntry[] custom = request.Edits
+            .Select(edit => MusicTrackCatalog.FindAny(edit.TrackId))
+            .OfType<MusicTrackEntry>()
+            .Where(track => track.CustomSlot != null)
+            .ToArray();
+        bool wroteImage = request.WriteImage && (plan.Patches.Count > 0 || custom.Length > 0);
         if (wroteImage)
+        {
             await WriteImageAsync(
                 request.SourceImagePath,
                 request.SourceCuePath,
@@ -54,6 +61,9 @@ public static class LevelMusicPatchExporter
                 plan,
                 request.ConsumeDisposableSourceImage,
                 cancellationToken);
+            if (custom.Length > 0)
+                await Task.Run(() => CustomMusicSlots.Install(outputImagePath, custom, request.Crash, request.Yotd), cancellationToken);
+        }
 
         return new LevelMusicBatchPatchResult(outputImagePath, outputCuePath, outputPlanPath, plan, wroteImage);
     }
@@ -84,7 +94,7 @@ public static class LevelMusicPatchExporter
         List<LevelMusicPatch> patches = [];
         foreach (LevelMusicReplacement edit in normalizedEdits)
         {
-            MusicTrackEntry track = MusicTrackCatalog.Find(edit.TrackId)
+            MusicTrackEntry track = MusicTrackCatalog.FindAny(edit.TrackId)
                 ?? throw new InvalidOperationException($"Music track {edit.TrackId} does not exist.");
             if (!track.IsSelectable)
                 throw new InvalidOperationException($"{track.DisplayName} is reserved for future custom-audio support.");
@@ -102,8 +112,9 @@ public static class LevelMusicPatchExporter
                 track,
                 "level-track",
                 tableLayout.MappingTableOffset + levelIndex * sizeof(int),
-                edit.TrackId,
-                "Changes the level's initial XA music track.");
+                track.CustomSlot ?? edit.TrackId,
+                track.CustomSlot == null ? "Changes the level's initial XA music track."
+                    : "Plays the song written into the unused XA slot.");
 
             for (int alternate = 0; alternate < LateAlternateCountPerLevel; alternate++)
             {
@@ -145,6 +156,10 @@ public static class LevelMusicPatchExporter
                 "No music audio sectors are copied into the plan; built-in selection patches executable table values only."
             ]);
     }
+
+    /// <summary>Where the level-to-track table is in an executable (found next to the PETEXA LBA table).</summary>
+    public static int MappingTableOffset(byte[] exeBytes, IReadOnlyList<int> peteXaLbas) =>
+        LocateTables(exeBytes, peteXaLbas).MappingTableOffset;
 
     private static MusicTableLayout LocateTables(byte[] exeBytes, IReadOnlyList<int> peteXaLbas)
     {
@@ -262,7 +277,7 @@ public static class LevelMusicPatchExporter
         await File.WriteAllTextAsync(outputCuePath, cueText, DiscCueSheet.TextEncoding, cancellationToken);
     }
 
-    private static bool IsExecutableName(string name)
+    internal static bool IsExecutableName(string name)
     {
         string upper = name.ToUpperInvariant();
         return upper.StartsWith("SCUS", StringComparison.Ordinal)
@@ -297,7 +312,9 @@ public sealed record LevelMusicBatchPatchRequest(
     string OutputPrefix,
     IReadOnlyList<LevelMusicReplacement> Edits,
     bool WriteImage,
-    bool ConsumeDisposableSourceImage = false);
+    bool ConsumeDisposableSourceImage = false,
+    Spyro.Editor.Core.Crash.CrashWarpedDisc? Crash = null,
+    Spyro.Editor.Core.Music.YearOfTheDragonDisc? Yotd = null);
 
 public sealed record LevelMusicBatchPatchResult(
     string OutputImagePath,

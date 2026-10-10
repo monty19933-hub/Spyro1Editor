@@ -47,6 +47,11 @@ internal static partial class NewLevelBuildCases
             case "wumpa-build": WumpaBuild(window); return true;
             case "wumpa-objects": WumpaObjects(window); return true;
             case "wumpa-tiletype": WumpaTileType(window); return true;
+            case "music": MusicStep(window, outDir); return true;
+            case "yotd-disc": YearOfTheDragonDisc(window); return true;
+            case "lostfleet": LostFleetBuild(window); return true;
+            case "lostfleet-objects": LostFleetObjects(window); return true;
+            case "lostfleet-sheep": LostFleetSheep(window); return true;
             default: return false;
         }
     }
@@ -161,6 +166,23 @@ internal static partial class NewLevelBuildCases
         Console.WriteLine("apply sky: " + save.Result + " - " + Status(window));
         Snapshot(window, Path.Combine(outDir, "environment-snow.png"));
         Console.WriteLine("NEW_LEVEL_FROSTSNOW_OK");
+    }
+
+    /// <summary>NEW_LEVEL_MUSIC_LEVEL gets NEW_LEVEL_MUSIC (a picker entry's start), chosen and saved the way a user would.</summary>
+    private static void MusicStep(MainWindow window, string outDir)
+    {
+        Load(window, System.Environment.GetEnvironmentVariable("NEW_LEVEL_MUSIC_LEVEL") ?? "darkhollow");
+        SelectTab(window, "Game Settings");
+        string track = System.Environment.GetEnvironmentVariable("NEW_LEVEL_MUSIC") ?? "Toad Village";
+        var music = Get<Avalonia.Controls.ComboBox>(window, "_levelMusicTrackBox");
+        Console.WriteLine("music choices: " + music.Items.Count + ", last: " + music.Items.Cast<object>().Last());
+        music.SelectedItem = music.Items.Cast<object>().First(o => o.ToString()!.StartsWith(track, StringComparison.Ordinal)); Pump(10);
+        Console.WriteLine("details: " + Get<Avalonia.Controls.TextBlock>(window, "_levelMusicDetails").Text?.Replace('\n', ' '));
+        var save = (Task)Invoke(window, "SaveLevelMusicPlanAsync")!;
+        Wait(() => save.IsCompleted, "save music", 300);
+        Console.WriteLine("save music: " + Status(window));
+        Snapshot(window, Path.Combine(outDir, "music.png"));
+        Console.WriteLine("NEW_LEVEL_MUSIC_OK");
     }
 
     private static void Settings(MainWindow window, string outDir)

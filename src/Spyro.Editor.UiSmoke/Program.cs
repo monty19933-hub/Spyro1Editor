@@ -264,6 +264,14 @@ if (args.Contains("--authored-mesh-only", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Contains("--play-as-crash-ui-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --play-as-crash-ui-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    CrashPlayerUiCases.Run();
+    return 0;
+}
+
 if (args.Contains("--free-flight-ui-only", StringComparer.Ordinal))
 {
     if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --free-flight-ui-only");
