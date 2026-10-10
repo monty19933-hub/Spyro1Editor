@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using Spyro.Editor.Core.Crash;
 using Spyro.Editor.Core.Scene;
+using Spyro.Editor.Core.YearOfTheDragon;
 
 namespace Spyro.Editor.Core.Universal;
 
@@ -36,6 +37,17 @@ public static class UniversalCrashEnemies
         double Size, Tuning Tuning, Model? Companion = null)
     {
         public int Class => Main.Class;
+        /// <summary>The behaviour (UniversalSpecialBehaviors.CrashEnemyFrog, -Knight or -Wizard) when it is not the
+        /// Crash enemy's own: a creature from another game that hops, or guards, marches and attacks.</summary>
+        public int Kind { get; init; } = -1;
+        /// <summary>A creature from Spyro: Year of the Dragon: its animated model set in Lost Fleet's model block and the
+        /// animations its behaviour plays (as a Crash enemy's: guard, march, attack for a knight).</summary>
+        public int YotdSet { get; init; } = -1;
+        public YearOfTheDragonSpyroModel.Animation[] YotdAnimations { get; init; } = [];
+        /// <summary>The creature's own sound slots it keeps, in package order (0 knocked flying, 1 jumped on, then
+        /// those its animations play).</summary>
+        public int[] YotdSoundSlots { get; init; } = [];
+        public bool FromYearOfTheDragon => YotdSet >= 0;
     }
 
     // Class IDs: free like the Crash boxes' (no retail level registers, places or dispatches them, no executable or
@@ -69,7 +81,35 @@ public static class UniversalCrashEnemies
             new("Wa1fV", true),                          // 1 standing in his underwear
         ]));
 
-    public static IReadOnlyList<Enemy> Enemies { get; } = [Frog, Knight, Wizard];
+    // Lost Fleet's creatures (Spyro: Year of the Dragon), from the user's own disc, with their own sounds. Year of the
+    // Dragon's world and model units are Spyro the Dragon's. Their attacks are stretched (each frame twice) so the hit
+    // lands on the frames the knight behaviour reads (6..9): the rhynoc's belly flop, the crab's claw slam.
+    public const string YotdFile = "Lost Fleet (WAD 137, models)";
+    /// <summary>Catalogue and asset source of Lost Fleet's creatures (the user's Spyro: Year of the Dragon disc).</summary>
+    public const string YotdSourceKey = "yearofthedragon";
+    public static readonly Enemy Rhynoc = new("yotd-rhynoc", "Lost Fleet rhynoc", YotdFile, YearOfTheDragonModels.LostFleetModelsSha256,
+        new(0x175, "rhynoc", []), [], 0x54, 1.0, new(690, 740, 1300, 5000, 1600, 26, 450, 1100, 1300))
+    {
+        Kind = 1, YotdSet = 0x7BB5C,
+        YotdAnimations = [new(0, true), new(1, true), new(2, false, 1, 2)],   // breathing, run cycle, belly flop
+        // Roar (knocked flying), grunt (jumped on), then the run's huff and footsteps and the belly flop's landing.
+        YotdSoundSlots = [0, 1, 3, 5, 6],
+    };
+    public static readonly Enemy Crab = new("yotd-crab", "Lost Fleet crab", YotdFile, YearOfTheDragonModels.LostFleetModelsSha256,
+        new(0x1A2, "crab", []), [], 0x55, 1.0, new(800, 1180, 1740, 4000, 1000, 10, 500, 1000, 1200))
+    {
+        Kind = 1, YotdSet = 0x866FC,
+        YotdAnimations = [new(0, true), new(1, true), new(2, false, 1, 2)],   // still, claws swaying, claw slam
+        // Breaking apart (knocked flying), the claw slam's crash (jumped on, and on the slam). Its claw click is left out:
+        // in Lost Fleet it ticks on the still pose, which this crab plays while guarding.
+        YotdSoundSlots = [0, 2],
+    };
+
+    public static IReadOnlyList<Enemy> Enemies { get; } = [Frog, Knight, Wizard, Rhynoc, Crab];
+    public static IReadOnlyList<Enemy> CrashEnemies => [.. Enemies.Where(e => !e.FromYearOfTheDragon)];
+    public static IReadOnlyList<Enemy> YotdCreatures => [.. Enemies.Where(e => e.FromYearOfTheDragon)];
+    public static bool IsYotdId(string? id) => id != null && YotdCreatures.Any(e => e.Id == id);
+    public static bool IsCrashId(string? id) => id != null && CrashEnemies.Any(e => e.Id == id);
 
     public static bool IsId(string? id) => id != null && Enemies.Any(e => e.Id == id);
     /// <summary>Every class the enemies use, companions included.</summary>
@@ -94,7 +134,7 @@ public static class UniversalCrashEnemies
         int basketRow = Enumerable.Range(0, dark.Scene().RowCount).First(i => BinaryPrimitives.ReadUInt16LittleEndian(dark.Row(i).AsSpan(0x36)) == UniversalCrashBoxes.BasketClass);
         byte[] row = dark.Row(basketRow);
         List<UniversalSpecialAsset> assets = [];
-        foreach (var file in Enemies.GroupBy(e => (e.File, e.Sha256)))
+        foreach (var file in CrashEnemies.GroupBy(e => (e.File, e.Sha256)))
         {
             // One texture image per Crash level file: art the enemies share is stored (and imported) once.
             var nsf = disc.Level(file.Key.File, file.Key.Sha256);
@@ -119,6 +159,36 @@ public static class UniversalCrashEnemies
             }
         }
         Cached.AddOrUpdate(library, new(disc.ImagePath, assets));
+        return assets;
+    }
+
+    private static readonly ConditionalWeakTable<UniversalSourceLibrary, Cache> CachedYotd = new();
+
+    /// <summary>Lost Fleet's creatures, converted from the user's Spyro: Year of the Dragon disc (one shared texture
+    /// image), with Dark Hollow's basket row as their template like the Crash enemies.</summary>
+    public static IReadOnlyList<UniversalSpecialAsset> YotdAssets(UniversalSourceLibrary library, Spyro.Editor.Core.Music.YearOfTheDragonDisc disc)
+    {
+        if (CachedYotd.TryGetValue(library, out var hit) && hit.DiscPath == disc.ImagePath) return hit.Assets;
+        var dark = library.Get("darkhollow").Data;
+        int basketRow = Enumerable.Range(0, dark.Scene().RowCount).First(i => BinaryPrimitives.ReadUInt16LittleEndian(dark.Row(i).AsSpan(0x36)) == UniversalCrashBoxes.BasketClass);
+        byte[] row = dark.Row(basketRow);
+        var level = YearOfTheDragonModels.LostFleet(disc);
+        var art = new YearOfTheDragonSpyroModel.Art(level);
+        List<UniversalSpecialAsset> assets = [];
+        foreach (var e in YotdCreatures)
+        {
+            var ids = level.SoundSlots(e.YotdSet);
+            var sounds = e.YotdSoundSlots.Select(k => level.Sound(ids[k])).ToArray();
+            var source = sounds.Length == 0 ? dark : UniversalCrashBoxes.SoundSource(dark, [.. sounds.Select(x => x.Adpcm)], [.. sounds.Select(x => x.Pitch)]);
+            var built = YearOfTheDragonSpyroModel.Build(level, e.YotdSet, e.Main.Name, e.YotdAnimations, e.Size, art: art, soundSlots: e.YotdSoundSlots);
+            byte[] template = row.ToArray();
+            BinaryPrimitives.WriteUInt16LittleEndian(template.AsSpan(0x36), (ushort)e.Class);
+            template[0x53] = e.Reward;
+            template.AsSpan(0x3C, 5).Clear();
+            template[0x41] = built.Package[BinaryPrimitives.ReadInt32LittleEndian(built.Package.AsSpan(0x38)) + 0xC];
+            assets.Add(new(e.Id, e.Name, e.Class, UniversalSpecialBehavior.CrashEnemy, built.Package, art.Vram, source, template) { SourceKey = YotdSourceKey });
+        }
+        CachedYotd.AddOrUpdate(library, new(disc.ImagePath, assets));
         return assets;
     }
 }

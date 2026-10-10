@@ -101,12 +101,18 @@ public sealed class UniversalVramAllocator
         if (length > 0) for (int y = offset / RowBytes; y <= (offset + length - 1) / RowBytes; y++) RebuildRow(y);
     }
 
-    public (int X, int Y)? Clut(int bytes = 32)
+    /// <summary>A palette slot of <paramref name="rows"/> rows (an object palette and its distance shades).</summary>
+    public (int X, int Y)? Clut(int bytes = 32, int rows = 1)
     {
         if (bytes is not (32 or 512)) throw new ArgumentOutOfRangeException(nameof(bytes));
-        for (int y = 0; y < Rows; y++)
+        if (rows is < 1 or > 16) throw new ArgumentOutOfRangeException(nameof(rows));
+        for (int y = 0; y + rows <= Rows; y++)
             for (int x = 0; x + bytes <= RowBytes; x += 32)
-                if (_runFull[y * RowBytes + x] >= bytes) { Mark(x, y, bytes, 1); return (x, y); }
+            {
+                bool free = true;
+                for (int k = 0; k < rows && free; k++) free = _runFull[(y + k) * RowBytes + x] >= bytes;
+                if (free) { Mark(x, y, bytes, rows); return (x, y); }
+            }
         return null;
     }
 }
@@ -204,6 +210,10 @@ public static class UniversalAssetImport
     }
 
     static int PixelByte(int u, int depth) => depth == 0 ? u / 2 : u << (depth - 1);
+    /// <summary>An object palette is followed by rows of the same colours shaded toward the level's distance colour;
+    /// the game draws far objects with a lower row (Artisans' gnorc: rows 472-479). An imported palette brings them.</summary>
+    public const int ShadeRows = 8;
+    static int ShadeRowsAt(int pal, int vramLength) => Math.Clamp((vramLength - ClutOffset(pal)) / 1024, 1, ShadeRows);
     static int PixelOffset(int page, int byteU, int v) => ((page & 16) != 0 ? 256 + v : v) * 1024 + (page & 15) * 128 + byteU - 1024;
     static int PaletteBytes(int depth) => depth == 0 ? 32 : depth == 1 ? 512 : 0;
     static int ClutOffset(int pal) => (pal >> 6) * 1024 + (pal & 63) * 32 - 1024;
@@ -252,11 +262,13 @@ public static class UniversalAssetImport
                 bool same = true;
                 for (int row = 0; row < r.H && same; row++)
                     same = destVram.Slice(PixelOffset(page, r.Bx0, r.MinV + row), r.W).SequenceEqual(r.Rect.AsSpan(row * r.W, r.W));
-                int paletteBytes = PaletteBytes(r.Depth);
-                if (same && (paletteBytes == 0 || destVram.Slice(ClutOffset(pal), paletteBytes).SequenceEqual(src.AsSpan(ClutOffset(pal), paletteBytes))))
+                int paletteBytes = PaletteBytes(r.Depth), shades = ShadeRowsAt(pal, src.Length);
+                for (int k = 0; k < shades && same && paletteBytes > 0; k++)
+                    same = destVram.Slice(ClutOffset(pal) + k * 1024, paletteBytes).SequenceEqual(src.AsSpan(ClutOffset(pal) + k * 1024, paletteBytes));
+                if (same)
                 {
                     for (int row = 0; row < r.H; row++) alloc.Reserve(PixelOffset(page, r.Bx0, r.MinV + row), r.W);
-                    if (paletteBytes > 0) alloc.Reserve(ClutOffset(pal), paletteBytes);
+                    if (paletteBytes > 0) for (int k = 0; k < shades; k++) alloc.Reserve(ClutOffset(pal) + k * 1024, paletteBytes);
                     reused[it]++; continue;
                 }
                 pending.Add(r);
@@ -298,12 +310,15 @@ public static class UniversalAssetImport
             int newPal = r.Pal, paletteBytes = PaletteBytes(r.Depth);
             if (paletteBytes > 0)
             {
-                byte[] clut = items[r.Item].SourceVram.AsSpan(ClutOffset(r.Pal), paletteBytes).ToArray();
-                string ck = Convert.ToHexString(clut);
+                // The palette with the rows of distance shades below it, which the game reads for far objects.
+                var source = items[r.Item].SourceVram;
+                int shades = ShadeRowsAt(r.Pal, source.Length);
+                byte[][] clut = Enumerable.Range(0, shades).Select(k => source.AsSpan(ClutOffset(r.Pal) + k * 1024, paletteBytes).ToArray()).ToArray();
+                string ck = string.Concat(clut.Select(Convert.ToHexString));
                 if (!clutByContent.TryGetValue(ck, out newPal))
                 {
-                    var c = alloc.Clut(paletteBytes) ?? throw new InvalidDataException("No free CLUT slot remains in the destination level.");
-                    clut.CopyTo(destVram.Slice(c.Y * 1024 + c.X, paletteBytes));
+                    var c = alloc.Clut(paletteBytes, ShadeRows) ?? throw new InvalidDataException("No free CLUT slot remains in the destination level.");
+                    for (int k = 0; k < ShadeRows; k++) clut[Math.Min(k, shades - 1)].CopyTo(destVram.Slice((c.Y + k) * 1024 + c.X, paletteBytes));
                     newPal = (c.Y << 6) | ((c.X + 1024) / 32);
                     clutByContent[ck] = newPal; cluts[r.Item]++;
                 }

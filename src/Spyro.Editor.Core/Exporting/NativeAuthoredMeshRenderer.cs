@@ -15,6 +15,10 @@ internal static class NativeAuthoredMeshRenderer
     private sealed record Face(Vector3f[] Points,ColorRgba[] Near,ColorRgba[] Far,int Material,int Group=-1,int Flags=0);
     /// <summary>Imported levels were made for a game with deeper subdivision queues; their faces subdivide only up close.</summary>
     internal const int ImportedFaceFlags=0x40;
+    /// <summary>The face's back is drawn too: the HP face pass and every subdivision pass skip their NCLIP rejection
+    /// when bit 2 is set (USA 0x80026C90, 0x800271F8, 0x80027E04, 0x800284E8, 0x80029304, 0x80029F3C); bit 1 would
+    /// instead flip which side is the front.</summary>
+    internal const int TwoSidedFaceFlag=0x04;
     /// <summary>A sector's far (LP) mesh when it differs from the near one: LP indices are 6 bits, so a sector with
     /// more than 64 near vertices (as retail and imported sectors have) draws a simplified copy far away.</summary>
     private sealed record FarMesh(List<Vector3f> Vertices,List<ColorRgba> Colors,List<int[]> Faces);
@@ -56,6 +60,7 @@ internal static class NativeAuthoredMeshRenderer
             // Imported quads are rarely flat; they stay whole (as the game they came from draws them) when convex,
             // so their texture spans the quad instead of being squeezed into each half.
             int flags=group>=0?(ImportedFlagsOverride?.Invoke(s)??ImportedFaceFlags):0;
+            if(s.TwoSided)flags|=TwoSidedFaceFlag;
             if(s.Vertices.Length==4&&(group>=0?ConvexQuad(s.Vertices):CompatibleQuad(s.Vertices)))faces.Add(new(s.Vertices,near,far,material,group,flags));
             else
             {
@@ -111,7 +116,7 @@ internal static class NativeAuthoredMeshRenderer
         int totalFaces=batches.Sum(b=>b.Faces.Count);
         if(totalFaces>MaxFaces)
             throw new InvalidDataException($"Authored terrain has {totalFaces} drawn faces; the game's per-face table holds {MaxFaces}. Reduce geometry.");
-        RequireSubdivisionQueues(batches);
+        RequireSubdivisionQueues(batches,NativeSubdivisionQueueGuard.Needed(doc));
         var sectors=new List<byte[]>();int cache=1;
         foreach(var batch in batches){sectors.Add(Encode(batch,cache,!proved));cache+=batch.Faces.Count;}
         int count=sectors.Count,total=8+count*4+sectors.Sum(s=>s.Length);byte[] env=new byte[total];W(env,0,(uint)total);W(env,4,(uint)count);
@@ -174,7 +179,7 @@ internal static class NativeAuthoredMeshRenderer
     internal static Func<float,float,float,bool>? PoseFilter;
     /// <summary>Lab only: measure, but do not refuse (experimental images for real-queue measurements).</summary>
     internal static bool QueueCheckDisabled;
-    private static void RequireSubdivisionQueues(List<Batch> batches)
+    private static void RequireSubdivisionQueues(List<Batch> batches,bool guarded)
     {
         if(QueueCheckDisabled){LastReport=(batches.Count,-1,"not checked");return;}
         // Imported levels were made for deeper queues; the export installs NativeSubdivisionQueueGuard for them, so a
@@ -240,7 +245,7 @@ internal static class NativeAuthoredMeshRenderer
                             if(sum<=0||sum>=0x2000)continue;
                             int flags=s.Flags?[n]??0;
                             if((flags&0x80)!=0||!near&&(flags&0x40)!=0)continue;
-                            if(!near&&(px-s.Corners[a3])*s.Normals[n*3]+(py-s.Corners[a3+1])*s.Normals[n*3+1]+(pz-s.Corners[a3+2])*s.Normals[n*3+2]<=0)continue;
+                            if(!near&&(flags&TwoSidedFaceFlag)==0&&(px-s.Corners[a3])*s.Normals[n*3]+(py-s.Corners[a3+1])*s.Normals[n*3+1]+(pz-s.Corners[a3+2])*s.Normals[n*3+2]<=0)continue;
                             if(near&&(flags&0x40)==0)sc++;else sn++;
                         }
                         if(sn>0)normal+=sn+1;if(sc>0)close+=sc+1;
@@ -252,7 +257,9 @@ internal static class NativeAuthoredMeshRenderer
             }
         });
         LastReport=(batches.Count,worst,where??"nowhere");LastLoadMap=(x0,y0,map);
-        if(worst>SubdivisionQueueEntries-SubdivisionMargin)
+        // The simulation is a bound (measured queues in a built village were 4-10x below it): with the guard installed
+        // a camera that does fill a queue draws its remaining faces whole, so only an unguarded level is refused.
+        if(worst>SubdivisionQueueEntries-SubdivisionMargin&&!guarded)
             throw new InvalidDataException($"Too many textured tiles close together near {where}: a camera there can need {worst} of the game's {SubdivisionQueueEntries} close-up texture slots (keep {SubdivisionMargin} spare). Use larger tiles there, or untextured faces.");
     }
 

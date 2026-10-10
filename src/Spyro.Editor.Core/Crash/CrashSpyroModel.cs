@@ -70,29 +70,9 @@ public static class CrashSpyroModel
             for (int i = 0; i < used.Length; i++) part[used[i]] = i;
         }
         int vertexCount = world[0][0].Length;
-        if (vertexCount > 255) throw new InvalidDataException($"{modelName} has {vertexCount} vertices; Spyro objects allow 255.");
-        if (world.SelectMany(a => a).Any(f => f.Length != vertexCount)) throw new InvalidDataException($"{modelName}'s frames disagree on their vertex count.");
-        // Header +5 draws the model 2^n times larger than its stored coordinates (the game's big enemies use 1 and 2).
-        // Every stored coordinate stays within +-1000 like the game's own models: the renderer files faces into
-        // depth buckets in stored units with no upper bound check, so a model reaching further overruns the
-        // ordering table and crashes the game.
-        bool Fits(int n) => world.SelectMany(a => a).SelectMany(f => f).All(v =>
-            Math.Abs(v.X) / (1 << n) <= 1000 && Math.Abs(v.Y) / (1 << n) <= 1000 && Math.Abs(v.Z) / (1 << n) <= 1000);
-        int scaleShift = Enumerable.Range(0, 3).FirstOrDefault(Fits, -1);
-        if (scaleShift < 0) throw new InvalidDataException($"{modelName} is too large for a Spyro object at this size.");
-        var spyroFrames = world.Select(a => a.Select(f => f.Select(v => (X: (int)Math.Round(v.X / (1 << scaleShift)),
-            Y: (int)Math.Round(v.Y / (1 << scaleShift)), Z: (int)Math.Round(v.Z / (1 << scaleShift)))).ToArray()).ToArray()).ToArray();
-
-        // Faces.
-        List<(byte R, byte G, byte B)> near = [], far = [];
-        int Near((byte, byte, byte) c) { int i = near.IndexOf(c); if (i < 0) { i = near.Count; near.Add(c); } return i; }
-        int Far((byte, byte, byte) c) { int i = far.IndexOf(c); if (i < 0) { i = far.Count; far.Add(c); } return i; }
         art ??= new Art(nsf);
         if (!ReferenceEquals(art.Nsf, nsf)) throw new ArgumentException("A shared Crash texture image belongs to one level file.");
-        using var nearFaces = new MemoryStream();
-        using var farFaces = new MemoryStream();
-        void Word(Stream s, uint w) { Span<byte> b = stackalloc byte[4]; BinaryPrimitives.WriteUInt32LittleEndian(b, w); s.Write(b); }
-        int faces = 0;
+        List<Triangle> drawn = [];
         foreach (var t in triangles)
         {
             var tex = t.Texture > 0 ? model.Textures[t.Texture - 1] : null;
@@ -111,8 +91,6 @@ public static class CrashSpyroModel
             if (part != null) v = v.Select(i => i >= 0 && i < part.Length ? part[i] : -1).ToArray();
             if (v.Any(i => i < 0 || i >= vertexCount)) continue;
             var colours = slot.Select(i => t.Colours[i] < model.Colours.Count ? model.Colours[t.Colours[i]] : ((byte)128, (byte)128, (byte)128)).ToArray();
-            uint vertices = (uint)(v[0] << 22 | v[1] << 13 | v[2] << 4);
-            int[] ni = colours.Select(Near).ToArray();
             byte[]? field = null; (byte, byte, byte) average = (128, 128, 128);
             if (tex != null)
             {
@@ -121,12 +99,62 @@ public static class CrashSpyroModel
                 if (!nocull) (corner[1], corner[2]) = (corner[2], corner[1]);
                 (field, average) = art.Field(model.Pages[tex.Page], tex, corner);
             }
+            drawn.Add(new(v, colours, nocull, field, average));
+        }
+        return Package(modelName, animations, world, drawn, options.Collision, sounds, art.Vram);
+    }
+
+    /// <summary>A triangle of a converted model: vertices in the order Spyro's renderer keeps as the front, their
+    /// colours, whether its back is drawn too, and its 12-byte GPU texture field with the texture's average colour
+    /// (for the far, untextured copy), or no field for a plain coloured face.</summary>
+    public sealed record Triangle(int[] Vertices, (byte R, byte G, byte B)[] Colours, bool TwoSided, byte[]? Field,
+        (byte R, byte G, byte B) Average);
+
+    /// <summary>Writes a Spyro animated object package from a model's frames (Spyro model space, world units, z down;
+    /// one array of frames per animation) and triangles, with the texture image their fields point into.
+    /// <paramref name="storedLimit"/> bounds every stored coordinate (see the scale choice below).</summary>
+    public static Result Package(string modelName, IReadOnlyList<Animation> animations, (double X, double Y, double Z)[][][] world,
+        IReadOnlyList<Triangle> triangles, bool collision, IReadOnlyList<byte>? sounds, byte[] vram, int storedLimit = 1000)
+    {
+        int vertexCount = world[0][0].Length;
+        if (vertexCount > 255) throw new InvalidDataException($"{modelName} has {vertexCount} vertices; Spyro objects allow 255.");
+        if (world.SelectMany(a => a).Any(f => f.Length != vertexCount)) throw new InvalidDataException($"{modelName}'s frames disagree on their vertex count.");
+        if (world.Length != animations.Count) throw new ArgumentException("One frame list per animation.");
+        // Header +5 draws the model 2^n times larger than its stored coordinates (the game's big enemies use 1 and 2).
+        // Every stored coordinate stays within +-1000 like the game's own models: the renderer files faces into
+        // depth buckets in stored units with no upper bound check, so a model reaching further overruns the
+        // ordering table and crashes the game.
+        // The object renderer also sorts each face into a 288-bucket depth table of its own, in stored units, with no
+        // bound check (USA 0x8001FFD4..0x8002049C): a model spinning in flight turns its far side to the camera, so a
+        // wide model must be stored smaller (Lost Fleet's crab, 825 stored units across its claws at x2, overran it;
+        // the Crash wizard's 680 did not).
+        bool Fits(int n) => world.SelectMany(a => a).SelectMany(f => f).All(v =>
+            Math.Abs(v.X) / (1 << n) <= storedLimit && Math.Abs(v.Y) / (1 << n) <= storedLimit && Math.Abs(v.Z) / (1 << n) <= storedLimit);
+        int scaleShift = Enumerable.Range(0, 3).FirstOrDefault(Fits, -1);
+        if (scaleShift < 0) throw new InvalidDataException($"{modelName} is too large for a Spyro object at this size.");
+        var spyroFrames = world.Select(a => a.Select(f => f.Select(v => (X: (int)Math.Round(v.X / (1 << scaleShift)),
+            Y: (int)Math.Round(v.Y / (1 << scaleShift)), Z: (int)Math.Round(v.Z / (1 << scaleShift)))).ToArray()).ToArray()).ToArray();
+
+        // Faces.
+        List<(byte R, byte G, byte B)> near = [], far = [];
+        int Near((byte, byte, byte) c) { int i = near.IndexOf(c); if (i < 0) { i = near.Count; near.Add(c); } return i; }
+        int Far((byte, byte, byte) c) { int i = far.IndexOf(c); if (i < 0) { i = far.Count; far.Add(c); } return i; }
+        using var nearFaces = new MemoryStream();
+        using var farFaces = new MemoryStream();
+        void Word(Stream s, uint w) { Span<byte> b = stackalloc byte[4]; BinaryPrimitives.WriteUInt32LittleEndian(b, w); s.Write(b); }
+        int faces = 0;
+        foreach (var t in triangles)
+        {
+            int[] v = t.Vertices;
+            if (v.Length != 3 || v.Any(i => i < 0 || i >= vertexCount)) throw new InvalidDataException($"{modelName} has a triangle outside its vertices.");
+            uint vertices = (uint)(v[0] << 22 | v[1] << 13 | v[2] << 4);
+            int[] ni = t.Colours.Select(Near).ToArray();
             // Bit 0: drawn from both sides (Crash's no-cull triangles).
-            uint sided = nocull ? 1u : 0u;
-            Word(nearFaces, vertices | sided | (field != null ? 2u : 0u));
+            uint sided = t.TwoSided ? 1u : 0u;
+            Word(nearFaces, vertices | sided | (t.Field != null ? 2u : 0u));
             Word(nearFaces, (uint)(ni[0] << 19 | ni[1] << 10 | ni[2] << 1));
-            if (field != null) nearFaces.Write(field);
-            int[] fi = colours.Select(c => Far(field == null ? c : Modulate(average, c))).ToArray();
+            if (t.Field != null) nearFaces.Write(t.Field);
+            int[] fi = t.Colours.Select(c => Far(t.Field == null ? c : Modulate(t.Average, c))).ToArray();
             Word(farFaces, vertices | sided);
             Word(farFaces, (uint)(fi[0] << 19 | fi[1] << 10 | fi[2] << 1));
             faces++;
@@ -184,11 +212,11 @@ public static class CrashSpyroModel
         int cursor = headerBytes;
         for (int a = 0; a < animations.Count; a++) { animOffsets[a] = cursor; cursor += 0x24 + 8 * frameEntries[a].Count; }
         int md = Align(cursor, 8), trailerAt = Align(md + (int)body.Length, 4);
-        byte[] p = new byte[options.Collision ? trailerAt + trailer.Length : md + (int)body.Length];
+        byte[] p = new byte[collision ? trailerAt + trailer.Length : md + (int)body.Length];
         BinaryPrimitives.WriteInt32LittleEndian(p, animations.Count);
         p.AsSpan(4, 16).Fill(0xFF);
         if (sounds != null) for (int i = 0; i < Math.Min(16, sounds.Count); i++) p[4 + i] = sounds[i];
-        if (options.Collision) BinaryPrimitives.WriteUInt32LittleEndian(p.AsSpan(0x14), 0x80000000u | (uint)trailerAt);
+        if (collision) BinaryPrimitives.WriteUInt32LittleEndian(p.AsSpan(0x14), 0x80000000u | (uint)trailerAt);
         BinaryPrimitives.WriteInt32LittleEndian(p.AsSpan(0x34), md);
         for (int a = 0; a < animations.Count; a++)
         {
@@ -213,8 +241,8 @@ public static class CrashSpyroModel
             }
         }
         body.ToArray().CopyTo(p, md);
-        if (options.Collision) trailer.CopyTo(p, trailerAt);
-        return new(p, art.Vram, vertexCount, faces, height, radius0, frameEntries.Select(f => f.Count).ToArray(), scaleShift);
+        if (collision) trailer.CopyTo(p, trailerAt);
+        return new(p, vram, vertexCount, faces, height, radius0, frameEntries.Select(f => f.Count).ToArray(), scaleShift);
     }
 
     private static (byte, byte, byte) Modulate((byte R, byte G, byte B) texture, (byte R, byte G, byte B) colour) =>
@@ -312,9 +340,14 @@ public static class CrashSpyroModel
             int count = t.Mode == 0 ? 16 : 256;
             if (!_cluts.TryGetValue((pageName, t.ClutX, t.ClutY, count), out var clut))
             {
-                if (_clutX + count > 512) { _clutX = 0; _clutY++; }
+                // Each palette takes its row and the 7 below (repeated): the game draws far objects with those
+                // distance-shade rows, so a neighbouring palette there would recolour the model at a distance.
+                int shades = Spyro.Editor.Core.Universal.UniversalAssetImport.ShadeRows;
+                if (_clutX + count > 512) { _clutX = 0; _clutY += shades; }
+                if (_clutY + shades > 512) throw new InvalidDataException("This Crash model uses too many palettes.");
                 clut = (_clutX, _clutY);
-                page.AsSpan(t.ClutY * 512 + t.ClutX * 2, count * 2).CopyTo(Vram.AsSpan(clut.Y * 1024 + clut.X * 2));
+                for (int k = 0; k < shades; k++)
+                    page.AsSpan(t.ClutY * 512 + t.ClutX * 2, count * 2).CopyTo(Vram.AsSpan((clut.Y + k) * 1024 + clut.X * 2));
                 _clutX += count;
                 _cluts[(pageName, t.ClutX, t.ClutY, count)] = clut;
             }

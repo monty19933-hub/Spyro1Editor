@@ -26,7 +26,7 @@ public static partial class UniversalSpecialBehaviors
         (int Class, int Kind, UniversalCrashEnemies.Tuning T) Tuning(int c)
         {
             var e = UniversalCrashEnemies.ForClass(c)!;
-            return (c, e == UniversalCrashEnemies.Frog ? CrashEnemyFrog : e == UniversalCrashEnemies.Knight ? CrashEnemyKnight : CrashEnemyWizard, e.Tuning);
+            return (c, e.Kind >= 0 ? e.Kind : e == UniversalCrashEnemies.Frog ? CrashEnemyFrog : e == UniversalCrashEnemies.Knight ? CrashEnemyKnight : CrashEnemyWizard, e.Tuning);
         }
         var tunings = classes.Order().Select(Tuning).ToList();
         if (tunings.Any(t => t.Kind == CrashEnemyWizard) && !classes.Contains(UniversalCrashEnemies.Wizard.Companion!.Class))

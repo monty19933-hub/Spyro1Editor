@@ -69,7 +69,8 @@ public static class UniversalCrashBoxes
     ];
     private const string BoxPage = "Cr10T";
     private const int TexturePage = 8;              // VRAM x 512, y 0, 4 bpp
-    private const int ClutRow = 480;                // palettes at VRAM (512, 480 + face)
+    private const int ClutRow = 480;                // palette of face f at VRAM (512 + 16f, 480), repeated on the 7 rows
+                                                    // below: the game draws far objects with those distance-shade rows
 
     private sealed record Cache(string DiscPath, IReadOnlyList<UniversalSpecialAsset> Assets);
     private static readonly ConditionalWeakTable<UniversalSourceLibrary, Cache> Cached = new();
@@ -102,7 +103,7 @@ public static class UniversalCrashBoxes
         {
             for (int y = 0; y < 32; y++)
                 faces[i].Texels.AsSpan(y * 16, 16).CopyTo(vram.AsSpan((i / 8 * 32 + y) * 1024 + i % 8 * 16));
-            faces[i].Clut.CopyTo(vram.AsSpan((ClutRow + i) * 1024));
+            for (int k = 0; k < UniversalAssetImport.ShadeRows; k++) faces[i].Clut.CopyTo(vram.AsSpan((ClutRow + k) * 1024 + 32 * i));
         }
 
         var sounds = SoundSource(dark, [.. SoundNames.Select(nsf.Sound)]);
@@ -187,8 +188,10 @@ public static class UniversalCrashBoxes
 
     /// <summary>A copy of Dark Hollow's data whose first sound descriptors and SPU bank hold the given Crash sounds,
     /// so the editor's ordinary sound import copies them into the destination like any imported object's sounds.</summary>
-    internal static UniversalLevelData SoundSource(UniversalLevelData dark, IReadOnlyList<byte[]> samples)
+    internal static UniversalLevelData SoundSource(UniversalLevelData dark, IReadOnlyList<byte[]> samples, IReadOnlyList<int>? pitches = null)
     {
+        if (pitches != null && (pitches.Count != samples.Count || pitches.Any(p => p is <= 0 or > 0x3FFF)))
+            throw new ArgumentException("One SPU pitch per sound.");
         byte[] data = dark.Bytes.ToArray();
         var layout = new Spyro.Editor.Core.Exporting.NativeLevelSoundLayout(data);
         int count = layout.Sound.Descriptors.Count, bank = layout.Sound.BankByteLength, cursor = 0;
@@ -210,7 +213,7 @@ public static class UniversalCrashBoxes
             d.Clear();
             BinaryPrimitives.WriteInt32LittleEndian(d, offsets[i < samples.Count ? i : 0]);
             d[8] = 0x32;
-            BinaryPrimitives.WriteUInt16LittleEndian(d[10..], SoundPitch);
+            BinaryPrimitives.WriteUInt16LittleEndian(d[10..], pitches == null ? SoundPitch : (ushort)pitches[i < samples.Count ? i : 0]);
         }
         var check = new Spyro.Editor.Core.Exporting.NativeLevelSoundLayout(data);
         if (check.Sound.Descriptors.Take(samples.Count).Any(d => !d.IsSupportedOneShot))
@@ -267,7 +270,7 @@ public static class UniversalCrashBoxes
             // Seen from outside, a side's first base vertex is on the right: read the image right to left there,
             // so lettering ("NITRO", 3-2-1) is not mirrored.
             if (upright) (u0, u1) = (u1, u0);
-            int clut = (ClutRow + face) << 6 | 512 / 16;
+            int clut = ClutRow << 6 | (512 + 16 * face) / 16;
             // Corners a, b, c, d take (u0, va), (u0, vb), (u1, va), (u1, vb): a and c are the base vertices of a side.
             int va = upright ? v1 : v0, vb = upright ? v0 : v1;
             byte[] f = new byte[12];

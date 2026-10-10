@@ -42,7 +42,9 @@ internal static class WumpaVillage
             m => new AuthoredMaterial(darkHollowWad, m.Carrier) { Image = Path.GetFullPath(Path.Combine(pictures, m.Name + ".png")) });
         return blank with
         {
-            Name = Name, Spawn = Spawn, Heading = 64, SkyColor = new(240, 150, 90), MusicTrack = MusicTrack,
+            Name = Name, Spawn = Spawn, Heading = 64, SkyColor = new(240, 150, 90),
+            // A song chosen later in Game Settings (Toad Village) stays.
+            MusicTrack = Spyro.Editor.Core.Music.MusicTrackCatalog.IsCustom(blank.MusicTrack) ? blank.MusicTrack : MusicTrack,
             Surfaces = Build(n => materials[n]), SkySourceWadEntry = skyWad,
         };
     }
@@ -117,10 +119,15 @@ internal static class WumpaVillage
             float nx = dy / len, ny = -dx / len;   // the visible side is on the right of a->b
             return (int)MathF.Round(22 * (nx * -0.8f + ny * -0.6f));
         }
+        /// <summary>Tiles and panels are made this much smaller than the sizes written below: one picture spread over
+        /// 200-300 units stretched into coarse blocks and swam as the camera moved (the console maps textures without
+        /// perspective correction), so the level uses tiles about as large as retail Spyro's.</summary>
+        private const float Detail = 0.5f;
         /// <summary>Floor rectangle split into tiles of at most <paramref name="tile"/>, counter-clockwise.</summary>
         public void Floor(float x0, float y0, float x1, float y1, float z, string m, float tile = 0)
         {
             if (tile == 0) tile = m == "grass" ? 320 : 240;   // open grass takes larger tiles (fewer close-up faces)
+            tile *= Detail;
             int nx = Math.Max(1, (int)Math.Ceiling((x1 - x0) / tile)), ny = Math.Max(1, (int)Math.Ceiling((y1 - y0) / tile));
             for (int i = 0; i < nx; i++) for (int j = 0; j < ny; j++)
             {
@@ -131,6 +138,7 @@ internal static class WumpaVillage
         /// <summary>Ramp rising from z0 at y0 to z1 at y1 (or along x when <paramref name="alongX"/>).</summary>
         public void Ramp(float x0, float y0, float x1, float y1, float z0, float z1, string m, bool alongX = false, float tile = 240)
         {
+            tile *= Detail;
             int nx = Math.Max(1, (int)Math.Ceiling((x1 - x0) / tile)), ny = Math.Max(1, (int)Math.Ceiling((y1 - y0) / tile));
             float Z(float x, float y) => R(alongX ? z0 + (z1 - z0) * (x - x0) / (x1 - x0) : z0 + (z1 - z0) * (y - y0) / (y1 - y0));
             for (int i = 0; i < nx; i++) for (int j = 0; j < ny; j++)
@@ -144,6 +152,7 @@ internal static class WumpaVillage
         public void Wall(float ax, float ay, float bx, float by, float z0, float z1, string m, float panel = 0, float course = 320, int shade = 0)
         {
             if (panel == 0) panel = m == "castle" ? 320 : 240;   // the long castle walls take wider panels
+            panel *= Detail; course = Math.Max(48, course * Detail);
             float len = MathF.Sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
             int n = Math.Max(1, (int)Math.Ceiling(len / panel)), k = Math.Max(1, (int)Math.Ceiling((z1 - z0) / course));
             for (int i = 0; i < n; i++) for (int j = 0; j < k; j++)
@@ -188,6 +197,7 @@ internal static class WumpaVillage
         /// side); panels that reach the base at one end become triangles.</summary>
         public void SlopedWall(float ax, float ay, float bx, float by, float zBase, float topA, float topB, string m, float panel = 240)
         {
+            panel *= Detail;
             float len = MathF.Sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
             int n = Math.Max(1, (int)Math.Ceiling(len / panel));
             for (int i = 0; i < n; i++)

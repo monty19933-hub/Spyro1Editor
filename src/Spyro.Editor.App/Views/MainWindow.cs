@@ -14536,6 +14536,9 @@ public sealed partial class MainWindow : Window
             string japaneseImage = needsJapanese ? UniversalJapaneseDiscLocator.Find(_workspace) : "";
             bool needsCrash = universalPlacements.Values.Any(list => list.Any(p => UniversalSpecialCatalog.RequiresCrashSource(p.SpecialId)));
             string crashImage = needsCrash ? Spyro.Editor.Core.Crash.CrashWarpedDiscLocator.Find(_workspace) : "";
+            bool needsYotd = universalPlacements.Values.Any(list => list.Any(p => UniversalSpecialCatalog.RequiresYearOfTheDragonSource(p.SpecialId)));
+            var yotd = needsYotd ? ResolveYearOfTheDragonDisc()
+                ?? throw new InvalidDataException("Lost Fleet's creatures are converted from your Spyro: Year of the Dragon (USA) disc. Choose it with \"Year of the Dragon disc…\" in Game Settings → Music.") : null;
             UniversalExportResult universal = await Task.Run(() =>
             {
                 UniversalSourceLibrary.RequireOriginal(donorImage);
@@ -14554,7 +14557,7 @@ public sealed partial class MainWindow : Window
                         throw new InvalidDataException("Crash crates, TNT, Nitro and the Crash enemies use art and sounds from your Crash Bandicoot: Warped (USA) disc. Choose it with \"Crash disc…\" in the Add Object browser.");
                     crash = new Spyro.Editor.Core.Crash.CrashWarpedDisc(crashImage);
                 }
-                return UniversalMobyExport.Apply(library, currentImage, universalImage, _retailCatalog, universalPlacements, japanese: japanese, crash: crash,
+                return UniversalMobyExport.Apply(library, currentImage, universalImage, _retailCatalog, universalPlacements, japanese: japanese, crash: crash, yotd: yotd,
                     removedRowsByLevel: universalRemoved, identityWorkspace: _workspace.RootPath,
                     deferSpecialHooks: deferSharedRuntimeHooks,
                     // The completed ordinary object stage already adjusted native removal rewards.

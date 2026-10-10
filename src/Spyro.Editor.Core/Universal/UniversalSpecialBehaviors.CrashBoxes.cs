@@ -76,7 +76,9 @@ public static partial class UniversalSpecialBehaviors
             a.I(43, Sp, T0, 0x30); a.I(43, Sp, T1, 0x34); a.I(43, Sp, T2, 0x38);
             a.I(9, Sp, A0, 0x30);
         }
-        // v0 = 1 while Spyro stands on (or drops onto) the box top and is not rising.
+        // v0 = 1 while Spyro stands on (or drops onto) the box top and is not rising. Rising is his vertical speed
+        // (0x80078B48, up positive), not the jump state: a jump stays in state 5 all the way down, so a box landed on
+        // from a jump would never count.
         void OnTop()
         {
             string end = L("ontop");
@@ -88,8 +90,8 @@ public static partial class UniversalSpecialBehaviors
             a.R(T2, T5, T2, 0, 0x23); Abs(T2); a.I(11, T2, T7, CrashOnTopHalf); a.Br(4, T7, Zero, end); a.Nop();
             a.R(T3, T6, T3, 0, 0x23); a.I(9, T3, T3, -CrashOnTopLow);
             a.I(11, T3, T7, CrashOnTopHigh - CrashOnTopLow); a.Br(4, T7, Zero, end); a.Nop();
-            a.La(T0, MovementState); a.I(35, T0, T1, 0); Li(T2, RisingJump);
-            a.Br(4, T1, T2, end); a.Nop();
+            a.La(T0, VerticalSpeed); a.I(35, T0, T1, 0); a.Nop();
+            a.Br(7, T1, Zero, end); a.Nop();
             Li(V0, 1);
             a.L(end);
         }

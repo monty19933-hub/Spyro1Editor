@@ -797,7 +797,8 @@ public static class UniversalMobyComposer
         var collectionStars = classes.Keys.Where(k => k.Class is >= 0x53 and <= 0x57)
             .Select(k => k.Source)
             // A Crash crate's gem is spawned by the destination's own reward path, like its native enemies' gems.
-            .Concat(rows.Where(r => r.Item1[0x53] is >= 0x53 and <= 0x57 && r.Item2.SourceLevelKey != UniversalCrashBoxes.SourceKey)
+            .Concat(rows.Where(r => r.Item1[0x53] is >= 0x53 and <= 0x57 && r.Item2.SourceLevelKey != UniversalCrashBoxes.SourceKey
+                    && r.Item2.SourceLevelKey != UniversalCrashEnemies.YotdSourceKey)
                 .Select(r => r.Item2.SourceLevelKey))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(key =>

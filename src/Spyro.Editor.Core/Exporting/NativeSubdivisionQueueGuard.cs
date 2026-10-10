@@ -9,7 +9,7 @@ namespace Spyro.Editor.Core.Exporting;
 /// pushes a sector header once per sector and queue, then the face, with no check: a level denser than the game's
 /// own overruns the queue into the next buffer. With the guard a face that would not fit (header and face) is drawn
 /// whole instead, through the pass's own path for distant faces. Retail levels never fill a queue, so nothing they
-/// draw changes. Installed for levels imported from another game, whose density the editor cannot bound.</summary>
+/// draw changes. Installed for imported levels and large built levels (<see cref="Needed"/>).</summary>
 public static class NativeSubdivisionQueueGuard
 {
     private sealed record Site(uint At, uint Header, uint Face, uint Direct, int Pointer, int Bit, uint Limit);
@@ -55,8 +55,14 @@ public static class NativeSubdivisionQueueGuard
         }
     }
 
-    /// <summary>Levels with sectors imported from another game need the guard.</summary>
-    public static bool Needed(Spyro.Editor.Core.Editing.SceneDocument document) => document.Surfaces.Any(s => s.Sector != null);
+    /// <summary>Levels with sectors imported from another game need the guard, and so do built levels with more textured
+    /// faces than one queue holds: the editor can only bound their per-camera load (generously), and their tiles
+    /// must stay small enough for the game's texture detail, as retail tiles are. A built level with at most
+    /// <see cref="UnguardedTexturedFaces"/> textured faces (each at most two drawn faces, about one queue) stays
+    /// unguarded and is refused if the simulation finds a camera that could overfill a queue.</summary>
+    public static bool Needed(Spyro.Editor.Core.Editing.SceneDocument document) =>
+        document.Surfaces.Any(s => s.Sector != null) || document.Surfaces.Count(s => s.Material != null) > UnguardedTexturedFaces;
+    public const int UnguardedTexturedFaces = 63;
 
     public static bool IsInstalled(byte[] exe) =>
         BinaryPrimitives.ReadUInt32LittleEndian(exe.AsSpan((int)(Sites[0].At - UniversalExeBindings.ExeBase))) == UniversalMips.EncodeJ(2, Cave);

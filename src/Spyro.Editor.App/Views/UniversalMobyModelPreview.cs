@@ -23,9 +23,9 @@ internal static class UniversalMobyModelPreview
     internal const int Size = 224;
 
     internal static Task<Frame> LoadAsync(UniversalSourceLibrary library, UniversalMobyVariant variant, UniversalJapaneseSource? japanese,
-        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash = null)
+        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash = null, Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd = null)
     {
-        string key = $"{library.ImagePath}|{japanese?.ImagePath}|{crash?.ImagePath}|{variant.SourceLevelKey}|{variant.ClassId}";
+        string key = $"{library.ImagePath}|{japanese?.ImagePath}|{crash?.ImagePath}|{yotd?.ImagePath}|{variant.SourceLevelKey}|{variant.ClassId}";
         return Cache.GetOrAdd(key, _ => new Lazy<Task<Frame>>(() => Task.Run(async () =>
         {
             await Workers.WaitAsync();
@@ -34,9 +34,11 @@ internal static class UniversalMobyModelPreview
                 byte[] package, vram;
                 if (UniversalSpecialCatalog.IsSpecial(variant))
                 {
-                    var asset = UniversalMobyExport.SpecialProvider(japanese, library, crash)?.Invoke(UniversalSpecialCatalog.SpecialIdForClass(variant.ClassId)!);
+                    var asset = UniversalMobyExport.SpecialProvider(japanese, library, crash, yotd)?.Invoke(UniversalSpecialCatalog.SpecialIdForClass(variant.ClassId)!);
                     if (asset == null)
-                        return new(null, variant.SourceLevelKey == UniversalCrashBoxes.SourceKey ? "Choose your Crash disc to preview this model." : "Choose your Japanese disc to preview this model.");
+                        return new(null, variant.SourceLevelKey == UniversalCrashBoxes.SourceKey ? "Choose your Crash disc to preview this model."
+                            : variant.SourceLevelKey == UniversalCrashEnemies.YotdSourceKey ? "Choose your Year of the Dragon disc to preview this creature."
+                            : "Choose your Japanese disc to preview this model.");
                     package = asset.Package; vram = asset.SourceVram;
                 }
                 else if (variant.HasLocalModel)

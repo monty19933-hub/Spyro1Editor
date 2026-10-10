@@ -54,9 +54,28 @@ if (args.Length == 6 && args[0] == "--export")
 }
 
 // ---- Free checks.
-var enemies = UniversalCrashEnemies.Enemies;
+var enemies = UniversalCrashEnemies.CrashEnemies;
+var creatures = UniversalCrashEnemies.YotdCreatures;
 var all = UniversalCrashEnemies.AllClasses;
-Check(enemies.Count == 3 && all.Count == 4 && all.Distinct().Count() == 4, "frog, knight, wizard and the wizard's robe-off model");
+Check(enemies.Count == 3 && creatures.Count == 2 && all.Count == 6 && all.Distinct().Count() == 6,
+    "frog, knight, wizard and the wizard's robe-off model; Lost Fleet's rhynoc and crab");
+foreach (var e in creatures)
+{
+    string id = UniversalSpecialCatalog.SpecialIdForClass(e.Class)!;
+    Check(id == e.Id && UniversalSpecialCatalog.RequiresYearOfTheDragonSource(id) && !UniversalSpecialCatalog.RequiresCrashSource(id) &&
+        !UniversalSpecialCatalog.RequiresJapaneseSource(id), $"{e.Id} needs the Year of the Dragon disc only");
+    Check(UniversalSpecialCatalog.DisplayName(e.Class) == e.Name && e.Name.StartsWith("Lost Fleet ") && e.Kind == UniversalSpecialBehaviors.CrashEnemyKnight,
+        $"{e.Id} is named {e.Name} and guards, marches and attacks");
+    // The knight behaviour hits on attack frames 6..9: the stretched attack must reach them.
+    var attack = e.YotdAnimations[2];
+    Check(e.YotdAnimations.Length == 3 && attack.Repeat == 2, $"{e.Id}: guard, march and a stretched attack");
+}
+Check(UniversalCrashEnemies.TreasureValue(UniversalCrashEnemies.Rhynoc.Class) == 2 && UniversalCrashEnemies.TreasureValue(UniversalCrashEnemies.Crab.Class) == 5,
+    "rhynoc: green gem (2); crab: blue gem (5)");
+var yotdEntries = UniversalSpecialCatalog.Entries(true, true, true).Where(e => e.Default.SourceLevelKey == UniversalCrashEnemies.YotdSourceKey).ToList();
+Check(yotdEntries.Count == 2 && yotdEntries.All(e => e.Category == "Enemies" && e.SubCategory == "Spyro: Year of the Dragon" && e.RestrictionReason == null) &&
+    UniversalSpecialCatalog.Entries(true, true).Where(e => e.Default.SourceLevelKey == UniversalCrashEnemies.YotdSourceKey).All(e => e.RestrictionReason != null),
+    "catalog: Enemies › Spyro: Year of the Dragon, locked until the disc is chosen");
 Check(enemies.All(e => UniversalCrashEnemies.IsPlaceableClass(e.Class)) && !UniversalCrashEnemies.IsPlaceableClass(UniversalCrashEnemies.Wizard.Companion!.Class),
     "the robe-off model is not placeable on its own");
 Check(!all.Intersect(UniversalCrashBoxes.AllClasses).Any(), "no clash with the Crash boxes");
@@ -157,8 +176,8 @@ Check(MusicTrackCatalog.CustomTracks.Select(t => t.CustomSlot).Distinct().Count(
 }
 if (args.Length == 0) { Console.WriteLine($"CRASH_ENEMY_FREE_OK checks={checks}"); return; }
 
-// ---- Source checks: USA.bin catalog-workspace Crash.bin.
-if (args.Length != 3) throw new ArgumentException("USA.bin catalog-workspace Crash.bin");
+// ---- Source checks: USA.bin catalog-workspace Crash.bin [YearOfTheDragon.bin].
+if (args.Length is not (3 or 4)) throw new ArgumentException("USA.bin catalog-workspace Crash.bin [YearOfTheDragon.bin]");
 var catalog2 = LevelCatalog.Load(args[1]);
 var library = new UniversalSourceLibrary(args[0], catalog2);
 var disc2 = new CrashWarpedDisc(args[2]);
@@ -282,6 +301,46 @@ UniversalCrashBoxes.RequireDestination(library.Get("darkhollow").Overlay, librar
         Check(10 * Math.Log10(signal / error) > 30 && rms is > 4000 and < 9000, $"decodes back to the render ({10 * Math.Log10(signal / error):0.0} dB) at Spyro's loudness (rms {rms:0})");
     }
     finally { Directory.Delete(scratch, true); }
+}
+if (args.Length == 4)
+{
+    // Lost Fleet's creatures from the Year of the Dragon disc: read, converted, tuned to their built models.
+    var yotd = new Spyro.Editor.Core.Music.YearOfTheDragonDisc(args[3]);
+    var made = UniversalCrashEnemies.YotdAssets(library, yotd);
+    Check(ReferenceEquals(made, UniversalCrashEnemies.YotdAssets(library, yotd)), "creature cache reused");
+    Check(made.Select(a => a.Id).SequenceEqual(creatures.Select(e => e.Id)) && made.All(a => a.Behavior == UniversalSpecialBehavior.CrashEnemy &&
+        a.SourceKey == UniversalCrashEnemies.YotdSourceKey) && ReferenceEquals(made[0].SourceVram, made[1].SourceVram), "one asset per creature, one shared texture image");
+    var lostFleet = Spyro.Editor.Core.YearOfTheDragon.YearOfTheDragonModels.LostFleet(yotd);
+    foreach (var (asset, e) in made.Select(a => (a, UniversalCrashEnemies.ForClass(a.ClassId)!)))
+    {
+        var m = Decoded.Read(asset.Package);
+        var source = lostFleet.Animated(e.YotdSet);
+        Check(m.Frames.Select(f => f.Count).SequenceEqual(e.YotdAnimations.Select(a => (source[a.Index].Frames.Count + a.Step - 1) / a.Step * a.Repeat)),
+            $"{asset.Id}: every kept frame of each animation");
+        Check(m.Frames[2].Count >= 10, $"{asset.Id}: the attack reaches the behaviour's hit frames 6..9");
+        Check(m.Vertices is > 0 and <= 255 && m.NearFaces > 0 && m.FarFaces == m.NearFaces && m.MaxStored <= 1000 && m.FacesValid,
+            $"{asset.Id}: {m.Vertices} vertices, {m.NearFaces} faces, stored coordinates {m.MaxStored}");
+        Check(m.Textures.All(t => t.PageX >= 8 && t.Depth <= 2), $"{asset.Id}: art in the level's half of texture memory");
+        int n = e.YotdSoundSlots.Length;
+        Check(n >= 2 && asset.Package.AsSpan(4, 16).ToArray().Select((b, i) => i < n ? b == i : b == 0xFF).All(x => x), $"{asset.Id}: sound slots 0..{n - 1}");
+        var soundLayout = new Spyro.Editor.Core.Exporting.NativeLevelSoundLayout(asset.SourceData.Bytes);
+        var soundIds = lostFleet.SoundSlots(e.YotdSet);
+        for (int i = 0; i < n; i++)
+        {
+            var want = lostFleet.Sound(soundIds[e.YotdSoundSlots[i]]);
+            var dsc = soundLayout.Sound.Descriptors[i];
+            Check(dsc.IsSupportedOneShot && dsc.Pitch == want.Pitch && dsc.Sample.CopyBytes().SequenceEqual(want.Adpcm),
+                $"{asset.Id}: sound {i} is Lost Fleet's sound {soundIds[e.YotdSoundSlots[i]]} ({want.Adpcm.Length} bytes, pitch 0x{want.Pitch:X})");
+        }
+        Check(m.Frames.SelectMany(f => f).All(s => s == 0xFF || s < n) && m.Frames.SelectMany(f => f).Any(s => s != 0xFF),
+            $"{asset.Id}: its animations play its own sounds");
+        Check(Math.Abs(e.Tuning.Top - m.Height) <= 40, $"{asset.Id}: tuned height {e.Tuning.Top} vs model {m.Height}");
+        Check(Math.Abs(e.Tuning.Stand - (m.CapsuleTop + 556)) <= 60, $"{asset.Id}: tuned standing height {e.Tuning.Stand} vs capsule top {m.CapsuleTop} + 556");
+        Check(e.Tuning.Touch > m.CapsuleRadius && e.Tuning.Stomp > m.CapsuleRadius, $"{asset.Id}: touch and stomp reach beyond the capsule");
+        Check(BinaryPrimitives.ReadUInt16LittleEndian(asset.RowTemplate.AsSpan(0x36)) == asset.ClassId && asset.RowTemplate[0x53] == e.Reward,
+            $"{asset.Id}: row carries its class and reward");
+        Console.WriteLine($"  {asset.Id}: {asset.Package.Length} bytes, {m.Vertices} vertices, {m.NearFaces} faces, height {m.Height}, frames {string.Join(",", m.Frames.Select(f => f.Count))}");
+    }
 }
 Console.WriteLine($"CRASH_ENEMY_SOURCE_OK checks={checks}");
 

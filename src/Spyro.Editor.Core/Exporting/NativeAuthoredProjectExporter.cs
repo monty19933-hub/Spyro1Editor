@@ -75,7 +75,7 @@ public static class NativeAuthoredProjectExporter
         List<LevelTextReplacement> names=[..retailNames??[]];
         List<(string Key,int Prefix)> identities=[];
         // The user's Crash disc supplies Crash boxes and enemies, as in the retail-level export.
-        var special=UniversalMobyExport.SpecialProvider(japanese,donors,crash);
+        var special=UniversalMobyExport.SpecialProvider(japanese,donors,crash,yotd);
         foreach(var scene in scenes.Where(s=>s.Document.TargetBinding!=null).OrderBy(s=>s.Document.TargetBinding!.LevelId))
         {
             token.ThrowIfCancellationRequested();requireCurrent?.Invoke();
@@ -135,7 +135,7 @@ public static class NativeAuthoredProjectExporter
                 foreach(var identity in identities)UniversalNativeLayoutStore.Bind(workspace,identity.Key,identity.Prefix);
             }
             string hash=await compilation.ExportAsync(donors,fresh.Placements,japanese,outputImage,workspace,catalog,token,
-                RequirePublication,stage,eggs,signs,names,startLevelId==65,startLevelId,portalRoutes,returnClasses,crash);
+                RequirePublication,stage,eggs,signs,names,startLevelId==65,startLevelId,portalRoutes,returnClasses,crash,yotd);
             return hash;
         }
         NativeClearedRetailBinding.ApplyNewGameStart(donors.Disc.Exe,exe,startLevelId);

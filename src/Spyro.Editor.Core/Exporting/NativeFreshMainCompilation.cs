@@ -144,7 +144,8 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         UniversalJapaneseSource? japanese,string outputImage,string identityWorkspace,LevelCatalog nativeCatalog,CancellationToken token=default,Action? requireDocumentCurrent=null,
         string? stagedRetailImage=null,IReadOnlyList<(int LevelIndex,int Row,int Colour)>? retailEggs=null,IReadOnlySet<string>? retailSignLevels=null,
         IReadOnlyList<LevelTextReplacement>? retailNames=null,bool startInAuthoredLevel=true,int? startLevelId=null,PortalRouteDocument? portalRoutes=null,
-        IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses=null,Spyro.Editor.Core.Crash.CrashWarpedDisc? crash=null)
+        IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses=null,Spyro.Editor.Core.Crash.CrashWarpedDisc? crash=null,
+        Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd=null)
     {
         if(Path.GetFullPath(outputImage)==Path.GetFullPath(donors.ImagePath))throw new InvalidDataException("Fresh export cannot replace its original source image.");
         if(portalRoutes?.Destinations.Any(d=>d.DestinationLevelId==65)==true)
@@ -158,7 +159,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         if(startLevelId is {} chosen) NativeClearedRetailBinding.ApplyNewGameStart(donors.Disc.Exe,stagedExe,chosen);
         else NativeFreshNewGameEntry.Apply(donors.Disc.Exe,stagedExe,startInAuthoredLevel);
         bool liquids=UniversalLiquidSplashes.Liquids(Document.Surfaces.Select(s=>s.Kind)).Count>0;
-        var compose=placements.Count == 0 && !liquids ? null : ComposeWithExecutable(donors,placements,stagedExe,UniversalMobyExport.SpecialProvider(japanese,donors,crash));
+        var compose=placements.Count == 0 && !liquids ? null : ComposeWithExecutable(donors,placements,stagedExe,UniversalMobyExport.SpecialProvider(japanese,donors,crash,yotd));
         Dictionary<int,IReadOnlyList<NativePortalReturnClass>> returnClasses=retailReturnClasses?.ToDictionary(p=>p.Key,p=>p.Value)??[];
         returnClasses[65]=compose==null?[]:NativePortalReturnClass.Capture(compose.Classes);
         byte[] levelData=compose?.LevelData ?? _body.ToArray(), overlayData=compose?.Overlay ?? _overlay.ToArray();

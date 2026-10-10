@@ -27,6 +27,7 @@ public sealed class YearOfTheDragonDisc
     private readonly DiscLayout _layout;
     private readonly (int Lba, int Size) _speech;
     private readonly byte[] _songs, _levels;
+    private readonly Dictionary<string, (int Lba, int Size)> _files;
 
     public YearOfTheDragonDisc(string imagePath)
     {
@@ -34,7 +35,7 @@ public sealed class YearOfTheDragonDisc
         using var fs = File.OpenRead(imagePath);
         _layout = DiscImage.DetectLayout(fs);
         if (_layout.SectorSize != 2352) throw new InvalidDataException("The Spyro: Year of the Dragon disc must be a raw MODE2/2352 image (.bin/.cue).");
-        var files = new Dictionary<string, (int Lba, int Size)>(StringComparer.OrdinalIgnoreCase);
+        var files = _files = new Dictionary<string, (int Lba, int Size)>(StringComparer.OrdinalIgnoreCase);
         byte[] root = DiscImage.ReadFileBytes(fs, _layout, _layout.RootExtent, 0, _layout.RootLength);
         for (int o = 0; o < root.Length;)
         {
@@ -57,6 +58,26 @@ public sealed class YearOfTheDragonDisc
     }
 
     public string ImagePath { get; }
+
+    /// <summary>The game's executable (SCUS_944.67), as stored.</summary>
+    public byte[] Executable() => ReadFile(BootName);
+
+    /// <summary>Entry <paramref name="index"/> of WAD.WAD (the levels and their sub-files), as stored.</summary>
+    public byte[] WadEntry(int index)
+    {
+        byte[] header = ReadFile("WAD.WAD", 0, 0x800);
+        if (index < 0 || index >= 0x100) throw new ArgumentOutOfRangeException(nameof(index));
+        int offset = BinaryPrimitives.ReadInt32LittleEndian(header.AsSpan(8 * index)), size = BinaryPrimitives.ReadInt32LittleEndian(header.AsSpan(8 * index + 4));
+        if (offset <= 0 || size <= 0 || (long)offset + size > _files["WAD.WAD"].Size) throw new InvalidDataException($"WAD entry {index} is not on this disc.");
+        return ReadFile("WAD.WAD", offset, size);
+    }
+
+    private byte[] ReadFile(string name, int offset = 0, int length = -1)
+    {
+        if (!_files.TryGetValue(name, out var file)) throw new InvalidDataException($"{name} is missing from the Spyro: Year of the Dragon disc.");
+        using var fs = File.OpenRead(ImagePath);
+        return DiscImage.ReadFileBytes(fs, _layout, file.Lba, offset, length < 0 ? file.Size - offset : length);
+    }
 
     /// <summary>The song a level plays, as XA sector payloads (2,324 bytes each, Form 2 data without EDC).</summary>
     public byte[][] LevelSong(YearOfTheDragonSong song)

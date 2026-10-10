@@ -26,6 +26,10 @@ public sealed record AuthoredSurface(string Id, Vector3f[] Vertices, ColorRgba C
     /// compiler groups the face itself).</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public int? Sector { get; init; }
+    /// <summary>Drawn from both sides (thin walls, sails, planks). One-sided faces show only their front, the side
+    /// their corners turn anticlockwise from.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool TwoSided { get; init; }
 }
 
 /// <summary>A native special-surface record (type and two parameters, as retail levels store them): type 0 is a

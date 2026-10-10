@@ -12,11 +12,14 @@ public static class UniversalSpecialCatalog
     public const string TemplatePrefix = "special:";
     private const int EggModelBytes = 2056, SignModelBytes = 2664, EggCodeBytes = 0x150, SignCodeBytes = 0x1C0;
 
-    public static bool IsSpecial(UniversalMobyVariant v) => v.SourceLevelKey is SourceKey or UniversalHighValueGems.SourceKey or UniversalCrashBoxes.SourceKey;
+    public static bool IsSpecial(UniversalMobyVariant v) => v.SourceLevelKey is SourceKey or UniversalHighValueGems.SourceKey or UniversalCrashBoxes.SourceKey
+        or UniversalCrashEnemies.YotdSourceKey;
 
-    public static bool RequiresJapaneseSource(string? id) => id != null && !UniversalHighValueGems.IsId(id) && !RequiresCrashSource(id);
+    public static bool RequiresJapaneseSource(string? id) => id != null && !UniversalHighValueGems.IsId(id) && !RequiresCrashSource(id) && !RequiresYearOfTheDragonSource(id);
 
-    public static bool RequiresCrashSource(string? id) => UniversalCrashBoxes.IsId(id) || UniversalCrashEnemies.IsId(id) || UniversalCrashPlayer.IsId(id);
+    public static bool RequiresCrashSource(string? id) => UniversalCrashBoxes.IsId(id) || UniversalCrashEnemies.IsCrashId(id) || UniversalCrashPlayer.IsId(id);
+
+    public static bool RequiresYearOfTheDragonSource(string? id) => UniversalCrashEnemies.IsYotdId(id);
 
     public static bool NeedsRenderHook(string? id) => id == UniversalDragonflyEggs.SignId;
 
@@ -36,7 +39,7 @@ public static class UniversalSpecialCatalog
         : UniversalCrashEnemies.NameForClass(classId) is { } enemyName ? enemyName
         : UniversalDragonflyEggs.Variants.FirstOrDefault(v => v.Class == classId).Name ?? $"Object 0x{classId:X3}";
 
-    public static IReadOnlyList<UniversalMobyCatalogEntry> Entries(bool japaneseDiscAvailable, bool crashDiscAvailable = false)
+    public static IReadOnlyList<UniversalMobyCatalogEntry> Entries(bool japaneseDiscAvailable, bool crashDiscAvailable = false, bool yotdDiscAvailable = false)
     {
         string? restriction = japaneseDiscAvailable ? null :
             "This comes from the Japanese version of Spyro. Press \"Choose Japanese disc…\" at the top of this window to unlock it.";
@@ -52,14 +55,31 @@ public static class UniversalSpecialCatalog
                 "Choose its color above. When Spyro picks it up, the inventory counts it for this level and for the whole game, the memory card remembers it, and it counts toward completing the game. The bonus level also needs every dragonfly egg you placed."),
             new(sign.ClassId, "Sign", "Interactive", "Signs", [sign], sign, [SourceKey], restriction,
                 "When Spyro stands next to it, your message (up to three short lines) appears on screen. After placing it, select it and press Edit to type the message."),
-            .. CrashEntries(crashDiscAvailable)
+            .. CrashEntries(crashDiscAvailable),
+            .. YotdEntries(yotdDiscAvailable)
         ];
     }
 
     public const int CrashBoxModelBytes = 1000, CrashBoxCodeBytes = 0x900, CrashEnemyCodeBytes = 0x1400;
     /// <summary>Model bytes per enemy, its robe-off model included (the converted packages are a little smaller).</summary>
     public static int CrashEnemyModelBytes(UniversalCrashEnemies.Enemy e) =>
-        e == UniversalCrashEnemies.Frog ? 15000 : e == UniversalCrashEnemies.Knight ? 28000 : 41000;
+        e == UniversalCrashEnemies.Frog ? 15000 : e == UniversalCrashEnemies.Knight ? 28000 : e == UniversalCrashEnemies.Rhynoc ? 23000
+        : e == UniversalCrashEnemies.Crab ? 18000 : 41000;
+
+    private static IEnumerable<UniversalMobyCatalogEntry> YotdEntries(bool yotdDiscAvailable)
+    {
+        string? restriction = yotdDiscAvailable ? null :
+            "This creature comes from Spyro: Year of the Dragon. Choose your disc with \"Year of the Dragon disc…\" in Game Settings → Music.";
+        string[] sources = [UniversalCrashEnemies.YotdSourceKey];
+        UniversalMobyVariant Creature(UniversalCrashEnemies.Enemy e) =>
+            new(e.Class, UniversalCrashEnemies.YotdSourceKey, -1, 16, CrashEnemyModelBytes(e), CrashEnemyCodeBytes, true, false, true);
+        var rhynoc = Creature(UniversalCrashEnemies.Rhynoc);
+        var crab = Creature(UniversalCrashEnemies.Crab);
+        yield return new(rhynoc.ClassId, UniversalCrashEnemies.Rhynoc.Name, "Enemies", "Spyro: Year of the Dragon", [rhynoc], rhynoc, sources, restriction,
+            "A blue rhynoc from Lost Fleet. He guards his spot, runs at Spyro when he sees him and belly-flops on him (a hit costs a Sparx level), and walks back when Spyro gets away. Flame him, charge him or jump on him to knock him flying; he drops a green gem (2), which counts toward the level's treasure.");
+        yield return new(crab.ClassId, UniversalCrashEnemies.Crab.Name, "Enemies", "Spyro: Year of the Dragon", [crab], crab, sources, restriction,
+            "A big-eyed red crab from Lost Fleet. It sidles up to Spyro and slams its claws down in front of it (a hit costs a Sparx level). Flame it, charge it or jump on it to knock it flying; it drops a blue gem (5), which counts toward the level's treasure.");
+    }
 
     private static IEnumerable<UniversalMobyCatalogEntry> CrashEntries(bool crashDiscAvailable)
     {

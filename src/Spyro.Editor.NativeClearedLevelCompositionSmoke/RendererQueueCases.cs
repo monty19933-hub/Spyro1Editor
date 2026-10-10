@@ -24,12 +24,15 @@ internal static class RendererQueueCases
             return accepted;
         }
         check(Accepted(Document(0,125)),"125 shared triangles fit one sector header and terminated HQ queue");
-        check(!Accepted(Document(0,126)),"126 textured triangles refuse batched HQ terminator overflow");
+        // More textured faces than one queue holds: admitted, and the export installs the runtime queue guard (a face
+        // that would not fit is drawn whole) instead of the level being refused.
+        check(Accepted(Document(0,126))&&NativeSubdivisionQueueGuard.Needed(Document(0,126)),"126 textured triangles admitted with the queue guard");
+        check(!NativeSubdivisionQueueGuard.Needed(Document(0,63))&&!NativeSubdivisionQueueGuard.Needed(Document(127,0)),"small or untextured levels stay unguarded");
         check(Accepted(Document(127,0)),"127 direct triangles fit terminated sector queue");
         check(Accepted(Document(128,0)),"128 direct triangles batch into bounded sector queues");
         check(Accepted(Document(64,63)),"mixed maximum respects both independent native queues");
         check(Accepted(Document(65,63)),"mixed scene safely batches shared direct and textured vertices");
-        check(!Accepted(Document(0,242)),"failed 121 textured quads refuse before native export");
+        check(Accepted(Document(0,242))&&NativeSubdivisionQueueGuard.Needed(Document(0,242)),"121 textured quads admitted with the queue guard");
         check(Accepted(Document(0,50)),"bounded 25-quad runtime fixture admitted");
 
         // Replay the native queue producers, including the zero written at the

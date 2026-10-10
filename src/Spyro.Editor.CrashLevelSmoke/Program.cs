@@ -187,7 +187,10 @@ if (args.Length == 3 && args[0] == "--arena")
     byte[] bundle = NativeAuthoredMesh.Compile(doc, materials);
     var (sectors, load, _) = NativeAuthoredMeshRenderer.LastReport;
     Check(bundle.Length <= NativeAuthoredMesh.MaxSurfaceBytes && sectors <= NativeAuthoredMeshRenderer.MaxSectors, "village fits the level data and sector lists");
-    Check(load <= NativeAuthoredMeshRenderer.SubdivisionQueueEntries - NativeAuthoredMeshRenderer.SubdivisionMargin, "village close-up queues");
+    // The village's tiles are small enough for the game's texture detail; its estimated load is past one queue, so it
+    // carries the runtime queue guard (measured in the emulator: at most 42 of 127 entries in use).
+    Check(load <= NativeAuthoredMeshRenderer.SubdivisionQueueEntries - NativeAuthoredMeshRenderer.SubdivisionMargin || NativeSubdivisionQueueGuard.Needed(doc),
+        $"village close-up queues ({load}) or the queue guard");
     Check(NativeAuthoredMeshRenderer.LastQueueSectors.All(q => q.R < 0x1FFF), "sector radii");
     // A wall visible from the south (corners top-b, top-a, bottom-a) is stored with its normal into the wall (north);
     // a floor visible from above is stored clockwise from above.

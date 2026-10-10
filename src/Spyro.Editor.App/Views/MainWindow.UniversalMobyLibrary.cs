@@ -248,9 +248,10 @@ public sealed partial class MainWindow
 
     /// <summary>Objects that do not come from a USA row: Japanese eggs and signs, editor gems and Crash boxes.</summary>
     private Func<string, UniversalSpecialAsset?>? UniversalSpecials(UniversalJapaneseSource? japanese, UniversalSourceLibrary? library) =>
-        UniversalMobyExport.SpecialProvider(japanese, library, ResolveUniversalCrashDisc());
+        UniversalMobyExport.SpecialProvider(japanese, library, ResolveUniversalCrashDisc(), ResolveYearOfTheDragonDisc());
 
     private static bool IsCrashVariant(UniversalMobyVariant v) => v.SourceLevelKey == UniversalCrashBoxes.SourceKey;
+    private static bool IsYotdVariant(UniversalMobyVariant v) => v.SourceLevelKey == UniversalCrashEnemies.YotdSourceKey;
 
     private int PlannedUniversalBytes(UniversalSourceLibrary lib)
     {
@@ -667,7 +668,7 @@ public sealed partial class MainWindow
             var e = Est(statusVariant);
             bool known = listDry.TryGetValue(statusVariant, out var dr);
             bool fitsNow = known ? dr.Error == null : e.Fits;
-            string status = entry.RestrictionReason != null ? (IsCrashVariant(entry.Default) ? "Needs your Crash disc" : UniversalSpecialCatalog.IsSpecial(entry.Default) ? "Needs your Japanese disc" : "See placement details")
+            string status = entry.RestrictionReason != null ? (IsCrashVariant(entry.Default) ? "Needs your Crash disc" : IsYotdVariant(entry.Default) ? "Needs your Year of the Dragon disc" : UniversalSpecialCatalog.IsSpecial(entry.Default) ? "Needs your Japanese disc" : "See placement details")
                 : !known ? "Checking whether it fits…" : fitsNow ? e.Native ? "Already in this level" : "Can be added"
                 : UniversalFitFailureSummary(dr.Error!, destination.DisplayName, compact: true);
             Color statusColor = entry.RestrictionReason == null && !e.Native && !known ? ModernMutedInk
@@ -678,13 +679,13 @@ public sealed partial class MainWindow
                 Children =
                 {
                     new TextBlock { Text = entry.Name, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis },
-                    new TextBlock { Text = $"{FriendlyCategory(entry.Category)}{(entry.SubCategory.Length > 0 ? " › " + entry.SubCategory : "")} · {(entry.Default.SourceLevelKey == UniversalHighValueGems.SourceKey ? "USA gem variant" : IsCrashVariant(entry.Default) ? "Crash Bandicoot: Warped" : UniversalSpecialCatalog.IsSpecial(entry.Default) ? "Japanese version of the game" : "found in " + string.Join(", ", entry.SourceLevels.Take(3).Select(LevelName)) + (entry.SourceLevels.Count > 3 ? $" and {entry.SourceLevels.Count - 3} more" : ""))}",
+                    new TextBlock { Text = $"{FriendlyCategory(entry.Category)}{(entry.SubCategory.Length > 0 ? " › " + entry.SubCategory : "")} · {(entry.Default.SourceLevelKey == UniversalHighValueGems.SourceKey ? "USA gem variant" : IsCrashVariant(entry.Default) ? "Crash Bandicoot: Warped" : IsYotdVariant(entry.Default) ? "Spyro: Year of the Dragon (Lost Fleet)" : UniversalSpecialCatalog.IsSpecial(entry.Default) ? "Japanese version of the game" : "found in " + string.Join(", ", entry.SourceLevels.Take(3).Select(LevelName)) + (entry.SourceLevels.Count > 3 ? $" and {entry.SourceLevels.Count - 3} more" : ""))}",
                         FontSize = 11, Foreground = new SolidColorBrush(ModernMutedInk), TextTrimming = TextTrimming.CharacterEllipsis },
                     new TextBlock { Text = status, FontSize = 11, Foreground = new SolidColorBrush(statusColor) }
                 }
             };
             Grid row = new() { ColumnDefinitions = new ColumnDefinitions("72,*"), Margin = new Thickness(4), ColumnSpacing = 6 };
-            row.Children.Add(UniversalMobyModelPreview.Build(() => UniversalMobyModelPreview.LoadAsync(lib!, entry.Default, japanese, crash)));
+            row.Children.Add(UniversalMobyModelPreview.Build(() => UniversalMobyModelPreview.LoadAsync(lib!, entry.Default, japanese, crash, ResolveYearOfTheDragonDisc())));
             Grid.SetColumn(words, 1); row.Children.Add(words);
             return row;
         });
@@ -699,7 +700,7 @@ public sealed partial class MainWindow
         variants.ItemTemplate = new FuncDataTemplate<UniversalMobyVariant>((v, _) =>
             v != null && UniversalDragonflyEggs.IsEggClass(v.ClassId)
                 ? BuildEggColourChoice(UniversalSpecialCatalog.SpecialIdForClass(v.ClassId)!, UniversalSpecialCatalog.DisplayName(v.ClassId))
-                : new TextBlock { Text = v == null ? "" : v.SourceLevelKey == UniversalHighValueGems.SourceKey || IsCrashVariant(v) ? UniversalSpecialCatalog.DisplayName(v.ClassId) : UniversalSpecialCatalog.IsSpecial(v) ? "Japanese sign" : VersionName(v), TextWrapping = TextWrapping.Wrap });
+                : new TextBlock { Text = v == null ? "" : v.SourceLevelKey == UniversalHighValueGems.SourceKey || IsCrashVariant(v) || IsYotdVariant(v) ? UniversalSpecialCatalog.DisplayName(v.ClassId) : UniversalSpecialCatalog.IsSpecial(v) ? "Japanese sign" : VersionName(v), TextWrapping = TextWrapping.Wrap });
 
         string VersionName(UniversalMobyVariant v)
         {
@@ -713,7 +714,7 @@ public sealed partial class MainWindow
             .Replace("; roster identity", "", StringComparison.Ordinal)
             .Replace("(identity unverified)", "(name unknown)", StringComparison.Ordinal);
 
-        string LevelName(string key) => key == UniversalHighValueGems.SourceKey ? "USA gem variants" : key == UniversalCrashBoxes.SourceKey ? "Crash Bandicoot: Warped" : key == UniversalSpecialCatalog.SourceKey ? "Spyro the Dragon (Japan)" : _retailCatalog.FindByKey(key)?.DisplayName ?? key;
+        string LevelName(string key) => key == UniversalHighValueGems.SourceKey ? "USA gem variants" : key == UniversalCrashBoxes.SourceKey ? "Crash Bandicoot: Warped" : key == UniversalCrashEnemies.YotdSourceKey ? "Spyro: Year of the Dragon" : key == UniversalSpecialCatalog.SourceKey ? "Spyro the Dragon (Japan)" : _retailCatalog.FindByKey(key)?.DisplayName ?? key;
 
         bool MatchesCategory(UniversalMobyCatalogEntry e)
         {
@@ -788,7 +789,7 @@ public sealed partial class MainWindow
             if (previewVariant != v)
             {
                 previewVariant = v;
-                modelPreview.Child = UniversalMobyModelPreview.Build(() => UniversalMobyModelPreview.LoadAsync(lib, v, japanese, crash), detailed: true);
+                modelPreview.Child = UniversalMobyModelPreview.Build(() => UniversalMobyModelPreview.LoadAsync(lib, v, japanese, crash, ResolveYearOfTheDragonDisc()), detailed: true);
             }
             bool magicArtisans = freshCompilation == null && IsMagicArtisansRoomChoice(destination.Key, v);
             if (magicArtisans)
@@ -843,7 +844,7 @@ public sealed partial class MainWindow
             }
             if (restriction != null)
             {
-                fit.Text = isSpecial ? (IsCrashVariant(v) ? "Choose your Crash Bandicoot: Warped disc above to add this object." : "Choose your Japanese disc above to add this object.")
+                fit.Text = isSpecial ? (IsCrashVariant(v) ? "Choose your Crash Bandicoot: Warped disc above to add this object." : IsYotdVariant(v) ? "Choose your Spyro: Year of the Dragon disc (Game Settings → Music → Year of the Dragon disc…) to add this creature." : "Choose your Japanese disc above to add this object.")
                     : "This source version cannot be placed here. Try another version if available; see Technical details for the reason.";
                 technical.Text += "\nPlacement restriction: " + restriction;
                 fit.Foreground = new SolidColorBrush(ModernRed); return;
@@ -1156,7 +1157,7 @@ public sealed partial class MainWindow
                 await Task.Run(() => UniversalJapaneseDiscLocator.Configure(_workspace, bin));
                 japanese = await Task.Run(ResolveUniversalJapaneseSource);
                 special = UniversalSpecials(japanese, lib);
-                var specials = UniversalSpecialCatalog.Entries(japanese != null, crash != null);
+                var specials = UniversalSpecialCatalog.Entries(japanese != null, crash != null, ResolveYearOfTheDragonDisc() != null);
                 entries = [.. entries.Where(e => !UniversalSpecialCatalog.IsSpecial(e.Default)), .. specials];
                 dryRuns.Clear();
                 fitTasks.Clear();
@@ -1191,7 +1192,7 @@ public sealed partial class MainWindow
                 await Task.Run(() => CrashWarpedDiscLocator.Configure(_workspace, bin));
                 crash = await Task.Run(ResolveUniversalCrashDisc);
                 special = UniversalSpecials(japanese, lib);
-                var specials = UniversalSpecialCatalog.Entries(japanese != null, crash != null);
+                var specials = UniversalSpecialCatalog.Entries(japanese != null, crash != null, ResolveYearOfTheDragonDisc() != null);
                 entries = [.. entries.Where(e => !UniversalSpecialCatalog.IsSpecial(e.Default)), .. specials];
                 dryRuns.Clear();
                 fitTasks.Clear();
@@ -1219,7 +1220,7 @@ public sealed partial class MainWindow
                 japanese = await Task.Run(ResolveUniversalJapaneseSource);
                 special = UniversalSpecials(japanese, l);
                 crash = await Task.Run(ResolveUniversalCrashDisc);
-                var es = entries = [.. usa, .. UniversalSpecialCatalog.Entries(japanese != null, crash != null)];
+                var es = entries = [.. usa, .. UniversalSpecialCatalog.Entries(japanese != null, crash != null, ResolveYearOfTheDragonDisc() != null)];
                 lib = l;
                 if (_freshSceneDocument != null) freshCompilation = await CaptureFreshNativeAsync();
                 else
@@ -1292,9 +1293,10 @@ public sealed partial class MainWindow
         string? specialId = UniversalSpecialCatalog.IsSpecial(v) ? UniversalSpecialCatalog.SpecialIdForClass(v.ClassId) : null;
         UniversalSpecialAsset? asset = specialId != null ? UniversalSpecials(japanese, lib)?.Invoke(specialId) : null;
         if (specialId != null && asset == null && IsCrashVariant(v)) { _statusText.Text = "Choose your Crash Bandicoot: Warped disc first (Choose Crash disc… in the Add Object browser)."; return; }
+        if (specialId != null && asset == null && IsYotdVariant(v)) { _statusText.Text = "Choose your Spyro: Year of the Dragon disc first (Game Settings → Music → Year of the Dragon disc…)."; return; }
         if (specialId != null && asset == null) { _statusText.Text = "Select the original Japanese disc first (Choose Japanese disc… in the Add Object browser)."; return; }
         byte[] row = asset?.RowTemplate ?? lib.Get(v.SourceLevelKey).Data.Row(v.SourceRow);
-        string sourceName = v.SourceLevelKey == UniversalHighValueGems.SourceKey ? "USA gem variant" : IsCrashVariant(v) ? "Crash Bandicoot: Warped" : asset != null ? "Spyro the Dragon (Japan)" : _retailCatalog.FindByKey(v.SourceLevelKey)?.DisplayName ?? v.SourceLevelKey;
+        string sourceName = v.SourceLevelKey == UniversalHighValueGems.SourceKey ? "USA gem variant" : IsCrashVariant(v) ? "Crash Bandicoot: Warped" : IsYotdVariant(v) ? "Spyro: Year of the Dragon" : asset != null ? "Spyro the Dragon (Japan)" : _retailCatalog.FindByKey(v.SourceLevelKey)?.DisplayName ?? v.SourceLevelKey;
         string name = asset?.Name ?? UniversalSourceObjectName(entry,v);
         var template = new AddMobyTemplate(
             Name: name,

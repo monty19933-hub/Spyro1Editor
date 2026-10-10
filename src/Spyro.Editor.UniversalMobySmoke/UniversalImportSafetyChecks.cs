@@ -27,8 +27,8 @@ internal static class UniversalImportSafetyChecks
         byte[] pkg = TexturedPackage();
         var textureAlloc = new UniversalVramAllocator([]);
         var report = UniversalAssetImport.ImportTextures(pkg, src, dst, textureAlloc);
-        check(report.Reused == 1 && report.PixelBytes == 0 && textureAlloc.FreeBytes == UniversalVramAllocator.ImageBytes - 48,
-            "identical all-zero texture reserves both 16 pixel bytes and 32 palette bytes");
+        check(report.Reused == 1 && report.PixelBytes == 0 && textureAlloc.FreeBytes == UniversalVramAllocator.ImageBytes - 16 - 32 * UniversalAssetImport.ShadeRows,
+            "identical all-zero texture reserves its 16 pixel bytes and the 32-byte palette with its 7 distance-shade rows");
         var clone = textureAlloc.Clone();
         clone.Reserve(4000, 8);
         check(textureAlloc.FreeBytes - clone.FreeBytes == 8, "allocator clones keep independent ownership maps");

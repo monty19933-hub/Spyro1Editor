@@ -89,7 +89,7 @@ public static class UniversalMobyExport
         string? identityWorkspace = null,
         bool deferSpecialHooks = false,
         bool removedTreasureAlreadyApplied = false,
-        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash = null)
+        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash = null, Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd = null)
     {
         if (string.Equals(Path.GetFullPath(sources.ImagePath), Path.GetFullPath(outputImagePath), StringComparison.Ordinal) ||
             string.Equals(Path.GetFullPath(currentImagePath), Path.GetFullPath(outputImagePath), StringComparison.Ordinal))
@@ -123,7 +123,7 @@ public static class UniversalMobyExport
             }
             var composed = UniversalMobyComposer.Compose(level, levelBytes,
                 current.EntryBytes(level.SourceWadEntry - 1), exe, k => sources.Get(k), sources.SharedClasses,
-                protectedVram(currentImagePath, level), placements, SpecialProvider(japanese, sources, crash),
+                protectedVram(currentImagePath, level), placements, SpecialProvider(japanese, sources, crash, yotd),
                 removed,
                 useNativeOwnershipScan ? dropped => DefaultProtectedVram(currentImagePath, level, dropped) : null, sources.SharedModelPackage, sources.PlayerAnimations,
                 removedTreasureAlreadyApplied, nativeSharedEntry8:current.EntryBytes(8));
@@ -194,7 +194,7 @@ public static class UniversalMobyExport
     public static int CollectedMaskIndex(LevelDefinition level) => (level.LevelId / 10 - 1) * 6 + level.LevelId % 10;
 
     public static Func<string, UniversalSpecialAsset?>? SpecialProvider(UniversalJapaneseSource? japanese, UniversalSourceLibrary? sources = null,
-        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash = null)
+        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash = null, Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd = null)
     {
         if (japanese == null && sources == null) return null;
         var japaneseAssets = new Lazy<Dictionary<string, UniversalSpecialAsset>>(() =>
@@ -207,7 +207,10 @@ public static class UniversalMobyExport
             sources == null || crash == null ? [] : UniversalCrashEnemies.Assets(sources, crash).ToDictionary(a => a.Id));
         var player = new Lazy<Dictionary<string, UniversalSpecialAsset>>(() =>
             sources == null || crash == null ? [] : UniversalCrashPlayer.Assets(sources, crash).ToDictionary(a => a.Id));
+        var creatures = new Lazy<Dictionary<string, UniversalSpecialAsset>>(() =>
+            sources == null || yotd == null ? [] : UniversalCrashEnemies.YotdAssets(sources, yotd).ToDictionary(a => a.Id));
         return id => (UniversalHighValueGems.IsId(id) ? gems.Value : UniversalCrashBoxes.IsId(id) ? boxes.Value
+            : UniversalCrashEnemies.IsYotdId(id) ? creatures.Value
             : UniversalCrashEnemies.IsId(id) ? enemies.Value : UniversalCrashPlayer.IsId(id) ? player.Value : japaneseAssets.Value).GetValueOrDefault(id);
     }
 
