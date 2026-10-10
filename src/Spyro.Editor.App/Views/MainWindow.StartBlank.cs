@@ -113,6 +113,51 @@ public sealed partial class MainWindow
         { _statusText.Text="Restore Before Clear stopped: "+e.Message; }
         finally{_startBlankBusy=false;RefreshCurrentLevelDetails();}
     }
+    /// <summary>File ▾ > Free Deleted Objects' Save Rows…: a level keeps one of the game's 256 save rows for every object
+    /// ever added, deleted ones included, so an older save never marks a different object as collected. This gives
+    /// the deleted objects' rows back (for a new game).</summary>
+    private async Task FreeRetiredSaveRowsAsync()
+    {
+        if(_startBlankBusy||_createBinBusy||_regularEditorPersistenceBusy||_workspaceTransitionBusy||_loadingLevel)return;
+        if(_freshSceneDocument==null||_currentLevel==null)
+        { _statusText.Text="Save rows are freed in a level you emptied with Start Blank or built with New Level. Open one first.";return; }
+        var level=_currentLevel;string root=_workspace.RootPath;
+        var before=CaptureFreshScene();
+        int prefix=before.TargetBinding?.NativePrefixRows??0,deleted=before.Ledger.Entries.Count-before.Objects.Count(o=>!o.Value.IsRemoved);
+        if(deleted<=0){_statusText.Text=$"{level.DisplayName} has no save rows held by deleted objects.";return;}
+        var content=new StackPanel{Margin=new Thickness(22),Spacing=12};
+        content.Children.Add(new TextBlock{Text="Free the save rows of deleted objects?",FontSize=20,FontWeight=FontWeight.SemiBold,TextWrapping=TextWrapping.Wrap});
+        content.Children.Add(new TextBlock{Name="FreeSaveRowsExplanation",TextWrapping=TextWrapping.Wrap,Text=
+            $"The game saves what you've collected in {level.DisplayName} in 256 rows. Every object you add takes one, and a deleted object keeps its row so an older save never marks a different object as collected. "+
+            $"{Count(deleted,"row is","rows are")} held by deleted objects, and {Math.Max(0,256-prefix-before.Ledger.Entries.Count)} free.\n"+
+            "Freeing them lets you add that many more objects. Play this level from a new game afterwards: a memory card that already played it from an earlier export can show some gems, eggs or dragons as already collected."});
+        var dialog=new Window{Name="FreeSaveRowsDialog",Title="Free Deleted Objects' Save Rows",Width=520,SizeToContent=SizeToContent.Height,CanResize=false,WindowStartupLocation=WindowStartupLocation.CenterOwner,Content=content};
+        var actions=new StackPanel{Orientation=Orientation.Horizontal,Spacing=10,HorizontalAlignment=HorizontalAlignment.Right};
+        Button cancel=NewButton("Cancel"),confirm=NewButton("Free Save Rows");
+        cancel.Name="FreeSaveRowsCancel";confirm.Name="FreeSaveRowsConfirm";
+        cancel.Click+=(_,_)=>dialog.Close(false);confirm.Click+=(_,_)=>dialog.Close(true);
+        StyleModernPrimaryButton(confirm,ModernBlue,150);actions.Children.Add(cancel);actions.Children.Add(confirm);content.Children.Add(actions);
+        if(!await dialog.ShowDialog<bool>(this))return;
+        if(_currentLevel!=level||_workspace.RootPath!=root)return;
+        _startBlankBusy=true;
+        try{int freed=await FreeRetiredSaveRowsConfirmedAsync();_statusText.Text=$"Freed {Count(freed,"save row","save rows")} in {level.DisplayName}. Play it from a new game.";}
+        catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        { _statusText.Text="Freeing save rows stopped: "+e.Message; }
+        finally{_startBlankBusy=false;RefreshCurrentLevelDetails();}
+    }
+    /// <summary>Saves the open built level, gives back its deleted objects' save rows and reopens it.</summary>
+    internal async Task<int> FreeRetiredSaveRowsConfirmedAsync()
+    {
+        if(_freshSceneDocument==null)throw new InvalidDataException("No built level is open.");
+        if(!await SaveFreshSceneAsync())throw new InvalidDataException("The level could not be saved first.");
+        var (scene,freed)=CaptureFreshScene().FreeRetiredSaveRows();
+        string key=scene.TargetBinding?.LevelKey??"authored65";
+        if(StartBlankRecoveryStore.Read(_workspace.RootPath,key)!=null)
+            StartBlankRecoveryStore.ReplaceLifetime(_workspace.RootPath,key,scene.Ledger,scene.TargetBinding?.NativePrefixRows??0);
+        await scene.SaveAsync(FreshScenePath);
+        ApplyFreshScene(scene);
+        return freed;
+    }
     private async Task<bool> ShowStartBlankConfirmationAsync(string name,int faces,int objects,bool restoring)
     {
         var content=new StackPanel{Margin=new Thickness(22),Spacing=12};

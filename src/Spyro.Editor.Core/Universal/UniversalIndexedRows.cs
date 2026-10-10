@@ -22,6 +22,7 @@ public static class UniversalIndexedRows
     {
         UniversalAlpineArmResources.RequireSourceFamilyEnrollment(data,overlay,template);
         if(UniversalAlpineArmInstaller.Applies(template))return UniversalAlpineArmResources.CaptureSource(data,overlay,template);
+        template = UniversalDreamWeaversCannonRows.Capture(data, overlay, template);
         template = UniversalBeastMistyBoarPlacement.Capture(data,overlay,template);
         template = UniversalHauntedWizardPlacement.Capture(data, overlay, template);
         template = UniversalHauntedSuperflameFairy.Capture(data,overlay,template);
@@ -108,6 +109,7 @@ public static class UniversalIndexedRows
         UniversalLevelData original, UniversalOverlay originalOverlay, IReadOnlySet<int> removed)
     {
         UniversalDarkPassageLanternGroups.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
+        UniversalDreamWeaversCannonRows.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);
         UniversalDarkPassageShapeshifterOwnership.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalBeastMistyBoarPlacement.RequireNativeRemoval(destinationKey,destination,original,originalOverlay,removed);
         UniversalHauntedWizardPlacement.RequireNativeRemoval(destinationKey, destination, original, originalOverlay, removed);

@@ -60,7 +60,7 @@ public static class UniversalSpecialCatalog
         ];
     }
 
-    public const int CrashBoxModelBytes = 1000, CrashBoxCodeBytes = 0x900, CrashEnemyCodeBytes = 0x1400;
+    public const int CrashBoxModelBytes = 1000, CrashBoxCodeBytes = 0xA00, CrashEnemyCodeBytes = 0x1400;
     /// <summary>Model bytes per enemy, its robe-off model included (the converted packages are a little smaller).</summary>
     public static int CrashEnemyModelBytes(UniversalCrashEnemies.Enemy e) =>
         e == UniversalCrashEnemies.Frog ? 15000 : e == UniversalCrashEnemies.Knight ? 28000 : e == UniversalCrashEnemies.Rhynoc ? 23000
@@ -89,6 +89,7 @@ public static class UniversalSpecialCatalog
         var crates = UniversalCrashBoxes.Crates.Select(c => Variant(c.Class)).ToList();
         var tnt = Variant(UniversalCrashBoxes.TntClass);
         var nitro = Variant(UniversalCrashBoxes.NitroClass);
+        var nitroSwitch = Variant(UniversalCrashBoxes.SwitchClass);
         string[] sources = [UniversalCrashBoxes.SourceKey];
         yield return new(crates[1].ClassId, "Crash crate", "Interactive", "Crash Bandicoot", crates, crates[1], sources, restriction,
             "Breaks when Spyro flames it, charges it or jumps on it (he bounces off, Crash style), and drops what you chose above: a gem, which counts toward the level's treasure, or a butterfly. Stays broken like Spyro's baskets.");
@@ -96,6 +97,8 @@ public static class UniversalSpecialCatalog
             "Jump on it and it counts down 3, 2, 1, then explodes. Flaming or charging it sets it off at once. The blast costs Spyro one Sparx level if he's close, and breaks nearby crates and sets off other TNT and Nitro.");
         yield return new(nitro.ClassId, "Nitro crate", "Interactive", "Crash Bandicoot", [nitro], nitro, sources, restriction,
             "Hops in place and explodes when anything touches it, taking all of Spyro's health: touching or charging it is fatal. Flame it from a distance, or set it off with a TNT blast.");
+        yield return new(nitroSwitch.ClassId, "Nitro switch box", "Interactive", "Crash Bandicoot", [nitroSwitch], nitroSwitch, sources, restriction,
+            "The green \"!\" box. Jump on it (Spyro bounces off), flame it or charge it, and every Nitro crate in the level explodes; the ones out of sight go up as soon as they come into view. It goes in a flash once pressed, and is back if Spyro leaves the level and returns.");
         string? enemyRestriction = crashDiscAvailable ? null :
             "This enemy comes from Crash Bandicoot: Warped. Press \"Crash disc…\" at the top of this window to choose your copy.";
         UniversalMobyVariant Enemy(UniversalCrashEnemies.Enemy e) =>

@@ -269,7 +269,8 @@ public static class UniversalBehaviorBundleBuilder
                 constructors[c] = init;
             }
             var linkedClassSites = UniversalNativeLinkedActorOwnership.Patch(upd, s.Source, map, constructors)
-                .Concat(Remaps(s.SourceKey) ? UniversalWhirlwindIndexedRows.TranslateOwnedReads(upd, s.Source, map) : []).Concat(boarClassSites).Concat(twilightClassSites).ToArray();
+                .Concat(Remaps(s.SourceKey) ? UniversalWhirlwindIndexedRows.TranslateOwnedReads(upd, s.Source, map) : [])
+                .Concat(UniversalDreamWeaversCannonRows.TranslateOwnedReads(upd, s.SourceKey, s.Source, s.Classes, map)).Concat(boarClassSites).Concat(twilightClassSites).ToArray();
             IReadOnlyList<uint> soundReadSites = [];
             if (s.Classes.Contains(0x12C))
             {

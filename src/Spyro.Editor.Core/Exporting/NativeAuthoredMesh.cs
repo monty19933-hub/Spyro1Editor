@@ -19,6 +19,10 @@ internal static class NativeAuthoredMesh
     {
         /// <summary>The face's ground kind (null: solid ground); every lattice piece keeps it.</summary>
         public AuthoredSurfaceKind? Kind { get; init; }
+        /// <summary>The surface's <see cref="AuthoredSurface.TwoSided"/> and <see cref="AuthoredSurface.FrontReversed"/>;
+        /// every lattice piece keeps them.</summary>
+        public bool TwoSided { get; init; }
+        public bool FrontReversed { get; init; }
     }
     internal static byte[] Compile(SceneDocument document, IReadOnlyList<AuthoredMaterial> materials) => CompileWithSky(document, materials, null);
     /// <summary>As <see cref="Compile"/>, with an optional borrowed retail sky block in place of the plain sky color.</summary>
@@ -33,8 +37,8 @@ internal static class NativeAuthoredMesh
             if (material < 0) throw new InvalidDataException("An authored material was omitted.");
             var near=s.NearColors??Enumerable.Repeat(s.Color,s.Vertices.Length).ToArray();
             var far=s.FarColors??Enumerable.Repeat(s.Color,s.Vertices.Length).ToArray();
-            triangles.Add(new(s.Vertices[0], s.Vertices[1], s.Vertices[2], s.Color,material,[near[0],near[1],near[2]],[far[0],far[1],far[2]]) { Kind = s.Kind });
-            if (s.Vertices.Length == 4) triangles.Add(new(s.Vertices[0],s.Vertices[2],s.Vertices[3],s.Color,material,[near[0],near[2],near[3]],[far[0],far[2],far[3]]) { Kind = s.Kind });
+            triangles.Add(new(s.Vertices[0], s.Vertices[1], s.Vertices[2], s.Color,material,[near[0],near[1],near[2]],[far[0],far[1],far[2]]) { Kind = s.Kind, TwoSided = s.TwoSided, FrontReversed = s.FrontReversed });
+            if (s.Vertices.Length == 4) triangles.Add(new(s.Vertices[0],s.Vertices[2],s.Vertices[3],s.Color,material,[near[0],near[2],near[3]],[far[0],far[2],far[3]]) { Kind = s.Kind, TwoSided = s.TwoSided, FrontReversed = s.FrontReversed });
         }
         List<Triangle> nativeTriangles=[];
         foreach(var triangle in triangles)
@@ -110,7 +114,9 @@ internal static class NativeAuthoredMesh
         tree.CopyTo(collision,32);blocks.CopyTo(collision,32+tree.Length);
         for(int i=0;i<n;i++)
         {
-            var t=triangles[i];var (a,b,c)=CollisionWinding(t.A,t.B,t.C);
+            // A reversed face shows its other side, so a wall of it is solid from that side (CollisionWinding keeps a
+            // vertical triangle's order, reversed from the side it is given as visible).
+            var t=triangles[i];var (a,b,c)=t.FrontReversed?CollisionWinding(t.A,t.C,t.B):CollisionWinding(t.A,t.B,t.C);
             W(collision,start+i*12,Axis(a.X,b.X,c.X));W(collision,start+i*12+4,Axis(a.Y,b.Y,c.Y));W(collision,start+i*12+8,HeightAxis(a.Z,b.Z,c.Z));
         }
         for(int i=0;i<n;i++)collision[flags+i]=(byte)(triangles[i].Kind is {} kind?kinds.IndexOf(kind):0x3F);
@@ -206,7 +212,7 @@ internal static class NativeAuthoredMesh
             }
             output.Add(new(pa,pb,pc,t.Color,t.Material,
                 [Color(t.Near,a.I,a.J),Color(t.Near,b.I,b.J),Color(t.Near,c.I,c.J)],
-                [Color(t.Far,a.I,a.J),Color(t.Far,b.I,b.J),Color(t.Far,c.I,c.J)]) { Kind = t.Kind });
+                [Color(t.Far,a.I,a.J),Color(t.Far,b.I,b.J),Color(t.Far,c.I,c.J)]) { Kind = t.Kind, TwoSided = t.TwoSided, FrontReversed = t.FrontReversed });
         }
         for(int i=0;i<divisions;i++)for(int j=0;j<divisions-i;j++)
         {
@@ -236,9 +242,12 @@ internal static class NativeAuthoredMesh
             W(s,40+i*4,Rgb(t.Far[i]));W(s,72+i*4,Rgb(t.Far[i]));W(s,84+i*4,Rgb(t.Near[i]));
         }
         uint low=(1u<<20)|(2u<<14)|(2u<<8), high=(1u<<16)|(2u<<24);
+        // A reversed face: its far copy turns the other way (the far pass has no front flip); the near flag below.
+        if(t.FrontReversed)low=(2u<<20)|(1u<<14)|(1u<<8);
         // Retail textured faces use the native subdivision/near-plane path.
         // FF has no descriptor: retain its direct packet flag and bounded mesh.
-        W(s,52,low);W(s,56,low);W(s,96,high);W(s,100,high);W(s,104,(uint)t.Material);W(s,108,t.Material==255?0x80u:0u);
+        uint sides=(t.TwoSided?(uint)NativeAuthoredMeshRenderer.TwoSidedFaceFlag:0)|(t.FrontReversed?(uint)NativeAuthoredMeshRenderer.FrontReversedFaceFlag:0);
+        W(s,52,low|(t.TwoSided?NativeAuthoredMeshRenderer.FarTwoSidedFlag:0));W(s,56,low);W(s,96,high);W(s,100,high);W(s,104,(uint)t.Material);W(s,108,(t.Material==255?0x80u:0u)|sides);
         Id65EnvironmentSectorHeaderContract.Stamp(s[..112]);
         var header=Id65EnvironmentSectorHeaderContract.ReadPointerSpan(s,s.Length,false,"authored triangle");
         if(header.ExactSectorByteLength!=112||header.PointerGapByteLength!=4)throw new InvalidDataException("Authored triangle sector lost its native prefetch guard.");

@@ -10,8 +10,28 @@ public sealed partial class MainWindow
     private sealed record UniversalCompanionClipboard(MobyClipboard Clipboard, Vector3f Offset);
 
     private IEnumerable<Moby> GetUniversalLinkGroupMembers(Moby member) =>
-        string.IsNullOrWhiteSpace(member.UniversalLinkGroupId) ? [] : _currentMobys.Where(m =>
-            !m.IsRemoved && m.UniversalLinkGroupId == member.UniversalLinkGroupId);
+        string.IsNullOrWhiteSpace(member.UniversalLinkGroupId) || IsLooseUniversalGroupMember(member) ? [] : _currentMobys.Where(m =>
+            !m.IsRemoved && m.UniversalLinkGroupId == member.UniversalLinkGroupId && !IsLooseUniversalGroupMember(m));
+
+    /// <summary>A Dream Weavers fool in a Resize cannon's group: the group only tells the export which cannon it calls
+    /// and is shot by. It moves, copies and is removed on its own, and the cannon and its gunner leave it where it is.</summary>
+    private static bool IsLooseUniversalGroupMember(Moby m) =>
+        m.IsAdded && UniversalDreamWeaversCannonRows.IsFoolRow(m.CrossLevelSourceLevelKey, m.CrossLevelSourceTrueIndex);
+
+    /// <summary>The level's Resize cannon groups (each a cannon and its gunner).</summary>
+    private List<string> UniversalCannonGroups() => _currentMobys.Where(m => m.IsAdded && !m.IsRemoved &&
+            !string.IsNullOrWhiteSpace(m.UniversalLinkGroupId) &&
+            UniversalDreamWeaversCannonRows.IsCannonRow(m.CrossLevelSourceLevelKey, m.CrossLevelSourceTrueIndex))
+        .Select(m => m.UniversalLinkGroupId).Distinct(StringComparer.Ordinal).ToList();
+
+    /// <summary>The Resize cannon a newly added Dream Weavers fool can join: the selected object's cannon, or the level's
+    /// only one.</summary>
+    private string? UniversalCannonGroupForNewFool()
+    {
+        var groups = UniversalCannonGroups();
+        if (_selectedMoby is { } selected && groups.Contains(selected.UniversalLinkGroupId)) return selected.UniversalLinkGroupId;
+        return groups.Count == 1 ? groups[0] : null;
+    }
 
     private PendingMobyAdd WithUniversalCompanions(PendingMobyAdd pending, UniversalSourceLibrary library, byte[] sourceRow)
     {

@@ -29,7 +29,7 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
     public byte[] CopyExecutable() => _exe.ToArray();
 
     public static async Task<NativeClearedLevelCompilation> CaptureAsync(string originalUSA, SceneDocument document,
-        LevelCatalog catalog, string scratchBaselinePath, CancellationToken token=default)
+        LevelCatalog catalog, string scratchBaselinePath, CancellationToken token=default, Func<int,byte[]?>? destinationSky=null)
     {
         ExportArtifactTransaction.RequireSourceSeparation(originalUSA,null,scratchBaselinePath);
         NativeAuthoredSpawn.RequirePortalArrivalSupported(document);
@@ -52,7 +52,7 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
             // XA slot, mapped by the project exporter) stands in as one of Spyro's own tracks here.
             int kernelMusic=Spyro.Editor.Core.Music.MusicTrackCatalog.IsCustom(document.MusicTrack)
                 ?Spyro.Editor.Core.Music.MusicTrackCatalog.SelectableTracks[0].TrackId:document.MusicTrack;
-            var portals=NativeHubPortals.Build(originalUSA,catalog,document);
+            var portals=NativeHubPortals.Build(originalUSA,catalog,document,destinationSky);
             var kernel=await NativeFreshMainCompilation.CaptureAsync(originalUSA,
                 document with{TargetBinding=null,Objects=[],Ledger=UniversalPlacementLedger.Empty,MusicTrack=kernelMusic,Portals=null},kernelPath,token,portals:portals);
             byte[] body=kernel.CopyLevelData(),overlay=kernel.CopyOverlay();

@@ -214,6 +214,16 @@ public static class StartBlankRecoveryStore
         try{File.WriteAllBytes(temporary,JsonSerializer.SerializeToUtf8Bytes(new Lifetime(1,key,nativePrefixRows,ledger)));File.Move(temporary,path,true);}
         finally{if(File.Exists(temporary))File.Delete(temporary);}return ledger;
     }
+    /// <summary>Replaces the level's lifetime identities outright (after <see cref="SceneDocument.FreeRetiredSaveRows"/>):
+    /// the only way slots are ever given back.</summary>
+    public static void ReplaceLifetime(string root,string key,UniversalPlacementLedger ledger,int nativePrefixRows)
+    {
+        ledger.Validate();
+        if(nativePrefixRows+ledger.Entries.Count>256)throw new InvalidDataException("The native collectible identity rows are full.");
+        string path=LifetimePath(root,key),temporary=path+".pending-"+Guid.NewGuid().ToString("N");
+        try{File.WriteAllBytes(temporary,JsonSerializer.SerializeToUtf8Bytes(new Lifetime(1,key,nativePrefixRows,ledger)));File.Move(temporary,path,true);}
+        finally{if(File.Exists(temporary))File.Delete(temporary);}
+    }
     public static UniversalPlacementLedger ReconcileNativeLedger(string nativeEditPath,UniversalPlacementLedger current)
     {
         const string suffix="-native-edits.json";string filename=Path.GetFileName(nativeEditPath);

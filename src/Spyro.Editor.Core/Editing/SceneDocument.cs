@@ -30,7 +30,20 @@ public sealed record AuthoredSurface(string Id, Vector3f[] Vertices, ColorRgba C
     /// their corners turn anticlockwise from.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
     public bool TwoSided { get; init; }
+    /// <summary>The face shows its other side: the front is the side its corners turn clockwise from (as Year of the
+    /// Dragon's faces with its flip bit). Compiled as the native face flag 0x02, with the far copy and collision
+    /// reversed to match, so the texture keeps its orientation.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool FrontReversed { get; init; }
 }
+
+/// <summary>A sector's own distant (low-detail) mesh, drawn in place of the compiler's simplified copy when the sector's
+/// faces need one (more than 64 corners or colours): untextured faces over <paramref name="Vertices"/> in
+/// <paramref name="Colors"/>, as the level it was imported from draws that sector far away.</summary>
+public sealed record AuthoredFarMesh(int Sector, Vector3f[] Vertices, ColorRgba[] Colors, IReadOnlyList<AuthoredFarFace> Faces);
+/// <summary>A distant face: 3 or 4 corners (indices into the mesh's vertices) in perimeter order, anticlockwise seen
+/// from the side it shows, and each corner's colour (indices into the mesh's colours).</summary>
+public sealed record AuthoredFarFace(int[] Corners, int[] Colors);
 
 /// <summary>A native special-surface record (type and two parameters, as retail levels store them): type 0 is a
 /// hazard floor (Param1 0 hurts, 1 deadly; Param2 0 water, 1 lava, 2 ooze), 4 a supercharge ramp, 5 an invisible
@@ -76,6 +89,10 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
     /// <summary>WAD entry of the retail level whose sky this scene borrows; null keeps the plain sky color.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public int? SkySourceWadEntry { get; init; }
+    /// <summary>Distant meshes of imported sectors (by <see cref="AuthoredSurface.Sector"/>); null: every sector that
+    /// needs one gets the compiler's simplified copy.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<AuthoredFarMesh>? FarMeshes { get; init; }
     public LevelDefinition ResolveTarget(LevelCatalog catalog) => TargetBinding == null
         ? NativeTarget(Name) : TargetBinding.Resolve(catalog) with { DisplayName = Name, SourceRecordCount = 0 };
     public static string PathForTarget(string workspace, string key) => SceneDocumentStore.PathForTarget(workspace, key);
@@ -149,7 +166,7 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
             surfaces.Add(new(identity,
                 p.Points.Select((v,i) => new Vector3f(v.X,v.Y,p.ZValues[i])).ToArray(), p.TextureVisualEdit?.AverageNearColor ?? p.FaceColor, material,
                 Enumerable.Range(0,p.Points.Count).Select(i => { int slot=Enumerable.Range(0,p.CornerPointIndexes.Count).FirstOrDefault(k=>p.CornerPointIndexes[k]==i); return p.TextureVisualEdit?.Corners.ElementAtOrDefault(slot)?.NearColor ?? p.NearColors.ElementAtOrDefault(slot); }).ToArray(),
-                Enumerable.Range(0,p.Points.Count).Select(i => { int slot=Enumerable.Range(0,p.CornerPointIndexes.Count).FirstOrDefault(k=>p.CornerPointIndexes[k]==i); return p.TextureVisualEdit?.Corners.ElementAtOrDefault(slot)?.FarColor ?? p.FarColors.ElementAtOrDefault(slot); }).ToArray()) { Kind = kind, Sector = old?.Sector });
+                Enumerable.Range(0,p.Points.Count).Select(i => { int slot=Enumerable.Range(0,p.CornerPointIndexes.Count).FirstOrDefault(k=>p.CornerPointIndexes[k]==i); return p.TextureVisualEdit?.Corners.ElementAtOrDefault(slot)?.FarColor ?? p.FarColors.ElementAtOrDefault(slot); }).ToArray()) { Kind = kind, Sector = old?.Sector, TwoSided = old?.TwoSided ?? false, FrontReversed = old?.FrontReversed ?? false });
         }
         var ledger = ReconcileLedger(mobys);
         var captured = this with { Surfaces = surfaces, Objects = mobys.Select(m => new AuthoredObject(m.UniversalPlacementId,m)).ToArray(), Ledger = ledger };
@@ -162,6 +179,22 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
     public IReadOnlyList<AuthoredSurface>? OriginalSurfaces { get; init; }
     [System.Text.Json.Serialization.JsonIgnore]
     public Func<string,int> LevelSourceEntry { get; init; } = _ => throw new InvalidDataException("No terrain material source resolver is bound.");
+
+    /// <summary>The scene with the save rows of deleted objects given back: deleted objects are dropped and the
+    /// remaining ones renumbered in their existing order. A card that played the level with the old numbering can
+    /// then show some of the new objects as already collected, so this is for a new game.</summary>
+    public (SceneDocument Scene, int Freed) FreeRetiredSaveRows()
+    {
+        var live = Objects.Where(o => !o.Value.IsRemoved).ToArray();
+        var order = Ledger.Entries.Select((e, i) => (e.Id, i)).ToDictionary(x => x.Id, x => x.i, StringComparer.Ordinal);
+        var ids = live.Select(o => o.Value.UniversalPlacementId).Distinct(StringComparer.Ordinal)
+            .OrderBy(id => order.TryGetValue(id, out int slot) ? slot : int.MaxValue).ToArray();
+        var ledger = new UniversalPlacementLedger(1, ids.Select((id, i) => new UniversalPlacementIdentity(id, i)).ToArray());
+        ledger.Validate();
+        var scene = this with { Objects = live, Ledger = ledger };
+        scene.Validate();
+        return (scene, Ledger.Entries.Count - ledger.Entries.Count);
+    }
 
     public UniversalPlacementLedger ReconcileLedger(IReadOnlyList<Moby> mobys)
     {
@@ -206,6 +239,21 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
         }
         RequireCoordinate(Spawn);
         foreach (var o in Objects) if (!Guid.TryParseExact(o.Identity,"N",out _)) throw new InvalidDataException("An authored object has no stable identity.");
+        if (FarMeshes is { } farMeshes)
+        {
+            if (farMeshes.Select(m => m.Sector).Distinct().Count() != farMeshes.Count)
+                throw new InvalidDataException("A sector has more than one distant mesh.");
+            foreach (var m in farMeshes)
+            {
+                if (m.Vertices.Length == 0 || m.Colors.Length == 0 || m.Faces.Count == 0 || m.Colors.Any(c => c.A != 255))
+                    throw new InvalidDataException("A distant mesh has no faces or an invalid colour.");
+                foreach (var v in m.Vertices) RequireCoordinate(v);
+                foreach (var f in m.Faces)
+                    if (f.Corners.Length is < 3 or > 4 || f.Colors.Length != f.Corners.Length || f.Corners.Distinct().Count() != f.Corners.Length ||
+                        f.Corners.Any(i => i < 0 || i >= m.Vertices.Length) || f.Colors.Any(i => i < 0 || i >= m.Colors.Length))
+                        throw new InvalidDataException("A distant face has invalid corners or colours.");
+            }
+        }
         if (Portals is { } portals)
         {
             if (TargetBinding is not { LevelId: var home } || home % 10 != 0 ||

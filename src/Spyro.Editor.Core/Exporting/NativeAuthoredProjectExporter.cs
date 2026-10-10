@@ -76,6 +76,18 @@ public static class NativeAuthoredProjectExporter
         List<(string Key,int Prefix)> identities=[];
         // The user's Crash disc supplies Crash boxes and enemies, as in the retail-level export.
         var special=UniversalMobyExport.SpecialProvider(japanese,donors,crash,yotd);
+        // A rebuilt homeworld's doorways carry their destinations' skies as this export makes them: a level rebuilt here
+        // shows its borrowed sky (none borrowed: the doorway keeps the retail copy), any other level its sky from the
+        // staged image (with its sky edits).
+        byte[]? DestinationSky(int levelId)
+        {
+            var built=scenes.FirstOrDefault(s=>s.Document.TargetBinding?.LevelId==levelId)?.Document;
+            if(built!=null)return NativeAuthoredMesh.CaptureSky(donors.ImagePath,built);
+            var level=catalog.Levels.FirstOrDefault(l=>l.LevelId==levelId);
+            if(level==null||level.SourceWadEntry<=0)return null;
+            var data=new UniversalLevelData(baseline.EntryBytes(level.SourceWadEntry));var model=data.Subfiles()[1];
+            return Spyro1SkyBlockAnalyzer.ReadPrimarySkyBlock(data.Bytes.AsSpan(model.Offset,model.Length).ToArray());
+        }
         foreach(var scene in scenes.Where(s=>s.Document.TargetBinding!=null).OrderBy(s=>s.Document.TargetBinding!.LevelId))
         {
             token.ThrowIfCancellationRequested();requireCurrent?.Invoke();
@@ -84,7 +96,7 @@ public static class NativeAuthoredProjectExporter
             if(eggs.Any(e=>e.LevelIndex==UniversalMobyExport.CollectedMaskIndex(target))||signs.Contains(target.Key)||
                 names.Any(n=>n.Target.LevelKey==target.Key))
                 throw new InvalidDataException("Saved retail edits must not also target a cleared replacement level.");
-            var compiled=await NativeClearedLevelCompilation.CaptureAsync(donors.ImagePath,doc,catalog,Path.Combine(scratch,target.Key+"-host.bin"),token);
+            var compiled=await NativeClearedLevelCompilation.CaptureAsync(donors.ImagePath,doc,catalog,Path.Combine(scratch,target.Key+"-host.bin"),token,DestinationSky);
             exe=NativeClearedRetailBinding.Prepare(donors.Disc.Exe,exe,target);
             var result=!compiled.NeedsComposition(scene.Placements)?null:compiled.ComposeWithExecutable(donors,scene.Placements,exe,special);
             exe=result?.Executable??exe;

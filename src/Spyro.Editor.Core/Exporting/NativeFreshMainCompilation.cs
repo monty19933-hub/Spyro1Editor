@@ -32,7 +32,9 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         ExportArtifactTransaction.RequireSourceSeparation(originalUSA,null,scratchBaselinePath);
         NativeAuthoredSpawn.RequireSupported(document);
         var materials=document.Surfaces.Where(s=>s.Material!=null).Select(s=>s.Material!).Distinct().ToArray();
-        byte[] mesh=NativeAuthoredMesh.CompileWithSky(document,materials,NativeAuthoredMesh.CaptureSky(originalUSA,document),portals?.Triggers());
+        // Faces whose far colours were never chosen are drawn far away in their texture's own colour.
+        var drawn=NativeAuthoredFarColors.Derive(document,m=>NativeAuthoredFarColors.Average(originalUSA,m));
+        byte[] mesh=NativeAuthoredMesh.CompileWithSky(drawn,materials,NativeAuthoredMesh.CaptureSky(originalUSA,document),portals?.Triggers());
         // Source-issued bootstrap captures the complete player, companion, native audio and zero-actor scene.
         // Its generated surface is discarded in full; final geometry comes only from NativeAuthoredMesh.
         // The throwaway bootstrap floor is fixed; it must not constrain the authored spawn.

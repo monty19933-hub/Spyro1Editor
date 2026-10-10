@@ -208,6 +208,14 @@ if (args.Contains("--dragon-colour-ui", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Contains("--dreamweavers-cannon-ui", StringComparer.Ordinal))
+{
+    if (args.Length != 3) throw new ArgumentException("Usage: UiSmoke --dreamweavers-cannon-ui <USA.bin> <catalog root>");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    DreamWeaversCannonUiCases.Run(args[1], args[2]);
+    return 0;
+}
+
 if (args.Contains("--universal-groups-ui", StringComparer.Ordinal))
 {
     if (args.Length != 3) throw new ArgumentException("Usage: UiSmoke --universal-groups-ui <USA.bin> <catalog root>");

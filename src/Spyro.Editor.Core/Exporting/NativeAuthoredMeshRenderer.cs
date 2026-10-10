@@ -19,15 +19,28 @@ internal static class NativeAuthoredMeshRenderer
     /// when bit 2 is set (USA 0x80026C90, 0x800271F8, 0x80027E04, 0x800284E8, 0x80029304, 0x80029F3C); bit 1 would
     /// instead flip which side is the front.</summary>
     internal const int TwoSidedFaceFlag=0x04;
+    /// <summary>The face's front is its other side: bit 1 negates the first NCLIP of the HP quad pass (USA 0x80026C60),
+    /// the triangle pass (0x80027210) and every subdivision pass (0x80027E10, 0x800284F4, 0x80029310, 0x80029F48),
+    /// so the face is drawn from the side its corners turn clockwise from, with its texture as authored.</summary>
+    internal const int FrontReversedFaceFlag=0x02;
+    /// <summary>LP (far) face word 0, low byte: bit 7 skips the far pass's second NCLIP rejection (USA 0x80026430..50),
+    /// so the face is drawn from both sides; bits 0-4 push it back in the depth order. The far pass has no front flip:
+    /// a reversed face is written with its corners reversed (LP faces are untextured).</summary>
+    internal const uint FarTwoSidedFlag=0x80;
     /// <summary>A sector's far (LP) mesh when it differs from the near one: LP indices are 6 bits, so a sector with
-    /// more than 64 near vertices (as retail and imported sectors have) draws a simplified copy far away.</summary>
-    private sealed record FarMesh(List<Vector3f> Vertices,List<ColorRgba> Colors,List<int[]> Faces);
+    /// more than 64 near vertices (as retail and imported sectors have) draws a simplified copy far away, or the
+    /// sector's own distant mesh when the scene gives one (<see cref="SceneDocument.FarMeshes"/>).
+    /// <paramref name="FaceColors"/>: per face, its corners' colour indices (null: the vertex indices);
+    /// <paramref name="FaceFlags"/>: per face, the low byte of LP word 0 (null: 0).</summary>
+    private sealed record FarMesh(List<Vector3f> Vertices,List<ColorRgba> Colors,List<int[]> Faces,List<int[]>? FaceColors=null,List<uint>? FaceFlags=null,bool Supplied=false);
     private sealed class Batch
     {
         internal readonly List<Face> Faces=[];
         internal readonly List<Vector3f> Vertices=[];
         internal readonly List<(ColorRgba Near,ColorRgba Far)> Colors=[];
         internal FarMesh? Far;
+        /// <summary>The scene sector an imported batch draws (a sector too big for one batch is split).</summary>
+        internal int Group=-1;
         /// <summary>An imported sector: near tables up to 255 entries, with a far mesh of its own when needed.</summary>
         internal bool Imported;
         internal bool Fits(Face f)
@@ -61,6 +74,7 @@ internal static class NativeAuthoredMeshRenderer
             // so their texture spans the quad instead of being squeezed into each half.
             int flags=group>=0?(ImportedFlagsOverride?.Invoke(s)??ImportedFaceFlags):0;
             if(s.TwoSided)flags|=TwoSidedFaceFlag;
+            if(s.FrontReversed)flags|=FrontReversedFaceFlag;
             if(s.Vertices.Length==4&&(group>=0?ConvexQuad(s.Vertices):CompatibleQuad(s.Vertices)))faces.Add(new(s.Vertices,near,far,material,group,flags));
             else
             {
@@ -68,7 +82,7 @@ internal static class NativeAuthoredMeshRenderer
                 if(s.Vertices.Length==4)faces.Add(new([s.Vertices[0],s.Vertices[2],s.Vertices[3]],[near[0],near[2],near[3]],[far[0],far[2],far[3]],material,group,flags));
             }
         }
-        foreach(var t in direct)faces.Add(new([t.A,t.B,t.C],t.Near,t.Far,255));
+        foreach(var t in direct)faces.Add(new([t.A,t.B,t.C],t.Near,t.Far,255,-1,(t.TwoSided?TwoSidedFaceFlag:0)|(t.FrontReversed?FrontReversedFaceFlag:0)));
         // Small levels keep the original packing (spatial buckets filled in authoring order, the same bytes as
         // before): when every textured face and one header per textured sector fit a subdivision queue at once, no
         // camera can overflow it. Larger levels get compact sectors like retail ones (a few hundred units across)
@@ -83,7 +97,11 @@ internal static class NativeAuthoredMeshRenderer
         if(faces.Any(f=>f.Group>=0))
         {
             batches=[];
-            foreach(var group in faces.Where(f=>f.Group>=0).GroupBy(f=>f.Group))SplitImported([..group],batches);
+            foreach(var group in faces.Where(f=>f.Group>=0).GroupBy(f=>f.Group))
+            {
+                int first=batches.Count;SplitImported([..group],batches);
+                for(int k=first;k<batches.Count;k++)batches[k].Group=group.Key;
+            }
             var own=faces.Where(f=>f.Group<0).ToList();
             if(own.Count>0)
             {
@@ -95,12 +113,14 @@ internal static class NativeAuthoredMeshRenderer
                 }
                 batches.AddRange(rest);
             }
-            foreach(var batch in batches.Where(b=>b.Imported))batch.Far=NeedsFarMesh(batch)?Simplify(batch):null;
+            var supplied=doc.FarMeshes?.ToDictionary(m=>m.Sector);
+            foreach(var batch in batches.Where(b=>b.Imported))batch.Far=NeedsFarMesh(batch)?Supplied(batch,batches,supplied)??Simplify(batch):null;
+            LastFarReport=(batches.Count(b=>b.Far is {Supplied:true}),batches.Count(b=>b.Far is {Supplied:false}));
             proved=false;
         }
         else
         {
-            batches=Bucketed(faces);
+            batches=Bucketed(faces);LastFarReport=(0,0);
             proved=batches.Count<=MaxSectors&&TexturedLoad(batches)<=SubdivisionQueueCapacity;
         }
         if(!proved&&!faces.Any(f=>f.Group>=0))
@@ -150,6 +170,8 @@ internal static class NativeAuthoredMeshRenderer
 
     /// <summary>The last compile's sector count and heaviest simulated subdivision-queue load (for smoke tests).</summary>
     internal static (int Sectors,int QueueLoad,string Where) LastReport{get;private set;}
+    /// <summary>The last compile's far meshes: sectors drawing their scene-given distant mesh, and simplified copies.</summary>
+    internal static (int Supplied,int Simplified) LastFarReport{get;private set;}
     internal static IReadOnlyList<QueueSector> LastQueueSectors{get;private set;}=[];
     /// <summary>The last compile's heaviest load per grid column (x, y from the grid origin in PoseSpacing steps).</summary>
     internal static (float X,float Y,int[,] Load) LastLoadMap{get;private set;}
@@ -245,7 +267,8 @@ internal static class NativeAuthoredMeshRenderer
                             if(sum<=0||sum>=0x2000)continue;
                             int flags=s.Flags?[n]??0;
                             if((flags&0x80)!=0||!near&&(flags&0x40)!=0)continue;
-                            if(!near&&(flags&TwoSidedFaceFlag)==0&&(px-s.Corners[a3])*s.Normals[n*3]+(py-s.Corners[a3+1])*s.Normals[n*3+1]+(pz-s.Corners[a3+2])*s.Normals[n*3+2]<=0)continue;
+                            float facing=(px-s.Corners[a3])*s.Normals[n*3]+(py-s.Corners[a3+1])*s.Normals[n*3+1]+(pz-s.Corners[a3+2])*s.Normals[n*3+2];
+                            if(!near&&(flags&TwoSidedFaceFlag)==0&&((flags&FrontReversedFaceFlag)!=0?facing>=0:facing<=0))continue;
                             if(near&&(flags&0x40)==0)sc++;else sn++;
                         }
                         if(sn>0)normal+=sn+1;if(sc>0)close+=sc+1;
@@ -334,25 +357,139 @@ internal static class NativeAuthoredMeshRenderer
                 var s=sums[id];sums[id]=(s.X+p.X,s.Y+p.Y,s.Z+p.Z,s.R+c.R,s.G+c.G,s.B+c.B,s.N+1);
                 return id;
             }
-            List<int[]> faces=[];HashSet<string> seen=[];
+            List<int[]> faces=[];List<uint> flags=[];HashSet<string> seen=[];
             foreach(var f in b.Faces)
             {
-                var ring=f.Points.Select((p,i)=>Cluster(p,f.Far[i])).ToList();
+                var ring=FarOrder(f).Select(i=>Cluster(f.Points[i],f.Far[i])).ToList();
                 List<int> corners=[];
                 foreach(int id in ring)if(corners.Count==0||corners[^1]!=id)corners.Add(id);
                 if(corners.Count>1&&corners[0]==corners[^1])corners.RemoveAt(corners.Count-1);
                 if(corners.Distinct().Count()!=corners.Count||corners.Count<3)continue;
                 if(!seen.Add(string.Join(",",corners.Order())))continue;
-                faces.Add([..corners]);
+                faces.Add([..corners]);flags.Add((f.Flags&TwoSidedFaceFlag)!=0?FarTwoSidedFlag:0);
             }
             var used=faces.SelectMany(f=>f).Distinct().Order().ToList();
             if(used.Count>64||2*used.Count+2*faces.Count>255)continue;
             var remap=used.Select((id,i)=>(id,i)).ToDictionary(t=>t.id,t=>t.i);
             var vertices=used.Select(id=>{var s=sums[id];return new Vector3f((float)Math.Round(s.X/s.N),(float)Math.Round(s.Y/s.N),(float)Math.Round(s.Z/s.N));}).ToList();
             var colors=used.Select(id=>{var s=sums[id];return new ColorRgba((byte)Math.Round(s.R/s.N),(byte)Math.Round(s.G/s.N),(byte)Math.Round(s.B/s.N));}).ToList();
-            return new(vertices,colors,faces.Select(f=>f.Select(id=>remap[id]).ToArray()).ToList());
+            return new(vertices,colors,faces.Select(f=>f.Select(id=>remap[id]).ToArray()).ToList(),null,flags);
         }
         throw new InvalidDataException("An imported sector could not be simplified for distant viewing.");
+    }
+    /// <summary>A face's corners in far (LP) perimeter order: reversed for a face whose front is reversed, since the far
+    /// pass cannot flip the front (its colours follow the corners).</summary>
+    private static int[] FarOrder(Face f)=>(f.Flags&FrontReversedFaceFlag)==0?[..Enumerable.Range(0,f.Points.Length)]:f.Points.Length==3?[0,2,1]:[0,3,2,1];
+    private static float Distance2(Vector3f a,Vector3f b){float x=a.X-b.X,y=a.Y-b.Y,z=a.Z-b.Z;return x*x+y*y+z*z;}
+    /// <summary>The sector's own distant mesh (<see cref="SceneDocument.FarMeshes"/>) fitted to the far tables, or null
+    /// (none given, or it cannot fit). A sector split into pieces gives each piece the distant faces most of whose
+    /// corners are its own near corners (otherwise the piece whose box centre is nearest the face).</summary>
+    private static FarMesh? Supplied(Batch batch,List<Batch> batches,Dictionary<int,AuthoredFarMesh>? meshes)
+    {
+        if(meshes==null||!meshes.TryGetValue(batch.Group,out var mesh))return null;
+        var pieces=batches.Where(b=>b.Imported&&b.Group==batch.Group).ToList();
+        IReadOnlyList<AuthoredFarFace> faces=mesh.Faces;
+        if(pieces.Count>1)
+        {
+            var own=pieces.Select(p=>p.Vertices.ToHashSet()).ToList();
+            var centres=pieces.Select(p=>new Vector3f((p.Vertices.Min(v=>v.X)+p.Vertices.Max(v=>v.X))/2,(p.Vertices.Min(v=>v.Y)+p.Vertices.Max(v=>v.Y))/2,(p.Vertices.Min(v=>v.Z)+p.Vertices.Max(v=>v.Z))/2)).ToList();
+            int Owner(AuthoredFarFace f)
+            {
+                var pts=f.Corners.Select(i=>mesh.Vertices[i]).ToArray();
+                int[] score=[..own.Select(h=>pts.Count(h.Contains))];
+                int best=score.Max();
+                if(best>0&&score.Count(x=>x==best)==1)return Array.IndexOf(score,best);
+                var c=new Vector3f(pts.Average(p=>p.X),pts.Average(p=>p.Y),pts.Average(p=>p.Z));
+                return Enumerable.Range(0,pieces.Count).Where(k=>score[k]==best).MinBy(k=>Distance2(centres[k],c));
+            }
+            int me=pieces.IndexOf(batch);
+            faces=[..mesh.Faces.Where(f=>Owner(f)==me)];
+        }
+        return Fit(batch,mesh,faces);
+    }
+    /// <summary>A distant mesh fitted to one sector's far tables, which share the sector's origin: corners are kept
+    /// inside the sector's box, repeated corners and faces dropped, the shortest edge collapsed (onto its corner used
+    /// by more faces) until at most 64 corners remain and the nearest colours merged until at most 64 remain. Null
+    /// when nothing is left or the tables still overflow the header's one-byte offset.</summary>
+    private static FarMesh? Fit(Batch batch,AuthoredFarMesh mesh,IReadOnlyList<AuthoredFarFace> source)
+    {
+        // The sector's box grows to take the distant corners when the packed offsets still fit; otherwise they are
+        // pulled into the near faces' box.
+        var all=batch.Vertices.Concat(source.SelectMany(f=>f.Corners).Select(i=>mesh.Vertices[i]).Select(p=>new Vector3f(MathF.Round(p.X),MathF.Round(p.Y),MathF.Round(p.Z)))).ToList();
+        bool grow=all.Max(p=>p.X)-all.Min(p=>p.X)<=2047&&all.Max(p=>p.Y)-all.Min(p=>p.Y)<=2047&&all.Max(p=>p.Z)-all.Min(p=>p.Z)<=1023&&all.Min(p=>Math.Min(p.X,Math.Min(p.Y,p.Z)))>=0;
+        var box=grow?all:batch.Vertices;
+        float x0=box.Min(p=>p.X),y0=box.Min(p=>p.Y),z0=box.Min(p=>p.Z);
+        float x1=box.Max(p=>p.X),y1=box.Max(p=>p.Y),z1=box.Max(p=>p.Z);
+        List<Vector3f> vertices=[];Dictionary<Vector3f,int> vertexIds=[];
+        int Vertex(Vector3f p)
+        {
+            var q=new Vector3f(Math.Clamp(MathF.Round(p.X),x0,x1),Math.Clamp(MathF.Round(p.Y),y0,y1),Math.Clamp(MathF.Round(p.Z),z0,z1));
+            if(!vertexIds.TryGetValue(q,out int id)){id=vertices.Count;vertexIds.Add(q,id);vertices.Add(q);}
+            return id;
+        }
+        List<ColorRgba> colors=[];Dictionary<ColorRgba,int> colorIds=[];
+        int Colour(ColorRgba c)
+        {
+            c=c with{A=255};
+            if(!colorIds.TryGetValue(c,out int id)){id=colors.Count;colorIds.Add(c,id);colors.Add(c);}
+            return id;
+        }
+        List<(int[] V,int[] C)> faces=[..source.Select(f=>((int[])[..f.Corners.Select(i=>Vertex(mesh.Vertices[i]))],(int[])[..f.Colors.Select(i=>Colour(mesh.Colors[i]))]))];
+        int[] merged=[..Enumerable.Range(0,vertices.Count)];
+        int Find(int a){while(merged[a]!=a)a=merged[a]=merged[merged[a]];return a;}
+        List<(int[] V,int[] C)> Clean()
+        {
+            List<(int[] V,int[] C)> output=[];HashSet<string> seen=[];
+            foreach(var (v,c) in faces)
+            {
+                List<int> cv=[],cc=[];
+                for(int k=0;k<v.Length;k++){int r=Find(v[k]);if(cv.Count>0&&cv[^1]==r)continue;cv.Add(r);cc.Add(c[k]);}
+                if(cv.Count>1&&cv[0]==cv[^1]){cv.RemoveAt(cv.Count-1);cc.RemoveAt(cc.Count-1);}
+                if(cv.Count<3||cv.Distinct().Count()!=cv.Count||!seen.Add(string.Join(",",cv.Order())))continue;
+                output.Add(([..cv],[..cc]));
+            }
+            return output;
+        }
+        var live=Clean();
+        while(live.Count>0&&live.SelectMany(f=>f.V).Distinct().Count()>64)
+        {
+            var uses=live.SelectMany(f=>f.V).GroupBy(i=>i).ToDictionary(g=>g.Key,g=>g.Count());
+            int ea=-1,eb=-1;float best=float.MaxValue;
+            foreach(var (v,_) in live)
+                for(int k=0;k<v.Length;k++)
+                {
+                    int a=Math.Min(v[k],v[(k+1)%v.Length]),b=Math.Max(v[k],v[(k+1)%v.Length]);float d=Distance2(vertices[a],vertices[b]);
+                    if(d<best||d==best&&(a<ea||a==ea&&b<eb)){best=d;ea=a;eb=b;}
+                }
+            if(uses[ea]>=uses[eb])merged[eb]=ea;else merged[ea]=eb;
+            live=Clean();
+        }
+        if(live.Count==0)return null;
+        // Colours: the closest pair (by their use-weighted averages) merges until 64 remain.
+        Dictionary<int,(double R,double G,double B,int N)> sums=[];
+        foreach(int i in live.SelectMany(f=>f.C)){var c=colors[i];sums[i]=sums.TryGetValue(i,out var s)?(s.R+c.R,s.G+c.G,s.B+c.B,s.N+1):(c.R,c.G,c.B,1);}
+        int[] colourTo=[..Enumerable.Range(0,colors.Count)];
+        int ColourFind(int a){while(colourTo[a]!=a)a=colourTo[a]=colourTo[colourTo[a]];return a;}
+        while(sums.Count>64)
+        {
+            var keys=sums.Keys.Order().ToArray();int ka=-1,kb=-1;double best=double.MaxValue;
+            for(int i=0;i<keys.Length;i++)for(int j=i+1;j<keys.Length;j++)
+            {
+                var a=sums[keys[i]];var b=sums[keys[j]];
+                double dr=a.R/a.N-b.R/b.N,dg=a.G/a.N-b.G/b.N,db=a.B/a.N-b.B/b.N,d=dr*dr+dg*dg+db*db;
+                if(d<best){best=d;ka=keys[i];kb=keys[j];}
+            }
+            var p=sums[ka];var q=sums[kb];sums[ka]=(p.R+q.R,p.G+q.G,p.B+q.B,p.N+q.N);sums.Remove(kb);colourTo[kb]=ka;
+        }
+        var usedVertices=live.SelectMany(f=>f.V).Distinct().Order().ToList();
+        var usedColours=sums.Keys.Order().ToList();
+        var vertexMap=usedVertices.Select((id,i)=>(id,i)).ToDictionary(t=>t.id,t=>t.i);
+        var colourMap=usedColours.Select((id,i)=>(id,i)).ToDictionary(t=>t.id,t=>t.i);
+        int lv=usedVertices.Count,lc=usedColours.Count,lf=live.Count;
+        if(lv>64||lc>64||lv+lc+2*lf>255)return null;
+        return new([..usedVertices.Select(i=>vertices[i])],
+            [..usedColours.Select(i=>{var s=sums[i];return new ColorRgba((byte)Math.Round(s.R/s.N),(byte)Math.Round(s.G/s.N),(byte)Math.Round(s.B/s.N));})],
+            [..live.Select(f=>f.V.Select(i=>vertexMap[i]).ToArray())],[..live.Select(f=>f.C.Select(i=>colourMap[ColourFind(i)]).ToArray())],null,true);
     }
     /// <summary>The header's bounding radius: the farthest corner from the header centre, rounded up (retail
     /// headers store this; the game culls and picks the detail tier with it).</summary>
@@ -403,9 +540,11 @@ internal static class NativeAuthoredMeshRenderer
         var far=batch.Far;
         int lv=far?.Vertices.Count??v,lc=far?.Colors.Count??c,lf=far?.Faces.Count??f;
         int lpv=28,lpc=lpv+4*lv,lpf=lpc+4*lc,hpv=lpf+8*lf,hpfar=hpv+4*v,hpnear=hpfar+4*c,hpf=hpnear+4*c,end=hpf+16*f;
-        byte[] s=new byte[end+4];int x=(int)batch.Vertices.Min(p=>p.X),y=(int)batch.Vertices.Min(p=>p.Y),z=(int)batch.Vertices.Min(p=>p.Z);
-        int mx=(int)batch.Vertices.Max(p=>p.X),my=(int)batch.Vertices.Max(p=>p.Y),mz=(int)batch.Vertices.Max(p=>p.Z);
-        W(s,0,(uint)(((x+mx)/2<<16)|((y+my)/2)));W(s,4,(uint)(((z+mz)/2<<16)|(trueRadius?Radius(batch.Vertices,(x+mx)/2,(y+my)/2,(z+mz)/2):mx-x+my-y+mz-z)));W(s,8,(uint)(x<<16|y));W(s,12,(uint)(z<<16|cache));
+        // A scene-given distant mesh may reach past the near faces: the header's box and sphere hold both tiers.
+        var box=far is {Supplied:true}?[..batch.Vertices,..far.Vertices]:batch.Vertices;
+        byte[] s=new byte[end+4];int x=(int)box.Min(p=>p.X),y=(int)box.Min(p=>p.Y),z=(int)box.Min(p=>p.Z);
+        int mx=(int)box.Max(p=>p.X),my=(int)box.Max(p=>p.Y),mz=(int)box.Max(p=>p.Z);
+        W(s,0,(uint)(((x+mx)/2<<16)|((y+my)/2)));W(s,4,(uint)(((z+mz)/2<<16)|(trueRadius?Radius(box,(x+mx)/2,(y+my)/2,(z+mz)/2):mx-x+my-y+mz-z)));W(s,8,(uint)(x<<16|y));W(s,12,(uint)(z<<16|cache));
         s[16]=(byte)lv;s[17]=(byte)lc;s[18]=(byte)lf;s[20]=(byte)v;s[21]=(byte)c;s[22]=(byte)f;W(s,24,uint.MaxValue);
         uint Pack(Vector3f p)=>(uint)(((int)p.X-x)<<21|((int)p.Y-y)<<10|((int)p.Z-z));
         for(int i=0;i<v;i++){uint packed=Pack(batch.Vertices[i]);if(far==null)W(s,lpv+4*i,packed);W(s,hpv+4*i,packed);}
@@ -416,9 +555,9 @@ internal static class NativeAuthoredMeshRenderer
             for(int i=0;i<lc;i++)W(s,lpc+4*i,Rgb(far.Colors[i]));
             for(int i=0;i<lf;i++)
             {
-                int[] corners=far.Faces[i];int[] order=corners.Length==3?[2,1,0,0]:[3,2,0,1];
-                uint low=(uint)(corners[order[0]]<<26|corners[order[1]]<<20|corners[order[2]]<<14|corners[order[3]]<<8);
-                W(s,lpf+i*8,low);W(s,lpf+i*8+4,low);
+                int[] corners=far.Faces[i],colors=far.FaceColors?[i]??corners;int[] order=corners.Length==3?[2,1,0,0]:[3,2,0,1];
+                uint Word(int[] k)=>(uint)(k[order[0]]<<26|k[order[1]]<<20|k[order[2]]<<14|k[order[3]]<<8);
+                W(s,lpf+i*8,Word(corners)|(far.FaceFlags?[i]??0));W(s,lpf+i*8+4,Word(colors));
             }
         }
         for(int i=0;i<f;i++)
@@ -431,8 +570,13 @@ internal static class NativeAuthoredMeshRenderer
             int[] lp=face.Points.Length==3?[2,1,0,0]:[3,2,0,1],hp=face.Points.Length==3?[2,1,0,0]:[3,2,1,0];
             uint Low(int[] indexes)=>(uint)(indexes[lp[0]]<<26|indexes[lp[1]]<<20|indexes[lp[2]]<<14|indexes[lp[3]]<<8);
             uint High(int[] indexes)=>(uint)(indexes[hp[0]]<<24|indexes[hp[1]]<<16|indexes[hp[2]]<<8|indexes[hp[3]]);
-            if(far==null){W(s,lpf+i*8,Low(vertex));W(s,lpf+i*8+4,Low(color));}
-            W(s,hpf+i*16,High(vertex));W(s,hpf+i*16+4,High(color));W(s,hpf+i*16+8,(uint)face.Material);W(s,hpf+i*16+12,face.Material==255?128u:(uint)face.Flags);
+            if(far==null)
+            {
+                int[] ring=FarOrder(face);
+                W(s,lpf+i*8,Low([..ring.Select(k=>vertex[k])])|((face.Flags&TwoSidedFaceFlag)!=0?FarTwoSidedFlag:0));W(s,lpf+i*8+4,Low([..ring.Select(k=>color[k])]));
+            }
+            W(s,hpf+i*16,High(vertex));W(s,hpf+i*16+4,High(color));W(s,hpf+i*16+8,(uint)face.Material);
+            W(s,hpf+i*16+12,face.Material==255?(uint)(128|face.Flags&(TwoSidedFaceFlag|FrontReversedFaceFlag)):(uint)face.Flags);
         }
         Id65EnvironmentSectorHeaderContract.Stamp(s.AsSpan(0,end));_=Id65EnvironmentSectorHeaderContract.ReadPointerSpan(s,s.Length,false,"authored batch");return s;
     }

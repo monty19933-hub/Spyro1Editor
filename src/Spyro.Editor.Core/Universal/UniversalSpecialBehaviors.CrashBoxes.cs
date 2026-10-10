@@ -17,7 +17,7 @@ public static partial class UniversalSpecialBehaviors
     private const uint PlayModelSound = 0x8003851C, DropReward = 0x8003ABC0, KeepDestroyed = 0x8003B7C0;
     private const uint MovementState = 0x80078AD0, VerticalSpeed = 0x80078B48;
     private const int RisingJump = 5, BounceSpeed = 4400;
-    private const int HitMask = 0x000B0000, ChainHit = 0x00080000;
+    private const int HitMask = 0x000B0000, ChainHit = 0x00080000, SwitchPress = 0x00030000;
     public const int CrashBoxCentre = 368, CrashOnTopHalf = 0x1C0, CrashOnTopLow = 0x380, CrashOnTopHigh = 0x4C0;
     public const int CrashTntBlast = 0x600, CrashNitroBlast = 0x200, CrashNitroTouch = 0x1E0, CrashChainReach = 0x700;
     public const int CrashTntStepFrames = 30;
@@ -121,6 +121,7 @@ public static partial class UniversalSpecialBehaviors
         a.I(11, V0, V0, 0x80); a.Br(4, V0, Zero, tag + "_loop"); a.Nop();
         a.I(35, S1, S3, 0x18); a.Nop();
         Li(T0, UniversalCrashBoxes.NitroClass); a.Br(4, S2, T0, tag + "_nitro"); a.Nop();
+        Li(T0, UniversalCrashBoxes.SwitchClass); a.Br(4, S2, T0, tag + "_switch"); a.Nop();
         foreach (int c in UniversalCrashBoxes.TntClasses) { Li(T0, c); a.Br(4, S2, T0, tag + "_tnt"); a.Nop(); }
 
         // Crate: flame, charge, a blast or a jump on top breaks it.
@@ -157,6 +158,32 @@ public static partial class UniversalSpecialBehaviors
         a.I(11, T1, T0, 3 * CrashTntStepFrames + 1); a.Br(5, T0, Zero, tag + "_loop"); a.Nop();
         a.L(tag + "_tnt_explode");
         a.J(tag + "_explode"); Move(S4, Zero);
+
+        // Nitro switch: flame, charge or a jump on top presses it (blasts don't). Every live Nitro in the object table is
+        // marked as hit, so each explodes on its next update, and the switch goes in a flash; it is not kept destroyed,
+        // so it is back (for any Nitro still left) when Spyro returns. The table ends at state -1 (0x80052568 frees a
+        // row as -3, -2, or -1 when it is the last).
+        a.L(tag + "_switch");
+        Li(T0, SwitchPress); a.R(S3, T0, T0, 0, 0x24); a.Br(5, T0, Zero, tag + "_switch_press"); a.Nop();
+        OnTop(); a.Br(4, V0, Zero, tag + "_loop"); a.Nop();
+        Bounce();
+        a.L(tag + "_switch_press");
+        Sound();
+        Particle(5, 2, 0);
+        Particle(16, 70, 0x20);
+        a.La(T0, MobyArray); a.I(35, T0, T0, 0); a.Nop();
+        a.L(tag + "_switch_walk");
+        a.I(32, T0, T1, 0x48); Li(T2, -1);
+        a.Br(4, T1, T2, tag + "_switch_gone"); a.Nop();
+        a.Br(1, T1, 0, tag + "_switch_next"); a.Nop();
+        a.I(37, T0, T2, 0x36); Li(T3, UniversalCrashBoxes.NitroClass);
+        a.Br(5, T2, T3, tag + "_switch_next"); a.Nop();
+        a.I(35, T0, T3, 0x18); Li(T4, ChainHit); a.R(T3, T4, T3, 0, 0x25); a.I(43, T0, T3, 0x18);
+        a.L(tag + "_switch_next");
+        a.J(tag + "_switch_walk"); a.I(9, T0, T0, 0x58);
+        a.L(tag + "_switch_gone");
+        a.Jal(FreeMoby); Move(A0, S1);
+        a.J(tag + "_loop"); a.Nop();
 
         // Nitro: anything that touches it sets it off; flame from a distance is the safe way.
         a.L(tag + "_nitro");

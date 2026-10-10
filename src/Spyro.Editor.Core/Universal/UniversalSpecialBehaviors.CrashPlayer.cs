@@ -20,7 +20,7 @@ public static partial class UniversalSpecialBehaviors
     private static readonly int[] AirStates = [5, 6, 15, 23];
     public const int CrashPlayerFeet = 352;
     public const int CrashSpinTicks = 14, CrashSpinCooldown = 6, CrashSpinReach = 900;
-    public const int CrashDoubleJumpSpeed = 3000, CrashHighJumpSpeed = 4600, CrashSlamSpeed = -5600, CrashSlamReach = 1100,
+    public const int CrashDoubleJumpSpeed = 5000, CrashHighJumpSpeed = 4600, CrashSlamSpeed = -5600, CrashSlamReach = 1100,
         CrashGetUpTicks = 16;
     public const int CrashSlideTicks = 12, CrashSlideMinSpeed = 2500, CrashSlideSpeed = 5200, CrashSlideReach = 700;
     public const int CrashBounceReach = 300, CrashBounceAbove = 300, CrashIntroTicks = 14;
@@ -35,7 +35,7 @@ public static partial class UniversalSpecialBehaviors
     public const int CrashSoundSpin = 0, CrashSoundBounce = 1, CrashSoundSlide = 2, CrashSoundLand = 3, CrashSoundJump = 4;
     // Body property bytes: the controller's state. Legs property words: Spyro's position last frame.
     private const int PSpin = 0, PDoubleJump = 1, PSlam = 2, PGetUp = 3, PCooldown = 4, PSlide = 5, PCrouch = 6, PIntro = 7,
-        PIntroTicks = 8, PHighJump = 9, PDash = 10;
+        PIntroTicks = 8, PHighJump = 9, PDash = 10, PXReleased = 11;
 
     /// <summary>Per-frame controller for the playable Crash's two objects (body and legs).</summary>
     internal static UniversalAsmPart CrashPlayerUpdate(IReadOnlyList<int> classes, string tag)
@@ -110,7 +110,8 @@ public static partial class UniversalSpecialBehaviors
         Lw(Fp, S1, 0); Beq(Fp, Zero, tag + "_done");
         a.La(T0, GameState); Lw(T0, T0, 0);
         {
-            // While Spyro dies (4) or a dragon is rescued (8) Crash stands in for him: flattened, or standing.
+            // While Spyro dies (4) or a dragon is rescued (8) Crash stands in for him: flattened, or standing. (The level
+            // update only runs in a rescue's first phase; later phases draw Crash from the exe hook, UniversalCrashPlayer.)
             string play = L("play"), notDeath = L("nd");
             Beq(T0, Zero, play);
             Lbu(T1, S2, PIntro); Beq(T1, Zero, tag + "_done");
@@ -149,7 +150,7 @@ public static partial class UniversalSpecialBehaviors
         {
             string air = L("air"), noLand = L("noland");
             Bne(S7, Zero, air);
-            Sb(Zero, S2, PDoubleJump);
+            Sb(Zero, S2, PDoubleJump); Sb(Zero, S2, PXReleased);
             Lbu(T0, S2, PSlam); Li(T1, 1); Bne(T0, T1, noLand);
             Li(T1, 2); Sb(T1, S2, PSlam); Li(T1, CrashGetUpTicks); Sb(T1, S2, PGetUp);
             Hit(CrashSlamReach, CrashSlamFlags);
@@ -233,11 +234,16 @@ public static partial class UniversalSpecialBehaviors
             SetVertical(CrashHighJumpSpeed);
             a.L(no);
         }
-        // X in the air: the double jump (once per jump).
+        // X in the air: the double jump (once per jump), on a new press once the jump's own X has been let go (the
+        // press that started the jump still reads as pressed for its first frame in the air).
         {
-            string no = L("dj");
+            string no = L("dj"), held = L("held");
             Beq(S7, Zero, no);
+            a.I(12, S4, T0, ButtonCross); Bne(T0, Zero, held);
+            Li(T1, 1); Sb(T1, S2, PXReleased);
+            a.L(held);
             a.I(12, S3, T0, ButtonCross); Beq(T0, Zero, no);
+            Lbu(T1, S2, PXReleased); Beq(T1, Zero, no);
             Lbu(T1, S2, PDoubleJump); Bne(T1, Zero, no);
             Lbu(T1, S2, PSlam); Bne(T1, Zero, no);
             Li(T1, 1); Sb(T1, S2, PDoubleJump);
@@ -257,13 +263,14 @@ public static partial class UniversalSpecialBehaviors
             Sound(CrashSoundBounce);
             a.L(no);
         }
-        // Spyro never sees Circle (no flame), nor X in the air (no glide of his own). Square is the spin; held on
-        // after a spin on the ground it is Crash's dash (Spyro's charge, which also climbs supercharge ramps).
+        // Spyro never sees Circle (no flame), nor a new X press in the air (no glide of his own); X held keeps working,
+        // so a held jump goes as high as Spyro's. Square is the spin; held on after a spin on the ground it is Crash's
+        // dash (Spyro's charge, which also climbs supercharge ramps).
         {
             Move(T5, S3); Move(T6, S4);                                 // the buttons as pressed
             Li(T0, ~(ButtonSquare | ButtonCircle)); And(S3, S3, T0); And(S4, S4, T0);
             string ground = L("g"); Beq(S7, Zero, ground);
-            Li(T0, ~ButtonCross); And(S3, S3, T0); And(S4, S4, T0);
+            Li(T0, ~ButtonCross); And(S3, S3, T0);
             a.L(ground);
             string noDash = L("nd"), dashing = L("dash"), written = L("w");
             a.I(12, T6, T0, ButtonSquare); Beq(T0, Zero, noDash);
@@ -402,6 +409,10 @@ public static partial class UniversalSpecialBehaviors
         Beq(T7, S0, tag + "_stomp_loop"); Beq(T7, S1, tag + "_stomp_loop");
         Lw(T4, T7, 8); a.R(0, T4, T0, 24, 0x02); Li(T1, 0x80); Bne(T0, T1, tag + "_stomp_loop");
         Lbu(T0, T7, 0x48); a.I(11, T0, T0, 0x80); Beq(T0, Zero, tag + "_stomp_loop");
+        // Crash boxes see a landing for themselves (a TNT starts its countdown, a crate breaks, the switch is pressed)
+        // and bounce Crash; a stomp would count as a charge and set a TNT off at once.
+        Lhu(T0, T7, 0x36);
+        foreach (int c in UniversalCrashBoxes.AllClasses) { Li(T1, c); Beq(T0, T1, tag + "_stomp_loop"); }
         Lhu(T3, T4, 6); a.I(9, T3, T3, CrashBounceReach);              // reach: its radius and a little more
         foreach (int axis in new[] { 0, 4 })
         {

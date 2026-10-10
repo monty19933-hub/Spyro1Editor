@@ -141,6 +141,62 @@ Check(UniversalCrashPlayer.IsPlayableLevel(10) && UniversalCrashPlayer.IsPlayabl
     !UniversalCrashPlayer.IsPlayableLevel(15) && !UniversalCrashPlayer.IsPlayableLevel(55) && !UniversalCrashPlayer.IsPlayableLevel(65), "Crash plays every normal level but the flight levels");
 Check(UniversalSpecialCatalog.RequiresCrashSource(UniversalCrashPlayer.Id) && !UniversalSpecialCatalog.RequiresJapaneseSource(UniversalCrashPlayer.LegsId), "Crash needs the Crash disc only");
 Check(Refuses(() => UniversalCrashPlayer.PatchExe(new byte[0x66000])), "the hide-Spyro hook refuses an unknown executable");
+// Crash in Spyro's place during a dragon rescue: the hook and the scene draw run on a test CPU against a small world
+// (hide flag, game state, rescue phase, model table, object table, Spyro); the object pass is a stub that records the
+// list it is given and moves the close-record end (which the scene draw must put back); the list clear is the game's.
+{
+    const uint Ret = 0x80001000, Rows = 0x80100000, Stack = 0x801FF000, Sparkle = Rows, Body = Rows + 0x58, Legs = Rows + 0xB0;
+    const uint StatueModel = 0x80110000, Records = 0x80072500;
+    bool Run(uint gameState = 8, uint hide = 1, uint bodyModel = 0x80120000, uint phase = 1, uint timer = 40, uint loader = 3)
+    {
+        var cpu = new RenderProbeCpu();
+        void Words(uint at, uint[] words) { for (int i = 0; i < words.Length; i++) cpu.Put(at + 4 * (uint)i, words[i]); }
+        Words(UniversalCrashPlayer.DrawHookHost, UniversalCrashPlayer.DrawHookWords());
+        Words(UniversalCrashPlayer.SceneDrawHost, UniversalCrashPlayer.SceneDrawWords());
+        Words(UniversalCrashPlayer.ObjectPass, [0x3C018007, 0xAC3F5F00, UniversalMips.JrRa, 0]);   // sw ra over the record end
+        Words(UniversalCrashPlayer.ObjectListClear, [0x00C43020, 0x20C6FFFC, 0xAC850000, 0x1486FFFE, 0x20840004, UniversalMips.JrRa, 0]);
+        Words(UniversalCrashPlayer.ObjectDraw, [UniversalMips.JrRa, 0]);
+        cpu.Put(0x80075814, hide); cpu.Put(0x800757D8, gameState); cpu.Put(0x80075828, Rows);
+        cpu.Put(UniversalCrashPlayer.RescuePhase, phase); cpu.Put(UniversalCrashPlayer.RescueTimer, timer); cpu.Put(UniversalCrashPlayer.RescueLoader, loader);
+        cpu.Put(0x80076378 + 4 * 0xFA, StatueModel); cpu.Put(0x80076378 + 4 * 0x19A, bodyModel); cpu.Put(0x80076378 + 4 * 0x19B, 0x80121000);
+        foreach (var (row, cls) in new[] { (Sparkle, 0xFBu), (Body, (uint)UniversalCrashPlayer.BodyClass), (Legs, (uint)UniversalCrashPlayer.LegsClass) })
+        { cpu.Put(row + 0x36, cls, 2); cpu.Put(row + 0x48, 0, 1); cpu.Put(row + 0xC, 7); cpu.Put(row + 0x46, 9, 1); }
+        cpu.Put(Rows + 3 * 0x58 + 0x48, 0xFF, 1);
+        cpu.Put(0x80078A58, 1000); cpu.Put(0x80078A5C, 2000); cpu.Put(0x80078A60, 3000); cpu.Put(0x80078A66, 0x40, 1);
+        for (uint a = 0; a <= UniversalCrashPlayer.ObjectListBytes; a += 4) cpu.Put(UniversalCrashPlayer.ObjectList + a, 0xDEAD0000 + a);
+        cpu.Put(UniversalCrashPlayer.CloseRecordsEnd, Records);
+        uint[] listed = [];
+        cpu.BeforeInstruction = pc => { if (pc == UniversalCrashPlayer.ObjectPass) listed = [cpu.Get(UniversalCrashPlayer.ObjectList), cpu.Get(UniversalCrashPlayer.ObjectList + 4), cpu.Get(UniversalCrashPlayer.ObjectList + 8)]; };
+        for (int r = 16; r < 24; r++) cpu.Regs[r] = 0x5150 + (uint)r;
+        cpu.Regs[29] = Stack; cpu.Regs[31] = Ret;
+        cpu.Run(UniversalCrashPlayer.DrawHookHost, hide == 0 ? UniversalCrashPlayer.SpyroDrawResume : Ret);
+        if (hide == 0) { Check(cpu.Regs[1] == 0x80077DD8 && cpu.Calls.Count == 0, "without the flag Spyro's own drawing runs on"); return false; }
+        Check(cpu.Regs[29] == Stack && Enumerable.Range(16, 8).All(r => cpu.Regs[r] == 0x5150 + (uint)r), "Crash's scene draw keeps the stack and saved registers");
+        bool drew = cpu.Calls.Contains(UniversalCrashPlayer.ObjectPass);
+        if (drew)
+        {
+            Check(cpu.Calls.SequenceEqual([UniversalCrashPlayer.ObjectPass, UniversalCrashPlayer.ObjectListClear, UniversalCrashPlayer.ObjectDraw]),
+                "the object pass, the list clear and the draw, as the game's renderers call them");
+            Check(listed.SequenceEqual([Body, Legs, 0u]), "Crash's body and legs are the only objects drawn");
+            Check(new[] { Body, Legs }.All(o => cpu.Get(o + 0xC) == 1000 && cpu.Get(o + 0x10) == 2000 &&
+                cpu.Get(o + 0x14) == (uint)(3000 - UniversalSpecialBehaviors.CrashPlayerFeet) && cpu.Get(o + 0x46, 1) == 0x40) && cpu.Get(Sparkle + 0xC) == 7,
+                "Crash stands where the scene puts Spyro, facing his way; nothing else moves");
+            Check(Enumerable.Range(0, UniversalCrashPlayer.ObjectListBytes / 4).All(i => cpu.Get(UniversalCrashPlayer.ObjectList + 4 * (uint)i) == 0) &&
+                cpu.Get(UniversalCrashPlayer.ObjectList + UniversalCrashPlayer.ObjectListBytes) == 0xDEAD0000 + (uint)UniversalCrashPlayer.ObjectListBytes &&
+                cpu.Get(UniversalCrashPlayer.CloseRecordsEnd) == Records, "the list area is cleared as the game clears it and the close-record end put back");
+        }
+        else Check(cpu.Calls.Count == 0 && cpu.Get(Body + 0xC) == 7 && cpu.Get(UniversalCrashPlayer.ObjectList) == 0xDEAD0000, "nothing drawn, nothing changed");
+        return drew;
+    }
+    Check(Run() && Run(phase: 5) && Run(phase: 7, timer: 15) && Run(loader: 0) && Run(loader: 6), "a dragon rescue draws Crash in Spyro's place");
+    Check(!Run(phase: 6, loader: 4) && !Run(phase: 6, loader: 5), "not while the rescue reloads the model area after the scene");
+    Check(!Run(gameState: 0) && !Run(gameState: 4) && !Run(gameState: 9), "other scenes draw nobody (they may load over the models)");
+    Check(!Run(bodyModel: StatueModel - 0x800), "a model below the statue (in the rescue's stream area) is not drawn");
+    Check(!Run(phase: 7, timer: 16), "the rescue's last phase, which draws the level's objects itself, does not draw Crash twice");
+    Run(hide: 0);
+    Check(UniversalCrashPlayer.DrawHookWords().Length <= UniversalCrashPlayer.DrawHookHostWords &&
+        UniversalCrashPlayer.SceneDrawWords().Length <= UniversalCrashPlayer.SceneDrawHostWords, "the hook and the scene draw fit their hosts");
+}
 // Crash 3 music in Spyro's unused XA slots: the catalog keeps Spyro's own 48/46 tracks and adds the songs apart.
 Check(MusicTrackCatalog.Tracks.Count == 48 && MusicTrackCatalog.SelectableTracks.Count == 46, "Spyro's own track lists unchanged");
 Check(MusicTrackCatalog.CustomTracks.Count == CrashMusic.Songs.Count + YearOfTheDragonDisc.LevelSongs.Count && MusicTrackCatalog.CustomTracks.All(t => t.IsSelectable && t.TrackId >= 100),
@@ -240,7 +296,28 @@ Check(player[0].Package.AsSpan(4, 16).ToArray().Select((b, i) => i < UniversalCr
 byte[] hooked = library.Disc.Exe.ToArray(); UniversalCrashPlayer.PatchExe(hooked);
 byte[] hookedAgain = hooked.ToArray(); UniversalCrashPlayer.PatchExe(hookedAgain);
 int changedBytes = Enumerable.Range(0, hooked.Length).Count(i => hooked[i] != library.Disc.Exe[i]);
-Check(changedBytes is > 0 and <= 48 && hookedAgain.AsSpan().SequenceEqual(hooked), $"the hide-Spyro hook installs once ({changedBytes} bytes)");
+int hookBytes = 4 * (UniversalCrashPlayer.DrawHookWords().Length + UniversalCrashPlayer.SceneDrawWords().Length + 2);
+Check(changedBytes is > 0 && changedBytes <= hookBytes && hookedAgain.AsSpan().SequenceEqual(hooked), $"the hide-Spyro hook and Crash's scene draw install once ({changedBytes} bytes)");
+{
+    // Only the call site and the two hosts change; an executable with the first release's hook (hide only) is upgraded
+    // to the same bytes; a changed host is refused.
+    int Off(uint a) => (int)(a - UniversalExeBindings.ExeBase);
+    bool Inside(int o, uint host, int words) => o >= Off(host) && o < Off(host) + 4 * words;
+    Check(Enumerable.Range(0, hooked.Length).Where(i => hooked[i] != library.Disc.Exe[i]).All(o => Inside(o, UniversalCrashPlayer.SpyroDraw, 2) ||
+        Inside(o, UniversalCrashPlayer.DrawHookHost, UniversalCrashPlayer.DrawHookHostWords) || Inside(o, UniversalCrashPlayer.SceneDrawHost, UniversalCrashPlayer.SceneDrawHostWords)),
+        "only the call site and the two unused hosts change");
+    byte[] first = library.Disc.Exe.ToArray();
+    uint[] firstHook = UniversalCrashPlayer.FirstDrawHook();
+    for (int i = 0; i < firstHook.Length; i++) BinaryPrimitives.WriteUInt32LittleEndian(first.AsSpan(Off(UniversalCrashPlayer.DrawHookHost) + 4 * i), firstHook[i]);
+    BinaryPrimitives.WriteUInt32LittleEndian(first.AsSpan(Off(UniversalCrashPlayer.SpyroDraw)), UniversalMips.EncodeJ(2, UniversalCrashPlayer.DrawHookHost));
+    BinaryPrimitives.WriteUInt32LittleEndian(first.AsSpan(Off(UniversalCrashPlayer.SpyroDraw) + 4), 0);
+    UniversalCrashPlayer.PatchExe(first);
+    Check(first.AsSpan().SequenceEqual(hooked), "the first release's hide-only hook is upgraded to the scene draw");
+    byte[] changed = library.Disc.Exe.ToArray(); changed[Off(UniversalCrashPlayer.SceneDrawHost) + 4 * 20] ^= 1;
+    Check(Refuses(() => UniversalCrashPlayer.PatchExe(changed)), "a changed scene-draw host is refused");
+    byte[] tampered = hooked.ToArray(); tampered[Off(UniversalCrashPlayer.SceneDrawHost) + 4] ^= 1;
+    Check(Refuses(() => UniversalCrashPlayer.PatchExe(tampered)), "an installed hook that differs is refused");
+}
 // Class IDs: unused by every retail level's registrations and rows, the shared model table and any small
 // immediate in the executable and every overlay (the boxes' rule).
 HashSet<int> used = [.. library.SharedClasses];

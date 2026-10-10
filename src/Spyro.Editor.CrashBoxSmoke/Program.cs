@@ -11,7 +11,7 @@ void Check(bool ok, string label) { if (!ok) throw new InvalidOperationException
 bool Refuses(Action action) { try { action(); return false; } catch (InvalidDataException) { return true; } }
 
 var all = UniversalCrashBoxes.AllClasses;
-Check(all.Distinct().Count() == 11, "eleven distinct box classes");
+Check(all.Distinct().Count() == 12, "twelve distinct box classes");
 Check(all.All(UniversalCrashBoxes.IsClass) && !UniversalCrashBoxes.IsClass(UniversalCrashBoxes.BasketClass), "box classes recognised");
 Check(UniversalCrashBoxes.Crates.Select(c => c.Reward).SequenceEqual(new byte[] { 0xFF, 0x53, 0x54, 0x55, 0x56, 0x57 }), "crate rewards: butterfly then the five gem classes");
 Check(UniversalCrashBoxes.TreasureValue(UniversalCrashBoxes.Crates[0].Class) == 0, "a butterfly crate adds no treasure");
@@ -24,8 +24,9 @@ foreach (int c in all.Where(UniversalCrashBoxes.IsPlaceableClass))
     Check(UniversalCrashBoxes.IsId(id) && UniversalSpecialCatalog.RequiresCrashSource(id) && !UniversalSpecialCatalog.RequiresJapaneseSource(id), $"{id} needs the Crash disc only");
 }
 Check(UniversalCrashBoxes.TntClasses.Skip(1).All(c => !UniversalCrashBoxes.IsPlaceableClass(c)), "countdown faces are not placeable on their own");
+Check(UniversalCrashBoxes.IsPlaceableClass(UniversalCrashBoxes.SwitchClass), "the Nitro switch is placeable");
 var entries = UniversalSpecialCatalog.Entries(true, true).Where(e => e.Default.SourceLevelKey == UniversalCrashBoxes.SourceKey && UniversalCrashBoxes.IsClass(e.ClassId)).ToList();
-Check(entries.Count == 3 && entries[0].Variants.Count == 6 && entries.All(e => e.RestrictionReason == null), "catalog: crate (6 contents), TNT, Nitro");
+Check(entries.Count == 4 && entries[0].Variants.Count == 6 && entries[3].ClassId == UniversalCrashBoxes.SwitchClass && entries.All(e => e.RestrictionReason == null), "catalog: crate (6 contents), TNT, Nitro, Nitro switch");
 Check(UniversalSpecialCatalog.Entries(true).Where(e => e.Default.SourceLevelKey == UniversalCrashBoxes.SourceKey).All(e => e.RestrictionReason != null), "without the Crash disc the boxes explain what is needed");
 Check(Refuses(() => UniversalSpecialBehaviors.CrashBoxUpdate([0x57], "bad")), "retail class refused");
 Check(Refuses(() => UniversalSpecialBehaviors.CrashBoxUpdate([UniversalCrashBoxes.TntClass, UniversalCrashBoxes.TntClass], "bad")), "duplicate refused");
@@ -41,7 +42,7 @@ var lib = new UniversalSourceLibrary(args[0], catalog);
 var disc = new CrashWarpedDisc(args[2]);
 var assets = UniversalCrashBoxes.Assets(lib, disc);
 Check(ReferenceEquals(assets, UniversalCrashBoxes.Assets(lib, disc)), "asset cache reused");
-Check(assets.Count == 8 && assets.All(a => a.SourceKey == UniversalCrashBoxes.SourceKey && a.Behavior == UniversalSpecialBehavior.CrashBox), "six crates, TNT and Nitro");
+Check(assets.Count == 9 && assets.All(a => a.SourceKey == UniversalCrashBoxes.SourceKey && a.Behavior == UniversalSpecialBehavior.CrashBox), "six crates, TNT, Nitro and the Nitro switch");
 var tnt = assets.Single(a => a.Id == UniversalCrashBoxes.TntId);
 Check(tnt.Companions.Select(c => c.ClassId).SequenceEqual(UniversalCrashBoxes.TntClasses.Skip(1)), "TNT brings its 3-2-1 faces");
 foreach (var a in assets.Concat(tnt.Companions))
@@ -49,7 +50,8 @@ foreach (var a in assets.Concat(tnt.Companions))
     Check(a.Package.Length == 1000 && a.SourceVram.Length == 0x80000, $"{a.Id}: basket-sized package and a VRAM image");
     Check(BinaryPrimitives.ReadUInt32LittleEndian(a.Package.AsSpan(0x14)) == 0x800003D0 && BinaryPrimitives.ReadUInt16LittleEndian(a.Package.AsSpan(0x3D0)) == 0x2E0,
         $"{a.Id}: basket collision block kept");
-    (byte, byte) slots = a.Id.StartsWith("crash-crate") ? ((byte)0, (byte)0xFF) : a.ClassId == UniversalCrashBoxes.NitroClass ? ((byte)3, (byte)4) : ((byte)1, (byte)2);
+    (byte, byte) slots = a.Id.StartsWith("crash-crate") ? ((byte)0, (byte)0xFF) : a.ClassId == UniversalCrashBoxes.NitroClass ? ((byte)3, (byte)4)
+        : a.ClassId == UniversalCrashBoxes.SwitchClass ? ((byte)5, (byte)0xFF) : ((byte)1, (byte)2);
     Check((a.Package[4], a.Package[5]) == slots && a.Package.AsSpan(6, 14).ToArray().All(b => b == 0xFF), $"{a.Id}: Crash sounds in slots 0 and 1");
     Check(BinaryPrimitives.ReadUInt16LittleEndian(a.RowTemplate.AsSpan(0x36)) == a.ClassId, $"{a.Id}: row has its class");
     var (vertices, nearFaces, farFaces) = Cube(a.Package);

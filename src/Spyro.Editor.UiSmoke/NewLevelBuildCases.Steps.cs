@@ -54,8 +54,12 @@ internal static partial class NewLevelBuildCases
             case "lostfleet-sheep": LostFleetSheep(window); return true;
             case "add-objects": AddObjects(window); return true;
             case "lostfleet-fix": LostFleetFix(window); return true;
+            case "lostfleet-holes": LostFleetHoles(window); return true;
             case "lostfleet-creatures": LostFleetCreatures(window); return true;
             case "retile": Retile(window); return true;
+            case "edit-objects": EditObjects(window); return true;
+            case "solidify": Solidify(window); return true;
+            case "cloudspire-cannon": CloudspireCannon(window); return true;
             default: return false;
         }
     }

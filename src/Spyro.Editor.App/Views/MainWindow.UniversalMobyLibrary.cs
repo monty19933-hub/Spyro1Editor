@@ -496,6 +496,13 @@ public sealed partial class MainWindow
         TextBlock variantLabel = new() { Text = "Source version", FontSize = 11, Foreground = new SolidColorBrush(ModernMutedInk), TextWrapping = TextWrapping.Wrap };
         TextBlock technical = new() { Name = "UniversalMobyTechnical", TextWrapping = TextWrapping.Wrap, FontSize = 11, LineHeight = 16, Foreground = new SolidColorBrush(ModernMutedInk) };
         TextBlock fit = new() { Name = "UniversalMobyFitText", TextWrapping = TextWrapping.Wrap, FontSize = 12, LineHeight = 18, FontWeight = FontWeight.SemiBold };
+        // A Dream Weavers fool can join a Resize cannon's group: the cannon (once Spyro has defeated its gunner) can then shoot it.
+        string? cannonGroup = UniversalCannonGroupForNewFool();
+        bool levelHasCannon = UniversalCannonGroups().Count > 0;
+        TextBlock joinCannonText = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
+        CheckBox joinCannon = new() { Name = "UniversalMobyJoinCannon", IsVisible = false, Content = joinCannonText,
+            IsChecked = cannonGroup != null && _selectedMoby?.UniversalLinkGroupId == cannonGroup };
+        ToolTip.SetTip(joinCannon, "The fool joins the Resize cannon's linked group. It still moves and is removed on its own. A fool that is not in a cannon's group never calls a cannon.");
         Button place = NewButton("Place in level"); place.Name = "UniversalMobyPlace"; place.IsEnabled = false;
         StyleModernPrimaryButton(place, ModernGreen);
         Button addHere = NewButton("Add near selection"); addHere.Name = "UniversalMobyAddHere"; addHere.IsEnabled = false;
@@ -767,6 +774,7 @@ public sealed partial class MainWindow
         {
             place.IsEnabled = addHere.IsEnabled = false;
             magicRoom.IsVisible = magicPair.IsVisible = false;
+            joinCannon.IsVisible = false;
             // While a search runs the button is its Stop button; a refresh must not take that away.
             findRoom.Content = findingRoom ? "Stop searching" : "Find space for this object…";
             findRoom.IsEnabled = findingRoom || (lib != null && freshCompilation == null && list.SelectedItem is UniversalMobyCatalogEntry);
@@ -816,6 +824,16 @@ public sealed partial class MainWindow
                 $"From {LevelName(v.SourceLevelKey)}.\n" +
                 (isSpecial && entry.Notes is { Length: > 0 } friendly ? friendly :
                     e.Native ? "This object already belongs to this level." : "Its appearance and game behavior are copied when you create the BIN. Playtest your exported level to check it in its new surroundings.");
+            if (UniversalDreamWeaversCannonRows.IsCannonRow(v.SourceLevelKey, v.SourceRow))
+                details.Text += "\nComes with its gunner, a Winged Fool that keeps the cannon pointed at Spyro. Once Spyro defeats the gunner, the barrel stays where it was left: stand behind the cannon facing it and flame it to fire. A hit makes a big Armored Fool small (and a small one big). To give it targets, select the cannon, then add Armored Fools with \u201cLet the Resize cannon shoot it\u201d ticked (Dream Weavers T20 and T21 start big and never call it).";
+            if (UniversalDreamWeaversCannonRows.IsFoolRow(v.SourceLevelKey, v.SourceRow))
+            {
+                joinCannon.IsVisible = levelHasCannon;
+                joinCannon.IsEnabled = cannonGroup != null;
+                joinCannonText.Text = cannonGroup != null ? "Let the Resize cannon shoot it (joins the cannon\u2019s group)" : "Select the Resize cannon in the level first to let it shoot this fool";
+                if (!levelHasCannon) details.Text += "\nOn its own a fool never calls a Resize cannon. Add a Resize cannon first to let one shoot it.";
+                else details.Text += "\n" + UniversalDreamWeaversCannonRows.Describe(lib.Get(v.SourceLevelKey).Data, v.SourceRow);
+            }
             technical.Text =
                 $"Source identity: {UniversalSourceObjectName(entry,v)}\n" +
                 $"Object type {entry.ClassHex} · {FriendlyCategory(entry.Category)}{(entry.SubCategory.Length > 0 ? " › " + entry.SubCategory : "")}\n" +
@@ -1083,7 +1101,9 @@ public sealed partial class MainWindow
             if (lib == null || list.SelectedItem is not UniversalMobyCatalogEntry entry) return;
             var v = variants.SelectedItem as UniversalMobyVariant ?? entry.Default;
             dialog.Close();
-            await AddUniversalMobyAsync(lib, entry, v, clickToPlace, japanese);
+            if (joinCannon.IsVisible && joinCannon.IsChecked == true && cannonGroup != null)
+                await AddUniversalMobyIntoGroupAsync(lib, entry, v, clickToPlace, japanese, cannonGroup);
+            else await AddUniversalMobyAsync(lib, entry, v, clickToPlace, japanese);
         }
         place.Click += async (_, _) => await AddAsync(true);
         addHere.Click += async (_, _) => await AddAsync(false);
@@ -1120,6 +1140,7 @@ public sealed partial class MainWindow
         right.Children.Add(variants);
         right.Children.Add(details);
         right.Children.Add(fit);
+        right.Children.Add(joinCannon);
         right.Children.Add(magicRoom); right.Children.Add(magicPair);
         right.Children.Add(findRoom); right.Children.Add(roomExplanation); right.Children.Add(roomPlans); right.Children.Add(inspectPlan);
         right.Children.Add(new Expander { Header = "Technical details", IsExpanded = false, Content = technical, HorizontalAlignment = HorizontalAlignment.Stretch });
@@ -1286,8 +1307,16 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(owner);
     }
 
-    private async Task AddUniversalMobyAsync(UniversalSourceLibrary lib, UniversalMobyCatalogEntry entry, UniversalMobyVariant v, bool clickToPlace,
-        UniversalJapaneseSource? japanese = null)
+    private Task AddUniversalMobyAsync(UniversalSourceLibrary lib, UniversalMobyCatalogEntry entry, UniversalMobyVariant v, bool clickToPlace,
+        UniversalJapaneseSource? japanese = null) => AddUniversalMobyCoreAsync(lib, entry, v, clickToPlace, japanese, null);
+
+    /// <summary>Adds a Dream Weavers fool into a Resize cannon's linked group, so that cannon can shoot it
+    /// (<see cref="UniversalDreamWeaversCannonRows"/>).</summary>
+    private Task AddUniversalMobyIntoGroupAsync(UniversalSourceLibrary lib, UniversalMobyCatalogEntry entry, UniversalMobyVariant v, bool clickToPlace,
+        UniversalJapaneseSource? japanese, string cannonGroup) => AddUniversalMobyCoreAsync(lib, entry, v, clickToPlace, japanese, cannonGroup);
+
+    private async Task AddUniversalMobyCoreAsync(UniversalSourceLibrary lib, UniversalMobyCatalogEntry entry, UniversalMobyVariant v, bool clickToPlace,
+        UniversalJapaneseSource? japanese, string? cannonGroup)
     {
         if (_currentLevel == null) return;
         string? specialId = UniversalSpecialCatalog.IsSpecial(v) ? UniversalSpecialCatalog.SpecialIdForClass(v.ClassId) : null;
@@ -1328,6 +1357,13 @@ public sealed partial class MainWindow
         PendingMobyAdd pending = new(template, name, template.Type, template.State, template.YawByte,
             template.SourceByte36, template.SourceByte4F, template.Flag4B, GemValue.Red, option, [template]);
         pending = WithUniversalCompanions(pending, lib, row);
+        if (cannonGroup != null)
+        {
+            if (pending.UniversalCompanions.Count != 0 || !UniversalDreamWeaversCannonRows.IsFoolRow(v.SourceLevelKey, v.SourceRow) ||
+                !UniversalCannonGroups().Contains(cannonGroup))
+            { _statusText.Text = "Only a Dream Weavers fool can join a Resize cannon in this level."; return; }
+            pending = pending with { UniversalLinkGroupId = cannonGroup };
+        }
         if (clickToPlace) { BeginPendingMobyPlacement(pending, fallback); return; }
         Vector3f position = ApplyTerrainPlacementLift(SnapOrNearestTerrain(fallback), pending);
         await AddPendingMobyAtPositionAsync(pending, position);

@@ -65,9 +65,11 @@ internal static partial class NewLevelBuildCases
         return (browser, list.ItemsSource!.Cast<UniversalMobyCatalogEntry>().ToArray());
     }
 
-    /// <summary>Lost Fleet, second pass: the faces Year of the Dragon draws from both sides (its flag 0x08; LOSTFLEET_FACES
-    /// is the lab's faces.json) become two-sided, and every gem stands as high above the ground under it as retail
-    /// gems do (measured in GEM_LIFT_LEVEL, default Toasty, an unedited retail level).</summary>
+    /// <summary>Lost Fleet, second pass: every face takes Year of the Dragon's sides (LOSTFLEET_FACES is the lab's
+    /// faces.json; flag 0x04 shows the face's other side, flag 0x08, set only on the acid, draws both; see
+    /// <see cref="LostFleetSides"/>), and every gem stands as high above the ground under it as retail gems do (measured
+    /// in GEM_LIFT_LEVEL, default Toasty, an unedited retail level). The lostfleet-holes step does the rest of the
+    /// 2026-10-10 hole fixes.</summary>
     private static void LostFleetFix(MainWindow window)
     {
         string facesPath = Environment.GetEnvironmentVariable("LOSTFLEET_FACES") ?? throw new InvalidOperationException("Set LOSTFLEET_FACES.");
@@ -86,23 +88,9 @@ internal static partial class NewLevelBuildCases
         Console.WriteLine($"{probe}: {lifts.Count} gems, lift above the ground {lifts[0]:0}..{lifts[^1]:0}, median {lift}");
 
         Load(window, "artisans");
-        static string Key(IEnumerable<(int, int, int)> points) => string.Join(";", points.Order());
-        HashSet<string> twoSided = [];
-        foreach (var f in JsonDocument.Parse(File.ReadAllText(facesPath)).RootElement.EnumerateArray())
-        {
-            if (!f.GetProperty("double").GetBoolean()) continue;
-            var v = f.GetProperty("v").EnumerateArray().Select(p => (p[0].GetInt32(), p[1].GetInt32(), p[2].GetInt32())).ToArray();
-            twoSided.Add(Key(f.GetProperty("tri").GetBoolean() ? v[1..] : v));
-        }
         var doc = window.FreshSceneForTesting ?? throw new InvalidOperationException("Artisans is not a built level");
-        int marked = 0;
-        var surfaces = doc.Surfaces.Select(s =>
-        {
-            bool both = twoSided.Contains(Key(s.Vertices.Select(p => ((int)p.X, (int)p.Y, (int)p.Z))));
-            if (both) marked++;
-            return both == s.TwoSided ? s : s with { TwoSided = both };
-        }).ToArray();
-        Console.WriteLine($"two-sided faces: {marked} of {twoSided.Count} flagged in Year of the Dragon");
+        var (surfaces, reversed, twoSided, changed) = LostFleetSides(doc.Surfaces, LostFleetFaces());
+        Console.WriteLine($"lost fleet faces: {reversed} shown from their other side, {twoSided} two-sided (acid); {changed} changed");
         ApplyScene(window, doc with { Surfaces = surfaces });
 
         int moved = 0;

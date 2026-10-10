@@ -341,6 +341,8 @@ public static class UniversalMobyComposer
             // A rebuilt homeworld's own dragons keep naming each other's rows (statue, dragon, pedestal).
             if (persistentNativePrefixRows != null && string.Equals(p.SourceLevelKey, destination.Key, StringComparison.OrdinalIgnoreCase))
                 t = UniversalDragonRows.Capture(s.Data, t);
+            // Dream Weavers fools take the cannon in their linked group, or never call one.
+            t = UniversalDreamWeaversCannonRows.Bind(t, p, placements, destination.Key, dest, permanentlyRemoved, s.Data);
             if(destination.Key=="alpineridge"&&UniversalGreenDruidWorldRows.Applies(t))t=UniversalGreenDruidNativeReferences.Capture(dest,s.Data,s.Overlay,t,permanentlyRemoved);
             if(string.Equals(p.SourceLevelKey,"darkpassage",StringComparison.OrdinalIgnoreCase)&&string.Equals(destination.Key,"darkpassage",StringComparison.OrdinalIgnoreCase)&&t.ClassId==0x35&&t.SourceRowIndices.Count==1&&
                 destinationData.AsSpan().SequenceEqual(originalDestination.Data.Bytes)&&destinationOverlay.AsSpan().SequenceEqual(originalDestination.Overlay.Bytes))
@@ -724,6 +726,15 @@ public static class UniversalMobyComposer
             { var donor=source(p.SourceLevelKey);UniversalTwilightTrooperPlacement.RequireSourceLabel(p.SourceLevelKey);UniversalTwilightTrooperPlacement.RequireInitialRow(t,r);t=UniversalTwilightTrooperPlacement.Rebase(donor.Data,donor.Overlay,t,r); }
             if(UniversalBeastMistyBoarPlacement.Applies(t))
             { var boarSource=source(p.SourceLevelKey);t=UniversalBeastMistyBoarPlacement.Rebase(boarSource.Data,boarSource.Overlay,t,r); }
+            // Every other moved object takes the world points in its data along (patrol paths, circle centres, home
+            // points); objects with their own rule above, a doorway's set points or a statue's camera are left as is.
+            if (p.SpecialId == null && p.PropertyWordOverrides == null && t.ClassId != NativeDragonRescueCamera.StatueClass
+                && t.Properties.AsSpan().SequenceEqual(templates[i].Properties) && t.BoarPlacementCertificate == null && t.DarkLanternContext == null
+                && t.GreenDruidNativeReferences == null && !UniversalHighCavesTornadoPlacement.Applies(t) && !UniversalHauntedWizardPlacement.Applies(t)
+                && !UniversalHauntedSuperflameFairy.Applies(t) && !UniversalTwilightTrooperPlacement.Applies(t) && !UniversalGreenDruidLinkedRows.Applies(t)
+                && !UniversalGreenDruidWorldRows.Applies(t) && !UniversalHighCavesWorldRows.Applies(t) && !UniversalDarkPassageLanternGroups.Applies(t)
+                && !UniversalDarkPassageShapeshifterOwnership.Applies(t))
+                t = UniversalPropertyCoordinates.Rebase(t, r);
             if (p.SpecialId == null)
             {
                 // Count the actual authored bytes while class still identifies
@@ -970,16 +981,55 @@ public static class UniversalMobyComposer
         // Compositions whose model layout is certified exactly above keep it and are refused instead.
         bool certifiedLayout = magicChain != null || magicOriginal != null || magicPair != null || linkedWorld != null ||
             greenWorld != null || highCavesWorld != null || flightGate != null || flightChest != null;
-        if (!certifiedLayout &&
-            UniversalNativeDragonRescuePrefix.Measure(destination.Key, destination.DisplayName, originalDestination.Data, dest, exe) is { Deficit: > 0 })
+        // Playable Crash stands in for Spyro during a dragon rescue (UniversalCrashPlayer.PatchExe draws his two models
+        // then), and the rescue streams over the model area below the statue, so his models belong above it. A built
+        // level adds them before its statue: they move after it, and what that leaves the area short is filled by other
+        // imported models, then (built levels, game RAM allowing) by empty room. A trial on a copy decides; without room
+        // the layout stays as it was and he sits the scene out (the hook leaves models below the statue undrawn).
+        var originalRegistrations = originalDestination.Data.Registrations();
+        var originalStatue = originalRegistrations.SingleOrDefault(r => r.ClassId == 250);
+        HashSet<int> nativeTail = originalStatue == null ? [] : [.. originalRegistrations.Where(r => r.Root > originalStatue.Root).Select(r => r.ClassId)];
+        UniversalNativeDragonRescueBudget? Budget(UniversalLevelData d) =>
+            UniversalNativeDragonRescuePrefix.Measure(destination.Key, destination.DisplayName, originalDestination.Data, d, exe);
+        int[] AfterStatue(UniversalLevelData d, bool crash)
         {
-            var original = originalDestination.Data.Registrations();
-            int originalStatue = original.Single(r => r.ClassId == 250).Root, statue = dest.Registrations().Single(r => r.ClassId == 250).Root;
-            var nativeTail = original.Where(r => r.Root > originalStatue).Select(r => r.ClassId).ToHashSet();
-            modelGrowth += dest.MoveModelsBefore(250, dest.Registrations().Where(r => r.Root > statue && !nativeTail.Contains(r.ClassId)).Select(r => r.ClassId).ToArray());
+            int statue = d.Registrations().Single(r => r.ClassId == 250).Root;
+            return [.. d.Registrations().Where(r => r.Root > statue && !nativeTail.Contains(r.ClassId) && UniversalCrashPlayer.IsClass(r.ClassId) == crash).Select(r => r.ClassId)];
+        }
+        bool CrashClear(UniversalLevelData d)
+        {
+            int statue = d.Registrations().Single(r => r.ClassId == 250).Root;
+            int[] below = [.. d.Registrations().Where(r => UniversalCrashPlayer.IsClass(r.ClassId) && r.Root < statue).Select(r => r.ClassId)];
+            if (below.Length > 0)
+            {
+                var packages = below.Select(c => (c, d.Package(c))).ToList();
+                d.RemoveModels(below);
+                d.AppendModels(packages);
+            }
+            if (Budget(d) is not { Deficit: > 0 }) return true;
+            d.MoveModelsBefore(250, AfterStatue(d, crash: false));
+            if (Budget(d) is not { Deficit: > 0 } open) return true;
+            int room = UniversalLevelData.Align(open.Deficit, 0x800);
+            if (persistentNativePrefixRows == null || RuntimeEnd(d, copyBuffer) + (uint)room > NormalBufferFloor - RamSafetyMargin) return false;
+            d.ReserveBefore(250, room);
+            return true;
+        }
+        if (!certifiedLayout && dest.Registrations().Any(r => UniversalCrashPlayer.IsClass(r.ClassId)) && Budget(dest) != null)
+        {
+            int before = dest.Bytes.Length;
+            if (CrashClear(new UniversalLevelData(dest.Bytes.ToArray()))) CrashClear(dest);
+            else warnings.Add($"Crash sits out {destination.DisplayName}'s dragon rescues (nobody stands in Spyro's place): the rescue " +
+                "loads over his model there, and the level has no game memory left to keep it clear.");
+            modelGrowth += dest.Bytes.Length - before;
+        }
+        // A dragon rescue streams into the model area below the statue. When removed native models leave too little
+        // room there, imported models move below the statue too; the game reloads that area after every rescue.
+        // Compositions whose model layout is certified exactly above keep it and are refused instead.
+        if (!certifiedLayout && Budget(dest) is { Deficit: > 0 })
+        {
+            modelGrowth += dest.MoveModelsBefore(250, [.. AfterStatue(dest, crash: false), .. AfterStatue(dest, crash: true)]);
             // A rebuilt homeworld may hold too few models to fill the area: the rest is reserved as empty room there.
-            if (persistentNativePrefixRows != null &&
-                UniversalNativeDragonRescuePrefix.Measure(destination.Key, destination.DisplayName, originalDestination.Data, dest, exe) is { Deficit: > 0 } still)
+            if (persistentNativePrefixRows != null && Budget(dest) is { Deficit: > 0 } still)
                 modelGrowth += dest.ReserveBefore(250, UniversalLevelData.Align(still.Deficit, 0x800));
         }
         UniversalNativeDragonRescuePrefix.RequireSafe(destination.Key,destination.DisplayName,originalDestination.Data,dest,exe);

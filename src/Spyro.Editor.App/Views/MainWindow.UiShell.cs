@@ -236,6 +236,7 @@ public sealed partial class MainWindow
         fileActions.Children.Add(BuildActionMenu("File", "EditorFileMenu", new ToolbarAction("New Level…", NewMainLevelAsync),
             new ToolbarAction("Start Blank in Current Level…", StartBlankCurrentLevelAsync),
             new ToolbarAction("Restore Before Clear…", RestoreBeforeClearAsync),
+            new ToolbarAction("Free Deleted Objects' Save Rows…", FreeRetiredSaveRowsAsync),
             new ToolbarAction("Open Created Level…", OpenMainFreshLevelAsync),
             new ToolbarAction("Save Level", SaveFromToolbarAsync)));
         fileActions.Children.Add(_toolbarOpenDiscImageButton);

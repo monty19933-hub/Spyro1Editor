@@ -45,6 +45,16 @@ class OwnedCommandTests(unittest.TestCase):
         self.assertNotIn(name,RUNNER.SOURCE_QA_CUE_CASES)
         self.assertIn(("MagicArtisansPairSmoke","MAGIC_ARTISANS_PAIR_SOURCE_OK",[]),RUNNER.SOURCE_QA_CASES)
 
+    def test_dreamweavers_cannon_source_suite_registration_uses_current_core(self):
+        name = "UniversalDreamWeaversCannonSmoke"
+        self.assertIn((name, "UNIVERSAL_DREAMWEAVERS_CANNON_FREE_OK"), RUNNER.CORE_CASES)
+        self.assertIn((name, "UNIVERSAL_DREAMWEAVERS_CANNON_SOURCE_OK", []), RUNNER.SOURCE_QA_CASES)
+        self.assertIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        self.assertIn(name, RUNNER.SOURCE_QA_REPORT_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        project = RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
+        self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"', project.read_text())
+
     def test_green_no_target_world_source_suite_registration_uses_current_core(self):
         name = "GreenDruidNoTargetWorldSmoke"
         marker = "GREEN_DRUID_NO_TARGET_WORLD_SAVED_REOPENED_EXPORT_OK"

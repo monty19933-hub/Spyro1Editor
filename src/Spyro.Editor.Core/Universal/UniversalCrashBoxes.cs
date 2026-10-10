@@ -8,14 +8,17 @@ namespace Spyro.Editor.Core.Universal;
 
 /// <summary>Crash Bandicoot boxes for any ground level: crates that break like baskets (flame, charge or a jump
 /// on top) and drop a gem, TNT that counts down 3-2-1 after a jump on it and explodes at once when flamed or
-/// charged, and Nitro that explodes on any touch and takes Spyro's last life point. Box faces come from the
+/// charged, Nitro that explodes on any touch and takes Spyro's last life point, and the green "!" Nitro switch that
+/// sets off every Nitro in the level. Box faces come from the
 /// user's Crash Bandicoot: Warped disc; the cube model keeps Dark Hollow's basket package layout and its
 /// collision block, so the engine's own flame/charge contact and standing-on-top work unchanged.</summary>
 public static class UniversalCrashBoxes
 {
     public const string SourceKey = "crash";
-    public const string TntId = "crash-tnt", NitroId = "crash-nitro";
+    public const string TntId = "crash-tnt", NitroId = "crash-nitro", SwitchId = "crash-nitro-switch";
     public const int TntClass = 0x129, Tnt3Class = 0x133, Tnt2Class = 0x13F, Tnt1Class = 0x14E, NitroClass = 0x152;
+    /// <summary>The Nitro switch: the last class ID no retail level or other editor object uses.</summary>
+    public const int SwitchClass = 0x1A3;
     public const int BasketClass = 0xC2;
     public const string BasketPackageSha256 = "79bc229395e861933e0dc9e2acb3114c4ae7e0250058722f57775b6a973c1391";
 
@@ -34,17 +37,18 @@ public static class UniversalCrashBoxes
 
     public static IReadOnlyList<int> CrateClasses => Crates.Select(c => c.Class).ToArray();
     public static IReadOnlyList<int> TntClasses => [TntClass, Tnt3Class, Tnt2Class, Tnt1Class];
-    public static IReadOnlyList<int> AllClasses => [.. CrateClasses, .. TntClasses, NitroClass];
+    public static IReadOnlyList<int> AllClasses => [.. CrateClasses, .. TntClasses, NitroClass, SwitchClass];
 
-    public static bool IsId(string? id) => id != null && (id == TntId || id == NitroId || Crates.Any(c => c.Id == id));
+    public static bool IsId(string? id) => id != null && (id == TntId || id == NitroId || id == SwitchId || Crates.Any(c => c.Id == id));
     public static bool IsClass(int classId) => AllClasses.Contains(classId);
-    public static bool IsPlaceableClass(int classId) => CrateClasses.Contains(classId) || classId is TntClass or NitroClass;
+    public static bool IsPlaceableClass(int classId) => CrateClasses.Contains(classId) || classId is TntClass or NitroClass or SwitchClass;
 
     public static string? IdForClass(int classId) =>
-        classId == TntClass ? TntId : classId == NitroClass ? NitroId : Crates.FirstOrDefault(c => c.Class == classId).Id;
+        classId == TntClass ? TntId : classId == NitroClass ? NitroId : classId == SwitchClass ? SwitchId : Crates.FirstOrDefault(c => c.Class == classId).Id;
 
     public static string? NameForClass(int classId) =>
-        classId == TntClass ? "TNT crate" : classId == NitroClass ? "Nitro crate" : Crates.FirstOrDefault(c => c.Class == classId).Name;
+        classId == TntClass ? "TNT crate" : classId == NitroClass ? "Nitro crate" : classId == SwitchClass ? "Nitro switch box"
+        : Crates.FirstOrDefault(c => c.Class == classId).Name;
 
     /// <summary>Treasure the box adds to its level's total (a crate's gem).</summary>
     public static int TreasureValue(int classId)
@@ -53,7 +57,7 @@ public static class UniversalCrashBoxes
         return crate.Id != null && GemValue.TryFromIdByte(crate.Reward, out var gem) ? gem.Value : 0;
     }
 
-    private enum Kind { Crate, Tnt, Tnt3, Tnt2, Tnt1, Nitro }
+    private enum Kind { Crate, Tnt, Tnt3, Tnt2, Tnt1, Nitro, Switch }
 
     // Box faces: (model, index within the model's distinct textures) in the Crash box page Cr10T.
     private static readonly (string Model, int Index)[] Faces =
@@ -66,6 +70,8 @@ public static class UniversalCrashBoxes
         ("BT20G", 0),   // 5 "1"
         ("Bn10G", 0),   // 6 NITRO side
         ("Bn10G", 2),   // 7 Nitro top (green X)
+        ("Ba10G", 0),   // 8 Nitro switch side (green "!")
+        ("Ba10G", 2),   // 9 Nitro switch top (iron)
     ];
     private const string BoxPage = "Cr10T";
     private const int TexturePage = 8;              // VRAM x 512, y 0, 4 bpp
@@ -113,11 +119,13 @@ public static class UniversalCrashBoxes
             BinaryPrimitives.WriteUInt16LittleEndian(template.AsSpan(0x36), (ushort)cls);
             template[0x53] = reward;
             byte[] package = Package(basket, kind, faces);
-            // Sound slots: 0 = break or explosion, 1 = the TNT beep or the Nitro rattle (indices into SoundSource).
+            // Sound slots: 0 = break, explosion or the switch's click, 1 = the TNT beep or the Nitro rattle (indices
+            // into SoundSource).
             package.AsSpan(4, 16).Fill(0xFF);
             (package[4], package[5]) = kind switch
             {
-                Kind.Crate => ((byte)0, (byte)0xFF), Kind.Nitro => ((byte)3, (byte)4), _ => ((byte)1, (byte)2),
+                Kind.Crate => ((byte)0, (byte)0xFF), Kind.Nitro => ((byte)3, (byte)4),
+                Kind.Switch => ((byte)5, (byte)0xFF), _ => ((byte)1, (byte)2),
             };
             return new(id, name, cls, UniversalSpecialBehavior.CrashBox, package, vram, sounds, template) { SourceKey = SourceKey };
         }
@@ -126,6 +134,7 @@ public static class UniversalCrashBoxes
             .Select(k => Asset($"crash-tnt-{k.Item2.ToString().ToLowerInvariant()[3..]}", "TNT crate (counting)", k.Item1, k.Item2, 0xFF)).ToArray();
         list.Add(Asset(TntId, "TNT crate", TntClass, Kind.Tnt, 0xFF) with { Companions = countdown });
         list.Add(Asset(NitroId, "Nitro crate", NitroClass, Kind.Nitro, 0xFF));
+        list.Add(Asset(SwitchId, "Nitro switch box", SwitchClass, Kind.Switch, 0xFF));
         return list;
     }
 
@@ -182,8 +191,9 @@ public static class UniversalCrashBoxes
 
     /// <summary>Crash 3's own box sounds, by name in the box level file: crate break, TNT explosion, TNT countdown
     /// beep, Nitro explosion, Nitro rattle (identified by length and shape: the beep is a steady 1 kHz tone of
-    /// 0.12 s, the explosions are long noise bursts). Crash plays them at 11025 Hz (SPU pitch 0x400).</summary>
-    public static readonly string[] SoundNames = ["brk0A", "tnt0A", "Ttb0A", "nbr0A", "nbu0A"];
+    /// 0.12 s, the explosions are long noise bursts), and the switch box's click. Crash plays them at 11025 Hz (SPU
+    /// pitch 0x400).</summary>
+    public static readonly string[] SoundNames = ["brk0A", "tnt0A", "Ttb0A", "nbr0A", "nbu0A", "swb0A"];
     private const ushort SoundPitch = 0x400;
 
     /// <summary>A copy of Dark Hollow's data whose first sound descriptors and SPU bank hold the given Crash sounds,
@@ -262,7 +272,8 @@ public static class UniversalCrashBoxes
     {
         (int side, int top) = kind switch
         {
-            Kind.Crate => (0, 0), Kind.Tnt => (1, 2), Kind.Tnt3 => (3, 2), Kind.Tnt2 => (4, 2), Kind.Tnt1 => (5, 2), _ => (6, 7),
+            Kind.Crate => (0, 0), Kind.Tnt => (1, 2), Kind.Tnt3 => (3, 2), Kind.Tnt2 => (4, 2), Kind.Tnt1 => (5, 2),
+            Kind.Switch => (8, 9), _ => (6, 7),
         };
         byte[] Field(int face, bool upright)
         {

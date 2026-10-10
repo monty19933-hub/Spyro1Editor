@@ -158,7 +158,12 @@ public sealed class NativeHubPortals
         return faces;
     }
 
-    public static NativeHubPortals? Build(string originalUSA, LevelCatalog catalog, SceneDocument document)
+    /// <param name="destinationSky">The sky each destination level (by id) actually has in this export, or null to
+    /// keep the retail copy. A doorway's record carries a whole copy of its destination's sky: the game draws it in the
+    /// doorway and through the first half of the entry flight (and the second half of the flight home), until the
+    /// destination's own data has loaded (USA 0x80015420, 0x800159CC), so a stale copy shows a different sky midway.</param>
+    public static NativeHubPortals? Build(string originalUSA, LevelCatalog catalog, SceneDocument document,
+        Func<int, byte[]?>? destinationSky = null)
     {
         if (document.Portals is not { Count: > 0 } portals) return null;
         var home = document.ResolveTarget(catalog);
@@ -181,6 +186,12 @@ public sealed class NativeHubPortals
             int skyAt = 0x20 + 12 * pointCount + 20;
             int skyLength = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(head.AsSpan(skyAt)));
             byte[] record = Wad(original.WadOffset, skyAt + skyLength);
+            if (destinationSky?.Invoke(portal.DestinationLevelId) is { } sky)
+            {
+                if (!Spyro1SkyBlockAnalyzer.IsValidStandaloneSkyBlock(sky) || BinaryPrimitives.ReadUInt32LittleEndian(sky) != sky.Length)
+                    throw new InvalidDataException($"The sky of level {portal.DestinationLevelId} is not one native sky block.");
+                record = [.. record.AsSpan(0, skyAt), .. sky];
+            }
             var outline = Enumerable.Range(0, pointCount).Select(i => (X: I(record, 0x20 + 12 * i), Y: I(record, 0x24 + 12 * i), Z: I(record, 0x28 + 12 * i))).ToArray();
             int bottom = outline.Min(p => p.Z);
             var low = outline.Where(p => p.Z - bottom <= 16).ToArray();

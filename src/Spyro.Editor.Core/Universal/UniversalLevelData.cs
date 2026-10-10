@@ -23,6 +23,9 @@ public sealed record UniversalRowTemplate(string SourceLevelKey, int SourceRowIn
     public IReadOnlyList<UniversalSourceRowIndex> SourceRowIndices { get; init; } = [];
     public IReadOnlyList<UniversalSourcePrerequisite> SourcePrerequisiteRows { get; init; } = [];
     public IReadOnlyList<UniversalImportedRowIndex> ImportedRowIndices { get; init; } = [];
+    /// <summary>Property words that hold the object's own final row: an unread row word (a Dream Weavers fool without a
+    /// cannon) that, if ever read, can only name the object itself.</summary>
+    public IReadOnlyList<int> OwnRowIndexOffsets { get; init; } = [];
     internal UniversalDarkPassageLanternContext? DarkLanternContext {get;init;}
     internal UniversalGreenDruidNativeReferences? GreenDruidNativeReferences {get;init;}
     public int ClassId => BinaryPrimitives.ReadUInt16LittleEndian(Row.AsSpan(0x36));
@@ -411,8 +414,9 @@ public sealed class UniversalLevelData
         using MemoryStream blob = new();
         List<int> propStarts = [];
         int nextStart=insert; foreach(var row in rows){propStarts.Add(row.Template.Properties.Length==0?0:nextStart);nextStart=checked(nextStart+Align(row.Template.Properties.Length,4));}
-        foreach (var (_, t) in rows)
+        for (int index = 0; index < rows.Count; index++)
         {
+            var t = rows[index].Template;
             int start = insert + (int)blob.Length;
             byte[] p = new byte[Align(t.Properties.Length, 4)];
             t.Properties.CopyTo(p, 0);
@@ -428,6 +432,13 @@ public sealed class UniversalLevelData
                 newFix.Add(start + off);
             }
             UniversalIndexedRows.Apply(t, rows, allocation, p);
+            foreach (int own in t.OwnRowIndexOffsets)
+            {
+                if (own < 0 || own % 4 != 0 || own + 4 > t.Properties.Length || t.InternalPointers.Any(x => x.Offset == own) ||
+                    t.ImportedRowPointers.Any(x => x.Offset == own) || t.ImportedRowIndices.Any(x => x.Offset == own))
+                    throw new InvalidDataException("An own-row word overlaps another link in the object's data.");
+                BinaryPrimitives.WriteInt32LittleEndian(p.AsSpan(own), allocation.NewRows[index]);
+            }
             UniversalBeastMistyBoarPlacement.ApplyChargePointer(t,rows,propStarts,p);
             blob.Write(p);
         }
