@@ -27,6 +27,13 @@ New
 - Example: WUMPA VILLAGE, a Crash Bandicoot: Warped style village built in Dark Hollow's place with Crash 3's textures, crates and enemies.
 - Terrain textures from your own pictures: images added in the Terrain tab are now written into the game in every detail level (far, normal and close up), with the fade into the distance kept. Textures that share pixels in the level take new images together; the editor says which.
 - Lower now works on tiles at the floor of their part of the level. The game stores each part's heights within a band that used to start exactly at the lowest tile; Create BIN now moves the band when a lowered corner needs it.
+- Play as Crash (Game Settings → Play as Crash, chosen per level; needs your Crash Bandicoot: Warped disc): Crash replaces Spyro in that level. He runs, jumps, double-jumps (let go of X and press it again in the air), spins, slides, belly-flops, breaks crates and presses switches, and stands in Spyro's place when a dragon is rescued.
+- Songs from other games for any level's music: Crash Bandicoot: Warped's Toad Village and Spyro: Year of the Dragon's Lost Fleet, taken from your own discs ("Year of the Dragon disc…" in the music panel).
+- Year of the Dragon creatures (needs your Spyro: Year of the Dragon disc, under Enemies › Spyro: Year of the Dragon): Lost Fleet's rhynoc and crab, with their own models, animations and sounds. They guard their spot, attack when Spyro comes close and are knocked flying by flame, a charge or a jump.
+- Nitro switch box: the green "!" box from Crash 3. Jump on it, flame it or charge it and every Nitro crate in the level explodes.
+- Resize cannon from Dream Weavers works in other levels. Its gunner comes with it; to give it targets, select the cannon, open Add Object, pick an Armored Fool and tick "Let the Resize cannon shoot it". Defeat the gunner, stand behind the cannon and flame it: a hit makes a big fool small, and a small fool can be charged.
+- A homeworld you empty with Start Blank keeps working doorways (moved to where you put them), its own dragons rescue properly, and the balloonist keeps his balloon.
+- File ▾ → Free Deleted Objects' Save Rows…: a level keeps one of the game's 256 save rows for every object ever added, deleted ones included. When a level runs out, this gives the deleted objects' rows back (play that level from a new game afterwards).
 
 Fixed
 
@@ -34,6 +41,13 @@ Fixed
 - Levels you build keep the game's 91 spare object slots (they had 16). The game puts every gem an enemy or crate drops, every butterfly and every projectile into those slots without checking the end, so with more than 16 at once it overwrote the level's data and could crash.
 - Objects you add to one of the game's own levels no longer use up its spare object slots. Create BIN gives the level back its 91 (182 or 272 in the few levels that have more) as far as the level's game memory allows. Dark Hollow with 49 added objects used to keep only 52, so defeating many enemies and breaking many crates without collecting what they dropped could crash the game. If a level's memory is too full to give all of them back, Create BIN keeps as many as fit and stops with a message, naming the level, only when fewer would remain than the level's enemies and crates that drop something, plus 16.
 - A large built level's terrain is cut into compact parts like the game's own, each with its true size, so the game can skip the parts out of view (they used to cover large areas and be drawn close up from far away). Small built levels keep their exact earlier layout.
+- Enemies copied from another level stay where you put them. Many remember places in their home level (patrol paths, the circle Ice Cavern's snowballers skate, the area a Fool guards); copied, they headed back there, off the map and into walls. Those places now move with the enemy.
+- Dragon statues you recoloured throw shards of their own colour when the dragon is freed, instead of green.
+- Doorway flights into a level show that level's sky all the way, instead of switching halfway.
+- Textures in levels you build no longer "swim" as you run: far away the game draws ground in plain colours, and faces whose far colours were never chosen used their shading values instead of their texture's colour.
+- Faces drawn from both sides, or from their other side, keep that setting when the level is saved (it used to be lost on every save); a level built from another game can keep that game's distant meshes, so far-off terrain has no cracks.
+- Crates, TNT and enemies keep their colours far away; jumping onto a crate or a TNT counts (a TNT counts down instead of exploding under Crash).
+- Built levels with many small tiles are accepted (the game's close-up texture work is guarded while it runs).
 
 Clearer
 
