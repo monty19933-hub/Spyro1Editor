@@ -194,6 +194,7 @@ unsafe-tests/
 /docs/terrain-side-collision-plan.md
 /tools/*
 !/tools/Build-SpyroEditorRelease.sh
+!/tools/Build-SpyroEditorBetaBridge.sh
 !/tools/Run-SpyroEditorOfflineQa.sh
 !/tools/Run-SpyroEditorRegression.py
 !/tools/Build-DragonStatueTint.py

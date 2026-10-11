@@ -13,6 +13,7 @@ internal static class SourceCases
         var catalog=LevelCatalog.Load(workspace);
         var donors=new UniversalSourceLibrary(original,catalog);
         MeshFaceCacheCases.RunSource(donors,catalog,check);
+        await ThiefEggCases.RunSource(original,catalog,donors,artifacts,check);
         var old=donors.Get("artisans");
         int prefix=old.Data.Scene().RowCount;
         var binding=new SceneTargetBinding(old.Level.Key,old.Level.LevelId,old.Level.SourceWadEntry,old.Level.SourceWadEntry-1,UniversalSourceLibrary.OriginalUsaSha256,prefix);

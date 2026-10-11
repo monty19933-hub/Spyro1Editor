@@ -1,3 +1,19 @@
+# Spyro Editor 1.3 and the Beta V6 bridge — 11 October 2026
+
+Stable 1.3 (internal 1.3.0, schema 3, tag `v1.3`). Levels from Spyro: Year of the Dragon (`YearOfTheDragonLevelImport`)
+and Crash Bandicoot: Warped (`CrashLevelImport`), Fill In What the Level Needs (`LevelFill`), the "To finish 100%" line
+(`LevelCompletionCheck`), the drawing budget at Create BIN (`NativeDrawLoad`) with the in-game guard
+(`NativeDrawBufferGuard`), kill heights for rebuilt levels in high slots (`NativeKillHeights`), the level's own dragons
+and egg thieves in its rebuilt level, and the fixes listed in `CHANGELOG.md`.
+
+Updates: 1.2 finds 1.3 through its stable updater. Beta V2-V5 cannot see stable releases, so the 1.3 packages are also
+published as the prerelease **Spyro Editor Beta V6** (`tools/Build-SpyroEditorBetaBridge.sh`, notes
+`docs/beta-v6-bridge-changelog.md`; the app is the stable build unchanged). The updater code of Beta V2, V3, V4, V5 and
+of 1.2, each compiled from its own tag, was run against the packages (macOS and Windows) and a GitHub releases list
+with both new releases: every beta is offered Beta V6 and verifies it; 1.2 is offered 1.3 and verifies it.
+
+Checks: gate 609 checks, 0 failed. Emulator: Sunny Villa, Seashell Shore and Toad Village (`outputs/NewLevels-20261011`).
+
 # Play as Crash, songs from other games, Lost Fleet as a homeworld — 8–9 October 2026
 
 Unreleased (Claude; branch `feature/playable-crash-20261008`, not in any package). Gate 363/0.

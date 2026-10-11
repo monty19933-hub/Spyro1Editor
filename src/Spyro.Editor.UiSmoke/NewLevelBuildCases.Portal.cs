@@ -283,7 +283,12 @@ internal static partial class NewLevelBuildCases
                 if (start != null)
                 {
                     Console.WriteLine("start level choices: " + string.Join(" | ", start.ItemsSource!.Cast<object>()));
-                    start.SelectedIndex = 0; Pump(5);
+                    // NEW_LEVEL_START (or NEW_LEVEL_EXPORT_START) names the level New Game starts in (default: the first, Artisans or its replacement).
+                    string? wanted = System.Environment.GetEnvironmentVariable("NEW_LEVEL_START") ?? System.Environment.GetEnvironmentVariable("NEW_LEVEL_EXPORT_START");
+                    var names = start.ItemsSource!.Cast<object>().Select(o => o?.ToString() ?? "").ToList();
+                    int chosen = wanted == null ? 0 : names.FindIndex(n => string.Equals(n, wanted, StringComparison.OrdinalIgnoreCase));
+                    if (chosen < 0) throw new InvalidOperationException($"NEW_LEVEL_START {wanted} is not one of: {string.Join(" | ", names)}");
+                    start.SelectedIndex = chosen; Pump(5);
                     Console.WriteLine("New Game starts in: " + start.SelectedItem);
                 }
                 Click(Find<Button>(scope, "ExportCreate"));

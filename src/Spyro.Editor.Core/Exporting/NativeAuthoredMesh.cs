@@ -35,6 +35,8 @@ internal static class NativeAuthoredMesh
         {
             int material = s.Material == null ? 255 : materials.IndexOf(s.Material);
             if (material < 0) throw new InvalidDataException("An authored material was omitted.");
+            // A textured face is drawn from the document by the batched renderer; one Spyro cannot reach has no collision.
+            if (s.NoCollision && material != 255) continue;
             var near=s.NearColors??Enumerable.Repeat(s.Color,s.Vertices.Length).ToArray();
             var far=s.FarColors??Enumerable.Repeat(s.Color,s.Vertices.Length).ToArray();
             triangles.Add(new(s.Vertices[0], s.Vertices[1], s.Vertices[2], s.Color,material,[near[0],near[1],near[2]],[far[0],far[1],far[2]]) { Kind = s.Kind, TwoSided = s.TwoSided, FrontReversed = s.FrontReversed });
@@ -84,6 +86,19 @@ internal static class NativeAuthoredMesh
         // Collision without a drawn face (a homeworld doorway's entry triangles).
         foreach (var (a, b, c, kind) in collisionOnly ?? [])
             triangles.Add(new(a, b, c, new(0, 0, 0), 255, [new(0, 0, 0), new(0, 0, 0), new(0, 0, 0)], [new(0, 0, 0), new(0, 0, 0), new(0, 0, 0)]) { Kind = kind });
+        // Collision-only faces of the scene (invisible walls, deadly pit floors), split like a textured face's collision.
+        foreach (var f in document.CollisionFaces ?? [])
+        {
+            var v = f.Vertices;
+            foreach (var (a, b, c) in v.Length == 4 ? new[] { (v[0], v[1], v[2]), (v[0], v[2], v[3]) } : [(v[0], v[1], v[2])])
+            {
+                var u = new Vector3f(b.X - a.X, b.Y - a.Y, b.Z - a.Z); var w = new Vector3f(c.X - a.X, c.Y - a.Y, c.Z - a.Z);
+                if (u.Y * w.Z - u.Z * w.Y == 0 && u.Z * w.X - u.X * w.Z == 0 && u.X * w.Y - u.Y * w.X == 0)
+                    throw new InvalidDataException("A collision-only face has zero area.");
+                AppendLattice(triangles, new(a, b, c, new(0, 0, 0), 255, [new(0, 0, 0), new(0, 0, 0), new(0, 0, 0)], [new(0, 0, 0), new(0, 0, 0), new(0, 0, 0)]) { Kind = f.Kind }, 255);
+                if (triangles.Count > MaxCollisionTriangles) throw new InvalidDataException($"The level needs more than {MaxCollisionTriangles} collision triangles; reduce geometry or invisible walls.");
+            }
+        }
         n = triangles.Count;
         if (n > MaxCollisionTriangles) throw new InvalidDataException($"The level needs more than {MaxCollisionTriangles} collision triangles; reduce geometry.");
         // Special surfaces: the ground kinds the level's faces use, in order of first use. The component is its

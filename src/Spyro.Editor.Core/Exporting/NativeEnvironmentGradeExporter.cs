@@ -976,15 +976,39 @@ public static class NativeEnvironmentGradeExporter
                     $"class-{classId:X}-{change.Offset:X}", change.After.Length / 4, change.Before, change.After,
                     discLayout, writtenRanges, patches, payloads);
         }
-        // Their foliage texture palettes snow too, unless the landscape or another model also uses that palette.
+        // Their foliage texture palettes snow too, with the distance-shade rows below them, unless the landscape or
+        // another model also uses one of those rows.
         byte[] textures = DiscImage.ReadFileBytes(image, discLayout, assets.WadLba, asset.TexturePages.WadOffset, asset.TexturePages.Size);
-        foreach (int palette in plantPalettes.Except(otherPalettes).Where(p => p >= 0 && p + 32 <= textures.Length).Order())
+        foreach (var change in PlantSnowTextureChanges(textures, plantPalettes, otherPalettes, landscapePalettes.Select(t => (t.Offset, t.Bytes.Length))))
+            AddPatch(level, donor, assets.WadLba, asset.TexturePages.WadOffset + change.Offset, "environment-plant-snow-texture",
+                $"palette-{change.Offset:X}", change.After.Length / 2, change.Before, change.After, discLayout, writtenRanges, patches, payloads);
+    }
+
+    /// <summary>The texture-page changes for snow on plants' palettes (byte offsets of row 0 in the level's texture
+    /// pages): each palette and its seven distance-shade rows (<see cref="NativeModelPalettes.SnowClutRows"/>). A
+    /// palette is left alone when any of its rows is also a row of another model's palette or overlaps a landscape
+    /// palette, since snow there would also land on that model or on the ground.</summary>
+    internal static IReadOnlyList<NativeModelPalettes.Change> PlantSnowTextureChanges(ReadOnlySpan<byte> textures,
+        IEnumerable<int> plantPalettes, IEnumerable<int> otherPalettes, IEnumerable<(int Offset, int Length)> landscapePalettes)
+    {
+        const int rows = NativeModelPalettes.ClutRows, stride = NativeModelPalettes.VramRowBytes, bytes = TexturePalette16ColorByteLength;
+        int length = textures.Length;
+        static IEnumerable<int> Rows(int palette) => Enumerable.Range(0, rows).Select(k => palette + k * stride);
+        int[] plants = plantPalettes.Distinct().Where(p => p >= 0 && p + bytes <= length).Order().ToArray();
+        int[] otherRows = otherPalettes.SelectMany(Rows).Distinct().ToArray();
+        var landscape = landscapePalettes.ToArray();
+        List<NativeModelPalettes.Change> changes = [];
+        foreach (int palette in plants)
         {
-            if (landscapePalettes.Any(t => t.Offset < palette + 32 && palette < t.Offset + t.Bytes.Length)) continue;
-            byte[] before = textures.AsSpan(palette, 32).ToArray();
-            AddPatch(level, donor, assets.WadLba, asset.TexturePages.WadOffset + palette, "environment-plant-snow-texture",
-                $"palette-{palette:X}", 16, before, NativeModelPalettes.SnowClut(before), discLayout, writtenRanges, patches, payloads);
+            var own = Rows(palette).Where(row => row + bytes <= length).ToArray();
+            // Rows of two plant palettes that overlap would be snowed twice; leave both.
+            var foreign = otherRows.Concat(plants.Where(p => p != palette).SelectMany(Rows));
+            if (own.Any(row => foreign.Any(other => Math.Abs(other - row) < bytes)) ||
+                own.Any(row => landscape.Any(t => t.Offset < row + bytes && row < t.Offset + t.Length)))
+                continue;
+            changes.AddRange(NativeModelPalettes.SnowClutRows(textures, palette));
         }
+        return changes;
     }
 
     private static NativeEnvironmentColorStatistics SceneColorStatistics(LevelColorData data, string detail) =>

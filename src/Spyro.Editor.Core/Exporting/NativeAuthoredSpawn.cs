@@ -35,6 +35,16 @@ public static class NativeAuthoredSpawn
         List<List<Point>> uncovered = [[new(-r,-r),new(r,-r),new(r,r),new(-r,r)]];
         foreach (var face in document.Surfaces)
         {
+            if (face.NoCollision && face.Material != null) continue;
+            var v = face.Vertices;
+            Cover(v[0],v[1],v[2]);
+            if (v.Length == 4) Cover(v[0],v[2],v[3]);
+            if (uncovered.Count == 0) return;
+        }
+        // Undrawn solid floors count too (an imported level's landing pad under its start); hazard floors do not.
+        foreach (var face in document.CollisionFaces ?? [])
+        {
+            if (face.Kind != null) continue;
             var v = face.Vertices;
             Cover(v[0],v[1],v[2]);
             if (v.Length == 4) Cover(v[0],v[2],v[3]);

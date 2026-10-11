@@ -265,6 +265,24 @@ internal static partial class NewLevelBuildCases
     }
 
     // Drives the level-settings Skybox picker and button as a user would; nothing is saved.
+    /// <summary>Game Settings › Sky for a built level, as the user picks it: SKY_LEVEL the level, SKY_FROM the level whose
+    /// sky it borrows ("plain" for the plain colour).</summary>
+    private static void SceneSkyStep(MainWindow window)
+    {
+        string key = Environment.GetEnvironmentVariable("SKY_LEVEL") ?? throw new InvalidOperationException("Set SKY_LEVEL.");
+        string from = Environment.GetEnvironmentVariable("SKY_FROM") ?? "plain";
+        Load(window, key);
+        if (window.FreshSceneForTesting == null) throw new InvalidOperationException($"{key} is not a built level");
+        var panel = Get<StackPanel>(window, "_freshSettingsPanel");
+        var picker = Find<ComboBox>(panel, "FreshMainSkySource");
+        var levels = picker.ItemsSource!.Cast<object>().ToList();
+        picker.SelectedItem = from == "plain" ? levels[0] : levels.OfType<LevelDefinition>().First(l => l.Key == from); Pump();
+        Click(Find<Button>(panel, "FreshMainSetSkySource"));
+        Save(window);
+        Console.WriteLine($"{key}: sky from {from} (WAD {window.FreshSceneForTesting!.SkySourceWadEntry?.ToString() ?? "none"}); {Status(window)}");
+        Console.WriteLine("NEW_LEVEL_SCENE_SKY_OK");
+    }
+
     private static void SkyPickerStep(MainWindow window)
     {
         Load(window, "townsquare");

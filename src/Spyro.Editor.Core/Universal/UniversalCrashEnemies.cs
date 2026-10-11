@@ -64,8 +64,11 @@ public static class UniversalCrashEnemies
         new(0x16E, "Kn10G",
         [
             new("Kn10V", true),                          // 0 guard
-            new("Kn40V", true, [(0, 3), (4, 3)]),        // 1 march, footsteps
-            new("Kn20V", true, [(3, 2)]),                // 2 overhead swing
+            // 1 march: Kn30V, a step forward with the sword out (footsteps as the foot lands and comes back). Not
+            // Kn40V, the knight standing without its head (collapsed to a point at the neck): in Crash 3 the head is a
+            // model of its own (Kn20G, animated by Kn50V), and as the march Kn40V made the knight lose its head.
+            new("Kn30V", true, [(1, 3), (5, 3)]),
+            new("Kn20V", true, [(3, 2)]),                // 2 swing, the sword swept round
         ]), ["fli0A", "bnc0A", "KSSbA", "KFSbA"], 0x54, 0.8, new(620, 1770, 2330, 5200, 1600, 18, 450, 1850, 2200));
 
     public static readonly Enemy Wizard = new("crash-wizard", "Crash wizard", GeeWizFile, GeeWizSha256,
@@ -78,7 +81,7 @@ public static class UniversalCrashEnemies
         new(0x171, "WA2fG",
         [
             new("Wa5fV", true, [(0, 4)]),                // 0 robe blown off
-            new("Wa1fV", true),                          // 1 standing in his underwear
+            new("Wa1fV", true, HidesParts: true),        // 1 standing in his underwear (the robe folded away)
         ]));
 
     // Lost Fleet's creatures (Spyro: Year of the Dragon), from the user's own disc, with their own sounds. Year of the

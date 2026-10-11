@@ -113,6 +113,7 @@ public sealed partial class MainWindow : Window
     private readonly TextBlock _levelTitle = new();
     private readonly TextBlock _levelDetails = new();
     private readonly TextBlock _gemCounterText = new();
+    private readonly TextBlock _completionText = new() { Name = "LevelCompletionLine", IsVisible = false };
     private readonly TextBlock _skyboxDetails = new();
     private readonly ComboBox _skyboxModeBox = new();
     private readonly ComboBox _skyboxPresetBox = new();
@@ -1242,8 +1243,11 @@ public sealed partial class MainWindow : Window
         _levelDetails.TextWrapping = TextWrapping.Wrap;
         _levelDetails.LineHeight = 20;
         _levelDetails.Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92));
+        _completionText.FontSize = 13;
+        _completionText.TextWrapping = TextWrapping.Wrap;
         panel.Children.Add(_levelTitle);
         panel.Children.Add(_gemCounterText);
+        panel.Children.Add(_completionText);
         panel.Children.Add(_levelDetails);
         return panel;
     }
@@ -10636,6 +10640,7 @@ public sealed partial class MainWindow : Window
                 : hasUnsavedTerrainEdits ? "Save Terrain *" : "Save Terrain";
         }
         _gemCounterText.Text = _releaseMode ? BuildPlainTreasureLine() : BuildLevelGemCounter();
+        RefreshCompletionLine();
         int visibleObjects = _currentMobys.Count(moby => !moby.IsRemoved && !moby.IsEditorControl);
         int visibleEntryControls = _currentMobys.Count(moby => !moby.IsRemoved && moby.IsFlyInLandingControl);
         _levelDetails.Text = _releaseMode
@@ -11758,6 +11763,7 @@ public sealed partial class MainWindow : Window
                 .Append('|')
                 .Append(moby.SignText)
                 .Append('|').Append(DragonStatueColor.Hex(moby.DragonColor))
+                .Append('|').Append(moby.UniversalPathNodes == null ? "" : string.Join(';', moby.UniversalPathNodes.Select(n => string.Join(',', n))))
                 .Append('|')
                 .Append(moby.CrossLevelSourceLevelKey)
                 .Append('|')
@@ -31936,6 +31942,7 @@ public sealed partial class MainWindow : Window
 
     private void RefreshMobyList(Moby? selected = null)
     {
+        RefreshPlacedObjectRoutes();
         _syncingMobyList = true;
         List<Moby> all = _currentMobys.Where(moby => !moby.IsRemoved).ToList();
         string filter = _mobySearchBox.Text?.Trim() ?? "";

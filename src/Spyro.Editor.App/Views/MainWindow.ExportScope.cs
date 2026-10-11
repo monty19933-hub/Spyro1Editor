@@ -2,7 +2,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using System.Text.Json;
 using Spyro.Editor.Core.Editing;
+using Spyro.Editor.Core.Universal;
 
 namespace Spyro.Editor.App.Views;
 
@@ -12,6 +14,80 @@ public sealed partial class MainWindow
         _releaseMode && (Id65BlankLabHasCanonicalAuthoringDocument() || Id65BlankLabHasAnyAuthoredArtifacts())
             ? " Older experimental drafts are preserved separately and are not included."
             : "";
+
+    private readonly Dictionary<string, LevelOwnRows> _ownCompletionRows = new(StringComparer.OrdinalIgnoreCase);
+    private bool _completionCatalogRequested;
+
+    /// <summary>The line under the level's treasure: how many of its own dragons and egg thieves (which finishing the game
+    /// needs) the level has, and what to add back. Hidden for levels with neither, and until the source disc is read.</summary>
+    private void RefreshCompletionLine()
+    {
+        string? text = null, hint = null; bool complete = true;
+        string? key = _currentLevel == null ? null : _freshSceneDocument?.TargetBinding?.LevelKey ?? _currentLevel.Key;
+        if (key != null && _retailCatalog.FindByKey(key) is { SourceWadEntry: > 0 } slot)
+        {
+            if (!_ownCompletionRows.TryGetValue(key, out var own) && _universalCatalog is { } ready)
+            {
+                try { own = _ownCompletionRows[key] = LevelCompletionCheck.OriginalRows(ready.Library.Get(key).Data); }
+                catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException) { own = _ownCompletionRows[key] = LevelOwnRows.None; }
+            }
+            if (own != null && _universalCatalog is { } library)
+            {
+                bool cleared = _freshSceneDocument != null;
+                var gap = LevelCompletionCheck.Check(own, key, cleared,
+                    _currentMobys.Where(m => !m.IsAdded && m.IsRemoved && m.TrueIndex >= 0).Select(m => m.TrueIndex),
+                    _currentMobys.Where(m => m.IsAdded && !m.IsRemoved).Select(m => (m.CrossLevelSourceLevelKey, m.CrossLevelSourceTrueIndex)),
+                    LevelCompletionCheck.SourceClass(library.Library));
+                text = LevelCompletionCheck.Summary(gap);
+                hint = LevelCompletionCheck.Describe(gap, slot.DisplayName, cleared ? _freshSceneDocument!.Name : null);
+                complete = hint == null;
+            }
+            else if (!_completionCatalogRequested)
+            {
+                // The Add Object library reads the original disc in the background; the line appears once it has.
+                _completionCatalogRequested = true;
+                EnsureUniversalCatalogAsync().ContinueWith(t =>
+                { if (t.IsCompletedSuccessfully) Avalonia.Threading.Dispatcher.UIThread.Post(RefreshCompletionLine); }, TaskScheduler.Default);
+            }
+        }
+        _completionText.IsVisible = text != null;
+        _completionText.Text = text == null ? "" : hint == null ? text : text + "\n" + hint;
+        _completionText.Foreground = new SolidColorBrush(complete ? Color.FromRgb(46, 125, 72) : Color.FromRgb(168, 98, 0));
+    }
+
+    /// <summary>For every level the game will contain changed: its own dragons and egg thieves that are no longer in it
+    /// (<see cref="LevelCompletionCheck"/>), and a built level's faces under the lowest kill height Create BIN can give its
+    /// slot (<see cref="Spyro.Editor.Core.Exporting.NativeKillHeights.Warning"/>). Empty when nothing is missing or the
+    /// source disc can't be read.</summary>
+    private List<string> CompletionGapLines(IReadOnlyList<SceneDocument> scenes, IReadOnlyList<EditedLevelExportTarget> targets)
+    {
+        List<string> lines = [];
+        try
+        {
+            var library = _universalCatalog?.Library ?? new UniversalSourceLibrary(ResolveUniversalSourceDisc(), _retailCatalog);
+            HashSet<string> built = new(StringComparer.OrdinalIgnoreCase);
+            foreach (var scene in scenes)
+            {
+                if (scene.TargetBinding?.LevelKey is not { } key || _retailCatalog.FindByKey(key) is not { SourceWadEntry: > 0 } slot) continue;
+                built.Add(key);
+                if (Spyro.Editor.Core.Exporting.NativeKillHeights.Warning(library.Disc.Exe, slot.LevelId, scene) is { } fall)
+                    lines.Add($"{scene.Name} ({slot.DisplayName}): {fall}");
+                var added = scene.Objects.Where(o => o.Value.IsAdded && !o.Value.IsRemoved)
+                    .Select(o => (o.Value.CrossLevelSourceLevelKey, o.Value.CrossLevelSourceTrueIndex));
+                if (LevelCompletionCheck.Describe(LevelCompletionCheck.Check(library, key, true, [], added), slot.DisplayName, scene.Name) is { } line)
+                    lines.Add(line);
+            }
+            foreach (var target in targets.Where(t => !built.Contains(t.Level.Key) && t.Level.SourceWadEntry > 0))
+            {
+                var (removed, added) = LevelCompletionCheck.ReadNativeEdits(Path.Combine(_workspace.RootPath, $"{target.Level.Key}-native-edits.json"));
+                if (LevelCompletionCheck.Describe(LevelCompletionCheck.Check(library, target.Level.Key, false, removed, added), target.Level.DisplayName) is { } line)
+                    lines.Add(line);
+            }
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or FileNotFoundException or InvalidOperationException or JsonException or KeyNotFoundException or ArgumentException)
+        { lines.Add("(The dragon, egg and Return Home check could not run: " + e.Message + ")"); }
+        return lines;
+    }
 
     private async Task<int?> ShowAuthoredProjectExportScopeAsync(IReadOnlyList<SceneDocument> scenes, int currentLevelId)
     {
@@ -53,6 +129,14 @@ public sealed partial class MainWindow
                 : "Start a New Game to play the rebuilt layout from its safe player start. Loading an existing game keeps its previous collected state.",
             TextWrapping = TextWrapping.Wrap
         });
+        if (CompletionGapLines(scenes, targets) is { Count: > 0 } gaps)
+            content.Children.Add(new TextBlock
+            {
+                Name = "ExportCompletionGaps", TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Color.FromRgb(176, 104, 16)),
+                Text = "Before you play:\n" + string.Join("\n", gaps.Select(g => "• " + g)) +
+                    "\nThe game can still be played; missing dragons or eggs just can't be collected, and a level without Return Home is left from the pause menu."
+            });
         string research = PreservedResearchExportNote().Trim();
         if (research.Length > 0)
             content.Children.Add(new TextBlock { Name = "ExportPreservedDrafts", Text = research, TextWrapping = TextWrapping.Wrap });

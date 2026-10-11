@@ -235,6 +235,9 @@ public sealed partial class MainWindow
         StyleModernToolbarButton(_toolbarOpenDiscImageButton, 106);
         fileActions.Children.Add(BuildActionMenu("File", "EditorFileMenu", new ToolbarAction("New Level…", NewMainLevelAsync),
             new ToolbarAction("Start Blank in Current Level…", StartBlankCurrentLevelAsync),
+            new ToolbarAction("New Level from Spyro: Year of the Dragon…", NewLevelFromYearOfTheDragonAsync),
+            new ToolbarAction("New Level from Crash Bandicoot: Warped…", NewLevelFromCrashAsync),
+            new ToolbarAction("Fill In What the Level Needs…", FillInLevelAsync),
             new ToolbarAction("Restore Before Clear…", RestoreBeforeClearAsync),
             new ToolbarAction("Free Deleted Objects' Save Rows…", FreeRetiredSaveRowsAsync),
             new ToolbarAction("Open Created Level…", OpenMainFreshLevelAsync),
@@ -702,9 +705,13 @@ public sealed partial class MainWindow
         _gemCounterText.Foreground = new SolidColorBrush(Color.FromRgb(36, 94, 130));
         _gemCounterText.TextWrapping = TextWrapping.Wrap;
 
+        _completionText.FontSize = 12;
+        _completionText.TextWrapping = TextWrapping.Wrap;
+
         StackPanel text = new() { Spacing = 3 };
         text.Children.Add(_levelTitle);
         text.Children.Add(_gemCounterText);
+        text.Children.Add(_completionText);
         return new Border
         {
             Background = new SolidColorBrush(ModernSurface),

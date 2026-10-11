@@ -34,6 +34,19 @@ public static class UniversalPlacementReader
         return rows;
     }
 
+    /// <summary>An added object's saved route ("universalPathNodes": [[x, y, z], …] in raw units), or null.</summary>
+    public static List<int[]>? ReadPathNodes(JsonElement edit)
+    {
+        if (!edit.TryGetProperty("universalPathNodes", out var nodes) || nodes.ValueKind != JsonValueKind.Array) return null;
+        List<int[]> list = [];
+        foreach (var n in nodes.EnumerateArray())
+        {
+            if (n.ValueKind != JsonValueKind.Array || n.GetArrayLength() != 3) throw new InvalidDataException("A saved route node is not x, y, z.");
+            list.Add([n[0].GetInt32(), n[1].GetInt32(), n[2].GetInt32()]);
+        }
+        return list.Count is > 0 and <= 64 ? list : throw new InvalidDataException("A saved route has no nodes or too many.");
+    }
+
     public static List<UniversalMobyPlacement> Read(string nativeEditsPath)
     {
         List<UniversalMobyPlacement> list = [];
@@ -68,7 +81,7 @@ public static class UniversalPlacementReader
             if (edit.TryGetProperty("typeEditedHex", out var ty) && ty.ValueKind == JsonValueKind.String) overrides[0x50] = (byte)Convert.ToInt32(ty.GetString(), 16);
             string id = UniversalPlacementLedger.IdentityOf(edit);
             string? group = edit.TryGetProperty("universalLinkGroupId", out var lg) && lg.ValueKind == JsonValueKind.String ? lg.GetString() : null;
-            if (!slots.TryGetValue(id, out int slot) || !active.TryAdd(id, new(src, row, x, y, z, yaw, overrides, id, special, text, PersistentSlot: slot) { LinkGroupId = group, DragonColor = DragonStatueColor.Read(edit) }))
+            if (!slots.TryGetValue(id, out int slot) || !active.TryAdd(id, new(src, row, x, y, z, yaw, overrides, id, special, text, PersistentSlot: slot) { LinkGroupId = group, DragonColor = DragonStatueColor.Read(edit), PathNodes = ReadPathNodes(edit) }))
                 throw new InvalidDataException("An imported object has a missing or duplicate placement identity; export stopped to preserve collected state.");
         }
         foreach (var entry in ledger.Entries)

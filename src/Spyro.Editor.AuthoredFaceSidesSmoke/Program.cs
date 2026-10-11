@@ -29,8 +29,9 @@ var wall = Quad(new(2000, 1000, 500), new(2100, 1000, 500), new(2100, 1000, 600)
 var reversedWall = Quad(new(2000, 1200, 500), new(2100, 1200, 500), new(2100, 1200, 600), new(2000, 1200, 600), 9) with { FrontReversed = true };
 var bothFloor = Quad(new(2000, 1400, 500), new(2100, 1400, 500), new(2100, 1500, 500), new(2000, 1500, 500), 9) with { TwoSided = true };
 surfaces.AddRange([wall, reversedWall, bothFloor]);
-// Sector 11: a 17 x 17 grid (324 corners: split into two native sectors).
-for (int i = 0; i < 17; i++) for (int j = 0; j < 17; j++)
+// Sector 11: a 15 x 15 grid (256 corners: split into two native sectors, each within the 170 near corners the
+// game's scratchpad holds).
+for (int i = 0; i < 15; i++) for (int j = 0; j < 15; j++)
 {
     float x = 3000 + i * 64, y = 1000 + j * 64;
     surfaces.Add(Quad(new(x, y, 500), new(x + 64, y, 500), new(x + 64, y + 64, 500), new(x, y + 64, 500), 11));

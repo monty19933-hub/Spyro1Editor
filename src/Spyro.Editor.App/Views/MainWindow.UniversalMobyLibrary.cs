@@ -84,7 +84,7 @@ public sealed partial class MainWindow
         });
         _universalCatalogLoad.ContinueWith(t =>
         {
-            if (t.IsCompletedSuccessfully) _universalCatalog = t.Result;
+            if (t.IsCompletedSuccessfully) { _universalCatalog = t.Result; Avalonia.Threading.Dispatcher.UIThread.Post(RefreshPlacedObjectRoutes); }
         }, TaskScheduler.Default);
         return _universalCatalogLoad;
     }
@@ -161,7 +161,7 @@ public sealed partial class MainWindow
                 Yaw:m.YawByte>=0?m.YawByte:null,
                 RowByteOverrides:new Dictionary<int,byte>{{0x50,checked((byte)m.Type)},{0x51,checked((byte)m.State)}},
                 EditorId: identity.Id, PersistentSlot: identity.Slot,
-                SpecialId: UniversalSpecialIdOf(m), Text: IsUniversalSign(m) ? UniversalPlacementReader.SplitSignText(m.SignText) : null) { LinkGroupId = m.UniversalLinkGroupId, DragonColor = m.DragonColor }
+                SpecialId: UniversalSpecialIdOf(m), Text: IsUniversalSign(m) ? UniversalPlacementReader.SplitSignText(m.SignText) : null) { LinkGroupId = m.UniversalLinkGroupId, DragonColor = m.DragonColor, PathNodes = m.UniversalPathNodes }
             : new UniversalMobyPlacement("", -1, 0, 0, 0, EditorId: identity.Id, PersistentSlot: identity.Slot, Retired: true)).ToList();
     }
 
@@ -1315,8 +1315,18 @@ public sealed partial class MainWindow
     private Task AddUniversalMobyIntoGroupAsync(UniversalSourceLibrary lib, UniversalMobyCatalogEntry entry, UniversalMobyVariant v, bool clickToPlace,
         UniversalJapaneseSource? japanese, string cannonGroup) => AddUniversalMobyCoreAsync(lib, entry, v, clickToPlace, japanese, cannonGroup);
 
+    /// <summary>Adds an object of the Add Object browser at <paramref name="at"/> (dropped onto the floor there) facing
+    /// <paramref name="yaw"/>; returns the objects added (the first is the object, then any that come with it).</summary>
+    private async Task<IReadOnlyList<Moby>> AddUniversalMobyAtAsync(UniversalSourceLibrary lib, UniversalMobyCatalogEntry entry, UniversalMobyVariant v,
+        Vector3f at, int yaw, UniversalJapaneseSource? japanese = null)
+    {
+        var before = _currentMobys.ToHashSet();
+        await AddUniversalMobyCoreAsync(lib, entry, v, false, japanese, null, at, yaw);
+        return [.. _currentMobys.Where(m => !before.Contains(m))];
+    }
+
     private async Task AddUniversalMobyCoreAsync(UniversalSourceLibrary lib, UniversalMobyCatalogEntry entry, UniversalMobyVariant v, bool clickToPlace,
-        UniversalJapaneseSource? japanese, string? cannonGroup)
+        UniversalJapaneseSource? japanese, string? cannonGroup, Vector3f? at = null, int? yaw = null)
     {
         if (_currentLevel == null) return;
         string? specialId = UniversalSpecialCatalog.IsSpecial(v) ? UniversalSpecialCatalog.SpecialIdForClass(v.ClassId) : null;
@@ -1365,7 +1375,8 @@ public sealed partial class MainWindow
             pending = pending with { UniversalLinkGroupId = cannonGroup };
         }
         if (clickToPlace) { BeginPendingMobyPlacement(pending, fallback); return; }
-        Vector3f position = ApplyTerrainPlacementLift(SnapOrNearestTerrain(fallback), pending);
+        if (yaw is { } turned) pending = pending with { YawByte = turned & 0xFF };
+        Vector3f position = ApplyTerrainPlacementLift(SnapOrNearestTerrain(at is { } spot ? spot with { Z = spot.Z + 16 } : fallback), pending);
         await AddPendingMobyAtPositionAsync(pending, position);
     }
 }

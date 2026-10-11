@@ -13,6 +13,8 @@
     <InternalsVisibleTo Include="Spyro.Editor.DiscImageWorkingCopySmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.DeadUnreferencedTextureStorageSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.FarLodTextureCompanionSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.DragonStatueColorSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.DrawLoadSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.SourceAnalysisSessionCacheSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.StoneHillLevelReplacementBaselineSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65BlankLevelLabSmoke" />

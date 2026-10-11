@@ -1,3 +1,16 @@
+# Handoff — Spyro Editor 1.3 — 2026-10-11, Claude
+
+- Branch `feature/new-levels-20261010` (from 1.2, `d12d615`). Packages: task-root `outputs/SpyroEditor-V1.3-20261011`
+  (stable 1.3 and the Beta V6 bridge). Example disc and screenshots: `outputs/NewLevels-20261011`.
+- New code: `YearOfTheDragon/YearOfTheDragonLevel{s,Data,Import}.cs`, `Crash/Crash{Levels,Zones,Scenery,LevelPictures,
+  LevelImport}.cs`, `Editing/LevelFill.cs`, `Universal/LevelCompletionCheck.cs`, `Exporting/Native{DrawLoad,
+  DrawBufferGuard,KillHeights,AuthoredPictureVram}.cs`; App `MainWindow.{OtherGameLevels,CrashLevels,LevelFill}.cs`.
+  Smokes `YearOfTheDragonImportSmoke` (`--level-fill`), `DrawLoadSmoke`, `NativeKillHeightSmoke`; UiSmoke steps
+  `yotd-import`, `yotd-menu`, `crash-menu`, `crash-import`, `completion-check`, `dialog-shots`.
+- Updates: stable releases reach 1.0-1.2 directly. Beta V2-V5 only see beta prereleases, so 1.3 is also published as
+  the whole-number schema-1 bridge Beta V6 (`tools/Build-SpyroEditorBetaBridge.sh`, `docs/beta-release-checklist.md`);
+  once opened it follows the stable channel. A new bridge is needed only before Beta V6 leaves the newest 30 releases.
+
 # Handoff — Spyro Editor 1.2 (owner feedback on 1.1) — 2026-10-05, Claude
 
 ## Where

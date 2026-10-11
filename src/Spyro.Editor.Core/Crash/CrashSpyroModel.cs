@@ -6,7 +6,7 @@ namespace Spyro.Editor.Core.Crash;
 /// (the format of the game's own enemies) plus a 512x512 texture image holding the art it uses.
 /// Package: animation count, 16 sound slots, collision block pointer (0x14, high bit = package-relative), model
 /// data offset (0x34), one animation header per animation (0x38 + 4i). Animation header: frame count, colour count,
-/// vertex delta shift - 1 (+6), vertex counts (+8, +9), default speed (+0xC, 64 = one frame per tick, 32 = every
+/// vertex delta shift - 1 (+6), vertex counts (+8, +9), depth range (+0xB), default speed (+0xC, 64 = one frame per tick, 32 = every
 /// other tick with interpolation), near/far face tables and palettes (+0x14..+0x20, relative to the model data) and
 /// eight bytes per frame: vertex data offset (low 21 bits) with a sound slot in the top byte (0xFF none), and the
 /// absolute vertex count (top byte) with the frame's bounding radius / 8 (third byte). Vertices are 32-bit absolute
@@ -18,7 +18,13 @@ public static class CrashSpyroModel
     /// <param name="Sounds">(frame, package sound slot) pairs the game plays when the frame comes up.</param>
     /// <param name="Step">Keeps every Step-th stored frame and plays them Step times slower (the game's animation
     /// step is a phase counter, 64 a frame, and the renderer blends between frames), for less memory.</param>
-    public sealed record Animation(string Name, bool Interpolated, IReadOnlyList<(int Frame, int Slot)>? Sounds = null, int Step = 1);
+    /// <param name="HidesParts">The animation is meant to hide a part of the model (its source game collapses that
+    /// part's vertices to a point in every frame, as the Crash wizard's robe once it is blown off). Without it,
+    /// <see cref="Package"/> refuses an animation that hides more than <see cref="HiddenShareLimit"/> of the model:
+    /// Crash 3's knight has a headless animation (Kn40V, played once its head, a model of its own, is knocked off),
+    /// which converted as the knight's march made it lose its head in Spyro.</param>
+    public sealed record Animation(string Name, bool Interpolated, IReadOnlyList<(int Frame, int Slot)>? Sounds = null, int Step = 1,
+        bool HidesParts = false);
     /// <param name="UnitsPerSpyroUnit">Crash model-space units per Spyro unit.</param>
     /// <param name="Yaw">Quarter turns about the vertical axis (Crash models face -y).</param>
     /// <param name="Mirror">Mirror the model left to right (faces keep their outward winding).</param>
@@ -31,8 +37,14 @@ public static class CrashSpyroModel
         /// only drawn (package +0x14 stays zero, like many of the game's own models).</summary>
         public bool Collision { get; init; } = true;
     }
+    /// <param name="DepthShifts">Each animation's header +0xB (see <see cref="DepthShift"/>).</param>
+    /// <param name="HiddenShares">Each animation's share of the model's surface it hides (see <see cref="HiddenShares"/>).</param>
     public sealed record Result(byte[] Package, byte[] Vram, int VertexCount, int FaceCount, int Height, int Radius,
-        IReadOnlyList<int> FrameCounts, int ScaleShift);
+        IReadOnlyList<int> FrameCounts, int ScaleShift, IReadOnlyList<int> DepthShifts, IReadOnlyList<double> HiddenShares);
+
+    /// <summary>The largest share of a model's surface an animation may hide without saying so (a few slivers of
+    /// Crash's own model fold away in his crouch and get-up).</summary>
+    public const double HiddenShareLimit = 0.01;
 
     private const int ClutRow = 256;   // palettes from VRAM row 256 down; art in the top half (rows 0..255)
 
@@ -120,6 +132,13 @@ public static class CrashSpyroModel
         if (vertexCount > 255) throw new InvalidDataException($"{modelName} has {vertexCount} vertices; Spyro objects allow 255.");
         if (world.SelectMany(a => a).Any(f => f.Length != vertexCount)) throw new InvalidDataException($"{modelName}'s frames disagree on their vertex count.");
         if (world.Length != animations.Count) throw new ArgumentException("One frame list per animation.");
+        if (triangles.Any(t => t.Vertices.Length != 3 || t.Vertices.Any(i => i < 0 || i >= vertexCount)))
+            throw new InvalidDataException($"{modelName} has a triangle outside its vertices.");
+        var hiddenShares = HiddenShares(world, triangles);
+        for (int a = 0; a < animations.Count; a++)
+            if (hiddenShares[a] > HiddenShareLimit && !animations[a].HidesParts)
+                throw new InvalidDataException($"{modelName}'s animation {animations[a].Name} hides {hiddenShares[a]:P0} of the model " +
+                    "(its source collapses that part to a point in every frame): choose another animation, or mark it as hiding parts.");
         // Header +5 draws the model 2^n times larger than its stored coordinates (the game's big enemies use 1 and 2).
         // Every stored coordinate stays within +-1000 like the game's own models: the renderer files faces into
         // depth buckets in stored units with no upper bound check, so a model reaching further overruns the
@@ -127,13 +146,14 @@ public static class CrashSpyroModel
         // The object renderer also sorts each face into a 288-bucket depth table of its own, in stored units, with no
         // bound check (USA 0x8001FFD4..0x8002049C): a model spinning in flight turns its far side to the camera, so a
         // wide model must be stored smaller (Lost Fleet's crab, 825 stored units across its claws at x2, overran it;
-        // the Crash wizard's 680 did not).
+        // the Crash wizard's 680 did not). Header +0xB (DepthShift) now widens that table as the game's own models do.
         bool Fits(int n) => world.SelectMany(a => a).SelectMany(f => f).All(v =>
             Math.Abs(v.X) / (1 << n) <= storedLimit && Math.Abs(v.Y) / (1 << n) <= storedLimit && Math.Abs(v.Z) / (1 << n) <= storedLimit);
         int scaleShift = Enumerable.Range(0, 3).FirstOrDefault(Fits, -1);
         if (scaleShift < 0) throw new InvalidDataException($"{modelName} is too large for a Spyro object at this size.");
         var spyroFrames = world.Select(a => a.Select(f => f.Select(v => (X: (int)Math.Round(v.X / (1 << scaleShift)),
             Y: (int)Math.Round(v.Y / (1 << scaleShift)), Z: (int)Math.Round(v.Z / (1 << scaleShift)))).ToArray()).ToArray()).ToArray();
+        int[] depthShifts = spyroFrames.Select(a => DepthShift(a)).ToArray();
 
         // Faces.
         List<(byte R, byte G, byte B)> near = [], far = [];
@@ -225,7 +245,7 @@ public static class CrashSpyroModel
             BinaryPrimitives.WriteUInt16LittleEndian(p.AsSpan(h), (ushort)frameEntries[a].Count);
             BinaryPrimitives.WriteUInt16LittleEndian(p.AsSpan(h + 2), (ushort)colourCount);
             p[h + 5] = (byte)scaleShift; p[h + 6] = (byte)(shift - 1); p[h + 7] = (byte)cullRadius;
-            p[h + 8] = (byte)vertexCount; p[h + 9] = (byte)vertexCount;
+            p[h + 8] = (byte)vertexCount; p[h + 9] = (byte)vertexCount; p[h + 0xB] = (byte)depthShifts[a];
             p[h + 0xC] = (byte)((animations[a].Interpolated ? 32 : 64) / animations[a].Step);
             BinaryPrimitives.WriteInt32LittleEndian(p.AsSpan(h + 0x14), offNear);
             BinaryPrimitives.WriteInt32LittleEndian(p.AsSpan(h + 0x18), offNearPalette);
@@ -242,7 +262,42 @@ public static class CrashSpyroModel
         }
         body.ToArray().CopyTo(p, md);
         if (collision) trailer.CopyTo(p, trailerAt);
-        return new(p, vram, vertexCount, faces, height, radius0, frameEntries.Select(f => f.Count).ToArray(), scaleShift);
+        return new(p, vram, vertexCount, faces, height, radius0, frameEntries.Select(f => f.Count).ToArray(), scaleShift, depthShifts, hiddenShares);
+    }
+
+    /// <summary>Animation header +0xB, the object renderer's depth range: it files each face into a 288-entry depth table
+    /// of its own, 4 &lt;&lt; B stored units a bucket, from 512 &lt;&lt; B stored units in front of the object's origin
+    /// (USA 0x8001F404 reads it, the larger of the two animations being blended, 0x8001F8B0..0x8002051C use it).
+    /// A face nearer than that is dropped and one more than 640 &lt;&lt; B behind lands past the table, in the vertex
+    /// depths of a model with more than 128 vertices (or whatever follows). The game's own models carry the smallest B
+    /// that holds their furthest vertex (1479 of 1549 retail animations exactly that, the rest larger); a few units
+    /// of margin cover the GTE's rounding.</summary>
+    internal static int DepthShift(IEnumerable<(int X, int Y, int Z)[]> frames)
+    {
+        double reach = frames.SelectMany(f => f).Max(v => Math.Sqrt((double)v.X * v.X + (double)v.Y * v.Y + (double)v.Z * v.Z));
+        int k = 0;
+        while ((512 << k) < reach + 4) k++;
+        return k;
+    }
+
+    /// <summary>For each animation, the share of the model's surface (its triangles' areas in the first frame of the
+    /// first animation) whose triangles shrink to nothing (under 2% of that area) in every one of its frames: a part the
+    /// source hides in that animation by collapsing its vertices.</summary>
+    internal static double[] HiddenShares((double X, double Y, double Z)[][][] world, IReadOnlyList<Triangle> triangles)
+    {
+        static double Area((double X, double Y, double Z)[] f, int[] v)
+        {
+            var (a, b, c) = (f[v[0]], f[v[1]], f[v[2]]);
+            double ux = b.X - a.X, uy = b.Y - a.Y, uz = b.Z - a.Z, wx = c.X - a.X, wy = c.Y - a.Y, wz = c.Z - a.Z;
+            double nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+            return Math.Sqrt(nx * nx + ny * ny + nz * nz) / 2;
+        }
+        var rest = world[0][0];
+        double[] restArea = triangles.Select(t => Area(rest, t.Vertices)).ToArray();
+        double total = restArea.Sum();
+        return world.Select(frames => total <= 0 ? 0 : Enumerable.Range(0, triangles.Count)
+            .Where(t => restArea[t] > 0 && frames.All(f => Area(f, triangles[t].Vertices) < 0.02 * restArea[t]))
+            .Sum(t => restArea[t]) / total).ToArray();
     }
 
     private static (byte, byte, byte) Modulate((byte R, byte G, byte B) texture, (byte R, byte G, byte B) colour) =>

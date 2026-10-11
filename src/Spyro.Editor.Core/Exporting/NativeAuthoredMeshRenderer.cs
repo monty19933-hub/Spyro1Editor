@@ -47,7 +47,7 @@ internal static class NativeAuthoredMeshRenderer
         {
             var v=Vertices.Concat(f.Points).Distinct().ToArray();
             int colors=Colors.Concat(f.Near.Zip(f.Far)).Distinct().Count();
-            return v.Length<=64&&v.Length<=170&&colors<=64&&v.Length+colors+2*(Faces.Count+1)<=255&&
+            return v.Length<=64&&v.Length<=MaxNearVertices&&colors<=64&&v.Length+colors+2*(Faces.Count+1)<=255&&
                 v.Max(p=>p.X)-v.Min(p=>p.X)<=2047&&v.Max(p=>p.Y)-v.Min(p=>p.Y)<=2047&&v.Max(p=>p.Z)-v.Min(p=>p.Z)<=1023&&
                 v.Max(p=>p.X)-v.Min(p=>p.X)+v.Max(p=>p.Y)-v.Min(p=>p.Y)+v.Max(p=>p.Z)-v.Min(p=>p.Z)<=8191;
         }
@@ -69,18 +69,7 @@ internal static class NativeAuthoredMeshRenderer
             var near=s.NearColors??Enumerable.Repeat(s.Color,s.Vertices.Length).ToArray();
             var far=s.FarColors??Enumerable.Repeat(s.Color,s.Vertices.Length).ToArray();
             foreach(var p in s.Vertices){_=Unit(p.X);_=Unit(p.Y);_=Unit(p.Z);}
-            int group=s.Sector??-1;
-            // Imported quads are rarely flat; they stay whole (as the game they came from draws them) when convex,
-            // so their texture spans the quad instead of being squeezed into each half.
-            int flags=group>=0?(ImportedFlagsOverride?.Invoke(s)??ImportedFaceFlags):0;
-            if(s.TwoSided)flags|=TwoSidedFaceFlag;
-            if(s.FrontReversed)flags|=FrontReversedFaceFlag;
-            if(s.Vertices.Length==4&&(group>=0?ConvexQuad(s.Vertices):CompatibleQuad(s.Vertices)))faces.Add(new(s.Vertices,near,far,material,group,flags));
-            else
-            {
-                faces.Add(new(s.Vertices[..3],near[..3],far[..3],material,group,flags));
-                if(s.Vertices.Length==4)faces.Add(new([s.Vertices[0],s.Vertices[2],s.Vertices[3]],[near[0],near[2],near[3]],[far[0],far[2],far[3]],material,group,flags));
-            }
+            AddFaces(faces,s,near,far,material);
         }
         foreach(var t in direct)faces.Add(new([t.A,t.B,t.C],t.Near,t.Far,255,-1,(t.TwoSided?TwoSidedFaceFlag:0)|(t.FrontReversed?FrontReversedFaceFlag:0)));
         // Small levels keep the original packing (spatial buckets filled in authoring order, the same bytes as
@@ -114,7 +103,9 @@ internal static class NativeAuthoredMeshRenderer
                 batches.AddRange(rest);
             }
             var supplied=doc.FarMeshes?.ToDictionary(m=>m.Sector);
-            foreach(var batch in batches.Where(b=>b.Imported))batch.Far=NeedsFarMesh(batch)?Supplied(batch,batches,supplied)??Simplify(batch):null;
+            foreach(var batch in batches.Where(b=>b.Imported))
+                batch.Far=NeedsFarMesh(batch)?Supplied(batch,batches,supplied)??Simplify(batch)
+                    :supplied!=null&&supplied.TryGetValue(batch.Group,out var always)&&always.Always?Supplied(batch,batches,supplied):null;
             LastFarReport=(batches.Count(b=>b.Far is {Supplied:true}),batches.Count(b=>b.Far is {Supplied:false}));
             proved=false;
         }
@@ -137,15 +128,134 @@ internal static class NativeAuthoredMeshRenderer
         if(totalFaces>MaxFaces)
             throw new InvalidDataException($"Authored terrain has {totalFaces} drawn faces; the game's per-face table holds {MaxFaces}. Reduce geometry.");
         RequireSubdivisionQueues(batches,NativeSubdivisionQueueGuard.Needed(doc));
+        _lastDrawPlan=PlanDraw(doc,batches,proved,doc.FarMeshes?.ToDictionary(m=>m.Sector));
+        byte[] env=Environment(batches,proved);
+        int count=batches.Count;
+        int list=(count+4)&~3,sky=16+list;byte[] visibility=new byte[sky+12];W(visibility,0,(uint)visibility.Length);W(visibility,4,(uint)(sky-4));W(visibility,8,1);W(visibility,12,12);
+        visibility.AsSpan(16,list).Fill(255);for(int i=0;i<count;i++)visibility[16+i]=(byte)i;
+        W(visibility,sky,1);W(visibility,sky+4,8);visibility.AsSpan(sky+8,4).Fill(255);
+        return(env,visibility);
+    }
+    private static byte[] Environment(List<Batch> batches,bool proved)
+    {
         var sectors=new List<byte[]>();int cache=1;
         foreach(var batch in batches){sectors.Add(Encode(batch,cache,!proved));cache+=batch.Faces.Count;}
         int count=sectors.Count,total=8+count*4+sectors.Sum(s=>s.Length);byte[] env=new byte[total];W(env,0,(uint)total);W(env,4,(uint)count);
         int cursor=8+count*4;
         for(int i=0;i<count;i++){W(env,8+i*4,(uint)(cursor-4));sectors[i].CopyTo(env,cursor);cursor+=sectors[i].Length;}
-        int list=(count+4)&~3,sky=16+list;byte[] visibility=new byte[sky+12];W(visibility,0,(uint)visibility.Length);W(visibility,4,(uint)(sky-4));W(visibility,8,1);W(visibility,12,12);
-        visibility.AsSpan(16,list).Fill(255);for(int i=0;i<count;i++)visibility[16+i]=(byte)i;
-        W(visibility,sky,1);W(visibility,sky+4,8);visibility.AsSpan(sky+8,4).Fill(255);
-        return(env,visibility);
+        return env;
+    }
+
+    /// <summary>How a compiled level's terrain loads the frame's draw buffer (<see cref="NativeDrawLoad"/>): the near
+    /// distance the draw-buffer guard gives the level (2,048 as retail unless the terrain needs less), the most far-mesh
+    /// faces a sector kept (null: as many as its tables hold), and the heaviest view the survey found.</summary>
+    public sealed record DrawPlan(int NearDistance,int? FarFaceCap,NativeDrawLoad.Load Worst,System.Numerics.Vector3 WorstSpot,
+        System.Numerics.Vector3 WorstEye,int Spots,int Cameras)
+    {
+        public bool OverBudget=>Worst.Whole>NativeDrawLoad.TerrainBudget;
+        /// <summary>A readable line for reports.</summary>
+        public string Describe()=>$"heaviest view {Worst.Whole:N0} bytes of terrain drawn whole ({Worst.Far:N0} distant, {Worst.Near:N0} near; {Worst.Subdivided:N0} more subdivided up close) " +
+            $"from ({WorstSpot.X:0}, {WorstSpot.Y:0}, {WorstSpot.Z:0}); budget {NativeDrawLoad.TerrainBudget:N0}" +
+            (NearDistance<NativeDrawLoad.NearDistance?$"; textured terrain drawn to {NearDistance:N0} units (retail 2,048)":"") +
+            (FarFaceCap is int cap?$"; distant meshes at most {cap} faces a sector":"") + $" ({Spots:N0} spots, {Cameras:N0} views)";
+        /// <summary>The plan in everyday words for an import's summary (null: nothing changed and nothing to say).</summary>
+        public string? Note()
+        {
+            List<string> parts=[];
+            if(FarFaceCap!=null)parts.Add("distant scenery is drawn simpler");
+            if(NearDistance<NativeDrawLoad.NearDistance)parts.Add($"textures show to {NearDistance:N0} units instead of 2,048");
+            string? changed=parts.Count==0?null:"So the game can draw its busiest views, "+string.Join(" and ",parts)+".";
+            if(!OverBudget)return changed;
+            return (changed==null?"":changed+" ")+$"Its busiest view (from {WorstSpot.X:0}, {WorstSpot.Y:0}, {WorstSpot.Z:0}) is still heavy: with many objects in view, the farthest terrain may flicker out there.";
+        }
+    }
+    [ThreadStatic] private static DrawPlan? _lastDrawPlan;
+    /// <summary>The draw plan of this thread's last <see cref="Compile"/>.</summary>
+    internal static DrawPlan? LastDrawPlan=>_lastDrawPlan;
+    /// <summary>Lab only: skip the draw-load survey (null plan).</summary>
+    internal static bool DrawPlanDisabled;
+    internal static readonly int[] FarFaceCaps=[48,32,24,16,12,8], NearDistances=[1792,1536,1280,1024];
+    /// <summary>Distant meshes are coarsened only while they draw more than this in the heaviest view.</summary>
+    internal const int FarFloor=0x4000;
+    internal const string DrawLoadRefusal="Too much terrain in view";
+
+    /// <summary>Surveys Spyro's views over the level (<see cref="NativeDrawLoad.Spots"/>) and, while the heaviest one draws
+    /// more terrain (drawn whole) than <see cref="NativeDrawLoad.TerrainBudget"/>: coarsens the sectors' distant meshes (fewer faces
+    /// each, refitted from the scene's own distant meshes or simplified from the near faces) while they draw more than
+    /// <see cref="FarFloor"/>, then shortens the near distance the guard gives the level (the passes draw textured
+    /// faces only that close, and distant meshes from 256 units nearer). Each step is checked on the heaviest views found
+    /// so far and confirmed on all. A level still over the budget keeps its last step (the guard then trims the terrain
+    /// in its heaviest views); one over <see cref="NativeDrawLoad.TerrainLimit"/> even so is refused.</summary>
+    private static DrawPlan? PlanDraw(SceneDocument doc,List<Batch> batches,bool proved,Dictionary<int,AuthoredFarMesh>? supplied)
+    {
+        if(DrawPlanDisabled||batches.Count==0)return null;
+        var spots=NativeDrawLoad.Spots(doc);
+        var cameras=NativeDrawLoad.Cameras(spots).ToList();
+        var original=batches.Select(b=>b.Far).ToArray();
+        int near=(int)NativeDrawLoad.NearDistance;int? cap=null;
+        var all=NativeDrawLoad.Survey(NativeDrawLoad.Parse(Environment(batches,proved)),cameras,near);
+        var hot=all.Take(96).Select(v=>(v.Pose,v.Spot)).ToList();
+        var worst=all[0];bool confirmed=true;
+        DrawPlan Plan()=>new(near,cap,worst.Load,worst.Spot,worst.Pose.Eye,spots.Count,cameras.Count);
+        while(worst.Load.Whole>NativeDrawLoad.TerrainBudget)
+        {
+            int nextCap=FarFaceCaps.FirstOrDefault(c=>c<(cap??int.MaxValue));
+            if(worst.Load.Far>FarFloor&&nextCap>0)
+            {
+                cap=nextCap;
+                for(int i=0;i<batches.Count;i++)batches[i].Far=CappedFar(batches[i],original[i],batches,supplied,nextCap);
+            }
+            else if(NearDistances.FirstOrDefault(n=>n<near) is int nextNear&&nextNear>0)near=nextNear;
+            else break;
+            var sectors=NativeDrawLoad.Parse(Environment(batches,proved));
+            var trial=NativeDrawLoad.Survey(sectors,hot,near);
+            if(trial[0].Load.Whole>NativeDrawLoad.TerrainBudget){worst=trial[0];confirmed=false;continue;}
+            all=NativeDrawLoad.Survey(sectors,cameras,near);worst=all[0];confirmed=true;
+            foreach(var v in all.Take(32))if(!hot.Contains((v.Pose,v.Spot)))hot.Add((v.Pose,v.Spot));
+        }
+        if(!confirmed)worst=NativeDrawLoad.Survey(NativeDrawLoad.Parse(Environment(batches,proved)),cameras,near)[0];
+        LastFarReport=(batches.Count(b=>b.Far is {Supplied:true}),batches.Count(b=>b.Far is {Supplied:false}));
+        var plan=Plan();
+        if(worst.Load.Whole>NativeDrawLoad.TerrainLimit)
+            throw new InvalidDataException($"{DrawLoadRefusal} near ({worst.Spot.X:0}, {worst.Spot.Y:0}, {worst.Spot.Z:0}): the game would draw {worst.Load.Whole:N0} bytes of it " +
+                $"({worst.Load.Far:N0} distant, {worst.Load.Near:N0} near) even with textured terrain only {near:N0} units out and " + (cap is int most?$"distant meshes of {most} faces; ":"its distant meshes; ") +
+                $"a frame holds {NativeDrawLoad.FrameBufferBytes:N0} for everything. Remove geometry seen from there (backdrop, small details) or split the level.");
+        return plan;
+    }
+
+    /// <summary>A sector's distant mesh with at most <paramref name="cap"/> faces (unchanged when it has no more).</summary>
+    private static FarMesh? CappedFar(Batch batch,FarMesh? original,List<Batch> batches,Dictionary<int,AuthoredFarMesh>? supplied,int cap)
+    {
+        int faces=original?.Faces.Count??batch.Faces.Count;
+        if(faces<=cap)return original;
+        if(original is {Supplied:true}&&Supplied(batch,batches,supplied,cap) is {} refit)return refit;
+        return Simplify(batch,cap);
+    }
+
+    /// <summary>A textured surface as drawn faces. Imported quads are rarely flat; they stay whole (as the game they came
+    /// from draws them) when convex, so their texture spans the quad instead of being squeezed into each half.</summary>
+    private static void AddFaces(List<Face> faces,AuthoredSurface s,ColorRgba[] near,ColorRgba[] far,int material)
+    {
+        int group=s.Sector??-1;
+        int flags=group>=0?(ImportedFlagsOverride?.Invoke(s)??ImportedFaceFlags):0;
+        if(s.TwoSided)flags|=TwoSidedFaceFlag;
+        if(s.FrontReversed)flags|=FrontReversedFaceFlag;
+        if(s.Vertices.Length==4&&(group>=0?ConvexQuad(s.Vertices):CompatibleQuad(s.Vertices)))faces.Add(new(s.Vertices,near,far,material,group,flags));
+        else
+        {
+            faces.Add(new(s.Vertices[..3],near[..3],far[..3],material,group,flags));
+            if(s.Vertices.Length==4)faces.Add(new([s.Vertices[0],s.Vertices[2],s.Vertices[3]],[near[0],near[2],near[3]],[far[0],far[2],far[3]],material,group,flags));
+        }
+    }
+    /// <summary>How many native sectors the textured faces of one imported sector need: the drawn faces <see cref="Compile"/>
+    /// makes of them, split as it splits an imported sector whose near tables or packed offsets overflow.</summary>
+    internal static int ImportedSectorCount(IEnumerable<AuthoredSurface> surfaces)
+    {
+        List<Face> faces=[];
+        foreach(var s in surfaces.Where(s=>s.Material!=null))
+            AddFaces(faces,s with{Sector=s.Sector??0},s.NearColors??Enumerable.Repeat(s.Color,s.Vertices.Length).ToArray(),s.FarColors??Enumerable.Repeat(s.Color,s.Vertices.Length).ToArray(),0);
+        if(faces.Count==0)return 0;
+        List<Batch> output=[];SplitImported(faces,output);return output.Count;
     }
     // Per-frame native queues (USA sector pass 0x80025A30.., face pass 0x80026C80.. quads, 0x80027244.. triangles):
     // - a sector is near when its header sphere passes the view-frustum test (culled when d+r <= 0, when
@@ -166,6 +276,10 @@ internal static class NativeAuthoredMeshRenderer
     // textured sector fit that, no camera can overflow it (exact, no margin needed).
     // One cache byte per face in a 0x1C00-byte table, index 0 unused: 7,167 faces (retail Dark Passage uses them all).
     internal const int MaxSectors=127, MaxFaces=7167, SubdivisionQueueCapacity=127, SubdivisionQueueEntries=126, SubdivisionMargin=16;
+    /// <summary>A sector's near (HP) vertices are transformed into the 1 KB scratchpad (USA 0x8002683C..0x800269B4: screen
+    /// x/y 4 bytes each from 0x1F800000, depth 2 bytes each from 0x1F8002A8), so a sector drawn up close holds at most
+    /// 170; more run past the scratchpad (bus error at 0x8002699C, seen with an imported Crash 3 sector of 200+).</summary>
+    internal const int MaxNearVertices=170;
     private const float NearDistance=2048, PoseSpacing=128;
 
     /// <summary>The last compile's sector count and heaviest simulated subdivision-queue load (for smoke tests).</summary>
@@ -303,14 +417,14 @@ internal static class NativeAuthoredMeshRenderer
         int half=ordered.Count/2;
         Split(ordered[..half],span,output);Split(ordered[half..],span,output);
     }
-    /// <summary>Near tables of an imported sector: up to 255 vertices, colour pairs and faces (8-bit indices),
-    /// within the packed vertex offsets.</summary>
+    /// <summary>Near tables of an imported sector: up to 255 colour pairs and faces (8-bit indices) and up to
+    /// <see cref="MaxNearVertices"/> vertices, within the packed vertex offsets.</summary>
     private static bool ImportedFits(List<Face> faces)
     {
         var v=faces.SelectMany(f=>f.Points).Distinct().ToArray();
         int colors=faces.SelectMany(f=>f.Near.Zip(f.Far)).Distinct().Count();
         int span=ImportedSpanOverride??2047;
-        return faces.Count<=255&&v.Length<=255&&colors<=255&&
+        return faces.Count<=255&&v.Length<=MaxNearVertices&&colors<=255&&
             v.Max(p=>p.X)-v.Min(p=>p.X)<=span&&v.Max(p=>p.Y)-v.Min(p=>p.Y)<=span&&v.Max(p=>p.Z)-v.Min(p=>p.Z)<=Math.Min(span,1023)&&
             v.Max(p=>p.X)-v.Min(p=>p.X)+v.Max(p=>p.Y)-v.Min(p=>p.Y)+v.Max(p=>p.Z)-v.Min(p=>p.Z)<=8191;
     }
@@ -343,9 +457,14 @@ internal static class NativeAuthoredMeshRenderer
     /// <summary>The far mesh of a big sector: its vertices merged on a grid (the cell grows until the LP tables fit
     /// their 6-bit indices and one-byte HP offset), one colour per merged vertex (the faces' far colours averaged),
     /// faces that collapse dropped. Drawn only beyond the near-detail distance.</summary>
-    private static FarMesh Simplify(Batch b)
+    /// <remarks>Never an empty far table: the far pass transforms its vertices in a loop that ends when its pointer
+    /// equals the table's end (USA 0x80026350), and with no vertex it is already past it, so it runs on through the
+    /// scratchpad into the I/O registers (seen as a hang in Sunny Villa). With <paramref name="maxFaces"/> the cell grows
+    /// until at most that many faces remain; when the next size leaves none, the last mesh with faces is kept.</remarks>
+    private static FarMesh Simplify(Batch b,int maxFaces=int.MaxValue)
     {
         float x0=b.Vertices.Min(p=>p.X),y0=b.Vertices.Min(p=>p.Y),z0=b.Vertices.Min(p=>p.Z);
+        FarMesh? fewest=null;
         foreach(float cell in new[]{8f,12,16,24,32,48,64,96,128,192,256,384,512,768,1024,1536,2048,4096})
         {
             Dictionary<(int,int,int),int> ids=[];
@@ -369,13 +488,33 @@ internal static class NativeAuthoredMeshRenderer
                 faces.Add([..corners]);flags.Add((f.Flags&TwoSidedFaceFlag)!=0?FarTwoSidedFlag:0);
             }
             var used=faces.SelectMany(f=>f).Distinct().Order().ToList();
-            if(used.Count>64||2*used.Count+2*faces.Count>255)continue;
+            if(used.Count>64||2*used.Count+2*faces.Count>255||faces.Count==0)continue;
             var remap=used.Select((id,i)=>(id,i)).ToDictionary(t=>t.id,t=>t.i);
             var vertices=used.Select(id=>{var s=sums[id];return new Vector3f((float)Math.Round(s.X/s.N),(float)Math.Round(s.Y/s.N),(float)Math.Round(s.Z/s.N));}).ToList();
             var colors=used.Select(id=>{var s=sums[id];return new ColorRgba((byte)Math.Round(s.R/s.N),(byte)Math.Round(s.G/s.N),(byte)Math.Round(s.B/s.N));}).ToList();
-            return new(vertices,colors,faces.Select(f=>f.Select(id=>remap[id]).ToArray()).ToList(),null,flags);
+            fewest=new(vertices,colors,faces.Select(f=>f.Select(id=>remap[id]).ToArray()).ToList(),null,flags);
+            if(faces.Count<=maxFaces)return fewest;
         }
-        throw new InvalidDataException("An imported sector could not be simplified for distant viewing.");
+        return fewest??LargestFace(b);
+    }
+    /// <summary>A distant mesh of the sector's largest face alone (its faces are too small and scattered to survive any
+    /// merging grid).</summary>
+    private static FarMesh LargestFace(Batch b)
+    {
+        static double Area(Face f)
+        {
+            var a=f.Points[0];double sum=0;
+            for(int i=1;i+1<f.Points.Length;i++)
+            {
+                var u=f.Points[i];var v=f.Points[i+1];
+                double ux=u.X-a.X,uy=u.Y-a.Y,uz=u.Z-a.Z,vx=v.X-a.X,vy=v.Y-a.Y,vz=v.Z-a.Z;
+                double cx=uy*vz-uz*vy,cy=uz*vx-ux*vz,cz=ux*vy-uy*vx;sum+=Math.Sqrt(cx*cx+cy*cy+cz*cz)/2;
+            }
+            return sum;
+        }
+        var face=b.Faces.MaxBy(Area)!;var order=FarOrder(face);
+        return new([..order.Select(i=>face.Points[i])],[..order.Select(i=>face.Far[i])],[[..Enumerable.Range(0,order.Length)]],null,
+            [(face.Flags&TwoSidedFaceFlag)!=0?FarTwoSidedFlag:0]);
     }
     /// <summary>A face's corners in far (LP) perimeter order: reversed for a face whose front is reversed, since the far
     /// pass cannot flip the front (its colours follow the corners).</summary>
@@ -384,7 +523,7 @@ internal static class NativeAuthoredMeshRenderer
     /// <summary>The sector's own distant mesh (<see cref="SceneDocument.FarMeshes"/>) fitted to the far tables, or null
     /// (none given, or it cannot fit). A sector split into pieces gives each piece the distant faces most of whose
     /// corners are its own near corners (otherwise the piece whose box centre is nearest the face).</summary>
-    private static FarMesh? Supplied(Batch batch,List<Batch> batches,Dictionary<int,AuthoredFarMesh>? meshes)
+    private static FarMesh? Supplied(Batch batch,List<Batch> batches,Dictionary<int,AuthoredFarMesh>? meshes,int maxFaces=int.MaxValue)
     {
         if(meshes==null||!meshes.TryGetValue(batch.Group,out var mesh))return null;
         var pieces=batches.Where(b=>b.Imported&&b.Group==batch.Group).ToList();
@@ -405,13 +544,13 @@ internal static class NativeAuthoredMeshRenderer
             int me=pieces.IndexOf(batch);
             faces=[..mesh.Faces.Where(f=>Owner(f)==me)];
         }
-        return Fit(batch,mesh,faces);
+        return Fit(batch,mesh,faces,maxFaces);
     }
     /// <summary>A distant mesh fitted to one sector's far tables, which share the sector's origin: corners are kept
     /// inside the sector's box, repeated corners and faces dropped, the shortest edge collapsed (onto its corner used
     /// by more faces) until at most 64 corners remain and the nearest colours merged until at most 64 remain. Null
     /// when nothing is left or the tables still overflow the header's one-byte offset.</summary>
-    private static FarMesh? Fit(Batch batch,AuthoredFarMesh mesh,IReadOnlyList<AuthoredFarFace> source)
+    private static FarMesh? Fit(Batch batch,AuthoredFarMesh mesh,IReadOnlyList<AuthoredFarFace> source,int maxFaces=int.MaxValue)
     {
         // The sector's box grows to take the distant corners when the packed offsets still fit; otherwise they are
         // pulled into the near faces' box.
@@ -451,7 +590,7 @@ internal static class NativeAuthoredMeshRenderer
             return output;
         }
         var live=Clean();
-        while(live.Count>0&&live.SelectMany(f=>f.V).Distinct().Count()>64)
+        while(live.Count>0&&(live.SelectMany(f=>f.V).Distinct().Count()>64||live.Count>maxFaces))
         {
             var uses=live.SelectMany(f=>f.V).GroupBy(i=>i).ToDictionary(g=>g.Key,g=>g.Count());
             int ea=-1,eb=-1;float best=float.MaxValue;
@@ -489,7 +628,8 @@ internal static class NativeAuthoredMeshRenderer
         if(lv>64||lc>64||lv+lc+2*lf>255)return null;
         return new([..usedVertices.Select(i=>vertices[i])],
             [..usedColours.Select(i=>{var s=sums[i];return new ColorRgba((byte)Math.Round(s.R/s.N),(byte)Math.Round(s.G/s.N),(byte)Math.Round(s.B/s.N));})],
-            [..live.Select(f=>f.V.Select(i=>vertexMap[i]).ToArray())],[..live.Select(f=>f.C.Select(i=>colourMap[ColourFind(i)]).ToArray())],null,true);
+            [..live.Select(f=>f.V.Select(i=>vertexMap[i]).ToArray())],[..live.Select(f=>f.C.Select(i=>colourMap[ColourFind(i)]).ToArray())],
+            mesh.TwoSided?[..live.Select(_=>FarTwoSidedFlag)]:null,true);
     }
     /// <summary>The header's bounding radius: the farthest corner from the header centre, rounded up (retail
     /// headers store this; the game culls and picks the detail tier with it).</summary>
@@ -538,6 +678,8 @@ internal static class NativeAuthoredMeshRenderer
     {
         int v=batch.Vertices.Count,c=batch.Colors.Count,f=batch.Faces.Count;
         var far=batch.Far;
+        // The far pass loops over a sector's far vertices until its pointer meets the table's end: none would never end.
+        if(far!=null&&(far.Vertices.Count==0||far.Faces.Count==0))throw new InvalidDataException("Authored native sector has an empty distant mesh.");
         int lv=far?.Vertices.Count??v,lc=far?.Colors.Count??c,lf=far?.Faces.Count??f;
         int lpv=28,lpc=lpv+4*lv,lpf=lpc+4*lc,hpv=lpf+8*lf,hpfar=hpv+4*v,hpnear=hpfar+4*c,hpf=hpnear+4*c,end=hpf+16*f;
         // A scene-given distant mesh may reach past the near faces: the header's box and sphere hold both tiers.

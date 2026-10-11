@@ -138,6 +138,8 @@ public static class UniversalMobyCatalogBuilder
         if (Has("portal", "door", "gate", "switch", "trigger", "lever", "platform", "elevator", "lift", "ladder", "whirlwind", "supercharge", "ramp"))
             return ("Interactive", "Doors, Platforms & Triggers");
         if (Has("balloon", "npc", "fairy", "zoe", "keeper", "elder")) return ("NPCs", "");
+        // A gnorc with a bird, a bird enemy: the enemy word wins over the animal.
+        if (Has("gnorc", "wizard", "druid", "knight", "enemy", "boss")) return ("Enemies", "");
         if (Has("sheep", "cow", "frog", "chicken", "rabbit", "fodder", "butterfly", "bird", "fish", "seal", "lamb", "goat", "ram ", "turkey", "animal"))
             return ("NPCs", "Fodder & Animals");
         if (Has("gnorc", "wizard", "enemy", "boss", "druid", "knight", "armor", "bull", "gnasty", "shaman", "cannon", "attack", "hostile", "guard", "thrower", "lizard", "monster"))

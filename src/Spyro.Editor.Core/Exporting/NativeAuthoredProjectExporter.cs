@@ -74,6 +74,8 @@ public static class NativeAuthoredProjectExporter
         HashSet<string> signs=new(retailSignLevels??new HashSet<string>(),StringComparer.OrdinalIgnoreCase);
         List<LevelTextReplacement> names=[..retailNames??[]];
         List<(string Key,int Prefix)> identities=[];
+        // Each built level's near distance for the draw-buffer guard (a fresh level's is set when it is compiled, below).
+        Dictionary<int,int> nearDistances=scenes.Any(s=>s.Document.TargetBinding==null)?new(){[65]=NativeDrawBufferGuard.MaxNearDistance}:[];
         // The user's Crash disc supplies Crash boxes and enemies, as in the retail-level export.
         var special=UniversalMobyExport.SpecialProvider(japanese,donors,crash,yotd);
         // A rebuilt homeworld's doorways carry their destinations' skies as this export makes them: a level rebuilt here
@@ -97,7 +99,9 @@ public static class NativeAuthoredProjectExporter
                 names.Any(n=>n.Target.LevelKey==target.Key))
                 throw new InvalidDataException("Saved retail edits must not also target a cleared replacement level.");
             var compiled=await NativeClearedLevelCompilation.CaptureAsync(donors.ImagePath,doc,catalog,Path.Combine(scratch,target.Key+"-host.bin"),token,DestinationSky);
+            nearDistances[target.LevelId]=compiled.NearDistance;
             exe=NativeClearedRetailBinding.Prepare(donors.Disc.Exe,exe,target);
+            NativeKillHeights.LowerFor(donors.Disc.Exe,exe,target.LevelId,doc);
             var result=!compiled.NeedsComposition(scene.Placements)?null:compiled.ComposeWithExecutable(donors,scene.Placements,exe,special);
             exe=result?.Executable??exe;
             returnClasses[target.LevelId]=result==null?[]:NativePortalReturnClass.Capture(result.Classes);
@@ -123,8 +127,8 @@ public static class NativeAuthoredProjectExporter
         }
         // A private intermediate carries all rewritten retail slots into the existing
         // authored65 owner. It is not published or mistaken for a finished game image.
-        exe=NativeClearedTitleDemos.Prepare(donors.Disc.Exe,exe,
-            scenes.Where(s=>s.Document.TargetBinding!=null).Select(s=>s.Document.TargetBinding!.LevelId).ToHashSet());
+        var rebuilt=scenes.Where(s=>s.Document.TargetBinding!=null).Select(s=>s.Document.TargetBinding!.LevelId).ToHashSet();
+        exe=NativeClearedTitleDemos.Prepare(donors.Disc.Exe,exe,rebuilt);
         // Songs from other games (Crash 3's): rendered once, their loop marks set in the executable here, their audio
         // written into every image this export writes.
         var songs=scenes.Select(s=>MusicTrackCatalog.FindAny(s.Document.MusicTrack)).OfType<MusicTrackEntry>()
@@ -132,6 +136,10 @@ public static class NativeAuthoredProjectExporter
             .Select(t=>CustomMusicSlots.Encode(t,crash,baseline.Path,yotd)).ToArray();
         foreach(var song in songs)CustomMusicSlots.PatchEndTable(exe,baseline.Path,song);
         if(scenes.Any(s=>NativeSubdivisionQueueGuard.Needed(s.Document)))NativeSubdivisionQueueGuard.PatchExe(exe);
+        // Every level built here bounds its terrain's share of the frame's draw buffer (retail levels draw as before).
+        NativeDrawBufferGuard.PatchExe(exe,nearDistances);
+        // Kill heights change only in the rebuilt levels' own words (and only downwards).
+        NativeKillHeights.RequireOwned(donors.Disc.Exe,exe,rebuilt);
         string stage=Path.Combine(scratch,"retail-stage.bin");
         baseline.WriteImage(stage,baseline.RebuildWad(replacements),exe);
         RequireReadback(stage,baseline,replacements,exe);
@@ -159,6 +167,7 @@ public static class NativeAuthoredProjectExporter
         if(flight?.Enabled==true)throw new InvalidDataException("Experimental flight cannot be merged into a rebuilt retail slot.");
         if(portalRoutes?.HasEdits==true)NativePortalRouteComposer.Apply(donors,catalog,exe,replacements,baseline.EntryBytes,portalRoutes,
             returnClasses:returnClasses);
+        NativeKillHeights.RequireOwned(donors.Disc.Exe,exe,rebuilt);
         string pending=outputImage+".pending-"+Guid.NewGuid().ToString("N"),pendingCue=pending+".cue";
         bool retain=false;
         try

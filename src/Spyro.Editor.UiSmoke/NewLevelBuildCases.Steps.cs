@@ -40,6 +40,8 @@ internal static partial class NewLevelBuildCases
             case "sky-update2": SkyUpdate2Step(window); return true;
             case "sky-update3": SkyUpdate3Step(window); return true;
             case "sky-picker": SkyPickerStep(window); return true;
+            case "scene-sky": SceneSkyStep(window); return true;
+            case "dialog-shots": DialogShots(window, outDir); return true;
             case "crash-disc": CrashDisc(window); return true;
             case "crash-textures": CrashTextures(window); return true;
             case "crash-objects": CrashObjects(window); return true;
@@ -59,7 +61,12 @@ internal static partial class NewLevelBuildCases
             case "retile": Retile(window); return true;
             case "edit-objects": EditObjects(window); return true;
             case "solidify": Solidify(window); return true;
+            case "completion-check": CompletionCheck(window); return true;
             case "cloudspire-cannon": CloudspireCannon(window); return true;
+            case "yotd-import": YearOfTheDragonImport(window); return true;
+            case "yotd-menu": YearOfTheDragonMenu(window); return true;
+            case "crash-menu": CrashMenu(window); return true;
+            case "crash-import": CrashImport(window, outDir); return true;
             default: return false;
         }
     }

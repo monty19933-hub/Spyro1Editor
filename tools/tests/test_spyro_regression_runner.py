@@ -45,6 +45,13 @@ class OwnedCommandTests(unittest.TestCase):
         self.assertNotIn(name,RUNNER.SOURCE_QA_CUE_CASES)
         self.assertIn(("MagicArtisansPairSmoke","MAGIC_ARTISANS_PAIR_SOURCE_OK",[]),RUNNER.SOURCE_QA_CASES)
 
+    def test_draw_load_smoke_registration(self):
+        name = "DrawLoadSmoke"
+        self.assertIn((name, "DRAW_LOAD_FREE_OK checks=37"), RUNNER.CORE_CASES)
+        self.assertIn((name, "DRAW_LOAD_SOURCE_OK checks=41", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+
     def test_dreamweavers_cannon_source_suite_registration_uses_current_core(self):
         name = "UniversalDreamWeaversCannonSmoke"
         self.assertIn((name, "UNIVERSAL_DREAMWEAVERS_CANNON_FREE_OK"), RUNNER.CORE_CASES)
@@ -2242,6 +2249,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeFreshWizardAuthoringSmoke": ["--source", "/selected original.bin", "/selected original.cue"],
             "NativeGreenWizardMoverSmoke": ["/selected original.bin"],
             "NativeLevelSlotOwnershipSmoke": ["--source", "/selected original.bin"],
+            "NativeKillHeightSmoke": ["--source", "/selected original.bin"],
             "NativePlayerAnimationSmoke": ["--source", "/selected original.bin"],
             "NativeFreeFlightSmoke": ["/selected original.bin"],
             "NativeGlobalSoundSmoke": ["--source", "/selected original.bin"],

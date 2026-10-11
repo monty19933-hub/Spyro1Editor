@@ -116,6 +116,25 @@ public sealed class NativeMobyPath
     public byte[] OriginalHeaderBytes { get; }
     public string OriginalPathSha256 { get; }
     public IReadOnlyList<NativePathNode> Nodes { get; }
+    /// <summary>The route of an object added to a level (not on the disc): its nodes are saved with the object
+    /// (<see cref="Moby.UniversalPathNodes"/>), not as in-place disc edits.</summary>
+    public bool IsPlacedObjectRoute { get; private init; }
+
+    /// <summary>An added object's route: <paramref name="original"/> is where it came with (moved with the object),
+    /// <paramref name="current"/> as edited; raw x, y, z per node.</summary>
+    public static NativeMobyPath ForPlacedObject(string levelKey, string levelName, int ownerTrueIndex, ushort ownerClass,
+        IReadOnlyList<int[]> original, IReadOnlyList<int[]> current)
+    {
+        if (original.Count != current.Count || original.Count is 0 or > 64) throw new ArgumentException("A route needs 1 to 64 nodes.");
+        var nodes = original.Select((n, i) => new NativePathNode(i, n[0], n[1], n[2], 0, -1)).ToList();
+        for (int i = 0; i < nodes.Count; i++) nodes[i].SetRawPosition(current[i][0], current[i][1], current[i][2]);
+        byte[] header = new byte[8]; header[0] = (byte)nodes.Count;
+        return new NativeMobyPath(levelKey, levelName, ownerTrueIndex, ownerClass, -1, 0, -1, 0, 0, -1, 0, -1, header, "", nodes)
+            { IsPlacedObjectRoute = true };
+    }
+
+    /// <summary>The nodes' raw positions (x, y, z), in order.</summary>
+    public List<int[]> RawNodes() => [.. Nodes.Select(n => new[] { n.RawX, n.RawY, n.RawZ })];
     public int NodeCount => OriginalHeaderBytes[0];
     public int CurrentNode => OriginalHeaderBytes[1];
     public short Reversed => BitConverter.ToInt16(OriginalHeaderBytes, 6);

@@ -226,6 +226,16 @@ CORE_CASES = (
     ("NativeClearedTitleDemosSmoke", "NATIVE_CLEARED_TITLE_DEMOS_SMOKE_OK"),
     ("NativeAuthoredAggregateOwnershipSmoke", "NATIVE_AUTHORED_AGGREGATE_OWNERSHIP_CHECKS_OK checks=32"),
     ("NativeClearedLevelCompositionSmoke", "NATIVE_CLEARED_LEVEL_COMPOSITION_CHECKS_OK checks="),
+    # Year of the Dragon level importer on a synthetic level: decoder, face rules, ground kinds, merging, sectors, start.
+    ("YearOfTheDragonImportSmoke", "YOTD_IMPORT_FREE_OK checks=48"),
+    # Rebuilt retail slots: the kill height is lowered under the level's lowest face (never raised, never under 64), only
+    # in the slot's own word; Start Blank survives in every slot (source-free; --source checks the real table and consumers).
+    ("NativeKillHeightSmoke", "NATIVE_KILL_HEIGHT_SOURCE_FREE_OK checks=308"),
+    # The frame's draw buffer: the terrain model (a wall seen from chosen cameras, the game's camera matrix), the compile's
+    # draw plan (a floor too heavy far away is given simpler distant meshes and a shorter texture distance; terrain over
+    # the limit even so is refused) and the runtime guard's stubs run on a test CPU (limit, near distance, retail levels
+    # untouched) and its refusals.
+    ("DrawLoadSmoke", "DRAW_LOAD_FREE_OK checks=37"),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
@@ -239,6 +249,7 @@ CASE_ARGUMENTS = {
     # default mode, which constructs fixtures and mutates retained inputs.
     "Id65AuthoringRewardStagingRuntimeCandidatePublisherSmoke": ["--source-free-fixture-lookup"],
     "UnusedLevel65MusicOwnershipClosureSmoke": ["--source-free-music-selection"],
+    "YearOfTheDragonImportSmoke": ["--source-free"],
 }
 # Additional modes retain their own arguments/markers without replacing the
 # established mode of the same executable. Project builds remain deduplicated.
@@ -252,6 +263,8 @@ ADDITIONAL_CORE_CASES = (
      ["--start-blank-ui-only"]),
     ("TownSquareLockedChestSmoke", "LOCKED_CHEST_BEHAVIOR_FREE_OK",
      ["--behavior-free"]),
+    ("DragonStatueColorSmoke", "PLANT_SNOW_SOURCE_FREE_OK checks=",
+     ["--plant-snow"]),
     ("UiSmoke", "FREE_FLIGHT_UI_OK",
      ["--free-flight-ui-only"]),
     ("UiSmoke", "PLAY_AS_CRASH_UI_OK checks=",
@@ -288,8 +301,21 @@ ADDITIONAL_CORE_CASES = (
      ["--fresh-material-inspection-only"]),
     ("UiSmoke", "FRESH_SAVED_RESEARCH_UI_OK",
      ["--fresh-saved-research-ui"]),
+    # Crash Bandicoot: Warped level importer on a synthetic level: scenery/zone/octree decoders, faces, sides, triangle
+    # pairs, see-through cards, invisible walls, pit floors, collision-free faces, sectors, start, refusals.
+    ("CrashLevelSmoke", "CRASH_LEVEL_IMPORT_FREE_OK checks=40",
+     ["--import-free"]),
+    # Fill In What the Level Needs on a synthetic built level: walking, ramps, glides over lava, a block too high,
+    # dragons spread, Return Home at the far end, the thief's run on the floor, exact gem totals, routes that fit.
+    ("YearOfTheDragonImportSmoke", "LEVEL_FILL_FREE_OK checks=",
+     ["--level-fill"]),
 )
 SOURCE_QA_CASES = (
+    # Every catalogued Crash Bandicoot: Warped level decodes as the prototype found; Toad Village imports whole for Ice
+    # Cavern (needs the user's Crash disc: CRASH_DISC or the workspace's configured one; reports a skip without it).
+    ("CrashLevelSmoke", "CRASH_LEVEL_IMPORT_DISC_OK", ["--import-disc"]),
+    # The draw-buffer guard installed into the retail executable (read only): hooks, both code areas, re-install.
+    ("DrawLoadSmoke", "DRAW_LOAD_SOURCE_OK checks=41", ["--source"]),
     ("DarkParticleHostSmoke", "DARK_PROJECTILE_ALL_HOST_OWNERSHIP_OK", []),
     ("FreshParticleBindingSmoke", "FRESH_OWNED_PARTICLE_BINDING_OK", []),
     ("CollectionStarSmoke", "COLLECTION_STAR_SOURCE_OWNERSHIP_OK", []),
@@ -409,10 +435,14 @@ SOURCE_QA_CASES = (
     ("NativeFreeFlightSmoke", "NATIVE_FREE_FLIGHT_SOURCE_OK", []),
     # Plan capture only: never --exercise-staging, --verify or publication.
     ("NativeFreeFlightResearchSmoke", "NATIVE_FREE_FLIGHT_RESEARCH_SOURCE_OK", []),
+    # Every Year of the Dragon level decodes; Lost Fleet imports into Artisans (needs the user's Year of the Dragon disc:
+    # YOTD_DISC or the workspace's configured one).
+    ("YearOfTheDragonImportSmoke", "YOTD_IMPORT_DISC_OK", ["--disc-qa"]),
+    ("NativeKillHeightSmoke", "NATIVE_KILL_HEIGHT_SOURCE_OK checks=172", ["--source"]),
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
-SOURCE_QA_WORKSPACE_CASES = frozenset({"RetailDynamicSlotsSmoke", "UniversalDreamWeaversCannonSmoke", "GreenDruidRampWorldSmoke", "GreenDruidNoTargetWorldSmoke", "HauntedDarkHollowSmoke", "GreenDruidSecondWorldSmoke", "AlpineArmPair34Smoke", "HighCavesWorldInstallerSmoke", "MagicOriginalSmoke", "HighCavesParticleSmoke", "HighCavesTornadoPlacementSmoke", "HighCavesTornadoReactionSmoke", "MagicChainSmoke", "FreshParticleBindingSmoke", "MagicArtisansPairSmoke", "NativeDragonRescuePrefixSmoke", "AlpineArtisansChooserSmoke", "DarkParticleHostSmoke", "CollectionStarSmoke", "UniversalTwilightTrooperSmoke", "GreenDruidWorldOwnershipSmoke", "DarkPassageLanternSmoke", "DarkProjectileParticleSmoke", "UniversalSoundStorageSmoke", "MagicPairCertificateSmoke", "DarkPassageShapeshifterSmoke", "BeastMisty89OwnershipSmoke", "BeastMisty89PlacementSmoke", "HauntedWizardOwnershipSmoke", "HauntedWizardIntegrationSmoke", "TerraceParticleOwnershipSmoke", "UniversalFlightGateSmoke", "UniversalFlightChestSmoke", "UniversalPlacementVisibilitySmoke", "UniversalParticleBoundarySmoke", "UniversalFlightDependencySmoke", "UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalLinkedActorOwnershipSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke", "NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
+SOURCE_QA_WORKSPACE_CASES = frozenset({"YearOfTheDragonImportSmoke", "CrashLevelSmoke", "RetailDynamicSlotsSmoke", "UniversalDreamWeaversCannonSmoke", "GreenDruidRampWorldSmoke", "GreenDruidNoTargetWorldSmoke", "HauntedDarkHollowSmoke", "GreenDruidSecondWorldSmoke", "AlpineArmPair34Smoke", "HighCavesWorldInstallerSmoke", "MagicOriginalSmoke", "HighCavesParticleSmoke", "HighCavesTornadoPlacementSmoke", "HighCavesTornadoReactionSmoke", "MagicChainSmoke", "FreshParticleBindingSmoke", "MagicArtisansPairSmoke", "NativeDragonRescuePrefixSmoke", "AlpineArtisansChooserSmoke", "DarkParticleHostSmoke", "CollectionStarSmoke", "UniversalTwilightTrooperSmoke", "GreenDruidWorldOwnershipSmoke", "DarkPassageLanternSmoke", "DarkProjectileParticleSmoke", "UniversalSoundStorageSmoke", "MagicPairCertificateSmoke", "DarkPassageShapeshifterSmoke", "BeastMisty89OwnershipSmoke", "BeastMisty89PlacementSmoke", "HauntedWizardOwnershipSmoke", "HauntedWizardIntegrationSmoke", "TerraceParticleOwnershipSmoke", "UniversalFlightGateSmoke", "UniversalFlightChestSmoke", "UniversalPlacementVisibilitySmoke", "UniversalParticleBoundarySmoke", "UniversalFlightDependencySmoke", "UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalLinkedActorOwnershipSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke", "NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
 # These suites retain new source/readback reports inside this run's isolated log directory.
 SOURCE_QA_REPORT_CASES = frozenset({"RetailDynamicSlotsSmoke", "UniversalDreamWeaversCannonSmoke", "GreenDruidRampWorldSmoke", "GreenDruidNoTargetWorldSmoke", "HauntedDarkHollowSmoke", "GreenDruidSecondWorldSmoke", "AlpineArmPair34Smoke", "HighCavesWorldInstallerSmoke", "MagicOriginalSmoke", "HighCavesParticleSmoke", "HighCavesTornadoPlacementSmoke", "HighCavesTornadoReactionSmoke", "MagicChainSmoke", "FreshParticleBindingSmoke", "MagicArtisansPairSmoke", "NativeDragonRescuePrefixSmoke", "AlpineArtisansChooserSmoke", "DarkParticleHostSmoke", "CollectionStarSmoke", "UniversalTwilightTrooperSmoke", "GreenDruidWorldOwnershipSmoke", "DarkPassageLanternSmoke", "DarkProjectileParticleSmoke", "UniversalSoundStorageSmoke", "MagicPairCertificateSmoke", "DarkPassageShapeshifterSmoke", "BeastMisty89OwnershipSmoke", "BeastMisty89PlacementSmoke", "HauntedWizardOwnershipSmoke", "HauntedWizardIntegrationSmoke", "TerraceParticleOwnershipSmoke", "UniversalFlightGateSmoke", "UniversalFlightChestSmoke", "UniversalPlacementVisibilitySmoke", "UniversalParticleBoundarySmoke", "UniversalFlightDependencySmoke", "UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke"})
 SOURCE_QA_CUE_CASES = frozenset({"NativeCollectibleCardAdmissionResearchSmoke", "NativeCollectibleCardLoadResearchSmoke", "NativeCollectibleStartupResearchSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke", "NativeFreshSavedLevelResearchSmoke", "NativeFreshSavedLevelPublicSmoke", "UiSmoke"})
@@ -639,6 +669,7 @@ def main():
             continue
         suffix = {
             ("--behavior-free",): "-behavior",
+            ("--plant-snow",): "-plant-snow",
             ("--dragon-colour-ui",): "-dragon-colour-ui",
             ("--editor-navigation-ui-only",): "-editor-navigation-ui",
             ("--portal-routes-ui-only",): "-portal-routes-ui",

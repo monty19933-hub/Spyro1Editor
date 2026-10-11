@@ -124,6 +124,35 @@ for (int n = 0; n < 200; n++)
             Math.Abs(z.First.Z - z.Second.Item3) <= Math.Max(4, 1 << shift)), $"vertex round trip (shift {shift})");
     }
 }
+// Hidden parts and the depth range, on a small model: two triangles sharing an edge, the furthest vertex `reach` world
+// units from the origin (each coordinate within the converter's 1000, so it is stored as it is).
+{
+    (double X, double Y, double Z)[] Pose(double reach, bool collapsed) =>
+        [(0, 0, 0), (reach / Math.Sqrt(2), reach / Math.Sqrt(2), 0), (0, 0, -200), collapsed ? (0, 0, -200) : (-200, 0, 0)];
+    CrashSpyroModel.Triangle Tri(params int[] v) => new(v, [(128, 128, 128), (128, 128, 128), (128, 128, 128)], false, null, (128, 128, 128));
+    CrashSpyroModel.Triangle[] tris = [Tri(0, 1, 2), Tri(1, 3, 2)];
+    CrashSpyroModel.Result Make(double reach, bool collapse, bool hides) => CrashSpyroModel.Package("test",
+        [new("stand", true), new("part gone", true, HidesParts: hides)],
+        [[Pose(reach, false), Pose(reach, false)], [Pose(reach, collapse), Pose(reach, collapse)]], tris, false, null, new byte[16]);
+    // The knight's march was Crash 3's headless Kn40V: an animation that folds a part of the model away is refused
+    // unless it says it means to (the wizard's robe once it is blown off).
+    Check(Refuses(() => Make(400, true, false)), "an animation hiding a part of the model is refused");
+    var hiding = Make(400, true, true);
+    Check(hiding.HiddenShares[0] == 0 && hiding.HiddenShares[1] > 0.1 && Math.Abs(Decoded.Read(hiding.Package).Hidden[1] - hiding.HiddenShares[1]) < 0.02,
+        "an animation marked as hiding parts converts, and the hidden share reads back from the package");
+    // Header +0xB: the smallest depth range that holds the model's furthest vertex (the object renderer drops faces
+    // more than 512 << B stored units in front of the origin and overruns its 288-entry table 640 << B behind it).
+    foreach (var (reach, shift) in new[] { (400.0, 0), (560.0, 1), (1000.0, 1), (1131.0, 2) })
+    {
+        var m = Decoded.Read(Make(reach, false, false).Package);
+        Check(m.DepthShifts.All(b => b == shift) && m.Reach.All(r => r + 4 <= 512 << shift) && (shift == 0 || m.Reach.Max() + 4 > 512 << (shift - 1)),
+            $"depth range for a model reaching {reach}: +0xB = {shift} ({string.Join(",", m.DepthShifts)})");
+    }
+}
+// Every Crash enemy animation keeps the whole model on screen except those declared to hide parts.
+Check(enemies.SelectMany(e => e.Companion == null ? [e.Main] : new[] { e.Main, e.Companion }).SelectMany(m => m.Animations)
+    .Where(a => a.HidesParts).Select(a => a.Name).SequenceEqual(["Wa1fV"]), "only the wizard's robe-off standing animation hides a part (the robe)");
+Check(!UniversalCrashEnemies.Knight.Main.Animations.Any(a => a.Name == "Kn40V"), "the knight does not march with Crash 3's headless Kn40V");
 // Playable Crash: the controller assembles for his body and legs only; the placements that add him; his levels.
 Check(UniversalBehaviorBundleBuilder.Assemble([UniversalSpecialBehaviors.CrashPlayerUpdate([UniversalCrashPlayer.BodyClass, UniversalCrashPlayer.LegsClass], "crash_player_upd")], 0x80090000).Code.Length > 0,
     "playable Crash's controller assembles");
@@ -253,6 +282,12 @@ foreach (var (asset, enemy) in assets.SelectMany(a => new[] { a }.Concat(a.Compa
     Check(m.Frames.Select(f => f.Count).SequenceEqual(model.Animations.Select(a => nsf.Entry(a.Name).Items.Count)), $"{asset.Id}: every frame of each Crash animation");
     Check(m.Vertices is > 0 and <= 255 && m.NearFaces > 0 && m.FarFaces == m.NearFaces, $"{asset.Id}: {m.Vertices} vertices, {m.NearFaces} faces with a far copy each");
     Check(m.MaxStored <= 1000, $"{asset.Id}: stored coordinates within the game's range ({m.MaxStored})");
+    Check(m.Reach.Zip(m.DepthShifts).All(x => x.First + 4 <= 512 << x.Second),
+        $"{asset.Id}: every animation's depth range holds its furthest vertex ({string.Join(", ", m.Reach.Zip(m.DepthShifts).Select(x => $"{x.First:F0}/B{x.Second}"))})");
+    Check(m.Hidden.Select((share, i) => model.Animations[i].HidesParts ? share > CrashSpyroModel.HiddenShareLimit : share <= CrashSpyroModel.HiddenShareLimit).All(x => x),
+        $"{asset.Id}: no animation hides part of the model unless it means to ({string.Join(", ", m.Hidden.Select(h => $"{h:P1}"))})");
+    if (asset.ClassId == UniversalCrashEnemies.Knight.Class)
+        Check(m.Hidden.All(h => h == 0), "the knight keeps its head (every face of its guard pose) in its guard, march and swing");
     Check(m.FacesValid, $"{asset.Id}: faces name existing vertices and colours");
     Check(m.Textures.All(t => t.PageX >= 8 && t.PageY == 0 && t.Depth <= 1 && t.ClutY >= 256), $"{asset.Id}: art in the image's top half, palettes from row 256");
     Check(m.Frames.SelectMany(f => f).All(s => s == 0xFF || s < enemy.Sounds.Length), $"{asset.Id}: frame sounds name the enemy's slots");
@@ -288,6 +323,8 @@ foreach (var a in player)
     var m = Decoded.Read(a.Package);
     Check(BinaryPrimitives.ReadUInt32LittleEndian(a.Package.AsSpan(0x14)) == 0, $"{a.Id}: no collision (Spyro keeps his own)");
     Check(m.FacesValid && m.MaxStored <= 1000 && m.FarFaces == m.NearFaces, $"{a.Id}: faces valid, coordinates within the game's range");
+    Check(m.Reach.Zip(m.DepthShifts).All(x => x.First + 4 <= 512 << x.Second) && m.Hidden.All(h => h <= CrashSpyroModel.HiddenShareLimit),
+        $"{a.Id}: depth ranges hold every animation, none hides a part");
     Check(m.Frames.Select(f => f.Count).SequenceEqual(UniversalCrashPlayer.Animations.Select(an => (toad.Entry(an.Name).Items.Count + an.Step - 1) / an.Step)),
         $"{a.Id}: every kept frame of each animation");
 }
@@ -397,6 +434,8 @@ if (args.Length == 4)
         Check(m.Frames[2].Count >= 10, $"{asset.Id}: the attack reaches the behaviour's hit frames 6..9");
         Check(m.Vertices is > 0 and <= 255 && m.NearFaces > 0 && m.FarFaces == m.NearFaces && m.MaxStored <= 1000 && m.FacesValid,
             $"{asset.Id}: {m.Vertices} vertices, {m.NearFaces} faces, stored coordinates {m.MaxStored}");
+        Check(m.Reach.Zip(m.DepthShifts).All(x => x.First + 4 <= 512 << x.Second) && m.Hidden.All(h => h <= CrashSpyroModel.HiddenShareLimit),
+            $"{asset.Id}: depth ranges hold every animation, none hides a part");
         Check(m.Textures.All(t => t.PageX >= 8 && t.Depth <= 2), $"{asset.Id}: art in the level's half of texture memory");
         int n = e.YotdSoundSlots.Length;
         Check(n >= 2 && asset.Package.AsSpan(4, 16).ToArray().Select((b, i) => i < n ? b == i : b == 0xFF).All(x => x), $"{asset.Id}: sound slots 0..{n - 1}");
@@ -422,8 +461,14 @@ if (args.Length == 4)
 Console.WriteLine($"CRASH_ENEMY_SOURCE_OK checks={checks}");
 
 /// <summary>A Spyro animated object package read back the way the game reads it.</summary>
+/// <param name="DepthShifts">Each animation's header +0xB: the object renderer keeps faces from 512 &lt;&lt; B stored
+/// units in front of the origin to 640 &lt;&lt; B behind it.</param>
+/// <param name="Reach">Each animation's furthest stored vertex from the origin.</param>
+/// <param name="Hidden">Each animation's share of the model's surface (first frame) whose faces shrink to nothing in all
+/// of its frames: a part the animation hides.</param>
 sealed record Decoded(int Vertices, int NearFaces, int FarFaces, int Scale, int MaxStored, int Height, bool FacesValid,
-    int CapsuleTop, int CapsuleRadius, IReadOnlyList<IReadOnlyList<int>> Frames, IReadOnlyList<(int PageX, int PageY, int Depth, int ClutY)> Textures)
+    int CapsuleTop, int CapsuleRadius, IReadOnlyList<IReadOnlyList<int>> Frames, IReadOnlyList<(int PageX, int PageY, int Depth, int ClutY)> Textures,
+    IReadOnlyList<int> DepthShifts, IReadOnlyList<double> Reach, IReadOnlyList<double> Hidden)
 {
     public static Decoded Read(byte[] p)
     {
@@ -431,11 +476,14 @@ sealed record Decoded(int Vertices, int NearFaces, int FarFaces, int Scale, int 
         int anims = I(0), md = I(0x34), h0 = I(0x38), count = p[h0 + 8], colours = BinaryPrimitives.ReadUInt16LittleEndian(p.AsSpan(h0 + 2));
         int maxStored = 0, height = 0;
         List<IReadOnlyList<int>> frames = [];
+        List<List<List<(int X, int Y, int Z)>>> shapes = [];
+        List<int> depthShifts = []; List<double> reach = [];
         for (int a = 0; a < anims; a++)
         {
             int h = I(0x38 + 4 * a), n = BinaryPrimitives.ReadUInt16LittleEndian(p.AsSpan(h)), shift = p[h + 6] + 1, scale = 1 << p[h + 5];
             if (p[h + 8] != count || p[h + 5] != p[h0 + 5] || I(h + 0x14) != I(h0 + 0x14)) throw new InvalidDataException("animations disagree");
             List<int> sounds = [];
+            shapes.Add([]); depthShifts.Add(p[h + 0xB]); reach.Add(0);
             for (int f = 0; f < n; f++)
             {
                 uint packed = (uint)I(h + 0x24 + 8 * f), aux = (uint)I(h + 0x28 + 8 * f);
@@ -444,12 +492,15 @@ sealed record Decoded(int Vertices, int NearFaces, int FarFaces, int Scale, int 
                 var v = Unpack(p.AsSpan(start).ToArray(), absolute, count, shift);
                 maxStored = Math.Max(maxStored, v.Max(q => Math.Max(Math.Abs(q.X), Math.Max(Math.Abs(q.Y), Math.Abs(q.Z)))));
                 if (a == 0 && f == 0) height = -v.Min(q => q.Z) * scale;
+                shapes[a].Add(v);
+                reach[a] = Math.Max(reach[a], v.Max(q => Math.Sqrt((double)q.X * q.X + (double)q.Y * q.Y + (double)q.Z * q.Z)));
                 sounds.Add((int)(packed >> 24));
             }
             frames.Add(sounds);
         }
         bool valid = true; int near = 0, far = 0;
         List<(int, int, int, int)> textures = [];
+        List<int[]> tris = [];
         foreach (int table in new[] { 0x14, 0x1C })
         {
             int t = md + I(h0 + table), end = t + 4 + I(t);
@@ -458,6 +509,7 @@ sealed record Decoded(int Vertices, int NearFaces, int FarFaces, int Scale, int 
                 uint w = (uint)I(q), c = (uint)I(q + 4);
                 bool quad = (w & 0x80000000) != 0, tex = (w & 2) != 0;
                 valid &= !quad && new[] { w >> 22 & 511, w >> 13 & 511, w >> 4 & 511 }.All(i => i < count) && new[] { c >> 19 & 511, c >> 10 & 511, c >> 1 & 511 }.All(i => i < colours);
+                if (table == 0x14 && valid) tris.Add([(int)(w >> 22 & 511), (int)(w >> 13 & 511), (int)(w >> 4 & 511)]);
                 if (tex)
                 {
                     int page = BinaryPrimitives.ReadUInt16LittleEndian(p.AsSpan(q + 14)), clut = BinaryPrimitives.ReadUInt16LittleEndian(p.AsSpan(q + 10));
@@ -467,9 +519,21 @@ sealed record Decoded(int Vertices, int NearFaces, int FarFaces, int Scale, int 
                 if (table == 0x14) near++; else far++;
             }
         }
+        static double Area(List<(int X, int Y, int Z)> v, int[] t)
+        {
+            var (a, b, c) = (v[t[0]], v[t[1]], v[t[2]]);
+            double ux = b.X - a.X, uy = b.Y - a.Y, uz = b.Z - a.Z, wx = c.X - a.X, wy = c.Y - a.Y, wz = c.Z - a.Z;
+            double nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+            return Math.Sqrt(nx * nx + ny * ny + nz * nz) / 2;
+        }
+        double[] rest = [.. tris.Select(t => valid ? Area(shapes[0][0], t) : 0)];
+        double total = rest.Sum();
+        var hidden = shapes.Select(fr => total <= 0 ? 0 : Enumerable.Range(0, tris.Count)
+            .Where(t => rest[t] > 0 && fr.All(v => Area(v, tris[t]) < 0.02 * rest[t])).Sum(t => rest[t]) / total).ToArray();
         int trailer = (int)((uint)I(0x14) & 0x7FFFFFFF);
         return new(count, near, far, 1 << p[h0 + 5], maxStored, height, valid,
-            BinaryPrimitives.ReadUInt16LittleEndian(p.AsSpan(trailer)), BinaryPrimitives.ReadUInt16LittleEndian(p.AsSpan(trailer + 6)), frames, textures);
+            trailer == 0 ? 0 : BinaryPrimitives.ReadUInt16LittleEndian(p.AsSpan(trailer)), trailer == 0 ? 0 : BinaryPrimitives.ReadUInt16LittleEndian(p.AsSpan(trailer + 6)),
+            frames, textures, depthShifts, reach, hidden);
     }
 
     public static List<(int X, int Y, int Z)> Unpack(byte[] data, int absoluteCount, int count, int shift)

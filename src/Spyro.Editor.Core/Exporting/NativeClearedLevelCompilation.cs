@@ -18,8 +18,12 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
     private readonly string _baseline;
     internal NativeFreshRewardFallbackResources RewardFallbacks { get; }
     private NativeClearedLevelCompilation(SceneDocument document, LevelDefinition target, string baseline,
-        byte[] body, byte[] overlay, byte[] exe, NativeFreshRewardFallbackResources rewardFallbacks, NativeHubPortals? portals)
-    { Document=document; Target=target; _baseline=baseline; _body=body; _overlay=overlay; _exe=exe; RewardFallbacks=rewardFallbacks; Portals=portals; }
+        byte[] body, byte[] overlay, byte[] exe, NativeFreshRewardFallbackResources rewardFallbacks, NativeHubPortals? portals,
+        NativeAuthoredMeshRenderer.DrawPlan? drawPlan)
+    { Document=document; Target=target; _baseline=baseline; _body=body; _overlay=overlay; _exe=exe; RewardFallbacks=rewardFallbacks; Portals=portals; DrawPlan=drawPlan; }
+    /// <summary>How the terrain loads the frame's draw buffer (<see cref="NativeFreshMainCompilation.DrawPlan"/>).</summary>
+    internal NativeAuthoredMeshRenderer.DrawPlan? DrawPlan { get; }
+    public int NearDistance => DrawPlan?.NearDistance ?? NativeDrawBufferGuard.MaxNearDistance;
     /// <summary>A rebuilt homeworld's doorways (their objects join the placements at composition).</summary>
     public NativeHubPortals? Portals { get; }
     public SceneDocument Document { get; }
@@ -40,6 +44,7 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
         if(binding.NativePrefixRows!=prefix)
             throw new InvalidDataException("The replacement scene's saved object identities do not match its original level.");
         byte[] exe=NativeClearedRetailBinding.Prepare(original.Exe,original.Exe,target);
+        NativeKillHeights.LowerFor(original.Exe,exe,target.LevelId,document);
         if(NativeSubdivisionQueueGuard.Needed(document))NativeSubdivisionQueueGuard.PatchExe(exe);
         string kernelPath=scratchBaselinePath+".kernel-"+Guid.NewGuid().ToString("N");
         string stage=scratchBaselinePath+".pending-"+Guid.NewGuid().ToString("N");
@@ -56,6 +61,8 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
             var kernel=await NativeFreshMainCompilation.CaptureAsync(originalUSA,
                 document with{TargetBinding=null,Objects=[],Ledger=UniversalPlacementLedger.Empty,MusicTrack=kernelMusic,Portals=null},kernelPath,token,portals:portals);
             byte[] body=kernel.CopyLevelData(),overlay=kernel.CopyOverlay();
+            // The level bounds its terrain's share of the frame's draw buffer at the near distance its terrain was planned for.
+            NativeDrawBufferGuard.PatchExe(exe,new Dictionary<int,int>{[target.LevelId]=kernel.NearDistance});
             // The rebuilt level must fit the game's level memory on its own (composition re-checks it with objects).
             uint end=UniversalMobyComposer.RuntimeEnd(new UniversalLevelData(body),new UniversalOverlay(overlay,UniversalExeBindings.Read(exe,target.LevelId)).CopyBuffer);
             if(end>UniversalMobyComposer.NormalBufferFloor-UniversalMobyComposer.RamSafetyMargin)
@@ -69,7 +76,7 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
                 throw new InvalidDataException("The rebuilt retail level failed independent disc readback.");
             ExportArtifactTransaction.RequireSourceSeparation(originalUSA,null,scratchBaselinePath);
             File.Move(stage,scratchBaselinePath,true);
-            return new(document,target,scratchBaselinePath,body,overlay,exe,kernel.RewardFallbacks,portals);
+            return new(document,target,scratchBaselinePath,body,overlay,exe,kernel.RewardFallbacks,portals,kernel.DrawPlan);
         }
         finally {if(File.Exists(stage))File.Delete(stage);if(File.Exists(kernelPath))File.Delete(kernelPath);}
     }
@@ -79,9 +86,9 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
 
     /// <summary>Water, lava or ooze in the level need their splash models (cleared levels drop the native ones).</summary>
     public bool NeedsComposition(IReadOnlyList<UniversalMobyPlacement> placements)=>
-        placements.Count>0||Portals!=null||UniversalLiquidSplashes.Liquids(Document.Surfaces.Select(s=>s.Kind)).Count>0;
+        placements.Count>0||Portals!=null||UniversalLiquidSplashes.Liquids(Document.GroundKinds()).Count>0;
     private IReadOnlyList<(int Class,string SourceKey)> LiquidSplashes(UniversalSourceLibrary donors)=>
-        UniversalLiquidSplashes.Dependencies(UniversalLiquidSplashes.Liquids(Document.Surfaces.Select(s=>s.Kind)),Target.Key,k=>donors.Get(k).Data);
+        UniversalLiquidSplashes.Dependencies(UniversalLiquidSplashes.Liquids(Document.GroundKinds()),Target.Key,k=>donors.Get(k).Data);
 
     public UniversalComposeResult ComposeWithExecutable(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements,
         byte[] executable,Func<string,UniversalSpecialAsset?>? special=null)
@@ -99,18 +106,49 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
     }
 
     private const int RescueActorClass=0xFB;
-    private static readonly HashSet<int> DragonFamily=[0xFA,0x6E,0x14B];   // statue, dragon, pedestal
+    /// <summary>Rows that keep their original save identity when put back in their rebuilt level: the dragon family
+    /// (statue, dragon, pedestal) and the egg thief, whose bit is the one the game sets when its egg is collected
+    /// (egg handler -> mark 0x8003B854 on the thief) and reads at load (0x800142C8: a set bit makes +0x53 0xFF, no egg).</summary>
+    public static readonly IReadOnlySet<int> OwnIdentityClasses=new HashSet<int>{0xFA,0x6E,0x14B,0x14C,0x14D,LevelCompletionCheck.EggThiefClass};
 
-    /// <summary>The level's own dragons (statue, dragon and pedestal rows) keep their original save identities: a card
-    /// that rescued one in the original level has it rescued here too, and they need no new identity.</summary>
     private IReadOnlyList<UniversalMobyPlacement> KeepOwnDragonIdentities(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements)
     {
         if(Document.TargetBinding?.NativePrefixRows is not int prefix)return placements;
         var original=donors.Get(Target.Key).Data;
+        return KeepOwnIdentities(Target.Key,prefix,placements,row=>System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(original.Row(row).AsSpan(0x36)));
+    }
+
+    /// <summary>The level's own dragons and egg thieves keep their original save identities: a card that rescued a
+    /// dragon or got the egg in the original level has it here too (the thief then carries no egg), and they need no
+    /// new identity. Only the first copy of a row keeps it; <paramref name="originalClass"/> gives an original row's class.</summary>
+    public static IReadOnlyList<UniversalMobyPlacement> KeepOwnIdentities(string levelKey,int prefix,IReadOnlyList<UniversalMobyPlacement> placements,Func<int,int> originalClass)
+    {
         HashSet<int> taken=[..placements.Where(p=>p.SaveIdentity!=null).Select(p=>p.SaveIdentity!.Value)];
-        return placements.Select(p=>!p.Retired&&p.SaveIdentity==null&&p.SpecialId==null&&string.Equals(p.SourceLevelKey,Target.Key,StringComparison.OrdinalIgnoreCase)&&
-            p.SourceRowIndex>=0&&p.SourceRowIndex<prefix&&DragonFamily.Contains(System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(original.Row(p.SourceRowIndex).AsSpan(0x36)))&&
+        return placements.Select(p=>!p.Retired&&p.SaveIdentity==null&&p.SpecialId==null&&string.Equals(p.SourceLevelKey,levelKey,StringComparison.OrdinalIgnoreCase)&&
+            p.SourceRowIndex>=0&&p.SourceRowIndex<prefix&&OwnIdentityClasses.Contains(originalClass(p.SourceRowIndex))&&
             taken.Add(p.SourceRowIndex)?p with{SaveIdentity=p.SourceRowIndex}:p).ToList();
+    }
+
+    /// <summary>The native classes the rebuilt level's own objects keep (UniversalNativeRelease): the kernel overlay runs
+    /// another level's code for them, so they run their own level's imported code under their own numbers.
+    /// Dragons: statue 0xFA, dragon 0x6E and the rescue actor 0xFB (the rescue loader finds the statue by number).
+    /// Egg thief: 0x21 and its egg 0x22. The thief's update spawns the egg itself through the spawn pointer 0x800758CC
+    /// (Town Square 0x8007F40C: while +0x53 != 0xFF and it holds none, spawn(0x22, thief), egg pointer at props+4); the
+    /// overlay's particle code tells the egg apart by class 0x22 (Town Square 0x800892E0), so a renumbered egg would
+    /// sparkle in the wrong place.</summary>
+    public static IReadOnlySet<int>? ReleasedClasses(string levelKey,IEnumerable<UniversalMobyPlacement> placements,Func<int,int> originalClass)
+    {
+        var own=placements.Where(p=>!p.Retired&&p.SpecialId==null&&p.SourceRowIndex>=0&&string.Equals(p.SourceLevelKey,levelKey,StringComparison.OrdinalIgnoreCase))
+            .Select(p=>originalClass(p.SourceRowIndex)).ToHashSet();
+        HashSet<int> released=[];
+        if(own.Contains(NativeDragonRescueCamera.StatueClass))
+        {
+            released.Add(NativeDragonRescueCamera.StatueClass);
+            if(own.Contains(0x6E))released.Add(0x6E);
+            released.Add(RescueActorClass);
+        }
+        if(own.Contains(LevelCompletionCheck.EggThiefClass)){released.Add(LevelCompletionCheck.EggThiefClass);released.Add(LevelCompletionCheck.DragonEggClass);}
+        return released.Count>0?released:null;
     }
 
     private UniversalComposeResult ComposeOwn(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements,
@@ -133,15 +171,13 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
         var original=donors.Get(Target.Key).Data;
         bool ownDragons=placements.Any(p=>!p.Retired&&string.Equals(p.SourceLevelKey,Target.Key,StringComparison.OrdinalIgnoreCase)&&
             System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(original.Row(p.SourceRowIndex).AsSpan(0x36))==250);
-        // The kernel overlay carries its donor homeworld's dragon code; the level's own dragons (statue 0xFA, dragon 0x6E)
-        // keep their numbers, which the rescue loader looks for, and run this level's code instead. So does the rescue
-        // scene's actor (0xFB), which the game creates and initialises by number during the rescue.
-        IReadOnlySet<int>? released=null;
+        // The kernel overlay carries another level's code for the dragons (statue 0xFA, dragon 0x6E), the rescue scene's
+        // actor (0xFB, created and initialised by number during the rescue) and the egg thief and its egg (0x21, 0x22):
+        // the level's own ones keep their numbers and run this level's code instead (ReleasedClasses).
+        IReadOnlySet<int>? released=ReleasedClasses(Target.Key,placements,row=>System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(original.Row(row).AsSpan(0x36)));
         var dependencies=LiquidSplashes(donors).ToList();
         if(ownDragons)
         {
-            released=new HashSet<int>{0xFA,0x6E}.Where(c=>placements.Any(p=>!p.Retired&&string.Equals(p.SourceLevelKey,Target.Key,StringComparison.OrdinalIgnoreCase)&&
-                System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(original.Row(p.SourceRowIndex).AsSpan(0x36))==c)).Append(RescueActorClass).ToHashSet();
             dependencies.Add((RescueActorClass,Target.Key));
             var withStreams=new UniversalLevelData(prepared);
             // The kernel's own trailing subfiles belong to the donor slot it was issued from.
@@ -164,11 +200,28 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
             prepared=withStreams.Bytes;
         }
         var nativeOwner=new UniversalOverlay(_overlay,UniversalExeBindings.Read(executable,Target.LevelId));
-        var composed=UniversalMobyComposer.Compose(Target,prepared,_overlay,executable,donors.Get,donors.SharedClasses,
-            UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,
-            sharedModelPackage:donors.SharedModelPackage,playerAnimationSource:donors.PlayerAnimations,
-            persistentNativePrefixRows:Document.TargetBinding!.NativePrefixRows,nativeDestinationOwner:nativeOwner,nativeOriginalExecutable:donors.Disc.Exe,
-            dependencyClasses:dependencies,releasedNativeClasses:released);
+        // The level's own objects whose code reads other objects' class numbers (a Wizard Peak wizard's spell checks
+        // what it hits) can't be renumbered: those the rebuilt level's code also handles keep their numbers and run this
+        // level's code, like the dragons (the others are not renumbered for this level's code to begin with).
+        HashSet<int> keep=[..released??new HashSet<int>()];
+        var kernelSwitch=UniversalDispatchAnalysis.FindUpdateSwitch(nativeOwner);
+        int[] Clashing(IEnumerable<int> classes)=>[..classes.Where(c=>UniversalDispatchAnalysis.Handles(nativeOwner,kernelSwitch,c))];
+        UniversalComposeResult composed;
+        for(int attempt=0;;attempt++)
+        {
+            try
+            {
+                composed=UniversalMobyComposer.Compose(Target,prepared,_overlay,executable,donors.Get,donors.SharedClasses,
+                    UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,
+                    sharedModelPackage:donors.SharedModelPackage,playerAnimationSource:donors.PlayerAnimations,
+                    persistentNativePrefixRows:Document.TargetBinding!.NativePrefixRows,nativeDestinationOwner:nativeOwner,nativeOriginalExecutable:donors.Disc.Exe,
+                    dependencyClasses:dependencies,releasedNativeClasses:keep.Count>0?keep:null);
+                break;
+            }
+            catch(InvalidDataException e)when(attempt<8&&UniversalClassFieldRefusal.TryRead(e,out string key,out var classes)&&
+                string.Equals(key,Target.Key,StringComparison.OrdinalIgnoreCase)&&!keep.IsSupersetOf(Clashing(classes)))
+            { keep.UnionWith(Clashing(classes)); }
+        }
         RewardFallbacks.RequireInstalled(composed.LevelData);
         return composed;
     }

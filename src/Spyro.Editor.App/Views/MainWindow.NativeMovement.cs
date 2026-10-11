@@ -8,6 +8,7 @@ using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
+using Spyro.Editor.Core.Universal;
 using Spyro.Editor.Core.Workspace;
 
 namespace Spyro.Editor.App.Views;
@@ -79,8 +80,47 @@ public sealed partial class MainWindow
         _moveSelectedThiefPathWithOwner = true;
         _snapNativePathNodesToTerrain = DefaultSnapNativePathNodesToTerrain;
         RefreshAllDragonRunToViewportTargets();
-        _viewport.SetNativeMovementData(_currentNativeMobyPaths, _currentDragonRunToViewportTargets.Values);
+        RefreshPlacedObjectRoutes();
+        _savedNativeMovementEditSignature = BuildNativeMovementEditSignature();
         RefreshNativeMovementActionButton();
+    }
+
+    /// <summary>Routes of objects added to this level (an egg thief's run, a sheep's walk), from each object's source
+    /// template: where it came with, moved with the object, or as the user edited it (saved on the object).</summary>
+    private readonly Dictionary<(string, int), UniversalRowTemplate?> _placedRouteTemplates = [];
+    private void RefreshPlacedObjectRoutes()
+    {
+        _currentNativeMobyPaths = [.. _currentNativeMobyPaths.Where(path => !path.IsPlacedObjectRoute)];
+        if (_universalCatalog is { } catalog && _currentLevel != null)
+        {
+            foreach (Moby moby in _currentMobys.Where(m => m.IsAdded && !m.IsRemoved && m.CrossLevelSourceTrueIndex >= 0 &&
+                         !string.IsNullOrEmpty(m.CrossLevelSourceLevelKey) && _catalog.FindByKey(m.CrossLevelSourceLevelKey)?.SourceWadEntry > 0))
+            {
+                var key = (moby.CrossLevelSourceLevelKey, moby.CrossLevelSourceTrueIndex);
+                if (!_placedRouteTemplates.TryGetValue(key, out UniversalRowTemplate? template))
+                {
+                    try { template = catalog.Library.Get(key.Item1).Data.CaptureRow(key.Item1, key.Item2); }
+                    catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or KeyNotFoundException or InvalidOperationException) { template = null; }
+                    _placedRouteTemplates[key] = template;
+                }
+                if (template == null) continue;
+                List<int[]>? original = UniversalPropertyCoordinates.DefaultPath(template,
+                    (int)MathF.Round(moby.Position.X * 16), (int)MathF.Round(moby.Position.Y * 16), (int)MathF.Round(moby.Position.Z * 16));
+                if (original == null) continue;
+                IReadOnlyList<int[]> current = moby.UniversalPathNodes is { } saved && saved.Count == original.Count ? saved : original;
+                _currentNativeMobyPaths.Add(NativeMobyPath.ForPlacedObject(_currentLevel.Key, _currentLevel.DisplayName, moby.TrueIndex,
+                    (ushort)template.ClassId, original, current));
+            }
+        }
+        _viewport.SetNativeMovementData(_currentNativeMobyPaths, _currentDragonRunToViewportTargets.Values);
+    }
+
+    /// <summary>An added object's route is saved on the object (export reads it from there).</summary>
+    private void StorePlacedObjectRoute(NativeMobyPath path)
+    {
+        if (!path.IsPlacedObjectRoute) return;
+        Moby? owner = _currentMobys.FirstOrDefault(m => m.TrueIndex == path.OwnerTrueIndex && m.IsAdded && !m.IsRemoved);
+        if (owner != null) owner.UniversalPathNodes = path.HasEdits ? path.RawNodes() : null;
     }
 
     private string NativeMobyPathEditPath(string levelKey) =>
@@ -102,6 +142,7 @@ public sealed partial class MainWindow
         return string.Join(
             "|",
             _currentNativeMobyPaths
+                .Where(path => !path.IsPlacedObjectRoute)
                 .OrderBy(path => path.OwnerTrueIndex)
                 .SelectMany(path => path.Nodes.OrderBy(node => node.Index)
                     .Select(node => $"{path.OwnerTrueIndex}:{node.Index}:{node.RawX}:{node.RawY}:{node.RawZ}")));
@@ -143,7 +184,7 @@ public sealed partial class MainWindow
         !string.Equals(BuildDragonRunToEditSignature(), _savedDragonRunToEditSignature, StringComparison.Ordinal);
 
     private int NativeMovementEditedPathCount() =>
-        _currentNativeMobyPaths.Count(path => path.HasEdits);
+        _currentNativeMobyPaths.Count(path => path.HasEdits && !path.IsPlacedObjectRoute);
 
     private bool HasUndoableNativePathEdits(Moby owner) =>
         _currentNativeMobyPaths.Any(path =>
@@ -158,6 +199,7 @@ public sealed partial class MainWindow
             return false;
 
         path.ResetEdits();
+        StorePlacedObjectRoute(path);
         _snapNativePathNodesToTerrain = DefaultSnapNativePathNodesToTerrain;
         _viewport.RefreshNativeMovementData();
         return true;
@@ -165,22 +207,23 @@ public sealed partial class MainWindow
 
     private NativeMobyPath? SelectedNativeMobyPath()
     {
-        if (_selectedMoby == null || _selectedMoby.IsAdded || _selectedMoby.IsRemoved)
+        if (_selectedMoby == null || _selectedMoby.IsRemoved)
             return null;
-        return _currentNativeMobyPaths.SingleOrDefault(path => path.OwnerTrueIndex == _selectedMoby.TrueIndex);
+        NativeMobyPath? path = _currentNativeMobyPaths.SingleOrDefault(path => path.OwnerTrueIndex == _selectedMoby.TrueIndex);
+        return path != null && path.IsPlacedObjectRoute == _selectedMoby.IsAdded ? path : null;
     }
 
     private bool CanEditSelectedNativeMovement() =>
         SelectedNativeMobyPath() != null || CanEditSelectedDragonRunTo();
 
     private string SelectedNativeMovementButtonText() =>
-        SelectedNativeMobyPath() != null ? "Edit Run Path" : "Edit Spyro Run-To";
+        SelectedNativeMobyPath() is { } path ? path.IsPlacedObjectRoute ? "Edit Route…" : "Edit Run Path" : "Edit Spyro Run-To";
 
     private void RefreshNativeMovementActionButton()
     {
         if (_objectNativeMovementButton == null)
             return;
-        if (_releaseMode ||
+        if (_releaseMode && SelectedNativeMobyPath() is not { IsPlacedObjectRoute: true } ||
             IsId65BlankLabObjectInspectionOnly() ||
             _workspaceTransitionBusy ||
             _id65BlankLabBusy && _id65BlankLabManualOperation != null ||
@@ -198,7 +241,9 @@ public sealed partial class MainWindow
         _objectNativeMovementButton.Content = available ? SelectedNativeMovementButtonText() : "Edit Native Movement";
         ToolTip.SetTip(
             _objectNativeMovementButton,
-            SelectedNativeMobyPath() != null
+            SelectedNativeMobyPath() is { IsPlacedObjectRoute: true }
+                ? "Edit the route this object follows (an egg thief's run, a sheep's walk): drag its points in the 3D view or type them. Keep the points on the ground; the object goes from one to the next in order."
+                : SelectedNativeMobyPath() != null
                 ? "Edit this egg thief's ordered native PathData route. The dashed closing seam is a possible forward or reverse handler traversal, not necessarily the immediate next step. Keep terrain snap enabled. Edited routes remain runtime-gated in normal Create BIN until their exact profile is proven."
                 : "Edit Spyro's native dragon-rescue approach destination without changing the cameras or choreography.");
     }
@@ -237,7 +282,7 @@ public sealed partial class MainWindow
 
         Window dialog = new()
         {
-            Title = $"Edit Run Path - {owner.DisplayLabel}",
+            Title = path.IsPlacedObjectRoute ? $"Edit Route - {owner.DisplayLabel}" : $"Edit Run Path - {owner.DisplayLabel}",
             Width = 760,
             Height = 680,
             MinWidth = 640,
@@ -400,7 +445,9 @@ public sealed partial class MainWindow
         });
         panel.Children.Add(new TextBlock
         {
-            Text = "Safety: keep terrain snap enabled so every moved node stays on terrain. Edited egg-thief routes are runtime-gated; normal Create BIN will not export an unproven route profile. Inspect Build Safety and validate a focused test in DuckStation before promotion.",
+            Text = path.IsPlacedObjectRoute
+                ? "The object goes from point to point in this order, then turns back or loops. Keep the points on the ground (terrain snap) and away from edges: it does not check walls or drops. An egg thief has to run where Spyro can catch it."
+                : "Safety: keep terrain snap enabled so every moved node stays on terrain. Edited egg-thief routes are runtime-gated; normal Create BIN will not export an unproven route profile. Inspect Build Safety and validate a focused test in DuckStation before promotion.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(166, 106, 24))
         });
@@ -434,11 +481,14 @@ public sealed partial class MainWindow
             TryParseFloat(row.ZBox.Text, out float z);
             row.Node.SetPosition(new Vector3f(x, y, z));
         }
+        StorePlacedObjectRoute(path);
 
         InvalidateBuildSafetySummary();
         _viewport.RefreshNativeMovementData();
         RefreshActionAvailability();
-        _statusText.Text = path.HasEdits
+        _statusText.Text = path.IsPlacedObjectRoute
+            ? path.HasEdits ? $"Updated {owner.DisplayLabel}'s route ({path.Nodes.Count} points). Save the level to keep it." : $"{owner.DisplayLabel} follows the route it came with."
+            : path.HasEdits
             ? $"Updated {owner.DisplayLabel}'s native run path; {path.Nodes.Count(node => node.HasEdit)} node(s) differ from the source disc. Keep terrain snap enabled; normal Create BIN remains runtime-gated until this route profile is proven."
             : $"Reset {owner.DisplayLabel}'s native run path to the source disc.";
     }
@@ -455,6 +505,7 @@ public sealed partial class MainWindow
         if (_snapNativePathNodesToTerrain && TryFindTerrainZAt(x, y, z, out float terrainZ, preferTopSurface: true))
             z = terrainZ;
         e.Node.SetPosition(new Vector3f(x, y, z));
+        StorePlacedObjectRoute(e.Path);
         InvalidateBuildSafetySummary();
         _viewport.RefreshNativeMovementData();
         RefreshActionAvailability();
@@ -473,6 +524,7 @@ public sealed partial class MainWindow
                 checked((int)Math.Round(appliedDelta.X * 16f)),
                 checked((int)Math.Round(appliedDelta.Y * 16f)),
                 checked((int)Math.Round(appliedDelta.Z * 16f)));
+            StorePlacedObjectRoute(path);
         }
 
         TranslateOwnedDragonRunTo(owner, appliedDelta);

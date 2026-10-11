@@ -64,6 +64,9 @@ public sealed class Moby
     [JsonIgnore]
     public string UniversalPlacementId { get; set; } = Guid.NewGuid().ToString("N");
     public string UniversalLinkGroupId { get; set; } = "";
+    /// <summary>An added object's route (an egg thief's run, a sheep's walk): each node's raw x, y, z (editor units x 16),
+    /// in the order its path stores them. Null keeps the route it came with, moved with the object.</summary>
+    public List<int[]>? UniversalPathNodes { get; set; }
     public string CrossLevelFamily { get; set; } = "";
     public string CrossLevelSourceLevelKey { get; set; } = "";
     public string CrossLevelSourceLevelName { get; set; } = "";
@@ -260,6 +263,7 @@ public sealed class Moby
     public void UndoEdits()
     {
         DragonColor = null;
+        UniversalPathNodes = null;
         Position = OriginalPosition;
         if (OriginalType >= 0)
             SetType(OriginalType);

@@ -118,6 +118,48 @@ if (args.Length == 5 && args[0] == "--village")
     Console.WriteLine("CRASH_LEVEL_VILLAGE_OK");
     return;
 }
+if (args.Length == 1 && args[0] == "--import-free")
+{
+    // Source-free: the Crash scenery/zone decoders and the level importer on a synthetic level (CrashImportFree).
+    await CrashImportFree.RunAsync();
+    return;
+}
+if (args.Length >= 1 && args[0] == "--import-disc")
+{
+    // Source QA with the Crash disc (CRASH_DISC or the workspace's configured one): --import-disc [USA.bin] [workspace]
+    await CrashImportDisc.RunAsync(args.Length > 2 ? args[2] : null);
+    return;
+}
+if (args.Length >= 7 && args[0] == "--import")
+{
+    // A Crash Bandicoot: Warped level imported for a cleared retail slot, without the editor (research; writes nothing
+    // to a disc): --import crash.bin USA.bin workspace "Toad Village" icecavern out-dir [first last]
+    // Prints the report; writes the pictures, scene.json and map.png (top view: faces by height, walls red, pits blue).
+    var catalog = LevelCatalog.Load(args[3]);
+    var target = catalog.FindByKey(args[5]) ?? throw new ArgumentException("no level " + args[5]);
+    var lib = new UniversalSourceLibrary(args[2], catalog);
+    int rows = lib.Get(target.Key).Data.Scene().RowCount;
+    var binding = new SceneTargetBinding(target.Key, target.LevelId, target.SourceWadEntry, target.SourceWadEntry - 1, UniversalSourceLibrary.OriginalUsaSha256, rows);
+    var level = Spyro.Editor.Core.Crash.CrashLevels.Find(args[4]);
+    Directory.CreateDirectory(args[6]);
+    var options = new Spyro.Editor.Core.Crash.CrashLevelImportOptions
+    {
+        PictureFolder = Path.Combine(args[6], "pictures"),
+        FirstZone = args.Length > 7 ? int.Parse(args[7]) : null, LastZone = args.Length > 8 ? int.Parse(args[8]) : null,
+        CheckTextureMemory = Environment.GetEnvironmentVariable("CRASH_IMPORT_VRAM") != "0",
+        CompileCheck = Environment.GetEnvironmentVariable("CRASH_IMPORT_COMPILE") != "0",
+        Scale = double.TryParse(Environment.GetEnvironmentVariable("CRASH_IMPORT_SCALE"), out double sc) ? sc : Spyro.Editor.Core.Crash.CrashLevelImportOptions.CrateScale,
+    };
+    var clock = System.Diagnostics.Stopwatch.StartNew();
+    var result = await Spyro.Editor.Core.Crash.CrashLevelImport.ImportAsync(args[1], level, args[2], catalog, binding, options,
+        new Progress<string>(m => Console.WriteLine($"  [{clock.Elapsed.TotalSeconds,5:0.0}s] {m}")));
+    foreach (string line in result.Report.Lines()) Console.WriteLine(line);
+    await result.Scene.SaveAsync(Path.Combine(args[6], "scene.json"));
+    CrashImportMap.Write(result.Scene, Path.Combine(args[6], "map.png"));
+    File.WriteAllText(Path.Combine(args[6], "crash-route.json"), System.Text.Json.JsonSerializer.Serialize(result.Report.Route.Select(p => new[] { p.X, p.Y, p.Z })));
+    Console.WriteLine("CRASH_LEVEL_IMPORT_OK");
+    return;
+}
 if (args.Length == 3 && args[0] == "--surfaces")
 {
     // Special-surface descriptors of every retail level and how many collision triangles use each:
@@ -213,4 +255,80 @@ if (args.Length == 3 && args[0] == "--arena")
         Check(wet > 0 && wet + dry == n, "pond triangles flagged as water, the rest solid ground");
     }
     Console.WriteLine($"CRASH_LEVEL_FREE_OK checks={checks} faces={doc.Surfaces.Count} sectors={sectors} queue={load}");
+}
+
+
+/// <summary>A top view of an imported scene for checking by eye: faces shaded by height (floors lighter), invisible walls
+/// red, deadly pit floors blue, the start yellow.</summary>
+static class CrashImportMap
+{
+    static readonly Dictionary<string, ColorRgba> Averages = [];
+    static ColorRgba Average(string image)
+    {
+        if (Averages.TryGetValue(image, out var c)) return c;
+        if (!File.Exists(image)) return Averages[image] = new(128, 128, 128);
+        var px = PngRgbaImage.ReadRgba(image, out _, out _);
+        return Averages[image] = new((byte)px.Average(p => p.R), (byte)px.Average(p => p.G), (byte)px.Average(p => p.B));
+    }
+    public static void Write(SceneDocument doc, string path, int maxSide = 2000)
+    {
+        var all = doc.Surfaces.SelectMany(s => s.Vertices).Concat(doc.CollisionFaces?.SelectMany(c => c.Vertices) ?? []).ToList();
+        float x0 = all.Min(v => v.X), y0 = all.Min(v => v.Y), z0 = all.Min(v => v.Z), z1 = all.Max(v => v.Z);
+        float side = Math.Max(all.Max(v => v.X) - x0, all.Max(v => v.Y) - y0);
+        double k = maxSide / (double)side;
+        int w = (int)((all.Max(v => v.X) - x0) * k) + 2, h = (int)((all.Max(v => v.Y) - y0) * k) + 2;
+        var px = new Rgba32[w * h];
+        var depth = new float[w * h]; Array.Fill(depth, float.MinValue);
+        void Tri(Vector3f a, Vector3f b, Vector3f c, Func<float, Rgba32> colour, bool always)
+        {
+            double ax = (a.X - x0) * k, ay = (a.Y - y0) * k, bx = (b.X - x0) * k, by = (b.Y - y0) * k, cx = (c.X - x0) * k, cy = (c.Y - y0) * k;
+            double det = (bx - ax) * (cy - ay) - (cx - ax) * (by - ay);
+            if (Math.Abs(det) < 1e-9) { Line(ax, ay, bx, by, colour(Math.Max(a.Z, b.Z)), Math.Max(a.Z, b.Z), always); Line(bx, by, cx, cy, colour(Math.Max(b.Z, c.Z)), Math.Max(b.Z, c.Z), always); return; }
+            for (int y = (int)Math.Max(0, Math.Min(ay, Math.Min(by, cy))); y <= Math.Min(h - 1, Math.Max(ay, Math.Max(by, cy))); y++)
+                for (int x = (int)Math.Max(0, Math.Min(ax, Math.Min(bx, cx))); x <= Math.Min(w - 1, Math.Max(ax, Math.Max(bx, cx))); x++)
+                {
+                    double l1 = ((bx - x) * (cy - y) - (cx - x) * (by - y)) / det, l2 = ((cx - x) * (ay - y) - (ax - x) * (cy - y)) / det, l3 = 1 - l1 - l2;
+                    if (l1 < 0 || l2 < 0 || l3 < 0) continue;
+                    float z = (float)(l1 * a.Z + l2 * b.Z + l3 * c.Z);
+                    if (!always && z < depth[y * w + x]) continue;
+                    depth[y * w + x] = z; px[y * w + x] = colour(z);
+                }
+        }
+        void Line(double ax, double ay, double bx, double by, Rgba32 c, float z, bool always)
+        {
+            int n = (int)Math.Max(1, Math.Max(Math.Abs(bx - ax), Math.Abs(by - ay)));
+            for (int i = 0; i <= n; i++)
+            {
+                int x = (int)(ax + (bx - ax) * i / n), y = (int)(ay + (by - ay) * i / n);
+                if (x < 0 || y < 0 || x >= w || y >= h || !always && z < depth[y * w + x]) continue;
+                px[y * w + x] = c; if (always) depth[y * w + x] = float.MaxValue;
+            }
+        }
+        foreach (var s in doc.Surfaces)
+        {
+            var v = s.Vertices;
+            var u = new Vector3f(v[1].X - v[0].X, v[1].Y - v[0].Y, v[1].Z - v[0].Z); var t = new Vector3f(v[2].X - v[0].X, v[2].Y - v[0].Y, v[2].Z - v[0].Z);
+            double nx = u.Y * t.Z - u.Z * t.Y, ny = u.Z * t.X - u.X * t.Z, nz = u.X * t.Y - u.Y * t.X, up = Math.Abs(nz) / Math.Max(1e-9, Math.Sqrt(nx * nx + ny * ny + nz * nz));
+            // The picture's average colour times the face's near colours (as the game shows it).
+            var tint = s.Material?.Image is { } image ? Average(image) : new ColorRgba(128, 128, 128);
+            var near = s.NearColors ?? [s.Color];
+            var avg = new ColorRgba((byte)Math.Min(255, tint.R * near.Average(c => c.R) / 128), (byte)Math.Min(255, tint.G * near.Average(c => c.G) / 128), (byte)Math.Min(255, tint.B * near.Average(c => c.B) / 128));
+            Rgba32 Shade(float z) { double f = 0.45 + 0.55 * (z - z0) / Math.Max(1, z1 - z0); f *= 0.6 + 0.4 * up; return new((byte)Math.Min(255, avg.R * f * 1.6), (byte)Math.Min(255, avg.G * f * 1.6), (byte)Math.Min(255, avg.B * f * 1.6), 255); }
+            Tri(v[0], v[1], v[2], Shade, false);
+            if (v.Length == 4) Tri(v[0], v[2], v[3], Shade, false);
+        }
+        foreach (var c in doc.CollisionFaces ?? [])
+        {
+            var v = c.Vertices;
+            Rgba32 col = c.Kind != null ? new(40, 90, 255, 255) : new(255, 0, 0, 255);
+            if (c.Kind != null) { Tri(v[0], v[1], v[2], _ => col, true); if (v.Length == 4) Tri(v[0], v[2], v[3], _ => col, true); }
+            else Line((v[0].X - x0) * k, (v[0].Y - y0) * k, (v[1].X - x0) * k, (v[1].Y - y0) * k, col, float.MaxValue, true);
+        }
+        int sx = (int)((doc.Spawn.X - x0) * k), sy = (int)((doc.Spawn.Y - y0) * k);
+        for (int dy = -4; dy <= 4; dy++) for (int dx = -4; dx <= 4; dx++) if (sx + dx >= 0 && sy + dy >= 0 && sx + dx < w && sy + dy < h) px[(sy + dy) * w + sx + dx] = new(255, 255, 0, 255);
+        // Flip so +Y is up in the picture.
+        var flipped = new Rgba32[w * h];
+        for (int y = 0; y < h; y++) Array.Copy(px, (h - 1 - y) * w, flipped, y * w, w);
+        TerrainTexturePngWriter.WriteRgbaAsync(path, w, h, flipped).GetAwaiter().GetResult();
+    }
 }

@@ -18,6 +18,7 @@ public static class MobyMetadataEnricher
         labeled += ApplyGlobalSignatureLabels(workspace, mobys);
         labeled += ApplyLevelSignatureLabels(mobys);
         labeled += ApplyLevelModelFamilyLabels(mobys);
+        labeled += ApplyCertainClassNames(mobys);
         int behaviorLinks = ApplyBehaviorLinks(workspace, levelKey, mobys);
         int inferredLinks = InferRelationshipLinks(levelKey, mobys);
         foreach (Moby moby in mobys)
@@ -1325,6 +1326,21 @@ public static class MobyMetadataEnricher
             moby.SourceByte36 == 0x1E &&
             moby.Flag4A == 0x10 &&
             moby.Flag4B == 0xFF;
+    }
+
+    /// <summary>Objects whose class settles what they are, whatever an older label file says: an egg thief (class 0x21)
+    /// is one in every level (the shipped label files once called Dry Canyon's a chest and misspelt two others).</summary>
+    private static int ApplyCertainClassNames(IList<Moby> mobys)
+    {
+        int named = 0;
+        foreach (Moby moby in mobys)
+        {
+            if (moby.SourceByte36 != 0x21 || moby.SourceByte37 != 0 || moby.Label == "Egg thief") continue;
+            moby.Label = moby.OriginalLabel = "Egg thief";
+            moby.CandidateKind = "Enemy";
+            named++;
+        }
+        return named;
     }
 
     private static string ResolveMetadataPath(EditorWorkspace workspace, string fileName)

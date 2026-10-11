@@ -35,7 +35,12 @@ public static partial class UniversalSpecialBehaviors
     public const int CrashSoundSpin = 0, CrashSoundBounce = 1, CrashSoundSlide = 2, CrashSoundLand = 3, CrashSoundJump = 4;
     // Body property bytes: the controller's state. Legs property words: Spyro's position last frame.
     private const int PSpin = 0, PDoubleJump = 1, PSlam = 2, PGetUp = 3, PCooldown = 4, PSlide = 5, PCrouch = 6, PIntro = 7,
-        PIntroTicks = 8, PHighJump = 9, PDash = 10, PXReleased = 11;
+        PIntroTicks = 8, PHighJump = 9, PDash = 10, PXReleased = 11, PSpinAngle = 12;
+    /// <summary>Crash 3 turns Crash in code while he spins (its spin animation keeps him facing one way): his objects
+    /// turn this much per tick (256 a turn), about two turns over a spin.</summary>
+    public const int CrashSpinTurn = 36;
+    /// <summary>Each animation's own speed, as its package header stores it (CrashSpyroModel.Package).</summary>
+    private static readonly int[] AnimationSpeeds = [.. UniversalCrashPlayer.Animations.Select(a => (a.Interpolated ? 32 : 64) / a.Step)];
 
     /// <summary>Per-frame controller for the playable Crash's two objects (body and legs).</summary>
     internal static UniversalAsmPart CrashPlayerUpdate(IReadOnlyList<int> classes, string tag)
@@ -116,10 +121,10 @@ public static partial class UniversalSpecialBehaviors
             Beq(T0, Zero, play);
             Lbu(T1, S2, PIntro); Beq(T1, Zero, tag + "_done");
             Li(T1, DeathGameState); Bne(T0, T1, notDeath);
-            Call(tag + "_place"); Li(A0, UniversalCrashPlayer.Death); Jmp(tag + "_pose");
+            Sb(Zero, S2, PSpinAngle); Call(tag + "_place"); Li(A0, UniversalCrashPlayer.Death); Jmp(tag + "_pose");
             a.L(notDeath);
             Li(T1, RescueGameState); Bne(T0, T1, tag + "_done");
-            Call(tag + "_place"); Li(A0, UniversalCrashPlayer.Idle); Jmp(tag + "_pose");
+            Sb(Zero, S2, PSpinAngle); Call(tag + "_place"); Li(A0, UniversalCrashPlayer.Idle); Jmp(tag + "_pose");
             a.L(play);
         }
 
@@ -294,6 +299,17 @@ public static partial class UniversalSpecialBehaviors
             a.L(noTornado);
             a.La(T0, PressedButtons); Sw(S3, T0, 0); Sw(S4, T0, 8);
         }
+        {
+            string turning = L("turning"), set = L("setangle");
+            Move(T1, Zero);
+            Lbu(T0, S2, PSpin); Bne(T0, Zero, turning);
+            Lbu(T0, S2, PIntroTicks); Bne(T0, Zero, turning);
+            Li(T0, GlideMoveState); Bne(S5, T0, set);
+            a.L(turning);
+            Lbu(T1, S2, PSpinAngle); a.I(9, T1, T1, CrashSpinTurn);
+            a.L(set);
+            Sb(T1, S2, PSpinAngle);
+        }
         Call(tag + "_place");
         // Animation.
         {
@@ -322,11 +338,21 @@ public static partial class UniversalSpecialBehaviors
             Li(A0, UniversalCrashPlayer.Idle);
             a.L(pick);
             a.L(tag + "_pose");
+            // A new animation starts at once at its own speed (+0x3C/+0x3D animation, +0x3E/+0x3F key frames, +0x40
+            // progress, +0x41 speed): blending into it waited for the current key frame, up to 16 ticks of the slow
+            // idle, by which time a spin was over.
+            {
+                string known = L("speed");
+                Li(T2, AnimationSpeeds[0]);
+                for (int k = 1; k < AnimationSpeeds.Length; k++) { Li(T2, AnimationSpeeds[k]); Li(T1, k); Beq(A0, T1, known); }
+                Li(T2, AnimationSpeeds[0]);
+                a.L(known);
+            }
             foreach (int r in new[] { S0, S1 })
             {
                 string same = L("same");
                 Lbu(T0, r, 0x3D); Beq(T0, A0, same);
-                Sb(A0, r, 0x3D); Sb(Zero, r, 0x3F);
+                Sb(A0, r, 0x3C); Sb(A0, r, 0x3D); Sb(Zero, r, 0x3E); Li(T1, 1); Sb(T1, r, 0x3F); Sb(Zero, r, 0x40); Sb(T2, r, 0x41);
                 a.L(same);
             }
             // Flattened stays flattened: at the last frame (+0x42 bit 1) the speed goes to zero; the next animation
@@ -374,6 +400,7 @@ public static partial class UniversalSpecialBehaviors
             Sw(T1, S0, 0xC + axis); Sw(T1, S1, 0xC + axis);
         }
         a.La(T0, SpyroFacing); Lbu(T4, T0, 0);
+        Lbu(T5, S2, PSpinAngle); Addu(T4, T4, T5);
         foreach (int r in new[] { S0, S1 }) { Sb(Zero, r, 0x44); Sb(Zero, r, 0x45); Sb(T4, r, 0x46); }
         a.Part.Emit(UniversalMips.JrRa); a.Nop();
 

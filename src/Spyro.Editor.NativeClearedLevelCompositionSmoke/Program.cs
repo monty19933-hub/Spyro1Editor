@@ -63,11 +63,20 @@ RendererQueueCases.Run(Check);
 NativeBatchCases.Run(Check);
 await StarterFloorCases.Run(Check);
 await SourceAliasCases.Run(Check);
+ThiefEggCases.Run(Check);
 
 if(args.Length==0) { Console.WriteLine("NATIVE_CLEARED_LEVEL_COMPOSITION_CHECKS_OK checks="+checks);return; }
-if(args.Length is not 3 and not 4 || args.Length==4 && args[3]!="--replacement-only")
-    throw new ArgumentException("Source fixture: ORIGINAL_USA CATALOG_WORKSPACE ARTIFACTS_DIRECTORY [--replacement-only]");
+if(args.Length is not 3 and not 4 || args.Length==4 && args[3] is not "--replacement-only" and not "--thief-egg-only")
+    throw new ArgumentException("Source fixture: ORIGINAL_USA CATALOG_WORKSPACE ARTIFACTS_DIRECTORY [--replacement-only | --thief-egg-only]");
 Directory.CreateDirectory(args[2]);
+if(args.Length==4&&args[3]=="--thief-egg-only")
+{
+    // A rebuilt Town Square with its own egg thief (and Stone Hill's): composition only, nothing is kept.
+    var thiefCatalog=Spyro.Editor.Core.Levels.LevelCatalog.Load(args[1]);
+    await ThiefEggCases.RunSource(args[0],thiefCatalog,new Spyro.Editor.Core.Universal.UniversalSourceLibrary(args[0],thiefCatalog),args[2],Check);
+    Console.WriteLine("NATIVE_CLEARED_THIEF_EGG_SOURCE_OK checks="+checks);
+    return;
+}
 await SourceCases.Run(args[0],args[1],args[2],Check,args.Length==4);
 File.WriteAllText(Path.Combine(args[2],"checks.json"),JsonSerializer.Serialize(new{checks,SourceSha256=Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(args[0]))),Scope="source-bound static composition/written readback; no native runtime claim"},new JsonSerializerOptions{WriteIndented=true}));
 Console.WriteLine("NATIVE_CLEARED_LEVEL_COMPOSITION_CHECKS_OK checks="+checks);

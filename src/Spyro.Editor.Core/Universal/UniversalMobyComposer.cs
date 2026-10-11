@@ -15,6 +15,9 @@ public sealed record UniversalMobyPlacement(string SourceLevelKey, int SourceRow
     /// <summary>Words of the object's own properties (offsets in its packed properties, as captured) set to new values:
     /// a moved homeworld doorway's path nodes.</summary>
     public IReadOnlyDictionary<int, int>? PropertyWordOverrides { get; init; }
+    /// <summary>The object's route as edited (raw x, y, z per node of its first path, <see cref="UniversalPropertyCoordinates.Paths"/>);
+    /// null keeps the route it came with, moved with the object.</summary>
+    public IReadOnlyList<int[]>? PathNodes { get; init; }
     /// <summary>An explicit save identity (0-255). Below a rebuilt level's original prefix it must be one of
     /// <see cref="UniversalSaveIdentities.Reusable"/>.</summary>
     public int? SaveIdentity { get; init; }
@@ -412,6 +415,19 @@ public static class UniversalMobyComposer
                     throw new UniversalSourceCollisionException($"Class 0x{c:X3}, which the game spawns by number, is already taken in {destination.Key}.");
                 collision = false;
             }
+            // A released class number belongs to the destination's own objects (their own code, UniversalNativeRelease),
+            // whichever placement comes first: another level's class of that number (a copied thief's egg) is renumbered.
+            if (releasedNativeClasses?.Contains(c) == true)
+            {
+                if (!string.Equals(sk, destination.Key, StringComparison.OrdinalIgnoreCase)) collision = true;
+                else
+                {
+                    if (classes.Any(k => k.Value.DestinationClass == c))
+                        throw new UniversalSourceCollisionException($"Class 0x{c:X3}, which {destination.DisplayName}'s own objects keep, is already taken.");
+                    collision = false;
+                    other = default;
+                }
+            }
             if (collision)
             {
                 if (shared.Contains(c) && !source(sk).Data.Registrations().Any(r => r.ClassId == c) && sharedModelPackage == null)
@@ -735,6 +751,7 @@ public static class UniversalMobyComposer
                 && !UniversalGreenDruidWorldRows.Applies(t) && !UniversalHighCavesWorldRows.Applies(t) && !UniversalDarkPassageLanternGroups.Applies(t)
                 && !UniversalDarkPassageShapeshifterOwnership.Applies(t))
                 t = UniversalPropertyCoordinates.Rebase(t, r);
+            if (p.PathNodes != null) t = UniversalPropertyCoordinates.SetPath(t, p.PathNodes);
             if (p.SpecialId == null)
             {
                 // Count the actual authored bytes while class still identifies

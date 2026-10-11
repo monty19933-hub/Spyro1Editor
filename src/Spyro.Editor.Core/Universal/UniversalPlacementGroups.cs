@@ -15,7 +15,9 @@ public static class UniversalPlacementGroups
         var source = getSource(rootPlacement.SourceLevelKey);
         var root = UniversalIndexedRows.Capture(source.Data, source.Overlay,
             source.Data.CaptureRow(rootPlacement.SourceLevelKey, rootPlacement.SourceRowIndex));
-        if (root.SourceRowIndices.Count == 0 && root.SourcePrerequisiteRows.Count == 0) return [rootPlacement];
+        // A dragon comes whole: its statue, pedestal and dragon name each other by row (UniversalDragonRows).
+        var dragon = UniversalDragonRows.Family(source.Data, rootPlacement.SourceLevelKey, rootPlacement.SourceRowIndex);
+        if (root.SourceRowIndices.Count == 0 && root.SourcePrerequisiteRows.Count == 0 && dragon.Count == 0) return [rootPlacement];
         List<UniversalRowTemplate> members = []; HashSet<int> seen = []; Queue<int> pending = new([root.SourceRowIndex]);
         while (pending.Count > 0)
         {
@@ -23,6 +25,7 @@ public static class UniversalPlacementGroups
             var template = UniversalIndexedRows.Capture(source.Data, source.Overlay, source.Data.CaptureRow(rootPlacement.SourceLevelKey, row));
             members.Add(template);
             foreach (var link in template.SourceRowIndices) pending.Enqueue(link.SourceRow);
+            foreach (int member in dragon) pending.Enqueue(member);
             foreach (var required in template.SourcePrerequisiteRows) pending.Enqueue(required.SourceRow);
         }
         string group = string.IsNullOrEmpty(rootPlacement.LinkGroupId) ? Guid.NewGuid().ToString("N") : rootPlacement.LinkGroupId;

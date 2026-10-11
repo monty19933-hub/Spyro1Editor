@@ -40,7 +40,37 @@ public sealed partial class MainWindow
         _startBlankBusy=true;
         try
         {
-            if(!await SaveCurrentEditsAsync())return;
+            if(await StartBlankConfirmedAsync(level) is {})
+                _statusText.Text=$"{level.DisplayName} is blank: a small starting floor and no objects. Recovery > Restore Before Clear brings back your saved work.";
+        }
+        finally{_startBlankBusy=false;RefreshCurrentLevelDetails();}
+    }
+    /// <summary>The object identities a level emptied with Start Blank keeps (its retail level and its original object
+    /// rows); a built level keeps its own.</summary>
+    private async Task<SceneTargetBinding?> StartBlankBindingAsync(LevelDefinition level)
+    {
+        if(_freshSceneDocument!=null)return _freshSceneDocument.TargetBinding;
+        string image=ResolveUniversalSourceDisc();
+        int nativeRows=await Task.Run(()=>
+        {
+            UniversalSourceLibrary.RequireOriginal(image);
+            var source=new UniversalSourceLibrary(image,_retailCatalog);
+            try{_=NativeClearedRetailBinding.Prepare(source.Disc.Exe,source.Disc.Exe,level);}
+            catch(InvalidDataException e){throw new InvalidDataException("Start Blank is not available for this level yet. Your saved level is unchanged. Try Artisans or another supported level listed in the user guide.",e);}
+            return source.Get(level.Key).Data.Scene().RowCount;
+        });
+        var binding=new SceneTargetBinding(level.Key,level.LevelId,level.SourceWadEntry,level.SourceWadEntry-1,UniversalSourceLibrary.OriginalUsaSha256,nativeRows);
+        _=binding.Resolve(_retailCatalog);
+        return binding;
+    }
+    /// <summary>Start Blank once the user has agreed (the caller holds <c>_startBlankBusy</c>): saves the level, keeps a
+    /// recovery copy and opens the blank scene. Returns it, or null when it stopped (the status line says why).</summary>
+    private async Task<SceneDocument?> StartBlankConfirmedAsync(LevelDefinition level)
+    {
+        string root=_workspace.RootPath;
+        try
+        {
+            if(!await SaveCurrentEditsAsync())return null;
             var geometry=_currentGeometry;string terrainSignature=BuildTerrainEditSignature(geometry),mobySignature=BuildMobyEditSignature(_currentMobys);
             string? sceneSignature=_freshSceneDocument==null?null:CaptureFreshScene().Fingerprint();
             void RequireCurrent()
@@ -50,23 +80,13 @@ public sealed partial class MainWindow
                     (_freshSceneDocument==null?null:CaptureFreshScene().Fingerprint())!=sceneSignature)
                     throw new InvalidDataException("The current level changed while its recovery snapshot was prepared. Start Blank was canceled.");
             }
-            SceneTargetBinding? binding=_freshSceneDocument?.TargetBinding;
+            bool built=_freshSceneDocument!=null;
+            SceneTargetBinding? binding=await StartBlankBindingAsync(level);
             UniversalPlacementLedger ledger;
-            if(_freshSceneDocument!=null)ledger=CaptureFreshScene().Ledger;
+            if(built)ledger=CaptureFreshScene().Ledger;
             else
             {
-                string image=ResolveUniversalSourceDisc();
-                int nativeRows=await Task.Run(()=>
-                {
-                    UniversalSourceLibrary.RequireOriginal(image);
-                    var source=new UniversalSourceLibrary(image,_retailCatalog);
-                    try{_=NativeClearedRetailBinding.Prepare(source.Disc.Exe,source.Disc.Exe,level);}
-                    catch(InvalidDataException e){throw new InvalidDataException("Start Blank is not available for this level yet. Your saved level is unchanged. Try Artisans or another supported level listed in the user guide.",e);}
-                    return source.Get(level.Key).Data.Scene().RowCount;
-                });
-                RequireCurrent();UniversalNativeLayoutStore.Validate(root,level.Key,nativeRows);
-                binding=new(level.Key,level.LevelId,level.SourceWadEntry,level.SourceWadEntry-1,UniversalSourceLibrary.OriginalUsaSha256,nativeRows);
-                _=binding.Resolve(_retailCatalog);
+                RequireCurrent();UniversalNativeLayoutStore.Validate(root,level.Key,binding!.NativePrefixRows);
                 ledger=UniversalPlacementLedger.Reconcile(Path.Combine(root,level.Key+"-native-edits.json"),_currentMobys);
             }
             string key=binding?.LevelKey??"authored65";
@@ -74,11 +94,10 @@ public sealed partial class MainWindow
             var blank=SceneDocument.New(level.DisplayName) with{TargetBinding=binding,Ledger=ledger};
             await StartBlankRecoveryStore.ClearAsync(root,key,blank,RequireCurrent,StartBlankSnapshotFaultForTesting);
             ApplyFreshScene(blank);
-            _statusText.Text=$"{level.DisplayName} is blank: a small starting floor and no objects. Recovery > Restore Before Clear brings back your saved work.";
+            return blank;
         }
         catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException or System.Text.Json.JsonException)
-        { _statusText.Text="Start Blank stopped: "+e.Message; }
-        finally{_startBlankBusy=false;RefreshCurrentLevelDetails();}
+        { _statusText.Text="Start Blank stopped: "+e.Message;return null; }
     }
     private async Task RestoreBeforeClearAsync()
     {

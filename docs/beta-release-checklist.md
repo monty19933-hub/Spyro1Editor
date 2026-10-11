@@ -22,7 +22,32 @@ Their next update must therefore be the exact bridge below:
 This exact V3 release is what makes the update notification appear in V2. A
 release named V2.1 would be ignored by those already-installed clients.
 
-## Incremental releases after the current V5 bridge
+## Beta V6: the bridge from the betas to the stable channel
+
+Stable releases (`Spyro Editor 1.3`, tag `v1.3`) are full releases with schema-3
+manifests. Installed Beta V2-V5 clients read only prereleases named
+`Spyro Editor Beta VN` with schema-1 or schema-2 manifests, so they are never
+offered a stable release. Beta V6 is the stable 1.3 build repackaged for them:
+
+- `BetaReleaseNumber`: `6`, `PublicReleaseVersion`: `6`,
+  `ReleaseManifestSchemaVersion`: `1`, `PreviousPublicReleaseVersion`: `5`
+  (the stable assembly carries these three metadata fields as well)
+- Git tag `beta-v6`, prerelease titled `Spyro Editor Beta V6`
+- Assets `SpyroEditor-Beta-V6-osx-arm64.zip` and `SpyroEditor-Beta-V6-win-x64.zip`
+  from `tools/Build-SpyroEditorBetaBridge.sh`, run after the stable build with
+  the same `DIST_DIR`: root folders renamed, README first line
+  `Spyro Editor Beta V6`, `CHANGELOG.md` from
+  `docs/beta-v6-bridge-changelog.md`, schema-1 manifest with
+  `internalVersion` `1.3.0`, the stable app unchanged (Mac signature intact)
+- Release body: `docs/beta-v6-bridge-changelog.md`, unchanged
+
+The old clients compare the app's assembly metadata with the manifest (beta 6,
+public 6, schema 1, internal 1.3.0) and find it matches. Once opened, the app is
+the stable release and checks only the stable channel. A later stable release
+needs no new bridge unless Beta V6 would fall out of the newest 30 releases;
+the next bridge would then be `Beta V7` with `BetaReleaseNumber` `7`.
+
+## Incremental releases after the V5 bridge
 
 Future incremental releases use a dotted canonical public version and schema 2.
 For example, V5.1 uses:
@@ -41,10 +66,10 @@ Never repoint an old tag or silently replace an already-published asset.
 
 The frozen Beta V2 updater reads only the newest 30 GitHub prereleases and
 ignores dotted identities. Keep at least one whole-number schema-1 bridge among
-those newest 30 releases. V5 is the current bridge. Before it would fall out of
-that window, publish the next deliberate whole-number bridge (for example V6
-with `BetaReleaseNumber: 6`, `PublicReleaseVersion: 6`, and schema 1). Dotted
-releases between bridges continue to use schema 2.
+those newest 30 releases. V6 (the stable 1.3 bridge above) is the current
+bridge. Before it would fall out of that window, publish the next deliberate
+whole-number bridge (V7 with `BetaReleaseNumber: 7`, `PublicReleaseVersion: 7`,
+and schema 1). Dotted releases between bridges continue to use schema 2.
 
 Every release assembly carries all three metadata fields:
 

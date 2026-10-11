@@ -33,7 +33,8 @@ public static class UniversalCrashPlayer
         new("CrR0V", true),            // run
         new("CJU1V", true, Step: 2),   // jumping, arms up
         new("CJF1V", false),           // the somersault (double jump)
-        new("CWD0V", true),            // spin attack (and the tornado spin)
+        new("CWD0V", false),           // spin attack (and the tornado spin): every frame at full speed, as in Crash 3;
+                                       // the controller turns him (the animation keeps him facing one way)
         new("CrS1V", true),            // into a slide
         new("CrD1V", true),            // crouch
         new("CfS1V", true),            // belly flop: diving flat

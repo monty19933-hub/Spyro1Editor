@@ -7,6 +7,7 @@ using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Universal;
+if(args is ["--plant-snow"]){PlantSnowCases.Run();return;}
 int checks=0;void Check(bool b,string m){if(!b)throw new Exception(m);checks++;}
 void Refused(Action action,string label){try{action();}catch(InvalidDataException){Check(true,label);return;}throw new Exception(label);}
 if(args.Length==0)
@@ -29,6 +30,26 @@ if(args.Length==0)
     BinaryPrimitives.WriteUInt16LittleEndian(package.AsSpan(0x42),255);Put(0x60,int.MaxValue);Refused(()=>NativeDragonStatueColors.RequirePalette(package),"palette extent overflow");
     Put(0x38,-1);Refused(()=>NativeDragonStatueColors.RequirePalette(package),"absent palettes refused");
     Refused(()=>NativeDragonStatueColors.Plan(new byte[0x800]),"truncated executable refused");
+    // "To finish 100%": a level's own dragons (rows 5, 9) and thief (row 20), kept, removed, added back, added twice.
+    var own=new LevelOwnRows([5,9],[20],[]);
+    var whole=LevelCompletionCheck.Check(own,"townsquare",false,[],[]);
+    Check(whole.Complete&&LevelCompletionCheck.Describe(whole,"Town Square")==null&&LevelCompletionCheck.Summary(whole)=="To finish 100%: dragons 2 of 2, egg thief 1 of 1 ✓","untouched level complete");
+    var blank=LevelCompletionCheck.Check(own,"townsquare",true,[],[("townsquare",5),("stonehill",9),("townsquare",21)]);
+    Check(blank is {DragonsPresent:1,ThievesPresent:0,MissingDragons:1,MissingThieves:1}&&
+        LevelCompletionCheck.Describe(blank,"Town Square","Cloudspire Isles")=="Cloudspire Isles (in Town Square's place) needs 1 of Town Square's dragons and Town Square's egg thief (Add Object: dragons and egg thief from Town Square).",
+        "rebuilt level: only its own rows count");
+    var twice=LevelCompletionCheck.Check(own,"townsquare",false,[9],[("TOWNSQUARE",20),("townsquare",9)]);
+    Check(twice is {Complete:true,DuplicateThieves:1,DuplicateDragons:0}&&
+        LevelCompletionCheck.Describe(twice,"Town Square")=="Town Square has the same egg thief twice; the game counts only one, so remove the extra copy."&&
+        !LevelCompletionCheck.Summary(twice)!.EndsWith("✓"),"a thief kept and added again is flagged");
+    Check(LevelCompletionCheck.Summary(LevelCompletionCheck.Check(LevelOwnRows.None,"sunnyflight",false,[],[]))==null,"no line for a level without dragons, thieves or exit");
+    // Return Home: the level's own vortex (row 30) kept, or any level's vortex (class 9) added to the rebuilt level.
+    var exits=new LevelOwnRows([5],[],[30]);int SourceClass(string k,int r)=>k=="darkhollow"&&r==118?9:r==30?9:0x55;
+    var kept=LevelCompletionCheck.Check(exits,"stonehill",false,[],[],SourceClass);
+    Check(kept is {Complete:true,ExitNeeded:true,ExitPresent:true}&&LevelCompletionCheck.Summary(kept)=="To finish 100%: dragons 1 of 1  ·  Return Home vortex: yes ✓","own vortex kept");
+    var none=LevelCompletionCheck.Check(exits,"stonehill",true,[],[("stonehill",5),("darkhollow",117)],SourceClass);
+    Check(none is {Complete:false,ExitPresent:false}&&LevelCompletionCheck.Describe(none,"Stone Hill","Frost")=="Frost (in Stone Hill's place) needs a Return Home vortex (Add Object: Return Home from any level).","rebuilt level without a vortex");
+    Check(LevelCompletionCheck.Check(exits,"stonehill",true,[],[("stonehill",5),("darkhollow",118)],SourceClass) is {Complete:true,ExitPresent:true},"another level's vortex counts");
     Console.WriteLine($"DRAGON_STATUE_COLOUR_SOURCE_FREE_OK checks={checks}");return;
 }
 if(args.Length!=3)throw new ArgumentException("USA.bin catalogRoot newOutput");

@@ -6,7 +6,9 @@ using Spyro.Editor.Core.Primitives;
 
 namespace Spyro.Editor.Core.YearOfTheDragon;
 
-/// <summary>Lost Fleet's terrain sectors as Year of the Dragon stores them (WAD entry 137, sub-file 1): a block of 116
+/// <summary>Year of the Dragon's distant meshes. <see cref="FarMeshes(YearOfTheDragonDisc, YearOfTheDragonLevel)"/> reads any
+/// level (<see cref="YearOfTheDragonLevelData"/>); the Lost Fleet reader below is pinned to that level's sector block.
+/// Lost Fleet's terrain sectors as Year of the Dragon stores them (WAD entry 137, sub-file 1): a block of 116
 /// sectors (kind word, count, one offset per sector from the block start), each a 0x1C-byte header (centre, radius and
 /// flags, origin; the far and near tables' vertex, colour and face counts at +0x10 and +0x14) followed by its far
 /// (distant, untextured) vertices, colours and faces and then its near ones. A sector's number is its place in the
@@ -17,6 +19,12 @@ public static class YearOfTheDragonTerrain
     public const string LostFleetSectorBlockSha256 = "18ac4dea98668554c99ac0101db95cd2f2c4ebfa907b853c200d78d49ee2c85b";
     /// <summary>Header flag: the near vertices' heights are in steps of 2 world units, not 16.</summary>
     private const int FineHeights = 0x1000;
+
+    /// <summary>Every sector's own far mesh of any Year of the Dragon level's main area, in editor units, in the scene's
+    /// corner convention (numbered by the sector's place in the level's list, as <see cref="AuthoredSurface.Sector"/>
+    /// of an imported face; checked against the release through the level's WAD entry).</summary>
+    public static IReadOnlyList<AuthoredFarMesh> FarMeshes(YearOfTheDragonDisc disc, YearOfTheDragonLevel level) =>
+        [.. YearOfTheDragonLevelData.Read(disc, level).Sectors.Select(s => s.Far).OfType<AuthoredFarMesh>()];
 
     /// <summary>Every Lost Fleet sector's far mesh in editor units (16 world units), in the scene's corner convention.</summary>
     public static IReadOnlyList<AuthoredFarMesh> LostFleetFarMeshes(YearOfTheDragonDisc disc)

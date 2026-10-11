@@ -18,8 +18,12 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
     private readonly NativeFreeFlightCompositionPlan? _flight;
     private readonly IReadOnlyList<NativeId65FreshExecutableWindow> _bootstrapWindows;
     private NativeFreshMainCompilation(SceneDocument document, string baseline, byte[] body, byte[] overlay, byte[] exe, NativeFreeFlightCompositionPlan? flight,
-        IReadOnlyList<NativeId65FreshExecutableWindow> bootstrapWindows, NativeFreshRewardFallbackResources rewardFallbacks)
-    { Document=document;_baseline=baseline;_body=body;_overlay=overlay;_exe=exe;_flight=flight;_bootstrapWindows=bootstrapWindows; RewardFallbacks=rewardFallbacks; }
+        IReadOnlyList<NativeId65FreshExecutableWindow> bootstrapWindows, NativeFreshRewardFallbackResources rewardFallbacks, NativeAuthoredMeshRenderer.DrawPlan? drawPlan)
+    { Document=document;_baseline=baseline;_body=body;_overlay=overlay;_exe=exe;_flight=flight;_bootstrapWindows=bootstrapWindows; RewardFallbacks=rewardFallbacks; DrawPlan=drawPlan; }
+    /// <summary>How the terrain loads the frame's draw buffer (null: no terrain survey); its near distance goes to the
+    /// draw-buffer guard (<see cref="NativeDrawBufferGuard"/>).</summary>
+    internal NativeAuthoredMeshRenderer.DrawPlan? DrawPlan { get; }
+    public int NearDistance => DrawPlan?.NearDistance ?? NativeDrawBufferGuard.MaxNearDistance;
     public SceneDocument Document { get; }
     public LevelDefinition Target => SceneDocument.NativeTarget(Document.Name);
     public byte[] CopyLevelData()=>_body.ToArray();
@@ -35,6 +39,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         // Faces whose far colours were never chosen are drawn far away in their texture's own colour.
         var drawn=NativeAuthoredFarColors.Derive(document,m=>NativeAuthoredFarColors.Average(originalUSA,m));
         byte[] mesh=NativeAuthoredMesh.CompileWithSky(drawn,materials,NativeAuthoredMesh.CaptureSky(originalUSA,document),portals?.Triggers());
+        var drawPlan=NativeAuthoredMeshRenderer.LastDrawPlan;
         // Source-issued bootstrap captures the complete player, companion, native audio and zero-actor scene.
         // Its generated surface is discarded in full; final geometry comes only from NativeAuthoredMesh.
         // The throwaway bootstrap floor is fixed; it must not constrain the authored spawn.
@@ -114,7 +119,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
             if(!read.EntryBytes(80).AsSpan().SequenceEqual(body.Bytes))throw new InvalidDataException("Fresh native scene readback differs from authored output.");
             ExportArtifactTransaction.RequireSourceSeparation(originalUSA,null,scratchBaselinePath);
             File.Move(stage,scratchBaselinePath,true);
-            return new(document,scratchBaselinePath,body.Bytes,issued.DiscPlan.CopyOverlay(),issued.DiscPlan.CopyExecutable(),flight,issued.DiscPlan.Executable.SequentialStages,rewardFallbacks);
+            return new(document,scratchBaselinePath,body.Bytes,issued.DiscPlan.CopyOverlay(),issued.DiscPlan.CopyExecutable(),flight,issued.DiscPlan.Executable.SequentialStages,rewardFallbacks,drawPlan);
         }
         finally {if(File.Exists(stage))File.Delete(stage);}
     }
@@ -137,7 +142,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
                 ? (Target, new UniversalLevelData(prepared), new UniversalOverlay(_overlay, UniversalExeBindings.Read(actualExecutable,65)))
                 : donors.Get(key), donors.SharedClasses,
             UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,sharedModelPackage: donors.SharedModelPackage, playerAnimationSource: donors.PlayerAnimations,nativeOriginalExecutable:donors.Disc.Exe,
-            dependencyClasses:UniversalLiquidSplashes.Dependencies(UniversalLiquidSplashes.Liquids(Document.Surfaces.Select(s=>s.Kind)),null,k=>donors.Get(k).Data));
+            dependencyClasses:UniversalLiquidSplashes.Dependencies(UniversalLiquidSplashes.Liquids(Document.GroundKinds()),null,k=>donors.Get(k).Data));
         RewardFallbacks.RequireInstalled(composed.LevelData);
         return composed;
     }
@@ -157,10 +162,12 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         UniversalNativeLayoutStore.Validate(identityWorkspace,Target.Key,0);
         var baseline=UniversalDiscImage.Read(stagedRetailImage??_baseline);
         byte[] stagedExe=stagedRetailImage==null?_exe.ToArray():MergeAuthoredExecutable(donors.Disc.Exe,baseline.Exe);
+        // The built level bounds its terrain's share of the frame's draw buffer (a staged image already has the guard).
+        NativeDrawBufferGuard.PatchExe(stagedExe,new Dictionary<int,int>{[65]=NearDistance});
         NativeFreshTreasureTarget.RequireZeroBaseline(donors.Disc.Exe,stagedExe);
         if(startLevelId is {} chosen) NativeClearedRetailBinding.ApplyNewGameStart(donors.Disc.Exe,stagedExe,chosen);
         else NativeFreshNewGameEntry.Apply(donors.Disc.Exe,stagedExe,startInAuthoredLevel);
-        bool liquids=UniversalLiquidSplashes.Liquids(Document.Surfaces.Select(s=>s.Kind)).Count>0;
+        bool liquids=UniversalLiquidSplashes.Liquids(Document.GroundKinds()).Count>0;
         var compose=placements.Count == 0 && !liquids ? null : ComposeWithExecutable(donors,placements,stagedExe,UniversalMobyExport.SpecialProvider(japanese,donors,crash,yotd));
         Dictionary<int,IReadOnlyList<NativePortalReturnClass>> returnClasses=retailReturnClasses?.ToDictionary(p=>p.Key,p=>p.Value)??[];
         returnClasses[65]=compose==null?[]:NativePortalReturnClass.Capture(compose.Classes);

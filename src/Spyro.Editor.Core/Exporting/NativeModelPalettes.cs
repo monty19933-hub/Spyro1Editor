@@ -33,11 +33,55 @@ internal static class NativeModelPalettes
     }
 
     private static double Luminance(int r, int g, int b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    private static double Luminance(IReadOnlyList<double> c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
     private static double Greenness(ReadOnlySpan<byte> c) => Math.Clamp((c[1] - Math.Max(c[0], c[2]) - 8) / 24.0, 0, 1);
+
+    /// <summary>Texture palette rows the object renderer can draw with: the palette and the seven distance-shade rows
+    /// below it. Up close (0x80021730) a textured face uses row 0; further out (0x800215B0..0x800215E0) it uses row
+    /// (1024 - v) / 128 while its colour words slide from the near table to the far one, and past that the untextured
+    /// low-detail faces take over with the far table.</summary>
+    internal const int ClutRows = 8;
+    internal const int VramRowBytes = 1024;
+    private const int ClutBytes = 32;
+
+    /// <summary>Which near colour words of a static model light textured faces only (true), are plain colours of
+    /// untextured faces (false), or are not used by its high-detail faces (null). Null when the face table is not
+    /// the plain grammar this reads.</summary>
+    private static bool?[]? NearWordRoles(ReadOnlySpan<byte> package, int animation, int count)
+    {
+        long table = (long)I32(package, 0x34) + I32(package, animation + 0x14);
+        if (table < 0 || table + 4 > package.Length) return null;
+        int length = I32(package, (int)table);
+        long cursor = table + 4, end = cursor + length;
+        if (length < 0 || end > package.Length) return null;
+        bool?[] roles = new bool?[count];
+        while (cursor < end)
+        {
+            if (cursor + 8 > end) return null;
+            uint word = BinaryPrimitives.ReadUInt32LittleEndian(package[(int)cursor..]), colour = BinaryPrimitives.ReadUInt32LittleEndian(package[(int)(cursor + 4)..]);
+            bool quad = (word & 0x80000000) != 0, textured = (word & 2) != 0;
+            if (quad && (word & 4) != 0) return null;   // alternate command: its colour fields are not read here
+            int size = quad ? textured ? 24 : 12 : textured ? 20 : 8;
+            if (cursor + size > end) return null;
+            List<int> indices = [(int)(colour >> 19 & 511), (int)(colour >> 10 & 511), (int)(colour >> 1 & 511)];
+            if (quad) indices.Add((int)(BinaryPrimitives.ReadUInt32LittleEndian(package[(int)(cursor + 8)..]) >> 11 & 511));
+            foreach (int index in indices)
+            {
+                if (index >= count) return null;
+                roles[index] = (roles[index] ?? true) && textured;
+            }
+            cursor += size;
+        }
+        return roles;
+    }
 
     /// <summary>Trees and plants: a static model (one single-frame animation) whose colours are at least a quarter
     /// green. Their foliage turns snow white where the near palette is bright (lit) and frosty blue in shade, keeping
-    /// each colour's own shading; trunks and other colours stay. Null when the model is not a plant.</summary>
+    /// each colour's own shading; trunks and other colours stay. A near word that only lights textured faces is not a
+    /// colour but a multiplier of the texture (0x80 = as stored), and the snow is in the texture palette
+    /// (<see cref="SnowClutRows"/>): such a word keeps its brightness and only takes the snow's cool tint, so close up
+    /// the foliage stays shaded like the far colours instead of every texel washing out white. Null when the model
+    /// is not a plant.</summary>
     internal static IReadOnlyList<Change>? Snow(byte[] package)
     {
         var palettes = Palettes(package);
@@ -49,21 +93,59 @@ internal static class NativeModelPalettes
         for (int i = 0; i < count; i++)
             weight[i] = Math.Max(Greenness(package.AsSpan(near + i * 4, 3)), Greenness(package.AsSpan(far + i * 4, 3)));
         if (weight.Count(w => w > 0) * 4 < count) return null;
+        bool?[]? roles = NearWordRoles(package, I32(package, 0x38), count);
         for (int i = 0; i < count; i++)
         {
             if (weight[i] == 0) continue;
             var lit = package.AsSpan(near + i * 4, 3);
-            double t = Math.Clamp((Luminance(lit[0], lit[1], lit[2]) - 90) / 90, 0, 1);
+            double light = Luminance(lit[0], lit[1], lit[2]);
+            double t = Math.Clamp((light - 90) / 90, 0, 1);
             double[] snow = [168 + (242 - 168) * t, 196 + (246 - 196) * t, 218 + (252 - 218) * t];
+            // Without a readable face table, a near word with no green of its own is taken to light a texture.
+            bool lightsTexture = roles == null ? Greenness(lit) == 0 : roles[i] == true;
             foreach (int table in new[] { near, far })
             {
                 int at = table + i * 4;
-                double shade = Math.Clamp(0.6 + 0.5 * Luminance(package[at], package[at + 1], package[at + 2]) / 180, 0.6, 1.0);
+                double[] target = table == near && lightsTexture
+                    ? snow.Select(c => c / Luminance(snow) * light).ToArray()
+                    : snow.Select(c => c * Math.Clamp(0.6 + 0.5 * Luminance(package[at], package[at + 1], package[at + 2]) / 180, 0.6, 1.0)).ToArray();
                 for (int c = 0; c < 3; c++)
-                    after[at + c] = (byte)Math.Clamp(Math.Round(package[at + c] + (snow[c] * shade - package[at + c]) * weight[i]), 0, 255);
+                    after[at + c] = (byte)Math.Clamp(Math.Round(package[at + c] + (target[c] - package[at + c]) * weight[i]), 0, 255);
             }
         }
         return Changes(package, after, palettes);
+    }
+
+    /// <summary>Snow on an object's 16-colour texture palette at <paramref name="offset"/> of the level's texture pages
+    /// and on its seven distance-shade rows below (see <see cref="ClutRows"/>): row 0 takes <see cref="SnowClut"/>;
+    /// shade row k is the palette faded toward a grey and keeps (17 - 2k)/16 of row 0 (measured on the retail levels),
+    /// so it moves by that share of row 0's change and keeps its own fade. Without the shade rows a snowy tree
+    /// turned green again at middle distance. One change per row that changes; rows past the pages are absent.</summary>
+    internal static IReadOnlyList<Change> SnowClutRows(ReadOnlySpan<byte> textures, int offset)
+    {
+        if (offset < 0 || offset + ClutBytes > textures.Length) throw new ArgumentOutOfRangeException(nameof(offset));
+        byte[] row0 = textures.Slice(offset, ClutBytes).ToArray(), snow0 = SnowClut(row0);
+        List<Change> changes = [new(offset, row0, snow0)];
+        static int[] Five(ushort c) => [c & 31, c >> 5 & 31, c >> 10 & 31];
+        for (int k = 1; k < ClutRows && offset + k * VramRowBytes + ClutBytes <= textures.Length; k++)
+        {
+            int at = offset + k * VramRowBytes;
+            byte[] before = textures.Slice(at, ClutBytes).ToArray(), after = before.ToArray();
+            double keep = (17 - 2 * k) / 16.0;
+            for (int i = 0; i < ClutBytes / 2; i++)
+            {
+                ushort original = BinaryPrimitives.ReadUInt16LittleEndian(row0.AsSpan(i * 2)), snowed = BinaryPrimitives.ReadUInt16LittleEndian(snow0.AsSpan(i * 2));
+                ushort shade = BinaryPrimitives.ReadUInt16LittleEndian(before.AsSpan(i * 2));
+                if (original == snowed || (shade & 0x7FFF) == 0) continue;
+                int[] from = Five(original), to = Five(snowed), own = Five(shade);
+                int[] five = Enumerable.Range(0, 3).Select(c => Math.Clamp((int)Math.Round(own[c] + (to[c] - from[c]) * keep), 0, 31)).ToArray();
+                ushort packed = (ushort)((shade & 0x8000) | five[0] | five[1] << 5 | five[2] << 10);
+                if ((packed & 0x7FFF) == 0) packed |= 1;   // never become the transparent colour
+                BinaryPrimitives.WriteUInt16LittleEndian(after.AsSpan(i * 2), packed);
+            }
+            changes.Add(new(at, before, after));
+        }
+        return changes.Where(c => !c.Before.AsSpan().SequenceEqual(c.After)).ToArray();
     }
 
     /// <summary>A 16-colour texture palette (15-bit colours) with snow on its green entries: white for the brightest,

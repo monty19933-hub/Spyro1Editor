@@ -1,4 +1,4 @@
-# Spyro Editor 1.2
+# Spyro Editor 1.3
 
 Spyro Editor changes the levels of the original PlayStation game *Spyro the Dragon*
 (USA) and builds a new, playable copy of the game from your changes. It never
@@ -286,6 +286,51 @@ The game gives close-up detail to the textured tiles near the camera, and only s
 many at once: Create BIN checks camera positions all over the level and names the
 place if textured tiles are too crowded there. Use larger tiles there (a few hundred
 units across, like the game's own) or untextured faces.
+
+## Levels from other games
+
+Open the level whose place the new level takes (a level or homeworld, not a flight
+level), then choose one of these from **File ▾**:
+
+- **New Level from Spyro: Year of the Dragon…** rebuilds one of Year of the Dragon's
+  levels from your own Year of the Dragon (USA) disc: its ground, walls, textures,
+  water and lava, its distant scenery, and a start where its level begins. Lava and
+  acid can be deadly as in that game; deep water costs a life, because Spyro can't
+  swim here. Its sky's shapes are not converted: the level gets a plain sky colour,
+  or borrow a Spyro sky in Game Settings.
+- **New Level from Crash Bandicoot: Warped…** does the same for Crash 3's levels on
+  foot (Toad Village, the Warp Room, the boss arenas; Gee Wiz and Double Header in
+  halves) from your Crash disc: Crash's path, its pits (deadly, as for Crash),
+  invisible walls along the path, and the scenery around it.
+
+Building takes about a minute. The open level is emptied the way Start Blank empties
+it, with a recovery copy, and keeps playing its own song. Characters, enemies and
+boxes of the other game are not brought over.
+
+**File ▾ → Fill In What the Level Needs…** (done for you at the end of the two
+commands above) puts into a level you built:
+
+- the level's own dragons, spread out on open floor;
+- its egg thieves, each with a run around open ground;
+- a Return Home vortex at the far end;
+- enemies and animals of the level's own kinds, spread along the way;
+- gems worth the level's treasure, where the other game had its gems.
+
+Everything goes on floor Spyro can walk or glide to from the start, and everything is
+an ordinary object you can drag, turn or remove. Each object takes one of the level's
+256 save rows (a dragon three); if the gems don't all fit, fewer gems carry the total.
+
+Under each level's treasure, **To finish 100%** counts its own dragons and egg
+thieves and says whether it has its Return Home vortex. It turns amber and names what
+to add when something is missing; Create BIN lists the same before you play.
+
+An object you add that walks a route (an egg thief, a patrolling enemy) can have its
+route changed with **Edit Route…** in its object panel.
+
+Create BIN keeps every level you build within what the game can draw in a frame: it
+checks the views from every spot Spyro can reach and, where a view would draw too
+much, draws distant scenery more simply and brings textures a little closer. A level
+that is still too heavy is refused with the place named.
 
 ## What this package does not contain
 

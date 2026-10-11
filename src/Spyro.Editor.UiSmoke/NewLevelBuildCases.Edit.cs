@@ -9,6 +9,7 @@ using Spyro.Editor.Core.Universal;
 ///   {"move": {"label", "x", "y"}, "x", "y", "z", "yaw"?}    that object moved (and turned: yaw byte);
 ///   {"turn": {"label", "x", "y"}, "face": [x, y]}           that object turned to face a point;
 ///   {"color": {"label", "x", "y"}, "rgb": [r, g, b]}         a dragon statue's colour;
+///   {"route": {"label", "x", "y"}, "nodes": [[x, y, z], ...]} an added object's route (Edit Route…), points on the terrain;
 ///   {"source", "row" | "special" | "class", "x", "y", "z", "yaw"?, "snap"?}   an object added through the Add Object
 ///                                     browser (special: a special id such as crash-tnt; snap: dropped onto the terrain).
 /// FREE_SAVE_ROWS=1 first gives back the save rows of deleted objects (File > Free Deleted Objects' Save Rows).</summary>
@@ -62,6 +63,28 @@ internal static partial class NewLevelBuildCases
                 var rgb = o.GetProperty("rgb");
                 m.DragonColor = new Spyro.Editor.Core.Primitives.ColorRgba((byte)rgb[0].GetInt32(), (byte)rgb[1].GetInt32(), (byte)rgb[2].GetInt32());
                 Console.WriteLine($"  coloured {m.DisplayLabel} ({m.Position.X:0},{m.Position.Y:0}) {m.DragonColor}");
+                continue;
+            }
+            if (o.TryGetProperty("route", out var rt))
+            {
+                // An added object's route, as Edit Route… sets it: each point moved (and dropped onto the terrain).
+                var m = Find(rt);
+                SetField(window, "_selectedMoby", m);
+                Invoke(window, "RefreshPlacedObjectRoutes");
+                var route = (Spyro.Editor.Core.Scene.NativeMobyPath?)Invoke(window, "SelectedNativeMobyPath")
+                    ?? throw new InvalidOperationException($"{m.DisplayLabel} has no route");
+                var nodes = o.GetProperty("nodes").EnumerateArray().Select(n => (X: n[0].GetSingle(), Y: n[1].GetSingle(), Z: n[2].GetSingle())).ToList();
+                if (nodes.Count != route.Nodes.Count) throw new InvalidOperationException($"{m.DisplayLabel}'s route has {route.Nodes.Count} points, the list {nodes.Count}");
+                for (int i = 0; i < nodes.Count; i++)
+                {
+                    var (nx, ny, nz) = nodes[i];
+                    object?[] args = [nx, ny, nz, 0f, -1, true];
+                    if ((bool)typeof(MainWindow).GetMethod("TryFindTerrainZAt", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(window, args)!)
+                        nz = (float)args[3]!;
+                    route.Nodes[i].SetPosition(new Spyro.Editor.Core.Primitives.Vector3f(nx, ny, nz));
+                }
+                Invoke(window, "StorePlacedObjectRoute", route);
+                Console.WriteLine($"  route of {m.DisplayLabel}: {route.Nodes.Count} points, saved {m.UniversalPathNodes?.Count}");
                 continue;
             }
             if (o.TryGetProperty("turn", out var t))
@@ -124,5 +147,28 @@ internal static partial class NewLevelBuildCases
         if (window.FreshSceneForTesting is { } scene)
             Console.WriteLine($"ledger {scene.Ledger.Entries.Count} + prefix {scene.TargetBinding?.NativePrefixRows} = {scene.Ledger.Entries.Count + (scene.TargetBinding?.NativePrefixRows ?? 0)} of 256");
         Console.WriteLine("NEW_LEVEL_EDIT_OBJECTS_OK");
+    }
+}
+
+internal static partial class NewLevelBuildCases
+{
+    /// <summary>The Create BIN dialog's "To finish the game 100%" lines for the project as saved.</summary>
+    private static void CompletionCheck(MainWindow window)
+    {
+        var catalog = Get<Spyro.Editor.Core.Levels.LevelCatalog>(window, "_retailCatalog");
+        var saved = Spyro.Editor.Core.Editing.SceneDocumentStore.ReadAll(Workspace(window).RootPath, catalog);
+        var targets = Invoke(window, "FindEditedLevelExportTargets");
+        var lines = (List<string>)Invoke(window, "CompletionGapLines", saved, targets)!;
+        Console.WriteLine($"completion gaps: {lines.Count}");
+        foreach (string line in lines) Console.WriteLine("  " + line);
+        // COMPLETION_LEVELS (comma list): open each level and read the line under its treasure, as the user sees it.
+        foreach (string level in (Environment.GetEnvironmentVariable("COMPLETION_LEVELS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            Load(window, level);
+            var line = Get<Avalonia.Controls.TextBlock>(window, "_completionText");
+            Wait(() => line.IsVisible, $"{level}: the 100% line", 180);
+            Console.WriteLine($"  {level}: {line.Text!.Replace("\n", " | ")}");
+        }
+        Console.WriteLine("NEW_LEVEL_COMPLETION_CHECK_OK");
     }
 }

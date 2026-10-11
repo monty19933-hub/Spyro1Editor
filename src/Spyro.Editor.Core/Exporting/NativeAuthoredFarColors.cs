@@ -14,9 +14,12 @@ public static class NativeAuthoredFarColors
     public static SceneDocument Derive(SceneDocument document, Func<AuthoredMaterial, ColorRgba?> average)
     {
         Dictionary<AuthoredMaterial, ColorRgba?> cache = [];
+        // Sectors with their own distant mesh drawn always keep their faces' far colours (AuthoredFarMesh.Always).
+        var own = document.FarMeshes?.Where(m => m.Always).Select(m => m.Sector).ToHashSet() ?? [];
         var surfaces = document.Surfaces.Select(s =>
         {
             if (s.Material is not { } m) return s;
+            if (s.Sector is int sector && own.Contains(sector)) return s;
             var near = s.NearColors ?? Enumerable.Repeat(s.Color, s.Vertices.Length).ToArray();
             if (s.FarColors != null && !s.FarColors.SequenceEqual(near)) return s;
             if (!cache.TryGetValue(m, out var avg)) cache[m] = avg = average(m);

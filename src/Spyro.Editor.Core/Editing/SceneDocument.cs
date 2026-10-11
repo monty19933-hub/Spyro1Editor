@@ -35,12 +35,30 @@ public sealed record AuthoredSurface(string Id, Vector3f[] Vertices, ColorRgba C
     /// reversed to match, so the texture keeps its orientation.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
     public bool FrontReversed { get; init; }
+    /// <summary>Drawn only: Spyro passes through it (scenery out of his reach, such as an imported level's backdrop beyond
+    /// its invisible walls). Saves the level's collision triangles and data. Textured faces only (an untextured face's
+    /// drawing comes from its collision pieces, so it always keeps them).</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool NoCollision { get; init; }
 }
 
 /// <summary>A sector's own distant (low-detail) mesh, drawn in place of the compiler's simplified copy when the sector's
 /// faces need one (more than 64 corners or colours): untextured faces over <paramref name="Vertices"/> in
 /// <paramref name="Colors"/>, as the level it was imported from draws that sector far away.</summary>
-public sealed record AuthoredFarMesh(int Sector, Vector3f[] Vertices, ColorRgba[] Colors, IReadOnlyList<AuthoredFarFace> Faces);
+public sealed record AuthoredFarMesh(int Sector, Vector3f[] Vertices, ColorRgba[] Colors, IReadOnlyList<AuthoredFarFace> Faces)
+{
+    /// <summary>Drawn far away even when the sector's near tables could serve as its distant mesh, and the sector's faces
+    /// keep the far colours they were given (an import whose faces' far colours equal their near colours: the face pass
+    /// modulates a textured face drawn whole near the camera with its first near-tier colour table, which the compiler
+    /// fills from <see cref="AuthoredSurface.FarColors"/>; USA 0x80026DB8..0x80026FB4). Without it a sector small enough
+    /// draws its near faces untextured in their far colours, and far colours equal to the near ones are replaced by the
+    /// texture's average times them.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Always { get; init; }
+    /// <summary>Every distant face is drawn from both sides (LP face flag 0x80), as the sector's two-sided near faces are.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool TwoSided { get; init; }
+}
 /// <summary>A distant face: 3 or 4 corners (indices into the mesh's vertices) in perimeter order, anticlockwise seen
 /// from the side it shows, and each corner's colour (indices into the mesh's colours).</summary>
 public sealed record AuthoredFarFace(int[] Corners, int[] Colors);
@@ -69,6 +87,14 @@ public sealed record AuthoredSurfaceKind(int Type, int Param1, int Param2)
 }
 public sealed record AuthoredObject(string Identity, Moby Value);
 
+/// <summary>A face Spyro collides with that is not drawn: an invisible wall or floor (3 or 4 corners, editor units), with
+/// an optional ground kind (a deadly floor at the bottom of a pit). Solid like a drawn face's collision: a floor from above,
+/// a wall from the side its corners turn anticlockwise from (NativeAuthoredMesh.CollisionWinding). Compiled into the level's
+/// collision only (split like a textured face's collision, at most 255 units per piece and axis; keep a wall's pieces
+/// within that so they stay exactly upright).</summary>
+public sealed record AuthoredCollisionFace(Vector3f[] Vertices,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] AuthoredSurfaceKind? Kind = null);
+
 /// <summary>A doorway of a rebuilt homeworld: the original homeworld's portal to <see cref="DestinationLevelId"/>
 /// (its walk-in path, name lettering, return point and the destination's sky seen through it), moved so the bottom
 /// middle of its opening stands at <see cref="Position"/> and Spyro walks in towards <see cref="Heading"/>
@@ -93,6 +119,15 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
     /// needs one gets the compiler's simplified copy.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<AuthoredFarMesh>? FarMeshes { get; init; }
+    /// <summary>Where the level's own game kept its gems (a level imported from another game), for Fill In What the Level
+    /// Needs (<see cref="LevelFill"/>); null: gems are spread along the walkable floor.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<Vector3f>? GemSpots { get; init; }
+    /// <summary>Faces Spyro collides with that are not drawn (invisible walls, deadly pit floors); null: none.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<AuthoredCollisionFace>? CollisionFaces { get; init; }
+    /// <summary>The ground kinds the level's drawn and collision-only faces use (null: solid ground).</summary>
+    public IEnumerable<AuthoredSurfaceKind?> GroundKinds() => Surfaces.Select(s => s.Kind).Concat(CollisionFaces?.Select(c => c.Kind) ?? []);
     public LevelDefinition ResolveTarget(LevelCatalog catalog) => TargetBinding == null
         ? NativeTarget(Name) : TargetBinding.Resolve(catalog) with { DisplayName = Name, SourceRecordCount = 0 };
     public static string PathForTarget(string workspace, string key) => SceneDocumentStore.PathForTarget(workspace, key);
@@ -166,7 +201,7 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
             surfaces.Add(new(identity,
                 p.Points.Select((v,i) => new Vector3f(v.X,v.Y,p.ZValues[i])).ToArray(), p.TextureVisualEdit?.AverageNearColor ?? p.FaceColor, material,
                 Enumerable.Range(0,p.Points.Count).Select(i => { int slot=Enumerable.Range(0,p.CornerPointIndexes.Count).FirstOrDefault(k=>p.CornerPointIndexes[k]==i); return p.TextureVisualEdit?.Corners.ElementAtOrDefault(slot)?.NearColor ?? p.NearColors.ElementAtOrDefault(slot); }).ToArray(),
-                Enumerable.Range(0,p.Points.Count).Select(i => { int slot=Enumerable.Range(0,p.CornerPointIndexes.Count).FirstOrDefault(k=>p.CornerPointIndexes[k]==i); return p.TextureVisualEdit?.Corners.ElementAtOrDefault(slot)?.FarColor ?? p.FarColors.ElementAtOrDefault(slot); }).ToArray()) { Kind = kind, Sector = old?.Sector, TwoSided = old?.TwoSided ?? false, FrontReversed = old?.FrontReversed ?? false });
+                Enumerable.Range(0,p.Points.Count).Select(i => { int slot=Enumerable.Range(0,p.CornerPointIndexes.Count).FirstOrDefault(k=>p.CornerPointIndexes[k]==i); return p.TextureVisualEdit?.Corners.ElementAtOrDefault(slot)?.FarColor ?? p.FarColors.ElementAtOrDefault(slot); }).ToArray()) { Kind = kind, Sector = old?.Sector, TwoSided = old?.TwoSided ?? false, FrontReversed = old?.FrontReversed ?? false, NoCollision = old?.NoCollision ?? false });
         }
         var ledger = ReconcileLedger(mobys);
         var captured = this with { Surfaces = surfaces, Objects = mobys.Select(m => new AuthoredObject(m.UniversalPlacementId,m)).ToArray(), Ledger = ledger };
@@ -254,6 +289,13 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
                         throw new InvalidDataException("A distant face has invalid corners or colours.");
             }
         }
+        if (CollisionFaces is { } collisionFaces)
+            foreach (var c in collisionFaces)
+            {
+                if (c.Vertices is not { Length: 3 or 4 } || c.Kind is { IsSupported: false })
+                    throw new InvalidDataException("A collision-only face has an invalid vertex count or ground kind.");
+                foreach (var v in c.Vertices) RequireCoordinate(v);
+            }
         if (Portals is { } portals)
         {
             if (TargetBinding is not { LevelId: var home } || home % 10 != 0 ||

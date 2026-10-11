@@ -1,4 +1,24 @@
-# Spyro Editor 1.2 — supported scope and limitations
+# Spyro Editor 1.3 — supported scope and limitations
+
+- Version 1.3 builds levels from other games (File ▾ → New Level from Spyro:
+  Year of the Dragon… and New Level from Crash Bandicoot: Warped…) and fills a
+  built level with what it needs (Fill In What the Level Needs…). Both need
+  your own disc of that game; nothing from it ships with the editor. Only a
+  level's main area is rebuilt: its ground, walls, textures, water and lava,
+  and its distant scenery. Year of the Dragon's sky shapes, its characters and
+  sub-areas, and Crash's see-through decorations (bunting, grass tufts) and
+  crates are not brought over; a new level has a plain sky colour unless it
+  borrows a Spyro sky. Long Crash levels (Gee Wiz, Double Header) come in
+  halves. Played in the emulator as Sunny Villa (Dry Canyon's place), Seashell
+  Shore (Cliff Town's) and Toad Village (Wizard Peak's) only.
+- A level holds at most 256 save rows, so a built level may have fewer gems
+  than its source game had; Fill In then makes fewer gems carry the whole
+  treasure (teal and rainbow values included).
+- Create BIN keeps a built level within the game's drawing budget by drawing
+  busy distant scenery more simply and, when needed, starting textures a little
+  closer. A level still too heavy is refused with the place named. The in-game
+  guard that drops the farthest scenery instead of crashing is only in levels
+  the editor built.
 
 - Version 1.2 makes terrain editing refuse, at the moment of the change and in
   plain words, what Create BIN would refuse later (scenery without collision,
@@ -28,9 +48,9 @@
 - A built level's terrain can carry your own PNG pictures, but only through the
   level's scene file; the editor window has no picture chooser for built levels
   yet, and its 3D view shows the underlying texture's colours.
-- Dragons cannot be added to a level you build or clear with Start Blank. A
-  dragon's rescue (cutscene, speech, camera) belongs to the level that owns it,
-  and a built level has none of its own.
+- A level you build or clear with Start Blank can have the dragons of the level
+  whose place it takes (Fill In puts them in), but not other levels' dragons: a
+  dragon's rescue (cutscene, speech, camera) belongs to the level that owns it.
 - Version 1.1 reorganizes the interface (first-run welcome, carded Objects and
   Terrain tabs, plain wording, one Export Check), adds **Fly Anywhere**, a red
   bar that explains and undoes terrain the game cannot stand on, **Show Game

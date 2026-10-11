@@ -259,7 +259,7 @@ public static class UniversalBehaviorBundleBuilder
                     allocatedClassSites.AddRange(UniversalClassRemapping.PatchInitAllocatedClassReads(init, s.Source, map, c));
                     parentClassSites.AddRange(UniversalClassRemapping.PatchInitParentClassReads(init, s.Source, map));
                     if(s.SourceKey=="hauntedtowers")parentClassSites.AddRange(UniversalHauntedWizardClassOwnership.PatchProjectileParent(init,s.Source,map,c));
-                    UniversalClassRemapping.RequireNoUnownedClassMemory(init, true);
+                    Named(() => UniversalClassRemapping.RequireNoUnownedClassMemory(init, true), s.SourceKey, [c], s.Classes);
                 }
                 UniversalClassRemapping.PatchConstantSpawns(init, s.Source, map);
                 playerDamageWrites.AddRange(UniversalPlayerDamageWrites.AnalyzeOverlay(s.Source,
@@ -278,7 +278,7 @@ public static class UniversalBehaviorBundleBuilder
                     throw new InvalidDataException("Imported whirlwind behavior requires its native looping sound dependency.");
                 soundReadSites = UniversalWhirlwindSoundDependency.Patch(upd, s.Source, nativeExecutable ?? [], soundBinding);
             }
-            if (Remaps(s.SourceKey)) UniversalClassRemapping.RequireNoUnownedClassMemory(upd, false, s.Source);
+            if (Remaps(s.SourceKey)) Named(() => UniversalClassRemapping.RequireNoUnownedClassMemory(upd, false, s.Source), s.SourceKey, s.Classes, s.Classes);
             var nativeDamage = UniversalNativePlayerDamageCalls.AnalyzeSource(s.SourceKey, s.Source, upd, nativeExecutable);
             if(magicPair!=null&&s.SourceKey=="magiccrafters")parts.Add(UniversalMagicPairCollisionShadow.Apply(upd,s.Source,nativeExecutable??[],magicPair));
             if(magicChain!=null&&s.SourceKey=="magiccrafters")parts.Add(magicChain.Apply(upd,s.Source,nativeExecutable??[]));
@@ -505,5 +505,37 @@ public static class UniversalBehaviorBundleBuilder
                 BinaryPrimitives.WriteUInt32LittleEndian(code.AsSpan(offset), n); offset += 4;
             }
         return (code, labels);
+    }
+
+    /// <summary>A refusal that says which level's objects it is about (the class-field message alone names only an address);
+    /// <paramref name="bundle"/>: every class copied from that level together (renumbering any of them is what the check
+    /// refuses, so keeping them all is what avoids it).</summary>
+    private static void Named(Action check, string sourceKey, IEnumerable<int> classes, IEnumerable<int> bundle)
+    {
+        try { check(); }
+        catch (InvalidDataException e) when (e.Message.StartsWith("Source class remapping", StringComparison.Ordinal))
+        {
+            throw UniversalClassFieldRefusal.Create(sourceKey, [.. bundle], $"An object from {sourceKey} (class {string.Join(", ", classes.Select(c => $"0x{c:X3}"))}) can't be copied here: " +
+                $"its code reads the kind of other objects in a way the editor can't follow yet. Remove it or use another kind. ({e.Message})", e);
+        }
+    }
+}
+
+/// <summary>Copied code that reads other objects' class numbers where the copy would renumber its classes
+/// (<see cref="UniversalClassRemapping.RequireNoUnownedClassMemory"/>): the refusal carries which level's objects and
+/// their classes, so a rebuilt level can keep its own ones' numbers instead.</summary>
+public static class UniversalClassFieldRefusal
+{
+    private const string KeyName = "UniversalClassField.SourceKey", ClassesName = "UniversalClassField.Classes";
+    public static InvalidDataException Create(string sourceKey, IReadOnlyList<int> classes, string message, Exception inner)
+    {
+        var e = new InvalidDataException(message, inner);
+        e.Data[KeyName] = sourceKey; e.Data[ClassesName] = classes.ToArray();
+        return e;
+    }
+    public static bool TryRead(Exception e, out string sourceKey, out IReadOnlyList<int> classes)
+    {
+        sourceKey = e.Data[KeyName] as string ?? ""; classes = e.Data[ClassesName] as int[] ?? [];
+        return sourceKey.Length > 0 && classes.Count > 0;
     }
 }
