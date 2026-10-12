@@ -39,7 +39,9 @@ internal static class UniversalMobyModelPreview
                         return new(null, variant.SourceLevelKey == UniversalCrashBoxes.SourceKey ? "Choose your Crash disc to preview this model."
                             : variant.SourceLevelKey == UniversalCrashEnemies.YotdSourceKey ? "Choose your Year of the Dragon disc to preview this creature."
                             : "Choose your Japanese disc to preview this model.");
-                    package = asset.Package; vram = asset.SourceVram;
+                    // Teal and rainbow gems export native shine faces; the preview draws their lit facets as flat colours.
+                    package = UniversalHighValueGems.IsClass(asset.ClassId) ? UniversalHighValueGems.PreviewPackage(asset.ClassId, asset.Package) : asset.Package;
+                    vram = asset.SourceVram;
                 }
                 else if (variant.HasLocalModel)
                 {

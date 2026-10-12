@@ -43,30 +43,57 @@ public static partial class UniversalHighValueGems
             throw new InvalidDataException("High-value gems require the certified original USA purple shared-model package.");
         var donor = library.Get("jacques").Data;
         byte[] row = donor.Row(40);
-        if (BinaryPrimitives.ReadUInt16LittleEndian(row.AsSpan(0x36)) != 0x57 || row[0x4F] != 5 || row[0x50] != 0x18)
+        if (BinaryPrimitives.ReadUInt16LittleEndian(row.AsSpan(0x36)) != 0x57 || row[0x4F] != 5 || row[0x50] != 0x18 || (row[0x4E] & 0xE0) != 0)
             throw new InvalidDataException("High-value gems require their original Jacques purple loose-gem row.");
         // The shared simple gem is untextured. SourceData is retained for the normal
         // local-model relocation grammar; no extracted game assets are committed.
+        byte[] model = ShinyModel(purple);
         UniversalSpecialAsset Asset(string id, string name, int cls)
         {
             byte[] template = row.ToArray();
             BinaryPrimitives.WriteUInt16LittleEndian(template.AsSpan(0x36), (ushort)cls);
-            template[0x4F] = 0; // Simple model has no animation/value frame.
+            // +0x4F selects the gem's colour pair in the renderer's shine table (with +0x4E's clear top bits):
+            // teal owns entry 0; the rainbow gem starts red and its update walks the six hues.
+            template[0x4F] = cls == RainbowClass ? (byte)RainbowFirstEntry : (byte)TealEntry;
             template[0x53] = 0xFF; // This placed gem is never an enemy reward selector.
             return new(id, name, cls, UniversalSpecialBehavior.HighValueGem,
-                Recolour(purple, cls), donor.Vram().ToArray(), donor, template) { SourceKey = SourceKey };
+                model.ToArray(), donor.Vram().ToArray(), donor, template) { SourceKey = SourceKey };
         }
         return [Asset(TealId, "Teal gem (50)", TealClass), Asset(RainbowId, "Rainbow gem (100)", RainbowClass)];
     }
 
-    /// <summary>Doubles signed-byte vertex coordinates and brightens every RGB entry
-    /// of the bounded untextured simple model. Unreferenced trailing RGB entries
-    /// are removed to close the indexed-RGB owner; face/read-ahead bytes move together.
-    /// Native profile faces
-    /// become admitted indexed-RGB faces, so the authored colours reach the renderer.</summary>
-    public static byte[] Recolour(byte[] package, int classId)
+    // Native shine. Every face of the five retail gems carries flags 3 and its own signed-byte normal instead of
+    // RGB indices. The simple-model renderer (0x80023720) lights such a face from that normal and draws it flat,
+    // colour = base + highlight x intensity, plus white above intensity 0x5C0 (the glint); front faces near the
+    // camera are semi-transparent over dimmer opaque back faces. The pair is read from the executable's table
+    // 0x8006E44C at byte offset (moby+0x4C)>>21, i.e. 8 x moby+0x4F: entries 1-5 are red, green, blue, gold and
+    // purple. Entry 0 is zero and no placed USA object uses it, so the update writes the teal pair there.
+    public const uint ShineTable = 0x8006E44C, CosineTable = 0x8006CC78, SineTable = 0x8006CBF8, FrameStep = 0x800756CC;
+    public const uint TealShineBase = 0x00485000, TealShineHighlight = 0x00E8FF00; // 0x00BBGGRR: teal 00/50/48 to 00/FF/E8
+    public const int TealEntry = 0, RainbowFirstEntry = 1, PhaseByte = 8, PhaseSeedShift = 4;
+    /// <summary>Rainbow hue order as table entries, one per nibble: red, gold, green, teal, blue, purple.</summary>
+    public const uint RainbowHueOrder = 0x00530241;
+    public const int RainbowHues = 6;
+    internal const string ShineTableSha256 = "3b2e3e3dd0f0b17cc6a0869cc4bc4005a93da4a8cb902136e340a1d42efa8492", SineCosineSha256 = "795a93bee7b4d49bef89d4df8c8628a4b4b3a91d694053dbc2b26b4293d4fa55";
+    internal const string ShineRendererSha256 = "c9cef2546764b5b14a58c4d9bc33a938512d378758258b97a469ef900f80cfa8";
+
+    /// <summary>The colour pair (base, highlight) the renderer reads for a shine-table entry 0-5.</summary>
+    public static (uint Base, uint Highlight) ShinePair(int entry) => entry switch
     {
-        if (!IsClass(classId)) throw new InvalidDataException("Unknown high-value gem class.");
+        TealEntry => (TealShineBase, TealShineHighlight),
+        1 => (0x00000050, 0x000000FF), 2 => (0x00005000, 0x0000FF00), 3 => (0x00500000, 0x00FF0000),
+        4 => (0x00005050, 0x0000FFFF), 5 => (0x00500050, 0x00FF00FF),
+        _ => throw new ArgumentOutOfRangeException(nameof(entry))
+    };
+
+    /// <summary>The shine-table entry a rainbow gem shows at wobble phase 0-255 (six hues per wobble turn).</summary>
+    public static int RainbowEntry(int phase) => (int)(RainbowHueOrder >> (((phase & 0xFF) * RainbowHues >> 8) * 4) & 0xF);
+
+    /// <summary>Doubles the signed-byte vertex coordinates of the bounded untextured simple purple model and keeps
+    /// its eighteen native shine faces (flags 3, one signed-byte normal each) and its RGB table byte for byte, so the
+    /// gem is lit and glints exactly like the retail gems. Its colour comes from the row's shine-table entry.</summary>
+    public static byte[] ShinyModel(byte[] package)
+    {
         byte[] admitted = UniversalSharedModelAssets.CountDerivedSimplePackage(package);
         if (admitted.Length != package.Length)
             throw new InvalidDataException("High-value gem simple model contains unowned trailing bytes.");
@@ -80,58 +107,81 @@ public static partial class UniversalHighValueGems
                 throw new InvalidDataException("High-value gem doubled vertex exceeds its native signed-byte coordinate.");
             copy[p] = unchecked((byte)(sbyte)scaled);
         }
-        int rgb = BinaryPrimitives.ReadInt32LittleEndian(copy.AsSpan(8));
-        int faces = BinaryPrimitives.ReadInt32LittleEndian(copy.AsSpan(12));
-        int count = (faces - rgb) / 4;
-        if (count <= 0 || rgb < 16 || faces > copy.Length)
-            throw new InvalidDataException("High-value gem RGB interval is not owned by its simple model.");
-        (byte R, byte G, byte B)[] rainbow = [(255, 80, 104), (255, 176, 64), (255, 240, 80), (80, 255, 128), (64, 240, 255), (104, 144, 255), (224, 104, 255)];
-        (byte R, byte G, byte B)[] teal = [(120, 255, 240), (32, 200, 190), (75, 240, 215), (30, 200, 200), (165, 255, 245), (40, 225, 210), (18, 175, 165)];
-        for (int i = 0; i < count; i++)
-        {
-            int p = rgb + i * 4;
-            // Indexed RGB is the native unlit colour path. The donor's 127 gray
-            // table must not halve the authored palette again.
-            var tint = classId == TealClass ? teal[i % teal.Length] : rainbow[i % rainbow.Length];
-            copy[p] = tint.Item1;
-            copy[p + 1] = tint.Item2;
-            copy[p + 2] = tint.Item3;
-        }
-        int faceCount = copy[1];
-        int highestColor = -1;
-        for (int i = 0; i < faceCount; i++)
-        {
-            int p = faces + i * 8;
-            uint vertices = BinaryPrimitives.ReadUInt32LittleEndian(copy.AsSpan(p));
-            // Source profile faces obtain colour through native lighting rather than
-            // the white RGB table. Indexed mode0 is the engine's own ordinary RGB
-            // path and uses one authored colour per unchanged geometry vertex.
-            BinaryPrimitives.WriteUInt32LittleEndian(copy.AsSpan(p), vertices & ~3u);
-            BinaryPrimitives.WriteUInt32LittleEndian(copy.AsSpan(p + 4), vertices & ~3u);
-            int[] indices = [(int)(vertices >> 23 & 127), (int)(vertices >> 16 & 127), (int)(vertices >> 9 & 127), (int)(vertices >> 2 & 127)];
-            highestColor = Math.Max(highestColor, indices.Take(indices[2] == indices[3] ? 3 : 4).Max());
-        }
-        // The purple donor owns fifteen gray RGB words but its fourteen vertices
-        // reference only the first fourteen. Once converted to indexed RGB, retain
-        // precisely the referenced prefix and relocate the complete face/read-ahead
-        // stream; both native and preview readers then have one closed owner.
-        int closedFaces = checked(rgb + (highestColor + 1) * 4);
-        if (closedFaces > faces) throw new InvalidDataException("High-value gem references an unowned RGB entry.");
-        if (closedFaces < faces)
-        {
-            byte[] closed = new byte[copy.Length - (faces - closedFaces)];
-            copy.AsSpan(0, closedFaces).CopyTo(closed);
-            copy.AsSpan(faces).CopyTo(closed.AsSpan(closedFaces));
-            BinaryPrimitives.WriteInt32LittleEndian(closed.AsSpan(12), closedFaces);
-            copy = closed;
-        }
-        _ = UniversalSharedModelAssets.CountDerivedSimplePackage(copy);
-        _ = NativeSimpleGouraudModelGeometry.Decode(copy);
+        _ = ShineFaces(copy);
         return copy;
     }
 
-    /// <summary>Authenticates native placed retirement and the amount-to-numeral popup;
-    /// award accepts the original helper or the canonical physical/save-row mapping.</summary>
+    /// <summary>A shine face: its 3 or 4 vertex indices and its signed-byte normal in vertex-byte order.</summary>
+    public sealed record ShineFace(int[] Vertices, int NormalX, int NormalY, int NormalZ);
+
+    /// <summary>Strict reader of a simple model whose faces are all native shine faces: negative header, vertices at
+    /// root+0x10 (no normal prefix), flags 3 on every face, owned vertex indices and a non-zero normal per face.</summary>
+    public static (IReadOnlyList<(int X, int Y, int Z)> Vertices, IReadOnlyList<ShineFace> Faces) ShineFaces(byte[] package)
+    {
+        if (UniversalSharedModelAssets.CountDerivedSimplePackage(package).Length != package.Length)
+            throw new InvalidDataException("Shine model has unowned trailing bytes.");
+        int vertices = unchecked((sbyte)package[0]), faces = package[1];
+        int vertexStart = BinaryPrimitives.ReadInt32LittleEndian(package.AsSpan(4)), faceStart = BinaryPrimitives.ReadInt32LittleEndian(package.AsSpan(12));
+        if (vertexStart != 0x10) throw new InvalidDataException("Shine model needs its vertices at root+0x10.");
+        var v = Enumerable.Range(0, vertices).Select(i => (unchecked((sbyte)package[0x10 + 3 * i]) * 2,
+            unchecked((sbyte)package[0x11 + 3 * i]) * 2, unchecked((sbyte)package[0x12 + 3 * i]) * 2)).ToArray();
+        List<ShineFace> list = [];
+        for (int f = 0; f < faces; f++)
+        {
+            uint word = BinaryPrimitives.ReadUInt32LittleEndian(package.AsSpan(faceStart + 8 * f));
+            uint normal = BinaryPrimitives.ReadUInt32LittleEndian(package.AsSpan(faceStart + 8 * f + 4));
+            if ((word & 3) != 3) throw new InvalidDataException("Every high-value gem face must be a native shine face.");
+            int[] idx = [(int)(word >> 23 & 127), (int)(word >> 16 & 127), (int)(word >> 9 & 127), (int)(word >> 2 & 127)];
+            if (idx.Any(i => i >= vertices)) throw new InvalidDataException("Shine face references an unowned vertex.");
+            // The renderer (0x80023784) loads IR1 = bits 16-23, IR2 = bits 8-15, IR3 = bits 24-31, matching vertex bytes
+            // 1, 2 and 0 (0x80023010); returned here in vertex-byte order like the vertices.
+            int nx = unchecked((sbyte)(normal >> 24)), ny = unchecked((sbyte)(normal >> 16)), nz = unchecked((sbyte)(normal >> 8));
+            if (nx == 0 && ny == 0 && nz == 0) throw new InvalidDataException("Shine face has no normal.");
+            list.Add(new(idx[2] == idx[3] ? idx[..3] : idx, nx, ny, nz));
+        }
+        return (v, list);
+    }
+
+    /// <summary>Editor preview of a shiny gem: the same geometry as a flat indexed-RGB simple model (one RGB word per
+    /// face), each face shaded by the native shine formula under one fixed light. Rainbow faces walk its six hues.
+    /// The result passes <see cref="NativeSimpleGouraudModelGeometry"/>; it is never exported.</summary>
+    public static byte[] PreviewPackage(int classId, byte[] shiny)
+    {
+        if (!IsClass(classId)) throw new InvalidDataException("Unknown high-value gem class.");
+        var (_, faces) = ShineFaces(shiny);
+        int vertices = unchecked((sbyte)shiny[0]);
+        int rgb = UniversalLevelData.Align(0x10 + vertices * 3, 4), faceStart = rgb + faces.Count * 4;
+        int oldFaces = BinaryPrimitives.ReadInt32LittleEndian(shiny.AsSpan(12));
+        byte[] preview = new byte[faceStart + faces.Count * 8 + 8];
+        shiny.AsSpan(0, rgb).CopyTo(preview);
+        BinaryPrimitives.WriteInt32LittleEndian(preview.AsSpan(8), rgb);
+        BinaryPrimitives.WriteInt32LittleEndian(preview.AsSpan(12), faceStart);
+        (double X, double Y, double Z) light = (0.5, 0.6, -0.62); // toward the preview camera and its top
+        for (int f = 0; f < faces.Count; f++)
+        {
+            var face = faces[f];
+            double length = Math.Sqrt(face.NormalX * face.NormalX + face.NormalY * face.NormalY + face.NormalZ * face.NormalZ);
+            double dot = Math.Max(0, (face.NormalX * light.X + face.NormalY * light.Y + face.NormalZ * light.Z) / length);
+            int intensity = (int)(dot * 0x7F0);
+            var (lo, hi) = ShinePair(classId == TealClass ? TealEntry : (int)(RainbowHueOrder >> (f % RainbowHues * 4) & 0xF));
+            uint colour = 0;
+            for (int shift = 0; shift < 24; shift += 8)
+            {
+                int channel = (int)(lo >> shift & 255) * 16 + (intensity * (int)(hi >> shift & 255) * 16 >> 12) + Math.Max(0, intensity - 0x5C0) * 8;
+                colour |= (uint)Math.Clamp(channel >> 4, 0, 255) << shift;
+            }
+            BinaryPrimitives.WriteUInt32LittleEndian(preview.AsSpan(rgb + 4 * f), colour);
+            uint word = BinaryPrimitives.ReadUInt32LittleEndian(shiny.AsSpan(oldFaces + 8 * f)) & ~3u;
+            uint same = (uint)(f << 23 | f << 16 | f << 9 | f << 2);
+            BinaryPrimitives.WriteUInt32LittleEndian(preview.AsSpan(faceStart + 8 * f), word);
+            BinaryPrimitives.WriteUInt32LittleEndian(preview.AsSpan(faceStart + 8 * f + 4), same);
+        }
+        _ = NativeSimpleGouraudModelGeometry.Decode(preview);
+        return preview;
+    }
+
+    /// <summary>Authenticates native placed retirement, the amount-to-numeral popup and the shine renderer, colour and
+    /// wobble tables; award accepts the original helper or the canonical physical/save-row mapping.</summary>
     public static void RequireNativeOwner(byte[] executable)
     {
         if (executable.Length != 0x66000) throw new InvalidDataException("High-value gems require the complete USA executable.");
@@ -144,6 +194,11 @@ public static partial class UniversalHighValueGems
         Require(0x80053608, 0x9C, "3bf6f2ab0aaba682bc34bb5c4f734e872e144df43022b4e3f389784aa5a11be8");
         Require(0x80052568, 0x64, "602fc31b1351212e5d5c72c39ac59cc86a9afd0226a9a0549192855588498505");
         Require(0x800557CC, 0x190, "ede979bdf91a0602de89166b225633adf582a1c1a4eabd32e81f131271723709");
+        // Shine and wobble: the simple-model face renderer, its six-entry colour table (entry 0 still zero) and the
+        // sine/cosine table the retail gem wobble reads.
+        Require(0x80023268, 0x6F0, ShineRendererSha256);
+        Require(ShineTable, 48, ShineTableSha256);
+        Require(SineTable, 640, SineCosineSha256);
         var mark = NativeMobySaveMap.Windows().Single(w => w.Address == NativeMobySaveMap.MarkAddress);
         ReadOnlySpan<byte> current = executable.AsSpan((int)(mark.Address - UniversalExeBindings.ExeBase), mark.Code.Length);
         if (!current.SequenceEqual(mark.Code) && Convert.ToHexStringLower(SHA256.HashData(current)) != mark.SourceSha256)
