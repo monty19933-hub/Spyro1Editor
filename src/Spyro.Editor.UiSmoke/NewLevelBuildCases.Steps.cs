@@ -23,6 +23,7 @@ internal static partial class NewLevelBuildCases
             case "footprint": Footprint(window); return true;
             case "fill": FillHoles(window, outDir); return true;
             case "export": Export(window); return true;
+            case "sky-import": SkyImportStep(window, outDir); return true;
             case "portal-reorient": PortalReorient(window, outDir); return true;
             case "portal-backside": PortalBackside(window); return true;
             case "objects": StonehillObjects(window); return true;

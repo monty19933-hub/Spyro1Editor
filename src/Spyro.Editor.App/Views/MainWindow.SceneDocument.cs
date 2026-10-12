@@ -383,18 +383,23 @@ public sealed partial class MainWindow
             else _statusText.Text="Use three color values from 0 through 255, separated by commas.";
         });applySky.Name="FreshMainSetSkyColor";_freshSettingsPanel.Children.Add(applySky);
         // Flight skies are left out: their camera bounds pop outside flight levels.
-        List<object> skyChoices=["Plain sky color",.._retailCatalog.Levels.Where(l=>l.SourceWadEntry is >=10 and <=78&&l.SourceWadEntry%2==0&&!NativeSkyGeometrySafety.IsFlight(l.Key))];
+        const string ownSky="Your imported sky";
+        List<object> skyChoices=["Plain sky color",..(scene.CustomSky!=null?new object[]{ownSky}:[]),.._retailCatalog.Levels.Where(l=>l.SourceWadEntry is >=10 and <=78&&l.SourceWadEntry%2==0&&!NativeSkyGeometrySafety.IsFlight(l.Key))];
         ComboBox skySource=new(){Name="FreshMainSkySource",ItemsSource=skyChoices,MinHeight=32,
-            SelectedItem=skyChoices.OfType<Spyro.Editor.Core.Levels.LevelDefinition>().FirstOrDefault(l=>l.SourceWadEntry==scene.SkySourceWadEntry)??skyChoices[0]};
-        _freshSettingsPanel.Children.Add(new TextBlock{Text="Skybox (borrow a level's sky)"});_freshSettingsPanel.Children.Add(skySource);
+            SelectedItem=scene.CustomSky!=null?ownSky:skyChoices.OfType<Spyro.Editor.Core.Levels.LevelDefinition>().FirstOrDefault(l=>l.SourceWadEntry==scene.SkySourceWadEntry)??skyChoices[0]};
+        _freshSettingsPanel.Children.Add(new TextBlock{Text="Skybox (your own, or borrow a level's sky)"});_freshSettingsPanel.Children.Add(skySource);
         Button applySkySource=NewButton("Use this skybox",()=>
         {
+            if(Equals(skySource.SelectedItem,ownSky)){_statusText.Text="The level already uses your imported sky.";return;}
             var level=skySource.SelectedItem as Spyro.Editor.Core.Levels.LevelDefinition;
-            _freshSceneDocument=_freshSceneDocument! with{SkySourceWadEntry=level?.SourceWadEntry};
+            _freshSceneDocument=_freshSceneDocument! with{SkySourceWadEntry=level?.SourceWadEntry,CustomSky=null};
             _statusText.Text=level==null
                 ? "The level uses its plain sky color again; Save Level records it."
                 : $"The level will use {level.DisplayName}'s skybox in the game. Save Level records it.";
         });applySkySource.Name="FreshMainSetSkySource";_freshSettingsPanel.Children.Add(applySkySource);
+        Button importSky=NewAsyncButton("Import a sky (360° picture or OBJ/FBX model)…",ImportFreshSkyAsync);
+        importSky.Name="FreshMainImportSky";ToolTip.SetTip(importSky,"Use a 360° panorama picture (PNG, JPEG) or a sky model (OBJ, FBX), for example from a skybox maker, as this level's sky. You see what the game will draw before it is used.");
+        _freshSettingsPanel.Children.Add(importSky);
         ComboBox source=new(){Name="FreshMainMaterialSource",ItemsSource=_retailCatalog.Levels.Where(l=>l.SourceWadEntry is >=10 and <=78).ToList(),SelectedItem=_retailCatalog.FindByKey("stonehill"),MinHeight=32};
         TextBox texture=new(){Name="FreshMainMaterialId",Text="0"};
         _freshTerrainPanel.Children.Add(NewSmallNote(_releaseMode

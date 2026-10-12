@@ -259,7 +259,28 @@ says how many. Translucent original tiles cannot currently be copied or removed.
 
 ## Environment tab
 
-Recolor the level's sky, borrow another level's sky, or use a ready-made one.
+Recolor the level's sky, borrow another level's sky, use a ready-made one, or
+import your own.
+
+### Importing a sky
+
+**Import a sky** takes a 360° panorama picture (PNG, JPEG, WebP or BMP; twice as
+wide as it is tall, as skybox makers export them), a sky model (OBJ or FBX, with
+its textures next to it or packed inside), or a `.sky` file. In a game level
+choose the **Import a sky** mode and **Choose Sky File…**; in a level of your own
+use **Game Settings → Import a sky…**.
+
+Spyro skies are made of coloured triangles around the player, not pictures, so
+the editor converts what you choose and shows exactly what the game will draw
+before you use it:
+
+- **Detail** sets the number of triangles (1,000–4,000; the game's own skies use
+  250–4,300). More detail keeps sharper shapes but makes the level bigger
+  (about 20–55 KB). Small details such as single stars or writing soften.
+- **Turn** turns the sky around the player. The middle of the picture faces the
+  level's heading 0.
+- A model is seen from its centre. Parts it leaves open, such as a dome without
+  a floor, continue its nearest colours.
 
 ## Levels of your own
 

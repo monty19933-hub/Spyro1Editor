@@ -98,7 +98,7 @@ public sealed partial class MainWindow : Window
         new(NativeSkyEditPlan.PaletteMode, "Recolor this sky"),
         new(NativeSkyEditPlan.SwapMode, "Use another level's sky"),
         new(NativeSkyEditPlan.OriginalPresetMode, "Use a ready-made sky"),
-        new(NativeSkyEditPlan.ImportMode, "Import a .sky file")
+        new(NativeSkyEditPlan.ImportMode, "Import a sky (360° picture, OBJ/FBX model or .sky)")
     ];
 
     private EditorWorkspace _workspace;
@@ -1621,7 +1621,7 @@ public sealed partial class MainWindow : Window
         });
 
         _skyboxImportPanel.Children.Add(_skyboxImportPathBox);
-        _skyboxCustomImportButton = NewAsyncButton("Choose .sky", async () => await ChooseCustomSkyAsync());
+        _skyboxCustomImportButton = NewAsyncButton("Choose Sky File…", async () => await ChooseCustomSkyAsync());
         _skyboxImportPanel.Children.Add(_skyboxCustomImportButton);
 
         WrapPanel buttons = new() { Orientation = Orientation.Horizontal };
@@ -12757,13 +12757,9 @@ public sealed partial class MainWindow : Window
 
                 IReadOnlyList<IStorageFile> files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
                 {
-                    Title = "Choose a native Spyro 1 sky block",
+                    Title = "Choose a sky: a 360° panorama picture, a sky model (OBJ, FBX) or a .sky file",
                     AllowMultiple = false,
-                    FileTypeFilter =
-                    [
-                        new FilePickerFileType("Native sky block") { Patterns = ["*.sky"] },
-                        FilePickerFileTypes.All
-                    ]
+                    FileTypeFilter = [SkyFileType(withNativeSky: true), FilePickerFileTypes.All]
                 });
                 sourcePath = files.FirstOrDefault()?.Path.LocalPath;
             }
@@ -12771,7 +12767,19 @@ public sealed partial class MainWindow : Window
                 !IsCurrentEditorMutationSceneIdentity(capturedScene))
                 return;
 
-            byte[] sourceBytes = await File.ReadAllBytesAsync(sourcePath);
+            // A panorama picture or sky model is first made into a native sky (after the Import Sky preview).
+            bool converted = !Path.GetExtension(sourcePath).Equals(".sky", StringComparison.OrdinalIgnoreCase);
+            string convertedSummary = "";
+            byte[] sourceBytes;
+            if (converted)
+            {
+                if (await ImportSkyFromFileAsync(sourcePath) is not { } built)
+                    return;
+                sourceBytes = built.Block;
+                convertedSummary = $" as a sky of {built.Triangles:N0} triangles";
+            }
+            else
+                sourceBytes = await File.ReadAllBytesAsync(sourcePath);
             if (!IsCurrentEditorMutationSceneIdentity(capturedScene))
                 return;
             if (sourceBytes.Length > 1_048_576)
@@ -12786,7 +12794,9 @@ public sealed partial class MainWindow : Window
             string destinationPath = Path.Combine(
                 importDirectory,
                 $"{hash[..12].ToLowerInvariant()}-{SafeFilePart(Path.GetFileNameWithoutExtension(sourcePath))}.sky");
-            if (!PathsEqual(sourcePath, destinationPath))
+            if (converted)
+                await File.WriteAllBytesAsync(destinationPath, sourceBytes);
+            else if (!PathsEqual(sourcePath, destinationPath))
                 File.Copy(sourcePath, destinationPath, true);
 
             string relativePath = Path.GetRelativePath(capturedScene.WorkspaceRoot, destinationPath);
@@ -12801,11 +12811,13 @@ public sealed partial class MainWindow : Window
                 _syncingSkyboxControls = false;
             }
             RefreshSkyboxModeControls();
-            _statusText.Text = $"Imported {Path.GetFileName(sourcePath)} into this workspace. Save Skybox will validate its native structure and choose in-place storage or guarded WAD expansion.";
+            _statusText.Text = _releaseMode
+                ? $"Imported {Path.GetFileName(sourcePath)}{convertedSummary}. Save Skybox keeps it for this level; Create BIN puts it in the game."
+                : $"Imported {Path.GetFileName(sourcePath)}{convertedSummary} into this workspace. Save Skybox will validate its native structure and choose in-place storage or guarded WAD expansion.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            _statusText.Text = $"Could not import that .sky file: {ex.Message}";
+            _statusText.Text = $"Could not import that sky: {ex.Message}";
         }
     }
 
