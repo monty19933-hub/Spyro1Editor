@@ -2,8 +2,8 @@ namespace Spyro.Editor.Core.Universal;
 
 public static partial class UniversalSpecialBehaviors
 {
-    /// <summary>Placed loose gems: spin, proximity pickup, exact native treasure/save
-    /// award, bounded idle/collection effects, and retirement. Native MarkCollected owns the popup.</summary>
+    /// <summary>Placed loose gems: the retail gem wobble and shine colours, proximity pickup, exact native
+    /// treasure/save award, bounded idle/collection effects, and retirement. Native MarkCollected owns the popup.</summary>
     internal static UniversalAsmPart HighValueGemUpdate(IReadOnlyCollection<int> gemClasses, string tag, bool remapSaveRows = false)
     {
         ValidateHighGems(gemClasses);
@@ -12,6 +12,13 @@ public static partial class UniversalSpecialBehaviors
         a.I(9, Sp, Sp, -0x30); a.I(43, Sp, Ra, 0x20); a.I(43, Sp, S0, 0x10);
         a.I(43, Sp, S1, 0x14); a.I(43, Sp, S2, 0x18); a.I(43, Sp, S3, 0x1C);
         a.I(43, Sp, Zero, 0x24); // Per-scan idle budget; shared effect count lives at+28.
+        // Teal colour pair in the renderer's unused shine-table entry 0 (UniversalHighValueGems.ShineTable), every
+        // update; the rainbow gem's hue walk passes through it too.
+        a.I(15, Zero, T0, UniversalMips.Hi(UniversalHighValueGems.ShineTable));
+        a.I(15, Zero, T1, (int)(UniversalHighValueGems.TealShineBase >> 16)); a.I(13, T1, T1, (int)(UniversalHighValueGems.TealShineBase & 0xFFFF));
+        a.I(43, T0, T1, UniversalMips.Lo(UniversalHighValueGems.ShineTable));
+        a.I(15, Zero, T1, (int)(UniversalHighValueGems.TealShineHighlight >> 16)); a.I(13, T1, T1, (int)(UniversalHighValueGems.TealShineHighlight & 0xFFFF));
+        a.I(43, T0, T1, UniversalMips.Lo(UniversalHighValueGems.ShineTable + 4));
         a.I(15, Zero, T0, 0x8007); a.I(35, T0, S0, 0x5828); a.I(35, T0, S2, 0x5890); a.Nop();
         a.L(tag + "_loop");
         a.R(S0, S2, V0, 0, 0x2B); a.Br(4, V0, Zero, tag + "_done"); a.R(S0, Zero, S1, 0, 0x21);
@@ -46,7 +53,29 @@ public static partial class UniversalSpecialBehaviors
         a.Br(4, T1, Zero, tag + "_uncollected"); a.Nop();
         a.Jal(FreeMoby); a.R(S1, Zero, A0, 0, 0x21);
         a.J(tag + "_loop"); a.Nop(); a.L(tag + "_uncollected");
-        a.I(36, S1, V0, 0x46); a.Nop(); a.I(9, V0, V0, 3); a.I(40, S1, V0, 0x46);
+        // Wobble exactly like the retail gems (their idle update, e.g. Artisans 0x800802F4): tilt +0x44 =
+        // cos(phase)>>7 and +0x45 = sin(phase)>>7 (up to 45 degrees) from the executable's own tables, yaw +0x46
+        // untouched, phase += 2 x frame step per update (one turn in about 2.1 seconds). Property byte 8 keeps the
+        // phase; (x+y)>>4 offsets it so neighbouring gems tumble out of step, as the retail gems' random phases do.
+        a.I(36, S3, T0, UniversalHighValueGems.PhaseByte); a.I(35, S1, T1, 0xC); a.I(35, S1, T2, 0x10); a.Nop();
+        a.R(T1, T2, T1, 0, 0x21); a.R(Zero, T1, T1, UniversalHighValueGems.PhaseSeedShift, 3);
+        a.R(T0, T1, T1, 0, 0x21); a.I(12, T1, T1, 0xFF);
+        a.I(15, Zero, At, UniversalMips.Hi(UniversalHighValueGems.FrameStep));
+        a.I(35, At, V0, UniversalMips.Lo(UniversalHighValueGems.FrameStep)); a.Nop();
+        a.R(Zero, V0, V0, 1, 0); a.R(T0, V0, T0, 0, 0x21); a.I(40, S3, T0, UniversalHighValueGems.PhaseByte);
+        a.R(Zero, T1, T2, 1, 0);
+        a.La(T3, UniversalHighValueGems.CosineTable); a.R(T3, T2, T3, 0, 0x21); a.I(33, T3, V0, 0);
+        a.La(T3, UniversalHighValueGems.SineTable); a.R(T3, T2, T3, 0, 0x21); a.I(33, T3, V1, 0);
+        a.R(Zero, V0, V0, 7, 3); a.I(40, S1, V0, 0x44);
+        a.R(Zero, V1, V1, 7, 3); a.I(40, S1, V1, 0x45);
+        // Rainbow: shine-table entry (+0x4F) = nibble (phase x 6)>>8 of RainbowHueOrder, six hues per wobble turn.
+        a.I(37, S1, T0, 0x36); a.I(9, Zero, T2, UniversalHighValueGems.RainbowClass);
+        a.Br(5, T0, T2, tag + "_shine"); a.Nop();
+        a.R(Zero, T1, T0, 1, 0); a.R(Zero, T1, T2, 2, 0); a.R(T0, T2, T0, 0, 0x21);
+        a.R(Zero, T0, T0, 8, 2); a.R(Zero, T0, T0, 2, 0);
+        a.I(15, Zero, T2, (int)(UniversalHighValueGems.RainbowHueOrder >> 16)); a.I(13, T2, T2, (int)(UniversalHighValueGems.RainbowHueOrder & 0xFFFF));
+        a.R(T0, T2, T2, 0, 6); a.I(12, T2, T2, 0xF); a.I(40, S1, T2, 0x4F);
+        a.L(tag + "_shine");
         a.La(T0, SpyroPosition);
         a.I(35, T0, T1, 0); a.I(35, T0, T2, 4); a.I(35, T0, T3, 8);
         a.I(35, S1, T4, 0xC); a.I(35, S1, T5, 0x10); a.I(35, S1, T6, 0x14); a.Nop();

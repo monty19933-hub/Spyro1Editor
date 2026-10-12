@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Strict scalar proof of emitted high-value gem instructions and source-native awards.
+The retail gems' own idle wobble (Artisans overlay) runs beside the emitted wobble at every phase.
 
 No emulator, BIOS, save states, card writes or host RAM. Original FreeMoby/MarkCollected
 and canonical save-map gateway execute; native sound, particle, trigonometry and actor allocation calls are
@@ -31,7 +32,7 @@ with open(args.source_image, 'rb') as stream:
     r = pvd[156:190]
     root = read(struct.unpack_from('<I', r, 2)[0], struct.unpack_from('<I', r, 10)[0])
     pos = 0
-    exe = None
+    exe = wad_lba = None
     while pos < len(root):
         n = root[pos]
         if not n:
@@ -41,7 +42,13 @@ with open(args.source_image, 'rb') as stream:
         pos += n
         if r[33:33+r[32]].startswith(b'SCUS_942.28'):
             exe = read(struct.unpack_from('<I', r, 2)[0], struct.unpack_from('<I', r, 10)[0])
-            break
+        elif r[33:33+r[32]].startswith(b'WAD.WAD'):
+            wad_lba = struct.unpack_from('<I', r, 2)[0]
+    # Artisans' level code (WAD entry 9, loaded at 0x8007AA38): the retail gems' idle wobble.
+    require(wad_lba is not None, 'WAD.WAD')
+    overlay_offset, overlay_size = struct.unpack_from('<II', read(wad_lba, 2048), 9 * 8)
+    stream.seek(0)
+    ARTISANS_OVERLAY = read(wad_lba + overlay_offset // 2048, overlay_size)
 require(exe is not None and hashlib.sha256(exe).hexdigest() ==
         'a533d75cab8afaae6107ec35a02a9a5fe979a92c7c955f9cf1ee50f693a1b998', 'original source executable')
 a = json.loads(Path(args.emitted).read_text())
@@ -268,11 +275,74 @@ for cls, value in zip(CLASSES, [50, 100]):
         glyphs = [e for e in run(m) if e['Target'] == SPAWN]
         check(len(glyphs) == ((2 if value == 50 else 3) if height >= 768 else 0), 'native floor guard and exact decimal numeral count')
         check(m.read(0x80075860) == value and m.read(actor+0x48, 1) == 0xFD, 'native popup floor guard changes no pickup accounting')
+# Wobble and shine. The retail gems' own idle wobble (Artisans 0x800802F4-0x80080364: tilt +0x44/+0x45 from the
+# executable's cosine/sine tables, phase += 2 x frame step) runs beside the emitted update at every phase; both must
+# write the same tilt bytes and advance the phase alike. Yaw stays, the teal pair sits in shine-table entry 0 and
+# the rainbow gem walks entries red, gold, green, teal, blue, purple.
+RETAIL_WOBBLE, RETAIL_WOBBLE_END = 0x800802F4, 0x80080364
+wobble_code = ARTISANS_OVERLAY[RETAIL_WOBBLE-0x8007AA38:RETAIL_WOBBLE_END-0x8007AA38]
+require(hashlib.sha256(wobble_code).hexdigest() == '16592ab3b58a710de6e2454401a9fe37f4bde86f8ff20c73d9cfcf3aa3dded52', 'retail gem idle wobble owner')
+SINE_COSINE = exe[0x8006CBF8-0x8000F800:0x8006CBF8-0x8000F800+640]
+require(hashlib.sha256(SINE_COSINE).hexdigest() == '795a93bee7b4d49bef89d4df8c8628a4b4b3a91d694053dbc2b26b4293d4fa55', 'native sine/cosine tables')
+SHINE_TABLE = 0x8006E44C
+require(exe[SHINE_TABLE-0x8000F800:SHINE_TABLE-0x8000F800+48] == bytes(8) + struct.pack('<10I', 0x50, 0xFF, 0x5000, 0xFF00, 0x500000, 0xFF0000, 0x5050, 0xFFFF, 0x500050, 0xFF00FF),
+        'native shine table: entry 0 free, entries 1-5 the retail gem pairs')
+TEAL_PAIR, RAINBOW_ORDER = (0x00485000, 0x00E8FF00), [1, 4, 2, 0, 3, 5]
+retail = Scalar(words(wobble_code, RETAIL_WOBBLE))
+retail.map(0x80060000, 0x20000)
+retail.map(0x80110000, 0x100)
+retail.map(0x80111000, 0x20)
+for i, b in enumerate(SINE_COSINE):
+    retail.poke(0x8006CBF8+i, b, 1)
+retail.poke(0x800756CC, 2)
+
+def retail_wobble(phase):
+    retail.poke(0x80111000+0x11, 0, 1); retail.poke(0x80111000+0x12, 0, 1); retail.poke(0x80111000+0x13, phase, 1)
+    retail.r[17], retail.r[19] = 0x80111000, 0x80110000
+    require(retail.run(RETAIL_WOBBLE, {RETAIL_WOBBLE_END}) == RETAIL_WOBBLE_END, 'retail wobble window ends')
+    return retail.read(0x80110044, 1), retail.read(0x80110045, 1), retail.read(0x80111013, 1)
+
+wobble_cases = []
+for cls in CLASSES:
+    for position in [(2048, 0, 0), (2048, 1000, 0), (-4000, 3000, 0)]:
+        m, actor, prop, _ = fixture(cls, position=position)
+        for i, b in enumerate(SINE_COSINE):
+            m.poke(0x8006CBF8+i, b, 1)
+        m.poke(0x800756CC, 2)
+        m.poke(actor+0x46, 0x5A, 1)
+        offset = ((position[0] + position[1]) >> 4) & 255
+        start = m.read(prop+8, 1)
+        hues = []
+        for update in range(64):
+            stored = m.read(prop+8, 1)
+            display = (stored + offset) & 255
+            run(m)
+            x, y, advanced = retail_wobble(display)
+            check(m.read(actor+0x44, 1) == x and m.read(actor+0x45, 1) == y, 'placed gem tilts exactly like the retail gem wobble')
+            check(m.read(prop+8, 1) == (stored + 4) & 255 and advanced == (display + 4) & 255, 'phase advances like the retail gem (2 x frame step)')
+            check(m.read(actor+0x46, 1) == 0x5A, 'yaw untouched, as on the retail gems')
+            check((m.read(SHINE_TABLE), m.read(SHINE_TABLE+4)) == TEAL_PAIR, 'teal pair in the free shine-table entry 0')
+            entry = m.read(actor+0x4F, 1)
+            if cls == CLASSES[1]:
+                check(entry == RAINBOW_ORDER[display*6 >> 8], 'rainbow entry follows its phase')
+                hues.append(entry)
+            else:
+                check(entry == 0, 'teal keeps shine-table entry 0')
+            check(m.read(0x80075860) == 0 and m.read(actor+0x48, 1) == 0, 'wobble changes no award or state')
+        check(m.read(prop+8, 1) == start, 'one wobble turn takes 64 updates (about 2.1 seconds at 30 updates a second)')
+        if cls == CLASSES[1]:
+            check([h for k, h in enumerate(hues) if k == 0 or hues[k-1] != h][:6] == RAINBOW_ORDER[RAINBOW_ORDER.index(hues[0]):] + RAINBOW_ORDER[:RAINBOW_ORDER.index(hues[0])], 'rainbow walks all six hues in order')
+        wobble_cases.append({'Class': cls, 'Position': position, 'Updates': 64, 'Hues': sorted(set(hues))})
+for cls in [0x53, 0x54, 0x55, 0x56, 0x57]:
+    m, actor, prop, _ = fixture(cls, position=(2048, 0, 0))
+    m.poke(actor+0x44, 0x1234, 2); m.poke(actor+0x4F, cls-0x52, 1)
+    run(m)
+    check(m.read(actor+0x44, 2) == 0x1234 and m.read(actor+0x4F, 1) == cls-0x52 and m.read(prop+8, 1) == 0, 'retail gems keep their own wobble and colour')
 receipt = {'Marker': 'HIGH_VALUE_GEM_NATIVE_SCALAR_OK', 'Evidence':
            'source-native award/retirement/decimal-numeral popup and emitted update; strict integer branch/load delays; sound/particle/trigonometry/actor allocation are ABI effect doubles, not gameplay/card/visual acceptance',
-           'Checks': checks, 'Cases': cases, 'IdleCases': idle_cases, 'SourceExecutableSha256': hashlib.sha256(exe).hexdigest(),
+           'Checks': checks, 'Cases': cases, 'IdleCases': idle_cases, 'WobbleCases': wobble_cases, 'SourceExecutableSha256': hashlib.sha256(exe).hexdigest(),
            'NativePopupSha256': hashlib.sha256(NATIVE_POPUP).hexdigest(),
            'EmittedSha256': hashlib.sha256(Path(args.emitted).read_bytes()).hexdigest(), 'RuntimeStatus': 'not-tested'}
 if args.receipt:
     Path(args.receipt).write_text(json.dumps(receipt, indent=2)+'\n')
-print(json.dumps({'Marker': receipt['Marker'], 'Checks': checks, 'Cases': len(cases)}))
+print(json.dumps({'Marker': receipt['Marker'], 'Checks': checks, 'Cases': len(cases), 'WobbleCases': len(wobble_cases)}))

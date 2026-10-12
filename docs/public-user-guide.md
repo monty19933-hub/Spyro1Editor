@@ -166,8 +166,10 @@ Use a separate memory card for each edited game.
 ### Teal and rainbow gems
 
 **Add object… → Collectibles → Gems** has **Teal gem (50)** and
-**Rainbow gem (100)**: double-size, bright gems that add 50 or 100 to collected
-treasure and to the level's total. They use only your USA disc.
+**Rainbow gem (100)**: double-size gems that add 50 or 100 to collected
+treasure and to the level's total. In the game they tumble and shine exactly
+like the original gems; the rainbow gem cycles red, gold, green, teal, blue and
+purple. They use only your USA disc.
 
 ### Replace a Flight gate
 

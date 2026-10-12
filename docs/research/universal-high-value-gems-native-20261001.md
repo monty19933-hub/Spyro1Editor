@@ -136,3 +136,31 @@ The particle owner output includes extracted native code and belongs in private
 ignored work storage. Source/image, firmware, cards and extracted assets must
 not enter public packages. Native worker receipts and the isolated build are at
 `work/high-value-gems-native/` in this checkout.
+
+## 2026-10-11: retail wobble and shine
+
+The indexed-RGB conversion above is superseded. Every face of the five retail
+gem models carries flags 3 and a signed-byte normal; the simple-model renderer
+(`80023720`, inside the certified `80023268/6F0` owner) lights it from that
+normal, draws it flat as base + highlight x intensity with white above `5C0`,
+and draws near front faces semi-transparent over dimmer back faces. Its colour
+pair is read from the executable table `8006E44C` at byte offset
+`(moby+4C)>>21` = 8 x `+4F`: entries 1-5 are the retail red, green, blue, gold
+and purple pairs; entry 0 is zero and no placed USA row uses it (all 35 levels
+scanned; the only other shine model is an unplaced flight-level class `189`).
+
+Both copies now keep the purple model byte for byte except for the doubled
+vertices (272 bytes, all 18 shine faces). The teal row selects entry 0 and the
+update writes the teal pair `00485000/00E8FF00` there each update; the rainbow
+row starts on entry 1 and its update walks red, gold, green, teal, blue,
+purple, six hues per wobble turn.
+
+The retail idle wobble (Artisans `800802F4-80080364`) sets `+44` =
+`cos[phase]>>7` and `+45` = `sin[phase]>>7` from the executable tables at
+`8006CC78`/`8006CBF8` and advances its phase by 2 x frame step (`800756CC`)
+per update, leaving yaw `+46` alone. The placed gems do the same, with the
+phase in property byte 8 offset by `(x+y)>>4`; they no longer turn their yaw.
+The scalar proof runs the retail window beside the emitted update at every
+phase. The update is 928 bytes (944 with save-row remapping). The Add Object
+preview draws the lit facets as flat colours from a separate preview package
+that is never exported.
