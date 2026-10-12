@@ -44,23 +44,36 @@ internal static class NativeSkyOcclusionPatcher
     // leaves this 0x100-byte tail zero. Sky export runs after environment grade
     // in normal combined builds and claims only this disjoint tail. Any other
     // owner is rejected by exact preimage validation below.
+    // Each load is followed by a nop: on the R3000 the instruction right after a load still sees the register's old
+    // value (load delay slot). The first payload tested the level id in that slot, read a stale register and took the
+    // native path, so imported and swapped skies kept the target's own part lists (emulator, 2026-10-11).
     private static readonly uint[] ScopedPayloadCode =
     [
         0x3C088007, // lui   t0, 0x8007
         0x8D09596C, // lw    t1, 0x596C(t0)       ; g_LevelId
+        0x00000000, // nop                        ; load delay
         0x2D2A0041, // sltiu t2, t1, 65
-        0x11400009, // beq   t2, zero, native
+        0x1140000A, // beq   t2, zero, native
         0x00000000, // nop
         0x3C088007, // lui   t0, 0x8007
         0x25083480, // addiu t0, t0, 0x3480       ; scoped byte table
         0x01094021, // addu  t0, t0, t1
         0x91080000, // lbu   t0, 0(t0)
+        0x00000000, // nop                        ; load delay
         0x11000003, // beq   t0, zero, native
         0x00000000, // nop
         0x03E00008, // jr    ra
         0x2404FFFF, // addiu a0, zero, -1         ; edited destination only
         0x03E00008, // native: jr ra
         0x8CC40000  // lw    a0, 0(a2)            ; replay retail instruction
+    ];
+
+    /// <summary>The first payload (without the load-delay nops), still found in images made before the fix; it is
+    /// read for its level table and replaced.</summary>
+    private static readonly uint[] LegacyScopedPayloadCode =
+    [
+        0x3C088007, 0x8D09596C, 0x2D2A0041, 0x11400009, 0x00000000, 0x3C088007, 0x25083480, 0x01094021,
+        0x91080000, 0x11000003, 0x00000000, 0x03E00008, 0x2404FFFF, 0x03E00008, 0x8CC40000
     ];
 
     public static NativeSkyOcclusionPatchPlan BuildPlan(
@@ -107,7 +120,7 @@ internal static class NativeSkyOcclusionPatcher
         HashSet<int> scopedLevelIds = requestedLevelIds.ToHashSet();
         if (instruction == scopedHookInstruction)
         {
-            foreach (int existingLevelId in ReadAndValidatePayload(payloadBefore))
+            foreach (int existingLevelId in ReadAndValidatePayload(payloadBefore, allowLegacy: true))
                 scopedLevelIds.Add(existingLevelId);
         }
         else if (payloadBefore.Any(value => value != 0))
@@ -201,20 +214,24 @@ internal static class NativeSkyOcclusionPatcher
         return payload;
     }
 
-    private static int[] ReadAndValidatePayload(byte[] payload)
+    private static bool Matches(byte[] payload, uint[] code) =>
+        code.Select((word, index) => BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(index * 4, 4)) == word).All(same => same);
+
+    private static int[] ReadAndValidatePayload(byte[] payload, bool allowLegacy = false)
     {
         if (payload.Length != ScopedPayloadBytes)
             throw new InvalidDataException($"The scoped sky payload is {payload.Length} bytes; expected {ScopedPayloadBytes}.");
-        for (int index = 0; index < ScopedPayloadCode.Length; index++)
+        uint[] code = allowLegacy && Matches(payload, LegacyScopedPayloadCode) ? LegacyScopedPayloadCode : ScopedPayloadCode;
+        for (int index = 0; index < code.Length; index++)
         {
             uint actual = BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(index * 4, 4));
-            if (actual != ScopedPayloadCode[index])
+            if (actual != code[index])
             {
                 throw new InvalidDataException(
-                    $"The scoped sky payload code changed at word {index}: expected 0x{ScopedPayloadCode[index]:X8}, got 0x{actual:X8}.");
+                    $"The scoped sky payload code changed at word {index}: expected 0x{code[index]:X8}, got 0x{actual:X8}.");
             }
         }
-        if (payload.AsSpan(ScopedPayloadCode.Length * 4, ScopedLevelTableOffset - (ScopedPayloadCode.Length * 4)).ContainsAnyExcept((byte)0) ||
+        if (payload.AsSpan(code.Length * 4, ScopedLevelTableOffset - (code.Length * 4)).ContainsAnyExcept((byte)0) ||
             payload.AsSpan(ScopedLevelTableOffset + MaxLevelId + 1).ContainsAnyExcept((byte)0))
         {
             throw new InvalidDataException("The scoped sky payload contains unexpected bytes outside its code and level table.");

@@ -63,9 +63,13 @@ try
     byte[] payload = ReadExact(output, payloadImageOffset, 0x100);
     Require(BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(0, 4)) == 0x3C088007,
         "Scoped payload no longer starts by loading the retail global page.");
-    Require(BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(13 * 4, 4)) == 0x03E00008 &&
-            BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(14 * 4, 4)) == 0x8CC40000,
+    Require(BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(15 * 4, 4)) == 0x03E00008 &&
+            BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(16 * 4, 4)) == 0x8CC40000,
         "Scoped payload no longer replays the retail occlusion-group load for unrelated levels.");
+    // The R3000 load delay: the level id and the table byte are only tested one instruction after their loads.
+    Require(BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(1 * 4, 4)) == 0x8D09596C && BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(2 * 4, 4)) == 0 &&
+            BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(9 * 4, 4)) == 0x91080000 && BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(10 * 4, 4)) == 0,
+        "Scoped payload tests a loaded value in its load delay slot.");
     for (int levelId = 0; levelId <= 64; levelId++)
     {
         byte expected = safe.Plan.SkyOcclusionScopeLevelIds.Contains(levelId) ? (byte)1 : (byte)0;
