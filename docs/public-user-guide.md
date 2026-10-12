@@ -277,8 +277,10 @@ before you use it:
 - **Detail** sets the number of triangles (1,000–4,000; the game's own skies use
   250–4,300). More detail keeps sharper shapes but makes the level bigger
   (about 20–55 KB). Small details such as single stars or writing soften.
-- **Turn** turns the sky around the player. The middle of the picture faces the
-  level's heading 0.
+- **Turn** turns the sky around the player. Without it, the middle of the
+  picture faces east (+X; right in the Map view, where north is up).
+- **Flip left and right** is for a model made to be looked at from outside,
+  whose pictures read backwards from inside.
 - A model is seen from its centre. Parts it leaves open, such as a dome without
   a floor, continue its nearest colours.
 

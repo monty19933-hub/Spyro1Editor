@@ -109,7 +109,11 @@ public sealed partial class MainWindow
     private async Task<SkyBuildOptions?> ShowSkyImportDialogAsync(string fileName, SkyPanorama panorama)
     {
         var preview = new Image { Name = "SkyImportPreview", Width = 640, Height = 320, Stretch = Stretch.Fill };
-        var facing = new TextBlock { Text = "▲ faces the level's start direction (heading 0)", FontSize = 11, Foreground = new SolidColorBrush(ModernMutedInk), HorizontalAlignment = HorizontalAlignment.Center };
+        var facing = new TextBlock
+        {
+            Text = "▲\nThe middle of the picture faces east (+X, heading 0; right in the Map view, where north is up).",
+            FontSize = 11, Foreground = new SolidColorBrush(ModernMutedInk), HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center
+        };
         var summary = new TextBlock { Name = "SkyImportSummary", TextWrapping = TextWrapping.Wrap };
         var detail = new Slider { Name = "SkyImportDetail", Minimum = SkyBuildOptions.MinTriangles, Maximum = SkyBuildOptions.MaxTriangles, Value = SkyBuildOptions.DefaultTriangles, TickFrequency = 100, IsSnapToTickEnabled = true };
         var turn = new Slider { Name = "SkyImportTurn", Minimum = 0, Maximum = 355, Value = 0, TickFrequency = 5, IsSnapToTickEnabled = true };
