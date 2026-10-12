@@ -36,11 +36,14 @@ public sealed partial class MainWindow
         {
             var levels=_catalog.Levels.Select(l=>authored!=null&&l.Key==authored.Key?authored:l).ToList();
             if(authored!=null&&!levels.Any(l=>l.Key==authored.Key))levels.Add(authored);
+            // The new world's levels (File ▾ › New World…) after the game's own, under their current names.
+            foreach(var world in WorldLevelPickerOptions())
+                if(!levels.Any(l=>l.Key==world.Key))levels.Add(authored!=null&&authored.Key==world.Key?authored:world);
             _levelList.ItemsSource=levels;_levelJumpBox.ItemsSource=levels;
         }
         finally{_syncingLevelSelection=false;}
     }
-    private string FreshScenePath => SceneDocumentStore.PathForTarget(_workspace.RootPath,_freshSceneDocument?.TargetBinding?.LevelKey??"authored65");
+    private string FreshScenePath => SceneDocumentStore.PathForTarget(_workspace.RootPath,_freshSceneDocument?.TargetKey??"authored65");
     internal SceneDocument? FreshSceneForTesting => _freshSceneDocument == null || _currentGeometry == null ? null : CaptureFreshScene();
 
     private async Task NewMainLevelAsync()
@@ -69,6 +72,8 @@ public sealed partial class MainWindow
             { _statusText.Text="Could not keep a copy of the current created level, so it was left unchanged: "+e.Message;return; }
         }
         ApplyFreshScene(StarterLevel.Create("Untitled Level",_retailCatalog));
+        // The Ground card is the first thing a new level needs.
+        ApplyEditorExperienceForCurrentLevel(_modernTerrainWorkspaceTab);
         _statusText.Text="New level created: a meadow with a path, a ledge and a pond. Paint the ground in the Terrain tab (Ground), add objects and save; Create BIN makes a game that opens your level from New Game."+
             (keptCopy==null?"":" The previous one was copied to backups/"+Path.GetFileName(keptCopy)+".");
     }
@@ -140,7 +145,7 @@ public sealed partial class MainWindow
         try
         {
             var snapshot=CaptureFreshScene();
-            string targetKey=snapshot.TargetBinding?.LevelKey??"authored65";
+            string targetKey=snapshot.TargetKey;
             if(StartBlankRecoveryStore.Read(_workspace.RootPath,targetKey)!=null)
                 snapshot=snapshot with{Ledger=StartBlankRecoveryStore.SaveLifetime(_workspace.RootPath,targetKey,snapshot.Ledger,snapshot.TargetBinding?.NativePrefixRows??0)};
             string path=FreshScenePath;

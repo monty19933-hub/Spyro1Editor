@@ -42,7 +42,7 @@ public static class StartBlankRecoveryStore
         Action? requireCurrent=null,Action<string>? snapshotFaultForTesting=null)
     {
         blank.Validate();
-        if((blank.TargetBinding?.LevelKey??"authored65")!=key||blank.Objects.Count!=0)
+        if(blank.TargetKey!=key||blank.Objects.Count!=0)
             throw new InvalidDataException("Start Blank requires a matching neutral document with no objects.");
         string scenePath=SceneDocumentStore.PathForTarget(root,key),id=Guid.NewGuid().ToString("N");
         string snapshot=SnapshotPath(root,key,id);RequireRecoveryDirectories(root,key);Directory.CreateDirectory(snapshot);

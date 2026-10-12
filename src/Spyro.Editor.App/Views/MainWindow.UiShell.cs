@@ -234,6 +234,7 @@ public sealed partial class MainWindow
         ToolTip.SetTip(_toolbarOpenDiscImageButton, "Choose your original Spyro BIN or CUE. Export creates a separate playable copy.");
         StyleModernToolbarButton(_toolbarOpenDiscImageButton, 106);
         fileActions.Children.Add(BuildActionMenu("File", "EditorFileMenu", new ToolbarAction("New Level…", NewMainLevelAsync),
+            new ToolbarAction("New World…", NewWorldAsync),
             new ToolbarAction("Start Blank in Current Level…", StartBlankCurrentLevelAsync),
             new ToolbarAction("New Level from Spyro: Year of the Dragon…", NewLevelFromYearOfTheDragonAsync),
             new ToolbarAction("Fill In What the Level Needs…", FillInLevelAsync),

@@ -109,6 +109,13 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
 {
     public const string FileName = "fresh-level.scene.json";
     public SceneTargetBinding? TargetBinding { get; init; }
+    /// <summary>A level of the project's new world (70 its homeworld, 71-74 its levels; see <see cref="NewWorldDocument"/>);
+    /// null: the level in a retail slot (<see cref="TargetBinding"/>) or File ▾ › New Level's.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? WorldLevelId { get; init; }
+    /// <summary>The key the scene is saved and listed under: the retail level it replaces, worldNN, or authored65.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string TargetKey => TargetBinding?.LevelKey ?? (WorldLevelId is int world ? NewWorldDocument.KeyFor(world) : "authored65");
     /// <summary>A rebuilt homeworld's doorways (null: none).</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<AuthoredPortal>? Portals { get; init; }
@@ -129,7 +136,8 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
     /// <summary>The ground kinds the level's drawn and collision-only faces use (null: solid ground).</summary>
     public IEnumerable<AuthoredSurfaceKind?> GroundKinds() => Surfaces.Select(s => s.Kind).Concat(CollisionFaces?.Select(c => c.Kind) ?? []);
     public LevelDefinition ResolveTarget(LevelCatalog catalog) => TargetBinding == null
-        ? NativeTarget(Name) : TargetBinding.Resolve(catalog) with { DisplayName = Name, SourceRecordCount = 0 };
+        ? WorldLevelId is int world ? NewWorldDocument.Target(world, Name) : NativeTarget(Name)
+        : TargetBinding.Resolve(catalog) with { DisplayName = Name, SourceRecordCount = 0 };
     public static string PathForTarget(string workspace, string key) => SceneDocumentStore.PathForTarget(workspace, key);
     public SceneDocument StartBlank() => New(Name) with { TargetBinding = TargetBinding, Ledger = Ledger };
 
@@ -255,6 +263,8 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
             throw new InvalidDataException("Fresh scene document identity, surfaces or settings are invalid.");
         Ledger.Validate();
         TargetBinding?.Validate();
+        if (WorldLevelId is int world && (TargetBinding != null || !NewWorldDocument.IsWorldKey(NewWorldDocument.KeyFor(world), out _)))
+            throw new InvalidDataException("A new world level is levels 70-74 and replaces no retail level.");
         if (SkySourceWadEntry is int sky && (sky is < 10 or > 78 || sky % 2 != 0))
             throw new InvalidDataException("The scene's sky source is not a retail level.");
         if ((TargetBinding?.NativePrefixRows ?? 0) + Ledger.Entries.Count > 256)

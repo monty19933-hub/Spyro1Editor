@@ -67,6 +67,7 @@ internal static partial class NewLevelBuildCases
             case "yotd-menu": YearOfTheDragonMenu(window); return true;
             case "crash-import": CrashImport(window, outDir); return true;
             case "starter-ground": StarterGround(window, outDir); return true;
+            case "new-world": NewWorldStep(window, outDir); return true;
             default: return false;
         }
     }

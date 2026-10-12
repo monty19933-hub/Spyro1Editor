@@ -32,7 +32,11 @@ internal static partial class NewLevelBuildCases
             throw new InvalidOperationException("The new level does not start as the meadow.");
         if (scene.Surfaces.Any(s => s.Material == null)) throw new InvalidOperationException("A starter face has no texture.");
 
-        SelectTab(window, "Terrain"); Pump(40);
+        Pump(20);
+        var tabs = Find<TabControl>(window, "EditorWorkspaceToolTabs");
+        string opened = ((tabs.SelectedItem as TabItem)?.Header as TextBlock)?.Text ?? "";
+        Console.WriteLine("tab after New Level: " + opened);
+        if (opened != "Terrain") throw new InvalidOperationException("New Level did not open the Terrain tab.");
         var card = Find<Border>(window, "TerrainGroundCard");
         Wait(() => card.IsVisible, "the Ground card", 30);
         var swatches = Find<WrapPanel>(window, "GroundSwatches").Children.OfType<Button>().Select(b => b.Name).ToList();

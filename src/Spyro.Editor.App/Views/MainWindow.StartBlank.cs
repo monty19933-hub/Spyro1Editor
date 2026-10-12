@@ -17,7 +17,7 @@ public sealed partial class MainWindow
     {
         var document=SceneDocumentStore.ReadForTarget(_workspace.RootPath,level,_retailCatalog);
         if(document==null)return false;
-        string key=document.TargetBinding?.LevelKey??"authored65";
+        string key=document.TargetKey;
         document=document with{Ledger=StartBlankRecoveryStore.ReconcileLifetime(_workspace.RootPath,key,document.Ledger,document.TargetBinding?.NativePrefixRows??0)};
         ApplyFreshScene(document);
         _statusText.Text=_releaseMode
@@ -96,6 +96,7 @@ public sealed partial class MainWindow
             var blank=(starter?StarterLevel.Create(level.DisplayName,_retailCatalog):SceneDocument.New(level.DisplayName)) with{TargetBinding=binding,Ledger=ledger};
             await StartBlankRecoveryStore.ClearAsync(root,key,blank,RequireCurrent,StartBlankSnapshotFaultForTesting);
             ApplyFreshScene(blank);
+            if(starter)ApplyEditorExperienceForCurrentLevel(_modernTerrainWorkspaceTab);
             return blank;
         }
         catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException or System.Text.Json.JsonException)
@@ -172,7 +173,7 @@ public sealed partial class MainWindow
         if(_freshSceneDocument==null)throw new InvalidDataException("No built level is open.");
         if(!await SaveFreshSceneAsync())throw new InvalidDataException("The level could not be saved first.");
         var (scene,freed)=CaptureFreshScene().FreeRetiredSaveRows();
-        string key=scene.TargetBinding?.LevelKey??"authored65";
+        string key=scene.TargetKey;
         if(StartBlankRecoveryStore.Read(_workspace.RootPath,key)!=null)
             StartBlankRecoveryStore.ReplaceLifetime(_workspace.RootPath,key,scene.Ledger,scene.TargetBinding?.NativePrefixRows??0);
         await scene.SaveAsync(FreshScenePath);

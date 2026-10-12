@@ -2097,6 +2097,7 @@ public sealed partial class MainWindow : Window
                 return;
 
             if (level.Key == "authored65") { await OpenMainFreshLevelAsync(); return; }
+            if (NewWorldDocument.IsWorldKey(level.Key, out int worldLevel)) { await OpenWorldLevelAsync(worldLevel); return; }
             if (IsId65BlankLabKey(level.Key) &&
                 !UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level))
             {

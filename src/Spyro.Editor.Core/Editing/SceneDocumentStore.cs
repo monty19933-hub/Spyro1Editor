@@ -29,6 +29,7 @@ public static class SceneDocumentStore
     public static string PathForTarget(string workspace, string key)
     {
         if (key == "authored65") return Path.Combine(workspace, SceneDocument.FileName);
+        if (NewWorldDocument.IsWorldKey(key, out int world)) return Path.Combine(workspace, $"new-world-{world}.scene.json");
         if (string.IsNullOrWhiteSpace(key) || key != LevelCatalog.NormalizeKey(key) || key.Any(c => !char.IsAsciiLetterOrDigit(c)))
             throw new InvalidDataException("Invalid scene target key.");
         return Path.Combine(workspace, key + "-replacement.scene.json");
@@ -42,6 +43,10 @@ public static class SceneDocumentStore
             throw new InvalidDataException("The saved replacement scene belongs to another level.");
         return doc;
     }
+    /// <summary>The new world's levels that have a saved scene, homeworld first.</summary>
+    public static IReadOnlyList<SceneDocument> ReadWorld(string workspace, LevelCatalog catalog) =>
+        (NewWorldDocument.Read(workspace)?.LevelIds ?? []).Select(id => ReadForTarget(workspace, NewWorldDocument.Target(id, ""), catalog))
+        .OfType<SceneDocument>().ToArray();
     public static IReadOnlyList<SceneDocument> LoadOverrides(string workspace, LevelCatalog catalog) =>
         ReadAll(workspace, catalog).Where(d => d.TargetBinding != null).ToArray();
     public static IReadOnlyList<SceneDocument> ReadAll(string workspace, LevelCatalog catalog)
