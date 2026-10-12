@@ -162,7 +162,7 @@ public sealed partial class MainWindow
     private string DoorwayDestinationName(int levelId)
     {
         if (NewWorldDocument.LevelSlots.Contains(levelId))
-            return WorldLevelPickerOptions().FirstOrDefault(l => l.LevelId == levelId)?.DisplayName ?? $"World level {levelId - 70}";
+            return DestinationNameOrNull(levelId) ?? $"World level {levelId - 70}";
         return _retailCatalog.Levels.FirstOrDefault(l => l.LevelId == levelId)?.DisplayName ?? $"Level {levelId}";
     }
 
@@ -239,8 +239,25 @@ public sealed partial class MainWindow
                 (world ? " Playable after New World export." : "");
     }
 
-    private string? DestinationNameOrNull(int levelId) =>
-        NewWorldDocument.LevelSlots.Contains(levelId) ? WorldLevelPickerOptions().FirstOrDefault(l => l.LevelId == levelId)?.DisplayName : null;
+    private IReadOnlyDictionary<int, string> _doorwayWorldNames = new Dictionary<int, string>();
+    private string _doorwayWorldNamesKey = "";
+
+    /// <summary>The name of one of the new world's levels (null: not made, or not a world level). The names are read
+    /// from the project only when its world files change (the card refreshes on every selection).</summary>
+    private string? DestinationNameOrNull(int levelId)
+    {
+        if (!NewWorldDocument.LevelSlots.Contains(levelId) || string.IsNullOrEmpty(_workspace.RootPath)) return null;
+        string root = _workspace.RootPath;
+        string key = string.Join("|", new[] { NewWorldDocument.PathFor(root) }
+            .Concat(NewWorldDocument.LevelSlots.Select(id => SceneDocumentStore.PathForTarget(root, NewWorldDocument.KeyFor(id))))
+            .Select(path => path + "@" + (File.Exists(path) ? File.GetLastWriteTimeUtc(path).Ticks : 0)));
+        if (key != _doorwayWorldNamesKey)
+        {
+            _doorwayWorldNames = WorldLevelPickerOptions().Where(l => NewWorldDocument.LevelSlots.Contains(l.LevelId)).ToDictionary(l => l.LevelId, l => l.DisplayName);
+            _doorwayWorldNamesKey = key;
+        }
+        return _doorwayWorldNames.GetValueOrDefault(levelId);
+    }
 
     private void SelectDoorway(int destination, bool highlight)
     {
