@@ -249,6 +249,11 @@ CORE_CASES = (
     # assigned triangles; a saved donor resolves only when the donor still holds that exact record; portals and
     # level-linked kinds never travel; the saved edit keeps its donor (the default mode adds all 35 levels x 8 kinds).
     ("SurfaceLayoutSmoke", "SURFACE_LAYOUT_FREE_OK checks=117"),
+    # Sky models (OBJ and FBX readers) on fixtures the smoke writes itself: OBJ/MTL (fans, negative indices, map_Kd
+    # options and paths, Kd, vertex colours, missing files noted); binary FBX 7400/7500 with zlib and raw arrays and
+    # ASCII FBX (transforms and parents, UVs flipped to top-row V, embedded and on-disk textures, up axes); broken,
+    # truncated and too-large files refused.
+    ("SkyModelSmoke", "SKY_MODEL_OK checks=59"),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.

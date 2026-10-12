@@ -76,6 +76,14 @@ class OwnedCommandTests(unittest.TestCase):
         # The gate mode must return before the disc-backed workspace is resolved.
         self.assertLess(program.index('args[0] == "--source-free"'), program.index("ResolveWorkspaceRoot(args);"))
 
+    def test_sky_model_smoke_registration(self):
+        name = "SkyModelSmoke"
+        self.assertIn((name, "SKY_MODEL_OK checks=59"), RUNNER.CORE_CASES)
+        self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
+        self.assertFalse(any(c[0] == name for c in RUNNER.SOURCE_QA_CASES))
+        project = RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
+        self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"', project.read_text())
+
     def test_dreamweavers_cannon_source_suite_registration_uses_current_core(self):
         name = "UniversalDreamWeaversCannonSmoke"
         self.assertIn((name, "UNIVERSAL_DREAMWEAVERS_CANNON_FREE_OK"), RUNNER.CORE_CASES)
