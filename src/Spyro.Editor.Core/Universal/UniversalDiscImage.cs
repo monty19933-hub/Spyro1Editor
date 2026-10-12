@@ -93,6 +93,40 @@ public sealed class UniversalDiscImage
         PatchRootRecords(fs, wad.Length, exeLba, exe.Length);
     }
 
+    /// <summary>Writes <paramref name="data"/> as Mode 2 Form 1 sectors from <paramref name="lba"/> of an image (extending
+    /// the file when they lie past its end), outside every ISO file, and raises the volume's sector count to cover them.
+    /// The game reads WAD rows as raw sectors (LBA 37 + offset / 2048), so a row may point there (the level window's
+    /// levels placed after the movie files).</summary>
+    public static void WriteRawSectors(string imagePath, int lba, byte[] data)
+    {
+        if (lba < 16 || data.Length == 0) throw new ArgumentOutOfRangeException(nameof(lba));
+        using FileStream fs = new(imagePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        long length = fs.Length;
+        if ((long)lba * RawSector > length) throw new InvalidDataException("Raw sectors must start inside the image or right after its end.");
+        WriteFile(fs, lba, data);
+        int end = lba + (data.Length + User - 1) / User;
+        byte[] pvd = ReadUser(fs, 16);
+        if (BinaryPrimitives.ReadInt32LittleEndian(pvd.AsSpan(80)) < end)
+        {
+            Both(pvd, 80, end);
+            fs.Position = 16L * RawSector;
+            byte[] sector = new byte[RawSector]; fs.ReadExactly(sector);
+            pvd.CopyTo(sector, UserOffset);
+            Mode2Form1.Finish(sector);
+            fs.Position = 16L * RawSector; fs.Write(sector);
+        }
+    }
+
+    /// <summary>Reads <paramref name="length"/> user bytes from raw sectors starting at <paramref name="lba"/>.</summary>
+    public static byte[] ReadRawSectors(string imagePath, int lba, int length)
+    {
+        using FileStream fs = new(imagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        byte[] result = new byte[length];
+        for (int i = 0; i * User < length; i++)
+            ReadUser(fs, lba + i).AsSpan(0, Math.Min(User, length - i * User)).CopyTo(result.AsSpan(i * User));
+        return result;
+    }
+
     private static void WriteFile(FileStream fs, int lba, byte[] data)
     {
         int n = (data.Length + User - 1) / User;

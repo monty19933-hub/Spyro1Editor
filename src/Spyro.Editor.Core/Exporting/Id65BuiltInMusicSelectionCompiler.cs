@@ -107,6 +107,9 @@ internal static class Id65BuiltInMusicSelectionCompiler
     private const int Slot35Offset = MappingOffset + 35 * 4;
     private const int LateOffset = 0x5F85C;
     private const int PeteXaOffset = 0x5FA00;
+    /// <summary>The late-music bridge alone (index 35 plays music slot 35's song after its timer, not a PETEXA word);
+    /// the level window (<see cref="NativeLevelWindow"/>) installs it for its levels when no ID65 level did.</summary>
+    internal static IReadOnlyList<Id65MusicFilePatch> Bridge => BridgePatches;
     private static readonly Id65MusicFilePatch[] BridgePatches =
     [
         new("preload-scus-high-in-condition-branch-delay", 0x1C57C, 4,
