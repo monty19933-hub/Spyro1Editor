@@ -236,6 +236,10 @@ CORE_CASES = (
     # the limit even so is refused) and the runtime guard's stubs run on a test CPU (limit, near distance, retail levels
     # untouched) and its refusals.
     ("DrawLoadSmoke", "DRAW_LOAD_FREE_OK checks=37"),
+    # Emulator only (8 MB RAM): the scene-placement check's words and both loader hooks on a test CPU (2 MB mirror and
+    # 8 MB), install refusals and recognition of its own patch, the split budget (the 2 MB arithmetic equal to the old
+    # checks), the export scope and its sentence, the project setting, and the scene-address features refusing 8 MB.
+    ("ExtendedRamSmoke", "EXTENDED_RAM_FREE_OK checks=73"),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
@@ -269,6 +273,8 @@ ADDITIONAL_CORE_CASES = (
      ["--free-flight-ui-only"]),
     ("UiSmoke", "PLAY_AS_CRASH_UI_OK checks=",
      ["--play-as-crash-ui-only"]),
+    ("UiSmoke", "MEMORY_MODE_UI_OK checks=12",
+     ["--memory-mode-ui-only"]),
     ("UiSmoke", "LEVEL_PICKER_AUTOMATION_OK",
      ["--level-picker-automation-only"]),
     ("UiSmoke", "AUTHORED_MESH_CHECKS_OK",
@@ -316,6 +322,9 @@ SOURCE_QA_CASES = (
     ("CrashLevelSmoke", "CRASH_LEVEL_IMPORT_DISC_OK", ["--import-disc"]),
     # The draw-buffer guard installed into the retail executable (read only): hooks, both code areas, re-install.
     ("DrawLoadSmoke", "DRAW_LOAD_SOURCE_OK checks=41", ["--source"]),
+    # The 8 MB scene placement in the retail executable (read only), every retail level against both layouts, and Tree
+    # Tops with imported enemies: refused with 2 MB, composed with 8 MB, named by the export step.
+    ("ExtendedRamSmoke", "EXTENDED_RAM_SOURCE_OK checks=88", ["--source"]),
     ("DarkParticleHostSmoke", "DARK_PROJECTILE_ALL_HOST_OWNERSHIP_OK", []),
     ("FreshParticleBindingSmoke", "FRESH_OWNED_PARTICLE_BINDING_OK", []),
     ("CollectionStarSmoke", "COLLECTION_STAR_SOURCE_OWNERSHIP_OK", []),
@@ -442,7 +451,7 @@ SOURCE_QA_CASES = (
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
-SOURCE_QA_WORKSPACE_CASES = frozenset({"YearOfTheDragonImportSmoke", "CrashLevelSmoke", "RetailDynamicSlotsSmoke", "UniversalDreamWeaversCannonSmoke", "GreenDruidRampWorldSmoke", "GreenDruidNoTargetWorldSmoke", "HauntedDarkHollowSmoke", "GreenDruidSecondWorldSmoke", "AlpineArmPair34Smoke", "HighCavesWorldInstallerSmoke", "MagicOriginalSmoke", "HighCavesParticleSmoke", "HighCavesTornadoPlacementSmoke", "HighCavesTornadoReactionSmoke", "MagicChainSmoke", "FreshParticleBindingSmoke", "MagicArtisansPairSmoke", "NativeDragonRescuePrefixSmoke", "AlpineArtisansChooserSmoke", "DarkParticleHostSmoke", "CollectionStarSmoke", "UniversalTwilightTrooperSmoke", "GreenDruidWorldOwnershipSmoke", "DarkPassageLanternSmoke", "DarkProjectileParticleSmoke", "UniversalSoundStorageSmoke", "MagicPairCertificateSmoke", "DarkPassageShapeshifterSmoke", "BeastMisty89OwnershipSmoke", "BeastMisty89PlacementSmoke", "HauntedWizardOwnershipSmoke", "HauntedWizardIntegrationSmoke", "TerraceParticleOwnershipSmoke", "UniversalFlightGateSmoke", "UniversalFlightChestSmoke", "UniversalPlacementVisibilitySmoke", "UniversalParticleBoundarySmoke", "UniversalFlightDependencySmoke", "UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalLinkedActorOwnershipSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke", "NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
+SOURCE_QA_WORKSPACE_CASES = frozenset({"ExtendedRamSmoke", "YearOfTheDragonImportSmoke", "CrashLevelSmoke", "RetailDynamicSlotsSmoke", "UniversalDreamWeaversCannonSmoke", "GreenDruidRampWorldSmoke", "GreenDruidNoTargetWorldSmoke", "HauntedDarkHollowSmoke", "GreenDruidSecondWorldSmoke", "AlpineArmPair34Smoke", "HighCavesWorldInstallerSmoke", "MagicOriginalSmoke", "HighCavesParticleSmoke", "HighCavesTornadoPlacementSmoke", "HighCavesTornadoReactionSmoke", "MagicChainSmoke", "FreshParticleBindingSmoke", "MagicArtisansPairSmoke", "NativeDragonRescuePrefixSmoke", "AlpineArtisansChooserSmoke", "DarkParticleHostSmoke", "CollectionStarSmoke", "UniversalTwilightTrooperSmoke", "GreenDruidWorldOwnershipSmoke", "DarkPassageLanternSmoke", "DarkProjectileParticleSmoke", "UniversalSoundStorageSmoke", "MagicPairCertificateSmoke", "DarkPassageShapeshifterSmoke", "BeastMisty89OwnershipSmoke", "BeastMisty89PlacementSmoke", "HauntedWizardOwnershipSmoke", "HauntedWizardIntegrationSmoke", "TerraceParticleOwnershipSmoke", "UniversalFlightGateSmoke", "UniversalFlightChestSmoke", "UniversalPlacementVisibilitySmoke", "UniversalParticleBoundarySmoke", "UniversalFlightDependencySmoke", "UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalLinkedActorOwnershipSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke", "NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
 # These suites retain new source/readback reports inside this run's isolated log directory.
 SOURCE_QA_REPORT_CASES = frozenset({"RetailDynamicSlotsSmoke", "UniversalDreamWeaversCannonSmoke", "GreenDruidRampWorldSmoke", "GreenDruidNoTargetWorldSmoke", "HauntedDarkHollowSmoke", "GreenDruidSecondWorldSmoke", "AlpineArmPair34Smoke", "HighCavesWorldInstallerSmoke", "MagicOriginalSmoke", "HighCavesParticleSmoke", "HighCavesTornadoPlacementSmoke", "HighCavesTornadoReactionSmoke", "MagicChainSmoke", "FreshParticleBindingSmoke", "MagicArtisansPairSmoke", "NativeDragonRescuePrefixSmoke", "AlpineArtisansChooserSmoke", "DarkParticleHostSmoke", "CollectionStarSmoke", "UniversalTwilightTrooperSmoke", "GreenDruidWorldOwnershipSmoke", "DarkPassageLanternSmoke", "DarkProjectileParticleSmoke", "UniversalSoundStorageSmoke", "MagicPairCertificateSmoke", "DarkPassageShapeshifterSmoke", "BeastMisty89OwnershipSmoke", "BeastMisty89PlacementSmoke", "HauntedWizardOwnershipSmoke", "HauntedWizardIntegrationSmoke", "TerraceParticleOwnershipSmoke", "UniversalFlightGateSmoke", "UniversalFlightChestSmoke", "UniversalPlacementVisibilitySmoke", "UniversalParticleBoundarySmoke", "UniversalFlightDependencySmoke", "UniversalDryCanyonBirdSmoke", "DragonStatueColorSmoke", "UniversalIndexedRowsSmoke", "UniversalGnorcCurrentModelReadSmoke", "UniversalNativePlayerDamageCallsSmoke", "UniversalMagicCraftersIndexedRowsSmoke"})
 SOURCE_QA_CUE_CASES = frozenset({"NativeCollectibleCardAdmissionResearchSmoke", "NativeCollectibleCardLoadResearchSmoke", "NativeCollectibleStartupResearchSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeId65FreshDocumentResearchSmoke", "NativeId65FreshDocumentPublicationSmoke", "NativeTwoWizardResearchSmoke", "NativeId65FreshWizardResearchSmoke", "NativeFreshWizardAuthoringSmoke", "NativeId65TexturedResearchSmoke", "NativeFreshSavedLevelResearchSmoke", "NativeFreshSavedLevelPublicSmoke", "UiSmoke"})
@@ -676,6 +685,7 @@ def main():
             ("--high-value-gems-ui-only",): "-high-value-gems-ui",
             ("--start-blank-ui-only",): "-start-blank-ui",
             ("--free-flight-ui-only",): "-free-flight-ui",
+            ("--memory-mode-ui-only",): "-memory-mode-ui",
             ("--level-picker-automation-only",): "-level-picker-automation",
             ("--authored-mesh-only",): "-authored-mesh",
             ("--source-free-route-surfaces",): "-route-surfaces",

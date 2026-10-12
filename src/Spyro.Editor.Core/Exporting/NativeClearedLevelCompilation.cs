@@ -64,9 +64,10 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
             // The level bounds its terrain's share of the frame's draw buffer at the near distance its terrain was planned for.
             NativeDrawBufferGuard.PatchExe(exe,new Dictionary<int,int>{[target.LevelId]=kernel.NearDistance});
             // The rebuilt level must fit the game's level memory on its own (composition re-checks it with objects).
-            uint end=UniversalMobyComposer.RuntimeEnd(new UniversalLevelData(body),new UniversalOverlay(overlay,UniversalExeBindings.Read(exe,target.LevelId)).CopyBuffer);
-            if(end>UniversalMobyComposer.NormalBufferFloor-UniversalMobyComposer.RamSafetyMargin)
-                throw new InvalidDataException($"{document.Name} needs {end-(UniversalMobyComposer.NormalBufferFloor-UniversalMobyComposer.RamSafetyMargin):N0} more bytes of level memory than the game has. Remove some geometry.");
+            // (GameRam: the whole load below the draw buffers with 2 MB; with 8 MB RAM the scene has its own room.)
+            var bodyData=new UniversalLevelData(body);uint bodyCopy=new UniversalOverlay(overlay,UniversalExeBindings.Read(exe,target.LevelId)).CopyBuffer;
+            if(!GameRam.Fits(bodyData,bodyCopy))
+                throw new InvalidDataException($"{document.Name} needs {GameRam.Shortfall(bodyData,bodyCopy):N0} more bytes of level memory than the game has. Remove some geometry.");
             var replacements=new Dictionary<int,byte[]>{{target.SourceWadEntry,body},{target.SourceWadEntry-1,overlay}};
             original.WriteImage(stage,original.RebuildWad(replacements),exe);
             token.ThrowIfCancellationRequested();

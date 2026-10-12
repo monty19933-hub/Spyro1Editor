@@ -272,6 +272,37 @@ if (args.Contains("--authored-mesh-only", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Contains("--memory-mode-ui-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --memory-mode-ui-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    MemoryModeUiCases.Run();
+    return 0;
+}
+
+if (args.Length is 2 or 3 && args[0] == "--memory-mode-card-shots")
+{
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    MemoryModeUiCases.Shots(args[1], args.Length == 3 ? args[2] : null);
+    return 0;
+}
+
+if (args.Length > 0 && args[0] == "--memory-mode-authored-export-ui")
+{
+    if (args.Length != 3) throw new ArgumentException("Usage: UiSmoke --memory-mode-authored-export-ui <project folder> <output folder>");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    MemoryModeUiCases.RunAuthoredExport(args[1], args[2]);
+    return 0;
+}
+
+if (args.Length > 0 && args[0] == "--memory-mode-export-ui")
+{
+    if (args.Length is not (3 or 4)) throw new ArgumentException("Usage: UiSmoke --memory-mode-export-ui <project folder> <output folder> [level key]");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    MemoryModeUiCases.RunExport(args[1], args[2], args.Length == 4 ? args[3] : "treetops");
+    return 0;
+}
+
 if (args.Contains("--play-as-crash-ui-only", StringComparer.Ordinal))
 {
     if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --play-as-crash-ui-only");

@@ -13501,6 +13501,7 @@ public sealed partial class MainWindow : Window
 
     private async Task CreateObjectTestBinCoreAsync()
     {
+        using var memory = UseProjectMemoryMode();
         if (_releaseMode && TryGetCreateBinDiskSpaceBlockReason(out string diskSpaceReason))
         {
             _statusText.Text = diskSpaceReason;
@@ -13670,6 +13671,7 @@ public sealed partial class MainWindow : Window
         // change that outcome or enter the prepublication failure handler.
         await CompleteCombinedExportPublicationAsync(
             sourceImage, outputDir, targets, result, targetSummary, currentBuildSafetyReport);
+        _statusText.Text += MemoryModeExportNote(memory);
         try
         {
             _statusText.Text += OpenContainingFolderStatus(result.OutputCuePath);
@@ -14649,6 +14651,9 @@ public sealed partial class MainWindow : Window
             foreach (var target in targets.Where(t => t.HasPortalRoutes))
                 if (!patchedLevelNames.Contains(target.Level.DisplayName)) patchedLevelNames.Add(target.Level.DisplayName);
         }
+
+        if (!deferSharedRuntimeHooks)
+            (currentImage, currentCue) = await ApplyMemoryModeStageAsync(sourceImage, currentImage, currentCue, tempDir, step + 1, _retailCatalog);
 
         if (objectPatches + terrainPatches + environmentGradePatches + skyboxPatches + levelNamePatches + musicLevelPatches + portalRoutePatches == 0 && flightStage == null && globalFlight == null || !File.Exists(currentImage))
             return new CombinedTestBinResult("", "", objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, false);

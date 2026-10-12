@@ -29,6 +29,8 @@ internal sealed class NativeCollectibleSaveSchedulerKernel
     private readonly byte[] bytes;
     private NativeCollectibleSaveSchedulerKernel(NativeCollectibleSaveControllerKernel controller,IReadOnlyList<(uint Address,uint Value)> globals,uint residentAddress=0)
     {
+        // Its game code compares the scene address (0x800785E4) with the 2 MB layout's.
+        Spyro.Editor.Core.Universal.GameRam.RequirePlayStationSceneAddress("The collectible save scheduler");
         ResidentAddress=residentAddress;
         if(residentAddress!=0&&residentAddress!=checked(controller.ArenaAddress+NativeCollectibleSaveControllerKernel.ArenaBytes))
             throw new InvalidDataException("Resident scheduler requires the named owner immediately after its complete controller arena.");

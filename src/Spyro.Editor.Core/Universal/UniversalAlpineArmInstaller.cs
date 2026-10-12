@@ -99,10 +99,10 @@ internal static class UniversalAlpineArmInstaller
         int[] save=Enumerable.Range(0,nativeEnd).ToArray();for(int n=0;n<placed;n++)save[87+n]=87+(active[n].PersistentSlot??order[n]);
         if(save.Where((logical,physical)=>logical!=physical).Any())
         {var mapped=NativeMobySaveMap.Append(host.Overlay,overlay,joined.Labels["quarantine_wrap_update"],copy,save);overlay=mapped.Overlay;copy=mapped.CopyBuffer;NativeMobySaveMap.PatchExe(exe);var currentBindings=UniversalExeBindings.Read(exe,level.LevelId);UniversalExeBindings.Patch(exe,currentBindings[UniversalExeBindings.UpdateGlobal],mapped.UpdatePointer);UniversalExeBindings.Patch(exe,currentBindings[UniversalExeBindings.CopyBufferGlobal],copy);}
-        uint before=UniversalMobyComposer.RuntimeEnd(host.Data,host.Overlay.CopyBuffer),end=UniversalMobyComposer.RuntimeEnd(dest,copy),limit=UniversalMobyComposer.NormalBufferFloor-UniversalMobyComposer.RamSafetyMargin;
         int modelGrowth=packages.Sum(x=>x.Package.Length)+reactions.Sum(x=>x.ModelGrowthBytes),sceneGrowth=dest.Subfiles()[3].Length-host.Data.Subfiles()[3].Length,codeGrowth=checked((int)(copy-host.Overlay.CopyBuffer));
-        var budget=new UniversalRamBudget(before,end,UniversalMobyComposer.NormalBufferFloor,(int)(UniversalMobyComposer.NormalBufferFloor-before),(int)((long)UniversalMobyComposer.NormalBufferFloor-end),codeGrowth,modelGrowth,sceneGrowth,checked((int)((long)end-before))-codeGrowth-modelGrowth-sceneGrowth);
-        if(end>limit)throw new UniversalBudgetException("Blowhard does not have enough game memory for the complete Alpine group and its dynamic arms.",budget);
+        // The level's game RAM in the export's memory mode (GameRam: one 2 MB budget, or two with 8 MB RAM).
+        var budget=GameRam.Budget(host.Data,host.Overlay.CopyBuffer,dest,copy,codeGrowth,modelGrowth,sceneGrowth);
+        if(!GameRam.Fits(dest,copy))throw new UniversalBudgetException("Blowhard does not have enough game memory for the complete Alpine group and its dynamic arms.",budget);
         int arenaBytes=dest.Scene().ArenaEnd-dest.Scene().RowsOffset-nativeEnd*88;int usable=(arenaBytes-73)/112;
         Require(usable>=90+32&&nativeEnd+usable<256,"complete cohort/native dynamic reserve does not fit the row/cache namespace.");
         int[] physicalRows=Enumerable.Repeat(-1,ledger.Count).ToArray(),saveRows=physicalRows.ToArray();for(int n=0;n<placed;n++){physicalRows[order[n]]=87+n;saveRows[order[n]]=save[87+n];}

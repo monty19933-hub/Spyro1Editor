@@ -64,7 +64,7 @@ public sealed class UniversalCompositionHost
             uint original=UniversalMobyComposer.RuntimeEnd(new UniversalLevelData(replacement.Before),copy);
             uint final=UniversalMobyComposer.RuntimeEnd(new UniversalLevelData(replacement.After),copy);
             if(original!=replacement.OriginalRuntimeEnd||final!=replacement.FinalRuntimeEnd||
-                final>UniversalMobyComposer.NormalBufferFloor-UniversalMobyComposer.RamSafetyMargin && final>original)
+                GameRam.Exceeds(new UniversalLevelData(replacement.After),copy,new UniversalLevelData(replacement.Before),copy))
                 throw new InvalidDataException("Growing terrain fit host failed its source-authenticated native RAM guard.");
             return new(sourceImagePath,destination,replacement.After,image.EntryBytes(destination.SourceWadEntry-1),image.Exe,prepared:true,sharedEntry8:image.EntryBytes(8));
         }

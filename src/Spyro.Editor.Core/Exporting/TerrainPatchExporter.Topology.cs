@@ -261,8 +261,8 @@ public static partial class TerrainPatchExporter
         after.CopyTo(emittedEntry,checked((int)modelInfo.SubfileOffset));
         uint nativeEnd=UniversalMobyComposer.RuntimeEnd(new UniversalLevelData(originalEntry),copyBuffer);
         uint emittedEnd=UniversalMobyComposer.RuntimeEnd(new UniversalLevelData(emittedEntry),copyBuffer);
-        if(emittedEnd>UniversalMobyComposer.NormalBufferFloor-UniversalMobyComposer.RamSafetyMargin && emittedEnd>nativeEnd)
-            throw new InvalidOperationException($"Terrain topology exceeds native working memory by {emittedEnd-(UniversalMobyComposer.NormalBufferFloor-UniversalMobyComposer.RamSafetyMargin)} bytes; no terrain BIN was built.");
+        if(GameRam.Exceeds(new UniversalLevelData(emittedEntry),copyBuffer,new UniversalLevelData(originalEntry),copyBuffer))
+            throw new InvalidOperationException($"Terrain topology exceeds native working memory by {GameRam.Shortfall(new UniversalLevelData(emittedEntry),copyBuffer)} bytes; no terrain BIN was built.");
         if(growth>0)
         {
             foreach(long at in patches.Keys.Where(at=>at>=modelInfo.AssetOffset&&at<modelInfo.AssetOffset+modelInfo.AssetSize).ToArray())patches.Remove(at);
