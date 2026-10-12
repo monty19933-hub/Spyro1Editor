@@ -12730,6 +12730,12 @@ public sealed partial class MainWindow : Window
     {
         if (TryBlockId65SkyMutation("custom sky import"))
             return;
+        if (_freshSceneDocument != null)
+        {
+            // A level you build (or rebuilt with Start Blank) keeps its sky in the level.
+            await ImportFreshSkyAsync();
+            return;
+        }
 
         if (_currentLevel == null)
         {
@@ -12903,7 +12909,9 @@ public sealed partial class MainWindow : Window
     {
         if(_freshSceneDocument!=null)
         {
-            _statusText.Text="The authored native sky currently supports the flat RGB color above. Imported sky meshes and environment grading require a verified native compiler before export.";
+            // A level you build keeps its sky in the level itself (Choose Sky File… or Game Settings › Import a sky…).
+            if(_freshSceneDocument.CustomSky!=null){_statusText.Text="This level keeps its imported sky in the level; Save Level keeps it.";return true;}
+            _statusText.Text="A level you build keeps its sky in the level: use Choose Sky File… to import one, or borrow a level's sky in Game Settings, then Save Level.";
             return false;
         }
         if (TryBlockId65SkyMutation("save"))

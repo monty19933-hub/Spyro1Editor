@@ -3,9 +3,10 @@ using Spyro.Editor.Core.Exporting;
 
 namespace Spyro.Editor.Core.Sky;
 
-/// <summary>How a panorama becomes a native sky: about how many triangles (the game's own skies use 250-4,300) and
-/// how far to turn it (degrees, anticlockwise seen from above).</summary>
-public sealed record SkyBuildOptions(int Triangles = SkyBuildOptions.DefaultTriangles, double TurnDegrees = 0)
+/// <summary>How a panorama becomes a native sky: about how many triangles (the game's own skies use 250-4,300), how far
+/// to turn it (degrees, anticlockwise seen from above) and whether to flip it left to right (a model made to be seen from
+/// outside shows its pictures mirrored from inside).</summary>
+public sealed record SkyBuildOptions(int Triangles = SkyBuildOptions.DefaultTriangles, double TurnDegrees = 0, bool Mirror = false)
 {
     public const int MinTriangles = 1000, DefaultTriangles = 3000, MaxTriangles = 4000;
 }
@@ -38,7 +39,7 @@ public static class NativeSkyBuilder
     {
         int budget = Math.Clamp(options.Triangles, SkyBuildOptions.MinTriangles, SkyBuildOptions.MaxTriangles);
         var importance = panorama.LevelNear(512);
-        double turn = options.TurnDegrees;
+        var look = new SkyLook(panorama, options.TurnDegrees, options.Mirror);
 
         // Ring heights: evenly spaced in angle, plus extra rings where the colour changes from row to row.
         int rings = Math.Max(8, (int)Math.Round(Math.Sqrt(budget / 2.55)));
@@ -58,7 +59,7 @@ public static class NativeSkyBuilder
 
         // Corners per ring: the ring's length, plus extra where the colour changes around it; never further apart than
         // MaxGap along the ring.
-        var around = elevations.Select(e => AroundChange(panorama, e, turn)).ToArray();
+        var around = elevations.Select(e => AroundChange(look, e)).ToArray();
         double meanAround = Math.Max(1e-6, around.SelectMany(a => a).Average());
         double[] weight = elevations.Select((e, k) => Math.Cos(e) * (1 + Math.Min(4, around[k].Average() / meanAround))).ToArray();
         int[] minimum = elevations.Select(e => Math.Max(3, (int)Math.Ceiling(2 * Math.PI * Math.Cos(e) / MaxGap))).ToArray();
@@ -99,7 +100,7 @@ public static class NativeSkyBuilder
             }
         var colors = corners.Select((d, i) =>
         {
-            var (r, g, b) = panorama.Sample(d, 0.75 * spacing[i], turn);
+            var (r, g, b) = look.Sample(d, 0.75 * spacing[i]);
             return (SkyPanorama.Byte(r), SkyPanorama.Byte(g), SkyPanorama.Byte(b));
         }).ToArray();
         var points = corners.Select(d => (X: (int)Math.Round(d.X * Radius), Y: (int)Math.Round(d.Y * Radius), Z: (int)Math.Round(d.Z * Radius))).ToArray();
@@ -110,6 +111,21 @@ public static class NativeSkyBuilder
         if (!Spyro1SkyBlockAnalyzer.IsValidStandaloneSkyBlock(block))
             throw new InvalidDataException("The built sky is not a valid native sky block.");
         return new SkyBuildResult(block, triangles.Count, parts.Sum(p => p.Vertices.Count), parts.Sum(p => p.Vertices.Select(i => colors[i]).Distinct().Count()), parts.Count);
+    }
+
+    /// <summary>The panorama as it is put round the player: turned, and flipped left to right about the direction the
+    /// picture's middle faces.</summary>
+    private sealed record SkyLook(SkyPanorama Panorama, double TurnDegrees, bool Mirror)
+    {
+        public (float R, float G, float B) Sample(SkyVector d, double footprint)
+        {
+            if (Mirror)
+            {
+                double turn = TurnDegrees * Math.PI / 180, azimuth = 2 * turn - Math.Atan2(d.Y, d.X), across = Math.Sqrt(d.X * d.X + d.Y * d.Y);
+                d = new(across * Math.Cos(azimuth), across * Math.Sin(azimuth), d.Z);
+            }
+            return Panorama.Sample(d, footprint, TurnDegrees);
+        }
     }
 
     /// <summary>How much the colour changes from each row of the panorama to the next (averaged across the row).</summary>
@@ -129,7 +145,7 @@ public static class NativeSkyBuilder
     }
 
     /// <summary>How much the colour changes along the ring at <paramref name="elevation"/>, at 512 points from azimuth 0.</summary>
-    private static double[] AroundChange(SkyPanorama panorama, double elevation, double turn)
+    private static double[] AroundChange(SkyLook look, double elevation)
     {
         const int n = 512;
         var colors = new (float R, float G, float B)[n];
@@ -137,7 +153,7 @@ public static class NativeSkyBuilder
         for (int i = 0; i < n; i++)
         {
             double azimuth = 2 * Math.PI * i / n;
-            colors[i] = panorama.Sample(new(Math.Cos(elevation) * Math.Cos(azimuth), Math.Cos(elevation) * Math.Sin(azimuth), Math.Sin(elevation)), footprint, turn);
+            colors[i] = look.Sample(new(Math.Cos(elevation) * Math.Cos(azimuth), Math.Cos(elevation) * Math.Sin(azimuth), Math.Sin(elevation)), footprint);
         }
         var change = new double[n];
         for (int i = 0; i < n; i++)

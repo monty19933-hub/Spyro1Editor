@@ -119,6 +119,12 @@ var sun = Seen(sky.Block, SkyDirections.FromUv(0.0, 0.2));
 Check(Near(sun, 255, 255, 255, 120), "the sun behind and high up");
 var turned = NativeSkyBuilder.Build(panorama, new(TurnDegrees: 90));
 Check(Near(Seen(turned.Block, new(0, 1, 0)), 230, 20, 20, 120), "Turn 90° brings the middle of the picture round to +Y");
+var flipped = NativeSkyBuilder.Build(panorama, new(Mirror: true));
+Check(Near(Seen(flipped.Block, new(1, 0, 0)), 230, 20, 20, 120) && Near(Seen(flipped.Block, new(0, -1, 0)), 240, 220, 20, 120),
+    "Flip left and right keeps heading 0 and puts the left quarter on the right (-Y)");
+var flippedTurned = NativeSkyBuilder.Build(panorama, new(TurnDegrees: 90, Mirror: true));
+Check(Near(Seen(flippedTurned.Block, new(0, 1, 0)), 230, 20, 20, 120) && Near(Seen(flippedTurned.Block, new(1, 0, 0)), 240, 220, 20, 120),
+    "flipped and turned 90°: the middle faces +Y, the left quarter +X");
 Console.WriteLine($"background {sky.Block[4]},{sky.Block[5]},{sky.Block[6]}");
 Check(Near(new Rgba32(sky.Block[4], sky.Block[5], sky.Block[6], 255), 40, 140, 50, 40), "the background colour is about the ground below the horizon");
 var preview = NativeSkyPreview.Render(sky.Block, 512);

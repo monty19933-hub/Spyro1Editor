@@ -254,6 +254,8 @@ CORE_CASES = (
     # ASCII FBX (transforms and parents, UVs flipped to top-row V, embedded and on-disk textures, up axes); broken,
     # truncated and too-large files refused.
     ("SkyModelSmoke", "SKY_MODEL_OK checks=59"),
+    # Panoramas and sky models become native skies within the game's limits, facing the right way (not mirrored).
+    ("SkyImportSmoke", "SKY_IMPORT_FREE_OK checks=70"),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
@@ -343,6 +345,8 @@ SOURCE_QA_CASES = (
     # The level window installed into the retail executable and card menu (read only): USA preimages and caves, the
     # routines on the real executable, re-install, placement inside WAD.WAD and after the image.
     ("LevelWindowSmoke", "LEVEL_WINDOW_SOURCE_OK checks=120", ["--source"]),
+    # Every retail sky drawn as a panorama and rebuilt from it within the game's limits, looking the same.
+    ("SkyImportSmoke", "SKY_IMPORT_SOURCE_OK checks=278", ["--source"]),
     ("DarkParticleHostSmoke", "DARK_PROJECTILE_ALL_HOST_OWNERSHIP_OK", []),
     ("FreshParticleBindingSmoke", "FRESH_OWNED_PARTICLE_BINDING_OK", []),
     ("CollectionStarSmoke", "COLLECTION_STAR_SOURCE_OWNERSHIP_OK", []),

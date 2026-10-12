@@ -21,8 +21,8 @@ public sealed partial class MainWindow
     internal static readonly string[] SkyPictureExtensions = [".png", ".jpg", ".jpeg", ".webp", ".bmp"];
     internal static readonly string[] SkyModelExtensions = [".obj", ".fbx"];
 
-    /// <summary>Answers the Import Sky dialog in tests: (triangles, turn in degrees), or null to cancel.</summary>
-    internal Func<(int Triangles, double Turn)?>? SkyImportChoiceForTesting { get; set; }
+    /// <summary>Answers the Import Sky dialog in tests (null: cancel).</summary>
+    internal Func<SkyBuildOptions?>? SkyImportChoiceForTesting { get; set; }
 
     internal static FilePickerFileType SkyFileType(bool withNativeSky) => new(withNativeSky ? "Skies: 360° pictures, OBJ, FBX or .sky" : "Skies: 360° pictures, OBJ or FBX")
     {
@@ -102,11 +102,11 @@ public sealed partial class MainWindow
         }
         var choice = SkyImportChoiceForTesting != null ? SkyImportChoiceForTesting() : await ShowSkyImportDialogAsync(Path.GetFileName(path), panorama);
         if (choice is not { } chosen) { _statusText.Text = "Sky import canceled."; return null; }
-        try { return await Task.Run(() => NativeSkyBuilder.Build(panorama, new(chosen.Triangles, chosen.Turn))); }
+        try { return await Task.Run(() => NativeSkyBuilder.Build(panorama, chosen)); }
         catch (InvalidDataException e) { _statusText.Text = "Could not make a sky from it: " + e.Message; return null; }
     }
 
-    private async Task<(int Triangles, double Turn)?> ShowSkyImportDialogAsync(string fileName, SkyPanorama panorama)
+    private async Task<SkyBuildOptions?> ShowSkyImportDialogAsync(string fileName, SkyPanorama panorama)
     {
         var preview = new Image { Name = "SkyImportPreview", Width = 640, Height = 320, Stretch = Stretch.Fill };
         var facing = new TextBlock { Text = "▲ faces the level's start direction (heading 0)", FontSize = 11, Foreground = new SolidColorBrush(ModernMutedInk), HorizontalAlignment = HorizontalAlignment.Center };
@@ -114,6 +114,7 @@ public sealed partial class MainWindow
         var detail = new Slider { Name = "SkyImportDetail", Minimum = SkyBuildOptions.MinTriangles, Maximum = SkyBuildOptions.MaxTriangles, Value = SkyBuildOptions.DefaultTriangles, TickFrequency = 100, IsSnapToTickEnabled = true };
         var turn = new Slider { Name = "SkyImportTurn", Minimum = 0, Maximum = 355, Value = 0, TickFrequency = 5, IsSnapToTickEnabled = true };
         var detailLabel = new TextBlock(); var turnLabel = new TextBlock();
+        var mirror = new CheckBox { Name = "SkyImportMirror", Content = "Flip left and right (for a model made to be seen from outside, whose pictures read backwards)" };
         var notes = new TextBlock { Name = "SkyImportNotes", TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromRgb(168, 98, 0)), Text = string.Join("\n", panorama.Notes), IsVisible = panorama.Notes.Count > 0 };
         Button cancel = NewButton("Cancel"), use = NewButton("Use This Sky");
         cancel.Name = "SkyImportCancel"; use.Name = "SkyImportUse";
@@ -131,6 +132,7 @@ public sealed partial class MainWindow
         content.Children.Add(notes);
         content.Children.Add(detailLabel); content.Children.Add(detail);
         content.Children.Add(turnLabel); content.Children.Add(turn);
+        content.Children.Add(mirror);
         content.Children.Add(summary);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right };
         actions.Children.Add(cancel); actions.Children.Add(use);
@@ -145,7 +147,8 @@ public sealed partial class MainWindow
         async Task Refresh()
         {
             int request = ++revision;
-            int triangles = (int)detail.Value; double degrees = turn.Value;
+            var options = new SkyBuildOptions((int)detail.Value, turn.Value, mirror.IsChecked == true);
+            int triangles = options.Triangles; double degrees = options.TurnDegrees;
             detailLabel.Text = $"Detail: {triangles:N0} triangles";
             turnLabel.Text = $"Turn: {degrees:0}° (turns the sky around the player)";
             summary.Text = "Building the preview…";
@@ -154,7 +157,7 @@ public sealed partial class MainWindow
             {
                 var (result, picture) = await Task.Run(() =>
                 {
-                    var built = NativeSkyBuilder.Build(panorama, new(triangles, degrees));
+                    var built = NativeSkyBuilder.Build(panorama, options);
                     return (built, NativeSkyPreview.Render(built.Block, 1024));
                 });
                 if (request != revision) return;
@@ -171,12 +174,13 @@ public sealed partial class MainWindow
         }
         detail.PropertyChanged += async (_, e) => { if (e.Property == RangeBase.ValueProperty) await Refresh(); };
         turn.PropertyChanged += async (_, e) => { if (e.Property == RangeBase.ValueProperty) await Refresh(); };
+        mirror.IsCheckedChanged += async (_, _) => await Refresh();
         cancel.Click += (_, _) => dialog.Close(false);
         use.Click += (_, _) => dialog.Close(true);
         dialog.Closed += (_, _) => { revision++; shown?.Dispose(); };
         _ = Refresh();
         if (!await dialog.ShowDialog<bool>(this)) return null;
-        return ((int)detail.Value, turn.Value);
+        return new SkyBuildOptions((int)detail.Value, turn.Value, mirror.IsChecked == true);
     }
 
     private static WriteableBitmap ToBitmap(SkyImage image)
