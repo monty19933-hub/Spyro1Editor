@@ -9,6 +9,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Spyro.Editor.UniversalParticleBoundarySmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.ExtendedRamSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.SkyImportSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UniversalDryCanyonBirdSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.CrossLevelCandidateFingerprintSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.DiscImageWorkingCopySmoke" />
