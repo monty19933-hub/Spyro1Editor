@@ -104,7 +104,7 @@ public sealed partial class MainWindow
         return true;
     }
 
-    private async Task<(string LevelKey, int TextureId)?> ShowBuiltTextureGridAsync()
+    private async Task<(string LevelKey, int TextureId)?> ShowBuiltTextureGridAsync(Window? owner = null)
     {
         var levels = _retailCatalog.Levels.Where(l => l.SourceWadEntry is >= 10 and <= 78).ToArray();
         var current = _freshSceneDocument?.Surfaces.Select(s => s.Material).OfType<AuthoredMaterial>().GroupBy(m => m.SourceWadEntry)
@@ -180,7 +180,7 @@ public sealed partial class MainWindow
         };
         dialog.Closed += (_, _) => { revision++; foreach (var b in bitmaps) b.Dispose(); };
         _ = Fill();
-        await dialog.ShowDialog(this);
+        await dialog.ShowDialog(owner ?? this);
         return result;
     }
 }
