@@ -17,8 +17,8 @@ public sealed partial class MainWindow
                 var merged=flight.MergeLevelData(level.LevelId,before);byte[] after=merged.CopyLevelData();
                 if(after.AsSpan().SequenceEqual(before))continue;
                 var overlay=new UniversalOverlay(disc.EntryBytes(level.SourceWadEntry-1),UniversalExeBindings.Read(disc.Exe,level.LevelId));
-                uint end=UniversalMobyComposer.RuntimeEnd(new UniversalLevelData(after),overlay.CopyBuffer);
-                if(end>UniversalMobyComposer.NormalBufferFloor-UniversalMobyComposer.RamSafetyMargin)
+                // The level's game RAM in the export's memory mode (GameRam: one 2 MB budget, or two with 8 MB RAM).
+                if(!GameRam.Fits(new UniversalLevelData(after),overlay.CopyBuffer))
                     throw new InvalidDataException($"{level.DisplayName}: flight animations exceed the native RAM budget in the actual edited body.");
                 replacements[level.SourceWadEntry]=after;
             }

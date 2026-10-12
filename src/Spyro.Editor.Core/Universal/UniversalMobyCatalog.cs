@@ -161,8 +161,7 @@ public static class UniversalMobyCatalogBuilder
         {
             bool have = data.Registrations().Any(r => r.ClassId == v.ClassId);
             int need = (have ? 0 : UniversalLevelData.Align(v.ModelBytes, 0x800)) + v.BehaviorBytes + UniversalLevelData.Align(v.PropertiesBytes, 4) + 8;
-            int room = (int)(UniversalMobyComposer.NormalBufferFloor - UniversalMobyComposer.RamSafetyMargin -
-                UniversalMobyComposer.RuntimeEnd(data, overlay.CopyBuffer)) - alreadyPlannedBytes;
+            int room = (int)GameRam.ModelRoom(data, overlay.CopyBuffer) - alreadyPlannedBytes;
             return new(false, !have, true, need, room, need <= room, $"Imports model + behavior · ~{need / 1024.0:0.0} KB of {Math.Max(0, room) / 1024.0:0.0} KB free");
         }
         var sw = UniversalDispatchAnalysis.FindUpdateSwitch(overlay);
@@ -188,8 +187,8 @@ public static class UniversalMobyCatalogBuilder
         int ram = depModels + (needModel ? UniversalLevelData.Align(v.ModelBytes, 0x800) : 0)
             + (needBehavior ? v.BehaviorBytes + EstimateInitBytes(lib, v.SourceLevelKey) + 0x60 : 0)
             + UniversalLevelData.Align(v.PropertiesBytes, 4) + 8;
-        int headroom = (int)(UniversalMobyComposer.NormalBufferFloor - UniversalMobyComposer.RamSafetyMargin -
-            UniversalMobyComposer.RuntimeEnd(data, overlay.CopyBuffer)) - alreadyPlannedBytes;
+        // Room below the draw buffers (models and behavior); with 8 MB RAM the scene's own bytes are no longer in it.
+        int headroom = (int)GameRam.ModelRoom(data, overlay.CopyBuffer) - alreadyPlannedBytes;
         bool texturesFit = !needModel || TexturesFit(lib, destination, v);
         bool fits = ram <= headroom && texturesFit;
         string summary = native && registered ? "Native to this level"

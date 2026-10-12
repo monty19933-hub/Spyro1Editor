@@ -183,8 +183,8 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         var title = new TextTargetEntry(Target.Key, Target.ScriptKey, Document.Name, "LAB", 3, 19, LevelTextTableKind.LevelNames, 35);
         exe = LevelTextPatchExporter.ComposeStagedExecutable(stagedRetailImage??_baseline, exe, [..retailNames??[],new(title, Document.Name)]);
         if (_flight?.IsLevelEnabled(65) == true) _ = _flight.RequireFinalLevelClosure(65, levelData, exe);
-        uint runtimeEnd = UniversalMobyComposer.RuntimeEnd(new UniversalLevelData(levelData), new UniversalOverlay(overlayData,UniversalExeBindings.Read(exe,65)).CopyBuffer);
-        if(runtimeEnd > UniversalMobyComposer.NormalBufferFloor-UniversalMobyComposer.RamSafetyMargin)
+        // The level's game RAM in the export's memory mode (GameRam: one 2 MB budget, or two with 8 MB RAM).
+        if(!GameRam.Fits(new UniversalLevelData(levelData), new UniversalOverlay(overlayData,UniversalExeBindings.Read(exe,65)).CopyBuffer))
             throw new InvalidDataException("The complete authored scene exceeds the native normal-buffer memory budget.");
         Dictionary<int,byte[]> replacements = new() {{79,overlayData},{80,levelData}};
         UniversalEggUnlocks.PatchOverlays(nativeCatalog,donors.Disc.EntryBytes,baseline.EntryBytes,replacements,eggs.Count);
@@ -202,6 +202,9 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         RewardFallbacks.RequireInstalled(levelData);
         if(freshParticleBinding!=null)NativePortalRouteFreshBinding.RequireOwnedParticleDestination(donors.Disc.Exe,exe,
             new(overlayData,UniversalExeBindings.Read(exe,65)),freshParticleBinding);
+        // Emulator only (8 MB RAM): the scenes load in the extra memory; every level is checked against that layout.
+        NativeExtendedRam.ApplyForExport(exe,entry=>replacements.TryGetValue(entry,out var bytes)?bytes:baseline.EntryBytes(entry),
+            nativeCatalog.Levels.Where(l=>l.LevelId!=65).Append(Target),donors.Disc);
         byte[] wad=baseline.RebuildWad(replacements);
         string stage=outputImage+".pending-"+Guid.NewGuid().ToString("N"),cue=Path.ChangeExtension(outputImage,".cue"),stagedCue=stage+".cue";
         bool retainStage=false;

@@ -164,7 +164,10 @@ public sealed class NativeFreeFlightCompositionPlan
         if (!bindings.TryGetValue(UniversalExeBindings.CopyBufferGlobal, out var binding))
             throw new InvalidDataException("Final flight output has no actual native copy-buffer binding.");
         var body = new UniversalLevelData(levelData.ToArray());
-        uint end = UniversalMobyComposer.RuntimeEnd(body, binding.Value);
+        // With 8 MB RAM the scene loads in the extra memory: what must end below the buffers is what loads before it.
+        uint end = GameRam.Extended ? GameRam.LowEnd(body, binding.Value) : UniversalMobyComposer.RuntimeEnd(body, binding.Value);
+        if (GameRam.Extended && GameRam.SceneRoom(body, binding.Value) < 0)
+            throw new InvalidDataException($"Fly Anywhere level {levelId}'s objects and layout do not fit the 8 MB memory setting's room for them.");
         bool sourceBaselineException = levelId == 62 && end <= _originalLevel62ReadEnd;
         var evidence = new NativeFreeFlightMemoryEvidence(levelId, binding.Value, end,
             UniversalMobyComposer.NormalBufferFloor, UniversalMobyComposer.RamSafetyMargin,

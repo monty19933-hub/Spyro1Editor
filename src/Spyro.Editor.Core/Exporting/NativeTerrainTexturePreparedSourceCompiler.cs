@@ -65,7 +65,7 @@ public static class NativeTerrainTexturePreparedSourceCompiler
         uint original=UniversalMobyComposer.RuntimeEnd(new UniversalLevelData(replacement.Before),copy);
         uint final=UniversalMobyComposer.RuntimeEnd(new UniversalLevelData(replacement.After),copy);
         if(original!=replacement.OriginalRuntimeEnd||final!=replacement.FinalRuntimeEnd||
-            final>UniversalMobyComposer.NormalBufferFloor-UniversalMobyComposer.RamSafetyMargin&&final>original)
+            GameRam.Exceeds(new UniversalLevelData(replacement.After),copy,new UniversalLevelData(replacement.Before),copy))
             throw new InvalidDataException("Growing private terrain body failed its authenticated original/final native memory guard.");
     }
 }

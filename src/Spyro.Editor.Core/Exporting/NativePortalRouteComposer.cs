@@ -84,9 +84,8 @@ public static class NativePortalRouteComposer
                 var data = new UniversalLevelData(Read(level.SourceWadEntry));
                 NativePortalRouteRuntime.PatchReturnHomeCalls(donors, result, bindings, data, level.Key,
                     returnClasses?.GetValueOrDefault(level.LevelId));
-                uint end = UniversalMobyComposer.RuntimeEnd(data, result.CopyBuffer);
-                if (end > UniversalMobyComposer.NormalBufferFloor - UniversalMobyComposer.RamSafetyMargin)
-                    throw new InvalidDataException($"{level.DisplayName} needs {end - (UniversalMobyComposer.NormalBufferFloor - UniversalMobyComposer.RamSafetyMargin):N0} more bytes for its Return Home route. Remove unused objects or level assets and try again.");
+                if (!GameRam.Fits(data, result.CopyBuffer))
+                    throw new InvalidDataException($"{level.DisplayName} needs {GameRam.Shortfall(data, result.CopyBuffer):N0} more bytes for its Return Home route. Remove unused objects or level assets and try again.");
                 if (level.LevelId == 65)
                 {
                     if(freshParticleBinding!=null)

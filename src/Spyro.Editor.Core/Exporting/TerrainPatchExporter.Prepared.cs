@@ -39,7 +39,7 @@ public static partial class TerrainPatchExporter
             uint original=UniversalMobyComposer.RuntimeEnd(new UniversalLevelData(replacement.Before),copy);
             if(original!=replacement.OriginalRuntimeEnd)throw new InvalidDataException("Growing terrain original memory ownership changed.");
             uint actual=UniversalMobyComposer.RuntimeEnd(new UniversalLevelData(body),copy);
-            if(actual!=replacement.FinalRuntimeEnd || actual>UniversalMobyComposer.NormalBufferFloor-UniversalMobyComposer.RamSafetyMargin&&actual>replacement.OriginalRuntimeEnd)
+            if(actual!=replacement.FinalRuntimeEnd || GameRam.Exceeds(new UniversalLevelData(body),copy,new UniversalLevelData(replacement.Before),copy))
                 throw new InvalidDataException("Growing terrain body failed its final native memory ownership gate.");
         }
         Directory.CreateDirectory(Path.GetDirectoryName(output)!);

@@ -1123,6 +1123,7 @@ public sealed partial class MainWindow
             crash.Name = "PlayAsCrashSection";
             panel.Children.Add(crash);
         }
+        panel.Children.Add(BuildMemoryModeSection());
         _homeworldTextGroup = BuildModernDisclosure("Portals & Return Home", BuildPortalControlPanel(), false);
         panel.Children.Add(_homeworldTextGroup);
 

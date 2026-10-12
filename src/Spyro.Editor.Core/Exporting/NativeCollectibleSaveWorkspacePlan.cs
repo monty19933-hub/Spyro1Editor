@@ -57,6 +57,8 @@ internal sealed class NativeCollectibleSaveWorkspacePlan
     private readonly SchedulerGeometryReceipt? schedulerGeometry;
     private NativeCollectibleSaveWorkspacePlan(NativeRegionalSourceSession source,NativeJapaneseEggAdmittedLifecyclePlan ancestry,WorkspaceProfile profile)
     {
+        // It rebinds the scene address (0x800785E4) from the 2 MB layout's.
+        Spyro.Editor.Core.Universal.GameRam.RequirePlayStationSceneAddress("The collectible save workspace");
         ancestry.RequireSourceComposition();
         byte[] original=source.ReadExecutableRange(0,source.ExecutableByteLength),exe=ancestry.CopyExecutable();
         NativeJapaneseEggMemoryReport.RequireSourceExecutable(original);

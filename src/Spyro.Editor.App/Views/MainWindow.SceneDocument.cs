@@ -202,7 +202,7 @@ public sealed partial class MainWindow
         var flightSettings = NativeFreeFlightSettingsStore.Capture(_workspace.RootPath);
         bool flightEnabled = flightSettings.GlobalEnabled, flightChosen = !_releaseMode || flightEnabled;
         IReadOnlyList<int> flightLevels = flightSettings.EnabledLevelIds;
-        string key=scene.Fingerprint()+"|"+sourceImage+"|flight="+(flightChosen?string.Join(",",flightLevels):"unset");
+        string key=scene.Fingerprint()+"|"+sourceImage+"|flight="+(flightChosen?string.Join(",",flightLevels):"unset")+"|memory="+GameRam.Mode;
         if(_freshNativeCompilation==null||_freshNativeCompilation.IsFaulted||_freshNativeCompilationKey!=key)
         {
             _freshNativeCompilationKey=key;
@@ -224,6 +224,7 @@ public sealed partial class MainWindow
 
     private async Task CreateFreshMainBinAsync()
     {
+        using var memory = UseProjectMemoryMode();
         bool authoredActive=_freshSceneDocument!=null;
         if(authoredActive?!await SaveFreshSceneAsync():!await SaveCurrentEditsAsync())return;
         var owner=CaptureSourceDiscOperationIdentity();
@@ -301,7 +302,7 @@ public sealed partial class MainWindow
         string flightNote=!flightIntent.RequiresRebuild?"":!flightIntent.Enabled?" Fly Anywhere is off in this game."
             :flightIntent.WholeGame?" Fly Anywhere is on in this game.":" Fly Anywhere is on in "+DescribeFlightLevels(flightIntent.EnabledLevelIds)+".";
         RememberExportedGame(Path.ChangeExtension(output,".cue"));
-        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. All saved level replacements and other saved edits are included."+flightNote+PreservedResearchExportNote();
+        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. All saved level replacements and other saved edits are included."+flightNote+PreservedResearchExportNote()+MemoryModeExportNote(memory);
         }
         // The merged retail image is a working copy for this export only.
         finally{if(retailStage!=null)ExportScratchSpace.Delete(retailStage);}

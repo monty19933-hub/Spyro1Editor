@@ -52,6 +52,15 @@ class OwnedCommandTests(unittest.TestCase):
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
 
+    def test_extended_ram_smoke_registration(self):
+        name = "ExtendedRamSmoke"
+        self.assertIn((name, "EXTENDED_RAM_FREE_OK checks=73"), RUNNER.CORE_CASES)
+        self.assertIn((name, "EXTENDED_RAM_SOURCE_OK checks=88", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_REPORT_CASES)
+        self.assertIn(("UiSmoke", "MEMORY_MODE_UI_OK checks=12", ["--memory-mode-ui-only"]), RUNNER.ADDITIONAL_CORE_CASES)
+
     def test_dreamweavers_cannon_source_suite_registration_uses_current_core(self):
         name = "UniversalDreamWeaversCannonSmoke"
         self.assertIn((name, "UNIVERSAL_DREAMWEAVERS_CANNON_FREE_OK"), RUNNER.CORE_CASES)
@@ -905,7 +914,7 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
-        self.assertEqual(16, len(lines))
+        self.assertEqual(17, len(lines))
         self.assertTrue(any(flag + " | " + marker in line for line in lines))
 
     def test_aggregate_ui_is_an_additional_isolated_mode_not_a_source_or_default_alias(self):
@@ -917,6 +926,7 @@ class RunnerOptionsTests(unittest.TestCase):
                     (name, "START_BLANK_UI_OK checks=27", ["--start-blank-ui-only"]),
                     (name, "FREE_FLIGHT_UI_OK", ["--free-flight-ui-only"]),
                     (name, "PLAY_AS_CRASH_UI_OK checks=", ["--play-as-crash-ui-only"]),
+                    (name, "MEMORY_MODE_UI_OK checks=12", ["--memory-mode-ui-only"]),
                     (name, "LEVEL_PICKER_AUTOMATION_OK", ["--level-picker-automation-only"]),
                     (name, "AUTHORED_MESH_CHECKS_OK", ["--authored-mesh-only"]),
                     (name, "FRESH_LEVEL_DOCUMENT_SESSION_OK", ["--fresh-native-level-session-only"]),
@@ -936,7 +946,7 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
-        self.assertEqual(16, len(lines))
+        self.assertEqual(17, len(lines))
         for _, marker, arguments in expected:
             self.assertTrue(any(arguments[0] + " | " + marker in line for line in lines))
 

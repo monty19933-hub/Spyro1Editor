@@ -168,6 +168,8 @@ public static class NativeAuthoredProjectExporter
         if(portalRoutes?.HasEdits==true)NativePortalRouteComposer.Apply(donors,catalog,exe,replacements,baseline.EntryBytes,portalRoutes,
             returnClasses:returnClasses);
         NativeKillHeights.RequireOwned(donors.Disc.Exe,exe,rebuilt);
+        // Emulator only (8 MB RAM): the scenes load in the extra memory; every level is checked against that layout.
+        NativeExtendedRam.ApplyForExport(exe,entry=>replacements.TryGetValue(entry,out var bytes)?bytes:baseline.EntryBytes(entry),catalog.Levels,donors.Disc);
         string pending=outputImage+".pending-"+Guid.NewGuid().ToString("N"),pendingCue=pending+".cue";
         bool retain=false;
         try

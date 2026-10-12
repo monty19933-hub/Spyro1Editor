@@ -21,6 +21,8 @@ internal sealed class NativeJapaneseEggLiveGuardKernel
         NativeJapaneseEggCollectibleBinding binding,NativeJapaneseEggOverlayProjection projection,
         NativeJapaneseEggLifecycleCallables lifecycle,NativeByteExtent capacity,uint codeAddress,uint preBridge,uint postBridge)
     {
+        // Its game code compares the scene address (0x800785E4) with the 2 MB layout's.
+        Spyro.Editor.Core.Universal.GameRam.RequirePlayStationSceneAddress("The Japanese egg guard");
         binding.RequireCurrent(authored,NativeCollectibleCardLoadResearchComposition.FixedManifest());projection.RequireCurrent(authored);
         if(lifecycle.Attempt.OrdinarySlot!=0||lifecycle.Attempt.CallerLedgerAddress!=Live||
             lifecycle.MaximumStackByteLength!=NestedBytes||capacity.ByteLength!=CapacityBytes||

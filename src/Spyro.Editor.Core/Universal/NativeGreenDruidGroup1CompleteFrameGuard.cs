@@ -66,6 +66,8 @@ internal sealed class NativeGreenDruidGroup1CompleteFrameGuard
   NativeGreenDruidGroup1ResidentEntrySource source,NativeLevelRuntimeMemoryReport owner)=>new(previous,source,owner);
  private NativeGreenDruidGroup1CompleteFrameGuard(NativeGreenDruidGroup1TerrainRenderer previous,NativeGreenDruidGroup1ResidentEntrySource source,NativeLevelRuntimeMemoryReport owner)
  {
+  // Its game code compares the scene address (0x800785E4) with the 2 MB layout's.
+  GameRam.RequirePlayStationSceneAddress("The Green Druid frame guard");
   _owner=owner;_source=source;previous.RequireFinal(previous.CopyExecutable(),previous.CopyOverlay(),previous.CopyLevelData());
   byte[] before=previous.CopyOverlay();int prefix=checked((int)(previous.CloneAddress-UniversalOverlay.Base));
   Require(prefix==71680&&before.Length==92160,"exact separate old terrain replacement boundary; all actor/save-map prefix retained");

@@ -32,7 +32,14 @@ public sealed record UniversalClassImport(int ClassId, string SourceLevelKey, bo
 }
 
 public sealed record UniversalRamBudget(uint OriginalEnd, uint FinalEnd, uint Limit, int OriginalHeadroom, int FinalHeadroom,
-    int OverlayGrowth, int ModelGrowth, int SceneGrowth, int DataGrowth);
+    int OverlayGrowth, int ModelGrowth, int SceneGrowth, int DataGrowth)
+{
+    /// <summary>Emulator only (8 MB RAM): the ends and headrooms above are what loads below the draw buffers (overlay,
+    /// level data, models); the scene loads in the extra memory with <see cref="SceneHeadroom"/> bytes to spare
+    /// (<see cref="GameRam"/>).</summary>
+    public bool ExtendedRam { get; init; }
+    public int SceneHeadroom { get; init; }
+}
 
 public sealed record UniversalComposeResult(
     string DestinationKey,
@@ -253,7 +260,7 @@ public static class UniversalMobyComposer
              nativeDestinationOwner.Update != destOverlay.Update || nativeDestinationOwner.Init != destOverlay.Init ||
              nativeDestinationOwner.CopyBuffer != destOverlay.CopyBuffer))
             throw new InvalidDataException("The rebuilt level's native behavior owner differs from its actual prepared host.");
-        uint originalEnd = RuntimeEnd(dest, destOverlay.CopyBuffer);
+        uint originalEnd = RuntimeEnd(dest, destOverlay.CopyBuffer), originalLowEnd = GameRam.LowEnd(dest, destOverlay.CopyBuffer);
         var destSwitch = UniversalDispatchAnalysis.FindUpdateSwitch(destOverlay);
         // Released classes (a rebuilt level's own dragons) keep their numbers and run their own imported code; the
         // destination's switch passes them by (UniversalNativeRelease).
@@ -1027,7 +1034,7 @@ public static class UniversalMobyComposer
             d.MoveModelsBefore(250, AfterStatue(d, crash: false));
             if (Budget(d) is not { Deficit: > 0 } open) return true;
             int room = UniversalLevelData.Align(open.Deficit, 0x800);
-            if (persistentNativePrefixRows == null || RuntimeEnd(d, copyBuffer) + (uint)room > NormalBufferFloor - RamSafetyMargin) return false;
+            if (persistentNativePrefixRows == null || GameRam.ModelRoom(d, copyBuffer) < room) return false;
             d.ReserveBefore(250, room);
             return true;
         }
@@ -1058,18 +1065,27 @@ public static class UniversalMobyComposer
         bool retailEdit = persistentNativePrefixRows == null && nativeRowsBefore > 0 && !certifiedLayout;
         int retailSlots = retailEdit ? ArenaSlots(originalDestination.Data) : 0, slotsAdded = 0;
         if (retailEdit && placements.Count > 0)
-            (dest, slotsAdded) = RestoreDynamicSlots(dest, retailSlots, (long)limit - RuntimeEnd(dest, copyBuffer));
+            (dest, slotsAdded) = RestoreDynamicSlots(dest, retailSlots, GameRam.SceneRoom(dest, copyBuffer));
         uint finalEnd = RuntimeEnd(dest, copyBuffer);
-        var ram = new UniversalRamBudget(originalEnd, finalEnd, NormalBufferFloor,
-            (int)(NormalBufferFloor - originalEnd), (int)((long)NormalBufferFloor - finalEnd),
+        // Emulator only (8 MB RAM): the scene loads in the extra memory, so the budget below the draw buffers is what
+        // loads before it (GameRam); the 2 MB budget is the whole load, as always.
+        bool extended = GameRam.Extended;
+        uint usedBefore = extended ? originalLowEnd : originalEnd, usedAfter = extended ? GameRam.LowEnd(dest, copyBuffer) : finalEnd;
+        var ram = new UniversalRamBudget(usedBefore, usedAfter, NormalBufferFloor,
+            (int)(NormalBufferFloor - usedBefore), (int)((long)NormalBufferFloor - usedAfter),
             (int)(copyBuffer - destOverlay.CopyBuffer), modelGrowth, dest.Subfiles()[3].Length - sceneBefore,
-            (int)(finalEnd - originalEnd) - (int)(copyBuffer - destOverlay.CopyBuffer) - modelGrowth - (dest.Subfiles()[3].Length - sceneBefore));
+            (int)(usedAfter - usedBefore) - (int)(copyBuffer - destOverlay.CopyBuffer) - modelGrowth - (extended ? 0 : dest.Subfiles()[3].Length - sceneBefore))
+            { ExtendedRam = extended, SceneHeadroom = extended ? (int)GameRam.SceneRoom(dest, copyBuffer) : 0 };
         bool nativeRemovalBudget = PreservesNativeRemovalBudget(permanentlyRemoved.Count, placements.Count, ram.OverlayGrowth,
             originalEnd, RuntimeEnd(originalDestination.Data, originalDestination.Overlay.CopyBuffer), finalEnd);
-        if (finalEnd > limit && !nativeRemovalBudget)
+        if (extended && GameRam.SceneRoom(dest, copyBuffer) < 0 && !nativeRemovalBudget)
+            throw new UniversalBudgetException($"{destination.DisplayName}'s objects and layout take {GameRam.SceneBytes(dest) / 1024.0:0.0} KB, " +
+                $"more than the {GameRam.ExtendedSceneCapacity / 1024} KB the 8 MB memory setting gives them. Remove some of the added objects.", ram);
+        if (!GameRam.Fits(dest, copyBuffer) && !nativeRemovalBudget)
             throw new UniversalBudgetException(
-                $"{destination.DisplayName} does not have enough game RAM for these objects: they need {(finalEnd - originalEnd) / 1024.0:0.0} KB " +
-                $"but the level has {Math.Max(0, (int)(limit - originalEnd)) / 1024.0:0.0} KB available." +
+                $"{destination.DisplayName} does not have enough game RAM for these objects: they need {(usedAfter - usedBefore) / 1024.0:0.0} KB " +
+                $"but the level has {Math.Max(0, (int)(limit - usedBefore)) / 1024.0:0.0} KB available." +
+                (extended ? " This is the memory below the game's draw buffers, for models and behavior; only the objects' layout moves to the extra memory with 8 MB RAM." : "") +
                 (playerAnimationImports.Sum(p => p.ModelGrowthBytes) > 0
                     ? $" This includes {playerAnimationImports.Sum(p => p.ModelGrowthBytes) / 1024.0:0.0} KB for Spyro's reactions to these enemies." : "") +
                 (specialClasses.Values.Any(a => a.Behavior == UniversalSpecialBehavior.CrashPlayer)

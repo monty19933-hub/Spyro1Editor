@@ -32,6 +32,8 @@ internal sealed class NativeGreenDruidGroup1TerrainRenderer
  internal static NativeGreenDruidGroup1TerrainRenderer Install(GreenDruidGroup1TerrainQueueSceneStorage scene,byte[] currentExe,byte[] completeOverlay,NativeLevelRuntimeMemoryReport originalDestinationOwner)=>new(scene,currentExe,completeOverlay,originalDestinationOwner);
  private NativeGreenDruidGroup1TerrainRenderer(GreenDruidGroup1TerrainQueueSceneStorage scene,byte[] currentExe,byte[] overlay,NativeLevelRuntimeMemoryReport owner)
  {
+  // Its game code compares the scene address (0x800785E4) with the 2 MB layout's.
+  GameRam.RequirePlayStationSceneAddress("The Green Druid terrain renderer");
   _owner=owner;var source=scene.World.Source;source.RequireNativeOwners(currentExe);scene.RequireFinal(new(scene.CopyLevelData()));
   var bindings=UniversalExeBindings.Read(currentExe,20);UniversalGreenDruidGroup1TerrainQueues.Require(bindings.TryGetValue(UniversalExeBindings.CopyBufferGlobal,out var binding)&&binding.Value<=UniversalOverlay.Base+(uint)overlay.Length&&binding.Value>=UniversalOverlay.Base,"owned current initializer copy anchor");
   // The generic allocation maximum remains unchanged. Retain the ENTIRE
