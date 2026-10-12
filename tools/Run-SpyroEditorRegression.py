@@ -244,6 +244,11 @@ CORE_CASES = (
     # synthetic executable (hooks, records, inventory, save layout, names), re-install and refusals; its routines run on
     # a test CPU (record swap, save, Load Game, New Game, names, doorway arrival, card offsets, page 7); the card menu.
     ("LevelWindowSmoke", "LEVEL_WINDOW_FREE_OK checks=81"),
+    # Ground kinds an original level never had (Tile Type… and the Ground card in Artisans, Stone Hill…): each of the
+    # eight kinds every level can use is appended from its canonical record to a table that lacks it and reparses on the
+    # assigned triangles; a saved donor resolves only when the donor still holds that exact record; portals and
+    # level-linked kinds never travel; the saved edit keeps its donor (the default mode adds all 35 levels x 8 kinds).
+    ("SurfaceLayoutSmoke", "SURFACE_LAYOUT_FREE_OK checks=117"),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
@@ -258,6 +263,7 @@ CASE_ARGUMENTS = {
     "Id65AuthoringRewardStagingRuntimeCandidatePublisherSmoke": ["--source-free-fixture-lookup"],
     "UnusedLevel65MusicOwnershipClosureSmoke": ["--source-free-music-selection"],
     "YearOfTheDragonImportSmoke": ["--source-free"],
+    "SurfaceLayoutSmoke": ["--source-free"],
 }
 # Additional modes retain their own arguments/markers without replacing the
 # established mode of the same executable. Project builds remain deduplicated.

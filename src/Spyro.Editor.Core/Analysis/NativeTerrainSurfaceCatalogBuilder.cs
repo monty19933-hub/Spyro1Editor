@@ -101,10 +101,14 @@ public sealed record NativeTerrainSurfaceLevelCatalog(
             : null;
     }
 
+    /// <param name="allowDescriptorImport">A kind the level lacks but every level can use
+    /// (<see cref="NativeTerrainSurfaceKindImport.IsImportable"/>) is ready too: Create BIN appends its record. The caller
+    /// still dry-runs the whole level's layout (its free bytes are shared by every staged tile).</param>
     public NativeTerrainSurfaceTransferReadiness EvaluateTransfer(
         string targetRuntimeKey,
         NativeTerrainSurfaceSignature signature,
-        bool crossLevel)
+        bool crossLevel,
+        bool allowDescriptorImport = false)
     {
         NativeTerrainFaceSurfaceBinding? target = FindFace(targetRuntimeKey);
         if (target == null || !target.HasExactTriangleMapping || target.NativeTriangles.Count == 0)
@@ -148,17 +152,21 @@ public sealed record NativeTerrainSurfaceLevelCatalog(
                 surface.Type == signature.SurfaceType &&
                 surface.Param1 == signature.Param1 &&
                 surface.Param2 == signature.Param2);
-            if (descriptor == null)
+            bool imported = descriptor == null && allowDescriptorImport &&
+                NativeTerrainSurfaceKindImport.IsImportable(signature) && Source.SpecialSurfaces.Count < 63;
+            if (descriptor == null && !imported)
             {
                 return new NativeTerrainSurfaceTransferReadiness(
                     false,
                     -1,
                     target.NativeTriangles.Count,
                     target.NativeTriangles.Count(triangle => triangle.FlagWadOffset >= 0),
-                    $"{Level.DisplayName} has no native {signature.Label} descriptor to reuse.");
+                    allowDescriptorImport && NativeTerrainSurfaceKindImport.IsImportable(signature)
+                        ? $"{Level.DisplayName} already has 63 ground kinds, the most a level can hold."
+                        : $"{Level.DisplayName} has no native {signature.Label} descriptor to reuse.");
             }
 
-            surfaceIndex = descriptor.Index;
+            surfaceIndex = descriptor?.Index ?? Source.SpecialSurfaces.Count;
             int promotionCount = target.NativeTriangles
                 .Where(triangle => triangle.FlagWadOffset < 0)
                 .Select(triangle => triangle.TriangleIndex)

@@ -10,10 +10,11 @@ using Spyro.Editor.Core.Scene;
 
 namespace Spyro.Editor.App.Views;
 
-/// <summary>Terrain tab › Ground, for a level you build: one button per ground (grass, dirt, stone, sand, snow, wood,
-/// water, lava, goo). A ground sets how a tile looks (an original level's texture) and what Spyro finds on it (water,
-/// lava and goo cost a life) at once. Clicking a ground repaints the selected tiles and then paints every tile clicked in
-/// the view until Esc or Stop.</summary>
+/// <summary>Terrain tab › Ground: one button per ground (grass, dirt, stone, sand, snow, wood, water, lava, goo). A ground
+/// sets how a tile looks (an original level's texture) and what Spyro finds on it (water, lava and goo cost a life) at
+/// once. Clicking a ground repaints the selected tiles and then paints every tile clicked in the view until Esc or Stop.
+/// In a level you build it edits the scene; in one of the game's own levels it goes through texture painting and Tile
+/// Type… (MainWindow.GroundRetail.cs).</summary>
 public sealed partial class MainWindow
 {
     private Border? _groundCard;
@@ -76,19 +77,23 @@ public sealed partial class MainWindow
     {
         if (_groundCard == null || _groundNote == null)
             return;
-        bool built = _freshSceneDocument != null && _currentGeometry != null;
-        _groundCard.IsVisible = built;
-        if (!built)
+        bool available = GroundCardAvailable;
+        _groundCard.IsVisible = available;
+        if (!available || (_activeGround != null && !string.Equals(_activeGroundLevelKey, CurrentGroundLevelKey, StringComparison.OrdinalIgnoreCase)))
         {
             if (_activeGround != null) StopGroundPainting(announce: false);
-            return;
+            if (!available)
+                return;
         }
         int selected = SelectedTilesForTypeChange().Count;
         _groundNote.Text = _activeGround != null
             ? $"Painting {_activeGround.Name.ToLowerInvariant()}: click tiles in the view. Esc or Stop Painting goes back to selecting."
             : selected > 0
                 ? $"Click a ground to make the {(selected == 1 ? "selected tile" : $"{selected} selected tiles")} that ground, then keep clicking tiles to paint more."
-                : "Click a ground, then click tiles in the view to paint them. Water, lava and goo cost Spyro a life, as in the game.";
+                : "Click a ground, then click tiles in the view to paint them. Water, lava and goo cost Spyro a life, as in the game." +
+                  (_freshSceneDocument == null
+                      ? " A ground from another level uses one of this level's spare texture slots; when there is none, the editor asks before changing every tile that shares the texture."
+                      : "");
         foreach ((GroundType ground, Button button) in _groundButtons)
         {
             bool active = ground == _activeGround;
@@ -148,9 +153,14 @@ public sealed partial class MainWindow
 
     private async Task ChooseGroundAsync(GroundType ground)
     {
-        if (_freshSceneDocument == null || _currentGeometry == null)
+        if (!GroundCardAvailable)
         {
-            _statusText.Text = "Ground painting works in a level you build: File ▾ › New Level or Start Blank.";
+            _statusText.Text = "Open a level first.";
+            return;
+        }
+        if (_freshSceneDocument == null)
+        {
+            await ChooseRetailGroundAsync(ground);
             return;
         }
         // While painting, another ground only changes the paint (the last tile clicked is selected, and must keep the
@@ -159,6 +169,7 @@ public sealed partial class MainWindow
         StopTerrainTexturePaintMode(announce: false);
         List<TerrainPolygon> selected = painting ? [] : SelectedTilesForTypeChange();
         _activeGround = ground;
+        _activeGroundLevelKey = CurrentGroundLevelKey;
         _viewport.TerrainTexturePaintMode = true;
         _viewport.TerrainTexturePaintHint = ground.Name.ToLowerInvariant();
         if (selected.Count > 0)
@@ -179,7 +190,12 @@ public sealed partial class MainWindow
     {
         if (_activeGround is not { } ground)
             return false;
-        if (_freshSceneDocument == null || face.IsTerrainRemoved || face.IsTerrainAddClone)
+        if (_freshSceneDocument == null)
+        {
+            await PaintRetailGroundAsync([face], ground);
+            return true;
+        }
+        if (face.IsTerrainRemoved || face.IsTerrainAddClone)
             return true;
         await PaintGroundAsync([face], ground);
         _statusText.Text = $"Painted {ground.Name.ToLowerInvariant()}. Keep clicking tiles; Esc stops.";
@@ -224,8 +240,11 @@ public sealed partial class MainWindow
     {
         bool was = _activeGround != null;
         _activeGround = null;
+        _activeGroundLevelKey = "";
         if (was)
         {
+            if (_activeTerrainTexturePaintBrush != null)
+                StopTerrainTexturePaintMode(announce: false);
             _viewport.TerrainTexturePaintMode = false;
             _viewport.TerrainTexturePaintHint = "";
             if (announce)

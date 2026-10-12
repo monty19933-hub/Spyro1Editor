@@ -89,7 +89,8 @@ public static class UniversalMobyExport
         string? identityWorkspace = null,
         bool deferSpecialHooks = false,
         bool removedTreasureAlreadyApplied = false,
-        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash = null, Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd = null)
+        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash = null, Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd = null,
+        IReadOnlyDictionary<string, IReadOnlyList<(int Class, string SourceKey)>>? dependenciesByLevel = null)
     {
         if (string.Equals(Path.GetFullPath(sources.ImagePath), Path.GetFullPath(outputImagePath), StringComparison.Ordinal) ||
             string.Equals(Path.GetFullPath(currentImagePath), Path.GetFullPath(outputImagePath), StringComparison.Ordinal))
@@ -99,6 +100,9 @@ public static class UniversalMobyExport
         Dictionary<string, IReadOnlyList<UniversalMobyPlacement>> allPlacements = new(placementsByLevel, StringComparer.OrdinalIgnoreCase);
         if (removedRowsByLevel != null)
             foreach (var (key, removed) in removedRowsByLevel) if (removed.Count > 0) allPlacements.TryAdd(key, []);
+        // Models a level needs without placing them (the splash of a liquid its tiles were given, UniversalLiquidSplashes).
+        if (dependenciesByLevel != null)
+            foreach (var (key, dependencies) in dependenciesByLevel) if (dependencies.Count > 0) allPlacements.TryAdd(key, []);
         var destinationKeys = allPlacements.Keys.Select(k => catalog.FindByKey(k)?.Key ?? k).ToArray();
         if (destinationKeys.Distinct(StringComparer.OrdinalIgnoreCase).Count() != destinationKeys.Length)
             throw new InvalidDataException("A destination level was supplied more than once under different names.");
@@ -113,7 +117,8 @@ public static class UniversalMobyExport
         {
             var level = catalog.FindByKey(key) ?? throw new InvalidDataException($"Unknown destination level '{key}'.");
             var removed = removedRowsByLevel?.FirstOrDefault(k => string.Equals(catalog.FindByKey(k.Key)?.Key, level.Key, StringComparison.OrdinalIgnoreCase)).Value;
-            if (placements.Count == 0 && removed is not { Count: > 0 }) continue;
+            var dependencies = dependenciesByLevel?.FirstOrDefault(k => string.Equals(catalog.FindByKey(k.Key)?.Key, level.Key, StringComparison.OrdinalIgnoreCase)).Value;
+            if (placements.Count == 0 && removed is not { Count: > 0 } && dependencies is not { Count: > 0 }) continue;
             byte[] levelBytes = current.EntryBytes(level.SourceWadEntry);
             int nativeRows = new UniversalLevelData(levelBytes).Scene().RowCount;
             if (identityWorkspace != null && placements.Any(p => p.PersistentSlot != null))
@@ -126,7 +131,8 @@ public static class UniversalMobyExport
                 protectedVram(currentImagePath, level), placements, SpecialProvider(japanese, sources, crash, yotd),
                 removed,
                 useNativeOwnershipScan ? dropped => DefaultProtectedVram(currentImagePath, level, dropped) : null, sources.SharedModelPackage, sources.PlayerAnimations,
-                removedTreasureAlreadyApplied, nativeSharedEntry8:current.EntryBytes(8));
+                removedTreasureAlreadyApplied, nativeSharedEntry8:current.EntryBytes(8),
+                dependencyClasses: dependencies is { Count: > 0 } ? dependencies : null);
             exe = composed.Executable;
             replacements[level.SourceWadEntry] = composed.LevelData;
             replacements[level.SourceWadEntry - 1] = composed.Overlay;

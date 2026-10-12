@@ -136,7 +136,22 @@ public sealed record TerrainSurfaceBehaviorEdit(
     int Param2,
     string SourceLevelKey,
     string SourceRuntimeKey,
-    string Label);
+    string Label)
+{
+    /// <summary>When the level has no descriptor for this kind (lava in Artisans…): the original level whose surface
+    /// table holds the record Create BIN copies in, and that record's index there. Empty/-1 when the level has it.</summary>
+    public string DescriptorDonorLevelKey { get; init; } = "";
+    public int DescriptorDonorWadEntry { get; init; } = -1;
+    public int DescriptorDonorIndex { get; init; } = -1;
+    public bool ImportsDescriptor => !string.IsNullOrWhiteSpace(DescriptorDonorLevelKey) && DescriptorDonorWadEntry >= 0 && DescriptorDonorIndex >= 0;
+
+    /// <summary>A kind chosen for the tile itself (Tile Type…, the Ground card) rather than copied with another face's
+    /// texture: its source is the tile in its own level. It changes only collision flags, so it never conflicts with an
+    /// art-only texture replacement on the same tile.</summary>
+    public bool IsOwnTileType(string runtimeKey, string levelKey) =>
+        string.Equals(SourceRuntimeKey, runtimeKey, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(Spyro.Editor.Core.Levels.LevelCatalog.NormalizeKey(SourceLevelKey), Spyro.Editor.Core.Levels.LevelCatalog.NormalizeKey(levelKey), StringComparison.OrdinalIgnoreCase);
+}
 
 public sealed record TerrainTextureVisualCorner(
     ColorRgba NearColor,

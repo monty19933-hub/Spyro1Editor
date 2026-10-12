@@ -332,6 +332,23 @@ public sealed partial class MainWindow
         GeometryCandidate geometry,
         out string error)
     {
+        NativeTerrainSurfaceSourceData? source = TryLocateNativeTerrainSurfaceSource(level, out error);
+        if (source == null)
+            return null;
+        try
+        {
+            return NativeTerrainSurfaceCatalogBuilder.Build(level, geometry, source);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or IOException)
+        {
+            error = ex.Message;
+            return null;
+        }
+    }
+
+    /// <summary>A level's special-surface and collision tables from the source disc, cached per level and image.</summary>
+    private NativeTerrainSurfaceSourceData? TryLocateNativeTerrainSurfaceSource(LevelDefinition level, out string error)
+    {
         error = "";
         string sourceImage = ResolveTerrainTextureSourceImage(level);
         if (string.IsNullOrWhiteSpace(sourceImage) || !File.Exists(sourceImage))
@@ -360,7 +377,7 @@ public sealed partial class MainWindow
                 _nativeTerrainSurfaceSources[levelKey] = source;
             }
 
-            return NativeTerrainSurfaceCatalogBuilder.Build(level, geometry, source);
+            return source;
         }
         catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or IOException)
         {

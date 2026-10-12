@@ -8790,10 +8790,10 @@ public sealed partial class MainWindow : Window
             return;
         }
         TerrainPolygon? faceLocalConflict = targetFaces.FirstOrDefault(face =>
-            (face.HasTextureEdit || face.HasTextureVisualEdit || face.HasSurfaceBehaviorEdit) &&
+            HasFaceLocalTextureState(face, selected.PreservesTargetNativeSurface) &&
             !(allowFaceLocalTextureTarget &&
               ReferenceEquals(face, auditedSelectedTerrain) &&
-              IsCleanFaceLocalTextureTarget(face, selected.TargetTextureId)));
+              IsCleanFaceLocalTextureTarget(face, selected.TargetTextureId, selected.PreservesTargetNativeSurface)));
         if (faceLocalConflict != null)
         {
             _statusText.Text = $"Face {faceLocalConflict.RuntimeKey} already has a face-local texture, tint, or gameplay-property edit on shared texture {selected.TargetTextureId}. Undo that face edit before applying a cross-level replacement; no face or saved edit was changed.";
@@ -8944,10 +8944,10 @@ public sealed partial class MainWindow : Window
             _nativeTerrainTextureRelocations.Any(edit => edit.TargetTextureId == selected.TargetTextureId) ||
             _customTerrainTextures.Any(import => import.TextureId == selected.TargetTextureId) ||
             revalidatedTargetFaces.Any(face =>
-                (face.HasTextureEdit || face.HasTextureVisualEdit || face.HasSurfaceBehaviorEdit) &&
+                HasFaceLocalTextureState(face, selected.PreservesTargetNativeSurface) &&
                 !(allowFaceLocalTextureTarget &&
                   ReferenceEquals(face, auditedSelectedTerrain) &&
-                  IsCleanFaceLocalTextureTarget(face, selected.TargetTextureId)));
+                  IsCleanFaceLocalTextureTarget(face, selected.TargetTextureId, selected.PreservesTargetNativeSurface)));
         if (targetContextChanged)
         {
             if (File.Exists(stagedPath))
@@ -9437,10 +9437,10 @@ public sealed partial class MainWindow : Window
             targetFaces.Length > 0;
         bool hasCustomTargetArt = _customTerrainTextures.Any(import => import.TextureId == targetTextureId);
         TerrainPolygon? existingFaceLocalEdit = targetFaces.FirstOrDefault(face =>
-            (face.HasTextureEdit || face.HasTextureVisualEdit || face.HasSurfaceBehaviorEdit) &&
+            HasFaceLocalTextureState(face, artOnlyPreserveTarget) &&
             !(allowSelectedFaceLocalTextureTarget && (
                 (ReferenceEquals(face, _selectedTerrain) &&
-                 IsCleanFaceLocalTextureTarget(face, targetTextureId)) ||
+                 IsCleanFaceLocalTextureTarget(face, targetTextureId, artOnlyPreserveTarget)) ||
                 (reusesMatchingRelocation &&
                  IsFaceLocalTextureTargetCompatibleWithRelocation(face, existingRelocation!)))));
         bool targetEditStateReady =
@@ -14552,7 +14552,35 @@ public sealed partial class MainWindow : Window
                 universalRemoved[target.Level.Key] = removed;
             }
         }
-        if (universalPlacements.Count > 0)
+        // Water, lava or ooze given to tiles of one of the game's levels (Tile Type…, the Ground card) needs the liquid's
+        // splash models: the game spawns the splash when Spyro lands in it and crashes drawing one with no model.
+        Dictionary<string, IReadOnlyList<int>> liquidLevels = new(StringComparer.OrdinalIgnoreCase);
+        foreach (EditedLevelExportTarget target in targets)
+        {
+            if (!target.HasTerrainEdits || File.Exists(SceneDocumentStore.PathForTarget(_workspace.RootPath, target.Level.Key)))
+                continue;
+            IReadOnlyList<int> liquids = UniversalLiquidSplashes.LiquidsInTerrainEdits(
+                Path.Combine(_workspace.RootPath, $"{target.Level.Key}-terrain-edits.json"));
+            if (liquids.Count > 0)
+                liquidLevels[target.Level.Key] = liquids;
+        }
+        Dictionary<string, IReadOnlyList<(int Class, string SourceKey)>> liquidDependencies = new(StringComparer.OrdinalIgnoreCase);
+        if (liquidLevels.Count > 0)
+        {
+            await Task.Run(() =>
+            {
+                var splashSources = new UniversalSourceLibrary(sourceImage, _retailCatalog);
+                foreach (var (key, liquids) in liquidLevels)
+                {
+                    var own = splashSources.Get(key).Data.Registrations().Select(r => r.ClassId).ToHashSet();
+                    var needed = UniversalLiquidSplashes.Dependencies(liquids, key, k => splashSources.Get(k).Data)
+                        .Where(d => !own.Contains(d.Class)).ToArray();
+                    if (needed.Length > 0)
+                        liquidDependencies[key] = needed;
+                }
+            });
+        }
+        if (universalPlacements.Count > 0 || liquidDependencies.Count > 0)
         {
             ReportCreateBinProgress("Importing objects...", "Create BIN: importing models, textures, sounds and behavior for objects from other levels...");
             string universalImage = Path.Combine(tempDir, $"{++step:00}-universal-mobys.bin");
@@ -14584,6 +14612,7 @@ public sealed partial class MainWindow : Window
                 }
                 return UniversalMobyExport.Apply(library, currentImage, universalImage, _retailCatalog, universalPlacements, japanese: japanese, crash: crash, yotd: yotd,
                     removedRowsByLevel: universalRemoved, identityWorkspace: _workspace.RootPath,
+                    dependenciesByLevel: liquidDependencies,
                     deferSpecialHooks: deferSharedRuntimeHooks,
                     // The completed ordinary object stage already adjusted native removal rewards.
                     removedTreasureAlreadyApplied: true);
@@ -24284,9 +24313,13 @@ public sealed partial class MainWindow : Window
                 privatePaintFace.ClearTextureVisualEdit();
                 privatePaintFace.ApplyTextureOverride(privatePaintFace.OriginalTextureId);
             }
+            // The tile's own kind (a Ground card or Tile Type… choice) goes back with its look.
+            bool clearedOwnTileType = IsOwnTileTypeEdit(_selectedTerrain);
+            if (clearedOwnTileType)
+                _selectedTerrain.ClearSurfaceBehaviorEdit();
             TerrainMaterialClassifier.Apply(_currentLevel.Key, _workspace.RootPath, _currentGeometry);
             ApplyCustomTerrainTexturePreviews();
-            if (!relocation.PreservesTargetNativeSurface || privatePaintFaces.Length > 0)
+            if (!relocation.PreservesTargetNativeSurface || privatePaintFaces.Length > 0 || clearedOwnTileType)
                 await PersistCurrentTerrainEditsAsync();
             if (!_nativeTerrainTextureRelocations.Any(edit =>
                     string.Equals(edit.PreviewImagePath, relocation.PreviewImagePath, StringComparison.OrdinalIgnoreCase)))

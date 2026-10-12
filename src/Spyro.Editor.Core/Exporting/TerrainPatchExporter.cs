@@ -1030,7 +1030,8 @@ public static partial class TerrainPatchExporter
     private static void AddNativeTextureRelocationFaceEditConflicts(
         JsonElement editsElement,
         IReadOnlyDictionary<int, NativeTerrainTextureRelocationEdit> relocationsByTarget,
-        List<string> skippedEdits)
+        List<string> skippedEdits,
+        string levelKey = "")
     {
         if (relocationsByTarget.Count == 0)
             return;
@@ -1079,7 +1080,21 @@ public static partial class TerrainPatchExporter
                             LevelCatalog.NormalizeKey(behaviorSourceLevelKey),
                             LevelCatalog.NormalizeKey(relocation.DonorLevelKey),
                             StringComparison.OrdinalIgnoreCase));
-                if (isRelocationBehaviorAssignment || isFaceLocalRelocationAssignment)
+                // A kind chosen for the tile itself (Tile Type…, the Ground card) changes only its collision flags, which
+                // an art-only replacement never touches, so the two compose.
+                bool isOwnTileTypeOnArtOnlyRelocation =
+                    relocation.PreservesTargetNativeSurface &&
+                    hasNativeBehavior &&
+                    !hasNativeVisual &&
+                    !string.IsNullOrWhiteSpace(levelKey) &&
+                    string.Equals(JsonValue.GetString(edit, "nativeSurfaceSourceRuntimeKey"), runtimeKey, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(
+                        LevelCatalog.NormalizeKey(behaviorSourceLevelKey),
+                        LevelCatalog.NormalizeKey(levelKey),
+                        StringComparison.OrdinalIgnoreCase) &&
+                    editedTextureId == targetTextureId &&
+                    (textureChanged ? originalTextureId != targetTextureId : originalTextureId == targetTextureId);
+                if (isRelocationBehaviorAssignment || isFaceLocalRelocationAssignment || isOwnTileTypeOnArtOnlyRelocation)
                     continue;
 
                 AddAtomicTerrainSwapBlock(
@@ -1147,7 +1162,8 @@ public static partial class TerrainPatchExporter
             AddNativeTextureRelocationFaceEditConflicts(
                 editsElement,
                 nativeTextureRelocationsByTarget,
-                skippedEdits);
+                skippedEdits,
+                level.Key);
 
             if (collisionContext == null && canPatchSceneSectors && usesSourceDerivedSceneBytes)
             {
@@ -4169,7 +4185,49 @@ public static partial class TerrainPatchExporter
                 surface.Type == signature.SurfaceType &&
                 surface.Param1 == signature.Param1 &&
                 surface.Param2 == signature.Param2);
-            if (descriptor == null)
+            string descriptorDonorLevelKey = JsonValue.GetString(edit, "nativeSurfaceDescriptorDonorLevelKey");
+            int descriptorDonorWadEntry = JsonValue.GetInt32(edit, "nativeSurfaceDescriptorDonorWadEntry", -1);
+            int descriptorDonorIndex = JsonValue.GetInt32(edit, "nativeSurfaceDescriptorDonorIndex", -1);
+            if (descriptor == null &&
+                !string.IsNullOrWhiteSpace(descriptorDonorLevelKey) &&
+                descriptorDonorWadEntry >= 0 &&
+                descriptorDonorIndex >= 0)
+            {
+                // A kind chosen for this tile (Tile Type…, the Ground card) that the level has never had: copy the record
+                // from the original level the editor named, re-read from this source image.
+                try
+                {
+                    if (!donorSurfaceSourcesByWadEntry.TryGetValue(descriptorDonorWadEntry, out NativeTerrainSurfaceSourceData? kindDonor))
+                    {
+                        kindDonor = PortalSourceDataLocator.LocateTerrainSurfaces(
+                            imageStream,
+                            layout,
+                            new LevelDefinition
+                            {
+                                Key = descriptorDonorLevelKey,
+                                DisplayName = descriptorDonorLevelKey,
+                                SourceWadEntry = descriptorDonorWadEntry
+                            });
+                        donorSurfaceSourcesByWadEntry[descriptorDonorWadEntry] = kindDonor;
+                    }
+                    donorImport = NativeTerrainSurfaceKindImport.ResolveSavedDonor(signature, kindDonor, descriptorDonorIndex, out string donorReason);
+                    if (donorImport == null)
+                    {
+                        AddAtomicTerrainSwapBlock(
+                            skippedEdits,
+                            $"{runtimeKey}: {level.DisplayName} has no {signature.Label} of its own and its copy could not be made: {donorReason} No behavior bytes were changed.");
+                        return;
+                    }
+                }
+                catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or IOException or OverflowException)
+                {
+                    AddAtomicTerrainSwapBlock(
+                        skippedEdits,
+                        $"{runtimeKey}: the {signature.Label} record of {descriptorDonorLevelKey} could not be read: {ex.Message}");
+                    return;
+                }
+            }
+            else if (descriptor == null)
             {
                 int originalTextureId = JsonValue.GetInt32(
                     edit,

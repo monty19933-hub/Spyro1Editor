@@ -68,6 +68,14 @@ class OwnedCommandTests(unittest.TestCase):
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
 
+    def test_surface_layout_smoke_registration(self):
+        name = "SurfaceLayoutSmoke"
+        self.assertIn((name, "SURFACE_LAYOUT_FREE_OK checks=117"), RUNNER.CORE_CASES)
+        self.assertEqual(["--source-free"], RUNNER.CASE_ARGUMENTS[name])
+        program = (RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / "Program.cs").read_text()
+        # The gate mode must return before the disc-backed workspace is resolved.
+        self.assertLess(program.index('args[0] == "--source-free"'), program.index("ResolveWorkspaceRoot(args);"))
+
     def test_dreamweavers_cannon_source_suite_registration_uses_current_core(self):
         name = "UniversalDreamWeaversCannonSmoke"
         self.assertIn((name, "UNIVERSAL_DREAMWEAVERS_CANNON_FREE_OK"), RUNNER.CORE_CASES)

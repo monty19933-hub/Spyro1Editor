@@ -310,7 +310,7 @@ public sealed partial class MainWindow
             _terrainPanelSelectionText.Text = $"Click a tile in the view to select it. {several} selects several.";
         else
         {
-            string tile = EditorViewport.PlainTileName(_selectedTerrain.Surface);
+            string tile = GroundShownBy(_selectedTerrain) is { } ground ? $"{ground.Name} tile" : EditorViewport.PlainTileName(_selectedTerrain.Surface);
             string state = _selectedTerrain.IsTerrainRemoved
                 ? " It is removed; Undo Terrain brings it back."
                 : _selectedTerrain.IsTerrainAddClone

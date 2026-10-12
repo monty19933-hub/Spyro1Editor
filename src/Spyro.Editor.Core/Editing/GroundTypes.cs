@@ -14,6 +14,13 @@ public sealed record GroundType(string Name, string LevelKey, int TextureId, Col
         "Snow" => new(220, 224, 232), "Wood" => new(120, 80, 48), "Water" => new(48, 120, 216), "Lava" => new(216, 88, 32),
         "Goo" => new(144, 48, 160), _ => new(128, 128, 128)
     };
+
+    /// <summary>The texture painted in one of the game's own levels when it is not <see cref="LevelKey"/>/<see cref="TextureId"/>:
+    /// those levels keep a tile's colours in tables shared with its neighbours, so <see cref="Shade"/> cannot be applied
+    /// there, and a ground whose look comes from its shade needs a texture that has that colour itself.</summary>
+    public string OriginalLevelKey { get; init; } = LevelKey;
+    public int OriginalLevelTextureId { get; init; } = TextureId;
+
     public AuthoredMaterial Material(LevelCatalog catalog) =>
         new((catalog.FindByKey(LevelKey) ?? throw new InvalidDataException($"The level catalog has no {LevelKey}.")).SourceWadEntry, TextureId);
 
@@ -37,7 +44,12 @@ public static class GroundTypes
     public static GroundType Water { get; } = new("Water", "alpineridge", 36, Plain, AuthoredSurfaceKind.Water,
         "Spyro sinks and loses a life, as in every Spyro the Dragon level: he cannot swim.");
     public static GroundType Lava { get; } = new("Lava", "gnastygnorc", 14, new(200, 92, 52), AuthoredSurfaceKind.Lava,
-        "Spyro burns and loses a life.");
+        "Spyro burns and loses a life.")
+    {
+        // Gnasty Gnorc's texture is lava only with the orange shade; in the game's own levels Night Flight's molten rock,
+        // which is red-orange by itself, is painted instead.
+        OriginalLevelKey = "nightflight", OriginalLevelTextureId = 6
+    };
     public static GroundType Goo { get; } = new("Goo", "drycanyon", 24, Plain, AuthoredSurfaceKind.Ooze,
         "Spyro sinks into it and loses a life.");
 

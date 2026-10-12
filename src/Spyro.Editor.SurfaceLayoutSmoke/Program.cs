@@ -7,6 +7,26 @@ using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.SurfaceLayoutSmoke;
 
+if (args.Length > 0 && args[0] == "--source-free")
+{
+    // Gate mode: synthetic fixtures only, no disc.
+    RunReuseSyntheticSmoke();
+    RunAppendPromotionCompositionSyntheticSmoke();
+    RunNegativeSyntheticGuards();
+    int kindChecks = GroundKindChecks.RunSourceFree();
+    Console.WriteLine($"SURFACE_LAYOUT_FREE_OK checks={kindChecks + 3}");
+    return;
+}
+if (args.Length > 0 && args[0] == "--verify-ground-export")
+{
+    // --verify-ground-export <exported BIN> <original BIN> <workspace with spyro-level-catalog.json> <ground-tiles.json>
+    if (args.Length != 5)
+        throw new ArgumentException("Usage: --verify-ground-export <exported BIN> <original BIN> <workspace> <ground-tiles.json>");
+    int verified = GroundKindChecks.VerifyGroundExport(args[1], args[2], args[3], args[4]);
+    Console.WriteLine($"GROUND_EXPORT_VERIFY_OK checks={verified}");
+    return;
+}
+
 string workspaceRoot = ResolveWorkspaceRoot(args);
 string sourceImagePath = Path.Combine(workspaceRoot, "Spyro the Dragon (USA).bin");
 if (!File.Exists(sourceImagePath))
@@ -15,8 +35,11 @@ if (!File.Exists(sourceImagePath))
 RunReuseSyntheticSmoke();
 RunAppendPromotionCompositionSyntheticSmoke();
 RunNegativeSyntheticGuards();
+GroundKindChecks.RunSourceFree();
 RetailMatrixResult matrix = RunAllLevelRetailWaterMatrix(workspaceRoot, sourceImagePath);
 WriteReport(workspaceRoot, sourceImagePath, matrix);
+(int kindLevels, int kindImports, int kindReuses) = GroundKindChecks.RunRetailKindMatrix(workspaceRoot, sourceImagePath);
+Console.WriteLine($"Every kind into every level: {kindLevels} levels x {NativeTerrainSurfaceKindImport.ImportableKinds.Count} kinds ({kindImports} copied in, {kindReuses} the level's own).");
 
 Console.WriteLine(
     $"Native terrain surface layout smoke passed: synthetic append/reuse/guards and {matrix.Levels.Count}/35 retail levels ({matrix.ReusedCount} reuse, {matrix.AppendedCount} append)." );

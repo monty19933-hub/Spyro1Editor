@@ -152,6 +152,16 @@ public static class PortalSourceDataLocator
         return LocateTerrainSurfaces(stream, layout, level);
     }
 
+    /// <summary>The level-data block <see cref="LocateTerrainSurfaces(string, LevelDefinition)"/> decoded, read again
+    /// from the same image (for a dry run of the surface-layout composer before anything is staged).</summary>
+    public static byte[] ReadTerrainLevelData(string sourceImagePath, NativeTerrainSurfaceSourceData source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
+        using FileStream stream = File.OpenRead(sourceImagePath);
+        return DiscImage.ReadFileBytes(stream, layout, WadLba, source.LevelDataWadOffset, source.LevelDataByteLength);
+    }
+
     internal static NativeTerrainSurfaceSourceData LocateTerrainSurfaces(
         FileStream stream,
         DiscLayout layout,

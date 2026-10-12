@@ -773,6 +773,19 @@ public static class NativeTerrainTextureRecordAppendBuilder
                 return false;
             }
 
+            // Ordinary patches may have grown the used body (a copied-in ground kind); move that body.
+            if (!TryParseLayout(composedSource, out LevelDataLayout? composedLayout, out failureReason) || composedLayout == null)
+            {
+                failureReason = $"The level data with its other edits did not reparse: {failureReason}";
+                return false;
+            }
+            if (composedLayout.UsedByteLength + growth > outputLevelDataByteLength)
+            {
+                failureReason =
+                    $"The level data has {outputLevelDataByteLength - composedLayout.UsedByteLength} spare bytes after its other edits; {request.Records.Count} native record(s) need {growth}.";
+                return false;
+            }
+
             int sourceLowStart = 8;
             int sourceHighStart = checked(sourceLowStart + (sourceLayout.TextureCount * LowDetailRecordBytes));
             int sourceTextureEnd = sourceLayout.TextureComponentByteLength;
@@ -799,7 +812,7 @@ public static class NativeTerrainTextureRecordAppendBuilder
                     .AsSpan()
                     .CopyTo(output.AsSpan(appendedHighStart + (index * HighDetailRecordBytes)));
             }
-            composedSource.AsSpan(sourceTextureEnd, sourceLayout.UsedByteLength - sourceTextureEnd)
+            composedSource.AsSpan(sourceTextureEnd, composedLayout.UsedByteLength - sourceTextureEnd)
                 .CopyTo(output.AsSpan(outputTextureEnd));
 
             if (!TryParseLayout(output, out LevelDataLayout? outputLayout, out failureReason) || outputLayout == null)
@@ -809,7 +822,7 @@ public static class NativeTerrainTextureRecordAppendBuilder
             }
             if (outputLayout.TextureCount != outputTextureCount ||
                 outputLayout.TextureComponentByteLength != outputTextureEnd ||
-                outputLayout.UsedByteLength != sourceLayout.UsedByteLength + growth)
+                outputLayout.UsedByteLength != composedLayout.UsedByteLength + growth)
             {
                 failureReason = "Expanded texture count, component size, or used level-data length did not advance by the exact requested record count.";
                 return false;
@@ -838,15 +851,15 @@ public static class NativeTerrainTextureRecordAppendBuilder
                 return false;
             }
 
-            if (sourceLayout.Components.Count != outputLayout.Components.Count)
+            if (composedLayout.Components.Count != outputLayout.Components.Count)
             {
                 failureReason = "The expanded level-data suffix no longer has the same component count.";
                 return false;
             }
             List<NativeTerrainTextureRecordShiftedComponentProof> componentProofs = [];
-            for (int index = 0; index < sourceLayout.Components.Count; index++)
+            for (int index = 0; index < composedLayout.Components.Count; index++)
             {
-                LevelDataComponent before = sourceLayout.Components[index];
+                LevelDataComponent before = composedLayout.Components[index];
                 LevelDataComponent after = outputLayout.Components[index];
                 ReadOnlySpan<byte> expected = composedSource.AsSpan(before.Offset, before.ByteLength);
                 ReadOnlySpan<byte> actual = output.AsSpan(after.Offset, after.ByteLength);
@@ -1190,6 +1203,26 @@ public static class NativeTerrainTextureRecordAppendBuilder
         int sourceTextureEnd = sourceLayout.TextureComponentByteLength;
         int lowGrowth = checked(appendCount * LowDetailRecordBytes);
         int fullGrowth = checked(appendCount * RecordGrowthBytes);
+        // A patch may start inside the used body and run on into the verified zero tail: the special-surface layout
+        // import (a ground kind the level never had) grows the used body that way. Its bytes there are zeros before.
+        int bodyEnd = sourceLayout.UsedByteLength;
+        foreach (NativeTerrainTextureRecordExistingPatch patch in patches)
+        {
+            long startLong = patch.WadOffset - levelDataWadOffset;
+            long endLong = startLong + (patch.Before?.Length ?? 0);
+            if (startLong >= 8 && startLong < sourceLayout.UsedByteLength && endLong > sourceLayout.UsedByteLength &&
+                endLong <= source.Length && IsUsedBodyGrowingPatch(patch.Kind) &&
+                source.AsSpan(sourceLayout.UsedByteLength, (int)endLong - sourceLayout.UsedByteLength).IndexOfAnyExcept((byte)0) < 0)
+            {
+                bodyEnd = Math.Max(bodyEnd, (int)endLong);
+            }
+        }
+        if (bodyEnd + fullGrowth > composed.Length)
+        {
+            failureReason =
+                $"The level data has {composed.Length - sourceLayout.UsedByteLength} spare bytes; the ground kinds copied in need {bodyEnd - sourceLayout.UsedByteLength} and the texture rows {fullGrowth}.";
+            return false;
+        }
         NativeAddressSpace originalSpace = new(NativeAddressKind.LevelData, "private-texture-level-data", NativeAddressRevision.Original, source.Length);
         NativeAddressSpace finalSpace = new(NativeAddressKind.LevelData, "private-texture-level-data", NativeAddressRevision.Final, composed.Length);
         NativeRelocationMap map = NativeRelocationMap.ForGrowth(originalSpace, finalSpace,
@@ -1198,7 +1231,7 @@ public static class NativeTerrainTextureRecordAppendBuilder
                 LowDetailRecordBytes, sourceLayout.TextureCount, checked(sourceLayout.TextureCount + appendCount), 4)),
             NativeRelocationMap.Table(new("hq-table", new NativeByteExtent(originalSpace, sourceHighStart, sourceTextureEnd - sourceHighStart),
                 checked(sourceHighStart + lowGrowth), HighDetailRecordBytes, sourceLayout.TextureCount, checked(sourceLayout.TextureCount + appendCount), 4)),
-            new("following-components", new NativeByteExtent(originalSpace, sourceTextureEnd, sourceLayout.UsedByteLength - sourceTextureEnd),
+            new("following-components", new NativeByteExtent(originalSpace, sourceTextureEnd, bodyEnd - sourceTextureEnd),
                 checked(sourceTextureEnd + fullGrowth), [])
         ]);
         List<(NativeTerrainTextureRecordExistingPatch Patch, int Start, int End, int OutputStart)> normalized = [];
@@ -1211,7 +1244,7 @@ public static class NativeTerrainTextureRecordAppendBuilder
             }
             long relativeLong = patch.WadOffset - levelDataWadOffset;
             long endLong = relativeLong + patch.Before.Length;
-            if (relativeLong < 8 || endLong > sourceLayout.UsedByteLength)
+            if (relativeLong < 8 || endLong > bodyEnd)
             {
                 failureReason = $"Existing {patch.Kind} patch at WAD 0x{patch.WadOffset:X} is outside the relocatable used level-data body.";
                 return false;
@@ -1261,6 +1294,11 @@ public static class NativeTerrainTextureRecordAppendBuilder
             .ToArray();
         return true;
     }
+
+    /// <summary>Patch kinds that may extend the used level-data body into its verified zero tail (TerrainPatchExporter's
+    /// native surface layout: copied-in surface records and promoted collision flags).</summary>
+    private static bool IsUsedBodyGrowingPatch(string kind) =>
+        kind is "native-surface-layout-import" or "collision-surface-flag-promotion";
 
     private static bool TryVerifyRebasedPatchResults(
         IReadOnlyList<NativeTerrainTextureRecordExistingPatch> patches,

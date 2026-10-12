@@ -5243,17 +5243,27 @@ public sealed partial class MainWindow
         }
     }
 
-    private static bool IsCleanFaceLocalTextureTarget(TerrainPolygon face, int targetTextureId)
+    private bool IsCleanFaceLocalTextureTarget(TerrainPolygon face, int targetTextureId, bool artOnly = false)
     {
         return face.TextureId == targetTextureId &&
             face.OriginalTextureId >= 0 &&
             face.OriginalTextureId != targetTextureId &&
             face.HasTextureEdit &&
             !face.HasTextureVisualEdit &&
-            !face.HasSurfaceBehaviorEdit;
+            (!face.HasSurfaceBehaviorEdit || (artOnly && IsOwnTileTypeEdit(face)));
     }
 
-    private static bool IsFaceLocalTextureTargetCompatibleWithRelocation(
+    /// <summary>The tile's kind was chosen for the tile itself (Tile Type…, the Ground card). It changes only collision
+    /// flags, so an art-only texture replacement of the tile's texture never clashes with it.</summary>
+    private bool IsOwnTileTypeEdit(TerrainPolygon face) =>
+        _currentLevel != null && face.SurfaceBehaviorEdit is { } edit && edit.IsOwnTileType(face.RuntimeKey, _currentLevel.Key);
+
+    /// <summary>The face has its own texture, tint or property state that a replacement of its shared texture would
+    /// clash with (an own tile kind does not, for an art-only replacement).</summary>
+    private bool HasFaceLocalTextureState(TerrainPolygon face, bool artOnly) =>
+        face.HasTextureEdit || face.HasTextureVisualEdit || (face.HasSurfaceBehaviorEdit && !(artOnly && IsOwnTileTypeEdit(face)));
+
+    private bool IsFaceLocalTextureTargetCompatibleWithRelocation(
         TerrainPolygon face,
         NativeTerrainTextureRelocationEdit relocation)
     {
@@ -5267,7 +5277,7 @@ public sealed partial class MainWindow
         }
 
         if (relocation.PreservesTargetNativeSurface)
-            return !face.HasSurfaceBehaviorEdit;
+            return !face.HasSurfaceBehaviorEdit || IsOwnTileTypeEdit(face);
 
         TerrainSurfaceBehaviorEdit? behavior = face.SurfaceBehaviorEdit;
         return behavior == null ||

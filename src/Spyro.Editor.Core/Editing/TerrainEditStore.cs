@@ -57,6 +57,12 @@ public static class TerrainEditStore
                 edit["nativeSurfaceSourceLevelKey"] = surfaceBehavior.SourceLevelKey;
                 edit["nativeSurfaceSourceRuntimeKey"] = surfaceBehavior.SourceRuntimeKey;
                 edit["nativeSurfaceLabel"] = surfaceBehavior.Label;
+                if (surfaceBehavior.ImportsDescriptor)
+                {
+                    edit["nativeSurfaceDescriptorDonorLevelKey"] = surfaceBehavior.DescriptorDonorLevelKey;
+                    edit["nativeSurfaceDescriptorDonorWadEntry"] = surfaceBehavior.DescriptorDonorWadEntry;
+                    edit["nativeSurfaceDescriptorDonorIndex"] = surfaceBehavior.DescriptorDonorIndex;
+                }
             }
 
             if (polygon.HasTextureEdit || polygon.HasTextureVisualEdit)
@@ -817,7 +823,12 @@ public static class TerrainEditStore
             JsonValue.GetInt32(edit, "nativeSurfaceParam2"),
             JsonValue.GetString(edit, "nativeSurfaceSourceLevelKey"),
             JsonValue.GetString(edit, "nativeSurfaceSourceRuntimeKey"),
-            JsonValue.GetString(edit, "nativeSurfaceLabel", "native terrain behavior")));
+            JsonValue.GetString(edit, "nativeSurfaceLabel", "native terrain behavior"))
+        {
+            DescriptorDonorLevelKey = JsonValue.GetString(edit, "nativeSurfaceDescriptorDonorLevelKey"),
+            DescriptorDonorWadEntry = JsonValue.GetInt32(edit, "nativeSurfaceDescriptorDonorWadEntry", -1),
+            DescriptorDonorIndex = JsonValue.GetInt32(edit, "nativeSurfaceDescriptorDonorIndex", -1)
+        });
     }
 
     private static void ApplyNativeTextureVisual(TerrainPolygon polygon, JsonElement edit)
