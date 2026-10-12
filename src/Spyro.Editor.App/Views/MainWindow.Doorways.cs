@@ -523,7 +523,8 @@ public sealed partial class MainWindow
         await ChangeSelectedDoorwayAsync(p => p with
             {
                 Shape = shape.Id, Scale = Math.Abs(choice.Scale - 1) < 0.01f ? null : choice.Scale,
-                FaceMaterial = material ?? p.FaceMaterial, SideMaterial = material ?? p.SideMaterial
+                FaceMaterial = material ?? p.FaceMaterial ?? GroundTypes.Stone.Material(_retailCatalog),
+                SideMaterial = material ?? p.SideMaterial ?? GroundTypes.Stone.Material(_retailCatalog)
             },
             p => $"The doorway to {DoorwayDestinationName(p.DestinationLevelId)} is a {shape.Name.ToLowerInvariant()} now ({DoorwaySizeName(choice.Scale).Split(' ')[0].ToLowerInvariant()} size). " +
                  "Its frame was rebuilt with the same textures.",
