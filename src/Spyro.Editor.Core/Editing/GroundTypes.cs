@@ -7,6 +7,13 @@ namespace Spyro.Editor.Core.Editing;
 /// into the level), the shade it is drawn with (128 = as in the original) and what Spyro finds on it (null: solid).</summary>
 public sealed record GroundType(string Name, string LevelKey, int TextureId, ColorRgba Shade, AuthoredSurfaceKind? Kind, string Note)
 {
+    /// <summary>The ground's colour without its texture (an untextured stand-in).</summary>
+    public ColorRgba Plain => Name switch
+    {
+        "Grass" => new(64, 128, 48), "Dirt" => new(112, 88, 64), "Stone" => new(120, 120, 128), "Sand" => new(200, 150, 88),
+        "Snow" => new(220, 224, 232), "Wood" => new(120, 80, 48), "Water" => new(48, 120, 216), "Lava" => new(216, 88, 32),
+        "Goo" => new(144, 48, 160), _ => new(128, 128, 128)
+    };
     public AuthoredMaterial Material(LevelCatalog catalog) =>
         new((catalog.FindByKey(LevelKey) ?? throw new InvalidDataException($"The level catalog has no {LevelKey}.")).SourceWadEntry, TextureId);
 

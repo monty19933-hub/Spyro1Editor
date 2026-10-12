@@ -10934,6 +10934,11 @@ public sealed partial class MainWindow : Window
         if (!CanUseTerrainAddCopyInCurrentLevel())
             return false;
 
+        // A level you build copies any of its tiles; the readiness search below reads the original level's files for
+        // every tile, which is slow on a level with many tiles and means nothing here.
+        if (_freshSceneDocument != null)
+            return _currentGeometry?.Polygons.Any(face => !face.IsTerrainRemoved) == true;
+
         if (_currentGeometry != null && IsSourceDerivedGeometry(_currentGeometry))
             return _currentGeometry.Polygons.Any(face => !face.IsTerrainRemoved && CanStageTerrainAddCopy(face));
         return TryGetBestTerrainAddSource(out _, out _) ||

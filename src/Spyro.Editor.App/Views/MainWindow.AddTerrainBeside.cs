@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
 
@@ -64,11 +65,65 @@ public sealed partial class MainWindow
             if (_selectedTerrain is not { IsTerrainRemoved: false } source)
             { _statusText.Text = "Select a tile first, then click an arrow to add a tile beside it."; return; }
             Vector2f move = FlushTerrainOffset(source, side);
-            if (AddFreshTerrainCopy(source, move.X, move.Y, 0) != null)
+            if (await MakeRoomBesideAsync(source, side, move) is not { } tile) return;
+            if (AddFreshTerrainCopy(tile, move.X, move.Y, 0) != null)
                 _statusText.Text = $"Added a tile against the {SideWord(side)} edge of the selected one. Click the arrow again to keep going; Save Level keeps it.";
             return;
         }
         await AddRetailTerrainBesideAsync(side);
+    }
+
+    /// <summary>Answers "move the whole level to make room?" in tests.</summary>
+    internal Func<bool>? MakeRoomChoiceForTesting { get; set; }
+
+    /// <summary>The tile to copy from: the selected one, or — when the copy would cross the west or south edge of the game's
+    /// map (or east or north) and the level has room on the other side — the same tile after the whole level is moved
+    /// away from that edge (asked first, then saved). Null when nothing is added.</summary>
+    private async Task<TerrainPolygon?> MakeRoomBesideAsync(TerrainPolygon source, TerrainSide side, Vector2f move)
+    {
+        float minX = source.Points.Min(p => p.X) + move.X, minY = source.Points.Min(p => p.Y) + move.Y;
+        float maxX = source.Points.Max(p => p.X) + move.X, maxY = source.Points.Max(p => p.Y) + move.Y;
+        float need = side switch
+        {
+            TerrainSide.West => -minX, TerrainSide.South => -minY,
+            TerrainSide.East => maxX - SceneMove.MapEdge, _ => maxY - SceneMove.MapEdge
+        };
+        if (need <= 0) return source;
+        var scene = CaptureFreshScene();
+        var room = SceneMove.Room(scene);
+        float across = side switch { TerrainSide.West => room.East, TerrainSide.South => room.North, TerrainSide.East => room.West, _ => room.South };
+        // A good step (eight meadow tiles) when there is room for it, so the next clicks don't ask again.
+        int step = (int)MathF.Ceiling(need / 1024f) * 1024;
+        if (step > across) step = (int)MathF.Ceiling(need);
+        if (step > across)
+        {
+            _statusText.Text = $"There is no room for that tile: your level already reaches across the game's map from its {SideWord(side)} edge to the other side.";
+            return null;
+        }
+        string away = side switch { TerrainSide.West => "east", TerrainSide.South => "north", TerrainSide.East => "west", _ => "south" };
+        bool accepted = MakeRoomChoiceForTesting != null
+            ? MakeRoomChoiceForTesting()
+            : await ShowConfirmationAsync("MakeRoomDialog", "Make Room", $"Move the level {away} to make room?",
+                $"Your level is against the {SideWord(side)} edge of the game's map, so a tile can't go further {SideWord(side)}.\n" +
+                $"The editor can move the whole level {step} units {away} — every tile, object, doorway and the player start together, " +
+                "so nothing changes in how it plays — and then add the tile. The level is saved after the move.", "Move Level and Add");
+        if (!accepted) { _statusText.Text = $"Nothing was added: the level stays against the map's {SideWord(side)} edge."; return null; }
+        string sourceId = _freshSceneDocument!.Surfaces[source.SectorIndex].Id;
+        int dx = side switch { TerrainSide.West => step, TerrainSide.East => -step, _ => 0 };
+        int dy = side switch { TerrainSide.South => step, TerrainSide.North => -step, _ => 0 };
+        SceneDocument moved;
+        try { moved = SceneMove.Moved(scene, dx, dy); }
+        catch (Exception e) when (e is InvalidDataException or System.Text.Json.JsonException)
+        { _statusText.Text = "Could not move the level: " + e.Message; return null; }
+        ApplyFreshScene(moved);
+        if (!await SaveFreshSceneAsync()) return null;
+        int index = moved.Surfaces.ToList().FindIndex(s => s.Id == sourceId);
+        int polygon = _currentGeometry!.Polygons.FindIndex(p => p.SectorIndex == index);
+        if (polygon < 0) return null;
+        _selectedTerrain = _currentGeometry.Polygons[polygon];
+        _selectedTerrainIndex = polygon;
+        ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(polygon, _selectedTerrain));
+        return _selectedTerrain;
     }
 
     /// <summary>An original level: Add Terrain's copy (the selected face becomes a staged copy moved by the offsets; Create

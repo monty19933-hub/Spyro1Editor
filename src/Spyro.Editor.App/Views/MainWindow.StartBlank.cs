@@ -41,7 +41,7 @@ public sealed partial class MainWindow
         try
         {
             if(await StartBlankConfirmedAsync(level) is {})
-                _statusText.Text=$"{level.DisplayName} is blank: a small starting floor and no objects. Recovery > Restore Before Clear brings back your saved work.";
+                _statusText.Text=$"{level.DisplayName} starts over as a grassy meadow with no objects (Terrain › Ground repaints it). Recovery > Restore Before Clear brings back your saved work.";
         }
         finally{_startBlankBusy=false;RefreshCurrentLevelDetails();}
     }

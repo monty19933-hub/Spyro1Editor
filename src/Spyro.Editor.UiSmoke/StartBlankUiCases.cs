@@ -45,16 +45,20 @@ internal static class StartBlankUiCases
             var clear=(Task)Invoke(window,"StartBlankCurrentLevelAsync")!;
             Wait(()=>window.OwnedWindows.Any(w=>w.Name=="StartBlankDialog"));
             Click(Find<Button>(window.OwnedWindows.Single(w=>w.Name=="StartBlankDialog"),"StartBlankConfirm"));Complete(clear);
-            Check(window.FreshSceneForTesting is{Surfaces.Count:2,Objects.Count:0}&&window.FreshSceneForTesting.Id!=original.Id,"actual confirmation replaces scene with neutral floor");
+            Check(window.FreshSceneForTesting is{Objects.Count:0} cleared&&cleared.Surfaces.Count>100&&cleared.Id!=original.Id,"actual confirmation replaces scene with the starter meadow");
             Check(ReferenceEquals(viewport,Get<object>(window,"_viewport")),"clear retains shared viewport");
             Check(StartBlankRecoveryStore.Read(root,"authored65")!.Active,"before-clear recovery durable");
+            // The meadow has well over a hundred tiles: all but one go as a multi-selection, the last on its own.
             geometry=Get<GeometryCandidate>(window,"_currentGeometry");
-            foreach(var face in geometry.Polygons.ToArray())
-            {
-                Invoke(window,"ShowSelection",ViewportSelectionChangedEventArgs.ForTerrain(geometry.Polygons.IndexOf(face),face));
-                Check(Get<Button>(window,"_terrainTaskRemoveFaceButton").IsEnabled,"Remove Terrain remains enabled for final face");
-                Click(Get<Button>(window,"_terrainTaskRemoveFaceButton"));
-            }
+            var shownViewport=Get<Spyro.Editor.App.Views.EditorViewport>(window,"_viewport");
+            shownViewport.SetTerrainMultiSelection(Enumerable.Range(0,geometry.Polygons.Count-1));Pump();
+            Check(Get<Button>(window,"_terrainTaskRemoveFaceButton").IsEnabled,"Remove Terrain enabled for the selected tiles");
+            Click(Get<Button>(window,"_terrainTaskRemoveFaceButton"));
+            shownViewport.ClearTerrainMultiSelection();Pump();
+            var last=geometry.Polygons[^1];
+            Invoke(window,"ShowSelection",ViewportSelectionChangedEventArgs.ForTerrain(geometry.Polygons.Count-1,last));
+            Check(Get<Button>(window,"_terrainTaskRemoveFaceButton").IsEnabled,"Remove Terrain remains enabled for final face");
+            Click(Get<Button>(window,"_terrainTaskRemoveFaceButton"));
             Check(window.FreshSceneForTesting!.Surfaces.Count==0,"normal Remove Terrain empties scene");
             Complete((Task)Invoke(window,"SaveFreshSceneAsync")!);Invoke(window,"ApplyFreshScene",SceneDocument.Read(Path.Combine(root,SceneDocument.FileName)));
             Check(window.FreshSceneForTesting!.Surfaces.Count==0&&Get<GeometryCandidate>(window,"_currentGeometry").Polygons.Count==0,"empty save reopen invents no floor");
@@ -117,7 +121,7 @@ internal static class StartBlankUiCases
             Environment.CurrentDirectory=previous;Environment.SetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE",workspace);Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE",release);
         }
     }
-    private static void Check(bool value,string name){if(!value)throw new Exception(name);checks++;}
+    private static void Check(bool value,string name){if(!value)throw new Exception(name);checks++;if(Environment.GetEnvironmentVariable("START_BLANK_TRACE")=="1")Console.WriteLine("ok: "+name);}
     private static object? Invoke(object target,string name,params object[] args)=>target.GetType().GetMethod(name,BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(target,args);
     private static T Get<T>(object target,string name)=>(T)target.GetType().GetField(name,BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(target)!;
     private static void Set(object target,string name,object value)=>target.GetType().GetField(name,BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(target,value);

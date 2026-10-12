@@ -96,5 +96,16 @@ static class LevelFillCases
         var grid = new LevelFill.FloorGrid(scene);
         var walk = grid.Walk(scene.Spawn);
         Check(walk.Keys.Any(c => Math.Abs(grid.Point(c).Z - StarterLevel.Ledge) < 2), "the ledge is reachable on foot from the start");
+
+        // Make Room: the whole level moves together, as a copy, by whole units.
+        var room = SceneMove.Room(scene);
+        Check(room.West == StarterLevel.Origin && room.South == StarterLevel.Origin, "the meadow has the origin's room to the west and south");
+        var moved = SceneMove.Moved(scene, 1024, -512);
+        Check(moved.Surfaces.Zip(scene.Surfaces).All(p => p.First.Id == p.Second.Id && p.First.Vertices.Zip(p.Second.Vertices).All(v =>
+            v.First.X == v.Second.X + 1024 && v.First.Y == v.Second.Y - 512 && v.First.Z == v.Second.Z)), "every face moves by exactly the step");
+        Check(moved.Spawn.X == scene.Spawn.X + 1024 && moved.Spawn.Y == scene.Spawn.Y - 512 && moved.Heading == scene.Heading &&
+            moved.Surfaces.Zip(scene.Surfaces).All(p => p.First.Material == p.Second.Material && p.First.Kind == p.Second.Kind), "the start moves with it; looks and grounds are kept");
+        Check(scene.Spawn.X == StarterLevel.Origin + 6 * StarterLevel.Tile, "moving makes a copy");
+        Check(SceneMove.Room(moved).West == room.West + 1024 && SceneMove.Room(moved).South == room.South - 512, "the room changes by the step");
     }
 }

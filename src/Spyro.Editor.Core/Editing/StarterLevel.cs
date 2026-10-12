@@ -20,8 +20,11 @@ public static class StarterLevel
 
     public static SceneDocument Create(string name, LevelCatalog catalog)
     {
-        AuthoredSurface Face(GroundType ground, params Vector3f[] corners) =>
-            ground.Apply(new(Guid.NewGuid().ToString("N"), corners, new(128, 128, 128), null), catalog);
+        // Without the original levels in the catalog (a bare test workspace) the meadow is drawn in plain colours.
+        bool textured = GroundTypes.All.All(g => catalog.FindByKey(g.LevelKey) != null);
+        AuthoredSurface Face(GroundType ground, params Vector3f[] corners) => textured
+            ? ground.Apply(new(Guid.NewGuid().ToString("N"), corners, new(128, 128, 128), null), catalog)
+            : new(Guid.NewGuid().ToString("N"), corners, ground.Plain, null) { Kind = ground.Kind };
         AuthoredSurface Wall(Vector3f[] corners) =>
             Face(GroundTypes.Stone, corners) with { Color = new(96, 96, 96) };
         List<AuthoredSurface> faces = [];

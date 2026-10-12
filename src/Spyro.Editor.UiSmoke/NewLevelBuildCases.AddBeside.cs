@@ -4,7 +4,7 @@ using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Scene;
 
 /// <summary>Terrain › Tiles › Add beside ◀ ▲: from the meadow's westmost tile, ◀ clicked until the map's west edge
-/// (each copy exactly against the last: the row has no gaps), the click past the edge refused with a message; ▲ once;
+/// (each copy exactly against the last: the row has no gaps), the click past the edge declined (nothing changes) and then accepted (the level moves east to make room); ▲ once;
 /// the saved scene read back.</summary>
 internal static partial class NewLevelBuildCases
 {
@@ -28,11 +28,27 @@ internal static partial class NewLevelBuildCases
         Console.WriteLine($"after {clicks} clicks west: {row.Count} new tiles from x {xs.First()} to {row.Max(p => p.Points.Max(v => v.X))}");
         if (row.Count != clicks || xs.First() != 0 || xs.Zip(xs.Skip(1)).Any(p => p.Second - p.First != t))
             throw new InvalidOperationException("The added tiles are not a gapless row against the edge.");
+        // Past the edge: declined, nothing changes; accepted, the whole level moves east to make room and the tile is added.
+        int faces = geometry.Polygons.Count;
+        window.MakeRoomChoiceForTesting = () => false;
         Click(west); Pump(5);
-        string refusal = Status(window);
-        Console.WriteLine("one more click: " + refusal);
-        if (!refusal.Contains("west edge", StringComparison.Ordinal)) throw new InvalidOperationException("Adding past the map's edge was not refused with a message.");
-        var top = geometry.Polygons.First(p => p.Points.Count == 4 && Math.Abs(p.Points.Min(v => v.X) - o) < 1 && Math.Abs(p.Points.Max(v => v.Y) - (o + 12 * t)) < 1);
+        Console.WriteLine("past the edge, declined: " + Status(window));
+        if (Get<GeometryCandidate>(window, "_currentGeometry").Polygons.Count != faces || !Status(window).Contains("west edge", StringComparison.Ordinal))
+            throw new InvalidOperationException("Declining to make room changed the level or said nothing.");
+        var spawnBefore = window.FreshSceneForTesting!.Spawn;
+        window.MakeRoomChoiceForTesting = () => true;
+        Click(west); Pump(5);
+        window.MakeRoomChoiceForTesting = null;
+        geometry = Get<GeometryCandidate>(window, "_currentGeometry");
+        var moved = window.FreshSceneForTesting!;
+        var edgeCopy = Get<TerrainPolygon>(window, "_selectedTerrain");
+        float shift = moved.Spawn.X - spawnBefore.X;
+        Console.WriteLine($"past the edge, accepted: level moved {shift} east, copy x {edgeCopy.Points.Min(v => v.X)}..{edgeCopy.Points.Max(v => v.X)}; {Status(window)}");
+        if (shift != 1024 || moved.Spawn.Y != spawnBefore.Y || geometry.Polygons.Count != faces + 1 || edgeCopy.Points.Max(v => v.X) != shift || edgeCopy.Points.Min(v => v.X) != shift - t)
+            throw new InvalidOperationException("Making room did not move the level east and add the tile against the row.");
+        if (SceneDocument.Read(SceneDocumentStore.PathForTarget(Workspace(window).RootPath, "authored65")).Spawn.X != moved.Spawn.X)
+            throw new InvalidOperationException("The moved level was not saved.");
+        var top = geometry.Polygons.First(p => p.Points.Count == 4 && Math.Abs(p.Points.Min(v => v.X) - (o + shift)) < 1 && Math.Abs(p.Points.Max(v => v.Y) - (o + 12 * t)) < 1);
         Set(window, "_selectedTerrain", top); Set(window, "_selectedTerrainIndex", geometry.Polygons.IndexOf(top));
         Click(Find<Button>(window, "AddTerrainNorth")); Pump(5);
         var added = Get<TerrainPolygon>(window, "_selectedTerrain");
