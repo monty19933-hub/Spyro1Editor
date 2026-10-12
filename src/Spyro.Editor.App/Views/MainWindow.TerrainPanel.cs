@@ -37,6 +37,7 @@ public sealed partial class MainWindow
             root.Children.Add(Detach(labControls));
         root.Children.Add(BuildTerrainGroundCard());
         root.Children.Add(BuildTerrainTilesCard());
+        root.Children.Add(BuildTerrainDoorwaysCard());
         root.Children.Add(BuildTerrainBrushCard());
         root.Children.Add(BuildTerrainTexturesCard());
         root.Children.Add(BuildTerrainCornerSection());
@@ -326,6 +327,7 @@ public sealed partial class MainWindow
         if (_terrainTileTypeButton != null)
             _terrainTileTypeButton.IsEnabled = _currentGeometry != null && SelectedTilesForTypeChange().Count > 0;
         RefreshGroundCard();
+        RefreshDoorwaysCard();
 
         if (_terrainPanelHeightRow != null)
             _terrainPanelHeightRow.IsVisible = _freshSceneDocument == null;

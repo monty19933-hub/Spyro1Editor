@@ -317,6 +317,39 @@ together; of the other twenty levels (Dark Hollow, Toasty and most levels of the
 later worlds) two can be cleared in one game. A cleared Town Square and a
 level of your own cannot currently be exported together.
 
+### Doorways in a homeworld you rebuild
+
+A homeworld you rebuilt with Start Blank (Artisans, Peace Keepers, Magic Crafters,
+Beast Makers, Dream Weavers or Gnasty's World) has a **Doorways** card in the
+Terrain tab. Other levels show it too, with the reason they cannot have doorways:
+the game keeps its doorway code in the homeworlds only.
+
+- **Add Doorway…** asks where it leads (the levels that homeworld's own doorways
+  lead to; each level has one doorway), its **shape** from six pictures — Stone
+  Arch, Pointed Arch, Square Gate, Round Ring, Wide Arch and Hex Gate — its size,
+  and its frame's texture (the same texture grid as Choose Texture…). It stands
+  on the selected tile, or on the ground in front of the camera, facing the
+  camera: Spyro walks into it away from you.
+- Select a doorway in the list, or click its frame in the view. **◀ ▲ ▼ ▶** move it
+  16 units (west, north, south, east as in the Map view), **Up**/**Down** 8 units;
+  **To Selected Tile** and **In Front of Camera** put it somewhere new; **⟲ ⟳**
+  turn it 15° or 90°. **Shape…** changes its shape or size, **Leads To…** where it
+  goes, **Front Texture…** and **Side Texture…** its frame's look, and **Remove
+  Doorway** takes it out with its frame.
+- The frame is made of ordinary tiles. Selecting a doorway selects its whole
+  frame, so the Ground card or Choose Texture… repaint it in one go; click single
+  frame tiles to paint them one by one. Moving, turning or reshaping the doorway
+  rebuilds the frame there and keeps its textures.
+- In the game the opening shows the sky of the level it leads to. Spyro walks in,
+  the level loads, and Return Home or Exit Level brings him back out of the same
+  doorway. The game draws a doorway's sky inside an opening of at most ten
+  corners that never bends inwards; the shapes are made that way.
+- Doorways made before this tool (such as Lost Fleet's) keep working as they
+  were; the first change finds their frame and moves it with them.
+- The new world's homeworld (File ▾ → New World…) can have a doorway to each of
+  its levels, marked "playable after New World export": Create BIN cannot build
+  the new world yet and says so.
+
 A rebuilt level holds up to 4,096 terrain tiles. Untextured tiles are split into
 smaller triangles automatically. Walls stop Spyro from the side you can see them.
 The game gives close-up detail to the textured tiles near the camera, and only so

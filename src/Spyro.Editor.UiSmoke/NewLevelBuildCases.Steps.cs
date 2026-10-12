@@ -73,6 +73,8 @@ internal static partial class NewLevelBuildCases
             case "new-world": NewWorldStep(window, outDir); return true;
             case "texture-grid": TextureGrid(window, outDir); return true;
             case "add-beside": AddBeside(window, outDir); return true;
+            case "doorways": DoorwaysStep(window, outDir); return true;
+            case "doorway-shots": DoorwayShots(window, outDir); return true;
             default: return false;
         }
     }

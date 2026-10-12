@@ -98,8 +98,31 @@ public sealed record AuthoredCollisionFace(Vector3f[] Vertices,
 /// <summary>A doorway of a rebuilt homeworld: the original homeworld's portal to <see cref="DestinationLevelId"/>
 /// (its walk-in path, name lettering, return point and the destination's sky seen through it), moved so the bottom
 /// middle of its opening stands at <see cref="Position"/> and Spyro walks in towards <see cref="Heading"/>
-/// (0-255, 0 = +X, 64 = +Y).</summary>
-public sealed record AuthoredPortal(int DestinationLevelId, Vector3f Position, int Heading);
+/// (0-255, 0 = +X, 64 = +Y).
+/// <para>A doorway with a <see cref="Shape"/> (Terrain › Doorways) has that shape's opening instead of the original one,
+/// and its frame is made of the scene faces listed in <see cref="FrameFaces"/>. Doorways saved without one (Lost Fleet's,
+/// made before the Doorways tool) read and export exactly as before.</para></summary>
+public sealed record AuthoredPortal(int DestinationLevelId, Vector3f Position, int Heading)
+{
+    /// <summary>The opening and frame (<see cref="DoorwayShapes"/> id); null: the original homeworld doorway's opening.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? Shape { get; init; }
+    /// <summary>The shape's size (<see cref="DoorwayShapes.MinScale"/>..<see cref="DoorwayShapes.MaxScale"/>); null: 1.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public float? Scale { get; init; }
+    /// <summary>The texture of the frame's front and back, and of its sides; the frame's faces carry their own once built
+    /// (repainting them repaints the frame), these are the frame's own choice when it is rebuilt.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public AuthoredMaterial? FaceMaterial { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public AuthoredMaterial? SideMaterial { get; init; }
+    /// <summary>The scene faces (<see cref="AuthoredSurface.Id"/>) that make the doorway's frame, in the order the frame
+    /// builder makes them; null: none known. Moving the doorway moves them, removing it removes them.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? FrameFaces { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public double SizeScale => Scale ?? 1;
+}
 
 /// <summary>The main editor's neutral authored scene. Native ID65 is its actual compilation target,
 /// never a cache donor. Geometry and actors originate only in this document.</summary>
@@ -315,11 +338,27 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
             }
         if (Portals is { } portals)
         {
-            if (TargetBinding is not { LevelId: var home } || home % 10 != 0 ||
+            // A rebuilt homeworld's doorways lead where its original ones did; the new world's homeworld (70) leads to its
+            // own levels (71-74).
+            bool worldHome = WorldLevelId == NewWorldDocument.Homeworld && TargetBinding == null;
+            if (!worldHome && (TargetBinding is not { LevelId: var home } || home % 10 != 0) ||
                 portals.Select(p => p.DestinationLevelId).Distinct().Count() != portals.Count ||
-                portals.Any(p => p.Heading is < 0 or > 255 || HomeworldPortalControlCatalog.All.All(d => d.DestinationLevelId != p.DestinationLevelId || d.HomeworldKey != TargetBinding.LevelKey)))
+                portals.Any(p => p.Heading is < 0 or > 255 || (worldHome
+                    ? !NewWorldDocument.LevelSlots.Contains(p.DestinationLevelId)
+                    : HomeworldPortalControlCatalog.All.All(d => d.DestinationLevelId != p.DestinationLevelId || d.HomeworldKey != TargetBinding!.LevelKey))))
                 throw new InvalidDataException("Doorways belong to a rebuilt homeworld, one per level that homeworld's original portals lead to.");
-            foreach (var p in portals) RequireCoordinate(p.Position);
+            List<string> frameFaces = [];
+            foreach (var p in portals)
+            {
+                RequireCoordinate(p.Position);
+                if (p.Shape != null && DoorwayShapes.Find(p.Shape) == null)
+                    throw new InvalidDataException($"A doorway has a shape this editor does not know ({p.Shape}).");
+                if (p.Scale is float scale && (!float.IsFinite(scale) || scale < DoorwayShapes.MinScale || scale > DoorwayShapes.MaxScale))
+                    throw new InvalidDataException("A doorway's size is outside what the editor allows.");
+                frameFaces.AddRange(p.FrameFaces ?? []);
+            }
+            if (frameFaces.Distinct(StringComparer.Ordinal).Count() != frameFaces.Count || frameFaces.Any(id => !Guid.TryParseExact(id, "N", out _)))
+                throw new InvalidDataException("A doorway's frame lists a face twice or a face of another doorway.");
         }
     }
     private static void RequireCoordinate(Vector3f v)

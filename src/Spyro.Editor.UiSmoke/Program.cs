@@ -272,6 +272,15 @@ if (args.Contains("--authored-mesh-only", StringComparer.Ordinal))
     return 0;
 }
 
+// Terrain › Doorways on throwaway projects; no disc and no game.
+if (args.Contains("--doorways-ui-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --doorways-ui-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    DoorwaysUiCases.Run();
+    return 0;
+}
+
 if (args.Contains("--memory-mode-ui-only", StringComparer.Ordinal))
 {
     if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --memory-mode-ui-only");

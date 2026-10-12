@@ -256,6 +256,11 @@ CORE_CASES = (
     ("SkyModelSmoke", "SKY_MODEL_OK checks=59"),
     # Panoramas and sky models become native skies within the game's limits, facing the right way (not mirrored).
     ("SkyImportSmoke", "SKY_IMPORT_FREE_OK checks=70"),
+    # Doorways (Terrain > Doorways): the six shapes are openings the game can draw (<= 10 points, convex, anticlockwise),
+    # their frames are whole-unit faces around them, shaped records hold the shape's opening before the original's sky
+    # header and sky, an original doorway's record is written exactly as before, scene editing keeps frames with their
+    # doorways, old scenes keep their fingerprint, the new world's doorways are refused by Create BIN in plain words.
+    ("DoorwaySmoke", "DOORWAY_FREE_OK checks=380"),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
@@ -292,6 +297,8 @@ ADDITIONAL_CORE_CASES = (
      ["--play-as-crash-ui-only"]),
     ("UiSmoke", "MEMORY_MODE_UI_OK checks=12",
      ["--memory-mode-ui-only"]),
+    ("UiSmoke", "DOORWAYS_UI_OK checks=38",
+     ["--doorways-ui-only"]),
     ("UiSmoke", "LEVEL_PICKER_AUTOMATION_OK",
      ["--level-picker-automation-only"]),
     ("UiSmoke", "AUTHORED_MESH_CHECKS_OK",
@@ -347,6 +354,8 @@ SOURCE_QA_CASES = (
     ("LevelWindowSmoke", "LEVEL_WINDOW_SOURCE_OK checks=120", ["--source"]),
     # Every retail sky drawn as a panorama and rebuilt from it within the game's limits, looking the same.
     ("SkyImportSmoke", "SKY_IMPORT_SOURCE_OK checks=278", ["--source"]),
+    # All 29 original homeworld doorways: written byte for byte as before; each shape keeps the original's sky.
+    ("DoorwaySmoke", "DOORWAY_SOURCE_OK checks=816", ["--source"]),
     ("DarkParticleHostSmoke", "DARK_PROJECTILE_ALL_HOST_OWNERSHIP_OK", []),
     ("FreshParticleBindingSmoke", "FRESH_OWNED_PARTICLE_BINDING_OK", []),
     ("CollectionStarSmoke", "COLLECTION_STAR_SOURCE_OWNERSHIP_OK", []),
@@ -708,6 +717,7 @@ def main():
             ("--start-blank-ui-only",): "-start-blank-ui",
             ("--free-flight-ui-only",): "-free-flight-ui",
             ("--memory-mode-ui-only",): "-memory-mode-ui",
+            ("--doorways-ui-only",): "-doorways-ui",
             ("--level-picker-automation-only",): "-level-picker-automation",
             ("--authored-mesh-only",): "-authored-mesh",
             ("--source-free-route-surfaces",): "-route-surfaces",

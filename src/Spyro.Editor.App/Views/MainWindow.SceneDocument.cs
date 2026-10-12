@@ -239,6 +239,7 @@ public sealed partial class MainWindow
     private async Task CreateFreshMainBinAsync()
     {
         using var memory = UseProjectMemoryMode();
+        if(RefuseNewWorldExport())return;
         bool authoredActive=_freshSceneDocument!=null;
         if(authoredActive?!await SaveFreshSceneAsync():!await SaveCurrentEditsAsync())return;
         var owner=CaptureSourceDiscOperationIdentity();
