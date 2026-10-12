@@ -10,7 +10,7 @@ using Spyro.Editor.Core.YearOfTheDragon;
 
 namespace Spyro.Editor.App.Views;
 
-/// <summary>File ▾ > New Level from Spyro: Year of the Dragon… and New Level from Crash Bandicoot: Warped…: the open
+/// <summary>File ▾ > New Level from Spyro: Year of the Dragon…: the open
 /// level's place is taken by a level of another game, rebuilt from the user's own disc (<see cref="YearOfTheDragonLevelImport"/>,
 /// <see cref="Spyro.Editor.Core.Crash.CrashLevelImport"/>): its ground, walls, textures, water and lava. The open level is emptied the way Start Blank empties it (with its recovery copy), so its own dragons,
 /// egg thieves and save rows stay; objects are added afterwards.</summary>
@@ -80,7 +80,7 @@ public sealed partial class MainWindow
             var built=await import.Build(binding,usa,pictures,progress,cancel.Token);
             if(_currentLevel!=slot||_workspace.RootPath!=root)return;
             progressLine.Text=$"Emptying {slot.DisplayName} (a recovery copy is saved first)…";
-            var blank=await StartBlankConfirmedAsync(slot);
+            var blank=await StartBlankConfirmedAsync(slot,starter:false);
             if(blank==null)return;
             // Replacing a level built earlier: its objects are gone, so their save rows go to the new level (new game).
             string freedNote="";
@@ -205,7 +205,7 @@ public sealed partial class MainWindow
 
     private async Task ShowOtherGameLevelReadyAsync(string name,string slotName,string summary,bool filled)
     {
-        if(OtherGameLevelChoiceForTesting!=null||CrashLevelChoiceForTesting!=null)return;
+        if(OtherGameLevelChoiceForTesting!=null)return;
         var content=new StackPanel{Margin=new Thickness(22),Spacing=12};
         content.Children.Add(new TextBlock{Text=$"{name} is ready to build on",FontSize=20,FontWeight=FontWeight.SemiBold,TextWrapping=TextWrapping.Wrap});
         content.Children.Add(new TextBlock{Name="OtherGameLevelSummary",TextWrapping=TextWrapping.Wrap,Text=summary});

@@ -65,8 +65,8 @@ internal static partial class NewLevelBuildCases
             case "cloudspire-cannon": CloudspireCannon(window); return true;
             case "yotd-import": YearOfTheDragonImport(window); return true;
             case "yotd-menu": YearOfTheDragonMenu(window); return true;
-            case "crash-menu": CrashMenu(window); return true;
             case "crash-import": CrashImport(window, outDir); return true;
+            case "starter-ground": StarterGround(window, outDir); return true;
             default: return false;
         }
     }

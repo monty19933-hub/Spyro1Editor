@@ -1,3 +1,16 @@
+# In progress after 1.3 — 11 October 2026 (branch feature/new-world-20261011, unreleased)
+
+- New Level and Start Blank begin as a meadow that looks like a Spyro level (`StarterLevel`: grass, stone path,
+  ramp to a ledge, pond with a sand rim, Artisans' sky) instead of two untextured triangles. The YOTD import still
+  starts from an empty level.
+- Terrain tab › Ground (`MainWindow.GroundPalette.cs`, `GroundTypes`): Grass, Dirt, Stone, Sand, Snow, Wood, Water,
+  Lava, Goo. Each sets texture, shade and ground kind; selected tiles take it, then clicks paint. Tile Type… is
+  enabled in built levels again (it was always disabled there).
+- File ▾ › New Level from Crash Bandicoot: Warped… removed (core importer and its smoke kept; Crash objects and songs
+  stay).
+- To do before release: changelog, README, limitations; gems shine/spin, 8 MB toggle and New World research run as
+  separate branches.
+
 # Spyro Editor 1.3 and the Beta V6 bridge — 11 October 2026
 
 Stable 1.3 (internal 1.3.0, schema 3, tag `v1.3`). Levels from Spyro: Year of the Dragon (`YearOfTheDragonLevelImport`)

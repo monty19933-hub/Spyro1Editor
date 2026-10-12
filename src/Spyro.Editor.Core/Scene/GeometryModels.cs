@@ -321,13 +321,13 @@ public sealed class TerrainPolygon
     /// Legacy serialized NearColors field: physical HP color table 2, used by
     /// the retail DPCS path as the runtime-far endpoint, in raw slot order.
     /// </summary>
-    public IReadOnlyList<ColorRgba> NearColors { get; }
+    public IReadOnlyList<ColorRgba> NearColors { get; private set; }
     /// <summary>
     /// Legacy serialized FarColors field: physical HP color table 1, used by
     /// the retail DPCS path as the runtime-near endpoint, in raw slot order.
     /// </summary>
-    public IReadOnlyList<ColorRgba> FarColors { get; }
-    public ColorRgba FaceColor { get; }
+    public IReadOnlyList<ColorRgba> FarColors { get; private set; }
+    public ColorRgba FaceColor { get; private set; }
     public string Surface { get; private set; } = "unknown";
     public string SurfaceSource { get; private set; } = "unclassified";
     public string Behavior { get; private set; } = "unknown";
@@ -511,6 +511,15 @@ public sealed class TerrainPolygon
         for (int i = 0; i < count; i++)
             deltas[i] = new Vector2f(_points[i].X - OriginalPoints[i].X, _points[i].Y - OriginalPoints[i].Y);
         return deltas;
+    }
+
+    /// <summary>A built level's face painted with a ground (Terrain tab › Ground): every corner takes the ground's shade,
+    /// near and far (Create BIN then derives the far colours from the texture, NativeAuthoredFarColors).</summary>
+    public void ApplyShade(ColorRgba shade)
+    {
+        FaceColor = shade;
+        NearColors = Enumerable.Repeat(shade, NearColors.Count).ToArray();
+        FarColors = Enumerable.Repeat(shade, FarColors.Count).ToArray();
     }
 
     public void ApplyTextureOverride(int textureId)

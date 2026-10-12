@@ -236,7 +236,6 @@ public sealed partial class MainWindow
         fileActions.Children.Add(BuildActionMenu("File", "EditorFileMenu", new ToolbarAction("New Level…", NewMainLevelAsync),
             new ToolbarAction("Start Blank in Current Level…", StartBlankCurrentLevelAsync),
             new ToolbarAction("New Level from Spyro: Year of the Dragon…", NewLevelFromYearOfTheDragonAsync),
-            new ToolbarAction("New Level from Crash Bandicoot: Warped…", NewLevelFromCrashAsync),
             new ToolbarAction("Fill In What the Level Needs…", FillInLevelAsync),
             new ToolbarAction("Restore Before Clear…", RestoreBeforeClearAsync),
             new ToolbarAction("Free Deleted Objects' Save Rows…", FreeRetiredSaveRowsAsync),

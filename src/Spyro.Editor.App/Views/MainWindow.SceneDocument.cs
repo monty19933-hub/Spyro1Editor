@@ -68,8 +68,8 @@ public sealed partial class MainWindow
             catch(Exception e)when(e is IOException or UnauthorizedAccessException)
             { _statusText.Text="Could not keep a copy of the current created level, so it was left unchanged: "+e.Message;return; }
         }
-        ApplyFreshScene(SceneDocument.New());
-        _statusText.Text="New level created. Edit the floor, add objects and save; Create BIN makes a game that opens your level from New Game."+
+        ApplyFreshScene(StarterLevel.Create("Untitled Level",_retailCatalog));
+        _statusText.Text="New level created: a meadow with a path, a ledge and a pond. Paint the ground in the Terrain tab (Ground), add objects and save; Create BIN makes a game that opens your level from New Game."+
             (keptCopy==null?"":" The previous one was copied to backups/"+Path.GetFileName(keptCopy)+".");
     }
 

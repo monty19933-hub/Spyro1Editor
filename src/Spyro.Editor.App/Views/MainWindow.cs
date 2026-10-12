@@ -451,9 +451,15 @@ public sealed partial class MainWindow : Window
         _viewport.TerrainBrushStrokeFinished += (_, _) => FinishTerrainBrushUndo();
         _viewport.TerrainTexturePaintRequested += async (_, e) =>
         {
+            if (await PaintGroundFromViewportAsync(e.Terrain))
+                return;
             await ApplyTerrainTexturePaintBrushAsync(e.TerrainIndex, e.Terrain);
         };
-        _viewport.TerrainTexturePaintCanceled += (_, _) => StopTerrainTexturePaintMode(announce: true);
+        _viewport.TerrainTexturePaintCanceled += (_, _) =>
+        {
+            if (_activeGround != null) StopGroundPainting(announce: true);
+            else StopTerrainTexturePaintMode(announce: true);
+        };
         _viewport.MobyMoveRequested += (_, e) => MoveMobyFromViewport(e);
         _viewport.MobyRotateRequested += (_, e) => RotateMobyFromViewport(e);
         _viewport.NativePathNodeMoveRequested += (_, e) =>

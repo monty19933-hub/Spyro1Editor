@@ -35,6 +35,7 @@ public sealed partial class MainWindow
         StackPanel root = new() { Name = "TerrainPanel", Spacing = 12, Margin = new Thickness(0, 10, 0, 0) };
         if (labControls != null)
             root.Children.Add(Detach(labControls));
+        root.Children.Add(BuildTerrainGroundCard());
         root.Children.Add(BuildTerrainTilesCard());
         root.Children.Add(BuildTerrainBrushCard());
         root.Children.Add(BuildTerrainTexturesCard());
@@ -322,7 +323,8 @@ public sealed partial class MainWindow
             _terrainPanelSelectionText.Text = $"{tile} selected{(kind == null ? "" : $" — {kind}")}.{state} Drag it in the view to move it, or use the buttons.";
         }
         if (_terrainTileTypeButton != null)
-            _terrainTileTypeButton.IsEnabled = _currentGeometry != null && _freshSceneDocument == null && SelectedTilesForTypeChange().Count > 0;
+            _terrainTileTypeButton.IsEnabled = _currentGeometry != null && SelectedTilesForTypeChange().Count > 0;
+        RefreshGroundCard();
 
         if (_terrainPanelHeightRow != null)
             _terrainPanelHeightRow.IsVisible = _freshSceneDocument == null;

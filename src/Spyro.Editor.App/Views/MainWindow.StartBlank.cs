@@ -65,7 +65,9 @@ public sealed partial class MainWindow
     }
     /// <summary>Start Blank once the user has agreed (the caller holds <c>_startBlankBusy</c>): saves the level, keeps a
     /// recovery copy and opens the blank scene. Returns it, or null when it stopped (the status line says why).</summary>
-    private async Task<SceneDocument?> StartBlankConfirmedAsync(LevelDefinition level)
+    /// <param name="starter">Begin with the meadow of <see cref="StarterLevel"/> (Start Blank); an import replaces the
+    /// terrain at once and starts from an empty level.</param>
+    private async Task<SceneDocument?> StartBlankConfirmedAsync(LevelDefinition level,bool starter=true)
     {
         string root=_workspace.RootPath;
         try
@@ -91,7 +93,7 @@ public sealed partial class MainWindow
             }
             string key=binding?.LevelKey??"authored65";
             ledger=StartBlankRecoveryStore.ReconcileLifetime(root,key,ledger,binding?.NativePrefixRows??0);
-            var blank=SceneDocument.New(level.DisplayName) with{TargetBinding=binding,Ledger=ledger};
+            var blank=(starter?StarterLevel.Create(level.DisplayName,_retailCatalog):SceneDocument.New(level.DisplayName)) with{TargetBinding=binding,Ledger=ledger};
             await StartBlankRecoveryStore.ClearAsync(root,key,blank,RequireCurrent,StartBlankSnapshotFaultForTesting);
             ApplyFreshScene(blank);
             return blank;

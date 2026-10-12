@@ -177,6 +177,12 @@ Pick a replacement, review its time bonus and fit check, then choose
 
 ## Terrain tab
 
+- **Ground** (in a level you build: New Level or Start Blank): nine buttons —
+  Grass, Dirt, Stone, Sand, Snow, Wood, Water, Lava and Goo. Click one, then
+  click tiles in the view to paint them; selected tiles take it at once. A ground
+  sets both how a tile looks (a texture from one of the game's own levels) and
+  what Spyro finds on it: water, lava and goo cost him a life, as in the game.
+  Esc or **Stop Painting** goes back to selecting tiles.
 - **Tiles**: click a tile to select it; ⌘-click (Ctrl-click on Windows) selects
   several; drag to move; Shift-drag to change height. **Move Tile…** and
   **Edit Corner…** take exact amounts. **Raise**, **Lower** and **Reset Height**
@@ -256,12 +262,15 @@ Recolor the level's sky, borrow another level's sky, or use a ready-made one.
 ## Levels of your own
 
 - **File ▾ → New Level…** starts a level of your own that opens when you choose
-  New Game. It uses the same Objects and Terrain tools. A project holds one such
+  New Game. It begins as a meadow that already looks like a Spyro level: grass,
+  a stone path from the start, a ramp up to a raised ledge, a pond with a sand
+  rim, and Artisans' sky. Repaint it with the Terrain tab's **Ground** card, move
+  or remove its tiles and add your own. It uses the same Objects and Terrain tools. A project holds one such
   level: if you already have one, the editor asks before replacing it and keeps
   a copy in the project's `backups` folder.
 - **File ▾ → Open Created Level…** reopens the level you made.
-- **File ▾ → Start Blank in Current Level…** empties the open level down to a
-  small floor so you can rebuild it. A recovery copy is saved first;
+- **File ▾ → Start Blank in Current Level…** replaces the open level with the
+  same meadow so you can rebuild it. A recovery copy is saved first;
   **Restore Before Clear…** brings the previous version back, also after
   reopening the project.
 
@@ -290,25 +299,22 @@ units across, like the game's own) or untextured faces.
 ## Levels from other games
 
 Open the level whose place the new level takes (a level or homeworld, not a flight
-level), then choose one of these from **File ▾**:
+level), then choose **File ▾ → New Level from Spyro: Year of the Dragon…**. It
+rebuilds one of Year of the Dragon's levels from your own Year of the Dragon (USA)
+disc: its ground, walls, textures, water and lava, its distant scenery, and a start
+where its level begins. Lava and acid can be deadly as in that game; deep water costs
+a life, because Spyro can't swim here. Its sky's shapes are not converted: the level
+gets a plain sky colour, or borrow a Spyro sky in Game Settings.
 
-- **New Level from Spyro: Year of the Dragon…** rebuilds one of Year of the Dragon's
-  levels from your own Year of the Dragon (USA) disc: its ground, walls, textures,
-  water and lava, its distant scenery, and a start where its level begins. Lava and
-  acid can be deadly as in that game; deep water costs a life, because Spyro can't
-  swim here. Its sky's shapes are not converted: the level gets a plain sky colour,
-  or borrow a Spyro sky in Game Settings.
-- **New Level from Crash Bandicoot: Warped…** does the same for Crash 3's levels on
-  foot (Toad Village, the Warp Room, the boss arenas; Gee Wiz and Double Header in
-  halves) from your Crash disc: Crash's path, its pits (deadly, as for Crash),
-  invisible walls along the path, and the scenery around it.
+Crash Bandicoot: Warped's boxes, enemies and songs are still offered in Add Object and
+Game Settings; building whole Crash levels is not offered for now.
 
 Building takes about a minute. The open level is emptied the way Start Blank empties
 it, with a recovery copy, and keeps playing its own song. Characters, enemies and
 boxes of the other game are not brought over.
 
-**File ▾ → Fill In What the Level Needs…** (done for you at the end of the two
-commands above) puts into a level you built:
+**File ▾ → Fill In What the Level Needs…** (done for you at the end of the command
+above) puts into a level you built:
 
 - the level's own dragons, spread out on open floor;
 - its egg thieves, each with a run around open ground;

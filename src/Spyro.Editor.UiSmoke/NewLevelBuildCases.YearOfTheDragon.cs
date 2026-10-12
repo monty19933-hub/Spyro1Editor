@@ -46,21 +46,6 @@ internal static partial class NewLevelBuildCases
         Console.WriteLine("NEW_LEVEL_YOTD_IMPORT_OK");
     }
 
-    /// <summary>File ▾ > New Level from Crash Bandicoot: Warped… as the user runs it (the dialog answered with CRASH_LEVEL,
-    /// CRASH_PART 0 whole / 1 first half / 2 second half; the disc is the project's configured one): IMPORT_TARGET is
-    /// opened and replaced, then filled in.</summary>
-    private static void CrashMenu(MainWindow window)
-    {
-        string name = Environment.GetEnvironmentVariable("CRASH_LEVEL") ?? "Toad Village";
-        string key = Environment.GetEnvironmentVariable("IMPORT_TARGET") ?? throw new InvalidOperationException("Set IMPORT_TARGET.");
-        int part = int.Parse(Environment.GetEnvironmentVariable("CRASH_PART") ?? "0");
-        var level = Spyro.Editor.Core.Crash.CrashLevels.Find(name);
-        Load(window, key);
-        window.CrashLevelChoiceForTesting = () => new(level, part, true, true, Environment.GetEnvironmentVariable("CRASH_FILL") != "0");
-        RunImportCommand(window, key, "NewLevelFromCrashAsync", "New Level from Crash Bandicoot: Warped");
-        Console.WriteLine("NEW_LEVEL_CRASH_MENU_OK");
-    }
-
     private static void RunImportCommand(MainWindow window, string key, string method, string label)
     {
         var clock = System.Diagnostics.Stopwatch.StartNew();

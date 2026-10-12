@@ -56,7 +56,45 @@ static class LevelFillCases
         Check(fitted != null && fitted.All(p => p.X >= 0 && p.X <= 1000 && Math.Abs(p.Z - 500) < 1), "a wide patrol shrinks onto the start floor");
         var flight = LevelFill.FitRoute(grid, home, [new(-100, 0, 400), new(100, 0, 400)], new(500, 500, 500));
         Check(flight != null && flight.All(p => Math.Abs(p.Z - 900) < 1), "a flying route keeps its height above its owner");
+        StarterChecks();
         Console.WriteLine($"LEVEL_FILL_FREE_OK checks={checks}");
         return checks;
+    }
+
+    /// <summary>File ▾ › New Level's meadow (<see cref="StarterLevel"/>): valid, on whole units, every face one of the
+    /// Ground card's grounds, floors facing up, walls facing out, and the ledge reachable on foot up the ramp.</summary>
+    static void StarterChecks()
+    {
+        string? root = new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory }
+            .SelectMany(d => { var list = new List<string>(); for (var i = new DirectoryInfo(d); i != null; i = i.Parent) list.Add(i.FullName); return list; })
+            .FirstOrDefault(d => File.Exists(Path.Combine(d, "spyro-level-catalog.json")));
+        Check(root != null, "the level catalog is found");
+        var catalog = Spyro.Editor.Core.Levels.LevelCatalog.Load(root!);
+        var scene = StarterLevel.Create("STARTER", catalog);
+        scene.Validate(); checks++;
+        Check(scene.Surfaces.All(f => f.Vertices.All(v => v.X == MathF.Round(v.X) && v.Y == MathF.Round(v.Y) && v.Z == MathF.Round(v.Z))), "starter corners on whole units");
+        Check(scene.Surfaces.All(f => GroundTypes.Of(f, catalog) != null), "every starter face is a Ground card ground");
+        Check(scene.Surfaces.Count(f => f.Kind == AuthoredSurfaceKind.Water) == 4, "the pond is four water tiles");
+        Check(scene.SkySourceWadEntry == catalog.FindByKey("artisans")!.SourceWadEntry, "Artisans' sky");
+        static Vector3f Normal(AuthoredSurface f)
+        {
+            var (a, b, c) = (f.Vertices[0], f.Vertices[1], f.Vertices[2]);
+            float ux = b.X - a.X, uy = b.Y - a.Y, uz = b.Z - a.Z, vx = c.X - a.X, vy = c.Y - a.Y, vz = c.Z - a.Z;
+            return new(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
+        }
+        var walls = scene.Surfaces.Where(f => f.Vertices.Select(v => v.X).Distinct().Count() == 1 || f.Vertices.Select(v => v.Y).Distinct().Count() == 1).ToList();
+        var floors = scene.Surfaces.Except(walls).ToList();
+        Check(floors.All(f => Normal(f).Z > 0), "every floor faces up (corners anticlockwise from above)");
+        Check(walls.Count > 0 && walls.All(w =>
+        {
+            var n = Normal(w); float cx = w.Vertices.Average(v => v.X), cy = w.Vertices.Average(v => v.Y);
+            bool xWall = w.Vertices.Select(v => v.X).Distinct().Count() == 1;
+            // outside: west of the ledge/ramp for x 384/640, east for 896/1152, south for the ledge's south face
+            return xWall ? (cx < 768 ? n.X < 0 : n.X > 0) && Math.Abs(n.Y) < 1e-3 : n.Y < 0 && Math.Abs(n.X) < 1e-3;
+        }), "every wall faces out of the ledge and ramp");
+        Check(Math.Atan2(StarterLevel.Ledge - StarterLevel.Floor, (10 - StarterLevel.RampStart) * StarterLevel.Tile) * 180 / Math.PI < 20, "the ramp is gentler than 20°");
+        var grid = new LevelFill.FloorGrid(scene);
+        var walk = grid.Walk(scene.Spawn);
+        Check(walk.Keys.Any(c => Math.Abs(grid.Point(c).Z - StarterLevel.Ledge) < 2), "the ledge is reachable on foot from the start");
     }
 }
