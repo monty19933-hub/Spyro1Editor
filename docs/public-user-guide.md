@@ -260,7 +260,10 @@ says how many. Translucent original tiles cannot currently be copied or removed.
 ## Environment tab
 
 Recolor the level's sky, borrow another level's sky, use a ready-made one, or
-import your own.
+import your own. The 3D view (Game Camera) shows the sky the game will draw
+behind the level: the original, your recoloured or borrowed one, or the one you
+imported, updated when you click **Apply Sky**, **Restore Original Sky** or
+change a level of your own's skybox.
 
 ### Importing a sky
 

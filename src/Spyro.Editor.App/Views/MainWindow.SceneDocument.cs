@@ -133,6 +133,7 @@ public sealed partial class MainWindow
         if (_modernWorkspaceTabs != null)
             foreach (var tab in _modernWorkspaceTabs.Items.OfType<TabItem>())
                 if (tab.Content is ScrollViewer scroll) scroll.Offset = default;
+        RefreshViewportSky();
     }
 
     private SceneDocument CaptureFreshScene()
@@ -392,7 +393,7 @@ public sealed partial class MainWindow
         {
             if(Equals(skySource.SelectedItem,ownSky)){_statusText.Text="The level already uses your imported sky.";return;}
             var level=skySource.SelectedItem as Spyro.Editor.Core.Levels.LevelDefinition;
-            _freshSceneDocument=_freshSceneDocument! with{SkySourceWadEntry=level?.SourceWadEntry,CustomSky=null};
+            _freshSceneDocument=_freshSceneDocument! with{SkySourceWadEntry=level?.SourceWadEntry,CustomSky=null};RefreshViewportSky();
             _statusText.Text=level==null
                 ? "The level uses its plain sky color again; Save Level records it."
                 : $"The level will use {level.DisplayName}'s skybox in the game. Save Level records it.";

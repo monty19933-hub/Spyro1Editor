@@ -3326,6 +3326,7 @@ public sealed partial class MainWindow : Window
             : $"{level.DisplayName}: {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces, {_viewport.Mobys.Count} objects";
         RefreshDiagnosticContext();
         EditorDiagnostics.RecordAction("Level loaded", $"{level.DisplayName} ({level.Key}); {_viewport.Mobys.Count} mobys; {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces");
+        RefreshViewportSky();
         if (_currentGeometry != null || _currentMobys.Count > 0)
             RememberLastLevel(level);
         RefreshWelcomeOverlay();
@@ -13094,6 +13095,7 @@ public sealed partial class MainWindow : Window
             _statusText.Text = _releaseMode
                 ? $"Sky saved for {capturedLevel.DisplayName}: {DescribeSkyboxEdit(plan)}. Create BIN puts it in the game."
                 : $"Saved {capturedLevel.DisplayName} skybox: {DescribeSkyboxEdit(plan)}.{storageStatus}{occlusionStatus}{gradeStatus} Create BIN will include it.";
+            RefreshViewportSky();
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or JsonException)
@@ -13116,8 +13118,10 @@ public sealed partial class MainWindow : Window
     {
         if(_freshSceneDocument!=null)
         {
-            _freshSceneDocument=_freshSceneDocument with{SkyColor=new(80,128,112)};
-            RefreshFreshDocumentPanels();_statusText.Text="Authored sky reset; Save Level records it.";return;
+            // A rebuilt level gets its level's own sky back; a level of your own its plain colour.
+            _freshSceneDocument=_freshSceneDocument with{SkyColor=new(80,128,112),CustomSky=null,SkySourceWadEntry=_freshSceneDocument.TargetBinding?.BodyWadEntry};
+            _viewport.SetAuthoredSkyColor(_freshSceneDocument.SkyColor);
+            RefreshFreshDocumentPanels();RefreshViewportSky();_statusText.Text="Sky reset; Save Level records it.";return;
         }
         if (TryBlockId65SkyMutation("reset"))
             return;
@@ -13148,6 +13152,7 @@ public sealed partial class MainWindow : Window
         RefreshOriginalSkyPresetPreview();
         RefreshSkyboxDetails(_currentLevel, null);
         _statusText.Text = $"Reset {_currentLevel.DisplayName} to its normal level palette and skybox.";
+        RefreshViewportSky();
     }
 
     private async Task CreateSkyboxCueAsync()

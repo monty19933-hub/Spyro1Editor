@@ -236,6 +236,7 @@ public sealed partial class MainWindow
         _freshSceneDocument = _freshSceneDocument with { CustomSky = block, SkySourceWadEntry = null, SkyColor = new(r, g, b) };
         _viewport.SetAuthoredSkyColor(_freshSceneDocument.SkyColor);
         RefreshFreshDocumentPanels();
+        RefreshViewportSky();
         _statusText.Text = $"Your level will use the sky from {what} in the game. Save Level keeps it.";
     }
 

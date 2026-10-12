@@ -3125,6 +3125,8 @@ public sealed partial class EditorViewport : Control
 
     private void DrawFlyBackground(DrawingContext context, Rect bounds)
     {
+        if (DrawSkyBackground(context, bounds))
+            return;
         const int bandCount = 18;
 
         for (int i = 0; i < bandCount; i++)

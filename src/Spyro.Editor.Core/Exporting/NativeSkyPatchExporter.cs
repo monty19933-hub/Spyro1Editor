@@ -398,6 +398,25 @@ public static class NativeSkyPatchExporter
         return new NativeSkySource($"custom:{importName}", importName, normalized);
     }
 
+    /// <summary>A standalone sky block recoloured as a palette or ready-made-sky edit recolours it (the background colour and
+    /// every part's colours mapped through the plan's gradient by brightness), for previews.</summary>
+    public static byte[] RecolorStandalone(byte[] block, NativeSkyEditPlan edit)
+    {
+        if (!Spyro1SkyBlockAnalyzer.IsValidStandaloneSkyBlock(block))
+            throw new InvalidDataException("This is not a native sky block.");
+        byte[] after = block.ToArray();
+        IReadOnlyList<Rgb> gradient = PaletteFor(edit);
+        ApplyMappedColor(after, 4, gradient);
+        int parts = BinaryPrimitives.ReadInt32LittleEndian(after.AsSpan(8));
+        for (int p = 0; p < parts; p++)
+        {
+            int at = 4 + BinaryPrimitives.ReadInt32LittleEndian(after.AsSpan(12 + 4 * p));
+            int vertices = BinaryPrimitives.ReadUInt16LittleEndian(after.AsSpan(at + 12)), colors = BinaryPrimitives.ReadUInt16LittleEndian(after.AsSpan(at + 18));
+            for (int c = 0; c < colors; c++) ApplyMappedColor(after, at + 24 + 4 * vertices + 4 * c, gradient);
+        }
+        return after;
+    }
+
     private static byte[] ApplyPalette(byte[] before, Spyro1SkyBlockLayout block, NativeSkyEditPlan edit)
     {
         byte[] after = before.ToArray();
