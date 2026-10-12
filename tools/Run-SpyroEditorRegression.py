@@ -236,6 +236,10 @@ CORE_CASES = (
     # the limit even so is refused) and the runtime guard's stubs run on a test CPU (limit, near distance, retail levels
     # untouched) and its refusals.
     ("DrawLoadSmoke", "DRAW_LOAD_FREE_OK checks=37"),
+    # The level window (world 7, ids 70-74): the shared executable-cave registry has no overlaps; the window's patch on a
+    # synthetic executable (hooks, records, inventory, save layout, names), re-install and refusals; its routines run on
+    # a test CPU (record swap, save, Load Game, New Game, names, doorway arrival, card offsets, page 7); the card menu.
+    ("LevelWindowSmoke", "LEVEL_WINDOW_FREE_OK checks=81"),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
@@ -316,6 +320,9 @@ SOURCE_QA_CASES = (
     ("CrashLevelSmoke", "CRASH_LEVEL_IMPORT_DISC_OK", ["--import-disc"]),
     # The draw-buffer guard installed into the retail executable (read only): hooks, both code areas, re-install.
     ("DrawLoadSmoke", "DRAW_LOAD_SOURCE_OK checks=41", ["--source"]),
+    # The level window installed into the retail executable and card menu (read only): USA preimages and caves, the
+    # routines on the real executable, re-install, placement inside WAD.WAD and after the image.
+    ("LevelWindowSmoke", "LEVEL_WINDOW_SOURCE_OK checks=120", ["--source"]),
     ("DarkParticleHostSmoke", "DARK_PROJECTILE_ALL_HOST_OWNERSHIP_OK", []),
     ("FreshParticleBindingSmoke", "FRESH_OWNED_PARTICLE_BINDING_OK", []),
     ("CollectionStarSmoke", "COLLECTION_STAR_SOURCE_OWNERSHIP_OK", []),

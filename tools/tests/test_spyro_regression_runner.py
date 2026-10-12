@@ -52,6 +52,13 @@ class OwnedCommandTests(unittest.TestCase):
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
 
+    def test_level_window_smoke_registration(self):
+        name = "LevelWindowSmoke"
+        self.assertIn((name, "LEVEL_WINDOW_FREE_OK checks=81"), RUNNER.CORE_CASES)
+        self.assertIn((name, "LEVEL_WINDOW_SOURCE_OK checks=120", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+
     def test_dreamweavers_cannon_source_suite_registration_uses_current_core(self):
         name = "UniversalDreamWeaversCannonSmoke"
         self.assertIn((name, "UNIVERSAL_DREAMWEAVERS_CANNON_FREE_OK"), RUNNER.CORE_CASES)
