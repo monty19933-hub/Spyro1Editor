@@ -452,13 +452,18 @@ public sealed partial class MainWindow : Window
         _viewport.TerrainTexturePaintRequested += async (_, e) =>
         {
             if (await PaintGroundFromViewportAsync(e.Terrain))
+            {
+                _activeBuiltTexture = null;   // a ground chosen after a texture replaces it
+                return;
+            }
+            if (await PaintBuiltTextureFromViewportAsync(e.Terrain))
                 return;
             await ApplyTerrainTexturePaintBrushAsync(e.TerrainIndex, e.Terrain);
         };
         _viewport.TerrainTexturePaintCanceled += (_, _) =>
         {
-            if (_activeGround != null) StopGroundPainting(announce: true);
-            else StopTerrainTexturePaintMode(announce: true);
+            if (_activeGround != null) { _activeBuiltTexture = null; StopGroundPainting(announce: true); }
+            else if (!StopBuiltTexturePainting(announce: true)) StopTerrainTexturePaintMode(announce: true);
         };
         _viewport.MobyMoveRequested += (_, e) => MoveMobyFromViewport(e);
         _viewport.MobyRotateRequested += (_, e) => RotateMobyFromViewport(e);
@@ -18452,7 +18457,7 @@ public sealed partial class MainWindow : Window
         _terrainTaskSinglePointButton = NewAsyncButton("Edit Point", EditSelectedTerrainPointAsync);
         _terrainTaskPaintFaceButton = NewAsyncButton("Paint Face", async()=>
         {
-            if(_freshSceneDocument!=null)await ChooseFreshMaterialAsync();
+            if(_freshSceneDocument!=null)await ChooseBuiltTextureAsync();
             else await ChooseTerrainTexturePaintBrushAsync();
         });
         _terrainTaskAddCopyButton = NewAsyncButton("Add Terrain", StageAddCloneSelectedTerrainAsync);
