@@ -153,10 +153,11 @@ internal static class NativeAuthoredMesh
         else if(c.Z<a.Z&&c.Z<b.Z)(a,b,c)=(c,a,b);
         return (a,b,c);
     }
-    /// <summary>Reads the sky of a retail level for a scene that borrows it. The block is copied whole; its part
-    /// pointers are relative to the block, so it needs no relocation.</summary>
+    /// <summary>The scene's own imported sky, or the sky of a retail level it borrows. The block is copied whole; its
+    /// part pointers are relative to the block, so it needs no relocation.</summary>
     internal static byte[]? CaptureSky(string originalUSA, SceneDocument document)
     {
+        if (document.CustomSky is { } custom) return custom.ToArray();
         if (document.SkySourceWadEntry is not int entry) return null;
         var level=new Spyro.Editor.Core.Universal.UniversalLevelData(Spyro.Editor.Core.Universal.UniversalDiscImage.Read(originalUSA).EntryBytes(entry));
         var model=level.Subfiles()[1];

@@ -122,6 +122,10 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
     /// <summary>WAD entry of the retail level whose sky this scene borrows; null keeps the plain sky color.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public int? SkySourceWadEntry { get; init; }
+    /// <summary>A sky of the level's own (a native sky block, made by Import Sky from a panorama or sky model); used in
+    /// place of <see cref="SkySourceWadEntry"/>. Null: none.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public byte[]? CustomSky { get; init; }
     /// <summary>Distant meshes of imported sectors (by <see cref="AuthoredSurface.Sector"/>); null: every sector that
     /// needs one gets the compiler's simplified copy.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
@@ -282,6 +286,9 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
             if (s.Kind is { IsSupported: false })
                 throw new InvalidDataException("An authored face has a ground kind the editor does not support.");
         }
+        if (CustomSky is { } custom && (!Spyro.Editor.Core.Exporting.Spyro1SkyBlockAnalyzer.IsValidStandaloneSkyBlock(custom) ||
+            System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(custom.AsSpan(8)) > 254))
+            throw new InvalidDataException("The level's own sky is not a native sky block the game can draw.");
         RequireCoordinate(Spawn);
         foreach (var o in Objects) if (!Guid.TryParseExact(o.Identity,"N",out _)) throw new InvalidDataException("An authored object has no stable identity.");
         if (FarMeshes is { } farMeshes)

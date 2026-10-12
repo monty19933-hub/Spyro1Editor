@@ -150,13 +150,18 @@ public sealed class SkyPanorama
     }
 
     /// <summary>The mean colour below the horizon, each row weighted by the share of the sky it covers.</summary>
-    internal (byte R, byte G, byte B) LowerAverage()
+    internal (byte R, byte G, byte B) LowerAverage() => AverageBetween(0.5, 1);
+
+    /// <summary>The mean colour of the rows from <paramref name="top"/> to <paramref name="bottom"/> (0 straight up,
+    /// 1 straight down), each row weighted by the share of the sky it covers.</summary>
+    public (byte R, byte G, byte B) AverageBetween(double top, double bottom)
     {
         var (width, height, rgb) = LevelNear(64);
         double r = 0, g = 0, b = 0, total = 0;
-        for (int y = height / 2; y < height; y++)
+        int y0 = Math.Clamp((int)Math.Floor(top * height), 0, height - 1), y1 = Math.Clamp((int)Math.Ceiling(bottom * height), y0 + 1, height);
+        for (int y = y0; y < y1; y++)
         {
-            double weight = Math.Cos(Math.PI / 2 - Math.PI * (y + 0.5) / height);
+            double weight = Math.Max(1e-6, Math.Cos(Math.PI / 2 - Math.PI * (y + 0.5) / height));
             for (int x = 0; x < width; x++)
             {
                 int i = (y * width + x) * 3;

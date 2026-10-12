@@ -10,11 +10,12 @@ using Spyro.Editor.Core.Sky;
 //   --out <folder>        writes the pictures it makes there
 int checks = 0;
 void Check(bool ok, string what) { if (!ok) throw new InvalidOperationException("check failed: " + what); checks++; }
-string? source = null, outDir = null;
+string? source = null, outDir = null, skyScene = null;
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--source") source = args[++i];
     else if (args[i] == "--out") outDir = args[++i];
+    else if (args[i] == "--sky-scene") skyScene = args[++i];
 }
 if (outDir != null) Directory.CreateDirectory(outDir);
 async Task Save(SkyImage image, string name)
@@ -83,6 +84,16 @@ void Limits(byte[] block, string what)
             }
     }
     checks += 3;
+}
+
+// --sky-scene <scene.json>: gives a saved built level the test panorama as its own sky (for an in-game check).
+if (skyScene != null)
+{
+    var block = NativeSkyBuilder.Build(SkyPanorama.FromImage(TestPanorama(2048)), new()).Block;
+    var scene = SceneDocument.Read(skyScene) with { CustomSky = block, SkySourceWadEntry = null };
+    await scene.SaveAsync(skyScene);
+    Console.WriteLine($"SKY_SCENE_OK {skyScene} {block.Length} bytes");
+    return;
 }
 
 // 1. Panorama → sky: budgets, limits, orientation, turning.
