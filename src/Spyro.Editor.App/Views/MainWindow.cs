@@ -23532,14 +23532,20 @@ public sealed partial class MainWindow : Window
         bool hasUniformZ,
         float uniformZ)
     {
-        Vector2f sideOffset = TerrainCopyPlacementSuggester.SuggestedBesideOffset(terrain, DefaultTerrainAddCopyOffset);
-        float forwardOffset = SuggestedTerrainCopyForwardOffset(terrain);
+        Vector2f sideOffset = FlushTerrainOffset(terrain, TerrainSide.East);
+        // Against an edge: moved by the tile's full width or depth, as the Map view shows the sides (north up).
+        TerrainCopyPlacementOption Flush(TerrainSide side, string name)
+        {
+            Vector2f move = FlushTerrainOffset(terrain, side);
+            return new(name, move.X, move.Y, 0, $"The copy goes exactly against the tile's {side.ToString().ToLowerInvariant()} edge, at the same height.");
+        }
         List<TerrainCopyPlacementOption> options =
         [
-            new("Beside source", sideOffset.X, sideOffset.Y, 0, "Places the copied face beside the longest outside edge of the source, so it starts near the terrain you are extending."),
-            new("Forward from source", 0, forwardOffset, 0, "Places the copied face forward on the map. Use this for extending paths or platforms."),
-            new("Behind source", 0, -forwardOffset, 0, "Places the copied face behind the source face. Useful when extending terrain in the opposite direction."),
-            new("Raised platform", sideOffset.X, sideOffset.Y, Math.Max(64, MathF.Round(Math.Max(terrain.MaxZ - terrain.MinZ, 0) + 96)), "Places a raised copy beside the source so height editing is immediately visible."),
+            Flush(TerrainSide.East, "East of it, touching"),
+            Flush(TerrainSide.West, "West of it, touching"),
+            Flush(TerrainSide.North, "North of it, touching"),
+            Flush(TerrainSide.South, "South of it, touching"),
+            new("Raised, east of it", FlushTerrainOffset(terrain, TerrainSide.East).X, 0, Math.Max(64, MathF.Round(Math.Max(terrain.MaxZ - terrain.MinZ, 0) + 96)), "A raised copy against the tile's east edge, so height changes are easy to see."),
             new("Custom offsets", hasUniformX ? uniformX : sideOffset.X, hasUniformY ? uniformY : sideOffset.Y, hasUniformZ ? uniformZ : 0, "Edit the X/Y/Z fields directly for an exact copied-face placement.")
         ];
 

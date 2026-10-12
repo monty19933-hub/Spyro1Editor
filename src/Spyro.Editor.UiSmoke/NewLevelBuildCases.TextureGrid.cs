@@ -20,7 +20,7 @@ internal static partial class NewLevelBuildCases
         var catalog = Get<LevelCatalog>(window, "_retailCatalog");
         var geometry = Get<GeometryCandidate>(window, "_currentGeometry");
         TerrainPolygon Tile(float x, float y) => geometry.Polygons.First(p => p.Points.Count == 4 &&
-            Math.Abs(p.Points.Average(v => v.X) - x) < 1 && Math.Abs(p.Points.Average(v => v.Y) - y) < 1 && p.ZValues.All(z => Math.Abs(z - StarterLevel.Floor) < 1));
+            Math.Abs(p.Points.Average(v => v.X) - (StarterLevel.Origin + x)) < 1 && Math.Abs(p.Points.Average(v => v.Y) - (StarterLevel.Origin + y)) < 1 && p.ZValues.All(z => Math.Abs(z - StarterLevel.Floor) < 1));
         var pond = Tile(8.5f * StarterLevel.Tile, 3.5f * StarterLevel.Tile);
         Set(window, "_selectedTerrain", pond);
         var choose = (Task)Invoke(window, "ChooseBuiltTextureAsync")!;
@@ -42,7 +42,7 @@ internal static partial class NewLevelBuildCases
         Invoke(window, "StopBuiltTexturePainting", true); Pump(5);
         var saved = SceneDocument.Read(SceneDocumentStore.PathForTarget(Workspace(window).RootPath, "authored65"));
         int entry = catalog.FindByKey("artisans")!.SourceWadEntry;
-        AuthoredSurface At(float x, float y) => saved.Surfaces.First(s => Math.Abs(s.Vertices.Average(v => v.X) - x) < 1 && Math.Abs(s.Vertices.Average(v => v.Y) - y) < 1 && s.Vertices.All(v => Math.Abs(v.Z - StarterLevel.Floor) < 1));
+        AuthoredSurface At(float x, float y) => saved.Surfaces.First(s => Math.Abs(s.Vertices.Average(v => v.X) - (StarterLevel.Origin + x)) < 1 && Math.Abs(s.Vertices.Average(v => v.Y) - (StarterLevel.Origin + y)) < 1 && s.Vertices.All(v => Math.Abs(v.Z - StarterLevel.Floor) < 1));
         var a = At(8.5f * StarterLevel.Tile, 3.5f * StarterLevel.Tile); var b = At(1.5f * StarterLevel.Tile, 5.5f * StarterLevel.Tile);
         Console.WriteLine($"pond tile: wad {a.Material?.SourceWadEntry} texture {a.Material?.TextureId} kind {a.Kind}; clicked tile: texture {b.Material?.TextureId} kind {b.Kind}");
         if (a.Material != new AuthoredMaterial(entry, 66) || a.Kind != AuthoredSurfaceKind.Water) throw new InvalidOperationException("The pond tile did not take the texture or lost its water.");

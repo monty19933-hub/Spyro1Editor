@@ -47,7 +47,7 @@ internal static partial class NewLevelBuildCases
         // Select a grass tile (the one east of the start) and press Lava.
         var geometry = Get<GeometryCandidate>(window, "_currentGeometry");
         TerrainPolygon Tile(float x, float y) => geometry.Polygons.First(p => p.Points.Count == 4 &&
-            Math.Abs(p.Points.Average(v => v.X) - x) < 1 && Math.Abs(p.Points.Average(v => v.Y) - y) < 1 && p.ZValues.All(z => Math.Abs(z - StarterLevel.Floor) < 1));
+            Math.Abs(p.Points.Average(v => v.X) - (StarterLevel.Origin + x)) < 1 && Math.Abs(p.Points.Average(v => v.Y) - (StarterLevel.Origin + y)) < 1 && p.ZValues.All(z => Math.Abs(z - StarterLevel.Floor) < 1));
         var lavaTile = Tile(8.5f * StarterLevel.Tile, 1.5f * StarterLevel.Tile);
         Set(window, "_selectedTerrain", lavaTile);
         Click(Find<Button>(window, "GroundLava"));

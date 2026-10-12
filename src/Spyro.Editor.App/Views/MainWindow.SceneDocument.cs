@@ -166,12 +166,20 @@ public sealed partial class MainWindow
         {_statusText.Text=(_releaseMode?"Could not save your level, so the last saved version is unchanged: ":"Authored scene save failed: ")+e.Message;return false;}
     }
 
-    private TerrainPolygon AddFreshTerrainCopy(TerrainPolygon source,float dx,float dy,float dz)
+    /// <summary>Adds a copy of a face moved by (dx, dy, dz) and selects it; null (with a message) when the copy would
+    /// leave the game's map (coordinates 0-16383).</summary>
+    private TerrainPolygon? AddFreshTerrainCopy(TerrainPolygon source,float dx,float dy,float dz)
     {
         if(_freshSceneDocument==null||_currentGeometry==null)throw new InvalidOperationException("No authored terrain is open.");
         var old=_freshSceneDocument.Surfaces[source.SectorIndex];
         var current=CaptureFreshScene().Surfaces.Single(s=>s.Id==old.Id);
         var copy=current with { Id=Guid.NewGuid().ToString("N"),Vertices=current.Vertices.Select(v=>new Vector3f(MathF.Round(v.X+dx),MathF.Round(v.Y+dy),MathF.Round(v.Z+dz))).ToArray() };
+        if(copy.Vertices.Any(v=>v.X<0||v.Y<0||v.Z<0||v.X>16383||v.Y>16383||v.Z>16383))
+        {
+            string side=copy.Vertices.Min(v=>v.X)<0?"west":copy.Vertices.Min(v=>v.Y)<0?"south":copy.Vertices.Max(v=>v.X)>16383?"east":copy.Vertices.Max(v=>v.Y)>16383?"north":"bottom or top";
+            _statusText.Text=$"There is no room for that tile: it would be past the {side} edge of the game's map. Build in another direction.";
+            return null;
+        }
         var extended=_freshSceneDocument with { Surfaces=_freshSceneDocument.Surfaces.Append(copy).ToArray() };
         extended.Validate();
         var projected=extended.ProjectGeometry();var face=projected.Polygons[^1];

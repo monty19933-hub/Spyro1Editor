@@ -14,6 +14,9 @@ public static class StarterLevel
     /// ramp). Corners must sit on whole editor units (the game's 16-unit grid).</summary>
     public const int RampStart = 7;
     public const int Size = 12;
+    /// <summary>The meadow's south-west corner: away from the map's edge (coordinates cannot go below 0), so tiles can
+    /// be added on every side.</summary>
+    public const float Origin = 2048;
 
     public static SceneDocument Create(string name, LevelCatalog catalog)
     {
@@ -27,11 +30,11 @@ public static class StarterLevel
         static bool OnLedge(int i, int j) => i is >= 3 and <= 8 && j >= 10;
         static bool Pond(int i, int j) => i is 8 or 9 && j is 3 or 4;
         static bool Rim(int i, int j) => i is >= 7 and <= 10 && j is >= 2 and <= 5 && !Pond(i, j);
-        float RampZ(float y) => Floor + (Ledge - Floor) * Math.Clamp((y - RampStart * Tile) / ((10 - RampStart) * Tile), 0, 1);
+        float RampZ(float y) => Floor + (Ledge - Floor) * Math.Clamp((y - Origin - RampStart * Tile) / ((10 - RampStart) * Tile), 0, 1);
         for (int j = 0; j < Size; j++)
             for (int i = 0; i < Size; i++)
             {
-                float x0 = i * Tile, y0 = j * Tile, x1 = x0 + Tile, y1 = y0 + Tile;
+                float x0 = Origin + i * Tile, y0 = Origin + j * Tile, x1 = x0 + Tile, y1 = y0 + Tile;
                 if (Ramp(i, j))
                 {
                     faces.Add(Face(GroundTypes.Stone, new(x0, y0, RampZ(y0)), new(x1, y0, RampZ(y0)), new(x1, y1, RampZ(y1)), new(x0, y1, RampZ(y1))));
@@ -44,31 +47,32 @@ public static class StarterLevel
         // The ledge's and the ramp's sides. A wall is solid and drawn from the side its corners turn anticlockwise from:
         // walk its bottom edge with that side (the outside) on your right.
         static Vector3f P(float x, float y, float z) => new(x, y, z);
-        float south = 10 * Tile, west = 3 * Tile, east = 9 * Tile;
+        float south = Origin + 10 * Tile, west = Origin + 3 * Tile, east = Origin + 9 * Tile;
         void Side(float ax, float ay, float bx, float by) =>
             faces.Add(Wall([P(ax, ay, Floor), P(bx, by, Floor), P(bx, by, Ledge), P(ax, ay, Ledge)]));
         for (int i = 3; i <= 8; i++)
-            if (i is not (5 or 6)) Side(i * Tile, south, (i + 1) * Tile, south);   // faces south: walk west to east
+            if (i is not (5 or 6)) Side(Origin + i * Tile, south, Origin + (i + 1) * Tile, south);   // faces south: walk west to east
         for (int j = 10; j < Size; j++)
         {
-            Side(west, (j + 1) * Tile, west, j * Tile);   // faces west: walk north to south
-            Side(east, j * Tile, east, (j + 1) * Tile);   // faces east: walk south to north
+            Side(west, Origin + (j + 1) * Tile, west, Origin + j * Tile);   // faces west: walk north to south
+            Side(east, Origin + j * Tile, east, Origin + (j + 1) * Tile);   // faces east: walk south to north
         }
         // The ramp's sides, row by row: west (x 640, walk north to south) and east (x 896, south to north); the first
         // row, where the ramp leaves the floor, is a triangle.
         for (int j = RampStart; j < 10; j++)
         {
-            float ya = j * Tile, yb = (j + 1) * Tile, za = RampZ(ya), zb = RampZ(yb);
+            float ya = Origin + j * Tile, yb = Origin + (j + 1) * Tile, za = RampZ(ya), zb = RampZ(yb);
+            float xw = Origin + 5 * Tile, xe = Origin + 7 * Tile;
             bool first = j == RampStart;
-            faces.Add(Wall(first ? [P(5 * Tile, yb, Floor), P(5 * Tile, ya, Floor), P(5 * Tile, yb, zb)]
-                : [P(5 * Tile, yb, Floor), P(5 * Tile, ya, Floor), P(5 * Tile, ya, za), P(5 * Tile, yb, zb)]));
-            faces.Add(Wall(first ? [P(7 * Tile, ya, Floor), P(7 * Tile, yb, Floor), P(7 * Tile, yb, zb)]
-                : [P(7 * Tile, ya, Floor), P(7 * Tile, yb, Floor), P(7 * Tile, yb, zb), P(7 * Tile, ya, za)]));
+            faces.Add(Wall(first ? [P(xw, yb, Floor), P(xw, ya, Floor), P(xw, yb, zb)]
+                : [P(xw, yb, Floor), P(xw, ya, Floor), P(xw, ya, za), P(xw, yb, zb)]));
+            faces.Add(Wall(first ? [P(xe, ya, Floor), P(xe, yb, Floor), P(xe, yb, zb)]
+                : [P(xe, ya, Floor), P(xe, yb, Floor), P(xe, yb, zb), P(xe, ya, za)]));
         }
         var artisans = catalog.FindByKey("artisans");
         return SceneDocument.New(name) with
         {
-            Spawn = new(6 * Tile, 2 * Tile, Floor + 32), Heading = 64, Surfaces = faces,
+            Spawn = new(Origin + 6 * Tile, Origin + 2 * Tile, Floor + 32), Heading = 64, Surfaces = faces,
             SkyColor = new(104, 152, 208), SkySourceWadEntry = artisans?.SourceWadEntry
         };
     }

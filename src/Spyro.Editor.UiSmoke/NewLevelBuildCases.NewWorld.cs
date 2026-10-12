@@ -35,8 +35,8 @@ internal static partial class NewLevelBuildCases
         picker.SelectedItem = listed.First(l => l.LevelId == 71); Pump(20);
         Wait(() => window.FreshSceneForTesting?.WorldLevelId == 71, "LEVEL ONE opened from the picker", 120);
         var geometry = Get<Spyro.Editor.Core.Scene.GeometryCandidate>(window, "_currentGeometry");
-        var tile = geometry.Polygons.First(p => p.Points.Count == 4 && Math.Abs(p.Points.Average(v => v.X) - 1.5f * StarterLevel.Tile) < 1 &&
-            Math.Abs(p.Points.Average(v => v.Y) - 1.5f * StarterLevel.Tile) < 1);
+        var tile = geometry.Polygons.First(p => p.Points.Count == 4 && Math.Abs(p.Points.Average(v => v.X) - (StarterLevel.Origin + 1.5f * StarterLevel.Tile)) < 1 &&
+            Math.Abs(p.Points.Average(v => v.Y) - (StarterLevel.Origin + 1.5f * StarterLevel.Tile)) < 1);
         var paint = (Task)Invoke(window, "PaintGroundAsync", new List<Spyro.Editor.Core.Scene.TerrainPolygon> { tile }, GroundTypes.Snow)!;
         Wait(() => paint.IsCompleted, "paint", 60);
         var saved = SceneDocument.Read(SceneDocumentStore.PathForTarget(root, NewWorldDocument.KeyFor(71)));

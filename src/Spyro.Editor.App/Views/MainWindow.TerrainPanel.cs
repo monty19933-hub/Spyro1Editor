@@ -155,9 +155,10 @@ public sealed partial class MainWindow
         content.Children.Add(height);
 
         Grid structure = TwoColumnGrid(2);
-        Place(structure, _terrainTaskAddCopyButton, 0, 0, "Add Terrain", "Add a copy of the selected tile next to it, then move it into place.");
+        Place(structure, _terrainTaskAddCopyButton, 0, 0, "Add Terrain…", "Add a copy of the selected tile with exact offsets, raised or lowered. The arrows above add one against an edge in one click.");
         Place(structure, _terrainTaskRemoveFaceButton, 1, 0, null, "Remove the selected tile (or all selected tiles) and the ground Spyro stands on there.");
         Place(structure, _terrainUndoButton, 0, 1, "Undo Terrain", "Put the selected tile back the way it was, or bring removed tiles back.", span: 2);
+        content.Children.Add(BuildAddBesideRow());
         content.Children.Add(structure);
         return TerrainCard("Tiles", content);
     }

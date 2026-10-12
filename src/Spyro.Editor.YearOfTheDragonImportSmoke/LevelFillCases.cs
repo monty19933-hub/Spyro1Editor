@@ -90,7 +90,7 @@ static class LevelFillCases
             var n = Normal(w); float cx = w.Vertices.Average(v => v.X), cy = w.Vertices.Average(v => v.Y);
             bool xWall = w.Vertices.Select(v => v.X).Distinct().Count() == 1;
             // outside: west of the ledge/ramp for x 384/640, east for 896/1152, south for the ledge's south face
-            return xWall ? (cx < 768 ? n.X < 0 : n.X > 0) && Math.Abs(n.Y) < 1e-3 : n.Y < 0 && Math.Abs(n.X) < 1e-3;
+            return xWall ? (cx < StarterLevel.Origin + 768 ? n.X < 0 : n.X > 0) && Math.Abs(n.Y) < 1e-3 : n.Y < 0 && Math.Abs(n.X) < 1e-3;
         }), "every wall faces out of the ledge and ramp");
         Check(Math.Atan2(StarterLevel.Ledge - StarterLevel.Floor, (10 - StarterLevel.RampStart) * StarterLevel.Tile) * 180 / Math.PI < 20, "the ramp is gentler than 20°");
         var grid = new LevelFill.FloorGrid(scene);
