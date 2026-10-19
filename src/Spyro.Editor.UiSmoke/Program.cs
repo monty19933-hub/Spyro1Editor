@@ -281,6 +281,15 @@ if (args.Contains("--doorways-ui-only", StringComparer.Ordinal))
     return 0;
 }
 
+// Terrain › World Entrance on a throwaway project; no game is written (WORLD_ENTRANCE_DISC: also the room check).
+if (args.Contains("--world-entrance-ui-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --world-entrance-ui-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    WorldEntranceUiCases.Run();
+    return 0;
+}
+
 if (args.Contains("--memory-mode-ui-only", StringComparer.Ordinal))
 {
     if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --memory-mode-ui-only");

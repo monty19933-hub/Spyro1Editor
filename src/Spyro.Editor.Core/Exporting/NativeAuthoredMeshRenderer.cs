@@ -733,6 +733,41 @@ internal static class NativeAuthoredMeshRenderer
         }
         Id65EnvironmentSectorHeaderContract.Stamp(s.AsSpan(0,end));_=Id65EnvironmentSectorHeaderContract.ReadPointerSpan(s,s.Length,false,"authored batch");return s;
     }
+    /// <summary>A face added to one of the game's own levels (<see cref="AddedSectors"/>): corners in editor units, anticlockwise
+    /// seen from the side it shows; per-corner near and far colours; the level's own material (texture) number.</summary>
+    internal sealed record AddedFace(Vector3f[] Points,ColorRgba[] Near,ColorRgba[] Far,int Material,bool TwoSided=false);
+    /// <summary>Native sectors for a few textured faces added to one of the game's own levels (a world entrance's frame,
+    /// <see cref="NativeWorldEntrance"/>), packed like an imported sector: as few sectors as the near tables allow (at most
+    /// <see cref="MaxNearVertices"/> near vertices each), a simplified distant mesh where the near tables are too big for the
+    /// far pass, a true culling sphere, and faces subdivided only up close (<see cref="ImportedFaceFlags"/>), so they never
+    /// load the subdivision queues of a level that already uses them. Each sector's subdivision-cache index continues from
+    /// <paramref name="firstCache"/> (one past the level's own faces).</summary>
+    internal static IReadOnlyList<byte[]> AddedSectors(IReadOnlyList<AddedFace> added,int firstCache)
+    {
+        List<Face> faces=[];
+        foreach(var a in added)
+        {
+            if(a.Material is <0 or >127)throw new InvalidDataException("An added face's texture is outside the native 7-bit textured descriptor index.");
+            if(a.Points.Length is not (3 or 4)||a.Near.Length!=a.Points.Length||a.Far.Length!=a.Points.Length)throw new InvalidDataException("An added face needs three or four corners with a colour each.");
+            foreach(var p in a.Points){_=Unit(p.X);_=Unit(p.Y);_=Unit(p.Z);}
+            int flags=ImportedFaceFlags|(a.TwoSided?TwoSidedFaceFlag:0);
+            if(a.Points.Length==4&&ConvexQuad(a.Points))faces.Add(new(a.Points,a.Near,a.Far,a.Material,0,flags));
+            else
+            {
+                faces.Add(new(a.Points[..3],a.Near[..3],a.Far[..3],a.Material,0,flags));
+                if(a.Points.Length==4)faces.Add(new([a.Points[0],a.Points[2],a.Points[3]],[a.Near[0],a.Near[2],a.Near[3]],[a.Far[0],a.Far[2],a.Far[3]],a.Material,0,flags));
+            }
+        }
+        if(faces.Count==0)return [];
+        List<Batch> batches=[];SplitImported(faces,batches);
+        List<byte[]> sectors=[];int cache=firstCache;
+        foreach(var batch in batches)
+        {
+            batch.Far=NeedsFarMesh(batch)?Simplify(batch):null;
+            sectors.Add(Encode(batch,cache,trueRadius:true));cache+=batch.Faces.Count;
+        }
+        return sectors;
+    }
     private static int Unit(float v){if(v!=MathF.Truncate(v)||v is <0 or >16383)throw new InvalidDataException("Native authored vertices require whole editor units.");return(int)v;}
     private static uint Rgb(ColorRgba c)=>(uint)(c.R|c.G<<8|c.B<<16);
     private static void W(Span<byte>b,int at,uint v)=>BinaryPrimitives.WriteUInt32LittleEndian(b[at..],v);

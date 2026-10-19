@@ -261,6 +261,11 @@ CORE_CASES = (
     # header and sky, an original doorway's record is written exactly as before, scene editing keeps frames with their
     # doorways, old scenes keep their fingerprint, the new world's doorways are refused by Create BIN in plain words.
     ("DoorwaySmoke", "DOORWAY_FREE_OK checks=380"),
+    # The New World's doorway in one of the game's own homeworlds (NativeWorldEntrance): its sky (whole, the part near
+    # the horizon within a size, one colour), the ground-kind, view-group and collision writers (entry triangles after
+    # the flagged ones, the rest renumbered, every cell kept), the frame as one added sector, the way back's facts, the
+    # saved placement (world-entrance.json) and refusals.
+    ("WorldEntranceSmoke", "WORLD_ENTRANCE_FREE_OK checks=54"),
     ("RandomLevelSmoke", "RANDOM_LEVEL_SMOKE_OK checks=103"),
     # Supercharge ground in built levels and in the game's own levels (Tile Type…): which scenes and saved terrain edits
     # need Spyro's supercharge animations 25 and 45, the texture rectangles a face table draws from (every command shape,
@@ -306,6 +311,8 @@ ADDITIONAL_CORE_CASES = (
      ["--memory-mode-ui-only"]),
     ("UiSmoke", "DOORWAYS_UI_OK checks=38",
      ["--doorways-ui-only"]),
+    ("UiSmoke", "WORLD_ENTRANCE_UI_OK checks=33",
+     ["--world-entrance-ui-only"]),
     ("UiSmoke", "LEVEL_PICKER_AUTOMATION_OK",
      ["--level-picker-automation-only"]),
     ("UiSmoke", "AUTHORED_MESH_CHECKS_OK",
@@ -363,6 +370,10 @@ SOURCE_QA_CASES = (
     ("SkyImportSmoke", "SKY_IMPORT_SOURCE_OK checks=280", ["--source"]),
     # All 29 original homeworld doorways: written byte for byte as before; each shape keeps the original's sky.
     ("DoorwaySmoke", "DOORWAY_SOURCE_OK checks=816", ["--source"]),
+    # The New World's doorway in each of the six homeworlds (read only): record, ground kind, entry triangles, objects,
+    # memory in 2 MB (which sky fits) and 8 MB, refusals (second entrance, six doorways, map edge, textures), every shape
+    # and size, after another object edit, deterministic bytes.
+    ("WorldEntranceSmoke", "WORLD_ENTRANCE_SOURCE_OK checks=177", ["--source"]),
     ("DarkParticleHostSmoke", "DARK_PROJECTILE_ALL_HOST_OWNERSHIP_OK", []),
     ("FreshParticleBindingSmoke", "FRESH_OWNED_PARTICLE_BINDING_OK", []),
     ("CollectionStarSmoke", "COLLECTION_STAR_SOURCE_OWNERSHIP_OK", []),
@@ -726,6 +737,7 @@ def main():
             ("--free-flight-ui-only",): "-free-flight-ui",
             ("--memory-mode-ui-only",): "-memory-mode-ui",
             ("--doorways-ui-only",): "-doorways-ui",
+            ("--world-entrance-ui-only",): "-world-entrance-ui",
             ("--level-picker-automation-only",): "-level-picker-automation",
             ("--authored-mesh-only",): "-authored-mesh",
             ("--source-free-route-surfaces",): "-route-surfaces",

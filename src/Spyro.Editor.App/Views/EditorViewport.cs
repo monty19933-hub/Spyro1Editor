@@ -1584,6 +1584,7 @@ public sealed partial class EditorViewport : Control
         if (_viewMode == ViewportViewMode.Fly3D)
         {
             DrawFlyScene(context, bounds);
+            DrawWorldEntrancePreview(context, bounds, fly: true);
             DrawViewportChrome(context, bounds);
             return;
         }
@@ -1594,6 +1595,7 @@ public sealed partial class EditorViewport : Control
             DrawGeometry(context, bounds, geometry);
         else
             DrawEmptyScene(context, bounds, _emptyMessage);
+        DrawWorldEntrancePreview(context, bounds, fly: false);
 
         DrawMobys(context, bounds);
         DrawNativeMovementOverlays(context, bounds);
