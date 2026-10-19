@@ -12,7 +12,15 @@ refusal of other levels' dragons in New Level levels (they crashed at the rescue
 Updates: 1.0-1.3 find 1.4 through their stable updater (the update code is the same in all of them). Beta V2-V5 are
 still offered Beta V6 (the 1.3 app), which then follows the stable channel to 1.4.
 
-Checks: CHECKS_PLACEHOLDER
+Checks: gate `--build-all` 629 checks (the one failure, the doorways UI test's count, fixed and rerun: 39 checks);
+114 source cases with the USA disc, 22 failing exactly as on 1.3 (legacy Green Druid, Magic, High Caves, Wizard and
+dragon-prefix research smokes), none new. Package verifier passed for both platforms (unnotarized and host provenance
+allowed, as for 1.2 and 1.3; run on the packages as extracted from the zips). Updater code of Beta V2-V5 (each tag) and
+of stable 1.0-1.3 (identical in all four) run offline against GitHub's list with 1.4 added: the betas are offered
+Beta V6, 1.0-1.3 are offered 1.4, every download verified (`outputs/SpyroEditor-V1.4-20261019/updater-checks`).
+Emulator (isolated DuckStation): New Game in Artisans, the entrance into SKY ISLES, its doorways to two levels and
+Exit Level back, gems, chest and enemy, the inventory page, the way back, a dragon and the fairy save in Artisans,
+cold boot and Load Game with the world's records restored; no faults.
 
 # Spyro Editor 1.3 and the Beta V6 bridge — 11 October 2026
 
