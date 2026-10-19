@@ -39,18 +39,25 @@ var uniform = new SkyImage(64, 32, Enumerable.Range(0, 64 * 32).Select(i => i / 
 byte[] builtSky = NativeSkyBuilder.Build(SkyPanorama.FromImage(uniform), new SkyBuildOptions(1000)).Block;
 Check(Spyro1SkyBlockAnalyzer.IsValidStandaloneSkyBlock(builtSky) && I(builtSky, 8) > 10, "a test sky is built (a blue sky over green ground)");
 byte[] plain = NativeWorldEntrance.PlainSky(new ColorRgba(10, 20, 30));
-Check(plain.Length == 16 && I(plain, 0) == 16 && plain[4] == 10 && plain[5] == 20 && plain[6] == 30 && I(plain, 8) == 0, "a plain sky is 16 bytes: length, colour, no parts");
+Check(plain.Length == 64 && I(plain, 0) == 64 && plain[4] == 10 && plain[5] == 20 && plain[6] == 30 && I(plain, 8) == 1 && Spyro1SkyBlockAnalyzer.IsValidStandaloneSkyBlock(plain),
+    "a plain sky is 64 bytes: its colour and one part (a doorway's sky without parts hangs the walk-in)");
+var plainTriangles = NativeSkyPreview.Triangles(plain);
+Check(plainTriangles.Count == 1 && plainTriangles[0].A.Z < -990 && plainTriangles[0].ColorA.R == 10 && plainTriangles[0].ColorC.B == 30,
+    "the plain sky's one triangle lies straight down in the sky's own colour");
+byte[] noParts = new byte[16]; W(noParts, 0, 16); noParts[4] = 7; noParts[5] = 8; noParts[6] = 9;
+Check(NativeWorldEntrance.DoorwaySky(noParts) is var fixedSky && I(fixedSky, 8) == 1 && fixedSky[4] == 7 && fixedSky[6] == 9 && NativeWorldEntrance.Sky(noParts, WorldEntranceSky.Full).Length == 64,
+    "a level sky of one colour without parts becomes the plain sky with a part for a doorway");
 var horizon = NativeWorldEntrance.HorizonColour(builtSky);
 Check(horizon.B > horizon.G && horizon.B > 150, $"the horizon colour of a blue-over-green sky is the blue above the horizon ({horizon.R},{horizon.G},{horizon.B})");
-Check(NativeWorldEntrance.Sky(builtSky, WorldEntranceSky.Plain) is var p2 && p2.Length == 16 && p2[4] == horizon.R && p2[6] == horizon.B, "Plain: one colour, the horizon's");
+Check(NativeWorldEntrance.Sky(builtSky, WorldEntranceSky.Plain) is var p2 && p2.Length == 64 && p2[4] == horizon.R && p2[6] == horizon.B, "Plain: one colour, the horizon's");
 Check(NativeWorldEntrance.Sky(builtSky, WorldEntranceSky.Full).AsSpan().SequenceEqual(builtSky), "Full: the sky as given");
 foreach (int budget in new[] { 400, 2000, 6000, 20000 })
 {
     byte[] reduced = NativeWorldEntrance.ReducedSky(builtSky, budget);
     int parts = I(reduced, 8);
-    Check(reduced.Length <= Math.Max(16, budget) && (parts == 0 ? reduced.Length == 16 : Spyro1SkyBlockAnalyzer.IsValidStandaloneSkyBlock(reduced)) && I(reduced, 0) == reduced.Length,
+    Check(reduced.Length <= Math.Max(64, budget) && parts >= 1 && Spyro1SkyBlockAnalyzer.IsValidStandaloneSkyBlock(reduced) && I(reduced, 0) == reduced.Length,
         $"a sky reduced to {budget} bytes is a valid block within it ({reduced.Length} bytes, {parts} parts)");
-    if (parts > 0)
+    if (reduced.Length > 64)
     {
         // Every kept part is one of the sky's own, byte for byte, in the sky's order.
         var own = Enumerable.Range(0, I(builtSky, 8)).Select(k => builtSky.AsSpan(4 + I(builtSky, 12 + 4 * k), (k + 1 < I(builtSky, 8) ? 4 + I(builtSky, 16 + 4 * k) : builtSky.Length) - 4 - I(builtSky, 12 + 4 * k)).ToArray()).ToList();
@@ -64,8 +71,8 @@ foreach (int budget in new[] { 400, 2000, 6000, 20000 })
             $"the {budget}-byte sky keeps the parts near the horizon first");
     }
 }
-Check(NativeWorldEntrance.ReducedSky(builtSky, 12) is var none && none.Length == 16 && I(none, 8) == 0, "a sky reduced below one part is a plain sky of the left-out parts' colour");
-byte[] onePart = plain.ToArray(); W(onePart, 8, 1);
+Check(NativeWorldEntrance.ReducedSky(builtSky, 12) is var none && none.Length == 64 && I(none, 8) == 1, "a sky reduced below one part is a plain sky of the left-out parts' colour");
+byte[] onePart = new byte[16]; W(onePart, 0, 16); W(onePart, 8, 1);
 Check(Throws(() => NativeWorldEntrance.Sky(new byte[40], WorldEntranceSky.Full)) && Throws(() => NativeWorldEntrance.Sky(onePart, WorldEntranceSky.Full)),
     "a block that is not a native sky is refused");
 
@@ -327,7 +334,7 @@ static class Source
         Check(Throws(() => NativeWorldEntrance.Apply(lib, catalog, basic with { FaceTexture = 68 }, aData, aOverlay, image.Exe, sky), "textures 0-67"), "a texture Artisans does not have is refused");
         Check(NativeWorldEntrance.TextureCount(aData) == 68 && NativeWorldEntrance.ArchTexture(lib, catalog, "artisans") == 4, "Artisans has 68 textures; its arches use texture 4");
         var plainR = NativeWorldEntrance.Apply(lib, catalog, basic with { SolidFrame = false, FaceTexture = 6, SideTexture = 3 }, aData, aOverlay, image.Exe, sky, WorldEntranceSky.Plain);
-        Check(plainR.Sky == WorldEntranceSky.Plain && plainR.SkyBytes == 16 && plainR.FrameTriangles == 0 && plainR.FaceTexture == 6 && plainR.SideTexture == 3 && plainR.AddedBytes < 3500,
+        Check(plainR.Sky == WorldEntranceSky.Plain && plainR.SkyBytes == 64 && plainR.FrameTriangles == 0 && plainR.FaceTexture == 6 && plainR.SideTexture == 3 && plainR.AddedBytes < 3500,
             $"a one-colour sky and no frame collision cost {plainR.AddedBytes:N0} bytes in Artisans");
         foreach (var shape in DoorwayShapes.All)
         foreach (double scale in new[] { DoorwayShapes.MinScale, DoorwayShapes.MaxScale })

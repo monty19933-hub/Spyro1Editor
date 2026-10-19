@@ -87,6 +87,17 @@ class OwnedCommandTests(unittest.TestCase):
         project = RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
         self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"', project.read_text())
 
+    def test_world_entrance_smoke_registration(self):
+        name = "WorldEntranceSmoke"
+        self.assertIn((name, "WORLD_ENTRANCE_FREE_OK checks=54"), RUNNER.CORE_CASES)
+        self.assertIn((name, "WORLD_ENTRANCE_SOURCE_OK checks=177", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        self.assertIn(("UiSmoke", "WORLD_ENTRANCE_UI_OK checks=33", ["--world-entrance-ui-only"]), RUNNER.ADDITIONAL_CORE_CASES)
+        project = RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
+        self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"', project.read_text())
+
     def test_sky_model_smoke_registration(self):
         name = "SkyModelSmoke"
         self.assertIn((name, "SKY_MODEL_OK checks=59"), RUNNER.CORE_CASES)
@@ -948,7 +959,7 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
-        self.assertEqual(18, len(lines))
+        self.assertEqual(19, len(lines))
         self.assertTrue(any(flag + " | " + marker in line for line in lines))
 
     def test_aggregate_ui_is_an_additional_isolated_mode_not_a_source_or_default_alias(self):
@@ -962,6 +973,7 @@ class RunnerOptionsTests(unittest.TestCase):
                     (name, "PLAY_AS_CRASH_UI_OK checks=", ["--play-as-crash-ui-only"]),
                     (name, "MEMORY_MODE_UI_OK checks=12", ["--memory-mode-ui-only"]),
                     (name, "DOORWAYS_UI_OK checks=38", ["--doorways-ui-only"]),
+                    (name, "WORLD_ENTRANCE_UI_OK checks=33", ["--world-entrance-ui-only"]),
                     (name, "LEVEL_PICKER_AUTOMATION_OK", ["--level-picker-automation-only"]),
                     (name, "AUTHORED_MESH_CHECKS_OK", ["--authored-mesh-only"]),
                     (name, "FRESH_LEVEL_DOCUMENT_SESSION_OK", ["--fresh-native-level-session-only"]),
@@ -981,7 +993,7 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
-        self.assertEqual(18, len(lines))
+        self.assertEqual(19, len(lines))
         for _, marker, arguments in expected:
             self.assertTrue(any(arguments[0] + " | " + marker in line for line in lines))
 

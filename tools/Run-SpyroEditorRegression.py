@@ -265,7 +265,7 @@ CORE_CASES = (
     # the horizon within a size, one colour), the ground-kind, view-group and collision writers (entry triangles after
     # the flagged ones, the rest renumbered, every cell kept), the frame as one added sector, the way back's facts, the
     # saved placement (world-entrance.json) and refusals.
-    ("WorldEntranceSmoke", "WORLD_ENTRANCE_FREE_OK checks=52"),
+    ("WorldEntranceSmoke", "WORLD_ENTRANCE_FREE_OK checks=54"),
     ("RandomLevelSmoke", "RANDOM_LEVEL_SMOKE_OK checks=103"),
     # Supercharge ground in built levels and in the game's own levels (Tile Type…): which scenes and saved terrain edits
     # need Spyro's supercharge animations 25 and 45, the texture rectangles a face table draws from (every command shape,
@@ -373,7 +373,7 @@ SOURCE_QA_CASES = (
     # The New World's doorway in each of the six homeworlds (read only): record, ground kind, entry triangles, objects,
     # memory in 2 MB (which sky fits) and 8 MB, refusals (second entrance, six doorways, map edge, textures), every shape
     # and size, after another object edit, deterministic bytes.
-    ("WorldEntranceSmoke", "WORLD_ENTRANCE_SOURCE_OK checks=175", ["--source"]),
+    ("WorldEntranceSmoke", "WORLD_ENTRANCE_SOURCE_OK checks=177", ["--source"]),
     ("DarkParticleHostSmoke", "DARK_PROJECTILE_ALL_HOST_OWNERSHIP_OK", []),
     ("FreshParticleBindingSmoke", "FRESH_OWNED_PARTICLE_BINDING_OK", []),
     ("CollectionStarSmoke", "COLLECTION_STAR_SOURCE_OWNERSHIP_OK", []),

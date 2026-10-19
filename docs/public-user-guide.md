@@ -356,6 +356,35 @@ the game keeps its doorway code in the homeworlds only.
   its levels, marked "playable after New World export": Create BIN cannot build
   the new world yet and says so.
 
+### The way into your new world
+
+Players reach the world made with **File ▾ → New World…** through a doorway in
+one of the game's own homeworlds (the one chosen in that window). Open that
+homeworld: its Terrain tab has a **World Entrance** card.
+
+- **Place Entrance…** asks for the doorway's shape (the same six as the Doorways
+  card) and size, and puts it on the selected tile or on the ground in front of
+  the camera, facing the camera: Spyro walks into it away from you. Give it open,
+  level ground in front: coming back, Spyro walks out of it a good way, as he does
+  from the homeworld's own doorways.
+- **◀ ▲ ▼ ▶**, **Up**/**Down**, **To Selected Tile**, **In Front of Camera** and
+  **⟲ ⟳** move and turn it; **Shape…** changes its shape or size; **Front
+  Texture…** and **Side Texture…** pick its frame's look from the homeworld's own
+  textures (until you do, it uses the texture of the homeworld's own arches);
+  **Remove Entrance** takes it out. The view draws it over the level; it becomes
+  part of the homeworld when Create BIN builds the game.
+- In another homeworld the card says where the world is entered from;
+  **Use This Homeworld** moves the entrance there.
+- The homeworld keeps its own five doorways (four in Gnasty's World): the
+  entrance is a sixth, the most the game allows.
+- Its opening shows your world's sky. A homeworld has little spare memory, so the
+  card checks it: Artisans and Gnasty's World have room for a whole sky; Peace
+  Keepers, Magic Crafters, Beast Makers and Dream Weavers take the part of the
+  sky near the horizon (or just its colour) on a PlayStation, and the whole sky
+  with Game Settings › Memory › Emulator only (8 MB RAM).
+- Leaving your world's homeworld through its doorway home brings Spyro back out
+  of the entrance.
+
 A rebuilt level holds up to 4,096 terrain tiles. Untextured tiles are split into
 smaller triangles automatically. Walls stop Spyro from the side you can see them.
 The game gives close-up detail to the textured tiles near the camera, and only so

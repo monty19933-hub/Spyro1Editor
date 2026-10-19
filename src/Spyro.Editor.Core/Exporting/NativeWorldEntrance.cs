@@ -89,8 +89,9 @@ public sealed record WorldEntranceResult(byte[] LevelData, byte[] Overlay, int D
 /// <item><b>Frame.</b> The shape's arch (<see cref="DoorwayShapes.Frame"/>) as new terrain sectors appended to the
 /// environment (<see cref="NativeAuthoredMeshRenderer.AddedSectors"/>: the homeworld's own textures, subdivided only up
 /// close), listed in every view group of the visibility component, with optional collision.</item>
-/// <item><b>Sky.</b> The record carries the new world's sky (<see cref="WorldEntranceSky"/>); a plain sky has no parts and
-/// the opening is filled with its colour (the opening fill 0x8004FEA0 uses the sky header's colour).</item>
+/// <item><b>Sky.</b> The record carries the new world's sky (<see cref="WorldEntranceSky"/>); the opening is first filled
+/// with the sky header's colour (0x8004FEA0), then the parts are drawn. It must have at least one part
+/// (<see cref="PlainSky"/>).</item>
 /// </list>
 /// The executable needs nothing beyond the level window (its doorway guard and arrival hook). Nothing else in the homeworld
 /// changes: its doorways, special surfaces, collision triangles and sectors keep their numbers and bytes.
@@ -129,10 +130,11 @@ public static class NativeWorldEntrance
         // The sky only lengthens the record, so the room left with a plain one says how much sky fits.
         var plain = Build(originals, catalog, level, spec, levelData, overlay, executable, Sky(destinationSky, WorldEntranceSky.Plain), WorldEntranceSky.Plain);
         long budget = plain.RoomLeft - AutoCushion + plain.SkyBytes;
-        if (destinationSky.Length <= budget)
-            return Build(originals, catalog, level, spec, levelData, overlay, executable, destinationSky.ToArray(), WorldEntranceSky.Full);
-        byte[] reduced = ReducedSky(destinationSky, (int)Math.Max(0, Math.Min(int.MaxValue, budget)));
-        if (PartCount(reduced) > 0)
+        byte[] whole = DoorwaySky(destinationSky);
+        if (whole.Length <= budget)
+            return Build(originals, catalog, level, spec, levelData, overlay, executable, whole, PartCount(destinationSky) == 0 ? WorldEntranceSky.Plain : WorldEntranceSky.Full);
+        var (reduced, kept) = Reduce(destinationSky, (int)Math.Max(0, Math.Min(int.MaxValue, budget)));
+        if (kept > 0)
             return Build(originals, catalog, level, spec, levelData, overlay, executable, reduced, WorldEntranceSky.Reduced);
         return plain;
     }
@@ -146,25 +148,54 @@ public static class NativeWorldEntrance
         {
             WorldEntranceSky.Plain => PlainSky(HorizonColour(destinationSky)),
             WorldEntranceSky.Reduced => ReducedSky(destinationSky, reducedBytes),
-            _ => destinationSky.ToArray(),
+            _ => DoorwaySky(destinationSky),
         };
     }
 
     /// <summary>The size an explicitly requested reduced sky keeps to.</summary>
     public const int DefaultReducedSkyBytes = 8192;
 
-    /// <summary>A sky of one colour and no parts (the opening is filled with <paramref name="colour"/>).</summary>
+    /// <summary>A sky of one colour (64 bytes): the colour fills the opening and the flight's background, and one tiny
+    /// triangle of the same colour lies straight down. A doorway's sky must have a part: walking in, the homeworld's path
+    /// object sets the sky tilt 0x80075910 (from 0x800758FC), the loader's state 12 (0x80015BD8) waits for it to reach 0,
+    /// and only the flight's sky drawing (0x8001A0E0) counts it down, and only for a sky with parts (0x80078A40). With
+    /// none, entering with the camera tilted hangs on "Returning home…".</summary>
     public static byte[] PlainSky(ColorRgba colour)
     {
-        byte[] b = new byte[16];
-        W(b, 0, 16); b[4] = colour.R; b[5] = colour.G; b[6] = colour.B;
+        byte[] b = new byte[64];
+        W(b, 0, 64); b[4] = colour.R; b[5] = colour.G; b[6] = colour.B; W(b, 8, 1); W(b, 12, 12);
+        // The part (camera axes VX = -Y, VY = -Z, VZ = X): centre straight down 1,000 units, radius 16; a 16-unit triangle.
+        var p = b.AsSpan(16);
+        BinaryPrimitives.WriteInt16LittleEndian(p, 0); BinaryPrimitives.WriteInt16LittleEndian(p[2..], 1000);
+        BinaryPrimitives.WriteInt16LittleEndian(p[4..], 16); BinaryPrimitives.WriteInt16LittleEndian(p[6..], 0);
+        BinaryPrimitives.WriteInt16LittleEndian(p[8..], 8); BinaryPrimitives.WriteInt16LittleEndian(p[10..], 1000);
+        BinaryPrimitives.WriteUInt16LittleEndian(p[12..], 3); BinaryPrimitives.WriteInt16LittleEndian(p[14..], -8);
+        BinaryPrimitives.WriteUInt16LittleEndian(p[16..], 1); BinaryPrimitives.WriteUInt16LittleEndian(p[18..], 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(p[20..], uint.MaxValue);
+        BinaryPrimitives.WriteUInt32LittleEndian(p[24..], 0);              // (VX 8, VY 1000, VZ -8)
+        BinaryPrimitives.WriteUInt32LittleEndian(p[28..], 16u << 10);      // (VX -8, VY 1000, VZ -8)
+        BinaryPrimitives.WriteUInt32LittleEndian(p[32..], 16u << 21);      // (VX 8, VY 1000, VZ 8)
+        p[36] = colour.R; p[37] = colour.G; p[38] = colour.B; p[39] = 0x30;
+        BinaryPrimitives.WriteUInt32LittleEndian(p[40..], 4u << 10 | 8u << 20);
+        BinaryPrimitives.WriteUInt32LittleEndian(p[44..], 0);
         return b;
+    }
+
+    /// <summary>A sky as a doorway may carry it: a sky without parts (a level of one plain colour) becomes
+    /// <see cref="PlainSky"/> of that colour (see there why).</summary>
+    public static byte[] DoorwaySky(byte[] block)
+    {
+        RequireSky(block);
+        return PartCount(block) == 0 ? PlainSky(new ColorRgba(block[4], block[5], block[6])) : block.ToArray();
     }
 
     /// <summary>The new world sky's parts nearest the line of sight through a doorway (centres closest to 10° above the
     /// horizon first) that fit in <paramref name="maxBytes"/>, in the sky's own drawing order; where parts were left out
     /// the opening is filled with their average colour. Fewer than one part fits: a plain sky of that colour.</summary>
-    public static byte[] ReducedSky(byte[] block, int maxBytes)
+    public static byte[] ReducedSky(byte[] block, int maxBytes) => Reduce(block, maxBytes).Block;
+
+    /// <summary><see cref="ReducedSky"/> and how many of the sky's own parts it kept (0: the plain sky).</summary>
+    private static (byte[] Block, int Kept) Reduce(byte[] block, int maxBytes)
     {
         RequireSky(block);
         int parts = PartCount(block);
@@ -187,14 +218,14 @@ public static class NativeWorldEntrance
             for (int k = 0; k < colours && at + 4 * k + 3 <= part.Bytes.Length; k++) { r += part.Bytes[at + 4 * k]; g += part.Bytes[at + 4 * k + 1]; b += part.Bytes[at + 4 * k + 2]; n++; }
         }
         var fill = n == 0 ? new ColorRgba(block[4], block[5], block[6]) : new ColorRgba((byte)(r / n), (byte)(g / n), (byte)(b / n));
-        if (kept.Count == 0) return PlainSky(fill);
+        if (kept.Count == 0) return (PlainSky(fill), 0);
         var list = all.Where(a => kept.Contains(a.Index)).ToList();
         int head = 12 + 4 * list.Count;
         byte[] result = new byte[head + list.Sum(k => k.Bytes.Length)];
         W(result, 0, result.Length); result[4] = fill.R; result[5] = fill.G; result[6] = fill.B; result[7] = block[7]; W(result, 8, list.Count);
         int cursor = head;
         for (int k = 0; k < list.Count; k++) { W(result, 12 + 4 * k, cursor - 4); list[k].Bytes.CopyTo(result, cursor); cursor += list[k].Bytes.Length; }
-        return result;
+        return (result, list.Count);
     }
 
     /// <summary>The average colour of the sky from the horizon to 30° up (what Spyro sees through a doorway).</summary>
@@ -259,6 +290,7 @@ public static class NativeWorldEntrance
             throw new InvalidDataException($"A doorway's size is {DoorwayShapes.MinScale:P0} to {DoorwayShapes.MaxScale:P0} of the shape's own.");
         if (spec.Heading is < 0 or > 255) throw new InvalidDataException("A doorway's heading is 0-255.");
 
+        if (PartCount(skyBlock) < 1) throw new InvalidDataException("A doorway's sky needs at least one part (NativeWorldEntrance.PlainSky).");
         // ---- the record ----
         var template = Template(originals, catalog, level.Key);
         var portal = new AuthoredPortal(Destination, spec.Position, spec.Heading) { Shape = shape.Id, Scale = (float)spec.Scale };
@@ -376,7 +408,7 @@ public static class NativeWorldEntrance
     private static void RequireSky(byte[] block)
     {
         ArgumentNullException.ThrowIfNull(block);
-        bool plain = block.Length == 16 && I(block, 0) == 16 && I(block, 8) == 0;
+        bool plain = block.Length >= 12 && I(block, 0) == block.Length && I(block, 8) == 0;
         if (!plain && (!Spyro1SkyBlockAnalyzer.IsValidStandaloneSkyBlock(block) || I(block, 0) != block.Length))
             throw new InvalidDataException("The New World's sky is not one native sky block.");
     }
