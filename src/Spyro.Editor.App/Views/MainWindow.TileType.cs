@@ -7,6 +7,7 @@ using Spyro.Editor.Core.Diagnostics;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Scene;
+using Spyro.Editor.Core.Universal;
 
 namespace Spyro.Editor.App.Views;
 
@@ -26,6 +27,7 @@ public sealed partial class MainWindow
     private GeometryCandidate? _tileTypeCatalogGeometry;
     private readonly Dictionary<NativeTerrainSurfaceSignature, NativeTerrainSurfaceDescriptorDonor?> _tileTypeDonors = new();
     private string _tileTypeDonorImage = "";
+    private readonly Dictionary<(string Level, GameMemoryMode Mode), long> _superchargeShortfalls = new();
 
     /// <summary>The kinds a player can tell apart; portal and level-linked surfaces are never offered.</summary>
     internal static bool IsSelectableTileType(NativeTerrainSurfaceSignature signature) =>
@@ -407,11 +409,49 @@ public sealed partial class MainWindow
         }
     }
 
+    /// <summary>Why one of the game's levels can't take supercharge ground, in plain words (null when it can): Spyro's
+    /// supercharge animations, which Create BIN adds to a level without them (<see cref="NativeSuperchargeAnimations"/>),
+    /// must fit the level's game RAM. Measured once per level and memory setting on the original level; Create BIN checks
+    /// the finished level again.</summary>
+    private async Task<string?> RetailSuperchargeNoRoomAsync(LevelDefinition level)
+    {
+        GameMemoryMode mode = GameRam.Mode;
+        if (!_superchargeShortfalls.TryGetValue((level.Key, mode), out long shortfall))
+        {
+            _statusText.Text = "Checking that the level has room for Spyro's supercharge moves…";
+            string image = ResolveTerrainTextureSourceImage(level);
+            try
+            {
+                shortfall = await Task.Run(() => NativeSuperchargeAnimations.RetailShortfallAsync(image, level));
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+            {
+                // Not the unchanged original disc, or unreadable: Create BIN refuses then anyway.
+                EditorDiagnostics.RecordWarning("Supercharge room not checked", $"{level.Key}: {ex.Message}");
+                return null;
+            }
+            _superchargeShortfalls[(level.Key, mode)] = shortfall;
+        }
+        if (shortfall <= 0)
+            return null;
+        return $"a supercharge ramp needs Spyro's supercharge animations, which {level.DisplayName} doesn't have. Adding them takes " +
+            $"{NativeSuperchargeAnimations.ByteLength:N0} bytes of level memory, and {level.DisplayName} is {shortfall:N0} bytes short of room for them." +
+            (mode == GameMemoryMode.Emulator8MB ? "" : " Choose Emulator only (8 MB RAM) under Game Settings › Memory to make room.");
+    }
+
     /// <summary>Stages the kind on every selected tile the game can take it on, saves, and says what happened.</summary>
     private async Task ApplyTileTypeAsync(IReadOnlyList<TerrainPolygon> faces, NativeTerrainSurfaceSignature chosen, NativeTerrainSurfaceLevelCatalog catalog)
     {
         if (_currentLevel == null)
             return;
+        // Checked before anything is staged: nothing is half-changed while the disc is read.
+        bool addsSuperchargeMoves = chosen.SurfaceType == Spyro.Editor.Core.Editing.AuthoredSurfaceKind.Supercharge.Type &&
+            !NativeSuperchargeAnimations.CarriedBy(_currentLevel.LevelId);
+        if (addsSuperchargeMoves && await RetailSuperchargeNoRoomAsync(_currentLevel) is { } noRoom)
+        {
+            _statusText.Text = $"No tile was changed: {noRoom}";
+            return;
+        }
         int changed = 0, unchanged = 0;
         List<string> skipped = new();
         List<(TerrainPolygon Face, TerrainSurfaceBehaviorEdit? Before, string Behavior, string Source, string Confidence, string Note)> previous = new();
@@ -483,6 +523,8 @@ public sealed partial class MainWindow
         };
         if (changed > 0 && !LevelHasSurfaceKind(catalog, chosen) && FindTileTypeDonor(chosen) is { } donor)
             summary += $" {_currentLevel.DisplayName} has no {name.Split(" (")[0]} of its own, so Create BIN copies it in from {donor.LevelName}.";
+        if (addsSuperchargeMoves && changed > 0)
+            summary += $" Create BIN also gives {_currentLevel.DisplayName} Spyro's supercharge animations, which only levels with supercharge ramps of their own have.";
         if (unchanged > 0)
             summary += $" {unchanged} {(unchanged == 1 ? "was" : "were")} already {name}.";
         if (skipped.Count > 0)

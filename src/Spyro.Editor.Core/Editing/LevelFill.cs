@@ -11,9 +11,11 @@ namespace Spyro.Editor.Core.Editing;
 /// open ground about halfway, and gems on the paths in between (or where the level's own game had its gems).</summary>
 public static class LevelFill
 {
-    public const float Cell = 32, StepUp = 72, StepDown = 640;
-    /// <summary>Units a glide carries Spyro for each unit he sinks (his glide sinks about 1 in 10; kept short of that).</summary>
-    public const float GlideRatio = 8;
+    /// <summary>A step or jump up of at most <see cref="StepUp"/>: the tallest ledge Spyro's held jump clears (measured,
+    /// <see cref="Generation.SpyroMoves.MaxLedge"/>).</summary>
+    public const float Cell = 32, StepUp = Generation.SpyroMoves.MaxLedge, StepDown = 640;
+    /// <summary>Units a glide carries Spyro for each unit he sinks: 3.3 measured in the game (<see cref="Generation.SpyroMoves"/>).</summary>
+    public const float GlideRatio = Generation.SpyroMoves.GlideRatio;
 
     /// <summary>A spot for one object: where it stands and the way it faces (yaw byte).</summary>
     public sealed record Spot(Vector3f Position, int Yaw);
@@ -348,9 +350,10 @@ public static class LevelFill
                             // An edge (nothing next to it but a drop, a pit or special ground): jump and glide straight on,
                             // landing on the first plain floor under the glide; anything higher on the way is a wall.
                             next = default; step = 0;
-                            for (int k = 1; k <= 48; k++)
+                            for (int k = 1; k <= 96; k++)
                             {
-                                float height = z + StepUp - k * Cell / GlideRatio;
+                                // A held jump's arc, then the glide (the measured moves, with a margin).
+                                float height = z + Generation.SpyroMoves.GlideHeight(k * Cell);
                                 var under = _cells.TryGetValue((c.X + k * dx, c.Y + k * dy), out var list) ? list : [];
                                 if (under.Any(e => e.Z > height)) break;
                                 if (k >= 2 && At(c.X + k * dx, c.Y + k * dy, height, 0, height - (z - StepDown)) is { } land) { next = land; step = k; break; }

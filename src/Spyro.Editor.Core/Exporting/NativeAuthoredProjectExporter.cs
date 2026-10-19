@@ -74,6 +74,8 @@ public static class NativeAuthoredProjectExporter
         HashSet<string> signs=new(retailSignLevels??new HashSet<string>(),StringComparer.OrdinalIgnoreCase);
         List<LevelTextReplacement> names=[..retailNames??[]];
         List<(string Key,int Prefix)> identities=[];
+        // Rebuilt slots with supercharge ground: their final level data must still carry Spyro's supercharge animations.
+        List<(int Entry,NativeSuperchargeAnimations Animations)> supercharged=[];
         // Each built level's near distance for the draw-buffer guard (a fresh level's is set when it is compiled, below).
         Dictionary<int,int> nearDistances=scenes.Any(s=>s.Document.TargetBinding==null)?new(){[65]=NativeDrawBufferGuard.MaxNearDistance}:[];
         // The user's Crash disc supplies Crash boxes and enemies, as in the retail-level export.
@@ -106,6 +108,7 @@ public static class NativeAuthoredProjectExporter
             exe=result?.Executable??exe;
             returnClasses[target.LevelId]=result==null?[]:NativePortalReturnClass.Capture(result.Classes);
             replacements.Add(target.SourceWadEntry,result?.LevelData??compiled.CopyLevelData());
+            if(compiled.Supercharge is {} supercharge)supercharged.Add((target.SourceWadEntry,supercharge));
             replacements.Add(target.SourceWadEntry-1,result?.Overlay??compiled.CopyOverlay());
             for(int i=0;i<scene.Placements.Count;i++)
             {
@@ -140,6 +143,7 @@ public static class NativeAuthoredProjectExporter
         NativeDrawBufferGuard.PatchExe(exe,nearDistances);
         // Kill heights change only in the rebuilt levels' own words (and only downwards).
         NativeKillHeights.RequireOwned(donors.Disc.Exe,exe,rebuilt);
+        foreach(var(entry,animations) in supercharged)animations.RequireDestination(replacements[entry]);
         string stage=Path.Combine(scratch,"retail-stage.bin");
         baseline.WriteImage(stage,baseline.RebuildWad(replacements),exe);
         RequireReadback(stage,baseline,replacements,exe);
@@ -168,6 +172,7 @@ public static class NativeAuthoredProjectExporter
         if(portalRoutes?.HasEdits==true)NativePortalRouteComposer.Apply(donors,catalog,exe,replacements,baseline.EntryBytes,portalRoutes,
             returnClasses:returnClasses);
         NativeKillHeights.RequireOwned(donors.Disc.Exe,exe,rebuilt);
+        foreach(var(entry,animations) in supercharged)animations.RequireDestination(replacements[entry]);
         // Emulator only (8 MB RAM): the scenes load in the extra memory; every level is checked against that layout.
         NativeExtendedRam.ApplyForExport(exe,entry=>replacements.TryGetValue(entry,out var bytes)?bytes:baseline.EntryBytes(entry),catalog.Levels,donors.Disc);
         string pending=outputImage+".pending-"+Guid.NewGuid().ToString("N"),pendingCue=pending+".cue";

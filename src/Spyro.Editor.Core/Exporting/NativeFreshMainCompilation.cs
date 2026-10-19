@@ -18,8 +18,11 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
     private readonly NativeFreeFlightCompositionPlan? _flight;
     private readonly IReadOnlyList<NativeId65FreshExecutableWindow> _bootstrapWindows;
     private NativeFreshMainCompilation(SceneDocument document, string baseline, byte[] body, byte[] overlay, byte[] exe, NativeFreeFlightCompositionPlan? flight,
-        IReadOnlyList<NativeId65FreshExecutableWindow> bootstrapWindows, NativeFreshRewardFallbackResources rewardFallbacks, NativeAuthoredMeshRenderer.DrawPlan? drawPlan)
-    { Document=document;_baseline=baseline;_body=body;_overlay=overlay;_exe=exe;_flight=flight;_bootstrapWindows=bootstrapWindows; RewardFallbacks=rewardFallbacks; DrawPlan=drawPlan; }
+        IReadOnlyList<NativeId65FreshExecutableWindow> bootstrapWindows, NativeFreshRewardFallbackResources rewardFallbacks, NativeAuthoredMeshRenderer.DrawPlan? drawPlan,
+        NativeSuperchargeAnimations? supercharge)
+    { Document=document;_baseline=baseline;_body=body;_overlay=overlay;_exe=exe;_flight=flight;_bootstrapWindows=bootstrapWindows; RewardFallbacks=rewardFallbacks; DrawPlan=drawPlan; Supercharge=supercharge; }
+    /// <summary>Spyro's supercharge animations, carried when the scene has supercharge ground (null otherwise).</summary>
+    internal NativeSuperchargeAnimations? Supercharge { get; }
     /// <summary>How the terrain loads the frame's draw buffer (null: no terrain survey); its near distance goes to the
     /// draw-buffer guard (<see cref="NativeDrawBufferGuard"/>).</summary>
     internal NativeAuthoredMeshRenderer.DrawPlan? DrawPlan { get; }
@@ -101,6 +104,17 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         body.Bytes[sceneFile.Offset+14]=(byte)document.Heading;
         _=NativeId65FreshSceneLayout.DecodeCanonical(body.Bytes.AsSpan(sceneFile.Offset,sceneFile.Length));
         if (flight != null) body = new UniversalLevelData(flight.MergeLevelData(65, body.Bytes).CopyLevelData());
+        // Supercharge ground switches Spyro to animations 25 and 45, which this player stream (Town Square's) lacks.
+        NativeSuperchargeAnimations? supercharge=null;
+        if(NativeSuperchargeAnimations.Needed(document))
+        {
+            supercharge=await NativeSuperchargeAnimations.CaptureAsync(originalUSA,token);
+            uint copy=new UniversalOverlay(issued.DiscPlan.CopyOverlay(),UniversalExeBindings.Read(issued.DiscPlan.CopyExecutable(),65)).CopyBuffer;
+            bool fitted=GameRam.Fits(body,copy);
+            body=supercharge.Merge(body);
+            if(fitted&&!GameRam.Fits(body,copy))throw new InvalidDataException(NativeSuperchargeAnimations.NoRoomMessage(document.Name,GameRam.Shortfall(body,copy)));
+            supercharge.RequireDestination(body.Bytes);
+        }
         rewardFallbacks.RequireInstalled(body.Bytes);
         if(body.Scene().RowCount!=0)throw new InvalidDataException("Fresh native bootstrap unexpectedly contains source actors.");
         _=UniversalMobyComposer.RuntimeEnd(body,new UniversalOverlay(issued.DiscPlan.CopyOverlay(),UniversalExeBindings.Read(issued.DiscPlan.CopyExecutable(),65)).CopyBuffer);
@@ -119,7 +133,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
             if(!read.EntryBytes(80).AsSpan().SequenceEqual(body.Bytes))throw new InvalidDataException("Fresh native scene readback differs from authored output.");
             ExportArtifactTransaction.RequireSourceSeparation(originalUSA,null,scratchBaselinePath);
             File.Move(stage,scratchBaselinePath,true);
-            return new(document,scratchBaselinePath,body.Bytes,issued.DiscPlan.CopyOverlay(),issued.DiscPlan.CopyExecutable(),flight,issued.DiscPlan.Executable.SequentialStages,rewardFallbacks,drawPlan);
+            return new(document,scratchBaselinePath,body.Bytes,issued.DiscPlan.CopyOverlay(),issued.DiscPlan.CopyExecutable(),flight,issued.DiscPlan.Executable.SequentialStages,rewardFallbacks,drawPlan,supercharge);
         }
         finally {if(File.Exists(stage))File.Delete(stage);}
     }
@@ -141,9 +155,10 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
             key => string.Equals(key, Target.Key, StringComparison.OrdinalIgnoreCase)
                 ? (Target, new UniversalLevelData(prepared), new UniversalOverlay(_overlay, UniversalExeBindings.Read(actualExecutable,65)))
                 : donors.Get(key), donors.SharedClasses,
-            UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,sharedModelPackage: donors.SharedModelPackage, playerAnimationSource: donors.PlayerAnimations,nativeOriginalExecutable:donors.Disc.Exe,
+            UniversalMobyExport.DefaultProtectedVram(_baseline,Target).Concat(Supercharge?.ProtectedVram??[]),placements,special,sharedModelPackage: donors.SharedModelPackage, playerAnimationSource: donors.PlayerAnimations,nativeOriginalExecutable:donors.Disc.Exe,
             dependencyClasses:UniversalLiquidSplashes.Dependencies(UniversalLiquidSplashes.Liquids(Document.GroundKinds()),null,k=>donors.Get(k).Data));
         RewardFallbacks.RequireInstalled(composed.LevelData);
+        Supercharge?.RequireDestination(composed.LevelData);
         return composed;
     }
 
@@ -184,8 +199,13 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         exe = LevelTextPatchExporter.ComposeStagedExecutable(stagedRetailImage??_baseline, exe, [..retailNames??[],new(title, Document.Name)]);
         if (_flight?.IsLevelEnabled(65) == true) _ = _flight.RequireFinalLevelClosure(65, levelData, exe);
         // The level's game RAM in the export's memory mode (GameRam: one 2 MB budget, or two with 8 MB RAM).
-        if(!GameRam.Fits(new UniversalLevelData(levelData), new UniversalOverlay(overlayData,UniversalExeBindings.Read(exe,65)).CopyBuffer))
-            throw new InvalidDataException("The complete authored scene exceeds the native normal-buffer memory budget.");
+        {
+            var finalData=new UniversalLevelData(levelData);uint copy=new UniversalOverlay(overlayData,UniversalExeBindings.Read(exe,65)).CopyBuffer;
+            if(!GameRam.Fits(finalData,copy))
+                throw new InvalidDataException(Supercharge!=null&&GameRam.Shortfall(finalData,copy)<=NativeSuperchargeAnimations.ByteLength
+                    ?NativeSuperchargeAnimations.NoRoomMessage(Document.Name,GameRam.Shortfall(finalData,copy))
+                    :"The complete authored scene exceeds the native normal-buffer memory budget.");
+        }
         Dictionary<int,byte[]> replacements = new() {{79,overlayData},{80,levelData}};
         UniversalEggUnlocks.PatchOverlays(nativeCatalog,donors.Disc.EntryBytes,baseline.EntryBytes,replacements,eggs.Count);
         if(signLevels.Count>0)
@@ -200,6 +220,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
                 exe,replacements,baseline.EntryBytes,portalRoutes,includesFreshLevel:true,returnClasses:returnClasses, freshParticleBinding:freshParticleBinding, reportFreshParticleBinding:updated=>freshParticleBinding=updated);
         levelData=replacements[80];overlayData=replacements[79];
         RewardFallbacks.RequireInstalled(levelData);
+        Supercharge?.RequireDestination(levelData);
         if(freshParticleBinding!=null)NativePortalRouteFreshBinding.RequireOwnedParticleDestination(donors.Disc.Exe,exe,
             new(overlayData,UniversalExeBindings.Read(exe,65)),freshParticleBinding);
         // Emulator only (8 MB RAM): the scenes load in the extra memory; every level is checked against that layout.

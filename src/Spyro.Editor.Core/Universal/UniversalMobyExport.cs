@@ -72,6 +72,8 @@ public sealed record UniversalExportResult(string OutputImagePath, string Output
     public bool SpecialHooksDeferred { get; init; }
     public IReadOnlyList<(int LevelIndex, int Row, int Colour)> ActiveDragonflyEggs { get; init; } = [];
     public IReadOnlySet<string> SignLevelKeys { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Levels given Spyro's supercharge animations (<see cref="NativeSuperchargeAnimations"/>).</summary>
+    public IReadOnlyList<string> SuperchargeLevelKeys { get; init; } = [];
 }
 
 /// <summary>Image-to-image Create BIN stage: applies universal Moby placements for any number of destinations.</summary>
@@ -81,6 +83,8 @@ public static class UniversalMobyExport
 
     /// <param name="removedTreasureAlreadyApplied">True only for a staged image whose ordinary
     /// source-row writer already applied all supplied native removal treasure deltas.</param>
+    /// <param name="superchargeLevels">Levels whose tiles were given supercharge ground: those without Spyro's
+    /// supercharge animations get them (<see cref="NativeSuperchargeAnimations.MergeRetail"/>), with or without objects.</param>
     public static UniversalExportResult Apply(UniversalSourceLibrary sources, string currentImagePath, string outputImagePath,
         LevelCatalog catalog, IReadOnlyDictionary<string, IReadOnlyList<UniversalMobyPlacement>> placementsByLevel,
         Func<string, LevelDefinition, IEnumerable<(long Offset, int Length)>>? protectedVram = null,
@@ -90,7 +94,8 @@ public static class UniversalMobyExport
         bool deferSpecialHooks = false,
         bool removedTreasureAlreadyApplied = false,
         Spyro.Editor.Core.Crash.CrashWarpedDisc? crash = null, Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd = null,
-        IReadOnlyDictionary<string, IReadOnlyList<(int Class, string SourceKey)>>? dependenciesByLevel = null)
+        IReadOnlyDictionary<string, IReadOnlyList<(int Class, string SourceKey)>>? dependenciesByLevel = null,
+        IReadOnlyCollection<string>? superchargeLevels = null)
     {
         if (string.Equals(Path.GetFullPath(sources.ImagePath), Path.GetFullPath(outputImagePath), StringComparison.Ordinal) ||
             string.Equals(Path.GetFullPath(currentImagePath), Path.GetFullPath(outputImagePath), StringComparison.Ordinal))
@@ -103,6 +108,17 @@ public static class UniversalMobyExport
         // Models a level needs without placing them (the splash of a liquid its tiles were given, UniversalLiquidSplashes).
         if (dependenciesByLevel != null)
             foreach (var (key, dependencies) in dependenciesByLevel) if (dependencies.Count > 0) allPlacements.TryAdd(key, []);
+        // Supercharge ground switches Spyro to animations 25 and 45, which only seven original levels carry.
+        HashSet<string> supercharged = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var key in superchargeLevels ?? [])
+        {
+            var level = catalog.FindByKey(key) ?? throw new InvalidDataException($"Unknown destination level '{key}'.");
+            if (NativeSuperchargeAnimations.CarriedBy(level.LevelId) || !supercharged.Add(level.Key)) continue;
+            if (!allPlacements.Keys.Any(k => string.Equals(catalog.FindByKey(k)?.Key, level.Key, StringComparison.OrdinalIgnoreCase)))
+                allPlacements[level.Key] = [];
+        }
+        NativeSuperchargeAnimations? supercharge = supercharged.Count == 0 ? null
+            : NativeSuperchargeAnimations.CaptureAsync(sources.ImagePath).GetAwaiter().GetResult();
         var destinationKeys = allPlacements.Keys.Select(k => catalog.FindByKey(k)?.Key ?? k).ToArray();
         if (destinationKeys.Distinct(StringComparer.OrdinalIgnoreCase).Count() != destinationKeys.Length)
             throw new InvalidDataException("A destination level was supplied more than once under different names.");
@@ -118,21 +134,37 @@ public static class UniversalMobyExport
             var level = catalog.FindByKey(key) ?? throw new InvalidDataException($"Unknown destination level '{key}'.");
             var removed = removedRowsByLevel?.FirstOrDefault(k => string.Equals(catalog.FindByKey(k.Key)?.Key, level.Key, StringComparison.OrdinalIgnoreCase)).Value;
             var dependencies = dependenciesByLevel?.FirstOrDefault(k => string.Equals(catalog.FindByKey(k.Key)?.Key, level.Key, StringComparison.OrdinalIgnoreCase)).Value;
-            if (placements.Count == 0 && removed is not { Count: > 0 } && dependencies is not { Count: > 0 }) continue;
+            bool objects = placements.Count > 0 || removed is { Count: > 0 } || dependencies is { Count: > 0 };
+            bool superchargeHere = supercharged.Contains(level.Key);
+            if (!objects && !superchargeHere) continue;
             byte[] levelBytes = current.EntryBytes(level.SourceWadEntry);
+            if (superchargeHere)
+            {
+                // The records go in first, so the objects' room and textures are measured around them.
+                uint copy = new UniversalOverlay(current.EntryBytes(level.SourceWadEntry - 1), UniversalExeBindings.Read(exe, level.LevelId)).CopyBuffer;
+                levelBytes = supercharge!.MergeRetail(new UniversalLevelData(levelBytes), copy, level.DisplayName).Bytes;
+                if (!objects)
+                {
+                    replacements[level.SourceWadEntry] = levelBytes;
+                    continue;
+                }
+            }
             int nativeRows = new UniversalLevelData(levelBytes).Scene().RowCount;
             if (identityWorkspace != null && placements.Any(p => p.PersistentSlot != null))
             {
                 UniversalNativeLayoutStore.Validate(identityWorkspace, key, nativeRows);
                 nativePrefixes[key] = nativeRows;
             }
+            // Animation 45's glow texture stays where the records expect it.
+            IEnumerable<(long Offset, int Length)> glow = superchargeHere ? supercharge!.ProtectedVram : [];
             var composed = UniversalMobyComposer.Compose(level, levelBytes,
                 current.EntryBytes(level.SourceWadEntry - 1), exe, k => sources.Get(k), sources.SharedClasses,
-                protectedVram(currentImagePath, level), placements, SpecialProvider(japanese, sources, crash, yotd),
+                protectedVram(currentImagePath, level).Concat(glow), placements, SpecialProvider(japanese, sources, crash, yotd),
                 removed,
-                useNativeOwnershipScan ? dropped => DefaultProtectedVram(currentImagePath, level, dropped) : null, sources.SharedModelPackage, sources.PlayerAnimations,
+                useNativeOwnershipScan ? dropped => DefaultProtectedVram(currentImagePath, level, dropped).Concat(glow) : null, sources.SharedModelPackage, sources.PlayerAnimations,
                 removedTreasureAlreadyApplied, nativeSharedEntry8:current.EntryBytes(8),
                 dependencyClasses: dependencies is { Count: > 0 } ? dependencies : null);
+            if (superchargeHere) supercharge!.RequireDestination(composed.LevelData);
             exe = composed.Executable;
             replacements[level.SourceWadEntry] = composed.LevelData;
             replacements[level.SourceWadEntry - 1] = composed.Overlay;
@@ -174,7 +206,8 @@ public static class UniversalMobyExport
                 foreach (var (key, rows) in nativePrefixes) UniversalNativeLayoutStore.Bind(identityWorkspace, key, rows);
             File.Move(staging, outputImagePath); // refuse a destination created during export
             return new(outputImagePath, sha, results, wad.Length - current.Wad.Length)
-            { SpecialHooksDeferred = deferSpecialHooks, ActiveDragonflyEggs = dragonflyEggs.ToArray(), SignLevelKeys = signLevels };
+            { SpecialHooksDeferred = deferSpecialHooks, ActiveDragonflyEggs = dragonflyEggs.ToArray(), SignLevelKeys = signLevels,
+              SuperchargeLevelKeys = [.. supercharged.Order(StringComparer.Ordinal)] };
         }
         finally { if (File.Exists(staging)) File.Delete(staging); }
     }

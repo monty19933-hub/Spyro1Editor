@@ -21,14 +21,18 @@ public static class UniversalLiquidSplashes
 
     /// <summary>The liquids (0..2) the tiles of one of the game's own levels are given in its saved terrain edits (Tile
     /// Type…, the Ground card, or a texture that brought its donor's kind): the level needs their splash models too.</summary>
-    public static IReadOnlyList<int> LiquidsInTerrainEdits(string terrainEditsPath)
+    public static IReadOnlyList<int> LiquidsInTerrainEdits(string terrainEditsPath) => Liquids(KindsInTerrainEdits(terrainEditsPath));
+
+    /// <summary>The ground kinds the tiles of one of the game's own levels are given in its saved terrain edits (removed
+    /// tiles left out), however they were given: Tile Type…, the Ground card, or a texture that brought its donor's kind.</summary>
+    public static IReadOnlyList<AuthoredSurfaceKind> KindsInTerrainEdits(string terrainEditsPath)
     {
         if (!File.Exists(terrainEditsPath))
             return [];
         using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(terrainEditsPath));
         if (!document.RootElement.TryGetProperty("edits", out var edits) || edits.ValueKind != System.Text.Json.JsonValueKind.Array)
             return [];
-        List<AuthoredSurfaceKind?> kinds = [];
+        List<AuthoredSurfaceKind> kinds = [];
         foreach (var edit in edits.EnumerateArray())
         {
             if (!JsonValue.GetBoolean(edit, "nativeSurfaceBehaviorEdit") ||
@@ -37,7 +41,7 @@ public static class UniversalLiquidSplashes
             kinds.Add(new AuthoredSurfaceKind(JsonValue.GetInt32(edit, "nativeSurfaceType", -1),
                 JsonValue.GetInt32(edit, "nativeSurfaceParam1"), JsonValue.GetInt32(edit, "nativeSurfaceParam2")));
         }
-        return Liquids(kinds);
+        return kinds;
     }
 
     /// <summary>Dependency-only imports that give a level the splash models of the liquids it uses: from the level's

@@ -200,7 +200,13 @@ Pick a replacement, review its time bonus and fit check, then choose
   puts the kind back. Only tiles whose collision matches the tile can be changed;
   the editor says so otherwise. In a level you build (New Level or Start Blank)
   Tile Type offers water, lava, ooze, a supercharge ramp and an invisible wall,
-  which the game handles in any level.
+  which the game handles in any level. Charging down a supercharge ramp needs
+  Spyro's supercharge moves, which only the levels with supercharge ramps of their
+  own have (Magic Crafters, High Caves, Wizard Peak, Tree Tops, Lofty Castle,
+  Haunted Towers, Twilight Harbor). In any other level Create BIN adds them,
+  which takes about 14 KB of the level's memory. Peacekeepers, Beast Makers,
+  Misty Bog, Dream Weavers and Dark Passage are too full for them: there Tile Type
+  says so, unless Game Settings › Memory is set to Emulator only (8 MB RAM).
 - **Add Terrain** copies the selected tile so you can move the copy into place.
   **Remove Terrain** (or Delete in the view) takes the selected tiles out.
   **Undo Terrain** puts the selected tile back the way it was, or brings removed
@@ -323,6 +329,48 @@ The game gives close-up detail to the textured tiles near the camera, and only s
 many at once: Create BIN checks camera positions all over the level and names the
 place if textured tiles are too crowded there. Use larger tiles there (a few hundred
 units across, like the game's own) or untextured faces.
+
+## Random levels
+
+**File ▾ → Random Level…** makes a whole level for you from a seed and a few
+choices, then puts it where you say so you can add objects and enemies yourself.
+
+- **Kind of level:** a valley (one big area of terraces, like Dark Hollow),
+  islands in the water, islands in the sky (like Lofty Castle), caverns and
+  tunnels, a winding canyon trail, or a castle with courtyards. **Surprise me**
+  lets the seed choose.
+- **Look:** spring meadow, misty highland, cloud kingdom, desert, frozen peaks,
+  swamp, volcano, royal castle or moonlit night. Each look picks a texture for
+  every kind of surface (grass on floors, rock on cliffs with a grass fringe at
+  the top, planks on bridges, bricks on walls, water, lava…), a sun, a song and a
+  name.
+- **What it has:** caves, supercharge paths, glides, water or lava, bridges and
+  secret ledges. Supercharge paths are steep ramps Spyro climbs only by charging,
+  and supercharge runways: a hill whose far side is supercharge ground marked with
+  arrows; charge down it and Spyro supercharges, then jump at the end to clear a
+  pit too wide for an ordinary jump and glide. A tick asks for a feature, an empty
+  box leaves it out, a filled square leaves it to chance.
+- **Textures:** the game's own textures, or new pictures painted in the look's
+  colours. **Use My Own Pictures…** puts your own picture (PNG, JPEG, WebP or
+  BMP) on any kind of surface; pictures need your original disc.
+- **Sky:** a sky painted to match, or the sky of the look's original level.
+- **Seed:** the same seed and choices always make the same level. **New Seed**
+  makes another; **Rebuild** makes this seed again with changed choices.
+
+Every jump, glide and climb is built inside what Spyro can really do (measured in
+the game): ledges are at most 56 units high, gaps between stepping stones one
+cell wide, walking ramps no steeper than 17°, charge ramps 28°, glides within
+Spyro's glide from the height he jumps from, supercharge pits 480 wide (a
+supercharged jump carries about 680, an ordinary jump and glide about 390). Before it is shown, the editor checks
+that every area can be reached from the start and left again.
+
+**Put it** in place of the open level (a recovery copy is kept, and **Restore
+Before Clear…** brings it back), as the project's new level, or in a level of
+the world made with **File ▾ → New World…**. Tick **Then put in the level's
+dragons…** to have Fill In add dragons, egg thieves, Return Home and gems at once;
+otherwise add them with Add Object. The generator leaves good places for gems on
+hidden ledges and rocks, which Fill In uses. Everything it makes is ordinary
+terrain: paint, move or remove any tile afterwards.
 
 ## Levels from other games
 
