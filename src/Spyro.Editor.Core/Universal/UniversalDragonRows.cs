@@ -57,5 +57,30 @@ public static class UniversalDragonRows
         return [statue, pedestal, .. Enumerable.Range(0, rows).Where(r => Class(r) == Dragon && Link(r, 0x00) == statue)];
     }
 
+    /// <summary>The first live placement among <paramref name="placements"/> that is part of a dragon (statue, dragon or
+    /// pedestal), or null.</summary>
+    public static UniversalMobyPlacement? FirstDragon(IEnumerable<UniversalMobyPlacement> placements, UniversalSourceLibrary donors)
+    {
+        foreach (var p in placements)
+        {
+            if (p.Retired || p.SpecialId != null) continue;
+            var data = donors.Get(p.SourceLevelKey).Data;
+            if (p.SourceRowIndex < 0 || p.SourceRowIndex >= data.Scene().RowCount) continue;
+            int c = BinaryPrimitives.ReadUInt16LittleEndian(data.Row(p.SourceRowIndex).AsSpan(0x36));
+            if (c is Statue or Dragon || IsPedestal(c)) return p;
+        }
+        return null;
+    }
+
+    /// <summary>Null, or why <paramref name="levelName"/>, a level compiled like File › New Level's (level 65, or a level of
+    /// a new world), can't have the dragons among <paramref name="placements"/>: a dragon's rescue scene is in its own
+    /// level's data, which such a level does not have, and the game stops when the rescue starts (emulator, 2026-10-18).
+    /// A level rebuilt with Start Blank keeps its own dragons.</summary>
+    public static string? BuiltLevelRefusal(string levelName, IEnumerable<UniversalMobyPlacement> placements, UniversalSourceLibrary donors) =>
+        FirstDragon(placements, donors) is { } p
+            ? $"{levelName} has a dragon from {donors.Get(p.SourceLevelKey).Level.DisplayName}, but a dragon can only be rescued in its own " +
+              "level (the game stops when the rescue starts). Remove it; to keep a level's dragons, build on that level with Start Blank."
+            : null;
+
     private static int I(byte[] b, int at) => BinaryPrimitives.ReadInt32LittleEndian(b.AsSpan(at));
 }

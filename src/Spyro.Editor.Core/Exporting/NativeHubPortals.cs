@@ -265,6 +265,9 @@ public sealed class NativeHubPortals
     {
         if (document.Portals is not { Count: > 0 } portals) return null;
         if (document.TargetBinding == null && document.WorldLevelId != null) throw new InvalidDataException(NewWorldNotExportable);
+        // The new world's homeworld (70) is compiled on a template homeworld; each doorway to 71-74 takes the template's
+        // doorway to 11-14 and is pointed at its own level (return token, entry triangles, the name's level number).
+        bool world = document.WorldLevelId == NewWorldDocument.Homeworld;
         if (portals.Count > MaxDoorways)
             throw new InvalidDataException($"A homeworld can have at most {MaxDoorways} doorways (the game keeps {MaxDoorways}); this one has {portals.Count}.");
         var home = document.ResolveTarget(catalog);
@@ -275,9 +278,13 @@ public sealed class NativeHubPortals
         List<Doorway> doorways = [];
         foreach (var portal in portals)
         {
-            var template = templates[portal.DestinationLevelId];
+            int templateDestination = world ? NativeNewWorldExport.TemplateDestination(portal.DestinationLevelId) : portal.DestinationLevelId;
+            if (!templates.TryGetValue(templateDestination, out var template))
+                throw new InvalidDataException($"The homeworld has no doorway to level {templateDestination} to build this doorway on.");
             var control = template.Control;
             var (record, triggers, place) = PlaceRecord(template, portal, destinationSky?.Invoke(portal.DestinationLevelId));
+            // +0x1C: the level Spyro returns from to arrive at this doorway (the original's own destination).
+            if (world) BinaryPrimitives.WriteInt32LittleEndian(record.AsSpan(0x1C), portal.DestinationLevelId);
             int pointCount = I(record, 4);
             int yawTurn = (int)Math.Round(place.Turn * 128 / Math.PI);
             UniversalMobyPlacement Object(int row, string id)
@@ -308,7 +315,9 @@ public sealed class NativeHubPortals
             UniversalMobyPlacement[] objects =
             [
                 Object(control.PathTrueIndex - bias, PathId(portal.DestinationLevelId)),
-                Object(control.LetteringTrueIndex - bias, $"hub-portal-{portal.DestinationLevelId}-name"),
+                world ? Object(control.LetteringTrueIndex - bias, $"hub-portal-{portal.DestinationLevelId}-name") with
+                    { PropertyWordOverrides = new Dictionary<int, int> { [0] = NativeLevelWindow.VirtualIndex(portal.DestinationLevelId) } }
+                    : Object(control.LetteringTrueIndex - bias, $"hub-portal-{portal.DestinationLevelId}-name"),
                 Object(control.CompanionTrueIndex - bias, $"hub-portal-{portal.DestinationLevelId}-return"),
             ];
             double nl = Math.Sqrt((double)I(record, 0x08) * I(record, 0x08) + (double)I(record, 0x0C) * I(record, 0x0C));

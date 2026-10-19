@@ -293,7 +293,11 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
             throw new InvalidDataException("Fresh scene document identity, surfaces or settings are invalid.");
         Ledger.Validate();
         TargetBinding?.Validate();
-        if (WorldLevelId is int world && (TargetBinding != null || !NewWorldDocument.IsWorldKey(NewWorldDocument.KeyFor(world), out _)))
+        // Create BIN compiles the world's homeworld on its template homeworld's slot (scratch images only); no other world
+        // level takes a retail slot.
+        bool templateHome = WorldLevelId == NewWorldDocument.Homeworld &&
+            string.Equals(TargetBinding?.LevelKey, Spyro.Editor.Core.Exporting.NativeNewWorldExport.TemplateKey, StringComparison.OrdinalIgnoreCase);
+        if (WorldLevelId is int world && (TargetBinding != null && !templateHome || !NewWorldDocument.IsWorldKey(NewWorldDocument.KeyFor(world), out _)))
             throw new InvalidDataException("A new world level is levels 70-74 and replaces no retail level.");
         if (SkySourceWadEntry is int sky && (sky is < 10 or > 78 || sky % 2 != 0))
             throw new InvalidDataException("The scene's sky source is not a retail level.");
@@ -343,7 +347,7 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
         {
             // A rebuilt homeworld's doorways lead where its original ones did; the new world's homeworld (70) leads to its
             // own levels (71-74).
-            bool worldHome = WorldLevelId == NewWorldDocument.Homeworld && TargetBinding == null;
+            bool worldHome = WorldLevelId == NewWorldDocument.Homeworld && (TargetBinding == null || templateHome);
             if (!worldHome && (TargetBinding is not { LevelId: var home } || home % 10 != 0) ||
                 portals.Select(p => p.DestinationLevelId).Distinct().Count() != portals.Count ||
                 portals.Any(p => p.Heading is < 0 or > 255 || (worldHome

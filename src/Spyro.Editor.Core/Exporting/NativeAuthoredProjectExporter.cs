@@ -21,14 +21,45 @@ public static class NativeAuthoredProjectExporter
         IReadOnlySet<string>? retailSignLevels=null,IReadOnlyList<LevelTextReplacement>? retailNames=null,
         NativeFreeFlightCompositionPlan? flight=null,PortalRouteDocument? portalRoutes=null,
         IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses=null,
-        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash=null,Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd=null)
+        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash=null,Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd=null,
+        NewWorldDocument? world=null,IReadOnlyList<NativeNewWorldExport.WorldLevel>? worldLevels=null)
     {
         // The staged disc images are working copies; remove them whether the export succeeds or fails.
         string scratch=Path.Combine(ExportScratchSpace.AggregateRoot(workspace),Guid.NewGuid().ToString("N"));
         try
         {
-            return await ExportCoreAsync(donors,catalog,scenes,japanese,outputImage,workspace,startLevelId,scratch,token,requireCurrent,
-                stagedRetailImage,retailEggs,retailSignLevels,retailNames,flight,portalRoutes,retailReturnClasses,crash,yotd);
+            // New Game in a level of the new world: the game is made starting in Artisans, then the world step moves it.
+            int? worldStart=startLevelId is >=NativeLevelWindow.FirstId and <=NativeLevelWindow.LastId?startLevelId:null;
+            if(worldStart!=null&&(world==null||worldLevels?.Any(l=>l.Document.WorldLevelId==worldStart)!=true))
+                throw new InvalidDataException("New Game can only start in a level of your new world when the world is part of the game.");
+            if(worldStart!=null)startLevelId=10;
+            if(world==null||worldLevels is not {Count:>0})
+                return await ExportCoreAsync(donors,catalog,scenes,japanese,outputImage,workspace,startLevelId,scratch,token,requireCurrent,
+                    stagedRetailImage,retailEggs,retailSignLevels,retailNames,flight,portalRoutes,retailReturnClasses,crash,yotd);
+            // With a new world the game is made beside the output first and the world goes in last (its levels after the
+            // game's, the level window over the finished executable); only the complete image is published, so a world
+            // that fails leaves the previous BIN as it was.
+            string directory=Path.GetDirectoryName(Path.GetFullPath(outputImage))!,cue=Path.ChangeExtension(outputImage,".cue");
+            string staged=Path.Combine(directory,"."+Path.GetFileNameWithoutExtension(outputImage)+".world-"+Guid.NewGuid().ToString("N")+".bin");
+            string stagedCue=Path.ChangeExtension(staged,".cue");
+            bool retain=false;
+            try
+            {
+                await ExportCoreAsync(donors,catalog,scenes,japanese,staged,workspace,startLevelId,scratch,token,requireCurrent,
+                    stagedRetailImage,retailEggs,retailSignLevels,retailNames,flight,portalRoutes,retailReturnClasses,crash,yotd,withWorld:true);
+                requireCurrent?.Invoke();
+                await NativeNewWorldExport.ApplyAsync(donors,catalog,world,worldLevels,staged,Path.Combine(scratch,"world"),
+                    UniversalMobyExport.SpecialProvider(japanese,donors,crash,yotd),token,worldStart);
+                await File.WriteAllLinesAsync(stagedCue,["FILE \""+Path.GetFileName(outputImage)+"\" BINARY","  TRACK 01 MODE2/2352","    INDEX 01 00:00:00"],token);
+                requireCurrent?.Invoke();
+                token.ThrowIfCancellationRequested();
+                ExportArtifactTransaction.RequireSourceSeparation(donors.ImagePath,null,outputImage,cue);
+                _=ExportArtifactTransaction.Publish(directory,[new(outputImage,staged),new(cue,stagedCue)]);
+                await using var stream=File.OpenRead(outputImage);
+                return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream,token));
+            }
+            catch(ExportArtifactRollbackException){retain=true;throw;}
+            finally{if(!retain){if(File.Exists(staged))File.Delete(staged);if(File.Exists(stagedCue))File.Delete(stagedCue);}}
         }
         finally{ExportScratchSpace.Delete(scratch);}
     }
@@ -40,9 +71,9 @@ public static class NativeAuthoredProjectExporter
         IReadOnlySet<string>? retailSignLevels,IReadOnlyList<LevelTextReplacement>? retailNames,
         NativeFreeFlightCompositionPlan? flight,PortalRouteDocument? portalRoutes,
         IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses,
-        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash,Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd)
+        Spyro.Editor.Core.Crash.CrashWarpedDisc? crash,Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd,bool withWorld=false)
     {
-        if(scenes.Count==0)throw new InvalidDataException("No authored scenes were selected for export.");
+        if(scenes.Count==0&&!withWorld)throw new InvalidDataException("No authored scenes were selected for export.");
         // ID65 is source-issued through Town's initializer. Composing two
         // distinct overlays would rewrite the same callback instruction pairs.
         // Refuse before reading donors, creating scratch files or staging edits.

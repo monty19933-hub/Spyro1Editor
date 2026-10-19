@@ -14,11 +14,24 @@ internal static partial class NewLevelBuildCases
     {
         string level = Environment.GetEnvironmentVariable("ADD_LEVEL") ?? throw new InvalidOperationException("Set ADD_LEVEL.");
         string objectsPath = Environment.GetEnvironmentVariable("ADD_OBJECTS") ?? throw new InvalidOperationException("Set ADD_OBJECTS.");
-        Load(window, level);
+        // ADD_LEVEL: a retail level key, or "world:71" for a level of the project's new world (70-74).
+        if (level.StartsWith("world:", StringComparison.Ordinal))
+        {
+            int id = int.Parse(level[6..]);
+            var open = (Task)Invoke(window, "OpenWorldLevelAsync", id)!;
+            Wait(() => open.IsCompleted, "open world level " + id, 120);
+            if (open.IsFaulted) throw open.Exception!;
+            if (window.FreshSceneForTesting?.WorldLevelId != id) throw new InvalidOperationException($"World level {id} did not open.");
+        }
+        else Load(window, level);
         var (browser, entries) = OpenBrowserReporting(window); browser.Close(); Pump(10);
         var lib = Library(window);
         var japanese = (UniversalJapaneseSource?)Invoke(window, "ResolveUniversalJapaneseSource");
         var variants = entries.SelectMany(e => e.Variants.Select(v => (Entry: e, Variant: v))).ToArray();
+        // ADD_LIST=<level key>: print that level's placeable rows (to choose rows for ADD_OBJECTS).
+        if (Environment.GetEnvironmentVariable("ADD_LIST") is { Length: > 0 } listed)
+            foreach (var (entry, variant) in variants.Where(p => p.Variant.SourceLevelKey == listed && p.Variant.Extractable).OrderBy(p => p.Variant.SourceRow))
+                Console.WriteLine($"  row {variant.SourceRow,3} class 0x{variant.ClassId:X3} {entry.Name} ({entry.Category}/{entry.SubCategory})");
         foreach (var o in JsonDocument.Parse(File.ReadAllText(objectsPath)).RootElement.EnumerateArray())
         {
             string source = o.GetProperty("source").GetString()!; int row = o.GetProperty("row").GetInt32();

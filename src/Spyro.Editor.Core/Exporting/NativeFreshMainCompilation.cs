@@ -145,6 +145,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
     private UniversalComposeResult ComposeWithExecutable(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements,
         byte[] actualExecutable,Func<string,UniversalSpecialAsset?>? special)
     {
+        if(UniversalDragonRows.BuiltLevelRefusal(Document.Name,placements,donors) is {} noDragons)throw new InvalidDataException(noDragons);
         NativeFreshTreasureTarget.RequireZeroBaseline(donors.Disc.Exe, actualExecutable);
         // The canonical zero-actor scene includes only one spare placed row.
         // Size its owned empty arena before imports consume further placed rows;

@@ -117,7 +117,11 @@ public sealed partial class MainWindow
         content.Children.Add(new TextBlock
         {
             Name = "ExportIncludedLevels", TextWrapping = TextWrapping.Wrap,
-            Text = existing + (_releaseMode ? "\nLevels you built: " : "\nRebuilt levels: ") + string.Join(", ",scenes.Select(s=>s.Name)) + "."
+            Text = existing + (_releaseMode ? "\nLevels you built: " : "\nRebuilt levels: ") + string.Join(", ",scenes.Select(s=>s.Name)) + "." +
+                (scenes.Any(s=>s.WorldLevelId!=null)
+                    ? $"\nYour new world ({string.Join(", ",scenes.Where(s=>s.WorldLevelId!=null).OrderBy(s=>s.WorldLevelId).Select(s=>s.Name))}) is part of this game. " +
+                      "Its homeworld's doorways lead to its levels; choose its homeworld for New Game to start there."
+                    : "")
         });
         content.Children.Add(new TextBlock { Text = "New Game starts in" });
         content.Children.Add(start);

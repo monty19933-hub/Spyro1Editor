@@ -104,6 +104,19 @@ foreach (var (at, name) in new (uint, string)[] { (0x8001565C, "loader"), (0x800
     NativeLevelWindow.TestSkipCaveHashes = true;
 }
 {
+    // Renamed levels repack the name pool: world-name slot 7 then points at "THIGH MASTERS" somewhere else.
+    byte[] moved = Synthetic();
+    "THIGH MASTERS\0"u8.ToArray().CopyTo(moved, Off(0x80010600));
+    Put(moved, 0x8006F7D0 + 28, 0x80010600);
+    NativeLevelWindow.Install(moved, wadTable, guests, "NEW WORLD");
+    Check(NativeLevelWindow.IsInstalled(moved) && Word(moved, 0x8006F7D0 + 28) == NativeLevelWindow.Plan(Synthetic(), wadTable, guests, "NEW WORLD").Labels["LW_WORLD_NAME"],
+        "a world-name slot 7 moved by renamed levels (still THIGH MASTERS) takes the world's name");
+    byte[] other = Synthetic();
+    "GNORC GNEXUS\0"u8.ToArray().CopyTo(other, Off(0x80010600));
+    Put(other, 0x8006F7D0 + 28, 0x80010600);
+    Check(Throws(() => NativeLevelWindow.Install(other, wadTable, guests, "NEW WORLD")), "a world-name slot 7 holding other text is refused");
+}
+{
     byte[] x = Synthetic();
     Check(Throws(() => NativeLevelWindow.Plan(x, wadTable, [guests[0] with { LevelId = 75 }], "NEW WORLD")), "level 75 is refused (v1: 70-74)");
     Check(Throws(() => NativeLevelWindow.Plan(x, wadTable, [guests[0] with { LevelId = 65 }], "NEW WORLD")), "level 65 is not a window guest");

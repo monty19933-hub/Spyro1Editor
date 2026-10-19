@@ -239,7 +239,6 @@ public sealed partial class MainWindow
     private async Task CreateFreshMainBinAsync()
     {
         using var memory = UseProjectMemoryMode();
-        if(RefuseNewWorldExport())return;
         bool authoredActive=_freshSceneDocument!=null;
         if(authoredActive?!await SaveFreshSceneAsync():!await SaveCurrentEditsAsync())return;
         var owner=CaptureSourceDiscOperationIdentity();
@@ -248,16 +247,19 @@ public sealed partial class MainWindow
         var flightIntent=NativeFreeFlightProjectExportIntent.Capture(workspacePath);
         var portalSnapshot=PortalRouteStore.Capture(workspacePath);
         var saved=SceneDocumentStore.ReadAll(workspacePath,_retailCatalog);
-        var fingerprints=saved.ToDictionary(s=>s.ResolveTarget(_retailCatalog).Key,s=>s.Fingerprint());
-        int? startLevelId=await ShowAuthoredProjectExportScopeAsync(saved,authoredActive?_currentLevel!.LevelId:10);
+        // The project's new world (homeworld 70 and levels 71-74) goes in through the level window.
+        var world=NewWorldDocument.Read(workspacePath);
+        var worldScenes=world==null?[]:SceneDocumentStore.ReadWorld(workspacePath,_retailCatalog);
+        var fingerprints=saved.Concat(worldScenes).ToDictionary(s=>s.ResolveTarget(_retailCatalog).Key,s=>s.Fingerprint());
+        int? startLevelId=await ShowAuthoredProjectExportScopeAsync([..saved,..worldScenes],authoredActive?_currentLevel!.LevelId:10);
         if(startLevelId==null){_statusText.Text="BIN creation canceled.";return;}
         void RequireOwner()
         {
             if(!IsCurrentSourceDiscOperationIdentity(owner)||imageSelection!=_discImagePathBox.Text||skySelection!=_skyboxDiscImagePathBox.Text||
                 authoredActive&&CaptureFreshScene().Fingerprint()!=fingerprints[_currentLevel!.Key])
                 throw new InvalidDataException("The project, scene or source selection changed during export.");
-            var current=SceneDocumentStore.ReadAll(workspacePath,_retailCatalog);
-            if(current.Count!=saved.Count||current.Any(s=>!fingerprints.TryGetValue(s.ResolveTarget(_retailCatalog).Key,out var hash)||hash!=s.Fingerprint()))
+            var current=SceneDocumentStore.ReadAll(workspacePath,_retailCatalog).Concat(world==null?[]:SceneDocumentStore.ReadWorld(workspacePath,_retailCatalog)).ToArray();
+            if(current.Length!=saved.Count+worldScenes.Count||current.Any(s=>!fingerprints.TryGetValue(s.ResolveTarget(_retailCatalog).Key,out var hash)||hash!=s.Fingerprint()))
                 throw new InvalidDataException("A saved authored level changed during export. Save and create the BIN again.");
             flightIntent?.RequireCurrent(workspacePath);
             portalSnapshot.RequireCurrent(workspacePath);
@@ -265,7 +267,7 @@ public sealed partial class MainWindow
             if(TryGetId65BlankLabNormalCreateBinBlockReason(out reason))throw new InvalidDataException(reason);
         }
         RequireOwner();
-        foreach(var scene in saved)NativeAuthoredSpawn.RequireSupported(scene);
+        foreach(var scene in saved.Concat(worldScenes))NativeAuthoredSpawn.RequireSupported(scene);
         var(_,donors,_)=await EnsureUniversalCatalogAsync();var japanese=ResolveUniversalJapaneseSource();
         RequireOwner();
         var crashLevels=CrashPlayerSettings.Load(workspacePath);
@@ -277,6 +279,11 @@ public sealed partial class MainWindow
             // Play as Crash: his two objects join the level's own.
             if(crashLevels.Contains(target.Key)&&UniversalCrashPlayer.IsPlayableLevel(target.LevelId))placements=UniversalCrashPlayer.WithPlayer(placements);
             return new NativeAuthoredExportScene(scene,placements);
+        }).ToArray();
+        var worldLevels=worldScenes.Select(scene=>
+        {
+            var objects=scene.ProjectObjects();
+            return new NativeNewWorldExport.WorldLevel(scene,PlacementsFor(scene.ReconcileLedger(objects),objects));
         }).ToArray();
         string outputFolder=Path.Combine(workspacePath,"output");Directory.CreateDirectory(outputFolder);
         CombinedTestBinResult? retail=null;
@@ -310,14 +317,15 @@ public sealed partial class MainWindow
                 requireCurrent:()=>Dispatcher.UIThread.InvokeAsync(RequireOwner).GetAwaiter().GetResult(),
                 stagedRetailImage:retail?.WroteImage==true?retail.OutputImagePath:null,retailEggs:retail?.ActiveDragonflyEggs,
                 retailSignLevels:retail?.SignLevelKeys,retailNames:retail?.DeferredLevelNames,flight:flight,portalRoutes:portalSnapshot.Document,
-                retailReturnClasses:retail?.ReturnClasses,crash:crash,yotd:yotd);
+                retailReturnClasses:retail?.ReturnClasses,crash:crash,yotd:yotd,world:world,worldLevels:worldLevels);
         });
         RequireOwner();
-        string startName=saved.FirstOrDefault(s=>s.ResolveTarget(_retailCatalog).LevelId==startLevelId)?.Name??"Artisans";
+        string startName=saved.Concat(worldScenes).FirstOrDefault(s=>s.ResolveTarget(_retailCatalog).LevelId==startLevelId)?.Name??"Artisans";
         string flightNote=!flightIntent.RequiresRebuild?"":!flightIntent.Enabled?" Fly Anywhere is off in this game."
             :flightIntent.WholeGame?" Fly Anywhere is on in this game.":" Fly Anywhere is on in "+DescribeFlightLevels(flightIntent.EnabledLevelIds)+".";
         RememberExportedGame(Path.ChangeExtension(output,".cue"));
-        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. All saved level replacements and other saved edits are included."+flightNote+PreservedResearchExportNote()+MemoryModeExportNote(memory);
+        string worldNote=world==null||worldScenes.Count==0?"":$" Your new world {world.Name} is in it ({Count(worldScenes.Count,"level","levels")}; save in it with a new save file).";
+        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. All saved level replacements and other saved edits are included."+worldNote+flightNote+PreservedResearchExportNote()+MemoryModeExportNote(memory);
         }
         // The merged retail image is a working copy for this export only.
         finally{if(retailStage!=null)ExportScratchSpace.Delete(retailStage);}

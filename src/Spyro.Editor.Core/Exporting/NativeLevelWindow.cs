@@ -9,8 +9,9 @@ namespace Spyro.Editor.Core.Exporting;
 /// <param name="LevelId">70-74; 70 is the world's homeworld (Return Home and Game Over in 71-74 lead to it).</param>
 /// <param name="Name">Its name: capital letters, spaces and apostrophes (the game's font), 1-15 characters.</param>
 /// <param name="TemplateLevelId">Whose per-level initializer (jump-table case) it borrows: a retail level id (10-64,
-/// e.g. 10 for a homeworld built on Artisans' overlay) or <see cref="NativeLevelWindow.FreshTemplate"/> (65) for a
-/// level compiled like File › New Level's (Town Square's case, as ID65 uses).</param>
+/// e.g. 10 for Artisans' own overlay) or <see cref="NativeLevelWindow.FreshTemplate"/> (65) for a level the editor
+/// compiled, homeworld or not (Town Square's case, as ID65 uses: a compiled overlay's library callbacks sit where Town
+/// Square's do).</param>
 /// <param name="MusicTrack">The music-table word for the level (the song it plays).</param>
 /// <param name="KillHeight">Its kill-height word (world units).</param>
 /// <param name="ArrivalHeight">How far above its start Spyro appears when he arrives through a doorway or Return Home
@@ -194,15 +195,18 @@ public static class NativeLevelWindow
             if (g.Bindings != null)
             {
                 var template = UniversalExeBindings.Read(exe, g.TemplateLevelId == FreshTemplate ? 13 : g.TemplateLevelId);
+                List<string> refused = [];
                 foreach (var (global, value) in g.Bindings)
                 {
                     uint current = template.TryGetValue(global, out var b) ? b.Value : 0;
                     if (current == value) continue;
                     int k = OverriddenGlobals.ToList().IndexOf(global);
-                    if (k < 0) throw new InvalidDataException($"Level {g.LevelId} needs initializer global 0x{global:X8} = 0x{value:X8}, which the level window cannot set.");
+                    if (k < 0) { refused.Add($"0x{global:X8} = 0x{value:X8}"); continue; }
                     if (value == 0) throw new InvalidDataException($"Level {g.LevelId}'s initializer callback 0x{global:X8} is null.");
                     ov[k] = value;
                 }
+                if (refused.Count > 0)
+                    throw new InvalidDataException($"Level {g.LevelId} needs initializer globals the level window cannot set: {string.Join(", ", refused)}.");
             }
             if (baseCase == DefaultCase) throw new InvalidDataException($"Level {g.LevelId}'s template case is missing.");
             Stat(record, Row(g.OverlayEntry), Row(g.DataEntry), g.KillHeight, g.ArrivalHeight, g.GemTotal, g.MusicTrack, g.DragonTotal, ov[0], ov[1], ov[2]);
@@ -255,7 +259,9 @@ public static class NativeLevelWindow
         foreach (var (at, load) in new (uint, uint)[] { (0x800197D4, 0x8C26F7F0), (0x800197F4, 0x8C26F7F0), (0x8003C3A4, 0x8C32F7F0) })
             HookN("name reader", at, [0x3C018007, 0x00220821, load], [Jal("LW_NAME"), 0, load & 0xFFFF0000]);
         // world-name slot 7 (the leftover "THIGH MASTERS"): inventory page 7 and "ENTERING ... WORLD"
-        Hook("world name", WorldNames + 7 * 4, 0x8001000C, labels["LW_WORLD_NAME"]);
+        // (Renamed levels repack the name pool, which moves the leftover; it must still be the leftover.)
+        uint leftover = Word(exe, WorldNames + 7 * 4);
+        Hook("world name", WorldNames + 7 * 4, IsLeftoverWorldName(exe, leftover) ? leftover : 0x8001000C, labels["LW_WORLD_NAME"]);
         // doorways to 70-74; homeworld-to-homeworld doorways remember where Spyro came from
         Hook("doorway guard", 0x80057110, 0x28420041, 0x28420000 | (LastId + 1));
         HookN("doorway arrival", 0x80057178, [0x10820003, 0], [J("LW_PREV"), 0]);
@@ -503,6 +509,13 @@ public static class NativeLevelWindow
         byte[] overlay = wad.AsSpan(offset, length).ToArray();
         PatchSaveOverlay(overlay);
         overlay.CopyTo(wad, offset);
+    }
+
+    private static bool IsLeftoverWorldName(byte[] exe, uint pointer)
+    {
+        const string leftover = "THIGH MASTERS";
+        if (pointer < ExeBase + 0x800 || pointer - ExeBase + leftover.Length + 1 > exe.Length) return false;
+        return exe.AsSpan(Off(pointer), leftover.Length + 1).SequenceEqual((ReadOnlySpan<byte>)[.. Encoding.ASCII.GetBytes(leftover), (byte)0]);
     }
 
     private static uint Imm(int value) => (uint)value & 0xFFFF;

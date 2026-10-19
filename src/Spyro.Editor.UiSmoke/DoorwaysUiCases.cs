@@ -16,8 +16,7 @@ using Spyro.Editor.Core.Universal;
 /// a doorway from the Add Doorway window's answers on the selected tile (saved with its frame), a frame face clicked in
 /// the view selects its doorway, then move, turn, Shape…, Leads To…, Front Texture… and Remove work through the card;
 /// the Add Doorway window offers the six shapes as pictures; a level in Stone Hill's place says why it has none; the new
-/// world's homeworld adds a doorway to its own level, marked playable after New World export, and Create BIN says
-/// plainly that it can't build the new world yet.</summary>
+/// world's homeworld adds a doorway to its own level.</summary>
 internal static class DoorwaysUiCases
 {
     private static int _checks;
@@ -138,23 +137,20 @@ internal static class DoorwaysUiCases
             Check(card.IsVisible && Text(window, "DoorwaysNote").Contains("only work in a homeworld") && !Find<Button>(window, "DoorwayAdd").IsVisible && !Find<ListBox>(window, "DoorwayList").IsVisible,
                 "a level in another level's place explains why it has no doorways: " + Text(window, "DoorwaysNote"));
 
-            // The new world: its homeworld's doorways lead to its own levels and are playable after New World export.
+            // The new world: its homeworld's doorways lead to its own levels.
             File.WriteAllText(NewWorldDocument.PathFor(root), "{\"schemaVersion\":1,\"name\":\"SKY ISLES\",\"entryHomeworldKey\":\"artisans\",\"levelIds\":[70,71]}");
             var level71 = SceneDocument.New("CLOUD STEPS") with { WorldLevelId = 71 };
             Run(level71.SaveAsync(SceneDocumentStore.PathForTarget(root, NewWorldDocument.KeyFor(71))), "save world level");
             var worldHome = SceneDocument.New("SKY ISLES") with { WorldLevelId = 70, Surfaces = hub.Surfaces };
             Run(worldHome.SaveAsync(SceneDocumentStore.PathForTarget(root, NewWorldDocument.KeyFor(70))), "save world homeworld");
             Invoke(window, "ApplyFreshScene", worldHome); Pump(20);
-            Check(Find<Button>(window, "DoorwayAdd").IsVisible && Text(window, "DoorwaysNote").Contains("playable after New World export"), "the new world's homeworld offers doorways: " + Text(window, "DoorwaysNote"));
+            Check(Find<Button>(window, "DoorwayAdd").IsVisible && Text(window, "DoorwaysNote").Contains("each level of your new world"), "the new world's homeworld offers doorways: " + Text(window, "DoorwaysNote"));
             geometry = window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry!;
             SetField(window, "_selectedTerrain", geometry.Polygons[0]); SetField(window, "_selectedTerrainIndex", 0);
             window.DoorwayChoiceForTesting = () => new(71, "pointed-arch", 1f, null, false);
             Run(window.AddDoorwayForTestingAsync(), "add world doorway");
-            Check(SceneDoorways.Find(window.FreshSceneForTesting!, 71)?.Shape == "pointed-arch" && Status(window).Contains("CLOUD STEPS") && Status(window).Contains("playable after New World export"),
-                "a doorway to the world's own level is added and marked playable after New World export: " + Status(window));
-            Run((Task)Invoke(window, "CreateFreshMainBinAsync")!, "create bin");
-            Check(Status(window).StartsWith("Create BIN can't build your new world yet", StringComparison.Ordinal) && Status(window).Contains("1 doorway is saved"),
-                "Create BIN says plainly that the new world can't go into a game yet: " + Status(window));
+            Check(SceneDoorways.Find(window.FreshSceneForTesting!, 71)?.Shape == "pointed-arch" && Status(window).Contains("CLOUD STEPS"),
+                "a doorway to the world's own level is added: " + Status(window));
 
             Check(File.ReadAllText(Path.Combine(root, "unrelated-project-notes.txt")) == "protected" &&
                 !Directory.EnumerateFiles(parent, "*.bin", SearchOption.AllDirectories).Any(), "no other file is touched and no game is written");

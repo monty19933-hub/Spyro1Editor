@@ -243,7 +243,7 @@ CORE_CASES = (
     # The level window (world 7, ids 70-74): the shared executable-cave registry has no overlaps; the window's patch on a
     # synthetic executable (hooks, records, inventory, save layout, names), re-install and refusals; its routines run on
     # a test CPU (record swap, save, Load Game, New Game, names, doorway arrival, card offsets, page 7); the card menu.
-    ("LevelWindowSmoke", "LEVEL_WINDOW_FREE_OK checks=81"),
+    ("LevelWindowSmoke", "LEVEL_WINDOW_FREE_OK checks=83"),
     # Ground kinds an original level never had (Tile Type… and the Ground card in Artisans, Stone Hill…): each of the
     # eight kinds every level can use is appended from its canonical record to a table that lacks it and reparses on the
     # assigned triangles; a saved donor resolves only when the donor still holds that exact record; portals and

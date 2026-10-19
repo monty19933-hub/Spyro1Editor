@@ -23,7 +23,7 @@ namespace Spyro.Editor.Core.Exporting;
 public static class NativeDrawBufferGuard
 {
     /// <summary>The stubs (unreferenced library code from 0x800694E8) and their data (unreferenced SPU library code from
-    /// 0x8005D91C: the terrain limit, the limit plus the queue constant, a byte per level id 10..73 with its near distance
+    /// 0x8005D91C: the terrain limit, the limit plus the queue constant, a byte per level id 10..74 (the new world ends at 74) with its near distance
     /// in 256-unit steps, 0 for a level the editor did not build).</summary>
     public const uint Cave = 0x800694E8, CaveEnd = 0x80069608, DataCave = 0x8005D91C, DataCaveEnd = 0x8005D9EC;
     private const string CaveSha256 = "f6cbd4612249b19ffdd76f4142b444482d033f42bfcb93fe9e6ee3d797678e40";
@@ -40,7 +40,7 @@ public static class NativeDrawBufferGuard
     public const int Slack = 0xC00;
     internal const uint Limit = DataCave, QueueLimit = DataCave + 4, NearTable = DataCave + 8;
     internal const uint FrameStub = Cave;
-    private const int FrameWords = 29, FarWords = 11, NearWords = 18, LevelSlots = 64;
+    private const int FrameWords = 29, FarWords = 11, NearWords = 18, LevelSlots = 65;
     internal const uint FarStub = FrameStub + 4 * FrameWords, NearStub = FarStub + 4 * FarWords;
     /// <summary>Queue bytes to packet bytes: a normal entry (4 bytes) may become 320 bytes, a close one 1,280.</summary>
     internal const uint NormalWeight = 80, CloseWeight = 320;

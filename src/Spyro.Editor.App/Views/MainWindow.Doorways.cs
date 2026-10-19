@@ -224,12 +224,11 @@ public sealed partial class MainWindow
         _doorwayAddButton.IsEnabled = !_doorwayBusy && free.Length > 0 && portals.Count < NativeHubPortals.MaxDoorways;
         _doorwaysNote.Text = portals.Count == 0
             ? (world
-                ? "Add a doorway to each level of your new world. They are saved with the homeworld; Create BIN can't build the New World yet, so they are playable after New World export."
+                ? "Add a doorway to each level of your new world: Spyro walks into it to reach the level, and Return Home brings him back out of it."
                 : "This homeworld has no doorways yet. Add Doorway… puts one in: Spyro walks into it to reach the level, and comes back out of it.")
             : free.Length == 0 && !world
                 ? $"Every level this homeworld's doorways can lead to has one ({Count(portals.Count, "doorway", "doorways")}). Select one to move, turn, reshape or remove it; Leads To… swaps where one goes."
-                : $"{Count(portals.Count, "doorway", "doorways")}. Select one (here or by clicking its frame) to move, turn, reshape or remove it." +
-                  (world ? " New World doorways are playable after New World export." : "");
+                : $"{Count(portals.Count, "doorway", "doorways")}. Select one (here or by clicking its frame) to move, turn, reshape or remove it.";
         var selected = portals.FirstOrDefault(p => p.DestinationLevelId == _selectedDoorway);
         _doorwayTools.IsVisible = selected != null;
         _doorwayTools.IsEnabled = !_doorwayBusy;
@@ -415,8 +414,7 @@ public sealed partial class MainWindow
             bool world = scene.WorldLevelId == NewWorldDocument.Homeworld;
             await CommitDoorwaySceneAsync(updated, choice.Destination,
                 $"Added a {shape.Name.ToLowerInvariant()} doorway to {name} {where}. Spyro walks in heading {CompassWord(heading)}; " +
-                (world ? "it is playable after New World export (Create BIN can't build the New World yet)."
-                       : "in the game the opening shows that level's sky. Its frame is ordinary tiles: paint them with the Ground card or Choose Texture."));
+                "in the game the opening shows that level's sky. Its frame is ordinary tiles: paint them with the Ground card or Choose Texture.");
         }
         finally { _doorwayBusy = false; RefreshDoorwaysCard(); }
     }
@@ -734,16 +732,4 @@ public sealed partial class MainWindow
         return result;
     }
 
-    /// <summary>Create BIN with one of the new world's levels open: the New World is not built by Create BIN yet, so say so
-    /// (its doorways are kept for when it is) instead of failing on the missing level.</summary>
-    private bool RefuseNewWorldExport()
-    {
-        if (_freshSceneDocument?.WorldLevelId is not int world) return false;
-        string name = _freshSceneDocument.Name;
-        int doorways = world == NewWorldDocument.Homeworld ? _freshSceneDocument.Portals?.Count ?? 0 : 0;
-        _statusText.Text = $"Create BIN can't build your new world yet, so {name} can't go into a game. " +
-            (doorways > 0 ? $"Its {Count(doorways, "doorway is", "doorways are")} saved and will lead to the world's levels once the New World is part of Create BIN. " : "") +
-            "To make a game now, open one of the game's levels or a level you built in a game slot, and Create BIN again.";
-        return true;
-    }
 }
