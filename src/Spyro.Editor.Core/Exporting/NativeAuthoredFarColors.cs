@@ -4,29 +4,34 @@ using Spyro.Editor.Core.Scene;
 
 namespace Spyro.Editor.Core.Exporting;
 
-/// <summary>The game draws a textured face only near the camera; farther away it draws the face untextured in its far
-/// colours. Retail far colours are the texture's own colour times the face's light, so the change is hard to see. A
-/// face whose far colours were never chosen (missing, or the same as its near colours, which only modulate the
-/// texture: 128 draws it as stored) would draw its shading values instead, and the edge where the texture starts
-/// visibly travels with Spyro. Those faces get far = texture average x near / 128.</summary>
+/// <summary>The game draws a textured face only near the camera; farther away it draws the face untextured in its
+/// distant colours. Retail distant colours are the texture's own colour times the face's light, so the change is hard
+/// to see. A face whose far colours were never chosen (missing, or the same as its near colours, which only modulate
+/// the texture: 128 draws it as stored) would draw its shading values instead, and the edge where the texture starts
+/// visibly travels with Spyro. Those faces get distant colours = texture average x near / 128
+/// (<see cref="AuthoredSurface.DistantColors"/>). Their far colours stay as they are: the game modulates the textured
+/// face with its first near-tier table (the far colours) when subdivided and when drawn whole up to 1,024 units short
+/// of the near-detail distance, fading to the second table (the near colours) by that distance (USA
+/// 0x80026DB8..0x80026FB4; the subdivision passes from 0x80027688 read the first table only), so the texture average
+/// there would apply the texture twice (darker and more saturated, or washed out for bright textures).</summary>
 public static class NativeAuthoredFarColors
 {
     public static SceneDocument Derive(SceneDocument document, Func<AuthoredMaterial, ColorRgba?> average)
     {
         Dictionary<AuthoredMaterial, ColorRgba?> cache = [];
-        // Sectors with their own distant mesh drawn always keep their faces' far colours (AuthoredFarMesh.Always).
+        // Sectors with their own distant mesh drawn always take their distant colours from it (AuthoredFarMesh.Always).
         var own = document.FarMeshes?.Where(m => m.Always).Select(m => m.Sector).ToHashSet() ?? [];
         var surfaces = document.Surfaces.Select(s =>
         {
-            if (s.Material is not { } m) return s;
+            if (s.Material is not { } m || s.DistantColors != null) return s;
             if (s.Sector is int sector && own.Contains(sector)) return s;
             var near = s.NearColors ?? Enumerable.Repeat(s.Color, s.Vertices.Length).ToArray();
             if (s.FarColors != null && !s.FarColors.SequenceEqual(near)) return s;
             if (!cache.TryGetValue(m, out var avg)) cache[m] = avg = average(m);
             if (avg is not { } a) return s;
             static byte Mix(byte shade, byte texture) => (byte)Math.Clamp((shade * texture + 64) / 128, 0, 255);
-            var far = near.Select(c => new ColorRgba(Mix(c.R, a.R), Mix(c.G, a.G), Mix(c.B, a.B), c.A)).ToArray();
-            return s with { FarColors = far };
+            var distant = near.Select(c => new ColorRgba(Mix(c.R, a.R), Mix(c.G, a.G), Mix(c.B, a.B), c.A)).ToArray();
+            return s with { DistantColors = distant };
         }).ToArray();
         return document with { Surfaces = surfaces };
     }

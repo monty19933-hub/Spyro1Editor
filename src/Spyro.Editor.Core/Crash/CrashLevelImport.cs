@@ -1159,13 +1159,13 @@ public static class CrashLevelImport
     /// <summary>The compiler's test for one imported sector (NativeAuthoredMeshRenderer.ImportedFits), on drawn faces.</summary>
     internal static bool FitsSector(IEnumerable<AuthoredSurface> surfaces)
     {
-        int faces = 0; HashSet<Vector3f> v = []; HashSet<(ColorRgba, ColorRgba)> colours = [];
+        int faces = 0; HashSet<Vector3f> v = []; HashSet<(ColorRgba, ColorRgba, ColorRgba)> colours = [];
         foreach (var s in surfaces)
         {
             faces += s.Vertices.Length == 4 && !ConvexQuad(s.Vertices) ? 2 : 1;
             var near = s.NearColors ?? [.. Enumerable.Repeat(s.Color, s.Vertices.Length)];
-            var far = s.FarColors ?? near;
-            for (int k = 0; k < s.Vertices.Length; k++) { v.Add(s.Vertices[k]); colours.Add((near[k], far[k])); }
+            var far = s.FarColors ?? near; var distant = s.DistantColors ?? far;
+            for (int k = 0; k < s.Vertices.Length; k++) { v.Add(s.Vertices[k]); colours.Add((near[k], far[k], distant[k])); }
         }
         if (faces > 255 || v.Count > NativeAuthoredMeshRenderer.MaxNearVertices || colours.Count > 255) return false;
         float dx = v.Max(p => p.X) - v.Min(p => p.X), dy = v.Max(p => p.Y) - v.Min(p => p.Y), dz = v.Max(p => p.Z) - v.Min(p => p.Z);

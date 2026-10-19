@@ -1,3 +1,9 @@
+# Unreleased
+
+Fixed
+
+- Textured ground and walls in levels you build no longer change colour as Spyro moves: up close they were drawn with the picture's colour applied twice (darker and more saturated, or washed out for bright pictures such as clouds) and only looked right from about 1,000 units away. Since Spyro Editor 1.2 (Wumpa Village, Cloudspire Isles and other built levels; export them again to get the fix).
+
 # Spyro Editor 1.3
 
 ## Changes since Spyro Editor 1.2

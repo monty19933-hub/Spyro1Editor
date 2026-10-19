@@ -40,6 +40,11 @@ public sealed record AuthoredSurface(string Id, Vector3f[] Vertices, ColorRgba C
     /// drawing comes from its collision pieces, so it always keeps them).</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
     public bool NoCollision { get; init; }
+    /// <summary>The colours of the face's untextured distant copy (the far tier, beyond the near-detail distance), when
+    /// they differ from <see cref="FarColors"/> (null: the far colours). <see cref="FarColors"/> also fill the first
+    /// near-tier table, which modulates the textured face up close, so colours meant for the untextured copy belong here.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public ColorRgba[]? DistantColors { get; init; }
 }
 
 /// <summary>A sector's own distant (low-detail) mesh, drawn in place of the compiler's simplified copy when the sector's
@@ -48,11 +53,9 @@ public sealed record AuthoredSurface(string Id, Vector3f[] Vertices, ColorRgba C
 public sealed record AuthoredFarMesh(int Sector, Vector3f[] Vertices, ColorRgba[] Colors, IReadOnlyList<AuthoredFarFace> Faces)
 {
     /// <summary>Drawn far away even when the sector's near tables could serve as its distant mesh, and the sector's faces
-    /// keep the far colours they were given (an import whose faces' far colours equal their near colours: the face pass
-    /// modulates a textured face drawn whole near the camera with its first near-tier colour table, which the compiler
-    /// fills from <see cref="AuthoredSurface.FarColors"/>; USA 0x80026DB8..0x80026FB4). Without it a sector small enough
-    /// draws its near faces untextured in their far colours, and far colours equal to the near ones are replaced by the
-    /// texture's average times them.</summary>
+    /// get no <see cref="AuthoredSurface.DistantColors"/> (the distant mesh has its own colours). Without it a sector small
+    /// enough draws its near faces untextured far away, in their distant colours: for far colours equal to the near ones,
+    /// the texture's average times them.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
     public bool Always { get; init; }
     /// <summary>Every distant face is drawn from both sides (LP face flag 0x80), as the sector's two-sided near faces are.</summary>
@@ -302,7 +305,7 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
         {
             if (!Guid.TryParseExact(s.Id,"N",out _) || s.Vertices.Length is < 3 or > 4 || s.Color.A != 255)
                 throw new InvalidDataException("An authored face has an invalid identity, vertex count or color.");
-            foreach (var colors in new[] {s.NearColors,s.FarColors})
+            foreach (var colors in new[] {s.NearColors,s.FarColors,s.DistantColors})
                 if(colors != null && (colors.Length!=s.Vertices.Length || colors.Any(c=>c.A!=255)))
                     throw new InvalidDataException("Authored Gouraud color lanes must match their opaque vertices.");
             foreach (var v in s.Vertices) RequireCoordinate(v);
