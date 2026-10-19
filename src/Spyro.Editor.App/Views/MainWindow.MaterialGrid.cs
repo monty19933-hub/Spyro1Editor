@@ -104,9 +104,10 @@ public sealed partial class MainWindow
         return true;
     }
 
-    private async Task<(string LevelKey, int TextureId)?> ShowBuiltTextureGridAsync(Window? owner = null)
+    /// <param name="onlyLevelKey">Offer only this level's textures (a world entrance's frame uses its homeworld's own).</param>
+    private async Task<(string LevelKey, int TextureId)?> ShowBuiltTextureGridAsync(Window? owner = null, string? onlyLevelKey = null)
     {
-        var levels = _retailCatalog.Levels.Where(l => l.SourceWadEntry is >= 10 and <= 78).ToArray();
+        var levels = _retailCatalog.Levels.Where(l => l.SourceWadEntry is >= 10 and <= 78 && (onlyLevelKey == null || l.Key == onlyLevelKey)).ToArray();
         var current = _freshSceneDocument?.Surfaces.Select(s => s.Material).OfType<AuthoredMaterial>().GroupBy(m => m.SourceWadEntry)
             .OrderByDescending(g => g.Count()).FirstOrDefault()?.Key;
         ComboBox level = new()
