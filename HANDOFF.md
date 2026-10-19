@@ -1,3 +1,51 @@
+# Handoff — Random Level generator — 2026-10-12, Claude
+
+- Branch `feature/random-levels-20261012` (from e20ad59, sky view), worktree task-root `work/random-levels-20261012`.
+- File ▾ › Random Level… (`MainWindow.RandomLevel.cs`): kind (valley, islands, sky islands, caverns, canyon, castle or
+  surprise), look (9 themes in `Generation/LevelThemes.cs`), size, six three-state features, game textures / painted
+  pictures / the user's own pictures per surface, painted or game sky, name, seed (deterministic), live top-down map,
+  destination (in place of the open level via Start Blank's recovery, the authored65 New Level slot, or a New World slot),
+  optional Fill In.
+- Core `Generation/`: `LevelRandom` (SplitMix64), `SpyroMoves` (movement measured in the emulator: run 4.48, charge 7.66,
+  held jump +81 / tap +30, glide 3.3:1, ledge ≤ 64, walk ramps ≤ 20°, charge ≤ 30°), `LevelGrid` (cells of 120 with
+  stacked slabs: ground, cave roofs, decks, floating islands; exposed sides only, banded cliff tops, 2x2 merges incl.
+  smooth patches), `LevelLayout` (areas, ramps incl. cut-back, rolling ground), `LayoutValley` (valley/canyon/castle),
+  `LayoutIslands` (water and sky; 2x2 stepping stones on a 3-cell lattice, bridges), `LayoutCaverns`, `LevelReach`
+  (plates + drops/ledges/glides; every required floor reachable and able to get back), `ProceduralPictures`,
+  `ProceduralSky`, `RandomLevelGenerator` (attempts, smaller retries on game limits, lighting quantised to share sector
+  colours), `RandomLevelTextureCheck` (texture memory like Create BIN).
+- Fill In (`LevelFill`) now uses the measured moves (ledge 64, glide 3.3:1 with the jump arc) instead of 72 / 1:8.
+- Tests: `Spyro.Editor.RandomLevelSmoke` (gate: `RANDOM_LEVEL_SMOKE_OK checks=103`; lab: `--calibration`, `--export`,
+  `--export-random`, `--check-themes`, `--surface-kinds`, `--dump-textures`), UiSmoke steps `random-level`
+  (RANDOM_SEED/RANDOM_STYLE/RANDOM_PLACE/RANDOM_PICTURES) and `random-dialog`.
+- Emulator: generated levels played on a private DuckStation copy (scratchpad emu, port 2478) with `links.py` (every
+  ramp, charge ramp, ledge, bridge, stone hop and glide performed from its report) and `look.py` (screenshots).
+- Supercharge in built levels (merged from the helper's worktree `work/supercharge-20261012`, uncommitted there too):
+  built levels lacked Spyro's animations 25 and 45 (only the 7 supercharge levels carry them; state 44 -> animation 45,
+  empty slot -> garbage vertex count -> scratchpad overrun at 0x80024778). `Exporting/NativeSuperchargeAnimations.cs`
+  appends Tree Tops' byte-identical records (13,920 bytes) with hash checks and protects the glow texture;
+  `NativeFreshMainCompilation`, `NativeClearedLevelCompilation`, `NativeAuthoredProjectExporter` call it; smoke
+  `Spyro.Editor.SuperchargeSmoke` (free 27, `--source` 160). Measured: supercharge starts after ~150 of descent on type 4
+  while charging, 12.8 after 200 down (cap 16.4), held jump lands ~680 ahead at the same height.
+- Supercharge in the game's own levels (Tile Type… "Supercharge ramp"): confirmed in the emulator that it crashed the
+  same way (Artisans, 10 tiles on a run falling 192: bus error EPC 0x80024778 60 frames into the charge). Fix: Create
+  BIN's object stage `UniversalMobyExport.Apply(superchargeLevels:)` adds the records to a level without them
+  (`NativeSuperchargeAnimations.MergeRetail`: records first, glow texture protected for any objects composed after, RAM
+  checked with `GameRam.Exceeds`, plain `RetailNoRoomMessage`); `MainWindow.cs` finds such levels from the saved terrain
+  edits (`NeededByTerrainEdits`, `UniversalLiquidSplashes.KindsInTerrainEdits`), so a texture that brings type 4 counts
+  too. Tile Type… refuses supercharge up front where the original level has no room (`RetailShortfallAsync`, cached per
+  level and memory mode, checked before anything is staged). Survey (`SuperchargeSmoke --retail-survey`): every level's
+  texture memory already holds the glow texture; growth 14,336; Peacekeepers 6,112, Beast Makers 1,180, Misty Bog 2,316,
+  Dream Weavers 7,328, Dark Passage 320 bytes short in 2 MB (all fit in 8 MB). Emulator after the fix: three runs reach
+  state 44 (and 24 on a jump) with no fault; screenshots show the glow. UiSmoke `--new-level <proj> <out> retail-supercharge`
+  (RETAIL_SUPERCHARGE_LEVEL, RETAIL_SUPERCHARGE_TIGHT) then `export`; emulator script and evidence in task-root
+  `outputs/RandomLevels-20261012/retail-supercharge`. Not tested: Fly Anywhere together with retail supercharge tiles
+  (its decoder reads the extended stream, as for built levels).
+- Generator supercharge runway (`LayoutValley.SuperchargeLeap`): hill, 5 cells of type 4 falling 200, 2 flat, a deadly
+  pit 4 cells wide, landing; only in large areas with a 14-cell straight free line.
+- Open: far-colour double modulation (uncommitted fix in source-farcolors) still darkens close-up textures in all built
+  levels on this branch.
+
 # Handoff — Spyro Editor 1.3 — 2026-10-11, Claude
 
 - Branch `feature/new-levels-20261010` (from 1.2, `d12d615`). Packages: task-root `outputs/SpyroEditor-V1.3-20261011`

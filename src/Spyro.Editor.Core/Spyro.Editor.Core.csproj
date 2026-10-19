@@ -17,6 +17,8 @@
     <InternalsVisibleTo Include="Spyro.Editor.FarLodTextureCompanionSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.DragonStatueColorSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.DrawLoadSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.RandomLevelSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.SuperchargeSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.SourceAnalysisSessionCacheSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.StoneHillLevelReplacementBaselineSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65BlankLevelLabSmoke" />

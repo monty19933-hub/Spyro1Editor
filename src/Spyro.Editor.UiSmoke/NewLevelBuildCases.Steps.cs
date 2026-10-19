@@ -70,7 +70,10 @@ internal static partial class NewLevelBuildCases
             case "crash-import": CrashImport(window, outDir); return true;
             case "starter-ground": StarterGround(window, outDir); return true;
             case "retail-ground": RetailGround(window, outDir); return true;
+            case "retail-supercharge": RetailSupercharge(window, outDir); return true;
             case "new-world": NewWorldStep(window, outDir); return true;
+            case "random-level": RandomLevelStep(window, outDir); return true;
+            case "random-dialog": RandomDialogStep(window, outDir); return true;
             case "texture-grid": TextureGrid(window, outDir); return true;
             case "add-beside": AddBeside(window, outDir); return true;
             case "doorways": DoorwaysStep(window, outDir); return true;

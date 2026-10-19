@@ -235,6 +235,7 @@ public sealed partial class MainWindow
         StyleModernToolbarButton(_toolbarOpenDiscImageButton, 106);
         fileActions.Children.Add(BuildActionMenu("File", "EditorFileMenu", new ToolbarAction("New Level…", NewMainLevelAsync),
             new ToolbarAction("New World…", NewWorldAsync),
+            new ToolbarAction("Random Level…", RandomLevelAsync),
             new ToolbarAction("Start Blank in Current Level…", StartBlankCurrentLevelAsync),
             new ToolbarAction("New Level from Spyro: Year of the Dragon…", NewLevelFromYearOfTheDragonAsync),
             new ToolbarAction("Fill In What the Level Needs…", FillInLevelAsync),

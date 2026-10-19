@@ -14605,9 +14605,19 @@ public sealed partial class MainWindow : Window
                 }
             });
         }
-        if (universalPlacements.Count > 0 || liquidDependencies.Count > 0)
+        // Supercharge ground given to tiles of one of the game's levels needs Spyro's supercharge animations, which only the
+        // seven levels with supercharge ground of their own carry: without them he crashes as soon as the supercharge starts.
+        List<string> superchargeLevels = targets
+            .Where(target => target.HasTerrainEdits && !File.Exists(SceneDocumentStore.PathForTarget(_workspace.RootPath, target.Level.Key)) &&
+                NativeSuperchargeAnimations.NeededByTerrainEdits(target.Level.LevelId, Path.Combine(_workspace.RootPath, $"{target.Level.Key}-terrain-edits.json")))
+            .Select(target => target.Level.Key)
+            .ToList();
+        if (universalPlacements.Count > 0 || liquidDependencies.Count > 0 || superchargeLevels.Count > 0)
         {
-            ReportCreateBinProgress("Importing objects...", "Create BIN: importing models, textures, sounds and behavior for objects from other levels...");
+            if (universalPlacements.Count > 0 || liquidDependencies.Count > 0)
+                ReportCreateBinProgress("Importing objects...", "Create BIN: importing models, textures, sounds and behavior for objects from other levels...");
+            else
+                ReportCreateBinProgress("Adding Spyro's supercharge moves...", "Create BIN: adding Spyro's supercharge animations to levels with new supercharge ground...");
             string universalImage = Path.Combine(tempDir, $"{++step:00}-universal-mobys.bin");
             string donorImage = sourceImage;
             bool needsJapanese = universalPlacements.Values.Any(list => list.Any(p => UniversalSpecialCatalog.RequiresJapaneseSource(p.SpecialId)));
@@ -14638,6 +14648,7 @@ public sealed partial class MainWindow : Window
                 return UniversalMobyExport.Apply(library, currentImage, universalImage, _retailCatalog, universalPlacements, japanese: japanese, crash: crash, yotd: yotd,
                     removedRowsByLevel: universalRemoved, identityWorkspace: _workspace.RootPath,
                     dependenciesByLevel: liquidDependencies,
+                    superchargeLevels: superchargeLevels,
                     deferSpecialHooks: deferSharedRuntimeHooks,
                     // The completed ordinary object stage already adjusted native removal rewards.
                     removedTreasureAlreadyApplied: true);
@@ -14683,6 +14694,13 @@ public sealed partial class MainWindow : Window
                     level.Compose.ArenaSlotsRemaining,
                     level.Compose.VramBytesUsed
                 });
+            }
+            foreach (string key in universal.SuperchargeLevelKeys)
+            {
+                string name = _retailCatalog.FindByKey(key)?.DisplayName ?? key;
+                if (!patchedLevelNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+                    patchedLevelNames.Add(name);
+                stepSummaries.Add(new { level = name, kind = "supercharge-animations", animations = NativeSuperchargeAnimations.AnimationIds, NativeSuperchargeAnimations.ByteLength });
             }
             currentImage = universalImage;
             currentCue = Path.ChangeExtension(universalImage, ".cue");

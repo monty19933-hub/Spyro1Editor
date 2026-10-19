@@ -19,8 +19,11 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
     internal NativeFreshRewardFallbackResources RewardFallbacks { get; }
     private NativeClearedLevelCompilation(SceneDocument document, LevelDefinition target, string baseline,
         byte[] body, byte[] overlay, byte[] exe, NativeFreshRewardFallbackResources rewardFallbacks, NativeHubPortals? portals,
-        NativeAuthoredMeshRenderer.DrawPlan? drawPlan)
-    { Document=document; Target=target; _baseline=baseline; _body=body; _overlay=overlay; _exe=exe; RewardFallbacks=rewardFallbacks; Portals=portals; DrawPlan=drawPlan; }
+        NativeAuthoredMeshRenderer.DrawPlan? drawPlan, NativeSuperchargeAnimations? supercharge)
+    { Document=document; Target=target; _baseline=baseline; _body=body; _overlay=overlay; _exe=exe; RewardFallbacks=rewardFallbacks; Portals=portals; DrawPlan=drawPlan; Supercharge=supercharge; }
+    /// <summary>Spyro's supercharge animations, carried when the scene has supercharge ground (null otherwise): the
+    /// rebuilt body is the kernel's, whose player stream is Town Square's whatever the slot had.</summary>
+    internal NativeSuperchargeAnimations? Supercharge { get; }
     /// <summary>How the terrain loads the frame's draw buffer (<see cref="NativeFreshMainCompilation.DrawPlan"/>).</summary>
     internal NativeAuthoredMeshRenderer.DrawPlan? DrawPlan { get; }
     public int NearDistance => DrawPlan?.NearDistance ?? NativeDrawBufferGuard.MaxNearDistance;
@@ -67,7 +70,9 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
             // (GameRam: the whole load below the draw buffers with 2 MB; with 8 MB RAM the scene has its own room.)
             var bodyData=new UniversalLevelData(body);uint bodyCopy=new UniversalOverlay(overlay,UniversalExeBindings.Read(exe,target.LevelId)).CopyBuffer;
             if(!GameRam.Fits(bodyData,bodyCopy))
-                throw new InvalidDataException($"{document.Name} needs {GameRam.Shortfall(bodyData,bodyCopy):N0} more bytes of level memory than the game has. Remove some geometry.");
+                throw new InvalidDataException(kernel.Supercharge!=null&&GameRam.Shortfall(bodyData,bodyCopy)<=NativeSuperchargeAnimations.ByteLength
+                    ?NativeSuperchargeAnimations.NoRoomMessage(document.Name,GameRam.Shortfall(bodyData,bodyCopy))
+                    :$"{document.Name} needs {GameRam.Shortfall(bodyData,bodyCopy):N0} more bytes of level memory than the game has. Remove some geometry.");
             var replacements=new Dictionary<int,byte[]>{{target.SourceWadEntry,body},{target.SourceWadEntry-1,overlay}};
             original.WriteImage(stage,original.RebuildWad(replacements),exe);
             token.ThrowIfCancellationRequested();
@@ -77,7 +82,7 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
                 throw new InvalidDataException("The rebuilt retail level failed independent disc readback.");
             ExportArtifactTransaction.RequireSourceSeparation(originalUSA,null,scratchBaselinePath);
             File.Move(stage,scratchBaselinePath,true);
-            return new(document,target,scratchBaselinePath,body,overlay,exe,kernel.RewardFallbacks,portals,kernel.DrawPlan);
+            return new(document,target,scratchBaselinePath,body,overlay,exe,kernel.RewardFallbacks,portals,kernel.DrawPlan,kernel.Supercharge);
         }
         finally {if(File.Exists(stage))File.Delete(stage);if(File.Exists(kernelPath))File.Delete(kernelPath);}
     }
@@ -213,7 +218,7 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
             try
             {
                 composed=UniversalMobyComposer.Compose(Target,prepared,_overlay,executable,donors.Get,donors.SharedClasses,
-                    UniversalMobyExport.DefaultProtectedVram(_baseline,Target),placements,special,
+                    UniversalMobyExport.DefaultProtectedVram(_baseline,Target).Concat(Supercharge?.ProtectedVram??[]),placements,special,
                     sharedModelPackage:donors.SharedModelPackage,playerAnimationSource:donors.PlayerAnimations,
                     persistentNativePrefixRows:Document.TargetBinding!.NativePrefixRows,nativeDestinationOwner:nativeOwner,nativeOriginalExecutable:donors.Disc.Exe,
                     dependencyClasses:dependencies,releasedNativeClasses:keep.Count>0?keep:null);
@@ -224,6 +229,7 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
             { keep.UnionWith(Clashing(classes)); }
         }
         RewardFallbacks.RequireInstalled(composed.LevelData);
+        Supercharge?.RequireDestination(composed.LevelData);
         return composed;
     }
 }
