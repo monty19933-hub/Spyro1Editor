@@ -26,7 +26,7 @@ public sealed record GroundType(string Name, string LevelKey, int TextureId, Col
 
     /// <summary>The face painted with this ground: its texture, shade and ground kind; shape and sides are kept.</summary>
     public AuthoredSurface Apply(AuthoredSurface face, LevelCatalog catalog) =>
-        face with { Material = Material(catalog), Color = Shade, NearColors = null, FarColors = null, Kind = Kind };
+        face with { Material = Material(catalog), Color = Shade, NearColors = null, FarColors = null, DistantColors = null, Kind = Kind };
 }
 
 /// <summary>The grounds of <see cref="GroundType"/>, chosen from textures that copy cleanly into a built level (static
