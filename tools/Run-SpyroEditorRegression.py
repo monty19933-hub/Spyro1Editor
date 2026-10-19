@@ -360,7 +360,7 @@ SOURCE_QA_CASES = (
     # routines on the real executable, re-install, placement inside WAD.WAD and after the image.
     ("LevelWindowSmoke", "LEVEL_WINDOW_SOURCE_OK checks=120", ["--source"]),
     # Every retail sky drawn as a panorama and rebuilt from it within the game's limits, looking the same.
-    ("SkyImportSmoke", "SKY_IMPORT_SOURCE_OK checks=278", ["--source"]),
+    ("SkyImportSmoke", "SKY_IMPORT_SOURCE_OK checks=280", ["--source"]),
     # All 29 original homeworld doorways: written byte for byte as before; each shape keeps the original's sky.
     ("DoorwaySmoke", "DOORWAY_SOURCE_OK checks=816", ["--source"]),
     ("DarkParticleHostSmoke", "DARK_PROJECTILE_ALL_HOST_OWNERSHIP_OK", []),
