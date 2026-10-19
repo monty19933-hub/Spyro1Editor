@@ -12,7 +12,14 @@ internal static class NativeAuthoredMeshRenderer
     /// <summary>A drawn face. <paramref name="Flags"/> is the face's subdivision byte: 0x40 keeps it out of the
     /// subdivision queues except within a few units of the camera (it then takes the normal 4-tile subdivision, not
     /// the 16-tile close one); otherwise it is drawn whole, textured. The face pass reads it at 0x80026D30/0x80026D74.</summary>
-    private sealed record Face(Vector3f[] Points,ColorRgba[] Near,ColorRgba[] Far,int Material,int Group=-1,int Flags=0);
+    private sealed record Face(Vector3f[] Points,ColorRgba[] Near,ColorRgba[] Far,int Material,int Group=-1,int Flags=0,ColorRgba[]? Distant=null)
+    {
+        /// <summary>The colours of the face's untextured far-tier copy (<see cref="AuthoredSurface.DistantColors"/>).</summary>
+        internal ColorRgba[] Lp=>Distant??Far;
+        /// <summary>Per corner: its near colour (the second near-tier table), far colour (the first) and distant colour (the
+        /// far tier), which share one colour index.</summary>
+        internal IEnumerable<(ColorRgba Near,ColorRgba Far,ColorRgba Distant)> Colours=>Near.Zip(Far,Lp);
+    }
     /// <summary>Imported levels were made for a game with deeper subdivision queues; their faces subdivide only up close.</summary>
     internal const int ImportedFaceFlags=0x40;
     /// <summary>The face's back is drawn too: the HP face pass and every subdivision pass skip their NCLIP rejection
@@ -37,7 +44,7 @@ internal static class NativeAuthoredMeshRenderer
     {
         internal readonly List<Face> Faces=[];
         internal readonly List<Vector3f> Vertices=[];
-        internal readonly List<(ColorRgba Near,ColorRgba Far)> Colors=[];
+        internal readonly List<(ColorRgba Near,ColorRgba Far,ColorRgba Distant)> Colors=[];
         internal FarMesh? Far;
         /// <summary>The scene sector an imported batch draws (a sector too big for one batch is split).</summary>
         internal int Group=-1;
@@ -46,7 +53,7 @@ internal static class NativeAuthoredMeshRenderer
         internal bool Fits(Face f)
         {
             var v=Vertices.Concat(f.Points).Distinct().ToArray();
-            int colors=Colors.Concat(f.Near.Zip(f.Far)).Distinct().Count();
+            int colors=Colors.Concat(f.Colours).Distinct().Count();
             return v.Length<=64&&v.Length<=MaxNearVertices&&colors<=64&&v.Length+colors+2*(Faces.Count+1)<=255&&
                 v.Max(p=>p.X)-v.Min(p=>p.X)<=2047&&v.Max(p=>p.Y)-v.Min(p=>p.Y)<=2047&&v.Max(p=>p.Z)-v.Min(p=>p.Z)<=1023&&
                 v.Max(p=>p.X)-v.Min(p=>p.X)+v.Max(p=>p.Y)-v.Min(p=>p.Y)+v.Max(p=>p.Z)-v.Min(p=>p.Z)<=8191;
@@ -56,7 +63,7 @@ internal static class NativeAuthoredMeshRenderer
             if(!Imported&&!Fits(f))throw new InvalidDataException("Authored native sector exceeds LP/HP vertex, color, offset, or coordinate capacity.");
             Faces.Add(f);
             foreach(var p in f.Points)if(!Vertices.Contains(p))Vertices.Add(p);
-            foreach(var c in f.Near.Zip(f.Far))if(!Colors.Contains(c))Colors.Add(c);
+            foreach(var c in f.Colours)if(!Colors.Contains(c))Colors.Add(c);
         }
     }
     internal static (byte[] Environment,byte[] Visibility) Compile(SceneDocument doc,IReadOnlyList<AuthoredMaterial> materials,IReadOnlyList<NativeAuthoredMesh.Triangle> direct)
@@ -240,11 +247,12 @@ internal static class NativeAuthoredMeshRenderer
         int flags=group>=0?(ImportedFlagsOverride?.Invoke(s)??ImportedFaceFlags):0;
         if(s.TwoSided)flags|=TwoSidedFaceFlag;
         if(s.FrontReversed)flags|=FrontReversedFaceFlag;
-        if(s.Vertices.Length==4&&(group>=0?ConvexQuad(s.Vertices):CompatibleQuad(s.Vertices)))faces.Add(new(s.Vertices,near,far,material,group,flags));
+        var distant=s.DistantColors??far;
+        if(s.Vertices.Length==4&&(group>=0?ConvexQuad(s.Vertices):CompatibleQuad(s.Vertices)))faces.Add(new(s.Vertices,near,far,material,group,flags,distant));
         else
         {
-            faces.Add(new(s.Vertices[..3],near[..3],far[..3],material,group,flags));
-            if(s.Vertices.Length==4)faces.Add(new([s.Vertices[0],s.Vertices[2],s.Vertices[3]],[near[0],near[2],near[3]],[far[0],far[2],far[3]],material,group,flags));
+            faces.Add(new(s.Vertices[..3],near[..3],far[..3],material,group,flags,distant[..3]));
+            if(s.Vertices.Length==4)faces.Add(new([s.Vertices[0],s.Vertices[2],s.Vertices[3]],[near[0],near[2],near[3]],[far[0],far[2],far[3]],material,group,flags,[distant[0],distant[2],distant[3]]));
         }
     }
     /// <summary>How many native sectors the textured faces of one imported sector need: the drawn faces <see cref="Compile"/>
@@ -422,7 +430,7 @@ internal static class NativeAuthoredMeshRenderer
     private static bool ImportedFits(List<Face> faces)
     {
         var v=faces.SelectMany(f=>f.Points).Distinct().ToArray();
-        int colors=faces.SelectMany(f=>f.Near.Zip(f.Far)).Distinct().Count();
+        int colors=faces.SelectMany(f=>f.Colours).Distinct().Count();
         int span=ImportedSpanOverride??2047;
         return faces.Count<=255&&v.Length<=MaxNearVertices&&colors<=255&&
             v.Max(p=>p.X)-v.Min(p=>p.X)<=span&&v.Max(p=>p.Y)-v.Min(p=>p.Y)<=span&&v.Max(p=>p.Z)-v.Min(p=>p.Z)<=Math.Min(span,1023)&&
@@ -455,7 +463,7 @@ internal static class NativeAuthoredMeshRenderer
     }
     private static bool NeedsFarMesh(Batch b)=>b.Vertices.Count>64||b.Colors.Count>64||b.Vertices.Count+b.Colors.Count+2*b.Faces.Count>255;
     /// <summary>The far mesh of a big sector: its vertices merged on a grid (the cell grows until the LP tables fit
-    /// their 6-bit indices and one-byte HP offset), one colour per merged vertex (the faces' far colours averaged),
+    /// their 6-bit indices and one-byte HP offset), one colour per merged vertex (the faces' distant colours averaged),
     /// faces that collapse dropped. Drawn only beyond the near-detail distance.</summary>
     /// <remarks>Never an empty far table: the far pass transforms its vertices in a loop that ends when its pointer
     /// equals the table's end (USA 0x80026350), and with no vertex it is already past it, so it runs on through the
@@ -479,7 +487,7 @@ internal static class NativeAuthoredMeshRenderer
             List<int[]> faces=[];List<uint> flags=[];HashSet<string> seen=[];
             foreach(var f in b.Faces)
             {
-                var ring=FarOrder(f).Select(i=>Cluster(f.Points[i],f.Far[i])).ToList();
+                var ring=FarOrder(f).Select(i=>Cluster(f.Points[i],f.Lp[i])).ToList();
                 List<int> corners=[];
                 foreach(int id in ring)if(corners.Count==0||corners[^1]!=id)corners.Add(id);
                 if(corners.Count>1&&corners[0]==corners[^1])corners.RemoveAt(corners.Count-1);
@@ -513,7 +521,7 @@ internal static class NativeAuthoredMeshRenderer
             return sum;
         }
         var face=b.Faces.MaxBy(Area)!;var order=FarOrder(face);
-        return new([..order.Select(i=>face.Points[i])],[..order.Select(i=>face.Far[i])],[[..Enumerable.Range(0,order.Length)]],null,
+        return new([..order.Select(i=>face.Points[i])],[..order.Select(i=>face.Lp[i])],[[..Enumerable.Range(0,order.Length)]],null,
             [(face.Flags&TwoSidedFaceFlag)!=0?FarTwoSidedFlag:0]);
     }
     /// <summary>A face's corners in far (LP) perimeter order: reversed for a face whose front is reversed, since the far
@@ -690,7 +698,10 @@ internal static class NativeAuthoredMeshRenderer
         s[16]=(byte)lv;s[17]=(byte)lc;s[18]=(byte)lf;s[20]=(byte)v;s[21]=(byte)c;s[22]=(byte)f;W(s,24,uint.MaxValue);
         uint Pack(Vector3f p)=>(uint)(((int)p.X-x)<<21|((int)p.Y-y)<<10|((int)p.Z-z));
         for(int i=0;i<v;i++){uint packed=Pack(batch.Vertices[i]);if(far==null)W(s,lpv+4*i,packed);W(s,hpv+4*i,packed);}
-        for(int i=0;i<c;i++){if(far==null)W(s,lpc+4*i,Rgb(batch.Colors[i].Far));W(s,hpfar+4*i,Rgb(batch.Colors[i].Far));W(s,hpnear+4*i,Rgb(batch.Colors[i].Near));}
+        // The face pass modulates a textured face with the first near table (hpfar) up close and fades to the second (hpnear)
+        // by the near distance (USA 0x80026DB8..0x80026FB4; subdivided faces read the first only); the far tier draws the
+        // face untextured in its distant colours, which share the near tables' colour indices.
+        for(int i=0;i<c;i++){if(far==null)W(s,lpc+4*i,Rgb(batch.Colors[i].Distant));W(s,hpfar+4*i,Rgb(batch.Colors[i].Far));W(s,hpnear+4*i,Rgb(batch.Colors[i].Near));}
         if(far!=null)
         {
             for(int i=0;i<lv;i++)W(s,lpv+4*i,Pack(far.Vertices[i]));
@@ -704,7 +715,7 @@ internal static class NativeAuthoredMeshRenderer
         }
         for(int i=0;i<f;i++)
         {
-            var face=batch.Faces[i];int[] vertex=face.Points.Select(p=>batch.Vertices.IndexOf(p)).ToArray(),color=face.Near.Zip(face.Far).Select(p=>batch.Colors.IndexOf(p)).ToArray();
+            var face=batch.Faces[i];int[] vertex=face.Points.Select(p=>batch.Vertices.IndexOf(p)).ToArray(),color=face.Colours.Select(p=>batch.Colors.IndexOf(p)).ToArray();
             // HP quads test (0,1,3), then (2,1,3); LP stores the
             // corresponding GPU strip (0,1,3,2). Reverse the authored
             // perimeter, as the established HP triangle path does, so both

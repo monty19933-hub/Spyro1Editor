@@ -109,6 +109,26 @@ internal static class SubdivisionCases
         check(Word(tex,4)==1,"planar textured quad emits one batched native sector");
         int ts=4+Word(tex,8),tf=ts+28+4*tex[ts+23]+4*tex[ts+20]+8*tex[ts+21];
         check(tex[ts+22]==1&&Word(tex,tf+8)==0&&Word(tex,tf+12)==0,"genuine textured quad descriptor enables native near clipping");
+        // Colour tables of a textured sector: far tier (LP), first near table (up close, subdivided or whole), second (at
+        // the near distance). A face whose far colours were never chosen keeps its near colours in both near tables; only
+        // the untextured far tier takes the texture's average times them. Chosen far colours fill the first and LP.
+        (uint[] Lp,uint[] First,uint[] Second) Tables(byte[] mesh)
+        {
+            int s=4+Word(mesh,8),lc=mesh[s+17],c=mesh[s+21],first=s+28+4*mesh[s+23]+4*mesh[s+20];
+            uint[] Read(int at,int n)=>[..Enumerable.Range(0,n).Select(i=>(uint)Word(mesh,at+4*i))];
+            return (Read(s+28+4*mesh[s+16],lc),Read(first,c),Read(first+4*c,c));
+        }
+        // Built levels store far colours equal to the near ones.
+        ColorRgba[] shade=[..Enumerable.Repeat(new ColorRgba(100,120,140),4)];
+        var plain=seed with{Surfaces=[Quad(200) with{Material=new(10,0),NearColors=shade,FarColors=shade}]};
+        var derived=NativeAuthoredFarColors.Derive(plain,_=>new ColorRgba(64,128,255));
+        check(derived.Surfaces[0].FarColors==shade&&derived.Surfaces[0].DistantColors!.All(c=>c==new ColorRgba(50,120,255)),"unchosen far colours: distant = texture average x near, far colours kept");
+        var (farTier,nearFirst,nearSecond)=Tables(Compile(derived));
+        check(farTier.SequenceEqual([0xFF7832u])&&nearFirst.SequenceEqual([0x8C7864u])&&nearSecond.SequenceEqual([0x8C7864u]),"derived distant colours fill only the far tier, both near tables keep the near colours");
+        var chosen=seed with{Surfaces=[plain.Surfaces[0] with{FarColors=[..Enumerable.Repeat(new ColorRgba(30,40,50),4)]}]};
+        check(NativeAuthoredFarColors.Derive(chosen,_=>new ColorRgba(64,128,255)).Surfaces[0].DistantColors==null,"chosen far colours get no derived distant colours");
+        (farTier,nearFirst,nearSecond)=Tables(Compile(chosen));
+        check(farTier.SequenceEqual([0x32281Eu])&&nearFirst.SequenceEqual([0x32281Eu])&&nearSecond.SequenceEqual([0x8C7864u]),"chosen far colours fill the far tier and the first near table");
         void Refuse(SceneDocument doc,string name)
         {
             string before=doc.Fingerprint();bool refused=false;try{_=Compile(doc);}catch(TargetInvocationException e)when(e.InnerException is InvalidDataException){refused=true;}
