@@ -1,30 +1,29 @@
-# Unreleased
+# Spyro Editor 1.4
 
-Fixed
-
-- Textured ground and walls in levels you build no longer change colour as Spyro moves: up close they were drawn with the picture's colour applied twice (darker and more saturated, or washed out for bright pictures such as clouds) and only looked right from about 1,000 units away. Since Spyro Editor 1.2 (Wumpa Village, Cloudspire Isles and other built levels; export them again to get the fix).
-
-# Spyro Editor 1.3
-
-## Changes since Spyro Editor 1.2
+## Changes since Spyro Editor 1.3
 
 New
 
-- File ▾ → New Level from Spyro: Year of the Dragon…: open the level whose place it takes, pick one of Year of the Dragon's levels (35 of its 37 import) and the editor rebuilds it from your own disc in about a minute: its ground, walls, textures, water and lava, its distant scenery and a start where its level begins. The level it replaces is kept in a recovery copy (File ▾ → Restore Before Clear…) and keeps playing its own song.
-- File ▾ → New Level from Crash Bandicoot: Warped…: the same for Crash 3's levels on foot (Toad Village, Gee Wiz and Double Header in halves, the Warp Room, the boss arenas): Crash's path, its pits (deadly, as for Crash), invisible walls along the path, and the scenery around it.
-- File ▾ → Fill In What the Level Needs…: in a level you built, puts in the level's own dragons and egg thieves (each thief with a run around open ground), a Return Home vortex at the far end, enemies and animals of the level's own kinds, and gems worth the level's treasure, all on floor Spyro can walk or glide to from the start. A new level from another game does this at the end. Everything it adds is an ordinary object you can drag, turn or remove.
-- "To finish 100%" under every level's treasure: how many of its own dragons and egg thieves it has and whether it has its Return Home vortex; amber with what to add when something is missing. Create BIN lists the same before you play, and warns about a dragon or egg thief placed twice.
-- Edit Route… for objects you add (an egg thief's run, a patrolling enemy's path).
-- Create BIN keeps every level you build within the game's drawing budget: it surveys the camera views from every walkable spot, draws busy distant scenery simpler and, if needed, brings textured scenery a little closer. A level that is still too heavy is refused with the place named; a guard in the game drops the farthest scenery in the rare heaviest frames instead of crashing (only in levels the editor built).
+- File ▾ → New World…: a world of your own in the game, with a homeworld and up to four levels. Its homeworld has a doorway to each of its levels (the Terrain tab's Doorways card), and the World Entrance card puts the way in into one of the game's own homeworlds, with a doorway back out of your world. Create BIN builds it all into the game: Spyro walks in from that homeworld, Return Home and Exit Level bring him back to your world's homeworld, the inventory has a page with your world's name, and New Game can start in it. Your world's progress is saved in a new save file, so saves from earlier versions are left alone.
+- Terrain tab › Doorways: doorways in a homeworld you rebuild with Start Blank, and in your world's homeworld. Six shapes (Stone Arch, Pointed Arch, Square Gate, Round Ring, Wide Arch, Hex Gate) from 75% to 150% size. The frame is ordinary tiles you can repaint, and it moves, turns and changes shape with its doorway. In the game the opening shows the sky of the level it leads to.
+- Import a sky from a 360° panorama picture (PNG, JPEG, WebP or BMP) or a sky model (OBJ or FBX): the editor turns it into a Spyro sky and shows what the game will draw, with Detail, Turn and Flip left and right. It works in the game's levels and in levels you build.
+- The 3D view (Game Camera) shows each level's real sky behind it.
+- File ▾ → Random Level…: a whole level from a seed and a few choices (a valley, islands, sky islands, caverns, a canyon trail or a castle; nine looks), with caves, supercharge runways, glides, water or lava, bridges and secret ledges, ready for your objects.
+- New Level and Start Blank begin as a meadow that looks like a Spyro level: grass, a stone path, a ramp up to a ledge and a pond with a sand rim, under Artisans' sky.
+- Terrain tab › Ground: Grass, Dirt, Stone, Sand, Snow, Wood, Water, Lava and Goo, each with its look and what Spyro finds on it. Tile Type… works in levels you build again, and in the game's own levels it now offers every ground kind, supercharge included; a kind a level lacks is brought in from another level.
+- Choose Texture… shows a level's textures as a grid of pictures.
+- Terrain tab › Tiles › Add beside ◀ ▲ ▼ ▶ adds an exact copy of the selected tile against one of its edges; at the map's edge it offers to move the level and make room.
+- Teal and rainbow gems tumble and shine like the game's own gems.
+- Game Settings › Memory › Emulator only (8 MB RAM): levels may use more memory when the game runs in an emulator set to 8 MB.
 
 Fixed
 
-- Crash spins all the way round in his spin.
-- The sword knights keep their heads: their march used Crash 3's headless-knight animation. Faces of models far from their centre (the knight's swing, the wizard, the frog, Crash) no longer vanish; a conversion that would hide a part of a model is refused.
-- Snowy trees stay snowy far away.
-- A level's own egg thief, put back in its rebuilt level, carries its egg, drops it when flamed or charged, and the egg counts. A card that already has that egg finds the thief without one.
-- Dragons from the Peace Keepers and Magic Crafters worlds can be copied (Create BIN refused them), and adding a dragon brings its pedestal and the dragon with it.
-- A level rebuilt low down in a slot that kills Spyro high up (Ice Cavern, Cliff Town, Dry Canyon…) no longer kills him where he stands.
-- A level's own creatures whose code checks what kind other objects are (Wizard Peak's Green Wizard's spell) can be put back in its rebuilt level.
-- Scenery parts with more than 170 corners near the camera crashed the game; Create BIN splits them.
-- Dry Canyon's egg thief was listed as a Flame/Charge Chest; "Egg Theif" spelled right.
+- Textured ground and walls in levels you build no longer change colour as Spyro moves: up close they were drawn with the picture's colour applied twice (darker and more saturated, or washed out for bright pictures such as clouds). Since Spyro Editor 1.2; export such levels again to get the fix.
+- A dragon from another level in a level made with New Level crashed the game when Spyro freed it: its rescue scene belongs to its own level. Add object… and Create BIN now say so; a level rebuilt with Start Blank keeps its own dragons.
+- Supercharge ground made with Tile Type… crashed the game in the game's own levels.
+- An imported sky in Stone Hill was drawn only in part.
+- Large levels you build no longer freeze the editor for a while each time a tile is selected.
+
+Removed
+
+- File ▾ → New Level from Crash Bandicoot: Warped… is gone from the menu. Crash's crates, enemies and songs stay.

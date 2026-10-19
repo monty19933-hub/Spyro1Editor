@@ -1,7 +1,26 @@
-# Spyro Editor 1.3 — supported scope and limitations
+# Spyro Editor 1.4 — supported scope and limitations
 
-- Version 1.3 builds levels from other games (File ▾ → New Level from Spyro:
-  Year of the Dragon… and New Level from Crash Bandicoot: Warped…) and fills a
+- Version 1.4 builds a world of your own into the game (File ▾ → New World…):
+  a homeworld and up to four levels, entered through a doorway in one of the
+  game's six homeworlds (its sixth doorway; Gnasty's World has room for two).
+  Played in the emulator from Artisans: in through the entrance, the doorways
+  to two levels and back out of them with Exit Level, gems, a chest and an
+  enemy, the way back, a save, and Load Game after switching off. The entrance
+  alone was also played in Beast Makers and Dream Weavers; in Peace Keepers,
+  Magic Crafters and Gnasty's World it is checked by the editor's tests only.
+  Not tried on a PlayStation. The world's levels can't have dragons (a dragon's
+  rescue belongs to its own level) or songs from other games yet. Peace
+  Keepers, Magic Crafters, Beast Makers and Dream Weavers have little spare
+  memory, so their entrance shows only part of your world's sky (whole with
+  Game Settings › Memory › Emulator only).
+- Doorways (Terrain tab) work in a homeworld you rebuild with Start Blank and
+  in your world's homeworld; the game keeps its doorway code in the homeworlds
+  only. An opening has at most ten corners and never bends inwards.
+- An imported sky is made of the game's coloured triangles, not a picture:
+  small details such as single stars or writing soften.
+- Version 1.3 built levels from other games (File ▾ → New Level from Spyro:
+  Year of the Dragon…; New Level from Crash Bandicoot: Warped… is no longer in
+  the menu in 1.4) and fills a
   built level with what it needs (Fill In What the Level Needs…). Both need
   your own disc of that game; nothing from it ships with the editor. Only a
   level's main area is rebuilt: its ground, walls, textures, water and lava,

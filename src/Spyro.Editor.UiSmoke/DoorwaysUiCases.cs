@@ -151,6 +151,16 @@ internal static class DoorwaysUiCases
             Run(window.AddDoorwayForTestingAsync(), "add world doorway");
             Check(SceneDoorways.Find(window.FreshSceneForTesting!, 71)?.Shape == "pointed-arch" && Status(window).Contains("CLOUD STEPS"),
                 "a doorway to the world's own level is added: " + Status(window));
+            // ... and back to the homeworld the world is entered from (new-world.json: Artisans).
+            var offered = SceneDoorways.Destinations(window.FreshSceneForTesting!, Get<LevelCatalog>(window, "_retailCatalog"), _ => "CLOUD STEPS",
+                (int?)Invoke(window, "DoorwayWayBack"));
+            Check(offered.Any(d => d.LevelId == 10 && d.ToString() == "Artisans (" + SceneDoorways.WayBackNote + ")"),
+                "the world's homeworld offers the way back to Artisans: " + string.Join(", ", offered));
+            SetField(window, "_selectedTerrain", geometry.Polygons[1]); SetField(window, "_selectedTerrainIndex", 1);
+            window.DoorwayChoiceForTesting = () => new(10, "stone-arch", 1f, null, false);
+            Run(window.AddDoorwayForTestingAsync(), "add the way back");
+            Check(SceneDoorways.Find(window.FreshSceneForTesting!, 10)?.Shape == "stone-arch" && Status(window).Contains("Artisans"),
+                "the way back to Artisans is added: " + Status(window));
 
             Check(File.ReadAllText(Path.Combine(root, "unrelated-project-notes.txt")) == "protected" &&
                 !Directory.EnumerateFiles(parent, "*.bin", SearchOption.AllDirectories).Any(), "no other file is touched and no game is written");

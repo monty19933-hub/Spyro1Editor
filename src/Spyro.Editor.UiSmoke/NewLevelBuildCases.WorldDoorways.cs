@@ -2,9 +2,10 @@ using Spyro.Editor.App.Views;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Scene;
 
-/// <summary>The new world's homeworld (after new-world) gets a doorway to each of its levels, on meadow tiles in front of
-/// the start: 71 a Stone Arch, 72 a Pointed Arch (WORLD_SHAPES to change them). Prints each doorway's position and heading
-/// for the emulator script, and saves the homeworld.</summary>
+/// <summary>The new world's homeworld (after new-world) gets a doorway to each of its levels and the way back to the
+/// homeworld the world is entered from (WORLD_WAYBACK=0: not), on meadow tiles in front of the start: Stone Arch, Pointed
+/// Arch, ... in turn (WORLD_SHAPES to change them); doorways it already has stay. Prints each doorway's position and
+/// heading for the emulator script, and saves the homeworld.</summary>
 internal static partial class NewLevelBuildCases
 {
     private static void WorldDoorwaysStep(MainWindow window, string outDir)
@@ -15,10 +16,13 @@ internal static partial class NewLevelBuildCases
         if (window.FreshSceneForTesting?.WorldLevelId != NewWorldDocument.Homeworld) throw new InvalidOperationException("The world's homeworld did not open.");
         string[] shapes = (Environment.GetEnvironmentVariable("WORLD_SHAPES") ?? "stone-arch,pointed-arch").Split(',');
         float t = StarterLevel.Tile, o = StarterLevel.Origin;
-        var levels = world.LevelIds.Where(id => id != NewWorldDocument.Homeworld).ToArray();
+        var catalog = Get<Spyro.Editor.Core.Levels.LevelCatalog>(window, "_retailCatalog");
+        int[] levels = [.. world.LevelIds.Where(id => id != NewWorldDocument.Homeworld),
+            .. Environment.GetEnvironmentVariable("WORLD_WAYBACK") == "0" ? [] : new[] { catalog.FindByKey(world.EntryHomeworldKey)!.LevelId }];
         for (int i = 0; i < levels.Length; i++)
         {
             int destination = levels[i];
+            if (window.FreshSceneForTesting!.Portals?.Any(p => p.DestinationLevelId == destination) == true) continue;
             // Tiles on the grass ahead of the start, a few tiles apart.
             float cx = o + (3.5f + 3 * i) * t, cy = o + 5.5f * t;
             var geometry = Get<GeometryCandidate>(window, "_currentGeometry");

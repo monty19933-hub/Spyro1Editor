@@ -346,12 +346,12 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
         if (Portals is { } portals)
         {
             // A rebuilt homeworld's doorways lead where its original ones did; the new world's homeworld (70) leads to its
-            // own levels (71-74).
+            // own levels (71-74) and back to a homeworld of the game (Create BIN checks it is the one the world is entered from).
             bool worldHome = WorldLevelId == NewWorldDocument.Homeworld && (TargetBinding == null || templateHome);
             if (!worldHome && (TargetBinding is not { LevelId: var home } || home % 10 != 0) ||
                 portals.Select(p => p.DestinationLevelId).Distinct().Count() != portals.Count ||
                 portals.Any(p => p.Heading is < 0 or > 255 || (worldHome
-                    ? !NewWorldDocument.LevelSlots.Contains(p.DestinationLevelId)
+                    ? !NewWorldDocument.LevelSlots.Contains(p.DestinationLevelId) && p.DestinationLevelId is not (10 or 20 or 30 or 40 or 50 or 60)
                     : HomeworldPortalControlCatalog.All.All(d => d.DestinationLevelId != p.DestinationLevelId || d.HomeworldKey != TargetBinding!.LevelKey))))
                 throw new InvalidDataException("Doorways belong to a rebuilt homeworld, one per level that homeworld's original portals lead to.");
             List<string> frameFaces = [];

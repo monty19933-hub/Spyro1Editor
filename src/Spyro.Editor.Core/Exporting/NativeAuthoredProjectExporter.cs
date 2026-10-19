@@ -22,7 +22,7 @@ public static class NativeAuthoredProjectExporter
         NativeFreeFlightCompositionPlan? flight=null,PortalRouteDocument? portalRoutes=null,
         IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses=null,
         Spyro.Editor.Core.Crash.CrashWarpedDisc? crash=null,Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd=null,
-        NewWorldDocument? world=null,IReadOnlyList<NativeNewWorldExport.WorldLevel>? worldLevels=null)
+        NewWorldDocument? world=null,IReadOnlyList<NativeNewWorldExport.WorldLevel>? worldLevels=null,WorldEntranceDocument? worldEntrance=null)
     {
         // The staged disc images are working copies; remove them whether the export succeeds or fails.
         string scratch=Path.Combine(ExportScratchSpace.AggregateRoot(workspace),Guid.NewGuid().ToString("N"));
@@ -49,7 +49,7 @@ public static class NativeAuthoredProjectExporter
                     stagedRetailImage,retailEggs,retailSignLevels,retailNames,flight,portalRoutes,retailReturnClasses,crash,yotd,withWorld:true);
                 requireCurrent?.Invoke();
                 await NativeNewWorldExport.ApplyAsync(donors,catalog,world,worldLevels,staged,Path.Combine(scratch,"world"),
-                    UniversalMobyExport.SpecialProvider(japanese,donors,crash,yotd),token,worldStart);
+                    UniversalMobyExport.SpecialProvider(japanese,donors,crash,yotd),token,worldStart,worldEntrance);
                 await File.WriteAllLinesAsync(stagedCue,["FILE \""+Path.GetFileName(outputImage)+"\" BINARY","  TRACK 01 MODE2/2352","    INDEX 01 00:00:00"],token);
                 requireCurrent?.Invoke();
                 token.ThrowIfCancellationRequested();

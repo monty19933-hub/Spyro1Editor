@@ -250,11 +250,10 @@ public sealed class NativeHubPortals
         return templates;
     }
 
-    /// <summary>Said when a scene of the new world (homeworld 70) is given to the doorway compiler: its doorways lead to
-    /// levels 71-74, which Create BIN does not build yet.</summary>
+    /// <summary>Said when a scene of the new world (homeworld 70) is given to the doorway compiler on its own: its doorways
+    /// are built only by Create BIN's New World step (<see cref="NativeNewWorldExport"/>), on its template homeworld.</summary>
     public const string NewWorldNotExportable =
-        "Doorways to your new world's levels can't go into a game yet: Create BIN does not build the New World yet. " +
-        "They are saved with its homeworld and will lead to its levels once the New World is part of Create BIN.";
+        "Your new world's doorways are built by Create BIN together with the whole world (its homeworld is made on Artisans' doorways).";
 
     /// <param name="destinationSky">The sky each destination level (by id) actually has in this export, or null to
     /// keep the retail copy. A doorway's record carries a whole copy of its destination's sky: the game draws it in the
@@ -266,7 +265,8 @@ public sealed class NativeHubPortals
         if (document.Portals is not { Count: > 0 } portals) return null;
         if (document.TargetBinding == null && document.WorldLevelId != null) throw new InvalidDataException(NewWorldNotExportable);
         // The new world's homeworld (70) is compiled on a template homeworld; each doorway to 71-74 takes the template's
-        // doorway to 11-14 and is pointed at its own level (return token, entry triangles, the name's level number).
+        // doorway to 11-14, the way back the one to 15, and is pointed at its own level (return token, entry triangles,
+        // the name's level number).
         bool world = document.WorldLevelId == NewWorldDocument.Homeworld;
         if (portals.Count > MaxDoorways)
             throw new InvalidDataException($"A homeworld can have at most {MaxDoorways} doorways (the game keeps {MaxDoorways}); this one has {portals.Count}.");

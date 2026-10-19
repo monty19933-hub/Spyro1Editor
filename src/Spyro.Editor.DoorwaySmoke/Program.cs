@@ -258,10 +258,13 @@ Check(SceneDoorways.AdoptOriginalFrame(home with { Portals = [original] }, 14, t
 SceneDocument world = SceneDocument.New("SKY ISLES") with { WorldLevelId = 70 };
 var worldDoor = SceneDoorways.Add(world, new AuthoredPortal(71, new(2000, 2000, 500), 0) { Shape = "pointed-arch", FaceMaterial = stone, SideMaterial = stone });
 Check(SceneDoorways.Unavailable(world, catalog) == null && SceneDoorways.Destinations(worldDoor, catalog, id => id == 71 ? "LEVEL ONE" : id == 72 ? "LEVEL TWO" : null)
-    .Select(d => d.ToString()).SequenceEqual(["LEVEL ONE (playable after New World export)", "LEVEL TWO (playable after New World export)"]), "the new world's homeworld leads to its own levels");
+    .Select(d => d.ToString()).SequenceEqual(["LEVEL ONE", "LEVEL TWO"]), "the new world's homeworld leads to its own levels");
 string? worldRefusal = null;
 try { NativeHubPortals.Build("/nonexistent/disc.bin", catalog, worldDoor); } catch (InvalidDataException e) { worldRefusal = e.Message; }
-Check(worldRefusal == NativeHubPortals.NewWorldNotExportable && worldRefusal.Contains("can't go into a game yet"), "Create BIN says plainly that New World doorways can't export yet");
+Check(worldRefusal == NativeHubPortals.NewWorldNotExportable, "a New World doorway is only built by Create BIN's New World step");
+Check(SceneDoorways.Destinations(worldDoor, catalog, id => id == 71 ? "LEVEL ONE" : null, wayBack: 10).Select(d => d.ToString())
+    .SequenceEqual(["LEVEL ONE", "Artisans (" + SceneDoorways.WayBackNote + ")"]), "the world's homeworld also leads back to the homeworld it is entered from");
+Check(!Invalid(world with { Portals = [new AuthoredPortal(10, new(10, 10, 10), 0)] }), "the way back to a homeworld of the game is a valid doorway");
 bool Invalid(SceneDocument s) { try { s.Validate(); return false; } catch (InvalidDataException) { return true; } }
 Check(Invalid(world with { Portals = [new AuthoredPortal(11, new(10, 10, 10), 0)] }), "the new world's homeworld can't lead to a retail level");
 Check(Invalid(home with { Portals = [new AuthoredPortal(21, new(10, 10, 10), 0)] }), "Artisans can't lead to Peace Keepers' levels");

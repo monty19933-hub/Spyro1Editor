@@ -289,6 +289,37 @@ byte[] CardOverlay()
     Check(Throws(() => NativeLevelWindow.PatchSaveOverlay(new byte[0x3000])), "a card menu of the wrong size is refused");
 }
 
+// ---- Create BIN's New World step: which doorway a world doorway is built on, and what a level's objects may change.
+Check(NativeNewWorldExport.TemplateDestination(71) == 11 && NativeNewWorldExport.TemplateDestination(74) == 14 &&
+      NativeNewWorldExport.TemplateDestination(10) == 15 && NativeNewWorldExport.TemplateDestination(60) == 15,
+    "world doorways are built on Artisans' doorways to 11-14, the way back on its doorway to Sunny Flight");
+Check(Throws(() => NativeNewWorldExport.TemplateDestination(70)) && Throws(() => NativeNewWorldExport.TemplateDestination(15)) &&
+      Throws(() => NativeNewWorldExport.TemplateDestination(75)), "a world doorway leads only to 71-74 or back to a homeworld");
+{
+    byte[] plain = Synthetic(), totals = plain.ToArray();
+    totals[Off(0x8006F438 + 2 * 35)] = 7; totals[Off(0x8006F414 + 35)] = 1;
+    Check(!NativeNewWorldExport.RequireOnlyWindowChanges("LEVEL ONE", plain, totals, 65, 35), "a level's gem and dragon totals may change (the window carries them)");
+    byte[] code = plain.ToArray(); code[Off(0x80020000)] ^= 1;
+    string? why = null;
+    try { NativeNewWorldExport.RequireOnlyWindowChanges("LEVEL ONE", plain, code, 65, 35); } catch (InvalidDataException e) { why = e.Message; }
+    Check(why != null && why.Contains("LEVEL ONE") && why.Contains("0x80020000"), "any other change to the game's code is refused, naming the level and the address");
+    byte[] mapped = plain.ToArray();
+    foreach (var w in NativeMobySaveMap.Windows()) w.Code.CopyTo(mapped, Off(w.Address));
+    Check(NativeNewWorldExport.RequireOnlyWindowChanges("SKY ISLES", plain, mapped, 10, 0), "the save map's game-wide hooks are carried, not refused");
+    byte[] partial = plain.ToArray(); var first = NativeMobySaveMap.Windows()[0]; first.Code.CopyTo(partial, Off(first.Address));
+    Check(Throws(() => NativeNewWorldExport.RequireOnlyWindowChanges("SKY ISLES", plain, partial, 10, 0)), "only the whole save map counts as the save map");
+}
+{
+    SceneDocument home = SceneDocument.New("SKY ISLES") with { WorldLevelId = 70 };
+    bool Valid(SceneDocument s) { try { s.Validate(); return true; } catch (InvalidDataException) { return false; } }
+    Check(Valid(home with { Portals = [new AuthoredPortal(71, new(100, 100, 100), 0), new AuthoredPortal(10, new(300, 100, 100), 0)] }) &&
+          !Valid(home with { Portals = [new AuthoredPortal(15, new(100, 100, 100), 0)] }), "the world's homeworld leads to its levels and back to a homeworld, nowhere else");
+    var artisansBinding = new SceneTargetBinding("artisans", 10, 10, 9, UniversalSourceLibrary.OriginalUsaSha256, 0);
+    Check(Valid(home with { TargetBinding = artisansBinding }) && !Valid(home with { WorldLevelId = 71, TargetBinding = artisansBinding }) &&
+          !Valid(home with { TargetBinding = artisansBinding with { LevelKey = "peacekeepers", LevelId = 20 } }),
+        "only the world's homeworld is compiled on a template slot, and only on Artisans'");
+}
+
 if (args.Length >= 2 && args[0] == "--source")
 {
     NativeLevelWindow.TestSkipCaveHashes = false;

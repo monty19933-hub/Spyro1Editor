@@ -243,7 +243,7 @@ CORE_CASES = (
     # The level window (world 7, ids 70-74): the shared executable-cave registry has no overlaps; the window's patch on a
     # synthetic executable (hooks, records, inventory, save layout, names), re-install and refusals; its routines run on
     # a test CPU (record swap, save, Load Game, New Game, names, doorway arrival, card offsets, page 7); the card menu.
-    ("LevelWindowSmoke", "LEVEL_WINDOW_FREE_OK checks=83"),
+    ("LevelWindowSmoke", "LEVEL_WINDOW_FREE_OK checks=91"),
     # Ground kinds an original level never had (Tile Type… and the Ground card in Artisans, Stone Hill…): each of the
     # eight kinds every level can use is appended from its canonical record to a table that lacks it and reparses on the
     # assigned triangles; a saved donor resolves only when the donor still holds that exact record; portals and
@@ -260,7 +260,7 @@ CORE_CASES = (
     # their frames are whole-unit faces around them, shaped records hold the shape's opening before the original's sky
     # header and sky, an original doorway's record is written exactly as before, scene editing keeps frames with their
     # doorways, old scenes keep their fingerprint, the new world's doorways are refused by Create BIN in plain words.
-    ("DoorwaySmoke", "DOORWAY_FREE_OK checks=380"),
+    ("DoorwaySmoke", "DOORWAY_FREE_OK checks=382"),
     # The New World's doorway in one of the game's own homeworlds (NativeWorldEntrance): its sky (whole, the part near
     # the horizon within a size, one colour), the ground-kind, view-group and collision writers (entry triangles after
     # the flagged ones, the rest renumbered, every cell kept), the frame as one added sector, the way back's facts, the
@@ -309,7 +309,7 @@ ADDITIONAL_CORE_CASES = (
      ["--play-as-crash-ui-only"]),
     ("UiSmoke", "MEMORY_MODE_UI_OK checks=12",
      ["--memory-mode-ui-only"]),
-    ("UiSmoke", "DOORWAYS_UI_OK checks=38",
+    ("UiSmoke", "DOORWAYS_UI_OK checks=39",
      ["--doorways-ui-only"]),
     ("UiSmoke", "WORLD_ENTRANCE_UI_OK checks=33",
      ["--world-entrance-ui-only"]),
@@ -365,11 +365,11 @@ SOURCE_QA_CASES = (
     ("ExtendedRamSmoke", "EXTENDED_RAM_SOURCE_OK checks=88", ["--source"]),
     # The level window installed into the retail executable and card menu (read only): USA preimages and caves, the
     # routines on the real executable, re-install, placement inside WAD.WAD and after the image.
-    ("LevelWindowSmoke", "LEVEL_WINDOW_SOURCE_OK checks=120", ["--source"]),
+    ("LevelWindowSmoke", "LEVEL_WINDOW_SOURCE_OK checks=130", ["--source"]),
     # Every retail sky drawn as a panorama and rebuilt from it within the game's limits, looking the same.
     ("SkyImportSmoke", "SKY_IMPORT_SOURCE_OK checks=280", ["--source"]),
     # All 29 original homeworld doorways: written byte for byte as before; each shape keeps the original's sky.
-    ("DoorwaySmoke", "DOORWAY_SOURCE_OK checks=816", ["--source"]),
+    ("DoorwaySmoke", "DOORWAY_SOURCE_OK checks=818", ["--source"]),
     # The New World's doorway in each of the six homeworlds (read only): record, ground kind, entry triangles, objects,
     # memory in 2 MB (which sky fits) and 8 MB, refusals (second entrance, six doorways, map edge, textures), every shape
     # and size, after another object edit, deterministic bytes.

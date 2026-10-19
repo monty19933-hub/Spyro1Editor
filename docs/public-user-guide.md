@@ -1,4 +1,4 @@
-# Spyro Editor 1.3
+# Spyro Editor 1.4
 
 Spyro Editor changes the levels of the original PlayStation game *Spyro the Dragon*
 (USA) and builds a new, playable copy of the game from your changes. It never
@@ -352,9 +352,9 @@ the game keeps its doorway code in the homeworlds only.
   corners that never bends inwards; the shapes are made that way.
 - Doorways made before this tool (such as Lost Fleet's) keep working as they
   were; the first change finds their frame and moves it with them.
-- The new world's homeworld (File ▾ → New World…) can have a doorway to each of
-  its levels, marked "playable after New World export": Create BIN cannot build
-  the new world yet and says so.
+- Your new world's homeworld (File ▾ → New World…) has the same card: a doorway
+  to each of the world's levels, and one back to the game's homeworld the world
+  is entered from (listed as "the way back out of your world").
 
 ### The way into your new world
 
@@ -383,7 +383,9 @@ homeworld: its Terrain tab has a **World Entrance** card.
   sky near the horizon (or just its colour) on a PlayStation, and the whole sky
   with Game Settings › Memory › Emulator only (8 MB RAM).
 - Leaving your world's homeworld through its doorway home brings Spyro back out
-  of the entrance.
+  of the entrance. Add that doorway with the Doorways card in your world's
+  homeworld (**Add Doorway…**, then the homeworld's name). Create BIN asks for
+  both together: an entrance without a way back would trap Spyro in your world.
 
 A rebuilt level holds up to 4,096 terrain tiles. Untextured tiles are split into
 smaller triangles automatically. Walls stop Spyro from the side you can see them.
@@ -391,6 +393,25 @@ The game gives close-up detail to the textured tiles near the camera, and only s
 many at once: Create BIN checks camera positions all over the level and names the
 place if textured tiles are too crowded there. Use larger tiles there (a few hundred
 units across, like the game's own) or untextured faces.
+
+### Your new world in the game
+
+**Create BIN** builds your world into the game with everything else: its
+homeworld, its levels, their doorways, the entrance and the way back.
+
+- Spyro walks in through the entrance. In your world's homeworld each doorway
+  leads to its level; **Return Home** and **Exit Level** in a level bring him back
+  out of that level's doorway, and the doorway home takes him back to the
+  entrance. Create BIN can also start **New Game** in your world.
+- The inventory has a page with your world's name, after the game's six worlds,
+  listing its levels with their gems and dragons.
+- A game with a new world saves in its own save file on the memory card (shown
+  as a separate file next to the original game's). Saves from the original game
+  or earlier exports are left alone; start a new save in the new game.
+- Levels of your world are built like a New Level: dragons from the game's
+  levels can't be added (their rescue scene belongs to their own level), and they
+  play Spyro's own music, not songs from other games. Objects whose code the game
+  changes for one level only are refused by Create BIN with the level's name.
 
 ## Random levels
 

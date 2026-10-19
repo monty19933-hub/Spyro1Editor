@@ -9,12 +9,16 @@ or copied game asset. Users must provide their own legally obtained disc image.
 
 ## Releases
 
-The current release target is **Spyro Editor 1.3**. It adds **New Level from
-Spyro: Year of the Dragon…** and **New Level from Crash Bandicoot: Warped…**
-(another game's level rebuilt from your own disc in a level's place), **Fill In
-What the Level Needs…** (the level's dragons, egg thieves, Return Home, enemies
-and gems placed on reachable floor), a "To finish 100%" check on every level, and
-a drawing budget that keeps built levels from overloading the game. 1.2 built on
+The current release target is **Spyro Editor 1.4**. It adds **New World…** (a
+homeworld and up to four levels of your own, entered through a doorway in one of
+the game's homeworlds, with its own inventory page and save file), **Doorways**
+in six frame shapes for rebuilt homeworlds, skies imported from 360° pictures and
+OBJ/FBX models, the real sky in the 3D view, **Random Level…**, the meadow start
+and Ground card for built levels, and every ground kind in the game's own levels.
+1.3 added **New Level from Spyro: Year of the Dragon…** (another game's level
+rebuilt from your own disc in a level's place), **Fill In What the Level
+Needs…**, a "To finish 100%" check on every level, and a drawing budget that
+keeps built levels from overloading the game. 1.2 built on
 1.1 (a first-run welcome, carded Objects and Terrain tabs, everyday wording, Fly
 Anywhere) with **Tile Type…** (choose what Spyro finds on a tile: solid ground,
 water, lava, supercharge…), Fly Anywhere for **chosen levels**, terrain edits
@@ -32,23 +36,23 @@ rainbow gems are placeable. See the [user guide](docs/public-user-guide.md),
 
 The self-contained release packages are named:
 
-- `SpyroEditor-V1.3-osx-arm64.zip`
-- `SpyroEditor-V1.3-win-x64.zip`
+- `SpyroEditor-V1.4-osx-arm64.zip`
+- `SpyroEditor-V1.4-win-x64.zip`
 
-Stable builds use the `v1.3` identity, schema-3 package manifests and the stable
+Stable builds use the `v1.4` identity, schema-3 package manifests and the stable
 update channel. They do not select beta releases as updates. Earlier numbered
 and dotted beta packages retain their existing compatibility rules and must not
 be replaced or retagged. Installed betas (V2-V5) are offered **Spyro Editor
-Beta V6**: the same 1.3 app repackaged by `tools/Build-SpyroEditorBetaBridge.sh`
-so their updater can find it; once opened it follows the stable channel (see the
-[release checklist](docs/beta-release-checklist.md)). Source builds default to V1.3 stable; the release script accepts an explicit
+Beta V6**: the 1.3 app repackaged by `tools/Build-SpyroEditorBetaBridge.sh`
+so their updater can find it; once opened it follows the stable channel and is
+offered 1.4 (see the [release checklist](docs/beta-release-checklist.md)). Source builds default to V1.4 stable; the release script accepts an explicit
 identity for reproducible packaging:
 
 ```sh
 SPYRO_EDITOR_RELEASE_CHANNEL=stable \
-SPYRO_EDITOR_STABLE_VERSION=1.3 \
-SPYRO_EDITOR_STABLE_INTERNAL_VERSION=1.3.0 \
-tools/Build-SpyroEditorRelease.sh SpyroEditor-V1.3
+SPYRO_EDITOR_STABLE_VERSION=1.4 \
+SPYRO_EDITOR_STABLE_INTERNAL_VERSION=1.4.0 \
+tools/Build-SpyroEditorRelease.sh SpyroEditor-V1.4
 ```
 
 The updater checks release identity, platform, packaged application and manifest,

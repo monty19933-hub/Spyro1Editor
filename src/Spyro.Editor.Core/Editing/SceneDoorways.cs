@@ -21,7 +21,8 @@ public static class SceneDoorways
     /// this deep to each side (<see cref="NativeHubPortals.Frame"/>'s defaults).</summary>
     public const float OriginalFrameWidth = 14, OriginalFrameDepth = 14;
     /// <summary>How a doorway to one of the new world's levels is listed until Create BIN builds the new world.</summary>
-    public const string NewWorldNote = "playable after New World export";
+    /// <summary>The note on the new world homeworld's doorway back to the game's homeworld it is entered from.</summary>
+    public const string WayBackNote = "the way back out of your world";
 
     /// <summary>Why the scene cannot have doorways (plain words), or null when it can: a doorway needs the doorway code of a
     /// homeworld's own program, so only a homeworld you rebuilt (or the new world's homeworld) has them.</summary>
@@ -45,12 +46,20 @@ public static class SceneDoorways
 
     /// <summary>The levels a doorway of this scene can lead to: a rebuilt homeworld's original destinations (their doorway
     /// code, path, lettering and return point come from the original homeworld), or the new world's levels.</summary>
-    public static IReadOnlyList<DoorwayDestination> Destinations(SceneDocument scene, LevelCatalog catalog, Func<int, string?>? worldLevelName = null)
+    /// <param name="wayBack">For the new world's homeworld: the game's homeworld the world is entered from (its doorway
+    /// there leads back), or null.</param>
+    public static IReadOnlyList<DoorwayDestination> Destinations(SceneDocument scene, LevelCatalog catalog, Func<int, string?>? worldLevelName = null,
+        int? wayBack = null)
     {
         var used = scene.Portals?.Select(p => p.DestinationLevelId).ToHashSet() ?? [];
         if (scene.WorldLevelId == NewWorldDocument.Homeworld && scene.TargetBinding == null)
-            return NewWorldDocument.LevelSlots.Where(id => worldLevelName?.Invoke(id) != null)
-                .Select(id => new DoorwayDestination(id, worldLevelName!(id)!, used.Contains(id), NewWorldNote)).ToArray();
+        {
+            var levels = NewWorldDocument.LevelSlots.Where(id => worldLevelName?.Invoke(id) != null)
+                .Select(id => new DoorwayDestination(id, worldLevelName!(id)!, used.Contains(id), null));
+            if (wayBack is int home && catalog.Levels.FirstOrDefault(l => l.LevelId == home) is { } back)
+                levels = levels.Append(new DoorwayDestination(home, back.DisplayName, used.Contains(home), WayBackNote));
+            return levels.ToArray();
+        }
         if (scene.TargetBinding is not { } binding) return [];
         return HomeworldPortalControlCatalog.ForLevel(binding.LevelKey)
             .Select(p => new DoorwayDestination(p.DestinationLevelId, catalog.Levels.FirstOrDefault(l => l.LevelId == p.DestinationLevelId)?.DisplayName ?? p.DestinationName,

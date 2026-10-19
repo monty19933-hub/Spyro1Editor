@@ -63,8 +63,8 @@ class OwnedCommandTests(unittest.TestCase):
 
     def test_level_window_smoke_registration(self):
         name = "LevelWindowSmoke"
-        self.assertIn((name, "LEVEL_WINDOW_FREE_OK checks=81"), RUNNER.CORE_CASES)
-        self.assertIn((name, "LEVEL_WINDOW_SOURCE_OK checks=120", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertIn((name, "LEVEL_WINDOW_FREE_OK checks=91"), RUNNER.CORE_CASES)
+        self.assertIn((name, "LEVEL_WINDOW_SOURCE_OK checks=130", ["--source"]), RUNNER.SOURCE_QA_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
 
@@ -78,12 +78,12 @@ class OwnedCommandTests(unittest.TestCase):
 
     def test_doorway_smoke_registration(self):
         name = "DoorwaySmoke"
-        self.assertIn((name, "DOORWAY_FREE_OK checks=380"), RUNNER.CORE_CASES)
-        self.assertIn((name, "DOORWAY_SOURCE_OK checks=816", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertIn((name, "DOORWAY_FREE_OK checks=382"), RUNNER.CORE_CASES)
+        self.assertIn((name, "DOORWAY_SOURCE_OK checks=818", ["--source"]), RUNNER.SOURCE_QA_CASES)
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
-        self.assertIn(("UiSmoke", "DOORWAYS_UI_OK checks=38", ["--doorways-ui-only"]), RUNNER.ADDITIONAL_CORE_CASES)
+        self.assertIn(("UiSmoke", "DOORWAYS_UI_OK checks=39", ["--doorways-ui-only"]), RUNNER.ADDITIONAL_CORE_CASES)
         project = RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
         self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"', project.read_text())
 
@@ -972,7 +972,7 @@ class RunnerOptionsTests(unittest.TestCase):
                     (name, "FREE_FLIGHT_UI_OK", ["--free-flight-ui-only"]),
                     (name, "PLAY_AS_CRASH_UI_OK checks=", ["--play-as-crash-ui-only"]),
                     (name, "MEMORY_MODE_UI_OK checks=12", ["--memory-mode-ui-only"]),
-                    (name, "DOORWAYS_UI_OK checks=38", ["--doorways-ui-only"]),
+                    (name, "DOORWAYS_UI_OK checks=39", ["--doorways-ui-only"]),
                     (name, "WORLD_ENTRANCE_UI_OK checks=33", ["--world-entrance-ui-only"]),
                     (name, "LEVEL_PICKER_AUTOMATION_OK", ["--level-picker-automation-only"]),
                     (name, "AUTHORED_MESH_CHECKS_OK", ["--authored-mesh-only"]),

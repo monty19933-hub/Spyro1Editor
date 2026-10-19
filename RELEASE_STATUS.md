@@ -1,15 +1,18 @@
-# In progress after 1.3 — 11 October 2026 (branch feature/new-world-20261011, unreleased)
+# Spyro Editor 1.4 — 19 October 2026
 
-- New Level and Start Blank begin as a meadow that looks like a Spyro level (`StarterLevel`: grass, stone path,
-  ramp to a ledge, pond with a sand rim, Artisans' sky) instead of two untextured triangles. The YOTD import still
-  starts from an empty level.
-- Terrain tab › Ground (`MainWindow.GroundPalette.cs`, `GroundTypes`): Grass, Dirt, Stone, Sand, Snow, Wood, Water,
-  Lava, Goo. Each sets texture, shade and ground kind; selected tiles take it, then clicks paint. Tile Type… is
-  enabled in built levels again (it was always disabled there).
-- File ▾ › New Level from Crash Bandicoot: Warped… removed (core importer and its smoke kept; Crash objects and songs
-  stay).
-- To do before release: changelog, README, limitations; gems shine/spin, 8 MB toggle and New World research run as
-  separate branches.
+Stable 1.4 (internal 1.4.0, schema 3, tag `v1.4`). Everything since 1.3 (`CHANGELOG.md`): New World built into the
+game by Create BIN (`NativeNewWorldExport` over the level window `NativeLevelWindow`: homeworld 70 compiled on
+Artisans' slot and run on the fresh template's initializer, levels 71-74 as File › New Level's level, WAD entries
+102+, doorways retargeted, the World Entrance `NativeWorldEntrance` in the entry homeworld and the way back),
+Doorways in six shapes (`DoorwayShapes`, `SceneDoorways`), sky import from panoramas and OBJ/FBX (`Sky/`), the real
+sky in the 3D view, Random Level, the meadow start and Ground card, every ground kind in the game's own levels, Add
+beside, the texture grid, shining teal and rainbow gems, the 8 MB emulator setting, the far-colour fix, and the
+refusal of other levels' dragons in New Level levels (they crashed at the rescue).
+
+Updates: 1.0-1.3 find 1.4 through their stable updater (the update code is the same in all of them). Beta V2-V5 are
+still offered Beta V6 (the 1.3 app), which then follows the stable channel to 1.4.
+
+Checks: CHECKS_PLACEHOLDER
 
 # Spyro Editor 1.3 and the Beta V6 bridge — 11 October 2026
 

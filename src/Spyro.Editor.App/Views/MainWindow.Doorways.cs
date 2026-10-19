@@ -220,7 +220,7 @@ public sealed partial class MainWindow
             finally { _syncingDoorwayList = false; }
         }
         bool world = scene.WorldLevelId == NewWorldDocument.Homeworld;
-        var free = SceneDoorways.Destinations(scene, _retailCatalog, DestinationNameOrNull).Where(d => !d.Taken).ToArray();
+        var free = SceneDoorways.Destinations(scene, _retailCatalog, DestinationNameOrNull, DoorwayWayBack()).Where(d => !d.Taken).ToArray();
         _doorwayAddButton.IsEnabled = !_doorwayBusy && free.Length > 0 && portals.Count < NativeHubPortals.MaxDoorways;
         _doorwaysNote.Text = portals.Count == 0
             ? (world
@@ -243,6 +243,14 @@ public sealed partial class MainWindow
 
     /// <summary>The name of one of the new world's levels (null: not made, or not a world level). The names are read
     /// from the project only when its world files change (the card refreshes on every selection).</summary>
+    /// <summary>The game's homeworld the project's new world is entered from: its homeworld's doorway back leads there.</summary>
+    private int? DoorwayWayBack()
+    {
+        if (string.IsNullOrEmpty(_workspace.RootPath)) return null;
+        try { return NewWorldDocument.Read(_workspace.RootPath)?.EntryHomeworldKey is { } key ? _retailCatalog.FindByKey(key)?.LevelId : null; }
+        catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException) { return null; }
+    }
+
     private string? DestinationNameOrNull(int levelId)
     {
         if (!NewWorldDocument.LevelSlots.Contains(levelId) || string.IsNullOrEmpty(_workspace.RootPath)) return null;
@@ -380,7 +388,7 @@ public sealed partial class MainWindow
         if (_freshSceneDocument == null || _currentGeometry == null || _doorwayBusy) return;
         if (SceneDoorways.Unavailable(_freshSceneDocument, _retailCatalog) is { } why) { _statusText.Text = why; return; }
         var scene = CaptureFreshScene();
-        var free = SceneDoorways.Destinations(scene, _retailCatalog, DestinationNameOrNull).Where(d => !d.Taken).ToArray();
+        var free = SceneDoorways.Destinations(scene, _retailCatalog, DestinationNameOrNull, DoorwayWayBack()).Where(d => !d.Taken).ToArray();
         if (free.Length == 0)
         {
             _statusText.Text = scene.WorldLevelId == NewWorldDocument.Homeworld
@@ -533,7 +541,7 @@ public sealed partial class MainWindow
     {
         if (_freshSceneDocument == null || _selectedDoorway is not int destination) { _statusText.Text = "Select a doorway first."; return; }
         var scene = _freshSceneDocument;
-        var free = SceneDoorways.Destinations(scene, _retailCatalog, DestinationNameOrNull).Where(d => !d.Taken).ToArray();
+        var free = SceneDoorways.Destinations(scene, _retailCatalog, DestinationNameOrNull, DoorwayWayBack()).Where(d => !d.Taken).ToArray();
         if (free.Length == 0)
         {
             _statusText.Text = "Every level this homeworld's doorways can lead to already has a doorway. Remove the other one first.";

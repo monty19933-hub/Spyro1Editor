@@ -249,6 +249,9 @@ public sealed partial class MainWindow
         var saved=SceneDocumentStore.ReadAll(workspacePath,_retailCatalog);
         // The project's new world (homeworld 70 and levels 71-74) goes in through the level window.
         var world=NewWorldDocument.Read(workspacePath);
+        // The way into the world (World Entrance); its file must not change while the BIN is made.
+        var worldEntrance=world==null?null:WorldEntranceDocument.Read(workspacePath);
+        string? entranceText=File.Exists(WorldEntranceDocument.PathFor(workspacePath))?File.ReadAllText(WorldEntranceDocument.PathFor(workspacePath)):null;
         var worldScenes=world==null?[]:SceneDocumentStore.ReadWorld(workspacePath,_retailCatalog);
         var fingerprints=saved.Concat(worldScenes).ToDictionary(s=>s.ResolveTarget(_retailCatalog).Key,s=>s.Fingerprint());
         int? startLevelId=await ShowAuthoredProjectExportScopeAsync([..saved,..worldScenes],authoredActive?_currentLevel!.LevelId:10);
@@ -263,6 +266,8 @@ public sealed partial class MainWindow
                 throw new InvalidDataException("A saved authored level changed during export. Save and create the BIN again.");
             flightIntent?.RequireCurrent(workspacePath);
             portalSnapshot.RequireCurrent(workspacePath);
+            if((File.Exists(WorldEntranceDocument.PathFor(workspacePath))?File.ReadAllText(WorldEntranceDocument.PathFor(workspacePath)):null)!=entranceText)
+                throw new InvalidDataException("The way into your new world changed during export. Create the BIN again.");
             if(TryGetFreeFlightSettingsExportBlockReason(out string reason))throw new InvalidDataException(reason);
             if(TryGetId65BlankLabNormalCreateBinBlockReason(out reason))throw new InvalidDataException(reason);
         }
@@ -317,14 +322,16 @@ public sealed partial class MainWindow
                 requireCurrent:()=>Dispatcher.UIThread.InvokeAsync(RequireOwner).GetAwaiter().GetResult(),
                 stagedRetailImage:retail?.WroteImage==true?retail.OutputImagePath:null,retailEggs:retail?.ActiveDragonflyEggs,
                 retailSignLevels:retail?.SignLevelKeys,retailNames:retail?.DeferredLevelNames,flight:flight,portalRoutes:portalSnapshot.Document,
-                retailReturnClasses:retail?.ReturnClasses,crash:crash,yotd:yotd,world:world,worldLevels:worldLevels);
+                retailReturnClasses:retail?.ReturnClasses,crash:crash,yotd:yotd,world:world,worldLevels:worldLevels,worldEntrance:worldEntrance);
         });
         RequireOwner();
         string startName=saved.Concat(worldScenes).FirstOrDefault(s=>s.ResolveTarget(_retailCatalog).LevelId==startLevelId)?.Name??"Artisans";
         string flightNote=!flightIntent.RequiresRebuild?"":!flightIntent.Enabled?" Fly Anywhere is off in this game."
             :flightIntent.WholeGame?" Fly Anywhere is on in this game.":" Fly Anywhere is on in "+DescribeFlightLevels(flightIntent.EnabledLevelIds)+".";
         RememberExportedGame(Path.ChangeExtension(output,".cue"));
-        string worldNote=world==null||worldScenes.Count==0?"":$" Your new world {world.Name} is in it ({Count(worldScenes.Count,"level","levels")}; save in it with a new save file).";
+        string entryName=world==null?"":_retailCatalog.FindByKey(world.EntryHomeworldKey)?.DisplayName??world.EntryHomeworldKey;
+        string worldNote=world==null||worldScenes.Count==0?"":$" Your new world {world.Name} is in it ({Count(worldScenes.Count,"level","levels")}; "+
+            (worldEntrance!=null?$"Spyro walks in from {entryName}":$"it has no way in from {entryName} yet (World Entrance)")+"; save in it with a new save file).";
         _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. All saved level replacements and other saved edits are included."+worldNote+flightNote+PreservedResearchExportNote()+MemoryModeExportNote(memory);
         }
         // The merged retail image is a working copy for this export only.
