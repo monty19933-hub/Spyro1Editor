@@ -63,13 +63,7 @@ public sealed partial class MainWindow
         content.Children.Add(_worldEntranceUseHere);
 
         _worldEntranceTools = new StackPanel { Name = "WorldEntranceTools", Spacing = 8 };
-        Grid move = new()
-        {
-            ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) },
-            ColumnSpacing = 4
-        };
-        move.Children.Add(new TextBlock { Text = "Move", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
+        List<Button> moveButtons = [], heightButtons = [];
         foreach (var (label, name, dx, dy, dz, tip, column) in new[]
         {
             ("◀", "West", -16, 0, 0, "Move the entrance 16 units west.", 1),
@@ -82,14 +76,11 @@ public sealed partial class MainWindow
         {
             Button button = NewAsyncButton(label, () => MoveWorldEntranceAsync(dx, dy, dz));
             button.Name = "WorldEntranceMove" + name;
-            button.MinHeight = 30;
-            button.HorizontalAlignment = HorizontalAlignment.Stretch;
-            button.HorizontalContentAlignment = HorizontalAlignment.Center;
             ToolTip.SetTip(button, tip);
-            Grid.SetColumn(button, column);
-            move.Children.Add(button);
+            (dz == 0 ? moveButtons : heightButtons).Add(button);
         }
-        _worldEntranceTools.Children.Add(move);
+        _worldEntranceTools.Children.Add(NudgeRow("Move", moveButtons));
+        _worldEntranceTools.Children.Add(NudgeRow("Height", heightButtons));
         Grid place = TwoColumnGrid(1);
         Button toTile = NewAsyncButton("To Selected Tile", WorldEntranceToTileAsync);
         toTile.Name = "WorldEntranceToTile";
@@ -100,25 +91,15 @@ public sealed partial class MainWindow
         Place(place, toTile, 0, 0);
         Place(place, toCamera, 1, 0);
         _worldEntranceTools.Children.Add(place);
-        Grid turn = new()
-        {
-            ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) },
-            ColumnSpacing = 4
-        };
-        turn.Children.Add(new TextBlock { Text = "Turn", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
+        List<Button> turnButtons = [];
         foreach (var (label, name, steps, column) in new[] { ("⟲ 15°", "Left15", 1, 1), ("⟳ 15°", "Right15", -1, 2), ("⟲ 90°", "Left90", 6, 3), ("⟳ 90°", "Right90", -6, 4) })
         {
             Button button = NewAsyncButton(label, () => TurnWorldEntranceAsync(steps));
             button.Name = "WorldEntranceTurn" + name;
-            button.MinHeight = 30;
-            button.HorizontalAlignment = HorizontalAlignment.Stretch;
-            button.HorizontalContentAlignment = HorizontalAlignment.Center;
             ToolTip.SetTip(button, steps > 0 ? "Turn the entrance anticlockwise (seen from above)." : "Turn the entrance clockwise (seen from above).");
-            Grid.SetColumn(button, column);
-            turn.Children.Add(button);
+            turnButtons.Add(button);
         }
-        _worldEntranceTools.Children.Add(turn);
+        _worldEntranceTools.Children.Add(NudgeRow("Turn", turnButtons));
         Grid change = TwoColumnGrid(2);
         Button shape = NewAsyncButton("Shape…", ReshapeWorldEntranceAsync);
         shape.Name = "WorldEntranceShape";

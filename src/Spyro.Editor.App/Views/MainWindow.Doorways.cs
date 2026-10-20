@@ -67,13 +67,7 @@ public sealed partial class MainWindow
         _doorwaySelectedText = TerrainNote();
         _doorwaySelectedText.Name = "DoorwaySelected";
         _doorwayTools.Children.Add(_doorwaySelectedText);
-        Grid move = new()
-        {
-            ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) },
-            ColumnSpacing = 4
-        };
-        move.Children.Add(new TextBlock { Text = "Move", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
+        List<Button> moveButtons = [], heightButtons = [];
         foreach (var (label, name, dx, dy, dz, tip, column) in new[]
         {
             ("◀", "West", -16, 0, 0, "Move the doorway 16 units west (left in the Map view).", 1),
@@ -86,14 +80,11 @@ public sealed partial class MainWindow
         {
             Button button = NewAsyncButton(label, () => MoveSelectedDoorwayAsync(dx, dy, dz));
             button.Name = "DoorwayMove" + name;
-            button.MinHeight = 30;
-            button.HorizontalAlignment = HorizontalAlignment.Stretch;
-            button.HorizontalContentAlignment = HorizontalAlignment.Center;
             ToolTip.SetTip(button, tip);
-            Grid.SetColumn(button, column);
-            move.Children.Add(button);
+            (dz == 0 ? moveButtons : heightButtons).Add(button);
         }
-        _doorwayTools.Children.Add(move);
+        _doorwayTools.Children.Add(NudgeRow("Move", moveButtons));
+        _doorwayTools.Children.Add(NudgeRow("Height", heightButtons));
         Grid place = TwoColumnGrid(1);
         Button toTile = NewAsyncButton("To Selected Tile", MoveSelectedDoorwayToTileAsync);
         toTile.Name = "DoorwayToTile";
@@ -104,25 +95,15 @@ public sealed partial class MainWindow
         Place(place, toTile, 0, 0);
         Place(place, toCamera, 1, 0);
         _doorwayTools.Children.Add(place);
-        Grid turn = new()
-        {
-            ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) },
-            ColumnSpacing = 4
-        };
-        turn.Children.Add(new TextBlock { Text = "Turn", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
+        List<Button> turnButtons = [];
         foreach (var (label, name, steps, column) in new[] { ("⟲ 15°", "Left15", 1, 1), ("⟳ 15°", "Right15", -1, 2), ("⟲ 90°", "Left90", 6, 3), ("⟳ 90°", "Right90", -6, 4) })
         {
             Button button = NewAsyncButton(label, () => TurnSelectedDoorwayAsync(steps));
             button.Name = "DoorwayTurn" + name;
-            button.MinHeight = 30;
-            button.HorizontalAlignment = HorizontalAlignment.Stretch;
-            button.HorizontalContentAlignment = HorizontalAlignment.Center;
             ToolTip.SetTip(button, steps > 0 ? "Turn the doorway anticlockwise (seen from above) about the middle of its floor." : "Turn the doorway clockwise (seen from above) about the middle of its floor.");
-            Grid.SetColumn(button, column);
-            turn.Children.Add(button);
+            turnButtons.Add(button);
         }
-        _doorwayTools.Children.Add(turn);
+        _doorwayTools.Children.Add(NudgeRow("Turn", turnButtons));
         Grid change = TwoColumnGrid(3);
         Button shape = NewAsyncButton("Shape…", ReshapeSelectedDoorwayAsync);
         shape.Name = "DoorwayShape";
@@ -152,6 +133,27 @@ public sealed partial class MainWindow
         _doorwaysCard.Name = "TerrainDoorwaysCard";
         RefreshDoorwaysCard();
         return _doorwaysCard;
+    }
+
+    /// <summary>A labelled row of equal buttons for the side panel (Move ◀ ▲ ▼ ▶, Height Up / Down, Turn): the label
+    /// column is the same width in every row so they line up, and at most four buttons share a row so labels stay whole.</summary>
+    private static Grid NudgeRow(string label, IReadOnlyList<Button> buttons)
+    {
+        Grid row = new() { ColumnSpacing = 4 };
+        row.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(50)));
+        row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center });
+        for (int i = 0; i < buttons.Count; i++)
+        {
+            row.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            Button button = buttons[i];
+            button.MinHeight = 30;
+            button.Padding = new Thickness(2, 4);
+            button.HorizontalAlignment = HorizontalAlignment.Stretch;
+            button.HorizontalContentAlignment = HorizontalAlignment.Center;
+            Grid.SetColumn(button, i + 1);
+            row.Children.Add(button);
+        }
+        return row;
     }
 
     private sealed record DoorwayRow(int Destination, string Label)

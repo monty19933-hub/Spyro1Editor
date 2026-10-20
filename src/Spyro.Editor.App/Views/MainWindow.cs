@@ -1873,11 +1873,13 @@ public sealed partial class MainWindow : Window
         Button yotdDisc = NewAsyncButton("Year of the Dragon disc…", ChooseYearOfTheDragonDiscAsync);
         yotdDisc.Name = "LevelMusicYearOfTheDragonDisc";
         ToolTip.SetTip(yotdDisc, "Songs marked (Spyro: Year of the Dragon) are copied from your copy of that disc (USA, Rev 1). It is only read, never changed.");
-        buttons.Children.Add(yotdDisc);
+        // Its own row: three buttons do not fit the side panel's width.
+        yotdDisc.HorizontalAlignment = HorizontalAlignment.Left;
 
         panel.Children.Add(_levelMusicTrackBox);
         panel.Children.Add(_levelMusicDetails);
         panel.Children.Add(buttons);
+        panel.Children.Add(yotdDisc);
         return panel;
     }
 
@@ -12391,7 +12393,7 @@ public sealed partial class MainWindow : Window
 
         _skyboxDetails.Text = _releaseMode
             ? saved == null
-                ? "This level has its original sky. Recolor it, borrow another level's sky, or pick a ready-made one."
+                ? "This level has its original sky. Choose below to recolor it, borrow another level's sky, pick a ready-made one, or import your own from a 360° picture or a 3D model (OBJ or FBX)."
                 : $"This level's sky: {DescribeSkyboxEdit(saved)}. Create BIN puts it in the game."
             : saved == null
                 ? nativeStatus
@@ -28262,20 +28264,33 @@ public sealed partial class MainWindow : Window
             "Add Terrain copies the selected tile so you can move the copy into place. Remove Terrain (or Delete in the view) takes tiles out; Undo Terrain puts the selected tile back or brings removed tiles back.",
             $"Brush: Raise, Lower, Smooth, Level or Restore the ground under the circle. Keys 1 to 5 choose a brush, 0 or Esc switches it off. Undo Stroke is {mod}Z in the view, Redo Stroke is {(OperatingSystem.IsMacOS() ? "⇧⌘Z" : "Ctrl+Y")}.",
             "Textures: Choose Texture…, then click tiles to paint them. Esc stops painting.",
+            "Ground (in a level you build): Grass, Dirt, Stone, Sand, Snow, Wood, Water, Lava or Goo — click one, then click tiles. Tile Type… changes only what Spyro finds on a tile (solid ground, water, lava, supercharge…).",
+            "Add beside ◀ ▲ ▼ ▶ adds an exact copy of the selected tile against one of its edges.",
+            "Doorways (in a homeworld you rebuild, or your world's homeworld): Add Doorway…, choose where it leads and its shape; move, turn and repaint it on the card.",
+            "World Entrance (in the homeworld your world is entered from): Place Entrance… puts the way into your world there.",
             "If a shape cannot be exported, a red bar says so, with Show it and Undo that change."
         ]);
 
         AddHelpSection(panel, "Game Settings and Environment", [
-            "Level name changes the name on portals, loading screens and in the guidebook. Music picks the level's track.",
-            "Fly Anywhere: tick it and the game you export lets Spyro fly in every normal level — jump, then press ✕ again in the air — or open Choose levels and tick only the levels you want. It is off unless you turn it on, and it is separate from the editor's Game Camera.",
-            "Portals & Return Home: choose where each portal leads and where Return Home goes.",
-            "Environment: recolor the sky, borrow another level's sky, or use a ready-made one."
+            "This level: Level name changes the name on portals, loading screens and in the guidebook. Music picks the level's track. Portals & Return Home: choose where each portal leads and where Return Home goes.",
+            "Whole game — Fly Anywhere: tick it and the game you export lets Spyro fly in every normal level — jump, then press ✕ again in the air — or open Choose levels and tick only the levels you want. It is separate from the editor's Game Camera.",
+            "Whole game — Hover: ▲ while gliding makes Spyro rise a little and drift on, as in Spyro 3. Play as Crash puts Crash in the levels you tick. Memory: Emulator only (8 MB RAM) lets levels hold more.",
+            "Environment: recolor the sky, borrow another level's sky, use a ready-made one, or import your own from a 360° picture or an OBJ/FBX model."
         ]);
 
         AddHelpSection(panel, "Levels of your own", [
-            "File ▾ > New Level… starts a level of your own that opens when you choose New Game. A project holds one; the editor asks before replacing it and keeps a copy in the project's backups folder.",
-            "File ▾ > Start Blank in Current Level… empties the open level down to a small floor so you can rebuild it. Restore Before Clear… brings the previous version back.",
+            "File ▾ > New Level… starts a level of your own (a grassy meadow to build on) that opens when you choose New Game. A project holds one; the editor asks before replacing it and keeps a copy in the project's backups folder.",
+            "File ▾ > Random Level… makes a whole level from a seed and a few choices. New Level from Spyro: Year of the Dragon… rebuilds one of that game's levels from your own disc.",
+            "File ▾ > Start Blank in Current Level… replaces the open level with the same meadow so you can rebuild it. Restore Before Clear… brings the previous version back.",
+            "File ▾ > Fill In What the Level Needs… adds the level's own dragons and egg thieves, a Return Home vortex, enemies and gems.",
             "File ▾ > Open Created Level… reopens the level you made."
+        ]);
+
+        AddHelpSection(panel, "Your own world", [
+            "File ▾ > New World… makes a world of your own: a homeworld and up to four levels, picked from the level list like the game's own.",
+            "In your world's homeworld, the Terrain tab's Doorways card adds a doorway to each of its levels and one back to the game's homeworld it is entered from.",
+            "Open that game homeworld: its Terrain tab's World Entrance card places the way into your world.",
+            "Create BIN builds it all into the game: Spyro walks in through the entrance, the inventory gets a page for your world, and it saves in its own save file."
         ]);
 
         AddHelpSection(panel, "Typing and shortcuts", [

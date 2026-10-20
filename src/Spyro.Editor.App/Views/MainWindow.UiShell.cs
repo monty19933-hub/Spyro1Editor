@@ -233,15 +233,19 @@ public sealed partial class MainWindow
         _toolbarOpenDiscImageButton = NewAsyncButton("Open Game…", ChooseSourceDiscImageAsync);
         ToolTip.SetTip(_toolbarOpenDiscImageButton, "Choose your original Spyro BIN or CUE. Export creates a separate playable copy.");
         StyleModernToolbarButton(_toolbarOpenDiscImageButton, 106);
+        // Grouped: make or open levels of your own; change the open level; recovery; save.
         fileActions.Children.Add(BuildActionMenu("File", "EditorFileMenu", new ToolbarAction("New Level…", NewMainLevelAsync),
-            new ToolbarAction("New World…", NewWorldAsync),
             new ToolbarAction("Random Level…", RandomLevelAsync),
-            new ToolbarAction("Start Blank in Current Level…", StartBlankCurrentLevelAsync),
+            new ToolbarAction("New World…", NewWorldAsync),
             new ToolbarAction("New Level from Spyro: Year of the Dragon…", NewLevelFromYearOfTheDragonAsync),
+            new ToolbarAction("Open Created Level…", OpenMainFreshLevelAsync),
+            MenuSeparator,
+            new ToolbarAction("Start Blank in Current Level…", StartBlankCurrentLevelAsync),
             new ToolbarAction("Fill In What the Level Needs…", FillInLevelAsync),
+            MenuSeparator,
             new ToolbarAction("Restore Before Clear…", RestoreBeforeClearAsync),
             new ToolbarAction("Free Deleted Objects' Save Rows…", FreeRetiredSaveRowsAsync),
-            new ToolbarAction("Open Created Level…", OpenMainFreshLevelAsync),
+            MenuSeparator,
             new ToolbarAction("Save Level", SaveFromToolbarAsync)));
         fileActions.Children.Add(_toolbarOpenDiscImageButton);
         _toolbarSaveButton = NewAsyncButton("Save", SaveFromToolbarAsync);
@@ -1095,7 +1099,8 @@ public sealed partial class MainWindow
     private Control BuildModernLevelWorkspace()
     {
         StackPanel panel = new() { Spacing = 8 };
-        panel.Children.Add(ModernSectionHeading("Level settings"));
+        // Two groups: what belongs to the open level, then what applies to the whole game Create BIN makes.
+        panel.Children.Add(ModernSectionHeading("This level"));
         if (_releaseMode)
             panel.Children.Add(new TextBlock
             {
@@ -1108,6 +1113,16 @@ public sealed partial class MainWindow
         _retailNameDisclosure=BuildModernDisclosure("Level name", BuildLevelTextPanel(), true);
         _retailMusicDisclosure=BuildModernDisclosure("Music", BuildLevelMusicPanel(), false);
         panel.Children.Add(_retailNameDisclosure);panel.Children.Add(_retailMusicDisclosure);
+        _homeworldTextGroup = BuildModernDisclosure("Portals & Return Home", BuildPortalControlPanel(), false);
+        panel.Children.Add(_homeworldTextGroup);
+        var wholeGame = ModernSectionHeading("Whole game");
+        wholeGame.Margin = new Thickness(0, 12, 0, 0);
+        panel.Children.Add(wholeGame);
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Moves, Play as Crash and memory for the games you create. Saved as soon as you choose.",
+            TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = new SolidColorBrush(ModernMutedInk)
+        });
         if (!_releaseMode) panel.Children.Add(BuildModernDisclosure("Starting Abilities", new StackPanel
         {
             Name = "StartingAbilitiesPanel", Spacing = 8,
@@ -1126,8 +1141,6 @@ public sealed partial class MainWindow
             panel.Children.Add(BuildHoverSection());
         }
         panel.Children.Add(BuildMemoryModeSection());
-        _homeworldTextGroup = BuildModernDisclosure("Portals & Return Home", BuildPortalControlPanel(), false);
-        panel.Children.Add(_homeworldTextGroup);
 
         // V5 whole-level replacement is deliberately a separate, guarded research
         // workflow. It never enters the normal Create BIN dispatcher.

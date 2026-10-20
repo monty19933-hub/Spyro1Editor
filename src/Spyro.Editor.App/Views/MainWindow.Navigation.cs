@@ -11,12 +11,16 @@ public sealed partial class MainWindow
     private bool _saveCommandRunning;
     private readonly TextBlock _visibleStatusText = new() { Name = "EditorStatusSummary" };
 
+    /// <summary>A line between groups of commands in a toolbar menu.</summary>
+    private static readonly ToolbarAction MenuSeparator = new("-", () => Task.CompletedTask);
+
     // A command menu must activate on click/Enter, never on highlight while navigating.
     private Button BuildActionMenu(string label, string name, params ToolbarAction[] actions)
     {
         var menu = new MenuFlyout();
         foreach (ToolbarAction action in actions)
         {
+            if (ReferenceEquals(action, MenuSeparator)) { menu.Items.Add(new Separator()); continue; }
             var item = new MenuItem { Header = action.Label };
             item.Click += async (_, _) =>
             {
