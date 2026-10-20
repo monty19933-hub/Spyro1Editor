@@ -13537,6 +13537,7 @@ public sealed partial class MainWindow : Window
     private async Task CreateObjectTestBinCoreAsync()
     {
         using var memory = UseProjectMemoryMode();
+        using var hover = UseProjectHover();
         if (_releaseMode && TryGetCreateBinDiskSpaceBlockReason(out string diskSpaceReason))
         {
             _statusText.Text = diskSpaceReason;

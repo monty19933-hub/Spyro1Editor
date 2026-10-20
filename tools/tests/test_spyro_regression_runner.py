@@ -59,7 +59,14 @@ class OwnedCommandTests(unittest.TestCase):
         self.assertIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_REPORT_CASES)
-        self.assertIn(("UiSmoke", "MEMORY_MODE_UI_OK checks=12", ["--memory-mode-ui-only"]), RUNNER.ADDITIONAL_CORE_CASES)
+        self.assertIn(("UiSmoke", "MEMORY_MODE_UI_OK checks=18", ["--memory-mode-ui-only"]), RUNNER.ADDITIONAL_CORE_CASES)
+
+    def test_hover_smoke_registration(self):
+        name = "HoverSmoke"
+        self.assertIn((name, "HOVER_FREE_OK checks=20"), RUNNER.CORE_CASES)
+        self.assertIn((name, "HOVER_SOURCE_OK checks=15", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
 
     def test_level_window_smoke_registration(self):
         name = "LevelWindowSmoke"
@@ -971,7 +978,7 @@ class RunnerOptionsTests(unittest.TestCase):
                     (name, "START_BLANK_UI_OK checks=27", ["--start-blank-ui-only"]),
                     (name, "FREE_FLIGHT_UI_OK", ["--free-flight-ui-only"]),
                     (name, "PLAY_AS_CRASH_UI_OK checks=", ["--play-as-crash-ui-only"]),
-                    (name, "MEMORY_MODE_UI_OK checks=12", ["--memory-mode-ui-only"]),
+                    (name, "MEMORY_MODE_UI_OK checks=18", ["--memory-mode-ui-only"]),
                     (name, "DOORWAYS_UI_OK checks=39", ["--doorways-ui-only"]),
                     (name, "WORLD_ENTRANCE_UI_OK checks=33", ["--world-entrance-ui-only"]),
                     (name, "LEVEL_PICKER_AUTOMATION_OK", ["--level-picker-automation-only"]),

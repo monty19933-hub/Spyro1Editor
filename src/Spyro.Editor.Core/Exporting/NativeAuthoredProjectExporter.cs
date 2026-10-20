@@ -205,6 +205,7 @@ public static class NativeAuthoredProjectExporter
         NativeKillHeights.RequireOwned(donors.Disc.Exe,exe,rebuilt);
         foreach(var(entry,animations) in supercharged)animations.RequireDestination(replacements[entry]);
         // Emulator only (8 MB RAM): the scenes load in the extra memory; every level is checked against that layout.
+        NativeHover.ApplyForExport(exe);
         NativeExtendedRam.ApplyForExport(exe,entry=>replacements.TryGetValue(entry,out var bytes)?bytes:baseline.EntryBytes(entry),catalog.Levels,donors.Disc);
         string pending=outputImage+".pending-"+Guid.NewGuid().ToString("N"),pendingCue=pending+".cue";
         bool retain=false;

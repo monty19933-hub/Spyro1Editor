@@ -273,6 +273,7 @@ CORE_CASES = (
     # and without supercharge ground and tampers with them, gives every original level the records or refuses it, and
     # runs Create BIN's object stage on Artisans and Dark Passage).
     ("SuperchargeSmoke", "SUPERCHARGE_FREE_OK checks=27"),
+    ("HoverSmoke", "HOVER_FREE_OK checks=20"),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
@@ -307,7 +308,7 @@ ADDITIONAL_CORE_CASES = (
      ["--free-flight-ui-only"]),
     ("UiSmoke", "PLAY_AS_CRASH_UI_OK checks=",
      ["--play-as-crash-ui-only"]),
-    ("UiSmoke", "MEMORY_MODE_UI_OK checks=12",
+    ("UiSmoke", "MEMORY_MODE_UI_OK checks=18",
      ["--memory-mode-ui-only"]),
     ("UiSmoke", "DOORWAYS_UI_OK checks=39",
      ["--doorways-ui-only"]),
@@ -498,6 +499,7 @@ SOURCE_QA_CASES = (
     ("YearOfTheDragonImportSmoke", "YOTD_IMPORT_DISC_OK", ["--disc-qa"]),
     ("NativeKillHeightSmoke", "NATIVE_KILL_HEIGHT_SOURCE_OK checks=172", ["--source"]),
     ("SuperchargeSmoke", "SUPERCHARGE_SOURCE_OK checks=160", ["--source"]),
+    ("HoverSmoke", "HOVER_SOURCE_OK checks=15", ["--source"]),
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.

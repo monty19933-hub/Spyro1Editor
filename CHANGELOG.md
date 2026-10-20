@@ -1,3 +1,9 @@
+# Unreleased
+
+New
+
+- Game Settings › Hover: Spyro 3's hover in the games you create. Pressing ▲ while gliding makes Spyro rise about as high as a short jump and drift on a little, then drop; as in Spyro 2 and 3 he can't glide again until he lands. Off unless you tick it.
+
 # Spyro Editor 1.4
 
 ## Changes since Spyro Editor 1.3

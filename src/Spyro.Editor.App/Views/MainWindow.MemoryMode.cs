@@ -102,21 +102,23 @@ public sealed partial class MainWindow
 
     /// <summary>The retail export's last executable step: with 8 MB RAM the scene placement goes into the finished
     /// working image (a new step image in the build folder), every level is checked against that layout, and the
-    /// export's scope learns which levels need 8 MB. Nothing happens in the 2 MB mode or when nothing was written.</summary>
+    /// export's scope learns which levels need 8 MB; Spyro 3's hover goes in when Game Settings asks for it. Nothing
+    /// happens in the 2 MB mode without the hover, or when nothing was written.</summary>
     private static async Task<(string Image, string Cue)> ApplyMemoryModeStageAsync(string sourceImage, string currentImage,
         string currentCue, string tempDir, int step, Spyro.Editor.Core.Levels.LevelCatalog catalog)
     {
-        if (!GameRam.Extended || !IsDisposableCombinedBuildImage(currentImage, tempDir) || !File.Exists(currentImage))
+        if (!GameRam.Extended && !NativeHover.Enabled || !IsDisposableCombinedBuildImage(currentImage, tempDir) || !File.Exists(currentImage))
             return (currentImage, currentCue);
-        string image = Path.Combine(tempDir, $"{step:00}-memory-8mb.bin");
+        string image = Path.Combine(tempDir, $"{step:00}-game-settings.bin");
         await Task.Run(() =>
         {
             var disc = UniversalDiscImage.Read(currentImage);
             byte[] exe = disc.Exe.ToArray();
-            NativeExtendedRam.ApplyForExport(exe, disc.EntryBytes, catalog.Levels, UniversalDiscImage.Read(sourceImage));
+            NativeHover.ApplyForExport(exe);
+            if (GameRam.Extended) NativeExtendedRam.ApplyForExport(exe, disc.EntryBytes, catalog.Levels, UniversalDiscImage.Read(sourceImage));
             disc.WriteImage(image, disc.Wad, exe);
             if (!UniversalDiscImage.Read(image).Exe.AsSpan().SequenceEqual(exe))
-                throw new InvalidDataException("The 8 MB memory step's executable readback changed.");
+                throw new InvalidDataException("The game settings step's executable readback changed.");
         });
         string cue = Path.ChangeExtension(image, ".cue");
         await File.WriteAllTextAsync(cue, BuildCueText(currentCue, currentImage, Path.GetFileName(image)), DiscCueSheet.TextEncoding);

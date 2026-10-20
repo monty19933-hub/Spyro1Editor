@@ -237,6 +237,7 @@ public sealed partial class MainWindow
         RefreshFreeFlightSettingsAvailability();
         RefreshCrashPlayerSettings();
         RefreshMemoryModeSettings();
+        RefreshHoverSettings();
     }
 
     internal void RevertFreeFlightSettings()

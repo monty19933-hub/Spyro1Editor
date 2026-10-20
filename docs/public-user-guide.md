@@ -259,6 +259,12 @@ says how many. Translucent original tiles cannot currently be copied or removed.
   the game's normal gliding in the next Create BIN. The five flight levels keep
   their own rules. This is separate from the editor's **Game Camera**, which
   always flies.
+- **Hover**: tick **Let Spyro hover (from Spyro 3)** and, in the games you
+  create, pressing ▲ while gliding makes Spyro rise about as high as a short jump
+  and drift on a little before he drops, as in Spyro 2 and 3: good for a ledge
+  just out of reach. As in those games he can't glide again until he lands. It is
+  in every level of the game; unticked, ▲ in a glide drops Spyro straight down as
+  in the original game. It is saved with the project.
 - **Portals & Return Home**: choose where each portal leads and where Return
   Home goes. **Select Portal** moves the trigger, lettering and travel path
   together; move the stone arch with the terrain tools.

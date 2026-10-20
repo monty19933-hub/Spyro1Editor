@@ -225,6 +225,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         if(freshParticleBinding!=null)NativePortalRouteFreshBinding.RequireOwnedParticleDestination(donors.Disc.Exe,exe,
             new(overlayData,UniversalExeBindings.Read(exe,65)),freshParticleBinding);
         // Emulator only (8 MB RAM): the scenes load in the extra memory; every level is checked against that layout.
+        NativeHover.ApplyForExport(exe);
         NativeExtendedRam.ApplyForExport(exe,entry=>replacements.TryGetValue(entry,out var bytes)?bytes:baseline.EntryBytes(entry),
             nativeCatalog.Levels.Where(l=>l.LevelId!=65).Append(Target),donors.Disc);
         byte[] wad=baseline.RebuildWad(replacements);

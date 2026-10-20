@@ -80,6 +80,29 @@ internal static class MemoryModeUiCases
             catch (TargetInvocationException e) when (e.InnerException is InvalidDataException d && d.Message.Contains("Memory setting")) { stops = true; }
             Check(stops, "Create BIN stops on the damaged choice instead of guessing");
             File.Delete(file);
+
+            // Hover (Spyro 3), the card beside it: off by default, saved as soon as it is ticked, removed when unticked,
+            // and a damaged choice stops Create BIN.
+            var hw = Measure();
+            var hover = Find<CheckBox>(hw, "HoverEnabled");
+            string hoverFile = SpyroMovesSettings.PathFor(root);
+            Check(Find<Control>(hw, "HoverSection").Parent == Find<Control>(hw, "PlayAsCrashSection").Parent && hover.IsChecked == false && !File.Exists(hoverFile),
+                "Hover is a card beside Play as Crash, off by default with nothing saved");
+            hover.IsChecked = true; Pump();
+            Check(SpyroMovesSettings.LoadHover(root) && Status(hw).StartsWith("Hover is on", StringComparison.Ordinal), "ticking Hover saves it at once: " + Status(hw));
+            Check(Find<CheckBox>(Measure(), "HoverEnabled").IsChecked == true, "a reopened editor shows Hover ticked");
+            hover.IsChecked = false; Pump();
+            Check(!File.Exists(hoverFile) && Status(hw).StartsWith("Hover is off", StringComparison.Ordinal), "unticking removes the file");
+            File.WriteAllText(hoverFile, "{ not json");
+            var hd = Measure();
+            var useHover = typeof(MainWindow).GetMethod("UseProjectHover", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            bool hoverStops = false;
+            try { ((IDisposable)useHover.Invoke(hd, null)!).Dispose(); }
+            catch (TargetInvocationException e) when (e.InnerException is InvalidDataException d && d.Message.Contains("Hover setting")) { hoverStops = true; }
+            Check(hoverStops && Find<CheckBox>(hd, "HoverEnabled").IsChecked == false && File.ReadAllText(hoverFile) == "{ not json",
+                "a damaged Hover choice is shown unticked, left as it was, and stops Create BIN");
+            Check(!NativeHover.Enabled, "no export is running, so no hover scope is left open");
+            File.Delete(hoverFile);
             Check(File.ReadAllText(Path.Combine(root, "unrelated-project-notes.txt")) == "protected" &&
                 !Directory.EnumerateFiles(parent, "*.bin", SearchOption.AllDirectories).Any(), "no other file is touched and no game is written");
             Console.WriteLine($"MEMORY_MODE_UI_OK checks={_checks}");
