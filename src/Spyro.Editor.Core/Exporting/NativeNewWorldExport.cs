@@ -154,8 +154,11 @@ public static class NativeNewWorldExport
             entranceResult = NativeWorldEntrance.Apply(donors, catalog, entrance.Spec(), image.EntryBytes(entryHome.SourceWadEntry),
                 image.EntryBytes(entryHome.SourceWadEntry - 1), final, NativeWorldEntrance.SceneSky(donors.ImagePath, homeDocument));
             rebuilt[entryHome.SourceWadEntry] = entranceResult.LevelData; rebuilt[entryHome.SourceWadEntry - 1] = entranceResult.Overlay;
+            NativeSpyroColours.ApplyToEntries(rebuilt);
             wad = image.RebuildWad(rebuilt);
         }
+        // Spyro's colours (Game Settings) in the world's levels; the rest of the game has them already.
+        NativeSpyroColours.ApplyToEntries(entries);
         var placement = NativeLevelWindowDisc.Place(image, wad, entries, final.Length);
         NativeDrawBufferGuard.PatchExe(final, near);
         // A level whose objects keep their saved identities in other rows carries a save map: its game-wide hooks.

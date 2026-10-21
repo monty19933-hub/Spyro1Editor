@@ -290,6 +290,23 @@ if (args.Contains("--world-entrance-ui-only", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Contains("--spyro-colours-ui-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --spyro-colours-ui-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    SpyroColoursUiCases.Run();
+    return 0;
+}
+
+if (args.Length is 3 && args[0] == "--spyro-colours-export-ui")
+{
+    // <output> then a project folder (cloned) or the original disc image (a new project with nothing else).
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    bool isProject = Directory.Exists(args[2]);
+    SpyroColoursUiCases.RunExport(args[1], isProject ? args[2] : null, isProject ? null : args[2]);
+    return 0;
+}
+
 if (args.Contains("--memory-mode-ui-only", StringComparer.Ordinal))
 {
     if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --memory-mode-ui-only");

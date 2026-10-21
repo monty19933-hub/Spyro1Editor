@@ -1120,14 +1120,14 @@ public sealed partial class MainWindow
         panel.Children.Add(wholeGame);
         panel.Children.Add(new TextBlock
         {
-            Text = "Moves, Play as Crash and memory for the games you create. Saved as soon as you choose.",
+            Text = "Moves, Play as Crash, Spyro's colours and memory for the games you create. Saved as soon as you choose.",
             TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = new SolidColorBrush(ModernMutedInk)
         });
         if (!_releaseMode) panel.Children.Add(BuildModernDisclosure("Starting Abilities", new StackPanel
         {
             Name = "StartingAbilitiesPanel", Spacing = 8,
             Children = { BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), true),
-                BuildModernDisclosure("Play as Crash", BuildCrashPlayerSettingsPanel(), false), BuildHoverSection() }
+                BuildModernDisclosure("Play as Crash", BuildCrashPlayerSettingsPanel(), false), BuildHoverSection(), BuildSpyroColourSection() }
         }, false));
         else
         {
@@ -1139,6 +1139,7 @@ public sealed partial class MainWindow
             crash.Name = "PlayAsCrashSection";
             panel.Children.Add(crash);
             panel.Children.Add(BuildHoverSection());
+            panel.Children.Add(BuildSpyroColourSection());
         }
         panel.Children.Add(BuildMemoryModeSection());
 

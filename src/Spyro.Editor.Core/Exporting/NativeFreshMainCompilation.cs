@@ -228,6 +228,9 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         NativeHover.ApplyForExport(exe);
         NativeExtendedRam.ApplyForExport(exe,entry=>replacements.TryGetValue(entry,out var bytes)?bytes:baseline.EntryBytes(entry),
             nativeCatalog.Levels.Where(l=>l.LevelId!=65).Append(Target),donors.Disc);
+        // Spyro's colours (Game Settings): every level (this one too), the title screen and the cutscenes.
+        NativeSpyroColours.ApplyForExport(replacements,baseline.EntryBytes);
+        levelData=replacements[80];
         byte[] wad=baseline.RebuildWad(replacements);
         string stage=outputImage+".pending-"+Guid.NewGuid().ToString("N"),cue=Path.ChangeExtension(outputImage,".cue"),stagedCue=stage+".cue";
         bool retainStage=false;

@@ -240,6 +240,7 @@ public sealed partial class MainWindow
     {
         using var memory = UseProjectMemoryMode();
         using var hover = UseProjectHover();
+        using var spyroColours = UseProjectSpyroColours();
         bool authoredActive=_freshSceneDocument!=null;
         if(authoredActive?!await SaveFreshSceneAsync():!await SaveCurrentEditsAsync())return;
         var owner=CaptureSourceDiscOperationIdentity();

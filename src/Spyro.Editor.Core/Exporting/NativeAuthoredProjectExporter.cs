@@ -207,6 +207,8 @@ public static class NativeAuthoredProjectExporter
         // Emulator only (8 MB RAM): the scenes load in the extra memory; every level is checked against that layout.
         NativeHover.ApplyForExport(exe);
         NativeExtendedRam.ApplyForExport(exe,entry=>replacements.TryGetValue(entry,out var bytes)?bytes:baseline.EntryBytes(entry),catalog.Levels,donors.Disc);
+        // Spyro's colours (Game Settings): every level, the title screen and the cutscenes.
+        NativeSpyroColours.ApplyForExport(replacements,baseline.EntryBytes);
         string pending=outputImage+".pending-"+Guid.NewGuid().ToString("N"),pendingCue=pending+".cue";
         bool retain=false;
         try

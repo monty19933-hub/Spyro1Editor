@@ -265,6 +265,18 @@ says how many. Translucent original tiles cannot currently be copied or removed.
   just out of reach. As in those games he can't glide again until he lands. It is
   in every level of the game; unticked, ▲ in a glide drops Spyro straight down as
   in the original game. It is saved with the project.
+- **Spyro's colours**: give Spyro any colours you like, part by part: **Body**
+  (head, back, legs, snout and tail), **Belly**, **Horns**, **Head spikes** (the
+  spiky fins behind his head), **Wing frame**, **Wing skin**, **Tail tip**,
+  **Eyes** and **Pupils**. Click a part's colour to choose: a quick colour, the
+  **Hue**, **Richness** and **Brightness** sliders, or a colour typed as
+  #RRGGBB, then **Use this colour**. The small square in the corner of a changed
+  part is his own colour, and **His own** puts it back. The looks at the top
+  (**Ember**, **Ice**, **Emerald**, **Gold**, **Shadow**) set every part at once;
+  **Classic** gives him his own colours again. Each part keeps his shading, and
+  the colours are in every level, on the title screen, the loading screens and in
+  the cutscenes. They are saved with the project, and Create BIN can make a game
+  with only these settings, without any level edits.
 - **Portals & Return Home**: choose where each portal leads and where Return
   Home goes. **Select Portal** moves the trigger, lettering and travel path
   together; move the stone arch with the terrain tools.

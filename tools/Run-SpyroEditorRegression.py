@@ -274,6 +274,10 @@ CORE_CASES = (
     # runs Create BIN's object stage on Artisans and Dark Passage).
     ("SuperchargeSmoke", "SUPERCHARGE_FREE_OK checks=27"),
     ("HoverSmoke", "HOVER_FREE_OK checks=20"),
+    # Spyro's colours (Game Settings): the saved colours, the recolour (parts, shading, transparency, the mouth) and Create
+    # BIN's scope; --source recolours the USA game's WAD: 35 levels, the title screen and 3 cutscenes change only in
+    # Spyro's palettes, other objects' copies stay, applying again changes nothing, the whole-WAD form matches.
+    ("SpyroColoursSmoke", "SPYRO_COLOURS_FREE_OK checks=28"),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
@@ -310,6 +314,8 @@ ADDITIONAL_CORE_CASES = (
      ["--play-as-crash-ui-only"]),
     ("UiSmoke", "MEMORY_MODE_UI_OK checks=18",
      ["--memory-mode-ui-only"]),
+    ("UiSmoke", "SPYRO_COLOURS_UI_OK checks=18",
+     ["--spyro-colours-ui-only"]),
     ("UiSmoke", "DOORWAYS_UI_OK checks=39",
      ["--doorways-ui-only"]),
     ("UiSmoke", "WORLD_ENTRANCE_UI_OK checks=33",
@@ -500,6 +506,7 @@ SOURCE_QA_CASES = (
     ("NativeKillHeightSmoke", "NATIVE_KILL_HEIGHT_SOURCE_OK checks=172", ["--source"]),
     ("SuperchargeSmoke", "SUPERCHARGE_SOURCE_OK checks=160", ["--source"]),
     ("HoverSmoke", "HOVER_SOURCE_OK checks=15", ["--source"]),
+    ("SpyroColoursSmoke", "SPYRO_COLOURS_SOURCE_OK checks=89", ["--source"]),
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.

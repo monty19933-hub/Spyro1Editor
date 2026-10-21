@@ -13540,6 +13540,7 @@ public sealed partial class MainWindow : Window
     {
         using var memory = UseProjectMemoryMode();
         using var hover = UseProjectHover();
+        using var spyroColours = UseProjectSpyroColours();
         if (_releaseMode && TryGetCreateBinDiskSpaceBlockReason(out string diskSpaceReason))
         {
             _statusText.Text = diskSpaceReason;
@@ -13603,9 +13604,10 @@ public sealed partial class MainWindow : Window
         }
         IReadOnlyList<EditedLevelExportTarget> targets = FindEditedLevelExportTargets();
         flightIntent?.RequireOrdinaryEditCompatibility(targets.Any(HasOrdinarySavedEdits));
-        if (targets.Count == 0 && flightIntent?.RequiresRebuild!=true)
+        if (targets.Count == 0 && flightIntent?.RequiresRebuild!=true && !NativeHover.Enabled && !NativeSpyroColours.Enabled)
         {
-            _statusText.Text = "No saved edits were found. Change a level name, music track, skybox, object, or terrain first.";
+            _statusText.Text = "No saved edits were found. Change a level name, music track, skybox, object, or terrain first, " +
+                "or something for the whole game in Game Settings (Spyro's colours, Hover).";
             return;
         }
 
@@ -13668,7 +13670,9 @@ public sealed partial class MainWindow : Window
         EditorDiagnostics.RecordAction("Create BIN started", $"Output: {outputDir}; targets: {targetSummary}");
         ReportCreateBinProgress(
             "Creating BIN...",
-            targets.Count == 1
+            targets.Count == 0
+                ? "Creating the game with your Game Settings..."
+                : targets.Count == 1
                 ? $"Creating test for {targets[0].Level.DisplayName}..."
                 : $"Creating one test for saved edits across {targets.Count} levels...");
         CombinedTestBinResult result;
@@ -13735,7 +13739,7 @@ public sealed partial class MainWindow : Window
         string treasureSummary = BuildExportedTreasureStatus(result.ExportedTreasureTargets);
         string skippedSummary = BuildSkippedExportStatus(result.SkippedEdits, result.SkippedEditDetails);
         RememberExportedGame(result.OutputCuePath);
-        string successStatus = $"Created all-edits test {Path.GetFileName(result.OutputCuePath)}{levelSummary}: {result.ObjectPatches} object patch(es), {result.TerrainPatches} terrain patch(es), {result.EnvironmentGradePatches} environment patch(es), {result.SkyboxPatches} sky block patch(es), {result.LevelNamePatches} level name(s), {result.MusicLevelPatches} music level(s), {result.PortalRoutePatches} portal route(s).{treasureSummary}{skippedSummary}{result.FreeFlightSummary}{PreservedResearchExportNote()}";
+        string successStatus = $"Created all-edits test {Path.GetFileName(result.OutputCuePath)}{levelSummary}: {result.ObjectPatches} object patch(es), {result.TerrainPatches} terrain patch(es), {result.EnvironmentGradePatches} environment patch(es), {result.SkyboxPatches} sky block patch(es), {result.LevelNamePatches} level name(s), {result.MusicLevelPatches} music level(s), {result.PortalRoutePatches} portal route(s).{treasureSummary}{skippedSummary}{result.FreeFlightSummary}{GameSettingsExportNote()}{PreservedResearchExportNote()}";
         _statusText.Text = successStatus;
         try
         {
@@ -14737,10 +14741,17 @@ public sealed partial class MainWindow : Window
                 if (!patchedLevelNames.Contains(target.Level.DisplayName)) patchedLevelNames.Add(target.Level.DisplayName);
         }
 
+        bool gameSettingsOnly = false;
         if (!deferSharedRuntimeHooks)
+        {
+            string before = currentImage;
             (currentImage, currentCue) = await ApplyMemoryModeStageAsync(sourceImage, currentImage, currentCue, tempDir, step + 1, _retailCatalog);
+            // Game Settings alone (hover, Spyro's colours) make a game from the original too.
+            gameSettingsOnly = targets.Count == 0 && PathsEqual(before, sourceImage) && !PathsEqual(currentImage, sourceImage);
+            if (gameSettingsOnly) stepSummaries.Add(new { kind = "game-settings", hover = NativeHover.Enabled, spyroColours = NativeSpyroColours.Enabled });
+        }
 
-        if (objectPatches + terrainPatches + environmentGradePatches + skyboxPatches + levelNamePatches + musicLevelPatches + portalRoutePatches == 0 && flightStage == null && globalFlight == null || !File.Exists(currentImage))
+        if (objectPatches + terrainPatches + environmentGradePatches + skyboxPatches + levelNamePatches + musicLevelPatches + portalRoutePatches == 0 && flightStage == null && globalFlight == null && !gameSettingsOnly || !File.Exists(currentImage))
             return new CombinedTestBinResult("", "", objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, false);
 
         string stagedPrefix = Path.Combine(tempDir, Path.GetFileName(finalPrefix));
@@ -28274,7 +28285,7 @@ public sealed partial class MainWindow : Window
         AddHelpSection(panel, "Game Settings and Environment", [
             "This level: Level name changes the name on portals, loading screens and in the guidebook. Music picks the level's track. Portals & Return Home: choose where each portal leads and where Return Home goes.",
             "Whole game — Fly Anywhere: tick it and the game you export lets Spyro fly in every normal level — jump, then press ✕ again in the air — or open Choose levels and tick only the levels you want. It is separate from the editor's Game Camera.",
-            "Whole game — Hover: ▲ while gliding makes Spyro rise a little and drift on, as in Spyro 3. Play as Crash puts Crash in the levels you tick. Memory: Emulator only (8 MB RAM) lets levels hold more.",
+            "Whole game — Spyro's colours: any colour for each part of Spyro (body, belly, horns, head spikes, wings, tail tip, eyes), or a ready-made look. Hover: ▲ while gliding makes Spyro rise a little and drift on, as in Spyro 3. Play as Crash puts Crash in the levels you tick. Memory: Emulator only (8 MB RAM) lets levels hold more. Create BIN works with only these settings too.",
             "Environment: recolor the sky, borrow another level's sky, use a ready-made one, or import your own from a 360° picture or an OBJ/FBX model."
         ]);
 

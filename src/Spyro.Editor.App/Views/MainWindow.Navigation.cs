@@ -181,8 +181,10 @@ public sealed partial class MainWindow
         string find = _lastExportedCuePath == null ? "" : " Show Game File finds it.";
         string flight = message.Contains("Fly Anywhere is on", StringComparison.Ordinal) ? " Fly Anywhere is on."
             : message.Contains("Fly Anywhere is off", StringComparison.Ordinal) ? " Fly Anywhere is off." : "";
+        int with = message.IndexOf(" With ", StringComparison.Ordinal), from = message.IndexOf(" from Game Settings.", StringComparison.Ordinal);
+        string settings = with >= 0 && from > with ? message[with..(from + " from Game Settings.".Length)] : "";
         if (clean && message.StartsWith("Created all-edits test ", StringComparison.Ordinal))
-            return $"Game exported{file}. Open the CUE in your emulator.{find}{flight} Details lists what went in.";
+            return $"Game exported{file}.{settings} Open the CUE in your emulator.{find}{flight} Details lists what went in.";
         if (_releaseMode && clean && message.StartsWith("Created ", StringComparison.Ordinal) &&
             message.Contains(". New Game starts in ", StringComparison.Ordinal))
         {
