@@ -1,3 +1,20 @@
+# Spyro Editor 1.5 — 28 October 2026 (built, not yet published)
+
+Stable 1.5 (internal 1.5.0, schema 3, tag `v1.5` when published). Everything since 1.4 (`CHANGELOG.md`): Spyro's
+colours (`NativeSpyroColours`, `SpyroColourSettings`: Spyro's 17 palettes recoloured part by part in every level, the
+title screen and the cutscenes), Hover with the flight levels' wing flap (`NativeHover`, `NativeHoverFlap`), Create BIN
+from Game Settings alone, and the usability batch (view hint, File menu groups, Doorway rows, Game Settings groups, Help).
+
+Updates: 1.0-1.4 find 1.5 through their stable updater (the update code is the same in all of them). Beta V2-V5 are
+still offered Beta V6 (the 1.3 app), which then follows the stable channel to 1.5.
+
+Checks: gate `--build-all` 634 checks, 0 failed. SpyroColoursSmoke 28/89, HoverSmoke 32/23, UiSmoke Spyro's colours 18
+and its Create BIN runs (new project; copy of the owner's project with world: 53 checks). Package verifier passed for
+both platforms on the packages extracted from the zips. Updater code of Beta V2-V5 and stable 1.0-1.4 run offline
+against GitHub's list with 1.5 added: betas offered Beta V6, 1.0-1.4 offered 1.5, every download verified
+(`outputs/SpyroEditor-V1.5-20261028/updater-checks`). Emulator: colours in Artisans, a world level, the opening, title,
+loading screen and a rescue; the hover's flap in Artisans, none in Tree Tops (no room with 2 MB), flight drop unchanged.
+
 # Spyro Editor 1.4 — 19 October 2026
 
 Stable 1.4 (internal 1.4.0, schema 3, tag `v1.4`). Everything since 1.3 (`CHANGELOG.md`): New World built into the
