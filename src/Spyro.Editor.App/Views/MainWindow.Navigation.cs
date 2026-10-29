@@ -183,6 +183,8 @@ public sealed partial class MainWindow
             : message.Contains("Fly Anywhere is off", StringComparison.Ordinal) ? " Fly Anywhere is off." : "";
         int with = message.IndexOf(" With ", StringComparison.Ordinal), from = message.IndexOf(" from Game Settings.", StringComparison.Ordinal);
         string settings = with >= 0 && from > with ? message[with..(from + " from Game Settings.".Length)] : "";
+        int noFlap = message.IndexOf(" Hover: no room for Spyro's wing flap in ", StringComparison.Ordinal);
+        if (noFlap >= 0) settings += message[noFlap..(message.IndexOf("without flapping.", noFlap, StringComparison.Ordinal) + "without flapping.".Length)];
         if (clean && message.StartsWith("Created all-edits test ", StringComparison.Ordinal))
             return $"Game exported{file}.{settings} Open the CUE in your emulator.{find}{flight} Details lists what went in.";
         if (_releaseMode && clean && message.StartsWith("Created ", StringComparison.Ordinal) &&

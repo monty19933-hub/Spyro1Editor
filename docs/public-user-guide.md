@@ -260,11 +260,15 @@ says how many. Translucent original tiles cannot currently be copied or removed.
   their own rules. This is separate from the editor's **Game Camera**, which
   always flies.
 - **Hover**: tick **Let Spyro hover (from Spyro 3)** and, in the games you
-  create, pressing ▲ while gliding makes Spyro rise about as high as a short jump
-  and drift on a little before he drops, as in Spyro 2 and 3: good for a ledge
-  just out of reach. As in those games he can't glide again until he lands. It is
-  in every level of the game; unticked, ▲ in a glide drops Spyro straight down as
-  in the original game. It is saved with the project.
+  create, pressing ▲ while gliding makes Spyro beat his wings, rise about as high
+  as a short jump and drift on a little before he drops, as in Spyro 2 and 3:
+  good for a ledge just out of reach. As in those games he can't glide again
+  until he lands. It is in every level of the game; unticked, ▲ in a glide drops
+  Spyro straight down as in the original game. It is saved with the project. The
+  wing flap is the flight levels' own, which Create BIN adds to each level that
+  has room for it; with a PlayStation's 2 MB, Tree Tops, Haunted Towers and
+  Twilight Harbor have none, so there Spyro hovers without flapping (with
+  Emulator only (8 MB RAM) every level has it).
 - **Spyro's colours**: give Spyro any colours you like, part by part: **Body**
   (head, back, legs, snout and tail), **Belly**, **Horns**, **Head spikes** (the
   spiky fins behind his head), **Wing frame**, **Wing skin**, **Tail tip**,

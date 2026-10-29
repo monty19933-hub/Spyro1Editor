@@ -18,13 +18,15 @@ public sealed partial class MainWindow
     private Control BuildHoverSection()
     {
         StackPanel content = new() { Name = "HoverPanel", Spacing = 6, Margin = new Avalonia.Thickness(2, 4, 2, 2) };
-        ToolTip.SetTip(_hoverEnabled, "While gliding, press ▲ (Triangle): Spyro flaps up a little and carries on forward, then drops, as in Spyro 2 and 3.");
+        ToolTip.SetTip(_hoverEnabled, "While gliding, press ▲ (Triangle): Spyro beats his wings, rises a little and carries on forward, then drops, as in Spyro 2 and 3.");
         content.Children.Add(_hoverEnabled);
         content.Children.Add(new TextBlock
         {
-            Text = "While gliding, press ▲ to rise about as high as a short jump and drift on a little, then drop: good for a " +
-                   "ledge just out of reach. As in Spyro 3, Spyro can't glide again until he lands. Without it, ▲ in a glide " +
-                   "drops Spyro straight down, as in the original game. It is in every level of the games you create.",
+            Text = "While gliding, press ▲: Spyro beats his wings (the flap from the flight levels), rises about as high as a " +
+                   "short jump and drifts on a little, then drops: good for a ledge just out of reach. As in Spyro 3, he can't " +
+                   "glide again until he lands. Without it, ▲ in a glide drops Spyro straight down, as in the original game. It is " +
+                   "in every level of the games you create; a level with no room for the flap (with 2 MB: Tree Tops, Haunted " +
+                   "Towers, Twilight Harbor) has the hover without it.",
             TextWrapping = TextWrapping.Wrap, FontSize = 12, LineHeight = 17, Foreground = new SolidColorBrush(ModernMutedInk),
             Margin = new Avalonia.Thickness(26, 0, 0, 4)
         });
@@ -52,7 +54,7 @@ public sealed partial class MainWindow
         SpyroMovesSettings.SaveHover(_workspace.RootPath, on);
         EditorDiagnostics.RecordAction("Hover choice", on ? "on" : "off");
         _statusText.Text = on
-            ? "Hover is on: in the next game you create, ▲ while gliding makes Spyro rise a little and drift on, as in Spyro 3."
+            ? "Hover is on: in the next game you create, ▲ while gliding makes Spyro beat his wings, rise a little and drift on, as in Spyro 3."
             : "Hover is off: ▲ while gliding drops Spyro straight down, as in the original game.";
     }
 

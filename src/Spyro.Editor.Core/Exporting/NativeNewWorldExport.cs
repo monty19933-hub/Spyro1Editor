@@ -93,6 +93,7 @@ public static class NativeNewWorldExport
             levels.FirstOrDefault(l => l.Document.WorldLevelId == id)?.Document is { } d ? NativeWorldEntrance.DoorwaySky(NativeWorldEntrance.SceneSky(donors.ImagePath, d))
             : id == entryHome.LevelId && LevelSkyResolver.Original(donors.ImagePath, entryHome.SourceWadEntry) is { } back ? NativeWorldEntrance.DoorwaySky(back) : null;
 
+        var flap = NativeHover.Enabled ? await NativeHoverFlap.CaptureAsync(donors.ImagePath, token) : null;
         Dictionary<int, byte[]> entries = [];
         List<(WorldLevel Level, int Template, int Music, int Kill, int Gems, int Dragons, IReadOnlyDictionary<uint, uint> Bindings)> built = [];
         Dictionary<int, int> near = [];
@@ -128,6 +129,13 @@ public static class NativeNewWorldExport
                 overlay = composed.Overlay; data = composed.LevelData; exe = composed.Executable;
                 slot = NativeLevelWindow.WindowIndex; templateId = NativeLevelWindow.FreshTemplate;
                 near[id] = compilation.NearDistance;
+            }
+            // Hover's wing flap in the world's levels (the rest of the game has it already).
+            if (flap != null)
+            {
+                uint copy = new UniversalOverlay(overlay, UniversalExeBindings.Read(exe, id == NewWorldDocument.Homeworld ? template.LevelId : NativeLevelWindow.FreshTemplate)).CopyBuffer;
+                if (flap.Merge(data, copy) is { } withFlap) data = withFlap;
+                else NativeHover.RecordWithoutFlap([doc.Name]);
             }
             // The music table holds the track number itself (LevelMusicPatchExporter's level-track word).
             int music = doc.MusicTrack;

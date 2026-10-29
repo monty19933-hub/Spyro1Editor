@@ -63,8 +63,8 @@ class OwnedCommandTests(unittest.TestCase):
 
     def test_hover_smoke_registration(self):
         name = "HoverSmoke"
-        self.assertIn((name, "HOVER_FREE_OK checks=20"), RUNNER.CORE_CASES)
-        self.assertIn((name, "HOVER_SOURCE_OK checks=15", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertIn((name, "HOVER_FREE_OK checks=32"), RUNNER.CORE_CASES)
+        self.assertIn((name, "HOVER_SOURCE_OK checks=23", ["--source"]), RUNNER.SOURCE_QA_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
 

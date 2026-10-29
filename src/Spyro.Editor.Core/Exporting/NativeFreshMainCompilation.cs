@@ -226,6 +226,9 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
             new(overlayData,UniversalExeBindings.Read(exe,65)),freshParticleBinding);
         // Emulator only (8 MB RAM): the scenes load in the extra memory; every level is checked against that layout.
         NativeHover.ApplyForExport(exe);
+        // Hover's wing flap in every level that lacks it, this one too (before the memory checks below).
+        await NativeHoverFlap.ApplyForExportAsync(donors.ImagePath,replacements,baseline.EntryBytes,exe,
+            nativeCatalog.Levels.Where(l=>l.LevelId!=65).Append(Target),token);
         NativeExtendedRam.ApplyForExport(exe,entry=>replacements.TryGetValue(entry,out var bytes)?bytes:baseline.EntryBytes(entry),
             nativeCatalog.Levels.Where(l=>l.LevelId!=65).Append(Target),donors.Disc);
         // Spyro's colours (Game Settings): every level (this one too), the title screen and the cutscenes.

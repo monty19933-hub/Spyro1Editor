@@ -206,6 +206,8 @@ public static class NativeAuthoredProjectExporter
         foreach(var(entry,animations) in supercharged)animations.RequireDestination(replacements[entry]);
         // Emulator only (8 MB RAM): the scenes load in the extra memory; every level is checked against that layout.
         NativeHover.ApplyForExport(exe);
+        // Hover's wing flap in every level that lacks it (before the memory checks below measure the levels).
+        await NativeHoverFlap.ApplyForExportAsync(donors.ImagePath,replacements,baseline.EntryBytes,exe,catalog.Levels,token);
         NativeExtendedRam.ApplyForExport(exe,entry=>replacements.TryGetValue(entry,out var bytes)?bytes:baseline.EntryBytes(entry),catalog.Levels,donors.Disc);
         // Spyro's colours (Game Settings): every level, the title screen and the cutscenes.
         NativeSpyroColours.ApplyForExport(replacements,baseline.EntryBytes);

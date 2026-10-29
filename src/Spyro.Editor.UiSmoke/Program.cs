@@ -298,12 +298,13 @@ if (args.Contains("--spyro-colours-ui-only", StringComparer.Ordinal))
     return 0;
 }
 
-if (args.Length is 3 && args[0] == "--spyro-colours-export-ui")
+if (args.Length is 3 or 4 && args[0] == "--spyro-colours-export-ui")
 {
-    // <output> then a project folder (cloned) or the original disc image (a new project with nothing else).
+    // <output> then a project folder (cloned) or the original disc image (a new project with nothing else); "hover" adds
+    // Game Settings › Hover.
     HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
     bool isProject = Directory.Exists(args[2]);
-    SpyroColoursUiCases.RunExport(args[1], isProject ? args[2] : null, isProject ? null : args[2]);
+    SpyroColoursUiCases.RunExport(args[1], isProject ? args[2] : null, isProject ? null : args[2], args.Length == 4 && args[3] == "hover");
     return 0;
 }
 

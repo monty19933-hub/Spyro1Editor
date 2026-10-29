@@ -113,13 +113,17 @@ public sealed partial class MainWindow
         if (!disposable && !PathsEqual(currentImage, sourceImage))
             return (currentImage, currentCue);
         string image = Path.Combine(tempDir, $"{step:00}-game-settings.bin");
-        await Task.Run(() =>
+        await Task.Run(async () =>
         {
             var disc = UniversalDiscImage.Read(currentImage);
             byte[] exe = disc.Exe.ToArray();
             NativeHover.ApplyForExport(exe);
-            if (GameRam.Extended) NativeExtendedRam.ApplyForExport(exe, disc.EntryBytes, catalog.Levels, UniversalDiscImage.Read(sourceImage));
-            byte[] wad = disc.Wad.ToArray();
+            // Hover's wing flap in every level that lacks it (the levels grow, so the WAD is rebuilt).
+            Dictionary<int, byte[]> replacements = [];
+            await NativeHoverFlap.ApplyForExportAsync(sourceImage, replacements, disc.EntryBytes, exe, catalog.Levels);
+            byte[] Entry(int entry) => replacements.TryGetValue(entry, out var bytes) ? bytes : disc.EntryBytes(entry);
+            if (GameRam.Extended) NativeExtendedRam.ApplyForExport(exe, Entry, catalog.Levels, UniversalDiscImage.Read(sourceImage));
+            byte[] wad = replacements.Count == 0 ? disc.Wad.ToArray() : disc.RebuildWad(replacements);
             NativeSpyroColours.ApplyForExport(wad);
             disc.WriteImage(image, wad, exe);
             var read = UniversalDiscImage.Read(image);

@@ -311,8 +311,11 @@ public sealed partial class MainWindow
         List<string> parts = [];
         if (NativeSpyroColours.Enabled) parts.Add("Spyro's colours");
         if (NativeHover.Enabled) parts.Add("the hover");
-        return parts.Count == 0 ? "" : " With " + string.Join(" and ", parts) + " from Game Settings.";
+        return (parts.Count == 0 ? "" : " With " + string.Join(" and ", parts) + " from Game Settings.") + HoverFlapNote();
     }
+
+    /// <summary>The levels of the export just made where Spyro hovers without flapping (no room for the flap).</summary>
+    private static string HoverFlapNote() => NativeHoverFlap.NoRoomNote(NativeHover.CurrentLevelsWithoutFlap);
 
     /// <summary>Create BIN's colour scope: the export's last steps recolour Spyro when the project asks.</summary>
     private NativeSpyroColours.Scope UseProjectSpyroColours()

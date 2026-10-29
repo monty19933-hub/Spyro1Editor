@@ -334,7 +334,7 @@ public sealed partial class MainWindow
         string entryName=world==null?"":_retailCatalog.FindByKey(world.EntryHomeworldKey)?.DisplayName??world.EntryHomeworldKey;
         string worldNote=world==null||worldScenes.Count==0?"":$" Your new world {world.Name} is in it ({Count(worldScenes.Count,"level","levels")}; "+
             (worldEntrance!=null?$"Spyro walks in from {entryName}":$"it has no way in from {entryName} yet (World Entrance)")+"; save in it with a new save file).";
-        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. All saved level replacements and other saved edits are included."+worldNote+flightNote+PreservedResearchExportNote()+MemoryModeExportNote(memory);
+        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. All saved level replacements and other saved edits are included."+worldNote+flightNote+PreservedResearchExportNote()+MemoryModeExportNote(memory)+HoverFlapNote();
         }
         // The merged retail image is a working copy for this export only.
         finally{if(retailStage!=null)ExportScratchSpace.Delete(retailStage);}

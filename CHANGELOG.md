@@ -4,7 +4,7 @@ New
 
 - Game Settings › Spyro's colours: give Spyro any colours you like, part by part: body, belly, horns, the spiky fins behind his head, wing frame, wing skin, tail tip, eyes and pupils. Each part keeps his shading. Pick a colour from the quick colours, with the hue, richness and brightness sliders or as #RRGGBB, or start from a look (Ember, Ice, Emerald, Gold, Shadow; Classic puts him back). The colours are in every level, on the title screen, the loading screens and in the cutscenes of the games you create.
 - Create BIN makes a game from Game Settings alone (Spyro's colours, Hover), with no level edits needed.
-- Game Settings › Hover: Spyro 3's hover in the games you create. Pressing ▲ while gliding makes Spyro rise about as high as a short jump and drift on a little, then drop; as in Spyro 2 and 3 he can't glide again until he lands. Off unless you tick it.
+- Game Settings › Hover: Spyro 3's hover in the games you create. Pressing ▲ while gliding makes Spyro beat his wings (the flap from the flight levels), rise about as high as a short jump and drift on a little, then drop; as in Spyro 2 and 3 he can't glide again until he lands. Off unless you tick it. Create BIN adds the flap to every level that has room for it (4.5 KB); with a PlayStation's 2 MB, Tree Tops, Haunted Towers and Twilight Harbor have none, and there Spyro hovers without flapping.
 
 # Spyro Editor 1.4
 

@@ -113,7 +113,7 @@ internal static class SpyroColoursUiCases
     }
 
     /// <summary>The export case (see the class notes). <paramref name="disc"/>: the original USA image for a new project.</summary>
-    internal static void RunExport(string outDir, string? project, string? disc)
+    internal static void RunExport(string outDir, string? project, string? disc, bool hover = false)
     {
         _checks = 0;
         Directory.CreateDirectory(outDir);
@@ -140,6 +140,8 @@ internal static class SpyroColoursUiCases
             foreach (string name in new[] { "spyro-level-catalog.json", "spyro-object-templates.json" })
                 if (File.Exists(Path.Combine(repo, name))) File.Copy(Path.Combine(repo, name), Path.Combine(support, name));
         }
+        // Hover too (Game Settings › Hover): its code and wing flap go in with the colours.
+        if (hover) SpyroMovesSettings.SaveHover(workspace, true);
         foreach (string name in IsolatedRoots) Environment.SetEnvironmentVariable(name, Directory.CreateDirectory(Path.Combine(outDir, "isolated", name)).FullName);
         Environment.SetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE", workspace);
         Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "1");
@@ -215,8 +217,21 @@ internal static class SpyroColoursUiCases
                     Enumerable.Range(0, 17).All(k => b.AsSpan(0x800 + NativeSpyroColours.PaletteOffset(NativeSpyroColours.Palettes[k]), 32).SequenceEqual(recoloured.AsSpan(k * 32, 32)));
             });
             if (File.Exists(NewWorldDocumentPath(workspace))) Check(world >= 5, $"the new world's 5 levels have his new colours ({world})");
-            if (project == null)
+            if (project == null && !hover)
                 Check(made.Exe.AsSpan().SequenceEqual(original.Exe), "from Game Settings alone the executable is the USA game's");
+            if (hover)
+            {
+                byte[] expected = original.Exe.ToArray(); NativeHover.Install(expected);
+                Check(project != null || made.Exe.AsSpan().SequenceEqual(expected), "from Game Settings alone the executable is the USA game's with Hover");
+                Check(NativeHover.IsInstalled(made.Exe.ToArray()), "the game has Hover");
+                var flap = Task.Run(() => NativeHoverFlap.CaptureAsync(sourceImage)).GetAwaiter().GetResult();
+                var catalog = Get<Spyro.Editor.Core.Levels.LevelCatalog>(window, "_retailCatalog");
+                int flapping = catalog.Levels.Count(l => flap.Carries(made.EntryBytes(l.SourceWadEntry)));
+                Check(flapping >= 32, $"the levels have Spyro's wing flap ({flapping} of {catalog.Levels.Count})");
+                if (project == null)
+                    Check(flapping == 32 && created.Contains("no room for Spyro's wing flap in") && created.Contains("Twilight Harbor"),
+                        "with 2 MB all but three levels flap, and Create BIN names those: " + created);
+            }
             string copyPath = Path.Combine(outDir, "spyro-colours.bin");
             File.Copy(bins[0], copyPath, overwrite: true);
             File.WriteAllText(Path.ChangeExtension(copyPath, ".cue"), "FILE \"spyro-colours.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n");
