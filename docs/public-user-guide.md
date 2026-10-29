@@ -1,4 +1,4 @@
-# Spyro Editor 1.4
+# Spyro Editor 1.5
 
 Spyro Editor changes the levels of the original PlayStation game *Spyro the Dragon*
 (USA) and builds a new, playable copy of the game from your changes. It never
