@@ -9,6 +9,7 @@ using Avalonia.Platform.Storage;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Generation;
 using Spyro.Editor.Core.Levels;
+using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Universal;
 
 namespace Spyro.Editor.App.Views;
@@ -204,7 +205,8 @@ public sealed partial class MainWindow
             try
             {
                 var catalog = _retailCatalog;
-                var result = await Task.Run(() => RandomLevelGenerator.Generate(options with { Textures = LevelTextureMode.GameTextures, Pictures = new Dictionary<SurfaceRole, string>() }, catalog, token: cancelSource.Token), cancelSource.Token);
+                var lookSource = RandomLevelLookSource();
+                var result = await Task.Run(() => RandomLevelGenerator.Generate(options with { Textures = LevelTextureMode.GameTextures, Pictures = new Dictionary<SurfaceRole, string>() }, catalog, token: cancelSource.Token, source: lookSource), cancelSource.Token);
                 if (cancelSource.IsCancellationRequested) return;
                 preview = result; previewOptions = options;
                 map.Source = MapBitmap(result);
@@ -241,6 +243,31 @@ public sealed partial class MainWindow
             preview = preview with { Scene = preview.Scene with { Name = typed } };
         return (new RandomLevelChoice(final, chosen.Place, chosen.World, fill.IsChecked == true), same ? preview : null);
     }
+
+    /// <summary>Reads a look's level from the project's level cache (the untouched original terrain), so the generator
+    /// can stand that level's own towers, trees and rocks in the new level. Called off the UI thread; a level that
+    /// cannot be read gives none, and the level is made without them.</summary>
+    private Func<string, LevelPropSource?> RandomLevelLookSource()
+    {
+        var paths = LevelThemes.All.ToDictionary(t => t.Key, t => FindCachedTerrainOverlayPath(t.Key), StringComparer.OrdinalIgnoreCase);
+        return key =>
+        {
+            if (!paths.TryGetValue(key, out string? path) || string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return null;
+            lock (_randomLevelLookSources)
+            {
+                if (_randomLevelLookSources.TryGetValue(path, out var known)) return known;
+                LevelPropSource? read = null;
+                try
+                {
+                    if (GeometryCacheHealth.InspectOverlay(key, path)?.BlocksLoading != true)
+                        read = LevelPropSource.FromGeometry(key, GeometryOverlayLoader.LoadFirstCandidate(path));
+                }
+                catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException or UnauthorizedAccessException) { }
+                return _randomLevelLookSources[path] = read;
+            }
+        };
+    }
+    private readonly Dictionary<string, LevelPropSource?> _randomLevelLookSources = new(StringComparer.OrdinalIgnoreCase);
 
     private static WriteableBitmap MapBitmap(RandomLevelResult r)
     {
@@ -351,7 +378,8 @@ public sealed partial class MainWindow
                 carriers = new(_pictureCarriers, folder);
             }
             string? replaced = choice.Place == RandomLevelPlace.OpenLevel ? _freshSceneDocument?.TargetBinding?.LevelKey ?? slot?.Key : null;
-            RandomLevelResult result = preview ?? await Task.Run(() => RandomLevelGenerator.Generate(options, _retailCatalog, carriers));
+            var lookSource = RandomLevelLookSource();
+            RandomLevelResult result = preview ?? await Task.Run(() => RandomLevelGenerator.Generate(options, _retailCatalog, carriers, source: lookSource));
             // Fewer textures when they do not fit the built level's texture memory.
             if (!string.IsNullOrEmpty(disc) && File.Exists(disc))
             {
@@ -363,7 +391,7 @@ public sealed partial class MainWindow
                     budget = Math.Min(budget, result.Materials.Count) - 3;
                     if (budget < 5) { _statusText.Text = "The level's textures do not fit the game's texture memory: " + problem; return; }
                     int b = budget;
-                    result = await Task.Run(() => RandomLevelGenerator.Generate(options, _retailCatalog, carriers, b));
+                    result = await Task.Run(() => RandomLevelGenerator.Generate(options, _retailCatalog, carriers, b, source: lookSource));
                 }
             }
             foreach (var p in result.Pictures) await TerrainTexturePngWriter.WriteRgbaAsync(p.Path, 64, 64, p.Pixels);

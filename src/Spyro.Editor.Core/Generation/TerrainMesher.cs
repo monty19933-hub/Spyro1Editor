@@ -9,6 +9,10 @@ internal sealed record TerrainPiece(Vector3f[] Corners, SurfaceRole Role, double
 {
     public bool Collides { get; init; } = true;
     public bool TwoSided { get; init; }
+    public bool FrontReversed { get; init; }
+    /// <summary>A face lifted from the look's level keeps that level's texture and its own colours, not a role's.</summary>
+    public int? Texture { get; init; }
+    public ColorRgba[]? Paint { get; init; }
 }
 
 /// <summary>Turns a <see cref="TerrainPlan"/> into faces the way the game's own levels are built: one welded sheet of
@@ -488,7 +492,7 @@ internal sealed class TerrainMesher
     }
 
     private double WallLight(double t, Vector3f p) =>
-        Math.Clamp(0.1 + 0.78 * t * Math.Sqrt(t) + 0.08 * _plan.Noise.At(p.X / 300.0 + 61, p.Y / 300.0 + 3), 0, 1);
+        Math.Clamp(0.2 + 0.78 * t * Math.Sqrt(t) + 0.08 * _plan.Noise.At(p.X / 300.0 + 61, p.Y / 300.0 + 3), 0, 1);
 
     private static double Up(Vector3f[] p)
     {

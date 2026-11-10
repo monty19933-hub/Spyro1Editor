@@ -30,6 +30,8 @@ public static class LevelDna
 
     public static IReadOnlyList<ColorRgba>? Ramp(string level, int id) => Entries.TryGetValue((level, id), out var e) ? e.Ramp : null;
     public static ColorRgba? Average(string level, int id) => Entries.TryGetValue((level, id), out var e) ? e.Average : null;
+    /// <summary>Whether a built level can carry the level's texture (a still picture in the game's usual layout).</summary>
+    public static bool Static(string level, int id) => LevelDnaTable.Static.TryGetValue(level, out var ids) && Array.IndexOf(ids, id) >= 0;
 }
 
 /// <summary>The colours a role is painted in when the generator paints its own pictures: base, dark and light.</summary>
@@ -90,7 +92,9 @@ public static class LevelThemes
     {
         var map = textures.ToDictionary(t => t.Role, t => new ThemeTexture(level, t.Id));
         foreach (var (role, from) in Fallbacks) if (!map.ContainsKey(role)) map[role] = map[from];
-        map[SurfaceRole.Water] = Water; map[SurfaceRole.Lava] = Lava; map[SurfaceRole.Goo] = Goo; map[SurfaceRole.Charge] = Chevrons;
+        // A look's own water where the level has still water; else the game's plainest.
+        map.TryAdd(SurfaceRole.Water, Water);
+        map[SurfaceRole.Lava] = Lava; map[SurfaceRole.Goo] = Goo; map[SurfaceRole.Charge] = Chevrons;
         // The colours a painted picture of each surface is made in: the texture's own colour under the level's paint.
         var colours = new Dictionary<SurfaceRole, ThemeColors>();
         foreach (var (role, t) in map)
@@ -100,7 +104,7 @@ public static class LevelThemes
             ColorRgba Lit(ColorRgba paint) => new((byte)Math.Min(255, average.R * paint.R / 128), (byte)Math.Min(255, average.G * paint.G / 128), (byte)Math.Min(255, average.B * paint.B / 128));
             colours[role] = new(Lit(ramp[ramp.Count / 2]), Lit(ramp[ramp.Count / 5]), Lit(ramp[ramp.Count - 2]));
         }
-        colours[SurfaceRole.Water] = new(new(48, 112, 200), new(30, 70, 124), new(60, 140, 250));
+        if (map[SurfaceRole.Water] == Water) colours[SurfaceRole.Water] = new(new(48, 112, 200), new(30, 70, 124), new(60, 140, 250));
         colours[SurfaceRole.Lava] = new(new(232, 96, 24), new(144, 60, 15), new(255, 120, 30));
         colours[SurfaceRole.Goo] = new(new(150, 48, 170), new(93, 30, 105), new(188, 60, 212));
         colours[SurfaceRole.Charge] = new(new(240, 200, 64), new(149, 124, 40), new(255, 250, 80));
@@ -121,12 +125,14 @@ public static class LevelThemes
     public static LevelTheme Artisans { get; } = Look("artisans", "Artisans", [0, 2, 26], MeadowAdjectives, MeadowNouns,
         [(LevelStyle.Valley, 4), (LevelStyle.Castle, 2), (LevelStyle.Islands, 2), (LevelStyle.Canyon, 1), (LevelStyle.SkyIslands, 1), (LevelStyle.Caverns, 1)],
         (SurfaceRole.Ground, 39), (SurfaceRole.GroundAlt, 64), (SurfaceRole.Path, 44), (SurfaceRole.Cliff, 61), (SurfaceRole.CliffTop, 47),
-        (SurfaceRole.Rock, 59), (SurfaceRole.Brick, 21), (SurfaceRole.Paving, 17), (SurfaceRole.Roof, 22), (SurfaceRole.Wood, 24), (SurfaceRole.Ceiling, 57));
+        (SurfaceRole.Rock, 59), (SurfaceRole.Brick, 21), (SurfaceRole.Paving, 17), (SurfaceRole.Roof, 22), (SurfaceRole.Wood, 24), (SurfaceRole.Ceiling, 57),
+        (SurfaceRole.Water, 27));
 
     public static LevelTheme StoneHill { get; } = Look("stonehill", "Stone Hill", [2, 0], StoneAdjectives, StoneNouns,
         [(LevelStyle.Valley, 4), (LevelStyle.Islands, 3), (LevelStyle.Castle, 2), (LevelStyle.Canyon, 1)],
         (SurfaceRole.Ground, 40), (SurfaceRole.GroundAlt, 40), (SurfaceRole.Path, 13), (SurfaceRole.Cliff, 11), (SurfaceRole.CliffTop, 12),
-        (SurfaceRole.Rock, 19), (SurfaceRole.Brick, 21), (SurfaceRole.Paving, 18), (SurfaceRole.Roof, 20), (SurfaceRole.Wood, 29), (SurfaceRole.Sand, 30));
+        (SurfaceRole.Rock, 19), (SurfaceRole.Brick, 21), (SurfaceRole.Paving, 18), (SurfaceRole.Roof, 20), (SurfaceRole.Wood, 29), (SurfaceRole.Sand, 30),
+        (SurfaceRole.Water, 32));
 
     public static LevelTheme DarkHollow { get; } = Look("darkhollow", "Dark Hollow", [32], DuskAdjectives, DuskNouns,
         [(LevelStyle.Valley, 3), (LevelStyle.Castle, 3), (LevelStyle.Caverns, 1), (LevelStyle.SkyIslands, 1)],
@@ -231,17 +237,48 @@ public static class LevelThemes
         CloudAmount = 0.5, SkyHills = new(60, 44, 56),
     };
 
+    public static LevelTheme TownSquare { get; } = Look("townsquare", "Town Square", [26, 0], CastleAdjectives, ["SQUARE", "TOWN", "MARKET", "COURT", "ROOFTOPS", "PLAZA"],
+        [(LevelStyle.Castle, 5), (LevelStyle.SkyIslands, 2), (LevelStyle.Valley, 1)],
+        (SurfaceRole.Ground, 6), (SurfaceRole.GroundAlt, 5), (SurfaceRole.Path, 50), (SurfaceRole.Cliff, 16), (SurfaceRole.CliffTop, 32),
+        (SurfaceRole.Rock, 36), (SurfaceRole.Brick, 15), (SurfaceRole.Paving, 28), (SurfaceRole.Roof, 3));
+
+    public static LevelTheme CliffTown { get; } = Look("clifftown", "Cliff Town", [27, 3], DesertAdjectives, ["TOWN", "PUEBLO", "BLUFFS", "MESA", "TERRACES", "CLIFFS"],
+        [(LevelStyle.Canyon, 4), (LevelStyle.Castle, 2), (LevelStyle.Islands, 1), (LevelStyle.Caverns, 1)],
+        (SurfaceRole.Ground, 41), (SurfaceRole.GroundAlt, 1), (SurfaceRole.Path, 30), (SurfaceRole.Cliff, 29), (SurfaceRole.CliffTop, 35),
+        (SurfaceRole.Rock, 27), (SurfaceRole.Brick, 26), (SurfaceRole.Paving, 14), (SurfaceRole.Wood, 15), (SurfaceRole.CaveWall, 36),
+        (SurfaceRole.Underside, 37)) with
+    {
+        Liquid = SurfaceRole.Goo, SkyTop = new(90, 110, 200), SkyHorizon = new(250, 180, 110), SkyBelow = new(200, 120, 70), CloudAmount = 0.25, SkyHills = new(180, 100, 60),
+    };
+
+    public static LevelTheme HighCaves { get; } = Look("highcaves", "High Caves", [46, 31], MagicAdjectives, MagicNouns,
+        [(LevelStyle.Caverns, 5), (LevelStyle.Valley, 2), (LevelStyle.Canyon, 2)],
+        (SurfaceRole.Ground, 37), (SurfaceRole.GroundAlt, 69), (SurfaceRole.Path, 86), (SurfaceRole.Cliff, 85), (SurfaceRole.CliffTop, 16),
+        (SurfaceRole.Rock, 28), (SurfaceRole.Brick, 64), (SurfaceRole.CaveWall, 84), (SurfaceRole.Ceiling, 23), (SurfaceRole.Underside, 24)) with
+    {
+        Peaks = true, SkyTop = new(70, 90, 190), SkyHorizon = new(200, 180, 235), SkyBelow = new(150, 140, 200), SkyHills = new(170, 150, 210),
+    };
+
+    public static LevelTheme DarkPassage { get; } = Look("darkpassage", "Dark Passage", [12, 34], DuskAdjectives, ["PASSAGE", "GROTTO", "CRYPT", "HOLLOW", "DEPTHS", "RUINS"],
+        [(LevelStyle.Caverns, 3), (LevelStyle.Castle, 3), (LevelStyle.Valley, 2), (LevelStyle.SkyIslands, 1)],
+        (SurfaceRole.Ground, 23), (SurfaceRole.GroundAlt, 31), (SurfaceRole.Path, 38), (SurfaceRole.Cliff, 21), (SurfaceRole.CliffTop, 13),
+        (SurfaceRole.Rock, 29), (SurfaceRole.Brick, 18), (SurfaceRole.CaveWall, 12), (SurfaceRole.Ceiling, 29)) with
+    {
+        Peaks = true, SkyTop = new(8, 12, 40), SkyHorizon = new(48, 64, 112), SkyBelow = new(16, 24, 48), SkySun = new(232, 236, 255), SkyClouds = new(56, 64, 96),
+        CloudAmount = 0.3, Stars = true, SkyHills = new(20, 28, 48),
+    };
+
     public static IReadOnlyList<LevelTheme> All { get; } =
     [
-        Artisans, StoneHill, DarkHollow, PeaceKeepers, DryCanyon, IceCavern, MagicCrafters, WizardPeak, MistyBog, TreeTops,
-        DreamWeavers, LoftyCastle, HauntedTowers, TwilightHarbor,
+        Artisans, StoneHill, DarkHollow, TownSquare, PeaceKeepers, DryCanyon, CliffTown, IceCavern, MagicCrafters, HighCaves, WizardPeak,
+        MistyBog, TreeTops, DreamWeavers, DarkPassage, LoftyCastle, HauntedTowers, TwilightHarbor,
     ];
 
     /// <summary>The looks of the first generator, by the level that now stands for each.</summary>
     private static readonly Dictionary<string, string> Earlier = new(StringComparer.OrdinalIgnoreCase)
     {
         ["meadow"] = "artisans", ["highland"] = "stonehill", ["sky"] = "loftycastle", ["desert"] = "drycanyon", ["winter"] = "icecavern",
-        ["swamp"] = "mistybog", ["volcano"] = "peacekeepers", ["castle"] = "hauntedtowers", ["night"] = "darkhollow",
+        ["swamp"] = "mistybog", ["volcano"] = "peacekeepers", ["castle"] = "hauntedtowers", ["night"] = "darkpassage",
     };
 
     public static LevelTheme? Find(string? key) => key == null ? null

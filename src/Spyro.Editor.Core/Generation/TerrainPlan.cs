@@ -347,8 +347,8 @@ internal sealed class TerrainPlan
             case Enclosure:
                 if (Kind == EnclosureKind.Cliff) return CapRole;
                 if (Kind == EnclosureKind.Peaks && Land(x, y) > BankWidth * 0.6) return nz < 0.8 ? SurfaceRole.Cliff : SurfaceRole.Rock;
-                // A bank: its steep lower half is bare rock in stretches, the rest grass.
-                return Land(x, y) < BankWidth * BankSplit && Noise.At(x / 520 + 70, y / 520 + 33) > RockShare ? SurfaceRole.Cliff : SurfaceRole.GroundAlt;
+                // A bank is bare rock in stretches, grass in others; over its top, grass.
+                return Land(x, y) < BankWidth && Noise.At(x / 520 + 70, y / 520 + 33) > RockShare ? SurfaceRole.Cliff : SurfaceRole.GroundAlt;
             case Fill: return Kind == EnclosureKind.Sea && -Land(x, y) < Beach * 0.45 ? SurfaceRole.Sand : SurfaceRole.Ground;
         }
         var z = Zones[layer];
@@ -432,10 +432,7 @@ internal sealed class TerrainPlan
             if (z.Kind == "room" && !z.Crisp) { var zone = z; yield return ((x, y) => zone.Sdf(x, y, Noise), 2); }
         foreach (var d in Decals) { var decal = d; yield return ((x, y) => decal.Sdf(x, y, Noise), 1.6); }
         if (Kind is EnclosureKind.Bank or EnclosureKind.Peaks)
-        {
-            yield return ((x, y) => Land(x, y) - BankWidth * BankSplit, 1.8);
-            yield return ((x, y) => Land(x, y) - BankWidth, 2.2);
-        }
+            yield return ((x, y) => Land(x, y) - BankWidth, 1.8);
         if (Kind is not EnclosureKind.Sky)
             yield return ((x, y) => Land(x, y) - TrimDistance, 3);
     }

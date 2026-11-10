@@ -40,50 +40,109 @@ internal static class SpyroStructures
         }
     }
 
-    /// <summary>Towers either side of where each path leaves a room, standing on the bank; more round a castle's yards.</summary>
-    public static List<TerrainPiece> Build(PlannedLevel L, LevelStyle style, LevelRandom rnd)
+    /// <summary>The report's count of things lifted from the look's level.</summary>
+    public const string OwnThings = "own";
+
+    /// <summary>Most of the level's faces that may be things rather than land, and most textures those things may add.</summary>
+    public const int PropFaces = 420, PropTextures = 8;
+
+    /// <summary>What stands on the land: the look's own towers, trees, rocks and arches where its level was read
+    /// (<paramref name="props"/>), else round towers built here. Tall ones stand either side of where paths leave rooms
+    /// (round a castle's yards, at both ends); small ones on the banks and rims round the rooms and at the rooms' edges.</summary>
+    public static List<TerrainPiece> Build(PlannedLevel L, LevelStyle style, LevelRandom rnd, IReadOnlyList<LevelProp>? props = null)
     {
         var plan = L.Plan; var pieces = new List<TerrainPiece>();
-        if (plan.Kind is EnclosureKind.Sea or EnclosureKind.Sky || style is LevelStyle.Canyon or LevelStyle.Caverns) return pieces;
-        bool castle = style == LevelStyle.Castle;
-        var placed = new List<(double X, double Y)>();
-        void Stand(double x, double y, double tall)
+        bool castle = style == LevelStyle.Castle, free = plan.Kind is EnclosureKind.Sea or EnclosureKind.Sky;
+        var tall = props?.Where(p => p.Tall && p.Radius <= 320).ToList() ?? [];
+        var small = props?.Where(p => !p.Tall && p.Radius <= 190).ToList() ?? [];
+        var textures = new HashSet<int>();
+        int faces = 0, towers = 0, things = 0;
+        var placed = new List<(double X, double Y, double R)>();
+        bool Room(double x, double y, double r) => placed.All(p => (p.X - x) * (p.X - x) + (p.Y - y) * (p.Y - y) >= (p.R + r + 60) * (p.R + r + 60));
+        // A prop is used only while the level has room for its faces and its textures.
+        LevelProp? Pick(List<LevelProp> from)
         {
-            if (placed.Any(p => (p.X - x) * (p.X - x) + (p.Y - y) * (p.Y - y) < 330 * 330)) return;
-            double land = plan.Land(x, y);
-            if (land < 70) return;
-            placed.Add((x, y));
-            double ground = plan.Height(TerrainPlan.Enclosure, x, y), floor = plan.Base(x, y);
-            double top = Math.Max(ground + 150, floor + tall);
-            pieces.AddRange(Tower(x, y, ground - 60, top, castle ? 112 : 100, castle ? 150 : 200));
+            var fits = from.Where(p => faces + p.Faces.Count <= PropFaces && textures.Union(p.Textures).Count() <= PropTextures).ToList();
+            return fits.Count == 0 ? null : rnd.Pick(fits);
         }
-        foreach (var zone in plan.Zones)
+        void Use(LevelProp prop, double x, double y, double ground, double sink)
         {
-            if (zone.Kind != "path" || zone.Roof > 0) continue;
-            int count = 0;
-            // Where the path's line leaves each room: a tower on the bank either side, at most at one end of each path
-            // (and at both ends in a castle).
-            foreach (bool end in new[] { false, true })
+            pieces.AddRange(LevelProps.Place(prop, x, y, ground, Range(rnd, 0, 6.2832), sink));
+            faces += prop.Faces.Count; textures.UnionWith(prop.Textures); placed.Add((x, y, prop.Radius)); things++;
+        }
+        void Stand(double x, double y, double height)
+        {
+            if (plan.Land(x, y) < 70) return;
+            double ground = plan.Height(TerrainPlan.Enclosure, x, y), floor = plan.Base(x, y);
+            if (Pick(tall) is { } prop && Room(x, y, prop.Radius)) { Use(prop, x, y, ground, 50); return; }
+            if (!Room(x, y, 110) || tall.Count > 0 && rnd.Chance(0.5)) return;
+            placed.Add((x, y, 110)); towers++;
+            pieces.AddRange(Tower(x, y, ground - 60, Math.Max(ground + 150, floor + height), castle ? 112 : 100, castle ? 150 : 200));
+        }
+        if (!free && style is not (LevelStyle.Canyon or LevelStyle.Caverns))
+            foreach (var zone in plan.Zones)
             {
-                if (!castle && count > 0) break;
-                if (!castle && !rnd.Chance(0.7)) continue;
-                var s = zone.Spine;
-                for (int k = 1; k < s.Count; k++)
+                if (zone.Kind != "path" || zone.Roof > 0) continue;
+                int count = 0;
+                foreach (bool end in new[] { false, true })
                 {
-                    int i = end ? s.Count - 1 - k : k, before = end ? i + 1 : i - 1;
-                    bool inRoom = plan.Zones.Any(z => z.Kind == "room" && z.Sdf(s[i].X, s[i].Y, plan.Noise) < 0);
-                    if (inRoom) continue;
-                    double tx = s[i].X - s[before].X, ty = s[i].Y - s[before].Y, tl = Math.Sqrt(tx * tx + ty * ty);
-                    if (tl <= 0) break;
-                    double off = zone.HalfWidth + (castle ? 150 : 170), tall = plan.Rise + Range(rnd, 110, 200);
-                    Stand(s[i].X - ty / tl * off, s[i].Y + tx / tl * off, tall);
-                    Stand(s[i].X + ty / tl * off, s[i].Y - tx / tl * off, tall);
-                    count++;
-                    break;
+                    if (!castle && count > 0) break;
+                    if (!castle && !rnd.Chance(0.7)) continue;
+                    var s = zone.Spine;
+                    for (int k = 1; k < s.Count; k++)
+                    {
+                        int i = end ? s.Count - 1 - k : k, before = end ? i + 1 : i - 1;
+                        if (plan.Zones.Any(z => z.Kind == "room" && z.Sdf(s[i].X, s[i].Y, plan.Noise) < 0)) continue;
+                        double tx = s[i].X - s[before].X, ty = s[i].Y - s[before].Y, tl = Math.Sqrt(tx * tx + ty * ty);
+                        if (tl <= 0) break;
+                        double off = zone.HalfWidth + (castle ? 150 : 170), height = plan.Rise + Range(rnd, 110, 200);
+                        Stand(s[i].X - ty / tl * off, s[i].Y + tx / tl * off, height);
+                        Stand(s[i].X + ty / tl * off, s[i].Y - tx / tl * off, height);
+                        count++;
+                        break;
+                    }
                 }
             }
-        }
-        if (pieces.Count > 0) L.Count("tower", placed.Count);
+        // Small things: round each room, on the land behind its edge (banks and rims; none where the land ends in
+        // water or air) and just inside it.
+        if (small.Count > 0)
+            foreach (var a in L.Areas)
+            {
+                int want = rnd.Next(2, 5);
+                for (int k = 0; k < want; k++)
+                {
+                    if (Pick(small) is not { } prop) break;
+                    double angle = Range(rnd, 0, 6.2832), dx = SpyroPlanner.Cos(angle), dy = SpyroPlanner.Sin(angle);
+                    bool inside = free || rnd.Chance(0.35);
+                    double target = inside ? -(prop.Radius + 70) : plan.Kind is EnclosureKind.Cliff ? plan.CapWidth * 0.5 : plan.BankWidth + 50;
+                    // Out from the room's middle to where the land is that far inside (or outside) its edge.
+                    double at = -1;
+                    for (double t = a.R * 0.3; t < a.R * 2.2; t += 16)
+                    {
+                        double land = plan.Land(a.X + dx * t, a.Y + dy * t);
+                        if (inside ? land > target : land >= target) { at = inside ? t - 16 : t; break; }
+                    }
+                    if (at < 0) continue;
+                    double x = a.X + dx * at, y = a.Y + dy * at;
+                    if (!Room(x, y, prop.Radius)) continue;
+                    int zone = plan.ZoneAt(x, y);
+                    if (inside)
+                    {
+                        // On a room's own floor, clear of paths, ledges and pools, and of where Spyro arrives.
+                        if (zone < 0 || plan.Zones[zone].Kind != "room" || plan.Zones[zone].Roof > 0) continue;
+                        if (plan.Zones.Any(z => z.Kind != "room" && z.Sdf(x, y, plan.Noise) < prop.Radius + 150)) continue;
+                        if ((x - L.Start.X) * (x - L.Start.X) + (y - L.Start.Y) * (y - L.Start.Y) < 420 * 420) continue;
+                        Use(prop, x, y, plan.Height(zone, x, y), 14);
+                    }
+                    else
+                    {
+                        if (zone >= 0 || plan.Land(x, y) <= 0) continue;
+                        Use(prop, x, y, plan.Height(TerrainPlan.Enclosure, x, y), 30);
+                    }
+                }
+            }
+        if (towers > 0) L.Count("tower", towers);
+        if (things > 0) L.Count(OwnThings, things);
         return pieces;
     }
 

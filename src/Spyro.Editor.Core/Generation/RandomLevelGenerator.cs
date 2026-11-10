@@ -68,8 +68,10 @@ public static class RandomLevelGenerator
         (SurfaceRole.Charge, SurfaceRole.Path), (SurfaceRole.CliffTop, SurfaceRole.Cliff), (SurfaceRole.Brick, SurfaceRole.Cliff),
     ];
 
+    /// <param name="source">The terrain of a look's level by level key, when it can be read (the editor's level cache):
+    /// the level's own towers, trees and rocks are then stood in the new level. Null: none.</param>
     public static RandomLevelResult Generate(RandomLevelOptions options, LevelCatalog catalog, PictureCarriers? carriers = null,
-        int textureBudget = 24, bool compile = true, CancellationToken token = default)
+        int textureBudget = 24, bool compile = true, CancellationToken token = default, Func<string, LevelPropSource?>? source = null)
     {
         var rnd = new LevelRandom(options.Seed);
         var style = options.Style ?? rnd.Pick<LevelStyle>([(LevelStyle.Valley, 3), (LevelStyle.Islands, 2), (LevelStyle.SkyIslands, 2),
@@ -85,7 +87,7 @@ public static class RandomLevelGenerator
         {
             var notes = new List<string>();
             if (shrink > 0) notes.Add("Built smaller than usual so the game can hold and draw it.");
-            try { return Build(options, catalog, carriers, textureBudget, compile, token, rnd.Fork("size" + shrink), style, theme, features, shrink, notes); }
+            try { return Build(options, catalog, carriers, textureBudget, compile, token, rnd.Fork("size" + shrink), style, theme, features, shrink, notes, source); }
             catch (InvalidDataException e) when (compile && shrink < 3)
             {
                 if (Environment.GetEnvironmentVariable("SPYRO_RANDOM_LEVEL_DEBUG") == "1") Console.Error.WriteLine($"shrink {shrink}: {e.Message}");
@@ -94,8 +96,14 @@ public static class RandomLevelGenerator
     }
 
     private static RandomLevelResult Build(RandomLevelOptions options, LevelCatalog catalog, PictureCarriers? carriers, int textureBudget, bool compile,
-        CancellationToken token, LevelRandom rnd, LevelStyle style, LevelTheme theme, FeatureSet features, int shrink, List<string> notes)
+        CancellationToken token, LevelRandom rnd, LevelStyle style, LevelTheme theme, FeatureSet features, int shrink, List<string> notes,
+        Func<string, LevelPropSource?>? source)
     {
+        // The look's own things, when its level can be read and the level keeps the game's textures.
+        List<LevelProp>? props = null;
+        bool gameTextures = options.Textures == LevelTextureMode.GameTextures && options.Pictures.Count == 0;
+        if (source != null && gameTextures && textureBudget >= 20 && source(theme.Key) is { } terrain)
+            props = LevelProps.Extract(terrain, id => LevelDna.Static(theme.Key, id));
         // A few layouts are tried; the first whose every floor is proved reachable both ways is taken (else the best).
         (PlannedLevel Planned, TerrainMesher Mesher, (int Required, int Unreached, int NoWayBack, List<(double X, double Y)> Bad) Check)? best = null;
         int attempts = 0;
@@ -119,13 +127,14 @@ public static class RandomLevelGenerator
         var (planned, mesher, check) = best!.Value;
         var plan = planned.Plan;
         var pieces = mesher.Pieces;
-        pieces.AddRange(SpyroStructures.Build(planned, style, rnd.Fork("structures")));
+        planned.Look = theme.Name;
+        pieces.AddRange(SpyroStructures.Build(planned, style, rnd.Fork("structures"), props));
         if (check.Unreached + check.NoWayBack > 0)
             notes.Add($"{check.Unreached + check.NoWayBack} of {check.Required} floors could not be proved reachable both ways; play it through once.");
         token.ThrowIfCancellationRequested();
 
         // Materials: a texture per surface, fewer surfaces when the level must use fewer textures.
-        var used = pieces.Select(p => p.Role).Distinct().ToList();
+        var used = pieces.Where(p => p.Texture == null).Select(p => p.Role).Distinct().ToList();
         var fold = used.ToDictionary(r => r, r => r);
         foreach (var (from, to) in Folds)
         {
@@ -158,14 +167,46 @@ public static class RandomLevelGenerator
         }
         var surfaces = new List<AuthoredSurface>();
         var faceRandom = rnd.Fork("faces");
+        var lookLevel = catalog.FindByKey(theme.Key);
+        var propMaterials = new Dictionary<int, AuthoredMaterial>();
         foreach (var p in pieces)
         {
+            if (p.Texture is int texture && p.Paint is { } paint && lookLevel != null)
+            {
+                // A face of the look's level, as that level has it.
+                if (!propMaterials.TryGetValue(texture, out var own))
+                {
+                    propMaterials[texture] = own = new AuthoredMaterial(lookLevel.SourceWadEntry, texture);
+                    if (LevelDna.Average(theme.Key, texture) is { } average) averages[own] = average;
+                }
+                surfaces.Add(new AuthoredSurface(faceRandom.Id(), p.Corners, Average(paint), own, paint) { TwoSided = p.TwoSided, FrontReversed = p.FrontReversed });
+                continue;
+            }
             var role = fold[p.Role];
             var material = materialOf[role];
             var ramp = Ramp(theme, role, material);
             var near = p.Light.Select(u => Paint(ramp, u)).ToArray();
             surfaces.Add(new AuthoredSurface(faceRandom.Id(), p.Corners, Average(near), material, near)
             { Kind = p.Kind, NoCollision = !p.Collides && material != null, TwoSided = p.TwoSided });
+        }
+        // Sectors: faces are grouped by where they are (squares a few faces across), as the game's levels group theirs.
+        // A face with a sector keeps its four corners, as the game's own faces do (they are not flat either); without
+        // one the compiler would cut every face that is not perfectly flat into two triangles.
+        // The game holds 127 sectors: the squares grow until the level needs comfortably fewer.
+        for (float size = SectorSize; ; size *= 1.2f)
+        {
+            var sectors = new Dictionary<(int, int), int>();
+            var of = new int[surfaces.Count];
+            for (int k = 0; k < surfaces.Count; k++)
+            {
+                var v = surfaces[k].Vertices;
+                var key = ((int)MathF.Floor(v.Average(c => c.X) / size), (int)MathF.Floor(v.Average(c => c.Y) / size));
+                if (!sectors.TryGetValue(key, out int id)) sectors[key] = id = sectors.Count;
+                of[k] = id;
+            }
+            if (sectors.Count > MaxSectors && size < 4096) continue;
+            for (int k = 0; k < surfaces.Count; k++) surfaces[k] = surfaces[k] with { Sector = of[k] };
+            break;
         }
         // The start, facing into the level.
         var spawn = new Vector3f((float)Math.Round(planned.Start.X), (float)Math.Round(planned.Start.Y),
@@ -221,6 +262,11 @@ public static class RandomLevelGenerator
         }
         return new(scene, report, pictures, materials) { Map = map, MapWidth = mw, MapHeight = mh };
     }
+
+    /// <summary>The side of the squares faces are grouped into sectors by.</summary>
+    public const float SectorSize = 640;
+    /// <summary>Most sectors a generated level is grouped into (the game holds 127; big sectors are split when compiled).</summary>
+    public const int MaxSectors = 96;
 
     /// <summary>The lowest floor's height in the built level.</summary>
     public const int BaseHeight = 512;
@@ -333,19 +379,21 @@ public static class RandomLevelGenerator
     {
         string style = r.Style switch
         {
-            LevelStyle.Valley => "a valley of terraces", LevelStyle.Islands => "islands in the water", LevelStyle.SkyIslands => "islands in the sky",
-            LevelStyle.Caverns => "caverns under the rock", LevelStyle.Canyon => "a winding canyon trail", _ => "a walled castle"
+            LevelStyle.Valley => "clearings among the hills", LevelStyle.Islands => "islands in the water", LevelStyle.SkyIslands => "islands in the sky",
+            LevelStyle.Caverns => "caverns under the rock", LevelStyle.Canyon => "a canyon", _ => "castle courtyards"
         };
-        var parts = r.Counts.Where(c => c.Value > 0).OrderByDescending(c => c.Value).Select(c => $"{c.Value} {Plural(c.Key, c.Value)}").ToList();
-        string reach = r.Unreached + r.NoWayBack == 0 ? "Every area can be reached from the start and left again." :
-            $"Almost every floor is proved reachable ({r.RequiredFloors - r.Unreached - r.NoWayBack} of {r.RequiredFloors} spots).";
-        return $"{name}: {style} in the {theme.Name} theme, {r.Areas} areas, {r.Faces:N0} faces, {r.Materials} textures. " +
-               (parts.Count > 0 ? "It has " + string.Join(", ", parts) + ". " : "") + reach;
+        var parts = r.Counts.Where(c => c.Value > 0 && c.Key != SpyroStructures.OwnThings).OrderByDescending(c => c.Value).ThenBy(c => c.Key, StringComparer.Ordinal)
+            .Select(c => $"{c.Value} {Plural(c.Key, c.Value)}").ToList();
+        string own = r.Counts.TryGetValue(SpyroStructures.OwnThings, out int things) && things > 0
+            ? $"{things} of {theme.Name}'s own towers, trees and rocks stand in it. " : "";
+        string reach = r.Unreached + r.NoWayBack == 0 ? "Every floor can be reached from the start and left again." :
+            $"Almost every floor is proved reachable ({r.RequiredFloors - r.Unreached - r.NoWayBack} of {r.RequiredFloors}).";
+        return $"{name}: {style} in the style of {theme.Name}, {r.Areas} areas, {r.Faces:N0} faces, {r.Materials} textures. " +
+               (parts.Count > 0 ? "It has " + string.Join(", ", parts) + ". " : "") + own + reach;
     }
 
     private static string Plural(string what, int n) => n == 1 ? what : what switch
     {
-        "open ground" => "open joins", "ledge" => "ledges", "stepping stones" => "stepping stones", "chasm" => "chasms", "glide gap" => "glide gaps",
-        _ when what.EndsWith("s") => what, _ => what + "s"
+        "chain of stepping stones" => "chains of stepping stones", _ when what.EndsWith("s") => what, _ => what + "s"
     };
 }

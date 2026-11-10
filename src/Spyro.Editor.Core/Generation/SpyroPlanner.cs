@@ -27,6 +27,8 @@ internal sealed class PlannedLevel
 {
     public required TerrainPlan Plan;
     public string Shape = "";
+    /// <summary>The name of the level the look is taken from, for the report.</summary>
+    public string Look = "";
     public readonly List<PlannedArea> Areas = [];
     public readonly List<PlannedJoin> Joins = [];
     public readonly List<LevelLink> Links = [];
@@ -384,7 +386,7 @@ internal static class SpyroPlanner
             if (j.Kind is not ("path" or "charge"))
             {
                 L.Links.Add(new LevelLink(p.Id, a.Id, "overlook", new((float)p.X, (float)p.Y, (float)p.Z), new((float)a.X, (float)a.Y, (float)a.Z)));
-                L.Count("overlook");
+                L.Count("overlook back over the start");
                 continue;
             }
             double dx = a.X - p.X, dy = a.Y - p.Y, d = Math.Sqrt(dx * dx + dy * dy), ux = dx / d, uy = dy / d;
@@ -451,6 +453,7 @@ internal static class SpyroPlanner
         double gap = (span - n * 2 * r) / (n + 1);
         if (gap < 30) { n--; if (n < 1) return false; gap = (span - n * 2 * r) / (n + 1); }
         if (Math.Abs(a.Z - p.Z) / (n + 1) > 40) return false;
+        var hops = new List<(double X, double Y, double Z)> { (p.X + ux * (from - 110), p.Y + uy * (from - 110), p.Z) };
         for (int k = 0; k < n; k++)
         {
             double t = from + gap + r + k * (2 * r + gap), z = p.Z + (a.Z - p.Z) * (k + 1) / (n + 1.0);
@@ -458,9 +461,14 @@ internal static class SpyroPlanner
             var stone = plan.Add(new TerrainZone { Kind = "stone", Z = z, Z1 = z, Area = a.Id, Priority = 0, Blend = 0, Wobble = 6, WobbleScale = 150, Flat = true, Floor = SurfaceRole.Rock });
             stone.Discs.Add((p.X + ux * t - uy * side, p.Y + uy * t + ux * side, r));
             L.Gems.Add((p.X + ux * t - uy * side, p.Y + uy * t + ux * side, stone.Id));
+            hops.Add((p.X + ux * t - uy * side, p.Y + uy * t + ux * side, z));
         }
-        L.Links.Add(new LevelLink(p.Id, a.Id, "stones", new((float)(p.X + ux * from), (float)(p.Y + uy * from), (float)p.Z), new((float)(p.X + ux * to), (float)(p.Y + uy * to), (float)a.Z)));
-        L.Count("stepping stones");
+        hops.Add((p.X + ux * (to + 110), p.Y + uy * (to + 110), a.Z));
+        // Each hop, for the in-game route checks: from a floor's middle to the next, jumping where the floor ends.
+        for (int k = 0; k + 1 < hops.Count; k++)
+            L.Links.Add(new LevelLink(p.Id, a.Id, "hop", new((float)hops[k].X, (float)hops[k].Y, (float)hops[k].Z), new((float)hops[k + 1].X, (float)hops[k + 1].Y, (float)hops[k + 1].Z))
+            { JumpAt = (float)(k == 0 ? 110 : r) });
+        L.Count("chain of stepping stones");
         return true;
     }
 
@@ -481,6 +489,9 @@ internal static class SpyroPlanner
         a.Taken.Add(d);
         var first = Step(L, a, x, y, r1, a.Z + SpyroMoves.DesignLedge, a.Priority + 1);
         L.Count("ledge");
+        // The jump up: from the room's floor in front of the step (towards the room's middle) onto it.
+        L.Links.Add(new LevelLink(a.Id, a.Id, "ledge", new((float)(x - d.X * (r1 + 90)), (float)(y - d.Y * (r1 + 90)), (float)a.Z),
+            new((float)(x - d.X * (r1 - 110)), (float)(y - d.Y * (r1 - 110)), (float)(a.Z + SpyroMoves.DesignLedge))) { JumpAt = 60 });
         L.Gems.Add((x + d.X * r1 * 0.3, y + d.Y * r1 * 0.3, first.Id));
         if (steps > 1 && r1 >= 300)
         {
@@ -527,9 +538,9 @@ internal static class SpyroPlanner
         Step(L, a, c2.X, c2.Y, r2, a.Z + 2 * step, a.Priority + 2);
         var summit = Step(L, a, c3.X, c3.Y, r3, a.Z + top, a.Priority + 3, "lookout");
         var ledge = Step(L, a, landing.Value.X, landing.Value.Y, tr, a.Z + target, a.Priority + 1, "glide ledge");
-        L.Count("lookout"); L.Count("glide");
+        L.Count("lookout with a glide");
         L.Glides.Add((summit.Id, ledge.Id));
-        L.Links.Add(new LevelLink(a.Id, a.Id, "glide", new((float)c3.X, (float)c3.Y, (float)(a.Z + top)), new((float)landing.Value.X, (float)landing.Value.Y, (float)(a.Z + target))));
+        L.Links.Add(new LevelLink(a.Id, a.Id, "glide", new((float)c3.X, (float)c3.Y, (float)(a.Z + top)), new((float)landing.Value.X, (float)landing.Value.Y, (float)(a.Z + target))) { JumpAt = (float)r3 });
         L.Gems.Add((c3.X, c3.Y, summit.Id));
         for (int q = -1; q <= 1; q++) L.Gems.Add((landing.Value.X + e.Y * q * 70, landing.Value.Y - e.X * q * 70, ledge.Id));
         return true;

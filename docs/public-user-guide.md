@@ -441,45 +441,58 @@ homeworld, its levels, their doorways, the entrance and the way back.
 
 ## Random levels
 
-**File ▾ → Random Level…** makes a whole level for you from a seed and a few
-choices, then puts it where you say so you can add objects and enemies yourself.
+**File ▾ → Random Level…** makes a whole new level the way the game's own levels
+are made, from a seed and a few choices, then puts it where you say so you can add
+objects and enemies yourself.
 
-- **Kind of level:** a valley (one big area of terraces, like Dark Hollow),
-  islands in the water, islands in the sky (like Lofty Castle), caverns and
-  tunnels, a winding canyon trail, or a castle with courtyards. **Surprise me**
-  lets the seed choose.
-- **Look:** spring meadow, misty highland, cloud kingdom, desert, frozen peaks,
-  swamp, volcano, royal castle or moonlit night. Each look picks a texture for
-  every kind of surface (grass on floors, rock on cliffs with a grass fringe at
-  the top, planks on bridges, bricks on walls, water, lava…), a sun, a song and a
-  name.
-- **What it has:** caves, supercharge paths, glides, water or lava, bridges and
-  secret ledges. Supercharge paths are steep ramps Spyro climbs only by charging,
-  and supercharge runways: a hill whose far side is supercharge ground marked with
-  arrows; charge down it and Spyro supercharges, then jump at the end to clear a
-  pit too wide for an ordinary jump and glide. A tick asks for a feature, an empty
-  box leaves it out, a filled square leaves it to chance.
-- **Textures:** the game's own textures, or new pictures painted in the look's
-  colours. **Use My Own Pictures…** puts your own picture (PNG, JPEG, WebP or
-  BMP) on any kind of surface; pictures need your original disc.
-- **Sky:** a sky painted to match, or the sky of the look's original level.
+- **Laid out like the game's levels:** rooms strung along a route, each a little
+  higher or lower than the last and joined by sloping paths: round a loop whose
+  last room stands over the first (so the way round ends with a drop back to the
+  start), off one big clearing, or along a winding trail. Rooms have steps to
+  jump up, lookouts to glide from, pools and hidden nooks.
+- **Built like them:** one sheet of four-cornered faces about 128 units across
+  whose lines follow the edges of the land, as in the original levels, enclosed by
+  steep banks, rock walls, peaks, open water or the sky.
+- **Painted like them:** with the textures the chosen level itself uses for its
+  ground, banks, rock and paths, in the colours that level paints them with, under
+  its sky and to its music. With your project's levels loaded, that level's own
+  towers, trees and rocks are lifted from it and stood in the new level.
+
+The choices:
+
+- **Kind of level:** clearings among the hills (like Artisans), islands in the
+  water, islands in the sky (like Lofty Castle), caverns and tunnels, a canyon
+  (like Dry Canyon) or castle courtyards. **Surprise me** lets the seed choose.
+- **In the style of:** Artisans, Stone Hill, Dark Hollow, Peace Keepers, Dry
+  Canyon, Ice Cavern, Magic Crafters, Wizard Peak, Misty Bog, Tree Tops, Dream
+  Weavers, Lofty Castle, Haunted Towers or Twilight Harbor.
+- **What it has:** caves (in caverns, more rooms under rock; in canyons and
+  castles, tunnels), charge ramps (a ramp too steep to walk, marked with arrows,
+  up to a hidden nook), glides (steps up to a lookout and a ledge across the room
+  that Spyro reaches only by gliding from it), pools, bridges (between islands;
+  without them, stepping stones) and hidden nooks. A tick asks for a feature, an
+  empty box leaves it out, a filled square leaves it to chance.
+- **Textures:** that level's own textures and colours, or new pictures painted in
+  the look's colours. **Use My Own Pictures…** puts your own picture (PNG, JPEG,
+  WebP or BMP) on any kind of surface; pictures need your original disc.
+- **Sky:** that level's sky, or a sky painted to match.
 - **Seed:** the same seed and choices always make the same level. **New Seed**
   makes another; **Rebuild** makes this seed again with changed choices.
 
 Every jump, glide and climb is built inside what Spyro can really do (measured in
-the game): ledges are at most 56 units high, gaps between stepping stones one
-cell wide, walking ramps no steeper than 17°, charge ramps 28°, glides within
-Spyro's glide from the height he jumps from, supercharge pits 480 wide (a
-supercharged jump carries about 680, an ordinary jump and glide about 390). Before it is shown, the editor checks
-that every area can be reached from the start and left again.
+the game): steps are 56 units high, stepping stones an easy jump apart, paths
+slope no more than about 16°, a charge ramp about 26°, and a glide's ledge lies
+within the glide from the lookout's height. Before a level is shown, the editor
+checks on the finished faces that every floor can be reached from the start and
+left again, and tries another layout if not.
 
 **Put it** in place of the open level (a recovery copy is kept, and **Restore
 Before Clear…** brings it back), as the project's new level, or in a level of
 the world made with **File ▾ → New World…**. Tick **Then put in the level's
 dragons…** to have Fill In add dragons, egg thieves, Return Home and gems at once;
-otherwise add them with Add Object. The generator leaves good places for gems on
-hidden ledges and rocks, which Fill In uses. Everything it makes is ordinary
-terrain: paint, move or remove any tile afterwards.
+otherwise add them with Add Object. The generator leaves good places for gems
+along paths, on ledges and lookouts, which Fill In uses. Everything it makes is
+ordinary terrain: paint, move or remove any tile afterwards.
 
 ## Levels from other games
 

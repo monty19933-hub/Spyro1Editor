@@ -22,7 +22,13 @@ if (args.Length >= 6 && args[0] == "--dump")
         Size = Enum.Parse<Spyro.Editor.Core.Generation.LevelSize>(args[3]), Theme = args.Length > 6 && args[6] != "-" ? args[6] : null,
     };
     var watch = System.Diagnostics.Stopwatch.StartNew();
-    var r = Spyro.Editor.Core.Generation.RandomLevelGenerator.Generate(options, catalog, compile: Environment.GetEnvironmentVariable("RANDOM_NO_COMPILE") != "1");
+    // RANDOM_LOOK_CACHE: a project's editor-cache folder, so the look's own towers and trees are stood in the level.
+    Func<string, Spyro.Editor.Core.Generation.LevelPropSource?>? source = Environment.GetEnvironmentVariable("RANDOM_LOOK_CACHE") is { Length: > 0 } cache
+        ? key => File.Exists(Path.Combine(cache, key + "-runtime-scene-editor-overlay.json"))
+            ? Spyro.Editor.Core.Generation.LevelPropSource.FromGeometry(key, Spyro.Editor.Core.Scene.GeometryOverlayLoader.LoadFirstCandidate(Path.Combine(cache, key + "-runtime-scene-editor-overlay.json")))
+            : null
+        : null;
+    var r = Spyro.Editor.Core.Generation.RandomLevelGenerator.Generate(options, catalog, compile: Environment.GetEnvironmentVariable("RANDOM_NO_COMPILE") != "1", source: source);
     Console.WriteLine($"{watch.ElapsedMilliseconds} ms: {r.Report.Summary}");
     Console.WriteLine("draw: " + r.Report.DrawPlan);
     foreach (var note in r.Report.Notes) Console.WriteLine("note: " + note);
@@ -44,7 +50,7 @@ if (args.Length >= 6 && args[0] == "--dump")
     return 0;
 }
 // Gate (no disc): [repo root] [--maps <folder>] [--seeds N]
-if (args.Length == 0 || args[0] is not ("--fingerprint" or "--dump" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes"))
+if (args.Length == 0 || args[0] is not ("--fingerprint" or "--dump" or "--static-textures" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes"))
 {
     string repo = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : Directory.GetCurrentDirectory();
     string? maps = args.SkipWhile(a => a != "--maps").Skip(1).FirstOrDefault();
@@ -105,7 +111,12 @@ if (args.Length >= 7 && args[0] == "--export-random")
         carriers = new([.. slots.Select(c => (c.Wad, c.Id))], Path.Combine(Path.GetDirectoryName(output)!, "pictures"));
         Directory.CreateDirectory(carriers.Folder);
     }
-    var result = Spyro.Editor.Core.Generation.RandomLevelGenerator.Generate(options, catalog, carriers);
+    Func<string, Spyro.Editor.Core.Generation.LevelPropSource?>? source = Environment.GetEnvironmentVariable("RANDOM_LOOK_CACHE") is { Length: > 0 } cache
+        ? key => File.Exists(Path.Combine(cache, key + "-runtime-scene-editor-overlay.json"))
+            ? Spyro.Editor.Core.Generation.LevelPropSource.FromGeometry(key, Spyro.Editor.Core.Scene.GeometryOverlayLoader.LoadFirstCandidate(Path.Combine(cache, key + "-runtime-scene-editor-overlay.json")))
+            : null
+        : null;
+    var result = Spyro.Editor.Core.Generation.RandomLevelGenerator.Generate(options, catalog, carriers, source: source);
     foreach (var p in result.Pictures) await TerrainTexturePngWriter.WriteRgbaAsync(p.Path, 64, 64, p.Pixels);
     Console.WriteLine(result.Report.Summary);
     await result.Scene.SaveAsync(Path.ChangeExtension(output, ".scene.json"));
@@ -137,6 +148,27 @@ if (args.Length >= 3 && args[0] == "--check-themes")
     }
     Console.WriteLine(bad == 0 ? "THEMES_OK" : $"THEMES_BAD {bad}");
     return bad == 0 ? 0 : 1;
+}
+if (args.Length >= 4 && args[0] == "--static-textures")
+{
+    // --static-textures <disc> <repo> <out.txt> [level keys]: per level, the terrain textures a built level can carry
+    // (still pictures in the usual layout), for study/dna_table.py. Slow: the disc is checked for every texture.
+    var catalog = LevelCatalog.Load(args[2]);
+    var keys = args.Length > 4 ? args[4..] : [.. Spyro.Editor.Core.Generation.LevelThemes.All.Select(t => t.Key)];
+    using var writer = new StreamWriter(args[3]);
+    foreach (string key in keys)
+    {
+        var level = catalog.FindByKey(key) ?? throw new InvalidDataException(key);
+        var ok = new List<int>(); int misses = 0;
+        for (int id = 0; id < 128 && misses < 40; id++)
+        {
+            try { NativeStaticTerrainTextureSource.Capture(args[1], level.SourceWadEntry, id); ok.Add(id); misses = 0; }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException or IndexOutOfRangeException) { misses++; }
+        }
+        writer.WriteLine($"{key}: {string.Join(",", ok)}"); writer.Flush();
+        Console.WriteLine($"{key}: {ok.Count} still textures");
+    }
+    return 0;
 }
 if (args.Length >= 3 && args[0] == "--dump-exe")
 {

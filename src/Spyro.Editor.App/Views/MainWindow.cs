@@ -28292,7 +28292,7 @@ public sealed partial class MainWindow : Window
 
         AddHelpSection(panel, "Levels of your own", [
             "File ▾ > New Level… starts a level of your own (a grassy meadow to build on) that opens when you choose New Game. A project holds one; the editor asks before replacing it and keeps a copy in the project's backups folder.",
-            "File ▾ > Random Level… makes a whole level from a seed and a few choices. New Level from Spyro: Year of the Dragon… rebuilds one of that game's levels from your own disc.",
+            "File ▾ > Random Level… makes a whole level the way the game's own levels are made (rooms along a route, sloping paths, steps, lookouts to glide from), in the style of a level you pick: its ground, rock, colours, sky and music. New Level from Spyro: Year of the Dragon… rebuilds one of that game's levels from your own disc.",
             "File ▾ > Start Blank in Current Level… replaces the open level with the same meadow so you can rebuild it. Restore Before Clear… brings the previous version back.",
             "File ▾ > Fill In What the Level Needs… adds the level's own dragons and egg thieves, a Return Home vortex, enemies and gems.",
             "File ▾ > Open Created Level… reopens the level you made."
