@@ -458,7 +458,7 @@ internal static class SpyroPlanner
                 Roof = caves && a.Id != 0 && (a.Id == 1 || !features.Caves || rnd.Chance(0.8)) ? Range(rnd, 190, 230) : 0,
             });
             // A doorway stands taller than a cave's roof is high: its room's roof is raised over it.
-            if (a.Zone.Roof > 0 && L.Doors.Any(door => door.Area == a.Id)) a.Zone.Roof += 110;
+            if (a.Zone.Roof > 0 && L.Doors.Any(door => door.Area == a.Id)) a.Zone.Roof += 150;
             a.Zone.Discs.Add((a.X, a.Y, a.R));
         }
         // Lobes: a room is a blob, not a disc.

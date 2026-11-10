@@ -68,6 +68,59 @@ internal static class RandomLevelCases
         var sizes = Enum.GetValues<LevelSize>();
         var themesSeen = new HashSet<string>();
         if (maps != null) Directory.CreateDirectory(maps);
+        if (only == null)
+        {
+            // Every doorway shape at every size and turn: the destination's sky, which the game draws in the opening,
+            // fits its frame: the frame's front begins at the opening's edge all the way round (but the floor), and
+            // covers next to none of the opening (a keystone and the footings lap a few units over it).
+            static bool Inside(List<(double U, double V)> polygon, double u, double v)
+            {
+                bool inside = false;
+                for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
+                    if (polygon[i].V > v != polygon[j].V > v && u < polygon[i].U + (polygon[j].U - polygon[i].U) * (v - polygon[i].V) / (polygon[j].V - polygon[i].V)) inside = !inside;
+                return inside;
+            }
+            foreach (var shape in DoorwayShapes.All)
+                foreach (double scale in new[] { 0.75, 0.9, 1.0, 1.15, 1.3, 1.5 })
+                    foreach (int heading in new[] { 0, 37, 64, 150, 233 })
+                    {
+                        var at = new Spyro.Editor.Core.Primitives.Vector3f(4000, 4000, 500);
+                        var (fx, fy) = DoorwayShapes.Facing(heading);
+                        var opening = DoorwayShapes.Opening(shape, scale).ToList();
+                        double depth = shape.FrameDepth * scale;
+                        var fronts = DoorwayShapes.Frame(shape, scale, at, heading).Where(f => f.Part == DoorwayFramePart.Face &&
+                            f.Corners.All(c => (c.X - at.X) * fx + (c.Y - at.Y) * fy < -depth + 1.5))
+                            .Select(f => f.Corners.Select(c => (U: -(c.X - at.X) * fy + (c.Y - at.Y) * fx, V: (double)(c.Z - at.Z))).ToList()).ToList();
+                        int samples = 0, covered = 0;
+                        double width = opening.Max(q => q.U), height = opening.Max(q => q.V);
+                        for (double u = -width; u <= width; u += 4)
+                            for (double v = 2; v <= height; v += 4)
+                            {
+                                if (!Inside(opening, u, v)) continue;
+                                // Three units in from the opening's edge: the frame's corners are whole units, so its
+                                // inner edge may lie a unit to either side of the opening's.
+                                bool edge = false;
+                                for (int e = 0; e + 1 < opening.Count && !edge; e++)
+                                {
+                                    var a = opening[e]; var b = opening[e + 1];
+                                    double du = b.U - a.U, dv = b.V - a.V, l = Math.Sqrt(du * du + dv * dv);
+                                    edge = ((u - a.U) * -dv + (v - a.V) * du) / l < 3;
+                                }
+                                if (edge) continue;
+                                samples++;
+                                if (fronts.Any(f => Inside(f, u, v))) covered++;
+                            }
+                        int open = 0;
+                        for (int e = 0; e + 1 < opening.Count; e++)
+                        {
+                            var a = opening[e]; var b = opening[e + 1];
+                            double du = b.U - a.U, dv = b.V - a.V, l = Math.Sqrt(du * du + dv * dv), mu = (a.U + b.U) / 2 + dv / l * 4, mv = (a.V + b.V) / 2 - du / l * 4;
+                            if (mv > 3 && !fronts.Any(f => Inside(f, mu, mv))) open++;
+                        }
+                        Check(DoorwayShapes.Check(opening) == null && samples > 200 && covered <= 0.02 * samples && open == 0,
+                            $"doorway {shape.Id} at {scale} heading {heading}: the frame covers {covered} of {samples} of the opening and leaves {open} of its edges open");
+                    }
+        }
         foreach (var style in styles.Where(x => only == null || x.ToString() == only))
             for (int k = 0; k < seedsPerStyle; k++)
             {
@@ -179,6 +232,24 @@ internal static class RandomLevelCases
                             LevelThemes.DoorwayShape(h.Theme), home.DoorwayMaterial!);
                         Check(added.Count == home.Doorways.Count && built.Portals?.Count == added.Count, $"{style} {seed} homeworld built {added.Count} doorways: {string.Join(" ", problems)}");
                         Check(built.Portals!.All(d => d.FrameFaces is { Count: > 20 }), $"{style} {seed} a homeworld doorway has no frame");
+                        // Each doorway in a look that suits the level: one of the look's shapes, a size of its own, framed in
+                        // the level's own stone; and it has room where it stands (no wall within its frame's reach).
+                        var suited = LevelThemes.DoorwayShapes(h.Theme).Select(x => x.Shape.Id).ToHashSet();
+                        Check(home.Doorways.All(d => d.Shape != null && suited.Contains(d.Shape) && d.Scale is >= 0.9f and <= 1.3f && d.Face != null && home.Materials.Contains(d.Face) && d.FaceTint != null),
+                            $"{style} {seed} homeworld doorway looks: {string.Join(", ", home.Doorways.Select(d => $"{d.Shape} x{d.Scale}"))}");
+                        Check(built.Portals!.Zip(home.Doorways.OrderBy(d => d.Position.X)).Count() == home.Doorways.Count && built.Portals!.All(d => home.Doorways.Any(x => x.Position == d.Position && x.Shape == d.Shape)),
+                            $"{style} {seed} a homeworld doorway was not built in its own look");
+                        float reach = float.MaxValue;
+                        foreach (var d in built.Portals!)
+                        {
+                            var shape = DoorwayShapes.Find(d.Shape)!;
+                            var (fx, fy) = DoorwayShapes.Facing(d.Heading);
+                            float half = (float)((shape.Width / 2 + shape.FrameWidth + 16) * d.SizeScale);
+                            foreach (float side in new[] { -half, 0, half })
+                                reach = Math.Min(reach, WallDistance(home.Scene, new(d.Position.X - (float)fy * side, d.Position.Y + (float)fx * side, d.Position.Z)));
+                        }
+                        Check(reach >= 24, $"{style} {seed} a homeworld doorway's frame stands {reach:0} units from a wall");
+                        Console.WriteLine($"    doorways: {string.Join(", ", built.Portals!.Select(d => $"{d.DestinationLevelId} {d.Shape} x{d.SizeScale:0.00}"))}");
                         try { NativeAuthoredMesh.Compile(built, [.. built.Surfaces.Select(f => f.Material).OfType<AuthoredMaterial>().Distinct()]); Check(true, ""); }
                         catch (InvalidDataException e) { Check(false, $"{style} {seed} homeworld with its doorways: {e.Message}"); }
                         var things = LevelScatter.Make(built, new LevelScatter.Request(seed, 6, 5, 200, 150) { ChestKinds = LevelScatter.Chests.ToHashSet(), Exit = true }, built.GemSpots);

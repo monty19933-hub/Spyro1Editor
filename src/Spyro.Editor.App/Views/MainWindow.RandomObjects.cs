@@ -37,9 +37,9 @@ public sealed partial class MainWindow
     private List<(int Class, string Name)> _randomObjectsEnemyKinds = [];
     private string? _randomObjectsScene;
     private readonly Random _randomObjectsSeeds = new();
-    /// <summary>The enemies and the animals (food for Sparx) a difficulty places: Easy, Medium, Hard, Kaizo.</summary>
-    private static readonly (int Enemies, int Animals)[] RandomObjectsDifficulties = [(6, 8), (10, 5), (16, 3), (24, 0)];
-    internal static int RandomObjectsEnemies(LevelDifficulty difficulty) => RandomObjectsDifficulties[Math.Clamp((int)difficulty, 0, 3)].Enemies;
+    /// <summary>The enemies a level of this treasure and difficulty gets: as many as the game's own levels have for
+    /// their treasure (about seven for every hundred gems), fewer when easy, more when hard.</summary>
+    internal static int RandomObjectsEnemies(LevelDifficulty difficulty, int treasure = 300) => LevelScatter.EnemiesFor(treasure, difficulty);
 
     /// <summary>The levels whose things can be chosen: the game's levels on foot (not the flights).</summary>
     private List<LevelDefinition> RandomObjectsLevels() =>
@@ -52,7 +52,7 @@ public sealed partial class MainWindow
         content.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(90, 98, 110)),
-            Text = "Fills the level with objects placed the way the game places them: enemies waiting in the rooms and on the paths, animals, chests by the walls, an extra life and a locked chest tucked away, gems in trails and on the ledges, the way out at the far end. Press it again for another arrangement.",
+            Text = "Fills the level the way the game's own levels are filled, by their measure: for the gems you ask for, about as many chests, enemies and loose gems as a level of the game with that treasure has. Most of the treasure is in chests and with enemies; loose gems, mostly reds and greens, lie in ones, twos and threes by the walls and along the way, the best at the hardest places. Press it again for another arrangement.",
         });
         ComboBox Combo(string name, IEnumerable<string> items, int selected = 0) =>
             new() { Name = name, HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = items.ToArray(), SelectedIndex = selected };
@@ -78,7 +78,7 @@ public sealed partial class MainWindow
         content.Children.Add(Row("Gems", _randomObjectsTreasure, "The treasure the level holds in all, as the game counts it (a red gem 1, green 2, blue 5, gold 10, pink 25). Loose gems of every colour, with what the chests and enemies give, come to exactly this."));
         content.Children.Add(Row("Dragonfly eggs", _randomObjectsEggs, "Dragonfly eggs to hide in the level. They come from the Japanese version of the game: choose that disc in Add object… first."));
         CheckBox Box(string name, string text, string tip) { CheckBox box = new() { Name = name, Content = text, IsChecked = true, FontSize = 12 }; ToolTip.SetTip(box, tip); return box; }
-        _randomObjectsEnemies = Box("RandomObjectsEnemies", "Enemies", "The enemy type's enemies, waiting in the rooms beyond the first and on the paths; how many goes by the difficulty.");
+        _randomObjectsEnemies = Box("RandomObjectsEnemies", "Enemies", "The enemy type's enemies, waiting in the rooms beyond the first and on the paths: as many as a level of the game with that many gems has, fewer when easy, more when hard.");
         _randomObjectsChests = Box("RandomObjectsChests", "Chests of every kind", "Baskets and vases, strong chests, chests that take three flames, firework and spring chests, an extra life, and a locked chest with its key.");
         _randomObjectsAnimals = Box("RandomObjectsAnimals", "Animals", "The level type's animals (sheep, rabbits, chickens…), in little groups: food for Sparx.");
         _randomObjectsThieves = Box("RandomObjectsThieves", "Egg thieves", "The egg thieves this level's place in the game has, each with a run.");
@@ -161,7 +161,7 @@ public sealed partial class MainWindow
         int kind = _randomObjectsEnemyKind?.SelectedIndex ?? 0;
         var difficulty = (LevelDifficulty)Math.Clamp(_randomObjectsDifficulty?.SelectedIndex ?? 1, 0, 3);
         return new(type, RandomObjectsEnemyLevelKey(), kind > 0 && kind <= _randomObjectsEnemyKinds.Count ? _randomObjectsEnemyKinds[kind - 1].Class : 0,
-            _randomObjectsEnemies?.IsChecked == false ? 0 : RandomObjectsEnemies(difficulty),
+            _randomObjectsEnemies?.IsChecked == false ? 0 : RandomObjectsEnemies(difficulty, (int)(_randomObjectsTreasure?.Value ?? 300)),
             (int)(_randomObjectsTreasure?.Value ?? 300), (int)(_randomObjectsEggs?.Value ?? 0),
             _randomObjectsChests?.IsChecked == true, _randomObjectsAnimals?.IsChecked == true, _randomObjectsThieves?.IsChecked == true,
             _randomObjectsDragons?.IsChecked == true, _randomObjectsExit?.IsChecked == true, Difficulty: difficulty);
@@ -274,7 +274,7 @@ public sealed partial class MainWindow
         int free = Math.Max(0, 256 - (scene.TargetBinding?.NativePrefixRows ?? 0) - scene.Ledger.Entries.Count + spare.Count);
         var occupied = _currentMobys.Where(m => !m.IsRemoved).Select(m => m.Position).ToList();
         int before = _currentMobys.Where(m => !m.IsRemoved).Sum(m => m.TreasureValue);
-        var request = new LevelScatter.Request(seed, foeKinds.Count > 0 ? choice.Enemies : 0, animalKinds.Count > 0 ? RandomObjectsDifficulties[Math.Clamp((int)choice.Difficulty, 0, 3)].Animals : 0,
+        var request = new LevelScatter.Request(seed, foeKinds.Count > 0 ? choice.Enemies : 0, animalKinds.Count > 0 ? LevelScatter.AnimalsFor(choice.Difficulty) : 0,
             Math.Max(0, choice.Treasure - before), Math.Max(0, free - LevelFillSpareRows))
         { Dragons = dragonRows.Count, ThiefRoutes = [.. thieves.Select(t => t.Nodes)], Exit = exit, ChestKinds = chest.Keys.ToHashSet(), Eggs = eggs, Difficulty = choice.Difficulty };
         var plan = await Task.Run(() => LevelScatter.Make(scene, request, scene.GemSpots, occupied));
@@ -423,7 +423,7 @@ public sealed partial class MainWindow
             // counts it, and the loose gems make up the rest of the treasure exactly, in every colour.
             int soFar = _currentMobys.Where(m => !m.IsRemoved).Sum(m => m.TreasureValue);
             int loose = choice.Treasure - soFar;
-            var values = plan.Gems.Count > 0 && loose > 0 ? LevelScatter.Mix(plan.GemHardness, loose, new LevelRandom(seed ^ 0x47454D53)) : [];
+            var values = plan.Gems.Count > 0 && loose > 0 ? LevelScatter.Values(plan.GemHardness, plan.GemGroups, loose, new LevelRandom(seed ^ 0x47454D53)) : [];
             for (int i = 0; i < values.Length; i++)
             {
                 if (values[i] <= 0) continue;

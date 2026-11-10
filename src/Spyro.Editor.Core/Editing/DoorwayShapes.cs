@@ -53,7 +53,14 @@ public static class DoorwayShapes
     public static readonly DoorwayShape HexGate = new("hex-gate", "Hex Gate",
         "A six-sided doorway.", [(48, 0), (96, 83), (48, 166), (-48, 166), (-96, 83), (-48, 0)], 20, 18, Keystone: true, Bases: false, Lintel: false);
 
-    public static IReadOnlyList<DoorwayShape> All { get; } = [StoneArch, PointedArch, SquareGate, RoundRing, WideArch, HexGate];
+    public static readonly DoorwayShape TallArch = new("tall-arch", "Tall Arch",
+        "A high round-topped arch on tall jambs.", Arch(64, 150, 60, 6), 22, 18, Keystone: true, Bases: true, Lintel: false);
+    public static readonly DoorwayShape GableGate = new("gable-gate", "Gable Gate",
+        "Two posts under a pointed gable, like the end of a hut.", [(64, 0), (64, 118), (0, 186), (-64, 118), (-64, 0)], 22, 18, Keystone: true, Bases: true, Lintel: false);
+    public static readonly DoorwayShape SlantedGate = new("slanted-gate", "Slanted Gate",
+        "Posts that lean in under a flat beam, wider at the foot than at the top.", [(84, 0), (54, 172), (-54, 172), (-84, 0)], 24, 20, Keystone: false, Bases: false, Lintel: true);
+
+    public static IReadOnlyList<DoorwayShape> All { get; } = [StoneArch, PointedArch, SquareGate, RoundRing, WideArch, HexGate, TallArch, GableGate, SlantedGate];
 
     public static DoorwayShape? Find(string? id) => All.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.Ordinal));
 

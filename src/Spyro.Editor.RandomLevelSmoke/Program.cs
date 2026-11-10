@@ -57,7 +57,7 @@ if (args.Length >= 6 && args[0] == "--dump")
     return 0;
 }
 // Gate (no disc): [repo root] [--maps <folder>] [--seeds N]
-if (args.Length == 0 || args[0] is not ("--fingerprint" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts"))
+if (args.Length == 0 || args[0] is not ("--fingerprint" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--scatter-facts"))
 {
     string repo = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : Directory.GetCurrentDirectory();
     string? maps = args.SkipWhile(a => a != "--maps").Skip(1).FirstOrDefault();
@@ -230,6 +230,63 @@ if (args.Length >= 3 && args[0] == "--surface-kinds")
         }
         catch (Exception e) { Console.WriteLine($"{level.Key}: {e.Message}"); }
     }
+    return 0;
+}
+if (args.Length >= 2 && args[0] == "--scatter-facts")
+{
+    // --scatter-facts <repo> [treasure] [difficulty]: Random objects on a level of every kind, measured the way
+    // study/objects.py measures the game's own levels, to be set beside its figures.
+    var catalog = LevelCatalog.Load(args[1]);
+    int treasure = args.Length > 2 ? int.Parse(args[2]) : 300;
+    var difficulty = args.Length > 3 ? Enum.Parse<Spyro.Editor.Core.Generation.LevelDifficulty>(args[3]) : Spyro.Editor.Core.Generation.LevelDifficulty.Medium;
+    static double Pct(List<double> v, double q) { v.Sort(); return v.Count == 0 ? 0 : v[Math.Min(v.Count - 1, (int)(q * v.Count))]; }
+    static double D(Spyro.Editor.Core.Primitives.Vector3f a, Spyro.Editor.Core.Primitives.Vector3f b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y) + (a.Z - b.Z) * (a.Z - b.Z));
+    static List<double> Nearest(List<Spyro.Editor.Core.Primitives.Vector3f> p) => p.Count < 2 ? [] : [.. p.Select(a => p.Where(b => b != a).Min(b => D(a, b)))];
+    static List<int> Groups(List<Spyro.Editor.Core.Primitives.Vector3f> p, double link)
+    {
+        var left = Enumerable.Range(0, p.Count).ToList(); List<int> sizes = [];
+        while (left.Count > 0)
+        {
+            var stack = new Stack<int>([left[^1]]); left.RemoveAt(left.Count - 1); int n = 0;
+            while (stack.Count > 0) { int i = stack.Pop(); n++; foreach (int j in left.Where(j => D(p[i], p[j]) <= link).ToList()) { left.Remove(j); stack.Push(j); } }
+            sizes.Add(n);
+        }
+        return sizes;
+    }
+    static string Share(List<int> sizes) { double all = sizes.Sum(); return all == 0 ? "-" : $"alone {sizes.Where(x => x == 1).Sum() / all:0%}, 2-3 {sizes.Where(x => x is 2 or 3).Sum() / all:0%}, 4+ {sizes.Where(x => x >= 4).Sum() / all:0%}"; }
+    List<double> gemNear = [], foeNear = [], chestNear = [], gemWall = [], chestWall = [], foeWall = [];
+    List<int> gemGroups = [], foeGroups = [], chestGroups = [];
+    var colours = new Dictionary<int, int>(); int loose = 0, inChests = 0, fromFoes = 0, all = 0, gemCount = 0, chestCount = 0, foeCount = 0, levels = 0, oneColour = 0, manyGroups = 0;
+    foreach (var style in Enum.GetValues<Spyro.Editor.Core.Generation.LevelStyle>())
+        for (int k = 0; k < 2; k++)
+        {
+            long seed = 5000 + (int)style * 10 + k;
+            var r = Spyro.Editor.Core.Generation.RandomLevelGenerator.Generate(new() { Seed = seed, Style = style, Difficulty = difficulty }, catalog, source: RandomLevelCases.LookSource());
+            var plan = LevelScatter.Make(r.Scene, new LevelScatter.Request(seed, LevelScatter.EnemiesFor(treasure, difficulty), LevelScatter.AnimalsFor(difficulty), treasure, 236)
+            { Exit = true, ChestKinds = LevelScatter.Chests.ToHashSet(), Difficulty = difficulty }, r.Scene.GemSpots);
+            var gems = plan.Gems.Select(g => g.Position).ToList();
+            var foes = plan.Of(LevelScatter.Kind.Enemy).Select(i => i.Position).ToList();
+            var chests = plan.Items.Where(i => i.Kind is LevelScatter.Kind.Basket or LevelScatter.Kind.StrongChest or LevelScatter.Kind.FlameChest or LevelScatter.Kind.Firework or LevelScatter.Kind.SpringChest or LevelScatter.Kind.LifeChest or LevelScatter.Kind.LockedChest).ToList();
+            int l = plan.Gems.Sum(g => g.Value), c = chests.Sum(i => i.Reward), f = plan.Of(LevelScatter.Kind.Enemy).Sum(i => i.Reward);
+            Console.WriteLine($"{style,-10} {seed}: treasure {plan.Treasure} = loose {l} in {gems.Count} gems + {chests.Count} chests {c} + {foes.Count} enemies {f}; " +
+                $"{string.Join(" ", plan.Gems.GroupBy(g => g.Value).OrderBy(g => g.Key).Select(g => $"{g.Key}x{g.Count()}"))}; {string.Join(", ", plan.Items.GroupBy(i => i.Kind).Select(g => $"{g.Count()} {g.Key}"))} {string.Join(" ", plan.Notes)}");
+            foreach (var g in plan.Gems) colours[g.Value] = colours.GetValueOrDefault(g.Value) + 1;
+            loose += l; inChests += c; fromFoes += f; all += plan.Treasure; gemCount += gems.Count; chestCount += chests.Count; foeCount += foes.Count; levels++;
+            gemNear.AddRange(Nearest(gems)); foeNear.AddRange(Nearest(foes)); chestNear.AddRange(Nearest([.. chests.Select(i => i.Position)]));
+            gemGroups.AddRange(Groups(gems, 150)); foeGroups.AddRange(Groups(foes, 450)); chestGroups.AddRange(Groups([.. chests.Select(i => i.Position)], 200));
+            gemWall.AddRange(gems.Select(p => (double)RandomLevelCases.WallDistance(r.Scene, p))); chestWall.AddRange(chests.Select(i => (double)RandomLevelCases.WallDistance(r.Scene, i.Position)));
+            foeWall.AddRange(foes.Select(p => (double)RandomLevelCases.WallDistance(r.Scene, p)));
+            foreach (var g in plan.Gems.Select((gem, i) => (gem, Group: plan.GemGroups[i])).GroupBy(x => x.Group).Where(g => g.Count() > 1)) { manyGroups++; if (g.Select(x => x.gem.Value).Distinct().Count() == 1) oneColour++; }
+        }
+    Console.WriteLine($"\n==== {levels} levels, treasure {treasure}, {difficulty} (the game's figures in brackets) ====");
+    Console.WriteLine($"treasure: loose {loose / (double)all:0%} [31%], chests {inChests / (double)all:0%} [46%], enemies {fromFoes / (double)all:0%} [23%]");
+    int n = colours.Values.Sum();
+    Console.WriteLine($"loose gem colours {string.Join(", ", colours.OrderBy(c => c.Key).Select(c => $"{c.Key}: {c.Value / (double)n:0%}"))} [1: 62%, 2: 24%, 5: 10%, 10: 3%, 25: 1%]; value per loose gem {loose / (double)Math.Max(1, gemCount):0.00} [2.13]");
+    Console.WriteLine($"per 100 treasure: enemies {100.0 * foeCount / all:0.0} [6.7], chests {100.0 * chestCount / all:0.0} [9.6], loose gems {100.0 * gemCount / all:0.0} [15.7]");
+    Console.WriteLine($"gem nearest p25/p50/p75 {Pct(gemNear, .25):0}/{Pct(gemNear, .5):0}/{Pct(gemNear, .75):0} [81/103/134]; groups {Share(gemGroups)} [alone 19%, 2-3 58%, 4+ 23%]; groups of one colour {oneColour} of {manyGroups} [about 3 in 4]");
+    Console.WriteLine($"enemy nearest p25/p50/p75 {Pct(foeNear, .25):0}/{Pct(foeNear, .5):0}/{Pct(foeNear, .75):0} [146/275/491]; groups {Share(foeGroups)} [alone 28%, 2-3 43%, 4+ 29%]");
+    Console.WriteLine($"chest nearest p25/p50/p75 {Pct(chestNear, .25):0}/{Pct(chestNear, .5):0}/{Pct(chestNear, .75):0} [92/118/236]; groups {Share(chestGroups)} [alone 28%, 2-3 55%, 4+ 17%]");
+    Console.WriteLine($"wall distance p25/p50/p75: gems {Pct(gemWall, .25):0}/{Pct(gemWall, .5):0}/{Pct(gemWall, .75):0} [54/96/202], chests {Pct(chestWall, .25):0}/{Pct(chestWall, .5):0}/{Pct(chestWall, .75):0} [64/97/190], enemies {Pct(foeWall, .25):0}/{Pct(foeWall, .5):0}/{Pct(foeWall, .75):0} [89/156/254]");
     return 0;
 }
 if (args.Length >= 3 && args[0] == "--doorway-facts")

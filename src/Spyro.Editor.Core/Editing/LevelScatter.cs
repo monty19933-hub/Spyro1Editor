@@ -63,6 +63,9 @@ public static class LevelScatter
         /// <summary>How hard each gem's place is to reach (one weight per gem of <see cref="Gems"/>), for
         /// <see cref="Mix"/> when the gems must come to another total after all.</summary>
         public IReadOnlyList<double> GemHardness { get; init; } = [];
+        /// <summary>The group each gem lies in (one number per gem of <see cref="Gems"/>): a group's gems are one
+        /// colour where the total allows (<see cref="Values"/>).</summary>
+        public IReadOnlyList<int> GemGroups { get; init; } = [];
         /// <summary>The gems the plan comes to: loose ones and what chests and enemies give.</summary>
         public int Treasure => Gems.Sum(g => g.Value) + Items.Sum(i => i.Reward);
     }
@@ -173,13 +176,65 @@ public static class LevelScatter
             return _inside[p] = behind >= 3;
         }
 
-        /// <summary>Free of walls: not in one, not against one.</summary>
-        public bool Open(Vector3f p) => !Near(p) && !Inside(p);
+        /// <summary>Whether a wall rises within <paramref name="cells"/> grid cells of <paramref name="p"/> (the game's
+        /// gems and chests mostly lie within a hundred units of one).</summary>
+        public bool Within(Vector3f p, int cells)
+        {
+            int x = (int)MathF.Floor(p.X / LevelFill.Cell), y = (int)MathF.Floor(p.Y / LevelFill.Cell);
+            for (int dx = -cells; dx <= cells; dx++)
+                for (int dy = -cells; dy <= cells; dy++)
+                    if (dx * dx + dy * dy <= cells * cells + cells && _spans.TryGetValue((x + dx, y + dy), out var list) && list.Any(e => e.Hi > p.Z + 30 && e.Lo < p.Z + 90)) return true;
+            return false;
+        }
+
+        /// <summary>Free of walls: not in one, not against one. <paramref name="small"/>: a gem, which may lie right at
+        /// a wall's foot (only where it lies itself must be clear).</summary>
+        public bool Open(Vector3f p, bool small = false) => !(small ? At(p) : Near(p)) && !Inside(p);
+
+        /// <summary>A wall where <paramref name="p"/> is or within about a gem's width of it.</summary>
+        private bool At(Vector3f p)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    float reach = dx != 0 && dy != 0 ? 17 : 24;
+                    if (_spans.TryGetValue(((int)MathF.Floor((p.X + dx * reach) / LevelFill.Cell), (int)MathF.Floor((p.Y + dy * reach) / LevelFill.Cell)), out var list) &&
+                        list.Any(e => e.Hi > p.Z + 14 && e.Lo < p.Z + 100)) return true;
+                }
+            return false;
+        }
     }
 
     private static float Dist2(Vector3f a, Vector3f b) => (a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y) + (a.Z - b.Z) * (a.Z - b.Z) / 4;
     private static double Range(LevelRandom rnd, double a, double b) => a + (b - a) * rnd.NextDouble();
     public static readonly int[] Colours = [1, 2, 5, 10, 25];
+
+    /// <summary>The game's own figures, measured over its thirty levels on foot (study/objects.py): of a level's
+    /// treasure 31% lies loose, 46% is in chests and 23% comes from enemies; for every hundred of treasure a level has
+    /// about ten chests (with the extra lives and the locked chest), seven enemies and sixteen loose gems worth a little over two apiece (62% red, 24% green, 10%
+    /// blue, 3% gold, 1% pink).</summary>
+    public const double LooseShare = 0.31, ChestsPerHundred = 9.2, EnemiesPerHundred = 6.7, LooseGemValue = 2.13;
+
+    /// <summary>The enemies a level of this treasure has in the game, more or fewer by the difficulty.</summary>
+    public static int EnemiesFor(int treasure, LevelDifficulty difficulty) => Math.Clamp((int)Math.Round(Math.Max(0, treasure) / 100.0 * difficulty switch
+    {
+        LevelDifficulty.Easy => 4.5, LevelDifficulty.Hard => 9.5, LevelDifficulty.Kaizo => 13, _ => EnemiesPerHundred,
+    }), 3, 40);
+
+    /// <summary>The animals for Sparx (a level of the game has about five): plenty when easy, none in Kaizo.</summary>
+    public static int AnimalsFor(LevelDifficulty difficulty) => difficulty switch { LevelDifficulty.Easy => 8, LevelDifficulty.Hard => 3, LevelDifficulty.Kaizo => 0, _ => 5 };
+
+    /// <summary>What a kind of chest, or an enemy, gives in the game: gems and how often (of a hundred).</summary>
+    private static IReadOnlyList<(int Gems, double Weight)> Gives(Kind kind) => kind switch
+    {
+        Kind.Basket => [(1, 4), (2, 45), (5, 38), (10, 11), (25, 2)],
+        Kind.StrongChest => [(1, 3), (2, 44), (5, 42), (10, 10), (25, 1)],
+        Kind.SpringChest => [(1, 3), (2, 26), (5, 42), (10, 24), (25, 5)],
+        Kind.FlameChest => [(1, 8), (2, 23), (5, 35), (10, 32), (25, 2)],
+        Kind.Firework => [(1, 6), (2, 3), (5, 44), (10, 25), (25, 22)],
+        Kind.LockedChest => [(2, 40), (5, 30), (10, 10), (25, 20)],
+        _ => [(1, 20), (2, 35), (5, 35), (10, 10)],
+    };
 
     /// <param name="hints">Good places for gems the level's maker left (<see cref="SceneDocument.GemSpots"/>: a generated
     /// level's paths, ledges, lookouts and stepping stones; an imported level's own gem places).</param>
@@ -254,6 +309,14 @@ public static class LevelScatter
         var ends = order.Where(c => open[c] >= 1 && walk[c] > 30 && Around(c).All(n => walk[n] <= walk[c])).ToList();
         var edges = order.Where(c => open[c] is 1 or 2 && fringe.ContainsKey(c) && walk[c] > 24).ToList();
         var nooks = rooms.Where(r => r != first && r.Cells.Count < 260).ToList();
+        // The floor by the walls: within about a hundred units of a wall that rises beside it (where the level has few
+        // such walls, as islands do, the floor near its edges as well).
+        var byWall = order.Where(c => open[c] >= 1 && walk[c] > 10 && upright.Within(point[c], 3)).ToList();
+        if (byWall.Count < 60) byWall = [.. byWall.Concat(edges).Distinct()];
+        var nearWall = byWall.ToHashSet();
+        // Right by them: about two steps from the wall, where most of the game's chests stand.
+        var hardBy = byWall.Where(c => upright.Within(point[c], 2)).ToList();
+        if (hardBy.Count < 40) hardBy = byWall;
 
         // A maker's place, on the plain floor under it (none there: not used).
         Vector3f? OnFloor(Vector3f g)
@@ -263,13 +326,17 @@ public static class LevelScatter
         }
         var places0 = hints?.Select(OnFloor).Where(p => p != null).Select(p => p!.Value).ToList() ?? [];
         List<Vector3f> taken = [.. occupied ?? [], spawn];
-        // A homeworld's doorways: nothing stands in one, nor on the floor in front where Spyro walks in and comes back out.
+        // A homeworld's doorways: nothing stands in one, nor on the floor in front where Spyro walks in and comes back
+        // out; enemies keep well away from them altogether.
+        List<Vector3f> doorways = [];
         foreach (var door in scene.Portals ?? [])
         {
             var (fx, fy) = DoorwayShapes.Facing(door.Heading);
-            for (float t = 0; t <= 720; t += 120) taken.Add(new(door.Position.X - (float)fx * t, door.Position.Y - (float)fy * t, door.Position.Z));
+            for (float t = 0; t <= 720; t += 120) doorways.Add(new(door.Position.X - (float)fx * t, door.Position.Y - (float)fy * t, door.Position.Z));
         }
-        bool Clear(Vector3f p, float d) => taken.All(t => Dist2(t, p) >= d * d) && upright.Open(p);
+        taken.AddRange(doorways);
+        bool OffDoorways(Vector3f p) => doorways.All(q => Dist2(q, p) >= 560 * 560);
+        bool Clear(Vector3f p, float d, bool small = false) => taken.All(t => Dist2(t, p) >= d * d) && upright.Open(p, small);
         T? Pick<T>(IReadOnlyList<T> items, Func<T, double> weight) where T : struct =>
             items.Count == 0 ? null : rnd.Pick<T>([.. items.Select(i => (i, Math.Max(0.0001, weight(i))))]);
         List<Item> items = [];
@@ -280,16 +347,29 @@ public static class LevelScatter
             return item;
         }
         int rows = request.MaxObjects;
+        int total = Math.Max(0, request.Treasure);
         // How far enemies keep from a room's way in and from the start, how far apart guards stand on the paths, how many
         // wait together in a room, how much of the treasure enemies and chests hold, and how much better the gems at
         // hard places are.
-        var (enemyGap, startGap, guardGap, together, held, bias) = request.Difficulty switch
+        var (enemyGap, startGap, guardGap, together, looseShare, bias) = request.Difficulty switch
         {
-            LevelDifficulty.Easy => (260f, 560f, 480f, 3, 0.45, 0.8),
-            LevelDifficulty.Hard => (190f, 480f, 340f, 5, 0.6, 1.3),
-            LevelDifficulty.Kaizo => (150f, 440f, 280f, 6, 0.65, 1.6),
-            _ => (220f, 520f, 420f, 4, 0.55, 1.0),
+            LevelDifficulty.Easy => (260f, 560f, 480f, 3, 0.4, 0.8),
+            LevelDifficulty.Hard => (190f, 480f, 340f, 5, 0.26, 1.3),
+            LevelDifficulty.Kaizo => (150f, 440f, 280f, 6, 0.2, 1.6),
+            _ => (220f, 520f, 420f, 4, LooseShare, 1.0),
         };
+        // How much of everything: what was asked for while the level's save rows hold it, else everything in proportion
+        // (fewer objects then carry the same treasure). A dragon takes three rows, a locked chest and its key four.
+        int wantChests = (int)Math.Round(total / 100.0 * ChestsPerHundred);
+        int wantGems = (int)Math.Round(total * looseShare / LooseGemValue);
+        int fixedRows = (request.Exit ? 1 : 0) + request.ThiefRoutes.Count + 3 * request.Dragons + request.Eggs + (request.ChestKinds.Contains(Kind.LifeChest) ? 1 : 0) + (request.ChestKinds.Contains(Kind.LockedChest) ? 4 : 0);
+        int wantAll = request.Enemies + request.Animals + wantChests + wantGems;
+        double fit = wantAll <= 0 ? 1 : Math.Clamp((rows - fixedRows) / (double)wantAll, 0, 1);
+        if (fit < 1)
+        {
+            wantChests = (int)(wantChests * fit);
+            if (fit < 0.75) notes.Add($"The level has save rows for about {(int)Math.Round(fit * 100)}% of what a level of the game with this treasure holds, so there is less of everything and each thing gives more.");
+        }
 
         // The way out: in the room farthest along (or the one before it), on its far side.
         if (request.Exit && rows > 0)
@@ -337,45 +417,55 @@ public static class LevelScatter
             }
         }
 
-        // Enemies: in each room past the first, a few together about its middle, facing the way in; then the odd one
-        // standing guard on a path. More rooms than enemies: the deeper rooms first.
+        // Enemies: in the rooms past the first, in ones, twos and threes (now and then a pack) a few steps apart, facing
+        // the way in; the deeper rooms first, big rooms more than one group; then the odd one standing guard on a path.
         var beyond = rooms.Where(r => r != first).ToList();
         if (beyond.Count == 0 && first != null) beyond = [first];
-        int enemies = Math.Min(request.Enemies, Math.Max(0, rows / 3));
+        // A room's floor out to its walls (enemies stand nearer the walls than the middle).
+        var fringeOf = fringe.GroupBy(f => f.Value).ToDictionary(g => g.Key, g => g.Select(f => f.Key).OrderBy(c => c.X).ThenBy(c => c.Y).ThenBy(c => c.Layer).ToList());
+        int enemies = Math.Min((int)Math.Round(request.Enemies * fit), Math.Max(0, rows / 3));
         if (enemies > 0 && beyond.Count > 0)
         {
-            int left = enemies;
-            var share = beyond.Select(r => Math.Sqrt(r.Cells.Count)).ToList();
-            double all = share.Sum();
-            var counts = share.Select(s => Math.Max(1, (int)Math.Round(enemies * 0.8 * s / all))).ToList();
-            for (int k = beyond.Count - 1; k >= 0 && left > 0; k--)
-            {
-                var room = beyond[k];
-                int want = Math.Min(left, Math.Min(together, counts[k]));
-                // Not in the doorway: Spyro gets to step in first.
-                var cells = room.Cells.Where(c => open[c] >= 2 && Dist2(point[c], room.EntryPoint) >= enemyGap * enemyGap && Dist2(point[c], spawn) >= startGap * startGap).ToList();
-                LevelFill.FloorGrid.Place? anchor = null;
-                for (int n = 0; n < want; n++)
+            int left = enemies, forPaths = (int)Math.Round(enemies * 0.2);
+            for (int round = 0; left > forPaths && round < 4; round++)
+                for (int k = beyond.Count - 1; k >= 0 && left > forPaths; k--)
                 {
-                    var near = anchor is { } a ? cells.Where(c => Dist2(point[c], point[a]) <= 300 * 300).ToList() : cells;
-                    if (Pick([.. near.Where(c => Clear(point[c], 170))], c => (double)open[c] * open[c]) is not { } spot) break;
-                    anchor ??= spot;
-                    Put(Kind.Enemy, point[spot], room.EntryPoint); left--;
+                    var room = beyond[k];
+                    // A second group only in a big room.
+                    if (round > 0 && room.Cells.Count < 500 * round) continue;
+                    int want = Math.Min(left - forPaths, Math.Min(together + 1, rnd.Pick<int>([(1, 34.0), (2, 30.0), (3, 18.0), (4, 9.0), (5, 5.0), (6, 4.0)])));
+                    // Not in the doorway: Spyro gets to step in first.
+                    var cells = room.Cells.Concat(fringeOf.GetValueOrDefault(room, [])).Where(c => open[c] >= 2 && Dist2(point[c], room.EntryPoint) >= enemyGap * enemyGap && Dist2(point[c], spawn) >= startGap * startGap && OffDoorways(point[c])).ToList();
+                    LevelFill.FloorGrid.Place? anchor = null;
+                    for (int n = 0; n < want; n++)
+                    {
+                        // The first of a group well clear of other groups; the rest a few steps from it.
+                        var near = anchor is { } a ? cells.Where(c => Dist2(point[c], point[a]) <= 250 * 250 && Clear(point[c], 118)).ToList() : [.. cells.Where(c => Clear(point[c], 330))];
+                        if (Pick(near, c => nearWall.Contains(c) ? 6.0 : 1.0) is not { } spot) break;
+                        anchor ??= spot;
+                        Put(Kind.Enemy, point[spot], room.EntryPoint); left--;
+                    }
                 }
-            }
             // On the paths: narrow floor between rooms, well apart.
-            var paths = order.Where(c => !roomOf.ContainsKey(c) && open[c] is >= 1 and <= 3 && walk[c] > 20 && Dist2(point[c], spawn) >= 600 * 600).ToList();
+            var paths = order.Where(c => !roomOf.ContainsKey(c) && open[c] is >= 1 and <= 3 && walk[c] > 20 && Dist2(point[c], spawn) >= 600 * 600 && OffDoorways(point[c])).ToList();
             for (int tries = 0; left > 0 && tries < 4 * enemies; tries++)
             {
                 if (Pick([.. paths.Where(c => Clear(point[c], guardGap))], c => 1.0) is not { } spot) break;
                 Put(Kind.Enemy, point[spot], spawn); left--;
+            }
+            // Any still to place: wherever a room has space.
+            for (int tries = 0; left > 0 && tries < 3 * enemies; tries++)
+            {
+                var room = rnd.Pick(beyond);
+                if (Pick([.. room.Cells.Where(c => open[c] >= 2 && Dist2(point[c], spawn) >= startGap * startGap && OffDoorways(point[c]) && Clear(point[c], 150))], c => 1.0) is not { } spot) continue;
+                Put(Kind.Enemy, point[spot], room.EntryPoint); left--;
             }
             if (left > 0) notes.Add($"Room for {enemies - left} of {enemies} enemies.");
             rows -= enemies - left;
         }
 
         // Animals: little groups in the open, the first where Spyro starts.
-        int animals = Math.Min(request.Animals, Math.Max(0, rows / 4)), placedAnimals = 0;
+        int animals = Math.Min((int)Math.Round(request.Animals * fit), Math.Max(0, rows / 4)), placedAnimals = 0;
         for (int group = 0; placedAnimals < animals && group < 2 * animals && rooms.Count > 0; group++)
         {
             var room = group == 0 && first != null ? first : rnd.Pick(rooms);
@@ -391,7 +481,8 @@ public static class LevelScatter
         }
         rows -= placedAnimals;
 
-        // Chests. How many of each goes by the size of the level; what each gives is settled with the treasure below.
+        // Chests. As many as the game's levels have for their treasure (about ten for every hundred gems), mostly
+        // baskets and strong chests, in ones, twos and threes a chest's width apart, most of them by the walls.
         Vector3f Facing(LevelFill.FloorGrid.Place c) => roomOf.TryGetValue(c, out var inRoom) ? inRoom.EntryPoint : fringe.TryGetValue(c, out var beside) ? beside.MiddlePoint : spawn;
         // A tucked-away place: a nook's middle, the end of a walk, or failing those the floor by a far wall.
         LevelFill.FloorGrid.Place? Hidden(float clear)
@@ -401,8 +492,8 @@ public static class LevelScatter
             return Pick(from, c => 1.0 + walk[c] / 32.0);
         }
         bool Has(Kind kind) => request.ChestKinds.Contains(kind);
-        int size0 = Math.Max(1, rooms.Count);
-        if (Has(Kind.LifeChest) && rows > 0 && Hidden(260) is { } life) { Put(Kind.LifeChest, point[life], Facing(life)); rows--; }
+        for (int n = 0; Has(Kind.LifeChest) && n < (total >= 400 ? 2 : 1) && rows > 0; n++)
+            if (Hidden(260) is { } life) { Put(Kind.LifeChest, point[life], Facing(life)); rows--; }
         if (Has(Kind.LockedChest) && rows > 4 && Hidden(260) is { } locked)
         {
             var chest = Put(Kind.LockedChest, point[locked], Facing(locked));
@@ -414,38 +505,41 @@ public static class LevelScatter
             else if (Pick(spots, c => 1.0 + Math.Sqrt(Dist2(point[c], chest.Position)) / 400) is { } key) { Put(Kind.Key, point[key], spawn); rows -= 3; }
             else { items.Remove(chest); taken.Remove(chest.Position); notes.Add("No place for a locked chest's key, so no locked chest."); }
         }
-        foreach (var (kind, count, clear) in new[]
+        // The kinds in the game's own proportions (of every 100 chests: 47 baskets, 27 strong, 16 spring, 7 three-flame,
+        // 4 firework), one of each kind first.
+        var common = new[] { (Kind.Basket, 47.0), (Kind.StrongChest, 27.0), (Kind.SpringChest, 16.0), (Kind.FlameChest, 7.0), (Kind.Firework, 4.0) }.Where(k => Has(k.Item1)).ToList();
+        int chests = common.Count == 0 ? 0 : Math.Min(wantChests, Math.Max(0, rows - 1));
+        List<Kind> kindsToPlace = [];
+        if (chests > 0)
         {
-            (Kind.StrongChest, Math.Clamp(size0 / 2, 1, 3), 240f), (Kind.FlameChest, size0 >= 4 ? 1 : 0, 240f), (Kind.Firework, size0 >= 3 ? 1 : 0, 240f),
-            (Kind.SpringChest, size0 >= 5 ? 1 : 0, 240f),
-        })
-            for (int n = 0; Has(kind) && n < count && rows > 0; n++)
-                // By a wall or where a walk ends; closer to other things when the level is tight.
-                for (int tries = 0; tries < 4; tries++)
-                {
-                    var from = tries % 2 == (rnd.Chance(0.4) ? 0 : 1) ? ends : edges;
-                    float room = clear * (tries < 2 ? 1 : 0.6f);
-                    if (Pick([.. from.Where(c => Clear(point[c], room))], c => 1.0 + walk[c] / 64.0) is not { } spot) continue;
-                    Put(kind, point[spot], Facing(spot)); rows--;
-                    break;
-                }
-        // Baskets and vases stand in twos and threes by the walls.
-        if (Has(Kind.Basket))
-        {
-            int baskets = Math.Min(Math.Clamp(size0 + 2, 3, 9), rows / 3), placed = 0;
-            for (int tries = 0; placed < baskets && tries < 6 * baskets; tries++)
-            {
-                if (Pick([.. edges.Where(c => Clear(point[c], 220))], c => 1.0) is not { } anchor) break;
-                int group = Math.Min(baskets - placed, rnd.Next(1, 4));
-                for (int n = 0; n < group; n++)
-                {
-                    var near = n == 0 ? [anchor] : edges.Concat(order.Where(c => open[c] is 2 or 3)).Where(c => Dist2(point[c], point[anchor]) <= 150 * 150 && Clear(point[c], 84)).ToList();
-                    if (Pick(near, c => 1.0) is not { } spot) break;
-                    Put(Kind.Basket, point[spot], Facing(spot)); placed++;
-                }
-            }
-            rows -= placed;
+            // Each kind its share of the chests (one at least while there are chests for it), the rest by chance.
+            double whole = common.Sum(k => k.Item2);
+            foreach (var (kind, weight) in common)
+                for (int n = 0; n < Math.Max(1, (int)(chests * weight / whole)) && kindsToPlace.Count < chests; n++) kindsToPlace.Add(kind);
+            while (kindsToPlace.Count < chests) kindsToPlace.Add(rnd.Pick<Kind>(common));
         }
+        // Like with like: the game's groups are mostly of one kind.
+        kindsToPlace = [.. kindsToPlace.OrderBy(k => k)];
+        int placedChests = 0;
+        var inTheOpen = order.Where(c => open[c] >= 3 && walk[c] > 12).ToList();
+        for (int tries = 0; placedChests < kindsToPlace.Count && tries < 8 * kindsToPlace.Count + 20; tries++)
+        {
+            // Three groups in four stand by a wall or where a walk ends; the rest out in the open.
+            var from = rnd.Chance(0.8) ? (rnd.Chance(0.15) && ends.Count > 0 ? ends : hardBy) : inTheOpen;
+            float apart = tries < 4 * kindsToPlace.Count ? 190 : 130;
+            if (Pick([.. from.Where(c => Clear(point[c], apart))], c => 1.0 + walk[c] / 96.0) is not { } anchor) continue;
+            int group = Math.Min(kindsToPlace.Count - placedChests, rnd.Pick<int>([(1, 50.0), (2, 30.0), (3, 14.0), (4, 6.0)]));
+            var last = anchor;
+            for (int n = 0; n < group; n++)
+            {
+                // The next one a chest's width along from the last (the game's chests stand about 120 apart).
+                var near = n == 0 ? [anchor] : order.Where(c => open[c] >= 1 && Math.Abs(point[c].Z - point[anchor].Z) <= 12 && Dist2(point[c], point[last]) is >= 92 * 92 and <= 136 * 136 && Clear(point[c], 90)).ToList();
+                if (Pick(near, c => 1.0) is not { } spot) break;
+                Put(kindsToPlace[placedChests++], point[spot], Facing(spot)); last = spot;
+            }
+        }
+        rows -= placedChests;
+        if (placedChests < chests) notes.Add($"Room for {placedChests} of {chests} chests.");
 
         // Dragonfly eggs: out of the way, one to a place, well apart.
         for (int n = 0; n < request.Eggs && rows > 0; n++)
@@ -457,96 +551,173 @@ public static class LevelScatter
             else { notes.Add($"Room for {n} of {request.Eggs} dragonfly eggs."); break; }
         }
 
-        // The treasure. What chests and enemies give is at most a little over half of it; loose gems carry the rest.
+        // What chests and enemies give: drawn as the game's own give (measured over its levels: a basket a green or a
+        // blue, a strong chest the same, spring and three-flame chests blue or gold, a firework blue to pink; an
+        // enemy a green or a blue, now and then a red or a gold).
         List<(Vector3f, int)> gems = [];
         List<double> hardness = [];
-        int total = Math.Max(0, request.Treasure);
+        List<int> groupOf = [];
         var givers = items.Select((item, i) => (item, i)).Where(p => p.item.Kind is Kind.Enemy or Kind.Basket or Kind.StrongChest or Kind.FlameChest or Kind.Firework or Kind.SpringChest or Kind.LockedChest).ToList();
-        var reward = givers.ToDictionary(p => p.i, p => p.item.Kind switch
-        {
-            Kind.Enemy => rnd.Chance(0.7) ? 1 : 2, Kind.Basket => rnd.Chance(0.6) ? 5 : rnd.Chance(0.5) ? 2 : 10, Kind.StrongChest => rnd.Chance(0.6) ? 10 : 25,
-            Kind.FlameChest => 25, Kind.Firework => 10, Kind.SpringChest => 10, _ => 25,
-        });
+        var reward = givers.ToDictionary(p => p.i, p => rnd.Pick<int>(Gives(p.item.Kind)));
         int Given() => reward.Values.Sum();
-        // Too much for the treasure asked for: the biggest come down a colour at a time (to nothing when it is very small).
-        for (int guard = 0; guard < 400 && Given() > total * held; guard++)
+        // The loose gems' share of the treasure: about a third in the game, less when the level is hard; never more than
+        // the gems the level has rows for can carry at about a blue apiece.
+        int gemRows = Math.Max(0, Math.Min(rows, 140));
+        double low = looseShare * 0.7 * total, most = Math.Min(looseShare * 1.35 * total, Math.Max(4.0 * gemRows, low));
+        // Too much given for the treasure asked for: the biggest come down a colour at a time (never below a red).
+        for (int guard = 0; guard < 2000 && total - Given() < low; guard++)
         {
-            int key = reward.OrderByDescending(p => p.Value).ThenBy(p => p.Key).Select(p => p.Key).DefaultIfEmpty(-1).First();
+            int key = reward.Where(p => p.Value > 1).OrderByDescending(p => p.Value).ThenBy(p => p.Key).Select(p => p.Key).DefaultIfEmpty(-1).First();
             if (key < 0) break;
-            int k = Array.IndexOf(Colours, reward[key]);
-            if (k <= 0) break;   // every giver is down to a red: they keep that
-            reward[key] = Colours[k - 1];
+            reward[key] = Colours[Array.IndexOf(Colours, reward[key]) - 1];
+        }
+        // Too little: the smallest go up a colour while that still leaves the loose gems their share.
+        for (int guard = 0; guard < 2000 && total - Given() > most; guard++)
+        {
+            int key = reward.Where(p => p.Value < 25).OrderBy(p => p.Value).ThenBy(p => p.Key).Select(p => p.Key).DefaultIfEmpty(-1).First();
+            if (key < 0) break;
+            int next = Colours[Array.IndexOf(Colours, reward[key]) + 1];
+            if (total - Given() - (next - reward[key]) < low) break;
+            reward[key] = next;
         }
         foreach (var (i, value) in reward) items[i] = items[i] with { Reward = value };
         int loose = total - Given();
         if (loose > 0 && rows > 0)
         {
-            // About one gem for every three and a half of the treasure, as the game's levels have, within the level's rows.
-            int want = Math.Clamp((int)Math.Round(loose / 3.5), Math.Min(loose, 5), Math.Min(rows, 140));
+            // As many loose gems as the game has for that much: mostly reds and greens, a little over two apiece.
+            int want = Math.Clamp((int)Math.Round(loose / LooseGemValue), Math.Min(loose, 5), gemRows);
+            // Few enough that one of every colour fits the total (a pink, a gold, a blue and a green cost 38 more than reds).
+            if (loose >= 48) want = Math.Min(want, Math.Max(5, loose - 38));
             if (loose > 25 * want) notes.Add($"Only {want} gems fit the level's save rows: the treasure comes to {Given() + 25 * want}, not {total}.");
-            List<(Vector3f P, double Hard)> places = [];
-            bool Free(Vector3f p) => Clear(p, 96) && places.All(q => Dist2(q.P, p) >= 70 * 70);
+            List<(Vector3f P, double Hard, int Group)> places = [];
+            int groups = 0;
+            bool Free(Vector3f p) => Clear(p, 84, small: true) && places.All(q => Dist2(q.P, p) >= 72 * 72);
+            // Groups keep apart, so each reads as its own.
+            bool Apart(Vector3f p, int own, float d) => places.All(q => q.Group == own || Dist2(q.P, p) >= d * d);
             double Far(Vector3f p) => Math.Sqrt(Dist2(p, spawn));
-            // The maker's places first (ledges, lookouts, stones, paths): the harder to reach, the better the gem.
+            // A group of gems from a place: the game's gems lie in ones (two groups in five), twos and threes, now and
+            // then four or five, about a hundred apart, in a line along the way or across it.
+            int Group(Vector3f at, double hard, int most = 5, (float X, float Y)? along = null)
+            {
+                if (!Free(at) || !Apart(at, -1, 215)) return 0;
+                int size = Math.Min(Math.Min(most, want - places.Count), rnd.Pick<int>([(1, 36.0), (2, 26.0), (3, 20.0), (4, 10.0), (5, 8.0)]));
+                if (size <= 0) return 0;
+                int id = groups++;
+                places.Add((at, hard, id));
+                if (size == 1) return 1;
+                double turn = rnd.NextDouble() * 6.2832;
+                var (dx, dy) = along ?? ((float)SpyroPlanner.Cos(turn), (float)SpyroPlanner.Sin(turn));
+                if (along != null && rnd.Chance(0.3)) (dx, dy) = (-dy, dx);
+                float step = (float)Range(rnd, 76, 132);
+                // Out one way from the first gem, then the other, while the floor stays level and free: along the way
+                // or across it, whichever holds more of the group (by a wall that is along the wall).
+                List<Vector3f> Line(float ux, float uy)
+                {
+                    List<Vector3f> line = [];
+                    foreach (int sign in new[] { 1, -1 })
+                        for (int k = 1; line.Count < size - 1; k++)
+                        {
+                            float x = at.X + sign * k * step * ux, y = at.Y + sign * k * step * uy;
+                            if (grid.FloorNear(x, y, at.Z + 30) is not { } z || Math.Abs(z - at.Z) > 20 || !grid.Floors(x, y).Any(f => f.Plain && Math.Abs(f.Z - z) < 4)) break;
+                            var p = new Vector3f(x, y, z);
+                            if (!Free(p) || !Apart(p, id, 190) || line.Any(q => Dist2(q, p) < 72 * 72)) break;
+                            line.Add(p);
+                        }
+                    return line;
+                }
+                var first1 = Line(dx, dy);
+                var best = first1.Count >= size - 1 ? first1 : Line(-dy, dx) is { } other && other.Count > first1.Count ? other : first1;
+                foreach (var p in best) places.Add((p, hard, id));
+                return 1 + best.Count;
+            }
+            // The way the walk runs at a place (towards the start), for trails.
+            (float X, float Y)? Way(LevelFill.FloorGrid.Place c)
+            {
+                var back = Around(c).Where(x => walk[x] < walk[c]).OrderBy(x => walk[x]).ThenBy(x => x.X).ThenBy(x => x.Y).Cast<LevelFill.FloorGrid.Place?>().FirstOrDefault();
+                if (back is not { } b) return null;
+                float dx = point[b].X - point[c].X, dy = point[b].Y - point[c].Y, l = MathF.Sqrt(dx * dx + dy * dy);
+                return l <= 0 ? null : (dx / l, dy / l);
+            }
+            // The maker's places first (ledges, lookouts, stones, paths): the harder to reach, the better the gems.
             if (places0.Count > 0)
             {
-                double keep = Range(rnd, 0.55, 0.85);
-                foreach (var p in places0.OrderBy(g => g.X).ThenBy(g => g.Y).ThenBy(g => g.Z))
+                // Most of the high places (they are what a jump or a glide is for), a few of the plain ones.
+                double keep = Range(rnd, 0.6, 0.85);
+                foreach (var h in places0.OrderBy(g => g.X).ThenBy(g => g.Y).ThenBy(g => g.Z))
                 {
-                    if (!rnd.Chance(keep)) continue;
-                    var under = grid.Nearest(p);
+                    if (places.Count >= want) break;
+                    var under = grid.Nearest(h);
                     bool high = !open.TryGetValue(under, out int o) || o <= 3;
-                    if (Free(p)) places.Add((p, high ? 3 : 1.5));
+                    if (!rnd.Chance(high ? keep : 0.18)) continue;
+                    Group(h, high ? 3 : 1.5, high ? 3 : 5, walk.ContainsKey(under) ? Way(under) : null);
                 }
             }
-            // A trail: from a room's way in, back along the walk towards the start, a gem every three cells.
-            foreach (var room in rooms.Where(r => r != first))
+            // Then about the level as the game's lie: half of them within a hundred units of a wall, the rest along
+            // the paths and out in the rooms.
+            // Right at the walls' feet, where a good half of the game's gems lie.
+            var gemsByWall = order.Where(c => walk[c] > 10 && upright.Within(point[c], 2)).ToList();
+            if (gemsByWall.Count < 40) gemsByWall = hardBy;
+            var onPaths = order.Where(c => !roomOf.ContainsKey(c) && open[c] >= 2 && walk[c] > 10).ToList();
+            var inRooms = order.Where(c => roomOf.ContainsKey(c) && open[c] >= 3 && walk[c] > 6).ToList();
+            for (int tries = 0; places.Count < want && tries < 12 * want + 40; tries++)
             {
-                if (!rnd.Chance(places0.Count > 0 ? 0.5 : 0.9)) continue;
-                var c = room.Entry;
-                int length = rnd.Next(4, 8);
-                for (int n = 0; n < length * 3; n++)
-                {
-                    var back = Around(c).Where(x => walk[x] < walk[c]).OrderBy(x => walk[x]).ThenBy(x => x.X).ThenBy(x => x.Y).Cast<LevelFill.FloorGrid.Place?>().FirstOrDefault();
-                    if (back is not { } step) break;
-                    c = step;
-                    if (n % 3 == 2 && Free(point[c])) places.Add((point[c], 1));
-                }
-            }
-            // A ring round the middle of a room or two.
-            foreach (var room in rooms.Where(r => r.Cells.Count >= 200))
-            {
-                if (!rnd.Chance(0.4)) continue;
-                int count = rnd.Next(5, 8);
-                double turn = rnd.NextDouble() * 6.2832, radius = Math.Min(open[room.Middle], 5) * cell * 0.9;
-                for (int n = 0; n < count; n++)
-                {
-                    double a = turn + 6.2832 * n / count;
-                    float x = room.MiddlePoint.X + (float)(radius * SpyroPlanner.Cos(a)), y = room.MiddlePoint.Y + (float)(radius * SpyroPlanner.Sin(a));
-                    if (grid.FloorNear(x, y, room.MiddlePoint.Z + 40) is { } z && Math.Abs(z - room.MiddlePoint.Z) <= 24 && Free(new(x, y, z))) places.Add((new(x, y, z), 1));
-                }
+                double roll = rnd.NextDouble();
+                var from = roll < 0.5 && gemsByWall.Count > 0 ? gemsByWall : roll < 0.7 && byWall.Count > 0 ? byWall : roll < 0.86 && onPaths.Count > 0 ? onPaths : inRooms.Count > 0 ? inRooms : byWall;
+                if (from.Count == 0) break;
+                var c = rnd.Pick(from);
+                if (tries >= 8 * want && places.Any(q => Dist2(q.P, point[c]) < 160 * 160)) continue;
+                Group(point[c], from == gemsByWall || from == byWall ? 1.6 : from == onPaths ? 1.2 : 1, 5, Way(c));
             }
             // Still short: more along the walk, closer together each time round.
-            for (float spacing = 360; places.Count < want && spacing >= 90; spacing *= 0.75f)
+            for (float spacing = 215; places.Count < want && spacing >= 84; spacing *= 0.8f)
                 foreach (var c in order.Where(c => open[c] >= 1).OrderBy(c => walk[c]).ThenBy(c => c.X).ThenBy(c => c.Y))
                 {
                     if (places.Count >= want) break;
-                    if (places.All(q => Dist2(q.P, point[c]) >= spacing * spacing) && Clear(point[c], 120)) places.Add((point[c], open[c] <= 2 ? 2 : 1));
+                    if (places.All(q => Dist2(q.P, point[c]) >= spacing * spacing) && Clear(point[c], 100)) places.Add((point[c], open[c] <= 2 ? 2 : 1, groups++));
                 }
-            if (places.Count > want)
-            {
-                rnd.Shuffle(places);
-                places = [.. places.Take(want)];
-            }
             // Farther from the start counts as harder too; a harder arrangement leans further towards the hard places.
             double reach = Math.Max(1, places.Count == 0 ? 1 : places.Max(q => Far(q.P)));
-            double Hard((Vector3f P, double Hard) q) { double h = q.Hard * (1 + Far(q.P) / reach); return h * Math.Max(0.3, 1 + (bias - 1) * (h - 1)); }
-            var values = Mix([.. places.Select(Hard)], loose, rnd);
-            for (int i = 0; i < places.Count; i++) if (values[i] > 0) { gems.Add((places[i].P, values[i])); hardness.Add(Hard(places[i])); }
+            double Hard((Vector3f P, double Hard, int Group) q) { double h = q.Hard * (1 + Far(q.P) / reach); return h * Math.Max(0.3, 1 + (bias - 1) * (h - 1)); }
+            var weights = places.Select(Hard).ToList();
+            var groupIds = places.Select(q => q.Group).ToList();
+            var values = Values(weights, groupIds, loose, rnd);
+            for (int i = 0; i < places.Count; i++) if (values[i] > 0) { gems.Add((places[i].P, values[i])); hardness.Add(weights[i]); groupOf.Add(groupIds[i]); }
             if (places.Count > 0 && values.Sum() != loose && loose <= 25 * places.Count) notes.Add($"The treasure comes to {Given() + values.Sum()}, not {total}.");
         }
         else if (total > 0 && rows <= 0) notes.Add("The level has no save rows left for gems.");
-        return new(items, gems, rooms.Count, notes) { Grid = grid, GemHardness = hardness };
+        return new(items, gems, rooms.Count, notes) { Grid = grid, GemHardness = hardness, GemGroups = groupOf };
+    }
+
+    /// <summary>Gem colours for places in groups that come to <paramref name="total"/> exactly (<see cref="Mix"/>), laid
+    /// out as the game lays them: a group's gems are one colour wherever the colours divide that way, and the better
+    /// colours go to the harder groups, the best of all to a gem that lies alone at the hardest place.</summary>
+    /// <param name="group">The group of each place (any numbers; one per place of <paramref name="hard"/>).</param>
+    public static int[] Values(IReadOnlyList<double> hard, IReadOnlyList<int> group, int total, LevelRandom rnd)
+    {
+        int n = hard.Count;
+        var mixed = Mix(hard, total, rnd);
+        if (group.Count != n || n == 0) return mixed;
+        // The colours Mix chose, best first, dealt to the groups hardest first: a colour goes to a group it can fill
+        // (or finish) before it is split over one it cannot.
+        var groups = Enumerable.Range(0, n).Where(i => mixed[i] > 0 || total >= n).GroupBy(i => group[i])
+            .Select(g => (Places: g.OrderByDescending(i => hard[i]).ThenBy(i => i).ToList(), Hard: g.Max(i => hard[i]), Id: g.Key))
+            .OrderByDescending(g => g.Hard).ThenBy(g => g.Id).ToList();
+        var free = groups.Select(g => g.Places.Count).ToList();
+        var value = new int[n];
+        foreach (int colour in Colours.Reverse())
+        {
+            int count = mixed.Count(v => v == colour);
+            while (count > 0)
+            {
+                int at = Enumerable.Range(0, groups.Count).Where(k => free[k] > 0 && free[k] <= count).Cast<int?>().FirstOrDefault()
+                    ?? Enumerable.Range(0, groups.Count).Where(k => free[k] > 0).Cast<int?>().FirstOrDefault() ?? -1;
+                if (at < 0) break;
+                int take = Math.Min(free[at], count);
+                for (int k = 0; k < take; k++) value[groups[at].Places[groups[at].Places.Count - free[at] + k]] = colour;
+                free[at] -= take; count -= take;
+            }
+        }
+        return value.Sum() == mixed.Sum() ? value : mixed;
     }
 
     /// <summary>Gem colours for places (red 1, green 2, blue 5, gold 10, pink 25) that come to <paramref name="total"/>

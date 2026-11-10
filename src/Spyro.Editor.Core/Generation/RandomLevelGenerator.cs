@@ -46,7 +46,18 @@ public sealed record RandomLevelReport
 /// <summary>A place the generator kept for a homeworld's doorway: the bottom middle of its opening on the floor, and
 /// the way Spyro walks into it (0-255, 0 = +X, 64 = +Y). In front of it the floor is open for Spyro to come back out
 /// onto. <paramref name="Plaza"/>: it stands in the room Spyro starts in.</summary>
-public sealed record DoorwaySpot(Vector3f Position, int Heading, bool Plaza);
+public sealed record DoorwaySpot(Vector3f Position, int Heading, bool Plaza)
+{
+    /// <summary>The look the generator chose for the doorway that stands here, to suit the level: a shape of the look's
+    /// kind (<see cref="LevelThemes.DoorwayShapes"/>), its size, the level's own stonework for its front and for its
+    /// sides, and the colours the level paints those with (128 grey leaves the texture as it is). Null: the caller's choice.</summary>
+    public string? Shape { get; init; }
+    public float Scale { get; init; } = 1;
+    public AuthoredMaterial? Face { get; init; }
+    public AuthoredMaterial? Side { get; init; }
+    public ColorRgba? FaceTint { get; init; }
+    public ColorRgba? SideTint { get; init; }
+}
 
 public sealed record RandomLevelResult(SceneDocument Scene, RandomLevelReport Report, IReadOnlyList<RandomLevelPicture> Pictures,
     IReadOnlyList<AuthoredMaterial> Materials)
@@ -247,11 +258,33 @@ public static class RandomLevelGenerator
         scene.Validate();
         var materials = surfaces.Select(s => s.Material).OfType<AuthoredMaterial>().Distinct().ToList();
         // A homeworld's doorway places, on the floor as it was built, the plaza's first and then outwards.
-        var doorways = planned.Doors.OrderBy(d => d.Area == 0 ? 0 : 1).ThenBy(d => planned.Areas[d.Area].Depth).ThenBy(d => d.Area).Select(d =>
+        // Their look is the level's: a shape of the look's kind (one for the whole homeworld as a rule, as the game's
+        // homeworlds have; now and then each doorway its own), each its own size, the last (the farthest in) the
+        // grandest; framed in the level's own stonework, painted as the level paints it.
+        var doorRandom = rnd.Fork("doorways");
+        var shapes = LevelThemes.DoorwayShapes(theme.Key);
+        var mainShape = doorRandom.Pick<DoorwayShape>(shapes);
+        bool mixed = doorRandom.Chance(0.3);
+        (AuthoredMaterial Material, ColorRgba Tint)? Stone(SurfaceRole[] roles, AuthoredMaterial? not, double bright)
+        {
+            var options = roles.Where(role => fold.TryGetValue(role, out var folded) && materialOf.GetValueOrDefault(folded) is { } m && m != not).Select(role => fold[role]).Distinct().ToList();
+            if (options.Count == 0) return null;
+            var chosen = doorRandom.Pick(options);
+            return (materialOf[chosen]!, Paint(Ramp(theme, chosen, materialOf[chosen]), bright));
+        }
+        var face = Stone([SurfaceRole.Brick, SurfaceRole.Rock, SurfaceRole.Cliff, SurfaceRole.CaveWall, SurfaceRole.Paving], null, 0.66);
+        var side = Stone([SurfaceRole.Rock, SurfaceRole.Cliff, SurfaceRole.CliffTop, SurfaceRole.Paving, SurfaceRole.Brick, SurfaceRole.CaveWall], face?.Material, 0.5) ?? face;
+        var ordered = planned.Doors.OrderBy(d => d.Area == 0 ? 0 : 1).ThenBy(d => planned.Areas[d.Area].Depth).ThenBy(d => d.Area).ToList();
+        var doorways = ordered.Select((d, index) =>
         {
             var area = planned.Areas[d.Area];
             var at = new Vector3f((float)Math.Round(d.X), (float)Math.Round(d.Y), (float)Math.Round(plan.Height(area.Zone.Id, d.X, d.Y)));
-            return new DoorwaySpot(at, (int)Math.Round(Math.Atan2(d.Dy, d.Dx) * 128 / Math.PI) & 0xFF, d.Area == 0);
+            var shape = mixed ? doorRandom.Pick<DoorwayShape>(shapes) : mainShape;
+            bool grand = index == ordered.Count - 1 && ordered.Count > 1;
+            // In steps of a twentieth, as the Doorways tool's sizes are.
+            float scale = (float)Math.Round((grand ? 1.15 + 0.15 * doorRandom.NextDouble() : 0.9 + 0.25 * doorRandom.NextDouble()) * 20) / 20;
+            return new DoorwaySpot(at, (int)Math.Round(Math.Atan2(d.Dy, d.Dx) * 128 / Math.PI) & 0xFF, d.Area == 0)
+            { Shape = shape.Id, Scale = scale, Face = face?.Material, Side = side?.Material, FaceTint = face?.Tint, SideTint = side?.Tint };
         }).ToArray();
         if (options.Doorways > 0 && doorways.Length < Math.Min(options.Doorways, NativeHubPortals.MaxDoorways))
             notes.Add($"The level has room for {doorways.Length} of the {options.Doorways} doorways; another seed or a larger size may fit them all.");

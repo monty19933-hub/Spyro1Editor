@@ -281,18 +281,27 @@ public static class LevelThemes
         ["swamp"] = "mistybog", ["volcano"] = "peacekeepers", ["castle"] = "hauntedtowers", ["night"] = "darkpassage",
     };
 
-    /// <summary>The doorway shape that suits a look (<see cref="Editing.DoorwayShapes"/>): the round stone arch of the
-    /// Artisans' world, square gates among the Peace Keepers' rocks, pointed arches for the Magic Crafters, six-sided
-    /// gates for the Beast Makers, rings for the Dream Weavers, wide arches in Gnasty's harbour.</summary>
-    public static Editing.DoorwayShape DoorwayShape(string? key) => Find(key)?.Key switch
+    /// <summary>The doorway shapes that suit a look (<see cref="Editing.DoorwayShapes"/>), the likeliest first: round
+    /// stone arches in the Artisans' world, square and slanted gates among the Peace Keepers' rocks, pointed and tall
+    /// arches for the Magic Crafters, six-sided and gabled gates for the Beast Makers, rings for the Dream Weavers,
+    /// wide arches and heavy gates in Gnasty's world.</summary>
+    public static IReadOnlyList<(Editing.DoorwayShape Shape, double Weight)> DoorwayShapes(string? key) => Find(key)?.Key switch
     {
-        "peacekeepers" or "drycanyon" or "clifftown" or "icecavern" => Editing.DoorwayShapes.SquareGate,
-        "magiccrafters" or "highcaves" or "wizardpeak" => Editing.DoorwayShapes.PointedArch,
-        "mistybog" or "treetops" => Editing.DoorwayShapes.HexGate,
-        "dreamweavers" or "darkpassage" or "loftycastle" or "hauntedtowers" => Editing.DoorwayShapes.RoundRing,
-        "twilightharbor" => Editing.DoorwayShapes.WideArch,
-        _ => Editing.DoorwayShapes.StoneArch,
+        "peacekeepers" or "drycanyon" or "clifftown" or "icecavern" =>
+            [(Editing.DoorwayShapes.SquareGate, 4), (Editing.DoorwayShapes.SlantedGate, 3), (Editing.DoorwayShapes.GableGate, 2), (Editing.DoorwayShapes.StoneArch, 1)],
+        "magiccrafters" or "highcaves" or "wizardpeak" =>
+            [(Editing.DoorwayShapes.PointedArch, 5), (Editing.DoorwayShapes.TallArch, 3), (Editing.DoorwayShapes.HexGate, 1)],
+        "mistybog" or "treetops" =>
+            [(Editing.DoorwayShapes.HexGate, 4), (Editing.DoorwayShapes.GableGate, 3), (Editing.DoorwayShapes.SlantedGate, 2), (Editing.DoorwayShapes.WideArch, 1)],
+        "dreamweavers" or "darkpassage" or "loftycastle" or "hauntedtowers" =>
+            [(Editing.DoorwayShapes.RoundRing, 5), (Editing.DoorwayShapes.PointedArch, 2), (Editing.DoorwayShapes.TallArch, 2), (Editing.DoorwayShapes.HexGate, 1)],
+        "twilightharbor" =>
+            [(Editing.DoorwayShapes.WideArch, 4), (Editing.DoorwayShapes.SquareGate, 3), (Editing.DoorwayShapes.SlantedGate, 2)],
+        _ => [(Editing.DoorwayShapes.StoneArch, 5), (Editing.DoorwayShapes.WideArch, 2), (Editing.DoorwayShapes.TallArch, 2), (Editing.DoorwayShapes.SquareGate, 1)],
     };
+
+    /// <summary>The first choice of <see cref="DoorwayShapes"/>.</summary>
+    public static Editing.DoorwayShape DoorwayShape(string? key) => DoorwayShapes(key)[0].Shape;
 
     public static LevelTheme? Find(string? key) => key == null ? null
         : All.FirstOrDefault(t => string.Equals(t.Key, Earlier.GetValueOrDefault(key, key), StringComparison.OrdinalIgnoreCase));

@@ -23,7 +23,7 @@ var catalog = LevelCatalog.Load(root);
 int I(byte[] b, int at) => BinaryPrimitives.ReadInt32LittleEndian(b.AsSpan(at));
 
 // ---- The shapes: what the game can draw (<= 10 points, convex, anticlockwise, floor edge), sizes like the game's own.
-Check(DoorwayShapes.All.Count == 6 && DoorwayShapes.All.Select(s => s.Id).Distinct().Count() == 6, "six shapes with their own ids");
+Check(DoorwayShapes.All.Count == 9 && DoorwayShapes.All.Select(s => s.Id).Distinct().Count() == 9, "nine shapes with their own ids");
 Check(DoorwayShapes.Find("stone-arch") == DoorwayShapes.StoneArch && DoorwayShapes.Find("nope") == null && DoorwayShapes.Find(null) == null, "shapes are found by id");
 foreach (var shape in DoorwayShapes.All)
 {
@@ -42,7 +42,7 @@ Check(DoorwayShapes.Check([(64, 0), (-64, 100), (64, 100), (-64, 0)]) != null, "
 
 // ---- Frames: whole-unit planar quads facing out, cheap, around the opening (not over it), the same at every heading.
 var at = new Vector3f(3000, 3000, 1000);
-var budget = new Dictionary<string, int> { ["stone-arch"] = 56, ["pointed-arch"] = 56, ["square-gate"] = 48, ["round-ring"] = 42, ["wide-arch"] = 56, ["hex-gate"] = 46 };
+var budget = new Dictionary<string, int> { ["stone-arch"] = 56, ["pointed-arch"] = 56, ["square-gate"] = 48, ["round-ring"] = 42, ["wide-arch"] = 56, ["hex-gate"] = 46, ["tall-arch"] = 64, ["gable-gate"] = 48, ["slanted-gate"] = 38 };
 foreach (var shape in DoorwayShapes.All)
 {
     var frame = DoorwayShapes.Frame(shape, 1, at, 0);

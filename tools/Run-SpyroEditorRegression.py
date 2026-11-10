@@ -260,13 +260,13 @@ CORE_CASES = (
     # their frames are whole-unit faces around them, shaped records hold the shape's opening before the original's sky
     # header and sky, an original doorway's record is written exactly as before, scene editing keeps frames with their
     # doorways, old scenes keep their fingerprint, the new world's doorways are refused by Create BIN in plain words.
-    ("DoorwaySmoke", "DOORWAY_FREE_OK checks=382"),
+    ("DoorwaySmoke", "DOORWAY_FREE_OK checks=543"),
     # The New World's doorway in one of the game's own homeworlds (NativeWorldEntrance): its sky (whole, the part near
     # the horizon within a size, one colour), the ground-kind, view-group and collision writers (entry triangles after
     # the flagged ones, the rest renumbered, every cell kept), the frame as one added sector, the way back's facts, the
     # saved placement (world-entrance.json) and refusals.
-    ("WorldEntranceSmoke", "WORLD_ENTRANCE_FREE_OK checks=54"),
-    ("RandomLevelSmoke", "RANDOM_LEVEL_SMOKE_OK checks=331"),
+    ("WorldEntranceSmoke", "WORLD_ENTRANCE_FREE_OK checks=57"),
+    ("RandomLevelSmoke", "RANDOM_LEVEL_SMOKE_OK checks=619"),
     # Supercharge ground in built levels and in the game's own levels (Tile Type…): which scenes and saved terrain edits
     # need Spyro's supercharge animations 25 and 45, the texture rectangles a face table draws from (every command shape,
     # merged rows and palettes, refusals), the plain refusals (--source compiles a New Level and a rebuilt Tree Tops with
@@ -376,11 +376,11 @@ SOURCE_QA_CASES = (
     # Every retail sky drawn as a panorama and rebuilt from it within the game's limits, looking the same.
     ("SkyImportSmoke", "SKY_IMPORT_SOURCE_OK checks=280", ["--source"]),
     # All 29 original homeworld doorways: written byte for byte as before; each shape keeps the original's sky.
-    ("DoorwaySmoke", "DOORWAY_SOURCE_OK checks=818", ["--source"]),
+    ("DoorwaySmoke", "DOORWAY_SOURCE_OK checks=1153", ["--source"]),
     # The New World's doorway in each of the six homeworlds (read only): record, ground kind, entry triangles, objects,
     # memory in 2 MB (which sky fits) and 8 MB, refusals (second entrance, six doorways, map edge, textures), every shape
     # and size, after another object edit, deterministic bytes.
-    ("WorldEntranceSmoke", "WORLD_ENTRANCE_SOURCE_OK checks=177", ["--source"]),
+    ("WorldEntranceSmoke", "WORLD_ENTRANCE_SOURCE_OK checks=186", ["--source"]),
     ("DarkParticleHostSmoke", "DARK_PROJECTILE_ALL_HOST_OWNERSHIP_OK", []),
     ("FreshParticleBindingSmoke", "FRESH_OWNED_PARTICLE_BINDING_OK", []),
     ("CollectionStarSmoke", "COLLECTION_STAR_SOURCE_OWNERSHIP_OK", []),

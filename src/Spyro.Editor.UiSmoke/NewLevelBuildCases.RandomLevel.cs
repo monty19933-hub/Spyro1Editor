@@ -152,7 +152,7 @@ internal static partial class NewLevelBuildCases
         if (Environment.GetEnvironmentVariable("RANDOM_FILL") == "1")
         {
             string type = Environment.GetEnvironmentVariable("RANDOM_OBJECTS_LEVEL") is { Length: > 0 } t ? t : made.Report.Theme;
-            var choice = new MainWindow.RandomObjectsChoice(type, "", 0, MainWindow.RandomObjectsEnemies(difficulty), int.Parse(Environment.GetEnvironmentVariable("RANDOM_TREASURE") ?? "100"), 0, Seed: 7, Difficulty: difficulty);
+            var choice = new MainWindow.RandomObjectsChoice(type, "", 0, MainWindow.RandomObjectsEnemies(difficulty, int.Parse(Environment.GetEnvironmentVariable("RANDOM_TREASURE") ?? "100")), int.Parse(Environment.GetEnvironmentVariable("RANDOM_TREASURE") ?? "100"), 0, Seed: 7, Difficulty: difficulty);
             var fill = (Task)Invoke(window, "RandomizeObjectsAsync", choice)!;
             Wait(() => fill.IsCompleted, "Random objects", 1800);
             fill.GetAwaiter().GetResult();
@@ -239,7 +239,7 @@ internal static partial class NewLevelBuildCases
                 var after = Get<SceneDocument>(window, "_freshSceneDocument");
                 if (gone == 0 || after.RandomObjects != null) throw new InvalidOperationException("Remove Them left random objects behind.");
             }
-            var choice = new MainWindow.RandomObjectsChoice(type, enemies, 0, 10, treasure, eggs, Seed: 100 + press);
+            var choice = new MainWindow.RandomObjectsChoice(type, enemies, 0, MainWindow.RandomObjectsEnemies(LevelDifficulty.Medium, treasure), treasure, eggs, Seed: 100 + press);
             var task = (Task)Invoke(window, "RandomizeObjectsAsync", choice)!;
             Wait(() => task.IsCompleted, "Random objects", 1800);
             task.GetAwaiter().GetResult();

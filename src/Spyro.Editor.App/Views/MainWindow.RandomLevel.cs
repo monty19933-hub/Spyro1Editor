@@ -101,7 +101,10 @@ public sealed partial class MainWindow
         if (added.Count == 0) return (scene, problems.Count > 0 ? "Its doorways could not be built: " + problems[0] : "");
         string names = string.Join(", ", added.Select(id => destinations.First(d => d.LevelId == id).Name));
         string missing = string.Join(", ", destinations.Where(d => !d.Taken && !added.Contains(d.LevelId)).Select(d => d.Name));
-        return (built, $"It has a {shape.Name.ToLowerInvariant()} doorway to {names}" +
+        var kinds = built.Portals!.Where(d => added.Contains(d.DestinationLevelId)).Select(d => DoorwayShapes.Find(d.Shape)?.Name.ToLowerInvariant() ?? "doorway").Distinct().ToList();
+        string look = kinds.Count == 1 ? $"{kinds[0]} doorways" : $"doorways ({string.Join(", ", kinds.Take(kinds.Count - 1))} and {kinds[^1]})";
+        if (added.Count == 1) look = $"a {kinds[0]} doorway";
+        return (built, $"It has {look}, framed in the level's own stone, to {names}" +
             (missing.Length > 0 ? $"; there was no place left for {missing} (add it with Terrain › Doorways)." : "."));
     }
 

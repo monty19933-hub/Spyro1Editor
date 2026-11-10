@@ -92,8 +92,8 @@ class OwnedCommandTests(unittest.TestCase):
 
     def test_doorway_smoke_registration(self):
         name = "DoorwaySmoke"
-        self.assertIn((name, "DOORWAY_FREE_OK checks=382"), RUNNER.CORE_CASES)
-        self.assertIn((name, "DOORWAY_SOURCE_OK checks=818", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertIn((name, "DOORWAY_FREE_OK checks=543"), RUNNER.CORE_CASES)
+        self.assertIn((name, "DOORWAY_SOURCE_OK checks=1153", ["--source"]), RUNNER.SOURCE_QA_CASES)
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
@@ -103,8 +103,8 @@ class OwnedCommandTests(unittest.TestCase):
 
     def test_world_entrance_smoke_registration(self):
         name = "WorldEntranceSmoke"
-        self.assertIn((name, "WORLD_ENTRANCE_FREE_OK checks=54"), RUNNER.CORE_CASES)
-        self.assertIn((name, "WORLD_ENTRANCE_SOURCE_OK checks=177", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertIn((name, "WORLD_ENTRANCE_FREE_OK checks=57"), RUNNER.CORE_CASES)
+        self.assertIn((name, "WORLD_ENTRANCE_SOURCE_OK checks=186", ["--source"]), RUNNER.SOURCE_QA_CASES)
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)

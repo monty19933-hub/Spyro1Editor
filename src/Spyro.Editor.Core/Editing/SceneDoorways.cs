@@ -108,9 +108,14 @@ public static class SceneDoorways
     /// first, then from the nearest room to the farthest). The way back out of a new world takes the first place; the
     /// levels follow in their order, so the last ones (the game's boss and flight levels) stand farthest in. Returns
     /// the scene, the levels that got a doorway, and what could not be placed.</summary>
+    /// <param name="shape">The shape and <paramref name="material"/> for places that bring no look of their own
+    /// (<see cref="Generation.DoorwaySpot.Shape"/>): a place's own look (its shape, size, frame textures and the
+    /// level's colours for them) is used where it has one.</param>
     public static (SceneDocument Scene, IReadOnlyList<int> Added, IReadOnlyList<string> Problems) AddAll(SceneDocument scene,
         IReadOnlyList<Generation.DoorwaySpot> spots, IReadOnlyList<DoorwayDestination> destinations, DoorwayShape shape, AuthoredMaterial material)
     {
+        static ColorRgba Under(ColorRgba shade, ColorRgba tint) =>
+            new((byte)Math.Clamp(shade.R * tint.R / 128, 0, 255), (byte)Math.Clamp(shade.G * tint.G / 128, 0, 255), (byte)Math.Clamp(shade.B * tint.B / 128, 0, 255), shade.A);
         List<int> added = [];
         List<string> problems = [];
         int next = 0;
@@ -122,7 +127,26 @@ public static class SceneDoorways
                 var spot = spots[next++];
                 try
                 {
-                    scene = Add(scene, new AuthoredPortal(destination.LevelId, spot.Position, spot.Heading) { Shape = shape.Id, FaceMaterial = material, SideMaterial = material });
+                    var own = DoorwayShapes.Find(spot.Shape) ?? shape;
+                    float size = (float)Math.Clamp(spot.Scale, DoorwayShapes.MinScale, DoorwayShapes.MaxScale);
+                    var front = spot.Face ?? material; var sides = spot.Side ?? spot.Face ?? material;
+                    var built = Add(scene, new AuthoredPortal(destination.LevelId, spot.Position, spot.Heading)
+                    { Shape = own.Id, Scale = Math.Abs(size - 1) < 0.01f ? null : size, FaceMaterial = front, SideMaterial = sides });
+                    // The frame in the level's own colours: each face's shade under the colour the level paints that stone.
+                    if (spot.FaceTint != null || spot.SideTint != null)
+                    {
+                        var frame = Find(built, destination.LevelId)!.FrameFaces!.ToHashSet(StringComparer.Ordinal);
+                        built = built with
+                        {
+                            Surfaces = [.. built.Surfaces.Select(f =>
+                            {
+                                if (!frame.Contains(f.Id) || (f.Material == front ? spot.FaceTint : spot.SideTint ?? spot.FaceTint) is not { } tint) return f;
+                                return f with { Color = Under(f.Color, tint), NearColors = f.NearColors?.Select(c => Under(c, tint)).ToArray(), FarColors = f.FarColors?.Select(c => Under(c, tint)).ToArray() };
+                            })]
+                        };
+                        built.Validate();
+                    }
+                    scene = built;
                     added.Add(destination.LevelId);
                     done = true;
                 }
