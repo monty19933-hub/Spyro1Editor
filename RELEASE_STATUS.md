@@ -1,19 +1,27 @@
-# Spyro Editor 1.5 — 28 October 2026 (built, not yet published)
+# Spyro Editor 1.5 — rebuilt 9 November 2026 (not yet published)
 
 Stable 1.5 (internal 1.5.0, schema 3, tag `v1.5` when published). Everything since 1.4 (`CHANGELOG.md`): Spyro's
 colours (`NativeSpyroColours`, `SpyroColourSettings`: Spyro's 17 palettes recoloured part by part in every level, the
-title screen and the cutscenes), Hover with the flight levels' wing flap (`NativeHover`, `NativeHoverFlap`), Create BIN
-from Game Settings alone, and the usability batch (view hint, File menu groups, Doorway rows, Game Settings groups, Help).
+title screen, the cutscenes and the stand-in Spyro of Gnasty Gnorc's level, with his picture on the card), Hover with the
+flight levels' wing flap as a flutter (`NativeHover`, `NativeHoverFlap`), Create BIN from Game Settings alone, and the
+usability batch (view hint, File menu groups, Doorway rows, Game Settings groups, Help, welcome card).
+
+The 9 November review of everything since 1.4 changed: the flap plays three times as fast while Spyro rises; the flap
+never makes a level need 8 MB; the stand-in Spyro takes the colours; the colours card draws Spyro; Surprise me; the
+Game Settings step no longer leaves a working image behind when every level edit is skipped.
 
 Updates: 1.0-1.4 find 1.5 through their stable updater (the update code is the same in all of them). Beta V2-V5 are
 still offered Beta V6 (the 1.3 app), which then follows the stable channel to 1.5.
 
-Checks: gate `--build-all` 634 checks, 0 failed. SpyroColoursSmoke 28/89, HoverSmoke 32/23, UiSmoke Spyro's colours 18
-and its Create BIN runs (new project; copy of the owner's project with world: 53 checks). Package verifier passed for
-both platforms on the packages extracted from the zips. Updater code of Beta V2-V5 and stable 1.0-1.4 run offline
-against GitHub's list with 1.5 added: betas offered Beta V6, 1.0-1.4 offered 1.5, every download verified
-(`outputs/SpyroEditor-V1.5-20261028/updater-checks`). Emulator: colours in Artisans, a world level, the opening, title,
-loading screen and a rescue; the hover's flap in Artisans, none in Tree Tops (no room with 2 MB), flight drop unchanged.
+Checks: gate `--build-all` 634 checks, 0 failed. Disc smokes: Hover 27, Spyro's colours 95, level window 130, doorways
+818, world entrance 177, kill heights 172, draw load 41. UiSmoke Spyro's colours 20 and its Create BIN runs (new
+project: 49 checks; copy of the owner's project with world, 8 MB mode and Hover: 55 checks, every level still fits
+2 MB). Package verifier passed for both platforms on the packages extracted from the zips. Updater code of Beta V2-V5
+and stable 1.0-1.4 run offline against GitHub's list with 1.5 added: betas offered Beta V6, 1.0-1.4 offered 1.5, every
+download verified (`outputs/SpyroEditor-V1.5-20261028/updater-checks`). Emulator: hover scenarios (Triangle too early,
+X again, Triangle twice, an interrupted rise, a long glide, eight in a row) in Artisans, a world level and its homeworld,
+Tree Tops (no flap) and Gnasty's Loot (flight drop unchanged); colours in Artisans, a world level, the opening, title,
+loading screen, a rescue and the stand-in spawned by hand; the title demos play as before.
 
 # Spyro Editor 1.4 — 19 October 2026
 
