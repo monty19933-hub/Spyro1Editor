@@ -13,6 +13,7 @@ Improved
 - The hint over the 3D view has a dark backing, so it reads over a bright sky.
 - The File menu is grouped: making and opening levels of your own, changing the open level, recovery, saving.
 - The Doorways and World Entrance cards lay out their Move, Height and Turn buttons in rows, so no label is cut off.
-- Game Settings is split into "This level" (name, music, portals) and "Whole game" (Fly Anywhere, Play as Crash, Hover, Spyro's colours, Memory).
+- Game Settings is split into "This level" (name, music, portals) and "Whole game" (Spyro's colours, Hover, Fly Anywhere, Play as Crash, Memory).
+- The welcome card points new users to Help and to Game Settings as a first stop.
 - The Music card's Year of the Dragon disc button has its own row.
 - Help covers Ground, Tile Type, Add beside, Doorways, World Entrance, Hover, Spyro's colours, Play as Crash, Memory, Random Level, Year of the Dragon levels and Fill In, with a section on making your own world.

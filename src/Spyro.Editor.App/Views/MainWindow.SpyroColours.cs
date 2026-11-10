@@ -99,7 +99,8 @@ public sealed partial class MainWindow
         content.Children.Add(_spyroColourRows);
         content.Children.Add(_spyroColourSummary);
         RefreshSpyroColourSettings();
-        var section = BuildModernDisclosure("Spyro's colours", content, false);
+        // Open from the start: his picture is the quickest way to see what the card does.
+        var section = BuildModernDisclosure("Spyro's colours", content, true);
         section.Name = "SpyroColourSection";
         return section;
     }

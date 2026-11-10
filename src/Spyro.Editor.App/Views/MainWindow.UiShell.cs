@@ -1120,7 +1120,7 @@ public sealed partial class MainWindow
         panel.Children.Add(wholeGame);
         panel.Children.Add(new TextBlock
         {
-            Text = "Moves, Play as Crash, Spyro's colours and memory for the games you create. Saved as soon as you choose.",
+            Text = "Spyro's colours and moves, Play as Crash and memory for the games you create. Saved as soon as you choose.",
             TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = new SolidColorBrush(ModernMutedInk)
         });
         if (!_releaseMode) panel.Children.Add(BuildModernDisclosure("Starting Abilities", new StackPanel
@@ -1131,6 +1131,9 @@ public sealed partial class MainWindow
         }, false));
         else
         {
+            // Spyro himself first (his colours, with his picture, then his hover), then the level-by-level switches.
+            panel.Children.Add(BuildSpyroColourSection());
+            panel.Children.Add(BuildHoverSection());
             // One switch for the whole exported game, off unless the user turns it on.
             var flight = BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), true);
             flight.Name = "FlyAnywhereSection";
@@ -1138,8 +1141,6 @@ public sealed partial class MainWindow
             var crash = BuildModernDisclosure("Play as Crash", BuildCrashPlayerSettingsPanel(), false);
             crash.Name = "PlayAsCrashSection";
             panel.Children.Add(crash);
-            panel.Children.Add(BuildHoverSection());
-            panel.Children.Add(BuildSpyroColourSection());
         }
         panel.Children.Add(BuildMemoryModeSection());
 
