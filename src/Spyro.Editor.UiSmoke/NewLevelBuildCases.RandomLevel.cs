@@ -74,7 +74,7 @@ internal static partial class NewLevelBuildCases
         Console.WriteLine("preview: " + Find<TextBlock>(dialog, "RandomLevelSummary").Text);
         Snapshot(dialog, Path.Combine(outDir, "01-random-level-dialog.png"));
         Find<ComboBox>(dialog, "RandomLevelKind").SelectedIndex = 3;   // islands in the sky
-        Find<ComboBox>(dialog, "RandomLevelLook").SelectedIndex = 1 + LevelThemes.All.ToList().FindIndex(t => t.Key == "sky");
+        Find<ComboBox>(dialog, "RandomLevelLook").SelectedIndex = 1 + LevelThemes.All.ToList().FindIndex(t => t.Key == "loftycastle");
         Find<TextBox>(dialog, "RandomLevelName").Text = "";
         Click(Find<Button>(dialog, "RandomLevelRebuild")); Pump(5);
         Wait(Ready, "sky islands preview", 120); Pump(10);

@@ -266,7 +266,7 @@ CORE_CASES = (
     # the flagged ones, the rest renumbered, every cell kept), the frame as one added sector, the way back's facts, the
     # saved placement (world-entrance.json) and refusals.
     ("WorldEntranceSmoke", "WORLD_ENTRANCE_FREE_OK checks=54"),
-    ("RandomLevelSmoke", "RANDOM_LEVEL_SMOKE_OK checks=103"),
+    ("RandomLevelSmoke", "RANDOM_LEVEL_SMOKE_OK checks=121"),
     # Supercharge ground in built levels and in the game's own levels (Tile Type…): which scenes and saved terrain edits
     # need Spyro's supercharge animations 25 and 45, the texture rectangles a face table draws from (every command shape,
     # merged rows and palettes, refusals), the plain refusals (--source compiles a New Level and a rebuilt Tree Tops with

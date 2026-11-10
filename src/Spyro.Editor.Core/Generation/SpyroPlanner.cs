@@ -317,7 +317,9 @@ internal static class SpyroPlanner
         {
             if (j.A != a.Id && j.B != a.Id) continue;
             var o = L.Areas[j.A == a.Id ? j.B : j.A];
-            if (SegmentDistance(x, y, a.X, a.Y, o.X, o.Y) < r + 260) return false;
+            // From halfway out of the room along the join (the room's middle is open floor either way) to the other room.
+            double dx = o.X - a.X, dy = o.Y - a.Y, d = Math.Sqrt(dx * dx + dy * dy), from = 0.5 * a.R;
+            if (SegmentDistance(x, y, a.X + dx / d * from, a.Y + dy / d * from, o.X, o.Y) < r + 230) return false;
         }
         return true;
     }
@@ -353,7 +355,7 @@ internal static class SpyroPlanner
             // A charge ramp is steeper than Spyro can walk (22 degrees) and well inside what he climbs charging (30).
             nook.Z = a.Z + (charge ? 0.41 * (gap - 90) : Climb(gap) * Range(rnd, 0.5, 1));
             Join(L, a, nook, charge ? "charge" : "path");
-            L.Count(charge ? "charge ramp nook" : "hidden nook");
+            L.Count(charge ? "nook up a charge ramp" : "hidden nook");
             made++;
         }
     }
@@ -426,14 +428,14 @@ internal static class SpyroPlanner
             bool level = Math.Abs(a.Z - p.Z) < 6;
             string kind = apart ? "bridge" : charge ? "charge ramp" : path.Roof > 0 && !caves ? "tunnel" : level ? "path" : "ramp";
             L.Links.Add(new LevelLink(p.Id, a.Id, kind, new((float)sx, (float)sy, (float)p.Z), new((float)ex, (float)ey, (float)a.Z)));
-            L.Count(kind);
+            if (!charge) L.Count(kind);
             for (int q = 1; q < 6; q++) L.Gems.Add((path.Spine[q].X, path.Spine[q].Y, path.Id));
         }
         // What stands in the rooms.
         foreach (var a in L.Areas)
         {
             bool big = a.R >= 600;
-            if (features.Glides && big && rnd.Chance(0.6) && Lookout(L, a, rnd)) continue;
+            if (features.Glides && big && rnd.Chance(0.7) && (Lookout(L, a, rnd) || Lookout(L, a, rnd) || Lookout(L, a, rnd))) continue;
             int ledges = rnd.Chance(0.75) ? rnd.Next(1, 3) : 0;
             for (int k = 0; k < ledges; k++) Ledges(L, a, rnd, rnd.Chance(0.4) ? 2 : 1);
             if (features.Hazards && big && rnd.Chance(0.45)) Pond(L, a, rnd);
@@ -525,26 +527,34 @@ internal static class SpyroPlanner
     {
         if (FreeDirection(a, rnd) is not { } d) return false;
         double step = SpyroMoves.DesignLedge;
-        double r1 = Math.Clamp(0.44 * a.R, 270, 380), r2 = r1 * 0.72, r3 = Math.Max(150, r2 * 0.68);
+        // The top is wide enough to stand and take a run on once it is made of faces (a disc this size comes out as a
+        // polygon a little smaller).
+        double r1 = Math.Clamp(0.5 * a.R, 340, 420), r2 = r1 * 0.76, r3 = Math.Max(200, r2 * 0.7);
         double o1 = 0.8 * a.R, o2 = o1 + 0.55 * r1, o3 = o2 + 0.5 * r2;
         (double X, double Y) c1 = (a.X + d.X * o1, a.Y + d.Y * o1), c2 = (a.X + d.X * o2, a.Y + d.Y * o2), c3 = (a.X + d.X * o3, a.Y + d.Y * o3);
         if (!Free(L, a, c1.X, c1.Y, r1) || !Free(L, a, c3.X, c3.Y, r3) || !OffJoins(L, a, c1.X, c1.Y, r1)) return false;
-        // The ledge to glide to: round the room's edge, as far as a glide from the top carries with room to spare.
-        double top = 3 * step, target = top - Range(rnd, 60, 80), tr = Range(rnd, 200, 250);
+        // The ledge to glide to: round the room's edge from the steps, too high to jump onto from the floor or the first
+        // step, and as far from the top as a glide carries with room to spare.
+        double top = 3 * step, target = top - Range(rnd, 30, 42), tr = Range(rnd, 200, 240);
         double reach = SpyroMoves.GlideReach((float)(top - target));
         (double X, double Y)? landing = null; (double X, double Y) e = default;
         double side = rnd.Chance(0.5) ? 1 : -1;
         for (int tries = 0; tries < 2 && landing == null; tries++, side = -side)
-            for (double angle = 0.7; angle <= 1.5 && landing == null; angle += 0.1)
-            {
-                double s = Sin(angle) * side, c = Cos(angle);
-                e = (d.X * c - d.Y * s, d.X * s + d.Y * c);
-                double x = a.X + e.X * a.R * 0.95, y = a.Y + e.Y * a.R * 0.95;
-                double gap = Dist(x, y, c3.X, c3.Y) - r3 - tr;
-                if (gap < 240 || gap > reach - 70) continue;
-                if (a.Taken.Any(t => t.X * e.X + t.Y * e.Y > 0.55) || !Free(L, a, x, y, tr) || !OffJoins(L, a, x, y, tr)) continue;
-                landing = (x, y);
-            }
+            foreach (double out_ in new[] { 1.15, 1.0, 1.28 })
+                for (double angle = 0.56; angle <= 1.5 && landing == null; angle += 0.04)
+                {
+                    double s = Sin(angle) * side, c = Cos(angle);
+                    e = (d.X * c - d.Y * s, d.X * s + d.Y * c);
+                    double x = a.X + e.X * a.R * out_, y = a.Y + e.Y * a.R * out_;
+                    double gap = Dist(x, y, c3.X, c3.Y) - r3 - tr;
+                    // Spyro may leave the top a little before its edge and must clear the ledge's edge: well inside the glide.
+                    if (gap < 170 || gap > reach - 115) continue;
+                    // Clear of the second step, so it is the glide from the top that reaches it (the first step is
+                    // too far below it to jump from).
+                    if (Dist(x, y, c2.X, c2.Y) < r2 + tr + 120) continue;
+                    if (a.Taken.Any(t => t.X * e.X + t.Y * e.Y > 0.55) || !Free(L, a, x, y, tr) || !OffJoins(L, a, x, y, tr)) continue;
+                    landing = (x, y);
+                }
         if (landing == null) return false;
         a.Taken.Add(d); a.Taken.Add(e);
         Step(L, a, c1.X, c1.Y, r1, a.Z + step, a.Priority + 1);
@@ -553,7 +563,7 @@ internal static class SpyroPlanner
         var ledge = Step(L, a, landing.Value.X, landing.Value.Y, tr, a.Z + target, a.Priority + 1, "glide ledge");
         L.Count("lookout with a glide");
         L.Glides.Add((summit.Id, ledge.Id));
-        L.Links.Add(new LevelLink(a.Id, a.Id, "glide", new((float)c3.X, (float)c3.Y, (float)(a.Z + top)), new((float)landing.Value.X, (float)landing.Value.Y, (float)(a.Z + target))) { JumpAt = (float)r3 });
+        L.Links.Add(new LevelLink(a.Id, a.Id, "glide", new((float)c3.X, (float)c3.Y, (float)(a.Z + top)), new((float)landing.Value.X, (float)landing.Value.Y, (float)(a.Z + target))) { JumpAt = (float)(r3 - 45) });
         L.Gems.Add((c3.X, c3.Y, summit.Id));
         for (int q = -1; q <= 1; q++) L.Gems.Add((landing.Value.X + e.Y * q * 70, landing.Value.Y - e.X * q * 70, ledge.Id));
         return true;

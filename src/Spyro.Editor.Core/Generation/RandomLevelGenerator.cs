@@ -205,7 +205,7 @@ public static class RandomLevelGenerator
                 of[k] = id;
             }
             if (sectors.Count > MaxSectors && size < 4096) continue;
-            for (int k = 0; k < surfaces.Count; k++) surfaces[k] = surfaces[k] with { Sector = of[k] };
+            for (int k = 0; k < surfaces.Count; k++) surfaces[k] = surfaces[k] with { Sector = of[k], CloseDetail = true };
             break;
         }
         // The start, facing into the level.
@@ -385,7 +385,7 @@ public static class RandomLevelGenerator
         var parts = r.Counts.Where(c => c.Value > 0 && c.Key != SpyroStructures.OwnThings).OrderByDescending(c => c.Value).ThenBy(c => c.Key, StringComparer.Ordinal)
             .Select(c => $"{c.Value} {Plural(c.Key, c.Value)}").ToList();
         string own = r.Counts.TryGetValue(SpyroStructures.OwnThings, out int things) && things > 0
-            ? $"{things} of {theme.Name}'s own towers, trees and rocks stand in it. " : "";
+            ? $"{things} of {theme.Name}{(theme.Name.EndsWith('s') ? "'" : "'s")} own towers, trees and rocks stand in it. " : "";
         string reach = r.Unreached + r.NoWayBack == 0 ? "Every floor can be reached from the start and left again." :
             $"Almost every floor is proved reachable ({r.RequiredFloors - r.Unreached - r.NoWayBack} of {r.RequiredFloors}).";
         return $"{name}: {style} in the style of {theme.Name}, {r.Areas} areas, {r.Faces:N0} faces, {r.Materials} textures. " +
@@ -394,6 +394,7 @@ public static class RandomLevelGenerator
 
     private static string Plural(string what, int n) => n == 1 ? what : what switch
     {
-        "chain of stepping stones" => "chains of stepping stones", _ when what.EndsWith("s") => what, _ => what + "s"
+        "chain of stepping stones" => "chains of stepping stones", "nook up a charge ramp" => "nooks up charge ramps",
+        "lookout with a glide" => "lookouts with glides", _ when what.EndsWith("s") => what, _ => what + "s"
     };
 }

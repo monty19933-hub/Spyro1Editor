@@ -66,6 +66,15 @@ internal static class RandomLevelCases
                     string other = OtherProcessFingerprint(seed, style, options.Size, repo);
                     Check(again.Scene.Fingerprint() == r.Scene.Fingerprint() && other == r.Scene.Fingerprint(), $"{style} {seed} not the same level every time ({other})");
                 }
+                if (k == 0)
+                {
+                    // Fill In What the Level Needs works on it: dragons, a way home and gems find floor to stand on.
+                    var fill = LevelFill.Make(r.Scene, 3, [4], true, 300, r.Scene.GemSpots);
+                    Check(fill.Dragons.Count == 3 && fill.Exit != null, $"{style} {seed} Fill In placed {fill.Dragons.Count} dragons, exit {fill.Exit != null}: {string.Join(" ", fill.Notes)}");
+                    Check(fill.Gems.Count >= 10 && fill.ReachableCells > 200, $"{style} {seed} Fill In placed {fill.Gems.Count} gems over {fill.ReachableCells} cells");
+                    // The joins the in-game route checks play are in the report.
+                    Check(rep.Links.Count >= rep.Areas - 1, $"{style} {seed} {rep.Links.Count} links for {rep.Areas} areas");
+                }
                 if (maps != null)
                 {
                     // Three times larger, so it can be looked at.

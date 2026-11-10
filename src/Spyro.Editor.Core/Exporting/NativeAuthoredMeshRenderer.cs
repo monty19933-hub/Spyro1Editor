@@ -244,7 +244,7 @@ internal static class NativeAuthoredMeshRenderer
     private static void AddFaces(List<Face> faces,AuthoredSurface s,ColorRgba[] near,ColorRgba[] far,int material)
     {
         int group=s.Sector??-1;
-        int flags=group>=0?(ImportedFlagsOverride?.Invoke(s)??ImportedFaceFlags):0;
+        int flags=group>=0&&!s.CloseDetail?(ImportedFlagsOverride?.Invoke(s)??ImportedFaceFlags):0;
         if(s.TwoSided)flags|=TwoSidedFaceFlag;
         if(s.FrontReversed)flags|=FrontReversedFaceFlag;
         var distant=s.DistantColors??far;

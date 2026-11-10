@@ -160,9 +160,7 @@ public sealed partial class MainWindow
         content.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, MaxWidth = 780, HorizontalAlignment = HorizontalAlignment.Left,
-            Text = "Every level is different: valleys, islands, sky islands, caverns, canyons and castles, with ramps, ledges, bridges, " +
-                   "stepping stones, glides and charge ramps all built inside Spyro's jumps, glides and climbs. Choose what you like or leave it to chance, " +
-                   "then put it in a level slot and add your own objects and enemies."
+            Text = "A new level made the way the game's own levels are: rooms along a route, sloping paths between them, steps to jump up, lookouts to glide from. It is built and painted like the level you pick: that level's ground, rock and paths in its colours, under its sky, to its music, with its own towers and trees. Every jump, glide and climb is inside what Spyro can do. Choose what you like or leave it to chance, then put it in a level slot and add your own objects and enemies."
         });
         content.Children.Add(columns);
         var place = new ComboBox { Name = "RandomLevelPlace", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = places.Select(p => p.Label).ToArray(), SelectedIndex = 0 };

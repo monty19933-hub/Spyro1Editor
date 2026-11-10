@@ -26,6 +26,13 @@ public sealed record AuthoredSurface(string Id, Vector3f[] Vertices, ColorRgba C
     /// compiler groups the face itself).</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public int? Sector { get; init; }
+    /// <summary>A face with a <see cref="Sector"/> that is still cut into small pieces when the camera is close, as the
+    /// editor's own faces are (generated levels: their faces are grouped into sectors so they keep four corners, but
+    /// they are the floor under Spyro's feet). Without it a sector's faces are cut up only at the very last moment
+    /// (imported levels, made for a game with deeper queues), and a face the camera stands on can leave a hole at the
+    /// bottom of the screen.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool CloseDetail { get; init; }
     /// <summary>Drawn from both sides (thin walls, sails, planks). One-sided faces show only their front, the side
     /// their corners turn anticlockwise from.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
