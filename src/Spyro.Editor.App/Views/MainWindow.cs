@@ -14746,8 +14746,9 @@ public sealed partial class MainWindow : Window
         {
             string before = currentImage;
             (currentImage, currentCue) = await ApplyMemoryModeStageAsync(sourceImage, currentImage, currentCue, tempDir, step + 1, _retailCatalog);
-            // Game Settings alone (hover, Spyro's colours) make a game from the original too.
-            gameSettingsOnly = targets.Count == 0 && PathsEqual(before, sourceImage) && !PathsEqual(currentImage, sourceImage);
+            // Game Settings alone (hover, Spyro's colours) make a game from the original too: with no level edits, or
+            // when none of them could be exported (the skipped ones are still reported).
+            gameSettingsOnly = PathsEqual(before, sourceImage) && !PathsEqual(currentImage, sourceImage);
             if (gameSettingsOnly) stepSummaries.Add(new { kind = "game-settings", hover = NativeHover.Enabled, spyroColours = NativeSpyroColours.Enabled });
         }
 
@@ -28246,7 +28247,7 @@ public sealed partial class MainWindow : Window
 
         AddHelpSection(panel, "Save and Create BIN", [
             $"Save ({mod}S) keeps the open level's changes in your project. It does not make a game.",
-            "Create BIN saves first, then builds a new playable game — a BIN and a CUE — from everything saved in the project. The files go in the project's output folder; open the CUE in your emulator.",
+            "Create BIN saves first, then builds a new playable game — a BIN and a CUE — from everything saved in the project. The files go in the project's output folder; open the CUE in a PlayStation emulator (DuckStation, for example).",
             "Your original disc image is never written to.",
             "If something cannot be put in the game, the editor says what and where. More ▾ > Check for Export Issues… runs the same check without building."
         ]);
@@ -28285,7 +28286,7 @@ public sealed partial class MainWindow : Window
         AddHelpSection(panel, "Game Settings and Environment", [
             "This level: Level name changes the name on portals, loading screens and in the guidebook. Music picks the level's track. Portals & Return Home: choose where each portal leads and where Return Home goes.",
             "Whole game — Fly Anywhere: tick it and the game you export lets Spyro fly in every normal level — jump, then press ✕ again in the air — or open Choose levels and tick only the levels you want. It is separate from the editor's Game Camera.",
-            "Whole game — Spyro's colours: any colour for each part of Spyro (body, belly, horns, head spikes, wings, tail tip, eyes), or a ready-made look. Hover: ▲ while gliding makes Spyro rise a little and drift on, as in Spyro 3. Play as Crash puts Crash in the levels you tick. Memory: Emulator only (8 MB RAM) lets levels hold more. Create BIN works with only these settings too.",
+            "Whole game — Spyro's colours: any colour for each part of Spyro (body, belly, horns, head spikes, wings, tail tip, eyes), a ready-made look, or Surprise me; the picture on the card shows him as he will be in the game. Hover: ▲ while gliding makes Spyro beat his wings, rise a little and drift on, as in Spyro 3 (not in levels where Fly Anywhere is on: there he flies instead of gliding). Play as Crash puts Crash in the levels you tick. Memory: Emulator only (8 MB RAM) lets levels hold more. Create BIN works with only these settings too.",
             "Environment: recolor the sky, borrow another level's sky, use a ready-made one, or import your own from a 360° picture or an OBJ/FBX model."
         ]);
 

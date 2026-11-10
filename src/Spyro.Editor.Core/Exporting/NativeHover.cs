@@ -19,8 +19,9 @@ namespace Spyro.Editor.Core.Exporting;
 /// and the entry checks the level has it (the player package's slot, 0 when missing) and otherwise hovers in the drop
 /// pose. The table bytes in the executable stay the game's own, as the features that check them expect.</item>
 /// <item>State 16's input step tested ✕ to start a new glide (0x80042D10); that test is replaced (else hover, glide and
-/// hover again would climb forever) by the switch back to the drop pose: once Spyro stops rising it writes the drop pose
-/// back into the table and marks his animation as the glide's, so the game blends into the drop as from a glide.</item>
+/// hover again would climb forever) by the flutter: while Spyro rises the flap plays three times as fast as in the flight
+/// levels, and once he stops rising the drop pose goes back into the table and his animation is marked as the glide's,
+/// so the game blends into the drop as from a glide.</item>
 /// </list>
 /// No code cave is used. <see cref="ApplyForExport"/> installs it in the game Create BIN makes when the export's scope
 /// (<see cref="Use"/>, opened with the project's setting) asks for it.</summary>
@@ -30,17 +31,20 @@ public static class NativeHover
     public const int RiseSpeed = 4096;
     /// <summary>The flight levels' climbing flap (state 33's animation) and the drop pose (state 16's own).</summary>
     public const int FlapAnimation = 34, DropAnimation = 17;
+    /// <summary>Playing speeds (sixteenths of an animation frame a step): the flap in a hover, three times the flight
+    /// levels' own 4, so the rise shows two full wingbeats; the drop pose's own.</summary>
+    public const int FlapSpeed = 12, DropSpeed = 4;
     public const uint EnterAddress = 0x8003EEF0, FrameAddress = 0x80042D10, SharedTail = 0x8003EEB4, SetGravity = 0x8003F8D4;
     /// <summary>State 16's byte of the state -> animation table, the player package pointer, the state input step's
     /// common continuation.</summary>
     public const uint DropAnimationByte = 0x8006C480, PlayerPackage = 0x80076378, InputContinue = 0x80042204;
     private const uint ExeBase = UniversalExeBindings.ExeBase;
-    private const int EnterWords = 24, FrameWords = 12;
+    private const int EnterWords = 24, FrameWords = 15;
 
-    // The USA game's state-16 entry (24 words), state 6's tail it shares, and state 16's ✕ test (12 words).
+    // The USA game's state-16 entry (24 words), state 6's tail it shares, and state 16's ✕ test (its first 15 words).
     private const string EnterOriginal = "0880023c6c8b428c0880033cf08a638c0880013cd48a20ac0880013c4c8b20ac0880013c508b20ac0880013c548b22ac6c02601440ff02240880023c088b428c00000000200042286602401040ff022443fa000c0000000035fe000840ff0224";
     private const string TailOriginal = "0880023cf08a428c000000008402401440ff02240880023c088b428c00000000200042287e02401040ff022443fa000c0000000035fe000840ff0224";
-    private const string FrameOriginal = "0780023c7873428c000000004000423038fd4010000000000880023ca88b428c00000000a20440100f0004240880023c";
+    private const string FrameOriginal = "0780023c7873428c000000004000423038fd4010000000000880023ca88b428c00000000a20440100f0004240880023cd88a428c0000000010004228";
 
     private const int Zero = 0, At = 1, V0 = 2, T0 = 8, T1 = 9, T2 = 10, T3 = 11, T4 = 12, T5 = 13;
     private static uint I(int op, int rs, int rt, int imm) => UniversalMips.EncodeI(op, rs, rt, imm);
@@ -91,26 +95,32 @@ public static class NativeHover
         return w;
     }
 
-    /// <summary>State 16's input step after its landing tests (0x80042D10, every frame of the drop): while Spyro rises it
-    /// goes on as the game does; once he stops, a flap gives way to the drop pose (the table byte back to 17, his
-    /// animation marked as the glide's: 0x80078AB4 = 15). It always continues where the old ✕ test did when ✕ was not
-    /// pressed, so state 16 never starts a new glide.</summary>
+    /// <summary>State 16's input step after its landing tests (0x80042D10, every frame of the drop). In the drop pose (a
+    /// plain drop, a level without the flap, or the flap is over) it goes on as the game does. While Spyro flaps and
+    /// still rises, his animation runs at <see cref="FlapSpeed"/> (the playing speed, 0x80078AB0, which every state's
+    /// entry sets from its animation's record): quick wingbeats, a flutter as in Spyro 3. Once he stops rising the flap
+    /// gives way to the drop pose: the table byte back to 17, the drop's own speed, his animation marked as the glide's
+    /// (0x80078AB4 = 15) so the game blends into it. It always continues where the old ✕ test did when ✕ was not
+    /// pressed, so state 16 never starts a new glide; the rest of that test (to 0x80042D58) is no longer reached.</summary>
     public static uint[] FrameCode()
     {
         uint[] w = new uint[FrameWords];
         uint At0(int slot) => FrameAddress + 4 * (uint)slot;
         w[0] = Lui(At, 0x8008);
-        w[1] = Lw(T0, -0x74AC, At);              // vertical speed
-        w[2] = Lui(T1, High(DropAnimationByte));
-        w[3] = Bgtz(T0, At0(3), InputContinue);  // still rising
-        w[4] = Lbu(T2, Low(DropAnimationByte), T1);
-        w[5] = Addiu(T3, Zero, DropAnimation);
-        w[6] = BeqTo(T2, T3, At0(6), InputContinue); // already the drop pose
-        w[7] = 0;
-        w[8] = Sb(T3, Low(DropAnimationByte), T1);
-        w[9] = Addiu(T3, Zero, 15);
-        w[10] = UniversalMips.EncodeJ(2, InputContinue);
-        w[11] = Sw(T3, -0x754C, At);             // his animation belongs to the glide: the game blends into the drop
+        w[1] = Lui(T1, High(DropAnimationByte));
+        w[2] = Lbu(T2, Low(DropAnimationByte), T1);  // state 16's animation now
+        w[3] = Lw(T0, -0x74AC, At);                  // vertical speed
+        w[4] = Addiu(T3, Zero, DropAnimation);
+        w[5] = BeqTo(T2, T3, At0(5), InputContinue); // the drop pose: as the game does
+        w[6] = Addiu(T4, Zero, FlapSpeed);
+        w[7] = Bgtz(T0, At0(7), InputContinue);      // flapping and still rising:
+        w[8] = Sw(T4, -0x7550, At);                  //   quick wingbeats
+        w[9] = Sb(T3, Low(DropAnimationByte), T1);   // the rise is over: the drop pose ...
+        w[10] = Addiu(T4, Zero, DropSpeed);
+        w[11] = Sw(T4, -0x7550, At);                 //   ... at its own speed
+        w[12] = Addiu(T3, Zero, 15);
+        w[13] = UniversalMips.EncodeJ(2, InputContinue);
+        w[14] = Sw(T3, -0x754C, At);                 // his animation belongs to the glide: the game blends into the drop
         return w;
     }
 

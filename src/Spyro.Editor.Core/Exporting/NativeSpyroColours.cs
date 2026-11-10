@@ -18,8 +18,9 @@ namespace Spyro.Editor.Core.Exporting;
 /// every colour towards black, a lighter one towards white; saturation keeps each colour's difference from the
 /// average.</item>
 /// <item>The cutscenes and the title screen (WAD entries 3 to 6) draw Spyro with copies of the palettes elsewhere in
-/// their VRAM images; every copy there is recoloured. In levels only the palettes' own places are: other objects (some
-/// dragons) share copies of a palette there, and they keep their colours.</item>
+/// their VRAM images; every copy there is recoloured. In levels the palettes' own places are, and the copies of a
+/// stand-in Spyro (Gnasty Gnorc's level swaps one in for him in a scripted moment) with their distance shades; other
+/// objects that share a copy of one of his palettes (life chests, some dragons) keep their colours.</item>
 /// </list>
 /// Only palettes still in the USA game's colours are changed, so applying the colours again changes nothing.
 /// <see cref="ApplyForExport(IDictionary{int, byte[]}, Func{int, byte[]})"/> recolours the game Create BIN makes when
@@ -191,7 +192,120 @@ public static class NativeSpyroColours
         if (places.Count == 0) return null;
         byte[] copy = entry.ToArray();
         foreach (var (at, k) in places) recoloured.Slice(k * PaletteBytes, PaletteBytes).CopyTo(copy.AsSpan(vram + at));
+        if (!IsCutsceneEntry(wadEntry))
+            foreach (var (at, k) in StandInCopies(copy, entry, vram, originals))
+                RecolourShaded(copy.AsSpan(vram, VramBytes), entry.Slice(vram, VramBytes), at, recoloured.Slice(k * PaletteBytes, PaletteBytes));
         return copy;
+    }
+
+    /// <summary>Where the game keeps a whole Spyro as an ordinary object model: Gnasty Gnorc's level (WAD entry 76), class
+    /// 0x19E, the stand-in that level swaps in for him. The editor draws it to show his colours before a game is made.</summary>
+    public const int StandInWadEntry = 76, StandInClass = 0x19E;
+
+    /// <summary>The stand-in Spyro's model package and the texture memory to draw it with, in the given colours (none:
+    /// his own), from Gnasty Gnorc's level data as it is in the original game; null when the level has no such model.</summary>
+    public static (byte[] Package, byte[] Vram)? PreviewModel(byte[] standInLevel, IReadOnlyDictionary<string, (byte R, byte G, byte B)> colours)
+    {
+        int vram = VramOffset(standInLevel);
+        if (vram < 0) return null;
+        byte[] level = standInLevel;
+        if (colours.Count > 0 && Originals(standInLevel.AsSpan(vram, VramBytes)) is { } originals)
+            level = RecolourEntry(StandInWadEntry, standInLevel, originals, Recolour(originals, colours)) ?? standInLevel;
+        var data = new Universal.UniversalLevelData(level);
+        if (data.Registrations().All(r => r.ClassId != StandInClass)) return null;
+        return (data.Package(StandInClass), level.AsSpan(vram, VramBytes).ToArray());
+    }
+
+    /// <summary>A model that is Spyro's stand-in uses at least this many of his 17 palettes.</summary>
+    private const int StandInPalettes = 14;
+
+    /// <summary>Copies of Spyro's palettes that belong to a stand-in Spyro: an object of the level drawn with (nearly) all
+    /// of his palettes, as the one Gnasty Gnorc's level swaps in for him in a scripted moment (class 0x19E, his whole
+    /// model with 16 palette copies). Found from the level's models: a model's texture commands (palette id, then the
+    /// page word four bytes on) naming copies of at least <see cref="StandInPalettes"/> of his palettes. Objects that
+    /// merely share a colour with him (life chests, some dragons) name one or two and are left alone.</summary>
+    private static List<(int At, int Palette)> StandInCopies(byte[] level, ReadOnlySpan<byte> original, int vram, ReadOnlySpan<byte> originals)
+    {
+        Dictionary<ushort, int> copies = [];
+        for (int at = 0; at < VramBytes; at += PaletteBytes)
+        {
+            var row = original.Slice(vram + at, PaletteBytes);
+            for (int k = 0; k < Palettes.Length; k++)
+                if (at != PaletteOffset(Palettes[k]) && row.SequenceEqual(originals.Slice(k * PaletteBytes, PaletteBytes)))
+                {
+                    // The GPU palette id of this place: x in 16-pixel steps (the image is VRAM's right half), y.
+                    copies[(ushort)(at / 1024 << 6 | (at % 1024 / 2 + 512) / 16)] = k;
+                    break;
+                }
+        }
+        List<(int, int)> result = [];
+        if (copies.Values.Distinct().Count() < StandInPalettes) return result;
+        var data = new Universal.UniversalLevelData(level);
+        var files = data.Subfiles();
+        if (files.Count < 3) return result;
+        var (modelsAt, modelsLength) = files[2];
+        int[] roots = [.. data.Registrations().Select(r => r.Root).Where(r => r >= modelsAt && r < modelsAt + modelsLength).Distinct().Order()];
+        HashSet<ushort> taken = [];
+        for (int i = 0; i < roots.Length; i++)
+        {
+            int end = i + 1 < roots.Length ? roots[i + 1] : modelsAt + modelsLength;
+            HashSet<ushort> used = [];
+            for (int p = (roots[i] + 3 & ~3) + 2; p + 6 <= end; p += 4)
+            {
+                ushort id = BinaryPrimitives.ReadUInt16LittleEndian(original[p..]);
+                if (copies.ContainsKey(id) && (BinaryPrimitives.ReadUInt16LittleEndian(original[(p + 4)..]) & 0xFF80) == 0) used.Add(id);
+            }
+            if (used.Select(id => copies[id]).Distinct().Count() >= StandInPalettes) taken.UnionWith(used);
+        }
+        foreach (ushort id in taken) result.Add((PaletteOffset(id), copies[id]));
+        return result;
+    }
+
+    /// <summary>An object's palette in its new colours: the palette itself and, when the seven rows under it are its
+    /// distance shades (the object renderer fades a far object through them; each has the palette's transparent
+    /// colours), those rows faded as they were. Every shade row is, channel by channel, a straight-line function of the
+    /// palette's colours (a fade towards the level's haze), fitted on the old colours and applied to the new.</summary>
+    private static void RecolourShaded(Span<byte> vram, ReadOnlySpan<byte> originalVram, int at, ReadOnlySpan<byte> palette)
+    {
+        const int Rows = 8, RowBytes = 1024;
+        palette.CopyTo(vram[at..]);
+        if (at + (Rows - 1) * RowBytes + PaletteBytes > VramBytes) return;
+        ushort[,] shades = new ushort[Rows, 16];
+        for (int row = 0; row < Rows; row++)
+            for (int i = 0; i < 16; i++)
+                shades[row, i] = BinaryPrimitives.ReadUInt16LittleEndian(originalVram[(at + row * RowBytes + 2 * i)..]);
+        ushort Old(int row, int i) => shades[row, i];
+        for (int row = 1; row < Rows; row++)
+            for (int i = 0; i < 16; i++)
+                if (Old(row, i) == 0 != (Old(0, i) == 0)) return;   // not this palette's shades
+        for (int row = 1; row < Rows; row++)
+        {
+            double[] a = new double[3], b = new double[3];
+            for (int c = 0; c < 3; c++)
+            {
+                double n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+                for (int i = 0; i < 16; i++)
+                {
+                    if (Old(0, i) == 0) continue;
+                    double x = Old(0, i) >> 5 * c & 31, y = Old(row, i) >> 5 * c & 31;
+                    n++; sx += x; sy += y; sxx += x * x; sxy += x * y;
+                }
+                double variance = n * sxx - sx * sx;
+                a[c] = n >= 2 && variance > 0.5 ? (n * sxy - sx * sy) / variance : 1;
+                b[c] = n > 0 ? (sy - a[c] * sx) / n : 0;
+            }
+            for (int i = 0; i < 16; i++)
+            {
+                ushort old = Old(row, i);
+                ushort near = BinaryPrimitives.ReadUInt16LittleEndian(palette[(2 * i)..]);
+                if (old == 0 || near == Old(0, i)) continue;   // transparent, or a colour that stays: its shades stay
+                int colour = 0;
+                for (int c = 0; c < 3; c++)
+                    colour |= Math.Clamp((int)Math.Round(a[c] * (near >> 5 * c & 31) + b[c]), 0, 31) << 5 * c;
+                if (colour == 0) colour = 1 << 10;
+                BinaryPrimitives.WriteUInt16LittleEndian(vram[(at + row * RowBytes + 2 * i)..], (ushort)(colour | old & 0x8000));
+            }
+        }
     }
 
     /// <summary>Where an entry's right-half VRAM image starts (its first subfile, at 0x800 in level and cutscene

@@ -7,9 +7,9 @@ namespace Spyro.Editor.Core.Exporting;
 /// <see cref="NativeHover.FlapAnimation"/>, a level-local player record (4,512 bytes) that only the five flight levels and
 /// Gnasty's Loot carry, byte-identical. Create BIN adds Sunny Flight's copy to the player stream of every other level of a
 /// game with Hover (the game's own levels, levels built in the editor and the new world's), the way supercharge ground's
-/// animations are added (<see cref="NativeSuperchargeAnimations"/>). A level whose game RAM in the current memory mode
-/// cannot take it (with 2 MB: Tree Tops, Haunted Towers and Twilight Harbor as shipped) is left without: there the hover's
-/// entry finds no record and keeps the drop pose.</summary>
+/// animations are added (<see cref="NativeSuperchargeAnimations"/>). A level without room for it on a PlayStation's 2 MB
+/// (Tree Tops, Haunted Towers and Twilight Harbor as shipped) is left without, in the 8 MB mode too unless it already
+/// needs 8 MB: there the hover's entry finds no record and keeps the drop pose.</summary>
 public sealed class NativeHoverFlap
 {
     public const int AnimationId = NativeHover.FlapAnimation, DonorLevelId = 15, ByteLength = 4512;
@@ -36,9 +36,11 @@ public sealed class NativeHoverFlap
     public static bool CarriedBy(int levelId) => NativeOwners.Contains(levelId);
 
     /// <summary>The level data with the flap in its player stream: the same bytes when it already has it, null when the
-    /// level's game RAM in the current memory mode cannot take it (a level already past the margin keeps its own end, as
-    /// for object imports: <see cref="GameRam.Exceeds(UniversalLevelData, uint, UniversalLevelData, uint)"/>).</summary>
-    public byte[]? Merge(byte[] levelData, uint copyBuffer)
+    /// level has no room for it. The flap never costs a level its place on a PlayStation: a level that fits 2 MB (or
+    /// ends no later than it does in the original game, <paramref name="originalEnd"/>; Twilight Harbor ships a little
+    /// past the editor's margin) must still do so with the flap, in the 8 MB mode too. A level that already needs 8 MB
+    /// takes it when that layout has room.</summary>
+    public byte[]? Merge(byte[] levelData, uint copyBuffer, uint? originalEnd = null)
     {
         var layout = _source.MergeCaptured(levelData, DonorLevelId, [AnimationId]);
         if (layout.AddedIds.Count == 0) return levelData;
@@ -46,7 +48,13 @@ public sealed class NativeHoverFlap
             throw new InvalidDataException("Adding Spyro's flap added unexpected player records.");
         var before = new UniversalLevelData(levelData);
         var merged = new UniversalLevelData(layout.CopyFinalBytes());
-        if (GameRam.Exceeds(merged, copyBuffer, before, copyBuffer)) return null;
+        bool OnPlayStation(UniversalLevelData d)
+        {
+            uint end = UniversalMobyComposer.RuntimeEnd(d, copyBuffer);
+            return end <= GameRam.LowLimit || originalEnd is uint shipped && end <= shipped;
+        }
+        if (!OnPlayStation(merged) && (!GameRam.Extended || OnPlayStation(before) || GameRam.Exceeds(merged, copyBuffer, before, copyBuffer)))
+            return null;
         var check = _source.MergeCaptured(merged.Bytes, DonorLevelId, [AnimationId]);
         if (check.AddedIds.Count != 0 || !check.CopyFinalBytes().AsSpan().SequenceEqual(merged.Bytes))
             throw new InvalidDataException("Spyro's flap is missing from the level's player stream after adding it.");
@@ -58,9 +66,10 @@ public sealed class NativeHoverFlap
 
     /// <summary>Adds the flap to every listed level of an export that lacks it (data at the level's WAD entry, overlay
     /// just before it; the copy buffer from the executable's bindings). Changed levels go into
-    /// <paramref name="replacements"/>; returns the names of the levels without room for it.</summary>
+    /// <paramref name="replacements"/>; returns the names of the levels without room for it. <paramref name="original"/>:
+    /// the original game, whose levels' own ends count as fitting a PlayStation.</summary>
     public IReadOnlyList<string> ApplyForExport(IDictionary<int, byte[]> replacements, Func<int, byte[]> entryBytes, byte[] exe,
-        IEnumerable<LevelDefinition> levels)
+        IEnumerable<LevelDefinition> levels, UniversalDiscImage? original = null)
     {
         List<string> noRoom = [];
         foreach (var level in levels)
@@ -68,7 +77,10 @@ public sealed class NativeHoverFlap
             byte[] Current(int entry) => replacements.TryGetValue(entry, out var bytes) ? bytes : entryBytes(entry);
             byte[] data = Current(level.SourceWadEntry);
             uint copy = new UniversalOverlay(Current(level.SourceWadEntry - 1), UniversalExeBindings.Read(exe, level.LevelId)).CopyBuffer;
-            byte[]? merged = Merge(data, copy);
+            uint? shipped = original != null && level.LevelId != 65 && level.SourceWadEntry < 80 &&
+                UniversalExeBindings.Read(original.Exe, level.LevelId).TryGetValue(UniversalExeBindings.CopyBufferGlobal, out var originalCopy)
+                ? UniversalMobyComposer.RuntimeEnd(new UniversalLevelData(original.EntryBytes(level.SourceWadEntry)), originalCopy.Value) : null;
+            byte[]? merged = Merge(data, copy, shipped);
             if (merged == null) noRoom.Add(level.DisplayName);
             else if (!ReferenceEquals(merged, data)) replacements[level.SourceWadEntry] = merged;
         }
@@ -83,7 +95,7 @@ public sealed class NativeHoverFlap
     {
         if (!NativeHover.Enabled) return;
         var flap = await CaptureAsync(originalUSA, token);
-        NativeHover.RecordWithoutFlap(flap.ApplyForExport(replacements, entryBytes, exe, levels));
+        NativeHover.RecordWithoutFlap(flap.ApplyForExport(replacements, entryBytes, exe, levels, UniversalDiscImage.Read(originalUSA)));
     }
 
     /// <summary>What Create BIN says when some levels had no room for the flap (nothing when all did).</summary>

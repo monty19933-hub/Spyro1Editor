@@ -5,6 +5,8 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using Spyro.Editor.Core.Diagnostics;
 using Spyro.Editor.Core.Exporting;
@@ -15,10 +17,20 @@ namespace Spyro.Editor.App.Views;
 
 /// <summary>Game Settings › Spyro's colours: a colour for each part of Spyro in the games Create BIN makes
 /// (<see cref="NativeSpyroColours"/>), saved with the project (<see cref="SpyroColourSettings"/>) as soon as it is chosen.
-/// Each part has a swatch that opens a picker (quick colours, hue / richness / brightness, #RRGGBB), his own colour beside it
-/// (read from the original disc) and a button to put it back; presets set every part at once.</summary>
+/// A picture of Spyro in the chosen colours heads the card: the game's own stand-in Spyro model
+/// (<see cref="NativeSpyroColours.PreviewModel"/>, read from the original disc) drawn by the Add object window's model
+/// preview, redrawn as soon as a look, a colour or a slider changes. Each part has a swatch that opens a picker (quick
+/// colours, hue / richness / brightness, #RRGGBB), his own colour beside it (read from the original disc) and a button
+/// to put it back; looks set every part at once, and Surprise me makes one up.</summary>
 public sealed partial class MainWindow
 {
+    private readonly Image _spyroColourPreview = new() { Name = "SpyroColourPreview", Width = UniversalMobyModelPreview.Size, Height = UniversalMobyModelPreview.Size, Stretch = Stretch.Uniform, IsVisible = false };
+    private readonly TextBlock _spyroColourPreviewNote = new() { Name = "SpyroColourPreviewNote", FontSize = 12, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center,
+        HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16) };
+    private byte[]? _spyroPreviewLevel;
+    private bool _spyroPreviewBusy;
+    private Dictionary<string, (byte R, byte G, byte B)>? _spyroPreviewPending;
+    private readonly Random _spyroSurprise = new();
     private readonly StackPanel _spyroColourRows = new() { Name = "SpyroColourRows", Spacing = 4 };
     private readonly TextBlock _spyroColourSummary = new() { Name = "SpyroColourSummary", TextWrapping = TextWrapping.Wrap, FontSize = 12 };
     private Dictionary<string, (byte R, byte G, byte B)> _spyroColours = [];
@@ -54,6 +66,20 @@ public sealed partial class MainWindow
                    "on the title screen, the loading screens and the cutscenes of the games you create.",
             TextWrapping = TextWrapping.Wrap, FontSize = 12, LineHeight = 17, Foreground = new SolidColorBrush(ModernMutedInk)
         });
+        // Spyro in the chosen colours, on a sky-to-grass backdrop so light and dark looks both read.
+        _spyroColourPreviewNote.Foreground = new SolidColorBrush(ModernMutedInk);
+        ToolTip.SetTip(_spyroColourPreview, "Spyro as he will look in the game you create");
+        content.Children.Add(new Border
+        {
+            Name = "SpyroColourPreviewHost", Height = UniversalMobyModelPreview.Size + 8, CornerRadius = new CornerRadius(8), ClipToBounds = true,
+            BorderBrush = new SolidColorBrush(ModernLine), BorderThickness = new Thickness(1),
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0.5, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0.5, 1, RelativeUnit.Relative),
+                GradientStops = { new GradientStop(Color.Parse("#CFE6FB"), 0), new GradientStop(Color.Parse("#EAF4FD"), 0.62), new GradientStop(Color.Parse("#CFE8C4"), 0.78), new GradientStop(Color.Parse("#B9DDAA"), 1) }
+            },
+            Child = new Grid { Children = { _spyroColourPreview, _spyroColourPreviewNote } }
+        });
         WrapPanel presets = new() { Name = "SpyroColourPresets", Orientation = Orientation.Horizontal };
         foreach (var (name, colours) in SpyroColourPresets)
         {
@@ -64,6 +90,11 @@ public sealed partial class MainWindow
             ToolTip.SetTip(button, name == "Classic" ? "Spyro's own colours" : $"Every part in the {name} look");
             presets.Children.Add(button);
         }
+        var surprise = NewButton("Surprise me", SurpriseSpyroColours);
+        surprise.Name = "SpyroColourSurprise";
+        surprise.Margin = new Thickness(0, 0, 6, 6);
+        ToolTip.SetTip(surprise, "A look made up on the spot; click again for another");
+        presets.Children.Add(surprise);
         content.Children.Add(presets);
         content.Children.Add(_spyroColourRows);
         content.Children.Add(_spyroColourSummary);
@@ -87,6 +118,72 @@ public sealed partial class MainWindow
             ? "The saved colours could not be read, so Create BIN stops until you choose colours again (a preset or Classic): " + error
             : _spyroColours.Count == 0 ? "Spyro has his own colours."
             : $"{_spyroColours.Count} of {NativeSpyroColours.Parts.Count} parts changed. Create BIN puts them in the game.";
+        ShowSpyroPreview(_spyroColours);
+    }
+
+    /// <summary>Draws Spyro in these colours (the saved ones, or a colour being tried in the picker). Drawing runs in the
+    /// background one picture at a time; while one is drawn, only the newest request waits.</summary>
+    private void ShowSpyroPreview(IReadOnlyDictionary<string, (byte R, byte G, byte B)> colours)
+    {
+        byte[]? level = _spyroPreviewLevel;
+        if (level == null)
+        {
+            if (!_spyroColourPreview.IsVisible)
+                _spyroColourPreviewNote.Text = _spyroOriginalColoursDisc == null ? "Open your game to see Spyro here." : "Drawing Spyro…";
+            return;
+        }
+        var request = new Dictionary<string, (byte R, byte G, byte B)>(colours);
+        if (_spyroPreviewBusy) { _spyroPreviewPending = request; return; }
+        _spyroPreviewBusy = true;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                return NativeSpyroColours.PreviewModel(level, request) is { } model ? UniversalMobyModelPreview.Decode(model.Package, model.Vram).Pixels : null;
+            }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or OverflowException) { return null; }
+        }).ContinueWith(task => Dispatcher.UIThread.Post(() =>
+        {
+            _spyroPreviewBusy = false;
+            if (task.Status == TaskStatus.RanToCompletion && task.Result is { } pixels && ReferenceEquals(level, _spyroPreviewLevel))
+            {
+                const int size = UniversalMobyModelPreview.Size;
+                WriteableBitmap bitmap = new(new PixelSize(size, size), new Vector(96, 96), PixelFormat.Rgba8888, AlphaFormat.Unpremul);
+                using (var buffer = bitmap.Lock())
+                    for (int y = 0; y < size; y++) System.Runtime.InteropServices.Marshal.Copy(pixels, y * size * 4, buffer.Address + y * buffer.RowBytes, size * 4);
+                var old = _spyroColourPreview.Source as IDisposable;
+                _spyroColourPreview.Source = bitmap; _spyroColourPreview.IsVisible = true; _spyroColourPreviewNote.IsVisible = false;
+                old?.Dispose();
+            }
+            else if (!_spyroColourPreview.IsVisible) _spyroColourPreviewNote.Text = "Spyro can't be drawn from this disc; the colours still work.";
+            if (_spyroPreviewPending is { } next) { _spyroPreviewPending = null; ShowSpyroPreview(next); }
+        }), TaskScheduler.Default);
+    }
+
+    /// <summary>A look made up on the spot: a body colour, a pale belly, and one accent family for horns, spikes, wings and
+    /// tail tip (his eyes stay his own).</summary>
+    private void SurpriseSpyroColours()
+    {
+        var random = _spyroSurprise;
+        double Next(double from, double to) => from + random.NextDouble() * (to - from);
+        (byte, byte, byte) Colour(double h, double sat, double l)
+        {
+            var (r, g, b) = NativeSpyroColours.FromHsl((h % 1 + 1) % 1, sat, l);
+            return ((byte)Math.Round(r * 255), (byte)Math.Round(g * 255), (byte)Math.Round(b * 255));
+        }
+        double body = random.NextDouble(), accent = body + new[] { 0.5, 0.33, -0.33, 0.08, -0.08 }[random.Next(5)] + Next(-0.03, 0.03);
+        bool darkBody = random.Next(4) == 0;
+        var colours = new Dictionary<string, (byte R, byte G, byte B)>
+        {
+            ["body"] = Colour(body, Next(0.5, 0.85), darkBody ? Next(0.2, 0.3) : Next(0.38, 0.6)),
+            ["belly"] = Colour(random.Next(2) == 0 ? accent : body + Next(-0.06, 0.06), Next(0.45, 0.85), Next(0.72, 0.88)),
+            ["horns"] = Colour(accent, Next(0.3, 0.8), random.Next(2) == 0 ? Next(0.25, 0.4) : Next(0.7, 0.9)),
+            ["spikes"] = Colour(accent, Next(0.7, 0.95), Next(0.48, 0.62)),
+            ["wings"] = Colour(accent, Next(0.55, 0.9), Next(0.32, 0.5)),
+            ["wingSkin"] = Colour(accent + Next(-0.07, 0.07), Next(0.55, 0.9), Next(0.5, 0.7)),
+        };
+        colours["tailTip"] = colours["spikes"];
+        SaveSpyroColours(colours, "A new look for Spyro. Click Surprise me again for another, or change any part below.");
     }
 
     private Control BuildSpyroColourRow(NativeSpyroColours.Part part)
@@ -147,12 +244,17 @@ public sealed partial class MainWindow
         Slider light = new() { Name = "SpyroColourBrightness", Minimum = 0, Maximum = 100, Value = l0 * 100, Width = 220 };
         TextBox hex = new() { Name = "SpyroColourHex", Text = SpyroColourSettings.Format(start), Width = 96, MaxLength = 7 };
         Border preview = new() { Width = 64, Height = 40, CornerRadius = new CornerRadius(6), BorderBrush = new SolidColorBrush(Color.FromArgb(90, 0, 0, 0)), BorderThickness = new Thickness(1) };
-        bool syncing = false;
+        // What each slider chooses from: a strip of the colours along it.
+        Border Strip() => new() { Height = 8, CornerRadius = new CornerRadius(4), Margin = new Thickness(10, 2, 10, -6), BorderBrush = new SolidColorBrush(Color.FromArgb(60, 0, 0, 0)), BorderThickness = new Thickness(1) };
+        Border hueStrip = Strip(), satStrip = Strip(), lightStrip = Strip();
+        bool syncing = false, opened = false;
         (byte R, byte G, byte B) current = start;
         void Show((byte R, byte G, byte B) c, bool fromSliders)
         {
             current = c;
             preview.Background = new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B));
+            // Spyro's picture tries the colour on while the picker is open.
+            if (opened) ShowSpyroPreview(new Dictionary<string, (byte R, byte G, byte B)>(_spyroColoursUnreadable ? [] : _spyroColours) { [part.Key] = c });
             syncing = true;
             try
             {
@@ -165,7 +267,7 @@ public sealed partial class MainWindow
                 }
                 if (hex.Text?.Trim().ToUpperInvariant() != SpyroColourSettings.Format(c)) hex.Text = SpyroColourSettings.Format(c);
                 var (hr, hg, hb) = NativeSpyroColours.FromHsl(hue.Value / 360, 1, 0.5);
-                sat.Background = new LinearGradientBrush
+                satStrip.Background = new LinearGradientBrush
                 {
                     StartPoint = new RelativePoint(0, 0.5, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 0.5, RelativeUnit.Relative),
                     GradientStops = { new GradientStop(Color.FromRgb(128, 128, 128), 0), new GradientStop(Color.FromRgb((byte)(hr * 255), (byte)(hg * 255), (byte)(hb * 255)), 1) }
@@ -196,8 +298,8 @@ public sealed partial class MainWindow
             var (r, g, b) = NativeSpyroColours.FromHsl(i / 6.0, 1, 0.5);
             hueBrush.GradientStops.Add(new GradientStop(Color.FromRgb((byte)(r * 255), (byte)(g * 255), (byte)(b * 255)), i / 6.0));
         }
-        hue.Background = hueBrush;
-        light.Background = new LinearGradientBrush
+        hueStrip.Background = hueBrush;
+        lightStrip.Background = new LinearGradientBrush
         {
             StartPoint = new RelativePoint(0, 0.5, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 0.5, RelativeUnit.Relative),
             GradientStops = { new GradientStop(Colors.Black, 0), new GradientStop(Color.FromRgb(128, 128, 128), 0.5), new GradientStop(Colors.White, 1) }
@@ -217,21 +319,24 @@ public sealed partial class MainWindow
             quick.Children.Add(chip);
         }
 
-        StackPanel Labeled(string text, Control control)
+        StackPanel Labeled(string text, params Control[] controls)
         {
             var p = new StackPanel { Spacing = 2 };
             p.Children.Add(new TextBlock { Text = text, FontSize = 11, Foreground = new SolidColorBrush(ModernMutedInk) });
-            p.Children.Add(control);
+            p.Children.AddRange(controls);
             return p;
         }
+        bool keep = false;   // Use (or His own) saves a choice: the picture follows that, not the closing picker
         var use = NewButton("Use this colour", () =>
         {
+            keep = true;
             flyout.Hide();
             SetSpyroColour(part, current);
         });
         use.Name = "SpyroColourUse";
         var own = NewButton("His own", () =>
         {
+            keep = true;
             flyout.Hide();
             SetSpyroColour(part, null);
         });
@@ -243,10 +348,13 @@ public sealed partial class MainWindow
             Children =
             {
                 new TextBlock { Text = part.Name, FontSize = 13, FontWeight = FontWeight.SemiBold },
-                quick, Labeled("Hue", hue), Labeled("Richness", sat), Labeled("Brightness", light), top, buttons
+                quick, Labeled("Hue", hueStrip, hue), Labeled("Richness", satStrip, sat), Labeled("Brightness", lightStrip, light), top, buttons
             }
         };
-        hex.KeyDown += (_, e) => { if (e.Key == Key.Enter && SpyroColourSettings.TryParse(hex.Text, out var _)) { flyout.Hide(); SetSpyroColour(part, current); } };
+        flyout.Opened += (_, _) => opened = true;
+        // Closed without Use: the picture goes back to the saved colours.
+        flyout.Closed += (_, _) => { opened = false; if (!keep) ShowSpyroPreview(_spyroColours); keep = false; };
+        hex.KeyDown += (_, e) => { if (e.Key == Key.Enter && SpyroColourSettings.TryParse(hex.Text, out var _)) { keep = true; flyout.Hide(); SetSpyroColour(part, current); } };
         Show(start, false);
         return flyout;
     }
@@ -280,7 +388,8 @@ public sealed partial class MainWindow
         RefreshSpyroColourSettings();
     }
 
-    /// <summary>His own colour for each part, read once per disc in the background (the swatches show grey until then).</summary>
+    /// <summary>His own colour for each part and the stand-in Spyro for the picture, read once per disc in the background
+    /// (the swatches show grey until then).</summary>
     private void LoadSpyroOriginalColours()
     {
         string disc;
@@ -294,13 +403,19 @@ public sealed partial class MainWindow
             {
                 var image = UniversalDiscImage.Read(disc);
                 byte[]? originals = NativeSpyroColours.FindOriginals(image.EntryBytes);
-                return originals == null ? null : NativeSpyroColours.OriginalColours(originals);
+                // Gnasty Gnorc's level has the stand-in Spyro the card draws.
+                byte[] standIn = image.EntryBytes(NativeSpyroColours.StandInWadEntry);
+                return (Own: originals == null ? null : NativeSpyroColours.OriginalColours(originals),
+                    Level: originals != null && NativeSpyroColours.PreviewModel(standIn, new Dictionary<string, (byte R, byte G, byte B)>()) != null ? standIn : null);
             }
-            catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException) { return null; }
+            catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException) { return default; }
         }).ContinueWith(task => Dispatcher.UIThread.Post(() =>
         {
-            if (task.Result == null || _spyroOriginalColoursDisc != disc) return;
-            _spyroOriginalColours = task.Result;
+            if (task.Status != TaskStatus.RanToCompletion || _spyroOriginalColoursDisc != disc) return;
+            _spyroPreviewLevel = task.Result.Level;
+            if (task.Result.Level == null && !_spyroColourPreview.IsVisible) _spyroColourPreviewNote.Text = "Spyro can't be drawn from this disc; the colours still work.";
+            if (task.Result.Own == null) { ShowSpyroPreview(_spyroColours); return; }
+            _spyroOriginalColours = task.Result.Own;
             RefreshSpyroColourSettings();
         }), TaskScheduler.Default);
     }

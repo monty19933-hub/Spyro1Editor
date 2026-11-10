@@ -110,7 +110,8 @@ public sealed partial class MainWindow
         if (!GameRam.Extended && !NativeHover.Enabled && !NativeSpyroColours.Enabled || !File.Exists(currentImage))
             return (currentImage, currentCue);
         bool disposable = IsDisposableCombinedBuildImage(currentImage, tempDir);
-        if (!disposable && !PathsEqual(currentImage, sourceImage))
+        // From the original game itself only for Hover or Spyro's colours: they alone make a game worth creating.
+        if (!disposable && !(PathsEqual(currentImage, sourceImage) && (NativeHover.Enabled || NativeSpyroColours.Enabled)))
             return (currentImage, currentCue);
         string image = Path.Combine(tempDir, $"{step:00}-game-settings.bin");
         await Task.Run(async () =>

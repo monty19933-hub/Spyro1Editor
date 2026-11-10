@@ -8409,10 +8409,14 @@ public sealed partial class EditorViewport : Control
                     break;
             }
         }
-        // A dark panel behind the hint keeps it readable over a bright sky or pale ground.
-        context.DrawRectangle(new SolidColorBrush(Color.FromArgb(150, 20, 26, 33)), null,
-            new Rect(bounds.Left + 10, bounds.Top + 9, text.Width + 16, text.Height + 14), 6, 6);
-        context.DrawText(text, new Point(bounds.Left + 18, bounds.Top + 16));
+        // A dark panel behind the hint keeps it readable over a bright sky or pale ground (none when there is no hint,
+        // as behind the welcome card).
+        if (text.Width > 1)
+        {
+            context.DrawRectangle(new SolidColorBrush(Color.FromArgb(150, 20, 26, 33)), null,
+                new Rect(bounds.Left + 10, bounds.Top + 9, text.Width + 16, text.Height + 14), 6, 6);
+            context.DrawText(text, new Point(bounds.Left + 18, bounds.Top + 16));
+        }
         DrawTerrainSurfaceLabels(context, bounds);
         DrawTerrainTargetReadout(context, bounds);
         DrawTerrainPatchLegend(context, bounds);

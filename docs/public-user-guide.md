@@ -260,27 +260,31 @@ says how many. Translucent original tiles cannot currently be copied or removed.
   their own rules. This is separate from the editor's **Game Camera**, which
   always flies.
 - **Hover**: tick **Let Spyro hover (from Spyro 3)** and, in the games you
-  create, pressing ▲ while gliding makes Spyro beat his wings, rise about as high
-  as a short jump and drift on a little before he drops, as in Spyro 2 and 3:
-  good for a ledge just out of reach. As in those games he can't glide again
-  until he lands. It is in every level of the game; unticked, ▲ in a glide drops
-  Spyro straight down as in the original game. It is saved with the project. The
-  wing flap is the flight levels' own, which Create BIN adds to each level that
-  has room for it; with a PlayStation's 2 MB, Tree Tops, Haunted Towers and
-  Twilight Harbor have none, so there Spyro hovers without flapping (with
-  Emulator only (8 MB RAM) every level has it).
+  create, pressing ▲ while gliding makes Spyro flutter: he beats his wings
+  quickly, rises about as high as a short jump and drifts on a little before he
+  drops, as in Spyro 2 and 3: good for a ledge just out of reach. As in those
+  games he can't glide again until he lands. It is in every level of the game;
+  unticked, ▲ in a glide drops Spyro straight down as in the original game. It
+  is saved with the project. The wing flap is the flight levels' own, which
+  Create BIN adds to each level that has room for it on a PlayStation; Tree
+  Tops, Haunted Towers and Twilight Harbor have none, so there Spyro hovers
+  without flapping. In levels where Fly Anywhere is on, Spyro flies instead of
+  gliding, so there is no glide to hover from.
 - **Spyro's colours**: give Spyro any colours you like, part by part: **Body**
   (head, back, legs, snout and tail), **Belly**, **Horns**, **Head spikes** (the
   spiky fins behind his head), **Wing frame**, **Wing skin**, **Tail tip**,
-  **Eyes** and **Pupils**. Click a part's colour to choose: a quick colour, the
-  **Hue**, **Richness** and **Brightness** sliders, or a colour typed as
-  #RRGGBB, then **Use this colour**. The small square in the corner of a changed
-  part is his own colour, and **His own** puts it back. The looks at the top
-  (**Ember**, **Ice**, **Emerald**, **Gold**, **Shadow**) set every part at once;
-  **Classic** gives him his own colours again. Each part keeps his shading, and
-  the colours are in every level, on the title screen, the loading screens and in
-  the cutscenes. They are saved with the project, and Create BIN can make a game
-  with only these settings, without any level edits.
+  **Eyes** and **Pupils**. The picture at the top of the card is Spyro as he
+  will look in the game, redrawn as you choose. Click a part's colour to choose:
+  a quick colour, the **Hue**, **Richness** and **Brightness** sliders, or a
+  colour typed as #RRGGBB (the picture tries it on while you choose), then **Use
+  this colour**. The small square in the corner of a changed part is his own
+  colour, and **His own** puts it back. The looks under the picture (**Ember**,
+  **Ice**, **Emerald**, **Gold**, **Shadow**) set every part at once,
+  **Surprise me** makes one up, and **Classic** gives him his own colours again.
+  Each part keeps his shading, and the colours are in every level, on the title
+  screen, the loading screens and in the cutscenes. They are saved with the
+  project, and Create BIN can make a game with only these settings, without any
+  level edits.
 - **Portals & Return Home**: choose where each portal leads and where Return
   Home goes. **Select Portal** moves the trigger, lettering and travel path
   together; move the stone arch with the terrain tools.

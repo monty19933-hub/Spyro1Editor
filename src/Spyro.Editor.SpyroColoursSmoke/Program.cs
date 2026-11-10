@@ -107,23 +107,43 @@ if (args.Length >= 2 && args[0] == "--source")
     int[] cutscenes = [3, 4, 5, 6];
     int[] levels = Enumerable.Range(0, 35).Select(i => 10 + 2 * i).ToArray();
     Check(changed == 39 && replacements.Count == 39 && cutscenes.Concat(levels).All(replacements.ContainsKey), "35 levels, the title screen and 3 cutscenes change");
+    // Gnasty Gnorc's level (entry 76) swaps a stand-in Spyro in for him: its 16 palette copies stand in two columns of
+    // eight-row blocks (the palette and seven distance shades) from VRAM (704, 296) and (720, 256).
+    const int GnastyGnorc = 76;
+    bool StandInRow(int row) { int y = row / 1024, x = 512 + row % 1024 / 2; return x == 704 && y is >= 296 and < 352 || x == 720 && y is >= 256 and < 328; }
+    int standInRows = 0;
     foreach (var (entry, bytes) in replacements)
     {
         byte[] before = disc.EntryBytes(entry);
         Check(bytes.Length == before.Length, $"entry {entry} keeps its length");
         int vram = 0x800, diff = 0;
         string? wrong = null;
-        for (int i = 0; i < bytes.Length && wrong == null; i++)
+        for (int row = 0; row < 0x80000 && wrong == null; row += 32)
         {
-            if (bytes[i] == before[i]) continue;
-            int at = i - vram, row = at - at % 32;
-            if (at < 0 || at >= 0x80000) { wrong = "a byte outside its VRAM image"; break; }
+            if (bytes.AsSpan(vram + row, 32).SequenceEqual(before.AsSpan(vram + row, 32))) continue;
+            diff++;
+            if (entry == GnastyGnorc && StandInRow(row)) { standInRows++; continue; }
             int k = Enumerable.Range(0, 17).FirstOrDefault(p => before.AsSpan(vram + row, 32).SequenceEqual(originals!.AsSpan(p * 32, 32)), -1);
             if (k < 0 || !bytes.AsSpan(vram + row, 32).SequenceEqual(recoloured.AsSpan(k * 32, 32))) wrong = "something other than Spyro's palettes";
             else if (!cutscenes.Contains(entry) && row != NativeSpyroColours.PaletteOffset(NativeSpyroColours.Palettes[k])) wrong = "a palette copy away from its own place";
-            diff++;
         }
+        if (wrong == null && (!bytes.AsSpan(0, vram).SequenceEqual(before.AsSpan(0, vram)) || !bytes.AsSpan(vram + 0x80000).SequenceEqual(before.AsSpan(vram + 0x80000))))
+            wrong = "a byte outside its VRAM image";
         Check(wrong == null && diff > 0, $"entry {entry} changes only Spyro's palettes, to his new colours ({wrong ?? "nothing changed"})");
+    }
+    // The stand-in: 15 of its 16 copies change (the mouth's does not), each with its seven shades; a copy's first row is
+    // his new palette, and its shades fade as before (towards the same haze: the last shade of the body's copy moves
+    // less than its first row does: here to 43%).
+    // (a last shade can already be the haze colour itself and stay as it is)
+    Check(standInRows is > 15 * 7 and <= 15 * 8, $"the stand-in Spyro's 15 changed palettes change with their shades ({standInRows} rows)");
+    {
+        byte[] was = disc.EntryBytes(GnastyGnorc), now = replacements[GnastyGnorc];
+        int body = 0x800 + 296 * 1024 + (704 - 512) * 2;   // palette 0x6B7D's copy
+        Check(was.AsSpan(body, 32).SequenceEqual(originals!.AsSpan(0, 32)) && now.AsSpan(body, 32).SequenceEqual(recoloured.AsSpan(0, 32)), "a copy's first row is his new palette");
+        int Moved(int row) => Enumerable.Range(1, 11).Sum(i => { ushort a = BinaryPrimitives.ReadUInt16LittleEndian(was.AsSpan(body + row * 1024 + 2 * i)), b = BinaryPrimitives.ReadUInt16LittleEndian(now.AsSpan(body + row * 1024 + 2 * i));
+            return Math.Abs((a & 31) - (b & 31)) + Math.Abs((a >> 5 & 31) - (b >> 5 & 31)) + Math.Abs((a >> 10 & 31) - (b >> 10 & 31)); });
+        Check(Moved(0) > Moved(4) && Moved(4) > Moved(7) && Moved(7) > 0, $"its shades fade towards the same haze, each further row changing less ({Moved(0)}, {Moved(4)}, {Moved(7)})");
+        Check(Enumerable.Range(0, 8).All(row => BinaryPrimitives.ReadUInt16LittleEndian(now.AsSpan(body + row * 1024)) == 0), "the transparent colour stays transparent in every shade");
     }
     // Artisans' dragons share copies of Spyro's back palette (VRAM 784, 448): they keep their colours.
     int dragonCopy = 0x800 + 448 * 1024 + (784 - 512) * 2;
@@ -149,6 +169,16 @@ if (args.Length >= 2 && args[0] == "--source")
         var added = new Dictionary<int, byte[]> { [102] = disc.EntryBytes(10), [103] = disc.EntryBytes(9) };
         Check(NativeSpyroColours.ApplyToEntries(added) == 1 && added[102].AsSpan().SequenceEqual(replacements[10]) && added[103].AsSpan().SequenceEqual(disc.EntryBytes(9)),
             "an added level is recoloured, its overlay left alone");
+    }
+    // The picture of Spyro in the editor: the stand-in's model with the texture memory in his colours.
+    {
+        byte[] level = disc.EntryBytes(NativeSpyroColours.StandInWadEntry);
+        var plain = NativeSpyroColours.PreviewModel(level, new Dictionary<string, (byte R, byte G, byte B)>());
+        var look = NativeSpyroColours.PreviewModel(level, all);
+        Check(plain is { } o && look is { } l && o.Package.Length == 41868 && o.Package.AsSpan().SequenceEqual(l.Package) &&
+            o.Vram.AsSpan().SequenceEqual(level.AsSpan(0x800, 0x80000)) && l.Vram.AsSpan().SequenceEqual(replacements[NativeSpyroColours.StandInWadEntry].AsSpan(0x800, 0x80000)),
+            "the preview draws the stand-in's model with the texture memory the game will have");
+        Check(NativeSpyroColours.PreviewModel(disc.EntryBytes(10), all) == null, "a level without the stand-in has no preview model");
     }
     // One part only: the eyes. Body palettes stay as they were.
     var eyes = NativeSpyroColours.Recolour(originals!, new Dictionary<string, (byte R, byte G, byte B)> { ["eyes"] = (255, 0, 0) });

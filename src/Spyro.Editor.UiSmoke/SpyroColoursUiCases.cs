@@ -55,6 +55,8 @@ internal static class SpyroColoursUiCases
             Check(text.Contains("Head spikes") && text.Contains("spiky fins behind his head") && text.Contains("Tail tip") && text.Contains("Pupils") &&
                 text.Contains("keeps his shading") && text.Contains("cutscenes"), "the card names the parts and says what changes");
             Check(Summary(window) == "Spyro has his own colours." && !File.Exists(file) && !Has(window, "SpyroColourReset_body"), "his own colours by default, nothing saved");
+            Check(Has(window, "SpyroColourPreviewHost") && Find<TextBlock>(window, "SpyroColourPreviewNote").Text == "Open your game to see Spyro here." &&
+                !Find<Image>(window, "SpyroColourPreview").IsVisible, "the picture of Spyro waits for the game to be opened");
 
             Click(Find<Button>(window, "SpyroColourPresetEmber"));
             var saved = SpyroColourSettings.Load(root);
@@ -84,6 +86,14 @@ internal static class SpyroColoursUiCases
             var reopened = Measure();
             Check(Summary(reopened).StartsWith("7 of 9 parts changed", StringComparison.Ordinal) && Has(reopened, "SpyroColourReset_eyes") && !Has(reopened, "SpyroColourReset_body"),
                 "a reopened editor shows the saved colours");
+            // Surprise me: a made-up look, different each time, saved like any other.
+            Click(Find<Button>(reopened, "SpyroColourSurprise"));
+            var first = SpyroColourSettings.Load(root);
+            Click(Find<Button>(reopened, "SpyroColourSurprise"));
+            var second = SpyroColourSettings.Load(root);
+            Check(first.Count == 7 && second.Count == 7 && first["tailTip"] == first["spikes"] && !first.ContainsKey("eyes") &&
+                (first["body"] != second["body"] || first["horns"] != second["horns"]) && Status(reopened).StartsWith("A new look for Spyro", StringComparison.Ordinal),
+                "Surprise me makes up a look, another each time");
             Click(Find<Button>(reopened, "SpyroColourPresetClassic"));
             Check(!File.Exists(file) && Summary(reopened) == "Spyro has his own colours.", "Classic removes the file");
 
@@ -165,6 +175,29 @@ internal static class SpyroColoursUiCases
             var colours = SpyroColourSettings.Load(workspace);
             Check(colours.Count == 8, "Ember with yellow eyes is chosen");
             ShowCard(window);
+            // The picture of Spyro: drawn from the disc's own stand-in model, in the chosen colours (Ember: mostly red).
+            var picture = Find<Image>(window, "SpyroColourPreview");
+            var clock = Stopwatch.StartNew();
+            while (clock.Elapsed < TimeSpan.FromSeconds(60) && !(picture.IsVisible && picture.Source != null && Get<Dictionary<string, (byte R, byte G, byte B)>?>(window, "_spyroPreviewPending") == null && !Get<bool>(window, "_spyroPreviewBusy"))) Pump(4);
+            Check(picture.IsVisible && picture.Source is Avalonia.Media.Imaging.WriteableBitmap, "the card shows a picture of Spyro");
+            using (var locked = ((Avalonia.Media.Imaging.WriteableBitmap)picture.Source!).Lock())
+            {
+                int red = 0, purple = 0, drawn = 0;
+                byte[] line = new byte[locked.RowBytes];
+                for (int y = 0; y < locked.Size.Height; y++)
+                {
+                    System.Runtime.InteropServices.Marshal.Copy(locked.Address + y * locked.RowBytes, line, 0, line.Length);
+                    for (int x = 0; x < locked.Size.Width; x++)
+                    {
+                        int r = line[4 * x], g = line[4 * x + 1], b = line[4 * x + 2], a = line[4 * x + 3];
+                        if (a == 0) continue;
+                        drawn++;
+                        if (r > g + 60 && r > b + 60) red++;
+                        if (b > g + 25 && b > r && r > g) purple++;
+                    }
+                }
+                Check(drawn > 4000 && red > drawn / 4 && purple < drawn / 20, $"the picture is Spyro in the chosen look (drawn {drawn}, red {red}, purple {purple})");
+            }
             Snapshot(window, Path.Combine(outDir, "1-colours-chosen.png"));
             string created = CreateBin(window);
             File.WriteAllText(Path.Combine(outDir, "status.txt"), created + "\n");

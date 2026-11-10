@@ -50,16 +50,18 @@ if (args.Length == 0)
     Check(UniversalMips.Op(code[22]) == 2 && ((code[22] & 0x3FFFFFF) << 2 | 0x80000000) == NativeHover.SharedTail, "it continues with state 6's steps");
     Check(code.Count(w => UniversalMips.IsStore(w)) == 5, "five fields are written: vertical and forward speed, flight sub-state, the animation byte, sideways speed");
 
-    // The input step: rising goes on as the game does; then the drop pose comes back; never a new glide.
+    // The input step: the drop pose goes on as the game does; a rising flap is quick; then the drop pose comes back; never a new glide.
     uint[] frame = NativeHover.FrameCode();
     uint F(int slot) => NativeHover.FrameAddress + 4 * (uint)slot;
-    Check(frame.Length == 12, "the input step keeps to the old ✕ test's 12 words");
-    Check(UniversalMips.Op(frame[3]) == 7 && Target(frame[3], F(3)) == NativeHover.InputContinue, "while rising it goes on as the game does");
-    Check(UniversalMips.Op(frame[6]) == 4 && Target(frame[6], F(6)) == NativeHover.InputContinue, "with the drop pose already it goes on");
-    Check(frame[8] == UniversalMips.EncodeI(40, 9, 11, Imm(frame[4])) && frame[5] == UniversalMips.EncodeI(9, 0, 11, NativeHover.DropAnimation),
-        "otherwise the drop pose goes back into state 16's byte");
-    Check(frame[9] == UniversalMips.EncodeI(9, 0, 11, 15) && frame[11] == UniversalMips.EncodeI(43, 1, 11, -0x754C), "and his animation is marked as the glide's");
-    Check(UniversalMips.Op(frame[10]) == 2 && ((frame[10] & 0x3FFFFFF) << 2 | 0x80000000) == NativeHover.InputContinue, "every way ends where the ✕ test went on without ✕");
+    Check(frame.Length == 15, "the input step takes the first 15 words of the old ✕ test");
+    Check(UniversalMips.Op(frame[5]) == 4 && Target(frame[5], F(5)) == NativeHover.InputContinue && frame[4] == UniversalMips.EncodeI(9, 0, 11, NativeHover.DropAnimation),
+        "in the drop pose it goes on as the game does");
+    Check(UniversalMips.Op(frame[7]) == 7 && Target(frame[7], F(7)) == NativeHover.InputContinue && frame[6] == UniversalMips.EncodeI(9, 0, 12, NativeHover.FlapSpeed) &&
+        frame[8] == UniversalMips.EncodeI(43, 1, 12, -0x7550) && NativeHover.FlapSpeed is > 4 and <= 16, "a rising flap plays at the flutter's speed");
+    Check(frame[9] == UniversalMips.EncodeI(40, 9, 11, Imm(frame[2])) && frame[10] == UniversalMips.EncodeI(9, 0, 12, NativeHover.DropSpeed) &&
+        frame[11] == UniversalMips.EncodeI(43, 1, 12, -0x7550), "after the rise the drop pose goes back into state 16's byte, at its own speed");
+    Check(frame[12] == UniversalMips.EncodeI(9, 0, 11, 15) && frame[14] == UniversalMips.EncodeI(43, 1, 11, -0x754C), "and his animation is marked as the glide's");
+    Check(UniversalMips.Op(frame[13]) == 2 && ((frame[13] & 0x3FFFFFF) << 2 | 0x80000000) == NativeHover.InputContinue, "every way ends where the ✕ test went on without ✕");
     Check(!frame.Any(w => UniversalMips.Op(w) == 35 && Imm(w) == 0x7378), "it no longer reads the new presses: no glide again until Spyro lands");
 
     // Create BIN's scope: off unless the export asks; scopes nest and end; levels without the flap are noted.
@@ -102,7 +104,9 @@ if (args.Length >= 2 && args[0] == "--source")
     }
     Check(Enumerable.Range(0, exe.Length).All(i => exe[i] == original[i] || covered[i]), "nothing else changes");
     Check(Enumerable.Range(0, 24).All(i => Word(exe, NativeHover.EnterAddress + 4 * (uint)i) == NativeHover.EnterCode()[i]), "the new entry is in place");
-    Check(Enumerable.Range(0, 12).All(i => Word(exe, NativeHover.FrameAddress + 4 * (uint)i) == NativeHover.FrameCode()[i]), "the new input step is in place");
+    Check(Enumerable.Range(0, 15).All(i => Word(exe, NativeHover.FrameAddress + 4 * (uint)i) == NativeHover.FrameCode()[i]), "the new input step is in place");
+    Check(original[(int)(0x8006C4A0 - 0x8000F800) + 4 * NativeHover.DropAnimation + 3] == NativeHover.DropSpeed &&
+        original[(int)(0x8006C4A0 - 0x8000F800) + 4 * NativeHover.FlapAnimation + 3] == 4, "the game plays the drop pose and the flight levels' flap at speed 4");
     Check(original[(int)(NativeHover.DropAnimationByte - 0x8000F800)] == NativeHover.DropAnimation, "the game's own state 16 animation is the drop pose");
     byte[] again = exe.ToArray(); NativeHover.Install(again);
     Check(again.AsSpan().SequenceEqual(exe), "installing again changes nothing");
@@ -132,7 +136,7 @@ if (args.Length >= 2 && args[0] == "--source")
         catalog.Levels.All(l => flap.Carries(disc.EntryBytes(l.SourceWadEntry)) == NativeHoverFlap.CarriedBy(l.LevelId)), "the flight levels and Gnasty's Loot carry the flap, no other level");
     Dictionary<int, byte[]> replacements = [];
     IReadOnlyList<string> noRoom;
-    using (GameRam.Use(GameMemoryMode.PlayStation2MB)) noRoom = flap.ApplyForExport(replacements, disc.EntryBytes, exe, catalog.Levels);
+    using (GameRam.Use(GameMemoryMode.PlayStation2MB)) noRoom = flap.ApplyForExport(replacements, disc.EntryBytes, exe, catalog.Levels, disc);
     Check(noRoom.Order().SequenceEqual(["Haunted Towers", "Tree Tops", "Twilight Harbor"]), "with 2 MB three levels have no room: " + string.Join(", ", noRoom));
     Check(replacements.Count == 26 && replacements.All(r => r.Value.Length == disc.EntryBytes(r.Key).Length + UniversalLevelData.Align(NativeHoverFlap.ByteLength, 0x800) && flap.Carries(r.Value)),
         "the other 26 levels get it (4,512 bytes, three more sectors each)");
@@ -144,12 +148,26 @@ if (args.Length >= 2 && args[0] == "--source")
     Check(data.Subfiles()[0] == shipped.Subfiles()[0] && data.Bytes.AsSpan(data.Subfiles()[0].Offset, data.Subfiles()[0].Length).SequenceEqual(shipped.Bytes.AsSpan(shipped.Subfiles()[0].Offset, shipped.Subfiles()[0].Length)),
         "Artisans' texture memory is unchanged");
     var again2 = new Dictionary<int, byte[]>(replacements);
-    using (GameRam.Use(GameMemoryMode.PlayStation2MB)) flap.ApplyForExport(again2, disc.EntryBytes, exe, catalog.Levels);
+    using (GameRam.Use(GameMemoryMode.PlayStation2MB)) flap.ApplyForExport(again2, disc.EntryBytes, exe, catalog.Levels, disc);
     Check(again2.Count == replacements.Count && again2.All(r => ReferenceEquals(r.Value, replacements[r.Key])), "adding it again changes nothing");
-    var harbor = catalog.FindByKey("twilightharbor") ?? catalog.Levels.Single(l => l.LevelId == 62);
+    // The flap never costs a level its place on a PlayStation: the 8 MB mode leaves the same three without it ...
     Dictionary<int, byte[]> eight = [];
-    using (GameRam.Use(GameMemoryMode.Emulator8MB)) Check(flap.ApplyForExport(eight, disc.EntryBytes, exe, catalog.Levels).Count == 0 && eight.ContainsKey(harbor.SourceWadEntry),
-        "with 8 MB every level has room");
+    using (GameRam.Use(GameMemoryMode.Emulator8MB))
+    {
+        var none = flap.ApplyForExport(eight, disc.EntryBytes, exe, catalog.Levels, disc);
+        Check(none.Order().SequenceEqual(["Haunted Towers", "Tree Tops", "Twilight Harbor"]) && eight.Count == 26,
+            "with 8 MB the same three stay without it, so the game still fits 2 MB: " + string.Join(", ", none));
+        Check(NativeExtendedRam.Survey(exe, e => eight.TryGetValue(e, out var b) ? b : disc.EntryBytes(e), catalog.Levels, disc).All(f => f.FitsPlayStation),
+            "every level of the game with the flap still fits a PlayStation");
+        // ... while a level that needs 8 MB anyway takes it there, and has no room with 2 MB.
+        var treeTops = catalog.Levels.Single(l => l.LevelId == 43);
+        uint copy = new UniversalOverlay(disc.EntryBytes(treeTops.SourceWadEntry - 1), UniversalExeBindings.Read(exe, treeTops.LevelId)).CopyBuffer;
+        var grown = new UniversalLevelData(disc.EntryBytes(treeTops.SourceWadEntry));
+        grown.GrowSubfile(3, 0x4000);
+        byte[]? withFlap = flap.Merge(grown.Bytes, copy);
+        Check(withFlap != null && flap.Carries(withFlap), "a level already past 2 MB takes the flap with 8 MB");
+        using (GameRam.Use(GameMemoryMode.PlayStation2MB)) Check(flap.Merge(grown.Bytes, copy) == null, "and has no room for it with 2 MB");
+    }
     Console.WriteLine($"HOVER_SOURCE_OK checks={checks}");
     return 0;
 }

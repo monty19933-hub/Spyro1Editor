@@ -25,8 +25,9 @@ public sealed partial class MainWindow
             Text = "While gliding, press ▲: Spyro beats his wings (the flap from the flight levels), rises about as high as a " +
                    "short jump and drifts on a little, then drops: good for a ledge just out of reach. As in Spyro 3, he can't " +
                    "glide again until he lands. Without it, ▲ in a glide drops Spyro straight down, as in the original game. It is " +
-                   "in every level of the games you create; a level with no room for the flap (with 2 MB: Tree Tops, Haunted " +
-                   "Towers, Twilight Harbor) has the hover without it.",
+                   "in every level of the games you create. Tree Tops, Haunted Towers and Twilight Harbor have no memory to spare " +
+                   "for the flap, so there he hovers without it. Where Fly Anywhere is on, Spyro flies instead of gliding, so there is " +
+                   "no glide to hover from.",
             TextWrapping = TextWrapping.Wrap, FontSize = 12, LineHeight = 17, Foreground = new SolidColorBrush(ModernMutedInk),
             Margin = new Avalonia.Thickness(26, 0, 0, 4)
         });

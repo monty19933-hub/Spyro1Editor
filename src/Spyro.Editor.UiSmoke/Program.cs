@@ -290,6 +290,20 @@ if (args.Contains("--world-entrance-ui-only", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Length == 3 && args[0] == "--stand-in-shot")
+{
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    TourShots.StandIn(args[1], args[2]);
+    return 0;
+}
+
+if (args.Length is 2 or 3 && args[0] == "--tour-shots")
+{
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    TourShots.Run(args[1], args.Length == 3 ? args[2] : null);
+    return 0;
+}
+
 if (args.Contains("--spyro-colours-ui-only", StringComparer.Ordinal))
 {
     if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --spyro-colours-ui-only");

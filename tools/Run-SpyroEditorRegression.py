@@ -314,7 +314,7 @@ ADDITIONAL_CORE_CASES = (
      ["--play-as-crash-ui-only"]),
     ("UiSmoke", "MEMORY_MODE_UI_OK checks=18",
      ["--memory-mode-ui-only"]),
-    ("UiSmoke", "SPYRO_COLOURS_UI_OK checks=18",
+    ("UiSmoke", "SPYRO_COLOURS_UI_OK checks=20",
      ["--spyro-colours-ui-only"]),
     ("UiSmoke", "DOORWAYS_UI_OK checks=39",
      ["--doorways-ui-only"]),
@@ -505,8 +505,8 @@ SOURCE_QA_CASES = (
     ("YearOfTheDragonImportSmoke", "YOTD_IMPORT_DISC_OK", ["--disc-qa"]),
     ("NativeKillHeightSmoke", "NATIVE_KILL_HEIGHT_SOURCE_OK checks=172", ["--source"]),
     ("SuperchargeSmoke", "SUPERCHARGE_SOURCE_OK checks=160", ["--source"]),
-    ("HoverSmoke", "HOVER_SOURCE_OK checks=23", ["--source"]),
-    ("SpyroColoursSmoke", "SPYRO_COLOURS_SOURCE_OK checks=89", ["--source"]),
+    ("HoverSmoke", "HOVER_SOURCE_OK checks=27", ["--source"]),
+    ("SpyroColoursSmoke", "SPYRO_COLOURS_SOURCE_OK checks=95", ["--source"]),
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.

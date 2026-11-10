@@ -1,17 +1,20 @@
 # Spyro Editor 1.5 — supported scope and limitations
 
 - Version 1.5 recolours Spyro (Game Settings › Spyro's colours) in every level,
-  on the title screen, the loading screens and in the cutscenes. His mouth keeps
-  its colours, and other characters that share one of his colours (some dragons)
-  keep theirs. Checked in the emulator in Artisans, a level of a new world, the
-  opening, the title screen, a loading screen and a dragon rescue; not tried on a
-  PlayStation.
+  on the title screen, the loading screens and in the cutscenes, and the
+  stand-in Spyro that Gnasty Gnorc's level swaps in for him. His mouth keeps its
+  colours, the gold Spyro head beside the lives count stays gold, and other
+  things that share one of his colours (life chests, some dragons) keep theirs.
+  Checked in the emulator in Artisans, a level of a new world, the opening, the
+  title screen, a loading screen, a dragon rescue and with the stand-in; not
+  tried on a PlayStation.
 - Hover (Game Settings) uses the flight levels' wing flap, which Create BIN adds
-  to each level that has room for it. With a PlayStation's 2 MB, Tree Tops,
-  Haunted Towers and Twilight Harbor have none, so there Spyro hovers without
-  flapping; with Game Settings › Memory › Emulator only (8 MB RAM) every level
-  has it, and those three then need 8 MB. Checked in the emulator in Artisans,
-  Tree Tops and Gnasty's Loot; not tried on a PlayStation.
+  to each level that has room for it on a PlayStation's 2 MB. Tree Tops, Haunted
+  Towers and Twilight Harbor have none, so there Spyro hovers without flapping
+  (the flap is never what makes a game need 8 MB; a level that already needs
+  8 MB takes it). There is no hover in levels where Fly Anywhere is on: Spyro
+  flies there instead of gliding. Checked in the emulator in Artisans, Tree Tops
+  and Gnasty's Loot; not tried on a PlayStation.
 - Version 1.4 builds a world of your own into the game (File ▾ → New World…):
   a homeworld and up to four levels, entered through a doorway in one of the
   game's six homeworlds (its sixth doorway; Gnasty's World has room for two).
