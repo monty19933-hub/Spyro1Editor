@@ -108,7 +108,7 @@ internal static class SpyroPlanner
                     plan.Spikes = theme.Peaks ? 260 : 0;
                     break;
             }
-            int count = Math.Max(3, size switch { LevelSize.Small => 4, LevelSize.Large => 7, _ => 5 } - shrink);
+            int count = Math.Max(3, size switch { LevelSize.Small => 4, LevelSize.Large => 8, _ => 6 } - shrink);
             string shape = style switch
             {
                 LevelStyle.Canyon => r.Pick<string>([("trail", 3), ("loop", 2)]),
@@ -117,7 +117,7 @@ internal static class SpyroPlanner
                 _ => r.Pick<string>([("loop", 3), ("hub", 3), ("trail", 1)]),
             };
             bool apart = plan.Kind is EnclosureKind.Sea or EnclosureKind.Sky;
-            if (apart) { _scale = 0.72; _gapFrom = 250; _gapTo = 430; count++; } else { _scale = style == LevelStyle.Caverns ? 0.8 : 1; _gapFrom = 520; _gapTo = 800; }
+            if (apart) { _scale = 0.72; _gapFrom = 250; _gapTo = 430; count += plan.Kind == EnclosureKind.Sky ? 2 : 1; } else { _scale = style == LevelStyle.Caverns ? 0.8 : 1; _gapFrom = 520; _gapTo = 800; }
             _ridge = apart ? 240 : Ridge;
             bool ok = shape switch { "loop" => Loop(L, count, r), "hub" => Hub(L, count, r), _ => Trail(L, count, r) };
             if (!ok || !Clear(L))
@@ -309,6 +309,19 @@ internal static class SpyroPlanner
         return true;
     }
 
+    /// <summary>Whether a disc in room <paramref name="a"/> leaves the room's joins alone: clear of the line from the
+    /// room's middle to each room it is joined to, so nothing stands where a path, bridge or stones arrive.</summary>
+    private static bool OffJoins(PlannedLevel L, PlannedArea a, double x, double y, double r)
+    {
+        foreach (var j in L.Joins)
+        {
+            if (j.A != a.Id && j.B != a.Id) continue;
+            var o = L.Areas[j.A == a.Id ? j.B : j.A];
+            if (SegmentDistance(x, y, a.X, a.Y, o.X, o.Y) < r + 260) return false;
+        }
+        return true;
+    }
+
     /// <summary>A direction out of a room at least <paramref name="apart"/> (cosine) from everything already there.</summary>
     private static (double X, double Y)? FreeDirection(PlannedArea a, LevelRandom rnd, double apart = 0.42)
     {
@@ -485,7 +498,7 @@ internal static class SpyroPlanner
         if (FreeDirection(a, rnd) is not { } d) return false;
         double r1 = Math.Clamp(a.R * Range(rnd, 0.38, 0.5), 240, 400), off = a.R * Range(rnd, 0.72, 0.9);
         double x = a.X + d.X * off, y = a.Y + d.Y * off;
-        if (!Free(L, a, x, y, r1)) return false;
+        if (!Free(L, a, x, y, r1) || !OffJoins(L, a, x, y, r1)) return false;
         a.Taken.Add(d);
         var first = Step(L, a, x, y, r1, a.Z + SpyroMoves.DesignLedge, a.Priority + 1);
         L.Count("ledge");
@@ -515,7 +528,7 @@ internal static class SpyroPlanner
         double r1 = Math.Clamp(0.44 * a.R, 270, 380), r2 = r1 * 0.72, r3 = Math.Max(150, r2 * 0.68);
         double o1 = 0.8 * a.R, o2 = o1 + 0.55 * r1, o3 = o2 + 0.5 * r2;
         (double X, double Y) c1 = (a.X + d.X * o1, a.Y + d.Y * o1), c2 = (a.X + d.X * o2, a.Y + d.Y * o2), c3 = (a.X + d.X * o3, a.Y + d.Y * o3);
-        if (!Free(L, a, c1.X, c1.Y, r1) || !Free(L, a, c3.X, c3.Y, r3)) return false;
+        if (!Free(L, a, c1.X, c1.Y, r1) || !Free(L, a, c3.X, c3.Y, r3) || !OffJoins(L, a, c1.X, c1.Y, r1)) return false;
         // The ledge to glide to: round the room's edge, as far as a glide from the top carries with room to spare.
         double top = 3 * step, target = top - Range(rnd, 60, 80), tr = Range(rnd, 200, 250);
         double reach = SpyroMoves.GlideReach((float)(top - target));
@@ -529,7 +542,7 @@ internal static class SpyroPlanner
                 double x = a.X + e.X * a.R * 0.95, y = a.Y + e.Y * a.R * 0.95;
                 double gap = Dist(x, y, c3.X, c3.Y) - r3 - tr;
                 if (gap < 240 || gap > reach - 70) continue;
-                if (a.Taken.Any(t => t.X * e.X + t.Y * e.Y > 0.55) || !Free(L, a, x, y, tr)) continue;
+                if (a.Taken.Any(t => t.X * e.X + t.Y * e.Y > 0.55) || !Free(L, a, x, y, tr) || !OffJoins(L, a, x, y, tr)) continue;
                 landing = (x, y);
             }
         if (landing == null) return false;
@@ -552,6 +565,7 @@ internal static class SpyroPlanner
         if (FreeDirection(a, rnd, 0.3) is not { } d) return false;
         double r = Math.Clamp(a.R * 0.26, 150, 250), off = a.R * 0.56;
         if (Dist(L.Areas[0].X, L.Areas[0].Y, a.X + d.X * off, a.Y + d.Y * off) < 1.7 * r + 400) return false;
+        if (!OffJoins(L, a, a.X + d.X * off, a.Y + d.Y * off, 1.4 * r - 60)) return false;
         a.Taken.Add(d);
         var pond = L.Plan.Add(new TerrainZone
         {

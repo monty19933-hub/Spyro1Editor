@@ -48,7 +48,9 @@ internal static partial class NewLevelBuildCases
         // The generator alone makes the same level for the same choices (painted pictures aside, whose paths differ).
         if (!pictures)
         {
-            var again = RandomLevelGenerator.Generate(options with { Name = made.Scene.Name }, Get<LevelCatalog>(window, "_retailCatalog"));
+            // With the same look source the window used: the look's own towers and trees are part of the level.
+            var source = (Func<string, LevelPropSource?>)Invoke(window, "RandomLevelLookSource")!;
+            var again = RandomLevelGenerator.Generate(options with { Name = made.Scene.Name }, Get<LevelCatalog>(window, "_retailCatalog"), source: source);
             if (again.Scene.Surfaces.Count != saved.Surfaces.Count || !again.Scene.Surfaces.Zip(saved.Surfaces).All(p => p.First.Vertices.SequenceEqual(p.Second.Vertices)))
                 throw new InvalidOperationException("The same seed did not make the same level.");
         }
