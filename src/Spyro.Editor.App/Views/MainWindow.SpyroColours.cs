@@ -425,7 +425,8 @@ public sealed partial class MainWindow
     private static string GameSettingsExportNote()
     {
         List<string> parts = [];
-        if (NativeSpyroColours.Enabled) parts.Add("Spyro's colours");
+        if (NativeSpyroColours.SpyroEnabled) parts.Add("Spyro's colours");
+        if (NativeEggThiefColours.Enabled) parts.Add("the egg thieves' colour");
         if (NativeHover.Enabled) parts.Add("the hover");
         return (parts.Count == 0 ? "" : " With " + string.Join(" and ", parts) + " from Game Settings.") + HoverFlapNote();
     }
@@ -440,6 +441,10 @@ public sealed partial class MainWindow
         try { colours = SpyroColourSettings.Load(_workspace.RootPath); }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException)
         { throw new InvalidDataException("Spyro's colours in Game Settings could not be read. Choose them again (a preset or Classic). (" + e.Message + ")", e); }
-        return NativeSpyroColours.Use(colours);
+        (byte R, byte G, byte B)? thieves;
+        try { thieves = EggThiefColourSettings.Load(_workspace.RootPath); }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        { throw new InvalidDataException("The egg thieves' colour in Game Settings could not be read. Choose it again. (" + e.Message + ")", e); }
+        return NativeSpyroColours.Use(colours).With(NativeEggThiefColours.Use(thieves));
     }
 }

@@ -270,6 +270,13 @@ says how many. Translucent original tiles cannot currently be copied or removed.
   Tops, Haunted Towers and Twilight Harbor have none, so there Spyro hovers
   without flapping. In levels where Fly Anywhere is on, Spyro flies instead of
   gliding, so there is no glide to hover from.
+- **Egg thieves' colour**: the egg thieves' robes in any colour in place of
+  their blue: pick one of the ready colours, type one as #RRGGBB and press **Use
+  This Colour**, or **Surprise me**; **Their own blue** puts it back. The card
+  draws a thief in the colour. It is the same in every level that has thieves and
+  for thieves you add to levels you build; they keep their shading and their
+  eyes. In High Caves the tornado wizards wear the same cloth as the thieves, so
+  they change with them.
 - **Spyro's colours**: give Spyro any colours you like, part by part: **Body**
   (head, back, legs, snout and tail), **Belly**, **Horns**, **Head spikes** (the
   spiky fins behind his head), **Wing frame**, **Wing skin**, **Tail tip**,
@@ -357,8 +364,9 @@ Terrain tab. Other levels show it too, with the reason they cannot have doorways
 the game keeps its doorway code in the homeworlds only.
 
 - **Add Doorway…** asks where it leads (the levels that homeworld's own doorways
-  lead to; each level has one doorway), its **shape** from six pictures — Stone
-  Arch, Pointed Arch, Square Gate, Round Ring, Wide Arch and Hex Gate — its size,
+  lead to; each level has one doorway), its **shape** from nine pictures — Stone
+  Arch, Pointed Arch, Square Gate, Round Ring, Wide Arch, Hex Gate, Tall Arch,
+  Gable Gate and Slanted Gate — its size,
   and its frame's texture (the same texture grid as Choose Texture…). It stands
   on the selected tile, or on the ground in front of the camera, facing the
   camera: Spyro walks into it away from you.
@@ -504,23 +512,30 @@ any tile afterwards.
 
 **File ▾ → Random Homeworld…** (or **Make: A homeworld** in the Random Level
 window) makes a homeworld: Spyro arrives in a plaza with rooms off it all round,
-and a doorway stands in a room for every level the homeworld leads to, with open
-floor in front of it for Spyro to fly back out onto.
+and a doorway stands in the middle of a room for every level the homeworld leads
+to, with open floor in front of it and behind it for Spyro to come back out onto.
 
-- A homeworld goes where the game keeps its doorway code: in place of Artisans,
-  Peace Keepers, Magic Crafters, Beast Makers, Dream Weavers or Gnasty's World
-  (open that homeworld first), or in the homeworld of your own world.
-- In a game homeworld's place it gets a doorway to each of that homeworld's
-  levels (in Artisans' place: Stone Hill, Dark Hollow, Town Square, Toasty and
-  Sunny Flight). In your own world it gets a doorway to each level you made and
-  the way back out to the game.
-- The doorways' shape follows the look: round stone arches in the Artisans'
-  style, square gates for the Peace Keepers, pointed arches for the Magic
-  Crafters, six-sided gates for the Beast Makers, rings for the Dream Weavers.
-  **Terrain → Doorways** moves, turns, reshapes or retargets any of them
-  afterwards; their frames are ordinary tiles you can repaint.
-- With **Then fill it with objects for me**, a game homeworld also gets its
-  balloonist and his balloon (the way to the other worlds) and its dragons.
+- A generated homeworld goes in Artisans' place (open Artisans first) or in the
+  homeworld of your own world. The other homeworlds are not offered yet: their
+  doorways bring Spyro back out differently, and are not proven with generated
+  layouts.
+- In Artisans' place it gets a doorway to each of Artisans' levels (Stone Hill,
+  Dark Hollow, Town Square, Toasty and Sunny Flight). In your own world it gets
+  a doorway to each level you made and the way back out to the game.
+- The doorways' look follows the level and is different every time: a shape of
+  the look's kind (round, wide and tall stone arches in the Artisans' style;
+  square, slanted and gabled gates for the Peace Keepers; pointed and tall
+  arches for the Magic Crafters; six-sided and gabled gates for the Beast
+  Makers; rings for the Dream Weavers; wide arches and heavy gates in Gnasty's
+  harbour), usually one shape for the whole homeworld as in the game, sometimes
+  a different one for each doorway; each doorway its own size, the farthest one
+  the grandest; and frames of the level's own stone in the level's colours. The
+  destination's sky fills each opening exactly. **Terrain → Doorways** moves,
+  turns, reshapes or retargets any of them afterwards; their frames are ordinary
+  tiles you can repaint.
+- With **Then fill it with objects for me**, a homeworld in Artisans' place also
+  gets its balloonist and his balloon (the way to the other worlds) and its
+  dragons.
 
 ### Random objects
 
@@ -551,13 +566,51 @@ first); **Remove Them** takes them all away. What you added yourself stays.
   the game, each thief with room to run; a Return Home vortex at the far end (in a
   homeworld, the balloonist).
 
-Enemies wait in the rooms beyond the first, facing the way Spyro comes in, and on
-the paths between; chests stand by the walls and in far corners; gems run in
-trails along the way, in rings in the open and on ledges, lookouts and stepping
-stones. Nothing is put inside a tower or against a wall, nor in front of a
-homeworld's doorways. Everything Randomize places is an ordinary object: move,
-change or delete any of it. How much fits is set by the level's save rows (the
-card says so when a level is full).
+How much of everything, and where, follows the game's own thirty levels on foot,
+measured from the disc:
+
+- For the gems you ask for there are about as many chests, enemies and loose gems
+  as a level of the game with that treasure has: for every hundred gems about ten
+  chests, seven enemies (fewer when easy, more when hard) and sixteen loose gems.
+- About a third of the treasure lies loose, nearly half is in chests and the rest
+  comes from enemies. Chests are mostly baskets and strong chests, with some
+  spring chests and a few three-flame and firework chests, and each gives what
+  its kind gives in the game (a basket mostly a green or a blue gem). Enemies
+  give what they give in their own level.
+- Loose gems are mostly reds and greens, in ones, twos and threes about a hundred
+  units apart, a group all one colour, more than half of them by the walls and
+  the rest along the paths and out in the rooms; the best gems go to the hardest
+  places, and one of every colour is always there when the total allows.
+- Chests stand in ones, twos and threes a chest's width apart, most of them a
+  step or two from a wall or where a walk ends. Enemies wait in ones, twos and
+  threes (now and then a pack) in the rooms beyond the first, facing the way
+  Spyro comes in, and on the paths between.
+
+Nothing is put inside a tower or against a wall, and enemies keep away from a
+homeworld's doorways. Before anything is placed, each kind is tried on in the
+level the way Create BIN will build it: a kind this level cannot hold (some
+creatures need things of their own level, and some kinds cannot share a level)
+is left out and named, so what Randomize places always builds. Everything
+Randomize places is an ordinary object: move, change or delete any of it. A level with few save rows left (a level built in
+Artisans' place, for one) gets less of everything, each thing worth more; the
+card says so.
+
+### An egg thief's run
+
+Select an egg thief you added (or any added object that walks a route, such as
+a sheep): **Edit Route…** and the **Its run** tools appear under the object's
+buttons, and the run's numbered points show in the 3D view.
+
+- Drag a point in the 3D view to move it (it stays on the ground), or type the
+  points in **Edit Route…**.
+- **New Loop Here** makes a new round run about where the thief stands, as wide
+  as the open floor allows; press it again for another.
+- **Bigger**, **Smaller** and **Turn** change the whole run about its middle;
+  **Other Way Round** makes him run it the opposite way; **As It Came** brings
+  back the run he had in his own level.
+- The run keeps to one level of floor (a thief cannot jump), and no step is
+  longer than the game can follow. Give a thief room to run and Spyro room to
+  chase: a round of 1,500 to 3,000 units on open floor plays best.
 
 ## Levels from other games
 

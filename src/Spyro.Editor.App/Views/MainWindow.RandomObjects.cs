@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Spyro.Editor.Core.Editing;
+using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Generation;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Primitives;
@@ -28,6 +29,8 @@ public sealed partial class MainWindow
 
     /// <summary>What the last Randomize placed, by kind (for tests and the card's note).</summary>
     internal IReadOnlyDictionary<string, int> LastRandomObjects { get; private set; } = new Dictionary<string, int>();
+    /// <summary>Why Create BIN would refuse what the last Randomize placed (null: it would not).</summary>
+    internal string? LastRandomObjectsRefusal { get; private set; }
 
     private Border? _randomObjectsCard;
     private ComboBox? _randomObjectsLevel, _randomObjectsEnemyLevel, _randomObjectsEnemyKind, _randomObjectsDifficulty;
@@ -132,6 +135,8 @@ public sealed partial class MainWindow
     private string RandomObjectsEnemyLevelKey()
     {
         var levels = RandomObjectsLevels();
+        // No levels to choose from (a project whose level list has not been read from a disc yet).
+        if (levels.Count == 0) return "";
         int type = Math.Clamp(_randomObjectsLevel?.SelectedIndex ?? 0, 0, levels.Count - 1), enemy = _randomObjectsEnemyLevel?.SelectedIndex ?? 0;
         return enemy <= 0 || enemy > levels.Count ? levels[type].Key : levels[enemy - 1].Key;
     }
@@ -157,6 +162,7 @@ public sealed partial class MainWindow
     {
         if (_randomObjectsLevel == null) return null;
         var levels = RandomObjectsLevels();
+        if (levels.Count == 0) { _statusText.Text = "Random objects needs the original Spyro the Dragon disc: open your game first."; return null; }
         string type = levels[Math.Clamp(_randomObjectsLevel.SelectedIndex, 0, levels.Count - 1)].Key;
         int kind = _randomObjectsEnemyKind?.SelectedIndex ?? 0;
         var difficulty = (LevelDifficulty)Math.Clamp(_randomObjectsDifficulty?.SelectedIndex ?? 1, 0, 3);
@@ -260,12 +266,95 @@ public sealed partial class MainWindow
         string enemyLevel = choice.EnemyLevelKey is { Length: > 0 } other ? other : choice.LevelKey;
         var foeKinds = RandomObjectsEnemies(entries, enemyLevel).Where(k => choice.EnemyClass == 0 || k.Entry.ClassId == choice.EnemyClass).OrderBy(k => k.Entry.ClassId).ToList();
         rnd.Shuffle(foeKinds);
-        foeKinds = [.. foeKinds.Take(4)];
         var animalKinds = choice.Animals
             ? entries.Where(e => e.Placeable && e.Category == "NPCs" && e.SubCategory == "Fodder & Animals" && !e.Name.Contains("cage", StringComparison.OrdinalIgnoreCase))
                 .Select(e => (e, e.Variants.FirstOrDefault(v => string.Equals(v.SourceLevelKey, choice.LevelKey, StringComparison.OrdinalIgnoreCase) && v.RestrictionReason == null)))
-                .Where(p => p.Item2 != null).Select(p => (Entry: p.e, Variant: p.Item2!)).OrderBy(p => p.Entry.ClassId).Take(2).ToList()
+                .Where(p => p.Item2 != null).Select(p => (Entry: p.e, Variant: p.Item2!)).OrderBy(p => p.Entry.ClassId).ToList()
             : [];
+        // Only kinds Create BIN takes in this level. Some creatures need things of their own level that this one lacks
+        // (a Haunted Towers wizard his resurrection effect), so each kind is tried on first: the level as it is, with
+        // one of the kind. Kinds that are refused are left out and named.
+        _statusText.Text = "Checking which objects this level can hold…";
+        INativeAuthoredCompilation? compilation = null;
+        try { compilation = await CaptureFreshNativeAsync(); }
+        catch (Exception e) when (e is IOException or InvalidDataException or InvalidOperationException or UnauthorizedAccessException) { compilation = null; }
+        if (_currentLevel != level || _workspace.RootPath != root || _freshSceneDocument == null) return;
+        var special = UniversalSpecials(japanese, lib);
+        var standing = CurrentUniversalPlacements();
+        List<string> refusedKinds = [];
+        // Kinds whose route Create BIN takes only as it came (a Misty Bog boar's): they are placed only where that
+        // route, moved with them, lies on the floor.
+        HashSet<(string, int)> fixedRoutes = [];
+        string? Refusal(UniversalMobyVariant v, bool movedRoute = false)
+        {
+            if (compilation == null || UniversalSpecialCatalog.IsSpecial(v)) return null;
+            byte[] row = lib.Get(v.SourceLevelKey).Data.Row(v.SourceRow);
+            var one = new UniversalMobyPlacement(v.SourceLevelKey, v.SourceRow, BitConverter.ToInt32(row, 0x0C), BitConverter.ToInt32(row, 0x10), BitConverter.ToInt32(row, 0x14),
+                EditorId: Guid.NewGuid().ToString("N"), PersistentSlot: standing.Count);
+            if (movedRoute)
+            {
+                // The same placement with its route's points a step aside, as a fitted route would have them.
+                List<int[]>? path;
+                try { path = UniversalPropertyCoordinates.DefaultPath(lib.Get(v.SourceLevelKey).Data.CaptureRow(v.SourceLevelKey, v.SourceRow), one.X, one.Y, one.Z); }
+                catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException) { path = null; }
+                if (path == null) return null;
+                one = one with { PathNodes = [.. path.Select(n => { var p = (int[])n.Clone(); p[0] += 16; return p; })] };
+            }
+            IReadOnlyList<UniversalMobyPlacement> trial;
+            try { trial = UniversalPlacementGroups.Expand(lib.Get, one); } catch (InvalidDataException) { trial = [one]; }
+            return DryRunFresh(compilation, lib, [.. standing, .. trial], special).Error;
+        }
+        // Together, too: some kinds cannot share a level (their code looks at the kind of other objects), and every kind
+        // takes memory. The wanted kinds are tried all at once; when the level refuses them together they are taken on
+        // one at a time (gems first, then chests, enemies, animals) and whatever will not go with the rest is left out.
+        var gemKinds = GemValue.Known.Where(g => g.Value is 1 or 2 or 5 or 10 or 25).Select(g => Of(g.IdByte, key, choice.LevelKey)).Where(g => g != null).Select(g => g!.Value).ToList();
+        var chestKinds = chest.ToList();
+        (foeKinds, animalKinds, var keptChests, bool keyFits) = await Task.Run(() =>
+        {
+            string? Together(IEnumerable<UniversalMobyVariant> kinds)
+            {
+                if (compilation == null) return null;
+                List<UniversalMobyPlacement> trial = [.. standing];
+                foreach (var v in kinds.Where(v => !UniversalSpecialCatalog.IsSpecial(v)).DistinctBy(v => (v.SourceLevelKey, v.SourceRow)))
+                {
+                    byte[] row = lib.Get(v.SourceLevelKey).Data.Row(v.SourceRow);
+                    var one = new UniversalMobyPlacement(v.SourceLevelKey, v.SourceRow, BitConverter.ToInt32(row, 0x0C), BitConverter.ToInt32(row, 0x10), BitConverter.ToInt32(row, 0x14),
+                        EditorId: Guid.NewGuid().ToString("N"), PersistentSlot: trial.Count);
+                    try { trial.AddRange(UniversalPlacementGroups.Expand(lib.Get, one)); } catch (InvalidDataException) { trial.Add(one); }
+                }
+                return DryRunFresh(compilation, lib, trial, special).Error;
+            }
+            var wantFoes = foeKinds.Take(4).ToList(); var wantAnimals = animalKinds.Take(2).ToList();
+            var all = gemKinds.Select(g => g.Variant).Concat(chestKinds.Select(c => c.Value.Variant)).Concat(keyKind is { } k0 ? [k0.Variant] : [])
+                .Concat(wantFoes.Select(f => f.Variant)).Concat(wantAnimals.Select(a => a.Variant)).ToList();
+            List<(UniversalMobyCatalogEntry Entry, UniversalMobyVariant Variant)> foes = [], animals = [];
+            var chests = new Dictionary<LevelScatter.Kind, (UniversalMobyCatalogEntry Entry, UniversalMobyVariant Variant)>();
+            bool keyOk = keyKind != null;
+            if (Together(all) == null) { foes = wantFoes; animals = wantAnimals; foreach (var c in chestKinds) chests[c.Key] = c.Value; }
+            else
+            {
+                List<UniversalMobyVariant> taken = [];
+                bool Take(UniversalMobyVariant v, string name)
+                {
+                    if (Together(taken.Append(v)) == null) { taken.Add(v); return true; }
+                    lock (refusedKinds) refusedKinds.Add(name);
+                    return false;
+                }
+                foreach (var g in gemKinds) Take(g.Variant, g.Entry.Name);
+                foreach (var c in chestKinds) if (Take(c.Value.Variant, c.Value.Entry.Name)) chests[c.Key] = c.Value;
+                if (keyKind is { } k1) keyOk = Take(k1.Variant, k1.Entry.Name);
+                foreach (var f in foeKinds) { if (foes.Count >= 4) break; if (Take(f.Variant, f.Entry.Name)) foes.Add(f); }
+                foreach (var a in animalKinds) { if (animals.Count >= 2) break; if (Take(a.Variant, a.Entry.Name)) animals.Add(a); }
+            }
+            // Whose route may not be changed.
+            foreach (var kind in foes.Concat(animals))
+                if (Refusal(kind.Variant) == null && Refusal(kind.Variant, movedRoute: true) != null) lock (fixedRoutes) fixedRoutes.Add((kind.Variant.SourceLevelKey, kind.Variant.SourceRow));
+            return (foes, animals, chests, keyOk);
+        });
+        if (_currentLevel != level || _workspace.RootPath != root || _freshSceneDocument == null) return;
+        chest.Clear();
+        foreach (var c in keptChests) chest[c.Key] = c.Value;
+        if (!keyFits) chest.Remove(LevelScatter.Kind.LockedChest);
         var eggEntry = specials.FirstOrDefault(e => e.SubCategory == "Dragonfly Eggs");
         int eggs = eggEntry is { Placeable: true } ? choice.Eggs : 0;
 
@@ -274,6 +363,15 @@ public sealed partial class MainWindow
         int free = Math.Max(0, 256 - (scene.TargetBinding?.NativePrefixRows ?? 0) - scene.Ledger.Entries.Count + spare.Count);
         var occupied = _currentMobys.Where(m => !m.IsRemoved).Select(m => m.Position).ToList();
         int before = _currentMobys.Where(m => !m.IsRemoved).Sum(m => m.TreasureValue);
+        // Enemies that bring helpers with them take a row for each: the plan is made for fewer rows by that much.
+        int helperRows = 0;
+        foreach (var kind in foeKinds)
+        {
+            try { helperRows = Math.Max(helperRows, lib.Get(kind.Variant.SourceLevelKey).Data.CaptureRow(kind.Variant.SourceLevelKey, kind.Variant.SourceRow).SourceRowIndices.Count); }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException) { }
+        }
+        int capacity = free;
+        free = Math.Max(0, free - helperRows * (foeKinds.Count > 0 ? choice.Enemies : 0));
         var request = new LevelScatter.Request(seed, foeKinds.Count > 0 ? choice.Enemies : 0, animalKinds.Count > 0 ? LevelScatter.AnimalsFor(choice.Difficulty) : 0,
             Math.Max(0, choice.Treasure - before), Math.Max(0, free - LevelFillSpareRows))
         { Dragons = dragonRows.Count, ThiefRoutes = [.. thieves.Select(t => t.Nodes)], Exit = exit, ChestKinds = chest.Keys.ToHashSet(), Eggs = eggs, Difficulty = choice.Difficulty };
@@ -283,16 +381,27 @@ public sealed partial class MainWindow
         _startBlankBusy = true;
         List<string> ids = [], missing = [];
         Dictionary<string, int> placed = [];
-        List<Moby> givers = [];
+        Dictionary<Moby, int> givers = [];
+        // The level's save rows: every object takes one, and some kinds bring others with them (a wizard his helpers,
+        // a balloonist his balloon). What does not fit is taken out again, so the level can always be saved.
+        int budget = Math.Max(0, capacity - LevelFillSpareRows), usedRows = 0, leftOut = 0;
         void Track(IReadOnlyList<Moby> objects, string what)
         {
+            if (objects.Count == 0) return;
+            if (usedRows + objects.Count > budget)
+            {
+                foreach (var m in objects) _currentMobys.Remove(m);
+                leftOut++;
+                return;
+            }
+            usedRows += objects.Count;
             foreach (var m in objects)
             {
                 // A row an earlier Randomize used and gave back, while there are any.
                 if (spare.Count > 0) m.UniversalPlacementId = spare.Dequeue();
                 ids.Add(m.UniversalPlacementId);
             }
-            if (objects.Count > 0) placed[what] = placed.GetValueOrDefault(what) + 1;
+            placed[what] = placed.GetValueOrDefault(what) + 1;
         }
         void Give(Moby m, int gems)
         {
@@ -301,13 +410,20 @@ public sealed partial class MainWindow
             m.Flag4B = match[0].IdByte; m.UniversalRewardByte = match[0].IdByte;
         }
         // An enemy's route (if its kind has one) fitted to the floor where it stands, shrunk if need be.
-        List<int[]>? Route(UniversalRowTemplate template, LevelScatter.Item item, out bool fits)
+        List<int[]>? Route(UniversalRowTemplate template, LevelScatter.Item item, out bool fits, bool asItCame = false)
         {
             fits = true;
             var row = template.Row;
             var home = new Vector3f(BitConverter.ToInt32(row, 0x0C) / 16f, BitConverter.ToInt32(row, 0x10) / 16f, BitConverter.ToInt32(row, 0x14) / 16f);
             var raw = UniversalPropertyCoordinates.DefaultPath(template, BitConverter.ToInt32(row, 0x0C), BitConverter.ToInt32(row, 0x10), BitConverter.ToInt32(row, 0x14));
             if (raw == null) return null;
+            if (asItCame)
+            {
+                // Its route may not be changed: it fits here only if, moved with it, every point lies on the floor.
+                var moved = raw.Select(n => new Vector3f(n[0] / 16f - home.X + item.Position.X, n[1] / 16f - home.Y + item.Position.Y, n[2] / 16f - home.Z + item.Position.Z));
+                fits = plan.Grid != null && plan.Grid.Holds(moved, 28);
+                return null;
+            }
             var fitted = plan.Grid == null ? null : LevelFill.FitRoute(plan.Grid, home, [.. raw.Select(n => new Vector3f(n[0] / 16f, n[1] / 16f, n[2] / 16f))], item.Position);
             if (fitted == null) { fits = false; return null; }
             return [.. raw.Select((n, j) => { var p = (int[])n.Clone(); p[0] = (int)MathF.Round(fitted[j].X * 16); p[1] = (int)MathF.Round(fitted[j].Y * 16); p[2] = (int)MathF.Round(fitted[j].Z * 16); return p; })];
@@ -320,6 +436,7 @@ public sealed partial class MainWindow
             foreach (var item in plan.Items)
             {
                 if (++done % 4 == 1) _statusText.Text = $"Placing objects ({done} of {plan.Items.Count})…";
+                if (usedRows >= budget) { leftOut++; continue; }
                 IReadOnlyList<Moby> objects = [];
                 switch (item.Kind)
                 {
@@ -371,13 +488,15 @@ public sealed partial class MainWindow
                         {
                             int at = (foe + k) % foeKinds.Count;
                             if (foeTemplates[at] is not { } template) continue;
-                            var route = Route(template, item, out bool fits);
+                            var route = Route(template, item, out bool fits, fixedRoutes.Contains((foeKinds[at].Variant.SourceLevelKey, foeKinds[at].Variant.SourceRow)));
                             if (!fits) continue;
                             objects = await AddUniversalMobyAtAsync(lib, foeKinds[at].Entry, foeKinds[at].Variant, item.Position, item.Yaw);
                             if (objects.Count > 0 && route != null) objects[0].UniversalPathNodes = route;
                         }
                         foe++;
-                        if (objects.Count > 0) { Give(objects[0], item.Reward); givers.Add(objects[0]); Track(objects, "enemy"); }
+                        // An enemy gives what it gives in its own level (many kinds are built around their own settings,
+                        // and Create BIN refuses them changed); the loose gems make up the difference below.
+                        if (objects.Count > 0) Track(objects, "enemy");
                         break;
                     }
                     case LevelScatter.Kind.Animal:
@@ -386,7 +505,7 @@ public sealed partial class MainWindow
                         {
                             int at = (animal + k) % animalKinds.Count;
                             if (animalTemplates[at] is not { } template) continue;
-                            var route = Route(template, item, out bool fits);
+                            var route = Route(template, item, out bool fits, fixedRoutes.Contains((animalKinds[at].Variant.SourceLevelKey, animalKinds[at].Variant.SourceRow)));
                             if (!fits) continue;
                             objects = await AddUniversalMobyAtAsync(lib, animalKinds[at].Entry, animalKinds[at].Variant, item.Position, item.Yaw);
                             if (objects.Count > 0 && route != null) objects[0].UniversalPathNodes = route;
@@ -410,7 +529,7 @@ public sealed partial class MainWindow
                         if (objects.Count == 0) { missing.Add(c.Entry.Name); break; }
                         // The chest itself is the one that stands where it was put; what it gives is set on it.
                         var body = objects.FirstOrDefault(m => !m.IsGemLike && !m.IsKey) ?? objects[0];
-                        if (item.Kind is not (LevelScatter.Kind.LifeChest or LevelScatter.Kind.LockedChest)) { Give(body, item.Reward); givers.Add(body); }
+                        if (item.Kind is not (LevelScatter.Kind.LifeChest or LevelScatter.Kind.LockedChest)) { Give(body, item.Reward); givers[body] = item.Reward; }
                         Track(objects, item.Kind switch
                         {
                             LevelScatter.Kind.Basket => "basket", LevelScatter.Kind.StrongChest => "strong chest", LevelScatter.Kind.FlameChest => "three-flame chest",
@@ -419,11 +538,41 @@ public sealed partial class MainWindow
                         break;
                 }
             }
+            // Enemies give what they give in their own levels, so the chests take up the difference: up or down a colour
+            // at a time until the loose gems have about the share of the treasure that was planned for them.
+            int planned = plan.Gems.Sum(g => g.Value);
+            for (int guard = 0; guard < 600 && givers.Count > 0 && planned > 0; guard++)
+            {
+                int left = choice.Treasure - _currentMobys.Where(m => !m.IsRemoved).Sum(m => m.TreasureValue);
+                if (left < planned * 0.8 - 2)
+                {
+                    var rich = givers.Where(g => g.Value > 1).OrderByDescending(g => g.Value).ThenBy(g => g.Key.TrueIndex).Select(g => g.Key).FirstOrDefault();
+                    if (rich == null) break;
+                    int lower = LevelScatter.Colours[Array.IndexOf(LevelScatter.Colours, givers[rich]) - 1];
+                    Give(rich, lower); givers[rich] = lower;
+                }
+                else if (left > planned * 1.2 + 2)
+                {
+                    var poor = givers.Where(g => g.Value < 25).OrderBy(g => g.Value).ThenBy(g => g.Key.TrueIndex).Select(g => g.Key).FirstOrDefault();
+                    if (poor == null) break;
+                    int higher = LevelScatter.Colours[Array.IndexOf(LevelScatter.Colours, givers[poor]) + 1];
+                    if (left - (higher - givers[poor]) < planned * 0.8 - 2) break;
+                    Give(poor, higher); givers[poor] = higher;
+                }
+                else break;
+            }
             // Gems last: what is in the level by now (chests, enemies, anything that was there) is counted as the editor
             // counts it, and the loose gems make up the rest of the treasure exactly, in every colour.
             int soFar = _currentMobys.Where(m => !m.IsRemoved).Sum(m => m.TreasureValue);
             int loose = choice.Treasure - soFar;
-            var values = plan.Gems.Count > 0 && loose > 0 ? LevelScatter.Values(plan.GemHardness, plan.GemGroups, loose, new LevelRandom(seed ^ 0x47454D53)) : [];
+            // As many of the planned gems as the rows left hold (whole groups first, in the plan's order).
+            int gemRoom = Math.Min(plan.Gems.Count, Math.Max(0, budget - usedRows));
+            if (gemRoom < plan.Gems.Count) leftOut += plan.Gems.Count - gemRoom;
+            // Few enough that one of every colour fits what is left for them (a pink, a gold, a blue and a green cost 38
+            // more than reds): what enemies give is their own, so the loose gems' share is only known now.
+            if (loose >= 48) gemRoom = Math.Min(gemRoom, Math.Max(5, loose - 38));
+            var values = gemRoom > 0 && loose > 0
+                ? LevelScatter.Values([.. plan.GemHardness.Take(gemRoom)], [.. plan.GemGroups.Take(gemRoom)], loose, new LevelRandom(seed ^ 0x47454D53)) : [];
             for (int i = 0; i < values.Length; i++)
             {
                 if (values[i] <= 0) continue;
@@ -443,7 +592,17 @@ public sealed partial class MainWindow
             _freshSceneDocument = _freshSceneDocument! with { RandomObjects = ids.Count > 0 ? [.. ids] : null, RandomObjectRows = spare.Count > 0 ? [.. spare] : null };
             RefreshPlacedObjectRoutes(); RefreshMobyList(null); RefreshCurrentLevelDetails();
         }
+        // The whole arrangement once more, as Create BIN will take it.
+        string? wholeRefusal = null;
+        if (compilation != null && ids.Count > 0)
+        {
+            _statusText.Text = "Checking the level as Create BIN will build it…";
+            var all = CurrentUniversalPlacements();
+            wholeRefusal = await Task.Run(() => DryRunFresh(compilation, lib, all, special).Error);
+            if (_currentLevel != level || _workspace.RootPath != root || _freshSceneDocument == null) return;
+        }
         LastRandomObjects = placed;
+        LastRandomObjectsRefusal = wholeRefusal;
         int treasure = _currentMobys.Where(m => !m.IsRemoved).Sum(m => m.TreasureValue);
         int gemCount = placed.Where(p => p.Key.EndsWith(" gem", StringComparison.Ordinal)).Sum(p => p.Value);
         var parts = placed.Where(p => !p.Key.EndsWith(" gem", StringComparison.Ordinal)).OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.Ordinal)
@@ -451,6 +610,9 @@ public sealed partial class MainWindow
         if (gemCount > 0)
             parts.Add($"{gemCount} gems ({string.Join(", ", new[] { "red", "green", "blue", "gold", "pink" }.Where(c => placed.ContainsKey(c + " gem")).Select(c => $"{placed[c + " gem"]} {c}"))})");
         List<string> notes = [.. plan.Notes];
+        if (refusedKinds.Count > 0) notes.Add($"Left out because this level cannot hold them: {string.Join(", ", refusedKinds.Distinct())}.");
+        if (wholeRefusal != null) notes.Add($"Create BIN would refuse this arrangement ({wholeRefusal}) Press Randomize again, or choose another enemy type.");
+        if (leftOut > 0) notes.Add($"The level's save rows are full: {Count(leftOut, "thing was", "things were")} left out.");
         if (choice.Eggs > 0 && eggs == 0) notes.Add("Dragonfly eggs come from the Japanese version of the game: choose that disc in Add object… first.");
         if (choice.Difficulty == LevelDifficulty.Kaizo && (choice.Animals || choice.Chests)) notes.Add("Kaizo: no animals for Sparx and no extra life.");
         if (choice.Enemies > 0 && foeKinds.Count == 0) notes.Add($"{_retailCatalog.FindByKey(enemyLevel)?.DisplayName ?? "That level"} has no enemies that can be placed.");

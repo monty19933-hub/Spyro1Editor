@@ -57,6 +57,10 @@ public sealed record DoorwaySpot(Vector3f Position, int Heading, bool Plaza)
     public AuthoredMaterial? Side { get; init; }
     public ColorRgba? FaceTint { get; init; }
     public ColorRgba? SideTint { get; init; }
+    /// <summary>How far the room's floor is kept open and level in front of the doorway and behind it (Spyro comes back
+    /// out of a doorway in front of it, or with some homeworlds' doorways a little way behind it).</summary>
+    public float ClearFront { get; init; }
+    public float ClearBehind { get; init; }
 }
 
 public sealed record RandomLevelResult(SceneDocument Scene, RandomLevelReport Report, IReadOnlyList<RandomLevelPicture> Pictures,
@@ -284,7 +288,7 @@ public static class RandomLevelGenerator
             // In steps of a twentieth, as the Doorways tool's sizes are.
             float scale = (float)Math.Round((grand ? 1.15 + 0.15 * doorRandom.NextDouble() : 0.9 + 0.25 * doorRandom.NextDouble()) * 20) / 20;
             return new DoorwaySpot(at, (int)Math.Round(Math.Atan2(d.Dy, d.Dx) * 128 / Math.PI) & 0xFF, d.Area == 0)
-            { Shape = shape.Id, Scale = scale, Face = face?.Material, Side = side?.Material, FaceTint = face?.Tint, SideTint = side?.Tint };
+            { Shape = shape.Id, Scale = scale, Face = face?.Material, Side = side?.Material, FaceTint = face?.Tint, SideTint = side?.Tint, ClearFront = (float)d.Front, ClearBehind = (float)d.Behind };
         }).ToArray();
         if (options.Doorways > 0 && doorways.Length < Math.Min(options.Doorways, NativeHubPortals.MaxDoorways))
             notes.Add($"The level has room for {doorways.Length} of the {options.Doorways} doorways; another seed or a larger size may fit them all.");

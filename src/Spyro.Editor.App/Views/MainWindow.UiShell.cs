@@ -924,8 +924,10 @@ public sealed partial class MainWindow
         _objectNativeMovementButton = NewAsyncButton("Edit Native Movement", EditSelectedNativeMovementAsync);
         StyleModernPrimaryButton(_objectNativeMovementButton, Color.FromRgb(111, 86, 174));
         _objectNativeMovementButton.IsVisible = false;
-        if (!_releaseMode)
-            panel.Children.Add(_objectNativeMovementButton);
+        // An added object's route (an egg thief's run, a sheep's walk) is edited in every build; the game's own thieves'
+        // runs only outside release mode (RefreshNativeMovementActionButton).
+        panel.Children.Add(_objectNativeMovementButton);
+        panel.Children.Add(BuildRouteToolsCard());
 
         _objectCopyButton = NewButton("Copy", CopySelectedMoby);
         _objectPasteButton = NewAsyncButton("Paste", PasteMobyClipboardAtLastPointerAsync);
@@ -1129,12 +1131,13 @@ public sealed partial class MainWindow
         {
             Name = "StartingAbilitiesPanel", Spacing = 8,
             Children = { BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), true),
-                BuildModernDisclosure("Play as Crash", BuildCrashPlayerSettingsPanel(), false), BuildHoverSection(), BuildSpyroColourSection() }
+                BuildModernDisclosure("Play as Crash", BuildCrashPlayerSettingsPanel(), false), BuildHoverSection(), BuildSpyroColourSection(), BuildEggThiefColourSection() }
         }, false));
         else
         {
             // Spyro himself first (his colours, with his picture, then his hover), then the level-by-level switches.
             panel.Children.Add(BuildSpyroColourSection());
+            panel.Children.Add(BuildEggThiefColourSection());
             panel.Children.Add(BuildHoverSection());
             // One switch for the whole exported game, off unless the user turns it on.
             var flight = BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), true);

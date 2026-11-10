@@ -37,7 +37,7 @@ if (args.Length >= 6 && args[0] == "--dump")
             .Concat(r.Doorways.Count > 4 ? [new DoorwayDestination(10, "Artisans", false, SceneDoorways.WayBackNote)] : []).ToArray();
         var (built, added, problems) = SceneDoorways.AddAll(r.Scene with { WorldLevelId = NewWorldDocument.Homeworld }, r.Doorways, destinations,
             Spyro.Editor.Core.Generation.LevelThemes.DoorwayShape(r.Report.Theme), r.DoorwayMaterial!);
-        Console.WriteLine($"doorways: {string.Join(", ", built.Portals!.Select(d => $"{d.DestinationLevelId} at {d.Position} heading {d.Heading}"))} {string.Join(" ", problems)}");
+        Console.WriteLine($"doorways: {string.Join(", ", built.Portals!.Select(d => $"{d.DestinationLevelId} {d.Shape} x{d.SizeScale:0.00}"))} {string.Join(" ", problems)}");
         r = r with { Scene = built };
     }
     var faces = r.Scene.Surfaces.Select(s => new
@@ -57,7 +57,7 @@ if (args.Length >= 6 && args[0] == "--dump")
     return 0;
 }
 // Gate (no disc): [repo root] [--maps <folder>] [--seeds N]
-if (args.Length == 0 || args[0] is not ("--fingerprint" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--scatter-facts"))
+if (args.Length == 0 || args[0] is not ("--fingerprint" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--scatter-facts" or "--model-colours" or "--thief-colours"))
 {
     string repo = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : Directory.GetCurrentDirectory();
     string? maps = args.SkipWhile(a => a != "--maps").Skip(1).FirstOrDefault();
@@ -289,6 +289,102 @@ if (args.Length >= 2 && args[0] == "--scatter-facts")
     Console.WriteLine($"wall distance p25/p50/p75: gems {Pct(gemWall, .25):0}/{Pct(gemWall, .5):0}/{Pct(gemWall, .75):0} [54/96/202], chests {Pct(chestWall, .25):0}/{Pct(chestWall, .5):0}/{Pct(chestWall, .75):0} [64/97/190], enemies {Pct(foeWall, .25):0}/{Pct(foeWall, .5):0}/{Pct(foeWall, .75):0} [89/156/254]");
     return 0;
 }
+if (args.Length >= 5 && args[0] == "--model-colours")
+{
+    // --model-colours <disc> <repo> <level key> <class hex>: an animated object model's colour tables and how its faces use them.
+    var catalog = LevelCatalog.Load(args[2]);
+    var library = new UniversalSourceLibrary(args[1], catalog);
+    byte[] package = library.Get(args[3]).Data.Package(Convert.ToInt32(args[4], 16));
+    uint W(int at) => BitConverter.ToUInt32(package, at);
+    int animations = (int)W(0), md = (int)W(0x34);
+    Console.WriteLine($"{args[3]} class {args[4]}: package {package.Length} bytes sha {Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(package))[..12]}, {animations} animations, model data at 0x{md:X}");
+    var tables = new Dictionary<int, (int Count, List<int> Animations)>();
+    var faceTables = new HashSet<int>();
+    for (int i = 0; i < animations; i++)
+    {
+        int animation = (int)W(0x38 + i * 4);
+        if (animation <= 0) continue;
+        int colours = md + (int)W(animation + 0x18), count = BitConverter.ToUInt16(package, animation + 2), faces = md + (int)W(animation + 0x14);
+        if (!tables.TryGetValue(colours, out var t)) tables[colours] = t = (count, []);
+        t.Animations.Add(i); tables[colours] = (Math.Max(t.Count, count), t.Animations);
+        faceTables.Add(faces);
+    }
+    foreach (var (at, t) in tables.OrderBy(t => t.Key))
+    {
+        Console.WriteLine($"colour table at 0x{at:X}: {t.Count} colours, animations {string.Join(",", t.Animations)}");
+        var rows = Enumerable.Range(0, t.Count).Select(k => W(at + 4 * k)).ToList();
+        Console.WriteLine("   " + string.Join(" ", rows.Select(c => $"{c & 255:X2}{c >> 8 & 255:X2}{c >> 16 & 255:X2}/{c >> 24:X2}")));
+    }
+    foreach (int table in faceTables.OrderBy(x => x))
+    {
+        int end = table + 4 + (int)W(table), plain = 0, textured = 0; var used = new Dictionary<int, int>();
+        for (int p2 = table + 4; p2 < end;)
+        {
+            uint word = W(p2), colour = W(p2 + 4);
+            bool quad = (word & 0x80000000) != 0, tex = (word & 2) != 0 || quad && (word & 4) != 0;
+            foreach (int ci in new[] { (int)(colour >> 19 & 511), (int)(colour >> 10 & 511), (int)(colour >> 1 & 511) }) used[ci] = used.GetValueOrDefault(ci) + 1;
+            if (tex) textured++; else plain++;
+            p2 += quad ? tex ? 24 : 12 : tex ? 20 : 8;
+        }
+        Console.WriteLine($"face table at 0x{table:X}: {plain} plain faces, {textured} textured; colour indexes used {used.Count} (max {used.Keys.Max()})");
+        // The palettes its textured faces name (4-bit: 16 colours at VRAM (x, y)), with their texel use left out.
+        byte[] vram = library.Get(args[3]).Data.Vram().ToArray();
+        var cluts = new Dictionary<(int Clut, int Page), int>();
+        for (int p2 = table + 4; p2 < end;)
+        {
+            uint word = W(p2);
+            bool quad = (word & 0x80000000) != 0, tex = (word & 2) != 0 || quad && (word & 4) != 0;
+            if (tex) { int t = p2 + (quad ? 12 : 8); var key = (BitConverter.ToUInt16(package, t + 2), BitConverter.ToUInt16(package, t + 6)); cluts[key] = cluts.GetValueOrDefault(key) + 1; }
+            p2 += quad ? tex ? 24 : 12 : tex ? 20 : 8;
+        }
+        foreach (var ((clut, page), n) in cluts.OrderBy(c => c.Key.Clut))
+        {
+            int x = (clut & 63) * 16, y = clut >> 6, at = y * 1024 + (x - 512) * 2;
+            string Row(int row) => string.Join(" ", Enumerable.Range(0, 16).Select(i => { ushort c = BitConverter.ToUInt16(vram, at + row * 1024 + 2 * i); return c == 0 ? "------" : $"{(c & 31) * 255 / 31:X2}{(c >> 5 & 31) * 255 / 31:X2}{(c >> 10 & 31) * 255 / 31:X2}"; }));
+            Console.WriteLine($"  clut 0x{clut:X4} at ({x},{y}) page 0x{page:X4} mode {page >> 7 & 3}, {n} faces\n     {Row(0)}\n  +7 {Row(7)}");
+        }
+    }
+    return 0;
+}
+if (args.Length >= 3 && args[0] == "--thief-colours")
+{
+    // --thief-colours <disc> <repo> [#RRGGBB]: every level's egg thieves: found by what they are, their own colour,
+    // what a recolour changes (bytes, all inside the level's texture memory), and who else uses their palettes.
+    var catalog = LevelCatalog.Load(args[2]);
+    var library = new UniversalSourceLibrary(args[1], catalog);
+    var colour = args.Length > 3 && Spyro.Editor.Core.Persistence.SpyroColourSettings.TryParse(args[3], out var given) ? given : ((byte)200, (byte)40, (byte)40);
+    int levels = 0, failures = 0;
+    foreach (var level in catalog.Levels.Where(l => l.SourceWadEntry > 0).OrderBy(l => l.LevelId))
+    {
+        byte[] bytes = library.Disc.EntryBytes(level.SourceWadEntry);
+        var own = NativeEggThiefColours.OriginalColour(bytes);
+        UniversalLevelData data; bool hasClass;
+        try { data = new UniversalLevelData(bytes); hasClass = data.Registrations().Any(r => r.ClassId == NativeEggThiefColours.ThiefClass); } catch (Exception) { continue; }
+        if (own == null && !hasClass) continue;
+        levels++;
+        byte[]? copy = NativeEggThiefColours.Recolour(bytes, colour);
+        int differing = copy == null ? 0 : Enumerable.Range(0, bytes.Length).Count(i => bytes[i] != copy[i]);
+        int first = copy == null ? -1 : Enumerable.Range(0, bytes.Length).First(i => bytes[i] != copy[i]), last = copy == null ? -1 : Enumerable.Range(0, bytes.Length).Last(i => bytes[i] != copy[i]);
+        var after = copy == null ? null : NativeEggThiefColours.OriginalColour(copy);
+        bool again = copy != null && NativeEggThiefColours.Recolour(copy, colour) == null;
+        // Other models naming the thief's palettes.
+        var mine = !hasClass ? [] : (NativeEggThiefColours.Palettes(data.Package(NativeEggThiefColours.ThiefClass)) ?? new Dictionary<ushort, int>()).Where(m => m.Value > 8).ToDictionary(m => m.Key, m => m.Value);
+        List<string> sharers = [];
+        foreach (var reg in data.Registrations().Where(r => r.ClassId != NativeEggThiefColours.ThiefClass))
+        {
+            byte[] package; try { package = data.Package(reg.ClassId); } catch (Exception) { continue; }
+            for (int p2 = 2; p2 + 6 <= package.Length; p2 += 4)
+                if (mine.ContainsKey(BitConverter.ToUInt16(package, p2)) && (BitConverter.ToUInt16(package, p2 + 4) & 0xFF80) == 0 && BitConverter.ToUInt16(package, p2 + 4) is > 0 and < 0x20)
+                { sharers.Add($"0x{reg.ClassId:X3}"); break; }
+        }
+        bool ok = hasClass && own != null && copy != null && first >= 0x800 && last < 0x800 + 0x80000 && again && after != null &&
+            Math.Abs(after.Value.R - colour.Item1) + Math.Abs(after.Value.G - colour.Item2) + Math.Abs(after.Value.B - colour.Item3) < 40;
+        if (!ok) failures++;
+        Console.WriteLine($"{level.Key,-14} class 0x21 {(hasClass ? "yes" : "NO ")} own {(own is { } o ? $"#{o.R:X2}{o.G:X2}{o.B:X2}" : "-")} -> {(after is { } a ? $"#{a.R:X2}{a.G:X2}{a.B:X2}" : "-")}: {differing} bytes differ (0x{first:X}..0x{last:X}), again {(again ? "same" : "CHANGES")}, palettes {string.Join(",", mine.Select(m => $"0x{m.Key:X4}x{m.Value}"))}, shared with {(sharers.Count == 0 ? "none" : string.Join(" ", sharers.Distinct()))} {(ok ? "" : "FAIL")}");
+    }
+    Console.WriteLine(failures == 0 ? $"THIEF_COLOURS_OK levels={levels}" : $"THIEF_COLOURS_FAILED {failures}");
+    return failures == 0 ? 0 : 1;
+}
 if (args.Length >= 3 && args[0] == "--doorway-facts")
 {
     // --doorway-facts <disc> <repo>: every homeworld doorway's objects and path as the doorway sees them (along: the way
@@ -305,7 +401,16 @@ if (args.Length >= 3 && args[0] == "--doorway-facts")
             double fx = Math.Cos(t.FacingAngle), fy = Math.Sin(t.FacingAngle);
             string Local(int x, int y, int z) => $"({((x - bx) * fx + (y - by) * fy) / 16:0},{(-(x - bx) * fy + (y - by) * fx) / 16:0},{(z - bz) / 16.0:0})";
             var points = Enumerable.Range(0, t.PointCount).Select(t.Point).ToArray();
-            Console.WriteLine($"{home.Key} -> {t.DestinationLevelId} {t.Control.DestinationName}: opening {t.PointCount} points {string.Join(" ", points.Select(q => Local(q.X, q.Y, q.Z)))}");
+            // Which way round the opening's points go seen from the side the normal points to (the game draws the sky
+            // for points anticlockwise from the viewer): the signed area in (side, up).
+            double area = 0;
+            for (int k = 0; k < points.Length; k++)
+            {
+                var a = points[k]; var b = points[(k + 1) % points.Length];
+                double au = -(a.X - bx) * fy + (a.Y - by) * fx, bu = -(b.X - bx) * fy + (b.Y - by) * fx;
+                area += au * (b.Z - bz) - bu * (a.Z - bz);
+            }
+            Console.WriteLine($"{home.Key} -> {t.DestinationLevelId} {t.Control.DestinationName}: facing {t.FacingAngle * 180 / Math.PI:0}°, points {(area > 0 ? "anticlockwise" : "clockwise")} seen from behind the normal, opening {t.PointCount} points {string.Join(" ", points.Select(q => Local(q.X, q.Y, q.Z)))}");
             foreach (var (name, index) in new[] { ("path", t.Control.PathTrueIndex), ("name", t.Control.LetteringTrueIndex), ("return", t.Control.CompanionTrueIndex) })
             {
                 int row = index - t.SourceMobyIndexBias;
@@ -321,7 +426,8 @@ if (args.Length >= 3 && args[0] == "--doorway-facts")
                     if (count is < 1 or > 16 || q[target + 1] >= count || q[target + 2] != 0 || q[target + 3] != 0 || target + 8 + 16 * count > q.Length) continue;
                     for (int n = 0; n < count; n++) nodes.Add(Local(I(q, target + 8 + 16 * n), I(q, target + 12 + 16 * n), I(q, target + 16 + 16 * n)));
                 }
-                Console.WriteLine($"    {name,-6} class 0x{BitConverter.ToUInt16(r, 0x36):X3} at {Local(I(r, 0x0C), I(r, 0x10), I(r, 0x14))} yaw {r[0x46]}" + (nodes.Count > 0 ? " nodes " + string.Join(" ", nodes) : ""));
+                double turned = ((r[0x46] * 360.0 / 256 - t.FacingAngle * 180 / Math.PI) % 360 + 360) % 360;
+                Console.WriteLine($"    {name,-6} class 0x{BitConverter.ToUInt16(r, 0x36):X3} at {Local(I(r, 0x0C), I(r, 0x10), I(r, 0x14))} yaw {r[0x46]} (from the facing {turned:0}°)" + (nodes.Count > 0 ? " nodes " + string.Join(" ", nodes) : ""));
             }
         }
     }

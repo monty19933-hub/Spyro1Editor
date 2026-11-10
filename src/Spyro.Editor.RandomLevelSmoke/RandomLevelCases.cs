@@ -221,8 +221,13 @@ internal static class RandomLevelCases
                         foreach (var door in home.Doorways)
                         {
                             var (fx, fy) = DoorwayShapes.Facing(door.Heading);
-                            var walk = Enumerable.Range(0, 13).Select(n => new Spyro.Editor.Core.Primitives.Vector3f(door.Position.X - (float)fx * n * 60, door.Position.Y - (float)fy * n * 60, door.Position.Z)).ToList();
-                            Check(floors.Holds(walk, 30), $"{style} {seed} homeworld doorway at {door.Position}: no level floor in front of it");
+                            // Level floor both ways while the room lasts (Spyro comes out in front of a doorway, or with some
+                            // homeworlds' doorways just behind it), and floor of some kind on to 720 in front (a path's slope).
+                            var walk = Enumerable.Range(-(int)(Math.Min(door.ClearBehind, 420) / 60), (int)(door.ClearFront / 60) + (int)(Math.Min(door.ClearBehind, 420) / 60) + 1)
+                                .Select(n => new Spyro.Editor.Core.Primitives.Vector3f(door.Position.X - (float)fx * n * 60, door.Position.Y - (float)fy * n * 60, door.Position.Z)).ToList();
+                            Check(door.ClearFront >= 480 && door.ClearBehind >= 200 && floors.Holds(walk, 30), $"{style} {seed} homeworld doorway at {door.Position}: no level floor in front of it ({door.ClearFront:0}) or behind it ({door.ClearBehind:0})");
+                            var beyond = Enumerable.Range(0, 13).Select(n => new Spyro.Editor.Core.Primitives.Vector3f(door.Position.X - (float)fx * n * 60, door.Position.Y - (float)fy * n * 60, door.Position.Z)).ToList();
+                            Check(floors.Holds(beyond, 200), $"{style} {seed} homeworld doorway at {door.Position}: no floor 720 in front of it");
                             float wall = walk.Min(q => WallDistance(home.Scene, q));
                             Check(wall >= 50, $"{style} {seed} homeworld doorway at {door.Position}: a wall {wall:0} units from its way in");
                         }
@@ -259,7 +264,7 @@ internal static class RandomLevelCases
                         {
                             var (fx, fy) = DoorwayShapes.Facing(door.Heading);
                             foreach (var q in stand)
-                                for (int n = 0; n <= 11; n++)
+                                for (int n = -4; n <= 11; n++)
                                     nearest = Math.Min(nearest, MathF.Sqrt(MathF.Pow(q.X - (door.Position.X - (float)fx * n * 60), 2) + MathF.Pow(q.Y - (door.Position.Y - (float)fy * n * 60), 2)));
                         }
                         Check(stand.Count >= 20 && nearest >= 60, $"{style} {seed} homeworld: {stand.Count} random objects, the nearest {nearest:0} units from a doorway's way in");

@@ -265,7 +265,7 @@ public static class NativeSpyroColours
     /// distance shades (the object renderer fades a far object through them; each has the palette's transparent
     /// colours), those rows faded as they were. Every shade row is, channel by channel, a straight-line function of the
     /// palette's colours (a fade towards the level's haze), fitted on the old colours and applied to the new.</summary>
-    private static void RecolourShaded(Span<byte> vram, ReadOnlySpan<byte> originalVram, int at, ReadOnlySpan<byte> palette)
+    internal static void RecolourShaded(Span<byte> vram, ReadOnlySpan<byte> originalVram, int at, ReadOnlySpan<byte> palette)
     {
         const int Rows = 8, RowBytes = 1024;
         palette.CopyTo(vram[at..]);
@@ -333,8 +333,11 @@ public static class NativeSpyroColours
     private static Scope? s_scope;
     private static readonly object ScopeLock = new();
 
-    /// <summary>Whether the game Create BIN is making gets new colours for Spyro.</summary>
-    public static bool Enabled => Volatile.Read(ref s_scope)?.Colours.Count > 0;
+    /// <summary>Whether the game Create BIN is making gets new colours from Game Settings: Spyro's, or the egg
+    /// thieves' (<see cref="NativeEggThiefColours"/>, applied by the same export steps).</summary>
+    public static bool Enabled => SpyroEnabled || NativeEggThiefColours.Enabled;
+    /// <summary>Whether Spyro himself gets new colours.</summary>
+    public static bool SpyroEnabled => Volatile.Read(ref s_scope)?.Colours.Count > 0;
 
     /// <summary>Create BIN's colours until the scope is disposed (scopes nest; none or an empty set: his own).</summary>
     public static Scope Use(IReadOnlyDictionary<string, (byte R, byte G, byte B)>? colours)
@@ -354,13 +357,14 @@ public static class NativeSpyroColours
     /// entries changed.</summary>
     public static int ApplyForExport(IDictionary<int, byte[]> replacements, Func<int, byte[]> entryBytes)
     {
+        int thieves = NativeEggThiefColours.ApplyForExport(replacements, entryBytes);
         var colours = Volatile.Read(ref s_scope)?.Colours;
-        if (colours is not { Count: > 0 }) return 0;
+        if (colours is not { Count: > 0 }) return thieves;
         byte[] Current(int entry) => replacements.TryGetValue(entry, out var bytes) ? bytes : entryBytes(entry);
         byte[]? originals = FindOriginals(Current);
-        if (originals == null) return 0; // nothing left in the original colours: already applied
+        if (originals == null) return thieves; // nothing left in the original colours: already applied
         byte[] recoloured = Recolour(originals, colours);
-        int changed = 0;
+        int changed = thieves;
         for (int entry = 0; entry < 256; entry++)
             if (RecolourEntry(entry, Current(entry), originals, recoloured) is { } copy) { replacements[entry] = copy; changed++; }
         return changed;
@@ -370,17 +374,18 @@ public static class NativeSpyroColours
     /// colours, as the new world's). Returns how many changed.</summary>
     public static int ApplyToEntries(IDictionary<int, byte[]> entries)
     {
+        int thieves = NativeEggThiefColours.ApplyToEntries(entries);
         var colours = Volatile.Read(ref s_scope)?.Colours;
-        if (colours is not { Count: > 0 }) return 0;
+        if (colours is not { Count: > 0 }) return thieves;
         byte[]? originals = null;
         foreach (var (entry, bytes) in entries)
         {
             int vram = VramOffset(bytes);
             if (vram >= 0 && !IsCutsceneEntry(entry) && Originals(bytes.AsSpan(vram, VramBytes)) is { } rows) { originals = rows; break; }
         }
-        if (originals == null) return 0;
+        if (originals == null) return thieves;
         byte[] recoloured = Recolour(originals, colours);
-        int changed = 0;
+        int changed = thieves;
         foreach (int entry in entries.Keys.ToArray())
             if (RecolourEntry(entry, entries[entry], originals, recoloured) is { } copy) { entries[entry] = copy; changed++; }
         return changed;
@@ -389,8 +394,9 @@ public static class NativeSpyroColours
     /// <summary>The same for a complete WAD.WAD, in place (entries keep their places and lengths).</summary>
     public static int ApplyForExport(byte[] wad)
     {
+        int thieves = NativeEggThiefColours.ApplyForExport(wad);
         var colours = Volatile.Read(ref s_scope)?.Colours;
-        if (colours is not { Count: > 0 }) return 0;
+        if (colours is not { Count: > 0 }) return thieves;
         (int Offset, int Length) Entry(int i) => (BinaryPrimitives.ReadInt32LittleEndian(wad.AsSpan(i * 8)), BinaryPrimitives.ReadInt32LittleEndian(wad.AsSpan(i * 8 + 4)));
         byte[] Bytes(int i)
         {
@@ -398,9 +404,9 @@ public static class NativeSpyroColours
             return l <= 0 || o < 0 || (long)o + l > wad.Length ? [] : wad.AsSpan(o, l).ToArray();
         }
         byte[]? originals = FindOriginals(Bytes);
-        if (originals == null) return 0;
+        if (originals == null) return thieves;
         byte[] recoloured = Recolour(originals, colours);
-        int changed = 0;
+        int changed = thieves;
         for (int entry = 0; entry < 256; entry++)
             if (RecolourEntry(entry, Bytes(entry), originals, recoloured) is { } copy) { copy.CopyTo(wad, Entry(entry).Offset); changed++; }
         return changed;
@@ -413,6 +419,9 @@ public static class NativeSpyroColours
         internal Scope(IReadOnlyDictionary<string, (byte R, byte G, byte B)> colours, Scope? previous)
         { Colours = new Dictionary<string, (byte R, byte G, byte B)>(colours); _previous = previous; }
         public IReadOnlyDictionary<string, (byte R, byte G, byte B)> Colours { get; }
+        private readonly List<IDisposable> _with = [];
+        /// <summary>Another Game Settings scope that lasts as long as this one (the egg thieves' colour).</summary>
+        public Scope With(IDisposable other) { _with.Add(other); return this; }
         public void Dispose()
         {
             lock (ScopeLock)
@@ -421,6 +430,7 @@ public static class NativeSpyroColours
                 _disposed = true;
                 if (ReferenceEquals(Volatile.Read(ref s_scope), this)) Volatile.Write(ref s_scope, _previous);
             }
+            foreach (var other in _with) other.Dispose();
         }
     }
 

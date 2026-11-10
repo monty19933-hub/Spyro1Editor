@@ -239,6 +239,7 @@ public sealed partial class MainWindow
         RefreshMemoryModeSettings();
         RefreshHoverSettings();
         RefreshSpyroColourSettings();
+        RefreshEggThiefColour();
     }
 
     internal void RevertFreeFlightSettings()

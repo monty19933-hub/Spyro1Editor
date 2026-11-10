@@ -326,13 +326,13 @@ public static class LevelScatter
         }
         var places0 = hints?.Select(OnFloor).Where(p => p != null).Select(p => p!.Value).ToList() ?? [];
         List<Vector3f> taken = [.. occupied ?? [], spawn];
-        // A homeworld's doorways: nothing stands in one, nor on the floor in front where Spyro walks in and comes back
-        // out; enemies keep well away from them altogether.
+        // A homeworld's doorways: nothing stands in one, nor on the floor in front of it and just behind it, where Spyro
+        // walks in and comes back out; enemies keep well away from them altogether.
         List<Vector3f> doorways = [];
         foreach (var door in scene.Portals ?? [])
         {
             var (fx, fy) = DoorwayShapes.Facing(door.Heading);
-            for (float t = 0; t <= 720; t += 120) doorways.Add(new(door.Position.X - (float)fx * t, door.Position.Y - (float)fy * t, door.Position.Z));
+            for (float t = -360; t <= 720; t += 120) doorways.Add(new(door.Position.X - (float)fx * t, door.Position.Y - (float)fy * t, door.Position.Z));
         }
         taken.AddRange(doorways);
         bool OffDoorways(Vector3f p) => doorways.All(q => Dist2(q, p) >= 560 * 560);

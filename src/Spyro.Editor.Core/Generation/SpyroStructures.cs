@@ -60,8 +60,8 @@ internal static class SpyroStructures
         var placed = new List<(double X, double Y, double R)>();
         // Nothing stands at a doorway, behind it, or on the floor in front of it where Spyro comes back out.
         foreach (var door in L.Doors)
-            for (double t = -260; t <= SpyroPlanner.DoorWalk; t += 140)
-                placed.Add((door.X - door.Dx * t, door.Y - door.Dy * t, t < 0 ? 200 : 130));
+            for (double t = -door.Behind; t <= door.Front; t += 130)
+                placed.Add((door.X - door.Dx * t, door.Y - door.Dy * t, Math.Abs(t) < 200 ? 200 : 130));
         bool Room(double x, double y, double r) => placed.All(p => (p.X - x) * (p.X - x) + (p.Y - y) * (p.Y - y) >= (p.R + r + 60) * (p.R + r + 60));
         // A prop is used only while the level has room for its faces and its textures.
         LevelProp? Pick(List<LevelProp> from)

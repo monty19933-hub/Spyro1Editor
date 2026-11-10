@@ -37,8 +37,9 @@ internal sealed class PlannedLevel
     public readonly List<(int From, int To)> Glides = [];
     public readonly List<string> Notes = [];
     public readonly Dictionary<string, int> Counts = [];
-    /// <summary>A homeworld's doorways: where each stands, the way Spyro walks into it (unit), and its room.</summary>
-    public readonly List<(double X, double Y, double Dx, double Dy, int Area)> Doors = [];
+    /// <summary>A homeworld's doorways: where each stands, the way Spyro walks into it (unit), its room, and how far the
+    /// floor is kept open in front of it and behind it.</summary>
+    public readonly List<(double X, double Y, double Dx, double Dy, int Area, double Front, double Behind)> Doors = [];
     public (double X, double Y) Start, Facing;
     public int StartZone;
     public double Spacing = 128;
@@ -55,9 +56,11 @@ internal static class SpyroPlanner
     /// <summary>The smallest room of a homeworld (0: any size): a doorway's room holds the doorway and the floor in
     /// front of it that Spyro comes back out onto.</summary>
     [ThreadStatic] private static double _minRoom;
-    /// <summary>How far inside its room's edge a doorway stands, and the floor kept open in front of it: coming back
-    /// from a level Spyro lands some 650 to 700 units in front of the doorway.</summary>
-    internal const double DoorInset = 170, DoorWalk = 860;
+    /// <summary>The floor kept open in front of a doorway: coming back from a level Spyro lands up to 700 units in
+    /// front of it (Artisans' doorways; measured in the game). Some homeworlds' doorways (three of Beast Makers')
+    /// set him down a little way behind it instead, so a doorway stands in the middle of its room with open floor
+    /// both ways.</summary>
+    internal const double DoorWalk = 860;
 
     /// <summary>What a difficulty changes: how wide paths are, how much of the walkable slope a ramp uses, how big
     /// stepping stones are and how far apart, how often islands get a bridge and how wide it is, how many ledges a room
@@ -359,18 +362,17 @@ internal static class SpyroPlanner
         }
         // Nor in front of a doorway, where Spyro walks in and comes back out.
         foreach (var door in L.Doors)
-            if (door.Area == a.Id && SegmentDistance(x, y, door.X + door.Dx * 120, door.Y + door.Dy * 120, door.X - door.Dx * DoorWalk, door.Y - door.Dy * DoorWalk) < r + 150) return false;
+            if (door.Area == a.Id && SegmentDistance(x, y, door.X + door.Dx * door.Behind, door.Y + door.Dy * door.Behind, door.X - door.Dx * door.Front, door.Y - door.Dy * door.Front) < r + 150) return false;
         return true;
     }
 
-    /// <summary>A homeworld's doorways: one to a room, the rooms at the ends of the level first, each on the far side
-    /// from the way in with open floor in front of it. With more doorways than rooms the plaza takes one, then the
-    /// biggest rooms a second.</summary>
+    /// <summary>A homeworld's doorways: one to a room, the rooms at the ends of the level first, each in the middle of
+    /// its room with open floor in front and behind. With more doorways than rooms the plaza takes up to two.</summary>
     private static void Doors(PlannedLevel L, int doors, LevelRandom rnd)
     {
         var plaza = L.Areas[0];
         var rooms = L.Areas.Skip(1).Where(a => a.Kind != "overlook").OrderBy(a => a.Taken.Count).ThenByDescending(a => a.Depth).ThenBy(a => a.Id).ToList();
-        foreach (var a in rooms.Append(plaza).Concat(rooms.OrderByDescending(a => a.R).ThenBy(a => a.Id)).Append(plaza))
+        foreach (var a in rooms.Append(plaza).Append(plaza))
         {
             if (L.Doors.Count >= doors) break;
             Door(L, a, rnd);
@@ -380,22 +382,29 @@ internal static class SpyroPlanner
 
     private static bool Door(PlannedLevel L, PlannedArea a, LevelRandom rnd)
     {
-        // The far side from the way in (the plaza: any side), then round from it.
-        (double X, double Y) from = a.Id == 0 || a.Taken.Count == 0 ? Dir(Range(rnd, 0, 6.2832)) : (-a.Taken[0].X, -a.Taken[0].Y);
-        double jitter = Range(rnd, -0.2, 0.2), at = a.R - DoorInset;
-        // The floor Spyro comes back out onto is this room's, well inside its edge.
-        if (at - DoorWalk < -(a.R - 110)) return false;
-        foreach (double turn in new[] { 0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, -2.0, 2.5, -2.5, 3.0 })
+        bool plaza = a.Id == 0;
+        // A room takes one doorway, about its middle (a little towards the back, so the floor in front is long enough
+        // for the longest way out of a doorway): at the end of the level facing away from the way in; in a room the way
+        // leads on through, turned across it so it does not stand in the way. The plaza (Spyro arrives in its middle)
+        // takes them halfway out, facing outwards, up to two well apart.
+        if (L.Doors.Count(o => o.Area == a.Id) >= (plaza ? 2 : 1)) return false;
+        (double X, double Y) from = plaza || a.Taken.Count == 0 ? Dir(Range(rnd, 0, 6.2832)) : (-a.Taken[0].X, -a.Taken[0].Y);
+        double jitter = plaza ? Range(rnd, -0.2, 0.2) : 0, at = plaza ? 0.5 * a.R : Math.Max(0, 780 - a.R);
+        double front = plaza ? Math.Min(DoorWalk, at + a.R - 130) : at + a.R - 60, behind = a.R - at - 120;
+        if (behind < 200 || front < 700) return false;
+        double side = rnd.Chance(0.5) ? 1 : -1;
+        double[] turns = plaza ? [0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, -2.0, 2.5, -2.5, 3.0]
+            : a.Taken.Count <= 1 ? [0, 0.35, -0.35, 0.7, -0.7] : [1.571 * side, -1.571 * side, 1.2 * side, -1.2 * side, 1.95 * side, -1.95 * side, 0, 0.5, -0.5];
+        foreach (double turn in turns)
         {
             double s = Sin(turn + jitter), c = Cos(turn + jitter);
             (double X, double Y) d = (from.X * c - from.Y * s, from.X * s + from.Y * c);
-            if (a.Taken.Any(t => t.X * d.X + t.Y * d.Y > 0.5)) continue;
+            // No way in or out of the room straight behind it, nor (but for the way in, which it may face) in front.
+            if (a.Taken.Any(t => t.X * d.X + t.Y * d.Y > 0.6) || a.Taken.Skip(plaza ? 0 : 1).Any(t => t.X * d.X + t.Y * d.Y < -0.6)) continue;
             double x = a.X + d.X * at, y = a.Y + d.Y * at;
-            if (!Free(L, a, x + d.X * 200, y + d.Y * 200, 120, floor: true) || !OffJoins(L, a, x, y, 110)) continue;
-            // Not in the way out of another doorway of this room (their ways may cross in the room's middle).
-            if (L.Doors.Any(o => o.Area == a.Id && SegmentDistance(x, y, o.X, o.Y, o.X - o.Dx * DoorWalk, o.Y - o.Dy * DoorWalk) < 330)) continue;
+            if (plaza && (!OffJoins(L, a, x, y, 110) || L.Doors.Any(o => o.Area == a.Id && o.Dx * d.X + o.Dy * d.Y > -0.2))) continue;
             a.Taken.Add(d);
-            L.Doors.Add((x, y, d.X, d.Y, a.Id));
+            L.Doors.Add((x, y, d.X, d.Y, a.Id, front, behind));
             return true;
         }
         return false;

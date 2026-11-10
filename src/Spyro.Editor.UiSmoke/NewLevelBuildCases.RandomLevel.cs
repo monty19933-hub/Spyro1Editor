@@ -160,6 +160,7 @@ internal static partial class NewLevelBuildCases
             var placed = window.LastRandomObjects;
             Console.WriteLine("    " + string.Join(", ", placed.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => $"{x.Value} {x.Key}")));
             if (where == MainWindow.RandomLevelPlace.OpenLevel && placed.GetValueOrDefault("balloonist") != 1) throw new InvalidOperationException("The homeworld has no balloonist.");
+            if (window.LastRandomObjectsRefusal is { } refusal) throw new InvalidOperationException("Create BIN would refuse what Random objects placed: " + refusal);
             var save = (Task<bool>)Invoke(window, "SaveFreshSceneAsync")!;
             Wait(() => save.IsCompleted, "Save Level", 120);
             if (!save.GetAwaiter().GetResult()) throw new InvalidOperationException("The homeworld did not save: " + Status(window));
@@ -216,6 +217,81 @@ internal static partial class NewLevelBuildCases
         Console.WriteLine("NEW_LEVEL_RANDOM_HOMEWORLD_DIALOG_OK");
     }
 
+    /// <summary><c>egg-thief</c>: a random level in Stone Hill's place (its place has an egg thief), filled by Random
+    /// objects; the thief is selected: Edit Route… and the run tools must show; New Loop Here, Bigger, Turn and Other Way
+    /// Round each change its run, every point on the floor and every step one the game can follow, and As It Came
+    /// brings the first run back; the run is saved on the object. Then the egg thieves' colour is set (EGG_THIEF_COLOUR,
+    /// default #C82828), saved, and the level saved. Writes thief.json (the thief and his run) for the in-game run.</summary>
+    private static void EggThiefStep(MainWindow window, string outDir)
+    {
+        Load(window, "stonehill");
+        Environment.SetEnvironmentVariable("RANDOM_PLACE", "open");
+        RandomLevelStep(window, outDir);
+        var fill = (Task)Invoke(window, "RandomizeObjectsAsync", new MainWindow.RandomObjectsChoice("stonehill", "", 0, 8, 150, 0, Seed: 5))!;
+        Wait(() => fill.IsCompleted, "Random objects", 1800);
+        fill.GetAwaiter().GetResult();
+        Console.WriteLine("objects: " + Status(window));
+        var mobys = Get<List<Spyro.Editor.Core.Scene.Moby>>(window, "_currentMobys");
+        var thief = mobys.FirstOrDefault(m => !m.IsRemoved && m.IsAdded && m.DisplayLabel.Contains("thief", StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException("Random objects placed no egg thief in Stone Hill's place.");
+        SetField(window, "_selectedMoby", thief);
+        Invoke(window, "RefreshActionAvailability"); Pump(10);
+        var card = Get<Border>(window, "_routeToolsCard"); var note = Get<TextBlock>(window, "_routeToolsNote");
+        var edit = Get<Button>(window, "_objectNativeMovementButton");
+        Console.WriteLine($"thief {thief.DisplayLabel} at {thief.Position}; card {card.IsVisible}; button {edit.IsVisible} \"{edit.Content}\"; note: {note.Text}");
+        if (!card.IsVisible || !edit.IsVisible || edit.Content?.ToString() != "Edit Route…" || note.Text?.Contains("egg thief runs", StringComparison.Ordinal) != true)
+            throw new InvalidOperationException("The egg thief's run tools are not shown.");
+        List<int[]> Nodes() => ((Spyro.Editor.Core.Scene.NativeMobyPath)Invoke(window, "SelectedNativeMobyPath")!).RawNodes();
+        string Shape(List<int[]> nodes) => string.Join(" ", nodes.Select(n => $"{n[0] / 16},{n[1] / 16},{n[2] / 16}"));
+        var first = Nodes();
+        Console.WriteLine($"    as it came: {Shape(first)}");
+        var floors = new LevelFill.FloorGrid((SceneDocument)Invoke(window, "CaptureFreshScene")!);
+        string last = Shape(first);
+        foreach (string how in new[] { "loop", "bigger", "turn", "reverse", "smaller" })
+        {
+            window.ReshapeSelectedRouteForTesting(how); Pump(5);
+            var nodes = Nodes();
+            string shape = Shape(nodes);
+            Console.WriteLine($"    {how}: {shape} — {Status(window)}");
+            if (shape == last) throw new InvalidOperationException($"{how} did not change the run: {Status(window)}");
+            if (nodes.Count != first.Count) throw new InvalidOperationException("The run lost or gained points.");
+            if (!floors.Holds(nodes.Select(n => new Spyro.Editor.Core.Primitives.Vector3f(n[0] / 16f, n[1] / 16f, n[2] / 16f)), 60)) throw new InvalidOperationException($"{how} left a point off the floor.");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                var a = nodes[i]; var b = nodes[(i + 1) % nodes.Count];
+                if (Math.Abs(a[0] - b[0]) > 32767 || Math.Abs(a[1] - b[1]) > 32767 || Math.Abs(a[2] - b[2]) > 32767) throw new InvalidOperationException($"{how} made a step the game cannot follow.");
+            }
+            if (thief.UniversalPathNodes == null) throw new InvalidOperationException("The run was not saved on the thief.");
+            // A thief cannot jump: the run stays on one level of floor.
+            if (nodes.Max(q => q[2]) - nodes.Min(q => q[2]) > 40 * 16) throw new InvalidOperationException($"{how} put the run up a ledge or down a drop.");
+            last = shape;
+        }
+        Snapshot(window, Path.Combine(outDir, "egg-thief-run.png"));
+        var kept = Nodes();
+        window.ReshapeSelectedRouteForTesting("reset"); Pump(5);
+        // The run it came with from its own level (Random objects had already fitted it to this floor), moved here.
+        if (thief.UniversalPathNodes != null || ((Spyro.Editor.Core.Scene.NativeMobyPath)Invoke(window, "SelectedNativeMobyPath")!).HasEdits) throw new InvalidOperationException("As It Came did not bring the first run back.");
+        // The shaped run again, for the game.
+        window.ReshapeSelectedRouteForTesting("loop"); Pump(5);
+        window.ReshapeSelectedRouteForTesting("bigger"); Pump(5);
+        var run = Nodes();
+        string colour = Environment.GetEnvironmentVariable("EGG_THIEF_COLOUR") is { Length: > 0 } c ? c : "#C82828";
+        if (!Spyro.Editor.Core.Persistence.SpyroColourSettings.TryParse(colour, out var parsed)) throw new InvalidOperationException("EGG_THIEF_COLOUR is not #RRGGBB.");
+        window.SetEggThiefColourForTesting(parsed); Pump(10);
+        if (window.EggThiefColourForTesting != parsed || Spyro.Editor.Core.Persistence.EggThiefColourSettings.Load(Workspace(window).RootPath) != parsed)
+            throw new InvalidOperationException("The egg thieves' colour was not saved.");
+        Console.WriteLine("colour: " + Get<TextBlock>(window, "_eggThiefSummary").Text);
+        var save = (Task<bool>)Invoke(window, "SaveFreshSceneAsync")!;
+        Wait(() => save.IsCompleted, "Save Level", 120);
+        if (!save.GetAwaiter().GetResult()) throw new InvalidOperationException("The level did not save: " + Status(window));
+        File.WriteAllText(Path.Combine(outDir, "thief.json"), System.Text.Json.JsonSerializer.Serialize(new
+        {
+            at = new[] { thief.Position.X, thief.Position.Y, thief.Position.Z }, colour,
+            run = run.Select(n => new[] { n[0] / 16f, n[1] / 16f, n[2] / 16f }).ToArray(),
+        }));
+        Console.WriteLine("NEW_LEVEL_EGG_THIEF_OK");
+    }
+
     /// <summary><c>random-objects</c>: a random level (as <c>random-level</c>), then Objects › Random objects three times:
     /// RANDOM_OBJECTS_LEVEL (level type, default stonehill), RANDOM_ENEMY_LEVEL (default the same), RANDOM_TREASURE
     /// (default 300), RANDOM_EGGS (default 0). Each press must leave the level's treasure exactly as asked, with every
@@ -246,6 +322,7 @@ internal static partial class NewLevelBuildCases
             Console.WriteLine($"press {press}: {Status(window)}");
             var placed = window.LastRandomObjects;
             Console.WriteLine("    " + string.Join(", ", placed.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => $"{p.Value} {p.Key}")));
+            if (window.LastRandomObjectsRefusal is { } refusal) throw new InvalidOperationException("Create BIN would refuse what Random objects placed: " + refusal);
             var live = Live();
             int total = live.Sum(m => m.TreasureValue);
             var colours = live.Where(m => m.IsVisibleGem).Select(m => m.TreasureValue).Distinct().Order().ToList();
