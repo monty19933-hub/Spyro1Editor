@@ -46,14 +46,63 @@ public sealed partial class MainWindow
         (SurfaceRole.Charge, "Charge ramps"),
     ];
 
-    private async Task RandomLevelAsync()
+    private Task RandomLevelAsync() => RandomLevelAsync(homeworld: false);
+    /// <summary>File ▾ › Random Homeworld…: the Random Level dialog set to make a homeworld.</summary>
+    private Task RandomHomeworldAsync() => RandomLevelAsync(homeworld: true);
+    internal Task RandomHomeworldForTestingAsync() => RandomLevelAsync(homeworld: true);
+
+    private async Task RandomLevelAsync(bool homeworld)
     {
         if (_startBlankBusy || _createBinBusy || _regularEditorPersistenceBusy || _workspaceTransitionBusy || _loadingLevel) return;
         if ((HasUnsavedTerrainEdits() || HasUnsavedMobyEdits()) && !await SaveCurrentEditsAsync()) return;
         string root = _workspace.RootPath;
-        var (choice, preview) = RandomLevelChoiceForTesting != null ? (RandomLevelChoiceForTesting(), null) : await ShowRandomLevelDialogAsync();
+        var (choice, preview) = RandomLevelChoiceForTesting != null ? (RandomLevelChoiceForTesting(), null) : await ShowRandomLevelDialogAsync(homeworld);
         if (choice == null || _workspace.RootPath != root) return;
         await MakeRandomLevelAsync(choice, preview);
+    }
+
+    /// <summary>The levels a homeworld made in this place gets a doorway to: a homeworld of the game leads to its own
+    /// levels, your new world's homeworld to the world's levels and back out to the game. None: the place is not a
+    /// homeworld (doorways work only where the game keeps its doorway code).</summary>
+    private IReadOnlyList<string> RandomHomeworldDoorways(RandomLevelPlace place, int worldLevelId)
+    {
+        try
+        {
+            switch (place)
+            {
+                case RandomLevelPlace.OpenLevel:
+                {
+                    string? key = _freshSceneDocument?.TargetBinding?.LevelKey ?? _currentLevel?.Key;
+                    if (key == null || _retailCatalog.FindByKey(key) is not { } level || level.LevelId % 10 != 0) return [];
+                    return [.. HomeworldPortalControlCatalog.ForLevel(key).OrderBy(d => d.DestinationLevelId)
+                        .Select(d => _retailCatalog.Levels.FirstOrDefault(l => l.LevelId == d.DestinationLevelId)?.DisplayName ?? d.DestinationName)];
+                }
+                case RandomLevelPlace.World when worldLevelId == NewWorldDocument.Homeworld:
+                {
+                    if (NewWorldDocument.Read(_workspace.RootPath) is not { } world) return [];
+                    var names = world.LevelIds.Where(id => id != NewWorldDocument.Homeworld).Select(id => DestinationNameOrNull(id) ?? $"level {id - NewWorldDocument.Homeworld}").ToList();
+                    if (_retailCatalog.FindByKey(world.EntryHomeworldKey) is { } back) names.Add($"{back.DisplayName} (the way back out)");
+                    return names;
+                }
+            }
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException) { }
+        return [];
+    }
+
+    /// <summary>The generated homeworld's doorways, built where the generator kept places for them: one to each level
+    /// the scene's homeworld leads to. Returns the scene and a sentence saying where they lead.</summary>
+    private (SceneDocument Scene, string Note) WithHomeworldDoorways(SceneDocument scene, RandomLevelResult result)
+    {
+        if (result.Doorways.Count == 0 || result.DoorwayMaterial == null || SceneDoorways.Unavailable(scene, _retailCatalog) != null) return (scene, "");
+        var destinations = SceneDoorways.Destinations(scene, _retailCatalog, DestinationNameOrNull, DoorwayWayBack());
+        var shape = LevelThemes.DoorwayShape(result.Report.Theme);
+        var (built, added, problems) = SceneDoorways.AddAll(scene, result.Doorways, destinations, shape, result.DoorwayMaterial);
+        if (added.Count == 0) return (scene, problems.Count > 0 ? "Its doorways could not be built: " + problems[0] : "");
+        string names = string.Join(", ", added.Select(id => destinations.First(d => d.LevelId == id).Name));
+        string missing = string.Join(", ", destinations.Where(d => !d.Taken && !added.Contains(d.LevelId)).Select(d => d.Name));
+        return (built, $"It has a {shape.Name.ToLowerInvariant()} doorway to {names}" +
+            (missing.Length > 0 ? $"; there was no place left for {missing} (add it with Terrain › Doorways)." : "."));
     }
 
     /// <summary>Where the level can go: in place of the open level (a game level, homeworld or one rebuilt from one), the
@@ -79,9 +128,10 @@ public sealed partial class MainWindow
         return places;
     }
 
-    private async Task<(RandomLevelChoice? Choice, RandomLevelResult? Preview)> ShowRandomLevelDialogAsync()
+    private async Task<(RandomLevelChoice? Choice, RandomLevelResult? Preview)> ShowRandomLevelDialogAsync(bool homeworld = false)
     {
-        var places = RandomLevelPlaces();
+        var allPlaces = RandomLevelPlaces();
+        var places = allPlaces;
         var rnd = new Random();
         RandomLevelResult? preview = null;
         RandomLevelOptions? previewOptions = null;
@@ -93,10 +143,23 @@ public sealed partial class MainWindow
         var kind = new ComboBox { Name = "RandomLevelKind", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = RandomLevelKinds.Select(k => k.Label).ToArray(), SelectedIndex = 0 };
         var look = new ComboBox { Name = "RandomLevelLook", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = new[] { "Surprise me" }.Concat(LevelThemes.All.Select(t => t.Name)).ToArray(), SelectedIndex = 0 };
         var size = new ComboBox { Name = "RandomLevelSize", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = new[] { "Small", "Medium", "Large" }, SelectedIndex = 1 };
+        var what = new ComboBox
+        {
+            Name = "RandomLevelMakes", HorizontalAlignment = HorizontalAlignment.Stretch, SelectedIndex = homeworld ? 1 : 0,
+            ItemsSource = new[] { "A level", "A homeworld with its doorways" },
+        };
+        var whatNote = new TextBlock { Name = "RandomLevelMakesNote", TextWrapping = TextWrapping.Wrap, FontSize = 12, Opacity = 0.75, IsVisible = false };
+        var difficulty = new ComboBox { Name = "RandomLevelDifficulty", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = new[] { "Easy", "Medium", "Hard", "Kaizo" }, SelectedIndex = 1 };
+        ToolTip.SetTip(difficulty, "Easy: wide paths, bridges, short hops, plenty of room. Hard: narrow paths, stepping stones, more ledges and lookouts, pools that cost a life. Kaizo: next to nothing to spare. Every jump and glide stays inside what Spyro can do.");
+        left.Children.Add(Label("Make")); left.Children.Add(what); left.Children.Add(whatNote);
         left.Children.Add(Label("Kind of level")); left.Children.Add(kind);
         left.Children.Add(Label("In the style of")); left.Children.Add(look);
         left.Children.Add(new TextBlock { Text = "The level is built from that level's own ground, rock and paths, painted in its colours.", TextWrapping = TextWrapping.Wrap, FontSize = 12, Opacity = 0.75 });
-        left.Children.Add(Label("Size")); left.Children.Add(size);
+        var sizeRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,12,*"), RowDefinitions = new RowDefinitions("Auto,Auto") };
+        var sizeLabel = Label("Size"); var difficultyLabel = Label("Difficulty");
+        Grid.SetColumn(difficultyLabel, 2); Grid.SetRow(size, 1); Grid.SetRow(difficulty, 1); Grid.SetColumn(difficulty, 2);
+        sizeRow.Children.Add(sizeLabel); sizeRow.Children.Add(difficultyLabel); sizeRow.Children.Add(size); sizeRow.Children.Add(difficulty);
+        left.Children.Add(sizeRow);
         left.Children.Add(Label("What it has"));
         left.Children.Add(new TextBlock { Text = "A filled square leaves it to chance; a tick asks for it; empty leaves it out.", TextWrapping = TextWrapping.Wrap, FontSize = 12, Opacity = 0.75 });
         var featureGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowDefinitions = new RowDefinitions("Auto,Auto,Auto") };
@@ -156,7 +219,8 @@ public sealed partial class MainWindow
         columns.Children.Add(right);
 
         var content = new StackPanel { Margin = new Thickness(22), Spacing = 12 };
-        content.Children.Add(new TextBlock { Text = "Make a random level", FontSize = 20, FontWeight = FontWeight.SemiBold });
+        var heading = new TextBlock { Text = homeworld ? "Make a random homeworld" : "Make a random level", FontSize = 20, FontWeight = FontWeight.SemiBold };
+        content.Children.Add(heading);
         content.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, MaxWidth = 780, HorizontalAlignment = HorizontalAlignment.Left,
@@ -166,7 +230,7 @@ public sealed partial class MainWindow
         var place = new ComboBox { Name = "RandomLevelPlace", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = places.Select(p => p.Label).ToArray(), SelectedIndex = 0 };
         content.Children.Add(Label("Put it"));
         content.Children.Add(place);
-        var fill = new CheckBox { Name = "RandomLevelFillIn", Content = "Then put in the level's dragons, egg thieves, Return Home and gems for me (you can move them)", IsChecked = false };
+        var fill = new CheckBox { Name = "RandomLevelFillIn", Content = "Then fill it with objects for me: enemies, chests, gems, dragons and the way out (Objects › Random objects does it again another way)", IsChecked = false };
         content.Children.Add(fill);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right };
         Button cancel = NewButton("Cancel"), make = NewButton("Make Level");
@@ -179,6 +243,30 @@ public sealed partial class MainWindow
             WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = new ScrollViewer { Content = content }
         };
 
+        // A homeworld goes where the game keeps its doorway code: the places that are homeworlds.
+        IReadOnlyList<string> Doorways() => what.SelectedIndex == 1 && place.SelectedIndex >= 0 && place.SelectedIndex < places.Count
+            ? RandomHomeworldDoorways(places[place.SelectedIndex].Place, places[place.SelectedIndex].World) : [];
+        void ShowPlaces()
+        {
+            bool home = what.SelectedIndex == 1;
+            places = home ? [.. allPlaces.Where(p => RandomHomeworldDoorways(p.Place, p.World).Count > 0)] : allPlaces;
+            place.ItemsSource = places.Count > 0 ? places.Select(p => p.Label).ToArray() : new[] { "No homeworld is open" };
+            place.SelectedIndex = 0;
+            place.IsEnabled = places.Count > 0;
+            make.Content = home ? "Make Homeworld" : "Make Level";
+            heading.Text = home ? "Make a random homeworld" : "Make a random level";
+            ShowDoorways();
+        }
+        void ShowDoorways()
+        {
+            bool home = what.SelectedIndex == 1;
+            var names = Doorways();
+            whatNote.IsVisible = home;
+            whatNote.Text = !home ? "" : places.Count == 0
+                ? "Doorways work only in a homeworld's place, where the game keeps its doorway code. Open Artisans or another homeworld first (the level picker), or make a world of your own with File ▾ › New World…, then choose this again."
+                : $"Spyro arrives in a plaza with rooms off it all round. {(names.Count == 1 ? "A doorway" : $"{names.Count} doorways")} will stand in them, with open floor in front to fly back out onto: to {string.Join(", ", names)}.";
+            make.IsEnabled = !home || places.Count > 0;
+        }
         RandomLevelOptions Read()
         {
             long seed = long.TryParse(seedBox.Text?.Trim(), out long s) ? s : 1;
@@ -187,6 +275,7 @@ public sealed partial class MainWindow
             {
                 Seed = seed, Style = RandomLevelKinds[Math.Max(0, kind.SelectedIndex)].Style, Size = (LevelSize)Math.Max(0, size.SelectedIndex),
                 Theme = look.SelectedIndex > 0 ? LevelThemes.All[look.SelectedIndex - 1].Key : null,
+                Difficulty = (LevelDifficulty)Math.Clamp(difficulty.SelectedIndex, 0, 3), Doorways = Doorways().Count,
                 Caves = caves.IsChecked, ChargePaths = charge.IsChecked, Glides = glides.IsChecked, Hazards = hazards.IsChecked,
                 Bridges = bridges.IsChecked, Secrets = secrets.IsChecked,
                 Textures = painted.IsChecked == true ? LevelTextureMode.GeneratedPictures : LevelTextureMode.GameTextures,
@@ -214,8 +303,17 @@ public sealed partial class MainWindow
             catch (OperationCanceledException) { }
             catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException)
             { summary.Text = "This one could not be made: " + e.Message + " Try another seed."; preview = null; }
-            finally { if (running == cancelSource) { busy.IsVisible = false; make.IsEnabled = true; } }
+            finally { if (running == cancelSource) { busy.IsVisible = false; make.IsEnabled = what.SelectedIndex != 1 || places.Count > 0; } }
         }
+        what.SelectionChanged += async (_, _) => { ShowPlaces(); await Preview(true); };
+        place.SelectionChanged += async (_, _) =>
+        {
+            if (what.SelectedIndex != 1) return;
+            ShowDoorways();
+            // Another homeworld, another number of doorways: the level is laid out again for them.
+            if (previewOptions is { } shown && shown.Doorways != Doorways().Count) await Preview(true);
+        };
+        if (homeworld) ShowPlaces();
         generate.Click += async (_, _) => { seedBox.Text = rnd.NextInt64(1, 999_999_999).ToString(); await Preview(false); };
         again.Click += async (_, _) => await Preview(true);
         ownPictures.Click += async (_, _) =>
@@ -229,14 +327,14 @@ public sealed partial class MainWindow
         dialog.Opened += async (_, _) => await Preview(false);
         await dialog.ShowDialog(this);
         running?.Cancel();
-        if (!accepted || place.SelectedIndex < 0) return (null, null);
+        if (!accepted || place.SelectedIndex < 0 || place.SelectedIndex >= places.Count) return (null, null);
         var chosen = places[place.SelectedIndex];
         var final = Read();
         // The preview was made with the game's textures; it is the level itself when nothing but the name changed.
         bool same = previewOptions is { } p && preview != null && final.Textures == LevelTextureMode.GameTextures && final.Pictures.Count == 0 &&
             p.Seed == final.Seed && p.Style == final.Style && p.Size == final.Size && p.Theme == final.Theme && p.Caves == final.Caves &&
             p.ChargePaths == final.ChargePaths && p.Glides == final.Glides && p.Hazards == final.Hazards && p.Bridges == final.Bridges &&
-            p.Secrets == final.Secrets && p.PaintedSky == final.PaintedSky;
+            p.Secrets == final.Secrets && p.PaintedSky == final.PaintedSky && p.Difficulty == final.Difficulty && p.Doorways == final.Doorways;
         if (same && final.Name is { } typed && NewWorldDocument.IsValidName(typed) && typed.All(c => !char.IsDigit(c)) && typed != preview!.Scene.Name)
             preview = preview with { Scene = preview.Scene with { Name = typed } };
         return (new RandomLevelChoice(final, chosen.Place, chosen.World, fill.IsChecked == true), same ? preview : null);
@@ -342,6 +440,17 @@ public sealed partial class MainWindow
         string root = _workspace.RootPath;
         var options = choice.Options;
         var slot = _currentLevel;
+        if (options.Doorways > 0)
+        {
+            // A homeworld: as many doorways as the place's homeworld has levels to lead to.
+            int doorways = RandomHomeworldDoorways(choice.Place, choice.WorldLevelId).Count;
+            if (doorways == 0)
+            {
+                _statusText.Text = "A homeworld's doorways work only in a homeworld's place, where the game keeps its doorway code: open Artisans or another homeworld (or your own world's homeworld) and choose Random Homeworld again.";
+                return;
+            }
+            if (doorways != options.Doorways) { options = options with { Doorways = doorways }; preview = null; }
+        }
         _startBlankBusy = true;
         try
         {
@@ -396,7 +505,7 @@ public sealed partial class MainWindow
             if (_workspace.RootPath != root) return;
             LastRandomLevelForTesting = result;
             var scene = result.Scene;
-            string where;
+            string where, doors = "";
             switch (choice.Place)
             {
                 case RandomLevelPlace.OpenLevel:
@@ -407,9 +516,10 @@ public sealed partial class MainWindow
                     var blank = await StartBlankConfirmedAsync(slot, starter: false);
                     if (blank == null) return;
                     if (blank.Ledger.Entries.Count > 0 && await FreeRetiredSaveRowsConfirmedAsync() > 0) blank = CaptureFreshScene();
-                    ApplyFreshScene(Placed(blank, scene));
+                    (var placed, doors) = WithHomeworldDoorways(Placed(blank, scene), result);
+                    ApplyFreshScene(placed);
                     if (!await SaveFreshSceneAsync()) return;
-                    where = $"in {slotName}'s place (File ▾ › Restore Before Clear… brings {slotName} back)";
+                    where = $"in {slotName}{(slotName.EndsWith('s') ? "'" : "'s")} place (File ▾ › Restore Before Clear… brings {slotName} back)";
                     break;
                 }
                 case RandomLevelPlace.NewLevel:
@@ -433,24 +543,31 @@ public sealed partial class MainWindow
                         string backups = Path.Combine(root, "backups"); Directory.CreateDirectory(backups);
                         File.Copy(path, Path.Combine(backups, $"world-level-{choice.WorldLevelId}-{DateTime.Now:yyyyMMdd-HHmmss}.scene.json"), overwrite: false);
                     }
-                    await (scene with { TargetBinding = null, WorldLevelId = choice.WorldLevelId }).SaveAsync(path);
+                    (var placed, doors) = WithHomeworldDoorways(scene with { TargetBinding = null, WorldLevelId = choice.WorldLevelId }, result);
+                    await placed.SaveAsync(path);
                     await OpenWorldLevelAsync(choice.WorldLevelId);
                     where = "in your world (the earlier version is in backups)";
                     break;
                 }
             }
             ApplyEditorExperienceForCurrentLevel(_modernTerrainWorkspaceTab);
+            // Objects › Random objects starts on the level this one was made in the style of.
+            RefreshRandomObjectsCard(result.Report.Theme, options.Difficulty);
             string filled = "";
             if (choice.FillIn)
             {
+                // The way out, dragons, enemies, chests and gems, placed at random in that level's manner
+                // (Objects › Random objects places them again another way).
                 _startBlankBusy = false;
-                await FillInLevelAsync(new LevelFillChoice(true, true, true, -1));
+                if (ReadRandomObjectsChoice() is { } objects) await RandomizeObjectsAsync(objects with { LevelKey = result.Report.Theme, EnemyLevelKey = result.Report.Theme, EnemyClass = 0 });
                 filled = " " + (_statusText.Text ?? "");
                 _startBlankBusy = true;
                 if (_freshSceneDocument != null) await SaveFreshSceneAsync();
             }
-            _statusText.Text = $"{scene.Name} is made {where}. Add objects and enemies with Add Object, then Create BIN." + filled;
-            if (RandomLevelChoiceForTesting == null) await ShowRandomLevelReadyAsync(scene.Name, result.Report.Summary, where, choice.FillIn);
+            if (doors.Length > 0) { _doorwaysSignature = ""; RefreshDoorwaysCard(); }
+            _statusText.Text = $"{scene.Name} is made {where}. " + (doors.Length > 0 ? doors + " " : "") + (choice.FillIn ? "" : "Objects › Random objects fills it for you, or add objects and enemies with Add Object; then Create BIN.") + filled;
+            if (RandomLevelChoiceForTesting == null)
+                await ShowRandomLevelReadyAsync(scene.Name, result.Report.Summary + (doors.Length > 0 ? "\n" + doors + " Terrain › Doorways moves, turns and reshapes them; their frames are ordinary tiles you can repaint." : ""), where, choice.FillIn);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException or InvalidOperationException or System.Text.Json.JsonException)
         { _statusText.Text = "The random level could not be made: " + e.Message; }
@@ -463,7 +580,7 @@ public sealed partial class MainWindow
     {
         Name = level.Name, Surfaces = level.Surfaces, Spawn = level.Spawn, Heading = level.Heading, SkyColor = level.SkyColor,
         SkySourceWadEntry = level.SkySourceWadEntry, CustomSky = level.CustomSky, MusicTrack = level.MusicTrack, GemSpots = level.GemSpots,
-        FarMeshes = null, CollisionFaces = null,
+        FarMeshes = null, CollisionFaces = null, Portals = null,
     };
 
     /// <summary>A picture shrunk (box average) to the game's 64 x 64 texture size.</summary>
@@ -489,10 +606,9 @@ public sealed partial class MainWindow
         content.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, Text = filled
-                ? "Play it through once and move anything that sits oddly, then add enemies with Add Object. Game Settings changes the music and sky."
-                : "Next, add objects with Add Object: the level's dragons and egg thief (the line under the treasure counts them), a Return Home vortex near the end, " +
-                  "gems along the paths and on the hidden ledges, and some enemies. File ▾ › Fill In What the Level Needs… can do the first part for you. " +
-                  "Terrain › Ground and Choose Texture repaint any surface; Game Settings changes the music and sky."
+                ? "Its objects are placed. Objects › Random objects places them again another way (choose whose enemies, how many gems, dragonfly eggs), or move any of them yourself. Game Settings changes the music and sky."
+                : "Next, its objects: Objects › Random objects fills the level for you (enemies, chests, gems of every colour, dragons, the way out: choose a level type and press Randomize), " +
+                  "or add them yourself with Add Object. Terrain › Ground and Choose Texture repaint any surface; Game Settings changes the music and sky."
         });
         var ok = NewButton("OK"); ok.Name = "RandomLevelReadyOk"; StyleModernPrimaryButton(ok, ModernBlue, 100); ok.HorizontalAlignment = HorizontalAlignment.Right;
         content.Children.Add(ok);

@@ -163,6 +163,14 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
     /// needs one gets the compiler's simplified copy.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<AuthoredFarMesh>? FarMeshes { get; init; }
+    /// <summary>The objects Randomize placed last (their <see cref="Moby.UniversalPlacementId"/>): the next Randomize
+    /// takes them away and places anew. Null: none.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? RandomObjects { get; init; }
+    /// <summary>Save rows of objects an earlier Randomize placed and took away again, for the next ones to take (so
+    /// pressing Randomize over and over does not use the level's 256 rows up). Null: none.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? RandomObjectRows { get; init; }
     /// <summary>Where the level's own game kept its gems (a level imported from another game), for Fill In What the Level
     /// Needs (<see cref="LevelFill"/>); null: gems are spread along the walkable floor.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]

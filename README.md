@@ -13,7 +13,10 @@ The current release target is **Spyro Editor 1.5**. It adds **Spyro's colours**
 (any colour for each part of Spyro, with ready-made looks), the **Hover** from
 Spyro 3 with its wing flap, games made from Game Settings alone, a tidier
 editor, and **Random Level…** rebuilt on the game's own level logic: levels laid
-out, built and painted like the game's, in the style of a level you pick. 1.4 added **New World…** (a
+out, built and painted like the game's, in the style of a level you pick, at a
+difficulty from Easy to Kaizo, with **Random Homeworld…** (a plaza with a doorway
+to every level of its world) and **Random objects** (enemies, chests, dragons and
+exactly as many gems as you ask for, placed the way the game places them). 1.4 added **New World…** (a
 homeworld and up to four levels of your own, entered through a doorway in one of
 the game's homeworlds, with its own inventory page and save file), **Doorways**
 in six frame shapes for rebuilt homeworlds, skies imported from 360° pictures and

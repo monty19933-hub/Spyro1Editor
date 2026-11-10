@@ -84,7 +84,7 @@ public sealed partial class MainWindow
         });
         _universalCatalogLoad.ContinueWith(t =>
         {
-            if (t.IsCompletedSuccessfully) { _universalCatalog = t.Result; Avalonia.Threading.Dispatcher.UIThread.Post(RefreshPlacedObjectRoutes); }
+            if (t.IsCompletedSuccessfully) { _universalCatalog = t.Result; Avalonia.Threading.Dispatcher.UIThread.Post(() => { RefreshPlacedObjectRoutes(); RefreshRandomObjectsEnemyKinds(); }); }
         }, TaskScheduler.Default);
         return _universalCatalogLoad;
     }
@@ -159,10 +159,19 @@ public sealed partial class MainWindow
             ? new UniversalMobyPlacement(m.CrossLevelSourceLevelKey, m.CrossLevelSourceTrueIndex,
                 (int)MathF.Round(m.Position.X * 16), (int)MathF.Round(m.Position.Y * 16), (int)MathF.Round(m.Position.Z * 16),
                 Yaw:m.YawByte>=0?m.YawByte:null,
-                RowByteOverrides:new Dictionary<int,byte>{{0x50,checked((byte)m.Type)},{0x51,checked((byte)m.State)}},
+                RowByteOverrides:RowOverrides(m),
                 EditorId: identity.Id, PersistentSlot: identity.Slot,
                 SpecialId: UniversalSpecialIdOf(m), Text: IsUniversalSign(m) ? UniversalPlacementReader.SplitSignText(m.SignText) : null) { LinkGroupId = m.UniversalLinkGroupId, DragonColor = m.DragonColor, PathNodes = m.UniversalPathNodes }
             : new UniversalMobyPlacement("", -1, 0, 0, 0, EditorId: identity.Id, PersistentSlot: identity.Slot, Retired: true)).ToList();
+    }
+
+    /// <summary>An added object's own row bytes: how it is drawn, and what it gives when that was chosen
+    /// (<see cref="Moby.UniversalRewardByte"/>; otherwise the row keeps what it came with).</summary>
+    private static Dictionary<int,byte> RowOverrides(Moby m)
+    {
+        var bytes=new Dictionary<int,byte>{{0x50,checked((byte)m.Type)},{0x51,checked((byte)m.State)}};
+        if(m.UniversalRewardByte is int reward&&UniversalSpecialIdOf(m)==null)bytes[0x53]=checked((byte)reward);
+        return bytes;
     }
 
     /// <summary>This level's own objects the user removed; removing every copy of a type frees its model.</summary>

@@ -281,6 +281,19 @@ public static class LevelThemes
         ["swamp"] = "mistybog", ["volcano"] = "peacekeepers", ["castle"] = "hauntedtowers", ["night"] = "darkpassage",
     };
 
+    /// <summary>The doorway shape that suits a look (<see cref="Editing.DoorwayShapes"/>): the round stone arch of the
+    /// Artisans' world, square gates among the Peace Keepers' rocks, pointed arches for the Magic Crafters, six-sided
+    /// gates for the Beast Makers, rings for the Dream Weavers, wide arches in Gnasty's harbour.</summary>
+    public static Editing.DoorwayShape DoorwayShape(string? key) => Find(key)?.Key switch
+    {
+        "peacekeepers" or "drycanyon" or "clifftown" or "icecavern" => Editing.DoorwayShapes.SquareGate,
+        "magiccrafters" or "highcaves" or "wizardpeak" => Editing.DoorwayShapes.PointedArch,
+        "mistybog" or "treetops" => Editing.DoorwayShapes.HexGate,
+        "dreamweavers" or "darkpassage" or "loftycastle" or "hauntedtowers" => Editing.DoorwayShapes.RoundRing,
+        "twilightharbor" => Editing.DoorwayShapes.WideArch,
+        _ => Editing.DoorwayShapes.StoneArch,
+    };
+
     public static LevelTheme? Find(string? key) => key == null ? null
         : All.FirstOrDefault(t => string.Equals(t.Key, Earlier.GetValueOrDefault(key, key), StringComparison.OrdinalIgnoreCase));
 

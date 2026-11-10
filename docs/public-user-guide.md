@@ -463,9 +463,15 @@ The choices:
 - **Kind of level:** clearings among the hills (like Artisans), islands in the
   water, islands in the sky (like Lofty Castle), caverns and tunnels, a canyon
   (like Dry Canyon) or castle courtyards. **Surprise me** lets the seed choose.
-- **In the style of:** Artisans, Stone Hill, Dark Hollow, Peace Keepers, Dry
-  Canyon, Ice Cavern, Magic Crafters, Wizard Peak, Misty Bog, Tree Tops, Dream
-  Weavers, Lofty Castle, Haunted Towers or Twilight Harbor.
+- **In the style of:** Artisans, Stone Hill, Dark Hollow, Town Square, Peace
+  Keepers, Dry Canyon, Cliff Town, Ice Cavern, Magic Crafters, High Caves, Wizard
+  Peak, Misty Bog, Tree Tops, Dream Weavers, Dark Passage, Lofty Castle, Haunted
+  Towers or Twilight Harbor.
+- **Size** and **Difficulty:** Easy, Medium, Hard or Kaizo. Easy levels have wide
+  paths, bridges, short hops and room to spare. Hard ones have narrow paths,
+  stepping stones in place of most bridges, more ledges and lookouts, glides with
+  little to spare, and pools that cost a life at once. Kaizo leaves next to
+  nothing to spare. Every jump and glide is still inside what Spyro can do.
 - **What it has:** caves (in caverns, more rooms under rock; in canyons and
   castles, tunnels), charge ramps (a ramp too steep to walk, marked with arrows,
   up to a hidden nook), glides (steps up to a lookout and a ledge across the room
@@ -488,11 +494,70 @@ left again, and tries another layout if not.
 
 **Put it** in place of the open level (a recovery copy is kept, and **Restore
 Before Clear…** brings it back), as the project's new level, or in a level of
-the world made with **File ▾ → New World…**. Tick **Then put in the level's
-dragons…** to have Fill In add dragons, egg thieves, Return Home and gems at once;
-otherwise add them with Add Object. The generator leaves good places for gems
-along paths, on ledges and lookouts, which Fill In uses. Everything it makes is
-ordinary terrain: paint, move or remove any tile afterwards.
+the world made with **File ▾ → New World…**. Tick **Then fill it with objects for
+me** to have Random objects (below) place enemies, chests, gems, dragons and the
+way out at once, at the level's difficulty; otherwise add them yourself with Add
+Object. Everything the generator makes is ordinary terrain: paint, move or remove
+any tile afterwards.
+
+### Random homeworlds
+
+**File ▾ → Random Homeworld…** (or **Make: A homeworld** in the Random Level
+window) makes a homeworld: Spyro arrives in a plaza with rooms off it all round,
+and a doorway stands in a room for every level the homeworld leads to, with open
+floor in front of it for Spyro to fly back out onto.
+
+- A homeworld goes where the game keeps its doorway code: in place of Artisans,
+  Peace Keepers, Magic Crafters, Beast Makers, Dream Weavers or Gnasty's World
+  (open that homeworld first), or in the homeworld of your own world.
+- In a game homeworld's place it gets a doorway to each of that homeworld's
+  levels (in Artisans' place: Stone Hill, Dark Hollow, Town Square, Toasty and
+  Sunny Flight). In your own world it gets a doorway to each level you made and
+  the way back out to the game.
+- The doorways' shape follows the look: round stone arches in the Artisans'
+  style, square gates for the Peace Keepers, pointed arches for the Magic
+  Crafters, six-sided gates for the Beast Makers, rings for the Dream Weavers.
+  **Terrain → Doorways** moves, turns, reshapes or retargets any of them
+  afterwards; their frames are ordinary tiles you can repaint.
+- With **Then fill it with objects for me**, a game homeworld also gets its
+  balloonist and his balloon (the way to the other worlds) and its dragons.
+
+### Random objects
+
+**Objects → Random objects** fills a level you built (a random level, a New
+Level, a level from another game, a level you cleared with Start Blank) with
+objects placed the way the game places them. Choose and press **Randomize**; press
+it again for another arrangement (what the last press placed is taken away
+first); **Remove Them** takes them all away. What you added yourself stays.
+
+- **Level type:** whose animals, chests and gems (a level of the game).
+- **Enemy type:** whose enemies: the same level's or another level's, all of its
+  kinds or one kind only.
+- **Difficulty:** Easy places a few enemies, well back from where Spyro comes into
+  a room, and plenty of animals for Sparx. Medium is like the game's own levels.
+  Hard places many enemies close together, few animals, and more of the treasure
+  behind enemies and chests. Kaizo has enemies everywhere, no animals for Sparx
+  and no extra life.
+- **Gems:** type the treasure the level should hold. Loose gems of every colour
+  (red, green, blue, gold and pink), with what the chests and enemies give, come
+  to exactly that number; the best gems lie at the places hardest to reach.
+- **Dragonfly eggs:** how many to hide (they come from the Japanese version of
+  the game: choose that disc in Add object… first).
+- **Chests of every kind:** baskets and vases, strong chests, chests that take
+  three flames, firework and spring chests, an extra life, and a locked chest
+  whose key lies somewhere else in the level.
+- **Animals, egg thieves, dragons, the way out:** the level type's animals in
+  little groups; the egg thieves and dragons that belong to the level's place in
+  the game, each thief with room to run; a Return Home vortex at the far end (in a
+  homeworld, the balloonist).
+
+Enemies wait in the rooms beyond the first, facing the way Spyro comes in, and on
+the paths between; chests stand by the walls and in far corners; gems run in
+trails along the way, in rings in the open and on ledges, lookouts and stepping
+stones. Nothing is put inside a tower or against a wall, nor in front of a
+homeworld's doorways. Everything Randomize places is an ordinary object: move,
+change or delete any of it. How much fits is set by the level's save rows (the
+card says so when a level is full).
 
 ## Levels from other games
 

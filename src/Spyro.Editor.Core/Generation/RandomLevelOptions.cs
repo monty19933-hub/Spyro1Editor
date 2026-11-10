@@ -19,6 +19,11 @@ public enum LevelStyle
 
 public enum LevelSize { Small, Medium, Large }
 
+/// <summary>How hard the level is to get through. Every jump, glide and climb stays inside what Spyro can do; what
+/// changes is how much room there is to spare: easy levels have wide paths, bridges and short hops; hard ones narrow
+/// paths, stepping stones, more ledges and lookouts, and water that costs a life; Kaizo leaves next to nothing to spare.</summary>
+public enum LevelDifficulty { Easy, Medium, Hard, Kaizo }
+
 /// <summary>Where the level's pictures come from: the textures of the level its look is taken from (the ones that level
 /// itself uses for its ground, banks, rock and paths), pictures the generator paints in the look's colours, or the user's
 /// own pictures for some or all surfaces.</summary>
@@ -37,6 +42,7 @@ public sealed record RandomLevelOptions
     public long Seed { get; init; }
     public LevelStyle? Style { get; init; }
     public LevelSize Size { get; init; } = LevelSize.Medium;
+    public LevelDifficulty Difficulty { get; init; } = LevelDifficulty.Medium;
     /// <summary>A key of <see cref="LevelThemes.All"/>; null picks one that suits the style.</summary>
     public string? Theme { get; init; }
     public bool? Caves { get; init; }
@@ -57,4 +63,8 @@ public sealed record RandomLevelOptions
     public bool PaintedSky { get; init; }
     /// <summary>The level's name (capital letters, spaces and apostrophes); null makes one up.</summary>
     public string? Name { get; init; }
+    /// <summary>A homeworld: this many doorways (0: an ordinary level). The level is then a plaza where Spyro arrives
+    /// with rooms off it all round, and a place for each doorway at a room's far side with open floor in front of it
+    /// (<see cref="RandomLevelResult.Doorways"/>).</summary>
+    public int Doorways { get; init; }
 }

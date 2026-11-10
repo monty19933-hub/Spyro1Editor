@@ -37,6 +37,8 @@ internal sealed class PlannedLevel
     public readonly List<(int From, int To)> Glides = [];
     public readonly List<string> Notes = [];
     public readonly Dictionary<string, int> Counts = [];
+    /// <summary>A homeworld's doorways: where each stands, the way Spyro walks into it (unit), and its room.</summary>
+    public readonly List<(double X, double Y, double Dx, double Dy, int Area)> Doors = [];
     public (double X, double Y) Start, Facing;
     public int StartZone;
     public double Spacing = 128;
@@ -50,6 +52,28 @@ internal static class SpyroPlanner
     /// <summary>This level's room size (1 = a valley's), the gaps its joins cross, and the space kept between rooms that
     /// are not joined. Set per level in <see cref="Build"/> (one level is built at a time per thread).</summary>
     [ThreadStatic] private static double _scale, _gapFrom, _gapTo, _ridge;
+    /// <summary>The smallest room of a homeworld (0: any size): a doorway's room holds the doorway and the floor in
+    /// front of it that Spyro comes back out onto.</summary>
+    [ThreadStatic] private static double _minRoom;
+    /// <summary>How far inside its room's edge a doorway stands, and the floor kept open in front of it: coming back
+    /// from a level Spyro lands some 650 to 700 units in front of the doorway.</summary>
+    internal const double DoorInset = 170, DoorWalk = 860;
+
+    /// <summary>What a difficulty changes: how wide paths are, how much of the walkable slope a ramp uses, how big
+    /// stepping stones are and how far apart, how often islands get a bridge and how wide it is, how many ledges a room
+    /// has, how often a room has a lookout, how much of a glide is left to spare, how often rooms have pools, whether
+    /// liquid costs a life at once, and how big rooms are.</summary>
+    private sealed record Tuning(double PathFrom, double PathTo, double Climb, double StoneRadius, double StoneGap, double BridgeChance, double BridgeHalf,
+        int LedgesFrom, int LedgesTo, double LookoutChance, double GlideSpare, double PoolChance, bool Deadly, double RoomScale);
+    private static Tuning For(LevelDifficulty difficulty) => difficulty switch
+    {
+        LevelDifficulty.Easy => new(190, 230, 0.16, 165, 70, 0.9, 118, 0, 2, 0.4, 170, 0.2, false, 1.05),
+        LevelDifficulty.Hard => new(128, 160, 0.24, 138, 100, 0.3, 96, 1, 4, 0.9, 88, 0.7, true, 0.94),
+        LevelDifficulty.Kaizo => new(114, 132, 0.25, 128, 112, 0.0, 92, 2, 4, 1.0, 62, 0.9, true, 0.88),
+        _ => new(150, 200, 0.22, 150, 88, 0.6, 104, 1, 3, 0.7, 115, 0.45, false, 1.0),
+    };
+    [ThreadStatic] private static Tuning? _tuning;
+    private static Tuning Tune => _tuning ??= For(LevelDifficulty.Medium);
     private static double Gap(LevelRandom rnd) => Range(rnd, _gapFrom, _gapTo);
 
     /// <summary>Sine by its series (the library's last digit differs between machines; the level must not).</summary>
@@ -74,15 +98,23 @@ internal static class SpyroPlanner
         return Dist(ax + sx * t, ay + sy * t, px, py);
     }
 
-    public static PlannedLevel Build(LevelStyle style, LevelSize size, FeatureSet features, LevelTheme theme, LevelRandom rnd, int shrink)
+    public static PlannedLevel Build(LevelStyle style, LevelSize size, FeatureSet features, LevelTheme theme, LevelRandom rnd, int shrink,
+        LevelDifficulty difficulty = LevelDifficulty.Medium, int doorways = 0)
     {
+        _tuning = For(difficulty);
+        _minRoom = doorways > 0 ? 600 : 0;
         for (int attempt = 0; ; attempt++)
         {
             var r = rnd.Fork("try" + attempt);
             var plan = new TerrainPlan { Noise = new TerrainNoise(r.Fork("noise")) };
             var L = new PlannedLevel { Plan = plan };
             plan.LiquidRole = theme.Liquid;
-            plan.LiquidKind = theme.Liquid switch { SurfaceRole.Lava => AuthoredSurfaceKind.Lava, SurfaceRole.Goo => AuthoredSurfaceKind.Ooze, _ => AuthoredSurfaceKind.Water };
+            plan.LiquidKind = (theme.Liquid, Tune.Deadly) switch
+            {
+                (SurfaceRole.Lava, false) => AuthoredSurfaceKind.Lava, (SurfaceRole.Lava, true) => AuthoredSurfaceKind.DeadlyLava,
+                (SurfaceRole.Goo, false) => AuthoredSurfaceKind.Ooze, (SurfaceRole.Goo, true) => AuthoredSurfaceKind.DeadlyOoze,
+                (_, true) => AuthoredSurfaceKind.DeadlyWater, _ => AuthoredSurfaceKind.Water,
+            };
             switch (style)
             {
                 case LevelStyle.Canyon:
@@ -116,8 +148,11 @@ internal static class SpyroPlanner
                 LevelStyle.Castle => r.Pick<string>([("hub", 2), ("loop", 2)]),
                 _ => r.Pick<string>([("loop", 3), ("hub", 3), ("trail", 1)]),
             };
+            // A homeworld: a plaza with a room for each doorway while they fit round it.
+            if (doorways > 0) { shape = "hub"; count = Math.Max(count, Math.Min(doorways, 5) + 1); }
             bool apart = plan.Kind is EnclosureKind.Sea or EnclosureKind.Sky;
             if (apart) { _scale = 0.72; _gapFrom = 250; _gapTo = 430; count += plan.Kind == EnclosureKind.Sky ? 2 : 1; } else { _scale = style == LevelStyle.Caverns ? 0.8 : 1; _gapFrom = 520; _gapTo = 800; }
+            _scale *= Tune.RoomScale;
             _ridge = apart ? 240 : Ridge;
             bool ok = shape switch { "loop" => Loop(L, count, r), "hub" => Hub(L, count, r), _ => Trail(L, count, r) };
             if (!ok || !Clear(L))
@@ -129,6 +164,7 @@ internal static class SpyroPlanner
                 shape = "trail";
             }
             L.Shape = shape;
+            if (doorways > 0) Doors(L, doorways, r);
             if (features.Secrets && !apart) Nooks(L, features, r);
             Zones(L, style, features, r);
             return L;
@@ -152,7 +188,7 @@ internal static class SpyroPlanner
 
     /// <summary>The climb a path across a gap of this width may make: its ramp (which starts and ends a little outside the
     /// rooms) is gentle enough to walk at its steepest.</summary>
-    private static double Climb(double gap) => Math.Clamp(0.22 * (gap - 90), 0, 130);
+    private static double Climb(double gap) => Math.Clamp(Tune.Climb * (gap - 90), 0, 130);
 
     /// <summary>Rooms round a ring, each a little higher than the last; the last one stands over the first, so the way
     /// round ends with a drop or a glide back to the start.</summary>
@@ -195,13 +231,13 @@ internal static class SpyroPlanner
     /// <summary>A big clearing with rooms off it all round, some of them leading further.</summary>
     private static bool Hub(PlannedLevel L, int count, LevelRandom rnd)
     {
-        var hub = Room(L, 0, 0, _scale * Range(rnd, 760, 920), 0, "start");
+        var hub = Room(L, 0, 0, Math.Max(_minRoom > 0 ? _minRoom + 60 : 0, _scale * Range(rnd, 760, 920)), 0, "start");
         int spokes = Math.Clamp(count - 1 - (count > 5 ? rnd.Next(1, 3) : count > 4 ? rnd.Next(0, 2) : 0), 2, 5);
         double angle = Range(rnd, 0, 6.28);
         for (int k = 0; k < spokes; k++)
         {
             var d = Dir(angle + 2 * 3.14159265358979 * (k + Range(rnd, -0.22, 0.22)) / spokes);
-            double r = _scale * (rnd.Chance(0.3) ? Range(rnd, 450, 540) : Range(rnd, 560, 780)), gap = Gap(rnd);
+            double r = Math.Max(_minRoom, _scale * (rnd.Chance(0.3) ? Range(rnd, 450, 540) : Range(rnd, 560, 780))), gap = Gap(rnd);
             var a = Room(L, d.X * (hub.R + r + gap), d.Y * (hub.R + r + gap), r, 0);
             double climb = Climb(gap);
             a.Z = rnd.Chance(0.7) ? climb * Range(rnd, 0.4, 1) : -climb * Range(rnd, 0.3, 0.8);
@@ -217,7 +253,7 @@ internal static class SpyroPlanner
                 if (p.Taken.Count > 2) continue;
                 double px = p.X - hub.X, py = p.Y - hub.Y, pd = Math.Sqrt(px * px + py * py), s = Range(rnd, -0.75, 0.75), c = Math.Sqrt(1 - s * s);
                 (double X, double Y) d = (px / pd * c - py / pd * s, px / pd * s + py / pd * c);
-                double r = _scale * Range(rnd, 500, 720), gap = Gap(rnd);
+                double r = Math.Max(_minRoom, _scale * Range(rnd, 500, 720)), gap = Gap(rnd);
                 double x = p.X + d.X * (p.R + r + gap), y = p.Y + d.Y * (p.R + r + gap);
                 if (L.Areas.Any(o => o != p && Dist(o.X, o.Y, x, y) < o.R + r + _ridge + 40)) continue;
                 var a = Room(L, x, y, r, 0);
@@ -234,7 +270,7 @@ internal static class SpyroPlanner
     private static bool Trail(PlannedLevel L, int count, LevelRandom rnd)
     {
         double heading = Range(rnd, 0, 6.28), curl = rnd.Chance(0.5) ? 1 : -1;
-        var first = Room(L, 0, 0, _scale * Range(rnd, 560, 660), 0, "start");
+        var first = Room(L, 0, 0, Math.Max(_minRoom > 0 ? _minRoom + 60 : 0, _scale * Range(rnd, 560, 660)), 0, "start");
         for (int k = 1; k < count; k++)
         {
             bool made = false;
@@ -243,7 +279,7 @@ internal static class SpyroPlanner
                 var p = L.Areas[^1];
                 double a = heading + curl * Range(rnd, -0.3, 1.0);
                 var d = Dir(a);
-                double r = _scale * (k == count - 1 ? Range(rnd, 580, 740) : rnd.Chance(0.3) ? Range(rnd, 440, 520) : Range(rnd, 540, 780)), gap = Gap(rnd);
+                double r = Math.Max(_minRoom, _scale * (k == count - 1 ? Range(rnd, 580, 740) : rnd.Chance(0.3) ? Range(rnd, 440, 520) : Range(rnd, 540, 780))), gap = Gap(rnd);
                 double x = p.X + d.X * (p.R + r + gap), y = p.Y + d.Y * (p.R + r + gap);
                 if (L.Areas.Any(o => o != p && (Dist(o.X, o.Y, x, y) < o.R + r + _ridge + 40 || SegmentDistance(o.X, o.Y, p.X, p.Y, x, y) < o.R + Math.Min(_ridge, PathClear) + 60))) continue;
                 var room = Room(L, x, y, r, 0);
@@ -321,7 +357,48 @@ internal static class SpyroPlanner
             double dx = o.X - a.X, dy = o.Y - a.Y, d = Math.Sqrt(dx * dx + dy * dy), from = 0.5 * a.R;
             if (SegmentDistance(x, y, a.X + dx / d * from, a.Y + dy / d * from, o.X, o.Y) < r + 230) return false;
         }
+        // Nor in front of a doorway, where Spyro walks in and comes back out.
+        foreach (var door in L.Doors)
+            if (door.Area == a.Id && SegmentDistance(x, y, door.X + door.Dx * 120, door.Y + door.Dy * 120, door.X - door.Dx * DoorWalk, door.Y - door.Dy * DoorWalk) < r + 150) return false;
         return true;
+    }
+
+    /// <summary>A homeworld's doorways: one to a room, the rooms at the ends of the level first, each on the far side
+    /// from the way in with open floor in front of it. With more doorways than rooms the plaza takes one, then the
+    /// biggest rooms a second.</summary>
+    private static void Doors(PlannedLevel L, int doors, LevelRandom rnd)
+    {
+        var plaza = L.Areas[0];
+        var rooms = L.Areas.Skip(1).Where(a => a.Kind != "overlook").OrderBy(a => a.Taken.Count).ThenByDescending(a => a.Depth).ThenBy(a => a.Id).ToList();
+        foreach (var a in rooms.Append(plaza).Concat(rooms.OrderByDescending(a => a.R).ThenBy(a => a.Id)).Append(plaza))
+        {
+            if (L.Doors.Count >= doors) break;
+            Door(L, a, rnd);
+        }
+        if (L.Doors.Count > 0) L.Count("doorway", L.Doors.Count);
+    }
+
+    private static bool Door(PlannedLevel L, PlannedArea a, LevelRandom rnd)
+    {
+        // The far side from the way in (the plaza: any side), then round from it.
+        (double X, double Y) from = a.Id == 0 || a.Taken.Count == 0 ? Dir(Range(rnd, 0, 6.2832)) : (-a.Taken[0].X, -a.Taken[0].Y);
+        double jitter = Range(rnd, -0.2, 0.2), at = a.R - DoorInset;
+        // The floor Spyro comes back out onto is this room's, well inside its edge.
+        if (at - DoorWalk < -(a.R - 110)) return false;
+        foreach (double turn in new[] { 0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, -2.0, 2.5, -2.5, 3.0 })
+        {
+            double s = Sin(turn + jitter), c = Cos(turn + jitter);
+            (double X, double Y) d = (from.X * c - from.Y * s, from.X * s + from.Y * c);
+            if (a.Taken.Any(t => t.X * d.X + t.Y * d.Y > 0.5)) continue;
+            double x = a.X + d.X * at, y = a.Y + d.Y * at;
+            if (!Free(L, a, x + d.X * 200, y + d.Y * 200, 120, floor: true) || !OffJoins(L, a, x, y, 110)) continue;
+            // Not in the way out of another doorway of this room (their ways may cross in the room's middle).
+            if (L.Doors.Any(o => o.Area == a.Id && SegmentDistance(x, y, o.X, o.Y, o.X - o.Dx * DoorWalk, o.Y - o.Dy * DoorWalk) < 330)) continue;
+            a.Taken.Add(d);
+            L.Doors.Add((x, y, d.X, d.Y, a.Id));
+            return true;
+        }
+        return false;
     }
 
     /// <summary>A direction out of a room at least <paramref name="apart"/> (cosine) from everything already there.</summary>
@@ -380,6 +457,8 @@ internal static class SpyroPlanner
                 // Caves: every room but the first is under rock (the first is the way in, open to the sky).
                 Roof = caves && a.Id != 0 && (a.Id == 1 || !features.Caves || rnd.Chance(0.8)) ? Range(rnd, 190, 230) : 0,
             });
+            // A doorway stands taller than a cave's roof is high: its room's roof is raised over it.
+            if (a.Zone.Roof > 0 && L.Doors.Any(door => door.Area == a.Id)) a.Zone.Roof += 110;
             a.Zone.Discs.Add((a.X, a.Y, a.R));
         }
         // Lobes: a room is a blob, not a disc.
@@ -405,7 +484,7 @@ internal static class SpyroPlanner
                 continue;
             }
             double dx = a.X - p.X, dy = a.Y - p.Y, d = Math.Sqrt(dx * dx + dy * dy), ux = dx / d, uy = dy / d;
-            if (apart && !(features.Bridges && rnd.Chance(0.6)) && Stones(L, p, a, rnd)) continue;
+            if (apart && !(features.Bridges && rnd.Chance(Tune.BridgeChance)) && Stones(L, p, a, rnd)) continue;
             // From well inside one room to well inside the other, bowed to one side.
             double inset = apart ? 110 : 160;
             double sx = p.X + ux * (p.R - inset), sy = p.Y + uy * (p.R - inset), ex = a.X - ux * (a.R - inset), ey = a.Y - uy * (a.R - inset);
@@ -413,7 +492,7 @@ internal static class SpyroPlanner
             double mx = (sx + ex) / 2 - uy * bow, my = (sy + ey) / 2 + ux * bow;
             var path = plan.Add(new TerrainZone
             {
-                Kind = apart ? "bridge" : charge ? "charge" : "path", Z = p.Z, Z1 = a.Z, Area = a.Id, Priority = 0, HalfWidth = apart ? 104 : Range(rnd, 150, 200), Wobble = apart ? 0 : 22, WobbleScale = 260,
+                Kind = apart ? "bridge" : charge ? "charge" : "path", Z = p.Z, Z1 = a.Z, Area = a.Id, Priority = 0, HalfWidth = apart ? Tune.BridgeHalf : Range(rnd, Tune.PathFrom, Tune.PathTo), Wobble = apart ? 0 : 22, WobbleScale = 260,
                 Floor = apart ? SurfaceRole.Wood : charge ? SurfaceRole.Charge : castle ? SurfaceRole.Paving : SurfaceRole.Path, Flat = apart,
                 // Under rock: every path to or from a cave; with caves asked for, some paths between rock walls are tunnels.
                 Roof = p.Zone.Roof > 0 || a.Zone.Roof > 0 || rocky && !caves && !charge && features.Caves && rnd.Chance(0.5) ? 175 : 0,
@@ -435,10 +514,10 @@ internal static class SpyroPlanner
         foreach (var a in L.Areas)
         {
             bool big = a.R >= 600;
-            if (features.Glides && big && rnd.Chance(0.7) && (Lookout(L, a, rnd) || Lookout(L, a, rnd) || Lookout(L, a, rnd))) continue;
-            int ledges = rnd.Chance(0.75) ? rnd.Next(1, 3) : 0;
+            if (features.Glides && big && rnd.Chance(Tune.LookoutChance) && (Lookout(L, a, rnd) || Lookout(L, a, rnd) || Lookout(L, a, rnd))) continue;
+            int ledges = rnd.Next(Tune.LedgesFrom, Tune.LedgesTo);
             for (int k = 0; k < ledges; k++) Ledges(L, a, rnd, rnd.Chance(0.4) ? 2 : 1);
-            if (features.Hazards && big && rnd.Chance(0.45)) Pond(L, a, rnd);
+            if (features.Hazards && big && rnd.Chance(Tune.PoolChance)) Pond(L, a, rnd);
         }
         L.Start = (L.Areas[0].X, L.Areas[0].Y);
         var next = L.Joins.Where(j => j.A == 0 && j.Kind == "path").Select(j => L.Areas[j.B]).FirstOrDefault() ?? L.Areas[Math.Min(1, L.Areas.Count - 1)];
@@ -461,7 +540,7 @@ internal static class SpyroPlanner
         double from = 0, to = d;
         for (double t = 0; t < d; t += 8) { if (p.Zone.Sdf(p.X + ux * t, p.Y + uy * t, plan.Noise) > 0) { from = t; break; } }
         for (double t = d; t > 0; t -= 8) { if (a.Zone.Sdf(p.X + ux * t, p.Y + uy * t, plan.Noise) > 0) { to = t; break; } }
-        const double r = 150, jump = 88;
+        double r = Tune.StoneRadius, jump = Tune.StoneGap;
         double span = to - from;
         if (span < 150 || Math.Abs(a.Z - p.Z) > 150) return false;
         int n = Math.Max(1, (int)Math.Ceiling((span - jump) / (2 * r + jump)));
@@ -548,7 +627,7 @@ internal static class SpyroPlanner
                     double x = a.X + e.X * a.R * out_, y = a.Y + e.Y * a.R * out_;
                     double gap = Dist(x, y, c3.X, c3.Y) - r3 - tr;
                     // Spyro may leave the top a little before its edge and must clear the ledge's edge: well inside the glide.
-                    if (gap < 170 || gap > reach - 115) continue;
+                    if (gap < 170 || gap > reach - Tune.GlideSpare) continue;
                     // Clear of the second step, so it is the glide from the top that reaches it (the first step is
                     // too far below it to jump from).
                     if (Dist(x, y, c2.X, c2.Y) < r2 + tr + 120) continue;

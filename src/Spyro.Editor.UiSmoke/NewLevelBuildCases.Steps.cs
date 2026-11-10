@@ -75,6 +75,9 @@ internal static partial class NewLevelBuildCases
             case "new-world": NewWorldStep(window, outDir); return true;
             case "random-level": RandomLevelStep(window, outDir); return true;
             case "random-dialog": RandomDialogStep(window, outDir); return true;
+            case "random-objects": RandomObjectsStep(window, outDir); return true;
+            case "random-homeworld": RandomHomeworldStep(window, outDir); return true;
+            case "random-homeworld-dialog": RandomHomeworldDialogStep(window, outDir); return true;
             case "texture-grid": TextureGrid(window, outDir); return true;
             case "add-beside": AddBeside(window, outDir); return true;
             case "doorways": DoorwaysStep(window, outDir); return true;

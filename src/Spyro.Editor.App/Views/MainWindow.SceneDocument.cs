@@ -354,6 +354,7 @@ public sealed partial class MainWindow
         if(_freshSettingsPanel==null||_freshTerrainPanel==null)return;
         _freshSettingsPanel.Children.Clear();_freshTerrainPanel.Children.Clear();
         _freshSettingsPanel.IsVisible=_freshTerrainPanel.IsVisible=_freshSceneDocument!=null;
+        RefreshRandomObjectsCard();
         if(_retailTerrainWorkspace!=null)_retailTerrainWorkspace.IsVisible=true;
         if(_retailTerrainDetailsPanel!=null)_retailTerrainDetailsPanel.IsVisible=_freshSceneDocument==null;
         if(_retailNameDisclosure!=null)_retailNameDisclosure.IsVisible=_freshSceneDocument==null;

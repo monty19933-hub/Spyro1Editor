@@ -236,6 +236,7 @@ public sealed partial class MainWindow
         // Grouped: make or open levels of your own; change the open level; recovery; save.
         fileActions.Children.Add(BuildActionMenu("File", "EditorFileMenu", new ToolbarAction("New Level…", NewMainLevelAsync),
             new ToolbarAction("Random Level…", RandomLevelAsync),
+            new ToolbarAction("Random Homeworld…", RandomHomeworldAsync),
             new ToolbarAction("New World…", NewWorldAsync),
             new ToolbarAction("New Level from Spyro: Year of the Dragon…", NewLevelFromYearOfTheDragonAsync),
             new ToolbarAction("Open Created Level…", OpenMainFreshLevelAsync),
@@ -782,6 +783,7 @@ public sealed partial class MainWindow
             add.Children.Add(_objectAddButton);
         }
         root.Children.Add(TerrainCard("Add to this level", add));
+        root.Children.Add(BuildRandomObjectsCard());
 
         StackPanel selected = new();
         if (selection is StackPanel summary && summary.Children.Count > 0)

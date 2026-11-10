@@ -67,6 +67,11 @@ public sealed class Moby
     /// <summary>An added object's route (an egg thief's run, a sheep's walk): each node's raw x, y, z (editor units x 16),
     /// in the order its path stores them. Null keeps the route it came with, moved with the object.</summary>
     public List<int[]>? UniversalPathNodes { get; set; }
+    /// <summary>What an added object gives when opened or beaten, when that was chosen (the gem's id byte, native row
+    /// +0x53): Create BIN writes it into the object's row and counts it in the level's treasure. Null: what the
+    /// object came with.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? UniversalRewardByte { get; set; }
     public string CrossLevelFamily { get; set; } = "";
     public string CrossLevelSourceLevelKey { get; set; } = "";
     public string CrossLevelSourceLevelName { get; set; } = "";

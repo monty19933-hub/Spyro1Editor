@@ -103,6 +103,36 @@ public static class SceneDoorways
         return result;
     }
 
+    /// <summary>A generated homeworld's doorways (File ▾ › Random Homeworld…): one for each level the homeworld leads to
+    /// that has none yet, at the places the generator kept for them (<see cref="Generation.DoorwaySpot"/>: the plaza's
+    /// first, then from the nearest room to the farthest). The way back out of a new world takes the first place; the
+    /// levels follow in their order, so the last ones (the game's boss and flight levels) stand farthest in. Returns
+    /// the scene, the levels that got a doorway, and what could not be placed.</summary>
+    public static (SceneDocument Scene, IReadOnlyList<int> Added, IReadOnlyList<string> Problems) AddAll(SceneDocument scene,
+        IReadOnlyList<Generation.DoorwaySpot> spots, IReadOnlyList<DoorwayDestination> destinations, DoorwayShape shape, AuthoredMaterial material)
+    {
+        List<int> added = [];
+        List<string> problems = [];
+        int next = 0;
+        foreach (var destination in destinations.Where(d => !d.Taken).OrderBy(d => d.Note == WayBackNote ? 0 : 1).ThenBy(d => d.LevelId))
+        {
+            bool done = false;
+            while (!done && next < spots.Count)
+            {
+                var spot = spots[next++];
+                try
+                {
+                    scene = Add(scene, new AuthoredPortal(destination.LevelId, spot.Position, spot.Heading) { Shape = shape.Id, FaceMaterial = material, SideMaterial = material });
+                    added.Add(destination.LevelId);
+                    done = true;
+                }
+                catch (InvalidDataException e) { problems.Add(e.Message); }
+            }
+            if (!done) problems.Add($"No place was left for the doorway to {destination.Name}.");
+        }
+        return (scene, added, problems);
+    }
+
     /// <summary>Replaces the doorway to <paramref name="destination"/> with <paramref name="changed"/> (moved, turned,
     /// reshaped, resized, retargeted or given new frame textures) and rebuilds its frame there. With the same shape and
     /// size every frame face keeps its identity, texture, shade and ground (a face the user removed stays removed); with

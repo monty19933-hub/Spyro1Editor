@@ -268,7 +268,15 @@ internal static partial class NewLevelBuildCases
 {
     private static void Export(MainWindow window)
     {
-        Load(window, System.Environment.GetEnvironmentVariable("NEW_LEVEL_EXPORT_FROM") ?? "artisans");
+        // NEW_LEVEL_EXPORT_FROM: the level open when Create BIN is pressed (world:70 opens the new world's homeworld).
+        string from = System.Environment.GetEnvironmentVariable("NEW_LEVEL_EXPORT_FROM") ?? "artisans";
+        if (from.StartsWith("world:", StringComparison.Ordinal))
+        {
+            var open = (Task)Invoke(window, "OpenWorldLevelAsync", int.Parse(from[6..]))!;
+            Wait(() => open.IsCompleted, "open the world level", 120);
+            WaitIdle(window);
+        }
+        else Load(window, from);
         var command = (Task)Invoke(window, "CreateObjectTestBinAsync")!;
         bool confirmed = false;
         var clock = System.Diagnostics.Stopwatch.StartNew();

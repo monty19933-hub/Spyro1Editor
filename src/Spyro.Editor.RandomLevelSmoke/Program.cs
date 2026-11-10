@@ -8,7 +8,7 @@ if (args.Length == 5 && args[0] == "--fingerprint")
     // A level's fingerprint in a process of its own (the gate compares it with the one made in the gate's process).
     var catalog = LevelCatalog.Load(args[4]);
     var r = Spyro.Editor.Core.Generation.RandomLevelGenerator.Generate(new Spyro.Editor.Core.Generation.RandomLevelOptions
-    { Seed = long.Parse(args[1]), Style = Enum.Parse<Spyro.Editor.Core.Generation.LevelStyle>(args[2]), Size = Enum.Parse<Spyro.Editor.Core.Generation.LevelSize>(args[3]) }, catalog);
+    { Seed = long.Parse(args[1]), Style = Enum.Parse<Spyro.Editor.Core.Generation.LevelStyle>(args[2]), Size = Enum.Parse<Spyro.Editor.Core.Generation.LevelSize>(args[3]) }, catalog, source: RandomLevelCases.LookSource());
     Console.WriteLine("FINGERPRINT " + r.Scene.Fingerprint());
     return 0;
 }
@@ -20,19 +20,26 @@ if (args.Length >= 6 && args[0] == "--dump")
     {
         Seed = long.Parse(args[1]), Style = args[2] == "-" ? null : Enum.Parse<Spyro.Editor.Core.Generation.LevelStyle>(args[2]),
         Size = Enum.Parse<Spyro.Editor.Core.Generation.LevelSize>(args[3]), Theme = args.Length > 6 && args[6] != "-" ? args[6] : null,
+        // RANDOM_DOORWAYS=n: a homeworld with n doorways (built as a new world's, to be looked at); RANDOM_DIFFICULTY.
+        Doorways = int.TryParse(Environment.GetEnvironmentVariable("RANDOM_DOORWAYS"), out int doors) ? doors : 0,
+        Difficulty = Enum.TryParse<Spyro.Editor.Core.Generation.LevelDifficulty>(Environment.GetEnvironmentVariable("RANDOM_DIFFICULTY"), out var hard) ? hard : Spyro.Editor.Core.Generation.LevelDifficulty.Medium,
     };
     var watch = System.Diagnostics.Stopwatch.StartNew();
-    // RANDOM_LOOK_CACHE: a project's editor-cache folder, so the look's own towers and trees are stood in the level.
-    Func<string, Spyro.Editor.Core.Generation.LevelPropSource?>? source = Environment.GetEnvironmentVariable("RANDOM_LOOK_CACHE") is { Length: > 0 } cache
-        ? key => File.Exists(Path.Combine(cache, key + "-runtime-scene-editor-overlay.json"))
-            ? Spyro.Editor.Core.Generation.LevelPropSource.FromGeometry(key, Spyro.Editor.Core.Scene.GeometryOverlayLoader.LoadFirstCandidate(Path.Combine(cache, key + "-runtime-scene-editor-overlay.json")))
-            : null
-        : null;
+    var source = RandomLevelCases.LookSource();
     var r = Spyro.Editor.Core.Generation.RandomLevelGenerator.Generate(options, catalog, compile: Environment.GetEnvironmentVariable("RANDOM_NO_COMPILE") != "1", source: source);
     Console.WriteLine($"{watch.ElapsedMilliseconds} ms: {r.Report.Summary}");
     Console.WriteLine("draw: " + r.Report.DrawPlan);
     foreach (var note in r.Report.Notes) Console.WriteLine("note: " + note);
     var keyOf = catalog.Levels.GroupBy(l => l.SourceWadEntry).ToDictionary(g => g.Key, g => g.First().Key);
+    if (r.Doorways.Count > 0)
+    {
+        var destinations = Enumerable.Range(71, Math.Min(4, r.Doorways.Count)).Select(id => new DoorwayDestination(id, "LEVEL " + (id - 70), false, null))
+            .Concat(r.Doorways.Count > 4 ? [new DoorwayDestination(10, "Artisans", false, SceneDoorways.WayBackNote)] : []).ToArray();
+        var (built, added, problems) = SceneDoorways.AddAll(r.Scene with { WorldLevelId = NewWorldDocument.Homeworld }, r.Doorways, destinations,
+            Spyro.Editor.Core.Generation.LevelThemes.DoorwayShape(r.Report.Theme), r.DoorwayMaterial!);
+        Console.WriteLine($"doorways: {string.Join(", ", built.Portals!.Select(d => $"{d.DestinationLevelId} at {d.Position} heading {d.Heading}"))} {string.Join(" ", problems)}");
+        r = r with { Scene = built };
+    }
     var faces = r.Scene.Surfaces.Select(s => new
     {
         p = s.Vertices.Select(v => new[] { v.X, v.Y, v.Z }).ToArray(),
@@ -50,7 +57,7 @@ if (args.Length >= 6 && args[0] == "--dump")
     return 0;
 }
 // Gate (no disc): [repo root] [--maps <folder>] [--seeds N]
-if (args.Length == 0 || args[0] is not ("--fingerprint" or "--dump" or "--static-textures" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes"))
+if (args.Length == 0 || args[0] is not ("--fingerprint" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts"))
 {
     string repo = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : Directory.GetCurrentDirectory();
     string? maps = args.SkipWhile(a => a != "--maps").Skip(1).FirstOrDefault();
@@ -111,11 +118,7 @@ if (args.Length >= 7 && args[0] == "--export-random")
         carriers = new([.. slots.Select(c => (c.Wad, c.Id))], Path.Combine(Path.GetDirectoryName(output)!, "pictures"));
         Directory.CreateDirectory(carriers.Folder);
     }
-    Func<string, Spyro.Editor.Core.Generation.LevelPropSource?>? source = Environment.GetEnvironmentVariable("RANDOM_LOOK_CACHE") is { Length: > 0 } cache
-        ? key => File.Exists(Path.Combine(cache, key + "-runtime-scene-editor-overlay.json"))
-            ? Spyro.Editor.Core.Generation.LevelPropSource.FromGeometry(key, Spyro.Editor.Core.Scene.GeometryOverlayLoader.LoadFirstCandidate(Path.Combine(cache, key + "-runtime-scene-editor-overlay.json")))
-            : null
-        : null;
+    var source = RandomLevelCases.LookSource();
     var result = Spyro.Editor.Core.Generation.RandomLevelGenerator.Generate(options, catalog, carriers, source: source);
     foreach (var p in result.Pictures) await TerrainTexturePngWriter.WriteRgbaAsync(p.Path, 64, 64, p.Pixels);
     Console.WriteLine(result.Report.Summary);
@@ -170,6 +173,31 @@ if (args.Length >= 4 && args[0] == "--static-textures")
     }
     return 0;
 }
+if (args.Length >= 4 && args[0] == "--catalog")
+{
+    // --catalog <disc> <repo> <project folder>: the placeable objects by kind and level (names from the project's level cache).
+    var catalog = LevelCatalog.Load(args[2]);
+    var lib = new UniversalSourceLibrary(args[1], catalog);
+    var workspace = new Spyro.Editor.Core.Workspace.EditorWorkspace(args[3]);
+    Dictionary<(string, int), (string, string)> index = [];
+    foreach (var level in catalog.Levels)
+    {
+        string path = Path.Combine(args[3], "editor-cache", $"{level.Key}-mobys.json");
+        if (!File.Exists(path)) continue;
+        var mobys = Spyro.Editor.Core.Scene.MobyLoader.LoadCached(path).ToList();
+        Spyro.Editor.Core.Scene.MobyMetadataEnricher.Apply(workspace, level.Key, mobys);
+        foreach (var m in mobys.Where(m => m.TrueIndex >= 0)) index[(level.Key, m.TrueIndex)] = (m.DisplayLabel, m.CandidateKind);
+    }
+    var entries = UniversalMobyCatalogBuilder.Build(lib, catalog, (level, row) => index.TryGetValue((level, row), out var n) ? n : null);
+    foreach (var g in entries.GroupBy(e => (e.Category, e.SubCategory)).OrderBy(g => g.Key.Category).ThenBy(g => g.Key.SubCategory))
+    {
+        Console.WriteLine($"== {g.Key.Category} / {g.Key.SubCategory} ({g.Count()})");
+        foreach (var e in g.OrderBy(e => e.ClassId))
+            Console.WriteLine($"   {e.ClassHex} {e.Name,-34} {(e.Placeable ? "ok " : "NO ")} levels: {string.Join(",", e.Variants.Where(v => v.RestrictionReason == null).Select(v => v.SourceLevelKey).Distinct())}" +
+                (e.Placeable ? "" : " | " + e.RestrictionReason));
+    }
+    return 0;
+}
 if (args.Length >= 3 && args[0] == "--dump-exe")
 {
     File.WriteAllBytes(args[2], UniversalDiscImage.Read(args[1]).Exe.ToArray());
@@ -201,6 +229,44 @@ if (args.Length >= 3 && args[0] == "--surface-kinds")
             }
         }
         catch (Exception e) { Console.WriteLine($"{level.Key}: {e.Message}"); }
+    }
+    return 0;
+}
+if (args.Length >= 3 && args[0] == "--doorway-facts")
+{
+    // --doorway-facts <disc> <repo>: every homeworld doorway's objects and path as the doorway sees them (along: the way
+    // Spyro walks in; side: to its left; up), in editor units. What a doorway needs clear in front of it.
+    var catalog = LevelCatalog.Load(args[2]);
+    var library = new UniversalSourceLibrary(args[1], catalog);
+    foreach (var home in catalog.Levels.Where(l => l.LevelId % 10 == 0 && Spyro.Editor.Core.Scene.HomeworldPortalControlCatalog.ForLevel(l.Key).Count > 0))
+    {
+        var templates = NativeHubPortals.Templates(args[1], catalog, home.Key);
+        var data = library.Get(home.Key).Data;
+        foreach (var t in templates.Values.OrderBy(t => t.DestinationLevelId))
+        {
+            var (bx, by, bz) = t.BottomMiddle;
+            double fx = Math.Cos(t.FacingAngle), fy = Math.Sin(t.FacingAngle);
+            string Local(int x, int y, int z) => $"({((x - bx) * fx + (y - by) * fy) / 16:0},{(-(x - bx) * fy + (y - by) * fx) / 16:0},{(z - bz) / 16.0:0})";
+            var points = Enumerable.Range(0, t.PointCount).Select(t.Point).ToArray();
+            Console.WriteLine($"{home.Key} -> {t.DestinationLevelId} {t.Control.DestinationName}: opening {t.PointCount} points {string.Join(" ", points.Select(q => Local(q.X, q.Y, q.Z)))}");
+            foreach (var (name, index) in new[] { ("path", t.Control.PathTrueIndex), ("name", t.Control.LetteringTrueIndex), ("return", t.Control.CompanionTrueIndex) })
+            {
+                int row = index - t.SourceMobyIndexBias;
+                byte[] r = data.Row(row);
+                int I(byte[] b, int at) => BitConverter.ToInt32(b, at);
+                var captured = data.CaptureRow(home.Key, row);
+                List<string> nodes = [];
+                foreach (var (_, target) in captured.InternalPointers)
+                {
+                    var q = captured.Properties;
+                    if (target + 8 > q.Length) continue;
+                    int count = q[target];
+                    if (count is < 1 or > 16 || q[target + 1] >= count || q[target + 2] != 0 || q[target + 3] != 0 || target + 8 + 16 * count > q.Length) continue;
+                    for (int n = 0; n < count; n++) nodes.Add(Local(I(q, target + 8 + 16 * n), I(q, target + 12 + 16 * n), I(q, target + 16 + 16 * n)));
+                }
+                Console.WriteLine($"    {name,-6} class 0x{BitConverter.ToUInt16(r, 0x36):X3} at {Local(I(r, 0x0C), I(r, 0x10), I(r, 0x14))} yaw {r[0x46]}" + (nodes.Count > 0 ? " nodes " + string.Join(" ", nodes) : ""));
+            }
+        }
     }
     return 0;
 }

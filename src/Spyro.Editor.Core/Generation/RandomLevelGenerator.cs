@@ -20,6 +20,7 @@ public sealed record RandomLevelReport
     public LevelStyle Style { get; init; }
     public string Theme { get; init; } = "";
     public LevelSize Size { get; init; }
+    public LevelDifficulty Difficulty { get; init; } = LevelDifficulty.Medium;
     public string Features { get; init; } = "";
     public int Areas { get; init; }
     public int Faces { get; init; }
@@ -42,9 +43,19 @@ public sealed record RandomLevelReport
     public string Summary { get; init; } = "";
 }
 
+/// <summary>A place the generator kept for a homeworld's doorway: the bottom middle of its opening on the floor, and
+/// the way Spyro walks into it (0-255, 0 = +X, 64 = +Y). In front of it the floor is open for Spyro to come back out
+/// onto. <paramref name="Plaza"/>: it stands in the room Spyro starts in.</summary>
+public sealed record DoorwaySpot(Vector3f Position, int Heading, bool Plaza);
+
 public sealed record RandomLevelResult(SceneDocument Scene, RandomLevelReport Report, IReadOnlyList<RandomLevelPicture> Pictures,
     IReadOnlyList<AuthoredMaterial> Materials)
 {
+    /// <summary>A homeworld's doorway places (<see cref="RandomLevelOptions.Doorways"/>), the plaza's first and then
+    /// from the nearest room to the farthest; fewer than asked for when the level had no room for more.</summary>
+    public IReadOnlyList<DoorwaySpot> Doorways { get; init; } = [];
+    /// <summary>The texture for doorway frames: one the level already uses (its stonework, else its rock).</summary>
+    public AuthoredMaterial? DoorwayMaterial { get; init; }
     /// <summary>A top-down picture of the level (one pixel per 30 units, north up): height-shaded floor colours.</summary>
     public required Rgba32[] Map { get; init; }
     public required int MapWidth { get; init; }
@@ -111,7 +122,7 @@ public static class RandomLevelGenerator
         {
             token.ThrowIfCancellationRequested();
             attempts++;
-            var tried = SpyroPlanner.Build(style, options.Size, features, theme, rnd.Fork("plan" + attempt), shrink);
+            var tried = SpyroPlanner.Build(style, options.Size, features, theme, rnd.Fork("plan" + attempt), shrink, options.Difficulty, Math.Clamp(options.Doorways, 0, NativeHubPortals.MaxDoorways));
             // Into the built level's coordinates: whole units from 0, the lowest floor (and what hangs under floating
             // land) well above the bottom.
             var (bx0, by0, _, _) = tried.Plan.Bounds();
@@ -179,7 +190,8 @@ public static class RandomLevelGenerator
                     propMaterials[texture] = own = new AuthoredMaterial(lookLevel.SourceWadEntry, texture);
                     if (LevelDna.Average(theme.Key, texture) is { } average) averages[own] = average;
                 }
-                surfaces.Add(new AuthoredSurface(faceRandom.Id(), p.Corners, Average(paint), own, paint) { TwoSided = p.TwoSided, FrontReversed = p.FrontReversed });
+                surfaces.Add(new AuthoredSurface(faceRandom.Id(), p.Corners, Average(paint), own, paint)
+                { TwoSided = p.TwoSided, FrontReversed = p.FrontReversed, DistantColors = Distant(paint, own, averages) });
                 continue;
             }
             var role = fold[p.Role];
@@ -187,7 +199,7 @@ public static class RandomLevelGenerator
             var ramp = Ramp(theme, role, material);
             var near = p.Light.Select(u => Paint(ramp, u)).ToArray();
             surfaces.Add(new AuthoredSurface(faceRandom.Id(), p.Corners, Average(near), material, near)
-            { Kind = p.Kind, NoCollision = !p.Collides && material != null, TwoSided = p.TwoSided });
+            { Kind = p.Kind, NoCollision = !p.Collides && material != null, TwoSided = p.TwoSided, DistantColors = Distant(near, material, averages) });
         }
         // Sectors: faces are grouped by where they are (squares a few faces across), as the game's levels group theirs.
         // A face with a sector keeps its four corners, as the game's own faces do (they are not flat either); without
@@ -234,6 +246,17 @@ public static class RandomLevelGenerator
         }
         scene.Validate();
         var materials = surfaces.Select(s => s.Material).OfType<AuthoredMaterial>().Distinct().ToList();
+        // A homeworld's doorway places, on the floor as it was built, the plaza's first and then outwards.
+        var doorways = planned.Doors.OrderBy(d => d.Area == 0 ? 0 : 1).ThenBy(d => planned.Areas[d.Area].Depth).ThenBy(d => d.Area).Select(d =>
+        {
+            var area = planned.Areas[d.Area];
+            var at = new Vector3f((float)Math.Round(d.X), (float)Math.Round(d.Y), (float)Math.Round(plan.Height(area.Zone.Id, d.X, d.Y)));
+            return new DoorwaySpot(at, (int)Math.Round(Math.Atan2(d.Dy, d.Dx) * 128 / Math.PI) & 0xFF, d.Area == 0);
+        }).ToArray();
+        if (options.Doorways > 0 && doorways.Length < Math.Min(options.Doorways, NativeHubPortals.MaxDoorways))
+            notes.Add($"The level has room for {doorways.Length} of the {options.Doorways} doorways; another seed or a larger size may fit them all.");
+        AuthoredMaterial? doorwayMaterial = new[] { SurfaceRole.Brick, SurfaceRole.Rock, SurfaceRole.Cliff, SurfaceRole.CaveWall, SurfaceRole.CliffTop, SurfaceRole.Paving, SurfaceRole.Path }
+            .Select(role => fold.TryGetValue(role, out var folded) ? materialOf.GetValueOrDefault(folded) : null).FirstOrDefault(m => m != null) ?? materials.FirstOrDefault();
         string? drawPlan = null;
         if (compile)
         {
@@ -245,7 +268,7 @@ public static class RandomLevelGenerator
         notes.AddRange(planned.Notes);
         var report = new RandomLevelReport
         {
-            Seed = options.Seed, Style = style, Theme = theme.Key, Size = options.Size,
+            Seed = options.Seed, Style = style, Theme = theme.Key, Size = options.Size, Difficulty = options.Difficulty,
             Features = string.Join(", ", new[] { features.Caves ? "caves" : null, features.ChargePaths ? "supercharge paths" : null, features.Glides ? "glides" : null,
                 features.Hazards ? "hazards" : null, features.Bridges ? "bridges" : null, features.Secrets ? "secrets" : null }.OfType<string>()),
             Areas = planned.Areas.Count, Faces = surfaces.Count, Materials = materials.Count, Counts = planned.Counts, Links = planned.Links,
@@ -260,7 +283,17 @@ public static class RandomLevelGenerator
             int col = (int)((x - mapX) / 30), row = (int)((y - mapY) / 30);
             if (col >= 0 && col < mw && row >= 0 && row < mh) map[(mh - 1 - row) * mw + col] = new Rgba32(255, 0, 0, 255);
         }
-        return new(scene, report, pictures, materials) { Map = map, MapWidth = mw, MapHeight = mh };
+        // Doorways show on the map as a bright bar across the way in.
+        foreach (var door in doorways)
+        {
+            var (fx, fy) = DoorwayShapes.Facing(door.Heading);
+            for (int k = -3; k <= 3; k++)
+            {
+                int col = (int)((door.Position.X - fy * k * 30 - mapX) / 30), row = (int)((door.Position.Y + fx * k * 30 - mapY) / 30);
+                if (col >= 0 && col < mw && row >= 0 && row < mh) map[(mh - 1 - row) * mw + col] = new Rgba32(255, 236, 96, 255);
+            }
+        }
+        return new(scene, report, pictures, materials) { Map = map, MapWidth = mw, MapHeight = mh, Doorways = doorways, DoorwayMaterial = doorwayMaterial };
     }
 
     /// <summary>The side of the squares faces are grouped into sectors by.</summary>
@@ -289,6 +322,18 @@ public static class RandomLevelGenerator
             L.Links[k] = l with { From = M(l.From), To = M(l.To) };
         }
         L.Start = (L.Start.X + dx, L.Start.Y + dy); L.Facing = (L.Facing.X + dx, L.Facing.Y + dy);
+        for (int k = 0; k < L.Doors.Count; k++) L.Doors[k] = L.Doors[k] with { X = L.Doors[k].X + dx, Y = L.Doors[k].Y + dy };
+    }
+
+    /// <summary>The colours a face is drawn in far away, where the game draws it without its texture: the texture's
+    /// colour as it looks up close (measured from the picture the player sees) under the face's paint. Left to Create
+    /// BIN (null) for a picture of the user's or a texture that was not measured; Create BIN's own figure comes from the
+    /// texture's distant tile, which for water is another colour than the water up close.</summary>
+    private static ColorRgba[]? Distant(ColorRgba[] near, AuthoredMaterial? material, Dictionary<AuthoredMaterial, ColorRgba> averages)
+    {
+        if (material == null || material.Image != null || !averages.TryGetValue(material, out var a)) return null;
+        static byte Mix(byte shade, byte texture) => (byte)Math.Clamp((shade * texture + 64) / 128, 0, 255);
+        return [.. near.Select(c => new ColorRgba(Mix(c.R, a.R), Mix(c.G, a.G), Mix(c.B, a.B), c.A))];
     }
 
     /// <summary>The paint of a surface, darkest to lightest: the original level's own colours for the texture when they
@@ -382,13 +427,14 @@ public static class RandomLevelGenerator
             LevelStyle.Valley => "clearings among the hills", LevelStyle.Islands => "islands in the water", LevelStyle.SkyIslands => "islands in the sky",
             LevelStyle.Caverns => "caverns under the rock", LevelStyle.Canyon => "a canyon", _ => "castle courtyards"
         };
-        var parts = r.Counts.Where(c => c.Value > 0 && c.Key != SpyroStructures.OwnThings).OrderByDescending(c => c.Value).ThenBy(c => c.Key, StringComparer.Ordinal)
-            .Select(c => $"{c.Value} {Plural(c.Key, c.Value)}").ToList();
+        var parts = r.Counts.Where(c => c.Value > 0 && c.Key != SpyroStructures.OwnThings).OrderBy(c => c.Key == "doorway" ? 0 : 1).ThenByDescending(c => c.Value).ThenBy(c => c.Key, StringComparer.Ordinal)
+            .Select(c => c.Key == "doorway" ? $"a place for {(c.Value == 1 ? "its doorway" : $"each of its {c.Value} doorways")}" : $"{c.Value} {Plural(c.Key, c.Value)}").ToList();
         string own = r.Counts.TryGetValue(SpyroStructures.OwnThings, out int things) && things > 0
             ? $"{things} of {theme.Name}{(theme.Name.EndsWith('s') ? "'" : "'s")} own towers, trees and rocks stand in it. " : "";
         string reach = r.Unreached + r.NoWayBack == 0 ? "Every floor can be reached from the start and left again." :
             $"Almost every floor is proved reachable ({r.RequiredFloors - r.Unreached - r.NoWayBack} of {r.RequiredFloors}).";
-        return $"{name}: {style} in the style of {theme.Name}, {r.Areas} areas, {r.Faces:N0} faces, {r.Materials} textures. " +
+        bool homeworld = r.Counts.ContainsKey("doorway");
+        return $"{name}: {(homeworld ? "a homeworld, " : "")}{style} in the style of {theme.Name}, {r.Difficulty.ToString().ToLowerInvariant()}, {r.Areas} areas, {r.Faces:N0} faces, {r.Materials} textures. " +
                (parts.Count > 0 ? "It has " + string.Join(", ", parts) + ". " : "") + own + reach;
     }
 
