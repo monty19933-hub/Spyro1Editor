@@ -278,17 +278,44 @@ if (source != null)
 {
     // Every original homeworld doorway from the disc: written as before (records and entry triangles), and as each shape.
     int originals = 0;
+    var library = new UniversalSourceLibrary(source, catalog);
     foreach (var key in NewWorldDocument.HomeworldKeys)
     {
         var templates = NativeHubPortals.Templates(source, catalog, key);
+        var homeData = library.Get(key).Data;
         foreach (var (dest, t) in templates)
         {
             Check(t.PointCount is >= 3 and <= DoorwayShapes.MaxOutlinePoints && t.Triggers.Count >= 2 && I(t.Record, 0x1C) == dest, $"{key} doorway to {dest}: {t.PointCount} points, {t.Triggers.Count} entry triangles");
             Console.WriteLine($"{key} doorway to {dest}: {t.PointCount} points, {t.Triggers.Count} entry triangles, record {t.Record.Length} bytes");
+            // Which side the homeworld is on, from the disc: coming back, Spyro starts on the path's first node when the
+            // path object's word +0x10 is set, on its second otherwise, and walks to the other one (USA 0x80015F1C).
+            var path = homeData.CaptureRow(key, t.Control.PathTrueIndex - t.SourceMobyIndexBias);
+            int block = path.InternalPointers.Single(q => q.Offset == 0).Target;
+            Check(path.Properties[block] == 2, $"{key} doorway to {dest}: its path has two nodes");
+            (double X, double Y) Node(int n) => (I(path.Properties, block + 8 + 16 * n), I(path.Properties, block + 12 + 16 * n));
+            var (from, to) = I(path.Properties, 0x10) != 0 ? (Node(0), Node(1)) : (Node(1), Node(0));
+            double out_ = (to.X - from.X) * Math.Cos(t.FacingAngle) + (to.Y - from.Y) * Math.Sin(t.FacingAngle);
+            Check(Math.Abs(out_) > 16 * 200 && out_ > 0 == t.Control.HomeworldOnNormalSide,
+                $"{key} doorway to {dest}: Spyro comes back out {(out_ > 0 ? "along" : "against")} its normal, as the catalog says");
+            Check(key != "artisans" || !t.Control.HomeworldOnNormalSide, "every Artisans doorway's normal points into the doorway");
+            var (mx, my, _) = t.BottomMiddle;
+            double startBehind = ((from.X - mx) * Math.Cos(t.WalkInAngle) + (from.Y - my) * Math.Sin(t.WalkInAngle)) / 16, endInFront = -((to.X - mx) * Math.Cos(t.WalkInAngle) + (to.Y - my) * Math.Sin(t.WalkInAngle)) / 16;
+            double aside = Math.Max(Math.Abs(-(from.X - mx) * Math.Sin(t.WalkInAngle) + (from.Y - my) * Math.Cos(t.WalkInAngle)), Math.Abs(-(to.X - mx) * Math.Sin(t.WalkInAngle) + (to.Y - my) * Math.Cos(t.WalkInAngle))) / 16;
+            Check(startBehind is > 70 and < 190 && endInFront is > 70 and < 190 && aside < 40,
+                $"{key} doorway to {dest}: coming back, Spyro starts {startBehind:0} units inside it and walks out to {endInFront:0} units in front, {aside:0} to the side at most");
             foreach (var pose in new[] { new AuthoredPortal(dest, new(4000, 3000, 1400), 0), new AuthoredPortal(dest, new(5000, 6000, 900), 141) })
             {
                 var (record, triggers, _) = NativeHubPortals.PlaceRecord(t, pose);
-                var old = OldPlace(t.Record, t.Triggers.ToArray(), pose);
+                // A doorway whose normal points to the homeworld is turned half way round (its walk-in side to the front);
+                // Tree Tops' stands by the middle of its sloping floor edge, not by its lower foot.
+                var old = OldPlace(t.Record, t.Triggers.ToArray(), t.Control.HomeworldOnNormalSide ? pose with { Heading = (pose.Heading + 128) & 255 } : pose);
+                if (dest == 43)
+                {
+                    var feet = Enumerable.Range(0, t.PointCount).Select(i => (X: I(record, 0x20 + 12 * i), Y: I(record, 0x24 + 12 * i), Z: I(record, 0x28 + 12 * i))).OrderBy(q => q.Z).Take(2).ToArray();
+                    Check(Math.Abs((feet[0].X + feet[1].X) / 2.0 - pose.Position.X * 16) <= 1 && Math.Abs((feet[0].Y + feet[1].Y) / 2.0 - pose.Position.Y * 16) <= 1 && feet[0].Z == (int)(pose.Position.Z * 16),
+                        "Tree Tops' doorway stands with the middle of its floor edge on its place");
+                }
+                else
                 Check(record.AsSpan().SequenceEqual(old.Record) && triggers.SequenceEqual(old.Triggers), $"{key} doorway to {dest} is written exactly as before");
                 foreach (var shape in DoorwayShapes.All)
                 {

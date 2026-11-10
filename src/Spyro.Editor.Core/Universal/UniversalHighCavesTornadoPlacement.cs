@@ -58,7 +58,7 @@ public static class UniversalHighCavesTornadoPlacement
  public static void RequireInitialRow(UniversalRowTemplate t,ReadOnlySpan<byte>r)
  {
   if(r.Length!=88)throw new InvalidDataException("High Caves actor row is truncated.");
-  for(int i=4;i<88;i++)if(i is not(>=12 and <24)&&i is not(0x43 or 0x46 or 0x4A)&&r[i]!=t.Row[i])throw new InvalidDataException("This High Caves object needs its original initial state, animation and collision settings.");
+  for(int i=4;i<88;i++)if(i is not(>=12 and <24)&&i is not(0x43 or 0x46 or 0x4A)&&r[i]!=t.Row[i]&&!UniversalRewardChoice.Allows(t.Row,i,r[i]))throw new InvalidDataException("This High Caves object needs its original initial state, animation and collision settings.");
   if(r[0x43]!=255||r[0x4A]!=255)throw new InvalidDataException("Imported High Caves actors require native unrestricted activation and visibility.");
  }
  public static void RequireGroups(IReadOnlyList<(byte[]Row,UniversalRowTemplate Template)> rows)

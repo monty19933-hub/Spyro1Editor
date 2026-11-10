@@ -65,7 +65,7 @@ internal static class UniversalDarkPassageShapeshifterOwnership
   var original=sourceData.CaptureRow(Key,t.SourceRowIndex);
   if(t.ClassId!=0x35||!t.Row.SequenceEqual(original.Row)||!t.Properties.SequenceEqual(original.Properties)||!t.InternalPointers.SequenceEqual(original.InternalPointers)||!t.ExternalRowPointers.SequenceEqual(original.ExternalRowPointers)||t.DroppedExternalPointers!=original.DroppedExternalPointers||t.Properties.Length!=20||t.InternalPointers.Count!=0||t.ExternalRowPointers.Count!=0||t.SourceRowIndices.Count!=0||t.ImportedRowIndices.Count!=0)
    throw new InvalidDataException("Dark Passage dog placement changed its original scalar properties or row identity.");
-  for(int i=4;i<0x58;i++)if(i is not(>=12 and <24)&&i is not(0x43 or 0x46 or 0x4A)&&row[i]!=original.Row[i])
+  for(int i=4;i<0x58;i++)if(i is not(>=12 and <24)&&i is not(0x43 or 0x46 or 0x4A)&&row[i]!=original.Row[i]&&!UniversalRewardChoice.Allows(original.Row,i,row[i]))
    throw new InvalidDataException("Dark Passage dog placement needs its original initial state, animation and collision inputs.");
   int lamp=BinaryPrimitives.ReadInt32LittleEndian(t.Properties.AsSpan(12));
   if(!IsSource(destinationKey)&&lamp!=-1)

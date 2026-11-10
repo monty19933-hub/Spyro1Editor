@@ -137,6 +137,13 @@ public static class NativeAuthoredProjectExporter
             NativeKillHeights.LowerFor(donors.Disc.Exe,exe,target.LevelId,doc);
             var result=!compiled.NeedsComposition(scene.Placements)?null:compiled.ComposeWithExecutable(donors,scene.Placements,exe,special);
             exe=result?.Executable??exe;
+            // Arriving by balloon in a rebuilt homeworld: the balloon comes down and Spyro steps off at its own start
+            // (the game's landing spots are places of the original homeworld).
+            if(target.LevelId is 10 or 20 or 30 or 40 or 50 or 60)
+            {
+                var arrival=NativeBalloonTravel.Arrival((int)MathF.Round(doc.Spawn.X*16),(int)MathF.Round(doc.Spawn.Y*16),(int)MathF.Round(doc.Spawn.Z*16),doc.Heading&0xFF);
+                NativeBalloonTravel.PatchArrival(exe,target.LevelId,arrival.Landing,arrival.StepOff);
+            }
             returnClasses[target.LevelId]=result==null?[]:NativePortalReturnClass.Capture(result.Classes);
             replacements.Add(target.SourceWadEntry,result?.LevelData??compiled.CopyLevelData());
             if(compiled.Supercharge is {} supercharge)supercharged.Add((target.SourceWadEntry,supercharge));

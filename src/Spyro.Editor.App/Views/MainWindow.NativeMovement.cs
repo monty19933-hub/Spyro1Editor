@@ -222,6 +222,7 @@ public sealed partial class MainWindow
     private void RefreshNativeMovementActionButton()
     {
         RefreshRouteToolsCard();
+        RefreshRewardCard();
         if (_objectNativeMovementButton == null)
             return;
         if (_releaseMode && SelectedNativeMobyPath() is not { IsPlacedObjectRoute: true } ||

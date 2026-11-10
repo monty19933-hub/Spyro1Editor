@@ -46,7 +46,11 @@ public static class NativeNewWorldExport
 
     /// <summary>What was built (for the status line and tests).</summary>
     public sealed record Result(IReadOnlyList<WindowGuest> Guests, IReadOnlyDictionary<int, int> NearDistances, bool AfterMovies,
-        WorldEntranceResult? Entrance = null);
+        WorldEntranceResult? Entrance = null)
+    {
+        /// <summary>What the balloonists' route did to each homeworld (empty: the world is off the route).</summary>
+        public IReadOnlyList<NativeBalloonTravel.Applied> Balloonists { get; init; } = [];
+    }
 
     /// <summary>Adds the world to the finished image at <paramref name="imagePath"/> (rewritten in place).</summary>
     public static async Task<Result> ApplyAsync(UniversalSourceLibrary donors, LevelCatalog catalog, NewWorldDocument world,
@@ -83,6 +87,13 @@ public static class NativeNewWorldExport
             throw new InvalidDataException($"{homeDocument.Name} needs a doorway back to {entryHome.DisplayName}, or Spyro can't leave your world: add one with Add Doorway in {homeDocument.Name}.");
         if (entrance == null && backs.Count > 0)
             throw new InvalidDataException($"{homeDocument.Name}'s doorway back to {entryHome.DisplayName} needs the way into your world there: place it in {entryHome.DisplayName} (World Entrance).");
+        // The world's place on the balloonists' route (not chosen: by whether its homeworld has a balloonist).
+        var homeLevel = levels.First(l => l.Document.WorldLevelId == NewWorldDocument.Homeworld);
+        bool hasBalloonist = homeLevel.Placements.Any(p => !p.Retired && p.SpecialId == null && p.SourceRowIndex >= 0 && !string.IsNullOrEmpty(p.SourceLevelKey) &&
+            BinaryPrimitives.ReadUInt16LittleEndian(donors.Get(p.SourceLevelKey).Data.Row(p.SourceRowIndex).AsSpan(0x36)) is >= UniversalBalloonistRows.BalloonistClass and <= UniversalBalloonistRows.BalloonistClass + 5);
+        var place = world.BalloonPlaceWith(hasBalloonist);
+        if (place.Refusal() is { } placeWhy) throw new InvalidDataException("The world's place on the balloon route: " + placeWhy);
+        var route = place.Route();
         Directory.CreateDirectory(scratch);
         // The world's levels resolve like the game's (doorway names, sky and lettering read the catalog).
         var worldCatalog = new LevelCatalog([.. catalog.Levels, .. levels.Select(l => NewWorldDocument.Target(l.Document.WorldLevelId!.Value, l.Document.Name))]);
@@ -163,8 +174,51 @@ public static class NativeNewWorldExport
                 image.EntryBytes(entryHome.SourceWadEntry - 1), final, NativeWorldEntrance.SceneSky(donors.ImagePath, homeDocument));
             rebuilt[entryHome.SourceWadEntry] = entranceResult.LevelData; rebuilt[entryHome.SourceWadEntry - 1] = entranceResult.Overlay;
             NativeSpyroColours.ApplyToEntries(rebuilt);
-            wad = image.RebuildWad(rebuilt);
         }
+        // The balloonists' route with the world on it: every homeworld's talk and menu routines, and the decision code
+        // and lines of the balloonists around the world's place (the overlays keep their length).
+        List<NativeBalloonTravel.Applied> balloonists = [];
+        var arrival = NativeBalloonTravel.Arrival((int)MathF.Round(homeDocument.Spawn.X * 16), (int)MathF.Round(homeDocument.Spawn.Y * 16),
+            (int)MathF.Round(homeDocument.Spawn.Z * 16), homeDocument.Heading & 0xFF);
+        if (route != null)
+        {
+            int homeAt = FirstEntry + 2 * levels.OrderBy(l => l.Document.WorldLevelId).ToList().FindIndex(l => l.Document.WorldLevelId == NewWorldDocument.Homeworld);
+            foreach (int id in NativeBalloonTravel.Order(route))
+            {
+                if (id == NewWorldDocument.Homeworld)
+                {
+                    var bindings = built.First(b => b.Level.Document.WorldLevelId == id).Bindings;
+                    if (!bindings.TryGetValue(NativeBalloonTravel.TickGlobal, out uint tick) || !bindings.TryGetValue(NativeBalloonTravel.RenderGlobal, out uint render))
+                        throw new InvalidDataException($"{homeDocument.Name} was built without the game's balloonist routines.");
+                    var applied = NativeBalloonTravel.Apply(entries[homeAt], new(id, tick, render, true, arrival.StepOff, world.Name, place.Balloonist), route);
+                    if (applied.Balloonists == 0 && route.AfterLevelId != 60)
+                        throw new InvalidDataException($"{homeDocument.Name} needs a balloonist: on the balloon route your world lies before " +
+                            $"{catalog.Levels.First(l => l.LevelId == route.AfterLevelId + 10).DisplayName}, and only its own balloonist can fly Spyro on. Add one " +
+                            "(Objects › Random objects places him with his balloon, or Add Object… › a balloonist and a balloon), or put the world last on the route in World Settings.");
+                    balloonists.Add(applied);
+                    continue;
+                }
+                var level = catalog.Levels.First(l => l.LevelId == id);
+                int e = level.SourceWadEntry - 1;
+                byte[] overlay = (rebuilt.TryGetValue(e, out var changed) ? changed : image.EntryBytes(e)).ToArray();
+                var now = UniversalExeBindings.Read(final, id);
+                if (!now.TryGetValue(NativeBalloonTravel.TickGlobal, out var t) || !now.TryGetValue(NativeBalloonTravel.RenderGlobal, out var r))
+                    throw new InvalidDataException($"{level.DisplayName} has lost the game's balloonist routines.");
+                // A homeworld the editor rebuilt runs Town Square's copy of the routines, elsewhere than the game's own.
+                bool compiled = UniversalExeBindings.Read(original, id)[NativeBalloonTravel.TickGlobal].Value != t.Value;
+                balloonists.Add(NativeBalloonTravel.Apply(overlay, new(id, t.Value, r.Value, compiled, null, world.Name, null), route));
+                rebuilt[e] = overlay;
+            }
+        }
+        else
+        {
+            // Off the route: a balloonist placed in the world's homeworld still shows the game's menu, under his own name.
+            int homeAt = FirstEntry + 2 * levels.OrderBy(l => l.Document.WorldLevelId).ToList().FindIndex(l => l.Document.WorldLevelId == NewWorldDocument.Homeworld);
+            var bindings = built.First(b => b.Level.Document.WorldLevelId == NewWorldDocument.Homeworld).Bindings;
+            if (bindings.TryGetValue(NativeBalloonTravel.TickGlobal, out uint tick) && bindings.TryGetValue(NativeBalloonTravel.RenderGlobal, out uint render))
+                NativeBalloonTravel.ApplyOffRoute(entries[homeAt], tick, render, place.Balloonist);
+        }
+        if (rebuilt.Count > 0) wad = image.RebuildWad(rebuilt);
         // Spyro's colours (Game Settings) in the world's levels; the rest of the game has them already.
         NativeSpyroColours.ApplyToEntries(entries);
         var placement = NativeLevelWindowDisc.Place(image, wad, entries, final.Length);
@@ -180,6 +234,9 @@ public static class NativeNewWorldExport
             return g;
         }).ToArray();
         NativeLevelWindow.Install(final, placement.Table, guests, world.Name);
+        // The route's part of the executable (the window has named world 7 from its own pool by now).
+        if (route != null)
+            NativeBalloonTravel.PatchExecutable(final, arrival.Landing, balloonists.FirstOrDefault(b => b.LevelId == route.AfterLevelId)?.KeptPages ?? -1);
         if (newGameStart is int start)
         {
             // New Game starts in a level of the world (USA 0x80012780 and 0x8002D4F0: addiu v0,zero,<level id>).
@@ -203,7 +260,7 @@ public static class NativeNewWorldExport
             File.Move(pending, imagePath, overwrite: true);
         }
         finally { if (File.Exists(pending)) File.Delete(pending); }
-        return new Result(guests, near, placement.AfterMovies, entranceResult);
+        return new Result(guests, near, placement.AfterMovies, entranceResult) { Balloonists = balloonists };
     }
 
     /// <summary>Composing a level's objects may change the executable only where the window carries the change into the

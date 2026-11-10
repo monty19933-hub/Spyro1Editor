@@ -101,7 +101,7 @@ public static class UniversalHauntedWizardPlacement
         // flags and collision inputs belong to the authenticated original variant.
         // Translation and yaw are authored; pods/sectors use native unrestricted sentinels.
         for (int i=4;i<row.Length;i++)
-            if (i is not (>=12 and <24) && i is not (0x43 or 0x46 or 0x4A) && row[i]!=template.Row[i])
+            if (i is not (>=12 and <24) && i is not (0x43 or 0x46 or 0x4A) && row[i]!=template.Row[i] && !UniversalRewardChoice.Allows(template.Row,i,row[i]))
                 throw new InvalidDataException("This Haunted actor needs its original state, animation and material settings.");
         if (row[0x43]!=0xFF || row[0x4A]!=0xFF)
             throw new InvalidDataException("Imported Haunted actors require unrestricted native activation and visibility.");

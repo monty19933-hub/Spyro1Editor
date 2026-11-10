@@ -238,6 +238,7 @@ public sealed partial class MainWindow
             new ToolbarAction("Random Level…", RandomLevelAsync),
             new ToolbarAction("Random Homeworld…", RandomHomeworldAsync),
             new ToolbarAction("New World…", NewWorldAsync),
+            new ToolbarAction("World's Balloon Route…", BalloonRouteAsync),
             new ToolbarAction("New Level from Spyro: Year of the Dragon…", NewLevelFromYearOfTheDragonAsync),
             new ToolbarAction("Open Created Level…", OpenMainFreshLevelAsync),
             MenuSeparator,
@@ -928,6 +929,7 @@ public sealed partial class MainWindow
         // runs only outside release mode (RefreshNativeMovementActionButton).
         panel.Children.Add(_objectNativeMovementButton);
         panel.Children.Add(BuildRouteToolsCard());
+        panel.Children.Add(BuildRewardCard());
 
         _objectCopyButton = NewButton("Copy", CopySelectedMoby);
         _objectPasteButton = NewAsyncButton("Paste", PasteMobyClipboardAtLastPointerAsync);

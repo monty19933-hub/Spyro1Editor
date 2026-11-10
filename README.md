@@ -9,7 +9,11 @@ or copied game asset. Users must provide their own legally obtained disc image.
 
 ## Releases
 
-The current release target is **Spyro Editor 1.5**. It adds **Spyro's colours**
+The current release target is **Spyro Editor 2.0**. It puts **your own world on
+the balloonists' route** (a place among the game's worlds, what each balloonist
+asks first, your world's own balloonist), lets you choose **what an enemy
+gives**, makes rebuilt and generated homeworlds work in **every homeworld's
+place**, and adds **Spyro's colours**
 (any colour for each part of Spyro, with ready-made looks), the **Hover** from
 Spyro 3 with its wing flap, games made from Game Settings alone, a tidier
 editor, and **Random Level…** rebuilt on the game's own level logic: levels laid
@@ -45,23 +49,23 @@ rainbow gems are placeable. See the [user guide](docs/public-user-guide.md),
 
 The self-contained release packages are named:
 
-- `SpyroEditor-V1.5-osx-arm64.zip`
-- `SpyroEditor-V1.5-win-x64.zip`
+- `SpyroEditor-V2.0-osx-arm64.zip`
+- `SpyroEditor-V2.0-win-x64.zip`
 
-Stable builds use the `v1.5` identity, schema-3 package manifests and the stable
+Stable builds use the `v2.0` identity, schema-3 package manifests and the stable
 update channel. They do not select beta releases as updates. Earlier numbered
 and dotted beta packages retain their existing compatibility rules and must not
 be replaced or retagged. Installed betas (V2-V5) are offered **Spyro Editor
 Beta V6**: the 1.3 app repackaged by `tools/Build-SpyroEditorBetaBridge.sh`
 so their updater can find it; once opened it follows the stable channel and is
-offered 1.5 (see the [release checklist](docs/beta-release-checklist.md)). Source builds default to V1.5 stable; the release script accepts an explicit
+offered 2.0 (see the [release checklist](docs/beta-release-checklist.md)). Source builds default to V2.0 stable; the release script accepts an explicit
 identity for reproducible packaging:
 
 ```sh
 SPYRO_EDITOR_RELEASE_CHANNEL=stable \
-SPYRO_EDITOR_STABLE_VERSION=1.5 \
-SPYRO_EDITOR_STABLE_INTERNAL_VERSION=1.5.0 \
-tools/Build-SpyroEditorRelease.sh SpyroEditor-V1.5
+SPYRO_EDITOR_STABLE_VERSION=2.0 \
+SPYRO_EDITOR_STABLE_INTERNAL_VERSION=2.0.0 \
+tools/Build-SpyroEditorRelease.sh SpyroEditor-V2.0
 ```
 
 The updater checks release identity, platform, packaged application and manifest,

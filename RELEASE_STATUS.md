@@ -1,4 +1,43 @@
-# Spyro Editor 1.5 — rebuilt 9 November 2026 (not yet published)
+# Spyro Editor 2.0 — 10 November 2026
+
+Stable 2.0 (internal 2.0.0, schema 3, tag `v2.0`). Everything since 1.4 (`CHANGELOG.md`); 1.5 was built twice but
+never published, and all of it is in 2.0: Spyro's colours, Hover with the wing flap, games from Game Settings alone,
+the usability batch, Random Level rebuilt on the game's own level logic with difficulty, Random Homeworld, Random
+objects by the game's measure, egg thieves' colour and run tools, three more doorway shapes.
+
+New on 10 November 2026:
+
+- **The balloonists' route with the new world on it** (`NativeBalloonTravel`, `WorldBalloonPlace` in `new-world.json`,
+  File ▾ › World's Balloon Route…). The game's six saved world bytes (0x800758D0-D5) stand for the route's positions
+  1-6; every homeworld's two balloonist routines (the same code in the six homeworlds and in Town Square, whose copy
+  compiled levels run) are changed in place to count seven positions, list the worlds in route order and fly to the
+  level at the chosen position; the balloonists around the world's place get rewritten decision code (what they ask,
+  which byte they open) and, where they ask something new, their own lines (kept where the routine holds Magic
+  Crafters' egg-thief hints). The world's landing is read from the 16 bytes of the unused name "THIGH MASTERS".
+- **Doorways in every homeworld's place**: twelve of the game's doorways have their normal pointing to the homeworld,
+  so doorways built on them brought Spyro back out behind them (`HomeworldPortalControlCatalog.NormalTowardsHomeworld`,
+  `DoorwayTemplate.WalkInAngle`); Tree Tops' stands on a slope; doorway objects keep their own save identities (Peace
+  Keepers, Magic Crafters and Dream Weavers had too few spare ones); two Magic Crafters statues keep a negative heading.
+- **What an enemy gives** (`UniversalRewardChoice`, Objects › What it gives): row byte +0x53, also for the creature
+  families whose copies must otherwise keep every byte.
+- A rebuilt homeworld's balloon landing is its own start (`NativeBalloonTravel.PatchArrival`).
+
+Updates: 1.0-1.4 (and the unpublished 1.5 builds) find 2.0 through their stable updater. Beta V2-V5 are still offered
+Beta V6 (the 1.3 app), which then follows the stable channel to 2.0.
+
+Checks: gate `--build-all` 636 checks, 0 failed. Disc smokes: balloon travel 7,063 (the changed game code run
+instruction by instruction for every place and state), doorways 1,269, world entrance 186. Emulator (isolated
+DuckStation, fresh card): generated homeworlds in all six homeworlds' places, every doorway in and back out in front
+(Peace Keepers 5/5, Magic Crafters 5/5, Beast Makers 5/5, Dream Weavers 5/5, Gnasty's World 4/4, Artisans 5/5); the
+world after Artisans with both balloonists asking something new (21 checks: the talks, each menu, five flights and
+landings), after Dream Weavers and before Gnasty's World with the game's price kept (15 of 16; the sixteenth was the
+test opening places without the dragons that open them), and last on the route; the entrance's way back in Peace
+Keepers and Beast Makers (in front now); a rebuilt Artisans' balloonist out to Peace Keepers and back to where the
+rebuilt homeworld starts; changed rewards in Stone Hill and in a built level with Misty Bog's creatures (beaten by
+Spyro, the treasure up by the new gem's worth). Evidence: `outputs/SpyroEditor-V2.0-20261110/evidence`.
+Not done: nothing was tried on a PlayStation or on Windows; the Mac app is not notarized.
+
+# Spyro Editor 1.5 — built 28 October and 9 November 2026, never published (its content shipped in 2.0)
 
 Stable 1.5 (internal 1.5.0, schema 3, tag `v1.5` when published). Everything since 1.4 (`CHANGELOG.md`): Spyro's
 colours (`NativeSpyroColours`, `SpyroColourSettings`: Spyro's 17 palettes recoloured part by part in every level, the

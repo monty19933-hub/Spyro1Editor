@@ -1,6 +1,27 @@
-# Spyro Editor 1.5 — supported scope and limitations
+# Spyro Editor 2.0 — supported scope and limitations
 
-- Version 1.5 recolours Spyro (Game Settings › Spyro's colours) in every level,
+- Version 2.0 puts your own world on the balloonists' route (File ▾ → World's
+  Balloon Route…). Played in the emulator with the world after Artisans (both
+  balloonists asking something new), after Dream Weavers and before Gnasty's
+  World (Dream Weavers' balloonist asking what he asks in the game), and last
+  on the route: the talks, the menus in every homeworld visited, each flight
+  and each landing. The other three places are checked by running the changed
+  game code instruction by instruction in the editor's tests. Not tried on a
+  PlayStation. A balloonist can ask for dragons, treasure or the game's twelve
+  dragon eggs, counted over the whole game; not for dragonfly eggs. After
+  Gnasty's World nothing can be asked (his balloonist has no room for it).
+  When Magic Crafters' balloonist asks something new he no longer hints where
+  egg thieves hide. With the world on the route, a saved game from before may
+  find one more world open.
+- A homeworld you rebuild (and a generated one) can stand in any of the six
+  homeworlds' places with all its doorways; each was played in the emulator in
+  2.0 (every doorway in, the level, and back out in front of it). The balloon
+  sets Spyro down where the rebuilt homeworld starts, behind his start heading:
+  keep that spot open.
+- What an enemy gives can be changed only when it gives a gem in the game; a
+  creature that gives butterflies or nothing keeps that. Played in the emulator
+  in Stone Hill and in a built level with Misty Bog's creatures.
+- Version 2.0 recolours Spyro (Game Settings › Spyro's colours) in every level,
   on the title screen, the loading screens and in the cutscenes, and the
   stand-in Spyro that Gnasty Gnorc's level swaps in for him. His mouth keeps its
   colours, the gold Spyro head beside the lives count stays gold, and other
@@ -21,8 +42,9 @@
   Played in the emulator from Artisans: in through the entrance, the doorways
   to two levels and back out of them with Exit Level, gems, a chest and an
   enemy, the way back, a save, and Load Game after switching off. The entrance
-  alone was also played in Beast Makers and Dream Weavers; in Peace Keepers,
-  Magic Crafters and Gnasty's World it is checked by the editor's tests only.
+  alone was also played in Peace Keepers, Beast Makers and Dream Weavers (in 2.0
+  the way back sets Spyro down in front of it in each); in Magic Crafters and
+  Gnasty's World it is checked by the editor's tests only.
   Not tried on a PlayStation. The world's levels can't have dragons (a dragon's
   rescue belongs to its own level) or songs from other games yet. Peace
   Keepers, Magic Crafters, Beast Makers and Dream Weavers have little spare

@@ -39,7 +39,8 @@ public static class NativeDragonRescueCamera
     {
         var turn = For(sourceRow, x, y, z, yaw);
         if (turn.None) return properties;
-        if (properties.Length < Length || Headings.Any(h => I(properties, h) is < 0 or >= 0x1000))
+        // Headings are 4096ths of a turn; two of Magic Crafters' statues keep Spyro's as -2048 (half a turn the other way).
+        if (properties.Length < Length || I(properties, Headings[0]) is < 0 or >= 0x1000 || Headings.Skip(1).Any(h => I(properties, h) is <= -0x1000 or >= 0x1000))
             throw new InvalidDataException("A dragon statue's rescue camera is missing.");
         byte[] moved = properties.ToArray();
         turn.Camera(moved);

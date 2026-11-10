@@ -47,17 +47,27 @@ public sealed class NativeHubPortals
     public IEnumerable<(Vector3f A, Vector3f B, Vector3f C, AuthoredSurfaceKind Kind)> Triggers() =>
         Doorways.SelectMany((d, i) => d.Triggers.Select(t => (t.A, t.B, t.C, AuthoredSurfaceKind.Portal(d.DestinationLevelId, i))));
 
-    /// <summary>The objects every doorway needs, appended to the level's placements (path object first).</summary>
-    /// <summary>Save identities the doorway objects take: original decorations' (never set on any card), so the
-    /// level's own objects keep every free identity.</summary>
+    /// <summary>Spare save identities for doorway objects: original decorations' (never set on any card). A doorway
+    /// object takes one only when its own is taken (<see cref="WithObjects"/>).</summary>
     public IReadOnlyList<int> SaveIdentities { get; }
 
+    /// <summary>The objects every doorway needs, appended to the level's placements (path object first). Each is one of
+    /// the original homeworld's own doorway rows put back, and keeps that row's save identity: the game never marks a
+    /// doorway's path, name or return point as collected, so no card has it set, and the level's own objects keep
+    /// every free identity. (Peace Keepers has only four decorations to borrow identities from; its five doorways'
+    /// fifteen objects all have their own.)</summary>
     public IReadOnlyList<UniversalMobyPlacement> WithObjects(IReadOnlyList<UniversalMobyPlacement> placements)
     {
         var objects = Doorways.SelectMany(d => d.Objects).ToArray();
-        if (objects.Length > SaveIdentities.Count)
-            throw new InvalidDataException($"The original homeworld has {SaveIdentities.Count} unused save identities; {objects.Length} doorway objects need one each.");
-        return [.. placements, .. objects.Select((o, i) => o with { SaveIdentity = SaveIdentities[i] })];
+        HashSet<int> taken = [.. placements.Where(p => p.SaveIdentity != null).Select(p => p.SaveIdentity!.Value)];
+        HashSet<int> own = [.. objects.Select(o => o.SourceRowIndex)];
+        Queue<int> spare = new(SaveIdentities.Where(i => !own.Contains(i) && !taken.Contains(i)));
+        return [.. placements, .. objects.Select(o => o with
+        {
+            SaveIdentity = taken.Add(o.SourceRowIndex) ? o.SourceRowIndex
+                : spare.Count > 0 ? spare.Dequeue()
+                : throw new InvalidDataException("A doorway's objects have no save identity left: this homeworld already uses the original doorway's own and has no unused ones."),
+        })];
     }
 
     /// <summary>After composition: each record names the physical row of its path object.</summary>
@@ -177,33 +187,50 @@ public sealed class NativeHubPortals
         /// <summary>Where the 20-byte sky header starts (after the opening's points).</summary>
         public int StubAt => 0x20 + 12 * PointCount;
         public int SkyAt => StubAt + 20;
-        /// <summary>The bottom middle of the opening (game units): the middle of its lowest points, at the lowest height.</summary>
+        /// <summary>The bottom middle of the opening (game units): the middle of its floor edge (the lowest point and the
+        /// lower of its two neighbours: Tree Tops' doorway stands on a slope, one foot 26 units above the other), at the
+        /// lowest height.</summary>
         public (double X, double Y, double Z) BottomMiddle
         {
             get
             {
                 var points = Enumerable.Range(0, PointCount).Select(Point).ToArray();
-                int bottom = points.Min(p => p.Z);
-                var low = points.Where(p => p.Z - bottom <= 16).ToArray();
-                return (low.Average(p => p.X), low.Average(p => p.Y), bottom);
+                int low = Enumerable.Range(0, points.Length).OrderBy(i => points[i].Z).First();
+                var next = points[(low + 1) % points.Length]; var prev = points[(low + points.Length - 1) % points.Length];
+                var other = next.Z <= prev.Z ? next : prev;
+                return ((points[low].X + other.X) / 2.0, (points[low].Y + other.Y) / 2.0, points[low].Z);
             }
         }
         public double FacingAngle => Math.Atan2(I(Record, 0x0C), I(Record, 0x08));
+        /// <summary>The way Spyro walks into the original doorway from the homeworld (radians): along its normal, or
+        /// against it for the doorways whose normal points to the homeworld
+        /// (<see cref="HomeworldPortalControlDefinition.HomeworldOnNormalSide"/>).</summary>
+        public double WalkInAngle => FacingAngle + (Control.HomeworldOnNormalSide ? Math.PI : 0);
     }
 
     /// <summary>The rigid move from a template doorway to the scene's: its bottom middle to <see cref="AuthoredPortal.Position"/>
-    /// (game units: editor units x 16), its facing turned to <see cref="AuthoredPortal.Heading"/>.</summary>
+    /// (game units: editor units x 16), the way Spyro walks into it (<see cref="DoorwayTemplate.WalkInAngle"/>) turned to
+    /// <see cref="AuthoredPortal.Heading"/>, so that its path leads him in from the front and, coming back, out to the front.</summary>
     public readonly record struct DoorwayPlacement(double Ax, double Ay, double Az, double Turn, double Tx, double Ty, double Tz)
     {
         public static DoorwayPlacement For(DoorwayTemplate template, AuthoredPortal portal)
         {
             var (ax, ay, az) = template.BottomMiddle;
-            return new(ax, ay, az, portal.Heading * Math.PI / 128 - template.FacingAngle, portal.Position.X * 16, portal.Position.Y * 16, portal.Position.Z * 16);
+            return new(ax, ay, az, portal.Heading * Math.PI / 128 - template.WalkInAngle, portal.Position.X * 16, portal.Position.Y * 16, portal.Position.Z * 16);
         }
         public (int X, int Y, int Z) Move(double x, double y, double z)
         {
             double cos = Math.Cos(Turn), sin = Math.Sin(Turn), dx = x - Ax, dy = y - Ay;
             return ((int)Math.Round(Tx + dx * cos - dy * sin), (int)Math.Round(Ty + dx * sin + dy * cos), (int)Math.Round(Tz + z - Az));
+        }
+        /// <summary><see cref="Move"/> for a point of the walk-in path of a doorway with a shape: first brought onto the
+        /// template doorway's middle line (the line through its bottom middle along <paramref name="walkInAngle"/>), so
+        /// Spyro walks in and comes back out straight through the middle of the shape's opening (Tree Tops' own path
+        /// crosses its doorway at a slant, 50 units sideways over its length).</summary>
+        public (int X, int Y, int Z) MoveOnAxis(double x, double y, double z, double walkInAngle)
+        {
+            double ux = Math.Cos(walkInAngle), uy = Math.Sin(walkInAngle), along = (x - Ax) * ux + (y - Ay) * uy;
+            return Move(Ax + along * ux, Ay + along * uy, z);
         }
         public (int X, int Y) Rotate(double x, double y)
         {
@@ -287,6 +314,7 @@ public sealed class NativeHubPortals
             if (world) BinaryPrimitives.WriteInt32LittleEndian(record.AsSpan(0x1C), portal.DestinationLevelId);
             int pointCount = I(record, 4);
             int yawTurn = (int)Math.Round(place.Turn * 128 / Math.PI);
+            bool shaped = DoorwayShapes.Find(portal.Shape) != null;
             UniversalMobyPlacement Object(int row, string id)
             {
                 byte[] r = homeData.Row(row);
@@ -304,7 +332,7 @@ public sealed class NativeHubPortals
                     for (int n = 0; n < count; n++)
                     {
                         int at = target + 8 + 16 * n;
-                        var (px, py, pz) = place.Move(I(p, at), I(p, at + 4), I(p, at + 8));
+                        var (px, py, pz) = shaped ? place.MoveOnAxis(I(p, at), I(p, at + 4), I(p, at + 8), template.WalkInAngle) : place.Move(I(p, at), I(p, at + 4), I(p, at + 8));
                         overrides[at] = px; overrides[at + 4] = py; overrides[at + 8] = pz;
                     }
                 }

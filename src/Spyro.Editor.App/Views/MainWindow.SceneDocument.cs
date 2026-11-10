@@ -332,8 +332,11 @@ public sealed partial class MainWindow
             :flightIntent.WholeGame?" Fly Anywhere is on in this game.":" Fly Anywhere is on in "+DescribeFlightLevels(flightIntent.EnabledLevelIds)+".";
         RememberExportedGame(Path.ChangeExtension(output,".cue"));
         string entryName=world==null?"":_retailCatalog.FindByKey(world.EntryHomeworldKey)?.DisplayName??world.EntryHomeworldKey;
+        // The world's place on the balloonists' route as Create BIN built it (not chosen: by whether its homeworld has a balloonist).
+        var worldPlace=world?.BalloonPlaceWith(worldScenes.FirstOrDefault(s=>s.WorldLevelId==NewWorldDocument.Homeworld) is {} worldHome&&HasBalloonist(worldHome.Objects.Select(o=>o.Value)));
         string worldNote=world==null||worldScenes.Count==0?"":$" Your new world {world.Name} is in it ({Count(worldScenes.Count,"level","levels")}; "+
-            (worldEntrance!=null?$"Spyro walks in from {entryName}":$"it has no way in from {entryName} yet (World Entrance)")+"; save in it with a new save file).";
+            (worldEntrance!=null?$"Spyro walks in from {entryName}":worldPlace?.OnRoute==true?"Spyro flies in by balloon":$"it has no way in from {entryName} yet (World Entrance)")+"; save in it with a new save file)."+
+            (worldPlace?.OnRoute==true?" "+BalloonRouteSentence(world,worldPlace):"");
         _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. All saved level replacements and other saved edits are included."+worldNote+flightNote+PreservedResearchExportNote()+MemoryModeExportNote(memory)+HoverFlapNote();
         }
         // The merged retail image is a working copy for this export only.

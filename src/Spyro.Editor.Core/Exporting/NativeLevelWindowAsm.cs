@@ -47,7 +47,12 @@ internal sealed class NativeCaveAssembler
         public Block Sh(string rt, int off, string rs) => I(0x29, rs, rt, off);
         public Block Sw(string rt, int off, string rs) => I(0x2B, rs, rt, off);
         public Block Addiu(string rt, string rs, int imm) => I(0x09, rs, rt, imm);
+        public Block Slti(string rt, string rs, int imm) => I(0x0A, rs, rt, imm);
         public Block Sltiu(string rt, string rs, int imm) => I(0x0B, rs, rt, imm);
+        public Block Andi(string rt, string rs, int imm) => I(0x0C, rs, rt, imm);
+        /// <summary>rd = rt >> rs (logical).</summary>
+        public Block Srlv(string rd, string rt, string rs) => Rr(rs, rt, rd, 0, 0x06);
+        public Block Jal(uint target) { Items.Add(new(3u << 26, Fix.Jump, null, target)); return this; }
         public Block Ori(string rt, string rs, int imm) => I(0x0D, rs, rt, imm);
         public Block Lui(string rt, int imm) => I(0x0F, "zero", rt, imm);
         public Block Addu(string rd, string rs, string rt) => Rr(rs, rt, rd, 0, 0x21);

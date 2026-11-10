@@ -61,9 +61,6 @@ public sealed partial class MainWindow
         await MakeRandomLevelAsync(choice, preview);
     }
 
-    /// <summary>The homeworld of the game a generated homeworld can take the place of.</summary>
-    internal const string RandomHomeworldProvenKey = "artisans";
-
     /// <summary>The levels a homeworld made in this place gets a doorway to: a homeworld of the game leads to its own
     /// levels, your new world's homeworld to the world's levels and back out to the game. None: the place is not a
     /// homeworld (doorways work only where the game keeps its doorway code).</summary>
@@ -76,10 +73,6 @@ public sealed partial class MainWindow
                 case RandomLevelPlace.OpenLevel:
                 {
                     string? key = _freshSceneDocument?.TargetBinding?.LevelKey ?? _currentLevel?.Key;
-                    // Artisans' doorways are the ones proven with generated homeworlds (and a new world's are built on
-                    // them). The other homeworlds' doorways bring Spyro back out differently (three of Beast Makers' set
-                    // him down behind the doorway, one would not let him in), so they are not offered yet.
-                    if (key != RandomHomeworldProvenKey) return [];
                     if (key == null || _retailCatalog.FindByKey(key) is not { } level || level.LevelId % 10 != 0) return [];
                     return [.. HomeworldPortalControlCatalog.ForLevel(key).OrderBy(d => d.DestinationLevelId)
                         .Select(d => _retailCatalog.Levels.FirstOrDefault(l => l.LevelId == d.DestinationLevelId)?.DisplayName ?? d.DestinationName)];
@@ -273,7 +266,7 @@ public sealed partial class MainWindow
             var names = Doorways();
             whatNote.IsVisible = home;
             whatNote.Text = !home ? "" : places.Count == 0
-                ? "A generated homeworld goes in Artisans' place or in the homeworld of a world of your own (their doorways are the ones proven to work in a generated homeworld). Open Artisans first (the level picker), or make a world with File ▾ › New World…, then choose this again."
+                ? "A generated homeworld goes in the place of one of the game's homeworlds or in the homeworld of a world of your own. Open a homeworld first (the level picker), or make a world with File ▾ › New World…, then choose this again."
                 : $"Spyro arrives in a plaza with rooms off it all round. {(names.Count == 1 ? "A doorway" : $"{names.Count} doorways")} will stand in them, with open floor in front to fly back out onto: to {string.Join(", ", names)}.";
             make.IsEnabled = !home || places.Count > 0;
         }
@@ -456,7 +449,7 @@ public sealed partial class MainWindow
             int doorways = RandomHomeworldDoorways(choice.Place, choice.WorldLevelId).Count;
             if (doorways == 0)
             {
-                _statusText.Text = "A generated homeworld goes in Artisans' place or in the homeworld of a world of your own: open Artisans (or your world's homeworld) and choose Random Homeworld again.";
+                _statusText.Text = "A generated homeworld goes in the place of one of the game's homeworlds or in the homeworld of a world of your own: open a homeworld (or your world's homeworld) and choose Random Homeworld again.";
                 return;
             }
             if (doorways != options.Doorways) { options = options with { Doorways = doorways }; preview = null; }

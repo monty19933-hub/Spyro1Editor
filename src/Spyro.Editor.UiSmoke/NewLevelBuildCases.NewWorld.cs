@@ -52,4 +52,74 @@ internal static partial class NewLevelBuildCases
         Wait(() => window.FreshSceneForTesting?.WorldLevelId == 70, "homeworld opened again", 120);
         Console.WriteLine("NEW_LEVEL_NEW_WORLD_OK");
     }
+
+    /// <summary><c>balloon-route</c>: File ▾ › World's Balloon Route… answered with BALLOON_AFTER (a homeworld key, or
+    /// "off"), BALLOON_TO and BALLOON_ON (kind:count, kinds Nothing, Dragons, Treasure, DragonEggs) and BALLOON_NAME. The
+    /// world file must hold the place, a place the game cannot have must be refused, and the status line must say who
+    /// flies Spyro where. Without BALLOON_AFTER the dialog itself is opened, read and cancelled.</summary>
+    private static void BalloonRouteStep(MainWindow window, string outDir)
+    {
+        string root = Workspace(window).RootPath;
+        var world = NewWorldDocument.Read(root) ?? throw new InvalidOperationException("The project has no world: run new-world first.");
+        static Spyro.Editor.Core.Exporting.BalloonRequirement Price(string? text)
+        {
+            if (string.IsNullOrEmpty(text)) return Spyro.Editor.Core.Exporting.BalloonRequirement.Nothing;
+            string[] parts = text.Split(':');
+            var kind = Enum.Parse<Spyro.Editor.Core.Exporting.BalloonRequirementKind>(parts[0], true);
+            return kind == Spyro.Editor.Core.Exporting.BalloonRequirementKind.Nothing ? Spyro.Editor.Core.Exporting.BalloonRequirement.Nothing : new(kind, int.Parse(parts[1]));
+        }
+        Task Run() { var t = (Task)Invoke(window, "BalloonRouteAsync")!; Wait(() => t.IsCompleted, "World's Balloon Route", 120); t.GetAwaiter().GetResult(); return t; }
+        if (Environment.GetEnvironmentVariable("BALLOON_AFTER") is not { Length: > 0 } after)
+        {
+            // The dialog: its choices and what it says for each place; cancelled, the world keeps its place.
+            var open = (Task)Invoke(window, "BalloonRouteAsync")!;
+            Window? dialog = null;
+            Wait(() => (dialog = window.OwnedWindows.FirstOrDefault(w => w.Name == "BalloonRouteDialog")) != null || open.IsCompleted, "the Balloon Route dialog", 60);
+            if (dialog == null) throw new InvalidOperationException("The Balloon Route dialog did not open: " + Status(window));
+            T Find<T>(string name) where T : Control => Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(dialog).OfType<T>().First(c => c.Name == name);
+            var place = Find<ComboBox>("BalloonRouteAfter");
+            var places = place.ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToList();
+            Console.WriteLine("places: " + string.Join(" | ", places));
+            if (places.Count != 7 || !places[4].Contains("Dream Weavers") || !places[4].Contains("Gnasty") || !places[6].Contains("Not on")) throw new InvalidOperationException("The dialog does not offer the six places and off.");
+            for (int i = 0; i < places.Count; i++)
+            {
+                place.SelectedIndex = i; Pump(10);
+                Console.WriteLine($"  {places[i]}: {Find<TextBlock>("BalloonRouteNote").Text}");
+                bool asks = Find<Grid>("BalloonRouteToWorldRow").IsVisible;
+                if (asks != (i < 5)) throw new InvalidOperationException("The prices show for the wrong places.");
+                if (!Find<Button>("BalloonRouteSave").IsEnabled) throw new InvalidOperationException("A place of the list cannot be saved: " + Find<TextBlock>("BalloonRouteProblem").Text);
+            }
+            // After Dream Weavers the game's own price there (6000 treasure) is offered for flying on.
+            place.SelectedIndex = 4; Pump(10);
+            if (Find<ComboBox>("BalloonRouteOnwardKind").SelectedIndex != 2 || (int)(Find<NumericUpDown>("BalloonRouteOnwardCount").Value ?? 0) != 6000 || Find<ComboBox>("BalloonRouteToWorldKind").SelectedIndex != 0)
+                throw new InvalidOperationException("A new place does not start from the game's own pace.");
+            Find<ComboBox>("BalloonRouteToWorldKind").SelectedIndex = 3; Pump(5);
+            Find<NumericUpDown>("BalloonRouteToWorldCount").Value = 40; Pump(5);
+            if (Find<NumericUpDown>("BalloonRouteToWorldCount").Value != 12) throw new InvalidOperationException("More dragon eggs than the game has can be asked.");
+            Find<TextBox>("BalloonRouteBalloonist").Text = "nils 2"; Pump(5);
+            if (Find<Button>("BalloonRouteSave").IsEnabled) throw new InvalidOperationException("A name the game cannot write can be saved.");
+            Console.WriteLine("  problem shown: " + Find<TextBlock>("BalloonRouteProblem").Text);
+            Snapshot(dialog, Path.Combine(outDir, "balloon-route-dialog.png"));
+            Find<Button>("BalloonRouteCancel").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Wait(() => open.IsCompleted, "cancel", 60);
+            if (NewWorldDocument.Read(root)!.Balloon != world.Balloon) throw new InvalidOperationException("Cancel changed the world's place.");
+            Console.WriteLine("NEW_LEVEL_BALLOON_ROUTE_DIALOG_OK");
+            return;
+        }
+        // A place the game cannot have is refused and nothing is saved.
+        window.BalloonRouteChoiceForTesting = () => new("gnastysworld", new(Spyro.Editor.Core.Exporting.BalloonRequirementKind.Dragons, 5), Spyro.Editor.Core.Exporting.BalloonRequirement.Nothing);
+        Run();
+        Console.WriteLine("refused: " + Status(window));
+        if (NewWorldDocument.Read(root)!.Balloon != world.Balloon || !Status(window).Contains("not changed")) throw new InvalidOperationException("A price was accepted around the last place.");
+        var chosen = new WorldBalloonPlace(after, Price(Environment.GetEnvironmentVariable("BALLOON_TO")), Price(Environment.GetEnvironmentVariable("BALLOON_ON")),
+            Environment.GetEnvironmentVariable("BALLOON_NAME") is { Length: > 0 } name ? name : WorldBalloonPlace.DefaultBalloonist);
+        window.BalloonRouteChoiceForTesting = () => chosen;
+        Run();
+        Console.WriteLine("status: " + Status(window));
+        var saved = NewWorldDocument.Read(root)!;
+        if (saved.Balloon != chosen) throw new InvalidOperationException("The world file does not hold the chosen place.");
+        if (chosen.OnRoute && !Status(window).Contains(world.Name)) throw new InvalidOperationException("The status line does not say who flies Spyro where.");
+        Console.WriteLine($"world {saved.Name}: after {saved.Balloon!.After}, to the world {saved.Balloon.ToWorld.Describe()}, onward {saved.Balloon.Onward.Describe()}, balloonist {saved.Balloon.Balloonist}");
+        Console.WriteLine("NEW_LEVEL_BALLOON_ROUTE_OK");
+    }
 }

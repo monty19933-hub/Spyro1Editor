@@ -1,4 +1,4 @@
-# Spyro Editor 1.5
+# Spyro Editor 2.0
 
 Spyro Editor changes the levels of the original PlayStation game *Spyro the Dragon*
 (USA) and builds a new, playable copy of the game from your changes. It never
@@ -72,6 +72,12 @@ you leave a level or close the editor; terrain changes ask first.
 **Selected object**
 
 - **Edit…** changes the name, gem or reward value, position and facing.
+- **What it gives** appears for an enemy, a chest or anything else that pays out
+  a gem when beaten or opened: choose any of the five gems (red 1, green 2, blue
+  5, gold 10, pink 25) and that is what Spyro gets. It works for the level's own
+  creatures and for ones you added from other levels; the level's treasure total
+  follows. A creature that gives nothing in the game (it gives butterflies, or
+  comes back to life) has no such choice.
 - **Replace…** swaps a chest or enemy for another kind known to work in this level.
 - **Copy** and **Paste** (⌘C / ⌘V, or Ctrl+C / Ctrl+V, in the view) duplicate the
   selected object at the pointer.
@@ -421,6 +427,45 @@ homeworld: its Terrain tab has a **World Entrance** card.
   homeworld (**Add Doorway…**, then the homeworld's name). Create BIN asks for
   both together: an entrance without a way back would trap Spyro in your world.
 
+### Your world on the balloon route
+
+The game's balloonists fly Spyro from world to world in a fixed order, each once
+Spyro has done what he asks (ten dragons in Artisans, 1,200 treasure in Peace
+Keepers, and so on). **File ▾ → World's Balloon Route…** gives your world a place
+in that order.
+
+- **Your world comes** after one of the game's six homeworlds: "After Dream
+  Weavers, before Gnasty's World", for one. The balloonist of the homeworld
+  before it then flies Spyro to your world, your world's own balloonist flies him
+  on to the world that used to come next, and every balloonist's menu lists your
+  world in its place once it is open.
+- **To fly Spyro to your world** the balloonist before it asks for what you
+  choose: nothing, a number of dragons rescued, an amount of treasure found, or a
+  number of dragon eggs recovered, counted over the whole game. **To fly Spyro
+  on**, your world's balloonist asks for what you choose in the same way. A new
+  place starts from the game's own pace: free to your world, and what the game
+  asks at that point to fly on. Dragons and treasure of your world's levels
+  count; dragon eggs are the twelve the game's thieves carry.
+- A balloonist who asks for something else than he does in the game says so in
+  his own words ("Come back when you have rescued 40 dragons."), and invites
+  Spyro to the right world by name.
+- **Your world's balloonist** has a name of your choosing (his talk is headed
+  with it). He must stand in your world's homeworld, with his balloon:
+  **Objects → Random objects** places them ("The way out"), or add a balloonist
+  and a balloon with **Add object…**. Create BIN says so if he is missing.
+- **After Gnasty's World** your world is the last on the route: Gnasty's World's
+  balloonist opens it with everything else and can ask for nothing, and your
+  world needs no balloonist (with one, Spyro can fly back out).
+- **Not on the balloon route**: the balloonists do not know your world; Spyro
+  reaches it through its doorway only.
+- A world that has no place chosen follows the homeworld its doorway is in when
+  its homeworld has a balloonist, and is last on the route when it has none.
+- The balloon sets Spyro down where your world's homeworld starts. The entrance
+  doorway is no longer needed to reach a world on the route (it still works).
+
+With your world on the route, a saved game made before (from the original game
+or an earlier export) may find one more world open than it had.
+
 A rebuilt level holds up to 4,096 terrain tiles. Untextured tiles are split into
 smaller triangles automatically. Walls stop Spyro from the side you can see them.
 The game gives close-up detail to the textured tiles near the camera, and only so
@@ -433,7 +478,8 @@ units across, like the game's own) or untextured faces.
 **Create BIN** builds your world into the game with everything else: its
 homeworld, its levels, their doorways, the entrance and the way back.
 
-- Spyro walks in through the entrance. In your world's homeworld each doorway
+- Spyro walks in through the entrance or flies in by balloon (**World's Balloon
+  Route…**). In your world's homeworld each doorway
   leads to its level; **Return Home** and **Exit Level** in a level bring him back
   out of that level's doorway, and the doorway home takes him back to the
   entrance. Create BIN can also start **New Game** in your world.
@@ -515,13 +561,12 @@ window) makes a homeworld: Spyro arrives in a plaza with rooms off it all round,
 and a doorway stands in the middle of a room for every level the homeworld leads
 to, with open floor in front of it and behind it for Spyro to come back out onto.
 
-- A generated homeworld goes in Artisans' place (open Artisans first) or in the
-  homeworld of your own world. The other homeworlds are not offered yet: their
-  doorways bring Spyro back out differently, and are not proven with generated
-  layouts.
-- In Artisans' place it gets a doorway to each of Artisans' levels (Stone Hill,
-  Dark Hollow, Town Square, Toasty and Sunny Flight). In your own world it gets
-  a doorway to each level you made and the way back out to the game.
+- A generated homeworld goes in the place of any of the game's six homeworlds
+  (open that homeworld first) or in the homeworld of your own world.
+- In a homeworld's place it gets a doorway to each of that homeworld's levels
+  (in Artisans' place: Stone Hill, Dark Hollow, Town Square, Toasty and Sunny
+  Flight; four in Gnasty's World). In your own world it gets a doorway to each
+  level you made and the way back out to the game.
 - The doorways' look follows the level and is different every time: a shape of
   the look's kind (round, wide and tall stone arches in the Artisans' style;
   square, slanted and gabled gates for the Peace Keepers; pointed and tall
@@ -533,9 +578,10 @@ to, with open floor in front of it and behind it for Spyro to come back out onto
   destination's sky fills each opening exactly. **Terrain → Doorways** moves,
   turns, reshapes or retargets any of them afterwards; their frames are ordinary
   tiles you can repaint.
-- With **Then fill it with objects for me**, a homeworld in Artisans' place also
-  gets its balloonist and his balloon (the way to the other worlds) and its
-  dragons.
+- With **Then fill it with objects for me**, the homeworld also gets its
+  balloonist and his balloon (the way to the other worlds) and, in a homeworld of
+  the game, its dragons. Arriving by balloon, Spyro is set down where the
+  homeworld starts.
 
 ### Random objects
 
@@ -576,7 +622,9 @@ measured from the disc:
   comes from enemies. Chests are mostly baskets and strong chests, with some
   spring chests and a few three-flame and firework chests, and each gives what
   its kind gives in the game (a basket mostly a green or a blue gem). Enemies
-  give what they give in their own level.
+  give what they give in their own level; when that would leave too little for
+  loose gems of every colour, chests and then enemies give a colour less.
+  (Select any of them and use **What it gives** to choose yourself.)
 - Loose gems are mostly reds and greens, in ones, twos and threes about a hundred
   units apart, a group all one colour, more than half of them by the walls and
   the rest along the paths and out in the rooms; the best gems go to the hardest

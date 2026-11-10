@@ -233,6 +233,12 @@ public sealed partial class MainWindow
             entries.FirstOrDefault(e => e.ClassId == UniversalBalloonistRows.BalloonistClass + home / 10 - 1 && e.Placeable) is { } guide &&
             guide.Variants.FirstOrDefault(v => v.RestrictionReason == null && string.Equals(v.SourceLevelKey, key, StringComparison.OrdinalIgnoreCase)) is { } his && !Has(his.SourceRow))
             balloonist = (guide, his);
+        // Your world's homeworld: Artisans' balloonist (it is built on Artisans' place), unless the world is off the route.
+        else if (_freshSceneDocument.WorldLevelId == NewWorldDocument.Homeworld && (NewWorldDocument.Read(root)?.Balloon?.OnRoute ?? true) &&
+            entries.FirstOrDefault(e => e.ClassId == UniversalBalloonistRows.BalloonistClass && e.Placeable) is { } pilot &&
+            pilot.Variants.FirstOrDefault(v => v.RestrictionReason == null && v.SourceLevelKey == NativeNewWorldExport.TemplateKey) is { } marco &&
+            !live.Any(m => m.SourceByte37 == 0 && m.SourceByte36 is >= UniversalBalloonistRows.BalloonistClass and <= UniversalBalloonistRows.BalloonistClass + 5))
+            balloonist = (pilot, marco);
         bool exit = choice.Exit && (gap.ExitNeeded && !gap.ExitPresent || balloonist != null);
         List<(int Row, UniversalRowTemplate Template, int Nodes)> thieves = [];
         foreach (int row in thiefRows)
@@ -381,7 +387,7 @@ public sealed partial class MainWindow
         _startBlankBusy = true;
         List<string> ids = [], missing = [];
         Dictionary<string, int> placed = [];
-        Dictionary<Moby, int> givers = [];
+        Dictionary<Moby, int> givers = [], foeGivers = [];
         // The level's save rows: every object takes one, and some kinds bring others with them (a wizard his helpers,
         // a balloonist his balloon). What does not fit is taken out again, so the level can always be saved.
         int budget = Math.Max(0, capacity - LevelFillSpareRows), usedRows = 0, leftOut = 0;
@@ -494,9 +500,13 @@ public sealed partial class MainWindow
                             if (objects.Count > 0 && route != null) objects[0].UniversalPathNodes = route;
                         }
                         foe++;
-                        // An enemy gives what it gives in its own level (many kinds are built around their own settings,
-                        // and Create BIN refuses them changed); the loose gems make up the difference below.
-                        if (objects.Count > 0) Track(objects, "enemy");
+                        // An enemy starts with what it gives in its own level. One that gives a gem can give another
+                        // (UniversalRewardChoice), so it takes part in the balancing below; the last in line, after the chests.
+                        if (objects.Count > 0)
+                        {
+                            Track(objects, "enemy");
+                            if (CanChooseReward(objects[0]) && LevelScatter.Colours.Contains(objects[0].TreasureValue)) foeGivers[objects[0]] = objects[0].TreasureValue;
+                        }
                         break;
                     }
                     case LevelScatter.Kind.Animal:
@@ -539,15 +549,26 @@ public sealed partial class MainWindow
                 }
             }
             // Enemies give what they give in their own levels, so the chests take up the difference: up or down a colour
-            // at a time until the loose gems have about the share of the treasure that was planned for them.
+            // at a time until the loose gems have about the share of the treasure that was planned for them. When the
+            // chests are down to red gems and the loose gems still have too little (a level's enemies that all give
+            // gold and pink), the enemies come down a colour at a time too.
             int planned = plan.Gems.Sum(g => g.Value);
-            for (int guard = 0; guard < 600 && givers.Count > 0 && planned > 0; guard++)
+            // One gem of every colour costs 43; with a few reds beside them the loose gems need 48 at least.
+            double least = Math.Max(planned * 0.8 - 2, choice.Treasure >= 100 ? 48 : 0);
+            for (int guard = 0; guard < 900 && givers.Count + foeGivers.Count > 0 && planned > 0; guard++)
             {
                 int left = choice.Treasure - _currentMobys.Where(m => !m.IsRemoved).Sum(m => m.TreasureValue);
-                if (left < planned * 0.8 - 2)
+                if (left < least)
                 {
                     var rich = givers.Where(g => g.Value > 1).OrderByDescending(g => g.Value).ThenBy(g => g.Key.TrueIndex).Select(g => g.Key).FirstOrDefault();
-                    if (rich == null) break;
+                    if (rich == null)
+                    {
+                        var foeRich = foeGivers.Where(g => g.Value > 1).OrderByDescending(g => g.Value).ThenBy(g => g.Key.TrueIndex).Select(g => g.Key).FirstOrDefault();
+                        if (foeRich == null) break;
+                        int less = LevelScatter.Colours[Array.IndexOf(LevelScatter.Colours, foeGivers[foeRich]) - 1];
+                        Give(foeRich, less); foeGivers[foeRich] = less;
+                        continue;
+                    }
                     int lower = LevelScatter.Colours[Array.IndexOf(LevelScatter.Colours, givers[rich]) - 1];
                     Give(rich, lower); givers[rich] = lower;
                 }

@@ -63,7 +63,7 @@ public static class UniversalBeastMistyBoarPlacement
  public static void RequireInitialRow(UniversalRowTemplate t,ReadOnlySpan<byte> row)
  {
   if(!Applies(t))return;if(row.Length!=UniversalLevelData.RowStride)throw new InvalidDataException("Boar row is truncated.");
-  for(int i=4;i<row.Length;i++)if(i is not (>=12 and <24) && i is not(0x43 or 0x46 or 0x4A)&&row[i]!=t.Row[i])throw new InvalidDataException("This boar needs its original state, animation and collision settings.");
+  for(int i=4;i<row.Length;i++)if(i is not (>=12 and <24) && i is not(0x43 or 0x46 or 0x4A)&&row[i]!=t.Row[i]&&!UniversalRewardChoice.Allows(t.Row,i,row[i]))throw new InvalidDataException("This boar needs its original state, animation and collision settings.");
   if(row[0x43]!=255||row[0x4A]!=255)throw new InvalidDataException("Imported boar needs unrestricted activation and visibility.");
  }
  private static void RequireCertificate(UniversalRowTemplate t)

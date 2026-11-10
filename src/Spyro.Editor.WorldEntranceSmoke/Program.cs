@@ -210,6 +210,18 @@ Check(Throws(() => NativeWorldEntrance.Apply(null!, catalogFree, new WorldEntran
 Check(Throws(() => NativeWorldEntrance.Apply(null!, catalogFree, new WorldEntranceSpec("artisans", new Vector3f(1000, 1000, 100), 0, "stone-arch"), [], [], [], new byte[20]), "sky"),
     "a destination sky that is not a native sky is refused");
 
+if (args.Length >= 2 && args[0] == "--spots")
+{
+    // --spots <usa disc>: the smoke's entrance spot in each homeworld (300 units in front of its first doorway).
+    var spotCatalog = LevelCatalog.Load(Proof.Root());
+    var spotLibrary = new UniversalSourceLibrary(args[1], spotCatalog);
+    foreach (var key in NewWorldDocument.HomeworldKeys)
+    {
+        var (position, heading) = Source.Spot(spotLibrary, spotCatalog, key);
+        Console.WriteLine($"{key} {position.X:0},{position.Y:0},{position.Z:0},{heading}");
+    }
+    return 0;
+}
 if (args.Length >= 2 && args[0] == "--source")
 {
     Source.Run(args[1], Check, Throws);
@@ -227,7 +239,7 @@ static class Source
     public static (Vector3f Position, int Heading) Spot(UniversalSourceLibrary lib, LevelCatalog catalog, string key)
     {
         var t = NativeWorldEntrance.Template(lib, catalog, key);
-        var (bx, by, bz) = t.BottomMiddle; double a = t.FacingAngle;
+        var (bx, by, bz) = t.BottomMiddle; double a = t.WalkInAngle;
         return (new Vector3f((float)Math.Round(bx / 16 - Math.Cos(a) * 300), (float)Math.Round(by / 16 - Math.Sin(a) * 300), (float)Math.Round(bz / 16)),
             (int)Math.Round(a * 128 / Math.PI) & 255);
     }

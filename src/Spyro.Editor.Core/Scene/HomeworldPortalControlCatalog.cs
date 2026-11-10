@@ -9,6 +9,13 @@ public sealed record HomeworldPortalControlDefinition(
     int CompanionTrueIndex)
 {
     public IReadOnlyList<int> TrueIndexes => [PathTrueIndex, LetteringTrueIndex, CompanionTrueIndex];
+
+    /// <summary>Which side of the original doorway the homeworld is on. Coming back from the level, the game stands Spyro
+    /// on one node of the doorway's path and walks him to the other (USA 0x80015F1C: the path object's word +0x10 says
+    /// which node he starts from), so he comes out on the side that second node is on. In Artisans every record's normal
+    /// points into the doorway, away from the homeworld; twelve doorways of the other homeworlds have it the other way
+    /// round. A doorway built on one of those is turned half way, or Spyro would come back out behind it.</summary>
+    public bool HomeworldOnNormalSide => HomeworldPortalControlCatalog.NormalTowardsHomeworld.Contains(DestinationLevelId);
 }
 
 public static class HomeworldPortalControlCatalog
@@ -50,6 +57,10 @@ public static class HomeworldPortalControlCatalog
         new("gnastysworld", 63, "Gnasty Gnorc", 10, 11, 12),
         new("gnastysworld", 64, "Gnasty's Loot", 13, 14, 15)
     ];
+
+    /// <summary>The doorways whose record normal points to the homeworld's side (see
+    /// <see cref="HomeworldPortalControlDefinition.HomeworldOnNormalSide"/>); checked against the disc by DoorwaySmoke.</summary>
+    public static IReadOnlySet<int> NormalTowardsHomeworld { get; } = new HashSet<int> { 21, 23, 24, 31, 32, 34, 41, 43, 45, 53, 55, 61 };
 
     public static IReadOnlyList<HomeworldPortalControlDefinition> ForLevel(string levelKey)
     {

@@ -439,7 +439,8 @@ public static class NativeWorldEntrance
                 for (int n = 0; n < count; n++)
                 {
                     int at = target + 8 + 16 * n;
-                    var (px, py, pz) = place.Move(I(p, at), I(p, at + 4), I(p, at + 8));
+                    // The entrance always has a shape: its path runs through the middle of the opening.
+                    var (px, py, pz) = place.MoveOnAxis(I(p, at), I(p, at + 4), I(p, at + 8), template.WalkInAngle);
                     overrides[at] = px; overrides[at + 4] = py; overrides[at + 8] = pz;
                 }
             }

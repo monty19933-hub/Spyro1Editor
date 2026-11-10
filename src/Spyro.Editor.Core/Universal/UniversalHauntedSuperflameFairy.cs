@@ -30,7 +30,7 @@ internal static class UniversalHauntedSuperflameFairy
  internal static UniversalRowTemplate Rebase(UniversalLevelData data,UniversalOverlay overlay,UniversalRowTemplate t,byte[] row)
  {
   Require(data,overlay,t);if(row.Length!=88)throw new InvalidDataException("Fairy row is truncated.");
-  for(int i=4;i<row.Length;i++)if(i is not(>=12 and <24)&&i is not(0x43 or 0x46 or 0x4A)&&row[i]!=t.Row[i])throw new InvalidDataException("This fairy needs its original state, animation, material, collision and duration settings.");
+  for(int i=4;i<row.Length;i++)if(i is not(>=12 and <24)&&i is not(0x43 or 0x46 or 0x4A)&&row[i]!=t.Row[i]&&!UniversalRewardChoice.Allows(t.Row,i,row[i]))throw new InvalidDataException("This fairy needs its original state, animation, material, collision and duration settings.");
   if(row[0x43]!=255||row[0x4A]!=255)throw new InvalidDataException("The imported fairy needs unrestricted native visibility and activation.");
   var properties=t.Properties.ToArray();for(int axis=0;axis<3;axis++){int delta=checked(I(row,12+4*axis)-I(t.Row,12+4*axis));foreach(int vector in new[]{0,0x44,0x54,0x64,0x74})BinaryPrimitives.WriteInt32LittleEndian(properties.AsSpan(vector+4*axis),checked(I(properties,vector+4*axis)+delta));}
   return t with{Properties=properties};

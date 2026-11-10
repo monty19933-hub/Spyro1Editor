@@ -57,7 +57,7 @@ if (args.Length >= 6 && args[0] == "--dump")
     return 0;
 }
 // Gate (no disc): [repo root] [--maps <folder>] [--seeds N]
-if (args.Length == 0 || args[0] is not ("--fingerprint" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--scatter-facts" or "--model-colours" or "--thief-colours"))
+if (args.Length == 0 || args[0] is not ("--fingerprint" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--balloon-facts" or "--scatter-facts" or "--model-colours" or "--thief-colours"))
 {
     string repo = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : Directory.GetCurrentDirectory();
     string? maps = args.SkipWhile(a => a != "--maps").Skip(1).FirstOrDefault();
@@ -428,7 +428,33 @@ if (args.Length >= 3 && args[0] == "--doorway-facts")
                 }
                 double turned = ((r[0x46] * 360.0 / 256 - t.FacingAngle * 180 / Math.PI) % 360 + 360) % 360;
                 Console.WriteLine($"    {name,-6} class 0x{BitConverter.ToUInt16(r, 0x36):X3} at {Local(I(r, 0x0C), I(r, 0x10), I(r, 0x14))} yaw {r[0x46]} (from the facing {turned:0}°)" + (nodes.Count > 0 ? " nodes " + string.Join(" ", nodes) : ""));
+                if (Environment.GetEnvironmentVariable("DOORWAY_WORDS") == "1")
+                    Console.WriteLine("           words " + string.Join(" ", Enumerable.Range(0, Math.Min(captured.Properties.Length / 4, 20)).Select(k => I(captured.Properties, 4 * k).ToString("X"))) + " pointers " + string.Join(" ", captured.InternalPointers.Select(q => $"{q.Offset:X}->{q.Target:X}")));
             }
+        }
+    }
+    return 0;
+}
+if (args.Length >= 3 && args[0] == "--balloon-facts")
+{
+    // --balloon-facts <disc> <repo>: every homeworld's balloonist and balloon rows beside the game's arrival tables
+    // (USA 0x8006EA4C: where the balloon lands, 16 bytes a world; 0x8006EADC: where Spyro steps off, 8 bytes a world).
+    var catalog = LevelCatalog.Load(args[2]);
+    var library = new UniversalSourceLibrary(args[1], catalog);
+    byte[] exe = library.Disc.Exe;
+    int W(uint a) => BitConverter.ToInt32(exe, (int)(a - 0x80010000 + 0x800));
+    foreach (var home in catalog.Levels.Where(l => l.LevelId % 10 == 0 && l.LevelId is >= 10 and <= 60))
+    {
+        int w = home.LevelId / 10 - 1;
+        var data = library.Get(home.Key).Data;
+        Console.WriteLine($"{home.Key}: lands at ({W(0x8006EA4C + 16 * (uint)w) / 16.0:0.#},{W(0x8006EA50 + 16 * (uint)w) / 16.0:0.#},{W(0x8006EA54 + 16 * (uint)w) / 16.0:0.#}) yaw {W(0x8006EA58 + 16 * (uint)w)}, Spyro steps off at ({W(0x8006EADC + 8 * (uint)w) / 16.0:0.#},{W(0x8006EAE0 + 8 * (uint)w) / 16.0:0.#})");
+        for (int i = 0; i < data.Scene().RowCount; i++)
+        {
+            byte[] r = data.Row(i);
+            int c = BitConverter.ToUInt16(r, 0x36);
+            if (c is not ((>= 0xBB and <= 0xC0) or 0x1A0 or 0xFA)) continue;
+            var t = data.CaptureRow(home.Key, i);
+            Console.WriteLine($"    row {i} class 0x{c:X3} at ({BitConverter.ToInt32(r, 0x0C) / 16.0:0.#},{BitConverter.ToInt32(r, 0x10) / 16.0:0.#},{BitConverter.ToInt32(r, 0x14) / 16.0:0.#}) yaw {r[0x46]} state {r[0x48]} props {t.Properties.Length} bytes: {string.Join(" ", Enumerable.Range(0, Math.Min(t.Properties.Length / 4, 14)).Select(k => BitConverter.ToInt32(t.Properties, 4 * k).ToString("X")))} rows {string.Join(",", t.SourceRowIndices.Select(q => q.ToString()))}");
         }
     }
     return 0;

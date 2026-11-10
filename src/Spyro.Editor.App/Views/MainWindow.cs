@@ -27556,7 +27556,12 @@ public sealed partial class MainWindow : Window
             if (editsRewardGem)
             {
                 if (changedGemBytes)
+                {
                     moby.Flag4B = selectedGem.IdByte;
+                    // An added object's reward is written into its row by Create BIN only when it was chosen.
+                    if (moby.IsAdded && moby.CrossLevelRequiredExporterFeature == UniversalMobyExport.RequiredExporterFeature && UniversalSpecialIdOf(moby) == null)
+                        moby.UniversalRewardByte = selectedGem.IdByte;
+                }
             }
             else if (changedGemBytes)
             {
@@ -28293,8 +28298,9 @@ public sealed partial class MainWindow : Window
         AddHelpSection(panel, "Levels of your own", [
             "File ▾ > New Level… starts a level of your own (a grassy meadow to build on) that opens when you choose New Game. A project holds one; the editor asks before replacing it and keeps a copy in the project's backups folder.",
             "File ▾ > Random Level… makes a whole level the way the game's own levels are made (rooms along a route, sloping paths, steps, lookouts to glide from), in the style of a level you pick: its ground, rock, colours, sky and music, as easy or hard as you choose (Easy, Medium, Hard, Kaizo). New Level from Spyro: Year of the Dragon… rebuilds one of that game's levels from your own disc.",
-            "File ▾ > Random Homeworld… makes a homeworld the same way: a plaza with rooms off it and a doorway to every level the homeworld leads to. It goes in Artisans' place (open Artisans first) or in the homeworld of a world of your own.",
+            "File ▾ > Random Homeworld… makes a homeworld the same way: a plaza with rooms off it and a doorway to every level the homeworld leads to. It goes in the place of any of the game's homeworlds (open that homeworld first) or in the homeworld of a world of your own.",
             "Objects > Random objects fills a level you built: choose a level type, an enemy type, a difficulty, how many gems and dragonfly eggs, and press Randomize. Enemies, animals, every kind of chest, egg thieves, dragons, the way out and gems of every colour are placed by the measure of the game's own levels (about as many chests, enemies and loose gems as a level of the game with that treasure has); press it again for another arrangement.",
+            "An enemy or a chest: select it and choose under \"What it gives\" which gem Spyro gets for it (red, green, blue, gold or pink).",
             "An egg thief you added: select him and Edit Route… and the \"Its run\" tools appear. Drag the run's points in the 3D view, or use New Loop Here, Bigger, Smaller, Turn and Other Way Round. Game Settings > Egg thieves' colour gives every thief in the game another colour.",
             "File ▾ > Start Blank in Current Level… replaces the open level with the same meadow so you can rebuild it. Restore Before Clear… brings the previous version back.",
             "File ▾ > Fill In What the Level Needs… adds the level's own dragons and egg thieves, a Return Home vortex, enemies and gems.",
@@ -28305,7 +28311,8 @@ public sealed partial class MainWindow : Window
             "File ▾ > New World… makes a world of your own: a homeworld and up to four levels, picked from the level list like the game's own.",
             "In your world's homeworld, the Terrain tab's Doorways card adds a doorway to each of its levels and one back to the game's homeworld it is entered from.",
             "Open that game homeworld: its Terrain tab's World Entrance card places the way into your world.",
-            "Create BIN builds it all into the game: Spyro walks in through the entrance, the inventory gets a page for your world, and it saves in its own save file."
+            "File ▾ > World's Balloon Route… gives your world a place among the balloonists' worlds (after Dream Weavers and before Gnasty's World, say): the balloonist before it flies Spyro there, your world's own balloonist flies him on, and each asks for what you choose first (nothing, dragons, treasure or dragon eggs). Your world's homeworld needs a balloonist and his balloon for it: Objects > Random objects places them.",
+            "Create BIN builds it all into the game: Spyro walks in through the entrance or flies in by balloon, the inventory gets a page for your world, and it saves in its own save file."
         ]);
 
         AddHelpSection(panel, "Typing and shortcuts", [

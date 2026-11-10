@@ -91,7 +91,7 @@ public sealed partial class MainWindow
             ApplyEditorExperienceForCurrentLevel(_modernTerrainWorkspaceTab);
             string entry = _retailCatalog.FindByKey(choice.EntryHomeworldKey)?.DisplayName ?? choice.EntryHomeworldKey;
             _statusText.Text = $"{choice.Name} is made: its homeworld and {Count(choice.Levels, "level", "levels")}, all in the level list. " +
-                $"Players reach it through a doorway in {entry}. Build each level like any level of your own.";
+                $"Players reach it through a doorway in {entry}, and by balloon once its homeworld has a balloonist (File ▾ › World's Balloon Route… says where it lies among the game's worlds). Build each level like any level of your own.";
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         { _statusText.Text = "Could not make the new world: " + e.Message; }

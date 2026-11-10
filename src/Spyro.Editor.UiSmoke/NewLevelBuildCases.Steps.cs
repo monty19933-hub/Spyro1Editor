@@ -73,6 +73,8 @@ internal static partial class NewLevelBuildCases
             case "retail-ground": RetailGround(window, outDir); return true;
             case "retail-supercharge": RetailSupercharge(window, outDir); return true;
             case "new-world": NewWorldStep(window, outDir); return true;
+            case "balloon-route": BalloonRouteStep(window, outDir); return true;
+            case "rewards": RewardsStep(window, outDir); return true;
             case "random-level": RandomLevelStep(window, outDir); return true;
             case "random-dialog": RandomDialogStep(window, outDir); return true;
             case "random-objects": RandomObjectsStep(window, outDir); return true;

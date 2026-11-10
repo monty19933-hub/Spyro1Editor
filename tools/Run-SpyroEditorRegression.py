@@ -266,6 +266,10 @@ CORE_CASES = (
     # the flagged ones, the rest renumbered, every cell kept), the frame as one added sector, the way back's facts, the
     # saved placement (world-entrance.json) and refusals.
     ("WorldEntranceSmoke", "WORLD_ENTRANCE_FREE_OK checks=57"),
+    # The balloonists' route with the project's new world on it (NativeBalloonTravel): the route and its refusals, a
+    # balloonist's lines for every price, his decision code written for every place and run instruction by instruction
+    # (a small MIPS interpreter) for every state of the game: the page he opens with, the byte he sets, what he leaves alone.
+    ("BalloonTravelSmoke", "BALLOON_TRAVEL_FREE_OK checks=2938"),
     ("RandomLevelSmoke", "RANDOM_LEVEL_SMOKE_OK checks=649"),
     # Supercharge ground in built levels and in the game's own levels (Tile Type…): which scenes and saved terrain edits
     # need Spyro's supercharge animations 25 and 45, the texture rectangles a face table draws from (every command shape,
@@ -376,11 +380,16 @@ SOURCE_QA_CASES = (
     # Every retail sky drawn as a panorama and rebuilt from it within the game's limits, looking the same.
     ("SkyImportSmoke", "SKY_IMPORT_SOURCE_OK checks=280", ["--source"]),
     # All 29 original homeworld doorways: written byte for byte as before; each shape keeps the original's sky.
-    ("DoorwaySmoke", "DOORWAY_SOURCE_OK checks=1153", ["--source"]),
+    ("DoorwaySmoke", "DOORWAY_SOURCE_OK checks=1269", ["--source"]),
     # The New World's doorway in each of the six homeworlds (read only): record, ground kind, entry triangles, objects,
     # memory in 2 MB (which sky fits) and 8 MB, refusals (second entrance, six doorways, map edge, textures), every shape
     # and size, after another object edit, deterministic bytes.
     ("WorldEntranceSmoke", "WORLD_ENTRANCE_SOURCE_OK checks=186", ["--source"]),
+    # The game's own overlays (read only): the two balloonist routines are the same in the six homeworlds and Town
+    # Square; changed for each of the six places the new world can take and run for every state of the route (the menu's
+    # rows and names, the level each row flies to, the "ready to go" page), every balloonist's decision code in its
+    # place, his own lines read back through the changed routine, the executable's part.
+    ("BalloonTravelSmoke", "BALLOON_TRAVEL_SOURCE_OK checks=7063", ["--source"]),
     ("DarkParticleHostSmoke", "DARK_PROJECTILE_ALL_HOST_OWNERSHIP_OK", []),
     ("FreshParticleBindingSmoke", "FRESH_OWNED_PARTICLE_BINDING_OK", []),
     ("CollectionStarSmoke", "COLLECTION_STAR_SOURCE_OWNERSHIP_OK", []),
