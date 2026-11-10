@@ -84,53 +84,47 @@ public static class RandomLevelGenerator
         for (int shrink = 0; ; shrink++)
         {
             var notes = new List<string>();
-            if (shrink > 0) notes.Add($"Built {shrink * 4} cells narrower than usual so the game can hold and draw it.");
-            try { return Build(options, catalog, carriers, textureBudget, compile, token, rnd.Fork("size" + shrink), style, theme, features, CellsFor(options.Size) - 4 * shrink, notes); }
-            catch (InvalidDataException) when (compile && shrink < 3) { }
+            if (shrink > 0) notes.Add("Built smaller than usual so the game can hold and draw it.");
+            try { return Build(options, catalog, carriers, textureBudget, compile, token, rnd.Fork("size" + shrink), style, theme, features, shrink, notes); }
+            catch (InvalidDataException e) when (compile && shrink < 3)
+            {
+                if (Environment.GetEnvironmentVariable("SPYRO_RANDOM_LEVEL_DEBUG") == "1") Console.Error.WriteLine($"shrink {shrink}: {e.Message}");
+            }
         }
     }
 
     private static RandomLevelResult Build(RandomLevelOptions options, LevelCatalog catalog, PictureCarriers? carriers, int textureBudget, bool compile,
-        CancellationToken token, LevelRandom rnd, LevelStyle style, LevelTheme theme, FeatureSet features, int n, List<string> notes)
+        CancellationToken token, LevelRandom rnd, LevelStyle style, LevelTheme theme, FeatureSet features, int shrink, List<string> notes)
     {
-        (Layout L, LevelReach R, double Score)? best = null;
+        // A few layouts are tried; the first whose every floor is proved reachable both ways is taken (else the best).
+        (PlannedLevel Planned, TerrainMesher Mesher, (int Required, int Unreached, int NoWayBack, List<(double X, double Y)> Bad) Check)? best = null;
         int attempts = 0;
-        for (int attempt = 0; attempt < 8; attempt++)
+        for (int attempt = 0; attempt < 6; attempt++)
         {
             token.ThrowIfCancellationRequested();
             attempts++;
-            var L = new Layout
-            {
-                Grid = new LevelGrid(n, n, Origin, Origin), Theme = theme, Style = style, Random = rnd.Fork("layout" + attempt), Features = features
-            };
-            switch (style)
-            {
-                case LevelStyle.Islands: case LevelStyle.SkyIslands: LayoutIslands.Build(L, n); break;
-                case LevelStyle.Caverns: LayoutCaverns.Build(L, n); break;
-                default: LayoutValley.Build(L, n); break;
-            }
-            L.Undulate(style switch { LevelStyle.Castle => 4, LevelStyle.Caverns => 8, _ => 12 });
-            var reach = new LevelReach(L.Grid);
-            reach.Check(Spawn(L));
-            // Score: the share of the level's floors Spyro can reach and come back from, worst area counted twice.
-            var areas = reach.ByArea.Where(a => a.Value.Total >= 8).Select(a => a.Value.Good / (double)a.Value.Total).ToList();
-            double whole = reach.RequiredFloors == 0 ? 0 : 1 - (reach.Unreached + reach.NoWayBack) / (double)reach.RequiredFloors;
-            double score = whole + (areas.Count == 0 ? 0 : areas.Min());
-            // Supercharge paths asked for outright: a layout with a supercharge leap is preferred (a few more tries).
-            bool wantLeap = options.ChargePaths == true && style is LevelStyle.Valley or LevelStyle.Canyon or LevelStyle.Castle;
-            bool hasLeap = L.Counts.ContainsKey("supercharge leap");
-            if (wantLeap && hasLeap) score += 0.05;
-            if (best == null || score > best.Value.Score) best = (L, reach, score);
-            if (areas.Count > 0 && areas.Min() >= 0.9 && whole >= 0.97 && (!wantLeap || hasLeap || attempt >= 5)) break;
+            var tried = SpyroPlanner.Build(style, options.Size, features, theme, rnd.Fork("plan" + attempt), shrink);
+            // Into the built level's coordinates: whole units from 0, the lowest floor (and what hangs under floating
+            // land) well above the bottom.
+            var (bx0, by0, _, _) = tried.Plan.Bounds();
+            double lowest = tried.Plan.Zones.Min(z => Math.Min(z.Z, z.Z1));
+            double under = tried.Plan.Kind == EnclosureKind.Sky ? 320 + 0.55 * tried.Plan.Zones.Where(z => !z.IsPath).Max(z => z.Discs.Max(d => d.R)) : 0;
+            Shift(tried, Math.Round(Origin - bx0), Math.Round(Origin - by0), Math.Round(BaseHeight + under - lowest));
+            var mesh = new TerrainMesher(tried.Plan, tried.Spacing);
+            mesh.Build(rnd.Fork("mesh" + attempt));
+            var reach = mesh.Reach(tried.Start.X, tried.Start.Y, tried.Glides.Select(g => (g.From, g.To)));
+            if (best == null || reach.Unreached + reach.NoWayBack < best.Value.Check.Unreached + best.Value.Check.NoWayBack) best = (tried, mesh, reach);
+            if (reach.Unreached + reach.NoWayBack == 0) break;
         }
-        var (layout, check, _) = best!.Value;
+        var (planned, mesher, check) = best!.Value;
+        var plan = planned.Plan;
+        var pieces = mesher.Pieces;
+        pieces.AddRange(SpyroStructures.Build(planned, style, rnd.Fork("structures")));
         if (check.Unreached + check.NoWayBack > 0)
-            notes.Add($"{check.Unreached + check.NoWayBack} of {check.RequiredFloors} floor samples could not be proved reachable both ways (corners and edges); play it through once.");
+            notes.Add($"{check.Unreached + check.NoWayBack} of {check.Required} floors could not be proved reachable both ways; play it through once.");
+        token.ThrowIfCancellationRequested();
 
-        // Faces, materials, light.
-        var pieces = layout.Grid.Faces(out int unpaired);
-        if (unpaired > 0 && Environment.GetEnvironmentVariable("SPYRO_RANDOM_LEVEL_DEBUG") == "1")
-        { notes.Add($"{unpaired} wall pieces were left out where two sloping surfaces cross."); notes.AddRange(layout.Grid.Unmatched); }
+        // Materials: a texture per surface, fewer surfaces when the level must use fewer textures.
         var used = pieces.Select(p => p.Role).Distinct().ToList();
         var fold = used.ToDictionary(r => r, r => r);
         foreach (var (from, to) in Folds)
@@ -140,6 +134,7 @@ public static class RandomLevelGenerator
         }
         var pictures = new List<RandomLevelPicture>();
         var materialOf = new Dictionary<SurfaceRole, AuthoredMaterial?>();
+        var averages = new Dictionary<AuthoredMaterial, ColorRgba>();
         int slot = 0;
         string slug = $"random-{(ulong)options.Seed:x}";
         foreach (var role in fold.Values.Distinct().OrderBy(r => r))
@@ -159,34 +154,33 @@ public static class RandomLevelGenerator
                 notes.Add("Pictures need the original disc's texture slots; the game's own textures were used instead.");
             var t = theme.Textures[role];
             materialOf[role] = catalog.FindByKey(t.Level) is { } level ? new AuthoredMaterial(level.SourceWadEntry, t.Id) : null;
+            if (materialOf[role] is { } game && LevelDna.Average(t.Level, t.Id) is { } average) averages[game] = average;
         }
-        var light = Light(theme);
         var surfaces = new List<AuthoredSurface>();
         var faceRandom = rnd.Fork("faces");
         foreach (var p in pieces)
         {
             var role = fold[p.Role];
             var material = materialOf[role];
-            var shade = material?.Image != null ? new ColorRgba(128, 128, 128) : theme.Textures[role] is { } tt ? tt.Tint ?? new ColorRgba(tt.Shade, tt.Shade, tt.Shade) : new ColorRgba(128, 128, 128);
-            var basis = material == null ? theme.Colors[role].Base : shade;
-            var near = Shade(p, basis, light, theme, faceRandom);
+            var ramp = Ramp(theme, role, material);
+            var near = p.Light.Select(u => Paint(ramp, u)).ToArray();
             surfaces.Add(new AuthoredSurface(faceRandom.Id(), p.Corners, Average(near), material, near)
-            { Kind = p.Kind, NoCollision = !p.Collides && material != null });
+            { Kind = p.Kind, NoCollision = !p.Collides && material != null, TwoSided = p.TwoSided });
         }
         // The start, facing into the level.
-        var spawn = Spawn(layout);
-        float cx = layout.Areas.SelectMany(a => a.Cells).Average(c => c.I + 0.5f), cy = layout.Areas.SelectMany(a => a.Cells).Average(c => c.J + 0.5f);
-        var middle = layout.Point(cx, cy, 0);
-        int heading = (int)Math.Round(Math.Atan2(middle.Y - spawn.Y, middle.X - spawn.X) / (2 * Math.PI) * 256) & 0xFF;
+        var spawn = new Vector3f((float)Math.Round(planned.Start.X), (float)Math.Round(planned.Start.Y),
+            (float)Math.Round(plan.Height(planned.StartZone, planned.Start.X, planned.Start.Y)) + 32);
+        int heading = (int)Math.Round(Math.Atan2(planned.Facing.Y - planned.Start.Y, planned.Facing.X - planned.Start.X) / (2 * Math.PI) * 256) & 0xFF;
         // The made-up name is always drawn, so a name typed in its place changes nothing else about the level.
         string madeUp = Name(theme, rnd);
         string name = options.Name is { } given && TextTargetName(given) ? given.Trim().ToUpperInvariant() : madeUp;
+        var gems = planned.Gems.Select(g => new Vector3f((float)Math.Round(g.X), (float)Math.Round(g.Y), (float)Math.Round(plan.Height(g.Zone, g.X, g.Y)))).Distinct().Take(120).ToArray();
         var scene = SceneDocument.New(name) with
         {
             Id = rnd.Id(), Spawn = spawn, Heading = heading, Surfaces = surfaces, SkyColor = theme.SkyHorizon,
             MusicTrack = rnd.Pick(theme.Music),
             SkySourceWadEntry = catalog.FindByKey(theme.SkyLevel)?.SourceWadEntry,
-            GemSpots = [.. layout.GemSpots.Where(g => g.X >= 0 && g.Y >= 0).Distinct().Take(120)],
+            GemSpots = gems,
         };
         if (options.PaintedSky)
         {
@@ -207,50 +201,81 @@ public static class RandomLevelGenerator
             drawPlan = NativeAuthoredMeshRenderer.LastDrawPlan?.Describe();
             if (NativeAuthoredMeshRenderer.LastDrawPlan?.Note() is { } note) notes.Add(note);
         }
-        notes.AddRange(layout.Notes);
-        var links = layout.Links.Select(l => l with { JumpAt = l.JumpAt ?? JumpAt(layout.Grid, l) }).ToList();
+        notes.AddRange(planned.Notes);
         var report = new RandomLevelReport
         {
             Seed = options.Seed, Style = style, Theme = theme.Key, Size = options.Size,
             Features = string.Join(", ", new[] { features.Caves ? "caves" : null, features.ChargePaths ? "supercharge paths" : null, features.Glides ? "glides" : null,
                 features.Hazards ? "hazards" : null, features.Bridges ? "bridges" : null, features.Secrets ? "secrets" : null }.OfType<string>()),
-            Areas = layout.Areas.Count, Faces = surfaces.Count, Materials = materials.Count, Counts = layout.Counts, Links = links,
-            Attempts = attempts, RequiredFloors = check.RequiredFloors, Unreached = check.Unreached, NoWayBack = check.NoWayBack, Traps = check.Traps,
-            GlideOnlyAreas = check.GlideOnlyAreas.Count, Plates = check.Plates, GlideMoves = check.GlideEdges, DrawPlan = drawPlan, Notes = notes,
+            Areas = planned.Areas.Count, Faces = surfaces.Count, Materials = materials.Count, Counts = planned.Counts, Links = planned.Links,
+            Attempts = attempts, RequiredFloors = check.Required, Unreached = check.Unreached, NoWayBack = check.NoWayBack,
+            GlideMoves = planned.Glides.Count, DrawPlan = drawPlan, Notes = notes,
         };
         report = report with { Summary = Summarise(report, theme, name) };
-        var (map, mw, mh) = Map(layout.Grid, theme);
-        foreach (var (si, sj) in check.Bad) map[(mh - 1 - sj) * mw + si] = new Rgba32(255, 0, 0, 255);
+        var (map, mw, mh) = Map(pieces, surfaces, averages);
+        float mapX = surfaces.Min(f => f.Vertices.Min(v => v.X)), mapY = surfaces.Min(f => f.Vertices.Min(v => v.Y));
+        foreach (var (x, y) in check.Bad)
+        {
+            int col = (int)((x - mapX) / 30), row = (int)((y - mapY) / 30);
+            if (col >= 0 && col < mw && row >= 0 && row < mh) map[(mh - 1 - row) * mw + col] = new Rgba32(255, 0, 0, 255);
+        }
         return new(scene, report, pictures, materials) { Map = map, MapWidth = mw, MapHeight = mh };
     }
 
-    /// <summary>How far from a link's start (editor units, along the line to its end) the floor Spyro stands on ends or
-    /// rises: where a jump starts. Null when the floor runs all the way (a ramp, a bridge).</summary>
-    private static float? JumpAt(LevelGrid grid, LevelLink l)
+    /// <summary>The lowest floor's height in the built level.</summary>
+    public const int BaseHeight = 512;
+
+    private static void Shift(PlannedLevel L, double dx, double dy, double dz)
     {
-        float dx = l.To.X - l.From.X, dy = l.To.Y - l.From.Y, len = MathF.Sqrt(dx * dx + dy * dy);
-        if (len < 1) return null;
-        for (float t = 4; t < len; t += 4)
+        foreach (var z in L.Plan.Zones.Concat(L.Plan.Decals))
         {
-            float x = l.From.X + dx / len * t, y = l.From.Y + dy / len * t;
-            int i = (int)MathF.Floor((x - grid.OriginX) / LevelGrid.Cell), j = (int)MathF.Floor((y - grid.OriginY) / LevelGrid.Cell);
-            if (!grid.Inside(i, j)) return t;
-            float u = (x - grid.X(i)) / LevelGrid.Cell, v = (y - grid.Y(j)) / LevelGrid.Cell;
-            var under = grid.At(i, j).Where(s => s.TopAt(u, v) <= l.From.Z + 40).Select(s => (Z: s.TopAt(u, v), s.Kind)).DefaultIfEmpty((Z: float.NegativeInfinity, Kind: null)).MaxBy(p => p.Z);
-            if (Math.Abs(under.Z - l.From.Z) > 6 || under.Kind is { } k && k != AuthoredSurfaceKind.Supercharge) return t;
+            for (int k = 0; k < z.Discs.Count; k++) z.Discs[k] = (z.Discs[k].X + dx, z.Discs[k].Y + dy, z.Discs[k].R);
+            for (int k = 0; k < z.Spine.Count; k++) z.Spine[k] = (z.Spine[k].X + dx, z.Spine[k].Y + dy);
+            z.Z += dz; z.Z1 += dz;
         }
-        return null;
+        L.Plan.SeaLevel += dz;
+        foreach (var a in L.Areas) { a.X += dx; a.Y += dy; a.Z += dz; }
+        for (int k = 0; k < L.Gems.Count; k++) L.Gems[k] = (L.Gems[k].X + dx, L.Gems[k].Y + dy, L.Gems[k].Zone);
+        for (int k = 0; k < L.Links.Count; k++)
+        {
+            var l = L.Links[k];
+            Vector3f M(Vector3f v) => new((float)(v.X + dx), (float)(v.Y + dy), (float)(v.Z + dz));
+            L.Links[k] = l with { From = M(l.From), To = M(l.To) };
+        }
+        L.Start = (L.Start.X + dx, L.Start.Y + dy); L.Facing = (L.Facing.X + dx, L.Facing.Y + dy);
+    }
+
+    /// <summary>The paint of a surface, darkest to lightest: the original level's own colours for the texture when they
+    /// were measured, else the texture's shade from dim to bright; a plain grey scale for a picture, which has its own colours.</summary>
+    private static IReadOnlyList<ColorRgba> Ramp(LevelTheme theme, SurfaceRole role, AuthoredMaterial? material)
+    {
+        if (material == null)
+        {
+            var c = theme.Colors[role];
+            return [c.Dark, c.Base, c.Light];
+        }
+        if (material.Image == null && theme.Textures[role] is { } t)
+        {
+            if (t.Ramp is { } measured) return measured;
+            var b = t.Tint ?? new ColorRgba(t.Shade, t.Shade, t.Shade);
+            ColorRgba S(double f) => new((byte)Math.Clamp(b.R * f, 8, 255), (byte)Math.Clamp(b.G * f, 8, 255), (byte)Math.Clamp(b.B * f, 8, 255));
+            return [S(0.42), S(0.75), S(1.12)];
+        }
+        return [new(54, 54, 54), new(98, 98, 98), new(142, 142, 142)];
+    }
+
+    /// <summary>The ramp's colour at <paramref name="u"/> (0-1), in steps of four so neighbouring faces share colours (a
+    /// sector holds 64).</summary>
+    private static ColorRgba Paint(IReadOnlyList<ColorRgba> ramp, double u)
+    {
+        double at = Math.Clamp(u, 0, 1) * (ramp.Count - 1);
+        int k = Math.Min((int)at, ramp.Count - 2);
+        double f = at - k;
+        byte C(byte a, byte b) => (byte)Math.Clamp((int)Math.Round((a + (b - a) * f) / 4) * 4, 8, 252);
+        return new(C(ramp[k].R, ramp[k + 1].R), C(ramp[k].G, ramp[k + 1].G), C(ramp[k].B, ramp[k + 1].B));
     }
 
     private static bool TextTargetName(string s) => NewWorldDocument.IsValidName(s.Trim().ToUpperInvariant()) && s.Trim().All(c => !char.IsDigit(c));
-
-    /// <summary>The start: the middle of the start pad, a little above its floor.</summary>
-    private static Vector3f Spawn(Layout L)
-    {
-        var (i, j) = L.StartCell;
-        float z = L.Grid.Ground(i, j)?.Top[0] ?? L.Grid.At(i, j).FirstOrDefault()?.Top[0] ?? LayoutValley.Ground0;
-        return L.Point(i, j, z + 32);
-    }
 
     private static string Name(LevelTheme theme, LevelRandom rnd)
     {
@@ -262,67 +287,44 @@ public static class RandomLevelGenerator
         return rnd.Pick(theme.Nouns);
     }
 
-    private static (double X, double Y, double Z) Light(LevelTheme theme)
-    {
-        double az = theme.SunAzimuth * Math.PI / 180, el = theme.SunElevation * Math.PI / 180;
-        return (Math.Cos(el) * Math.Cos(az), Math.Cos(el) * Math.Sin(az), Math.Sin(el));
-    }
-
-    /// <summary>Per-corner colours: the texture's shade lit by the theme's sun (faces turned away keep the ambient part),
-    /// darker under rock and where walls meet the floor, with a slight random variation between faces.</summary>
-    private static ColorRgba[] Shade(LevelGrid.Piece p, ColorRgba basis, (double X, double Y, double Z) sun, LevelTheme theme, LevelRandom rnd)
-    {
-        var v = p.Corners;
-        double nx = 0, ny = 0, nz = 0;
-        for (int k = 0; k < v.Length; k++)
-        {
-            var a = v[k]; var b = v[(k + 1) % v.Length];
-            nx += (a.Y - b.Y) * (a.Z + b.Z); ny += (a.Z - b.Z) * (a.X + b.X); nz += (a.X - b.X) * (a.Y + b.Y);
-        }
-        double len = Math.Sqrt(nx * nx + ny * ny + nz * nz);
-        if (len > 0) { nx /= len; ny /= len; nz /= len; }
-        double lambert = Math.Max(0, nx * sun.X + ny * sun.Y + nz * sun.Z);
-        double i0 = nz < -0.5 ? theme.Ambient * 0.8 : theme.Ambient + (1 - theme.Ambient) * lambert;
-        if (p.Covered) i0 *= 0.66;
-        var result = new ColorRgba[v.Length];
-        for (int k = 0; k < v.Length; k++)
-        {
-            // Light in steps of 1/32, so neighbouring faces share their colours (a sector holds at most 64).
-            double i = Math.Round(i0 * (p.Foot?[k] == true ? 0.74 : 1) * 32) / 32;
-            byte C(byte b, byte l) => (byte)Math.Clamp(Math.Round(b * l / 128.0 * i * 1.08), 8, 255);
-            result[k] = new ColorRgba(C(basis.R, theme.Light.R), C(basis.G, theme.Light.G), C(basis.B, theme.Light.B));
-        }
-        return result;
-    }
-
     private static ColorRgba Average(ColorRgba[] c) =>
         new((byte)c.Average(x => x.R), (byte)c.Average(x => x.G), (byte)c.Average(x => x.B));
 
-    /// <summary>A top-down picture of the floors: each 30-unit spot coloured by its role, brighter the higher it is.</summary>
-    private static (Rgba32[] Pixels, int W, int H) Map(LevelGrid grid, LevelTheme theme)
+    /// <summary>A top-down picture of the level (one pixel per 30 units, north up): every face that looks up, lowest
+    /// first, in its texture's colour under its paint.</summary>
+    private static (Rgba32[] Pixels, int W, int H) Map(IReadOnlyList<TerrainPiece> pieces, IReadOnlyList<AuthoredSurface> surfaces, Dictionary<AuthoredMaterial, ColorRgba> averages)
     {
-        int s = 4, w = grid.W * s, h = grid.H * s;
+        const float unit = 30;
+        float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
+        foreach (var s in surfaces) foreach (var v in s.Vertices) { x0 = Math.Min(x0, v.X); y0 = Math.Min(y0, v.Y); x1 = Math.Max(x1, v.X); y1 = Math.Max(y1, v.Y); }
+        int w = Math.Max(1, (int)Math.Ceiling((x1 - x0) / unit) + 2), h = Math.Max(1, (int)Math.Ceiling((y1 - y0) / unit) + 2);
         var px = new Rgba32[w * h];
-        int lo = int.MaxValue, hi = int.MinValue;
-        foreach (var (i, j) in grid.AllCells()) foreach (var slab in grid.At(i, j)) if (slab.DrawTop) { lo = Math.Min(lo, slab.MinTop); hi = Math.Max(hi, slab.MaxTop); }
-        foreach (var (i, j) in grid.AllCells())
+        Array.Fill(px, new Rgba32(24, 28, 40, 255));
+        var order = Enumerable.Range(0, surfaces.Count).Where(k => !pieces[k].Wall).OrderBy(k => surfaces[k].Vertices.Average(v => v.Z)).ThenBy(k => k);
+        foreach (int k in order)
         {
-            var top = grid.At(i, j).LastOrDefault(x => x.DrawTop || x.Required) ?? grid.At(i, j).LastOrDefault();
-            for (int a = 0; a < s; a++)
-                for (int b = 0; b < s; b++)
+            var s = surfaces[k];
+            ColorRgba? avg = s.Material != null && averages.TryGetValue(s.Material, out var found) ? found : null;
+            var c = s.Color;
+            var colour = avg is { } a
+                ? new Rgba32((byte)Math.Min(255, a.R * c.R / 128), (byte)Math.Min(255, a.G * c.G / 128), (byte)Math.Min(255, a.B * c.B / 128), 255)
+                : new Rgba32((byte)Math.Min(255, c.R * 2), (byte)Math.Min(255, c.G * 2), (byte)Math.Min(255, c.B * 2), 255);
+            var v = s.Vertices;
+            float minY = v.Min(p => p.Y), maxY = v.Max(p => p.Y);
+            for (int row = (int)MathF.Floor((minY - y0) / unit); row <= (int)MathF.Ceiling((maxY - y0) / unit); row++)
+            {
+                float y = y0 + (row + 0.5f) * unit, lo = float.MaxValue, hi = float.MinValue;
+                for (int e = 0; e < v.Length; e++)
                 {
-                    var c = new Rgba32(24, 28, 40, 255);
-                    if (top != null)
-                    {
-                        float z = top.TopAt((a + 0.5f) / s, (b + 0.5f) / s);
-                        double light = 0.55 + 0.6 * (hi == lo ? 0.5 : (z - lo) / (hi - lo));
-                        var basis = theme.Colors[top.TopRole].Base;
-                        if (!top.DrawTop) basis = new(70, 66, 72);
-                        c = new Rgba32((byte)Math.Clamp(basis.R * light, 0, 255), (byte)Math.Clamp(basis.G * light, 0, 255), (byte)Math.Clamp(basis.B * light, 0, 255), 255);
-                    }
-                    // North up: row 0 is the top of the picture.
-                    px[(h - 1 - (j * s + b)) * w + i * s + a] = c;
+                    var p = v[e]; var q = v[(e + 1) % v.Length];
+                    if (p.Y == q.Y || y < Math.Min(p.Y, q.Y) || y >= Math.Max(p.Y, q.Y)) continue;
+                    float x = p.X + (q.X - p.X) * (y - p.Y) / (q.Y - p.Y);
+                    lo = Math.Min(lo, x); hi = Math.Max(hi, x);
                 }
+                if (lo > hi || row < 0 || row >= h) continue;
+                for (int col = Math.Max(0, (int)MathF.Round((lo - x0) / unit)); col <= Math.Min(w - 1, (int)MathF.Round((hi - x0) / unit)); col++)
+                    px[(h - 1 - row) * w + col] = colour;
+            }
         }
         return (px, w, h);
     }

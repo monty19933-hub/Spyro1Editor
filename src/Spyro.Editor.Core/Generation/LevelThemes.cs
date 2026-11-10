@@ -9,6 +9,27 @@ public sealed record ThemeTexture(string Level, int Id, byte Shade = 128)
 {
     /// <summary>A shade per channel (lava's orange) instead of <see cref="Shade"/>.</summary>
     public ColorRgba? Tint { get; init; }
+    /// <summary>The colours the original level itself paints this texture with, darkest to lightest, when measured
+    /// (<see cref="LevelDnaTable"/>); the generator's faces take their colours from it.</summary>
+    public IReadOnlyList<ColorRgba>? Ramp => Tint == null ? LevelDna.Ramp(Level, Id) : null;
+}
+
+/// <summary>What was measured from the original levels (<see cref="LevelDnaTable"/>), by level key and texture id.</summary>
+public static class LevelDna
+{
+    private static readonly Dictionary<(string, int), (ColorRgba Average, ColorRgba[] Ramp)> Entries = Load();
+
+    private static Dictionary<(string, int), (ColorRgba, ColorRgba[])> Load()
+    {
+        static ColorRgba C(uint v) => new((byte)(v >> 16), (byte)(v >> 8), (byte)v);
+        var map = new Dictionary<(string, int), (ColorRgba, ColorRgba[])>();
+        foreach (var (level, textures) in LevelDnaTable.Levels)
+            foreach (var (id, average, ramp) in textures) map[(level, id)] = (C(average), [.. ramp.Select(C)]);
+        return map;
+    }
+
+    public static IReadOnlyList<ColorRgba>? Ramp(string level, int id) => Entries.TryGetValue((level, id), out var e) ? e.Ramp : null;
+    public static ColorRgba? Average(string level, int id) => Entries.TryGetValue((level, id), out var e) ? e.Average : null;
 }
 
 /// <summary>The colours a role is painted in when the generator paints its own pictures: base, dark and light.</summary>
@@ -38,185 +59,195 @@ public sealed record LevelTheme(string Key, string Name, IReadOnlyDictionary<Sur
     public ColorRgba SkyClouds { get; init; } = new(244, 244, 250);
     public double CloudAmount { get; init; } = 0.45;
     public bool Stars { get; init; }
+    /// <summary>The land round the level runs up into jagged peaks (Magic Crafters) instead of rounded hilltops.</summary>
+    public bool Peaks { get; init; }
     /// <summary>Distant hills painted round the horizon (their colour; null: none).</summary>
     public ColorRgba? SkyHills { get; init; } = new(88, 120, 104);
 }
 
 public static class LevelThemes
 {
-    private static ThemeColors C(int r, int g, int b) => new(new((byte)r, (byte)g, (byte)b),
-        new((byte)(r * 0.62), (byte)(g * 0.62), (byte)(b * 0.62)), new((byte)Math.Min(255, r * 1.25), (byte)Math.Min(255, g * 1.25), (byte)Math.Min(255, b * 1.25)));
-    private static Dictionary<SurfaceRole, ThemeColors> Palette(ThemeColors ground, ThemeColors alt, ThemeColors path, ThemeColors dirt,
-        ThemeColors sand, ThemeColors cliff, ThemeColors brick, ThemeColors roof, ThemeColors wood, ThemeColors liquid) => new Dictionary<SurfaceRole, ThemeColors>
-    {
-        [SurfaceRole.Ground] = ground, [SurfaceRole.GroundAlt] = alt, [SurfaceRole.Path] = path, [SurfaceRole.Dirt] = dirt,
-        [SurfaceRole.Sand] = sand, [SurfaceRole.Cliff] = cliff, [SurfaceRole.CliffTop] = cliff, [SurfaceRole.Rock] = cliff,
-        [SurfaceRole.CaveWall] = cliff, [SurfaceRole.Ceiling] = cliff, [SurfaceRole.Underside] = cliff, [SurfaceRole.Brick] = brick,
-        [SurfaceRole.Paving] = path, [SurfaceRole.Roof] = roof, [SurfaceRole.Wood] = wood,
-        [SurfaceRole.Water] = C(48, 112, 200), [SurfaceRole.Lava] = C(232, 96, 24), [SurfaceRole.Goo] = C(150, 48, 170),
-        [SurfaceRole.Charge] = C(240, 200, 64),
-    }.ToDictionary(p => p.Key, p => p.Key is SurfaceRole.Water && liquid != null ? liquid : p.Value);
-
     private static readonly ThemeTexture Lava = new("gnastygnorc", 14) { Tint = new ColorRgba(200, 92, 52) };
     private static readonly ThemeTexture Water = new("alpineridge", 36);
     private static readonly ThemeTexture Goo = new("drycanyon", 24);
     private static readonly ThemeTexture Chevrons = new("loftycastle", 22);
 
-    public static LevelTheme Meadow { get; } = new("meadow", "Spring Meadow", new Dictionary<SurfaceRole, ThemeTexture>
+    /// <summary>Roles a look does not name take another role's texture, in this order.</summary>
+    private static readonly (SurfaceRole Role, SurfaceRole From)[] Fallbacks =
+    [
+        (SurfaceRole.GroundAlt, SurfaceRole.Ground), (SurfaceRole.Path, SurfaceRole.Ground), (SurfaceRole.Paving, SurfaceRole.Path),
+        (SurfaceRole.Dirt, SurfaceRole.Path), (SurfaceRole.Sand, SurfaceRole.Path), (SurfaceRole.CliffTop, SurfaceRole.Cliff),
+        (SurfaceRole.Rock, SurfaceRole.Cliff), (SurfaceRole.CaveWall, SurfaceRole.Cliff), (SurfaceRole.Ceiling, SurfaceRole.CaveWall),
+        (SurfaceRole.Underside, SurfaceRole.Rock), (SurfaceRole.Brick, SurfaceRole.Cliff), (SurfaceRole.Roof, SurfaceRole.Brick),
+        (SurfaceRole.Wood, SurfaceRole.Paving),
+    ];
+
+    /// <summary>A look taken from one of the game's levels: the textures that level itself uses for its ground, banks,
+    /// rock and paths (by how much of each the level is made of), painted with the level's own colours
+    /// (<see cref="LevelDnaTable"/>), under its sky, to its music.</summary>
+    private static LevelTheme Look(string level, string name, int[] music, string[] adjectives, string[] nouns,
+        (LevelStyle Style, double Weight)[] styles, params (SurfaceRole Role, int Id)[] textures)
     {
-        [SurfaceRole.Ground] = new("artisans", 30), [SurfaceRole.GroundAlt] = new("artisans", 43), [SurfaceRole.Path] = new("darkhollow", 15),
-        [SurfaceRole.Dirt] = new("stonehill", 11), [SurfaceRole.Sand] = new("stonehill", 30), [SurfaceRole.Cliff] = new("artisans", 58),
-        [SurfaceRole.CliffTop] = new("artisans", 47), [SurfaceRole.Rock] = new("artisans", 40), [SurfaceRole.CaveWall] = new("artisans", 60),
-        [SurfaceRole.Ceiling] = new("artisans", 61), [SurfaceRole.Brick] = new("artisans", 42), [SurfaceRole.Paving] = new("artisans", 8),
-        [SurfaceRole.Roof] = new("artisans", 19), [SurfaceRole.Wood] = new("artisans", 24), [SurfaceRole.Water] = Water,
-        [SurfaceRole.Lava] = Lava, [SurfaceRole.Goo] = Goo, [SurfaceRole.Underside] = new("artisans", 59), [SurfaceRole.Charge] = Chevrons,
-    }, Palette(C(70, 140, 56), C(96, 160, 72), C(150, 146, 140), C(120, 92, 64), C(212, 184, 120), C(132, 124, 132), C(160, 150, 150),
-        C(72, 120, 190), C(130, 88, 52), null!), "artisans", [0, 2, 26, 17], ["SUNNY", "GREEN", "BREEZY", "MEADOW", "CLOVER", "GOLDEN"],
-        ["HILLS", "FIELDS", "GLEN", "DOWNS", "GARDENS", "VALE"])
+        var map = textures.ToDictionary(t => t.Role, t => new ThemeTexture(level, t.Id));
+        foreach (var (role, from) in Fallbacks) if (!map.ContainsKey(role)) map[role] = map[from];
+        map[SurfaceRole.Water] = Water; map[SurfaceRole.Lava] = Lava; map[SurfaceRole.Goo] = Goo; map[SurfaceRole.Charge] = Chevrons;
+        // The colours a painted picture of each surface is made in: the texture's own colour under the level's paint.
+        var colours = new Dictionary<SurfaceRole, ThemeColors>();
+        foreach (var (role, t) in map)
+        {
+            var average = LevelDna.Average(t.Level, t.Id) ?? new ColorRgba(128, 128, 128);
+            var ramp = t.Ramp ?? [new(72, 72, 72), new(128, 128, 128), new(160, 160, 160)];
+            ColorRgba Lit(ColorRgba paint) => new((byte)Math.Min(255, average.R * paint.R / 128), (byte)Math.Min(255, average.G * paint.G / 128), (byte)Math.Min(255, average.B * paint.B / 128));
+            colours[role] = new(Lit(ramp[ramp.Count / 2]), Lit(ramp[ramp.Count / 5]), Lit(ramp[ramp.Count - 2]));
+        }
+        colours[SurfaceRole.Water] = new(new(48, 112, 200), new(30, 70, 124), new(60, 140, 250));
+        colours[SurfaceRole.Lava] = new(new(232, 96, 24), new(144, 60, 15), new(255, 120, 30));
+        colours[SurfaceRole.Goo] = new(new(150, 48, 170), new(93, 30, 105), new(188, 60, 212));
+        colours[SurfaceRole.Charge] = new(new(240, 200, 64), new(149, 124, 40), new(255, 250, 80));
+        return new LevelTheme(level, name, map, colours, level, music, adjectives, nouns) { Styles = styles.ToDictionary(x => x.Style, x => x.Weight) };
+    }
+
+    private static readonly string[] MeadowAdjectives = ["SUNNY", "GREEN", "BREEZY", "MEADOW", "CLOVER", "GOLDEN"], MeadowNouns = ["HILLS", "FIELDS", "GLEN", "DOWNS", "GARDENS", "VALE"];
+    private static readonly string[] StoneAdjectives = ["STONY", "WINDY", "OLD", "MOSSY", "SHEPHERDS", "QUIET"], StoneNouns = ["HILL", "KEEP", "WELLS", "FOLD", "RIDGE", "HEIGHTS"];
+    private static readonly string[] DuskAdjectives = ["MISTY", "DUSKY", "SILENT", "SHADOW", "STARRY", "MOONLIT"], DuskNouns = ["HOLLOW", "GROVE", "MOOR", "GLADE", "RUINS", "DELL"];
+    private static readonly string[] DesertAdjectives = ["DUSTY", "SCORCHED", "SANDY", "RED", "DRY", "AMBER"], DesertNouns = ["MESA", "DUNES", "GULCH", "BLUFFS", "CANYON", "OASIS"];
+    private static readonly string[] IceAdjectives = ["FROZEN", "ICY", "SNOWY", "FROSTY", "CHILLY", "WHITE"], IceNouns = ["PEAKS", "GLACIER", "DRIFTS", "SUMMIT", "FJORD", "PASS"];
+    private static readonly string[] MagicAdjectives = ["CRYSTAL", "MYSTIC", "WIZARDS", "CHARMED", "ARCANE", "SPELL"], MagicNouns = ["PEAKS", "CRAGS", "SPIRES", "RIDGE", "CAVES", "PASS"];
+    private static readonly string[] SwampAdjectives = ["MURKY", "FOGGY", "MOSSY", "SOGGY", "GLOOMY", "DAMP"], SwampNouns = ["BOG", "MARSH", "FEN", "MIRE", "BAYOU", "WETLANDS"];
+    private static readonly string[] SkyAdjectives = ["LOFTY", "CLOUDY", "SKY", "AIRY", "HIGH", "DREAMY"], SkyNouns = ["SPIRES", "HEIGHTS", "ISLES", "REACH", "TOWERS", "HAVEN"];
+    private static readonly string[] CastleAdjectives = ["ROYAL", "GRAND", "KINGS", "NOBLE", "SILVER", "HAUNTED"], CastleNouns = ["KEEP", "CITADEL", "BASTION", "RAMPARTS", "COURT", "TOWERS"];
+    private static readonly string[] HarbourAdjectives = ["RUSTY", "IRON", "TWILIGHT", "SALTY", "GNORC", "SMOKY"], HarbourNouns = ["HARBOR", "DOCKS", "COVE", "WHARF", "QUAY", "YARD"];
+
+    public static LevelTheme Artisans { get; } = Look("artisans", "Artisans", [0, 2, 26], MeadowAdjectives, MeadowNouns,
+        [(LevelStyle.Valley, 4), (LevelStyle.Castle, 2), (LevelStyle.Islands, 2), (LevelStyle.Canyon, 1), (LevelStyle.SkyIslands, 1), (LevelStyle.Caverns, 1)],
+        (SurfaceRole.Ground, 39), (SurfaceRole.GroundAlt, 64), (SurfaceRole.Path, 44), (SurfaceRole.Cliff, 61), (SurfaceRole.CliffTop, 47),
+        (SurfaceRole.Rock, 59), (SurfaceRole.Brick, 21), (SurfaceRole.Paving, 17), (SurfaceRole.Roof, 22), (SurfaceRole.Wood, 24), (SurfaceRole.Ceiling, 57));
+
+    public static LevelTheme StoneHill { get; } = Look("stonehill", "Stone Hill", [2, 0], StoneAdjectives, StoneNouns,
+        [(LevelStyle.Valley, 4), (LevelStyle.Islands, 3), (LevelStyle.Castle, 2), (LevelStyle.Canyon, 1)],
+        (SurfaceRole.Ground, 40), (SurfaceRole.GroundAlt, 40), (SurfaceRole.Path, 13), (SurfaceRole.Cliff, 11), (SurfaceRole.CliffTop, 12),
+        (SurfaceRole.Rock, 19), (SurfaceRole.Brick, 21), (SurfaceRole.Paving, 18), (SurfaceRole.Roof, 20), (SurfaceRole.Wood, 29), (SurfaceRole.Sand, 30));
+
+    public static LevelTheme DarkHollow { get; } = Look("darkhollow", "Dark Hollow", [32], DuskAdjectives, DuskNouns,
+        [(LevelStyle.Valley, 3), (LevelStyle.Castle, 3), (LevelStyle.Caverns, 1), (LevelStyle.SkyIslands, 1)],
+        (SurfaceRole.Ground, 34), (SurfaceRole.GroundAlt, 9), (SurfaceRole.Path, 30), (SurfaceRole.Cliff, 24), (SurfaceRole.CliffTop, 8),
+        (SurfaceRole.Rock, 25), (SurfaceRole.Brick, 22), (SurfaceRole.Paving, 1), (SurfaceRole.Roof, 28)) with
     {
-        Styles = new Dictionary<LevelStyle, double> { [LevelStyle.Valley] = 3, [LevelStyle.Islands] = 2, [LevelStyle.Canyon] = 2, [LevelStyle.Castle] = 1, [LevelStyle.Caverns] = 1, [LevelStyle.SkyIslands] = 1 },
+        SkyTop = new(24, 28, 72), SkyHorizon = new(120, 96, 140), SkyBelow = new(28, 36, 56), SkySun = new(232, 236, 255), SkyClouds = new(72, 72, 110),
+        CloudAmount = 0.3, Stars = true, SkyHills = new(24, 40, 48),
     };
 
-    public static LevelTheme Highland { get; } = new("highland", "Misty Highland", new Dictionary<SurfaceRole, ThemeTexture>
+    public static LevelTheme PeaceKeepers { get; } = Look("peacekeepers", "Peace Keepers", [17, 3], DesertAdjectives, DesertNouns,
+        [(LevelStyle.Canyon, 4), (LevelStyle.Valley, 1), (LevelStyle.Caverns, 1), (LevelStyle.Islands, 1)],
+        (SurfaceRole.Ground, 36), (SurfaceRole.GroundAlt, 15), (SurfaceRole.Path, 17), (SurfaceRole.Cliff, 35), (SurfaceRole.CliffTop, 20),
+        (SurfaceRole.Rock, 30), (SurfaceRole.Brick, 27), (SurfaceRole.Paving, 18), (SurfaceRole.Wood, 12), (SurfaceRole.CaveWall, 33),
+        (SurfaceRole.Ceiling, 7), (SurfaceRole.Underside, 34)) with
     {
-        [SurfaceRole.Ground] = new("darkhollow", 17), [SurfaceRole.GroundAlt] = new("darkhollow", 10), [SurfaceRole.Path] = new("darkhollow", 14),
-        [SurfaceRole.Dirt] = new("stonehill", 7), [SurfaceRole.Sand] = new("stonehill", 30), [SurfaceRole.Cliff] = new("darkhollow", 18),
-        [SurfaceRole.CliffTop] = new("darkhollow", 19), [SurfaceRole.Rock] = new("darkhollow", 30), [SurfaceRole.CaveWall] = new("darkhollow", 18),
-        [SurfaceRole.Ceiling] = new("artisans", 57), [SurfaceRole.Brick] = new("darkhollow", 24), [SurfaceRole.Paving] = new("stonehill", 21),
-        [SurfaceRole.Roof] = new("darkhollow", 28), [SurfaceRole.Wood] = new("artisans", 24), [SurfaceRole.Water] = Water,
-        [SurfaceRole.Lava] = Lava, [SurfaceRole.Goo] = Goo, [SurfaceRole.Underside] = new("darkhollow", 18), [SurfaceRole.Charge] = Chevrons,
-    }, Palette(C(52, 120, 44), C(72, 136, 52), C(150, 150, 140), C(104, 80, 60), C(200, 176, 120), C(124, 116, 120), C(140, 136, 136),
-        C(96, 128, 96), C(110, 76, 48), C(56, 96, 168)), "darkhollow", [32, 2, 22], ["MISTY", "STONY", "WINDY", "HIGH", "OLD", "MOSSY"],
-        ["MOOR", "CRAGS", "HOLLOW", "TORS", "RIDGE", "HEIGHTS"])
-    {
-        Styles = new Dictionary<LevelStyle, double> { [LevelStyle.Valley] = 3, [LevelStyle.Canyon] = 3, [LevelStyle.Caverns] = 2, [LevelStyle.Castle] = 2, [LevelStyle.Islands] = 1 },
-        SunElevation = 38, Ambient = 0.58, SkyTop = new(80, 100, 150), SkyHorizon = new(176, 188, 200), SkyClouds = new(220, 224, 232), CloudAmount = 0.6,
-        SkyHills = new(72, 96, 88),
+        Liquid = SurfaceRole.Goo, SkyTop = new(96, 136, 216), SkyHorizon = new(240, 216, 176), SkyBelow = new(200, 150, 96), CloudAmount = 0.2, SkyHills = new(184, 112, 72),
     };
 
-    public static LevelTheme Sky { get; } = new("sky", "Cloud Kingdom", new Dictionary<SurfaceRole, ThemeTexture>
+    public static LevelTheme DryCanyon { get; } = Look("drycanyon", "Dry Canyon", [3, 27], DesertAdjectives, DesertNouns,
+        [(LevelStyle.Canyon, 5), (LevelStyle.Caverns, 2), (LevelStyle.Islands, 1)],
+        (SurfaceRole.Ground, 45), (SurfaceRole.GroundAlt, 43), (SurfaceRole.Path, 28), (SurfaceRole.Cliff, 34), (SurfaceRole.CliffTop, 37),
+        (SurfaceRole.Rock, 35), (SurfaceRole.Brick, 33), (SurfaceRole.Wood, 21), (SurfaceRole.CaveWall, 41), (SurfaceRole.Ceiling, 40),
+        (SurfaceRole.Underside, 38), (SurfaceRole.Sand, 27)) with
     {
-        [SurfaceRole.Ground] = new("loftycastle", 27), [SurfaceRole.GroundAlt] = new("loftycastle", 65), [SurfaceRole.Path] = new("loftycastle", 15),
-        [SurfaceRole.Dirt] = new("loftycastle", 26), [SurfaceRole.Sand] = new("loftycastle", 28), [SurfaceRole.Cliff] = new("loftycastle", 56),
-        [SurfaceRole.CliffTop] = new("loftycastle", 58), [SurfaceRole.Rock] = new("loftycastle", 57), [SurfaceRole.CaveWall] = new("loftycastle", 57),
-        [SurfaceRole.Ceiling] = new("loftycastle", 56), [SurfaceRole.Brick] = new("loftycastle", 53), [SurfaceRole.Paving] = new("loftycastle", 16),
-        [SurfaceRole.Roof] = new("dreamweavers", 40), [SurfaceRole.Wood] = new("treetops", 40), [SurfaceRole.Water] = Water,
-        [SurfaceRole.Lava] = Lava, [SurfaceRole.Goo] = Goo, [SurfaceRole.Underside] = new("loftycastle", 57), [SurfaceRole.Charge] = Chevrons,
-    }, Palette(C(96, 192, 150), C(120, 210, 170), C(236, 228, 200), C(176, 160, 200), C(220, 210, 236), C(118, 100, 140), C(232, 200, 210),
-        C(72, 160, 168), C(140, 96, 56), null!), "loftycastle", [14, 34, 9], ["LOFTY", "CLOUDY", "SKY", "AIRY", "HIGH", "DREAMY"],
-        ["SPIRES", "HEIGHTS", "ISLES", "REACH", "TOWERS", "HAVEN"])
-    {
-        Styles = new Dictionary<LevelStyle, double> { [LevelStyle.SkyIslands] = 5, [LevelStyle.Castle] = 2, [LevelStyle.Islands] = 1, [LevelStyle.Valley] = 1 },
-        SunElevation = 60, Ambient = 0.66, SkyTop = new(72, 136, 232), SkyHorizon = new(200, 224, 252), SkyBelow = new(232, 236, 248), CloudAmount = 0.7,
-        SkyHills = null,
+        Liquid = SurfaceRole.Goo, SkyTop = new(80, 120, 208), SkyHorizon = new(244, 200, 150), SkyBelow = new(190, 120, 80), CloudAmount = 0.2, SkyHills = new(170, 96, 60),
     };
 
-    public static LevelTheme Desert { get; } = new("desert", "Sun-Baked Desert", new Dictionary<SurfaceRole, ThemeTexture>
+    public static LevelTheme IceCavern { get; } = Look("icecavern", "Ice Cavern", [13], IceAdjectives, IceNouns,
+        [(LevelStyle.Caverns, 4), (LevelStyle.Canyon, 3), (LevelStyle.Islands, 1), (LevelStyle.SkyIslands, 1)],
+        (SurfaceRole.Ground, 34), (SurfaceRole.GroundAlt, 32), (SurfaceRole.Path, 30), (SurfaceRole.Cliff, 21), (SurfaceRole.CliffTop, 54),
+        (SurfaceRole.Rock, 8), (SurfaceRole.Brick, 31), (SurfaceRole.CaveWall, 49), (SurfaceRole.Ceiling, 8), (SurfaceRole.Underside, 15)) with
     {
-        [SurfaceRole.Ground] = new("drycanyon", 45), [SurfaceRole.GroundAlt] = new("drycanyon", 43), [SurfaceRole.Path] = new("drycanyon", 16),
-        [SurfaceRole.Dirt] = new("drycanyon", 27), [SurfaceRole.Sand] = new("drycanyon", 20), [SurfaceRole.Cliff] = new("drycanyon", 39),
-        [SurfaceRole.CliffTop] = new("drycanyon", 36), [SurfaceRole.Rock] = new("drycanyon", 22), [SurfaceRole.CaveWall] = new("drycanyon", 40),
-        [SurfaceRole.Ceiling] = new("drycanyon", 41), [SurfaceRole.Brick] = new("drycanyon", 29), [SurfaceRole.Paving] = new("clifftown", 2),
-        [SurfaceRole.Roof] = new("clifftown", 13), [SurfaceRole.Wood] = new("clifftown", 15), [SurfaceRole.Water] = Water,
-        [SurfaceRole.Lava] = Lava, [SurfaceRole.Goo] = Goo, [SurfaceRole.Underside] = new("drycanyon", 38), [SurfaceRole.Charge] = Chevrons,
-    }, Palette(C(200, 168, 104), C(212, 180, 112), C(184, 150, 96), C(176, 128, 72), C(224, 156, 88), C(196, 120, 72), C(184, 96, 64),
-        C(160, 56, 48), C(132, 92, 56), null!), "drycanyon", [3, 27, 17], ["DUSTY", "SCORCHED", "SANDY", "RED", "DRY", "AMBER"],
-        ["MESA", "DUNES", "GULCH", "BLUFFS", "CANYON", "OASIS"])
-    {
-        Styles = new Dictionary<LevelStyle, double> { [LevelStyle.Canyon] = 4, [LevelStyle.Valley] = 2, [LevelStyle.Castle] = 1, [LevelStyle.Caverns] = 1, [LevelStyle.Islands] = 1 },
-        Liquid = SurfaceRole.Goo, SunElevation = 64, Ambient = 0.66, Light = new(136, 128, 116), SkyTop = new(96, 136, 216), SkyHorizon = new(240, 216, 176),
-        SkyBelow = new(200, 150, 96), CloudAmount = 0.2, SkyHills = new(184, 112, 72),
+        SkyTop = new(96, 128, 196), SkyHorizon = new(212, 224, 240), SkyBelow = new(224, 232, 240), CloudAmount = 0.5, SkyHills = new(196, 208, 228),
     };
 
-    public static LevelTheme Winter { get; } = new("winter", "Frozen Peaks", new Dictionary<SurfaceRole, ThemeTexture>
+    public static LevelTheme MagicCrafters { get; } = Look("magiccrafters", "Magic Crafters", [31, 22], MagicAdjectives, MagicNouns,
+        [(LevelStyle.Valley, 4), (LevelStyle.Canyon, 2), (LevelStyle.SkyIslands, 2), (LevelStyle.Caverns, 1)],
+        (SurfaceRole.Ground, 17), (SurfaceRole.GroundAlt, 17), (SurfaceRole.Path, 37), (SurfaceRole.Cliff, 28), (SurfaceRole.CliffTop, 47),
+        (SurfaceRole.Rock, 16), (SurfaceRole.CaveWall, 27), (SurfaceRole.Ceiling, 45), (SurfaceRole.Underside, 45)) with
     {
-        [SurfaceRole.Ground] = new("icecavern", 0), [SurfaceRole.GroundAlt] = new("icecavern", 34), [SurfaceRole.Path] = new("highcaves", 33),
-        [SurfaceRole.Dirt] = new("highcaves", 31), [SurfaceRole.Sand] = new("icecavern", 10), [SurfaceRole.Cliff] = new("highcaves", 36),
-        [SurfaceRole.CliffTop] = new("highcaves", 12), [SurfaceRole.Rock] = new("highcaves", 37), [SurfaceRole.CaveWall] = new("icecavern", 9),
-        [SurfaceRole.Ceiling] = new("highcaves", 36), [SurfaceRole.Brick] = new("icecavern", 27), [SurfaceRole.Paving] = new("icecavern", 30),
-        [SurfaceRole.Roof] = new("dreamweavers", 41), [SurfaceRole.Wood] = new("treetops", 40), [SurfaceRole.Water] = Water,
-        [SurfaceRole.Lava] = Lava, [SurfaceRole.Goo] = Goo, [SurfaceRole.Underside] = new("highcaves", 37), [SurfaceRole.Charge] = Chevrons,
-    }, Palette(C(224, 228, 236), C(200, 220, 236), C(136, 140, 140), C(120, 124, 120), C(232, 236, 240), C(120, 124, 132), C(160, 192, 216),
-        C(96, 128, 160), C(120, 88, 56), C(80, 140, 200)), "icecavern", [13, 10, 22], ["FROZEN", "ICY", "SNOWY", "FROSTY", "CHILLY", "WHITE"],
-        ["PEAKS", "GLACIER", "DRIFTS", "SUMMIT", "FJORD", "PASS"])
-    {
-        Styles = new Dictionary<LevelStyle, double> { [LevelStyle.Valley] = 3, [LevelStyle.Canyon] = 2, [LevelStyle.Caverns] = 3, [LevelStyle.Islands] = 1, [LevelStyle.Castle] = 1 },
-        SunElevation = 30, Ambient = 0.7, Light = new(124, 128, 136), SkyTop = new(96, 128, 196), SkyHorizon = new(212, 224, 240),
-        SkyBelow = new(224, 232, 240), CloudAmount = 0.5, SkyHills = new(196, 208, 228),
+        Peaks = true, SkyTop = new(70, 90, 190), SkyHorizon = new(200, 180, 235), SkyBelow = new(150, 140, 200), SkyHills = new(170, 150, 210),
     };
 
-    public static LevelTheme Swamp { get; } = new("swamp", "Murky Swamp", new Dictionary<SurfaceRole, ThemeTexture>
+    public static LevelTheme WizardPeak { get; } = Look("wizardpeak", "Wizard Peak", [9], MagicAdjectives, IceNouns,
+        [(LevelStyle.Canyon, 3), (LevelStyle.Valley, 2), (LevelStyle.SkyIslands, 2)],
+        (SurfaceRole.Ground, 31), (SurfaceRole.Path, 69), (SurfaceRole.Cliff, 60), (SurfaceRole.CliffTop, 68), (SurfaceRole.Rock, 38),
+        (SurfaceRole.Brick, 61), (SurfaceRole.Underside, 26)) with
     {
-        [SurfaceRole.Ground] = new("mistybog", 27), [SurfaceRole.GroundAlt] = new("mistybog", 30), [SurfaceRole.Path] = new("mistybog", 15),
-        [SurfaceRole.Dirt] = new("mistybog", 16), [SurfaceRole.Sand] = new("mistybog", 17), [SurfaceRole.Cliff] = new("mistybog", 11),
-        [SurfaceRole.CliffTop] = new("mistybog", 36), [SurfaceRole.Rock] = new("mistybog", 23), [SurfaceRole.CaveWall] = new("mistybog", 12),
-        [SurfaceRole.Ceiling] = new("mistybog", 10), [SurfaceRole.Brick] = new("mistybog", 45), [SurfaceRole.Paving] = new("mistybog", 24),
-        [SurfaceRole.Roof] = new("beastmakers", 7), [SurfaceRole.Wood] = new("mistybog", 61), [SurfaceRole.Water] = Water,
-        [SurfaceRole.Lava] = Lava, [SurfaceRole.Goo] = Goo, [SurfaceRole.Underside] = new("mistybog", 11), [SurfaceRole.Charge] = Chevrons,
-    }, Palette(C(88, 128, 56), C(104, 120, 56), C(112, 96, 64), C(96, 76, 48), C(120, 104, 72), C(84, 72, 48), C(120, 116, 124),
-        C(140, 120, 64), C(110, 76, 44), C(64, 96, 72)), "mistybog", [21, 15, 7], ["MURKY", "FOGGY", "MOSSY", "SOGGY", "GLOOMY", "DAMP"],
-        ["BOG", "MARSH", "FEN", "MIRE", "BAYOU", "WETLANDS"])
-    {
-        Styles = new Dictionary<LevelStyle, double> { [LevelStyle.Islands] = 3, [LevelStyle.Valley] = 2, [LevelStyle.Canyon] = 1, [LevelStyle.Caverns] = 1 },
-        Liquid = SurfaceRole.Goo, SunElevation = 42, Ambient = 0.55, Light = new(120, 128, 112), SkyTop = new(88, 104, 112), SkyHorizon = new(168, 180, 160),
-        SkyBelow = new(72, 96, 64), SkyClouds = new(176, 184, 176), CloudAmount = 0.75, SkyHills = new(56, 80, 56),
+        Peaks = true, SkyTop = new(50, 80, 180), SkyHorizon = new(190, 210, 245), SkyBelow = new(200, 210, 235), SkyHills = new(190, 200, 235),
     };
 
-    public static LevelTheme Volcano { get; } = new("volcano", "Fiery Volcano", new Dictionary<SurfaceRole, ThemeTexture>
+    public static LevelTheme MistyBog { get; } = Look("mistybog", "Misty Bog", [21, 15], SwampAdjectives, SwampNouns,
+        [(LevelStyle.Islands, 3), (LevelStyle.Valley, 3), (LevelStyle.Canyon, 1)],
+        (SurfaceRole.Ground, 38), (SurfaceRole.GroundAlt, 27), (SurfaceRole.Path, 52), (SurfaceRole.Cliff, 7), (SurfaceRole.CliffTop, 37),
+        (SurfaceRole.Rock, 35), (SurfaceRole.Brick, 25), (SurfaceRole.Paving, 23), (SurfaceRole.Wood, 56), (SurfaceRole.Ceiling, 12),
+        (SurfaceRole.Underside, 12), (SurfaceRole.Sand, 16)) with
     {
-        [SurfaceRole.Ground] = new("nightflight", 19), [SurfaceRole.GroundAlt] = new("gnastygnorc", 27), [SurfaceRole.Path] = new("gnastysworld", 31),
-        [SurfaceRole.Dirt] = new("gnastygnorc", 37), [SurfaceRole.Sand] = new("gnastygnorc", 36), [SurfaceRole.Cliff] = new("darkpassage", 3),
-        [SurfaceRole.CliffTop] = new("darkpassage", 12), [SurfaceRole.Rock] = new("darkpassage", 29), [SurfaceRole.CaveWall] = new("darkpassage", 3),
-        [SurfaceRole.Ceiling] = new("darkpassage", 29), [SurfaceRole.Brick] = new("gnastysworld", 9), [SurfaceRole.Paving] = new("gnastysworld", 18),
-        [SurfaceRole.Roof] = new("gnastysworld", 23), [SurfaceRole.Wood] = new("clifftown", 15), [SurfaceRole.Water] = Lava,
-        [SurfaceRole.Lava] = Lava, [SurfaceRole.Goo] = Goo, [SurfaceRole.Underside] = new("darkpassage", 3), [SurfaceRole.Charge] = Chevrons,
-    }, Palette(C(80, 72, 72), C(96, 88, 80), C(128, 116, 104), C(104, 72, 56), C(120, 96, 80), C(72, 64, 64), C(150, 64, 48),
-        C(96, 96, 104), C(104, 72, 48), C(232, 96, 24)), "gnastysworld", [25, 33, 23, 19], ["FIERY", "SMOKY", "MOLTEN", "BURNING", "ASHEN", "SCALDING"],
-        ["CRATER", "FORGE", "CINDERS", "CALDERA", "FURNACE", "EMBERS"])
-    {
-        Styles = new Dictionary<LevelStyle, double> { [LevelStyle.Caverns] = 3, [LevelStyle.Islands] = 3, [LevelStyle.Canyon] = 2, [LevelStyle.Valley] = 1, [LevelStyle.Castle] = 1 },
-        Liquid = SurfaceRole.Lava, SunElevation = 35, Ambient = 0.6, Light = new(144, 120, 104), SkyTop = new(40, 24, 32), SkyHorizon = new(200, 88, 40),
-        SkyBelow = new(96, 32, 16), SkySun = new(255, 160, 64), SkyClouds = new(72, 56, 56), CloudAmount = 0.55, SkyHills = new(48, 32, 32),
+        Liquid = SurfaceRole.Goo, SkyTop = new(88, 104, 112), SkyHorizon = new(168, 180, 160), SkyBelow = new(72, 96, 64), SkyClouds = new(176, 184, 176),
+        CloudAmount = 0.75, SkyHills = new(56, 80, 56),
     };
 
-    public static LevelTheme Castle { get; } = new("castle", "Royal Castle", new Dictionary<SurfaceRole, ThemeTexture>
+    public static LevelTheme TreeTops { get; } = Look("treetops", "Tree Tops", [29], SwampAdjectives, ["TREETOPS", "BOUGHS", "CANOPY", "PERCH", "NESTS", "HEIGHTS"],
+        [(LevelStyle.SkyIslands, 5), (LevelStyle.Islands, 1), (LevelStyle.Valley, 1)],
+        (SurfaceRole.Ground, 21), (SurfaceRole.GroundAlt, 19), (SurfaceRole.Path, 35), (SurfaceRole.Cliff, 80), (SurfaceRole.Rock, 54),
+        (SurfaceRole.Brick, 12), (SurfaceRole.Wood, 68), (SurfaceRole.Underside, 60)) with
     {
-        [SurfaceRole.Ground] = new("toasty", 28), [SurfaceRole.GroundAlt] = new("artisans", 39), [SurfaceRole.Path] = new("hauntedtowers", 58),
-        [SurfaceRole.Dirt] = new("stonehill", 11), [SurfaceRole.Sand] = new("stonehill", 30), [SurfaceRole.Cliff] = new("hauntedtowers", 64),
-        [SurfaceRole.CliffTop] = new("hauntedtowers", 7), [SurfaceRole.Rock] = new("hauntedtowers", 59), [SurfaceRole.CaveWall] = new("hauntedtowers", 64),
-        [SurfaceRole.Ceiling] = new("hauntedtowers", 59), [SurfaceRole.Brick] = new("hauntedtowers", 16), [SurfaceRole.Paving] = new("stonehill", 21),
-        [SurfaceRole.Roof] = new("toasty", 68), [SurfaceRole.Wood] = new("artisans", 24), [SurfaceRole.Water] = Water,
-        [SurfaceRole.Lava] = Lava, [SurfaceRole.Goo] = Goo, [SurfaceRole.Underside] = new("hauntedtowers", 64), [SurfaceRole.Charge] = Chevrons,
-    }, Palette(C(72, 148, 64), C(96, 160, 80), C(176, 172, 164), C(120, 92, 64), C(212, 192, 140), C(170, 168, 160), C(216, 220, 216),
-        C(176, 48, 40), C(130, 88, 52), null!), "townsquare", [26, 4, 31], ["ROYAL", "GRAND", "KINGS", "NOBLE", "SILVER", "CROWN"],
-        ["KEEP", "CITADEL", "BASTION", "RAMPARTS", "COURT", "FORTRESS"])
-    {
-        Styles = new Dictionary<LevelStyle, double> { [LevelStyle.Castle] = 5, [LevelStyle.Valley] = 1, [LevelStyle.SkyIslands] = 1 },
-        SkyTop = new(80, 128, 216), SkyHorizon = new(200, 220, 244),
+        SkyTop = new(90, 110, 90), SkyHorizon = new(190, 200, 150), SkyBelow = new(60, 80, 50), CloudAmount = 0.5, SkyHills = new(50, 80, 50),
     };
 
-    public static LevelTheme Night { get; } = new("night", "Moonlit Night", new Dictionary<SurfaceRole, ThemeTexture>
+    public static LevelTheme DreamWeavers { get; } = Look("dreamweavers", "Dream Weavers", [34], SkyAdjectives, SkyNouns,
+        [(LevelStyle.SkyIslands, 5), (LevelStyle.Castle, 2)],
+        (SurfaceRole.Ground, 43), (SurfaceRole.GroundAlt, 10), (SurfaceRole.Path, 35), (SurfaceRole.Cliff, 37), (SurfaceRole.CliffTop, 39),
+        (SurfaceRole.Rock, 30), (SurfaceRole.Roof, 41), (SurfaceRole.Underside, 31)) with
     {
-        [SurfaceRole.Ground] = new("darkpassage", 23), [SurfaceRole.GroundAlt] = new("darkpassage", 36), [SurfaceRole.Path] = new("darkpassage", 37),
-        [SurfaceRole.Dirt] = new("darkpassage", 35), [SurfaceRole.Sand] = new("darkpassage", 38), [SurfaceRole.Cliff] = new("darkpassage", 3),
-        [SurfaceRole.CliffTop] = new("darkpassage", 29), [SurfaceRole.Rock] = new("darkpassage", 12), [SurfaceRole.CaveWall] = new("darkpassage", 3),
-        [SurfaceRole.Ceiling] = new("darkpassage", 12), [SurfaceRole.Brick] = new("darkpassage", 18), [SurfaceRole.Paving] = new("darkpassage", 34),
-        [SurfaceRole.Roof] = new("dreamweavers", 40), [SurfaceRole.Wood] = new("treetops", 48), [SurfaceRole.Water] = Water,
-        [SurfaceRole.Lava] = Lava, [SurfaceRole.Goo] = Goo, [SurfaceRole.Underside] = new("darkpassage", 3), [SurfaceRole.Charge] = Chevrons,
-    }, Palette(C(120, 152, 128), C(132, 160, 140), C(176, 180, 168), C(104, 100, 96), C(184, 184, 176), C(88, 92, 104), C(200, 176, 192),
-        C(64, 112, 136), C(104, 76, 56), C(40, 120, 200)), "darkpassage", [12, 4, 29, 28], ["MOONLIT", "SILENT", "SHADOW", "STARRY", "GHOSTLY", "MIDNIGHT"],
-        ["PASSAGE", "HOLLOW", "TOWERS", "GROTTO", "RUINS", "CRYPT"])
-    {
-        Styles = new Dictionary<LevelStyle, double> { [LevelStyle.Caverns] = 3, [LevelStyle.Castle] = 3, [LevelStyle.Valley] = 2, [LevelStyle.SkyIslands] = 1 },
-        SunElevation = 55, Ambient = 0.5, Light = new(104, 112, 144), SkyTop = new(8, 12, 40), SkyHorizon = new(48, 64, 112), SkyBelow = new(16, 24, 48),
-        SkySun = new(232, 236, 255), SkyClouds = new(56, 64, 96), CloudAmount = 0.3, Stars = true, SkyHills = new(20, 28, 48),
+        SkyTop = new(40, 60, 150), SkyHorizon = new(190, 150, 220), SkyBelow = new(120, 100, 180), CloudAmount = 0.7, SkyHills = null,
     };
 
-    public static IReadOnlyList<LevelTheme> All { get; } = [Meadow, Highland, Sky, Desert, Winter, Swamp, Volcano, Castle, Night];
+    public static LevelTheme LoftyCastle { get; } = Look("loftycastle", "Lofty Castle", [14, 34], SkyAdjectives, SkyNouns,
+        [(LevelStyle.SkyIslands, 5), (LevelStyle.Castle, 2), (LevelStyle.Islands, 1)],
+        (SurfaceRole.Ground, 65), (SurfaceRole.Path, 15), (SurfaceRole.Cliff, 25), (SurfaceRole.CliffTop, 19), (SurfaceRole.Rock, 57),
+        (SurfaceRole.Paving, 30), (SurfaceRole.Roof, 23), (SurfaceRole.Wood, 24)) with
+    {
+        SkyTop = new(72, 136, 232), SkyHorizon = new(200, 224, 252), SkyBelow = new(232, 236, 248), CloudAmount = 0.7, SkyHills = null,
+    };
 
-    public static LevelTheme? Find(string? key) => All.FirstOrDefault(t => string.Equals(t.Key, key, StringComparison.OrdinalIgnoreCase));
+    public static LevelTheme HauntedTowers { get; } = Look("hauntedtowers", "Haunted Towers", [4, 12], CastleAdjectives, CastleNouns,
+        [(LevelStyle.Castle, 5), (LevelStyle.Valley, 1), (LevelStyle.SkyIslands, 1)],
+        (SurfaceRole.Ground, 82), (SurfaceRole.GroundAlt, 80), (SurfaceRole.Path, 78), (SurfaceRole.Cliff, 69), (SurfaceRole.CliffTop, 73),
+        (SurfaceRole.Rock, 0), (SurfaceRole.Brick, 16)) with
+    {
+        SkyTop = new(16, 20, 60), SkyHorizon = new(70, 80, 140), SkyBelow = new(20, 28, 56), SkySun = new(232, 236, 255), SkyClouds = new(64, 72, 110),
+        CloudAmount = 0.35, Stars = true, SkyHills = new(24, 32, 56),
+    };
+
+    public static LevelTheme TwilightHarbor { get; } = Look("twilightharbor", "Twilight Harbor", [24, 5], HarbourAdjectives, HarbourNouns,
+        [(LevelStyle.Islands, 4), (LevelStyle.Canyon, 2), (LevelStyle.Castle, 1)],
+        (SurfaceRole.Ground, 47), (SurfaceRole.Path, 38), (SurfaceRole.Cliff, 29), (SurfaceRole.CliffTop, 49), (SurfaceRole.Rock, 0),
+        (SurfaceRole.Brick, 14), (SurfaceRole.Wood, 15), (SurfaceRole.Underside, 10)) with
+    {
+        SkyTop = new(40, 40, 90), SkyHorizon = new(230, 130, 60), SkyBelow = new(70, 50, 60), SkySun = new(255, 190, 110), SkyClouds = new(120, 80, 90),
+        CloudAmount = 0.5, SkyHills = new(60, 44, 56),
+    };
+
+    public static IReadOnlyList<LevelTheme> All { get; } =
+    [
+        Artisans, StoneHill, DarkHollow, PeaceKeepers, DryCanyon, IceCavern, MagicCrafters, WizardPeak, MistyBog, TreeTops,
+        DreamWeavers, LoftyCastle, HauntedTowers, TwilightHarbor,
+    ];
+
+    /// <summary>The looks of the first generator, by the level that now stands for each.</summary>
+    private static readonly Dictionary<string, string> Earlier = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["meadow"] = "artisans", ["highland"] = "stonehill", ["sky"] = "loftycastle", ["desert"] = "drycanyon", ["winter"] = "icecavern",
+        ["swamp"] = "mistybog", ["volcano"] = "peacekeepers", ["castle"] = "hauntedtowers", ["night"] = "darkhollow",
+    };
+
+    public static LevelTheme? Find(string? key) => key == null ? null
+        : All.FirstOrDefault(t => string.Equals(t.Key, Earlier.GetValueOrDefault(key, key), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>A theme for <paramref name="style"/>, by the themes' weights for it.</summary>
     public static LevelTheme For(LevelStyle style, LevelRandom random) =>
-        random.Pick<LevelTheme>([.. All.Select(t => (t, t.Styles.TryGetValue(style, out double w) ? w : 0.25))]);
+        random.Pick<LevelTheme>([.. All.Select(t => (t, t.Styles.TryGetValue(style, out double w) ? w : 0.15))]);
 }

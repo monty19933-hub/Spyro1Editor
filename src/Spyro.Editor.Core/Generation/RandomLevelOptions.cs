@@ -3,7 +3,7 @@ namespace Spyro.Editor.Core.Generation;
 /// <summary>The kind of level the generator lays out.</summary>
 public enum LevelStyle
 {
-    /// <summary>One big walled-in area of terraces, ramps and ledges (Dark Hollow, Artisans).</summary>
+    /// <summary>Clearings among steep green banks, joined by sloping paths (Artisans, Stone Hill, Dark Hollow).</summary>
     Valley,
     /// <summary>Islands in water, joined by bridges, stepping stones and glides (Twilight Harbor, Cliff Town's water).</summary>
     Islands,
@@ -11,7 +11,7 @@ public enum LevelStyle
     SkyIslands,
     /// <summary>Caves under rock joined by tunnels, with an open entrance (High Caves, Dark Passage).</summary>
     Caverns,
-    /// <summary>A long winding trail between tall cliffs, with side areas (Stone Hill, Dry Canyon).</summary>
+    /// <summary>Rooms and trails between tall rock walls (Dry Canyon, Peace Keepers).</summary>
     Canyon,
     /// <summary>Courtyards behind thick walls, towers and a moat (Town Square, Haunted Towers).</summary>
     Castle,
@@ -19,9 +19,9 @@ public enum LevelStyle
 
 public enum LevelSize { Small, Medium, Large }
 
-/// <summary>Where the level's pictures come from: the original levels' textures chosen by role (grass on floors, rock
-/// on cliffs, planks on bridges…), pictures the generator paints in the theme's colours, or the user's own pictures for
-/// some or all roles.</summary>
+/// <summary>Where the level's pictures come from: the textures of the level its look is taken from (the ones that level
+/// itself uses for its ground, banks, rock and paths), pictures the generator paints in the look's colours, or the user's
+/// own pictures for some or all surfaces.</summary>
 public enum LevelTextureMode { GameTextures, GeneratedPictures }
 
 /// <summary>What a face of the level is for; each theme gives every role a texture.</summary>
@@ -40,7 +40,7 @@ public sealed record RandomLevelOptions
     /// <summary>A key of <see cref="LevelThemes.All"/>; null picks one that suits the style.</summary>
     public string? Theme { get; init; }
     public bool? Caves { get; init; }
-    /// <summary>Supercharge paths: long straight runways and steep ramps Spyro climbs by charging.</summary>
+    /// <summary>A ramp too steep to walk, climbed by charging, up to a hidden nook.</summary>
     public bool? ChargePaths { get; init; }
     /// <summary>Gaps and high ledges crossed by gliding.</summary>
     public bool? Glides { get; init; }
@@ -48,13 +48,13 @@ public sealed record RandomLevelOptions
     public bool? Hazards { get; init; }
     /// <summary>Bridges over water and chasms.</summary>
     public bool? Bridges { get; init; }
-    /// <summary>Hidden ledges and platforms with room for treasure.</summary>
+    /// <summary>Hidden nooks off the level's rooms, with room for treasure.</summary>
     public bool? Secrets { get; init; }
     public LevelTextureMode Textures { get; init; } = LevelTextureMode.GameTextures;
     /// <summary>The user's own pictures (PNG or JPEG, any size) for roles, in place of the theme's.</summary>
     public IReadOnlyDictionary<SurfaceRole, string> Pictures { get; init; } = new Dictionary<SurfaceRole, string>();
-    /// <summary>True: a sky painted in the theme's colours; false: the theme's original level's sky.</summary>
-    public bool PaintedSky { get; init; } = true;
+    /// <summary>True: a sky painted in the look's colours; false: the sky of the level the look comes from.</summary>
+    public bool PaintedSky { get; init; }
     /// <summary>The level's name (capital letters, spaces and apostrophes); null makes one up.</summary>
     public string? Name { get; init; }
 }

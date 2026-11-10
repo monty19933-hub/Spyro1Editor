@@ -12,8 +12,39 @@ if (args.Length == 5 && args[0] == "--fingerprint")
     Console.WriteLine("FINGERPRINT " + r.Scene.Fingerprint());
     return 0;
 }
+if (args.Length >= 6 && args[0] == "--dump")
+{
+    // --dump <seed> <style> <size> <repo> <out.json> [theme]: the level's faces for the study renderer (no disc).
+    var catalog = LevelCatalog.Load(args[4]);
+    var options = new Spyro.Editor.Core.Generation.RandomLevelOptions
+    {
+        Seed = long.Parse(args[1]), Style = args[2] == "-" ? null : Enum.Parse<Spyro.Editor.Core.Generation.LevelStyle>(args[2]),
+        Size = Enum.Parse<Spyro.Editor.Core.Generation.LevelSize>(args[3]), Theme = args.Length > 6 && args[6] != "-" ? args[6] : null,
+    };
+    var watch = System.Diagnostics.Stopwatch.StartNew();
+    var r = Spyro.Editor.Core.Generation.RandomLevelGenerator.Generate(options, catalog, compile: Environment.GetEnvironmentVariable("RANDOM_NO_COMPILE") != "1");
+    Console.WriteLine($"{watch.ElapsedMilliseconds} ms: {r.Report.Summary}");
+    Console.WriteLine("draw: " + r.Report.DrawPlan);
+    foreach (var note in r.Report.Notes) Console.WriteLine("note: " + note);
+    var keyOf = catalog.Levels.GroupBy(l => l.SourceWadEntry).ToDictionary(g => g.Key, g => g.First().Key);
+    var faces = r.Scene.Surfaces.Select(s => new
+    {
+        p = s.Vertices.Select(v => new[] { v.X, v.Y, v.Z }).ToArray(),
+        c = (s.NearColors ?? []).Select(c => new[] { (int)c.R, c.G, c.B }).ToArray(),
+        t = s.Material == null ? null : $"{keyOf.GetValueOrDefault(s.Material.SourceWadEntry, "?")}:{s.Material.TextureId}",
+        k = s.Kind?.Type,
+    });
+    await File.WriteAllTextAsync(args[5], System.Text.Json.JsonSerializer.Serialize(new
+    {
+        name = r.Scene.Name, spawn = new[] { r.Scene.Spawn.X, r.Scene.Spawn.Y, r.Scene.Spawn.Z }, heading = r.Scene.Heading,
+        gems = (r.Scene.GemSpots ?? []).Select(g => new[] { g.X, g.Y, g.Z }).ToArray(),
+        links = r.Report.Links.Select(l => new { l.Kind, from = new[] { l.From.X, l.From.Y, l.From.Z }, to = new[] { l.To.X, l.To.Y, l.To.Z } }).ToArray(), faces,
+    }));
+    await TerrainTexturePngWriter.WriteRgbaAsync(Path.ChangeExtension(args[5], ".map.png"), r.MapWidth, r.MapHeight, r.Map);
+    return 0;
+}
 // Gate (no disc): [repo root] [--maps <folder>] [--seeds N]
-if (args.Length == 0 || args[0] is not ("--fingerprint" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes"))
+if (args.Length == 0 || args[0] is not ("--fingerprint" or "--dump" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes"))
 {
     string repo = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : Directory.GetCurrentDirectory();
     string? maps = args.SkipWhile(a => a != "--maps").Skip(1).FirstOrDefault();

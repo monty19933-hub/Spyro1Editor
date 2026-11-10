@@ -31,18 +31,18 @@ public sealed partial class MainWindow
 
     private static readonly (LevelStyle? Style, string Label)[] RandomLevelKinds =
     [
-        (null, "Surprise me"), (LevelStyle.Valley, "Valley: one big area (like Dark Hollow)"), (LevelStyle.Islands, "Islands in the water"),
+        (null, "Surprise me"), (LevelStyle.Valley, "Clearings among the hills (like Artisans)"), (LevelStyle.Islands, "Islands in the water"),
         (LevelStyle.SkyIslands, "Islands in the sky (like Lofty Castle)"), (LevelStyle.Caverns, "Caverns and tunnels"),
-        (LevelStyle.Canyon, "Canyon trail"), (LevelStyle.Castle, "Castle and courtyards"),
+        (LevelStyle.Canyon, "Canyon (like Dry Canyon)"), (LevelStyle.Castle, "Castle courtyards"),
     ];
     private static readonly (SurfaceRole Role, string Label)[] PictureRoles =
     [
-        (SurfaceRole.Ground, "Ground"), (SurfaceRole.GroundAlt, "Ground patches"), (SurfaceRole.Path, "Paths"), (SurfaceRole.Dirt, "Ramps and banks"),
-        (SurfaceRole.Sand, "Sand and shores"), (SurfaceRole.CliffTop, "Cliff tops"), (SurfaceRole.Cliff, "Cliffs"), (SurfaceRole.Rock, "Rocks"),
-        (SurfaceRole.CaveWall, "Cave walls"), (SurfaceRole.Ceiling, "Cave ceilings"), (SurfaceRole.Brick, "Walls and houses"),
-        (SurfaceRole.Paving, "Paving and ledges"), (SurfaceRole.Roof, "Roofs"), (SurfaceRole.Wood, "Bridges and planks"),
+        (SurfaceRole.Ground, "Ground"), (SurfaceRole.GroundAlt, "Banks and hilltops"), (SurfaceRole.Path, "Paths"), (SurfaceRole.Dirt, "Bare earth"),
+        (SurfaceRole.Sand, "Sand and shores"), (SurfaceRole.CliffTop, "Tops of rock walls"), (SurfaceRole.Cliff, "Rock walls"), (SurfaceRole.Rock, "Rims and stepping stones"),
+        (SurfaceRole.CaveWall, "Cave walls"), (SurfaceRole.Ceiling, "Cave ceilings"), (SurfaceRole.Brick, "Castle walls and towers"),
+        (SurfaceRole.Paving, "Paving"), (SurfaceRole.Roof, "Tower roofs"), (SurfaceRole.Wood, "Bridges and planks"),
         (SurfaceRole.Underside, "Under floating islands"), (SurfaceRole.Water, "Water"), (SurfaceRole.Lava, "Lava"), (SurfaceRole.Goo, "Ooze"),
-        (SurfaceRole.Charge, "Supercharge ramps"),
+        (SurfaceRole.Charge, "Charge ramps"),
     ];
 
     private async Task RandomLevelAsync()
@@ -93,7 +93,8 @@ public sealed partial class MainWindow
         var look = new ComboBox { Name = "RandomLevelLook", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = new[] { "Surprise me" }.Concat(LevelThemes.All.Select(t => t.Name)).ToArray(), SelectedIndex = 0 };
         var size = new ComboBox { Name = "RandomLevelSize", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = new[] { "Small", "Medium", "Large" }, SelectedIndex = 1 };
         left.Children.Add(Label("Kind of level")); left.Children.Add(kind);
-        left.Children.Add(Label("Look")); left.Children.Add(look);
+        left.Children.Add(Label("In the style of")); left.Children.Add(look);
+        left.Children.Add(new TextBlock { Text = "The level is built from that level's own ground, rock and paths, painted in its colours.", TextWrapping = TextWrapping.Wrap, FontSize = 12, Opacity = 0.75 });
         left.Children.Add(Label("Size")); left.Children.Add(size);
         left.Children.Add(Label("What it has"));
         left.Children.Add(new TextBlock { Text = "A filled square leaves it to chance; a tick asks for it; empty leaves it out.", TextWrapping = TextWrapping.Wrap, FontSize = 12, Opacity = 0.75 });
@@ -108,24 +109,24 @@ public sealed partial class MainWindow
             featureGrid.Children.Add(box);
             return box;
         }
-        var caves = Feature("RandomLevelCaves", "Caves", "Areas under a rock roof, and tunnels.");
-        var charge = Feature("RandomLevelCharge", "Supercharge paths", "Steep ramps Spyro climbs only by charging, and supercharge runways: charge down the arrows and leap a wide pit.");
-        var glides = Feature("RandomLevelGlides", "Glides", "Gaps and ledges crossed by jumping and gliding.");
-        var hazards = Feature("RandomLevelHazards", "Water or lava", "Pools, channels and chasms of water, lava or ooze that Spyro must not fall into.");
-        var bridges = Feature("RandomLevelBridges", "Bridges", "Plank bridges over water and chasms.");
-        var secrets = Feature("RandomLevelSecrets", "Secret ledges", "Hidden ledges and platforms with room for treasure.");
+        var caves = Feature("RandomLevelCaves", "Caves", "Caverns: more of the rooms are under rock. Canyons and castles: some paths run through tunnels.");
+        var charge = Feature("RandomLevelCharge", "Charge ramps", "A ramp too steep to walk, marked with arrows, up to a hidden nook: Spyro climbs it by charging.");
+        var glides = Feature("RandomLevelGlides", "Glides", "Steps up to a lookout, and a ledge across the room that Spyro reaches only by gliding from it.");
+        var hazards = Feature("RandomLevelHazards", "Pools", "Pools of water, lava or ooze at the side of some rooms.");
+        var bridges = Feature("RandomLevelBridges", "Bridges", "Islands are joined by bridges (without them, by stepping stones).");
+        var secrets = Feature("RandomLevelSecrets", "Hidden nooks", "Small rooms off the level's rooms, with room for treasure.");
         left.Children.Add(Label("Textures"));
-        var gameTextures = new RadioButton { Name = "RandomLevelGameTextures", GroupName = "RandomLevelTextures", Content = "The game's own textures, picked for each surface", IsChecked = true };
+        var gameTextures = new RadioButton { Name = "RandomLevelGameTextures", GroupName = "RandomLevelTextures", Content = "That level's own textures and colours", IsChecked = true };
         var painted = new RadioButton { Name = "RandomLevelPainted", GroupName = "RandomLevelTextures", Content = "New pictures painted in the look's colours" };
         left.Children.Add(gameTextures); left.Children.Add(painted);
         var ownPictures = NewButton("Use My Own Pictures…"); ownPictures.Name = "RandomLevelOwnPictures";
         var ownNote = new TextBlock { Name = "RandomLevelOwnNote", TextWrapping = TextWrapping.Wrap, FontSize = 12, Opacity = 0.75, Text = "None chosen: every surface follows the choice above." };
         left.Children.Add(ownPictures); left.Children.Add(ownNote);
         left.Children.Add(Label("Sky"));
-        var paintedSky = new RadioButton { Name = "RandomLevelPaintedSky", GroupName = "RandomLevelSky", Content = "A sky painted to match", IsChecked = true };
-        var gameSky = new RadioButton { Name = "RandomLevelGameSky", GroupName = "RandomLevelSky", Content = "The look's game sky" };
+        var paintedSky = new RadioButton { Name = "RandomLevelPaintedSky", GroupName = "RandomLevelSky", Content = "A sky painted to match" };
+        var gameSky = new RadioButton { Name = "RandomLevelGameSky", GroupName = "RandomLevelSky", Content = "That level's sky", IsChecked = true };
         var skyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
-        skyRow.Children.Add(paintedSky); skyRow.Children.Add(gameSky);
+        skyRow.Children.Add(gameSky); skyRow.Children.Add(paintedSky);
         left.Children.Add(skyRow);
 
         var right = new StackPanel { Spacing = 8, Width = 380 };
