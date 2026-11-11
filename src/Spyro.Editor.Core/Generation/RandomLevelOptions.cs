@@ -43,6 +43,11 @@ public sealed record RandomLevelOptions
     public LevelStyle? Style { get; init; }
     public LevelSize Size { get; init; } = LevelSize.Medium;
     public LevelDifficulty Difficulty { get; init; } = LevelDifficulty.Medium;
+    /// <summary>How the level is laid out: "journey" (a way from room to room with a clear end), "loop" (a ring that
+    /// comes back over its start), "hub" (a clearing with rooms off it all round), "arena" (one great room with a hill,
+    /// a mound or a moat in its middle), "climb" (a hill of terraces), "gorge" (a winding gorge), "web" (rooms with
+    /// more than one way round); null leaves it to the seed.</summary>
+    public string? Layout { get; init; }
     /// <summary>A key of <see cref="LevelThemes.All"/>; null picks one that suits the style.</summary>
     public string? Theme { get; init; }
     public bool? Caves { get; init; }

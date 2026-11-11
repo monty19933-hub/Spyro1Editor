@@ -23,6 +23,8 @@ if (args.Length >= 6 && args[0] == "--dump")
         // RANDOM_DOORWAYS=n: a homeworld with n doorways (built as a new world's, to be looked at); RANDOM_DIFFICULTY.
         Doorways = int.TryParse(Environment.GetEnvironmentVariable("RANDOM_DOORWAYS"), out int doors) ? doors : 0,
         Difficulty = Enum.TryParse<Spyro.Editor.Core.Generation.LevelDifficulty>(Environment.GetEnvironmentVariable("RANDOM_DIFFICULTY"), out var hard) ? hard : Spyro.Editor.Core.Generation.LevelDifficulty.Medium,
+        // RANDOM_LAYOUT: journey, loop, hub, arena, climb, gorge or web (unset: the seed's own).
+        Layout = Environment.GetEnvironmentVariable("RANDOM_LAYOUT") is { Length: > 0 } layout ? layout : null,
     };
     var watch = System.Diagnostics.Stopwatch.StartNew();
     var source = RandomLevelCases.LookSource();

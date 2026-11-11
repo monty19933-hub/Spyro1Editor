@@ -21,6 +21,9 @@ public sealed record RandomLevelReport
     public string Theme { get; init; } = "";
     public LevelSize Size { get; init; }
     public LevelDifficulty Difficulty { get; init; } = LevelDifficulty.Medium;
+    /// <summary>How the level is laid out (<see cref="RandomLevelOptions.Layout"/>): journey, loop, hub, arena, climb,
+    /// gorge or web (trail: the plain layout a level falls back on).</summary>
+    public string Layout { get; init; } = "";
     public string Features { get; init; } = "";
     public int Areas { get; init; }
     public int Faces { get; init; }
@@ -137,23 +140,31 @@ public static class RandomLevelGenerator
             props = LevelProps.Extract(terrain, id => LevelDna.Static(theme.Key, id));
         // A few layouts are tried; the first whose every floor is proved reachable both ways is taken (else the best).
         (PlannedLevel Planned, TerrainMesher Mesher, (int Required, int Unreached, int NoWayBack, List<(double X, double Y)> Bad) Check)? best = null;
-        int attempts = 0;
-        for (int attempt = 0; attempt < 6; attempt++)
+        int attempts = 0, squeeze = 0;
+        long planSeed = (long)rnd.Fork("plan0").Next64();
+        for (int attempt = 0, plans = 0; attempt < 12 && plans < 6; attempt++)
         {
             token.ThrowIfCancellationRequested();
             attempts++;
-            var tried = SpyroPlanner.Build(style, options.Size, features, theme, rnd.Fork("plan" + attempt), shrink, options.Difficulty, Math.Clamp(options.Doorways, 0, NativeHubPortals.MaxDoorways));
+            var tried = SpyroPlanner.Build(style, options.Size, features, theme, new LevelRandom(planSeed), shrink, options.Difficulty, Math.Clamp(options.Doorways, 0, NativeHubPortals.MaxDoorways),
+                options.Layout, squeeze);
             // Into the built level's coordinates: whole units from 0, the lowest floor (and what hangs under floating
             // land) well above the bottom.
             var (bx0, by0, _, _) = tried.Plan.Bounds();
             double lowest = tried.Plan.Zones.Min(z => Math.Min(z.Z, z.Z1));
-            double under = tried.Plan.Kind == EnclosureKind.Sky ? 320 + 0.55 * tried.Plan.Zones.Where(z => !z.IsPath).Max(z => z.Discs.Max(d => d.R)) : 0;
+            double under = tried.Plan.Kind == EnclosureKind.Sky ? 320 + 0.55 * tried.Plan.Zones.Where(z => !z.IsPath).Max(z => z.Radius) : 0;
             Shift(tried, Math.Round(Origin - bx0), Math.Round(Origin - by0), Math.Round(BaseHeight + under - lowest));
             var mesh = new TerrainMesher(tried.Plan, tried.Spacing);
-            mesh.Build(rnd.Fork("mesh" + attempt));
+            mesh.Build(new LevelRandom(planSeed ^ 0x6D657368));
+            // More faces than a level of this size may have (the game must hold and draw them): the same level
+            // again with smaller rooms.
+            if (mesh.Pieces.Count > FaceTarget(options.Size) && squeeze < 5) { squeeze++; continue; }
             var reach = mesh.Reach(tried.Start.X, tried.Start.Y, tried.Glides.Select(g => (g.From, g.To)));
             if (best == null || reach.Unreached + reach.NoWayBack < best.Value.Check.Unreached + best.Value.Check.NoWayBack) best = (tried, mesh, reach);
             if (reach.Unreached + reach.NoWayBack == 0) break;
+            // Another plan altogether.
+            plans++; squeeze = 0;
+            planSeed = (long)rnd.Fork("plan" + plans).Next64();
         }
         var (planned, mesher, check) = best!.Value;
         var plan = planned.Plan;
@@ -281,7 +292,8 @@ public static class RandomLevelGenerator
             var chosen = doorRandom.Pick(options);
             return (materialOf[chosen]!, Paint(Ramp(theme, chosen, materialOf[chosen]), bright));
         }
-        var face = Stone([SurfaceRole.Brick, SurfaceRole.Rock, SurfaceRole.Cliff, SurfaceRole.CaveWall, SurfaceRole.Paving], null, 0.66);
+        var face = Stone([SurfaceRole.Brick, SurfaceRole.Rock, SurfaceRole.Cliff, SurfaceRole.CaveWall, SurfaceRole.Paving], null, 0.66)
+            ?? Stone([SurfaceRole.CliffTop, SurfaceRole.Underside, SurfaceRole.Wood, SurfaceRole.Path, SurfaceRole.Ground], null, 0.66);
         var side = Stone([SurfaceRole.Rock, SurfaceRole.Cliff, SurfaceRole.CliffTop, SurfaceRole.Paving, SurfaceRole.Brick, SurfaceRole.CaveWall], face?.Material, 0.5) ?? face;
         var ordered = planned.Doors.OrderBy(d => d.Area == 0 ? 0 : 1).ThenBy(d => planned.Areas[d.Area].Depth).ThenBy(d => d.Area).ToList();
         var doorways = ordered.Select((d, index) =>
@@ -310,7 +322,7 @@ public static class RandomLevelGenerator
         notes.AddRange(planned.Notes);
         var report = new RandomLevelReport
         {
-            Seed = options.Seed, Style = style, Theme = theme.Key, Size = options.Size, Difficulty = options.Difficulty,
+            Seed = options.Seed, Style = style, Theme = theme.Key, Size = options.Size, Difficulty = options.Difficulty, Layout = planned.Shape,
             Features = string.Join(", ", new[] { features.Caves ? "caves" : null, features.ChargePaths ? "supercharge paths" : null, features.Glides ? "glides" : null,
                 features.Hazards ? "hazards" : null, features.Bridges ? "bridges" : null, features.Secrets ? "secrets" : null }.OfType<string>()),
             Areas = planned.Areas.Count, Faces = surfaces.Count, Materials = materials.Count, Counts = planned.Counts, Links = planned.Links,
@@ -339,6 +351,10 @@ public static class RandomLevelGenerator
         return new(scene, report, pictures, materials) { Map = map, MapWidth = mw, MapHeight = mh, Doorways = doorways, DoorwayMaterial = doorwayMaterial, PlayFloor = playFloor, Shape = planned.Shape };
     }
 
+    /// <summary>The most faces the land of a level of a size is made of, before its towers and trees (the game's own
+    /// levels have 2,000 to 7,000; a built level draws all of its land, so it has fewer).</summary>
+    public static int FaceTarget(LevelSize size) => size switch { LevelSize.Small => 2000, LevelSize.Large => 3700, _ => 2850 };
+
     /// <summary>The side of the squares faces are grouped into sectors by.</summary>
     public const float SectorSize = 640;
     /// <summary>Most sectors a generated level is grouped into (the game holds 127; big sectors are split when compiled).</summary>
@@ -352,6 +368,7 @@ public static class RandomLevelGenerator
         foreach (var z in L.Plan.Zones.Concat(L.Plan.Decals))
         {
             for (int k = 0; k < z.Discs.Count; k++) z.Discs[k] = (z.Discs[k].X + dx, z.Discs[k].Y + dy, z.Discs[k].R);
+            for (int k = 0; k < z.Boxes.Count; k++) z.Boxes[k] = z.Boxes[k] with { X = z.Boxes[k].X + dx, Y = z.Boxes[k].Y + dy };
             for (int k = 0; k < z.Spine.Count; k++) z.Spine[k] = (z.Spine[k].X + dx, z.Spine[k].Y + dy);
             z.Z += dz; z.Z1 += dz;
         }
@@ -366,6 +383,8 @@ public static class RandomLevelGenerator
         }
         L.Start = (L.Start.X + dx, L.Start.Y + dy); L.Facing = (L.Facing.X + dx, L.Facing.Y + dy);
         for (int k = 0; k < L.Doors.Count; k++) L.Doors[k] = L.Doors[k] with { X = L.Doors[k].X + dx, Y = L.Doors[k].Y + dy };
+        for (int k = 0; k < L.Landmarks.Count; k++) L.Landmarks[k] = L.Landmarks[k] with { X = L.Landmarks[k].X + dx, Y = L.Landmarks[k].Y + dy };
+        if (L.StartAt is { } at) L.StartAt = (at.X + dx, at.Y + dy);
     }
 
     /// <summary>The colours a face is drawn in far away, where the game draws it without its texture: the texture's

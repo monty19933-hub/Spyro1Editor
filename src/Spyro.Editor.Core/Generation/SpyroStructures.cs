@@ -83,6 +83,17 @@ internal static class SpyroStructures
             placed.Add((x, y, 110)); towers++;
             pieces.AddRange(Tower(x, y, ground - 60, Math.Max(ground + 150, floor + height), castle ? 112 : 100, castle ? 150 : 200));
         }
+        // Landmarks first: on a hilltop, a mound or an island that asked for one, the look's own tall thing where it has
+        // one that fits there, else a round tower.
+        foreach (var mark in L.Landmarks)
+        {
+            double ground = plan.Height(mark.Zone, mark.X, mark.Y);
+            var fitting = tall.Where(p => p.Radius <= mark.Room - 95).ToList();
+            if (Pick(fitting) is { } prop && Room(mark.X, mark.Y, prop.Radius)) { Use(prop, mark.X, mark.Y, ground, 20); continue; }
+            if (mark.Room < 190 || style == LevelStyle.Caverns || !Room(mark.X, mark.Y, 100)) continue;
+            placed.Add((mark.X, mark.Y, 100)); towers++;
+            pieces.AddRange(Tower(mark.X, mark.Y, ground - 20, ground + Range(rnd, 300, 430), Math.Min(104, mark.Room - 96), castle ? 150 : 200));
+        }
         if (!free && style is not (LevelStyle.Canyon or LevelStyle.Caverns))
             foreach (var zone in plan.Zones)
             {

@@ -68,9 +68,13 @@ internal enum EnclosureKind
 internal sealed class TerrainZone
 {
     public int Id;
-    /// <summary>room, path, terrace, pond, ledge, bridge, stone.</summary>
+    /// <summary>room, path, charge, bridge, stone, ledge, lookout, glide ledge, pond, islet (land in a pond), dell,
+    /// terrace, rise (a ramp up onto a terrace), mound, mound top, summit.</summary>
     public string Kind = "room";
     public readonly List<(double X, double Y, double R)> Discs = [];
+    /// <summary>Square-cornered parts (a castle's courtyards): middle, half sizes along and across the direction
+    /// (<c>Cos</c>, <c>Sin</c>), and how round the corners are.</summary>
+    public readonly List<(double X, double Y, double HalfX, double HalfY, double Cos, double Sin, double Round)> Boxes = [];
     public readonly List<(double X, double Y)> Spine = [];
     public double HalfWidth;
     /// <summary>Floor height; a path runs from <see cref="Z"/> at its start to <see cref="Z1"/> at its end.</summary>
@@ -95,7 +99,7 @@ internal sealed class TerrainZone
 
     public (double X, double Y) Centre => IsPath
         ? (Spine.Average(p => p.X), Spine.Average(p => p.Y))
-        : (Discs[0].X, Discs[0].Y);
+        : Discs.Count > 0 ? (Discs[0].X, Discs[0].Y) : (Boxes[0].X, Boxes[0].Y);
 
     public double Sdf(double x, double y, TerrainNoise noise)
     {
@@ -108,6 +112,12 @@ internal sealed class TerrainZone
             {
                 double dx = x - cx, dy = y - cy;
                 d = TerrainPlan.SMin(d, Math.Sqrt(dx * dx + dy * dy) - r, Blend);
+            }
+            foreach (var (cx, cy, hx, hy, c, s, round) in Boxes)
+            {
+                double dx = x - cx, dy = y - cy, u = Math.Abs(dx * c + dy * s) - (hx - round), v = Math.Abs(-dx * s + dy * c) - (hy - round);
+                double outside = Math.Sqrt(Math.Max(u, 0) * Math.Max(u, 0) + Math.Max(v, 0) * Math.Max(v, 0));
+                d = TerrainPlan.SMin(d, outside + Math.Min(Math.Max(u, v), 0) - round, Blend);
             }
         }
         if (Wobble > 0) d += Wobble * noise.At(x / WobbleScale + NoiseX, y / WobbleScale + NoiseY);
@@ -131,6 +141,9 @@ internal sealed class TerrainZone
         along = total <= 0 ? 0 : at / total;
         return best;
     }
+
+    /// <summary>The radius of the biggest round or square part.</summary>
+    public double Radius => Math.Max(Discs.Count > 0 ? Discs.Max(d => d.R) : 0, Boxes.Count > 0 ? Boxes.Max(b => Math.Max(b.HalfX, b.HalfY)) : 0);
 
     public double Length
     {
@@ -321,7 +334,7 @@ internal sealed class TerrainPlan
         // A pond's shore: the floor round it dips to the water.
         foreach (var pond in Zones)
         {
-            if (pond.Kind != "pond" || pond.Area != z.Area) continue;
+            if (pond.Kind != "pond" || pond.Area != z.Area || z.Kind == "islet") continue;
             double d = pond.Sdf(x, y, Noise);
             if (d < 90) h += (pond.Z - h) * Smooth(1 - d / 90);
         }
@@ -388,8 +401,8 @@ internal sealed class TerrainPlan
         if (z.Kind is not "room" && z.Area >= 0 && z.Kind is not ("bridge" or "stone" or "path"))
             z = Zones.First(c => c.Kind == "room" && c.Area == z.Area);
         if (z.IsPath) return (x, y, z.FloorAt(x, y) - 40);
-        double r = z.Discs.Max(d => d.R);
-        return (z.Discs[0].X, z.Discs[0].Y, z.Z - (z.Kind == "stone" ? 110 : 150 + 0.55 * r));
+        double r = z.Radius;
+        return (z.Centre.X, z.Centre.Y, z.Z - (z.Kind == "stone" ? 110 : 150 + 0.55 * r));
     }
 
     /// <summary>How brightly a point of a layer is lit (0 the level's darkest paint, 1 its lightest): open ground is
@@ -443,6 +456,7 @@ internal sealed class TerrainPlan
         foreach (var z in Zones)
         {
             foreach (var (cx, cy, r) in z.Discs) { x0 = Math.Min(x0, cx - r); y0 = Math.Min(y0, cy - r); x1 = Math.Max(x1, cx + r); y1 = Math.Max(y1, cy + r); }
+            foreach (var b in z.Boxes) { double r = Math.Sqrt(b.HalfX * b.HalfX + b.HalfY * b.HalfY); x0 = Math.Min(x0, b.X - r); y0 = Math.Min(y0, b.Y - r); x1 = Math.Max(x1, b.X + r); y1 = Math.Max(y1, b.Y + r); }
             foreach (var (sx, sy) in z.Spine) { x0 = Math.Min(x0, sx - z.HalfWidth); y0 = Math.Min(y0, sy - z.HalfWidth); x1 = Math.Max(x1, sx + z.HalfWidth); y1 = Math.Max(y1, sy + z.HalfWidth); }
         }
         double m = TrimDistance + 160;
