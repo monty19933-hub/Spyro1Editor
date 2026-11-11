@@ -37,6 +37,22 @@ public sealed partial class MainWindow
     private IReadOnlyDictionary<string, (byte R, byte G, byte B)>? _spyroOriginalColours;
     private string? _spyroOriginalColoursDisc;
     private bool _spyroColoursUnreadable;
+    // Whose look the card shows and changes: the whole game's, or the open level's own.
+    private ComboBox? _spyroColourScope;
+    private Button? _spyroColourSameAsGame;
+    private bool _spyroColourThisLevel, _spyroLevelHasOwn, _spyroScopeSyncing;
+    private Dictionary<string, (byte R, byte G, byte B)> _spyroWholeColours = [];
+
+    /// <summary>Switches the card between the whole game's look and the open level's own.</summary>
+    internal void SetSpyroColourScopeForTesting(bool thisLevel) { _spyroColourThisLevel = thisLevel; RefreshSpyroColourSettings(); }
+    internal bool SpyroLevelHasOwnLookForTesting => _spyroLevelHasOwn;
+    internal string SpyroColourSummaryForTesting => _spyroColourSummary.Text ?? "";
+    internal void ChooseSpyroPresetForTesting(string name)
+    {
+        var (preset, colours) = SpyroColourPresets.First(q => q.Name == name);
+        ChooseSpyroColours(preset, colours.ToDictionary(c => c.Part, c => SpyroColourSettings.TryParse(c.Colour, out var v) ? v : throw new InvalidOperationException("Bad preset colour.")));
+    }
+    internal void SameSpyroLookAsGameForTesting() => SameSpyroLookAsGame();
 
     /// <summary>Whole-body looks for the preset buttons (part key -> #RRGGBB; none: his own colours).</summary>
     private static readonly (string Name, (string Part, string Colour)[] Colours)[] SpyroColourPresets =
@@ -63,8 +79,30 @@ public sealed partial class MainWindow
         content.Children.Add(new TextBlock
         {
             Text = "Give Spyro any colours you like, part by part. Each part keeps his shading. The colours are in every level, " +
-                   "on the title screen, the loading screens and the cutscenes of the games you create.",
+                   "on the title screen, the loading screens and the cutscenes of the games you create. A level can have a look of its own: " +
+                   "choose the open level below and change his colours for it.",
             TextWrapping = TextWrapping.Wrap, FontSize = 12, LineHeight = 17, Foreground = new SolidColorBrush(ModernMutedInk)
+        });
+        _spyroColourScope = new ComboBox { Name = "SpyroColourScope", MinWidth = 210, ItemsSource = new[] { "The whole game", "This level only" }, SelectedIndex = 0 };
+        ToolTip.SetTip(_spyroColourScope, "Whose look you are choosing: the whole game's, or one for the open level only");
+        _spyroColourScope.SelectionChanged += (_, _) =>
+        {
+            if (_spyroScopeSyncing) return;
+            _spyroColourThisLevel = _spyroColourScope.SelectedIndex == 1;
+            RefreshSpyroColourSettings();
+        };
+        _spyroColourSameAsGame = NewButton("Same as the Whole Game", SameSpyroLookAsGame);
+        _spyroColourSameAsGame.Name = "SpyroColourSameAsGame";
+        ToolTip.SetTip(_spyroColourSameAsGame, "Take this level's own look away: Spyro looks here as in the rest of the game");
+        content.Children.Add(new WrapPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children =
+            {
+                new TextBlock { Text = "Colours for", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 6), FontSize = 12 },
+                new Border { Child = _spyroColourScope, Margin = new Thickness(0, 0, 8, 6) },
+                new Border { Child = _spyroColourSameAsGame, Margin = new Thickness(0, 0, 0, 6) },
+            }
         });
         // Spyro in the chosen colours, on a sky-to-grass backdrop so light and dark looks both read.
         _spyroColourPreviewNote.Foreground = new SolidColorBrush(ModernMutedInk);
@@ -109,16 +147,46 @@ public sealed partial class MainWindow
     private void RefreshSpyroColourSettings()
     {
         string error = "";
-        try { _spyroColours = SpyroColourSettings.Load(_workspace.RootPath); _spyroColoursUnreadable = false; }
+        var level = _settingsLevel ?? _currentLevel;
+        // Without an open level there is only the whole game's look to choose.
+        if (level == null) _spyroColourThisLevel = false;
+        _spyroLevelHasOwn = false;
+        try
+        {
+            var book = SpyroColourSettings.LoadAll(_workspace.RootPath);
+            _spyroWholeColours = book.Whole;
+            _spyroLevelHasOwn = level != null && book.Levels.ContainsKey(level.Key);
+            // A level without a look of its own shows the whole game's: that is what it has.
+            _spyroColours = _spyroColourThisLevel && level != null && book.Levels.TryGetValue(level.Key, out var own) ? own
+                : new Dictionary<string, (byte R, byte G, byte B)>(book.Whole);
+            _spyroColoursUnreadable = false;
+        }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException)
-        { _spyroColours = []; _spyroColoursUnreadable = true; error = e.Message; }
+        { _spyroColours = []; _spyroWholeColours = []; _spyroColoursUnreadable = true; error = e.Message; }
+        if (_spyroColourScope != null)
+        {
+            _spyroScopeSyncing = true;
+            try
+            {
+                _spyroColourScope.ItemsSource = new[] { "The whole game", level == null ? "This level only" : $"{level.DisplayName} only" };
+                _spyroColourScope.SelectedIndex = _spyroColourThisLevel ? 1 : 0;
+                _spyroColourScope.IsEnabled = level != null;
+            }
+            finally { _spyroScopeSyncing = false; }
+        }
+        if (_spyroColourSameAsGame != null) { _spyroColourSameAsGame.IsVisible = _spyroColourThisLevel; _spyroColourSameAsGame.IsEnabled = _spyroLevelHasOwn; }
         LoadSpyroOriginalColours();
         _spyroColourRows.Children.Clear();
         foreach (var part in NativeSpyroColours.Parts) _spyroColourRows.Children.Add(BuildSpyroColourRow(part));
+        string changedParts = $"{_spyroColours.Count} of {NativeSpyroColours.Parts.Count} parts changed";
         _spyroColourSummary.Text = error.Length > 0
             ? "The saved colours could not be read, so Create BIN stops until you choose colours again (a preset or Classic): " + error
+            : _spyroColourThisLevel && level != null
+                ? !_spyroLevelHasOwn ? $"{level.DisplayName} has the whole game's look. Choose a look or change a part, and it has its own."
+                    : _spyroColours.Count == 0 ? $"In {level.DisplayName} Spyro has his own colours, whatever the rest of the game has."
+                    : $"{level.DisplayName} has its own look ({changedParts}). Create BIN puts it in the game."
             : _spyroColours.Count == 0 ? "Spyro has his own colours."
-            : $"{_spyroColours.Count} of {NativeSpyroColours.Parts.Count} parts changed. Create BIN puts them in the game.";
+            : $"{changedParts}. Create BIN puts them in the game.";
         ShowSpyroPreview(_spyroColours);
     }
 
@@ -372,14 +440,44 @@ public sealed partial class MainWindow
     private void ChooseSpyroColours(string preset, Dictionary<string, (byte R, byte G, byte B)> colours) =>
         SaveSpyroColours(colours, colours.Count == 0 ? "Spyro has his own colours again." : $"Spyro is in the {preset} look. Create BIN puts it in the game.");
 
+    /// <summary>Takes the open level's own look away again.</summary>
+    private void SameSpyroLookAsGame()
+    {
+        if (!_spyroColourThisLevel || (_settingsLevel ?? _currentLevel) is not { } level) return;
+        try
+        {
+            if (_createBinBusy || _workspaceTransitionBusy) throw new InvalidOperationException("Wait for the current task to finish.");
+            SpyroColourSettings.SaveLevel(_workspace.RootPath, level.Key, null);
+            EditorDiagnostics.RecordAction("Spyro's colours", $"{level.Key}: as the whole game");
+            _statusText.Text = $"In {level.DisplayName} Spyro looks as in the rest of the game again.";
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException or InvalidDataException or System.Text.Json.JsonException)
+        {
+            EditorDiagnostics.RecordException("saving Spyro's colours", error);
+            _statusText.Text = "Could not save Spyro's colours: " + error.Message;
+        }
+        RefreshSpyroColourSettings();
+    }
+
     private void SaveSpyroColours(Dictionary<string, (byte R, byte G, byte B)> colours, string status)
     {
         try
         {
             if (_createBinBusy || _workspaceTransitionBusy) throw new InvalidOperationException("Wait for the current task to finish.");
-            SpyroColourSettings.Save(_workspace.RootPath, colours);
-            EditorDiagnostics.RecordAction("Spyro's colours", string.Join(", ", colours.Select(c => $"{c.Key} {SpyroColourSettings.Format(c.Value)}")));
-            _statusText.Text = status;
+            if (_spyroColourThisLevel && (_settingsLevel ?? _currentLevel) is { } level)
+            {
+                // The open level's own look (none of its parts changed: his own colours there).
+                SpyroColourSettings.SaveLevel(_workspace.RootPath, level.Key, colours);
+                EditorDiagnostics.RecordAction("Spyro's colours", $"{level.Key}: " + string.Join(", ", colours.Select(c => $"{c.Key} {SpyroColourSettings.Format(c.Value)}")));
+                _statusText.Text = status.Replace("Spyro's ", $"In {level.DisplayName}, Spyro's ", StringComparison.Ordinal).Replace("Spyro is ", $"In {level.DisplayName} Spyro is ", StringComparison.Ordinal)
+                    .Replace("Spyro has ", $"In {level.DisplayName} Spyro has ", StringComparison.Ordinal).Replace("A new look for Spyro.", $"A new look for Spyro in {level.DisplayName}.", StringComparison.Ordinal);
+            }
+            else
+            {
+                SpyroColourSettings.Save(_workspace.RootPath, colours);
+                EditorDiagnostics.RecordAction("Spyro's colours", string.Join(", ", colours.Select(c => $"{c.Key} {SpyroColourSettings.Format(c.Value)}")));
+                _statusText.Text = status;
+            }
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
@@ -427,8 +525,9 @@ public sealed partial class MainWindow
         List<string> parts = [];
         if (NativeSpyroColours.SpyroEnabled) parts.Add("Spyro's colours");
         if (NativeEggThiefColours.Enabled) parts.Add("the egg thieves' colour");
+        if (NativeCreatureColours.Enabled) parts.Add("the creatures' colours");
         if (NativeHover.Enabled) parts.Add("the hover");
-        return (parts.Count == 0 ? "" : " With " + string.Join(" and ", parts) + " from Game Settings.") + HoverFlapNote();
+        return (parts.Count == 0 ? "" : " With " + (parts.Count <= 2 ? string.Join(" and ", parts) : string.Join(", ", parts.Take(parts.Count - 1)) + " and " + parts[^1]) + " from Game Settings.") + HoverFlapNote();
     }
 
     /// <summary>The levels of the export just made where Spyro hovers without flapping (no room for the flap).</summary>
@@ -437,14 +536,19 @@ public sealed partial class MainWindow
     /// <summary>Create BIN's colour scope: the export's last steps recolour Spyro when the project asks.</summary>
     private NativeSpyroColours.Scope UseProjectSpyroColours()
     {
-        Dictionary<string, (byte R, byte G, byte B)> colours;
-        try { colours = SpyroColourSettings.Load(_workspace.RootPath); }
+        SpyroColourSettings.Book book;
+        try { book = SpyroColourSettings.LoadAll(_workspace.RootPath); }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException)
         { throw new InvalidDataException("Spyro's colours in Game Settings could not be read. Choose them again (a preset or Classic). (" + e.Message + ")", e); }
+        // Which level a WAD entry of the game's own is (levels built in their places keep them).
+        var entries = _retailCatalog.Levels.GroupBy(l => l.SourceWadEntry).ToDictionary(g => g.Key, g => g.First().Key);
+        string? LevelOfEntry(int entry) => entries.TryGetValue(entry, out var key) ? key : null;
         (byte R, byte G, byte B)? thieves;
         try { thieves = EggThiefColourSettings.Load(_workspace.RootPath); }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException)
         { throw new InvalidDataException("The egg thieves' colour in Game Settings could not be read. Choose it again. (" + e.Message + ")", e); }
-        return NativeSpyroColours.Use(colours).With(NativeEggThiefColours.Use(thieves));
+        var creatures = UseProjectCreatureColours(LevelOfEntry);
+        return NativeSpyroColours.Use(book.Whole, book.Levels.ToDictionary(l => l.Key, l => (IReadOnlyDictionary<string, (byte R, byte G, byte B)>)l.Value, StringComparer.OrdinalIgnoreCase), LevelOfEntry)
+            .With(NativeEggThiefColours.Use(thieves)).With(creatures);
     }
 }

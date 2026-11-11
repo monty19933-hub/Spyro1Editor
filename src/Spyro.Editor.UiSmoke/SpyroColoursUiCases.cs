@@ -109,6 +109,37 @@ internal static class SpyroColoursUiCases
             Click(Find<Button>(damaged, "SpyroColourPresetGold"));
             Check(SpyroColourSettings.Load(root).Count == 7, "choosing again replaces the damaged file");
             File.Delete(file);
+
+            // Colours level by level (2.1): the card's "whole game / this level" switch, and the level's Creatures' colours card.
+            var levelled = Measure();
+            var scope = Find<ComboBox>(levelled, "SpyroColourScope");
+            Check(scope.ItemCount == 2 && scope.SelectedIndex == 0 && !Find<Button>(levelled, "SpyroColourSameAsGame").IsVisible, "the card starts on the whole game's look");
+            levelled.SetSpyroColourScopeForTesting(true);
+            if (scope.IsEnabled)
+            {
+                // A level is open: its own look is chosen, kept beside the whole game's, and taken away again.
+                levelled.ChooseSpyroPresetForTesting("Shadow");
+                var book = SpyroColourSettings.LoadAll(root);
+                Check(book.Whole.Count == 0 && book.Levels.Count == 1 && book.Levels.Values.Single().Count == 8 && levelled.SpyroLevelHasOwnLookForTesting &&
+                      Find<Button>(levelled, "SpyroColourSameAsGame") is { IsVisible: true, IsEnabled: true }, "set to the open level, a look is that level's own and the whole game keeps his colours");
+                levelled.SameSpyroLookAsGameForTesting();
+                Check(!File.Exists(file) && !levelled.SpyroLevelHasOwnLookForTesting, "Same as the Whole Game takes the level's look away (and the file, when nothing is left)");
+            }
+            else
+            {
+                Check(scope.SelectedIndex == 0 && !Find<Button>(levelled, "SpyroColourSameAsGame").IsVisible, "without an open level there is only the whole game's look");
+                Check(!File.Exists(file), "and nothing is saved");
+            }
+            Check(Has(levelled, "CreatureColourSection") && Has(levelled, "CreatureColourRandomize") && !Find<Button>(levelled, "CreatureColourRandomize").IsEnabled &&
+                  !Find<Button>(levelled, "CreatureColourOwn").IsEnabled && levelled.CreatureKindsForTesting.Count == 0,
+                "the level's Creatures' colours card is there; without the game's disc it lists nothing and its buttons are off");
+            Check(levelled.CreatureColourNoteForTesting.Length > 0 && !File.Exists(CreatureColourSettings.PathFor(root)), "it says why, and saves nothing: " + levelled.CreatureColourNoteForTesting);
+            File.WriteAllText(CreatureColourSettings.PathFor(root), "{ not json");
+            bool creaturesStop = false;
+            try { ((IDisposable)use.Invoke(levelled, null)!).Dispose(); }
+            catch (TargetInvocationException x) when (x.InnerException is InvalidDataException d && d.Message.Contains("creatures' colours", StringComparison.OrdinalIgnoreCase)) { creaturesStop = true; }
+            Check(creaturesStop && !NativeSpyroColours.Enabled, "Create BIN stops on a damaged creatures' colours file instead of guessing");
+            File.Delete(CreatureColourSettings.PathFor(root));
             Check(File.ReadAllText(Path.Combine(root, "unrelated-project-notes.txt")) == "protected" &&
                 !Directory.EnumerateFiles(parent, "*.bin", SearchOption.AllDirectories).Any(), "no other file is touched and no game is written");
             Console.WriteLine($"SPYRO_COLOURS_UI_OK checks={_checks}");

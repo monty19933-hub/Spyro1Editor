@@ -1,4 +1,20 @@
-# Spyro Editor 2.0 — supported scope and limitations
+# Spyro Editor 2.1 — supported scope and limitations
+
+- Version 2.1 adds Fix It For Me for two of Create BIN's stops (a new world
+  with no way in; a world's homeworld with more than its 82 objects). The place
+  it chooses for the doorway was played in the emulator in Artisans, Peace
+  Keepers, Magic Crafters, Beast Makers and Dream Weavers (in, the world loads,
+  back out in front of it, on the floor). Gnasty's World has no free place, so
+  there it says so. Other stops still need fixing by hand.
+- Version 2.1 colours creatures level by level (Game Settings › Creatures'
+  colours) and gives Spyro a look for one level. Played in the emulator: red
+  gnorcs and an Ember Spyro in Artisans, blue gnorcs and an Ice Spyro in Dark
+  Hollow, Stone Hill as it was; and checked in the files of a game with a level
+  built in the editor. A creature's colour is the hue most of it has: that part
+  changes, the rest stays, so a creature of two strong colours keeps one of
+  them. Kinds that share a texture share its colour. The card lists enemies;
+  dragons, animals without an enemy's name and creatures from other games are
+  not listed. The title screen and cutscenes always show the whole game's look.
 
 - Version 2.0 puts your own world on the balloonists' route (File ▾ → World's
   Balloon Route…). Played in the emulator with the world after Artisans (both

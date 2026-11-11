@@ -304,6 +304,23 @@ if (args.Length is 2 or 3 && args[0] == "--tour-shots")
     return 0;
 }
 
+if (args.Length == 3 && args[0] == "--level-colours-export-ui")
+{
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    LevelColoursUiCases.Run(args[1], args[2]);
+    return 0;
+}
+
+if (args.Length is 5 or 6 && args[0] == "--creature-colours-check")
+    return CreatureColoursLab.Check(args[1], args[2], args[3], args[4], args.Length == 6 ? args[5] : null);
+
+if (args.Length == 5 && args[0] == "--creature-colours-lab")
+{
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    CreatureColoursLab.Run(args[1], args[2], args[3], args[4]);
+    return 0;
+}
+
 if (args.Contains("--spyro-colours-ui-only", StringComparer.Ordinal))
 {
     if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --spyro-colours-ui-only");

@@ -195,7 +195,8 @@ public static class NativeSpyroColours
         if (!IsCutsceneEntry(wadEntry))
             foreach (var (at, k) in StandInCopies(copy, entry, vram, originals))
                 RecolourShaded(copy.AsSpan(vram, VramBytes), entry.Slice(vram, VramBytes), at, recoloured.Slice(k * PaletteBytes, PaletteBytes));
-        return copy;
+        // Nothing of his to change here (a look that leaves these palettes as they are, applied again): no copy.
+        return copy.AsSpan().SequenceEqual(entry) ? null : copy;
     }
 
     /// <summary>Where the game keeps a whole Spyro as an ordinary object model: Gnasty Gnorc's level (WAD entry 76), class
@@ -335,21 +336,37 @@ public static class NativeSpyroColours
 
     /// <summary>Whether the game Create BIN is making gets new colours from Game Settings: Spyro's, or the egg
     /// thieves' (<see cref="NativeEggThiefColours"/>, applied by the same export steps).</summary>
-    public static bool Enabled => SpyroEnabled || NativeEggThiefColours.Enabled;
-    /// <summary>Whether Spyro himself gets new colours.</summary>
-    public static bool SpyroEnabled => Volatile.Read(ref s_scope)?.Colours.Count > 0;
+    public static bool Enabled => SpyroEnabled || NativeEggThiefColours.Enabled || NativeCreatureColours.Enabled;
+    /// <summary>Whether Spyro himself gets new colours, in the whole game or in a level.</summary>
+    public static bool SpyroEnabled => Volatile.Read(ref s_scope) is { } scope && (scope.Colours.Count > 0 || scope.Levels.Values.Any(c => c.Count > 0));
 
-    /// <summary>Create BIN's colours until the scope is disposed (scopes nest; none or an empty set: his own).</summary>
-    public static Scope Use(IReadOnlyDictionary<string, (byte R, byte G, byte B)>? colours)
+    /// <summary>Create BIN's colours until the scope is disposed (scopes nest; none or an empty set: his own).
+    /// <paramref name="levels"/> gives levels (by key) a look of their own in place of the whole game's (an empty set:
+    /// his own colours there); <paramref name="levelOfEntry"/> says which level a WAD entry of the game's own is.</summary>
+    public static Scope Use(IReadOnlyDictionary<string, (byte R, byte G, byte B)>? colours,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, (byte R, byte G, byte B)>>? levels = null, Func<int, string?>? levelOfEntry = null)
     {
-        foreach (string key in colours?.Keys ?? [])
+        foreach (string key in (colours?.Keys ?? []).Concat(levels?.Values.SelectMany(l => l.Keys) ?? []))
             if (FindPart(key) == null) throw new InvalidDataException($"Spyro has no part called \"{key}\".");
         lock (ScopeLock)
         {
-            var scope = new Scope(colours ?? new Dictionary<string, (byte, byte, byte)>(), s_scope);
+            var scope = new Scope(colours ?? new Dictionary<string, (byte, byte, byte)>(), s_scope, levels, levelOfEntry);
             Volatile.Write(ref s_scope, scope);
             return scope;
         }
+    }
+
+    /// <summary>Spyro's look in a WAD entry: its level's own when it has one, else the whole game's (the opening, title
+    /// and cutscenes always the whole game's).</summary>
+    private static IReadOnlyDictionary<string, (byte R, byte G, byte B)> LookFor(Scope scope, int entry, Func<int, string?>? levelOfEntry) =>
+        !IsCutsceneEntry(entry) && scope.Levels.Count > 0 && (levelOfEntry ?? scope.LevelOfEntry)(entry) is { } key && scope.Levels.TryGetValue(key, out var own) ? own : scope.Colours;
+
+    /// <summary>The recoloured palettes for a look, made once for each look of a game.</summary>
+    private sealed class Looks(byte[] originals)
+    {
+        private readonly Dictionary<IReadOnlyDictionary<string, (byte R, byte G, byte B)>, byte[]> _made = new(ReferenceEqualityComparer.Instance);
+        public byte[] Of(IReadOnlyDictionary<string, (byte R, byte G, byte B)> look) =>
+            _made.TryGetValue(look, out var rows) ? rows : _made[look] = Recolour(originals, look);
     }
 
     /// <summary>The export's last step before its WAD is written: every entry the colours change is added to
@@ -357,26 +374,27 @@ public static class NativeSpyroColours
     /// entries changed.</summary>
     public static int ApplyForExport(IDictionary<int, byte[]> replacements, Func<int, byte[]> entryBytes)
     {
-        int thieves = NativeEggThiefColours.ApplyForExport(replacements, entryBytes);
-        var colours = Volatile.Read(ref s_scope)?.Colours;
-        if (colours is not { Count: > 0 }) return thieves;
+        int thieves = NativeEggThiefColours.ApplyForExport(replacements, entryBytes) + NativeCreatureColours.ApplyForExport(replacements, entryBytes);
+        if (!SpyroEnabled || Volatile.Read(ref s_scope) is not { } scope) return thieves;
         byte[] Current(int entry) => replacements.TryGetValue(entry, out var bytes) ? bytes : entryBytes(entry);
         byte[]? originals = FindOriginals(Current);
         if (originals == null) return thieves; // nothing left in the original colours: already applied
-        byte[] recoloured = Recolour(originals, colours);
+        var looks = new Looks(originals);
         int changed = thieves;
         for (int entry = 0; entry < 256; entry++)
-            if (RecolourEntry(entry, Current(entry), originals, recoloured) is { } copy) { replacements[entry] = copy; changed++; }
+        {
+            var look = LookFor(scope, entry, null);
+            if (look.Count > 0 && RecolourEntry(entry, Current(entry), originals, looks.Of(look)) is { } copy) { replacements[entry] = copy; changed++; }
+        }
         return changed;
     }
 
     /// <summary>Recolours only these entries (levels an export adds to a game whose other entries already have the
     /// colours, as the new world's). Returns how many changed.</summary>
-    public static int ApplyToEntries(IDictionary<int, byte[]> entries)
+    public static int ApplyToEntries(IDictionary<int, byte[]> entries, Func<int, string?>? levelOfEntry = null)
     {
-        int thieves = NativeEggThiefColours.ApplyToEntries(entries);
-        var colours = Volatile.Read(ref s_scope)?.Colours;
-        if (colours is not { Count: > 0 }) return thieves;
+        int thieves = NativeEggThiefColours.ApplyToEntries(entries) + NativeCreatureColours.ApplyToEntries(entries, levelOfEntry);
+        if (!SpyroEnabled || Volatile.Read(ref s_scope) is not { } scope) return thieves;
         byte[]? originals = null;
         foreach (var (entry, bytes) in entries)
         {
@@ -384,19 +402,21 @@ public static class NativeSpyroColours
             if (vram >= 0 && !IsCutsceneEntry(entry) && Originals(bytes.AsSpan(vram, VramBytes)) is { } rows) { originals = rows; break; }
         }
         if (originals == null) return thieves;
-        byte[] recoloured = Recolour(originals, colours);
+        var looks = new Looks(originals);
         int changed = thieves;
         foreach (int entry in entries.Keys.ToArray())
-            if (RecolourEntry(entry, entries[entry], originals, recoloured) is { } copy) { entries[entry] = copy; changed++; }
+        {
+            var look = LookFor(scope, entry, levelOfEntry);
+            if (look.Count > 0 && RecolourEntry(entry, entries[entry], originals, looks.Of(look)) is { } copy) { entries[entry] = copy; changed++; }
+        }
         return changed;
     }
 
     /// <summary>The same for a complete WAD.WAD, in place (entries keep their places and lengths).</summary>
     public static int ApplyForExport(byte[] wad)
     {
-        int thieves = NativeEggThiefColours.ApplyForExport(wad);
-        var colours = Volatile.Read(ref s_scope)?.Colours;
-        if (colours is not { Count: > 0 }) return thieves;
+        int thieves = NativeEggThiefColours.ApplyForExport(wad) + NativeCreatureColours.ApplyForExport(wad);
+        if (!SpyroEnabled || Volatile.Read(ref s_scope) is not { } scope) return thieves;
         (int Offset, int Length) Entry(int i) => (BinaryPrimitives.ReadInt32LittleEndian(wad.AsSpan(i * 8)), BinaryPrimitives.ReadInt32LittleEndian(wad.AsSpan(i * 8 + 4)));
         byte[] Bytes(int i)
         {
@@ -405,10 +425,13 @@ public static class NativeSpyroColours
         }
         byte[]? originals = FindOriginals(Bytes);
         if (originals == null) return thieves;
-        byte[] recoloured = Recolour(originals, colours);
+        var looks = new Looks(originals);
         int changed = thieves;
         for (int entry = 0; entry < 256; entry++)
-            if (RecolourEntry(entry, Bytes(entry), originals, recoloured) is { } copy) { copy.CopyTo(wad, Entry(entry).Offset); changed++; }
+        {
+            var look = LookFor(scope, entry, null);
+            if (look.Count > 0 && RecolourEntry(entry, Bytes(entry), originals, looks.Of(look)) is { } copy) { copy.CopyTo(wad, Entry(entry).Offset); changed++; }
+        }
         return changed;
     }
 
@@ -416,9 +439,18 @@ public static class NativeSpyroColours
     {
         private readonly Scope? _previous;
         private bool _disposed;
-        internal Scope(IReadOnlyDictionary<string, (byte R, byte G, byte B)> colours, Scope? previous)
-        { Colours = new Dictionary<string, (byte R, byte G, byte B)>(colours); _previous = previous; }
+        internal Scope(IReadOnlyDictionary<string, (byte R, byte G, byte B)> colours, Scope? previous,
+            IReadOnlyDictionary<string, IReadOnlyDictionary<string, (byte R, byte G, byte B)>>? levels = null, Func<int, string?>? levelOfEntry = null)
+        {
+            Colours = new Dictionary<string, (byte R, byte G, byte B)>(colours); _previous = previous;
+            Levels = (levels ?? new Dictionary<string, IReadOnlyDictionary<string, (byte R, byte G, byte B)>>()).ToDictionary(l => l.Key,
+                l => (IReadOnlyDictionary<string, (byte R, byte G, byte B)>)new Dictionary<string, (byte R, byte G, byte B)>(l.Value), StringComparer.OrdinalIgnoreCase);
+            LevelOfEntry = levelOfEntry ?? (_ => null);
+        }
         public IReadOnlyDictionary<string, (byte R, byte G, byte B)> Colours { get; }
+        /// <summary>Levels (by key) with a look of their own (an empty set: his own colours there).</summary>
+        public IReadOnlyDictionary<string, IReadOnlyDictionary<string, (byte R, byte G, byte B)>> Levels { get; }
+        public Func<int, string?> LevelOfEntry { get; }
         private readonly List<IDisposable> _with = [];
         /// <summary>Another Game Settings scope that lasts as long as this one (the egg thieves' colour).</summary>
         public Scope With(IDisposable other) { _with.Add(other); return this; }

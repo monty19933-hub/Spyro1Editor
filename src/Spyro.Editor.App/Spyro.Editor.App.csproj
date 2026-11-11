@@ -23,10 +23,10 @@
     <PublicReleaseVersion>6</PublicReleaseVersion>
     <ReleaseManifestSchemaVersion>1</ReleaseManifestSchemaVersion>
     <PreviousPublicReleaseVersion>5</PreviousPublicReleaseVersion>
-    <StableReleaseVersion Condition="'$(StableReleaseVersion)' == ''">2.0</StableReleaseVersion>
-    <PreviousStableReleaseVersion>1.4</PreviousStableReleaseVersion>
+    <StableReleaseVersion Condition="'$(StableReleaseVersion)' == ''">2.1</StableReleaseVersion>
+    <PreviousStableReleaseVersion>2.0</PreviousStableReleaseVersion>
     <LegacyBetaInternalVersion>0.1.0-beta.54</LegacyBetaInternalVersion>
-    <Version>2.0.0</Version>
+    <Version>2.1.0</Version>
     <AssemblyVersion>0.1.0.0</AssemblyVersion>
     <FileVersion>0.1.0.0</FileVersion>
     <InformationalVersion>$(Version)</InformationalVersion>

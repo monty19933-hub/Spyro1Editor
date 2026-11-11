@@ -1,4 +1,4 @@
-# Spyro Editor 2.0
+# Spyro Editor 2.1
 
 Spyro Editor changes the levels of the original PlayStation game *Spyro the Dragon*
 (USA) and builds a new, playable copy of the game from your changes. It never
@@ -33,9 +33,23 @@ access was refused, the editor opens a small window that says where to allow it.
 - Create BIN needs working room on the disk that holds your project: about
   2.1 GB, or 3.3 GB when the project has a level you built. With less it says
   so and starts nothing.
+- Create BIN builds the whole project whichever level is open: every level you
+  changed or built, your new world, and Game Settings.
 - If something cannot be put in the game, the editor says what and where, and
   nothing half-built is written: the game you created last stays exactly as it
   was. **More ▾ → Check for Export Issues…** runs the same check without building.
+- **Fix It For Me**: when Create BIN stops on something the editor can put right
+  by itself, this button appears beside the message at the bottom of the window
+  (and in **Details**). Press it, read what it did, and press Create BIN again.
+  It does two things so far. When your new world has no way in yet, it places
+  the doorway in the homeworld the world is entered from, on level open ground
+  near where Spyro arrives (move it afterwards with Terrain › World Entrance if
+  you like; in Gnasty's World, which has no free place, it says so and you place
+  it yourself). When your world's homeworld has more objects than it can hold
+  (82), it first gives back the save rows of objects you deleted and then, if
+  needed, takes out loose gems, the least valuable first; it says how many and
+  what they were worth, and keeps the level as it was in the project's
+  `backups/fix-it` folder.
 - A terrain shape the game cannot stand on (for example a corner dragged so far
   that the ground folds over itself) raises a red bar with **Show it** and
   **Undo that change**.
@@ -255,6 +269,15 @@ says how many. Translucent original tiles cannot currently be copied or removed.
 - **Level name** changes the name on portals, loading screens and in the
   guidebook (capital letters, spaces and apostrophes).
 - **Music** picks the level's track.
+- **Creatures' colours** (this level): the open level's kinds of enemy, each
+  drawn as it will look. Click a kind's colour to choose one of the quick
+  colours or type one as #RRGGBB and press **Use**; **Its own** puts it back.
+  **Randomize** gives every kind another colour (press again for others) and
+  **Their Own Colours** clears them. A colour is for this level only, so the
+  same gnorc can be red in Artisans and blue in Dark Hollow. A creature keeps
+  its shading, and what is of another colour on it (skin, armour, eyes) stays.
+  In a level you built the card lists the enemies you placed in it. Two kinds
+  that share a texture share its colour.
 - **Fly Anywhere**: tick **Let Spyro fly in every level** and the game you
   export lets Spyro fly in every normal level the way he does in Gnasty's Loot:
   jump, then press ✕ again in the air. Steer with the direction buttons; land by
@@ -297,7 +320,12 @@ says how many. Translucent original tiles cannot currently be copied or removed.
   Each part keeps his shading, and the colours are in every level, on the title
   screen, the loading screens and in the cutscenes. They are saved with the
   project, and Create BIN can make a game with only these settings, without any
-  level edits.
+  level edits. **A look for one level**: set **Colours for** at the top of the
+  card to the open level, then choose a look or change a part; Spyro has it in
+  that level only (Classic there gives him his own colours in that level,
+  whatever the rest of the game has). **Same as the Whole Game** takes the
+  level's look away again. The title screen and cutscenes always have the whole
+  game's look.
 - **Portals & Return Home**: choose where each portal leads and where Return
   Home goes. **Select Portal** moves the trigger, lettering and travel path
   together; move the stone arch with the terrain tools.

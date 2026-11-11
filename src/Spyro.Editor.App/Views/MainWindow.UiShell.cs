@@ -1124,6 +1124,8 @@ public sealed partial class MainWindow
         panel.Children.Add(_retailNameDisclosure);panel.Children.Add(_retailMusicDisclosure);
         _homeworldTextGroup = BuildModernDisclosure("Portals & Return Home", BuildPortalControlPanel(), false);
         panel.Children.Add(_homeworldTextGroup);
+        // The open level's enemies in colours of their own (Spyro's look for one level is on his card, below).
+        panel.Children.Add(BuildCreatureColourSection());
         var wholeGame = ModernSectionHeading("Whole game");
         wholeGame.Margin = new Thickness(0, 12, 0, 0);
         panel.Children.Add(wholeGame);

@@ -240,8 +240,10 @@ public static class NativeNewWorldExport
                 NativeBalloonTravel.ApplyOffRoute(entries[homeAt], tick, render, place.Balloonist);
         }
         if (rebuilt.Count > 0) wad = image.RebuildWad(rebuilt);
-        // Spyro's colours (Game Settings) in the world's levels; the rest of the game has them already.
-        NativeSpyroColours.ApplyToEntries(entries);
+        // Spyro's and the creatures' colours (Game Settings) in the world's levels; the rest of the game has them already.
+        // The world's entries follow its levels in the order of their numbers, overlay then data.
+        int[] worldIds = [.. levels.Select(l => l.Document.WorldLevelId!.Value).Order()];
+        NativeSpyroColours.ApplyToEntries(entries, e => e >= FirstEntry && (e - FirstEntry) / 2 < worldIds.Length ? NewWorldDocument.KeyFor(worldIds[(e - FirstEntry) / 2]) : null);
         var placement = NativeLevelWindowDisc.Place(image, wad, entries, final.Length);
         NativeDrawBufferGuard.PatchExe(final, near);
         // A level whose objects keep their saved identities in other rows carries a save map: its game-wide hooks.

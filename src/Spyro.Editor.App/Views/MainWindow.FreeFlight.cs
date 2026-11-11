@@ -216,6 +216,8 @@ public sealed partial class MainWindow
 
     internal void RefreshFreeFlightSettingsEditor(LevelDefinition? level)
     {
+        // The level Game Settings is about (set here: while a level loads, _currentLevel is still the one before).
+        _settingsLevel = level;
         _freeFlightGeneration++;
         _freeFlightWorkspace = _workspace; _freeFlightLevel = level;
         _freeFlightLevelLoadRequest = _levelLoadRequestId;
@@ -240,6 +242,7 @@ public sealed partial class MainWindow
         RefreshHoverSettings();
         RefreshSpyroColourSettings();
         RefreshEggThiefColour();
+        RefreshCreatureColours();
     }
 
     internal void RevertFreeFlightSettings()

@@ -82,6 +82,52 @@ if (args.Length == 0)
     }
     Check(!NativeSpyroColours.Enabled, "the scope ends with the export");
     Refuse<InvalidDataException>(() => NativeSpyroColours.Use(new Dictionary<string, (byte R, byte G, byte B)> { ["fins"] = (1, 1, 1) }), "a scope with an unknown part is refused");
+
+    // ---- a look of its own for a level ----
+    string project = Path.Combine(Path.GetTempPath(), "spyro-level-colours-smoke-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(project);
+    try
+    {
+        SpyroColourSettings.Save(project, red);
+        SpyroColourSettings.SaveLevel(project, "artisans", new Dictionary<string, (byte, byte, byte)> { ["horns"] = (1, 2, 3) });
+        SpyroColourSettings.SaveLevel(project, "darkhollow", new Dictionary<string, (byte, byte, byte)>());
+        var book = SpyroColourSettings.LoadAll(project);
+        Check(book.Whole.Count == 1 && book.Levels.Count == 2 && book.Levels["artisans"]["horns"] == (1, 2, 3) && book.Levels["darkhollow"].Count == 0 && book.Levels.ContainsKey("ARTISANS"),
+            "a level keeps a look of its own beside the whole game's (none of its parts changed: his own colours there)");
+        Check(SpyroColourSettings.Load(project).Count == 1, "the whole game's look reads as before (as editors before 2.1 read the file)");
+        SpyroColourSettings.Save(project, new Dictionary<string, (byte, byte, byte)>());
+        Check(File.Exists(SpyroColourSettings.PathFor(project)) && File.ReadAllText(SpyroColourSettings.PathFor(project)).Contains("\"colours\": {}") && SpyroColourSettings.LoadAll(project).Levels.Count == 2,
+            "the whole game back to his own colours: the levels' looks stay, and the file still has its colours");
+        SpyroColourSettings.SaveLevel(project, "artisans", null); SpyroColourSettings.SaveLevel(project, "darkhollow", null);
+        Check(!File.Exists(SpyroColourSettings.PathFor(project)), "with no look anywhere the file goes");
+        Refuse<ArgumentException>(() => SpyroColourSettings.SaveLevel(project, "artisans", new Dictionary<string, (byte, byte, byte)> { ["fins"] = (1, 1, 1) }), "a level's look with an unknown part is refused");
+        using (NativeSpyroColours.Use(null, new Dictionary<string, IReadOnlyDictionary<string, (byte R, byte G, byte B)>> { ["artisans"] = red }, _ => null))
+            Check(NativeSpyroColours.SpyroEnabled && NativeSpyroColours.Enabled, "a look for one level alone makes the export ask for colours");
+        using (NativeSpyroColours.Use(null, new Dictionary<string, IReadOnlyDictionary<string, (byte R, byte G, byte B)>> { ["artisans"] = new Dictionary<string, (byte R, byte G, byte B)>() }, _ => null))
+            Check(!NativeSpyroColours.SpyroEnabled, "his own colours everywhere, said level by level, ask for none");
+
+        // ---- creatures' colours, level by level ----
+        Check(CreatureColourSettings.Load(project).Count == 0, "a project's creatures have their own colours until one is changed");
+        string gnorc = CreatureColourSettings.KindKey("artisans", 0x72);
+        Check(gnorc == "artisans:72" && CreatureColourSettings.TryParseKind(gnorc, out string from, out int cls) && from == "artisans" && cls == 0x72 &&
+              !CreatureColourSettings.TryParseKind("artisans", out _, out _) && !CreatureColourSettings.TryParseKind("artisans:xyz", out _, out _), "a kind is named by its level and class");
+        CreatureColourSettings.SaveLevel(project, "artisans", new Dictionary<string, (byte, byte, byte)> { [gnorc] = (200, 36, 36) });
+        CreatureColourSettings.SaveLevel(project, "darkhollow", new Dictionary<string, (byte, byte, byte)> { ["darkhollow:73"] = (40, 80, 210), ["darkhollow:a5"] = (40, 80, 210) });
+        var creatures = CreatureColourSettings.Load(project);
+        Check(creatures.Count == 2 && creatures["artisans"][gnorc] == (200, 36, 36) && creatures["darkhollow"].Count == 2 && File.ReadAllText(CreatureColourSettings.PathFor(project)).Contains("#C82424"),
+            "each level keeps its own creatures' colours, as #RRGGBB");
+        CreatureColourSettings.SaveLevel(project, "artisans", new Dictionary<string, (byte, byte, byte)>());
+        Check(CreatureColourSettings.Load(project).Count == 1, "a level back to its own colours leaves the other level's");
+        CreatureColourSettings.SaveLevel(project, "darkhollow", new Dictionary<string, (byte, byte, byte)>());
+        Check(!File.Exists(CreatureColourSettings.PathFor(project)), "with no colour anywhere the file goes");
+        File.WriteAllText(CreatureColourSettings.PathFor(project), "{\"schemaVersion\":1,\"levels\":{\"artisans\":{\"nonsense\":\"#112233\"}}}");
+        Refuse<InvalidDataException>(() => CreatureColourSettings.Load(project), "a kind that is not a level and class is refused");
+        Check(!NativeCreatureColours.Enabled && NativeCreatureColours.SignatureOf(new byte[0x100]) == null && NativeCreatureColours.Kinds(new byte[0x1000]).Count == 0 &&
+              NativeCreatureColours.Recolour(new byte[0x1000], []) == null, "what is not a level or a creature's model has no creatures to colour");
+        var turned = NativeCreatureColours.WithHue((60, 140, 40), 0.0);
+        Check(turned.R > turned.G + 60 && turned.R > turned.B + 60, "a creature's colour with its hue turned to red is red");
+    }
+    finally { Directory.Delete(project, recursive: true); }
     Console.WriteLine($"SPYRO_COLOURS_FREE_OK checks={checks}");
     return 0;
 }
@@ -183,6 +229,77 @@ if (args.Length >= 2 && args[0] == "--source")
     // One part only: the eyes. Body palettes stay as they were.
     var eyes = NativeSpyroColours.Recolour(originals!, new Dictionary<string, (byte R, byte G, byte B)> { ["eyes"] = (255, 0, 0) });
     Check(eyes.AsSpan(0, 32).SequenceEqual(originals!.AsSpan(0, 32)) && !eyes.AsSpan(32, 32).SequenceEqual(originals!.AsSpan(32, 32)), "eyes only: the eye palette changes, the body's stays");
+
+    // ---- a look for one level: Artisans green, Dark Hollow his own, the rest of the game red ----
+    {
+        var green = new Dictionary<string, (byte R, byte G, byte B)> { ["body"] = (40, 200, 60) };
+        var perLevel = new Dictionary<string, IReadOnlyDictionary<string, (byte R, byte G, byte B)>> { ["artisans"] = green, ["darkhollow"] = new Dictionary<string, (byte R, byte G, byte B)>() };
+        string? LevelOf(int entry) => entry == 10 ? "artisans" : entry == 14 ? "darkhollow" : entry == 12 ? "stonehill" : null;
+        Dictionary<int, byte[]> made = [];
+        using (NativeSpyroColours.Use(red, perLevel, LevelOf)) NativeSpyroColours.ApplyForExport(made, disc.EntryBytes);
+        byte[] redRows = NativeSpyroColours.Recolour(originals!, red), greenRows = NativeSpyroColours.Recolour(originals!, green);
+        bool Has(byte[] entry, byte[] rows) => Enumerable.Range(0, 17).All(k => entry.AsSpan(0x800 + NativeSpyroColours.PaletteOffset(NativeSpyroColours.Palettes[k]), 32).SequenceEqual(rows.AsSpan(k * 32, 32)));
+        Check(Has(made[10], greenRows) && !made.ContainsKey(14) && Has(made[12], redRows) && Has(made[16], redRows) && made.Count == 38,
+            "a level with its own look has it, a level given his own colours is left alone, and every other level and the cutscenes have the whole game's");
+        Dictionary<int, byte[]> again = new(made);
+        int second;
+        using (NativeSpyroColours.Use(red, perLevel, LevelOf)) second = NativeSpyroColours.ApplyForExport(again, disc.EntryBytes);
+        Check(second == 0, "applied again, nothing changes (" + second + ": " + string.Join(",", again.Where(e => !made.TryGetValue(e.Key, out var m) || !ReferenceEquals(m, e.Value)).Select(e => e.Key)) + ")");
+        // Levels an export adds (the new world's) say which they are themselves.
+        Dictionary<int, byte[]> added = new() { [103] = disc.EntryBytes(10), [105] = disc.EntryBytes(12) };
+        using (NativeSpyroColours.Use(red, new Dictionary<string, IReadOnlyDictionary<string, (byte R, byte G, byte B)>> { ["world70"] = green }, _ => null))
+            NativeSpyroColours.ApplyToEntries(added, e => e == 103 ? "world70" : e == 105 ? "world71" : null);
+        Check(Has(added[103], greenRows) && Has(added[105], redRows), "a new world's level has its own look, the next one the whole game's");
+    }
+
+    // ---- creatures' colours ----
+    {
+        byte[] artisans = disc.EntryBytes(10), hollow = disc.EntryBytes(14), stone = disc.EntryBytes(12);
+        var kinds = NativeCreatureColours.Kinds(artisans);
+        var gnorc = kinds.First(k => k.ClassId == 0x72);
+        Check(kinds.Count >= 20 && gnorc.Colour.G > gnorc.Colour.R + 30 && gnorc.Colour.G > gnorc.Colour.B + 30, "Artisans' gnorc is found, and it is green");
+        int with = Enumerable.Range(0, 35).Count(i => NativeCreatureColours.Kinds(disc.EntryBytes(10 + 2 * i)).Count > 0);
+        Check(with == 35, $"every level has creatures with a colour ({with})");
+        var library = new UniversalLevelData(artisans);
+        Check(NativeCreatureColours.SignatureOf(library.Package(0x72)) == gnorc.Model, "a model's signature is the same from its package as in its level");
+        (byte R, byte G, byte B) crimson = (200, 36, 36);
+        byte[]? redLevel = NativeCreatureColours.Recolour(artisans, [(gnorc.Model, crimson)]);
+        Check(redLevel != null && redLevel.Length == artisans.Length, "the gnorc takes a colour");
+        var after = NativeCreatureColours.Kinds(redLevel!);
+        var now = after.First(k => k.ClassId == 0x72);
+        Check(now.Model == gnorc.Model && now.Colour.R > now.Colour.G + 60 && now.Colour.R > now.Colour.B + 60, $"it is red, and still the same model (#{now.Colour.R:X2}{now.Colour.G:X2}{now.Colour.B:X2})");
+        int others = kinds.Count(k => k.ClassId != 0x72 && after.FirstOrDefault(a => a.ClassId == k.ClassId)?.Colour == k.Colour);
+        Check(others >= kinds.Count - 3, $"the level's other kinds keep their colours ({others} of {kinds.Count - 1})");
+        // His own palettes are never a creature's.
+        Check(Enumerable.Range(0, 17).All(k => redLevel.AsSpan(0x800 + NativeSpyroColours.PaletteOffset(NativeSpyroColours.Palettes[k]), 32).SequenceEqual(artisans.AsSpan(0x800 + NativeSpyroColours.PaletteOffset(NativeSpyroColours.Palettes[k]), 32))),
+            "Spyro's own palettes are left alone");
+        Check(redLevel.AsSpan(0, 0x800).SequenceEqual(artisans.AsSpan(0, 0x800)), "the level's layout is as it was");
+        Check(NativeCreatureColours.Recolour(stone, [(gnorc.Model, crimson)]) == null || NativeCreatureColours.Kinds(stone).Any(k => k.Model == gnorc.Model),
+            "a level without that model is left alone");
+        var preview = NativeCreatureColours.PreviewModel(artisans, gnorc.Model, crimson);
+        var plainPreview = NativeCreatureColours.PreviewModel(artisans, gnorc.Model, null);
+        Check(preview is { } p && plainPreview is { } q && p.Package.Length == q.Package.Length && !p.Package.AsSpan().SequenceEqual(q.Package) && q.Vram.AsSpan().SequenceEqual(artisans.AsSpan(0x800, 0x80000)),
+            "the card's picture draws the creature's model in the colour (its own: the level's as it is)");
+        // Level by level through the export: Artisans' gnorc red, Dark Hollow's large gnorc blue, Stone Hill untouched.
+        var large = NativeCreatureColours.Kinds(hollow).First(k => k.ClassId == 0x73);
+        (byte R, byte G, byte B) blue = (40, 80, 210);
+        var choices = new Dictionary<string, IReadOnlyList<NativeCreatureColours.Recipe>>
+        { ["artisans"] = [NativeCreatureColours.RecipeFor(artisans, gnorc.Model, crimson)!], ["darkhollow"] = [NativeCreatureColours.RecipeFor(hollow, large.Model, blue)!] };
+        // A recipe from the game's own level colours the same model wherever it is, and again changes nothing.
+        Check(NativeCreatureColours.Apply(redLevel!, choices["artisans"]) == null && NativeCreatureColours.Apply(artisans, choices["artisans"])!.AsSpan().SequenceEqual(redLevel),
+            "a kind's recipe gives the same level every time, and nothing the second time");
+        Dictionary<int, byte[]> made = [];
+        int changedLevels;
+        using (NativeCreatureColours.Use(choices, e => e == 10 ? "artisans" : e == 14 ? "darkhollow" : null))
+        {
+            Check(NativeCreatureColours.Enabled && NativeSpyroColours.Enabled, "creatures' colours alone make the export ask for colours");
+            changedLevels = NativeSpyroColours.ApplyForExport(made, disc.EntryBytes);
+        }
+        var blueNow = NativeCreatureColours.Kinds(made[14]).First(k => k.ClassId == 0x73).Colour;
+        Check(changedLevels == 2 && made.Count == 2 && made[10].AsSpan().SequenceEqual(redLevel) && blueNow.B > blueNow.R + 60 && blueNow.B > blueNow.G + 30,
+            $"through the export only the two levels change: Artisans' gnorc red, Dark Hollow's large gnorc blue (#{blueNow.R:X2}{blueNow.G:X2}{blueNow.B:X2})");
+        Check(!NativeCreatureColours.Enabled, "the scope ends with the export");
+    }
     Console.WriteLine($"SPYRO_COLOURS_SOURCE_OK checks={checks}");
     return 0;
 }

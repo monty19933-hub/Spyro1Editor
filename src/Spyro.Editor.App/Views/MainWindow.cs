@@ -10637,6 +10637,7 @@ public sealed partial class MainWindow : Window
     {
         if (_currentLevel == null)
             return;
+        RefreshCreatureKindsIfChanged();
 
         bool hasUnsavedTerrainEdits = HasUnsavedTerrainEdits();
         bool hasUnsavedMobyEdits = HasUnsavedMobyEdits();
@@ -13628,7 +13629,7 @@ public sealed partial class MainWindow : Window
         if (targets.Count == 0 && flightIntent?.RequiresRebuild!=true && !NativeHover.Enabled && !NativeSpyroColours.Enabled)
         {
             _statusText.Text = "No saved edits were found. Change a level name, music track, skybox, object, or terrain first, " +
-                "or something for the whole game in Game Settings (Spyro's colours, Hover).";
+                "or something in Game Settings (Spyro's colours, the creatures' colours, Hover).";
             return;
         }
 
@@ -28284,7 +28285,8 @@ public sealed partial class MainWindow : Window
             $"Save ({mod}S) keeps the open level's changes in your project. It does not make a game.",
             "Create BIN saves first, then builds a new playable game — a BIN and a CUE — from everything saved in the project. The files go in the project's output folder; open the CUE in a PlayStation emulator (DuckStation, for example).",
             "Your original disc image is never written to.",
-            "If something cannot be put in the game, the editor says what and where. More ▾ > Check for Export Issues… runs the same check without building."
+            "Create BIN builds the whole project whichever level is open: every level you changed or built, your new world, and Game Settings.",
+            "If something cannot be put in the game, the editor says what and where. When it is something the editor can put right itself (your world has no way in yet; its homeworld has more objects than it can hold), Fix It For Me appears beside the message: press it, read what it did, and press Create BIN again. More ▾ > Check for Export Issues… runs the same check without building."
         ]);
 
         AddHelpSection(panel, "The view", [
@@ -28319,8 +28321,8 @@ public sealed partial class MainWindow : Window
         ]);
 
         AddHelpSection(panel, "Game Settings and Environment", [
-            "This level: Level name changes the name on portals, loading screens and in the guidebook. Music picks the level's track. Portals & Return Home: choose where each portal leads and where Return Home goes.",
-            "Whole game — Spyro's colours: any colour for each part of Spyro (body, belly, horns, head spikes, wings, tail tip, eyes), a ready-made look, or Surprise me; the picture on the card shows him as he will be in the game. Hover: ▲ while gliding makes Spyro beat his wings, rise a little and drift on, as in Spyro 3 (not in levels where Fly Anywhere is on: there he flies instead of gliding). Play as Crash puts Crash in the levels you tick. Memory: Emulator only (8 MB RAM) lets levels hold more. Create BIN works with only these settings too.",
+            "This level: Level name changes the name on portals, loading screens and in the guidebook. Music picks the level's track. Portals & Return Home: choose where each portal leads and where Return Home goes. Creatures' colours: a colour for each kind of enemy in this level only (the same gnorc can be red here and blue in the next level); Randomize gives every kind another colour, Their Own Colours puts them back.",
+            "Whole game — Spyro's colours: any colour for each part of Spyro (body, belly, horns, head spikes, wings, tail tip, eyes), a ready-made look, or Surprise me; the picture on the card shows him as he will be in the game. Set \"Colours for\" to the open level to give him a look in that level only (Same as the Whole Game takes it away again). Hover: ▲ while gliding makes Spyro beat his wings, rise a little and drift on, as in Spyro 3 (not in levels where Fly Anywhere is on: there he flies instead of gliding). Play as Crash puts Crash in the levels you tick. Memory: Emulator only (8 MB RAM) lets levels hold more. Create BIN works with only these settings too.",
             "Whole game — Fly Anywhere: tick it and the game you export lets Spyro fly in every normal level — jump, then press ✕ again in the air — or open Choose levels and tick only the levels you want. It is separate from the editor's Game Camera.",
             "Environment: recolor the sky, borrow another level's sky, use a ready-made one, or import your own from a 360° picture or an OBJ/FBX model."
         ]);

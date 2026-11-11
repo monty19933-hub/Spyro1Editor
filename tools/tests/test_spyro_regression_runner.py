@@ -70,8 +70,8 @@ class OwnedCommandTests(unittest.TestCase):
 
     def test_spyro_colours_smoke_registration(self):
         name = "SpyroColoursSmoke"
-        self.assertIn((name, "SPYRO_COLOURS_FREE_OK checks=28"), RUNNER.CORE_CASES)
-        self.assertIn((name, "SPYRO_COLOURS_SOURCE_OK checks=95", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertIn((name, "SPYRO_COLOURS_FREE_OK checks=43"), RUNNER.CORE_CASES)
+        self.assertIn((name, "SPYRO_COLOURS_SOURCE_OK checks=112", ["--source"]), RUNNER.SOURCE_QA_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
 
@@ -994,7 +994,7 @@ class RunnerOptionsTests(unittest.TestCase):
                     (name, "FREE_FLIGHT_UI_OK", ["--free-flight-ui-only"]),
                     (name, "PLAY_AS_CRASH_UI_OK checks=", ["--play-as-crash-ui-only"]),
                     (name, "MEMORY_MODE_UI_OK checks=18", ["--memory-mode-ui-only"]),
-                    (name, "SPYRO_COLOURS_UI_OK checks=20", ["--spyro-colours-ui-only"]),
+                    (name, "SPYRO_COLOURS_UI_OK checks=26", ["--spyro-colours-ui-only"]),
                     (name, "DOORWAYS_UI_OK checks=39", ["--doorways-ui-only"]),
                     (name, "WORLD_ENTRANCE_UI_OK checks=39", ["--world-entrance-ui-only"]),
                     (name, "LEVEL_PICKER_AUTOMATION_OK", ["--level-picker-automation-only"]),

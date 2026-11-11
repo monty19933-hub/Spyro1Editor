@@ -14,37 +14,81 @@ public static class SpyroColourSettings
 
     public static string PathFor(string workspaceRoot) => Path.Combine(workspaceRoot, FileName);
 
-    /// <summary>Part key -> colour for every part the project changes (empty: none).</summary>
-    public static Dictionary<string, (byte R, byte G, byte B)> Load(string workspaceRoot)
+    /// <summary>The whole game's look and the looks of levels that have their own (level key -> part -> colour; an empty
+    /// look: his own colours in that level).</summary>
+    public sealed record Book(Dictionary<string, (byte R, byte G, byte B)> Whole, Dictionary<string, Dictionary<string, (byte R, byte G, byte B)>> Levels);
+
+    /// <summary>Part key -> colour for every part the project changes in the whole game (empty: none).</summary>
+    public static Dictionary<string, (byte R, byte G, byte B)> Load(string workspaceRoot) => LoadAll(workspaceRoot).Whole;
+
+    /// <summary>The whole game's look and each level's own.</summary>
+    public static Book LoadAll(string workspaceRoot)
     {
         string path = PathFor(workspaceRoot);
-        if (!File.Exists(path)) return [];
+        if (!File.Exists(path)) return new([], new(StringComparer.OrdinalIgnoreCase));
         var root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject
             ?? throw new InvalidDataException($"{FileName} is not a settings object.");
         if ((root["schemaVersion"] as System.Text.Json.Nodes.JsonValue)?.TryGetValue(out int version) != true || version != SchemaVersion)
             throw new InvalidDataException($"{FileName} has an unknown version.");
         if (root["colours"] is not JsonObject colours) throw new InvalidDataException($"{FileName} has no colours.");
-        Dictionary<string, (byte, byte, byte)> result = [];
-        foreach (var (key, value) in colours)
+        static Dictionary<string, (byte, byte, byte)> Look(JsonObject parts)
         {
-            if (NativeSpyroColours.FindPart(key) == null) throw new InvalidDataException($"{FileName} names a part Spyro doesn't have: {key}.");
-            string text = (value as System.Text.Json.Nodes.JsonValue)?.TryGetValue(out string? s) == true ? s : "";
-            result[key] = TryParse(text, out var colour) ? colour : throw new InvalidDataException($"{FileName}: \"{text}\" is not a colour (#RRGGBB).");
+            Dictionary<string, (byte, byte, byte)> result = [];
+            foreach (var (key, value) in parts)
+            {
+                if (NativeSpyroColours.FindPart(key) == null) throw new InvalidDataException($"{FileName} names a part Spyro doesn't have: {key}.");
+                string text = (value as System.Text.Json.Nodes.JsonValue)?.TryGetValue(out string? s) == true ? s : "";
+                result[key] = TryParse(text, out var colour) ? colour : throw new InvalidDataException($"{FileName}: \"{text}\" is not a colour (#RRGGBB).");
+            }
+            return result;
         }
-        return result;
+        Dictionary<string, Dictionary<string, (byte R, byte G, byte B)>> levels = new(StringComparer.OrdinalIgnoreCase);
+        if (root["levels"] is JsonObject saved)
+            foreach (var (key, value) in saved)
+                levels[key] = value is JsonObject parts ? Look(parts) : throw new InvalidDataException($"{FileName}: the look of {key} is not a set of colours.");
+        return new(Look(colours), levels);
     }
 
-    /// <summary>Saves the colours; none removes the file, so a project that never changed them is unchanged.</summary>
+    /// <summary>Saves the whole game's colours (the levels' own looks stay); with no colours anywhere the file is
+    /// removed, so a project that never changed them is unchanged.</summary>
     public static void Save(string workspaceRoot, IReadOnlyDictionary<string, (byte R, byte G, byte B)> colours)
     {
-        foreach (string key in colours.Keys)
+        Book book;
+        try { book = LoadAll(workspaceRoot); }
+        catch (Exception e) when (e is InvalidDataException or JsonException) { book = new([], new(StringComparer.OrdinalIgnoreCase)); }
+        SaveAll(workspaceRoot, book with { Whole = new(colours) });
+    }
+
+    /// <summary>Gives a level its own look (<paramref name="colours"/> empty: his own colours there), or (null) takes it
+    /// away again so the level has the whole game's.</summary>
+    public static void SaveLevel(string workspaceRoot, string levelKey, IReadOnlyDictionary<string, (byte R, byte G, byte B)>? colours)
+    {
+        var book = LoadAll(workspaceRoot);
+        if (colours == null) book.Levels.Remove(levelKey); else book.Levels[levelKey] = new(colours);
+        SaveAll(workspaceRoot, book);
+    }
+
+    public static void SaveAll(string workspaceRoot, Book book)
+    {
+        foreach (string key in book.Whole.Keys.Concat(book.Levels.Values.SelectMany(l => l.Keys)))
             if (NativeSpyroColours.FindPart(key) == null) throw new ArgumentException($"Spyro has no part called \"{key}\".");
         string path = PathFor(workspaceRoot);
-        if (colours.Count == 0) { if (File.Exists(path)) File.Delete(path); return; }
-        JsonObject parts = [];
-        foreach (var part in NativeSpyroColours.Parts)
-            if (colours.TryGetValue(part.Key, out var c)) parts[part.Key] = Format(c);
-        var root = new JsonObject { ["schemaVersion"] = SchemaVersion, ["colours"] = parts };
+        if (book.Whole.Count == 0 && book.Levels.Count == 0) { if (File.Exists(path)) File.Delete(path); return; }
+        static JsonObject Parts(IReadOnlyDictionary<string, (byte R, byte G, byte B)> look)
+        {
+            JsonObject parts = [];
+            foreach (var part in NativeSpyroColours.Parts)
+                if (look.TryGetValue(part.Key, out var c)) parts[part.Key] = Format(c);
+            return parts;
+        }
+        // "colours" is always written: editors before 2.1 read it and nothing else.
+        var root = new JsonObject { ["schemaVersion"] = SchemaVersion, ["colours"] = Parts(book.Whole) };
+        if (book.Levels.Count > 0)
+        {
+            JsonObject levels = [];
+            foreach (var (key, look) in book.Levels.OrderBy(l => l.Key, StringComparer.Ordinal)) levels[key] = Parts(look);
+            root["levels"] = levels;
+        }
         string temp = path + ".tmp";
         File.WriteAllText(temp, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         File.Move(temp, path, overwrite: true);

@@ -1,4 +1,4 @@
-# Spyro Editor 2.0 Known Limitations
+# Spyro Editor 2.1 Known Limitations
 
 Current stable scope is in [release limitations](public-known-limitations.md).
 The sections below are retained historical research notes for older workflows,
