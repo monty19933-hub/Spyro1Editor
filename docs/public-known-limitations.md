@@ -38,6 +38,22 @@
   Changes to the level's own objects are still left out as one. The search is
   capped at ten extra runs of Create BIN; past that it leaves out what it has
   not cleared.
+- Random levels (2.3) still rise and fall only about half as much as the game's
+  own levels (a typical generated level spans about 420 units of height, the
+  game's about 770). Wall lamps go up only where a wall rises well above head
+  height (castles, cliffs), so valley levels get none. Random objects puts
+  groups of four or more gems together less often than the game does, its loose
+  gems are a little more often red, and gems stand further from walls than in
+  the game. Levels were played in the emulator: every join of four layouts (a
+  hill of terraces, a web of rooms, an arena, a gorge), a level with teal and
+  rainbow gems, and two generated homeworlds in Artisans' place with all five
+  doorways entered and left. The same seed makes a different level than in 2.2.
+- Shaped doorways (2.3): Spyro now flies in through the lower part of the
+  opening (at most 60% of its height), so the flight differs a little from the
+  game's own doorway it is copied from. Played in the emulator on Artisans'
+  doorways, at the size a generated homeworld chose and with every doorway at
+  the smallest size of the lowest shapes; other homeworlds' doorways are
+  checked by the tests, not played.
 
 - Version 2.2 put Fix It For Me on every Create BIN stop that comes from the
   project. Where the editor has no repair, the fix is to make the game without

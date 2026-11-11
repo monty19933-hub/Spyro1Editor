@@ -612,11 +612,19 @@ homeworld, its levels, their doorways, the entrance and the way back.
 are made, from a seed and a few choices, then puts it where you say so you can add
 objects and enemies yourself.
 
-- **Laid out like the game's levels:** rooms strung along a route, each a little
-  higher or lower than the last and joined by sloping paths: round a loop whose
-  last room stands over the first (so the way round ends with a drop back to the
-  start), off one big clearing, or along a winding trail. Rooms have steps to
-  jump up, lookouts to glide from, pools and hidden nooks.
+- **Laid out like the game's levels**, in one of seven ways: a way from room to
+  room with a clear end (side rooms off it, sometimes a ledge over an earlier
+  room); a ring that comes back over its start (the way round ends with a drop
+  back to it); a clearing with rooms off it all round; one great room with a
+  hill, a stepped mound or a moat in the middle; a hill of two to four terraces,
+  each reached by a ramp that winds round it, with steps to the summit and a
+  glide down; a winding gorge whose reaches run together with steps between
+  them; or a web of rooms with more than one way round. Rooms are anything from
+  about 300 to 1,150 units across: some levels have a few big rooms, some many
+  small ones. Rooms have flights of steps, long paths that climb as they wind,
+  raised terraces, hollows, islets in pools, steps to jump up, lookouts to glide
+  from and hidden nooks; hilltops and islands get one of the look's tall things
+  or a tower.
 - **Built like them:** one sheet of four-cornered faces about 128 units across
   whose lines follow the edges of the land, as in the original levels, enclosed by
   steep banks, rock walls, peaks, open water or the sky.
@@ -630,6 +638,8 @@ The choices:
 - **Kind of level:** clearings among the hills (like Artisans), islands in the
   water, islands in the sky (like Lofty Castle), caverns and tunnels, a canyon
   (like Dry Canyon) or castle courtyards. **Surprise me** lets the seed choose.
+- **Laid out as:** one of the seven layouts above, or **Surprise me** to let the
+  seed choose one that suits the kind of level.
 - **In the style of:** Artisans, Stone Hill, Dark Hollow, Town Square, Peace
   Keepers, Dry Canyon, Cliff Town, Ice Cavern, Magic Crafters, High Caves, Wizard
   Peak, Misty Bog, Tree Tops, Dream Weavers, Dark Passage, Lofty Castle, Haunted
@@ -650,7 +660,8 @@ The choices:
   WebP or BMP) on any kind of surface; pictures need your original disc.
 - **Sky:** that level's sky, or a sky painted to match.
 - **Seed:** the same seed and choices always make the same level. **New Seed**
-  makes another; **Rebuild** makes this seed again with changed choices.
+  makes another; **Rebuild** makes this seed again with changed choices. (A seed
+  makes a different level in 2.3 than it did in 2.2.)
 
 Every jump, glide and climb is built inside what Spyro can really do (measured in
 the game): steps are 56 units high, stepping stones an easy jump apart, paths
@@ -670,9 +681,11 @@ any tile afterwards.
 ### Random homeworlds
 
 **File ▾ → Random Homeworld…** (or **Make: A homeworld** in the Random Level
-window) makes a homeworld: Spyro arrives in a plaza with rooms off it all round,
-and a doorway stands in the middle of a room for every level the homeworld leads
-to, with open floor in front of it and behind it for Spyro to come back out onto.
+window) makes a homeworld, laid out in any of the level layouts (a clearing with
+rooms off it, a hill of terraces, a web of rooms…), and a doorway stands in a
+room for every level the homeworld leads to, with open floor in front of it and
+behind it for Spyro to come back out onto. Spyro flies in through the lower part
+of each opening, whatever its shape and size, so every doorway loads its level.
 
 - A generated homeworld goes in the place of any of the game's six homeworlds
   (open that homeworld first) or in the homeworld of your own world.
@@ -720,6 +733,15 @@ first); **Remove Them** takes them all away. What you added yourself stays.
 - **Chests of every kind:** baskets and vases, strong chests, chests that take
   three flames, firework and spring chests, an extra life, and a locked chest
   whose key lies somewhere else in the level.
+- **Teal gems (50)** and **Rainbow gems (100)** (off unless you tick them): rare
+  gems worth 50 and 100, each alone at one of the hardest places to reach (a
+  perch, a high place, the far end of a way), counted in the treasure you typed.
+  A level needs about 100 gems of treasure for a teal gem and 200 for a rainbow
+  one (150 for one teal when both are ticked, 300 for one of each); up to four
+  teal and three rainbow gems. The card says when the treasure is too low.
+- **Trees, torches, flowers** (on unless you untick it): the level type's own
+  trees, cactuses, torches, lamps, flowers and grass, placed where the game puts
+  them. They go in last, so they use only save rows nothing else needs.
 - **Animals, egg thieves, dragons, the way out:** the level type's animals in
   little groups; the egg thieves and dragons that belong to the level's place in
   the game, each thief with room to run; a Return Home vortex at the far end (in a
@@ -744,8 +766,14 @@ measured from the disc:
   places, and one of every colour is always there when the total allows.
 - Chests stand in ones, twos and threes a chest's width apart, most of them a
   step or two from a wall or where a walk ends. Enemies wait in ones, twos and
-  threes (now and then a pack) in the rooms beyond the first, facing the way
-  Spyro comes in, and on the paths between.
+  threes (now and then a pack), spread through the rooms beyond the first,
+  facing the way Spyro comes in, and on the paths between; most chests and gems
+  stand where no enemy is close, as in the game.
+- About a quarter of the chests and gems go up on raised places and small
+  separate floors ("perches"), most keys go on a perch, and the extra life and
+  the locked chest go to tucked-away places. Three or more gems are as often a
+  little knot (a triangle, a square, a ring) as a line. Everything stands on the
+  level's floor, never out on its banks or in the sea.
 
 Nothing is put inside a tower or against a wall, and enemies keep away from a
 homeworld's doorways. Before anything is placed, each kind is tried on in the
