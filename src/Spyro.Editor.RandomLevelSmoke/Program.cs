@@ -40,8 +40,10 @@ if (args.Length >= 6 && args[0] == "--dump")
         Console.WriteLine($"doorways: {string.Join(", ", built.Portals!.Select(d => $"{d.DestinationLevelId} {d.Shape} x{d.SizeScale:0.00}"))} {string.Join(" ", problems)}");
         r = r with { Scene = built };
     }
-    var faces = r.Scene.Surfaces.Select(s => new
+    // Doorway frames are added after the level's own faces: the play-floor marks cover the level's own.
+    var faces = r.Scene.Surfaces.Select((s, index) => new
     {
+        w = index < r.PlayFloor.Count && r.PlayFloor[index] ? 1 : 0,
         p = s.Vertices.Select(v => new[] { v.X, v.Y, v.Z }).ToArray(),
         c = (s.NearColors ?? []).Select(c => new[] { (int)c.R, c.G, c.B }).ToArray(),
         t = s.Material == null ? null : $"{keyOf.GetValueOrDefault(s.Material.SourceWadEntry, "?")}:{s.Material.TextureId}",
@@ -49,7 +51,8 @@ if (args.Length >= 6 && args[0] == "--dump")
     });
     await File.WriteAllTextAsync(args[5], System.Text.Json.JsonSerializer.Serialize(new
     {
-        name = r.Scene.Name, spawn = new[] { r.Scene.Spawn.X, r.Scene.Spawn.Y, r.Scene.Spawn.Z }, heading = r.Scene.Heading,
+        name = r.Scene.Name, spawn = new[] { r.Scene.Spawn.X, r.Scene.Spawn.Y, r.Scene.Spawn.Z }, heading = r.Scene.Heading, shape = r.Shape,
+        areas = r.Report.Areas, counts = r.Report.Counts, theme = r.Report.Theme, style = r.Report.Style.ToString(),
         gems = (r.Scene.GemSpots ?? []).Select(g => new[] { g.X, g.Y, g.Z }).ToArray(),
         links = r.Report.Links.Select(l => new { l.Kind, from = new[] { l.From.X, l.From.Y, l.From.Z }, to = new[] { l.To.X, l.To.Y, l.To.Z } }).ToArray(), faces,
     }));

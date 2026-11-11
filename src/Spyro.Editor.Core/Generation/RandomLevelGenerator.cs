@@ -72,6 +72,11 @@ public sealed record RandomLevelResult(SceneDocument Scene, RandomLevelReport Re
     /// <summary>The texture for doorway frames: one the level already uses (its stonework, else its rock).</summary>
     public AuthoredMaterial? DoorwayMaterial { get; init; }
     /// <summary>A top-down picture of the level (one pixel per 30 units, north up): height-shaded floor colours.</summary>
+    /// <summary>For the study tools: one entry per face of the scene, true for the floor the level is played on (rooms,
+    /// paths, ledges; not banks, cliff tops, water, walls, roofs or things that stand on the land).</summary>
+    internal IReadOnlyList<bool> PlayFloor { get; init; } = [];
+    /// <summary>The level's layout by name (for reports and the study tools).</summary>
+    internal string Shape { get; init; } = "";
     public required Rgba32[] Map { get; init; }
     public required int MapWidth { get; init; }
     public required int MapHeight { get; init; }
@@ -330,7 +335,8 @@ public static class RandomLevelGenerator
                 if (col >= 0 && col < mw && row >= 0 && row < mh) map[(mh - 1 - row) * mw + col] = new Rgba32(255, 236, 96, 255);
             }
         }
-        return new(scene, report, pictures, materials) { Map = map, MapWidth = mw, MapHeight = mh, Doorways = doorways, DoorwayMaterial = doorwayMaterial };
+        var playFloor = pieces.Select(p => !p.Wall && p.Collides && (p.Layer >= 0 || p.Layer == TerrainPlan.Fill) && p.Kind == null && p.Texture == null && p.Role != SurfaceRole.Ceiling).ToArray();
+        return new(scene, report, pictures, materials) { Map = map, MapWidth = mw, MapHeight = mh, Doorways = doorways, DoorwayMaterial = doorwayMaterial, PlayFloor = playFloor, Shape = planned.Shape };
     }
 
     /// <summary>The side of the squares faces are grouped into sectors by.</summary>
