@@ -99,7 +99,25 @@ public sealed partial class MainWindow
     }
 
     /// <summary>What Create BIN says about memory once the game is written (nothing in the 2 MB mode).</summary>
-    private static string MemoryModeExportNote(GameRam.Scope? scope) => NativeExtendedRam.ExportNote(scope);
+    private string MemoryModeExportNote(GameRam.Scope? scope) => NativeExtendedRam.ExportNote(scope) + ExportRoomNote();
+
+    /// <summary>The game's levels the last Create BIN added objects to, each with the memory left below the game's
+    /// draw buffers once they were in (where an added object's model and behaviour go, in both memory settings).</summary>
+    private readonly List<(string Level, int Headroom)> _exportRoom = [];
+
+    /// <summary>Says how much room the levels with added objects have left, fullest first, so that running out does not
+    /// come as a surprise at some later Create BIN.</summary>
+    private string ExportRoomNote()
+    {
+        if (_exportRoom.Count == 0) return "";
+        static string Kb(int bytes) => $"{Math.Max(0, bytes) / 1024.0:0} KB";
+        var fullest = _exportRoom.OrderBy(r => r.Headroom).ToList();
+        string list = string.Join(", ", fullest.Take(5).Select(r => $"{r.Level} {Kb(r.Headroom)}")) + (fullest.Count > 5 ? $" and {fullest.Count - 5} more with more room" : "");
+        string tight = fullest[0].Headroom < 24 * 1024
+            ? $" {fullest[0].Level} is nearly full: another kind of object with a model of its own may not fit there (copies of kinds already in the level cost very little)."
+            : "";
+        return $" Room left for more objects after your changes: {list}.{tight}";
+    }
 
     /// <summary>The retail export's last step: with 8 MB RAM the scene placement goes into the finished working image (a
     /// new step image in the build folder), every level is checked against that layout, and the export's scope learns

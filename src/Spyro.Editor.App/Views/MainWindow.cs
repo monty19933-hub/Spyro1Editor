@@ -13976,6 +13976,7 @@ public sealed partial class MainWindow : Window
         List<NativeSkyBatchEdit> skyboxEdits = [];
         List<NativeEnvironmentGradeBatchEdit> environmentGradeEdits = [];
         List<object> stepSummaries = [];
+        _exportRoom.Clear();
         NativeFreeFlightExportStageResult? flightStage = null;
         IReadOnlyList<(int LevelIndex, int Row, int Colour)> activeDragonflyEggs = [];
         IReadOnlySet<string> signLevelKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -14725,6 +14726,7 @@ public sealed partial class MainWindow : Window
                 if (!patchedLevelNames.Contains(level.LevelName, StringComparer.OrdinalIgnoreCase))
                     patchedLevelNames.Add(level.LevelName);
                 skippedEditDetails.AddRange(level.Compose.Warnings.Select(w => $"{level.LevelName}: {w}"));
+                _exportRoom.Add((level.LevelName, level.Compose.Ram.FinalHeadroom));
                 stepSummaries.Add(new
                 {
                     level = level.LevelName,
