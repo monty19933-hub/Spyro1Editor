@@ -12054,8 +12054,8 @@ void AssertBuildSafetyInspection(MainWindow owner)
         throw new InvalidOperationException("Inspect Build Safety was not enabled before the smoke action.");
 
     Window dialog = OpenAsyncDialog(owner, inspect, "Export Check", "build-safety report dialog");
-    AssertText(dialog, "Ready to export");
-    AssertTextContains(dialog, "1 edited level checked. No problems were found.");
+    AssertText(dialog, "Object changes look fine");
+    AssertTextContains(dialog, "1 edited level checked. No problems were found in your object changes.");
     AssertTextContains(dialog, "Stone Hill: ready to export");
     FindButton(dialog, "Open Report Folder");
     Button close = FindButton(dialog, "Close");
@@ -12118,7 +12118,7 @@ void AssertBuildSafetyInspection(MainWindow owner)
         ?? throw new InvalidOperationException("Could not inspect the build-safety summary field.");
     TextBlock summary = (TextBlock)(summaryField.GetValue(owner)
         ?? throw new InvalidOperationException("The build-safety summary control was unavailable."));
-    const string expectedSummary = "Ready to export: 1 edited level checked";
+    const string expectedSummary = "Object changes checked in 1 edited level: no problems";
     if (!string.Equals(summary.Text, expectedSummary, StringComparison.Ordinal))
         throw new InvalidOperationException($"Unexpected build-safety summary: '{summary.Text}'.");
 

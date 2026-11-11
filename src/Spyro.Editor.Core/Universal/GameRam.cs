@@ -169,7 +169,7 @@ public static class GameRam
     {
         if (Extended)
             throw new InvalidDataException($"{feature} only works with the PlayStation (2 MB) memory setting: its game code " +
-                "checks where the level's objects are in memory, and with Emulator only (8 MB RAM) they move. " +
+                "checks where the level's objects are in memory, and with Emulator (8 MB RAM) they move. " +
                 "Choose PlayStation (2 MB) under Game Settings › Memory to include it.");
     }
 }

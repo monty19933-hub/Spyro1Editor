@@ -34,7 +34,7 @@ public sealed record UniversalClassImport(int ClassId, string SourceLevelKey, bo
 public sealed record UniversalRamBudget(uint OriginalEnd, uint FinalEnd, uint Limit, int OriginalHeadroom, int FinalHeadroom,
     int OverlayGrowth, int ModelGrowth, int SceneGrowth, int DataGrowth)
 {
-    /// <summary>Emulator only (8 MB RAM): the ends and headrooms above are what loads below the draw buffers (overlay,
+    /// <summary>Emulator (8 MB RAM): the ends and headrooms above are what loads below the draw buffers (overlay,
     /// level data, models); the scene loads in the extra memory with <see cref="SceneHeadroom"/> bytes to spare
     /// (<see cref="GameRam"/>).</summary>
     public bool ExtendedRam { get; init; }
@@ -1067,7 +1067,7 @@ public static class UniversalMobyComposer
         if (retailEdit && placements.Count > 0)
             (dest, slotsAdded) = RestoreDynamicSlots(dest, retailSlots, GameRam.SceneRoom(dest, copyBuffer));
         uint finalEnd = RuntimeEnd(dest, copyBuffer);
-        // Emulator only (8 MB RAM): the scene loads in the extra memory, so the budget below the draw buffers is what
+        // Emulator (8 MB RAM): the scene loads in the extra memory, so the budget below the draw buffers is what
         // loads before it (GameRam); the 2 MB budget is the whole load, as always.
         bool extended = GameRam.Extended;
         uint usedBefore = extended ? originalLowEnd : originalEnd, usedAfter = extended ? GameRam.LowEnd(dest, copyBuffer) : finalEnd;

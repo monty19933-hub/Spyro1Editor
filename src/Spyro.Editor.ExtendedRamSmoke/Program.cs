@@ -4,7 +4,7 @@ using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Persistence;
 using Spyro.Editor.Core.Universal;
 
-// "Emulator only (8 MB RAM)": the executable patch (NativeExtendedRam), the split RAM budget (GameRam) and the project
+// "Emulator (8 MB RAM)": the executable patch (NativeExtendedRam), the split RAM budget (GameRam) and the project
 // setting (GameMemorySettings).
 //   (no arguments)                               disc-free checks
 //   --source <USA bin> <catalog workspace>       also: installed into the retail executable (read only), every retail
@@ -182,11 +182,14 @@ string folder = Directory.CreateTempSubdirectory("spyro-memory-mode-").FullName;
 try
 {
     string file = GameMemorySettings.PathFor(folder);
-    Check(GameMemorySettings.Load(folder) == GameMemoryMode.PlayStation2MB && !File.Exists(file), "no file: PlayStation (2 MB)");
-    GameMemorySettings.Save(folder, GameMemoryMode.Emulator8MB);
-    Check(GameMemorySettings.Load(folder) == GameMemoryMode.Emulator8MB && File.ReadAllText(file).Contains("\"emulator-8mb\""), "8 MB is saved as memory-mode.json");
+    Check(GameMemorySettings.Default == GameMemoryMode.Emulator8MB && GameMemorySettings.Load(folder) == GameMemoryMode.Emulator8MB && !File.Exists(file),
+        "no file: Emulator (8 MB RAM), the default since 2.3");
     GameMemorySettings.Save(folder, GameMemoryMode.PlayStation2MB);
-    Check(!File.Exists(file) && Directory.GetFiles(folder).Length == 0, "choosing 2 MB again removes the file (the project is as it was)");
+    Check(GameMemorySettings.Load(folder) == GameMemoryMode.PlayStation2MB && File.ReadAllText(file).Contains("\"playstation-2mb\""), "2 MB is saved by name in memory-mode.json");
+    GameMemorySettings.Save(folder, GameMemoryMode.Emulator8MB);
+    Check(!File.Exists(file) && Directory.GetFiles(folder).Length == 0, "choosing 8 MB again removes the file (the project is as it was)");
+    File.WriteAllText(file, "{\"schemaVersion\":1,\"memory\":\"emulator-8mb\"}");
+    Check(GameMemorySettings.Load(folder) == GameMemoryMode.Emulator8MB, "an 8 MB choice saved by an earlier version is still read");
     File.WriteAllText(file, "{ not json");
     Check(Throws<Exception>(() => GameMemorySettings.Load(folder)) && File.ReadAllText(file) == "{ not json", "a damaged file is reported, not guessed at");
     File.WriteAllText(file, "{\"memory\":\"16mb\"}");

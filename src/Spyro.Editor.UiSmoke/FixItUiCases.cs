@@ -58,6 +58,9 @@ internal static class FixItUiCases
             if (Path.GetFullPath(opened).TrimEnd('/') != Path.GetFullPath(workspace).TrimEnd('/'))
                 throw new InvalidOperationException("The editor opened " + opened + " instead of the test project; stopping before any change.");
             window.OpenPathOverrideForTesting = _ => { };
+            // (The window that opens by itself when something was left out is tried in the export step of --new-level;
+            // here More › Left Out of the Game… is opened by hand.)
+            window.ShowLeftOutAfterFixIt = false;
             var catalog = Get<LevelCatalog>(window, "_retailCatalog");
             var texts = TextTargetCatalog.CreateDefault();
             LevelDefinition artisans = catalog.FindByKey("artisans")!, stoneHill = catalog.FindByKey("stonehill")!;

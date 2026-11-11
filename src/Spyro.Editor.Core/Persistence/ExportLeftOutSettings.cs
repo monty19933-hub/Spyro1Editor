@@ -21,6 +21,10 @@ public static class ExportParts
     public static string Level(string key) => "level:" + key.ToLowerInvariant();
     /// <summary>One kind of saved change to one of the game's own levels.</summary>
     public static string Level(string key, string kind) => Level(key) + ":" + kind;
+    /// <summary>One kind of object added to one of the game's own levels (every copy of it): the narrowest part.
+    /// <paramref name="kind"/> is <c>UniversalPlacementReader.KindOf</c>.</summary>
+    public static string Added(string key, string kind) => AddedPrefix(key) + kind;
+    public static string AddedPrefix(string key) => Level(key) + ":added:";
     /// <summary>A level built in the place of <paramref name="key"/> (the new level's key is <c>authored65</c>).</summary>
     public static string Built(string key) => "built:" + key.ToLowerInvariant();
 }

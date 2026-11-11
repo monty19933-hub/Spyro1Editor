@@ -14604,7 +14604,8 @@ public sealed partial class MainWindow : Window
             string editsFile = Path.Combine(_workspace.RootPath, $"{target.Level.Key}-native-edits.json");
             // A level whose object changes were left out of the game (Fix It For Me) keeps its own objects.
             if (target.ObjectsLeftOut) continue;
-            IReadOnlyList<UniversalMobyPlacement> placed = UniversalPlacementReader.Read(editsFile);
+            // Kinds of added object left out by themselves are read as deleted (their save rows stay theirs).
+            IReadOnlyList<UniversalMobyPlacement> placed = UniversalPlacementReader.Read(editsFile, LeftOutAdded(target.Level.Key));
             if (target.HasCrashPlayer) placed = UniversalCrashPlayer.WithPlayer(placed);
             var removed=UniversalPlacementReader.ReadRemovedNativeRows(editsFile);
             if (placed.Count > 0 || removed.Count > 0)
@@ -28336,7 +28337,7 @@ public sealed partial class MainWindow : Window
 
         AddHelpSection(panel, "Game Settings and Environment", [
             "This level: Level name changes the name on portals, loading screens and in the guidebook. Music picks the level's track. Portals & Return Home: choose where each portal leads and where Return Home goes. Creatures' colours: a colour for each kind of enemy in this level only (the same gnorc can be red here and blue in the next level); Randomize gives every kind another colour, Their Own Colours puts them back.",
-            "Whole game — Spyro's colours: any colour for each part of Spyro (body, belly, horns, head spikes, wings, tail tip, eyes), a ready-made look, or Surprise me; the picture on the card shows him as he will be in the game. Set \"Colours for\" to the open level to give him a look in that level only (Same as the Whole Game takes it away again). Hover: ▲ while gliding makes Spyro beat his wings, rise a little and drift on, as in Spyro 3 (not in levels where Fly Anywhere is on: there he flies instead of gliding). Play as Crash puts Crash in the levels you tick. Memory: Emulator only (8 MB RAM) lets levels hold more. Create BIN works with only these settings too.",
+            "Whole game — Spyro's colours: any colour for each part of Spyro (body, belly, horns, head spikes, wings, tail tip, eyes), a ready-made look, or Surprise me; the picture on the card shows him as he will be in the game. Set \"Colours for\" to the open level to give him a look in that level only (Same as the Whole Game takes it away again). Hover: ▲ while gliding makes Spyro beat his wings, rise a little and drift on, as in Spyro 3 (not in levels where Fly Anywhere is on: there he flies instead of gliding). Play as Crash puts Crash in the levels you tick. Memory: Emulator (8 MB RAM) lets levels hold more. Create BIN works with only these settings too.",
             "Whole game — Fly Anywhere: tick it and the game you export lets Spyro fly in every normal level — jump, then press ✕ again in the air — or open Choose levels and tick only the levels you want. It is separate from the editor's Game Camera.",
             "Environment: recolor the sky, borrow another level's sky, use a ready-made one, or import your own from a 360° picture or an OBJ/FBX model."
         ]);

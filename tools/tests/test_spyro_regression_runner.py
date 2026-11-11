@@ -54,8 +54,8 @@ class OwnedCommandTests(unittest.TestCase):
 
     def test_extended_ram_smoke_registration(self):
         name = "ExtendedRamSmoke"
-        self.assertIn((name, "EXTENDED_RAM_FREE_OK checks=73"), RUNNER.CORE_CASES)
-        self.assertIn((name, "EXTENDED_RAM_SOURCE_OK checks=88", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertIn((name, "EXTENDED_RAM_FREE_OK checks=74"), RUNNER.CORE_CASES)
+        self.assertIn((name, "EXTENDED_RAM_SOURCE_OK checks=89", ["--source"]), RUNNER.SOURCE_QA_CASES)
         self.assertIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_REPORT_CASES)

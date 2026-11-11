@@ -42,6 +42,15 @@ public sealed partial class MainWindow
     internal void LeaveOutForTesting(string part, string why) => LeaveOut(part, why);
 
     private bool IsLeftOut(string part) => LeftOutItems().Any(i => i.Part == part);
+    /// <summary>The kinds of object added to a level that are left out by themselves (null: none).</summary>
+    private IReadOnlySet<string>? LeftOutAdded(string levelKey)
+    {
+        string prefix = ExportParts.AddedPrefix(levelKey);
+        var kinds = LeftOutItems().Where(i => i.Part.StartsWith(prefix, StringComparison.Ordinal)).Select(i => i.Part[prefix.Length..]).ToHashSet(StringComparer.Ordinal);
+        return kinds.Count == 0 ? null : kinds;
+    }
+    /// <summary>Whether the window that lists what was left out opens by itself when Fix It For Me has left something out.</summary>
+    internal bool ShowLeftOutAfterFixIt { get; set; } = true;
     /// <summary>One kind of saved change to one of the game's own levels is left out (by itself or with the whole level).</summary>
     private bool IsLeftOut(string levelKey, string kind) => IsLeftOut(ExportParts.Level(levelKey)) || IsLeftOut(ExportParts.Level(levelKey, kind));
 
@@ -186,6 +195,17 @@ public sealed partial class MainWindow
         {
             string[] bits = id.Split(':');
             string name = _retailCatalog.FindByKey(bits[1])?.DisplayName ?? bits[1];
+            if (bits.Length >= 4 && bits[2] == "added")
+            {
+                string kind = id[ExportParts.AddedPrefix(bits[1]).Length..];
+                try
+                {
+                    var found = Spyro.Editor.Core.Universal.UniversalPlacementReader.ReadAddedKinds(Path.Combine(root, bits[1] + "-native-edits.json")).FirstOrDefault(k => k.Kind == kind);
+                    if (found.Kind != null) return (found.Count > 1 ? $"{found.Count} × {found.Label}" : found.Label) + $" (added to {name})";
+                }
+                catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException or KeyNotFoundException) { }
+                return $"an object you added to {name} (it is no longer there)";
+            }
             return bits.Length < 3 ? $"your changes to {name}" : bits[2] switch
             {
                 ExportParts.Objects => $"your object changes in {name}",
@@ -219,7 +239,11 @@ public sealed partial class MainWindow
     }
 
     /// <summary>More › Left Out of the Game…: each part Fix It For Me left out, why, and Put Back.</summary>
-    private async Task ShowLeftOutAsync()
+    private Task ShowLeftOutAsync() => ShowLeftOutCoreAsync(afterFixIt: false);
+
+    /// <summary>The same window, opened by Fix It For Me when it has just made a game without something: what it left
+    /// out must not be only a line at the bottom of the window.</summary>
+    private async Task ShowLeftOutCoreAsync(bool afterFixIt)
     {
         Window dialog = new()
         {
@@ -230,13 +254,21 @@ public sealed partial class MainWindow
         void Rebuild()
         {
             body.Children.Clear();
-            body.Children.Add(new TextBlock { Text = "Left out of the game", FontSize = 20, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(ModernInk) });
             var items = LeftOutItems().ToArray();
+            body.Children.Add(new TextBlock
+            {
+                Name = "LeftOutHeading", Text = afterFixIt && items.Length > 0 ? "Your game was made, but with something left out" : "Left out of the game",
+                FontSize = 20, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(ModernInk)
+            });
             body.Children.Add(new TextBlock
             {
                 Name = "LeftOutIntro", TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(ModernMutedInk), LineHeight = 20,
                 Text = items.Length == 0
                     ? "Nothing is left out: Create BIN makes the game with everything in your project."
+                    : afterFixIt
+                    ? "Create BIN stopped on something the editor could not repair, so Fix It For Me made the game without what is listed here. " +
+                      "Nothing was deleted: it is all still in your project and in the editor, only not in the game. " +
+                      "Put Back includes a part again (then press Create BIN); if it still stops Create BIN, change or remove it in the editor first."
                     : "When Create BIN stopped on something the editor could not repair, Fix It For Me made the game without the part that stopped it. " +
                       "These parts are still in your project; Create BIN leaves them out until you put them back. If a part still stops Create BIN, Fix It For Me can leave it out again.",
             });

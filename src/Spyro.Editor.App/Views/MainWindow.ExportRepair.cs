@@ -107,6 +107,7 @@ public sealed partial class MainWindow
         _repairBusy = true;
         if (_fixItButton != null) _fixItButton.IsEnabled = false;
         List<string> did = [];
+        HashSet<string> outBefore = [.. LeftOutItems().Select(i => i.Part)];
         try
         {
             _statusText.Text = "Fix It For Me: working on it…";
@@ -115,6 +116,10 @@ public sealed partial class MainWindow
             ForgetRepair();
             _statusText.Text = result;
             Spyro.Editor.Core.Diagnostics.EditorDiagnostics.RecordAction("Fix It For Me", result);
+            // Something of the user's is not in the game: that is said in a window of its own, not only in the line
+            // at the bottom (it opens by itself and is not waited for).
+            if (ShowLeftOutAfterFixIt && LeftOutItems().Any(i => !outBefore.Contains(i.Part)))
+                _ = ShowLeftOutCoreAsync(afterFixIt: true);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or InvalidOperationException or UnauthorizedAccessException)
         {
@@ -299,20 +304,105 @@ public sealed partial class MainWindow
     /// (its objects, its ground, its sky, its music or its name). Returns the outcome that stands and what was left out.</summary>
     private async Task<(CreateOutcome Outcome, string What)> LeaveOutNoMoreThanNeededAsync(ExportPart part, CreateStop stop, CreateOutcome made, Func<bool> mayRun, Func<int> run)
     {
-        if (part.Kinds.Count < 2) return (made, part.Label);
+        if (part.Kinds.Count == 0 || !part.Id.StartsWith("level:", StringComparison.Ordinal)) return (made, part.Label);
         string key = part.Id["level:".Length..];
-        foreach (string kind in part.Kinds)
+        string objects = Spyro.Editor.Core.Persistence.ExportParts.Level(key, Spyro.Editor.Core.Persistence.ExportParts.Objects);
+        string outNow = part.Id;
+        if (part.Kinds.Count == 1)
         {
-            if (!mayRun()) break;
-            string only = Spyro.Editor.Core.Persistence.ExportParts.Level(key, kind);
-            PutBack(part.Id);
-            LeaveOut(only, stop.Message);
-            var outcome = await CreateBinQuietlyAsync($"Fix It For Me: trying with only {PartLabel(only)} left out (run {run()})…");
-            if (outcome.Created) return (outcome, PartLabel(only));
-            PutBack(only);
-            LeaveOut(part.Id, stop.Message);
+            // The level has one kind of change, so the whole level and that kind are the same thing (no run needed).
+            outNow = Spyro.Editor.Core.Persistence.ExportParts.Level(key, part.Kinds[0]);
+            PutBack(part.Id); LeaveOut(outNow, stop.Message);
         }
-        return (made, part.Label);
+        else
+            foreach (string kind in part.Kinds)
+            {
+                if (!mayRun()) break;
+                string only = Spyro.Editor.Core.Persistence.ExportParts.Level(key, kind);
+                PutBack(part.Id);
+                LeaveOut(only, stop.Message);
+                var outcome = await CreateBinQuietlyAsync($"Fix It For Me: trying with only {PartLabel(only)} left out (run {run()})…");
+                if (outcome.Created) { made = outcome; outNow = only; break; }
+                PutBack(only);
+                LeaveOut(part.Id, stop.Message);
+            }
+        if (outNow != objects) return (made, outNow == part.Id ? part.Label : PartLabel(outNow));
+        return await LeaveOutOnlyTheObjectsThatStopAsync(key, stop, made, mayRun, run);
+    }
+
+    /// <summary>The most extra Create BIN runs spent on finding which added objects stop the game.</summary>
+    private const int MaxObjectSearchRuns = 10;
+
+    /// <summary>The game was made without a level's object changes: finds which KINDS of object added there stop it
+    /// (every copy of a Crash frog, say) and leaves out only those, putting the rest of the level's object changes back.
+    /// First the level's changes to its own objects go back in with every added kind out; then the added kinds are
+    /// tested in halves. Returns the outcome that stands (its game is without exactly what is left out) and what that is.</summary>
+    private async Task<(CreateOutcome Outcome, string What)> LeaveOutOnlyTheObjectsThatStopAsync(string key, CreateStop stop, CreateOutcome made, Func<bool> mayRun, Func<int> run)
+    {
+        string objects = Spyro.Editor.Core.Persistence.ExportParts.Level(key, Spyro.Editor.Core.Persistence.ExportParts.Objects);
+        string name = _retailCatalog.FindByKey(key)?.DisplayName ?? key;
+        List<(string Kind, string Label, int Count)> kinds;
+        try { kinds = UniversalPlacementReader.ReadAddedKinds(Path.Combine(_workspace.RootPath, key + "-native-edits.json")); }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException or KeyNotFoundException) { kinds = []; }
+        if (kinds.Count == 0) return (made, PartLabel(objects));
+        string Part(string kind) => Spyro.Editor.Core.Persistence.ExportParts.Added(key, kind);
+        string Config() => string.Join("|", LeftOutItems().Select(i => i.Part).OrderBy(p => p, StringComparer.Ordinal));
+        int spent = 0;
+        bool More() => spent < MaxObjectSearchRuns && mayRun();
+        async Task<CreateOutcome> Try(string what)
+        {
+            spent++;
+            return await CreateBinQuietlyAsync($"Fix It For Me: finding which objects added to {name} stop the game: {what} (run {run()})…");
+        }
+        void AllOut() { foreach (var k in kinds) LeaveOut(Part(k.Kind), stop.Message); }
+        void WholeLevelOut() { foreach (var k in kinds) PutBack(Part(k.Kind)); LeaveOut(objects, stop.Message); }
+
+        // The changes to the level's own objects back in, everything added out.
+        if (!More()) return (made, PartLabel(objects));
+        PutBack(objects); AllOut();
+        var standing = await Try("without any of them");
+        if (!standing.Created) { WholeLevelOut(); return (made, PartLabel(objects)); }
+        string standingConfig = Config();
+
+        // Halves: a half put back that still makes the game is clean and stays in.
+        async Task<List<(string Kind, string Label, int Count)>> Culprits(List<(string Kind, string Label, int Count)> suspects)
+        {
+            if (suspects.Count <= 1 || !More()) return suspects;
+            var a = suspects.Take(suspects.Count / 2).ToList(); var b = suspects.Skip(suspects.Count / 2).ToList();
+            foreach (var k in a) PutBack(Part(k.Kind));
+            var withA = await Try($"with {Count(a.Sum(k => k.Count), "of them")} back");
+            if (withA.Created) { standing = withA; standingConfig = Config(); return await Culprits(b); }
+            foreach (var k in a) LeaveOut(Part(k.Kind), stop.Message);
+            if (!More()) return suspects;
+            foreach (var k in b) PutBack(Part(k.Kind));
+            var withB = await Try($"with {Count(b.Sum(k => k.Count), "other")} back");
+            if (withB.Created) { standing = withB; standingConfig = Config(); return await Culprits(a); }
+            foreach (var k in b) LeaveOut(Part(k.Kind), stop.Message);
+            // Each half holds something that stops the game.
+            var inA = await Culprits(a);
+            var inB = await Culprits(b);
+            return [.. inA, .. inB];
+        }
+        var culprits = await Culprits(kinds);
+        foreach (var k in kinds)
+            if (culprits.Any(c => c.Kind == k.Kind)) LeaveOut(Part(k.Kind), stop.Message); else PutBack(Part(k.Kind));
+        if (Config() != standingConfig)
+        {
+            // The game on disk is from another try: make it once more as it now stands.
+            var final = mayRun() ? await Try("making the game without the ones that stop it") : null;
+            if (final is { Created: true }) standing = final;
+            else
+            {
+                // (The kinds do not stop the game one by one but together some other way: all of them stay out.)
+                AllOut(); culprits = kinds;
+                var again = mayRun() ? await Try("without any of them") : null;
+                if (again is { Created: true }) standing = again;
+                else { WholeLevelOut(); return (made, PartLabel(objects)); }
+            }
+        }
+        int copies = culprits.Sum(c => c.Count), all = kinds.Sum(k => k.Count);
+        string list = string.Join(", ", culprits.Select(c => c.Count > 1 ? $"{c.Count} × {c.Label}" : c.Label));
+        return (standing, $"{list} ({(copies == all ? $"everything you added to {name}" : $"{copies} of the {all} objects you added to {name}")}; the rest of your changes there are in the game)");
     }
 
     private static string Shortened(string message)

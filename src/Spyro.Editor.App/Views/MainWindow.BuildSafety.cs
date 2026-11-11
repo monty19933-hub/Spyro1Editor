@@ -914,9 +914,9 @@ public sealed partial class MainWindow
         MobyBuildSafetyReport report = inspection.Report;
         _buildSafetySummaryText.Text = _releaseMode
             ? report.Levels.Count == 0
-                ? "Ready to export: nothing needs attention"
+                ? "Object changes: nothing needs attention"
                 : report.Status == MobyBuildSafetyStatus.Stable
-                    ? $"Ready to export: {Count(report.Levels.Count, "edited level", "edited levels")} checked"
+                    ? $"Object changes checked in {Count(report.Levels.Count, "edited level", "edited levels")}: no problems"
                     : $"{PlainExportStatus(report.Status)}: {Count(report.Levels.Count(level => level.Status != MobyBuildSafetyStatus.Stable), "level needs", "levels need")} a look"
             : report.Levels.Count == 0
                 ? $"{report.StatusLabel}: no saved edits requiring structural inspection"
@@ -996,9 +996,9 @@ public sealed partial class MainWindow
         {
             Text = _releaseMode
                 ? report.Levels.Count == 0
-                    ? "No saved edits need attention."
+                    ? "No saved object changes need attention. This check looks at your changes to objects; Create BIN checks memory, doorways and your world while it builds."
                     : report.Status == MobyBuildSafetyStatus.Stable
-                        ? $"{Count(report.Levels.Count, "edited level", "edited levels")} checked. No problems were found."
+                        ? $"{Count(report.Levels.Count, "edited level", "edited levels")} checked. No problems were found in your object changes. Create BIN checks memory, doorways and your world while it builds; if it stops, Fix It For Me appears beside the message."
                         : "Review the highlighted items below before creating a BIN."
                 : report.Levels.Count == 0
                     ? "No saved edits require a structural Build Safety inspection."

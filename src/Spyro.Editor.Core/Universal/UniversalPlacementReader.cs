@@ -47,7 +47,44 @@ public static class UniversalPlacementReader
         return list.Count is > 0 and <= 64 ? list : throw new InvalidDataException("A saved route has no nodes or too many.");
     }
 
-    public static List<UniversalMobyPlacement> Read(string nativeEditsPath)
+    /// <summary>What kind of added object an edit is, for leaving a kind out of the game (Fix It For Me): its
+    /// template's id ("special:crash-frog", a level's own template id), or the source level and row when it has none.</summary>
+    public static string KindOf(JsonElement edit)
+    {
+        var t = edit.GetProperty("crossLevelTemplate");
+        string id = t.TryGetProperty("id", out var tid) && tid.ValueKind == JsonValueKind.String ? tid.GetString() ?? "" : "";
+        if (id.Length > 0) return id;
+        string source = t.TryGetProperty("sourceLevelKey", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() ?? "" : "";
+        int row = t.TryGetProperty("sourceTrueIndex", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetInt32() : -1;
+        return $"{LevelCatalog.NormalizeKey(source)}#{row}";
+    }
+
+    /// <summary>The kinds of object added to the level (<see cref="KindOf"/>), each with the name the editor shows for it
+    /// and how many were added, in the order they were first added.</summary>
+    public static List<(string Kind, string Label, int Count)> ReadAddedKinds(string nativeEditsPath)
+    {
+        List<(string Kind, string Label, int Count)> kinds = [];
+        if (!File.Exists(nativeEditsPath)) return kinds;
+        using var doc = JsonDocument.Parse(File.ReadAllBytes(nativeEditsPath));
+        if (!doc.RootElement.TryGetProperty("edits", out var edits) || edits.ValueKind != JsonValueKind.Array) return kinds;
+        foreach (var edit in edits.EnumerateArray())
+        {
+            if (!IsUniversalEdit(edit)) continue;
+            bool added = edit.TryGetProperty("added", out var a) && a.ValueKind == JsonValueKind.True;
+            bool removed = edit.TryGetProperty("removed", out var r) && r.ValueKind == JsonValueKind.True;
+            if (!added || removed) continue;
+            string kind = KindOf(edit);
+            string label = edit.TryGetProperty("labelEdited", out var le) && le.ValueKind == JsonValueKind.String && le.GetString() is { Length: > 0 } edited ? edited
+                : edit.TryGetProperty("label", out var l) && l.ValueKind == JsonValueKind.String && l.GetString() is { Length: > 0 } plain ? plain : "object";
+            int at = kinds.FindIndex(k => k.Kind == kind);
+            if (at < 0) kinds.Add((kind, label, 1)); else kinds[at] = (kind, kinds[at].Label, kinds[at].Count + 1);
+        }
+        return kinds;
+    }
+
+    /// <param name="withoutKinds">Kinds of added object (<see cref="KindOf"/>) to read as if they had been deleted (left
+    /// out of the game by Fix It For Me): their save rows stay kept for them, as a deleted object's do.</param>
+    public static List<UniversalMobyPlacement> Read(string nativeEditsPath, IReadOnlySet<string>? withoutKinds = null)
     {
         List<UniversalMobyPlacement> list = [];
         if (!File.Exists(nativeEditsPath)) return list;
@@ -62,6 +99,7 @@ public static class UniversalPlacementReader
             bool added = edit.TryGetProperty("added", out var a) && a.ValueKind == JsonValueKind.True;
             bool removed = edit.TryGetProperty("removed", out var r) && r.ValueKind == JsonValueKind.True;
             if (!added || removed) continue;
+            if (withoutKinds != null && withoutKinds.Contains(KindOf(edit))) continue;
             var t = edit.GetProperty("crossLevelTemplate");
             string templateId = t.TryGetProperty("id", out var tid) && tid.ValueKind == JsonValueKind.String ? tid.GetString() ?? "" : "";
             string? special = templateId.StartsWith(UniversalSpecialCatalog.TemplatePrefix, StringComparison.Ordinal)

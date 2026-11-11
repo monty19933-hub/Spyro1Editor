@@ -239,7 +239,7 @@ CORE_CASES = (
     # Emulator only (8 MB RAM): the scene-placement check's words and both loader hooks on a test CPU (2 MB mirror and
     # 8 MB), install refusals and recognition of its own patch, the split budget (the 2 MB arithmetic equal to the old
     # checks), the export scope and its sentence, the project setting, and the scene-address features refusing 8 MB.
-    ("ExtendedRamSmoke", "EXTENDED_RAM_FREE_OK checks=73"),
+    ("ExtendedRamSmoke", "EXTENDED_RAM_FREE_OK checks=74"),
     # The level window (world 7, ids 70-74): the shared executable-cave registry has no overlaps; the window's patch on a
     # synthetic executable (hooks, records, inventory, save layout, names), re-install and refusals; its routines run on
     # a test CPU (record swap, save, Load Game, New Game, names, doorway arrival, card offsets, page 7); the card menu.
@@ -375,7 +375,7 @@ SOURCE_QA_CASES = (
     ("DrawLoadSmoke", "DRAW_LOAD_SOURCE_OK checks=41", ["--source"]),
     # The 8 MB scene placement in the retail executable (read only), every retail level against both layouts, and Tree
     # Tops with imported enemies: refused with 2 MB, composed with 8 MB, named by the export step.
-    ("ExtendedRamSmoke", "EXTENDED_RAM_SOURCE_OK checks=88", ["--source"]),
+    ("ExtendedRamSmoke", "EXTENDED_RAM_SOURCE_OK checks=89", ["--source"]),
     # The level window installed into the retail executable and card menu (read only): USA preimages and caves, the
     # routines on the real executable, re-install, placement inside WAD.WAD and after the image.
     ("LevelWindowSmoke", "LEVEL_WINDOW_SOURCE_OK checks=134", ["--source"]),

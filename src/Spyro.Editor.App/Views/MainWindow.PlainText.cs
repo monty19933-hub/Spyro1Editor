@@ -162,7 +162,7 @@ public sealed partial class MainWindow
     /// <summary>Export check results as an answer to "can I create the BIN?".</summary>
     private static string PlainExportStatus(Spyro.Editor.Core.Exporting.MobyBuildSafetyStatus status) => status switch
     {
-        Spyro.Editor.Core.Exporting.MobyBuildSafetyStatus.Stable => "Ready to export",
+        Spyro.Editor.Core.Exporting.MobyBuildSafetyStatus.Stable => "Object changes look fine",
         Spyro.Editor.Core.Exporting.MobyBuildSafetyStatus.Review => "Worth checking first",
         _ => "Can't export yet"
     };

@@ -6,7 +6,7 @@ using Spyro.Editor.Core.Universal;
 namespace Spyro.Editor.Core.Exporting;
 
 /// <summary>
-/// "Emulator only (8 MB RAM)": the game puts each level's scene (subfile 3: its placed objects with their properties
+/// "Emulator (8 MB RAM)": the game puts each level's scene (subfile 3: its placed objects with their properties
 /// and spare slots, paths and cameras) at 0x80200000 when the console has DuckStation's extra 6 MB, so a level can
 /// hold more below the draw buffers (<see cref="GameRam"/> has the budgets).
 /// <para>The scene address (0x800785E4) is the models' address plus their size, computed in two places: the in-game
@@ -150,7 +150,7 @@ public static class NativeExtendedRam
         if (scope is not { Mode: GameMemoryMode.Emulator8MB, Installed: true }) return "";
         var levels = scope.LevelsNeedingExtendedRam;
         if (levels.Count == 0)
-            return " Memory: Emulator only (8 MB RAM) is on, and every level still fits 2 MB, so this game also works on a normal PlayStation setup.";
+            return " Memory: Emulator (8 MB RAM) is on, and every level still fits 2 MB, so this game also works on a normal PlayStation setup.";
         string names = levels.Count == 1 ? levels[0] : string.Join(", ", levels.Take(levels.Count - 1)) + " and " + levels[^1];
         return $" Memory: this game needs 8 MB RAM. {names} " + (levels.Count == 1 ? "does" : "do") + " not fit 2 MB: play it in DuckStation with " +
             "Settings › Console › Enable 8MB RAM turned on. Without it, levels that fit 2 MB still work.";

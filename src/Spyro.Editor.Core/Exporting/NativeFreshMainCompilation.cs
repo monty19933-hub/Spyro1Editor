@@ -232,7 +232,7 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         Supercharge?.RequireDestination(levelData);
         if(freshParticleBinding!=null)NativePortalRouteFreshBinding.RequireOwnedParticleDestination(donors.Disc.Exe,exe,
             new(overlayData,UniversalExeBindings.Read(exe,65)),freshParticleBinding);
-        // Emulator only (8 MB RAM): the scenes load in the extra memory; every level is checked against that layout.
+        // Emulator (8 MB RAM): the scenes load in the extra memory; every level is checked against that layout.
         NativeHover.ApplyForExport(exe);
         // Hover's wing flap in every level that lacks it, this one too (before the memory checks below).
         await NativeHoverFlap.ApplyForExportAsync(donors.ImagePath,replacements,baseline.EntryBytes,exe,

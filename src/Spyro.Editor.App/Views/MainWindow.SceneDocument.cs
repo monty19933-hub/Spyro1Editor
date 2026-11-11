@@ -254,6 +254,15 @@ public sealed partial class MainWindow
         // The project's new world (homeworld 70 and levels 71-74) goes in through the level window.
         var world=IsLeftOut(ExportParts.World)?null:NewWorldDocument.Read(workspacePath);
         bool builtLeftOut=saved.Count!=allSaved.Count||IsLeftOut(ExportParts.World);
+        // A world with no way in yet: Create BIN places its doorway itself, on open ground near where Spyro arrives
+        // (until 2.2 it stopped here and Fix It For Me placed it). Where the editor finds no place, the export says so.
+        string placedEntrance="";
+        var entranceNow=world==null?null:WorldEntranceDocument.Read(workspacePath);
+        if(world!=null&&(entranceNow==null||!string.Equals(entranceNow.HomeworldKey,world.EntryHomeworldKey,StringComparison.OrdinalIgnoreCase)))
+        {
+            var(placed,how)=await PlaceWorldEntranceForMeAsync(world.EntryHomeworldKey);
+            if(placed&&how.Length>0)placedEntrance=" "+how;
+        }
         // The way into the world (World Entrance); its file must not change while the BIN is made.
         var worldEntrance=world==null?null:WorldEntranceDocument.Read(workspacePath);
         string? entranceText=File.Exists(WorldEntranceDocument.PathFor(workspacePath))?File.ReadAllText(WorldEntranceDocument.PathFor(workspacePath)):null;
@@ -354,7 +363,7 @@ public sealed partial class MainWindow
             (worldPlace?.OnRoute==true?" "+BalloonRouteSentence(world,worldPlace):"");
         string skippedNote=skippedChanges.Count==0?"":$" Not in this game, because the game cannot take {(skippedChanges.Count==1?"it":"them")}: {ShortList(skippedChanges)}.";
         string included=LeftOutItems().Count==0?"All saved level replacements and other saved edits are included.":"Your other saved levels and changes are included.";
-        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. {included}"+NewLevelWayInNote(saved,portalSnapshot.Document,startLevelId)+worldNote+flightNote+PreservedResearchExportNote()+MemoryModeExportNote(memory)+HoverFlapNote()+skippedNote+LeftOutNote();
+        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. {included}"+NewLevelWayInNote(saved,portalSnapshot.Document,startLevelId)+worldNote+flightNote+placedEntrance+PreservedResearchExportNote()+MemoryModeExportNote(memory)+HoverFlapNote()+skippedNote+LeftOutNote();
         _createdGameCue=Path.ChangeExtension(output,".cue");
         }
         // The merged retail image is a working copy for this export only.

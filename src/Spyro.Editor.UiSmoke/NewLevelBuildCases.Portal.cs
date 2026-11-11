@@ -279,11 +279,26 @@ internal static partial class NewLevelBuildCases
         else Load(window, from);
         // NEW_LEVEL_EXPORT_FAULT="<part id>|<words>": Create BIN stops with <words> for as long as that part of the project
         // is in the game (a stop the editor has no repair for; ids as in ExportParts, e.g. level:stonehill or built:authored65).
-        if (System.Environment.GetEnvironmentVariable("NEW_LEVEL_EXPORT_FAULT") is { Length: > 0 } fault && fault.Split('|', 2) is { Length: 2 } bits)
+        // Several faults: "<part>|<words>;;<part>|<words>" (the first whose part is in the game speaks). An added object
+        // (level:<key>:added:<kind>) is also out when all of its level's object changes are.
+        if (System.Environment.GetEnvironmentVariable("NEW_LEVEL_EXPORT_FAULT") is { Length: > 0 } fault)
+        {
+            static bool Out(IReadOnlyList<string> leftOut, string part)
+            {
+                if (leftOut.Any(l => l == part || part.StartsWith(l + ":", StringComparison.Ordinal))) return true;
+                string[] ids = part.Split(':');
+                return ids.Length >= 4 && ids[0] == "level" && ids[2] == "added" && leftOut.Contains($"level:{ids[1]}:objects");
+            }
+            var faults = fault.Split(";;", StringSplitOptions.RemoveEmptyEntries).Select(f => f.Split('|', 2)).Where(f => f.Length == 2).ToArray();
+            int runs = 0;
             window.CreateBinFaultForTesting = () =>
             {
-                if (!window.LeftOutForTesting.Any(l => l == bits[0] || bits[0].StartsWith(l + ":", StringComparison.Ordinal))) throw new InvalidDataException(bits[1]);
+                runs++;
+                var leftOut = window.LeftOutForTesting;
+                Console.WriteLine($"  create bin run {runs}: left out [{string.Join(", ", leftOut)}]");
+                foreach (var f in faults) if (!Out(leftOut, f[0])) throw new InvalidDataException(f[1]);
             };
+        }
         CreateBin(window);
         // NEW_LEVEL_EXPORT_FIX=1: Create BIN is expected to stop on something in the project. Fix It For Me must be on
         // offer, and one press must get the game made (repairs done, and anything it had to leave out said).
@@ -306,6 +321,15 @@ internal static partial class NewLevelBuildCases
             if (File.Exists(entrance)) Console.WriteLine("entrance: " + File.ReadAllText(entrance).ReplaceLineEndings(" "));
             var leftOut = window.LeftOutForTesting;
             Console.WriteLine("left out: " + (leftOut.Count == 0 ? "nothing" : string.Join(", ", leftOut)));
+            // When something was left out, the window that says so has opened by itself.
+            var said = window.OwnedWindows.FirstOrDefault(w => w.Name == "LeftOutWindow");
+            if (leftOut.Count > 0)
+            {
+                if (said == null) throw new InvalidOperationException("Fix It For Me left something out and no window says so.");
+                Console.WriteLine("left out window: " + string.Join(" | ", Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(said).OfType<TextBlock>().Select(t => t.Text).Where(t => !string.IsNullOrWhiteSpace(t)).Take(12)));
+                said.Close(); Pump(10);
+            }
+            else if (said != null) throw new InvalidOperationException("Nothing was left out, yet the Left Out window opened.");
             if (System.Environment.GetEnvironmentVariable("NEW_LEVEL_EXPORT_LEFT_OUT") is { Length: > 0 } expected)
             {
                 var want = expected == "none" ? [] : expected.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

@@ -212,7 +212,7 @@ public static class NativeAuthoredProjectExporter
             returnClasses:returnClasses);
         NativeKillHeights.RequireOwned(donors.Disc.Exe,exe,rebuilt);
         foreach(var(entry,animations) in supercharged)animations.RequireDestination(replacements[entry]);
-        // Emulator only (8 MB RAM): the scenes load in the extra memory; every level is checked against that layout.
+        // Emulator (8 MB RAM): the scenes load in the extra memory; every level is checked against that layout.
         NativeHover.ApplyForExport(exe);
         // Hover's wing flap in every level that lacks it (before the memory checks below measure the levels).
         await NativeHoverFlap.ApplyForExportAsync(donors.ImagePath,replacements,baseline.EntryBytes,exe,catalog.Levels,token);

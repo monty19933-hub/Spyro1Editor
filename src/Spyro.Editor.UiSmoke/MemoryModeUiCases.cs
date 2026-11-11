@@ -14,10 +14,10 @@ using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Persistence;
 using Spyro.Editor.Core.Universal;
 
-/// <summary>Game Settings › Memory ("Emulator only (8 MB RAM)").
+/// <summary>Game Settings › Memory ("Emulator (8 MB RAM)").
 /// <list type="bullet">
 /// <item><c>--memory-mode-ui-only</c>: tiny throwaway projects; the card offers the two choices, each choice is saved at
-/// once (8 MB as memory-mode.json, 2 MB by removing it), the editor's capacity checks follow it, a reopened editor shows
+/// once (2 MB as memory-mode.json, 8 MB, the default, by removing it), the editor's capacity checks follow it, a reopened editor shows
 /// it, and a damaged file is reported (Create BIN then stops) rather than overwritten. No disc, no game.</item>
 /// <item><c>--memory-mode-export-ui &lt;project&gt; &lt;output&gt; [level]</c>: on a disposable clone of a real project,
 /// choose 8 MB, add enemies from other levels to a level with the ordinary Add object window until it holds more than
@@ -54,21 +54,21 @@ internal static class MemoryModeUiCases
             Check(section.Parent != null && section.Parent == Find<Control>(window, "PlayAsCrashSection").Parent,
                 "Memory is a card in Game Settings, beside Play as Crash");
             RadioButton ps = Find<RadioButton>(window, "MemoryModePlayStation"), em = Find<RadioButton>(window, "MemoryModeEmulator8MB");
-            Check(ps.Content?.ToString() == "PlayStation (2 MB)" && em.Content?.ToString() == "Emulator only (8 MB RAM)", "the two choices are named plainly");
+            Check(ps.Content?.ToString() == "PlayStation (2 MB)" && em.Content?.ToString() == "Emulator (8 MB RAM), the usual choice", "the two choices are named plainly");
             string text = string.Join(" ", section.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text));
-            Check(text.Contains("Emulator only (8 MB RAM): levels can hold more.") && text.Contains("DuckStation") && text.Contains("Enable 8MB RAM") &&
-                text.Contains("levels that fit 2 MB still work"), "the card says what 8 MB needs and what still works without it");
-            Check(ps.IsChecked == true && em.IsChecked == false && !File.Exists(file) && !GameRam.Extended, "PlayStation (2 MB) is the default and nothing is saved");
-            Check(Summary(window) == "The games you create fit a PlayStation's 2 MB.", "the summary: " + Summary(window));
-            em.IsChecked = true; Pump();
-            Check(GameMemorySettings.Load(root) == GameMemoryMode.Emulator8MB && GameRam.Extended && ps.IsChecked == false,
-                "choosing 8 MB saves it at once and the editor's capacity checks follow it");
-            Check(Summary(window).StartsWith("On:", StringComparison.Ordinal) && Status(window).Contains("Emulator only (8 MB RAM)"), "summary and status say so: " + Status(window));
+            Check(text.Contains("Emulator (8 MB RAM): levels can hold more") && text.Contains("DuckStation") && text.Contains("Enable 8MB RAM") &&
+                text.Contains("levels that fit 2 MB still work") && text.Contains("For a real PlayStation or a disc"), "the card says what 8 MB needs, what still works without it, and what 2 MB is for");
+            Check(em.IsChecked == true && ps.IsChecked == false && !File.Exists(file) && GameRam.Extended, "Emulator (8 MB RAM) is the default and nothing is saved");
+            Check(Summary(window) == "On: games you create use 8 MB RAM when the emulator has it.", "the summary: " + Summary(window));
+            ps.IsChecked = true; Pump();
+            Check(GameMemorySettings.Load(root) == GameMemoryMode.PlayStation2MB && File.Exists(file) && !GameRam.Extended && em.IsChecked == false,
+                "choosing 2 MB saves it at once and the editor's capacity checks follow it");
+            Check(Summary(window).StartsWith("The games you create fit a PlayStation's 2 MB.", StringComparison.Ordinal) && Status(window).Contains("PlayStation (2 MB)"), "summary and status say so: " + Status(window));
             var reopened = Measure();
-            Check(Find<RadioButton>(reopened, "MemoryModeEmulator8MB").IsChecked == true && Find<RadioButton>(reopened, "MemoryModePlayStation").IsChecked == false,
+            Check(Find<RadioButton>(reopened, "MemoryModePlayStation").IsChecked == true && Find<RadioButton>(reopened, "MemoryModeEmulator8MB").IsChecked == false,
                 "a reopened editor shows the saved choice");
-            Find<RadioButton>(reopened, "MemoryModePlayStation").IsChecked = true; Pump();
-            Check(!File.Exists(file) && !GameRam.Extended, "choosing 2 MB again removes the file");
+            Find<RadioButton>(reopened, "MemoryModeEmulator8MB").IsChecked = true; Pump();
+            Check(!File.Exists(file) && GameRam.Extended, "choosing 8 MB again removes the file");
             File.WriteAllText(file, "{ not json");
             var damaged = Measure();
             Check(Summary(damaged).StartsWith("The saved choice could not be read", StringComparison.Ordinal) && File.ReadAllText(file) == "{ not json" &&
@@ -182,11 +182,11 @@ internal static class MemoryModeUiCases
         {
             LevelDefinition level = Get<LevelCatalog>(window, "_retailCatalog").FindByKey(levelKey)!;
             Load(window, level);
-            Check(!File.Exists(GameMemorySettings.PathFor(workspace)) && !GameRam.Extended, "the project starts with PlayStation (2 MB)");
+            Check(!File.Exists(GameMemorySettings.PathFor(workspace)) && GameRam.Extended, "the project starts with Emulator (8 MB RAM)");
             ShowMemoryCard(window);
             Snapshot(window, Path.Combine(outDir, "0-memory-card-default.png"));
             Find<RadioButton>(window, "MemoryModeEmulator8MB").IsChecked = true; Pump(10);
-            Check(GameMemorySettings.Load(workspace) == GameMemoryMode.Emulator8MB && GameRam.Extended, "Emulator only (8 MB RAM) is chosen in Game Settings › Memory");
+            Check(GameMemorySettings.Load(workspace) == GameMemoryMode.Emulator8MB && GameRam.Extended, "Emulator (8 MB RAM) is chosen in Game Settings › Memory");
             Snapshot(window, Path.Combine(outDir, "1-memory-8mb-chosen.png"));
             Get<TabItem>(window, "_modernObjectWorkspaceTab").IsSelected = true; Pump(20);
 
@@ -218,7 +218,7 @@ internal static class MemoryModeUiCases
             // The same project with PlayStation (2 MB): the composer refuses the level in its own words.
             ShowMemoryCard(window);
             Find<RadioButton>(window, "MemoryModePlayStation").IsChecked = true; Pump(10);
-            Check(!File.Exists(GameMemorySettings.PathFor(workspace)) && !GameRam.Extended, "PlayStation (2 MB) chosen again: " +
+            Check(GameMemorySettings.Load(workspace) == GameMemoryMode.PlayStation2MB && !GameRam.Extended, "PlayStation (2 MB) chosen: " +
                 $"file={File.Exists(GameMemorySettings.PathFor(workspace))} mode={GameRam.Mode} scope={GameRam.Current?.Mode} " +
                 $"ps={Find<RadioButton>(window, "MemoryModePlayStation").IsChecked} em={Find<RadioButton>(window, "MemoryModeEmulator8MB").IsChecked} status={Status(window)}");
             Snapshot(window, Path.Combine(outDir, "3-memory-2mb-chosen.png"));
@@ -251,7 +251,7 @@ internal static class MemoryModeUiCases
         try
         {
             Find<RadioButton>(window, "MemoryModeEmulator8MB").IsChecked = true; Pump(10);
-            Check(GameMemorySettings.Load(workspace) == GameMemoryMode.Emulator8MB, "Emulator only (8 MB RAM) is chosen");
+            Check(GameMemorySettings.Load(workspace) == GameMemoryMode.Emulator8MB, "Emulator (8 MB RAM) is chosen");
             string created = CreateBin(window);
             string image = Path.Combine(workspace, "output", "Spyro Editor - Authored Level.bin");
             File.WriteAllText(Path.Combine(outDir, "status-authored-8mb.txt"), created + "\n");

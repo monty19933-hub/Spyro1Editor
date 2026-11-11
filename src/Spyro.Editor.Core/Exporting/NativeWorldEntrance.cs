@@ -378,7 +378,7 @@ public static class NativeWorldEntrance
 
         string NoRoom(long bytes) => $"{name} has no room for the New World's doorway: it needs {bytes:N0} more bytes of the console's memory" +
             (GameRam.Extended ? "." : skyKind == WorldEntranceSky.Plain
-                ? " even with a one-colour sky. Choose another homeworld for the entrance, a simpler shape, or Game Settings › Memory › Emulator only (8 MB RAM)."
+                ? " even with a one-colour sky. Choose another homeworld for the entrance, a simpler shape, or Game Settings › Memory › Emulator (8 MB RAM)."
                 : ". A smaller sky (one colour) may fit.");
         if (!GameRam.Fits(data, overlay.CopyBuffer)) throw new InvalidDataException(NoRoom(GameRam.Shortfall(data, overlay.CopyBuffer)));
 

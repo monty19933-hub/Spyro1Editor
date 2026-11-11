@@ -13,7 +13,7 @@ namespace Spyro.Editor.App.Views;
 public sealed partial class MainWindow
 {
     private readonly RadioButton _memoryPlayStation = new() { Name = "MemoryModePlayStation", GroupName = "MemoryMode", Content = "PlayStation (2 MB)" };
-    private readonly RadioButton _memoryEmulator = new() { Name = "MemoryModeEmulator8MB", GroupName = "MemoryMode", Content = "Emulator only (8 MB RAM)" };
+    private readonly RadioButton _memoryEmulator = new() { Name = "MemoryModeEmulator8MB", GroupName = "MemoryMode", Content = "Emulator (8 MB RAM), the usual choice" };
     private readonly TextBlock _memorySummary = new() { Name = "MemoryModeSummary", TextWrapping = TextWrapping.Wrap, FontSize = 12 };
     private bool _syncingMemoryMode;
 
@@ -28,11 +28,12 @@ public sealed partial class MainWindow
         };
         ToolTip.SetTip(_memoryPlayStation, "The game's own memory layout: the games you export work on a PlayStation and in every emulator.");
         ToolTip.SetTip(_memoryEmulator, "Each level's objects and layout load into DuckStation's extra 6 MB, so the memory below the game's draw buffers can hold more.");
-        content.Children.Add(_memoryPlayStation);
-        content.Children.Add(Note("Works everywhere: on a PlayStation and in every emulator. Each level must fit the console's 2 MB."));
         content.Children.Add(_memoryEmulator);
-        content.Children.Add(Note("Emulator only (8 MB RAM): levels can hold more. Players need DuckStation with Settings › Console › " +
-            "Enable 8MB RAM. On a normal PlayStation setup levels that fit 2 MB still work. Create BIN says when a level needs 8 MB."));
+        content.Children.Add(Note("Emulator (8 MB RAM): levels can hold more, so fewer of your changes run out of room. Players need DuckStation with " +
+            "Settings › Console › Enable 8MB RAM. On a normal PlayStation setup levels that fit 2 MB still work. Create BIN says when a level needs 8 MB."));
+        content.Children.Add(_memoryPlayStation);
+        content.Children.Add(Note("For a real PlayStation or a disc. Works everywhere, but each level must fit the console's 2 MB, " +
+            "and Create BIN stops when one does not."));
         content.Children.Add(_memorySummary);
         foreach (var (button, mode) in new[] { (_memoryPlayStation, GameMemoryMode.PlayStation2MB), (_memoryEmulator, GameMemoryMode.Emulator8MB) })
             button.PropertyChanged += (_, change) =>
@@ -59,15 +60,15 @@ public sealed partial class MainWindow
         GameRam.SetProjectMode(mode);
         EditorDiagnostics.RecordAction("Memory choice", mode.ToString());
         _statusText.Text = mode == GameMemoryMode.Emulator8MB
-            ? "Memory: Emulator only (8 MB RAM). The next Create BIN makes a game whose levels can hold more; it needs DuckStation with Enable 8MB RAM for levels that do not fit 2 MB."
-            : "Memory: PlayStation (2 MB). The next Create BIN makes a game for a normal PlayStation setup.";
+            ? "Memory: Emulator (8 MB RAM). The next Create BIN makes a game whose levels can hold more; it needs DuckStation with Enable 8MB RAM for levels that do not fit 2 MB."
+            : "Memory: PlayStation (2 MB). The next Create BIN makes a game for a real PlayStation or a disc; every level must fit 2 MB.";
     }
 
     /// <summary>Shows the project's saved choice and hands it to the editor's capacity checks (on project and level
     /// changes, and after each choice).</summary>
     private void RefreshMemoryModeSettings()
     {
-        GameMemoryMode mode = GameMemoryMode.PlayStation2MB;
+        GameMemoryMode mode = GameMemorySettings.Default;
         string error = "";
         try { mode = GameMemorySettings.Load(_workspace.RootPath); }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException)
@@ -83,7 +84,7 @@ public sealed partial class MainWindow
         finally { _syncingMemoryMode = false; }
         _memorySummary.Text = error.Length > 0 ? "The saved choice could not be read, so Create BIN stops until you choose again: " + error
             : mode == GameMemoryMode.Emulator8MB ? "On: games you create use 8 MB RAM when the emulator has it."
-            : "The games you create fit a PlayStation's 2 MB.";
+            : "The games you create fit a PlayStation's 2 MB. Levels hold less than with 8 MB.";
     }
 
     /// <summary>Create BIN's memory scope: budgets and the last executable step use the saved project choice.</summary>
@@ -92,7 +93,7 @@ public sealed partial class MainWindow
         GameMemoryMode mode;
         try { mode = GameMemorySettings.Load(_workspace.RootPath); }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException)
-        { throw new InvalidDataException("The Memory setting in Game Settings could not be read. Choose PlayStation (2 MB) or Emulator only (8 MB RAM) again. (" + e.Message + ")", e); }
+        { throw new InvalidDataException("The Memory setting in Game Settings could not be read. Choose PlayStation (2 MB) or Emulator (8 MB RAM) again. (" + e.Message + ")", e); }
         GameRam.SetProjectMode(mode);
         return GameRam.Use(mode);
     }
