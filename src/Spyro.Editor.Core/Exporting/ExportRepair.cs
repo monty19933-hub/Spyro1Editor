@@ -14,6 +14,10 @@ public abstract record ExportRepair
     /// (<see cref="Editing.SceneDocument.FitSaveRows"/>).</summary>
     public sealed record FitHomeworldObjects(int Room) : ExportRepair;
 
+    /// <summary>Saved changes to the game's own levels that the game cannot take (<paramref name="Details"/> names each):
+    /// the editor makes the game without them; they stay in the project.</summary>
+    public sealed record LeaveOutSkippedChanges(IReadOnlyList<string> Details) : ExportRepair;
+
     private const string Key = "SpyroEditor.ExportRepair";
 
     /// <summary>The refusal to throw: an <see cref="InvalidDataException"/> like Create BIN's others, with its repair.</summary>

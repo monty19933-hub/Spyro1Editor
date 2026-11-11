@@ -277,38 +277,41 @@ internal static partial class NewLevelBuildCases
             WaitIdle(window);
         }
         else Load(window, from);
+        // NEW_LEVEL_EXPORT_FAULT="<part id>|<words>": Create BIN stops with <words> for as long as that part of the project
+        // is in the game (a stop the editor has no repair for; ids as in ExportParts, e.g. level:stonehill or built:authored65).
+        if (System.Environment.GetEnvironmentVariable("NEW_LEVEL_EXPORT_FAULT") is { Length: > 0 } fault && fault.Split('|', 2) is { Length: 2 } bits)
+            window.CreateBinFaultForTesting = () =>
+            {
+                if (!window.LeftOutForTesting.Any(l => l == bits[0] || bits[0].StartsWith(l + ":", StringComparison.Ordinal))) throw new InvalidDataException(bits[1]);
+            };
         CreateBin(window);
-        // NEW_LEVEL_EXPORT_FIX=1: Create BIN is expected to stop on something the editor can put right (Fix It For Me):
-        // the button must be on offer, pressing it must do the repair, and Create BIN must then go through.
+        // NEW_LEVEL_EXPORT_FIX=1: Create BIN is expected to stop on something in the project. Fix It For Me must be on
+        // offer, and one press must get the game made (repairs done, and anything it had to leave out said).
+        // NEW_LEVEL_EXPORT_LEFT_OUT names the parts expected to be left out (comma separated; "none" for none).
         if (System.Environment.GetEnvironmentVariable("NEW_LEVEL_EXPORT_FIX") == "1")
         {
             string root = System.Environment.GetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE")!;
-            if (window.PendingRepairForTesting == null) throw new InvalidOperationException("Create BIN offered no Fix It For Me: " + Status(window));
-            // One problem after another, as a user would meet them (NEW_LEVEL_EXPORT_FIXES names how many are expected).
-            int fixes = 0;
-            while (window.PendingRepairForTesting is { } repair)
+            if (!window.FixItOnOfferForTesting) throw new InvalidOperationException("Create BIN offered no Fix It For Me: " + Status(window));
+            if (!window.FixItVisibleForTesting) throw new InvalidOperationException("Fix It For Me is on offer but the button is hidden.");
+            if (!Status(window).Contains("Fix It For Me", StringComparison.Ordinal)) throw new InvalidOperationException("The status does not point to Fix It For Me: " + Status(window));
+            Console.WriteLine("repair on offer: " + (window.PendingRepairForTesting?.ToString() ?? "none of its own (the editor leaves out what stops the game)"));
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var fix = window.ApplyPendingRepairForTestingAsync();
+            Wait(() => fix.IsCompleted, "Fix It For Me", 3600);
+            Pump(60);
+            Console.WriteLine($"fix ({clock.Elapsed.TotalSeconds:0}s): " + Status(window));
+            if (window.FixItOnOfferForTesting || window.FixItVisibleForTesting) throw new InvalidOperationException("Fix It For Me stayed on offer after it ran.");
+            if (!Status(window).StartsWith("Created", StringComparison.Ordinal)) throw new InvalidOperationException("Fix It For Me did not get the game made: " + Status(window));
+            string entrance = Spyro.Editor.Core.Editing.WorldEntranceDocument.PathFor(root);
+            if (File.Exists(entrance)) Console.WriteLine("entrance: " + File.ReadAllText(entrance).ReplaceLineEndings(" "));
+            var leftOut = window.LeftOutForTesting;
+            Console.WriteLine("left out: " + (leftOut.Count == 0 ? "nothing" : string.Join(", ", leftOut)));
+            if (System.Environment.GetEnvironmentVariable("NEW_LEVEL_EXPORT_LEFT_OUT") is { Length: > 0 } expected)
             {
-                if (++fixes > 5) throw new InvalidOperationException("Fix It For Me keeps being offered: " + Status(window));
-                if (!window.FixItVisibleForTesting) throw new InvalidOperationException("A repair is on offer but the button is hidden.");
-                if (!Status(window).Contains("Fix It For Me", StringComparison.Ordinal)) throw new InvalidOperationException("The status does not point to Fix It For Me: " + Status(window));
-                Console.WriteLine("repair on offer: " + repair);
-                var fix = window.ApplyPendingRepairForTestingAsync();
-                Wait(() => fix.IsCompleted, "Fix It For Me", 300);
-                Console.WriteLine("fix: " + Status(window));
-                if (window.PendingRepairForTesting != null || window.FixItVisibleForTesting) throw new InvalidOperationException("Fix It For Me stayed on offer after it ran.");
-                if (!Status(window).StartsWith("Fixed:", StringComparison.Ordinal)) throw new InvalidOperationException("Fix It For Me did not fix it: " + Status(window));
-                if (repair is Spyro.Editor.Core.Exporting.ExportRepair.PlaceWorldEntrance)
-                {
-                    string entrance = Spyro.Editor.Core.Editing.WorldEntranceDocument.PathFor(root);
-                    if (!File.Exists(entrance)) throw new InvalidOperationException("Fix It For Me placed no entrance.");
-                    Console.WriteLine("entrance: " + File.ReadAllText(entrance).ReplaceLineEndings(" "));
-                }
-                CreateBin(window);
+                var want = expected == "none" ? [] : expected.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (!want.Order().SequenceEqual(leftOut.Order())) throw new InvalidOperationException($"Left out {string.Join(", ", leftOut)}; expected {expected}.");
             }
-            if (!Status(window).StartsWith("Created", StringComparison.Ordinal)) throw new InvalidOperationException("Create BIN did not go through after the fix: " + Status(window));
-            if (int.TryParse(System.Environment.GetEnvironmentVariable("NEW_LEVEL_EXPORT_FIXES"), out int expected) && expected != fixes)
-                throw new InvalidOperationException($"{fixes} repairs were needed, {expected} expected.");
-            Console.WriteLine($"NEW_LEVEL_FIX_IT_OK fixes={fixes}");
+            Console.WriteLine($"NEW_LEVEL_FIX_IT_OK leftOut={leftOut.Count}");
         }
         Console.WriteLine("NEW_LEVEL_EXPORT_DONE");
     }

@@ -111,12 +111,12 @@ class OwnedCommandTests(unittest.TestCase):
 
     def test_world_entrance_smoke_registration(self):
         name = "WorldEntranceSmoke"
-        self.assertIn((name, "WORLD_ENTRANCE_FREE_OK checks=66"), RUNNER.CORE_CASES)
-        self.assertIn((name, "WORLD_ENTRANCE_SOURCE_OK checks=219", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertIn((name, "WORLD_ENTRANCE_FREE_OK checks=74"), RUNNER.CORE_CASES)
+        self.assertIn((name, "WORLD_ENTRANCE_SOURCE_OK checks=227", ["--source"]), RUNNER.SOURCE_QA_CASES)
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
-        self.assertIn(("UiSmoke", "WORLD_ENTRANCE_UI_OK checks=39", ["--world-entrance-ui-only"]), RUNNER.ADDITIONAL_CORE_CASES)
+        self.assertIn(("UiSmoke", "WORLD_ENTRANCE_UI_OK checks=40", ["--world-entrance-ui-only"]), RUNNER.ADDITIONAL_CORE_CASES)
         project = RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
         self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"', project.read_text())
 
@@ -996,7 +996,7 @@ class RunnerOptionsTests(unittest.TestCase):
                     (name, "MEMORY_MODE_UI_OK checks=18", ["--memory-mode-ui-only"]),
                     (name, "SPYRO_COLOURS_UI_OK checks=26", ["--spyro-colours-ui-only"]),
                     (name, "DOORWAYS_UI_OK checks=39", ["--doorways-ui-only"]),
-                    (name, "WORLD_ENTRANCE_UI_OK checks=39", ["--world-entrance-ui-only"]),
+                    (name, "WORLD_ENTRANCE_UI_OK checks=40", ["--world-entrance-ui-only"]),
                     (name, "LEVEL_PICKER_AUTOMATION_OK", ["--level-picker-automation-only"]),
                     (name, "AUTHORED_MESH_CHECKS_OK", ["--authored-mesh-only"]),
                     (name, "FRESH_LEVEL_DOCUMENT_SESSION_OK", ["--fresh-native-level-session-only"]),

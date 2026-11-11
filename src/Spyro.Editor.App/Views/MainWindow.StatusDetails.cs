@@ -24,7 +24,7 @@ public partial class MainWindow
         // With a repair on offer the window has the status bar's Fix It For Me too; the message then says what it did.
         Button fix = NewButton("Fix It For Me");
         fix.Name = "StatusDetailsFixIt";
-        fix.IsVisible = _pendingRepair != null;
+        fix.IsVisible = _pendingStop != null;
         fix.HorizontalAlignment = HorizontalAlignment.Right;
         fix.Margin = new Thickness(16, 0, 16, 16);
         StyleModernPrimaryButton(fix, ModernBlue);
@@ -33,7 +33,7 @@ public partial class MainWindow
             fix.IsEnabled = false;
             await ApplyPendingRepairAsync();
             message.Text = _statusText.Text ?? "";
-            fix.IsVisible = _pendingRepair != null;
+            fix.IsVisible = _pendingStop != null;
             fix.IsEnabled = true;
         };
         DockPanel content = new();

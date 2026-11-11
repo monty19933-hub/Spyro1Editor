@@ -13469,6 +13469,7 @@ public sealed partial class MainWindow : Window
 
         _createBinBusy = true;
         ForgetRepair();
+        _createdGameCue = null;
         string createBinWorkspace = _workspace.RootPath;
         RefreshActionAvailability();
         RefreshPortalRouteAvailability();
@@ -13489,13 +13490,13 @@ public sealed partial class MainWindow : Window
             string reportPath = EditorDiagnostics.WriteReport(
                 "Create BIN failed before a test image was completed.");
             _statusText.Text = $"Could not create BIN: {ex.Message}";
-            // Something the editor can put right itself: offer Fix It For Me.
+            // Something in the project: Fix It For Me gets the game made (a repair, or without what stops it).
             if (OfferRepair(ex) is { } offer)
                 _statusText.Text += " " + offer;
             if (!string.IsNullOrWhiteSpace(reportPath))
                 _statusText.Text += $" Diagnostic report: {reportPath}";
             // A terrain refusal is something the user can fix: name the level and offer Show it / Undo.
-            if (LooksLikeTerrainExportRefusal(ex) || ex.Message.Contains("Saved changes could not be included", StringComparison.Ordinal))
+            if (!_quietCreate && (LooksLikeTerrainExportRefusal(ex) || ex.Message.Contains("Saved changes could not be included", StringComparison.Ordinal)))
                 await ReportTerrainProblemAfterFailedExportAsync();
         }
         finally
@@ -13521,7 +13522,8 @@ public sealed partial class MainWindow : Window
     {
         if (_toolbarCreateBinButton != null)
             _toolbarCreateBinButton.Content = buttonText;
-        _statusText.Text = statusText;
+        // While Fix It For Me runs Create BIN, the status keeps saying which try this is.
+        _statusText.Text = _quietCreate && _fixItProgress.Length > 0 ? _fixItProgress + " " + statusText : statusText;
     }
 
     /// <summary>Lets a test pretend the disk is nearly full.</summary>
@@ -13567,6 +13569,8 @@ public sealed partial class MainWindow : Window
             EditorDiagnostics.RecordWarning("Create BIN not started", diskSpaceReason);
             return;
         }
+        // Lets a test make Create BIN stop (Fix It For Me's checks).
+        CreateBinFaultForTesting?.Invoke();
         // A project with built levels makes its game from all of them, whichever level is open: levels built in the
         // game's places, and a new world's levels (which were left out when one of the game's own levels was open).
         if (_freshSceneDocument != null || SceneDocumentStore.ReadAll(_workspace.RootPath,_retailCatalog).Count>0 || ProjectHasNewWorldLevels()) { await CreateFreshMainBinAsync(); return; }
@@ -13587,7 +13591,7 @@ public sealed partial class MainWindow : Window
             _statusText.Text = flightBlockReason;
             return;
         }
-        var flightIntent = NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
+        var flightIntent = ExportFlightIntent(_workspace.RootPath);
         var flightWorkspace = _workspace;
         int flightWorkspaceGeneration = _workspaceTransitionGeneration;
         var flightLevel = _currentLevel;
@@ -13596,7 +13600,7 @@ public sealed partial class MainWindow : Window
 
         if (TryGetCurrentReleaseTerrainEditBlockReason(out string releaseTerrainBlockReason))
         {
-            _statusText.Text = releaseTerrainBlockReason;
+            StopCreateBin(releaseTerrainBlockReason);
             return;
         }
 
@@ -13621,10 +13625,10 @@ public sealed partial class MainWindow : Window
             "Create BIN: checking which saved levels and edit types need to be exported...");
         if (TryGetSavedReleaseTerrainEditBlockReason(out string savedReleaseTerrainBlockReason))
         {
-            _statusText.Text = savedReleaseTerrainBlockReason;
+            StopCreateBin(savedReleaseTerrainBlockReason);
             return;
         }
-        IReadOnlyList<EditedLevelExportTarget> targets = FindEditedLevelExportTargets();
+        IReadOnlyList<EditedLevelExportTarget> targets = ExportTargets();
         flightIntent?.RequireOrdinaryEditCompatibility(targets.Any(HasOrdinarySavedEdits));
         if (targets.Count == 0 && flightIntent?.RequiresRebuild!=true && !NativeHover.Enabled && !NativeSpyroColours.Enabled)
         {
@@ -13650,7 +13654,7 @@ public sealed partial class MainWindow : Window
             catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or UnauthorizedAccessException)
             {
                 EditorDiagnostics.RecordException("inspecting object build safety", ex);
-                _statusText.Text = $"Could not inspect object build safety: {ex.Message}";
+                StopCreateBin($"Could not inspect object build safety: {ex.Message}");
                 return;
             }
 
@@ -13662,9 +13666,10 @@ public sealed partial class MainWindow : Window
             BuildSafetyDecision buildSafetyDecision = await ConfirmBuildSafetyAsync(buildSafety);
             if (buildSafetyDecision != BuildSafetyDecision.Create)
             {
-                _statusText.Text = buildSafety.Report.Status == MobyBuildSafetyStatus.Blocked
-                    ? $"Object build blocked by the native Moby safety check. Report: {buildSafety.Written.MarkdownPath}"
-                    : $"Canceled BIN creation after the object build safety review. Report: {buildSafety.Written.MarkdownPath}";
+                if (buildSafety.Report.Status == MobyBuildSafetyStatus.Blocked)
+                    StopCreateBin($"Object build blocked by the native Moby safety check. Report: {buildSafety.Written.MarkdownPath}");
+                else
+                    _statusText.Text = $"Canceled BIN creation after the object build safety review. Report: {buildSafety.Written.MarkdownPath}";
                 return;
             }
             currentBuildSafetyReport = buildSafety.Report;
@@ -13713,12 +13718,9 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            // The Create BIN command reports it (and offers Fix It For Me), as it does for a project with built levels.
             EditorDiagnostics.RecordException("creating the all-saved-edits BIN", ex);
-            string reportPath = EditorDiagnostics.WriteReport("Create BIN failed before a test image was completed.");
-            _statusText.Text = $"Could not create test: {ex.Message}";
-            if (!string.IsNullOrWhiteSpace(reportPath))
-                _statusText.Text += $" Diagnostic report: {reportPath}";
-            return;
+            throw;
         }
 
         if (!result.WroteImage)
@@ -13735,10 +13737,11 @@ public sealed partial class MainWindow : Window
         // change that outcome or enter the prepublication failure handler.
         await CompleteCombinedExportPublicationAsync(
             sourceImage, outputDir, targets, result, targetSummary, currentBuildSafetyReport);
-        _statusText.Text += MemoryModeExportNote(memory);
+        _statusText.Text += MemoryModeExportNote(memory) + LeftOutNote();
+        _createdGameCue = result.OutputCuePath;
         try
         {
-            _statusText.Text += OpenContainingFolderStatus(result.OutputCuePath);
+            _statusText.Text += _quietCreate ? $" Output folder: {outputDir}" : OpenContainingFolderStatus(result.OutputCuePath);
         }
         catch (Exception ex)
         {
@@ -13923,18 +13926,18 @@ public sealed partial class MainWindow : Window
         IReadOnlyList<EditedLevelExportTarget> targets,
         bool deferSharedRuntimeHooks = false)
     {
-        var portalSnapshot = PortalRouteStore.Capture(_workspace.RootPath);
+        var portalSnapshot = ExportPortalRoutes(_workspace.RootPath);
         if (TryGetId65BlankLabNormalCreateBinBlockReason(out string id65BlockReason))
             throw new InvalidOperationException(id65BlockReason);
 
         if (TryGetFreeFlightSettingsExportBlockReason(out string flightBlockReason))
             throw new InvalidOperationException(flightBlockReason);
-        var flightIntent = NativeFreeFlightProjectExportIntent.Capture(_workspace.RootPath);
+        var flightIntent = ExportFlightIntent(_workspace.RootPath);
         var flightOwner = CaptureSourceDiscOperationIdentity();
         string? flightImageSelection = _discImagePathBox.Text;
         string? flightSkyImageSelection = _skyboxDiscImagePathBox.Text;
         flightIntent?.RequireOrdinaryEditCompatibility(targets.Any(HasOrdinarySavedEdits) ||
-            flightIntent?.RequiresRebuild==true && FindEditedLevelExportTargets().Any(HasOrdinarySavedEdits));
+            flightIntent?.RequiresRebuild==true && ExportTargets().Any(HasOrdinarySavedEdits));
 
         string tempDir = Path.Combine(outputDir, "_combined-build", $"run-{Guid.NewGuid():N}");
         string finalPrefix = Path.Combine(outputDir, "Spyro Editor - All Saved Edits");
@@ -14597,6 +14600,8 @@ public sealed partial class MainWindow : Window
         foreach (EditedLevelExportTarget target in targets)
         {
             string editsFile = Path.Combine(_workspace.RootPath, $"{target.Level.Key}-native-edits.json");
+            // A level whose object changes were left out of the game (Fix It For Me) keeps its own objects.
+            if (target.ObjectsLeftOut) continue;
             IReadOnlyList<UniversalMobyPlacement> placed = UniversalPlacementReader.Read(editsFile);
             if (target.HasCrashPlayer) placed = UniversalCrashPlayer.WithPlayer(placed);
             var removed=UniversalPlacementReader.ReadRemovedNativeRows(editsFile);
@@ -14833,7 +14838,7 @@ public sealed partial class MainWindow : Window
                 throw new InvalidDataException("The complete staged flight export changed before publication.");
             await flightStage.RequireCurrentAsync(_workspace.RootPath);
             RequireFreeFlightExportOwner(flightIntent, flightOwner, flightImageSelection, flightSkyImageSelection);
-            flightIntent?.RequireOrdinaryEditCompatibility(FindEditedLevelExportTargets().Any(HasOrdinarySavedEdits));
+            flightIntent?.RequireOrdinaryEditCompatibility(ExportTargets().Any(HasOrdinarySavedEdits));
         }
         // Absence is also a captured choice. A new saved ON setting or dirty
         // draft must not arrive unnoticed during an ordinary async export.
@@ -16213,8 +16218,12 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>Lets a test keep folders from opening on the desktop.</summary>
+    internal Action<string>? OpenPathOverrideForTesting { get; set; }
+
     private void OpenPath(string path)
     {
+        if (OpenPathOverrideForTesting is { } opened) { opened(path); return; }
         ProcessStartInfo startInfo;
         if (OperatingSystem.IsMacOS())
         {
@@ -16833,6 +16842,9 @@ public sealed partial class MainWindow : Window
     {
         TerrainEditSafetySummary summary = BuildTerrainEditSafetySummary();
         if (!summary.HasPatchRisk)
+            return TerrainPatchRiskDecision.Create;
+        // Fix It For Me is making the game: the check was shown when Create BIN was first pressed.
+        if (_quietCreate)
             return TerrainPatchRiskDecision.Create;
 
         Window dialog = new()
@@ -28286,7 +28298,7 @@ public sealed partial class MainWindow : Window
             "Create BIN saves first, then builds a new playable game — a BIN and a CUE — from everything saved in the project. The files go in the project's output folder; open the CUE in a PlayStation emulator (DuckStation, for example).",
             "Your original disc image is never written to.",
             "Create BIN builds the whole project whichever level is open: every level you changed or built, your new world, and Game Settings.",
-            "If something cannot be put in the game, the editor says what and where. When it is something the editor can put right itself (your world has no way in yet; its homeworld has more objects than it can hold), Fix It For Me appears beside the message: press it, read what it did, and press Create BIN again. More ▾ > Check for Export Issues… runs the same check without building."
+            "If something cannot be put in the game, the editor says what and where, and Fix It For Me appears beside the message. One press gets the game made: the editor repairs what it can (it places the way into your world; it trims a world's homeworld to the objects it can hold) and, for anything else, makes the game without the part of your project that stops it, and tells you what it left out. A left-out part stays in your project; More ▾ > Left Out of the Game… says why and puts it back. More ▾ > Check for Export Issues… runs Create BIN's check without building."
         ]);
 
         AddHelpSection(panel, "The view", [
@@ -33801,6 +33813,8 @@ public sealed partial class MainWindow : Window
         public bool HasPortalRoutes { get; init; }
         /// <summary>Play as Crash is ticked for this level: his objects are added with the imported ones.</summary>
         public bool HasCrashPlayer { get; init; }
+        /// <summary>The level's object changes were left out of the game (Fix It For Me): none of them is read.</summary>
+        public bool ObjectsLeftOut { get; init; }
     }
 
     internal sealed record PrivateTextureAggregateSavedWriterScope(

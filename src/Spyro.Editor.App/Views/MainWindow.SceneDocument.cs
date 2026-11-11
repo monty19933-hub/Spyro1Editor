@@ -246,11 +246,14 @@ public sealed partial class MainWindow
         var owner=CaptureSourceDiscOperationIdentity();
         string workspacePath=_workspace.RootPath, original=ResolveUniversalSourceDisc();
         string? imageSelection=_discImagePathBox.Text,skySelection=_skyboxDiscImagePathBox.Text;
-        var flightIntent=NativeFreeFlightProjectExportIntent.Capture(workspacePath);
-        var portalSnapshot=PortalRouteStore.Capture(workspacePath);
-        var saved=SceneDocumentStore.ReadAll(workspacePath,_retailCatalog);
+        var flightIntent=ExportFlightIntent(workspacePath);
+        var portalSnapshot=ExportPortalRoutes(workspacePath);
+        // What Fix It For Me left out of the game is not read: the game is made as if it were not in the project.
+        var allSaved=SceneDocumentStore.ReadAll(workspacePath,_retailCatalog);
+        var saved=ExportScenes(allSaved);
         // The project's new world (homeworld 70 and levels 71-74) goes in through the level window.
-        var world=NewWorldDocument.Read(workspacePath);
+        var world=IsLeftOut(ExportParts.World)?null:NewWorldDocument.Read(workspacePath);
+        bool builtLeftOut=saved.Count!=allSaved.Count||IsLeftOut(ExportParts.World);
         // The way into the world (World Entrance); its file must not change while the BIN is made.
         var worldEntrance=world==null?null:WorldEntranceDocument.Read(workspacePath);
         string? entranceText=File.Exists(WorldEntranceDocument.PathFor(workspacePath))?File.ReadAllText(WorldEntranceDocument.PathFor(workspacePath)):null;
@@ -261,9 +264,9 @@ public sealed partial class MainWindow
         void RequireOwner()
         {
             if(!IsCurrentSourceDiscOperationIdentity(owner)||imageSelection!=_discImagePathBox.Text||skySelection!=_skyboxDiscImagePathBox.Text||
-                authoredActive&&CaptureFreshScene().Fingerprint()!=fingerprints[_currentLevel!.Key])
+                authoredActive&&fingerprints.TryGetValue(_currentLevel!.Key,out var openHash)&&CaptureFreshScene().Fingerprint()!=openHash)
                 throw new InvalidDataException("The project, scene or source selection changed during export.");
-            var current=SceneDocumentStore.ReadAll(workspacePath,_retailCatalog).Concat(world==null?[]:SceneDocumentStore.ReadWorld(workspacePath,_retailCatalog)).ToArray();
+            var current=ExportScenes(SceneDocumentStore.ReadAll(workspacePath,_retailCatalog)).Concat(world==null?[]:SceneDocumentStore.ReadWorld(workspacePath,_retailCatalog)).ToArray();
             if(current.Length!=saved.Count+worldScenes.Count||current.Any(s=>!fingerprints.TryGetValue(s.ResolveTarget(_retailCatalog).Key,out var hash)||hash!=s.Fingerprint()))
                 throw new InvalidDataException("A saved authored level changed during export. Save and create the BIN again.");
             flightIntent?.RequireCurrent(workspacePath);
@@ -277,7 +280,7 @@ public sealed partial class MainWindow
         foreach(var scene in saved.Concat(worldScenes))NativeAuthoredSpawn.RequireSupported(scene);
         var(_,donors,_)=await EnsureUniversalCatalogAsync();var japanese=ResolveUniversalJapaneseSource();
         RequireOwner();
-        var crashLevels=CrashPlayerSettings.Load(workspacePath);
+        IReadOnlySet<string> crashLevels=IsLeftOut(ExportParts.PlayAsCrash)?new HashSet<string>():CrashPlayerSettings.Load(workspacePath);
         var plans=saved.Select(scene=>
         {
             var objects=scene.ProjectObjects();
@@ -297,7 +300,8 @@ public sealed partial class MainWindow
         string? retailStage=null;
         try
         {
-        var targets=FindEditedLevelExportTargets();
+        var targets=ExportTargets();
+        IReadOnlyList<string> skippedChanges=[];
         if(targets.Count>0)
         {
             ReportCreateBinProgress("Merging saved levels…","Create BIN: composing saved changes from the other levels…");
@@ -308,7 +312,12 @@ public sealed partial class MainWindow
                 ?new(worldEntrance.Spec(),NativeWorldEntrance.SceneSky(original,stagedHome),GameRam.Mode):null;
             try{retail=await CreateSavedEditsStageAsync(original,DiscImageLocator.FindCueForImage(original),retailStage,targets,true);}
             finally{_stageWorldEntrance=null;}
-            if(retail.SkippedEdits>0)throw new InvalidDataException("Saved changes could not be included: "+string.Join("; ",retail.SkippedEditDetails));
+            // Saved changes the game cannot take stop Create BIN, until Fix It For Me is told to make the game without them.
+            // (The stage's list ends with the importer's notes, which are not skipped changes: the skipped ones come first.)
+            string[] skipped=[..retail.SkippedEditDetails.Take(retail.SkippedEdits)];
+            if(skipped.Length>0&&!IsLeftOut(ExportParts.SkippedChanges))
+                throw ExportRepair.Refusal("Saved changes could not be included: "+string.Join("; ",skipped),new ExportRepair.LeaveOutSkippedChanges(skipped));
+            skippedChanges=skipped;
             RequireOwner();
         }
         ReportCreateBinProgress("Building levels…","Create BIN: rebuilding geometry, collision, objects and assets…");
@@ -329,7 +338,8 @@ public sealed partial class MainWindow
                 requireCurrent:()=>Dispatcher.UIThread.InvokeAsync(RequireOwner).GetAwaiter().GetResult(),
                 stagedRetailImage:retail?.WroteImage==true?retail.OutputImagePath:null,retailEggs:retail?.ActiveDragonflyEggs,
                 retailSignLevels:retail?.SignLevelKeys,retailNames:retail?.DeferredLevelNames,flight:flight,portalRoutes:portalSnapshot.Document,
-                retailReturnClasses:retail?.ReturnClasses,crash:crash,yotd:yotd,world:world,worldLevels:worldLevels,worldEntrance:worldEntrance);
+                retailReturnClasses:retail?.ReturnClasses,crash:crash,yotd:yotd,world:world,worldLevels:worldLevels,worldEntrance:worldEntrance,
+                allowNoBuiltLevels:builtLeftOut);
         });
         RequireOwner();
         string startName=saved.Concat(worldScenes).FirstOrDefault(s=>s.ResolveTarget(_retailCatalog).LevelId==startLevelId)?.Name??"Artisans";
@@ -342,7 +352,10 @@ public sealed partial class MainWindow
         string worldNote=world==null||worldScenes.Count==0?"":$" Your new world {world.Name} is in it ({Count(worldScenes.Count,"level","levels")}; "+
             (worldEntrance!=null?$"Spyro walks in from {entryName}":worldPlace?.OnRoute==true?"Spyro flies in by balloon":$"it has no way in from {entryName} yet (World Entrance)")+"; save in it with a new save file)."+
             (worldPlace?.OnRoute==true?" "+BalloonRouteSentence(world,worldPlace):"");
-        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. All saved level replacements and other saved edits are included."+worldNote+flightNote+PreservedResearchExportNote()+MemoryModeExportNote(memory)+HoverFlapNote();
+        string skippedNote=skippedChanges.Count==0?"":$" Not in this game, because the game cannot take {(skippedChanges.Count==1?"it":"them")}: {ShortList(skippedChanges)}.";
+        string included=LeftOutItems().Count==0?"All saved level replacements and other saved edits are included.":"Your other saved levels and changes are included.";
+        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. {included}"+NewLevelWayInNote(saved,portalSnapshot.Document,startLevelId)+worldNote+flightNote+PreservedResearchExportNote()+MemoryModeExportNote(memory)+HoverFlapNote()+skippedNote+LeftOutNote();
+        _createdGameCue=Path.ChangeExtension(output,".cue");
         }
         // The merged retail image is a working copy for this export only.
         finally{if(retailStage!=null)ExportScratchSpace.Delete(retailStage);}

@@ -136,19 +136,26 @@ internal static class WorldEntranceUiCases
             Check(WorldEntranceDocument.Read(root) == null && Viewport(window).WorldEntrancePreviewFaceCountForTesting == 0 && Status(window).StartsWith("Removed the doorway to SKY ISLES", StringComparison.Ordinal),
                 "Remove Entrance deletes it and its preview");
 
-            // Fix It For Me: hidden until Create BIN stops on something the editor can put right itself; an ordinary
-            // refusal offers nothing; pressed without the game disc it says what it needs and withdraws the offer.
+            // Fix It For Me: hidden until Create BIN stops on something in the project. A stop the editor has a repair for
+            // carries it; any other stop in the project is on offer too (the editor then makes the game without what
+            // stops it); a failure of the computer's offers nothing. Pressed without the game disc, the repair says what
+            // it needs and the offer is withdrawn.
             var fixIt = Find<Button>(window, "FixItForMe");
-            Check(!fixIt.IsVisible && window.PendingRepairForTesting == null, "Fix It For Me is hidden while nothing is on offer");
+            Check(!fixIt.IsVisible && window.PendingRepairForTesting == null && !window.FixItOnOfferForTesting, "Fix It For Me is hidden while nothing is on offer");
             var needsWayIn = Spyro.Editor.Core.Exporting.ExportRepair.Refusal("needs the way in", new Spyro.Editor.Core.Exporting.ExportRepair.PlaceWorldEntrance("peacekeepers"));
             string? offer = (string?)Invoke(window, "OfferRepair", needsWayIn); Pump(5);
             Check(fixIt.IsVisible && window.FixItVisibleForTesting && window.PendingRepairForTesting is Spyro.Editor.Core.Exporting.ExportRepair.PlaceWorldEntrance { HomeworldKey: "peacekeepers" } &&
                   offer != null && offer.Contains("Fix It For Me", StringComparison.Ordinal), "a refusal with a repair shows the button and the words that point to it");
-            Check((string?)Invoke(window, "OfferRepair", new InvalidDataException("an ordinary refusal")) == null && !fixIt.IsVisible && window.PendingRepairForTesting == null,
-                "an ordinary refusal offers nothing and hides the button");
+            Invoke(window, "ForgetRepair"); Pump(5);
+            string? plain = (string?)Invoke(window, "OfferRepair", new InvalidDataException("an ordinary refusal")); Pump(5);
+            Check(plain != null && plain.Contains("Fix It For Me", StringComparison.Ordinal) && fixIt.IsVisible && window.FixItOnOfferForTesting && window.PendingRepairForTesting == null,
+                "a refusal without a repair of its own is on offer too");
+            Check((string?)Invoke(window, "OfferRepair", new FileNotFoundException("no disc image")) == null && !fixIt.IsVisible && !window.FixItOnOfferForTesting &&
+                  (string?)Invoke(window, "OfferRepair", new IOException("the disk is full")) == null && (string?)Invoke(window, "OfferRepair", new UnauthorizedAccessException("no permission")) == null &&
+                  !fixIt.IsVisible, "a failure of the computer's (no disc image, a full disk, no permission) offers nothing and hides the button");
             Invoke(window, "OfferRepair", needsWayIn); Pump(5);
             Run(window.ApplyPendingRepairForTestingAsync(), "fix it");
-            Check(!fixIt.IsVisible && window.PendingRepairForTesting == null && WorldEntranceDocument.Read(root) == null &&
+            Check(!fixIt.IsVisible && window.PendingRepairForTesting == null && !window.FixItOnOfferForTesting && WorldEntranceDocument.Read(root) == null &&
                   Status(window).StartsWith("Choose your original Spyro the Dragon (USA) disc first", StringComparison.Ordinal),
                 "pressed without the game disc, it says what it needs, places nothing and withdraws the offer");
             // A project whose only built levels are its new world's still makes its game from the whole project.

@@ -938,6 +938,10 @@ public sealed partial class MainWindow
     {
         if (inspection.Report.Status == MobyBuildSafetyStatus.Stable)
             return BuildSafetyDecision.Create;
+        // Fix It For Me is making the game: a blocked check stops this run (it then leaves out what blocks it); anything
+        // less was shown when Create BIN was first pressed.
+        if (_quietCreate)
+            return inspection.Report.Status == MobyBuildSafetyStatus.Blocked ? BuildSafetyDecision.Cancel : BuildSafetyDecision.Create;
         return await ShowBuildSafetyDialogAsync(inspection, allowCreateAnyway: true);
     }
 

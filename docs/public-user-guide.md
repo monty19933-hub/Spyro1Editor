@@ -38,18 +38,36 @@ access was refused, the editor opens a small window that says where to allow it.
 - If something cannot be put in the game, the editor says what and where, and
   nothing half-built is written: the game you created last stays exactly as it
   was. **More ▾ → Check for Export Issues…** runs the same check without building.
-- **Fix It For Me**: when Create BIN stops on something the editor can put right
-  by itself, this button appears beside the message at the bottom of the window
-  (and in **Details**). Press it, read what it did, and press Create BIN again.
-  It does two things so far. When your new world has no way in yet, it places
-  the doorway in the homeworld the world is entered from, on level open ground
-  near where Spyro arrives (move it afterwards with Terrain › World Entrance if
-  you like; in Gnasty's World, which has no free place, it says so and you place
-  it yourself). When your world's homeworld has more objects than it can hold
-  (82), it first gives back the save rows of objects you deleted and then, if
-  needed, takes out loose gems, the least valuable first; it says how many and
-  what they were worth, and keeps the level as it was in the project's
-  `backups/fix-it` folder.
+- **Fix It For Me**: whenever Create BIN stops on something in your project,
+  this button appears beside the message at the bottom of the window (and in
+  **Details**). One press gets the game made: the editor runs Create BIN itself,
+  as often as it takes, and at the end says everything it did. Each run is a
+  whole Create BIN, so a hard case can take several minutes; the status line
+  says which try it is on.
+  - What it can repair, it repairs. When your new world has no way in yet, it
+    places the doorway in the homeworld the world is entered from, on level open
+    ground near where Spyro arrives (move it afterwards with Terrain › World
+    Entrance if you like; in Gnasty's World, which has no free place, it says so
+    and you place it yourself). When your world's homeworld has more objects
+    than it can hold (82), it first gives back the save rows of objects you
+    deleted and then, if needed, takes out loose gems, the least valuable first;
+    it says how many and what they were worth, and keeps the level as it was in
+    the project's `backups/fix-it` folder.
+  - Anything else, it gets past by making the game **without the part of your
+    project that stops it**. It finds that part by trying: a level the message
+    names first, then one part at a time (a level you built, your new world,
+    your changes to one of the game's levels, a game setting such as Hover or
+    the colours). For one of the game's own levels it tries leaving out only
+    one kind of your changes (objects, ground, sky, music or name) before the
+    whole level. Saved changes the game cannot take (an egg thief's run moved
+    off its ground, for example) are left out by themselves and named each time.
+  - Nothing is deleted. A left-out part stays in your project and is only kept
+    out of the game; Create BIN says what is left out in its window and after
+    every game. **More ▾ → Left Out of the Game…** lists each part with what
+    Create BIN said about it, and **Put Back** includes it again. A newer
+    version of the editor starts with nothing left out.
+  - It is not offered when the computer is the problem (no disc image chosen, a
+    full disk, no permission to write): the message then says what to do.
 - A terrain shape the game cannot stand on (for example a corner dragged so far
   that the ground folds over itself) raises a red bar with **Show it** and
   **Undo that change**.

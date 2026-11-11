@@ -1,11 +1,30 @@
-# Spyro Editor 2.1 — supported scope and limitations
+# Spyro Editor 2.2 — supported scope and limitations
 
-- Version 2.1 adds Fix It For Me for two of Create BIN's stops (a new world
-  with no way in; a world's homeworld with more than its 82 objects). The place
+- Version 2.2 puts Fix It For Me on every Create BIN stop that comes from the
+  project. Where the editor has no repair, the fix is to make the game without
+  the part that stops it: the game is then made, but that part (a level you
+  built, your world, your changes to one level, a setting) is not in it until
+  the cause is put right and the part put back (More ▾ › Left Out of the Game…).
+  A level you built and a new world are left out whole; only the game's own
+  levels can lose one kind of change. Each try is a whole Create BIN, so a stop
+  that names nothing can take several minutes in a large project. A failure of
+  the computer's (disc image, disk space, permissions) is not something it can
+  fix. Tried through the editor with stops made on purpose and on a copy of a
+  real project that stopped three ways; the games it made were played in the
+  emulator only as far as the levels named in the release notes.
+- A game with a new level (the unused 65 slot) and no doorway to it froze on
+  the way into Town Square in every earlier version; 2.2 keeps the two apart.
+  Played in the emulator before and after (Town Square, the new level, the new
+  world's homeworld and first level, Artisans). A level built in Town Square's
+  place still cannot share a game with the new level: Fix It For Me leaves the
+  built Town Square out.
+
+- Version 2.1 added Fix It For Me with two repairs (a new world with no way in;
+  a world's homeworld with more than its 82 objects). The place
   it chooses for the doorway was played in the emulator in Artisans, Peace
   Keepers, Magic Crafters, Beast Makers and Dream Weavers (in, the world loads,
   back out in front of it, on the floor). Gnasty's World has no free place, so
-  there it says so. Other stops still need fixing by hand.
+  there it says so.
 - Version 2.1 colours creatures level by level (Game Settings › Creatures'
   colours) and gives Spyro a look for one level. Played in the emulator: red
   gnorcs and an Ember Spyro in Artisans, blue gnorcs and an Ice Spyro in Dark

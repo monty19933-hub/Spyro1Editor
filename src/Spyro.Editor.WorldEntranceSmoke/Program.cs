@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
+using Spyro.Editor.Core.Persistence;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
@@ -230,6 +231,35 @@ if (args.Length >= 2 && args[0] == "--spots")
           ExportRepair.Find(new AggregateException(new IOException("x"), new InvalidDataException("wrapped", refusal))) is ExportRepair.PlaceWorldEntrance,
         "repair: it is found through the exceptions that wrap it");
     Check(ExportRepair.Find(new InvalidDataException("plain")) == null && ExportRepair.Find(null) == null, "repair: an ordinary refusal has none");
+}
+
+// ---------------- Fix It For Me: what it leaves out of the game is remembered in the project ----------------
+{
+    var skipped = ExportRepair.Refusal("Saved changes could not be included: Stone Hill: Egg thief T166: blocked", new ExportRepair.LeaveOutSkippedChanges(["Stone Hill: Egg thief T166: blocked"]));
+    Check(ExportRepair.Find(new InvalidOperationException("outer", skipped)) is ExportRepair.LeaveOutSkippedChanges { Details.Count: 1 }, "left out: changes the game cannot take carry their own repair");
+    Check(ExportParts.Level("StoneHill") == "level:stonehill" && ExportParts.Level("stonehill", ExportParts.Music) == "level:stonehill:music" && ExportParts.Built("Authored65") == "built:authored65",
+        "left out: a part's id names the level and the kind of change");
+    string root = Directory.CreateTempSubdirectory("spyro-left-out-").FullName;
+    try
+    {
+        Check(ExportLeftOutSettings.Load(root, "2.2").Count == 0 && !File.Exists(ExportLeftOutSettings.PathFor(root)), "left out: a project starts with nothing left out");
+        var when = new DateTimeOffset(2026, 11, 11, 1, 2, 3, TimeSpan.Zero);
+        ExportLeftOutSettings.Save(root, "2.2", [new(ExportParts.Level("stonehill"), "Stone Hill: it stops", when), new(ExportParts.Hover, "no room", when)]);
+        var read = ExportLeftOutSettings.Load(root, "2.2");
+        Check(read.Count == 2 && read[0] == new ExportLeftOutSettings.Item("level:stonehill", "Stone Hill: it stops", when) && read[1].Part == ExportParts.Hover && read[1].Why == "no room",
+            "left out: the parts, the reasons and the times are read back");
+        Check(ExportLeftOutSettings.Load(root, "2.3").Count == 0 && File.Exists(ExportLeftOutSettings.PathFor(root)), "left out: another version of the editor starts afresh (the file is kept)");
+        File.WriteAllText(ExportLeftOutSettings.PathFor(root), "{ not json");
+        Check(ExportLeftOutSettings.Load(root, "2.2").Count == 0, "left out: an unreadable file leaves nothing out");
+        ExportLeftOutSettings.Save(root, "2.2", [new(ExportParts.World, "w", when)]);
+        ExportLeftOutSettings.Save(root, "2.2", []);
+        Check(!File.Exists(ExportLeftOutSettings.PathFor(root)) && Directory.GetFiles(root).Length == 0, "left out: with the last part put back the file is removed");
+        // Fly Anywhere left out: as in a project that never chose it, and the saved file is still watched.
+        var flight = NativeFreeFlightProjectExportIntent.Capture(root);
+        var without = flight.WithoutFlight();
+        Check(!without.RequiresRebuild && !without.Enabled && without.EnabledLevelIds.Count == 0 && !Throws(() => without.RequireCurrent(root)), "left out: Fly Anywhere left out reads as never chosen");
+    }
+    finally { Directory.Delete(root, recursive: true); }
 }
 
 // ---------------- Fix It For Me: a level made to fit its save rows ----------------

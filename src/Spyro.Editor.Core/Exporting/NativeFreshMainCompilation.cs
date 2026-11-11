@@ -219,6 +219,14 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         if(portalRoutes?.HasEdits==true)
             NativePortalRouteComposer.Apply(donors,new LevelCatalog(nativeCatalog.Levels.Where(l=>l.LevelId!=65).Append(Target)),
                 exe,replacements,baseline.EntryBytes,portalRoutes,includesFreshLevel:true,returnClasses:returnClasses, freshParticleBinding:freshParticleBinding, reportFreshParticleBinding:updated=>freshParticleBinding=updated);
+        // The new level starts up through Town Square's initializer. A doorway to it gives each its own half (above);
+        // with no doorway the two would still share one, and Town Square itself would start with the new level's code
+        // and memory. Give each its own half in every game.
+        else if(freshParticleBinding==null&&!NativePortalRouteFreshBinding.TryRead(exe,65,out _))
+        {
+            var own=UniversalExeBindings.Read(exe,65);
+            NativePortalRouteFreshBinding.Rebind(donors.Disc.Exe,exe,own[UniversalExeBindings.UpdateGlobal].Value,own[UniversalExeBindings.CopyBufferGlobal].Value);
+        }
         levelData=replacements[80];overlayData=replacements[79];
         RewardFallbacks.RequireInstalled(levelData);
         Supercharge?.RequireDestination(levelData);

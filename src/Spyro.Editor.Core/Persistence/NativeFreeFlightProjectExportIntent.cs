@@ -38,6 +38,11 @@ public sealed class NativeFreeFlightProjectExportIntent
         return new(root, snapshot, snapshot.GlobalEnabled ? SupportedEnabledLevelId : null);
     }
 
+    /// <summary>The same saved file with Fly Anywhere left out of this export (as in a project that never chose it);
+    /// the file is still watched for changes.</summary>
+    public NativeFreeFlightProjectExportIntent WithoutFlight() =>
+        new(_workspaceRoot, new NativeFreeFlightSettingsSnapshot(_snapshot.Path, _snapshot.ContentSha256, []), null);
+
     public void RequireCurrent(string workspaceRoot)
     {
         if (!string.Equals(Normalize(workspaceRoot), _workspaceRoot, StringComparison.Ordinal))

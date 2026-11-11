@@ -265,7 +265,7 @@ CORE_CASES = (
     # the horizon within a size, one colour), the ground-kind, view-group and collision writers (entry triangles after
     # the flagged ones, the rest renumbered, every cell kept), the frame as one added sector, the way back's facts, the
     # saved placement (world-entrance.json) and refusals.
-    ("WorldEntranceSmoke", "WORLD_ENTRANCE_FREE_OK checks=66"),
+    ("WorldEntranceSmoke", "WORLD_ENTRANCE_FREE_OK checks=74"),
     # The balloonists' route with the project's new world on it (NativeBalloonTravel): the route and its refusals, a
     # balloonist's lines for every price, his decision code written for every place and run instruction by instruction
     # (a small MIPS interpreter) for every state of the game: the page he opens with, the byte he sets, what he leaves alone.
@@ -322,7 +322,7 @@ ADDITIONAL_CORE_CASES = (
      ["--spyro-colours-ui-only"]),
     ("UiSmoke", "DOORWAYS_UI_OK checks=39",
      ["--doorways-ui-only"]),
-    ("UiSmoke", "WORLD_ENTRANCE_UI_OK checks=39",
+    ("UiSmoke", "WORLD_ENTRANCE_UI_OK checks=40",
      ["--world-entrance-ui-only"]),
     ("UiSmoke", "LEVEL_PICKER_AUTOMATION_OK",
      ["--level-picker-automation-only"]),
@@ -384,7 +384,7 @@ SOURCE_QA_CASES = (
     # The New World's doorway in each of the six homeworlds (read only): record, ground kind, entry triangles, objects,
     # memory in 2 MB (which sky fits) and 8 MB, refusals (second entrance, six doorways, map edge, textures), every shape
     # and size, after another object edit, deterministic bytes.
-    ("WorldEntranceSmoke", "WORLD_ENTRANCE_SOURCE_OK checks=219", ["--source"]),
+    ("WorldEntranceSmoke", "WORLD_ENTRANCE_SOURCE_OK checks=227", ["--source"]),
     # The game's own overlays (read only): the two balloonist routines are the same in the six homeworlds and Town
     # Square; changed for each of the six places the new world can take and run for every state of the route (the menu's
     # rows and names, the level each row flies to, the "ready to go" page), every balloonist's decision code in its

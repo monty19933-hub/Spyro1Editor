@@ -304,6 +304,13 @@ if (args.Length is 2 or 3 && args[0] == "--tour-shots")
     return 0;
 }
 
+if (args.Length == 3 && args[0] == "--fix-it-ui")
+{
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    FixItUiCases.Run(args[1], args[2]);
+    return 0;
+}
+
 if (args.Length == 3 && args[0] == "--level-colours-export-ui")
 {
     HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();

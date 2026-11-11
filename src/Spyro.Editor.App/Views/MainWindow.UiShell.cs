@@ -273,6 +273,7 @@ public sealed partial class MainWindow
             new("Project Data", ShowProjectDataAsync),
             new("Check for Updates", ShowUpdatesAsync),
             new("Check for Export Issues…", ShowBuildSafetyInspectorAsync),
+            new("Left Out of the Game…", ShowLeftOutAsync),
             new("Help", ShowHelpAsync)
         ];
         if (!_releaseMode)

@@ -54,6 +54,15 @@ var overridden=fresh.Compose(lib,placements.Select((p,i)=>i==2?p with{RowByteOve
 Check(Total(overridden.Executable,65)==38,"authored kind override short-circuits coincidental reward selector");
 string freshOutput=Path.Combine(args[2],"fresh-five.bin");await fresh.ExportAsync(lib,placements,null,freshOutput,args[2],catalog);
 Check(Total(UniversalDiscImage.Read(freshOutput).Exe,65)==43,"normal fresh written target43");
+// A game with the new level and no doorway to it: Town Square starts up as itself (not with the new level's code and
+// memory, which froze the game on the way into Town Square), and the new level has its own half of the initializer.
+{
+    byte[] made=UniversalDiscImage.Read(freshOutput).Exe;var town=UniversalExeBindings.Read(made,13);var own=UniversalExeBindings.Read(made,65);var retailTown=UniversalExeBindings.Read(originalExe,13);
+    Check(NativePortalRouteFreshBinding.TryRead(made,65,out _)&&town.Count==retailTown.Count&&retailTown.All(b=>town.TryGetValue(b.Key,out var now)&&now.Value==b.Value.Value),
+        "new level without a doorway: Town Square keeps every one of its own start-up addresses");
+    Check(own[UniversalExeBindings.CopyBufferGlobal].Value!=town[UniversalExeBindings.CopyBufferGlobal].Value&&own[UniversalExeBindings.UpdateGlobal].Value!=town[UniversalExeBindings.UpdateGlobal].Value,
+        "new level without a doorway: the new level's memory and update are its own");
+}
 string emptyOutput=Path.Combine(args[2],"fresh-empty.bin");await fresh.ExportAsync(lib,[],null,emptyOutput,args[2],catalog);
 Check(Total(UniversalDiscImage.Read(emptyOutput).Exe,65)==0,"empty normal fresh written target0");
 var art=lib.Get("artisans");var gone=Enumerable.Range(0,art.Data.Scene().RowCount).ToArray();int removed=gone.Sum(r=>UniversalMobyComposer.TreasureValue(art.Data.Row(r)));

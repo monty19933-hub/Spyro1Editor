@@ -22,7 +22,8 @@ public static class NativeAuthoredProjectExporter
         NativeFreeFlightCompositionPlan? flight=null,PortalRouteDocument? portalRoutes=null,
         IReadOnlyDictionary<int,IReadOnlyList<NativePortalReturnClass>>? retailReturnClasses=null,
         Spyro.Editor.Core.Crash.CrashWarpedDisc? crash=null,Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd=null,
-        NewWorldDocument? world=null,IReadOnlyList<NativeNewWorldExport.WorldLevel>? worldLevels=null,WorldEntranceDocument? worldEntrance=null)
+        NewWorldDocument? world=null,IReadOnlyList<NativeNewWorldExport.WorldLevel>? worldLevels=null,WorldEntranceDocument? worldEntrance=null,
+        bool allowNoBuiltLevels=false)
     {
         // The staged disc images are working copies; remove them whether the export succeeds or fails.
         string scratch=Path.Combine(ExportScratchSpace.AggregateRoot(workspace),Guid.NewGuid().ToString("N"));
@@ -35,7 +36,7 @@ public static class NativeAuthoredProjectExporter
             if(worldStart!=null)startLevelId=10;
             if(world==null||worldLevels is not {Count:>0})
                 return await ExportCoreAsync(donors,catalog,scenes,japanese,outputImage,workspace,startLevelId,scratch,token,requireCurrent,
-                    stagedRetailImage,retailEggs,retailSignLevels,retailNames,flight,portalRoutes,retailReturnClasses,crash,yotd);
+                    stagedRetailImage,retailEggs,retailSignLevels,retailNames,flight,portalRoutes,retailReturnClasses,crash,yotd,withWorld:allowNoBuiltLevels);
             // With a new world the game is made beside the output first and the world goes in last (its levels after the
             // game's, the level window over the finished executable); only the complete image is published, so a world
             // that fails leaves the previous BIN as it was.
