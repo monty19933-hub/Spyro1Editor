@@ -14,6 +14,14 @@
   at a freed dragon's pedestal. The dragon who steps out of a statue keeps his
   own colours (he is drawn from the rescue's own data). The Green Wizard in
   three levels and Haunted Towers' Summoning Wizard cannot be recoloured.
+- Spring chests with a teal or rainbow gem (2.3) were played in the emulator in
+  Stone Hill, Town Square (beside the level's own spring chest, which still
+  works) and a level built in the editor: the gem springs up, is collected,
+  adds 50 or 100, and the chest stays gone when the level is entered again.
+  Loading the game back from a memory card could not be tried: the test set-up
+  cannot load a save back even for the original game. The sparkle burst as the
+  lid opens is gold rather than teal or rainbow. Baskets, strong chests and
+  flame or firework chests cannot hold these gems.
 - Fix It For Me (2.3) narrows a level's objects down to kinds of object you
   added, not to single objects: every copy of a kind goes or stays together.
   Changes to the level's own objects are still left out as one. The search is

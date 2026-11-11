@@ -214,6 +214,17 @@ treasure and to the level's total. In the game they tumble and shine exactly
 like the original gems; the rainbow gem cycles red, gold, green, teal, blue and
 purple. They use only your USA disc.
 
+**Add object… → Interactive → Chests & Containers** has **Spring chest (Teal
+reward)** and **Spring chest (Rainbow reward)**: the game's own spring chest
+holding a teal or rainbow gem. Flame it or charge it and the gem springs up out
+of the lid; Spyro has to grab it quickly, or it vanishes in a burst of sparkles
+and the chest closes, ready to be opened again (jumping onto the lid does not
+open it, as with any spring chest). The gem adds 50 or 100 to collected
+treasure and to the level's total, and once collected the chest is gone for
+good. They can be placed wherever a spring chest can (not in Artisans, Gnorc
+Cove or Twilight Harbor, which have no room for one), in the game's own levels
+and in levels you build.
+
 ### Replace a Flight gate
 
 In a flight level, select an original gate and choose **Replace Flight gate…**.
