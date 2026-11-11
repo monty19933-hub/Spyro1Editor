@@ -28,7 +28,9 @@ public sealed partial class MainWindow
 
     /// <summary>The card's lists, in order: what the user asked to recolour level by level.</summary>
     private static readonly string[] ColourGroups = ["Enemies", "Chests", "Dragons", "Animals"];
-    /// <summary>The class of the dragons a level's statues free (its model is the dragons' own).</summary>
+    /// <summary>The class of the fairy who waits at a freed dragon's pedestal (where the game is saved). Seen in the
+    /// emulator on 11 November 2026: the original's wears red; the dragon who steps out of the statue for his speech
+    /// is drawn from the rescue's own data and keeps his colours.</summary>
     private const int FreedDragonClass = 0x6E;
 
     private readonly StackPanel _creatureColourRows = new() { Name = "CreatureColourRows", Spacing = 6 };
@@ -88,7 +90,7 @@ public sealed partial class MainWindow
         if (_currentLevel?.Key != level.Key) return [];   // still loading: the objects are the level's before
         bool built = _freshSceneDocument != null;
         // Which list a thing belongs in (null: none): enemies (egg thieves too), chests of every kind, animals; the
-        // dragons a statue frees are listed once for the level the statue comes from.
+        // fairy at a freed dragon's pedestal is listed once for the level its statue comes from.
         static string? GroupOf(Spyro.Editor.Core.Scene.Moby m)
         {
             if (Spyro.Editor.Core.Scene.DragonStatueColor.IsStatue(m)) return "Dragons";
@@ -101,7 +103,7 @@ public sealed partial class MainWindow
             .Select(m => (Moby: m, Group: GroupOf(m))).Where(m => m.Group != null)
             .Select(m => (Source: (m.Moby.CrossLevelSourceLevelKey.Length > 0 ? m.Moby.CrossLevelSourceLevelKey : level.Key).ToLowerInvariant(),
                 Class: m.Group == "Dragons" ? FreedDragonClass : CreatureClass(m.Moby),
-                Name: m.Group == "Dragons" ? "The dragons, once freed" : System.Text.RegularExpressions.Regex.Replace(m.Moby.DisplayLabel, @"\s*\([^)]*reward\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim(),
+                Name: m.Group == "Dragons" ? "Fairy at a freed dragon's pedestal" : System.Text.RegularExpressions.Regex.Replace(m.Moby.DisplayLabel, @"\s*\([^)]*reward\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim(),
                 Group: m.Group!))
             .GroupBy(k => (k.Source, k.Class))
             .Select(g => (g.Key.Source, g.Key.Class, g.GroupBy(k => k.Name).OrderByDescending(n => n.Count()).ThenBy(n => n.Key, StringComparer.Ordinal).First().Key, g.First().Group))
