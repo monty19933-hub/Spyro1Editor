@@ -289,11 +289,29 @@ internal sealed class TerrainPlan
 
     private double RippleAt(double x, double y) => Ripple * Noise.Fbm(x / RippleScale + 31, y / RippleScale + 77);
 
+    /// <summary>How much higher than usual the enclosure stands at a point: where a high place stands near (a hilltop,
+    /// a terrace, a room a storey up), high enough that a jump and glide from it does not carry Spyro over the top and
+    /// out of the level. <paramref name="floor"/>: the floor height all round the point (<see cref="Base"/>).</summary>
+    public double Lift(double x, double y, double floor)
+    {
+        double lift = 0;
+        foreach (var z in Zones)
+        {
+            if (z.Liquid != null || z.IsPath || z.Kind is "stone") continue;
+            double high = z.Z - floor;
+            if (high <= 60) continue;
+            // A held jump's rise, a margin, less what a glide sinks on the way from the high place's edge.
+            lift = Math.Max(lift, high + 81 + 40 - Math.Max(0, z.Sdf(x, y, Noise) - 100) / 3.3 - Rise);
+        }
+        return lift;
+    }
+
     /// <summary>The enclosure's height over the floor <paramref name="d"/> units outside it.</summary>
-    public double Profile(double d, double x, double y)
+    /// <param name="lift">Added to the enclosure's usual rise (<see cref="Lift"/>).</param>
+    public double Profile(double d, double x, double y, double lift = 0)
     {
         if (d <= 0) return 0;
-        double rough = Rough * Noise.Fbm(x / 240 + 3, y / 240 + 8);
+        double rough = Rough * Noise.Fbm(x / 240 + 3, y / 240 + 8), Rise = this.Rise + lift;
         switch (Kind)
         {
             case EnclosureKind.Cliff:
@@ -326,7 +344,11 @@ internal sealed class TerrainPlan
             case None: return 0;
             case Fill: return Shore(Base(x, y) + RippleAt(x, y), x, y);
             // A corner on the land's very edge is still the enclosure's: a cliff stands its full height there.
-            case Enclosure: return Base(x, y) + RippleAt(x, y) + Profile(Math.Max(Land(x, y), 0.01), x, y);
+            case Enclosure:
+            {
+                double floor = Base(x, y);
+                return floor + RippleAt(x, y) + Profile(Math.Max(Land(x, y), 0.01), x, y, Kind is EnclosureKind.Sea or EnclosureKind.Sky ? 0 : Lift(x, y, floor));
+            }
         }
         var z = Zones[layer];
         if (z.Liquid != null || z.Flat) return z.FloorAt(x, y);
