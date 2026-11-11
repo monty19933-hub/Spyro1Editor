@@ -275,13 +275,44 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
     {
         var live = Objects.Where(o => !o.Value.IsRemoved).ToArray();
         var order = Ledger.Entries.Select((e, i) => (e.Id, i)).ToDictionary(x => x.Id, x => x.i, StringComparer.Ordinal);
-        var ids = live.Select(o => o.Value.UniversalPlacementId).Distinct(StringComparer.Ordinal)
+        // An object's identity is its save row's (a scene read from its file has it only there).
+        var ids = live.Select(o => o.Identity).Distinct(StringComparer.Ordinal)
             .OrderBy(id => order.TryGetValue(id, out int slot) ? slot : int.MaxValue).ToArray();
         var ledger = new UniversalPlacementLedger(1, ids.Select((id, i) => new UniversalPlacementIdentity(id, i)).ToArray());
         ledger.Validate();
-        var scene = this with { Objects = live, Ledger = ledger };
+        // The rows Randomize kept for its next objects go back too (they are no longer the level's).
+        var scene = this with { Objects = live, Ledger = ledger, RandomObjectRows = null };
         scene.Validate();
         return (scene, Ledger.Entries.Count - ledger.Entries.Count);
+    }
+
+    /// <summary>What <see cref="FitSaveRows"/> did: the rows given back by deleted objects, the loose gems taken out and
+    /// their worth, and how many objects are still too many (0: the scene fits).</summary>
+    public sealed record SaveRowFit(SceneDocument Scene, int FreedRows, int RemovedGems, int RemovedTreasure, int StillOver);
+
+    /// <summary>The scene made to fit <paramref name="room"/> save rows (the Fix It For Me repair of a level with more
+    /// objects than its place in the game remembers): first the rows held by deleted objects are given back
+    /// (<see cref="FreeRetiredSaveRows"/>); then, as far as still needed, loose gems are taken out, the least valuable
+    /// first. A loose gem stands alone (nothing is linked to it); chests and what is in them, enemies, animals and
+    /// everything else stay, so a level with too few loose gems still has objects over.</summary>
+    public SaveRowFit FitSaveRows(int room)
+    {
+        var scene = this; int freed = 0;
+        if (Ledger.Entries.Count > room && Ledger.Entries.Count > Objects.Count(o => !o.Value.IsRemoved)) (scene, freed) = FreeRetiredSaveRows();
+        int over = scene.Ledger.Entries.Count - room;
+        if (over <= 0) return new(scene, freed, 0, 0, 0);
+        var gems = scene.Objects.Select((o, i) => (Object: o, Index: i))
+            .Where(x => !x.Object.Value.IsRemoved && x.Object.Value.IsVisibleGem && !x.Object.Value.IsChestContent && !x.Object.Value.IsKey)
+            .OrderBy(x => x.Object.Value.TreasureValue).ThenBy(x => x.Index).Take(over).Select(x => x.Object).ToList();
+        if (gems.Count == 0) return new(scene, freed, 0, 0, over);
+        var gone = gems.Select(g => g.Identity).ToHashSet(StringComparer.Ordinal);
+        var ledger = new UniversalPlacementLedger(1, scene.Ledger.Entries.Where(e => !gone.Contains(e.Id)).Select((e, i) => new UniversalPlacementIdentity(e.Id, i)).ToArray());
+        ledger.Validate();
+        var placed = scene.RandomObjects?.Where(id => !gone.Contains(id)).ToArray();
+        var fitted = scene with { Objects = [.. scene.Objects.Where(o => !gone.Contains(o.Identity))], Ledger = ledger,
+            RandomObjects = placed is { Length: > 0 } ? placed : null };
+        fitted.Validate();
+        return new(fitted, freed, gems.Count, gems.Sum(g => g.Value.TreasureValue), fitted.Ledger.Entries.Count - room);
     }
 
     public UniversalPlacementLedger ReconcileLedger(IReadOnlyList<Moby> mobys)
@@ -317,7 +348,8 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
         if (SkySourceWadEntry is int sky && (sky is < 10 or > 78 || sky % 2 != 0))
             throw new InvalidDataException("The scene's sky source is not a retail level.");
         if ((TargetBinding?.NativePrefixRows ?? 0) + Ledger.Entries.Count > 256)
-            throw new InvalidDataException("The cleared level's previous collectible identities fill the native save rows. Restore before clear or use a new project.");
+            throw new InvalidDataException($"{Name} has {Ledger.Entries.Count} objects (deleted ones still count until File ▾ › Free Deleted Objects' Save Rows…), " +
+                $"but its place in the game remembers {256 - (TargetBinding?.NativePrefixRows ?? 0)}. Take {(TargetBinding?.NativePrefixRows ?? 0) + Ledger.Entries.Count - 256} out.");
         if (Surfaces.Select(s => s.Id).Distinct().Count() != Surfaces.Count || Objects.Select(o => o.Identity).Distinct().Count() != Objects.Count)
             throw new InvalidDataException("Fresh surfaces and objects require unique identities.");
         foreach (var s in Surfaces)

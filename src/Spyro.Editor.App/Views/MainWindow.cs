@@ -13467,6 +13467,7 @@ public sealed partial class MainWindow : Window
         }
 
         _createBinBusy = true;
+        ForgetRepair();
         string createBinWorkspace = _workspace.RootPath;
         RefreshActionAvailability();
         RefreshPortalRouteAvailability();
@@ -13487,6 +13488,9 @@ public sealed partial class MainWindow : Window
             string reportPath = EditorDiagnostics.WriteReport(
                 "Create BIN failed before a test image was completed.");
             _statusText.Text = $"Could not create BIN: {ex.Message}";
+            // Something the editor can put right itself: offer Fix It For Me.
+            if (OfferRepair(ex) is { } offer)
+                _statusText.Text += " " + offer;
             if (!string.IsNullOrWhiteSpace(reportPath))
                 _statusText.Text += $" Diagnostic report: {reportPath}";
             // A terrain refusal is something the user can fix: name the level and offer Show it / Undo.
@@ -13526,7 +13530,7 @@ public sealed partial class MainWindow : Window
     private bool TryGetCreateBinDiskSpaceBlockReason(out string reason)
     {
         bool builtLevels = _freshSceneDocument != null || File.Exists(FreshScenePath) ||
-            SceneDocumentStore.ReadAll(_workspace.RootPath, _retailCatalog).Count > 0;
+            SceneDocumentStore.ReadAll(_workspace.RootPath, _retailCatalog).Count > 0 || ProjectHasNewWorldLevels();
         string image = FirstExistingDiscImagePath(_discImagePathBox.Text, _skyboxDiscImagePathBox.Text, DiscImageLocator.FindImage(_workspace));
         long imageBytes = File.Exists(image) ? new FileInfo(image).Length : 0;
         long? free = FreeDiskBytesOverrideForTesting != null
@@ -13534,6 +13538,21 @@ public sealed partial class MainWindow : Window
             : ExportScratchSpace.FreeBytes(_workspace.RootPath);
         reason = ExportScratchSpace.DescribeShortage(free, imageBytes, builtLevels ? 5 : 3) ?? "";
         return reason.Length > 0;
+    }
+
+    /// <summary>The way into the project's new world for the whole-project build's stage of the game's own levels: built
+    /// into its homeworld together with the objects added there (null: no world, no entrance, or not that build).</summary>
+    private sealed record StagedWorldEntrance(WorldEntranceSpec Spec, byte[] Sky, GameMemoryMode Mode);
+    private StagedWorldEntrance? _stageWorldEntrance;
+
+    /// <summary>Whether the project has a new world with at least one saved level (unreadable world files count: the
+    /// whole-project build then says what is wrong with them instead of a game being made without the world).</summary>
+    private bool ProjectHasNewWorldLevels()
+    {
+        string root = _workspace.RootPath;
+        if (string.IsNullOrEmpty(root) || !File.Exists(Path.Combine(root, NewWorldDocument.FileName))) return false;
+        try { return NewWorldDocument.Read(root) is { } world && world.LevelIds.Any(id => File.Exists(SceneDocumentStore.PathForTarget(root, NewWorldDocument.KeyFor(id)))); }
+        catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException or UnauthorizedAccessException) { return true; }
     }
 
     private async Task CreateObjectTestBinCoreAsync()
@@ -13547,7 +13566,9 @@ public sealed partial class MainWindow : Window
             EditorDiagnostics.RecordWarning("Create BIN not started", diskSpaceReason);
             return;
         }
-        if (_freshSceneDocument != null || SceneDocumentStore.ReadAll(_workspace.RootPath,_retailCatalog).Count>0) { await CreateFreshMainBinAsync(); return; }
+        // A project with built levels makes its game from all of them, whichever level is open: levels built in the
+        // game's places, and a new world's levels (which were left out when one of the game's own levels was open).
+        if (_freshSceneDocument != null || SceneDocumentStore.ReadAll(_workspace.RootPath,_retailCatalog).Count>0 || ProjectHasNewWorldLevels()) { await CreateFreshMainBinAsync(); return; }
         if (TryGetId65BlankLabNormalCreateBinBlockReason(out string id65BlockReason))
         {
             _statusText.Text = id65BlockReason;
@@ -14634,6 +14655,7 @@ public sealed partial class MainWindow : Window
             bool needsYotd = universalPlacements.Values.Any(list => list.Any(p => UniversalSpecialCatalog.RequiresYearOfTheDragonSource(p.SpecialId)));
             var yotd = needsYotd ? ResolveYearOfTheDragonDisc()
                 ?? throw new InvalidDataException("Lost Fleet's creatures are converted from your Spyro: Year of the Dragon (USA) disc. Choose it with \"Year of the Dragon disc…\" in Game Settings → Music.") : null;
+            var entranceStage = _stageWorldEntrance;
             UniversalExportResult universal = await Task.Run(() =>
             {
                 UniversalSourceLibrary.RequireOriginal(donorImage);
@@ -14656,6 +14678,14 @@ public sealed partial class MainWindow : Window
                     removedRowsByLevel: universalRemoved, identityWorkspace: _workspace.RootPath,
                     dependenciesByLevel: liquidDependencies,
                     superchargeLevels: superchargeLevels,
+                    // The way into the project's new world goes into its homeworld with the objects added there.
+                    composeWith: entranceStage == null ? null : (level, data, overlay, exe, compose) =>
+                    {
+                        if (!string.Equals(level.Key, entranceStage.Spec.HomeworldKey, StringComparison.OrdinalIgnoreCase)) return null;
+                        using var entranceMemory = GameRam.Use(entranceStage.Mode);
+                        return NativeWorldEntrance.Apply(library, _retailCatalog, entranceStage.Spec, data, overlay, exe, entranceStage.Sky,
+                            together: (prepared, objects) => compose(prepared, objects)).Composed;
+                    },
                     deferSpecialHooks: deferSharedRuntimeHooks,
                     // The completed ordinary object stage already adjusted native removal rewards.
                     removedTreasureAlreadyApplied: true);

@@ -113,18 +113,53 @@ internal sealed class NativeCaveAssembler
     public Block Code(string name) { var b = new Block(name, false); Blocks.Add(b); return b; }
     public Block Data(string name) { var b = new Block(name, true); Blocks.Add(b); return b; }
 
-    /// <summary>Places every block into the caves (largest block first, first cave with room; a block never spans two
-    /// caves) and returns the label table.</summary>
+    /// <summary>Places every block into the caves (a block never spans two caves) and returns the label table. First the
+    /// plain way every game so far was made: largest block first, each into the first cave with room. Where that leaves
+    /// a block without a cave although the caves' room would do (a game with many features on has little left, in small
+    /// pieces), the blocks are fitted by search instead: the same order, every cave tried, tightest first.</summary>
     public IReadOnlyDictionary<string, uint> Place(IReadOnlyList<NativeExecutableCaves.Cave> caves)
     {
-        var free = caves.Select(c => (c.Start, c.End)).ToList();
-        foreach (var b in Blocks.OrderByDescending(b => b.Length).ThenBy(b => b.Name, StringComparer.Ordinal))
+        var blocks = Blocks.OrderByDescending(b => b.Length).ThenBy(b => b.Name, StringComparer.Ordinal).ToArray();
+        int[] room = [.. caves.Select(c => checked((int)(c.End - c.Start)))];
+        int[] cave = new int[blocks.Length];
+        int[] left = [.. room];
+        bool plain = true;
+        for (int k = 0; k < blocks.Length && plain; k++)
         {
-            int i = free.FindIndex(f => f.End - f.Start >= b.Length);
-            if (i < 0) throw new InvalidDataException($"The level window's {b.Name} ({b.Length} bytes) does not fit its executable caves " +
-                $"(blocks {string.Join(", ", Blocks.Select(x => $"{x.Name} {x.Length}"))}; room {string.Join(", ", free.Select(f => f.End - f.Start))}).");
-            b.Address = free[i].Start;
-            free[i] = (free[i].Start + (uint)b.Length, free[i].End);
+            cave[k] = Array.FindIndex(left, r => r >= blocks[k].Length);
+            if (cave[k] < 0) plain = false; else left[cave[k]] -= blocks[k].Length;
+        }
+        if (!plain)
+        {
+            left = [.. room];
+            long steps = 0;
+            bool Fit(int k)
+            {
+                if (k == blocks.Length) return true;
+                if (++steps > 4_000_000) return false;
+                int need = blocks[k].Length;
+                var tried = new HashSet<int>();
+                foreach (int c in Enumerable.Range(0, left.Length).Where(c => left[c] >= need).OrderBy(c => left[c]).ThenBy(c => c))
+                {
+                    // Caves with the same room left are the same choice.
+                    if (!tried.Add(left[c])) continue;
+                    left[c] -= need; cave[k] = c;
+                    if (Fit(k + 1)) return true;
+                    left[c] += need;
+                }
+                return false;
+            }
+            if (blocks.Sum(b => (long)b.Length) > room.Sum(r => (long)r) || !Fit(0))
+                throw new InvalidDataException($"The game's program has no room left for your new world's code: it needs {blocks.Sum(b => b.Length):N0} bytes in " +
+                    $"{blocks.Length} pieces (the largest {blocks[0].Length}), and the spare room is {room.Sum():N0} bytes in {room.Length} pieces " +
+                    $"(the largest {(room.Length == 0 ? 0 : room.Max())}). Other features share that room: a world with fewer levels or shorter names, or fewer kinds of objects " +
+                    "added to the game's own levels, leaves more.");
+        }
+        uint[] next = [.. caves.Select(c => c.Start)];
+        for (int k = 0; k < blocks.Length; k++)
+        {
+            blocks[k].Address = next[cave[k]];
+            next[cave[k]] += (uint)blocks[k].Length;
         }
         Dictionary<string, uint> labels = [];
         foreach (var b in Blocks)

@@ -222,6 +222,47 @@ if (args.Length >= 2 && args[0] == "--spots")
     }
     return 0;
 }
+if (args.Length >= 2 && args[0] == "--overlay-after")
+{
+    // --overlay-after <usa disc>: does building the entrance into a homeworld leave its code as the game's own?
+    var c = LevelCatalog.Load(Proof.Root());
+    var lib = new UniversalSourceLibrary(args[1], c);
+    var image = UniversalDiscImage.Read(args[1]);
+    foreach (var key in NewWorldDocument.HomeworldKeys)
+    {
+        var level = c.FindByKey(key)!;
+        var shape = Spyro.Editor.Core.Generation.LevelThemes.DoorwayShape(key);
+        var spot = WorldEntranceSpots.Find(lib, c, key, shape, 1, 1).FirstOrDefault();
+        if (spot == null) { Console.WriteLine($"{key}: no spot"); continue; }
+        byte[] overlay = image.EntryBytes(level.SourceWadEntry - 1);
+        var r = NativeWorldEntrance.Apply(lib, c, new WorldEntranceSpec(key, spot.Position, spot.Heading, shape.Id), image.EntryBytes(level.SourceWadEntry), overlay, image.Exe,
+            NativeWorldEntrance.PlainSky(new Spyro.Editor.Core.Primitives.ColorRgba(120, 170, 230)));
+        bool same = r.Overlay.AsSpan().SequenceEqual(overlay);
+        string sw;
+        try { var found = UniversalDispatchAnalysis.FindUpdateSwitch(new UniversalOverlay(r.Overlay, UniversalExeBindings.Read(image.Exe, level.LevelId))); sw = "switch found"; }
+        catch (InvalidDataException e) { sw = e.Message; }
+        Console.WriteLine($"{key}: overlay unchanged {same}; {sw}; rows {new UniversalLevelData(r.LevelData).Scene().RowCount}");
+    }
+    return 0;
+}
+if (args.Length >= 2 && args[0] == "--auto-spots")
+{
+    // --auto-spots <usa disc> [most]: where Fix It For Me would put the entrance in each homeworld (best first).
+    var autoCatalog = LevelCatalog.Load(Proof.Root());
+    var autoLibrary = new UniversalSourceLibrary(args[1], autoCatalog);
+    foreach (var key in NewWorldDocument.HomeworldKeys)
+    {
+        var shape = Spyro.Editor.Core.Generation.LevelThemes.DoorwayShape(key);
+        var arrival = WorldEntranceSpots.Arrival(autoLibrary, autoCatalog, key);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        double size = 1;
+        var spots = WorldEntranceSpots.Find(autoLibrary, autoCatalog, key, shape, size, args.Length > 2 ? int.Parse(args[2]) : 6);
+        if (spots.Count == 0) spots = WorldEntranceSpots.Find(autoLibrary, autoCatalog, key, shape, size = DoorwayShapes.MinScale, args.Length > 2 ? int.Parse(args[2]) : 6);
+        Console.WriteLine($"{key} ({shape.Id}) arrival {arrival.X:0},{arrival.Y:0},{arrival.Z:0}: {spots.Count} spots in {clock.ElapsedMilliseconds} ms, size {size}");
+        foreach (var s in spots) Console.WriteLine($"  {s.Position.X:0},{s.Position.Y:0},{s.Position.Z:0} heading {s.Heading} from arrival {s.FromArrival:0} tightness {s.Tightness}");
+    }
+    return 0;
+}
 if (args.Length >= 2 && args[0] == "--source")
 {
     Source.Run(args[1], Check, Throws);

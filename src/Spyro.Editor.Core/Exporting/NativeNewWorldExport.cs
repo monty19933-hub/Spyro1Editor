@@ -41,6 +41,14 @@ public static class NativeNewWorldExport
         _ => throw new InvalidDataException($"A doorway in your new world's homeworld leads to its levels (71-74) or back to the game's homeworld, not to level {destination}."),
     };
 
+    /// <summary>How many objects the world's homeworld can hold: the game remembers each object's state in one of 256
+    /// save rows, and the homeworld is built on <see cref="TemplateKey"/>'s place, whose own objects' rows stay taken.</summary>
+    public static int HomeworldSaveRoom(UniversalSourceLibrary donors, LevelCatalog catalog)
+    {
+        var template = catalog.FindByKey(TemplateKey) ?? throw new InvalidDataException("The level catalog has no Artisans.");
+        return 256 - new UniversalLevelData(donors.Disc.EntryBytes(template.SourceWadEntry)).Scene().RowCount;
+    }
+
     /// <summary>One level of the world with its objects as Create BIN places them.</summary>
     public sealed record WorldLevel(SceneDocument Document, IReadOnlyList<UniversalMobyPlacement> Placements);
 
@@ -81,12 +89,23 @@ public static class NativeNewWorldExport
             throw new InvalidDataException($"{homeDocument.Name}'s doorway back leads to {catalog.Levels.FirstOrDefault(l => l.LevelId == backs[0].DestinationLevelId)?.DisplayName}, " +
                 $"but your world is entered from {entryHome.DisplayName}. Point it at {entryHome.DisplayName}.");
         if (entrance != null && !string.Equals(entrance.HomeworldKey, entryHome.Key, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException($"The way into your world stands in {catalog.FindByKey(entrance.HomeworldKey)?.DisplayName ?? entrance.HomeworldKey}, " +
-                $"but your world is entered from {entryHome.DisplayName}. Place it in {entryHome.DisplayName}.");
+            throw ExportRepair.Refusal($"The way into your world stands in {catalog.FindByKey(entrance.HomeworldKey)?.DisplayName ?? entrance.HomeworldKey}, " +
+                $"but your world is entered from {entryHome.DisplayName}. Place it in {entryHome.DisplayName}.", new ExportRepair.PlaceWorldEntrance(entryHome.Key));
         if (entrance != null && backs.Count == 0)
             throw new InvalidDataException($"{homeDocument.Name} needs a doorway back to {entryHome.DisplayName}, or Spyro can't leave your world: add one with Add Doorway in {homeDocument.Name}.");
         if (entrance == null && backs.Count > 0)
-            throw new InvalidDataException($"{homeDocument.Name}'s doorway back to {entryHome.DisplayName} needs the way into your world there: place it in {entryHome.DisplayName} (World Entrance).");
+            throw ExportRepair.Refusal($"{homeDocument.Name}'s doorway back to {entryHome.DisplayName} needs the way into your world there: place it in {entryHome.DisplayName} (World Entrance).",
+                new ExportRepair.PlaceWorldEntrance(entryHome.Key));
+        // The homeworld's objects fit its save rows (said here, by name and number, before anything is built).
+        int homeRoom = HomeworldSaveRoom(donors, catalog);
+        if (homeDocument.Ledger.Entries.Count > homeRoom)
+        {
+            int live = homeDocument.Objects.Count(o => !o.Value.IsRemoved), over = homeDocument.Ledger.Entries.Count - homeRoom;
+            throw ExportRepair.Refusal($"{homeDocument.Name} has {homeDocument.Ledger.Entries.Count} objects" +
+                (homeDocument.Ledger.Entries.Count > live ? $" ({homeDocument.Ledger.Entries.Count - live} of them deleted ones whose save rows are still kept)" : "") +
+                $", but a new world's homeworld has room for {homeRoom}: the game remembers every object in one of 256 rows, and the homeworld shares them with Artisans' own. " +
+                $"Take {over} out of {homeDocument.Name} (loose gems are the easiest).", new ExportRepair.FitHomeworldObjects(homeRoom));
+        }
         // The world's place on the balloonists' route (not chosen: by whether its homeworld has a balloonist).
         var homeLevel = levels.First(l => l.Document.WorldLevelId == NewWorldDocument.Homeworld);
         bool hasBalloonist = homeLevel.Placements.Any(p => !p.Retired && p.SpecialId == null && p.SourceRowIndex >= 0 && !string.IsNullOrEmpty(p.SourceLevelKey) &&
@@ -168,7 +187,9 @@ public static class NativeNewWorldExport
         byte[] wad = image.Wad;
         Dictionary<int, byte[]> rebuilt = [];
         WorldEntranceResult? entranceResult = null;
-        if (entrance != null)
+        // A homeworld with objects the user added already has the entrance: it was composed with them (a level is
+        // composed once; UniversalMobyExport.Apply's composeWith).
+        if (entrance != null && !NativeWorldEntrance.Present(image.EntryBytes(entryHome.SourceWadEntry)))
         {
             entranceResult = NativeWorldEntrance.Apply(donors, catalog, entrance.Spec(), image.EntryBytes(entryHome.SourceWadEntry),
                 image.EntryBytes(entryHome.SourceWadEntry - 1), final, NativeWorldEntrance.SceneSky(donors.ImagePath, homeDocument));

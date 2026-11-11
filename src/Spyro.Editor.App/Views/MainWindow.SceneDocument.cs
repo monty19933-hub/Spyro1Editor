@@ -302,7 +302,12 @@ public sealed partial class MainWindow
         {
             ReportCreateBinProgress("Merging saved levels…","Create BIN: composing saved changes from the other levels…");
             retailStage=Path.Combine(ExportScratchSpace.AggregateRoot(workspacePath),Guid.NewGuid().ToString("N"));
-            retail=await CreateSavedEditsStageAsync(original,DiscImageLocator.FindCueForImage(original),retailStage,targets,true);
+            // The way into the new world is composed into its homeworld with the objects added there (a level is composed once).
+            var stagedHome=worldScenes.FirstOrDefault(s=>s.WorldLevelId==NewWorldDocument.Homeworld);
+            _stageWorldEntrance=world!=null&&worldEntrance!=null&&stagedHome!=null&&string.Equals(worldEntrance.HomeworldKey,world.EntryHomeworldKey,StringComparison.OrdinalIgnoreCase)
+                ?new(worldEntrance.Spec(),NativeWorldEntrance.SceneSky(original,stagedHome),GameRam.Mode):null;
+            try{retail=await CreateSavedEditsStageAsync(original,DiscImageLocator.FindCueForImage(original),retailStage,targets,true);}
+            finally{_stageWorldEntrance=null;}
             if(retail.SkippedEdits>0)throw new InvalidDataException("Saved changes could not be included: "+string.Join("; ",retail.SkippedEditDetails));
             RequireOwner();
         }

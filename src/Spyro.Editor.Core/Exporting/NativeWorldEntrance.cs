@@ -52,6 +52,10 @@ public sealed record WorldEntranceResult(byte[] LevelData, byte[] Overlay, int D
     WorldEntranceSky Sky, int SkyBytes, int SkyParts, int OpeningPoints, int EntryTriangles, int FrameFaces, int FrameSectors,
     int FrameTriangles, int FaceTexture, int SideTexture, int AddedBytes, long RoomLeft)
 {
+    /// <summary>When the entrance was built together with the homeworld's added objects (<see cref="NativeWorldEntrance.ComposeWith"/>):
+    /// that composition, its level data the finished one. Null: the entrance was built by itself.</summary>
+    public Spyro.Editor.Core.Universal.UniversalComposeResult? Composed { get; init; }
+
     /// <summary>A readable line for Create BIN's report.</summary>
     public string Describe(string homeworld) =>
         $"{homeworld}: the New World's doorway (doorway {DoorwayIndex + 1}, {OpeningPoints}-point opening, {FrameFaces} frame faces in {FrameSectors} " +
@@ -120,22 +124,31 @@ public static class NativeWorldEntrance
     /// object classes); <paramref name="destinationSky"/> is the sky block homeworld 70 has in this export. Refuses (with
     /// <see cref="InvalidDataException"/>, in plain words) a homeworld that already has six doorways or an entrance, a spot
     /// outside the map, a level whose tables are full, and one without room in the current memory mode.</summary>
+    /// <summary>Composes a homeworld's added objects together with the entrance's three (given last): from the level data
+    /// with the entrance's record, frame and collision in it, and those three objects. A level is composed once, so a
+    /// homeworld with objects the user added gets its entrance in that same composition
+    /// (<see cref="Spyro.Editor.Core.Universal.UniversalMobyExport.Apply"/>), not afterwards.</summary>
+    public delegate UniversalComposeResult ComposeWith(byte[] levelData, IReadOnlyList<UniversalMobyPlacement> entranceObjects);
+
+    /// <summary>Whether the level already has the New World's doorway (it was built with the homeworld's added objects).</summary>
+    public static bool Present(byte[] levelData) => Body.Read(new UniversalLevelData(levelData)).Records.Any(r => I(r, 0x1C) == Destination);
+
     public static WorldEntranceResult Apply(UniversalSourceLibrary originals, LevelCatalog catalog, WorldEntranceSpec spec,
-        byte[] levelData, byte[] overlay, byte[] executable, byte[] destinationSky, WorldEntranceSky sky = WorldEntranceSky.Auto)
+        byte[] levelData, byte[] overlay, byte[] executable, byte[] destinationSky, WorldEntranceSky sky = WorldEntranceSky.Auto, ComposeWith? together = null)
     {
         ArgumentNullException.ThrowIfNull(spec);
         var level = RequireHomeworld(catalog, spec.HomeworldKey);
         RequireSky(destinationSky);
-        if (sky != WorldEntranceSky.Auto) return Build(originals, catalog, level, spec, levelData, overlay, executable, Sky(destinationSky, sky), sky);
+        if (sky != WorldEntranceSky.Auto) return Build(originals, catalog, level, spec, levelData, overlay, executable, Sky(destinationSky, sky), sky, together);
         // The sky only lengthens the record, so the room left with a plain one says how much sky fits.
-        var plain = Build(originals, catalog, level, spec, levelData, overlay, executable, Sky(destinationSky, WorldEntranceSky.Plain), WorldEntranceSky.Plain);
+        var plain = Build(originals, catalog, level, spec, levelData, overlay, executable, Sky(destinationSky, WorldEntranceSky.Plain), WorldEntranceSky.Plain, together);
         long budget = plain.RoomLeft - AutoCushion + plain.SkyBytes;
         byte[] whole = DoorwaySky(destinationSky);
         if (whole.Length <= budget)
-            return Build(originals, catalog, level, spec, levelData, overlay, executable, whole, PartCount(destinationSky) == 0 ? WorldEntranceSky.Plain : WorldEntranceSky.Full);
+            return Build(originals, catalog, level, spec, levelData, overlay, executable, whole, PartCount(destinationSky) == 0 ? WorldEntranceSky.Plain : WorldEntranceSky.Full, together);
         var (reduced, kept) = Reduce(destinationSky, (int)Math.Max(0, Math.Min(int.MaxValue, budget)));
         if (kept > 0)
-            return Build(originals, catalog, level, spec, levelData, overlay, executable, reduced, WorldEntranceSky.Reduced);
+            return Build(originals, catalog, level, spec, levelData, overlay, executable, reduced, WorldEntranceSky.Reduced, together);
         return plain;
     }
 
@@ -268,7 +281,7 @@ public static class NativeWorldEntrance
     // ------------------------------------------------------------------------------------------------------------------
 
     private static WorldEntranceResult Build(UniversalSourceLibrary originals, LevelCatalog catalog, LevelDefinition level, WorldEntranceSpec spec,
-        byte[] levelData, byte[] overlayBytes, byte[] executable, byte[] skyBlock, WorldEntranceSky skyKind)
+        byte[] levelData, byte[] overlayBytes, byte[] executable, byte[] skyBlock, WorldEntranceSky skyKind, ComposeWith? together = null)
     {
         string name = level.DisplayName;
         var before = new UniversalLevelData(levelData.ToArray());
@@ -374,26 +387,40 @@ public static class NativeWorldEntrance
         UniversalComposeResult composed;
         try
         {
-            composed = UniversalMobyComposer.Compose(level, data.Bytes, overlayBytes, executable, k => originals.Get(k), originals.SharedClasses,
-                [], placements, sharedModelPackage: originals.SharedModelPackage);
+            composed = together != null ? together(data.Bytes, placements)
+                : UniversalMobyComposer.Compose(level, data.Bytes, overlayBytes, executable, k => originals.Get(k), originals.SharedClasses,
+                    [], placements, sharedModelPackage: originals.SharedModelPackage);
         }
         catch (UniversalBudgetException e) { throw new InvalidDataException(NoRoom(Math.Max(1, -e.Budget.FinalHeadroom)), e); }
-        if (composed.Classes.Any(c => c.ModelImported || c.BehaviorImported) || composed.VramBytesUsed != 0)
-            throw new InvalidDataException($"{name}'s doorway objects are not its own any more (their models or behaviour would have to be copied in).");
-        if (!composed.Executable.AsSpan().SequenceEqual(executable))
-            throw new InvalidDataException($"Adding {name}'s doorway objects would change the game's program; the New World's doorway needs none.");
-        var rows = composed.NewRowIndices;
-        if (rows.Count != 3 || rows.Any(r => r is < 0 or > 255)) throw new InvalidDataException($"{name}'s doorway objects were not placed.");
-        var result = new UniversalLevelData(composed.LevelData);
+        IReadOnlyList<int> rows;
+        uint copy = overlay.CopyBuffer;
+        if (together == null)
+        {
+            if (composed.Classes.Any(c => c.ModelImported || c.BehaviorImported) || composed.VramBytesUsed != 0)
+                throw new InvalidDataException($"{name}'s doorway objects are not its own any more (their models or behaviour would have to be copied in).");
+            if (!composed.Executable.AsSpan().SequenceEqual(executable))
+                throw new InvalidDataException($"Adding {name}'s doorway objects would change the game's program; the New World's doorway needs none.");
+            rows = composed.NewRowIndices;
+            if (rows.Count != 3 || rows.Any(r => r is < 0 or > 255)) throw new InvalidDataException($"{name}'s doorway objects were not placed.");
+        }
+        else
+        {
+            // Composed with the homeworld's added objects: the doorway's three were given last, so they are the last rows.
+            if (composed.NewRowIndices.Count < 3) throw new InvalidDataException($"{name}'s doorway objects were not placed.");
+            rows = [.. composed.NewRowIndices.Skip(composed.NewRowIndices.Count - 3)];
+            if (rows.Any(r => r is < 0 or > 255)) throw new InvalidDataException($"{name} has no object rows left for the New World's doorway (the game numbers 256).");
+            copy = new UniversalOverlay(composed.Overlay, UniversalExeBindings.Read(composed.Executable, level.LevelId)).CopyBuffer;
+        }
+        var result = new UniversalLevelData(composed.LevelData.ToArray());
         BindPathRow(result, doorway, rows[0]);
 
         // ---- memory and readback ----
-        if (!GameRam.Fits(result, overlay.CopyBuffer)) throw new InvalidDataException(NoRoom(GameRam.Shortfall(result, overlay.CopyBuffer)));
-        Verify(before, result, body, record, doorway, specialCount, firstEntry, entry, frameTriangles.Count, sectorCount, added.Count, name);
+        if (!GameRam.Fits(result, copy)) throw new InvalidDataException(NoRoom(GameRam.Shortfall(result, copy)));
+        Verify(before, result, body, record, doorway, specialCount, firstEntry, entry, frameTriangles.Count, sectorCount, added.Count, name, together == null ? null : rows);
         return new(result.Bytes, composed.Overlay, doorway, rows[0], rows, skyKind, skyBlock.Length, PartCount(skyBlock), points, entry, frameFaces,
             added.Count, frameTriangles.Count, faceTexture, sideTexture,
-            (int)(UniversalMobyComposer.RuntimeEnd(result, overlay.CopyBuffer) - UniversalMobyComposer.RuntimeEnd(before, overlay.CopyBuffer)),
-            GameRam.ModelRoom(result, overlay.CopyBuffer));
+            (int)(UniversalMobyComposer.RuntimeEnd(result, copy) - UniversalMobyComposer.RuntimeEnd(before, overlay.CopyBuffer)),
+            GameRam.ModelRoom(result, copy)) { Composed = together == null ? null : composed with { LevelData = result.Bytes } };
     }
 
     private static LevelDefinition RequireHomeworld(LevelCatalog catalog, string key)
@@ -596,6 +623,25 @@ public static class NativeWorldEntrance
         return result;
     }
 
+    /// <summary>The level's collision triangles (editor units) and whether each is a special kind of ground (water, lava,
+    /// a supercharge ramp, a doorway's entry: the game lists those first, each with a flag byte whose low six bits name
+    /// the kind; 0x3F is solid ground). What <see cref="WorldEntranceSpots"/> reads the homeworld's ground from.</summary>
+    internal static IReadOnlyList<(Vector3f A, Vector3f B, Vector3f C, bool Flagged)> CollisionTriangles(UniversalLevelData data, string name)
+    {
+        byte[] c = Body.Read(data).Components[4];
+        var l = ReadCollision(c, name);
+        static int Signed(uint v) => (int)(v & 0x1FF) - ((v & 0x100) != 0 ? 0x200 : 0);
+        var list = new (Vector3f, Vector3f, Vector3f, bool)[l.Count];
+        for (int n = 0; n < l.Count; n++)
+        {
+            uint x = (uint)I(c, l.Triangles + 12 * n), y = (uint)I(c, l.Triangles + 12 * n + 4), z = (uint)I(c, l.Triangles + 12 * n + 8);
+            float ax = x & 0x3FFF, ay = y & 0x3FFF, az = z & 0x3FFF;
+            list[n] = (new(ax, ay, az), new(ax + Signed(x >> 14), ay + Signed(y >> 14), az + (z >> 16 & 0xFF)),
+                new(ax + Signed(x >> 23), ay + Signed(y >> 23), az + (z >> 24 & 0xFF)), n < l.FlagCount && (c[l.Flags + n] & 0x3F) != 0x3F);
+        }
+        return list;
+    }
+
     // ---- collision: length, count, flag count, then (from +4) block tree, blocks, triangles, assignments, flags ----
     internal sealed record CollisionLayout(int Count, int FlagCount, int Tree, int Blocks, int Triangles, int Assignment, int Flags, int UsedBlocks);
 
@@ -738,8 +784,10 @@ public static class NativeWorldEntrance
     }
 
     // ---- readback ----
+    /// <param name="together">The doorway objects' rows when they were composed with the homeworld's added objects (the
+    /// other rows, and video memory, are then that composition's business); null: the entrance was built by itself.</param>
     private static void Verify(UniversalLevelData before, UniversalLevelData after, Body old, byte[] record, int doorway, int special, int firstEntry,
-        int entryTriangles, int frameTriangles, int sectors, int addedSectors, string name)
+        int entryTriangles, int frameTriangles, int sectors, int addedSectors, string name, IReadOnlyList<int>? together = null)
     {
         void Require(bool ok, string what) { if (!ok) throw new InvalidDataException($"{name}'s New World doorway failed its readback: {what}."); }
         var now = Body.Read(after);
@@ -778,6 +826,14 @@ public static class NativeWorldEntrance
             "the collision grid lost a triangle");
         Require(newIndex.FlagCount == oldIndex.FlagCount + entryTriangles, "flag count");
         var oldScene = before.Scene(); var newScene = after.Scene();
+        int[] kinds = [0x18E, 1, 0x11E];
+        if (together != null)
+        {
+            Require(together.Count == 3 && together.All(r => r >= 0 && r < newScene.RowCount), "object rows");
+            for (int k = 0; k < 3; k++)
+                Require(BinaryPrimitives.ReadUInt16LittleEndian(after.Row(together[k]).AsSpan(0x36)) == kinds[k], "the doorway objects' kinds");
+            return;
+        }
         Require(newScene.RowCount == oldScene.RowCount + 3, "object rows");
         for (int r = 0; r < oldScene.RowCount; r++)
             Require(before.Row(r).AsSpan(0x0C, 12).SequenceEqual(after.Row(r).AsSpan(0x0C, 12)) && before.Row(r).AsSpan(0x36, 2).SequenceEqual(after.Row(r).AsSpan(0x36, 2)),

@@ -277,6 +277,44 @@ internal static partial class NewLevelBuildCases
             WaitIdle(window);
         }
         else Load(window, from);
+        CreateBin(window);
+        // NEW_LEVEL_EXPORT_FIX=1: Create BIN is expected to stop on something the editor can put right (Fix It For Me):
+        // the button must be on offer, pressing it must do the repair, and Create BIN must then go through.
+        if (System.Environment.GetEnvironmentVariable("NEW_LEVEL_EXPORT_FIX") == "1")
+        {
+            string root = System.Environment.GetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE")!;
+            if (window.PendingRepairForTesting == null) throw new InvalidOperationException("Create BIN offered no Fix It For Me: " + Status(window));
+            // One problem after another, as a user would meet them (NEW_LEVEL_EXPORT_FIXES names how many are expected).
+            int fixes = 0;
+            while (window.PendingRepairForTesting is { } repair)
+            {
+                if (++fixes > 5) throw new InvalidOperationException("Fix It For Me keeps being offered: " + Status(window));
+                if (!window.FixItVisibleForTesting) throw new InvalidOperationException("A repair is on offer but the button is hidden.");
+                if (!Status(window).Contains("Fix It For Me", StringComparison.Ordinal)) throw new InvalidOperationException("The status does not point to Fix It For Me: " + Status(window));
+                Console.WriteLine("repair on offer: " + repair);
+                var fix = window.ApplyPendingRepairForTestingAsync();
+                Wait(() => fix.IsCompleted, "Fix It For Me", 300);
+                Console.WriteLine("fix: " + Status(window));
+                if (window.PendingRepairForTesting != null || window.FixItVisibleForTesting) throw new InvalidOperationException("Fix It For Me stayed on offer after it ran.");
+                if (!Status(window).StartsWith("Fixed:", StringComparison.Ordinal)) throw new InvalidOperationException("Fix It For Me did not fix it: " + Status(window));
+                if (repair is Spyro.Editor.Core.Exporting.ExportRepair.PlaceWorldEntrance)
+                {
+                    string entrance = Spyro.Editor.Core.Editing.WorldEntranceDocument.PathFor(root);
+                    if (!File.Exists(entrance)) throw new InvalidOperationException("Fix It For Me placed no entrance.");
+                    Console.WriteLine("entrance: " + File.ReadAllText(entrance).ReplaceLineEndings(" "));
+                }
+                CreateBin(window);
+            }
+            if (!Status(window).StartsWith("Created", StringComparison.Ordinal)) throw new InvalidOperationException("Create BIN did not go through after the fix: " + Status(window));
+            if (int.TryParse(System.Environment.GetEnvironmentVariable("NEW_LEVEL_EXPORT_FIXES"), out int expected) && expected != fixes)
+                throw new InvalidOperationException($"{fixes} repairs were needed, {expected} expected.");
+            Console.WriteLine($"NEW_LEVEL_FIX_IT_OK fixes={fixes}");
+        }
+        Console.WriteLine("NEW_LEVEL_EXPORT_DONE");
+    }
+
+    private static void CreateBin(MainWindow window)
+    {
         var command = (Task)Invoke(window, "CreateObjectTestBinAsync")!;
         bool confirmed = false;
         var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -319,7 +357,6 @@ internal static partial class NewLevelBuildCases
         if (Directory.Exists(output))
             foreach (string f in Directory.GetFiles(output).OrderBy(File.GetLastWriteTimeUtc))
                 Console.WriteLine($"  {Path.GetFileName(f)} {new FileInfo(f).Length} {File.GetLastWriteTime(f):HH:mm:ss}");
-        Console.WriteLine("NEW_LEVEL_EXPORT_DONE");
     }
 }
 

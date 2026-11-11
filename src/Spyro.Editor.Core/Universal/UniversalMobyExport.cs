@@ -95,7 +95,8 @@ public static class UniversalMobyExport
         bool removedTreasureAlreadyApplied = false,
         Spyro.Editor.Core.Crash.CrashWarpedDisc? crash = null, Spyro.Editor.Core.Music.YearOfTheDragonDisc? yotd = null,
         IReadOnlyDictionary<string, IReadOnlyList<(int Class, string SourceKey)>>? dependenciesByLevel = null,
-        IReadOnlyCollection<string>? superchargeLevels = null)
+        IReadOnlyCollection<string>? superchargeLevels = null,
+        Func<LevelDefinition, byte[], byte[], byte[], Func<byte[], IReadOnlyList<UniversalMobyPlacement>, UniversalComposeResult>, UniversalComposeResult?>? composeWith = null)
     {
         if (string.Equals(Path.GetFullPath(sources.ImagePath), Path.GetFullPath(outputImagePath), StringComparison.Ordinal) ||
             string.Equals(Path.GetFullPath(currentImagePath), Path.GetFullPath(outputImagePath), StringComparison.Ordinal))
@@ -157,13 +158,31 @@ public static class UniversalMobyExport
             }
             // Animation 45's glow texture stays where the records expect it.
             IEnumerable<(long Offset, int Length)> glow = superchargeHere ? supercharge!.ProtectedVram : [];
-            var composed = UniversalMobyComposer.Compose(level, levelBytes,
-                current.EntryBytes(level.SourceWadEntry - 1), exe, k => sources.Get(k), sources.SharedClasses,
-                protectedVram(currentImagePath, level).Concat(glow), placements, SpecialProvider(japanese, sources, crash, yotd),
+            byte[] overlayBytes = current.EntryBytes(level.SourceWadEntry - 1), exeNow = exe;
+            // Objects composed in with the level's own (composeWith: the New World's doorway objects). They remember
+            // nothing, so they take the last save rows that are free: the level's added objects keep theirs, now and
+            // when more are added.
+            IReadOnlyList<UniversalMobyPlacement> WithMore(IReadOnlyList<UniversalMobyPlacement> more)
+            {
+                if (more.Count == 0) return placements;
+                var used = new HashSet<int>();
+                int rank = 0;
+                foreach (var p in placements) used.Add(p.SaveIdentity ?? nativeRows + (p.PersistentSlot ?? rank++));
+                var free = new Queue<int>(Enumerable.Range(nativeRows, Math.Max(0, 256 - nativeRows)).Reverse().Where(id => !used.Contains(id)));
+                if (free.Count < more.Count(p => p.SaveIdentity == null))
+                    throw new InvalidDataException($"{level.DisplayName} has no save rows left for the New World's doorway objects. Take out {more.Count} of the objects added there.");
+                return [.. placements, .. more.Select(p => p.SaveIdentity != null ? p : p with { SaveIdentity = free.Dequeue() })];
+            }
+            UniversalComposeResult Compose(byte[] data, IReadOnlyList<UniversalMobyPlacement> more) => UniversalMobyComposer.Compose(level, data,
+                overlayBytes, exeNow, k => sources.Get(k), sources.SharedClasses,
+                protectedVram(currentImagePath, level).Concat(glow),
+                WithMore(more),
+                SpecialProvider(japanese, sources, crash, yotd),
                 removed,
                 useNativeOwnershipScan ? dropped => DefaultProtectedVram(currentImagePath, level, dropped).Concat(glow) : null, sources.SharedModelPackage, sources.PlayerAnimations,
                 removedTreasureAlreadyApplied, nativeSharedEntry8:current.EntryBytes(8),
                 dependencyClasses: dependencies is { Count: > 0 } ? dependencies : null);
+            var composed = composeWith?.Invoke(level, levelBytes, overlayBytes, exeNow, Compose) ?? Compose(levelBytes, []);
             if (superchargeHere) supercharge!.RequireDestination(composed.LevelData);
             exe = composed.Executable;
             replacements[level.SourceWadEntry] = composed.LevelData;

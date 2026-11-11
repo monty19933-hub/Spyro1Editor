@@ -366,7 +366,9 @@ public sealed partial class MainWindow
 
         var scene = CaptureFreshScene();
         var spare = new Queue<string>(_freshSceneDocument.RandomObjectRows ?? []);
-        int free = Math.Max(0, 256 - (scene.TargetBinding?.NativePrefixRows ?? 0) - scene.Ledger.Entries.Count + spare.Count);
+        // A new world's homeworld is built on Artisans' place at Create BIN and has only the rows Artisans leaves.
+        int taken = scene.TargetBinding?.NativePrefixRows ?? (scene.WorldLevelId == NewWorldDocument.Homeworld ? 256 - NativeNewWorldExport.HomeworldSaveRoom(lib, _retailCatalog) : 0);
+        int free = Math.Max(0, 256 - taken - scene.Ledger.Entries.Count + spare.Count);
         var occupied = _currentMobys.Where(m => !m.IsRemoved).Select(m => m.Position).ToList();
         int before = _currentMobys.Where(m => !m.IsRemoved).Sum(m => m.TreasureValue);
         // Enemies that bring helpers with them take a row for each: the plan is made for fewer rows by that much.
