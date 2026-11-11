@@ -159,7 +159,7 @@ internal static class RewardCases
         check(made[0].Variants.All(v => v.RewardByte == 0xD6) && made[1].Variants.All(v => v.RewardByte == 0xD7) && made[0].Default.RewardByte == 0xD6, "each version gives the gem");
         check(!made[0].Variants[0].Equals(spring.Variants[0]) && made[0].Variants[0] with { RewardByte = null } == spring.Variants[0], "a reward version is its own key in the browser's caches");
         check(UniversalHighValueRewards.FindEntry([spring, .. made], "chest:spring-rainbow") == made[1], "found by id");
-        check(made.All(e => e.Notes!.Contains("springs up", StringComparison.Ordinal)), "the browser explains how to get the gem");
+        check(made.All(e => e.Notes!.Contains("springs up", StringComparison.Ordinal) && e.Notes.Contains("vanishes", StringComparison.Ordinal)), "the browser explains how to get the gem");
         check(UniversalHighValueRewards.CatalogEntries([.. made, spring]).Count == 2, "editor entries are not made from editor entries");
     }
 

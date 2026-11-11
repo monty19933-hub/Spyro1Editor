@@ -49,6 +49,9 @@ public sealed partial class MainWindow
     private string UniversalSourceObjectName(UniversalMobyCatalogEntry entry, UniversalMobyVariant variant)
     {
         if (UniversalSpecialCatalog.IsSpecial(variant)) return entry.Name;
+        // A teal or rainbow spring chest's versions are the game's spring chests: named without the gem they gave there.
+        if (variant.RewardByte != null)
+            return System.Text.RegularExpressions.Regex.Replace(UniversalSourceObjectName(entry, variant with { RewardByte = null }), @"\s*\([A-Za-z]+ reward\)$", "");
         if (variant.SourceLevelKey == "alpineridge" && variant.ClassId == 0x10F) return "Alpine Ridge source object (identity unverified)";
         if (_universalSourceNames.TryGetValue((variant.SourceLevelKey, variant.SourceRow), out var identity)) return identity.Item1;
         if (variant.SourceLevelKey == "wizardpeak" && variant.ClassId == 0x11C) return "Armored Druid (Wizard Peak; roster identity)";

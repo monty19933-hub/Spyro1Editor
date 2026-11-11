@@ -55,7 +55,7 @@ public static class UniversalHighValueRewards
             list.Add(new(first.ClassId, name, "Interactive", "Chests & Containers", variants, main,
                 springs.SelectMany(e => e.SourceLevels).Distinct().ToList(), first.RestrictionReason,
                 $"A spring chest that holds a {gem}. Flame it or charge it and the gem springs up out of its lid: Spyro has to grab it " +
-                $"before it sinks back in (the chest then closes, ready to be opened again). It adds {value} to collected treasure and to this level's total, " +
+                $"quickly, or it vanishes in a burst of sparkles and the chest closes, ready to be opened again. It adds {value} to collected treasure and to this level's total, " +
                 "and once collected the game remembers it like any gem. Uses your USA disc.") { Id = id });
         }
         return list;
