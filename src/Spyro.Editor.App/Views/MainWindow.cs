@@ -10849,6 +10849,8 @@ public sealed partial class MainWindow : Window
             _modernTerrainWorkspaceTab.IsEnabled = !editorMutationOperationActive;
         if (_modernLevelWorkspaceTab != null)
             _modernLevelWorkspaceTab.IsEnabled = !editorMutationOperationActive;
+        if (_modernColoursWorkspaceTab != null)
+            _modernColoursWorkspaceTab.IsEnabled = !editorMutationOperationActive;
         if (_modernEnvironmentWorkspaceTab != null)
             _modernEnvironmentWorkspaceTab.IsEnabled = !editorMutationOperationActive;
         if (_modernResearchWorkspaceTab != null)

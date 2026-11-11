@@ -51,8 +51,9 @@ internal static class MemoryModeUiCases
             foreach (string name in IsolatedRoots) Environment.SetEnvironmentVariable(name, Directory.CreateDirectory(Path.Combine(parent, name)).FullName);
             var window = Measure();
             var section = Find<Control>(window, "MemoryModeSection");
-            Check(section.Parent != null && section.Parent == Find<Control>(window, "PlayAsCrashSection").Parent,
-                "Memory is a card in Game Settings, beside Play as Crash");
+            Check(section.Parent != null && section.Parent == Find<Control>(window, "GameSettingsWholeGameNote").Parent &&
+                  Find<Control>(window, "PlayAsCrashSection").Parent == Find<Control>(window, "ColoursWorkspacePanel"),
+                "Memory is a card in Game Settings; Play as Crash is on the Colours tab");
             RadioButton ps = Find<RadioButton>(window, "MemoryModePlayStation"), em = Find<RadioButton>(window, "MemoryModeEmulator8MB");
             Check(ps.Content?.ToString() == "PlayStation (2 MB)" && em.Content?.ToString() == "Emulator (8 MB RAM), the usual choice", "the two choices are named plainly");
             string text = string.Join(" ", section.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text));

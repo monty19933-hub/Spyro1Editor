@@ -877,7 +877,7 @@ void RunFreshNativeShellOnly()
         EditorShellSessionSnapshot before = window.CaptureEditorShellSessionSnapshotForTesting();
         var inputs = CaptureTerrainProjectInputHashes(workspace, before.CurrentLevel!.Key);
         AssertWorkspaceTabHeaders(FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs"),
-            ["Objects", "Terrain", "Game Settings", "Environment"], "retail before separate fresh document");
+            ["Objects", "Terrain", "Game Settings", "Colours", "Environment"], "retail before separate fresh document");
         AssertNoWholeLevelWipeAction(window);
         AssertWorkspaceTabContrast(window);
         Button open = FindNamedUnique<Button>(window, "FreshNativeDocumentButton");
@@ -1011,7 +1011,7 @@ void RunWorkspaceShellOnly()
         }
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Game Settings", "Environment"],
+            ["Objects", "Terrain", "Game Settings", "Colours", "Environment"],
             "existing-level editor");
         AssertNoWholeLevelWipeAction(window);
         if (window.GetLogicalDescendants().OfType<EditorViewport>().Distinct().Count() != 1)
@@ -1056,7 +1056,7 @@ void RunWorkspaceShellOnly()
         EditorShellSessionSnapshot building = window.CaptureEditorShellSessionSnapshotForTesting();
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Game Settings", "Environment"],
+            ["Objects", "Terrain", "Game Settings", "Colours", "Environment"],
             "existing-level terrain tools");
         if (building.ActiveExperience != LevelEditorExperience.ExistingLevel ||
             !initial.Viewport.TerrainFocusMode)
@@ -1123,7 +1123,7 @@ void RunWorkspaceShellOnly()
         EditorShellSessionSnapshot returnedObjects = window.CaptureEditorShellSessionSnapshotForTesting();
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Game Settings", "Environment"],
+            ["Objects", "Terrain", "Game Settings", "Colours", "Environment"],
             "returned existing-level Objects tab");
         AssertWorkspaceSessionContinuity(dirtyBeforeSwitch, returnedObjects, "retail Environment -> Objects");
 
@@ -1517,7 +1517,7 @@ void RunDeferredReleaseUiPolicy()
     {
         WaitForLevelData(window);
         TabControl tabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
-        AssertWorkspaceTabHeaders(tabs, ["Objects", "Terrain", "Game Settings", "Environment"], "normal release");
+        AssertWorkspaceTabHeaders(tabs, ["Objects", "Terrain", "Game Settings", "Colours", "Environment"], "normal release");
         string[] deferredNames = ["Id65BlankLevelLabDisclosure", "NativeLevelReplacementDisclosure"];
         if (window.GetLogicalDescendants().OfType<Control>().Any(c => deferredNames.Contains(c.Name)))
             throw new InvalidOperationException("Deferred research controls leaked into the normal release editor.");
@@ -1737,7 +1737,7 @@ void RunId65BlankLabUiOnly()
         }
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Game Settings", "Environment", "Research"],
+            ["Objects", "Terrain", "Game Settings", "Colours", "Environment", "Research"],
             "internal existing-level editor");
         AssertNoWholeLevelWipeAction(window);
 
@@ -1891,7 +1891,7 @@ void RunId65BlankLabUiOnly()
             label: "loaded ID65 Lab without a canonical document");
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Object Manager", "Terrain", "Game Settings", "Environment", "Research"],
+            ["Object Manager", "Terrain", "Game Settings", "Colours", "Environment", "Research"],
             "internal fresh blank-level editor");
         Button freshObjectManagerButton = FindNamedUnique<Button>(
             window,
@@ -2355,7 +2355,7 @@ void RunId65BlankLabUiOnly()
         }
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Game Settings", "Environment", "Research"],
+            ["Objects", "Terrain", "Game Settings", "Colours", "Environment", "Research"],
             "internal ID65 round-trip retail editor");
         bool retailTabsContainFreshStart = ReadItemsSource(
                 toolTabs,
@@ -2414,7 +2414,7 @@ void RunId65BlankLabUiOnly()
             label: "returned ID65 Lab without a canonical document");
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Object Manager", "Terrain", "Game Settings", "Environment", "Research"],
+            ["Object Manager", "Terrain", "Game Settings", "Colours", "Environment", "Research"],
             "returned internal ID65 blank-level editor");
         Button returnedStartButton = FindNamedUnique<Button>(
             window,
@@ -5677,7 +5677,7 @@ void RunResearchWorkspaceTabMemory()
         }
         AssertWorkspaceTabHeaders(
             researchTabs,
-            ["Objects", "Terrain", "Game Settings", "Environment", "Research"],
+            ["Objects", "Terrain", "Game Settings", "Colours", "Environment", "Research"],
             "non-release existing-level editor");
         TabItem environment = ReadItemsSource(researchTabs, "non-release existing-level tabs")
             .OfType<TabItem>()

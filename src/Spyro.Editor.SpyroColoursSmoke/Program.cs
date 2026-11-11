@@ -132,6 +132,58 @@ if (args.Length == 0)
     return 0;
 }
 
+// Lab: --coverage <USA.bin> <repo root>: for every level, which of its creatures, chests and dragons the colour
+// changer can read and how much of each is a colour it would change.
+if (args.Length >= 3 && args[0] == "--coverage")
+{
+    var catalog = Spyro.Editor.Core.Levels.LevelCatalog.Load(args[2]);
+    var lib = new UniversalSourceLibrary(args[1], catalog);
+    var entries = UniversalMobyCatalogBuilder.Build(lib, catalog);
+    foreach (var level in catalog.Levels.Where(l => l.SourceWadEntry > 0).OrderBy(l => l.LevelId))
+    {
+        byte[] bytes = lib.Disc.EntryBytes(level.SourceWadEntry);
+        var survey = NativeCreatureColours.Survey(bytes).ToDictionary(r => r.ClassId);
+        var kinds = NativeCreatureColours.Kinds(bytes).Select(k => k.ClassId).ToHashSet();
+        foreach (var e in entries.Where(e => e.Variants.Any(v => string.Equals(v.SourceLevelKey, level.Key, StringComparison.OrdinalIgnoreCase))).OrderBy(e => e.Category).ThenBy(e => e.ClassId))
+        {
+            int cls = e.Variants.First(v => string.Equals(v.SourceLevelKey, level.Key, StringComparison.OrdinalIgnoreCase)).ClassId;
+            string state = !survey.TryGetValue(cls, out var row) ? "no-model" : !row.Readable ? "unread" : kinds.Contains(cls) ? "ok" : "no-colour";
+            Console.WriteLine($"{level.Key}\t0x{cls:X3}\t{e.Category}\t{e.SubCategory}\t{e.Name}\t{state}\t{(survey.TryGetValue(cls, out var r2) ? $"{r2.Own:0}/{r2.Vivid:0}/{r2.All:0}" : "")}");
+        }
+    }
+    return 0;
+}
+
+// Lab: --why <USA.bin> <repo root> <level key> <class hex>: the head of a class's model package (why it is not read).
+if (args.Length >= 5 && args[0] == "--why")
+{
+    var catalog = Spyro.Editor.Core.Levels.LevelCatalog.Load(args[2]);
+    var lib = new UniversalSourceLibrary(args[1], catalog);
+    byte[] bytes = lib.Disc.EntryBytes(catalog.FindByKey(args[3])!.SourceWadEntry);
+    var data = new UniversalLevelData(bytes);
+    var (modelsAt, modelsLength) = data.Subfiles()[2];
+    var regs = data.Registrations().Where(r => r.Root >= modelsAt && r.Root < modelsAt + modelsLength).GroupBy(r => r.Root).Select(g => g.First()).OrderBy(r => r.Root).ToArray();
+    int cls = Convert.ToInt32(args[4], 16);
+    for (int i = 0; i < regs.Length; i++)
+    {
+        if (regs[i].ClassId != cls) continue;
+        int start = regs[i].Root, end = i + 1 < regs.Length ? regs[i + 1].Root : modelsAt + modelsLength;
+        Console.WriteLine($"class 0x{cls:X} root 0x{start:X} length {end - start}; read: {(NativeCreatureColours.SignatureOf(bytes.AsSpan(start, end - start)) is { } sig ? sig.Id : "no, check " + NativeCreatureColours.LastNotRead)}");
+        for (int w = 0; w < 0x60 && start + w + 4 <= end; w += 4) Console.Write($"{BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(start + w)):X8} ");
+        Console.WriteLine();
+        int animations = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(start));
+        int md = (int)BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(start + 0x34));
+        for (int n = 0; n < Math.Min(animations, 3) && animations < 1024; n++)
+        {
+            int an = (int)BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(start + 0x38 + 4 * n));
+            Console.Write($"anim {n} at 0x{an:X}: ");
+            if (an > 0 && start + an + 0x2C <= end) for (int w = 0; w < 0x2C; w += 4) Console.Write($"{BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(start + an + w)):X8} ");
+            Console.WriteLine($" md 0x{md:X}");
+        }
+    }
+    return 0;
+}
+
 if (args.Length >= 2 && args[0] == "--source")
 {
     var disc = UniversalDiscImage.Read(args[1]);

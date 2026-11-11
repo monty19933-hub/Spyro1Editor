@@ -61,6 +61,9 @@ public sealed partial class MainWindow
     private TabItem? _modernLevelBuildingObjectWorkspaceTab;
     private TabItem? _modernTerrainWorkspaceTab;
     private TabItem? _modernLevelWorkspaceTab;
+    /// <summary>The Colours tab: this level's colours (enemies, chests, dragons, animals), Spyro's colours and moves,
+    /// Play as Crash. They were cards of Game Settings until 2.2.</summary>
+    private TabItem? _modernColoursWorkspaceTab;
     private TabItem? _modernEnvironmentWorkspaceTab;
     private TabItem? _modernResearchWorkspaceTab;
     private IReadOnlyList<TabItem> _existingLevelEditorTabs = Array.Empty<TabItem>();
@@ -548,6 +551,8 @@ public sealed partial class MainWindow
             new StackPanel { Spacing = 8, Children = { BuildFreshTerrainTools(),
                 _retailTerrainWorkspace } });
         _modernLevelWorkspaceTab = NewModernWorkspaceTab("Game Settings", BuildModernLevelWorkspace());
+        _modernColoursWorkspaceTab = NewModernWorkspaceTab("Colours", BuildModernColoursWorkspace());
+        _modernColoursWorkspaceTab.Name = "ColoursWorkspaceTab";
         _modernEnvironmentWorkspaceTab = NewModernWorkspaceTab(
             "Environment",
             BuildModernEnvironmentWorkspace());
@@ -556,6 +561,7 @@ public sealed partial class MainWindow
             _modernObjectWorkspaceTab,
             _modernTerrainWorkspaceTab,
             _modernLevelWorkspaceTab,
+            _modernColoursWorkspaceTab,
             _modernEnvironmentWorkspaceTab
         ];
         List<TabItem> levelBuildingItems =
@@ -563,6 +569,7 @@ public sealed partial class MainWindow
             _modernLevelBuildingObjectWorkspaceTab,
             _modernTerrainWorkspaceTab,
             _modernLevelWorkspaceTab,
+            _modernColoursWorkspaceTab,
             _modernEnvironmentWorkspaceTab
         ];
         if (!_releaseMode)
@@ -740,6 +747,8 @@ public sealed partial class MainWindow
         return new TabItem
         {
             Foreground = new SolidColorBrush(ModernInk),
+            // Five tabs share the panel's width: a little less room around each name than the theme gives.
+            Padding = new Thickness(8, 0),
             Header = new TextBlock
             {
                 Text = name,
@@ -1127,14 +1136,13 @@ public sealed partial class MainWindow
         panel.Children.Add(_retailNameDisclosure);panel.Children.Add(_retailMusicDisclosure);
         _homeworldTextGroup = BuildModernDisclosure("Portals & Return Home", BuildPortalControlPanel(), false);
         panel.Children.Add(_homeworldTextGroup);
-        // The open level's enemies in colours of their own (Spyro's look for one level is on his card, below).
-        panel.Children.Add(BuildCreatureColourSection());
         var wholeGame = ModernSectionHeading("Whole game");
         wholeGame.Margin = new Thickness(0, 12, 0, 0);
         panel.Children.Add(wholeGame);
         panel.Children.Add(new TextBlock
         {
-            Text = "Spyro's colours and moves, Play as Crash and memory for the games you create. Saved as soon as you choose.",
+            Name = "GameSettingsWholeGameNote",
+            Text = "Memory for the games you create, saved as soon as you choose. Colours (Spyro's, this level's enemies, chests and dragons), Hover, Fly Anywhere and Play as Crash are on the Colours tab.",
             TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = new SolidColorBrush(ModernMutedInk)
         });
         if (!_releaseMode) panel.Children.Add(BuildModernDisclosure("Starting Abilities", new StackPanel
@@ -1143,20 +1151,6 @@ public sealed partial class MainWindow
             Children = { BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), true),
                 BuildModernDisclosure("Play as Crash", BuildCrashPlayerSettingsPanel(), false), BuildHoverSection(), BuildSpyroColourSection(), BuildEggThiefColourSection() }
         }, false));
-        else
-        {
-            // Spyro himself first (his colours, with his picture, then his hover), then the level-by-level switches.
-            panel.Children.Add(BuildSpyroColourSection());
-            panel.Children.Add(BuildEggThiefColourSection());
-            panel.Children.Add(BuildHoverSection());
-            // One switch for the whole exported game, off unless the user turns it on.
-            var flight = BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), true);
-            flight.Name = "FlyAnywhereSection";
-            panel.Children.Add(flight);
-            var crash = BuildModernDisclosure("Play as Crash", BuildCrashPlayerSettingsPanel(), false);
-            crash.Name = "PlayAsCrashSection";
-            panel.Children.Add(crash);
-        }
         panel.Children.Add(BuildMemoryModeSection());
 
         // V5 whole-level replacement is deliberately a separate, guarded research
@@ -1174,6 +1168,41 @@ public sealed partial class MainWindow
         _levelDetails.FontSize = 12;
         _levelDetails.LineHeight = 18;
         panel.Children.Add(BuildModernDisclosure("Level details", _levelDetails, false));
+        return panel;
+    }
+
+    /// <summary>The Colours tab: colours for the open level's enemies, chests, dragons and animals; then Spyro's own
+    /// colours, the egg thieves' colour, and the moves and characters of the whole game (Hover, Fly Anywhere, Play as
+    /// Crash). In a development build the whole-game cards stay under Game Settings › Starting Abilities.</summary>
+    private Control BuildModernColoursWorkspace()
+    {
+        StackPanel panel = new() { Name = "ColoursWorkspacePanel", Spacing = 8 };
+        panel.Children.Add(ModernSectionHeading("This level"));
+        panel.Children.Add(BuildCreatureColourSection());
+        var wholeGame = ModernSectionHeading("Spyro and the whole game");
+        wholeGame.Margin = new Thickness(0, 12, 0, 0);
+        panel.Children.Add(wholeGame);
+        panel.Children.Add(new TextBlock
+        {
+            Text = _releaseMode
+                ? "Spyro's colours and moves and Play as Crash, for the games you create. Saved as soon as you choose; Create BIN puts them in the game."
+                : "In this development build Spyro's colours and moves are under Game Settings › Starting Abilities.",
+            TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = new SolidColorBrush(ModernMutedInk)
+        });
+        if (_releaseMode)
+        {
+            // Spyro himself first (his colours, with his picture), the egg thieves, then moves and characters.
+            panel.Children.Add(BuildSpyroColourSection());
+            panel.Children.Add(BuildEggThiefColourSection());
+            panel.Children.Add(BuildHoverSection());
+            // One switch for the whole exported game, off unless the user turns it on.
+            var flight = BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), false);
+            flight.Name = "FlyAnywhereSection";
+            panel.Children.Add(flight);
+            var crash = BuildModernDisclosure("Play as Crash", BuildCrashPlayerSettingsPanel(), false);
+            crash.Name = "PlayAsCrashSection";
+            panel.Children.Add(crash);
+        }
         return panel;
     }
 

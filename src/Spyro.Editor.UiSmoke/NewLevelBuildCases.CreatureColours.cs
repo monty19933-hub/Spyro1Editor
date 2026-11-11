@@ -15,16 +15,35 @@ internal static partial class NewLevelBuildCases
         if (!SpyroColourSettings.TryParse(Environment.GetEnvironmentVariable("CREATURE_COLOUR") ?? "#C82424", out var colour)) throw new ArgumentException("CREATURE_COLOUR is #RRGGBB.");
         if (level.StartsWith("world:", StringComparison.Ordinal)) { var open = (Task)Invoke(window, "OpenWorldLevelAsync", int.Parse(level[6..]))!; Wait(() => open.IsCompleted, "open the world level", 120); WaitIdle(window); }
         else Load(window, level);
-        SelectTab(window, "Game Settings"); Pump(20);
+        SelectTab(window, "Colours"); Pump(20);
         Invoke(window, "RefreshCreatureColours");
         var clock = System.Diagnostics.Stopwatch.StartNew();
         while (clock.Elapsed < TimeSpan.FromSeconds(120)) { Pump(20); if (window.CreatureKindsReadyForTesting.IsCompleted) { Pump(40); if (window.CreatureKindsReadyForTesting.IsCompleted) break; } }
         var kinds = window.CreatureKindsForTesting;
         string key = window.CaptureEditorShellSessionSnapshotForTesting().CurrentLevel!.Key;
-        Console.WriteLine($"{key}: {kinds.Count} kinds of enemy: " + string.Join(", ", kinds.Select(k => $"{k.Name} ({k.Key})")));
+        Console.WriteLine($"{key}: {kinds.Count} kinds: " + string.Join(", ", kinds.Select(k => $"{k.Name} ({k.Key})")));
+        if (kinds.Count == 0) throw new InvalidOperationException("The card lists nothing for " + key + ".");
+        Snapshot(window, Path.Combine(outDir, "colours-tab-before.png"));
+        // CREATURE_RANDOM=<seed>: Randomize All instead of one colour for everything.
+        if (int.TryParse(Environment.GetEnvironmentVariable("CREATURE_RANDOM"), out int seed))
+        {
+            window.RandomizeCreatureColoursForTesting(seed); Pump(60);
+            Console.WriteLine("randomized: " + string.Join(", ", window.CreatureColoursForTesting.Select(c => $"{c.Key} #{c.Value.R:X2}{c.Value.G:X2}{c.Value.B:X2}")));
+        }
+        else foreach (var kind in kinds) window.SetCreatureColourForTesting(kind.Key, colour);
+        // DRAGON_COLOUR=#RRGGBB: every dragon statue of the level in that crystal colour, then the level is saved.
+        if (SpyroColourSettings.TryParse(Environment.GetEnvironmentVariable("DRAGON_COLOUR") ?? "", out var crystal))
+        {
+            window.SetDragonStatueColoursForTesting(crystal); Pump(30);
+            Console.WriteLine("dragons: " + Status(window));
+            var save = (Task)Invoke(window, "SaveFromToolbarAsync")!;
+            Wait(() => save.IsCompleted, "save the level", 120); Pump(30);
+            Console.WriteLine("saved: " + Status(window));
+        }
+        Pump(120);
+        Snapshot(window, Path.Combine(outDir, "colours-tab.png"));
+        if (Environment.GetEnvironmentVariable("CREATURE_RANDOM") != null) { Console.WriteLine("NEW_LEVEL_CREATURE_COLOURS_OK"); return; }
         Console.WriteLine("note: " + window.CreatureColourNoteForTesting);
-        if (kinds.Count == 0) throw new InvalidOperationException("The card lists no enemies for " + key + ".");
-        foreach (var kind in kinds) window.SetCreatureColourForTesting(kind.Key, colour);
         Pump(60);
         var saved = CreatureColourSettings.Load(Workspace(window).RootPath);
         if (!saved.TryGetValue(key, out var mine) || mine.Count != kinds.Count || mine.Values.Any(c => c != colour)) throw new InvalidOperationException("The colours were not kept for " + key + ".");

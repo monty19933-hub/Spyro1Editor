@@ -40,13 +40,19 @@ public static class NativeCreatureColours
 
     /// <summary>An animated model's faces and colour tables, or null when the package is not one this reads (a simple
     /// model such as a gem's, or an unknown layout).</summary>
+    /// <summary>For study: which of <see cref="Read"/>'s checks turned the last unread package away.</summary>
+    [ThreadStatic] private static string? t_notRead;
+    public static string? LastNotRead => t_notRead;
+    private static Model? Not(string check) { t_notRead = check; return null; }
+
     private static Model? Read(ReadOnlySpan<byte> package)
     {
-        if (package.Length < 0x60) return null;
+        t_notRead = null;
+        if (package.Length < 0x60) return Not("1");
         int animations = BinaryPrimitives.ReadInt32LittleEndian(package);
-        if (animations is <= 0 or > 1024 || 0x38 + 4 * animations > package.Length) return null;
+        if (animations is <= 0 or > 1024 || 0x38 + 4 * animations > package.Length) return Not("2");
         int md = (int)U32(package, 0x34);
-        if (md <= 0 || md >= package.Length) return null;
+        if (md <= 0 || md >= package.Length) return Not("3");
         Model? model = null;
         List<(int, int)> tables = [];
         for (int n = 0; n < animations; n++)
@@ -59,21 +65,21 @@ public static class NativeCreatureColours
             if (!tables.Contains(((int)colours, count))) tables.Add(((int)colours, count));
             if (model != null) continue;
             long end = table + 4 + U32(package, (int)table);
-            if (end > package.Length || end <= table + 4) return null;
+            if (end > package.Length || end <= table + 4) return Not("4");
             List<Face> faces = [];
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             Span<byte> word4 = stackalloc byte[4];
             for (int p = (int)table + 4; p < end;)
             {
-                if (p + 8 > end) return null;
+                if (p + 8 > end) return Not("5");
                 uint word = U32(package, p), colour = U32(package, p + 4);
                 bool quad = (word & 0x80000000) != 0, textured = (word & 2) != 0 || quad && (word & 4) != 0;
                 int bytes = quad ? textured ? 24 : 12 : textured ? 20 : 8;
-                if (p + bytes > end) return null;
+                if (p + bytes > end) return Not("6");
                 List<int> corners = [(int)(colour >> 19 & 511), (int)(colour >> 10 & 511), (int)(colour >> 1 & 511)];
                 uint fourth = 0;
                 if (quad) { fourth = U32(package, p + 8); corners.Add((int)(fourth >> 11 & 511)); }
-                if (corners.Any(c => c >= count)) return null;
+                if (corners.Any(c => c >= count)) return Not("7");
                 ushort palette = 0, page = 0;
                 if (textured)
                 {
@@ -87,7 +93,7 @@ public static class NativeCreatureColours
                 BinaryPrimitives.WriteUInt32LittleEndian(word4, fourth); hash.AppendData(word4);
                 p += bytes;
             }
-            if (faces.Count == 0) return null;
+            if (faces.Count == 0) return Not("8");
             model = new(animations, package[animation + 8], count, faces, tables, Convert.ToHexStringLower(hash.GetHashAndReset()));
         }
         return model;
@@ -179,7 +185,10 @@ public static class NativeCreatureColours
     private static List<Sample> Own(List<Sample> samples)
     {
         var vivid = samples.Where(s => s.Vivid).ToList();
-        if (vivid.Count == 0) return [];
+        // A thing with no colour to speak of (grey metal, stone, bone): all of it that is neither black nor white is
+        // "its colour", so it can be given one (its light and shade kept, like any other).
+        if (vivid.Sum(s => s.Weight) < MinimumWeight)
+            return [.. samples.Where(s => s.Hsl.L is > 0.07 and < 0.93)];
         // The heaviest stretch of the hue circle (a 24th at a time, with its neighbours), then the mean hue about it.
         double[] bins = new double[24];
         foreach (var s in vivid) bins[(int)(s.Hsl.H * 24) % 24] += s.Weight * (0.4 + s.Hsl.S);
@@ -196,6 +205,26 @@ public static class NativeCreatureColours
     {
         double w = own.Sum(s => s.Weight);
         return ((byte)Math.Round(own.Sum(s => s.R * s.Weight) / w * 255), (byte)Math.Round(own.Sum(s => s.G * s.Weight) / w * 255), (byte)Math.Round(own.Sum(s => s.B * s.Weight) / w * 255));
+    }
+
+    /// <summary>For study: every class of the level that has a model, whether the model is one this reads, and how much
+    /// of it is "its colour" (vivid, about its main hue), vivid at all, and coloured at all (not black).</summary>
+    public static IReadOnlyList<(int ClassId, bool Readable, double Own, double Vivid, double All)> Survey(byte[] level)
+    {
+        int vram = VramOffset(level);
+        List<(int, bool, double, double, double)> rows = [];
+        var readable = Models(level).ToDictionary(m => m.ClassId, m => m);
+        var data = new UniversalLevelData(level);
+        var files = data.Subfiles();
+        if (files.Count < 3) return rows;
+        var (modelsAt, modelsLength) = files[2];
+        foreach (var r in data.Registrations().Where(r => r.Root >= modelsAt && r.Root < modelsAt + modelsLength).GroupBy(r => r.ClassId).Select(g => g.First()).OrderBy(r => r.ClassId))
+        {
+            if (!readable.TryGetValue(r.ClassId, out var m)) { rows.Add((r.ClassId, false, 0, 0, 0)); continue; }
+            var samples = Samples(level, m.Start, m.Model, vram);
+            rows.Add((r.ClassId, true, Own(samples).Sum(s => s.Weight), samples.Where(s => s.Vivid).Sum(s => s.Weight), samples.Sum(s => s.Weight)));
+        }
+        return rows;
     }
 
     /// <summary>The kinds of a level that have a colour to change, by class.</summary>
