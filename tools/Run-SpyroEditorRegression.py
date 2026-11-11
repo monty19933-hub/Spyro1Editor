@@ -386,7 +386,7 @@ SOURCE_QA_CASES = (
     # The New World's doorway in each of the six homeworlds (read only): record, ground kind, entry triangles, objects,
     # memory in 2 MB (which sky fits) and 8 MB, refusals (second entrance, six doorways, map edge, textures), every shape
     # and size, after another object edit, deterministic bytes.
-    ("WorldEntranceSmoke", "WORLD_ENTRANCE_SOURCE_OK checks=227", ["--source"]),
+    ("WorldEntranceSmoke", "WORLD_ENTRANCE_SOURCE_OK checks=229", ["--source"]),
     # The game's own overlays (read only): the two balloonist routines are the same in the six homeworlds and Town
     # Square; changed for each of the six places the new world can take and run for every state of the route (the menu's
     # rows and names, the level each row flies to, the "ready to go" page), every balloonist's decision code in its

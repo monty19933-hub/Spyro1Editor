@@ -496,6 +496,9 @@ public static class NativeWorldEntrance
         W(data.Bytes, body.RecordOffsets[doorway] + 0x18, row);
     }
 
+    /// <summary>The level's particles and sounds as the game keeps them after the doorway table (for tests).</summary>
+    public static byte[] ParticlesAndSounds(byte[] levelData) => Body.Read(new UniversalLevelData(levelData.ToArray())).Tail;
+
     // ---- subfile 1: six components, the doorway table, then particles and sounds ----
     private sealed class Body
     {
@@ -795,7 +798,10 @@ public static class NativeWorldEntrance
         for (int k = 0; k < doorway; k++) Require(now.Records[k].AsSpan().SequenceEqual(old.Records[k]), $"doorway {k + 1} changed");
         byte[] mine = now.Records[doorway];
         Require(mine.Length == record.Length && mine.AsSpan(0x1C).SequenceEqual(record.AsSpan(0x1C)) && I(mine, 0x18) is >= 0 and < 256 && I(mine, 0x1C) == Destination, "the record");
-        Require(now.Tail.AsSpan().SequenceEqual(old.Tail), "particles and sounds changed");
+        // Built by itself the entrance brings no particles or sounds. Composed together with the homeworld's added
+        // objects, theirs are added to that part of the level by the composition (a Crash enemy's sounds, say), which
+        // checks them itself; Body.Read above has already found the part where the game keeps it.
+        if (together == null) Require(now.Tail.AsSpan().SequenceEqual(old.Tail), "particles and sounds changed");
         Require(now.Components[0].AsSpan().SequenceEqual(old.Components[0]) && now.Components[5].AsSpan().SequenceEqual(old.Components[5]), "textures or sky changed");
         var oldSectors = Sectors(old.Components[1]); var newSectors = Sectors(now.Components[1]);
         Require(newSectors.Length == sectors + addedSectors && oldSectors.Select((s, i) => s.AsSpan().SequenceEqual(newSectors[i])).All(x => x), "terrain parts");

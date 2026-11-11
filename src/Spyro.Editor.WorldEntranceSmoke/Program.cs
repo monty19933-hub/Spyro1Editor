@@ -401,6 +401,49 @@ static class Source
             Check(BinaryPrimitives.ReadUInt16LittleEndian(after.Row(rows).AsSpan(0x36)) == BinaryPrimitives.ReadUInt16LittleEndian(new UniversalLevelData(data).Row(gem).AsSpan(0x36)) &&
                   BinaryPrimitives.ReadUInt16LittleEndian(after.Row(rows + 1).AsSpan(0x36)) == 0x18E && NativeWorldEntrance.Present(together.LevelData),
                 "together: the added object keeps the first new row, the doorway's path object follows, and the doorway is there");
+            // An added object that brings its own particles or sounds (found by trying: a creature of another level).
+            // 2.2 refused the entrance then ("failed its readback: particles and sounds changed"), and Fix It For Me got
+            // past that by leaving every added object of the homeworld out of the game.
+            byte[] tail = NativeWorldEntrance.ParticlesAndSounds(data);
+            UniversalMobyPlacement? loud = null;
+            foreach (string other in new[] { "stonehill", "darkhollow", "townsquare", "toasty", "peacekeepers", "drycanyon" })
+            {
+                var source = new UniversalLevelData(image.EntryBytes(catalog.FindByKey(other)!.SourceWadEntry));
+                HashSet<int> tried = [];
+                for (int r = 0; r < source.Scene().RowCount && loud == null; r++)
+                {
+                    int kind = BinaryPrimitives.ReadUInt16LittleEndian(source.Row(r).AsSpan(0x36));
+                    if (!tried.Add(kind)) continue;
+                    var candidate = new UniversalMobyPlacement(other, r, (int)(best.Position.X * 16) - 4800, (int)(best.Position.Y * 16), (int)(best.Position.Z * 16) + 320, EditorId: "added-loud", PersistentSlot: 0);
+                    try
+                    {
+                        var alone = UniversalMobyComposer.Compose(level, data, overlay, image.Exe, k => lib.Get(k), lib.SharedClasses, [], [candidate], sharedModelPackage: lib.SharedModelPackage);
+                        if (!NativeWorldEntrance.ParticlesAndSounds(alone.LevelData).AsSpan().SequenceEqual(tail)) loud = candidate;
+                    }
+                    catch (Exception e) when (e is InvalidDataException or UniversalBudgetException or InvalidOperationException or NotSupportedException or ArgumentException) { }
+                }
+                if (loud != null) break;
+            }
+            Check(loud != null, "together: another level has an object that brings particles or sounds into Artisans");
+            if (loud != null)
+            {
+                WorldEntranceResult? withLoud = null;
+                try
+                {
+                    withLoud = NativeWorldEntrance.Apply(lib, catalog, spec, data, overlay, image.Exe, sky, together: (prepared, objects) =>
+                        UniversalMobyComposer.Compose(level, prepared, overlay, image.Exe, k => lib.Get(k), lib.SharedClasses, [],
+                            [loud, .. objects.Select((o, i) => o with { SaveIdentity = 255 - i })], sharedModelPackage: lib.SharedModelPackage));
+                }
+                catch (InvalidDataException e) { Check(false, $"together: the entrance is built with an added object that brings particles or sounds ({loud.SourceLevelKey} row {loud.SourceRowIndex}: {e.Message})"); }
+                if (withLoud != null)
+                {
+                    var loudAfter = new UniversalLevelData(withLoud.LevelData);
+                    Check(NativeWorldEntrance.Present(withLoud.LevelData) && loudAfter.Scene().RowCount == rows + 4 &&
+                          !NativeWorldEntrance.ParticlesAndSounds(withLoud.LevelData).AsSpan().SequenceEqual(tail) &&
+                          BinaryPrimitives.ReadUInt16LittleEndian(loudAfter.Row(withLoud.PathRow).AsSpan(0x36)) == 0x18E,
+                        $"together: the entrance is built with an added object that brings particles or sounds ({loud.SourceLevelKey} row {loud.SourceRowIndex}), and they are in the level");
+                }
+            }
         }
         var small = Spyro.Editor.Core.Generation.LevelThemes.DoorwayShape("gnastysworld");
         Check(WorldEntranceSpots.Find(lib, catalog, "gnastysworld", small, 1).Count == 0 && WorldEntranceSpots.Find(lib, catalog, "gnastysworld", small, DoorwayShapes.MinScale).Count == 0,
