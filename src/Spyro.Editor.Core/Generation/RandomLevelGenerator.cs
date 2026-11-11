@@ -21,8 +21,13 @@ public sealed record RandomLevelReport
     public string Theme { get; init; } = "";
     public LevelSize Size { get; init; }
     public LevelDifficulty Difficulty { get; init; } = LevelDifficulty.Medium;
+    /// <summary>How the level is laid out (<see cref="RandomLevelOptions.Layout"/>): journey, loop, hub, arena, climb,
+    /// gorge or web (trail: the plain layout a level falls back on).</summary>
+    public string Layout { get; init; } = "";
     public string Features { get; init; } = "";
     public int Areas { get; init; }
+    /// <summary>How far apart in height the floors the level is played on lie (between the lowest and highest fiftieth).</summary>
+    public int HeightSpan { get; init; }
     public int Faces { get; init; }
     public int Materials { get; init; }
     public IReadOnlyDictionary<string, int> Counts { get; init; } = new Dictionary<string, int>();
@@ -72,6 +77,11 @@ public sealed record RandomLevelResult(SceneDocument Scene, RandomLevelReport Re
     /// <summary>The texture for doorway frames: one the level already uses (its stonework, else its rock).</summary>
     public AuthoredMaterial? DoorwayMaterial { get; init; }
     /// <summary>A top-down picture of the level (one pixel per 30 units, north up): height-shaded floor colours.</summary>
+    /// <summary>For the study tools: one entry per face of the scene, true for the floor the level is played on (rooms,
+    /// paths, ledges; not banks, cliff tops, water, walls, roofs or things that stand on the land).</summary>
+    internal IReadOnlyList<bool> PlayFloor { get; init; } = [];
+    /// <summary>The level's layout by name (for reports and the study tools).</summary>
+    internal string Shape { get; init; } = "";
     public required Rgba32[] Map { get; init; }
     public required int MapWidth { get; init; }
     public required int MapHeight { get; init; }
@@ -132,23 +142,31 @@ public static class RandomLevelGenerator
             props = LevelProps.Extract(terrain, id => LevelDna.Static(theme.Key, id));
         // A few layouts are tried; the first whose every floor is proved reachable both ways is taken (else the best).
         (PlannedLevel Planned, TerrainMesher Mesher, (int Required, int Unreached, int NoWayBack, List<(double X, double Y)> Bad) Check)? best = null;
-        int attempts = 0;
-        for (int attempt = 0; attempt < 6; attempt++)
+        int attempts = 0, squeeze = 0;
+        long planSeed = (long)rnd.Fork("plan0").Next64();
+        for (int attempt = 0, plans = 0; attempt < 12 && plans < 6; attempt++)
         {
             token.ThrowIfCancellationRequested();
             attempts++;
-            var tried = SpyroPlanner.Build(style, options.Size, features, theme, rnd.Fork("plan" + attempt), shrink, options.Difficulty, Math.Clamp(options.Doorways, 0, NativeHubPortals.MaxDoorways));
+            var tried = SpyroPlanner.Build(style, options.Size, features, theme, new LevelRandom(planSeed), shrink, options.Difficulty, Math.Clamp(options.Doorways, 0, NativeHubPortals.MaxDoorways),
+                options.Layout, squeeze);
             // Into the built level's coordinates: whole units from 0, the lowest floor (and what hangs under floating
             // land) well above the bottom.
             var (bx0, by0, _, _) = tried.Plan.Bounds();
             double lowest = tried.Plan.Zones.Min(z => Math.Min(z.Z, z.Z1));
-            double under = tried.Plan.Kind == EnclosureKind.Sky ? 320 + 0.55 * tried.Plan.Zones.Where(z => !z.IsPath).Max(z => z.Discs.Max(d => d.R)) : 0;
+            double under = tried.Plan.Kind == EnclosureKind.Sky ? 320 + 0.55 * tried.Plan.Zones.Where(z => !z.IsPath).Max(z => z.Radius) : 0;
             Shift(tried, Math.Round(Origin - bx0), Math.Round(Origin - by0), Math.Round(BaseHeight + under - lowest));
             var mesh = new TerrainMesher(tried.Plan, tried.Spacing);
-            mesh.Build(rnd.Fork("mesh" + attempt));
+            mesh.Build(new LevelRandom(planSeed ^ 0x6D657368));
+            // More faces than a level of this size may have (the game must hold and draw them): the same level
+            // again with smaller rooms.
+            if (mesh.Pieces.Count > FaceTarget(options.Size) && squeeze < 5) { squeeze++; continue; }
             var reach = mesh.Reach(tried.Start.X, tried.Start.Y, tried.Glides.Select(g => (g.From, g.To)));
             if (best == null || reach.Unreached + reach.NoWayBack < best.Value.Check.Unreached + best.Value.Check.NoWayBack) best = (tried, mesh, reach);
             if (reach.Unreached + reach.NoWayBack == 0) break;
+            // Another plan altogether.
+            plans++; squeeze = 0;
+            planSeed = (long)rnd.Fork("plan" + plans).Next64();
         }
         var (planned, mesher, check) = best!.Value;
         var plan = planned.Plan;
@@ -276,7 +294,8 @@ public static class RandomLevelGenerator
             var chosen = doorRandom.Pick(options);
             return (materialOf[chosen]!, Paint(Ramp(theme, chosen, materialOf[chosen]), bright));
         }
-        var face = Stone([SurfaceRole.Brick, SurfaceRole.Rock, SurfaceRole.Cliff, SurfaceRole.CaveWall, SurfaceRole.Paving], null, 0.66);
+        var face = Stone([SurfaceRole.Brick, SurfaceRole.Rock, SurfaceRole.Cliff, SurfaceRole.CaveWall, SurfaceRole.Paving], null, 0.66)
+            ?? Stone([SurfaceRole.CliffTop, SurfaceRole.Underside, SurfaceRole.Wood, SurfaceRole.Path, SurfaceRole.Ground], null, 0.66);
         var side = Stone([SurfaceRole.Rock, SurfaceRole.Cliff, SurfaceRole.CliffTop, SurfaceRole.Paving, SurfaceRole.Brick, SurfaceRole.CaveWall], face?.Material, 0.5) ?? face;
         var ordered = planned.Doors.OrderBy(d => d.Area == 0 ? 0 : 1).ThenBy(d => planned.Areas[d.Area].Depth).ThenBy(d => d.Area).ToList();
         var doorways = ordered.Select((d, index) =>
@@ -303,12 +322,15 @@ public static class RandomLevelGenerator
             if (NativeAuthoredMeshRenderer.LastDrawPlan?.Note() is { } note) notes.Add(note);
         }
         notes.AddRange(planned.Notes);
+        var playFloor = pieces.Select(p => !p.Wall && p.Collides && (p.Layer >= 0 || p.Layer == TerrainPlan.Fill) && p.Kind == null && p.Texture == null && p.Role != SurfaceRole.Ceiling).ToArray();
+        var floorHeights = pieces.Where((_, k) => playFloor[k]).Select(p => p.Corners.Average(c => c.Z)).Order().ToList();
+        int heightSpan = floorHeights.Count == 0 ? 0 : (int)Math.Round(floorHeights[Math.Min(floorHeights.Count - 1, (int)(0.98 * floorHeights.Count))] - floorHeights[(int)(0.02 * floorHeights.Count)]);
         var report = new RandomLevelReport
         {
-            Seed = options.Seed, Style = style, Theme = theme.Key, Size = options.Size, Difficulty = options.Difficulty,
+            Seed = options.Seed, Style = style, Theme = theme.Key, Size = options.Size, Difficulty = options.Difficulty, Layout = planned.Shape,
             Features = string.Join(", ", new[] { features.Caves ? "caves" : null, features.ChargePaths ? "supercharge paths" : null, features.Glides ? "glides" : null,
                 features.Hazards ? "hazards" : null, features.Bridges ? "bridges" : null, features.Secrets ? "secrets" : null }.OfType<string>()),
-            Areas = planned.Areas.Count, Faces = surfaces.Count, Materials = materials.Count, Counts = planned.Counts, Links = planned.Links,
+            Areas = planned.Areas.Count, HeightSpan = heightSpan, Faces = surfaces.Count, Materials = materials.Count, Counts = planned.Counts, Links = planned.Links,
             Attempts = attempts, RequiredFloors = check.Required, Unreached = check.Unreached, NoWayBack = check.NoWayBack,
             GlideMoves = planned.Glides.Count, DrawPlan = drawPlan, Notes = notes,
         };
@@ -330,8 +352,12 @@ public static class RandomLevelGenerator
                 if (col >= 0 && col < mw && row >= 0 && row < mh) map[(mh - 1 - row) * mw + col] = new Rgba32(255, 236, 96, 255);
             }
         }
-        return new(scene, report, pictures, materials) { Map = map, MapWidth = mw, MapHeight = mh, Doorways = doorways, DoorwayMaterial = doorwayMaterial };
+        return new(scene, report, pictures, materials) { Map = map, MapWidth = mw, MapHeight = mh, Doorways = doorways, DoorwayMaterial = doorwayMaterial, PlayFloor = playFloor, Shape = planned.Shape };
     }
+
+    /// <summary>The most faces the land of a level of a size is made of, before its towers and trees (the game's own
+    /// levels have 2,000 to 7,000; a built level draws all of its land, so it has fewer).</summary>
+    public static int FaceTarget(LevelSize size) => size switch { LevelSize.Small => 2000, LevelSize.Large => 3700, _ => 2850 };
 
     /// <summary>The side of the squares faces are grouped into sectors by.</summary>
     public const float SectorSize = 640;
@@ -346,6 +372,7 @@ public static class RandomLevelGenerator
         foreach (var z in L.Plan.Zones.Concat(L.Plan.Decals))
         {
             for (int k = 0; k < z.Discs.Count; k++) z.Discs[k] = (z.Discs[k].X + dx, z.Discs[k].Y + dy, z.Discs[k].R);
+            for (int k = 0; k < z.Boxes.Count; k++) z.Boxes[k] = z.Boxes[k] with { X = z.Boxes[k].X + dx, Y = z.Boxes[k].Y + dy };
             for (int k = 0; k < z.Spine.Count; k++) z.Spine[k] = (z.Spine[k].X + dx, z.Spine[k].Y + dy);
             z.Z += dz; z.Z1 += dz;
         }
@@ -360,6 +387,8 @@ public static class RandomLevelGenerator
         }
         L.Start = (L.Start.X + dx, L.Start.Y + dy); L.Facing = (L.Facing.X + dx, L.Facing.Y + dy);
         for (int k = 0; k < L.Doors.Count; k++) L.Doors[k] = L.Doors[k] with { X = L.Doors[k].X + dx, Y = L.Doors[k].Y + dy };
+        for (int k = 0; k < L.Landmarks.Count; k++) L.Landmarks[k] = L.Landmarks[k] with { X = L.Landmarks[k].X + dx, Y = L.Landmarks[k].Y + dy };
+        if (L.StartAt is { } at) L.StartAt = (at.X + dx, at.Y + dy);
     }
 
     /// <summary>The colours a face is drawn in far away, where the game draws it without its texture: the texture's
@@ -471,13 +500,22 @@ public static class RandomLevelGenerator
         string reach = r.Unreached + r.NoWayBack == 0 ? "Every floor can be reached from the start and left again." :
             $"Almost every floor is proved reachable ({r.RequiredFloors - r.Unreached - r.NoWayBack} of {r.RequiredFloors}).";
         bool homeworld = r.Counts.ContainsKey("doorway");
-        return $"{name}: {(homeworld ? "a homeworld, " : "")}{style} in the style of {theme.Name}, {r.Difficulty.ToString().ToLowerInvariant()}, {r.Areas} areas, {r.Faces:N0} faces, {r.Materials} textures. " +
+        string layout = r.Layout switch
+        {
+            "journey" => "a way from room to room to its end", "loop" => "a ring that comes back over its start", "hub" => "a clearing with rooms off it all round",
+            "arena" => "one great room and the rooms off it", "climb" => "a hill of terraces", "gorge" => "a winding gorge", "web" => "a web of rooms with more than one way round",
+            _ => "a winding trail",
+        };
+        return $"{name}: {(homeworld ? "a homeworld, " : "")}{style} in the style of {theme.Name}, laid out as {layout}, {r.Difficulty.ToString().ToLowerInvariant()}, {r.Areas} areas, {r.Faces:N0} faces, {r.Materials} textures; its floors lie {r.HeightSpan:N0} units apart in height. " +
                (parts.Count > 0 ? "It has " + string.Join(", ", parts) + ". " : "") + own + reach;
     }
 
     private static string Plural(string what, int n) => n == 1 ? what : what switch
     {
         "chain of stepping stones" => "chains of stepping stones", "nook up a charge ramp" => "nooks up charge ramps",
-        "lookout with a glide" => "lookouts with glides", _ when what.EndsWith("s") => what, _ => what + "s"
+        "lookout with a glide" => "lookouts with glides", "step between rooms" => "steps between rooms", "flight of steps" => "flights of steps",
+        "terrace up a ramp" => "terraces up ramps", "glide from a high place" => "glides from high places", "islet in a pool" => "islets in pools",
+        "moat round an island" => "moats round islands", "overlook over an earlier room" => "overlooks over earlier rooms",
+        "overlook back over the start" => "overlooks back over the start", _ when what.EndsWith("s") => what, _ => what + "s"
     };
 }

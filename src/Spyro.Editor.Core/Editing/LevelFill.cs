@@ -247,12 +247,15 @@ public static class LevelFill
     public sealed class FloorGrid
     {
         private readonly Dictionary<(int, int), List<(float Z, bool Plain)>> _cells = [];
+        /// <summary>Floors that slope too much to stand things on (cell, height in fours).</summary>
+        private readonly HashSet<(int, int, int)> _steep = [];
         public FloorGrid(SceneDocument scene)
         {
             foreach (var s in scene.Surfaces)
             {
                 var v = s.Vertices;
-                if (v.Length < 3) continue;
+                // A face Spyro falls through is no floor (water laid out to the horizon, a bridge's underside).
+                if (v.Length < 3 || s.NoCollision) continue;
                 for (int t = 1; t + 1 < v.Length; t++) Add(v[0], v[t], v[t + 1], s.Kind == null, s.TwoSided ? 0 : s.FrontReversed ? -1 : 1);
             }
             foreach (var list in _cells.Values) list.Sort((a, b) => a.Z.CompareTo(b.Z));
@@ -281,6 +284,8 @@ public static class LevelFill
                     int near = list.FindIndex(e => Math.Abs(e.Z - z) < 4);
                     if (near < 0) list.Add((z, plain));
                     else if (!plain) list[near] = (list[near].Z, false);
+                    // Steeper than about twenty degrees.
+                    if (Math.Abs(nz) / len < 0.94f) _steep.Add((i, j, (int)MathF.Round((near < 0 ? z : list[near].Z) / 4)));
                 }
         }
 
@@ -288,6 +293,10 @@ public static class LevelFill
         public readonly record struct Place(int X, int Y, int Layer);
 
         public Vector3f Point(Place p) => new((p.X + 0.5f) * Cell, (p.Y + 0.5f) * Cell, _cells[(p.X, p.Y)][p.Layer].Z);
+
+        /// <summary>Whether the floor at a place is level enough to stand a thing on (a slope Spyro walks is still floor
+        /// for <see cref="Walk"/>).</summary>
+        public bool IsLevel(Place p) => !_steep.Contains((p.X, p.Y, (int)MathF.Round(_cells[(p.X, p.Y)][p.Layer].Z / 4)));
 
         /// <summary>The floor place under <paramref name="p"/> nearest its height (layer 0 when the cell has none).</summary>
         public Place Nearest(Vector3f p)
@@ -326,7 +335,8 @@ public static class LevelFill
         }
 
         /// <summary>Every floor walkable from <paramref name="start"/>, with its walking distance in cells.</summary>
-        public Dictionary<Place, int> Walk(Vector3f start)
+        /// <param name="from">Filled, when given, with the place each place was first reached from (for study).</param>
+        public Dictionary<Place, int> Walk(Vector3f start, Dictionary<Place, Place>? from = null)
         {
             Dictionary<Place, int> seen = [];
             var first = At((int)MathF.Floor(start.X / Cell), (int)MathF.Floor(start.Y / Cell), start.Z, 8, 400);
@@ -350,10 +360,12 @@ public static class LevelFill
                             // An edge (nothing next to it but a drop, a pit or special ground): jump and glide straight on,
                             // landing on the first plain floor under the glide; anything higher on the way is a wall.
                             next = default; step = 0;
+                            // Cornerwise a cell is further across.
+                            float stride = dx != 0 && dy != 0 ? Cell * 1.41421f : Cell;
                             for (int k = 1; k <= 96; k++)
                             {
                                 // A held jump's arc, then the glide (the measured moves, with a margin).
-                                float height = z + Generation.SpyroMoves.GlideHeight(k * Cell);
+                                float height = z + Generation.SpyroMoves.GlideHeight(k * stride);
                                 var under = _cells.TryGetValue((c.X + k * dx, c.Y + k * dy), out var list) ? list : [];
                                 if (under.Any(e => e.Z > height)) break;
                                 if (k >= 2 && At(c.X + k * dx, c.Y + k * dy, height, 0, height - (z - StepDown)) is { } land) { next = land; step = k; break; }
@@ -362,6 +374,7 @@ public static class LevelFill
                             if (step == 0) continue;
                         }
                         if (seen.ContainsKey(next)) continue;
+                        from?.TryAdd(next, c);
                         seen[next] = seen[c] + step;
                         queue.Enqueue(next);
                     }

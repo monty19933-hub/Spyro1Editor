@@ -23,9 +23,24 @@ public sealed partial class MainWindow
     /// <param name="Treasure">The gems the level holds in all when it is done, as the game counts them.</param>
     /// <param name="Difficulty">How hard the arrangement is (<see cref="LevelScatter.Request.Difficulty"/>); it also sets
     /// how many animals there are for Sparx (none in Kaizo) and whether there is an extra life (none in Kaizo).</param>
+    /// <param name="Scenery">The level type's own scenery too: its trees or cactuses, torches and lamps, flowers and grass.</param>
+    /// <param name="TealGems">A rare few teal gems (50 each) take part of the treasure (<see cref="LevelScatter.HighGemsFor"/>).</param>
+    /// <param name="RainbowGems">A rare few rainbow gems (100 each) take part of the treasure.</param>
     internal sealed record RandomObjectsChoice(string LevelKey, string EnemyLevelKey, int EnemyClass, int Enemies, int Treasure, int Eggs,
         bool Chests = true, bool Animals = true, bool Thieves = true, bool Dragons = true, bool Exit = true, long? Seed = null,
-        LevelDifficulty Difficulty = LevelDifficulty.Medium);
+        LevelDifficulty Difficulty = LevelDifficulty.Medium, bool Scenery = true, bool TealGems = false, bool RainbowGems = false);
+
+    /// <summary>What a scenery object of the game is to Random objects, by its class: a tree or cactus, a torch or lamp
+    /// that stands on the floor, one that hangs on a wall, or flowers and grass. Null: not placed (flags fly from
+    /// tower tops, a stalactite hangs from a roof, tents and banners belong to one level's own places).</summary>
+    internal static LevelScatter.Kind? RandomObjectsSceneryKind(int classId) => classId switch
+    {
+        0x07F or 0x08A or 0x08D or 0x0DE or 0x0DF or 0x0E0 or 0x162 or 0x163 or 0x164 or 0x1F3 or 0x1F4 or 0x1F7 or 0x1F8 or 0x0CE or 0x0EF or 0x0F2 or 0x1EF => LevelScatter.Kind.Tree,
+        0x1E6 or 0x081 or 0x040 or 0x192 => LevelScatter.Kind.Light,
+        0x080 or 0x04A => LevelScatter.Kind.WallLight,
+        0x150 or 0x156 or 0x1F5 or 0x005 or 0x050 => LevelScatter.Kind.Plant,
+        _ => null,
+    };
 
     /// <summary>What the last Randomize placed, by kind (for tests and the card's note).</summary>
     internal IReadOnlyDictionary<string, int> LastRandomObjects { get; private set; } = new Dictionary<string, int>();
@@ -36,6 +51,7 @@ public sealed partial class MainWindow
     private ComboBox? _randomObjectsLevel, _randomObjectsEnemyLevel, _randomObjectsEnemyKind, _randomObjectsDifficulty;
     private NumericUpDown? _randomObjectsTreasure, _randomObjectsEggs;
     private CheckBox? _randomObjectsEnemies, _randomObjectsChests, _randomObjectsAnimals, _randomObjectsThieves, _randomObjectsDragons, _randomObjectsExit;
+    private CheckBox? _randomObjectsScenery, _randomObjectsTeal, _randomObjectsRainbow;
     private TextBlock? _randomObjectsNote;
     private List<(int Class, string Name)> _randomObjectsEnemyKinds = [];
     private string? _randomObjectsScene;
@@ -87,9 +103,16 @@ public sealed partial class MainWindow
         _randomObjectsThieves = Box("RandomObjectsThieves", "Egg thieves", "The egg thieves this level's place in the game has, each with a run.");
         _randomObjectsDragons = Box("RandomObjectsDragons", "Dragons", "The dragons this level's place in the game has, spread through the rooms.");
         _randomObjectsExit = Box("RandomObjectsExit", "The way out", "A Return Home vortex at the far end from where Spyro starts; in a homeworld, its balloonist and his balloon.");
-        Grid boxes = new() { ColumnDefinitions = new ColumnDefinitions("*,*"), RowDefinitions = new RowDefinitions("Auto,Auto,Auto") };
-        foreach (var (box, i) in new[] { _randomObjectsEnemies, _randomObjectsChests, _randomObjectsAnimals, _randomObjectsThieves, _randomObjectsDragons, _randomObjectsExit }.Select((b, i) => (b, i)))
+        _randomObjectsScenery = Box("RandomObjectsScenery", "Trees, torches, flowers", "The level type's own scenery, placed the way that level has it: trees or cactuses on open ground or along the banks, torches and lamp posts by the edges of paths, lamps on the walls, flowers and grass in little clusters. Levels whose scenery is part of their land have none to place.");
+        _randomObjectsTeal = Box("RandomObjectsTeal", "Teal gems (50)", "A rare few teal gems worth 50 each, each alone at one of the level's hardest places: on a ledge only a glide reaches, at the top of a climb, at the far end. They are part of the Gems total, which stays exact. A level needs 100 gems for one.");
+        _randomObjectsRainbow = Box("RandomObjectsRainbow", "Rainbow gems (100)", "A rare few rainbow gems worth 100 each, each alone at one of the level's hardest places. They are part of the Gems total, which stays exact. A level needs 200 gems for one (300 with teal gems too).");
+        _randomObjectsTeal.IsChecked = _randomObjectsRainbow.IsChecked = false;
+        Grid boxes = new() { ColumnDefinitions = new ColumnDefinitions("*,*"), RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto") };
+        foreach (var (box, i) in new[] { _randomObjectsEnemies, _randomObjectsChests, _randomObjectsAnimals, _randomObjectsThieves, _randomObjectsDragons, _randomObjectsExit, _randomObjectsScenery }.Select((b, i) => (b, i)))
         { Grid.SetColumn(box, i % 2); Grid.SetRow(box, i / 2); boxes.Children.Add(box); }
+        // The rare gems on a row of their own: they are off unless asked for.
+        Grid.SetColumn(_randomObjectsTeal, 0); Grid.SetRow(_randomObjectsTeal, 4); boxes.Children.Add(_randomObjectsTeal);
+        Grid.SetColumn(_randomObjectsRainbow, 1); Grid.SetRow(_randomObjectsRainbow, 4); boxes.Children.Add(_randomObjectsRainbow);
         content.Children.Add(boxes);
         Button randomize = NewAsyncButton("Randomize", async () => { if (ReadRandomObjectsChoice() is { } choice) await RandomizeObjectsAsync(choice); });
         randomize.Name = "RandomObjectsRandomize";
@@ -170,7 +193,8 @@ public sealed partial class MainWindow
             _randomObjectsEnemies?.IsChecked == false ? 0 : RandomObjectsEnemies(difficulty, (int)(_randomObjectsTreasure?.Value ?? 300)),
             (int)(_randomObjectsTreasure?.Value ?? 300), (int)(_randomObjectsEggs?.Value ?? 0),
             _randomObjectsChests?.IsChecked == true, _randomObjectsAnimals?.IsChecked == true, _randomObjectsThieves?.IsChecked == true,
-            _randomObjectsDragons?.IsChecked == true, _randomObjectsExit?.IsChecked == true, Difficulty: difficulty);
+            _randomObjectsDragons?.IsChecked == true, _randomObjectsExit?.IsChecked == true, Difficulty: difficulty,
+            Scenery: _randomObjectsScenery?.IsChecked == true, TealGems: _randomObjectsTeal?.IsChecked == true, RainbowGems: _randomObjectsRainbow?.IsChecked == true);
     }
 
     /// <summary>Takes away what Randomize placed (the objects go altogether; their save rows wait for the next
@@ -277,6 +301,17 @@ public sealed partial class MainWindow
                 .Select(e => (e, e.Variants.FirstOrDefault(v => string.Equals(v.SourceLevelKey, choice.LevelKey, StringComparison.OrdinalIgnoreCase) && v.RestrictionReason == null)))
                 .Where(p => p.Item2 != null).Select(p => (Entry: p.e, Variant: p.Item2!)).OrderBy(p => p.Entry.ClassId).ToList()
             : [];
+        // Scenery: the level type's own, a kind or two of each sort (every kind is brought into the level whole).
+        List<(LevelScatter.Kind Kind, UniversalMobyCatalogEntry Entry, UniversalMobyVariant Variant)> sceneryKinds = [];
+        if (choice.Scenery)
+        {
+            var all = entries.Where(e => e.Placeable && e.Category == "Props" && RandomObjectsSceneryKind(e.ClassId) != null)
+                .Select(e => (Kind: RandomObjectsSceneryKind(e.ClassId)!.Value, Entry: e, Variant: e.Variants.FirstOrDefault(v => string.Equals(v.SourceLevelKey, choice.LevelKey, StringComparison.OrdinalIgnoreCase) && v.RestrictionReason == null)))
+                .Where(p => p.Variant != null).OrderBy(p => p.Entry.ClassId).ToList();
+            rnd.Shuffle(all);
+            foreach (var group in all.GroupBy(p => p.Kind))
+                sceneryKinds.AddRange(group.Take(group.Key is LevelScatter.Kind.Tree or LevelScatter.Kind.Plant ? 2 : 1).Select(p => (p.Kind, p.Entry, p.Variant!)));
+        }
         // Only kinds Create BIN takes in this level. Some creatures need things of their own level that this one lacks
         // (a Haunted Towers wizard his resurrection effect), so each kind is tried on first: the level as it is, with
         // one of the kind. Kinds that are refused are left out and named.
@@ -315,7 +350,7 @@ public sealed partial class MainWindow
         // one at a time (gems first, then chests, enemies, animals) and whatever will not go with the rest is left out.
         var gemKinds = GemValue.Known.Where(g => g.Value is 1 or 2 or 5 or 10 or 25).Select(g => Of(g.IdByte, key, choice.LevelKey)).Where(g => g != null).Select(g => g!.Value).ToList();
         var chestKinds = chest.ToList();
-        (foeKinds, animalKinds, var keptChests, bool keyFits) = await Task.Run(() =>
+        (foeKinds, animalKinds, var keptChests, bool keyFits, sceneryKinds) = await Task.Run(() =>
         {
             string? Together(IEnumerable<UniversalMobyVariant> kinds)
             {
@@ -332,11 +367,12 @@ public sealed partial class MainWindow
             }
             var wantFoes = foeKinds.Take(4).ToList(); var wantAnimals = animalKinds.Take(2).ToList();
             var all = gemKinds.Select(g => g.Variant).Concat(chestKinds.Select(c => c.Value.Variant)).Concat(keyKind is { } k0 ? [k0.Variant] : [])
-                .Concat(wantFoes.Select(f => f.Variant)).Concat(wantAnimals.Select(a => a.Variant)).ToList();
+                .Concat(wantFoes.Select(f => f.Variant)).Concat(wantAnimals.Select(a => a.Variant)).Concat(sceneryKinds.Select(p => p.Variant)).ToList();
             List<(UniversalMobyCatalogEntry Entry, UniversalMobyVariant Variant)> foes = [], animals = [];
+            List<(LevelScatter.Kind Kind, UniversalMobyCatalogEntry Entry, UniversalMobyVariant Variant)> scenery = [];
             var chests = new Dictionary<LevelScatter.Kind, (UniversalMobyCatalogEntry Entry, UniversalMobyVariant Variant)>();
             bool keyOk = keyKind != null;
-            if (Together(all) == null) { foes = wantFoes; animals = wantAnimals; foreach (var c in chestKinds) chests[c.Key] = c.Value; }
+            if (Together(all) == null) { foes = wantFoes; animals = wantAnimals; scenery = sceneryKinds; foreach (var c in chestKinds) chests[c.Key] = c.Value; }
             else
             {
                 List<UniversalMobyVariant> taken = [];
@@ -351,17 +387,21 @@ public sealed partial class MainWindow
                 if (keyKind is { } k1) keyOk = Take(k1.Variant, k1.Entry.Name);
                 foreach (var f in foeKinds) { if (foes.Count >= 4) break; if (Take(f.Variant, f.Entry.Name)) foes.Add(f); }
                 foreach (var a in animalKinds) { if (animals.Count >= 2) break; if (Take(a.Variant, a.Entry.Name)) animals.Add(a); }
+                // Scenery last: what the level has room for after everything that is played with.
+                foreach (var p in sceneryKinds) if (Take(p.Variant, p.Entry.Name)) scenery.Add(p);
             }
             // Whose route may not be changed.
             foreach (var kind in foes.Concat(animals))
                 if (Refusal(kind.Variant) == null && Refusal(kind.Variant, movedRoute: true) != null) lock (fixedRoutes) fixedRoutes.Add((kind.Variant.SourceLevelKey, kind.Variant.SourceRow));
-            return (foes, animals, chests, keyOk);
+            return (foes, animals, chests, keyOk, scenery);
         });
         if (_currentLevel != level || _workspace.RootPath != root || _freshSceneDocument == null) return;
         chest.Clear();
         foreach (var c in keptChests) chest[c.Key] = c.Value;
         if (!keyFits) chest.Remove(LevelScatter.Kind.LockedChest);
         var eggEntry = specials.FirstOrDefault(e => e.SubCategory == "Dragonfly Eggs");
+        var tealEntry = specials.FirstOrDefault(e => e.ClassId == UniversalHighValueGems.TealClass && e.Placeable);
+        var rainbowEntry = specials.FirstOrDefault(e => e.ClassId == UniversalHighValueGems.RainbowClass && e.Placeable);
         int eggs = eggEntry is { Placeable: true } ? choice.Eggs : 0;
 
         var scene = CaptureFreshScene();
@@ -382,7 +422,15 @@ public sealed partial class MainWindow
         free = Math.Max(0, free - helperRows * (foeKinds.Count > 0 ? choice.Enemies : 0));
         var request = new LevelScatter.Request(seed, foeKinds.Count > 0 ? choice.Enemies : 0, animalKinds.Count > 0 ? LevelScatter.AnimalsFor(choice.Difficulty) : 0,
             Math.Max(0, choice.Treasure - before), Math.Max(0, free - LevelFillSpareRows))
-        { Dragons = dragonRows.Count, ThiefRoutes = [.. thieves.Select(t => t.Nodes)], Exit = exit, ChestKinds = chest.Keys.ToHashSet(), Eggs = eggs, Difficulty = choice.Difficulty };
+        {
+            Dragons = dragonRows.Count, ThiefRoutes = [.. thieves.Select(t => t.Nodes)], Exit = exit, ChestKinds = chest.Keys.ToHashSet(), Eggs = eggs, Difficulty = choice.Difficulty,
+            // About as many of each sort as a level of the game has; fewer where the level has no room or no rows left.
+            Scenery = sceneryKinds.GroupBy(p => p.Kind).ToDictionary(g => g.Key, g => g.Key switch
+            {
+                LevelScatter.Kind.Tree => 8, LevelScatter.Kind.Light => 8, LevelScatter.Kind.WallLight => 5, _ => 10,
+            }),
+            TealGems = choice.TealGems && tealEntry != null, RainbowGems = choice.RainbowGems && rainbowEntry != null,
+        };
         var plan = await Task.Run(() => LevelScatter.Make(scene, request, scene.GemSpots, occupied));
         if (_currentLevel != level || _workspace.RootPath != root || _freshSceneDocument == null) return;
 
@@ -441,9 +489,19 @@ public sealed partial class MainWindow
             var foeTemplates = foeKinds.Select(k => { try { return (UniversalRowTemplate?)lib.Get(k.Variant.SourceLevelKey).Data.CaptureRow(k.Variant.SourceLevelKey, k.Variant.SourceRow); } catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException) { return null; } }).ToList();
             var animalTemplates = animalKinds.Select(k => { try { return (UniversalRowTemplate?)lib.Get(k.Variant.SourceLevelKey).Data.CaptureRow(k.Variant.SourceLevelKey, k.Variant.SourceRow); } catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException) { return null; } }).ToList();
             int done = 0, dragon = 0, thief = 0, foe = 0, animal = 0;
+            // The teal and rainbow gems first: they are part of the treasure everything else is measured against.
+            foreach (var (position, value) in plan.HighGems)
+            {
+                var entry = value == LevelScatter.Rainbow ? rainbowEntry : tealEntry;
+                string what = value == LevelScatter.Rainbow ? "rainbow gem" : "teal gem";
+                var objects = entry == null ? [] : await AddUniversalMobyAtAsync(lib, entry, entry.Variants[0], position, 0);
+                if (objects.Count == 0) missing.Add(what); else Track(objects, what);
+            }
             foreach (var item in plan.Items)
             {
                 if (++done % 4 == 1) _statusText.Text = $"Placing objects ({done} of {plan.Items.Count})…";
+                // Scenery goes in last, after the gems: it takes only the save rows that are left over.
+                if (item.Kind is LevelScatter.Kind.Tree or LevelScatter.Kind.Light or LevelScatter.Kind.WallLight or LevelScatter.Kind.Plant) continue;
                 if (usedRows >= budget) { leftOut++; continue; }
                 IReadOnlyList<Moby> objects = [];
                 switch (item.Kind)
@@ -606,6 +664,24 @@ public sealed partial class MainWindow
                 if (objects.Count == 0) { missing.Add("gem"); continue; }
                 Track(objects, values[i] switch { 1 => "red gem", 2 => "green gem", 5 => "blue gem", 10 => "gold gem", _ => "pink gem" });
             }
+            // Scenery: each sort's kinds in turn.
+            var sceneryTurn = new Dictionary<LevelScatter.Kind, int>();
+            foreach (var item in plan.Items.Where(i => i.Kind is LevelScatter.Kind.Tree or LevelScatter.Kind.Light or LevelScatter.Kind.WallLight or LevelScatter.Kind.Plant))
+            {
+                var kinds = sceneryKinds.Where(p => p.Kind == item.Kind).ToList();
+                if (kinds.Count == 0 || usedRows >= budget) continue;
+                int turn = sceneryTurn.GetValueOrDefault(item.Kind);
+                var (_, entry, variant) = kinds[turn % kinds.Count];
+                // Flowers and grass of a cluster are one kind; trees take turns.
+                sceneryTurn[item.Kind] = turn + (item.Kind == LevelScatter.Kind.Plant && rnd.Chance(0.7) ? 0 : 1);
+                _statusText.Text = "Placing scenery…";
+                var objects = await AddUniversalMobyAtAsync(lib, entry, variant, item.Position, item.Yaw);
+                if (objects.Count == 0) continue;
+                // A wall lamp hangs where it was put (objects are set down on the floor when added).
+                if (item.Kind == LevelScatter.Kind.WallLight)
+                    MoveMoby(objects[0], item.Position.X - objects[0].Position.X, item.Position.Y - objects[0].Position.Y, item.Position.Z - objects[0].Position.Z);
+                Track(objects, item.Kind switch { LevelScatter.Kind.Tree => "tree", LevelScatter.Kind.Light => "torch", LevelScatter.Kind.WallLight => "wall lamp", _ => "plant" });
+            }
         }
         catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException or InvalidOperationException)
         { missing.Add(e.Message); }
@@ -629,14 +705,18 @@ public sealed partial class MainWindow
         int treasure = _currentMobys.Where(m => !m.IsRemoved).Sum(m => m.TreasureValue);
         int gemCount = placed.Where(p => p.Key.EndsWith(" gem", StringComparison.Ordinal)).Sum(p => p.Value);
         var parts = placed.Where(p => !p.Key.EndsWith(" gem", StringComparison.Ordinal)).OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.Ordinal)
-            .Select(p => p.Value == 1 ? "1 " + p.Key : $"{p.Value} {p.Key switch { "enemy" => "enemies", "egg thief" => "egg thieves", "Return Home vortex" => "Return Home vortexes", "key" => "keys", var w when w.EndsWith("chest") => w + "s", var w => w + "s" }}").ToList();
+            .Select(p => p.Value == 1 ? "1 " + p.Key : $"{p.Value} {p.Key switch { "enemy" => "enemies", "egg thief" => "egg thieves", "Return Home vortex" => "Return Home vortexes", "key" => "keys", "torch" => "torches and lamps", "plant" => "flowers and grasses", var w when w.EndsWith("chest") => w + "s", var w => w + "s" }}").ToList();
         if (gemCount > 0)
-            parts.Add($"{gemCount} gems ({string.Join(", ", new[] { "red", "green", "blue", "gold", "pink" }.Where(c => placed.ContainsKey(c + " gem")).Select(c => $"{placed[c + " gem"]} {c}"))})");
+            parts.Add($"{gemCount} gems ({string.Join(", ", new[] { "red", "green", "blue", "gold", "pink", "teal", "rainbow" }.Where(c => placed.ContainsKey(c + " gem")).Select(c => $"{placed[c + " gem"]} {c}"))})");
         List<string> notes = [.. plan.Notes];
         if (refusedKinds.Count > 0) notes.Add($"Left out because this level cannot hold them: {string.Join(", ", refusedKinds.Distinct())}.");
         if (wholeRefusal != null) notes.Add($"Create BIN would refuse this arrangement ({wholeRefusal}) Press Randomize again, or choose another enemy type.");
         if (leftOut > 0) notes.Add($"The level's save rows are full: {Count(leftOut, "thing was", "things were")} left out.");
         if (choice.Eggs > 0 && eggs == 0) notes.Add("Dragonfly eggs come from the Japanese version of the game: choose that disc in Add object… first.");
+        if ((choice.TealGems || choice.RainbowGems) && plan.HighGems.Count == 0 && LevelScatter.HighGemsFor(request.Treasure, choice.TealGems, choice.RainbowGems) == (0, 0))
+            notes.Add($"{request.Treasure} gems are too few for a teal or rainbow gem: a teal gem needs 100 (150 with rainbow gems asked for too), a rainbow gem 200 (300 with teal ones).");
+        if (choice.Scenery && sceneryKinds.Count == 0 && _retailCatalog.FindByKey(choice.LevelKey) is { } sceneryLevel)
+            notes.Add($"{sceneryLevel.DisplayName} has no scenery objects to place: its trees and torches are part of its land.");
         if (choice.Difficulty == LevelDifficulty.Kaizo && (choice.Animals || choice.Chests)) notes.Add("Kaizo: no animals for Sparx and no extra life.");
         if (choice.Enemies > 0 && foeKinds.Count == 0) notes.Add($"{_retailCatalog.FindByKey(enemyLevel)?.DisplayName ?? "That level"} has no enemies that can be placed.");
         if ((choice.Dragons || choice.Thieves) && own.Dragons.Count + own.Thieves.Count == 0)

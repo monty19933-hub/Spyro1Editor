@@ -20,9 +20,55 @@ internal static class RandomLevelCases
         return output.Split('\n').FirstOrDefault(l => l.StartsWith("FINGERPRINT ", StringComparison.Ordinal))?[12..].Trim() ?? "none";
     }
 
-    /// <summary>How far (on the map) <paramref name="p"/> is from the nearest upright face that stands between Spyro's
-    /// knees and his head there.</summary>
+    /// <summary>How far (on the map) <paramref name="p"/> is from the nearest upright face, measured to the part of
+    /// it that stands between Spyro's knees and his head there (a face that only passes under the floor or overhead
+    /// does not count).</summary>
     public static float WallDistance(SceneDocument scene, Spyro.Editor.Core.Primitives.Vector3f p)
+    {
+        float best = float.MaxValue, lo = p.Z + 20, hi = p.Z + 90;
+        var part = new List<Spyro.Editor.Core.Primitives.Vector3f>(8); var next = new List<Spyro.Editor.Core.Primitives.Vector3f>(8);
+        foreach (var s in scene.Surfaces)
+        {
+            var v = s.Vertices;
+            if (v.Max(q => q.Z) <= lo || v.Min(q => q.Z) >= hi) continue;
+            float nx = 0, ny = 0, nz = 0;
+            for (int k = 0; k < v.Length; k++)
+            {
+                var a = v[k]; var b = v[(k + 1) % v.Length];
+                nx += (a.Y - b.Y) * (a.Z + b.Z); ny += (a.Z - b.Z) * (a.X + b.X); nz += (a.X - b.X) * (a.Y + b.Y);
+            }
+            float len = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
+            if (len <= 0 || Math.Abs(nz) / len >= 0.6f) continue;
+            // The face cut down to the band of height that matters.
+            part.Clear(); part.AddRange(v);
+            foreach (var (level, above) in new[] { (lo, true), (hi, false) })
+            {
+                next.Clear();
+                for (int k = 0; k < part.Count; k++)
+                {
+                    var a = part[k]; var b = part[(k + 1) % part.Count];
+                    bool ina = above ? a.Z >= level : a.Z <= level, inb = above ? b.Z >= level : b.Z <= level;
+                    if (ina) next.Add(a);
+                    if (ina != inb) { float t = (level - a.Z) / (b.Z - a.Z); next.Add(new(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t, level)); }
+                }
+                (part, next) = (next, part);
+            }
+            for (int k = 0; k < part.Count; k++)
+            {
+                var a = part[k]; var b = part[(k + 1) % part.Count];
+                float dx = b.X - a.X, dy = b.Y - a.Y, l2 = dx * dx + dy * dy;
+                float t = l2 <= 0 ? 0 : Math.Clamp(((p.X - a.X) * dx + (p.Y - a.Y) * dy) / l2, 0, 1);
+                float ex = a.X + t * dx - p.X, ey = a.Y + t * dy - p.Y;
+                best = Math.Min(best, MathF.Sqrt(ex * ex + ey * ey));
+            }
+        }
+        return best;
+    }
+
+    /// <summary>The wall distance as study/objects.py measures it in the game's own levels (to any upright face whose
+    /// height span reaches between Spyro's knees and his head, wherever along the face that is), so that
+    /// <c>--scatter-facts</c> sets like beside like.</summary>
+    public static float WallDistanceAsStudied(SceneDocument scene, Spyro.Editor.Core.Primitives.Vector3f p)
     {
         float best = float.MaxValue;
         foreach (var s in scene.Surfaces)
@@ -57,6 +103,123 @@ internal static class RandomLevelCases
             : null
         : null;
 
+    /// <summary>Variety: the seed decides how a level is laid out, how many rooms it has, how big they are and how high
+    /// the level climbs. Two dozen seeds of every kind (not compiled; the checks above compile theirs) must differ in
+    /// all of these, every floor of every one must be reachable, every layout must turn up, and every layout can be
+    /// asked for by name. Homeworlds vary the same way and still have a place for each of their five doorways.</summary>
+    public static void Variety(LevelCatalog catalog, Func<string, LevelPropSource?>? source, Action<bool, string> check, int seeds = 24, bool print = true)
+    {
+        static T At<T>(List<T> sorted, double q) => sorted[Math.Min(sorted.Count - 1, (int)(q * sorted.Count))];
+        var seen = new Dictionary<string, int>();
+        List<RandomLevelResult> Make(Func<int, RandomLevelOptions> options, int count)
+        {
+            var made = new RandomLevelResult?[count];
+            // The generator's working state is per thread: levels are made side by side.
+            Parallel.For(0, count, k =>
+            {
+                try { made[k] = RandomLevelGenerator.Generate(options(k), catalog, compile: false, source: source); }
+                catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException) { }
+            });
+            return [.. made.OfType<RandomLevelResult>()];
+        }
+        string Line(string what, List<RandomLevelResult> made)
+        {
+            var rooms = made.Select(r => r.Report.Areas).Order().ToList(); var heights = made.Select(r => r.Report.HeightSpan).Order().ToList(); var faces = made.Select(r => r.Report.Faces).Order().ToList();
+            return $"variety {what,-18} rooms {rooms[0]}-{At(rooms, .5)}-{rooms[^1]}, height {heights[0]}-{At(heights, .5)}-{heights[^1]}, faces {faces[0]}-{At(faces, .5)}-{faces[^1]}; " +
+                string.Join(", ", made.GroupBy(r => r.Report.Layout).OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal).Select(g => $"{g.Key} {g.Count()}"));
+        }
+        foreach (var style in Enum.GetValues<LevelStyle>())
+        {
+            var made = Make(k => new RandomLevelOptions { Seed = 7000 + (int)style * 100 + k, Style = style }, seeds);
+            check(made.Count == seeds, $"variety {style}: {seeds - made.Count} of {seeds} seeds made no level");
+            if (made.Count == 0) continue;
+            if (print) Console.WriteLine(Line(style.ToString(), made));
+            var layouts = made.GroupBy(r => r.Report.Layout).ToDictionary(g => g.Key, g => g.Count());
+            foreach (var (layout, n) in layouts) seen[layout] = seen.GetValueOrDefault(layout) + n;
+            var rooms = made.Select(r => r.Report.Areas).Order().ToList(); var heights = made.Select(r => r.Report.HeightSpan).Order().ToList(); var faces = made.Select(r => r.Report.Faces).Order().ToList();
+            bool low = style is LevelStyle.Islands;
+            check(layouts.Count >= 4 && layouts.Values.Max() <= seeds / 2, $"variety {style}: layouts {string.Join(", ", layouts.Select(l => $"{l.Key} {l.Value}"))}");
+            check(rooms[^1] - rooms[0] >= 5 && rooms[^1] >= 1.6 * rooms[0], $"variety {style}: rooms only from {rooms[0]} to {rooms[^1]}");
+            check(heights[^1] >= 2.5 * Math.Max(1, heights[0]) && At(heights, .5) >= (low ? 150 : 300) && heights[^1] >= (low ? 300 : 600), $"variety {style}: heights {heights[0]}, {At(heights, .5)}, {heights[^1]}");
+            check(faces[^1] >= 1.6 * faces[0], $"variety {style}: faces only from {faces[0]} to {faces[^1]}");
+            var unreachable = made.Where(r => r.Report.RequiredFloors == 0 || r.Report.Unreached + r.Report.NoWayBack > 0.03 * r.Report.RequiredFloors).Select(r => r.Report.Seed).ToList();
+            check(unreachable.Count == 0, $"variety {style}: floors out of reach in seeds {string.Join(", ", unreachable)}");
+            check(made.Select(r => r.Scene.Fingerprint()).Distinct().Count() == made.Count, $"variety {style}: two seeds made the same level");
+            check(made.All(r => r.Report.Faces <= RandomLevelGenerator.FaceTarget(LevelSize.Medium) + SpyroStructuresFaces), $"variety {style}: a level of {faces[^1]} faces");
+        }
+        check(SpyroPlannerLayouts.All(l => seen.GetValueOrDefault(l) >= 5), $"variety: layouts over all kinds {string.Join(", ", seen.OrderBy(l => l.Key, StringComparer.Ordinal).Select(l => $"{l.Key} {l.Value}"))}");
+        // Every layout by name, in every size.
+        foreach (string layout in SpyroPlannerLayouts)
+        {
+            var made = Make(k => new RandomLevelOptions { Seed = 7900 + k, Style = k % 2 == 0 ? LevelStyle.Valley : LevelStyle.Castle, Size = (LevelSize)(k % 3), Layout = layout }, 6);
+            check(made.Count == 6 && made.Count(r => r.Report.Layout == layout) >= 5 && made.All(r => r.Report.Unreached + r.Report.NoWayBack <= 0.03 * r.Report.RequiredFloors),
+                $"variety: asked for {layout}, got {string.Join(", ", made.Select(r => r.Report.Layout))}");
+        }
+        // Sizes: a large level has more floor than a small one of the same seed, as a rule.
+        var small = Make(k => new RandomLevelOptions { Seed = 7950 + k, Style = LevelStyle.Valley, Size = LevelSize.Small }, 12);
+        var large = Make(k => new RandomLevelOptions { Seed = 7950 + k, Style = LevelStyle.Valley, Size = LevelSize.Large }, 12);
+        check(small.Count == 12 && large.Count == 12 && large.Average(r => r.Report.Faces) >= 1.35 * small.Average(r => r.Report.Faces),
+            $"variety: large levels average {(large.Count > 0 ? large.Average(r => r.Report.Faces) : 0):0} faces, small ones {(small.Count > 0 ? small.Average(r => r.Report.Faces) : 0):0}");
+        // Homeworlds.
+        foreach (var style in new[] { LevelStyle.Valley, LevelStyle.Castle, LevelStyle.Islands, LevelStyle.Canyon, LevelStyle.Caverns, LevelStyle.SkyIslands })
+        {
+            var homes = Make(k => new RandomLevelOptions { Seed = 7600 + (int)style * 100 + k, Style = style, Doorways = 5 }, 12);
+            if (print && homes.Count > 0) Console.WriteLine(Line("homeworld " + style, homes));
+            var kinds = homes.Select(r => r.Report.Layout).Distinct().ToList();
+            check(homes.Count == 12 && kinds.Count >= (style == LevelStyle.Caverns ? 2 : 3), $"variety {style} homeworlds: layouts {string.Join(", ", kinds)}");
+            check(homes.All(r => r.Doorways.Count == 5), $"variety {style} homeworlds: doorway places {string.Join(", ", homes.Select(r => r.Doorways.Count))}");
+            check(homes.All(r => r.Report.Unreached + r.Report.NoWayBack <= 0.03 * r.Report.RequiredFloors), $"variety {style} homeworlds: floors out of reach");
+            // Every doorway place of every one of them keeps the doorway rules (three checks a doorway, as one).
+            foreach (var home in homes)
+            {
+                List<string> wrong = [];
+                DoorwayFloors(home, $"{style} {home.Report.Seed}", (ok, problem) => { if (!ok) wrong.Add(problem); });
+                check(wrong.Count == 0, string.Join("; ", wrong));
+            }
+        }
+    }
+
+    /// <summary>Every doorway place of a homeworld has level floor both ways while its room lasts (Spyro comes out in
+    /// front of a doorway, or with some homeworlds' doorways just behind it), floor of some kind on to 720 in front (a
+    /// path's slope), and no wall near the way in and out.</summary>
+    public static void DoorwayFloors(RandomLevelResult home, string what, Action<bool, string> check)
+    {
+        var floors = new LevelFill.FloorGrid(home.Scene);
+        foreach (var door in home.Doorways)
+        {
+            var (fx, fy) = DoorwayShapes.Facing(door.Heading);
+            var walk = Enumerable.Range(-(int)(Math.Min(door.ClearBehind, 420) / 60), (int)(door.ClearFront / 60) + (int)(Math.Min(door.ClearBehind, 420) / 60) + 1)
+                .Select(n => new Spyro.Editor.Core.Primitives.Vector3f(door.Position.X - (float)fx * n * 60, door.Position.Y - (float)fy * n * 60, door.Position.Z)).ToList();
+            check(door.ClearFront >= 480 && door.ClearBehind >= 200 && floors.Holds(walk, 30), $"{what} homeworld doorway at {door.Position}: no level floor in front of it ({door.ClearFront:0}) or behind it ({door.ClearBehind:0})");
+            var beyond = Enumerable.Range(0, 13).Select(n => new Spyro.Editor.Core.Primitives.Vector3f(door.Position.X - (float)fx * n * 60, door.Position.Y - (float)fy * n * 60, door.Position.Z)).ToList();
+            check(floors.Holds(beyond, 200), $"{what} homeworld doorway at {door.Position}: no floor 720 in front of it");
+            float wall = walk.Min(q => WallDistance(home.Scene, q));
+            var worst = walk.MinBy(q => WallDistance(home.Scene, q));
+            check(wall >= 50, $"{what} homeworld doorway at {door.Position} (heading {door.Heading}, clear {door.ClearFront:0} in front, {door.ClearBehind:0} behind{(door.Plaza ? ", in the plaza" : "")}): a wall {wall:0} units from its way in at {worst}");
+        }
+    }
+
+    /// <summary>Random objects as the card asks for them at a treasure and difficulty: every kind of chest, the way
+    /// out, three dragons and a thief.</summary>
+    public static LevelScatter.Plan Scatter(SceneDocument scene, long seed, int treasure, LevelDifficulty difficulty, bool highGems = false) =>
+        LevelScatter.Make(scene, new LevelScatter.Request(seed, LevelScatter.EnemiesFor(treasure, difficulty), LevelScatter.AnimalsFor(difficulty), treasure, 236)
+        {
+            Exit = true, Dragons = 3, ThiefRoutes = [6], ChestKinds = LevelScatter.Chests.ToHashSet(), Difficulty = difficulty, TealGems = highGems, RainbowGems = highGems,
+            Scenery = new Dictionary<LevelScatter.Kind, int> { [LevelScatter.Kind.Tree] = 8, [LevelScatter.Kind.Light] = 8, [LevelScatter.Kind.WallLight] = 5, [LevelScatter.Kind.Plant] = 10 },
+        }, scene.GemSpots);
+
+    /// <summary>The kind names study/objects2.py groups objects by.</summary>
+    public static string StudyKind(LevelScatter.Kind kind) => kind switch
+    {
+        LevelScatter.Kind.Enemy => "enemy", LevelScatter.Kind.Animal => "fodder", LevelScatter.Kind.Exit => "exit", LevelScatter.Kind.Dragon => "dragon", LevelScatter.Kind.Thief => "thief",
+        LevelScatter.Kind.Key => "key", LevelScatter.Kind.LifeChest => "chest:life", LevelScatter.Kind.LockedChest => "chest:locked", LevelScatter.Kind.Egg => "egg",
+        LevelScatter.Kind.Tree => "prop:tree", LevelScatter.Kind.Light or LevelScatter.Kind.WallLight => "prop:light", LevelScatter.Kind.Plant => "prop:plant", _ => "chest:any",
+    };
+
+    private static readonly string[] SpyroPlannerLayouts = ["journey", "loop", "hub", "arena", "climb", "gorge", "web"];
+    /// <summary>The faces a level's towers and trees may add to its land.</summary>
+    private const int SpyroStructuresFaces = 900;
+
     public static async Task<int> Run(string repo, string? maps, int seedsPerStyle, string? only = null)
     {
         var catalog = LevelCatalog.Load(repo);
@@ -64,6 +227,7 @@ internal static class RandomLevelCases
         int checks = 0, failures = 0;
         void Check(bool ok, string what) { checks++; if (!ok) { failures++; Console.WriteLine("FAIL " + what); } }
         var fingerprints = new HashSet<string>();
+        double highAway = 0, looseAway = 0; int highCount = 0, looseCount = 0;
         var styles = Enum.GetValues<LevelStyle>();
         var sizes = Enum.GetValues<LevelSize>();
         var themesSeen = new HashSet<string>();
@@ -192,6 +356,52 @@ internal static class RandomLevelCases
                         var other = LevelScatter.Make(r.Scene, want with { Treasure = treasure, Seed = seed + treasure }, r.Scene.GemSpots);
                         Check(other.Treasure == treasure, $"{style} {seed} treasure {other.Treasure}, not {treasure}: {string.Join(" ", other.Notes)}");
                     }
+                    // Scenery: trees, torches, wall lamps and flowers find places on the floor (wall lamps on a wall
+                    // over it), none where Spyro arrives or on top of anything else, and the treasure is as exact with
+                    // them as without.
+                    {
+                        var withScenery = want with { Scenery = new Dictionary<LevelScatter.Kind, int> { [LevelScatter.Kind.Tree] = 6, [LevelScatter.Kind.Light] = 6, [LevelScatter.Kind.WallLight] = 4, [LevelScatter.Kind.Plant] = 8 } };
+                        var dressed = LevelScatter.Make(r.Scene, withScenery, r.Scene.GemSpots);
+                        var scenery = dressed.Items.Where(i => i.Kind is LevelScatter.Kind.Tree or LevelScatter.Kind.Light or LevelScatter.Kind.WallLight or LevelScatter.Kind.Plant).ToList();
+                        var others = dressed.Items.Except(scenery).Select(i => i.Position).Concat(dressed.Gems.Select(g => g.Position)).ToList();
+                        // Apart on the floor; things a storey apart in height are apart too.
+                        float Flat(Spyro.Editor.Core.Primitives.Vector3f a, Spyro.Editor.Core.Primitives.Vector3f b) => MathF.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y) + (a.Z - b.Z) * (a.Z - b.Z) / 4);
+                        Check(scenery.Count >= 10 && scenery.Count(i => i.Kind == LevelScatter.Kind.Plant) >= 3 && scenery.Count(i => i.Kind == LevelScatter.Kind.Tree) >= 1 &&
+                            scenery.Count(i => i.Kind == LevelScatter.Kind.Tree) <= 6 && scenery.Count(i => i.Kind == LevelScatter.Kind.Plant) <= 8,
+                            $"{style} {seed} scenery: {string.Join(", ", scenery.GroupBy(i => i.Kind).Select(g => g.Count() + " " + g.Key))}");
+                        Check(dressed.Treasure == 300 && dressed.Grid!.Holds(scenery.Select(i => i.Position), 200), $"{style} {seed} scenery: treasure {dressed.Treasure}, or a piece of it off the floor");
+                        Check(scenery.All(i => Flat(i.Position, r.Scene.Spawn) >= 250) && scenery.Where(i => i.Kind != LevelScatter.Kind.WallLight).All(i => others.All(o => Flat(o, i.Position) >= 60)),
+                            $"{style} {seed} scenery stands where Spyro arrives or on another object: " + string.Join("; ", scenery.Where(i => Flat(i.Position, r.Scene.Spawn) < 250 || i.Kind != LevelScatter.Kind.WallLight && others.Any(o => Flat(o, i.Position) < 60))
+                                .Select(i => $"{i.Kind} at {i.Position.X:0},{i.Position.Y:0},{i.Position.Z:0}, {Flat(i.Position, r.Scene.Spawn):0} from the start, {others.Min(o => Flat(o, i.Position)):0} from {dressed.Items.Except(scenery).OrderBy(o => Flat(o.Position, i.Position)).First().Kind}")));
+                        // What stands on the floor keeps off the walls like everything else; a wall lamp is at a wall.
+                        var standing = scenery.Where(i => i.Kind != LevelScatter.Kind.WallLight).ToList();
+                        float close = standing.Count == 0 ? 99 : standing.Min(i => WallDistance(r.Scene, i.Position));
+                        var lamps = scenery.Where(i => i.Kind == LevelScatter.Kind.WallLight).ToList();
+                        float lampWall = lamps.Count == 0 ? 0 : lamps.Max(i => WallDistance(r.Scene, i.Position with { Z = i.Position.Z - 90 }));
+                        Check(close >= 20 && lampWall <= 48, $"{style} {seed} scenery: a tree or a torch {close:0} from a wall, a wall lamp {lampWall:0} from its wall");
+                        Check(Shape(LevelScatter.Make(r.Scene, withScenery, r.Scene.GemSpots)) == Shape(dressed), $"{style} {seed} scenery differs for the same seed");
+                    }
+                    // Teal (50) and rainbow (100) gems: off unless asked for; asked for, a rare few take their part of
+                    // the treasure, each alone at a hard place far from the start, and the total is still exact.
+                    Check(scatter.HighGems.Count == 0, $"{style} {seed} teal or rainbow gems that were not asked for");
+                    foreach (var (treasure, teal, rainbow) in new[] { (300, true, true), (500, true, true), (1000, true, true), (300, true, false), (300, false, true), (120, true, true) })
+                    {
+                        var rich = LevelScatter.Make(r.Scene, want with { Treasure = treasure, TealGems = teal, RainbowGems = rainbow, Seed = seed + 7 * treasure }, r.Scene.GemSpots);
+                        var (teals, rainbows) = LevelScatter.HighGemsFor(treasure, teal, rainbow);
+                        float Flat(Spyro.Editor.Core.Primitives.Vector3f a, Spyro.Editor.Core.Primitives.Vector3f b) => MathF.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+                        Check(rich.Treasure == treasure && rich.HighGems.Count(g => g.Value == 50) == teals && rich.HighGems.Count(g => g.Value == 100) == rainbows && rich.HighGems.All(g => g.Value is 50 or 100),
+                            $"{style} {seed} treasure {treasure} with teal {teal} rainbow {rainbow}: {rich.Treasure}, gems {string.Join(",", rich.HighGems.Select(g => g.Value))} (wanted {teals} teal, {rainbows} rainbow): {string.Join(" ", rich.Notes)}");
+                        Check(rich.HighGems.All(g => Flat(g.Position, r.Scene.Spawn) >= 480 && rich.Gems.All(o => Flat(o.Position, g.Position) >= 150) && rich.Items.All(o => Flat(o.Position, g.Position) >= 120)) &&
+                            rich.Grid!.Holds(rich.HighGems.Select(g => g.Position), 40) && rich.HighGems.All(g => WallDistance(r.Scene, g.Position) >= 20),
+                            $"{style} {seed} treasure {treasure}: a teal or rainbow gem is not alone on open floor away from the start");
+                        if (treasure == 1000)
+                        {
+                            // The hardest places: further from the start than the level's loose gems are as a rule.
+                            double Away(Spyro.Editor.Core.Primitives.Vector3f p) => Flat(p, r.Scene.Spawn);
+                            highAway += rich.HighGems.Sum(g => Away(g.Position)); highCount += rich.HighGems.Count;
+                            looseAway += rich.Gems.Sum(g => Away(g.Position)); looseCount += rich.Gems.Count;
+                        }
+                    }
                     // An easy and a Kaizo arrangement: the treasure is still exact, and no enemy stands at the start.
                     foreach (var hard in new[] { LevelDifficulty.Easy, LevelDifficulty.Kaizo })
                     {
@@ -217,20 +427,7 @@ internal static class RandomLevelCases
                         Console.WriteLine($"    homeworld {h.Faces,5} faces areas {h.Areas,2} doorways {home.Doorways.Count} req {h.RequiredFloors,5} unreached {h.Unreached} noback {h.NoWayBack} | {string.Join(", ", h.Counts.Select(c => $"{c.Key} {c.Value}"))}");
                         Check(home.Doorways.Count == 5, $"{style} {seed} homeworld has {home.Doorways.Count} doorway places: {string.Join(" ", h.Notes)}");
                         Check(h.RequiredFloors > 0 && (h.Unreached + h.NoWayBack) <= 0.03 * h.RequiredFloors, $"{style} {seed} homeworld: {h.Unreached} unreached, {h.NoWayBack} without a way back of {h.RequiredFloors}");
-                        var floors = new LevelFill.FloorGrid(home.Scene);
-                        foreach (var door in home.Doorways)
-                        {
-                            var (fx, fy) = DoorwayShapes.Facing(door.Heading);
-                            // Level floor both ways while the room lasts (Spyro comes out in front of a doorway, or with some
-                            // homeworlds' doorways just behind it), and floor of some kind on to 720 in front (a path's slope).
-                            var walk = Enumerable.Range(-(int)(Math.Min(door.ClearBehind, 420) / 60), (int)(door.ClearFront / 60) + (int)(Math.Min(door.ClearBehind, 420) / 60) + 1)
-                                .Select(n => new Spyro.Editor.Core.Primitives.Vector3f(door.Position.X - (float)fx * n * 60, door.Position.Y - (float)fy * n * 60, door.Position.Z)).ToList();
-                            Check(door.ClearFront >= 480 && door.ClearBehind >= 200 && floors.Holds(walk, 30), $"{style} {seed} homeworld doorway at {door.Position}: no level floor in front of it ({door.ClearFront:0}) or behind it ({door.ClearBehind:0})");
-                            var beyond = Enumerable.Range(0, 13).Select(n => new Spyro.Editor.Core.Primitives.Vector3f(door.Position.X - (float)fx * n * 60, door.Position.Y - (float)fy * n * 60, door.Position.Z)).ToList();
-                            Check(floors.Holds(beyond, 200), $"{style} {seed} homeworld doorway at {door.Position}: no floor 720 in front of it");
-                            float wall = walk.Min(q => WallDistance(home.Scene, q));
-                            Check(wall >= 50, $"{style} {seed} homeworld doorway at {door.Position}: a wall {wall:0} units from its way in");
-                        }
+                        DoorwayFloors(home, $"{style} {seed}", Check);
                         var destinations = new[] { 71, 72, 73, 74 }.Select(id => new DoorwayDestination(id, "LEVEL " + (id - 70), false, null))
                             .Append(new DoorwayDestination(10, "Artisans", false, SceneDoorways.WayBackNote)).ToArray();
                         var (built, added, problems) = SceneDoorways.AddAll(home.Scene with { WorldLevelId = NewWorldDocument.Homeworld }, home.Doorways, destinations,
@@ -298,6 +495,18 @@ internal static class RandomLevelCases
                 }
             }
         if (only == null) Check(themesSeen.Count >= 4, $"only {themesSeen.Count} themes across the styles");
+        if (only == null)
+        {
+            Check(highCount >= 12 && highAway / highCount >= 1.15 * looseAway / Math.Max(1, looseCount),
+                $"teal and rainbow gems lie {highAway / Math.Max(1, highCount):0} from the start on average, loose gems {looseAway / Math.Max(1, looseCount):0}: not the harder places");
+            // How many of them a treasure gets.
+            (int, bool, bool, int, int)[] allotments = [(99, true, false, 0, 0), (100, true, false, 1, 0), (300, true, false, 1, 0), (1000, true, false, 4, 0), (199, false, true, 0, 0), (200, false, true, 0, 1),
+                (700, false, true, 0, 2), (2000, false, true, 0, 3), (149, true, true, 0, 0), (150, true, true, 1, 0), (299, true, true, 1, 0), (300, true, true, 1, 1), (500, true, true, 1, 1), (800, true, true, 2, 2),
+                (2000, true, true, 3, 2), (500, false, false, 0, 0)];
+            foreach (var (treasure, teal, rainbow, teals, rainbows) in allotments)
+                Check(LevelScatter.HighGemsFor(treasure, teal, rainbow) == (teals, rainbows), $"a treasure of {treasure} (teal {teal}, rainbow {rainbow}) gets {LevelScatter.HighGemsFor(treasure, teal, rainbow)}, not ({teals}, {rainbows})");
+        }
+        if (only == null) Variety(catalog, source, Check);
         Console.WriteLine(failures == 0 ? $"RANDOM_LEVEL_SMOKE_OK checks={checks}" : $"RANDOM_LEVEL_SMOKE_FAILED failures={failures} checks={checks}");
         return failures == 0 ? 0 : 1;
     }

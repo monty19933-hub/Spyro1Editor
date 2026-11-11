@@ -23,6 +23,8 @@ if (args.Length >= 6 && args[0] == "--dump")
         // RANDOM_DOORWAYS=n: a homeworld with n doorways (built as a new world's, to be looked at); RANDOM_DIFFICULTY.
         Doorways = int.TryParse(Environment.GetEnvironmentVariable("RANDOM_DOORWAYS"), out int doors) ? doors : 0,
         Difficulty = Enum.TryParse<Spyro.Editor.Core.Generation.LevelDifficulty>(Environment.GetEnvironmentVariable("RANDOM_DIFFICULTY"), out var hard) ? hard : Spyro.Editor.Core.Generation.LevelDifficulty.Medium,
+        // RANDOM_LAYOUT: journey, loop, hub, arena, climb, gorge or web (unset: the seed's own).
+        Layout = Environment.GetEnvironmentVariable("RANDOM_LAYOUT") is { Length: > 0 } layout ? layout : null,
     };
     var watch = System.Diagnostics.Stopwatch.StartNew();
     var source = RandomLevelCases.LookSource();
@@ -40,24 +42,72 @@ if (args.Length >= 6 && args[0] == "--dump")
         Console.WriteLine($"doorways: {string.Join(", ", built.Portals!.Select(d => $"{d.DestinationLevelId} {d.Shape} x{d.SizeScale:0.00}"))} {string.Join(" ", problems)}");
         r = r with { Scene = built };
     }
-    var faces = r.Scene.Surfaces.Select(s => new
+    // Doorway frames are added after the level's own faces: the play-floor marks cover the level's own.
+    var faces = r.Scene.Surfaces.Select((s, index) => new
     {
+        w = index < r.PlayFloor.Count && r.PlayFloor[index] ? 1 : 0,
         p = s.Vertices.Select(v => new[] { v.X, v.Y, v.Z }).ToArray(),
         c = (s.NearColors ?? []).Select(c => new[] { (int)c.R, c.G, c.B }).ToArray(),
         t = s.Material == null ? null : $"{keyOf.GetValueOrDefault(s.Material.SourceWadEntry, "?")}:{s.Material.TextureId}",
         k = s.Kind?.Type,
     });
+    // RANDOM_SCATTER=<treasure>: Random objects on it too (dragons, a thief, the way out, every kind of chest), for
+    // study/objects2.py.
+    var objects = new List<object>();
+    if (int.TryParse(Environment.GetEnvironmentVariable("RANDOM_SCATTER"), out int treasure))
+    {
+        var plan = RandomLevelCases.Scatter(r.Scene, options.Seed, treasure, options.Difficulty, Environment.GetEnvironmentVariable("RANDOM_HIGH_GEMS") == "1");
+        foreach (var gem in plan.HighGems) objects.Add(new { k = "gem" + gem.Value, p = new[] { gem.Position.X, gem.Position.Y, gem.Position.Z }, v = gem.Value });
+        foreach (var item in plan.Items)
+            objects.Add(new { k = RandomLevelCases.StudyKind(item.Kind), p = new[] { item.Position.X, item.Position.Y, item.Position.Z }, v = item.Reward });
+        foreach (var gem in plan.Gems) objects.Add(new { k = "gem" + gem.Value, p = new[] { gem.Position.X, gem.Position.Y, gem.Position.Z }, v = gem.Value });
+        Console.WriteLine($"objects: {string.Join(", ", plan.Items.GroupBy(i => i.Kind).Select(g => $"{g.Count()} {g.Key}"))}, {plan.Gems.Count} gems; treasure {plan.Treasure}. {string.Join(" ", plan.Notes)}");
+    }
     await File.WriteAllTextAsync(args[5], System.Text.Json.JsonSerializer.Serialize(new
     {
-        name = r.Scene.Name, spawn = new[] { r.Scene.Spawn.X, r.Scene.Spawn.Y, r.Scene.Spawn.Z }, heading = r.Scene.Heading,
+        objects,
+        name = r.Scene.Name, spawn = new[] { r.Scene.Spawn.X, r.Scene.Spawn.Y, r.Scene.Spawn.Z }, heading = r.Scene.Heading, shape = r.Shape,
+        areas = r.Report.Areas, counts = r.Report.Counts, theme = r.Report.Theme, style = r.Report.Style.ToString(),
         gems = (r.Scene.GemSpots ?? []).Select(g => new[] { g.X, g.Y, g.Z }).ToArray(),
         links = r.Report.Links.Select(l => new { l.Kind, from = new[] { l.From.X, l.From.Y, l.From.Z }, to = new[] { l.To.X, l.To.Y, l.To.Z } }).ToArray(), faces,
     }));
     await TerrainTexturePngWriter.WriteRgbaAsync(Path.ChangeExtension(args[5], ".map.png"), r.MapWidth, r.MapHeight, r.Map);
     return 0;
 }
+if (args.Length >= 7 && args[0] == "--walk-to")
+{
+    // --walk-to <seed> <style> <size> <repo> <x> <y>: how the floor walk of Random objects gets to the floor under a
+    // point of a generated level (the places it passes, every eighth), for study.
+    var catalog = LevelCatalog.Load(args[4]);
+    var r = Spyro.Editor.Core.Generation.RandomLevelGenerator.Generate(new Spyro.Editor.Core.Generation.RandomLevelOptions
+    { Seed = long.Parse(args[1]), Style = Enum.Parse<Spyro.Editor.Core.Generation.LevelStyle>(args[2]), Size = Enum.Parse<Spyro.Editor.Core.Generation.LevelSize>(args[3]) }, catalog, compile: false, source: RandomLevelCases.LookSource());
+    var grid = new LevelFill.FloorGrid(r.Scene);
+    var from = new Dictionary<LevelFill.FloorGrid.Place, LevelFill.FloorGrid.Place>();
+    var walk = grid.Walk(r.Scene.Spawn, from);
+    float x = float.Parse(args[5]), y = float.Parse(args[6]);
+    var target = walk.Keys.OrderBy(c => MathF.Pow(grid.Point(c).X - x, 2) + MathF.Pow(grid.Point(c).Y - y, 2)).First();
+    var chain = new List<LevelFill.FloorGrid.Place> { target };
+    while (from.TryGetValue(chain[^1], out var before)) chain.Add(before);
+    chain.Reverse();
+    for (int k = 0; k < chain.Count; k++)
+    {
+        var p = grid.Point(chain[k]); var q = k > 0 ? grid.Point(chain[k - 1]) : p;
+        float step = MathF.Sqrt((p.X - q.X) * (p.X - q.X) + (p.Y - q.Y) * (p.Y - q.Y));
+        if (k % 8 == 0 || k == chain.Count - 1 || step > 70 || Math.Abs(p.Z - q.Z) > 40) Console.WriteLine($"{k,4} {p.X,6:0} {p.Y,6:0} {p.Z,6:0}  step {step,5:0} dz {p.Z - q.Z,5:0}");
+    }
+    return 0;
+}
+if (args.Length >= 2 && args[0] == "--variety")
+{
+    // --variety <repo> [seeds]: how much the levels of each kind differ over that many seeds (no disc; the gate
+    // runs the same checks over two dozen).
+    int failed = 0;
+    RandomLevelCases.Variety(LevelCatalog.Load(args[1]), RandomLevelCases.LookSource(), (ok, what) => { if (!ok) { failed++; Console.WriteLine("FAIL " + what); } }, args.Length > 2 ? int.Parse(args[2]) : 24);
+    Console.WriteLine(failed == 0 ? "VARIETY_OK" : $"VARIETY_FAILED {failed}");
+    return failed == 0 ? 0 : 1;
+}
 // Gate (no disc): [repo root] [--maps <folder>] [--seeds N]
-if (args.Length == 0 || args[0] is not ("--fingerprint" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--balloon-facts" or "--scatter-facts" or "--model-colours" or "--thief-colours"))
+if (args.Length == 0 || args[0] is not ("--fingerprint" or "--variety" or "--walk-to" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--balloon-facts" or "--scatter-facts" or "--model-colours" or "--thief-colours"))
 {
     string repo = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : Directory.GetCurrentDirectory();
     string? maps = args.SkipWhile(a => a != "--maps").Skip(1).FirstOrDefault();
@@ -107,6 +157,7 @@ if (args.Length >= 7 && args[0] == "--export-random")
         Seed = long.Parse(args[1]), Style = Enum.Parse<Spyro.Editor.Core.Generation.LevelStyle>(args[2]), Size = Enum.Parse<Spyro.Editor.Core.Generation.LevelSize>(args[3]),
         Theme = args.Length > 7 && args[7] != "-" ? args[7] : null,
         ChargePaths = Environment.GetEnvironmentVariable("RANDOM_CHARGE") == "1" ? true : null,
+        Layout = Environment.GetEnvironmentVariable("RANDOM_LAYOUT") is { Length: > 0 } layout ? layout : null,
         Textures = args.Length > 8 && args[8] == "pictures" ? Spyro.Editor.Core.Generation.LevelTextureMode.GeneratedPictures : Spyro.Editor.Core.Generation.LevelTextureMode.GameTextures,
     };
     string output = Path.GetFullPath(args[6]);
@@ -274,8 +325,8 @@ if (args.Length >= 2 && args[0] == "--scatter-facts")
             loose += l; inChests += c; fromFoes += f; all += plan.Treasure; gemCount += gems.Count; chestCount += chests.Count; foeCount += foes.Count; levels++;
             gemNear.AddRange(Nearest(gems)); foeNear.AddRange(Nearest(foes)); chestNear.AddRange(Nearest([.. chests.Select(i => i.Position)]));
             gemGroups.AddRange(Groups(gems, 150)); foeGroups.AddRange(Groups(foes, 450)); chestGroups.AddRange(Groups([.. chests.Select(i => i.Position)], 200));
-            gemWall.AddRange(gems.Select(p => (double)RandomLevelCases.WallDistance(r.Scene, p))); chestWall.AddRange(chests.Select(i => (double)RandomLevelCases.WallDistance(r.Scene, i.Position)));
-            foeWall.AddRange(foes.Select(p => (double)RandomLevelCases.WallDistance(r.Scene, p)));
+            gemWall.AddRange(gems.Select(p => (double)RandomLevelCases.WallDistanceAsStudied(r.Scene, p))); chestWall.AddRange(chests.Select(i => (double)RandomLevelCases.WallDistanceAsStudied(r.Scene, i.Position)));
+            foeWall.AddRange(foes.Select(p => (double)RandomLevelCases.WallDistanceAsStudied(r.Scene, p)));
             foreach (var g in plan.Gems.Select((gem, i) => (gem, Group: plan.GemGroups[i])).GroupBy(x => x.Group).Where(g => g.Count() > 1)) { manyGroups++; if (g.Select(x => x.gem.Value).Distinct().Count() == 1) oneColour++; }
         }
     Console.WriteLine($"\n==== {levels} levels, treasure {treasure}, {difficulty} (the game's figures in brackets) ====");
