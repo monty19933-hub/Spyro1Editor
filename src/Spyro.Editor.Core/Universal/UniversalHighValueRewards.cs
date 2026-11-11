@@ -25,8 +25,45 @@ public static class UniversalHighValueRewards
     public const byte TealReward = 0xD6, RainbowReward = 0xD7;
     /// <summary>The original gems that stand in for the high-value ones while the game's own code runs.</summary>
     public const int TealStandInClass = 0x56, RainbowStandInClass = 0x57;
+    /// <summary>Stable ids of the two catalogue entries (<see cref="UniversalMobyCatalogEntry.Id"/>) and of the kind
+    /// of object they place (<see cref="UniversalPlacementReader.KindOf"/>).</summary>
     public const string TealSpringChestId = "chest:spring-teal", RainbowSpringChestId = "chest:spring-rainbow";
     public const string TealSpringChestName = "Spring chest (Teal reward)", RainbowSpringChestName = "Spring chest (Rainbow reward)";
+    public static readonly IReadOnlyList<(string Id, string Name, byte Reward)> SpringChests =
+        [(TealSpringChestId, TealSpringChestName, TealReward), (RainbowSpringChestId, RainbowSpringChestName, RainbowReward)];
+
+    public static bool IsChestId(string? id) => id is TealSpringChestId or RainbowSpringChestId;
+    public static string? ChestIdFor(int rewardByte) => rewardByte switch { TealReward => TealSpringChestId, RainbowReward => RainbowSpringChestId, _ => null };
+    public static string? ChestNameFor(int rewardByte) => rewardByte switch { TealReward => TealSpringChestName, RainbowReward => RainbowSpringChestName, _ => null };
+
+    /// <summary>The teal and rainbow spring chests for the Add Object list: every spring chest row of the game's levels
+    /// (as the two spring chest entries of <paramref name="usa"/> list them), each giving the high-value gem. Empty
+    /// when the catalogue has no spring chest.</summary>
+    public static IReadOnlyList<UniversalMobyCatalogEntry> CatalogEntries(IReadOnlyList<UniversalMobyCatalogEntry> usa)
+    {
+        var springs = usa.Where(e => SpringChestClasses.Contains(e.ClassId) && e.Id == null)
+            .OrderBy(e => e.ClassId == 0x149 ? 0 : 1).ToList();
+        if (springs.Count == 0) return [];
+        List<UniversalMobyCatalogEntry> list = [];
+        foreach (var (id, name, reward) in SpringChests)
+        {
+            var variants = springs.SelectMany(e => e.Variants).Select(v => v with { RewardByte = reward }).ToList();
+            var first = springs.First();
+            var main = first.Default with { RewardByte = reward };
+            int value = ValueFor(reward);
+            string gem = reward == TealReward ? "Teal gem (50)" : "Rainbow gem (100)";
+            list.Add(new(first.ClassId, name, "Interactive", "Chests & Containers", variants, main,
+                springs.SelectMany(e => e.SourceLevels).Distinct().ToList(), first.RestrictionReason,
+                $"A spring chest that holds a {gem}. Flame it or charge it and the gem springs up out of its lid: Spyro has to grab it " +
+                $"before it sinks back in (the chest then closes, ready to be opened again). It adds {value} to collected treasure and to this level's total, " +
+                "and once collected the game remembers it like any gem. Uses your USA disc.") { Id = id });
+        }
+        return list;
+    }
+
+    /// <summary>The teal or rainbow spring chest entry with this id in a list of catalogue entries, if any.</summary>
+    public static UniversalMobyCatalogEntry? FindEntry(IEnumerable<UniversalMobyCatalogEntry> entries, string id) =>
+        entries.FirstOrDefault(e => e.Id == id);
 
     /// <summary>The spring chest classes (Gnorc Cove's 0x0C7 and the common 0x149): flame or charge one and its gem
     /// springs up on the lid for Spyro to grab.</summary>

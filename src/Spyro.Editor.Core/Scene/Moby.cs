@@ -352,9 +352,10 @@ public sealed class Moby
     public int ClassId => SourceByte36 | SourceByte37 << 8;
     /// <summary>True when the object gives a Teal or Rainbow gem (<see cref="UniversalHighValueRewards"/>).</summary>
     public bool GivesHighValueGem => UniversalHighValueRewards.IsReward(Flag4B) && UniversalHighValueRewards.Supports(ClassId);
-    public GemValue RewardGem => GemValue.TryFromIdByte(Flag4B, out GemValue gem) ? gem
-        : GivesHighValueGem && GemValue.TryFromRewardByte(Flag4B, out GemValue high) ? high : GemValue.Unknown;
-    public int TreasureValue => IsGemLike ? Gem.Value : RewardGem.Value;
+    /// <summary>One of the five gems the object gives (row +0x53). A Teal or Rainbow reward is not one: the reward card
+    /// and the Edit window's gem choice (which list the five) leave such a chest alone; <see cref="TreasureValue"/> counts it.</summary>
+    public GemValue RewardGem => GemValue.TryFromIdByte(Flag4B, out GemValue gem) ? gem : GemValue.Unknown;
+    public int TreasureValue => IsGemLike ? Gem.Value : GivesHighValueGem ? UniversalHighValueRewards.ValueFor(Flag4B) : RewardGem.Value;
 
     public GemValue Gem
     {

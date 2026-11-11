@@ -58,12 +58,25 @@ public static class UniversalPlacementReader
         return value is >= 0 and <= 255 ? value : throw new InvalidDataException("A saved reward is not one byte.");
     }
 
+    /// <summary>What an added object's row will give: the chosen reward, or a teal or rainbow reward its saved +0x53
+    /// carries (those exist only when chosen).</summary>
+    public static int? RewardByteOf(JsonElement edit)
+    {
+        if (ReadRewardByte(edit) is int chosen) return chosen;
+        if (!edit.TryGetProperty("flag4BEditedHex", out var flag) || flag.ValueKind != JsonValueKind.String) return null;
+        int value = Convert.ToInt32(flag.GetString(), 16);
+        return UniversalHighValueRewards.IsReward(value) ? value : null;
+    }
+
     /// <summary>What kind of added object an edit is, for leaving a kind out of the game (Fix It For Me): its
     /// template's id ("special:crash-frog", a level's own template id), or the source level and row when it has none.</summary>
     public static string KindOf(JsonElement edit)
     {
         var t = edit.GetProperty("crossLevelTemplate");
         string id = t.TryGetProperty("id", out var tid) && tid.ValueKind == JsonValueKind.String ? tid.GetString() ?? "" : "";
+        // A spring chest that gives a teal or rainbow gem is its own kind, whichever spring chest it was copied from.
+        if (!id.StartsWith(UniversalSpecialCatalog.TemplatePrefix, StringComparison.Ordinal) &&
+            UniversalHighValueRewards.ChestIdFor(RewardByteOf(edit) ?? -1) is { } chest) return chest;
         if (id.Length > 0) return id;
         string source = t.TryGetProperty("sourceLevelKey", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() ?? "" : "";
         int row = t.TryGetProperty("sourceTrueIndex", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetInt32() : -1;
@@ -129,7 +142,7 @@ public static class UniversalPlacementReader
             if (edit.TryGetProperty("stateEditedHex", out var st) && st.ValueKind == JsonValueKind.String) overrides[0x51] = (byte)Convert.ToInt32(st.GetString(), 16);
             if (edit.TryGetProperty("typeEditedHex", out var ty) && ty.ValueKind == JsonValueKind.String) overrides[0x50] = (byte)Convert.ToInt32(ty.GetString(), 16);
             // A special object's row is its own (the composer sets what it gives).
-            if (special == null && ReadRewardByte(edit) is int reward) overrides[UniversalRewardChoice.RowOffset] = (byte)reward;
+            if (special == null && RewardByteOf(edit) is int reward) overrides[UniversalRewardChoice.RowOffset] = (byte)reward;
             string id = UniversalPlacementLedger.IdentityOf(edit);
             string? group = edit.TryGetProperty("universalLinkGroupId", out var lg) && lg.ValueKind == JsonValueKind.String ? lg.GetString() : null;
             if (!slots.TryGetValue(id, out int slot) || !active.TryAdd(id, new(src, row, x, y, z, yaw, overrides, id, special, text, PersistentSlot: slot) { LinkGroupId = group, DragonColor = DragonStatueColor.Read(edit), PathNodes = ReadPathNodes(edit) }))

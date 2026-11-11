@@ -75,6 +75,7 @@ internal static partial class NewLevelBuildCases
             case "new-world": NewWorldStep(window, outDir); return true;
             case "balloon-route": BalloonRouteStep(window, outDir); return true;
             case "rewards": RewardsStep(window, outDir); return true;
+            case "reward-chests": RewardChestsStep(window, outDir); return true;
             case "creature-colours": CreatureColoursStep(window, outDir); return true;
             case "random-level": RandomLevelStep(window, outDir); return true;
             case "random-dialog": RandomDialogStep(window, outDir); return true;
