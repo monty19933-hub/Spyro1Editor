@@ -1357,7 +1357,10 @@ try
     Assert(snapshotHash == snapshot.Sha256, "Project snapshot result did not report the ZIP's actual SHA-256.");
     Assert(File.ReadAllText(snapshot.Sha256Path).StartsWith(snapshot.Sha256, StringComparison.Ordinal), "Project snapshot SHA-256 sidecar did not match the verified ZIP.");
 
+    VerifyProjectClear(temporaryRoot);
+
     Console.WriteLine("PASS: external project layout, inventory, non-destructive migration, path rebasing, output preservation, cache exclusion, and conflict preservation.");
+    Console.WriteLine("PASS: clearing a project moves the work to a dated folder, keeps the chosen game, its data, the editor's files and the games made, undoes a failed clear, and the kept folder brings the work back.");
     Console.WriteLine("PASS: release bootstrap redirects writes, synchronizes support resources, and copy-migrates legacy edits without moving application files or generated BINs.");
     Console.WriteLine("PASS: install/project overlap, physical symlink escapes, nested write symlinks, and reverse migration overlap are rejected before unsafe writes.");
     Console.WriteLine("PASS: support synchronization prunes retired app-owned files while preserving unowned project support files.");
@@ -2065,6 +2068,140 @@ static void VerifyReleaseArtifactIsolation(string root)
     {
         Environment.SetEnvironmentVariable(WorkspaceArtifactSearchPolicy.ReleaseEnvironmentVariable, previousReleaseMode);
     }
+}
+
+/// <summary>File > Clear Entire Project to Base Game: what stays is what a new project holds once its game was opened;
+/// everything else goes, whole, to a dated folder beside the projects; a clear that fails part-way changes nothing.</summary>
+static void VerifyProjectClear(string temporaryRoot)
+{
+    string data = Path.Combine(temporaryRoot, "clear");
+    string project = Path.Combine(data, "Projects", "default-project");
+    string keptRoot = Path.Combine(data, "Old projects");
+    DateTimeOffset when = new(2026, 11, 11, 10, 45, 0, TimeSpan.Zero);
+    static Dictionary<string, string> Tree(string root) => Directory.Exists(root)
+        ? Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).ToDictionary(f => Path.GetRelativePath(root, f).Replace('\\', '/'), File.ReadAllText, StringComparer.Ordinal)
+        : new(StringComparer.Ordinal);
+    static bool Same(Dictionary<string, string> a, Dictionary<string, string> b) => a.Count == b.Count && a.All(p => b.TryGetValue(p.Key, out string? v) && v == p.Value);
+
+    // A project as it is once its game was opened: nothing in it is the user's work.
+    Write(Path.Combine(project, "spyro-project.json"), "{\"projectId\":\"default-project\"}");
+    Write(Path.Combine(project, "spyro-wad-analysis.json"), "wad");
+    Write(Path.Combine(project, "support", "spyro-level-catalog.json"), "catalog");
+    Write(Path.Combine(project, "support", "docs", "release-user-guide.md"), "guide");
+    Write(Path.Combine(project, "editor-cache", "artisans-mobys.json"), "objects read from the disc");
+    Write(Path.Combine(project, "editor-cache", "terrain-textures", "artisans", "manifest.json"), "textures");
+    Write(Path.Combine(project, "output", "Spyro Editor - Authored Level.bin"), "a game already made");
+    Write(Path.Combine(project, "output", "Spyro Editor - Authored Level.cue"), "its cue");
+    Write(Path.Combine(project, "_local", ".app", "support-ownership.json"), "ownership");
+    Write(Path.Combine(project, "_local", ".app", "support-recovery", "a", "b.json"), "recovery");
+    Write(Path.Combine(project, "_local", "settings", "source-disc.json"), "the chosen game");
+    Write(Path.Combine(project, "_local", "settings", "year-of-the-dragon-disc.json"), "another chosen game");
+    Write(Path.Combine(project, "_local", "authored-materials", "wad-11-t-3.png"), "a picture of one of the game's textures");
+    Dictionary<string, string> untouched = Tree(project);
+    Assert(ProjectClear.WhatWouldGo(project).Count == 0, "A project with no work in it had something to clear.");
+    ProjectClear.Result nothing = ProjectClear.Clear(project, when);
+    Assert(nothing.KeptPath == null && nothing.Moved == 0 && Same(Tree(project), untouched) && !Directory.Exists(keptRoot),
+        "Clearing a project with no work in it changed something.");
+
+    // The same project with work of every kind in it, and the compiled stages Create BIN keeps.
+    Write(Path.Combine(project, "artisans-native-edits.json"), "objects moved in Artisans");
+    Write(Path.Combine(project, "stonehill-terrain-edits.json"), "ground raised in Stone Hill");
+    Write(Path.Combine(project, "fresh-level.scene.json"), "a level of the user's own");
+    Write(Path.Combine(project, "new-world.json"), "a world of the user's own");
+    Write(Path.Combine(project, "new-world-70.scene.json"), "its homeworld");
+    Write(Path.Combine(project, "spyro-moves.json"), "hover");
+    Write(Path.Combine(project, "left-out.json"), "left out by Fix It For Me");
+    Write(Path.Combine(project, "a-file-a-later-version-adds.json"), "unknown to this version");
+    Write(Path.Combine(project, "custom-skyboxes", "artisans", "sky.sky"), "an imported sky");
+    Write(Path.Combine(project, "backups", "fix-it", "world.scene.json"), "a backup");
+    Write(Path.Combine(project, "level-recovery", "townsquare", "before.json"), "a recovery copy");
+    Write(Path.Combine(project, "_local", "settings", "last-level.json"), "the level last opened");
+    Write(Path.Combine(project, "_local", "custom-textures", "artisans-12.png"), "an imported texture");
+    Dictionary<string, string> withWork = Tree(project);
+    Write(Path.Combine(project, "_local", "authored-native", "scene-fingerprint.bin"), "a compiled stage, hundreds of MB in a real project");
+    Write(Path.Combine(project, "_local", "authored-aggregate", "run", "stage.bin"), "another");
+    string[] goes = [.. ProjectClear.WhatWouldGo(project)];
+    Assert(goes.Contains("_local") && goes.Contains("artisans-native-edits.json") && goes.Contains("a-file-a-later-version-adds.json") && goes.Contains("custom-skyboxes") &&
+           !goes.Contains("support") && !goes.Contains("editor-cache") && !goes.Contains("output") && !goes.Contains("spyro-project.json") && !goes.Contains("spyro-wad-analysis.json"),
+        "The work a clear would move is wrong: " + string.Join(", ", goes));
+
+    // A clear that fails at its first move, at its last, while _local is being remade and at the very end changes nothing.
+    foreach (string point in new[] { goes[0], goes[^1], "_local/", ProjectClear.NoteFileName })
+    {
+        bool refused = false;
+        try { ProjectClear.Clear(project, when, name => { if (name == point) throw new IOException("The disk refused."); }); }
+        catch (IOException e) { refused = e.Message.Contains("The disk refused.") && e.Message.Contains("Nothing was changed"); }
+        Assert(refused, $"A clear that failed at {point} did not say that nothing was changed.");
+        Assert(Same(Tree(project), withWork), $"A clear that failed at {point} did not put the project back as it was.");
+        Assert(!Directory.Exists(keptRoot), $"A clear that failed at {point} left a folder of kept work behind.");
+    }
+
+    // The clear: the project is as it was before any work; the work is whole in a dated folder beside the projects.
+    ProjectClear.Result cleared = ProjectClear.Clear(project, when);
+    string kept = Path.Combine(keptRoot, "default-project (cleared 2026-11-11 10.45)");
+    Assert(cleared.KeptPath == kept && cleared.Moved == goes.Length, $"The clear reported {cleared.KeptPath} and {cleared.Moved} moved.");
+    Assert(Same(Tree(project), untouched), "A cleared project is not what a new project holds once its game was opened: " +
+        string.Join(", ", Tree(project).Keys.Except(untouched.Keys).Concat(untouched.Keys.Except(Tree(project).Keys))));
+    Dictionary<string, string> keptTree = Tree(kept);
+    Assert(keptTree.Remove(ProjectClear.NoteFileName, out string? note) && note.Contains(project) && note.Contains("To bring this work back"),
+        "The kept folder has no note that says what it is and how to bring the work back.");
+    // (_local is kept whole, with copies of the editor's state and the chosen games, so that it can be moved back as
+    // it is; the texture pictures are game data and stay with the project.)
+    static bool Pictures(string path) => path.StartsWith("_local/authored-materials/", StringComparison.Ordinal);
+    Dictionary<string, string> expectedKept = withWork.Where(p => !untouched.ContainsKey(p.Key) || p.Key.StartsWith("_local/", StringComparison.Ordinal) && !Pictures(p.Key))
+        .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+    Assert(Same(keptTree, expectedKept), "The kept folder does not hold exactly the work (and no compiled stage): " +
+        string.Join(", ", keptTree.Keys.Except(expectedKept.Keys).Concat(expectedKept.Keys.Except(keptTree.Keys))));
+    Assert(ProjectClear.WhatWouldGo(project).Count == 0 && ProjectClear.Clear(project, when).KeptPath == null, "A cleared project still had something to clear.");
+
+    // The level the editor last showed is not work (the editor notes it as soon as a level opens), but a cleared
+    // project starts where a new one does, so it goes, with other work or without.
+    Write(Path.Combine(project, "_local", "settings", "last-level.json"), "the level last opened");
+    Directory.CreateDirectory(Path.Combine(project, "_local", "custom-textures", "generated"));   // folders the editor makes before it needs them
+    Directory.CreateDirectory(Path.Combine(project, "backups"));
+    Assert(ProjectClear.WhatWouldGo(project).Count == 0 && ProjectClear.Clear(project, when).KeptPath == null && Same(Tree(project), untouched) &&
+           Directory.GetDirectories(keptRoot).Length == 1, "The level last opened counted as work, or outlived a clear.");
+
+    // New work cleared in the same minute gets a folder of its own; nothing kept earlier is touched.
+    Write(Path.Combine(project, "_local", "settings", "last-level.json"), "the level last opened");
+    Write(Path.Combine(project, "artisans-native-edits.json"), "second go");
+    ProjectClear.Result again = ProjectClear.Clear(project, when);
+    Assert(again.KeptPath == kept + " 2" && File.ReadAllText(Path.Combine(kept + " 2", "artisans-native-edits.json")) == "second go" &&
+           File.ReadAllText(Path.Combine(kept, "artisans-native-edits.json")) == "objects moved in Artisans" && Same(Tree(project), untouched),
+        "A second clear in the same minute did not keep its work apart from the first.");
+
+    // The note's way back: everything in the kept folder moved over the cleared project, replacing a folder of the
+    // same name (_local, and any empty folder the editor has made since).
+    foreach (string entry in Directory.EnumerateFileSystemEntries(kept).Where(e => Path.GetFileName(e) != ProjectClear.NoteFileName))
+    {
+        string place = Path.Combine(project, Path.GetFileName(entry));
+        if (Directory.Exists(place)) Directory.Delete(place, recursive: true);
+        Directory.Move(entry, place);
+    }
+    Assert(Same(Tree(project), withWork.Where(p => !Pictures(p.Key)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal)),
+        "Moving the kept folder's contents back did not bring the project back as it was (less the texture pictures, which the editor makes again).");
+
+    // Where the work is kept: beside "Projects"; beside the project when it lives somewhere else.
+    string elsewhere = Path.Combine(data, "mine", "my-project");
+    Assert(ProjectClear.KeptRootFor(project) == keptRoot && ProjectClear.KeptRootFor(elsewhere) == Path.Combine(data, "mine", "Old projects"),
+        "Cleared work is kept in the wrong place.");
+
+    // A project whose game was never opened (no _local at all) with one saved change, and what a file browser leaves
+    // behind: the change goes, the litter is not work.
+    string bare = Path.Combine(data, "Projects", "bare-project");
+    Write(Path.Combine(bare, "spyro-project.json"), "{}");
+    Write(Path.Combine(bare, ".DS_Store"), "left by Finder");
+    Write(Path.Combine(bare, "support", "spyro-level-catalog.json"), "catalog");
+    Assert(ProjectClear.WhatWouldGo(bare).Count == 0 && ProjectClear.Clear(bare, when).KeptPath == null, "What a file browser leaves in a project counted as work.");
+    Write(Path.Combine(bare, "artisans-native-edits.json"), "one change");
+    ProjectClear.Result bareCleared = ProjectClear.Clear(bare, when);
+    Assert(bareCleared.KeptPath == Path.Combine(keptRoot, "bare-project (cleared 2026-11-11 10.45)") && bareCleared.Moved == 1 &&
+           File.Exists(Path.Combine(bareCleared.KeptPath, "artisans-native-edits.json")) && !File.Exists(Path.Combine(bare, "artisans-native-edits.json")) &&
+           File.Exists(Path.Combine(bare, ".DS_Store")) && !Directory.Exists(Path.Combine(bare, "_local")),
+        "A project with no _local folder was not cleared cleanly.");
+    bool missing = false;
+    try { ProjectClear.Clear(elsewhere, when); } catch (DirectoryNotFoundException) { missing = true; }
+    Assert(missing, "Clearing a project folder that does not exist did not fail.");
 }
 
 static void Assert(bool condition, string message)

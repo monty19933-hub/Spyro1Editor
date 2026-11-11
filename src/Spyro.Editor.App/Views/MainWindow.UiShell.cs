@@ -251,6 +251,8 @@ public sealed partial class MainWindow
             new ToolbarAction("Restore Before Clear…", RestoreBeforeClearAsync),
             new ToolbarAction("Free Deleted Objects' Save Rows…", FreeRetiredSaveRowsAsync),
             MenuSeparator,
+            new ToolbarAction(ClearProjectCommand, ClearEntireProjectAsync),
+            MenuSeparator,
             new ToolbarAction("Save Level", SaveFromToolbarAsync)));
         fileActions.Children.Add(_toolbarOpenDiscImageButton);
         _toolbarSaveButton = NewAsyncButton("Save", SaveFromToolbarAsync);

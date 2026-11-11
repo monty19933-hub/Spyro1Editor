@@ -9,6 +9,7 @@ New
 - Saved changes the game cannot take (an egg thief's run moved off its ground, for instance) no longer need you to find and undo them: Fix It For Me makes the game without them, and Create BIN names them each time.
 - More ▾ › Left Out of the Game… lists what Fix It For Me left out, with what Create BIN said about each, and puts a part back with one button. Create BIN keeps leaving a part out until you put it back, and says so in its window and after each game. A newer version of the editor starts with nothing left out, in case it no longer stops there.
 - Fix It For Me is not offered for a failure of the computer's (no disc image chosen, a full disk, no permission): those still say what to do.
+- File ▾ › Clear Entire Project to Base Game… starts the whole project over in one step. Everything you have made (your changes to every level, the levels and world you built, your game settings) is taken out and the editor shows the original game again; you do not have to choose your game again, and games you already created stay where they are. It asks first, saying what is in your project, and only "Yes, I am sure" clears: Cancel, Return and Escape leave everything as it is. Your work is moved, not deleted: it goes into a dated folder in "Old projects" beside your project, with a note that says how to bring it back. If the clear cannot finish (a file in use, for instance), nothing is changed.
 
 Fixed
 

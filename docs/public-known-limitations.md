@@ -12,6 +12,17 @@
   fix. Tried through the editor with stops made on purpose and on a copy of a
   real project that stopped three ways; the games it made were played in the
   emulator only as far as the levels named in the release notes.
+- Version 2.2 adds File ▾ › Clear Entire Project to Base Game…. There is no
+  command yet that brings cleared work back: the dated folder in "Old projects"
+  holds it, with a note that gives the steps (they are done by hand, with the
+  editor closed). The folder is on the same disk as the project and is never
+  removed by the editor, so clearing does not free the space your work took;
+  only the compiled copies Create BIN keeps for speed (hundreds of MB in a
+  project with built levels) are deleted. Games already created are not
+  touched. Tried through the editor on the Mac with and without a game open,
+  with a clear made to fail on purpose, and by making a game before and after;
+  not tried on Windows, where a file another program holds open makes the
+  clear stop with nothing changed.
 - A game with a new level (the unused 65 slot) and no doorway to it froze on
   the way into Town Square in every earlier version; 2.2 keeps the two apart.
   Played in the emulator before and after (Town Square, the new level, the new

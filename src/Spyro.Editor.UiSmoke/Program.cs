@@ -304,6 +304,21 @@ if (args.Length is 2 or 3 && args[0] == "--tour-shots")
     return 0;
 }
 
+if (args.Contains("--clear-project-ui-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --clear-project-ui-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    ClearProjectUiCases.Run(null, null);
+    return 0;
+}
+
+if (args.Length == 3 && args[0] == "--clear-project-ui")
+{
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    ClearProjectUiCases.Run(args[1], args[2]);
+    return 0;
+}
+
 if (args.Length == 3 && args[0] == "--fix-it-ui")
 {
     HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();

@@ -324,6 +324,8 @@ ADDITIONAL_CORE_CASES = (
      ["--doorways-ui-only"]),
     ("UiSmoke", "WORLD_ENTRANCE_UI_OK checks=40",
      ["--world-entrance-ui-only"]),
+    ("UiSmoke", "CLEAR_PROJECT_UI_OK checks=23",
+     ["--clear-project-ui-only"]),
     ("UiSmoke", "LEVEL_PICKER_AUTOMATION_OK",
      ["--level-picker-automation-only"]),
     ("UiSmoke", "AUTHORED_MESH_CHECKS_OK",

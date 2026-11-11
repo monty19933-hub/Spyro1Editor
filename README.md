@@ -13,8 +13,10 @@ The current release target is **Spyro Editor 2.2**. It makes **Fix It For Me**
 work on every Create BIN stop that comes from your project: one press repairs
 what the editor can repair and otherwise makes the game without the part that
 stops it, saying what it left out (nothing is deleted, and More ▾ › Left Out of
-the Game… puts it back). It also fixes a freeze on the way into Town Square in
-games with a new level and no doorway to it. 2.1 added Fix It For Me,
+the Game… puts it back). **File ▾ › Clear Entire Project to Base Game…** starts
+a project over in one step, behind a "Yes, I am sure" question, and keeps the
+work it takes out in a dated folder. It also fixes a freeze on the way into Town
+Square in games with a new level and no doorway to it. 2.1 added Fix It For Me,
 **creatures' colours level by level** (the same gnorc red in one level and blue
 in the next) and **Spyro's colours for one level**, and made Create BIN build
 the whole project whichever level is open. 2.0 put **your own world on

@@ -392,6 +392,26 @@ before you use it:
   same meadow so you can rebuild it. A recovery copy is saved first;
   **Restore Before Clear…** brings the previous version back, also after
   reopening the project.
+- **File ▾ → Clear Entire Project to Base Game…** starts the whole project over.
+  Everything you have made is taken out: your changes to every one of the
+  game's levels, the levels and the world you built, and your game settings
+  (Hover, colours, memory, doorways and the rest). The editor then opens the
+  original game again, as on the day you first opened it. You do not have to
+  choose your game again, and the games you already created (the BIN and CUE
+  files) stay where they are.
+  - It asks first. The question lists what is in your project now, and only
+    **Yes, I am sure** clears; **Cancel**, Return and Escape leave everything as
+    it is. Changes you have not saved are lost with the rest (the question says
+    so when there are any).
+  - Your work is moved, not deleted. It goes into a folder named after the
+    project and the time, inside **Old projects** beside your project folder
+    (for the usual project: Documents › Spyro Editor › Old projects). The line
+    at the bottom of the window says where, and the folder holds a note that
+    says how to bring the work back: clear the project, close the editor, move
+    the folder's contents into the project folder, open the editor. Delete the
+    folder when you are sure you do not want the work.
+  - If the clear cannot finish (a file is in use, the disk refuses), nothing is
+    changed and the editor says so.
 
 When a project has a level of your own or a blank level, **Create BIN** asks
 which level **New Game** starts in. Use New Game for the first test; a saved game

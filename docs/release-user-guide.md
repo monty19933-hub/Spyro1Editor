@@ -88,7 +88,11 @@ notarized. Compare its recorded SHA-256 digest and read its opening instructions
 ## Projects and Updates
 
 Packaged release builds keep application files and project data separate. Use
-`More` > `Project Data` to see or open the exact active project folder. `Open
+`More` > `Project Data` to see or open the exact active project folder.
+`File` > `Clear Entire Project to Base Game…` starts the project over: it asks
+first ("Yes, I am sure"), moves everything you made into a dated folder in
+`Old projects` beside the project (with a note on bringing it back), keeps your
+choice of game and the games already created, and reopens the original game. `Open
 Workspace` remembers another project folder across launches and synchronizes
 only versioned support catalogs into it; user edit files are never overwritten.
 

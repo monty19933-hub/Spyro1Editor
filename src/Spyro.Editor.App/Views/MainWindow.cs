@@ -572,6 +572,7 @@ public sealed partial class MainWindow : Window
         if (_currentLevel == null || _currentGeometry != null || _currentMobys.Count > 0)
         {
             await Task.Yield();
+            SayStatusAfterReopen();
             BeginId65BlankLabCatalogValidationInBackground();
             return;
         }
@@ -587,6 +588,7 @@ public sealed partial class MainWindow : Window
             _statusText.Text = $"Could not load {_currentLevel.DisplayName}: {ex.Message}";
         }
 
+        SayStatusAfterReopen();
         await Task.Yield();
         BeginId65BlankLabCatalogValidationInBackground();
     }
@@ -28348,7 +28350,8 @@ public sealed partial class MainWindow : Window
             "An egg thief you added: select him and Edit Route… and the \"Its run\" tools appear. Drag the run's points in the 3D view, or use New Loop Here, Bigger, Smaller, Turn and Other Way Round. Game Settings > Egg thieves' colour gives every thief in the game another colour.",
             "File ▾ > Start Blank in Current Level… replaces the open level with the same meadow so you can rebuild it. Restore Before Clear… brings the previous version back.",
             "File ▾ > Fill In What the Level Needs… adds the level's own dragons and egg thieves, a Return Home vortex, enemies and gems.",
-            "File ▾ > Open Created Level… reopens the level you made."
+            "File ▾ > Open Created Level… reopens the level you made.",
+            "File ▾ > Clear Entire Project to Base Game… starts the whole project over: everything you have made (your changes to every level, the levels and world you built, your game settings) is taken out and the editor shows the original game again. It asks first, and only \"Yes, I am sure\" clears. Your work is moved, not deleted: it goes into a dated folder in \"Old projects\" beside your project, with a note that says how to bring it back. Games you already created stay, and so does your choice of game."
         ]);
 
         AddHelpSection(panel, "Your own world", [
