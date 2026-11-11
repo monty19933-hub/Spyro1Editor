@@ -299,7 +299,8 @@ says how many. Translucent original tiles cannot currently be copied or removed.
   plays on a normal 2 MB set-up wherever its levels fit 2 MB, and Create BIN
   says which levels need 8 MB. Choose **PlayStation (2 MB)** for a real console
   or a disc: every level must then fit 2 MB and Create BIN stops when one does
-  not.
+  not. (The 8 MB setting goes into the unchanged USA game only; with any other
+  game open, games are made for 2 MB as before.)
 - **Portals & Return Home**: choose where each portal leads and where Return
   Home goes. **Select Portal** moves the trigger, lettering and travel path
   together; move the stone arch with the terrain tools.

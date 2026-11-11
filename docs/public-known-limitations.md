@@ -6,7 +6,8 @@
   2 MB needs DuckStation with Enable 8MB RAM; Create BIN names such levels.
   Hover's wing flap and added models still live in the memory below the game's
   draw buffers, which 8 MB does not enlarge: only each level's placed objects
-  move to the extra memory.
+  move to the extra memory. With a game open that is not the unchanged USA
+  original, the 8 MB setting cannot go in and games are made for 2 MB.
 - This level's colours (2.3): chests, animals and things without a colour of
   their own are recoloured the way enemies are. Seen in the emulator: a level's
   dragon statues in a chosen crystal colour, a recoloured chest and the fairy
