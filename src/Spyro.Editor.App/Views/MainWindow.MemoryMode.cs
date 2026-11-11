@@ -94,8 +94,29 @@ public sealed partial class MainWindow
         try { mode = GameMemorySettings.Load(_workspace.RootPath); }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException)
         { throw new InvalidDataException("The Memory setting in Game Settings could not be read. Choose PlayStation (2 MB) or Emulator (8 MB RAM) again. (" + e.Message + ")", e); }
+        // 8 MB is what a project has until it chooses 2 MB, where the opened game can take it: a game that is not the
+        // unchanged USA original (or no game at all) is made for 2 MB, as every game was before 2.3.
+        if (mode == GameMemoryMode.Emulator8MB && !OpenedGameTakesExtendedRam()) mode = GameMemoryMode.PlayStation2MB;
         GameRam.SetProjectMode(mode);
         return GameRam.Use(mode);
+    }
+
+    private (string Path, long Length, DateTime Written, bool Takes)? _extendedRamGame;
+
+    /// <summary>Whether the 8 MB memory setting can go into the game that is open (asked once for each disc image).</summary>
+    private bool OpenedGameTakesExtendedRam()
+    {
+        try
+        {
+            string disc = ResolveUniversalSourceDisc();
+            if (string.IsNullOrWhiteSpace(disc) || !File.Exists(disc)) return false;
+            var file = new FileInfo(disc);
+            if (_extendedRamGame is { } known && known.Path == disc && known.Length == file.Length && known.Written == file.LastWriteTimeUtc) return known.Takes;
+            bool takes = NativeExtendedRam.CanInstall(UniversalDiscImage.Read(disc).Exe);
+            _extendedRamGame = (disc, file.Length, file.LastWriteTimeUtc, takes);
+            return takes;
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { return false; }
     }
 
     /// <summary>What Create BIN says about memory once the game is written (nothing in the 2 MB mode).</summary>

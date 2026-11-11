@@ -137,7 +137,7 @@ internal static class SpyroColoursUiCases
             File.WriteAllText(CreatureColourSettings.PathFor(root), "{ not json");
             bool creaturesStop = false;
             try { ((IDisposable)use.Invoke(levelled, null)!).Dispose(); }
-            catch (TargetInvocationException x) when (x.InnerException is InvalidDataException d && d.Message.Contains("creatures' colours", StringComparison.OrdinalIgnoreCase)) { creaturesStop = true; }
+            catch (TargetInvocationException x) when (x.InnerException is InvalidDataException d && d.Message.Contains("level's colours", StringComparison.OrdinalIgnoreCase)) { creaturesStop = true; }
             Check(creaturesStop && !NativeSpyroColours.Enabled, "Create BIN stops on a damaged creatures' colours file instead of guessing");
             File.Delete(CreatureColourSettings.PathFor(root));
             Check(File.ReadAllText(Path.Combine(root, "unrelated-project-notes.txt")) == "protected" &&

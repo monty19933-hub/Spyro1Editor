@@ -13930,6 +13930,9 @@ public sealed partial class MainWindow : Window
         IReadOnlyList<EditedLevelExportTarget> targets,
         bool deferSharedRuntimeHooks = false)
     {
+        // Create BIN has set the export's memory mode already; a caller that comes here directly gets the project's
+        // (8 MB only where the opened game can take it).
+        using var ownMemory = GameRam.Current == null ? UseProjectMemoryMode() : null;
         var portalSnapshot = ExportPortalRoutes(_workspace.RootPath);
         if (TryGetId65BlankLabNormalCreateBinBlockReason(out string id65BlockReason))
             throw new InvalidOperationException(id65BlockReason);

@@ -101,6 +101,13 @@ public static class NativeExtendedRam
 
     public static bool IsInstalled(byte[] exe) => Word(exe, InGameHook) == Jal(InGameCheck);
 
+    /// <summary>Whether the 8 MB scene placement can go into this executable (the USA game's, or one that has it).</summary>
+    public static bool CanInstall(ReadOnlySpan<byte> exe)
+    {
+        try { PatchExe(exe.ToArray()); return true; }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException) { return false; }
+    }
+
     /// <summary>One level of an exported game: whether it fits a 2 MB console and the 8 MB layout.</summary>
     public sealed record LevelFit(int LevelId, string Name, bool FitsPlayStation, bool FitsExtended, uint RuntimeEnd, uint LowEnd, int SceneBytes);
 
