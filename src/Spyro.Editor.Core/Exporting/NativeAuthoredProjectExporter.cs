@@ -210,6 +210,8 @@ public static class NativeAuthoredProjectExporter
         if(flight?.Enabled==true)throw new InvalidDataException("Experimental flight cannot be merged into a rebuilt retail slot.");
         if(portalRoutes?.HasEdits==true)NativePortalRouteComposer.Apply(donors,catalog,exe,replacements,baseline.EntryBytes,portalRoutes,
             returnClasses:returnClasses);
+        // The game's egg totals follow the egg thieves its levels hold.
+        NativeEggTotals.ApplyForExport(exe,donors.Disc.Exe,replacements,baseline.EntryBytes);
         NativeKillHeights.RequireOwned(donors.Disc.Exe,exe,rebuilt);
         foreach(var(entry,animations) in supercharged)animations.RequireDestination(replacements[entry]);
         // Emulator (8 MB RAM): the scenes load in the extra memory; every level is checked against that layout.

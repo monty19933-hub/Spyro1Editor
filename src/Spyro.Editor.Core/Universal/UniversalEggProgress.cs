@@ -66,16 +66,20 @@ public static class UniversalEggProgress
         return bytes;
     }
 
-    public static byte[] PercentageRoutine(int total)
+    /// <param name="total">The dragonfly eggs in the game.</param>
+    /// <param name="thiefEggs">The egg thieves' eggs in the game (the game's own twelve unless thieves were added or
+    /// taken out: <see cref="Spyro.Editor.Core.Exporting.NativeEggTotals"/>).</param>
+    public static byte[] PercentageRoutine(int total, int thiefEggs = 12)
     {
         if (total is < 1 || total > UniversalSpecialBehaviors.MaxDragonflyEggs) throw new ArgumentOutOfRangeException(nameof(total));
+        if (thiefEggs is < 0 or > 200) throw new ArgumentOutOfRangeException(nameof(thiefEggs));
         var a=new Asm();
         a.I(9,29,29,-24); a.I(43,29,31,16); a.Part.Emit(UniversalMips.EncodeJ(3,CountAddress)); a.I(9,0,4,-1);
         a.R(2,0,15,0,0x21); // t7=earned active eggs
         a.I(15,0,8,0x8007); a.I(35,8,4,0x5860); a.I(35,8,5,0x5750); a.I(35,8,6,0x5810); a.I(9,0,9,total);
         // Bonus treasure cannot replace a missing required category.
         a.B(5,15,9,"base"); a.I(9,0,9,80);
-        a.B(5,5,9,"base"); a.I(9,0,9,12);
+        a.B(5,5,9,"base"); a.I(9,0,9,thiefEggs);
         a.B(5,6,9,"base"); a.I(11,4,9,12000);
         a.B(5,9,0,"base"); a.Nop();
         a.I(9,4,2,-12000); a.I(9,0,9,100); a.R(2,9,0,0,0x1B); a.R(0,0,2,0,0x12);
@@ -86,7 +90,7 @@ public static class UniversalEggProgress
         a.I(9,0,9,50); a.R(4,9,0,0,0x19); a.R(0,0,10,0,0x12);
         a.I(9,0,9,6000); a.R(5,9,0,0,0x19); a.R(0,0,11,0,0x12); a.R(10,11,10,0,0x21);
         a.R(6,15,6,0,0x21); a.I(9,0,9,10000); a.R(6,9,0,0,0x19); a.R(0,0,11,0,0x12); a.R(10,11,10,0,0x21);
-        a.I(9,0,9,12000+100*total); a.R(10,9,0,0,0x1B); a.R(0,0,2,0,0x12);
+        a.I(9,0,9,12000+100*(total+thiefEggs-12)); a.R(10,9,0,0,0x1B); a.R(0,0,2,0,0x12);
         a.Part.Label("done"); a.I(35,29,31,16); a.Nop(); a.Part.Emit(UniversalMips.JrRa); a.I(9,29,29,24);
         var bytes=a.Bytes(PercentageAddress);
         if (bytes.Length>PercentageBytes) throw new InvalidDataException($"Egg percentage routine needs {bytes.Length} bytes; native owner has {PercentageBytes}.");

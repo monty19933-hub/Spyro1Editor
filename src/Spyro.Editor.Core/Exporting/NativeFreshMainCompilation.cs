@@ -227,6 +227,8 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
             var own=UniversalExeBindings.Read(exe,65);
             NativePortalRouteFreshBinding.Rebind(donors.Disc.Exe,exe,own[UniversalExeBindings.UpdateGlobal].Value,own[UniversalExeBindings.CopyBufferGlobal].Value);
         }
+        // The game's egg totals follow the egg thieves its levels hold (this level's too).
+        NativeEggTotals.ApplyForExport(exe,donors.Disc.Exe,replacements,baseline.EntryBytes);
         levelData=replacements[80];overlayData=replacements[79];
         RewardFallbacks.RequireInstalled(levelData);
         Supercharge?.RequireDestination(levelData);

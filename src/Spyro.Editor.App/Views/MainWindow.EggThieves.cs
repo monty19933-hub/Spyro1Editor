@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using Spyro.Editor.Core.Diagnostics;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Persistence;
+using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Universal;
 
 namespace Spyro.Editor.App.Views;
@@ -209,6 +210,12 @@ public sealed partial class MainWindow
     }
 
     internal void ReshapeSelectedRouteForTesting(string how) => ReshapeSelectedRoute(how);
+    internal string MoveRunPointForTesting(NativeMobyPath path, int node, float dx, float dy)
+    {
+        MoveNativePathNodeFromViewport(new ViewportNativePathNodeMoveRequestedEventArgs(path, path.Nodes[node], dx, dy));
+        return _statusText.Text ?? "";
+    }
+    internal string DescribeRunForTesting(NativeMobyPath path) => "";
 
     /// <summary>Reshapes the selected object's route (a placed object's): every point keeps to the ground.</summary>
     private void ReshapeSelectedRoute(string how)

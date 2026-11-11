@@ -13,7 +13,9 @@ public static class UniversalEggUnlocks
     public const string PortalSourceSha256 = "93ccb45fb2c474672bc7dbb538e1c9ab28a63fa8c041e1cd04508e9cc70260ca";
     public const string EndingSourceSha256 = "6f1d9a46373e71e0050b14487dfc40f0ac599bd0708f2ecf988681b0d615b57e";
 
-    public static byte[] PortalGate()
+    /// <param name="thiefEggs">The egg thieves' eggs the doorway asks for (the game's own twelve unless thieves were
+    /// added or taken out).</param>
+    public static byte[] PortalGate(int thiefEggs = 12)
     {
         List<uint> w=[];
         void I(int op,int rs,int rt,int imm) => w.Add(UniversalMips.EncodeI(op,rs,rt,imm));
@@ -23,7 +25,7 @@ public static class UniversalEggUnlocks
         I(35,8,2,0x5860); I(35,8,3,0x5750); I(10,2,2,12000);
         B(5,2,0,0x8008351C); I(10,3,3,80);
         B(5,3,0,0x8008351C); w.Add(0); I(35,8,2,0x5810);
-        I(9,0,4,2); I(10,2,2,12); B(5,2,0,0x8008351C); w.Add(0);
+        I(9,0,4,2); I(10,2,2,thiefEggs); B(5,2,0,0x8008351C); w.Add(0);
         while (w.Count<18) w.Add(0);
         return Bytes(w);
     }
