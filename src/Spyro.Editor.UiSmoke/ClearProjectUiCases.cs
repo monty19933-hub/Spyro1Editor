@@ -207,6 +207,84 @@ internal static class ClearProjectUiCases
         }
     }
 
+    /// <summary><c>--clear-project-existing &lt;home&gt; &lt;output&gt;</c>: the command on a project that already exists at
+    /// <c>&lt;home&gt;/Projects/default-project</c> (a COPY of a real project, with its game chosen): what the question says
+    /// about it, and after "Yes, I am sure" that every one of its files and folders either stayed (the game's and the
+    /// editor's) or is in the dated folder, that the editor shows the original game with only the game's own levels,
+    /// and that nothing is left to clear.</summary>
+    internal static void RunOnExisting(string home, string outDir)
+    {
+        _checks = 0;
+        Directory.CreateDirectory(outDir);
+        string workspace = Path.Combine(home, "Projects", "default-project"), keptRoot = Path.Combine(home, "Old projects");
+        if (!File.Exists(Path.Combine(workspace, "_local", "settings", "source-disc.json"))) throw new ArgumentException("No project with a chosen game at " + workspace);
+        if (Directory.Exists(keptRoot)) throw new ArgumentException("This copy was cleared before (" + keptRoot + " exists); use a new copy.");
+        foreach (string name in IsolatedRoots) Environment.SetEnvironmentVariable(name, Directory.CreateDirectory(Path.Combine(home, "isolated", name)).FullName);
+        Environment.SetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE", workspace);
+        Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "1");
+        Environment.CurrentDirectory = workspace;
+        if (!SamePath(Spyro.Editor.Core.Workspace.EditorWorkspace.Find().RootPath, workspace)) throw new InvalidOperationException("The editor would open another folder than the copy; stopping before it opens.");
+        string[] before = [.. Directory.EnumerateFileSystemEntries(workspace).Select(e => Path.GetFileName(e)!).OrderBy(n => n, StringComparer.Ordinal)];
+        string[] expectedToGo = [.. ProjectClear.WhatWouldGo(workspace)];
+        bool hadStages = Directory.Exists(Path.Combine(workspace, "_local", "authored-native"));
+        string discChoice = File.ReadAllText(Path.Combine(workspace, "_local", "settings", "source-disc.json"));
+        MainWindow window = Open(withGame: true);
+        MainWindow? reopened = null;
+        try
+        {
+            if (!SamePath(Get<Spyro.Editor.Core.Workspace.EditorWorkspace>(window, "_workspace").RootPath, workspace)) throw new InvalidOperationException("The editor opened another folder than the copy.");
+            window.OpenPathOverrideForTesting = _ => { };
+            int levelsBefore = Get<LevelCatalog>(window, "_catalog").Levels.Count, original = Get<LevelCatalog>(window, "_retailCatalog").Levels.Count;
+            Console.WriteLine($"     the project: {before.Length} files and folders at its top; the level list has {levelsBefore} levels ({original} are the game's own)");
+            MenuItem item = ((MenuFlyout)Find<Button>(window, "EditorFileMenu").Flyout!).Items.OfType<MenuItem>().Single(i => i.Header?.ToString() == Command);
+            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            var clock = Stopwatch.StartNew();
+            while (!window.OwnedWindows.Any(w => w.Name == "ClearProjectDialog") && clock.Elapsed < TimeSpan.FromSeconds(60)) Pump();
+            Window ask = window.OwnedWindows.Single(w => w.Name == "ClearProjectDialog");
+            foreach (TextBlock line in ask.GetLogicalDescendants().OfType<TextBlock>()) Console.WriteLine("     | " + line.Text);
+            Snapshot(ask, Path.Combine(outDir, "question.png"));
+            Check(Find<TextBlock>(ask, "ClearProjectHolds").Text!.StartsWith("In your project now: ", StringComparison.Ordinal), "the question lists what is in the project");
+            clock.Restart();
+            Click(Find<Button>(ask, "ClearProjectConfirm"));
+            while (window.ReopenedForTesting == null && clock.Elapsed < TimeSpan.FromSeconds(120)) Pump();
+            reopened = window.ReopenedForTesting ?? throw new InvalidOperationException("Clear project UI: the editor did not open the cleared project (" + Status(window) + ")");
+            double seconds = clock.Elapsed.TotalSeconds;
+            WaitIdle(reopened, withGame: true);
+            Console.WriteLine($"     {Status(reopened)}");
+            Console.WriteLine($"     cleared and reopened in {seconds:F1} s");
+            string kept = Directory.GetDirectories(keptRoot).Single();
+            string[] stayed = [.. Directory.EnumerateFileSystemEntries(workspace).Select(e => Path.GetFileName(e)!).OrderBy(n => n, StringComparer.Ordinal)];
+            string[] moved = [.. Directory.EnumerateFileSystemEntries(kept).Select(e => Path.GetFileName(e)!).Where(n => n != ProjectClear.NoteFileName).OrderBy(n => n, StringComparer.Ordinal)];
+            Console.WriteLine("     stayed: " + string.Join(", ", stayed));
+            Console.WriteLine("     moved to " + Path.GetFileName(kept) + ": " + string.Join(", ", moved));
+            Check(before.All(n => stayed.Contains(n) || moved.Contains(n)), "every file and folder the project had either stayed or is in the dated folder: " +
+                string.Join(", ", before.Where(n => !stayed.Contains(n) && !moved.Contains(n))));
+            Check(moved.SequenceEqual(expectedToGo.OrderBy(n => n, StringComparer.Ordinal)) && !stayed.Intersect(moved).Except(["_local"]).Any(), "what moved is the work, and nothing that moved is still in the project");
+            Check(stayed.All(n => n is "_local" or "editor-cache" or "output" or "support" or "spyro-project.json" or "spyro-wad-analysis.json" or ".DS_Store" ||
+                                  Directory.Exists(Path.Combine(workspace, n)) && !Directory.EnumerateFiles(Path.Combine(workspace, n), "*", SearchOption.AllDirectories).Any()),
+                "what stayed is the game's and the editor's own (and empty folders)");
+            Check(ProjectClear.WhatWouldGo(workspace).Count == 0 && !Directory.Exists(Path.Combine(workspace, "_local", "authored-native")) &&
+                  File.ReadAllText(Path.Combine(workspace, "_local", "settings", "source-disc.json")) == discChoice,
+                "nothing is left to clear, the compiled stages are gone" + (hadStages ? " (there were some)" : "") + ", and the game is still chosen");
+            var shown = reopened.CaptureEditorShellSessionSnapshotForTesting();
+            int levelsAfter = Get<LevelCatalog>(reopened, "_catalog").Levels.Count;
+            Check(shown.CurrentLevel?.Key == "artisans" && shown.CurrentGeometry != null && reopened.FreshSceneForTesting == null && levelsAfter <= levelsBefore &&
+                  !(bool)Invoke(reopened, "ProjectHasNewWorldLevels")! && reopened.LeftOutForTesting.Count == 0,
+                $"the editor shows the original Artisans; no level or world of the user's own is left ({levelsAfter} levels in the list, {levelsBefore} before)");
+            Snapshot(reopened, Path.Combine(outDir, "after.png"));
+            Console.WriteLine($"CLEAR_PROJECT_EXISTING_OK checks={_checks}");
+        }
+        finally
+        {
+            foreach (MainWindow open in new[] { reopened, window }.OfType<MainWindow>())
+            {
+                foreach (Window other in open.OwnedWindows.ToArray()) other.Close();
+                if (open.IsVisible) open.Close();
+            }
+            Pump(10);
+        }
+    }
+
     /// <summary>A packaged-style project in <paramref name="home"/> (support files, a chosen game: the real one, or a
     /// stand-in path with stand-ins for what is read from a disc) and the environment that makes the editor open it.</summary>
     internal static (string Workspace, string KeptRoot, string DiscChoice, string Support, string Output, Dictionary<string, string?> EnvironmentBefore, string DirectoryBefore)
