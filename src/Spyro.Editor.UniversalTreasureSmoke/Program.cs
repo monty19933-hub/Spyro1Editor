@@ -21,6 +21,13 @@ foreach(var gem in GemValue.Known)
 foreach(int container in new[]{0xD,0xC3,0x149,0x186,0x11B})
     foreach(var gem in GemValue.Known)
         Check(UniversalMobyComposer.TreasureValue(Row(container,0x10,0,gem.IdByte))==gem.Value,"known native single reward selector");
+// Teal and rainbow rewards (UniversalHighValueRewards): 50 and 100 from a spring chest, nothing from any other object.
+for(int cls=0;cls<0x200;cls++)
+    foreach(int reward in new[]{0xD6,0xD7})
+    {
+        if(GemValue.TryFromIdByte(cls,out _)||UniversalHighValueGems.IsClass(cls))continue;
+        Check(UniversalMobyComposer.TreasureValue(Row(cls,0x20,0,reward))==(cls is 0x149 or 0xC7?(reward==0xD6?50:100):0),"high-value reward counted for spring chests only");
+    }
 foreach(int unknown in new[]{0,0x22,0x7F,0xFF})
     Check(UniversalMobyComposer.TreasureValue(Row(0xD,0x10,0,unknown))==0,"unknown/compound/random reward has no invented static total");
 Check(UniversalMobyComposer.TreasureValue(Row(0x153,0x18,1,0xFF))==0,"class low byte is not native gem identity");

@@ -105,13 +105,18 @@ public static partial class UniversalSpecialBehaviors
         a.I(36, T1, T6, 0x53); a.I(13, T4, T5, 0x80);                        // t5 = the byte that marks this gem
         a.Br(4, T6, T5, tag + "_show"); a.I(9, Zero, V0, 0xFF);
         a.Br(5, T6, V0, tag + "_next"); a.Nop();
-        // Not marked yet: the placed row that paid it (+0x56) must carry the byte and its paid bit.
+        // Not marked yet: the placed row that paid it (+0x56) must carry the byte and its paid bit, be alive, and hold
+        // this very gem (a spring chest keeps the gem it made in its first property word).
         a.I(36, T1, V0, 0x56); a.Nop();
         a.R(Zero, V0, V1, 6, 0); a.R(Zero, V0, At, 4, 0); a.R(V1, At, V1, 0, 0x21);
         a.R(Zero, V0, At, 3, 0); a.R(V1, At, V1, 0, 0x21); a.R(V1, T9, V1, 0, 0x21);
         a.I(36, V1, At, 0x53); a.I(36, V1, V0, 0x3A);
         a.Br(5, At, T5, tag + "_next"); a.I(12, V0, V0, 0x80);
         a.Br(4, V0, Zero, tag + "_next"); a.Nop();
+        a.I(32, V1, V0, 0x48); a.I(35, V1, At, 0);
+        a.Br(1, V0, 0, tag + "_next"); a.Nop();
+        a.I(35, At, At, 0); a.Nop();
+        a.Br(5, At, T1, tag + "_next"); a.Nop();
         a.I(40, T1, T5, 0x53);
         a.L(tag + "_show");
         a.I(9, Zero, V0, UniversalHighValueRewards.TealStandInClass);
