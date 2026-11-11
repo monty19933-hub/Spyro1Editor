@@ -227,10 +227,14 @@ public sealed class NativeHubPortals
         /// template doorway's middle line (the line through its bottom middle along <paramref name="walkInAngle"/>), so
         /// Spyro walks in and comes back out straight through the middle of the shape's opening (Tree Tops' own path
         /// crosses its doorway at a slant, 50 units sideways over its length).</summary>
-        public (int X, int Y, int Z) MoveOnAxis(double x, double y, double z, double walkInAngle)
+        /// <para>The point also stays in the lower <see cref="PathHeightShare"/> of the shape's opening
+        /// (<paramref name="openingHeight"/>, game units; <see cref="OpeningHeight"/>).</para>
+        public (int X, int Y, int Z) MoveOnAxis(double x, double y, double z, double walkInAngle, double openingHeight = double.PositiveInfinity)
         {
             double ux = Math.Cos(walkInAngle), uy = Math.Sin(walkInAngle), along = (x - Ax) * ux + (y - Ay) * uy;
-            return Move(Ax + along * ux, Ay + along * uy, z);
+            var (mx, my, mz) = Move(Ax + along * ux, Ay + along * uy, z);
+            if (double.IsFinite(openingHeight)) mz = Math.Min(mz, (int)Math.Round(Tz + openingHeight * PathHeightShare));
+            return (mx, my, mz);
         }
         public (int X, int Y) Rotate(double x, double y)
         {
@@ -238,6 +242,21 @@ public sealed class NativeHubPortals
             return ((int)Math.Round(x * cos - y * sin), (int)Math.Round(x * sin + y * cos));
         }
     }
+
+    /// <summary>The highest a shaped doorway's walk-in path may run above its floor, as a share of the opening's height.
+    /// Spyro flies in along the path (the camera close behind at about its height), and the game starts loading the
+    /// level only when that flight goes properly through the opening. The game's own openings are about 191 units tall
+    /// and their paths run 17-57% up, except Stone Hill's from Artisans at 83% (159 units). A shape's opening can be
+    /// much lower (a Wide Arch at 90% is 158 tall), so the path kept at its template's height ran along the top of the
+    /// opening and the level never loaded (emulator, 2026-11-11: a generated homeworld's doorway to Stone Hill). At 60%
+    /// the same homeworld's five doorways load and bring Spyro back out, also with every one at 75% of the lowest
+    /// shapes (a Hex Gate at 75% is 125 tall, the path 75 up).</summary>
+    public const double PathHeightShare = 0.6;
+
+    /// <summary>The height of <paramref name="portal"/>'s shaped opening (game units), or infinity for a doorway that keeps
+    /// the original opening.</summary>
+    public static double OpeningHeight(AuthoredPortal portal) =>
+        DoorwayShapes.Find(portal.Shape) is { } shape ? shape.Height * portal.SizeScale * 16 : double.PositiveInfinity;
 
     /// <summary>The original opening of <paramref name="template"/> moved to <paramref name="portal"/> (editor units, the
     /// record's order) and its facing (unit, horizontal).</summary>
@@ -332,7 +351,7 @@ public sealed class NativeHubPortals
                     for (int n = 0; n < count; n++)
                     {
                         int at = target + 8 + 16 * n;
-                        var (px, py, pz) = shaped ? place.MoveOnAxis(I(p, at), I(p, at + 4), I(p, at + 8), template.WalkInAngle) : place.Move(I(p, at), I(p, at + 4), I(p, at + 8));
+                        var (px, py, pz) = shaped ? place.MoveOnAxis(I(p, at), I(p, at + 4), I(p, at + 8), template.WalkInAngle, OpeningHeight(portal)) : place.Move(I(p, at), I(p, at + 4), I(p, at + 8));
                         overrides[at] = px; overrides[at + 4] = py; overrides[at + 8] = pz;
                     }
                 }

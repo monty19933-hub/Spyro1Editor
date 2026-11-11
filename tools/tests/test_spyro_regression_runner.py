@@ -92,8 +92,8 @@ class OwnedCommandTests(unittest.TestCase):
 
     def test_doorway_smoke_registration(self):
         name = "DoorwaySmoke"
-        self.assertIn((name, "DOORWAY_FREE_OK checks=543"), RUNNER.CORE_CASES)
-        self.assertIn((name, "DOORWAY_SOURCE_OK checks=1269", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertIn((name, "DOORWAY_FREE_OK checks=545"), RUNNER.CORE_CASES)
+        self.assertIn((name, "DOORWAY_SOURCE_OK checks=4403", ["--source"]), RUNNER.SOURCE_QA_CASES)
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)

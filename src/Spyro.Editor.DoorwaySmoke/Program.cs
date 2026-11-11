@@ -31,10 +31,11 @@ foreach (var shape in DoorwayShapes.All)
         Check(DoorwayShapes.Check(DoorwayShapes.Opening(shape, scale)) == null, $"{shape.Name} at {scale} is an opening the game can draw");
     Check(shape.Opening.Count is >= 4 and <= DoorwayShapes.MaxOutlinePoints, $"{shape.Name}: {shape.Opening.Count} points");
     Check(shape.Width is >= 128 and <= 200 && shape.Height is >= 160 and <= 215, $"{shape.Name} is the size of the game's doorways ({shape.Width:0} x {shape.Height:0})");
-    // Spyro walks the original doorway's path about 75-95 units above its floor: even the smallest size leaves room.
+    // Spyro's walk-in path runs at most NativeHubPortals.PathHeightShare up a shaped opening: even the smallest size
+    // leaves room for him there and at the floor.
     var small = DoorwayShapes.Opening(shape, DoorwayShapes.MinScale);
     double Inside(double v) { var xs = new List<double>(); for (int k = 0; k < small.Count; k++) { var a = small[k]; var b = small[(k + 1) % small.Count]; if ((a.V - v) * (b.V - v) <= 0 && a.V != b.V) xs.Add(a.U + (v - a.V) / (b.V - a.V) * (b.U - a.U)); } return xs.Count < 2 ? 0 : xs.Max() - xs.Min(); }
-    Check(Inside(95) >= 64 && Inside(10) >= 64, $"{shape.Name}: Spyro's walk-in path fits through it at three quarters size");
+    Check(Inside(shape.Height * DoorwayShapes.MinScale * NativeHubPortals.PathHeightShare) >= 64 && Inside(10) >= 64, $"{shape.Name}: Spyro's walk-in path fits through it at three quarters size");
 }
 Check(DoorwayShapes.Check([(64, 0), (64, 100), (0, 60), (-64, 100), (-64, 0)])!.Contains("convex"), "a notched (concave) opening is refused");
 Check(DoorwayShapes.Check(Enumerable.Range(0, 11).Select(k => (Math.Cos(Math.PI * k / 10) * 64, k is 0 or 10 ? 0 : Math.Sin(Math.PI * k / 10) * 64 + 10)).ToArray())!.Contains("at most 10"), "an opening of 11 points is refused");
@@ -85,6 +86,23 @@ static Spyro.Editor.Core.Scene.HomeworldPortalControlDefinition HomeworldPortalC
 var fakeTriggers = new[] { (new PortalSourcePoint(8404, 5248, 334, 0), new PortalSourcePoint(8404, 5184, 525, 0), new PortalSourcePoint(8404, 5233, 504, 0)) };
 var template = new NativeHubPortals.DoorwayTemplate("artisans", 14, templateRecord, fakeTriggers, toasty, 0);
 Check(template.PointCount == 5 && template.StubAt == 0x20 + 60 && template.BottomMiddle == (134462, 82944, 5347), "the template's opening and bottom middle");
+
+// A shaped doorway's walk-in path stays in the lower PathHeightShare of the shape's opening; a path already lower keeps
+// its height, and a doorway that keeps the original opening keeps the original's path. (Kept at the original's height,
+// Stone Hill's path, 159 units up a 191-unit opening, ran along the top of a 90% Wide Arch, 158 tall, and the game never
+// loaded the level: emulator, 2026-11-11.)
+{
+    var hex = new AuthoredPortal(14, new(3000, 3000, 1000), 64) { Shape = DoorwayShapes.HexGate.Id, Scale = (float)DoorwayShapes.MinScale };
+    var place = NativeHubPortals.DoorwayPlacement.For(template, hex);
+    double height = NativeHubPortals.OpeningHeight(hex), cap = 1000 * 16 + height * NativeHubPortals.PathHeightShare;
+    Check(Math.Abs(height - DoorwayShapes.HexGate.Height * DoorwayShapes.MinScale * 16) < 1e-6 && double.IsPositiveInfinity(NativeHubPortals.OpeningHeight(new AuthoredPortal(14, new(0, 0, 0), 0))),
+        "an opening's height comes from its shape and size; an original opening has none");
+    var (_, _, high) = place.MoveOnAxis(134462 + 16 * 125, 82944, 5347 + 159 * 16, template.WalkInAngle, height);
+    var (_, _, low) = place.MoveOnAxis(134462 + 16 * 125, 82944, 5347 + 32 * 16, template.WalkInAngle, height);
+    var (_, _, kept) = place.MoveOnAxis(134462 + 16 * 125, 82944, 5347 + 159 * 16, template.WalkInAngle);
+    Check(high == (int)Math.Round(cap) && low == 1000 * 16 + 32 * 16 && kept == 1000 * 16 + 159 * 16,
+        $"a path 159 units up goes down to {(high - 16000) / 16.0:0} in a {height / 16:0}-unit Hex Gate, one 32 units up stays, an uncapped one keeps 159");
+}
 
 // The record an original doorway gets is exactly what the editor wrote before shapes (that code, kept here).
 (byte[] Record, (Vector3f, Vector3f, Vector3f)[] Triggers) OldPlace(byte[] original, (PortalSourcePoint P1, PortalSourcePoint P2, PortalSourcePoint P3)[] triggers, AuthoredPortal portal)
@@ -317,6 +335,22 @@ if (source != null)
                 }
                 else
                 Check(record.AsSpan().SequenceEqual(old.Record) && triggers.SequenceEqual(old.Triggers), $"{key} doorway to {dest} is written exactly as before");
+                foreach (var shape in DoorwayShapes.All)
+                foreach (double scale in new[] { DoorwayShapes.MinScale, 1.0, DoorwayShapes.MaxScale })
+                {
+                    // The path Spyro flies in along keeps the original's height, but no more than PathHeightShare of the shape.
+                    var sized = pose with { Shape = shape.Id, Scale = (float)scale };
+                    var place = NativeHubPortals.DoorwayPlacement.For(t, sized);
+                    double height = NativeHubPortals.OpeningHeight(sized);
+                    for (int k = 0; k < 2; k++)
+                    {
+                        int node = block + 8 + 16 * k;
+                        var (_, _, z) = place.MoveOnAxis(I(path.Properties, node), I(path.Properties, node + 4), I(path.Properties, node + 8), t.WalkInAngle, height);
+                        double up = z - sized.Position.Z * 16, before = I(path.Properties, node + 8) - t.BottomMiddle.Z;
+                        Check(up == Math.Min(before, Math.Round(height * NativeHubPortals.PathHeightShare)) && up >= 0,
+                            $"{key} doorway to {dest} as a {shape.Name} at {scale:P0}: path node {k} {up / 16:0} units up ({before / 16:0} in the original), at most {height * NativeHubPortals.PathHeightShare / 16:0}");
+                    }
+                }
                 foreach (var shape in DoorwayShapes.All)
                 {
                     var (shaped, _, _) = NativeHubPortals.PlaceRecord(t, pose with { Shape = shape.Id });

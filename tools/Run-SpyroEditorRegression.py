@@ -260,7 +260,7 @@ CORE_CASES = (
     # their frames are whole-unit faces around them, shaped records hold the shape's opening before the original's sky
     # header and sky, an original doorway's record is written exactly as before, scene editing keeps frames with their
     # doorways, old scenes keep their fingerprint, the new world's doorways are refused by Create BIN in plain words.
-    ("DoorwaySmoke", "DOORWAY_FREE_OK checks=543"),
+    ("DoorwaySmoke", "DOORWAY_FREE_OK checks=545"),
     # The New World's doorway in one of the game's own homeworlds (NativeWorldEntrance): its sky (whole, the part near
     # the horizon within a size, one colour), the ground-kind, view-group and collision writers (entry triangles after
     # the flagged ones, the rest renumbered, every cell kept), the frame as one added sector, the way back's facts, the
@@ -387,7 +387,7 @@ SOURCE_QA_CASES = (
     # Every retail sky drawn as a panorama and rebuilt from it within the game's limits, looking the same.
     ("SkyImportSmoke", "SKY_IMPORT_SOURCE_OK checks=280", ["--source"]),
     # All 29 original homeworld doorways: written byte for byte as before; each shape keeps the original's sky.
-    ("DoorwaySmoke", "DOORWAY_SOURCE_OK checks=1269", ["--source"]),
+    ("DoorwaySmoke", "DOORWAY_SOURCE_OK checks=4403", ["--source"]),
     # The New World's doorway in each of the six homeworlds (read only): record, ground kind, entry triangles, objects,
     # memory in 2 MB (which sky fits) and 8 MB, refusals (second entrance, six doorways, map edge, textures), every shape
     # and size, after another object edit, deterministic bytes.

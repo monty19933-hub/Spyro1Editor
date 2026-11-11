@@ -383,7 +383,7 @@ public static class NativeWorldEntrance
         if (!GameRam.Fits(data, overlay.CopyBuffer)) throw new InvalidDataException(NoRoom(GameRam.Shortfall(data, overlay.CopyBuffer)));
 
         // ---- the three objects ----
-        var placements = Objects(originals, level.Key, template, place);
+        var placements = Objects(originals, level.Key, template, place, NativeHubPortals.OpeningHeight(portal));
         UniversalComposeResult composed;
         try
         {
@@ -445,7 +445,7 @@ public static class NativeWorldEntrance
     /// <summary>The three objects of <paramref name="template"/>'s doorway, moved with it (positions, turn, path nodes), the
     /// name showing the New World's homeworld.</summary>
     internal static IReadOnlyList<UniversalMobyPlacement> Objects(UniversalSourceLibrary originals, string key, NativeHubPortals.DoorwayTemplate template,
-        NativeHubPortals.DoorwayPlacement place)
+        NativeHubPortals.DoorwayPlacement place, double openingHeight)
     {
         var home = originals.Get(key).Data;
         int bias = template.SourceMobyIndexBias, yawTurn = (int)Math.Round(place.Turn * 128 / Math.PI);
@@ -467,7 +467,7 @@ public static class NativeWorldEntrance
                 {
                     int at = target + 8 + 16 * n;
                     // The entrance always has a shape: its path runs through the middle of the opening.
-                    var (px, py, pz) = place.MoveOnAxis(I(p, at), I(p, at + 4), I(p, at + 8), template.WalkInAngle);
+                    var (px, py, pz) = place.MoveOnAxis(I(p, at), I(p, at + 4), I(p, at + 8), template.WalkInAngle, openingHeight);
                     overrides[at] = px; overrides[at + 4] = py; overrides[at + 8] = pz;
                 }
             }
