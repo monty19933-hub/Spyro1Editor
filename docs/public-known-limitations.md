@@ -14,6 +14,17 @@
   at a freed dragon's pedestal. The dragon who steps out of a statue keeps his
   own colours (he is drawn from the rescue's own data). The Green Wizard in
   three levels and Haunted Towers' Summoning Wizard cannot be recoloured.
+- Egg thieves (2.3) were played in the emulator added to Dark Hollow, Artisans and
+  Terrace Village (run, caught, egg counted, inventory 13 places), and with
+  Stone Hill's own run edited (your earlier drag, and six points moved). The
+  game's own save and load routines keep the eggs (checked in memory); loading
+  a save back from a memory card could not be tried (the test set-up cannot,
+  even for the original game). Not played: a thief in a level you built or in
+  a new world. A thief's step limit (150 units up or down) was measured from
+  the game's own thieves, not read from its code. The run check at Create BIN
+  uses the game's original ground: a run over ground you reshaped is judged in
+  the editor, as you drag. At most 60 eggs in a game; if every one of the first
+  18 levels has a thief, thieves in later levels can't be counted.
 - Spring chests with a teal or rainbow gem (2.3) were played in the emulator in
   Stone Hill, Town Square (beside the level's own spring chest, which still
   works) and a level built in the editor: the gem springs up, is collected,

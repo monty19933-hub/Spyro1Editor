@@ -756,11 +756,22 @@ Randomize places is an ordinary object: move, change or delete any of it. A leve
 Artisans' place, for one) gets less of everything, each thing worth more; the
 card says so.
 
+### Egg thieves
+
+**Add object… → Enemies → Egg Thieves** puts an egg thief in any level or
+homeworld, also one that has none. Each egg thief in the game is one dragon egg:
+the inventory, the 100% count and Gnasty's Loot's door count the eggs the game
+really holds, so one added makes 13, one taken out 11. Create BIN says how many
+eggs the game has when it is not the game's 12. Eggs of thieves past the third
+world, in a level you built or in your new world are counted together in a spare
+place the save keeps, so they are kept like any egg.
+
 ### An egg thief's run
 
-Select an egg thief you added (or any added object that walks a route, such as
-a sheep): **Edit Route…** and the **Its run** tools appear under the object's
-buttons, and the run's numbered points show in the 3D view.
+Select an egg thief (one you added, or one of the game's own; also any added
+object that walks a route, such as a sheep): **Edit Route…** or **Edit Run
+Path** and the **Its run** tools appear under the object's buttons, and the
+run's numbered points show in the 3D view.
 
 - Drag a point in the 3D view to move it (it stays on the ground), or type the
   points in **Edit Route…**.
@@ -769,6 +780,13 @@ buttons, and the run's numbered points show in the 3D view.
 - **Bigger**, **Smaller** and **Turn** change the whole run about its middle;
   **Other Way Round** makes him run it the opposite way; **As It Came** brings
   back the run he had in his own level.
+- A point goes onto the ground the thief runs on, and only where he can still
+  run to it and on from it: ground all the way, and no step up or down of more
+  than 150 units (where the game's own run already has a bigger step, that one
+  stays allowed). Water, lava and ooze count as no ground: the thief could run
+  there, but Spyro sinks and can't catch him. A point he can't take stays where
+  it was and the editor says why; the run card warns while a thief stands in
+  water.
 - The run keeps to one level of floor (a thief cannot jump), and no step is
   longer than the game can follow. Give a thief room to run and Spyro room to
   chase: a round of 1,500 to 3,000 units on open floor plays best.
