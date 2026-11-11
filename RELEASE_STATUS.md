@@ -1,3 +1,43 @@
+# Spyro Editor 2.2 — 11 November 2026 (built, not published)
+
+Stable 2.2 (internal 2.2.0, schema 3). Built and checked locally from `f0bc913` on `feature/fix-it-all-20261111`;
+**not pushed, tagged or released**: publishing waits for the owner's word. Found by the owner on a new project made
+with 2.1, where Create BIN stopped three different ways in a row and they asked for "a universal fix me type thing".
+
+- **Fix It For Me on every Create BIN stop that comes from the project** (`MainWindow.ExportRepair.cs`,
+  `MainWindow.LeftOut.cs`, `ExportLeftOutSettings`): one press runs Create BIN itself until the game is made. A stop
+  with a repair is repaired (the way into the new world; a world's homeworld made to fit; now also saved changes the
+  game cannot take, `ExportRepair.LeaveOutSkippedChanges`). Any other stop is got past by making the game without the
+  part that causes it: a part the refusal names first (the one with the least work in it), then one part at a time,
+  then everything out and back in part by part; one of the game's own levels loses only one kind of change where
+  that is enough. Left-out parts stay in the project, are remembered in `left-out.json` (another editor version
+  ignores the list), said in the Create BIN window and after each game, and put back from More › Left Out of the Game….
+  Failures of the computer's (disc image, disk, permission) offer nothing.
+- **The retail-only Create BIN** (no built levels) reports a failure through the same handler (it said "Could not
+  create test" and offered nothing); its blocked export check and terrain blocks offer the button.
+- **Town Square froze in games with the new level and no doorway to it.** The new level (id 65) starts up through
+  Town Square's initializer; the two were split only by the doorway step (`NativePortalRouteFreshBinding.Rebind`).
+  `NativeFreshMainCompilation.ExportAsync` now splits them in every game. With 8 MB memory the export stopped instead
+  ("Town Square does not fit game RAM even with 8 MB"): the survey read Town Square's copy buffer as the new level's.
+- Create BIN says when the new level has no doorway leading to it.
+
+Checks: gate `--build-all` 636 checks, 0 failed (on `f0bc913`). Disc smokes: world entrance 227, level window 134,
+doorways 1,269, balloon travel 7,063, colours 112, 8 MB 88, supercharge 160, draw load 41, treasure 2,615 (with the
+new Town Square checks). Through the editor with the disc: `--fix-it-ui` (34 checks, 36 Create BIN runs: a named stop,
+one kind of a level's changes, an unnamed stop, two causes, a passing stop, the computer's failures, a stop nothing
+causes, the Left Out window); on copies of the owner's project: as they left it (a blank Town Square and the new
+level, no way into the world) one press leaves the blank Town Square out, places the entrance and makes the game;
+at its first stop (an egg thief's run) one press leaves that change out and makes the game. Emulator (isolated
+DuckStation, fresh card): before the fix New Game sent to Town Square never arrives (Stone Hill does); after it Town
+Square, the new level, the world's homeworld and first level and Artisans load; in the game Fix It For Me made from
+the owner's project copy Spyro walks from Artisans into the world and back out in front of the doorway, and Town
+Square and the new level load. Packages verified from their zips, codesign passed (not notarized), the packaged Mac
+app started on a scratch profile; every earlier version's updater against the planned list: 18 of 18 offered and
+downloaded the right package (betas V2–V5 Beta V6; 1.0–2.1 version 2.2), 2.2 offered nothing.
+
+Not done: nothing tried on a PlayStation or on Windows; two disc-based research smokes outside the gate
+(NativeFreshPlacementArenaSmoke, UniversalPlayerAnimationImportSmoke in disc mode) fail as they do in 2.1.
+
 # Spyro Editor 2.1 — 10 November 2026
 
 Stable 2.1 (internal 2.1.0, schema 3, tag `v2.1`). Found by the owner trying 2.0 on a fresh project the same day:
