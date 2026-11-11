@@ -37,37 +37,7 @@ internal static class ClearProjectUiCases
         if (withGame && !File.Exists(disc)) throw new ArgumentException("The test needs the original disc image.");
         string home = outDir ?? Directory.CreateTempSubdirectory("spyro-clear-project-ui-").FullName;
         Directory.CreateDirectory(home);
-        // The usual layout: the project in "Projects", so cleared work goes to "Old projects" beside it.
-        string workspace = Path.Combine(home, "Projects", "default-project"), keptRoot = Path.Combine(home, "Old projects");
-        foreach (string old in new[] { Path.Combine(home, "Projects"), keptRoot }) if (Directory.Exists(old)) Directory.Delete(old, recursive: true);
-        string settings = Directory.CreateDirectory(Path.Combine(workspace, "_local", "settings")).FullName;
-        string chosen = disc ?? Path.Combine(home, "games", "Spyro the Dragon (USA).bin");
-        string discChoice = Path.Combine(settings, "source-disc.json");
-        File.WriteAllText(discChoice, JsonSerializer.Serialize(new { selectedAt = DateTime.Now.ToString("o"), selectedPath = chosen, imagePath = chosen, cuePath = Path.ChangeExtension(chosen, ".cue") }));
-        File.WriteAllText(Path.Combine(settings, "last-level.json"), "{\"levelKey\":\"artisans\"}");
-        string support = Directory.CreateDirectory(Path.Combine(workspace, "support")).FullName;
-        string repo = AppContext.BaseDirectory;
-        while (!File.Exists(Path.Combine(repo, "spyro-level-catalog.json"))) repo = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(repo)) ?? throw new IOException("No level catalog found.");
-        foreach (string name in new[] { "spyro-level-catalog.json", "spyro-object-templates.json" })
-            if (File.Exists(Path.Combine(repo, name))) File.Copy(Path.Combine(repo, name), Path.Combine(support, name));
-        string output = Directory.CreateDirectory(Path.Combine(workspace, "output")).FullName;
-        if (!withGame)
-        {
-            // Stand-ins for what the editor reads from a disc and for a game already made: a clear must leave them.
-            Directory.CreateDirectory(Path.Combine(workspace, "editor-cache"));
-            File.WriteAllText(Path.Combine(workspace, "editor-cache", "index.json"), "read from the disc");
-            File.WriteAllText(Path.Combine(workspace, "spyro-wad-analysis.json"), "read from the disc");
-            File.WriteAllText(Path.Combine(output, "An Earlier Game.bin"), "a game already made");
-        }
-        Dictionary<string, string?> before = new();
-        foreach (string name in IsolatedRoots.Append("SPYRO_EDITOR_WORKSPACE").Append("SPYRO_EDITOR_RELEASE")) before[name] = Environment.GetEnvironmentVariable(name);
-        string directoryBefore = Environment.CurrentDirectory;
-        foreach (string name in IsolatedRoots) Environment.SetEnvironmentVariable(name, Directory.CreateDirectory(Path.Combine(home, "isolated", name)).FullName);
-        Environment.SetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE", workspace);
-        Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "1");
-        Environment.CurrentDirectory = workspace;
-        string found = Spyro.Editor.Core.Workspace.EditorWorkspace.Find().RootPath;
-        if (!SamePath(found, workspace)) throw new InvalidOperationException("The editor would open " + found + " instead of the test project; stopping before it opens.");
+        var (workspace, keptRoot, discChoice, support, output, before, directoryBefore) = PrepareProject(home, disc);
 
         MainWindow window = Open(withGame);
         MainWindow? reopened = null;
@@ -235,6 +205,47 @@ internal static class ClearProjectUiCases
             foreach (var (name, value) in before) Environment.SetEnvironmentVariable(name, value);
             if (outDir == null) try { Directory.Delete(home, recursive: true); } catch (IOException) { }
         }
+    }
+
+    /// <summary>A packaged-style project in <paramref name="home"/> (support files, a chosen game: the real one, or a
+    /// stand-in path with stand-ins for what is read from a disc) and the environment that makes the editor open it.</summary>
+    internal static (string Workspace, string KeptRoot, string DiscChoice, string Support, string Output, Dictionary<string, string?> EnvironmentBefore, string DirectoryBefore)
+        PrepareProject(string home, string? disc)
+    {
+        bool withGame = disc != null;
+        // The usual layout: the project in "Projects", so cleared work goes to "Old projects" beside it.
+        string workspace = Path.Combine(home, "Projects", "default-project"), keptRoot = Path.Combine(home, "Old projects");
+        foreach (string old in new[] { Path.Combine(home, "Projects"), keptRoot }) if (Directory.Exists(old)) Directory.Delete(old, recursive: true);
+        string settings = Directory.CreateDirectory(Path.Combine(workspace, "_local", "settings")).FullName;
+        string chosen = disc ?? Path.Combine(home, "games", "Spyro the Dragon (USA).bin");
+        string discChoice = Path.Combine(settings, "source-disc.json");
+        File.WriteAllText(discChoice, JsonSerializer.Serialize(new { selectedAt = DateTime.Now.ToString("o"), selectedPath = chosen, imagePath = chosen, cuePath = Path.ChangeExtension(chosen, ".cue") }));
+        File.WriteAllText(Path.Combine(settings, "last-level.json"), "{\"levelKey\":\"artisans\"}");
+        string support = Directory.CreateDirectory(Path.Combine(workspace, "support")).FullName;
+        string repo = AppContext.BaseDirectory;
+        while (!File.Exists(Path.Combine(repo, "spyro-level-catalog.json"))) repo = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(repo)) ?? throw new IOException("No level catalog found.");
+        foreach (string name in new[] { "spyro-level-catalog.json", "spyro-object-templates.json" })
+            if (File.Exists(Path.Combine(repo, name))) File.Copy(Path.Combine(repo, name), Path.Combine(support, name));
+        string output = Directory.CreateDirectory(Path.Combine(workspace, "output")).FullName;
+        if (!withGame)
+        {
+            // Stand-ins for what the editor reads from a disc and for a game already made: a clear must leave them.
+            Directory.CreateDirectory(Path.Combine(workspace, "editor-cache"));
+            File.WriteAllText(Path.Combine(workspace, "editor-cache", "index.json"), "read from the disc");
+            File.WriteAllText(Path.Combine(workspace, "spyro-wad-analysis.json"), "read from the disc");
+            File.WriteAllText(Path.Combine(output, "An Earlier Game.bin"), "a game already made");
+        }
+        Dictionary<string, string?> before = new();
+        foreach (string name in IsolatedRoots.Append("SPYRO_EDITOR_WORKSPACE").Append("SPYRO_EDITOR_RELEASE")) before[name] = Environment.GetEnvironmentVariable(name);
+        string directoryBefore = Environment.CurrentDirectory;
+        foreach (string name in IsolatedRoots) Environment.SetEnvironmentVariable(name, Directory.CreateDirectory(Path.Combine(home, "isolated", name)).FullName);
+        Environment.SetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE", workspace);
+        Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "1");
+        Environment.CurrentDirectory = workspace;
+        string found = Spyro.Editor.Core.Workspace.EditorWorkspace.Find().RootPath;
+        if (!SamePath(found, workspace)) throw new InvalidOperationException("The editor would open " + found + " instead of the test project; stopping before it opens.");
+
+        return (workspace, keptRoot, discChoice, support, output, before, directoryBefore);
     }
 
     /// <summary>Every file of the project with its size, less the compiled stages (a clear removes those even when it

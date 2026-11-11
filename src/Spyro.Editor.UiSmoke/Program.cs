@@ -312,6 +312,9 @@ if (args.Contains("--clear-project-ui-only", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Length == 3 && args[0] == "--clear-project-desktop")
+    return ClearProjectDesktopCase.Run(args[1], args[2]);
+
 if (args.Length == 3 && args[0] == "--clear-project-ui")
 {
     HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
