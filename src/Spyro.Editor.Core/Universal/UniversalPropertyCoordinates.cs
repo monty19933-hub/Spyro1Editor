@@ -65,6 +65,13 @@ public static class UniversalPropertyCoordinates
             BinaryPrimitives.ReadInt32LittleEndian(t.Properties.AsSpan(n + 4)) + y - sy, BinaryPrimitives.ReadInt32LittleEndian(t.Properties.AsSpan(n + 8)) + z - sz })];
     }
 
+    /// <summary>The point of its first route the object heads for first (the path header's current node), or 0.</summary>
+    public static int CurrentNode(UniversalRowTemplate t)
+    {
+        var paths = Paths(t);
+        return paths.Count == 0 ? 0 : t.Properties[paths[0].Nodes[0] - 8 + 1];
+    }
+
     /// <summary>The path blocks an object's internal pointers lead to: (pointer offset, offsets of each node's x).</summary>
     public static IReadOnlyList<(int PointerOffset, int[] Nodes)> Paths(UniversalRowTemplate t)
     {

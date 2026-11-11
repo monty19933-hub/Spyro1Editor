@@ -181,8 +181,9 @@ internal static partial class NewLevelBuildCases
     }
 
     /// <summary><c>thief-drag</c>: the drag the first report came from: point THIEF_NODE (default 6) of Stone Hill's thief
-    /// dragged in the 3D view by THIEF_DRAG "dx,dy" (default a small pull). The point must stay on the ground the thief
-    /// runs on (not jump to a roof above it), or the editor must say why it cannot go there; the level is saved.</summary>
+    /// dragged in the 3D view by THIEF_DRAG "dx,dy" (default a small pull). The point must land on the floor the thief
+    /// runs on, and the run must stay one he can take; the level is saved. THIEF_EXPECT_REFUSED=1: the drag goes where he
+    /// can't run, and the editor must keep the point and say why.</summary>
     private static void ThiefDragStep(MainWindow window, string outDir)
     {
         string key = Environment.GetEnvironmentVariable("THIEF_LEVEL") ?? "stonehill";
@@ -203,7 +204,17 @@ internal static partial class NewLevelBuildCases
         var after = path.Nodes[node].Position;
         Console.WriteLine($"{key} {thief.DisplayLabel}: point {node + 1} dragged from ({before.X:0.#},{before.Y:0.#},{before.Z:0.#}) to ({after.X:0.#},{after.Y:0.#},{after.Z:0.#}) — {Status(window)}");
         Console.WriteLine($"check: {window.DescribeRunForTesting(path)}");
-        if (MathF.Abs(after.Z - before.Z) > 64) throw new InvalidOperationException("The dragged point left the ground the thief runs on.");
+        string check = window.DescribeRunForTesting(path);
+        if (Environment.GetEnvironmentVariable("THIEF_EXPECT_REFUSED") == "1")
+        {
+            if (after.X != before.X || after.Y != before.Y || !Status(window).Contains("can't go there", StringComparison.Ordinal))
+                throw new InvalidOperationException("A point the thief could not run to was taken: " + Status(window));
+            Console.WriteLine("NEW_LEVEL_THIEF_DRAG_REFUSED_OK");
+            return;
+        }
+        if (after.X == before.X && after.Y == before.Y) throw new InvalidOperationException("The point did not move: " + Status(window));
+        if (check != "ok") throw new InvalidOperationException("The dragged run is not one the thief can take: " + check);
+        if (Floor(window, after.X, after.Y, after.Z - 32, out float floor) && MathF.Abs(after.Z - 32 - floor) > 1) throw new InvalidOperationException("The dragged point is not on the floor.");
         Save(window);
         Console.WriteLine("saved: " + Status(window));
         WriteThief(window, outDir, thief, path);

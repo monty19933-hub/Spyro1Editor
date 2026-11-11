@@ -101,6 +101,14 @@ class OwnedCommandTests(unittest.TestCase):
         project = RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
         self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"', project.read_text())
 
+    def test_egg_thief_smoke_registration(self):
+        name = "EggThiefSmoke"
+        self.assertIn((name, "EGG_THIEF_FREE_OK checks=644"), RUNNER.CORE_CASES)
+        self.assertIn((name, "EGG_THIEF_SOURCE_OK checks=520", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
+        project = RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
+        self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"', project.read_text())
+
     def test_balloon_travel_smoke_registration(self):
         name = "BalloonTravelSmoke"
         self.assertIn((name, "BALLOON_TRAVEL_FREE_OK checks=2938"), RUNNER.CORE_CASES)

@@ -123,12 +123,12 @@ public sealed class NativeMobyPath
     /// <summary>An added object's route: <paramref name="original"/> is where it came with (moved with the object),
     /// <paramref name="current"/> as edited; raw x, y, z per node.</summary>
     public static NativeMobyPath ForPlacedObject(string levelKey, string levelName, int ownerTrueIndex, ushort ownerClass,
-        IReadOnlyList<int[]> original, IReadOnlyList<int[]> current)
+        IReadOnlyList<int[]> original, IReadOnlyList<int[]> current, int currentNode = 0)
     {
         if (original.Count != current.Count || original.Count is 0 or > 64) throw new ArgumentException("A route needs 1 to 64 nodes.");
         var nodes = original.Select((n, i) => new NativePathNode(i, n[0], n[1], n[2], 0, -1)).ToList();
         for (int i = 0; i < nodes.Count; i++) nodes[i].SetRawPosition(current[i][0], current[i][1], current[i][2]);
-        byte[] header = new byte[8]; header[0] = (byte)nodes.Count;
+        byte[] header = new byte[8]; header[0] = (byte)nodes.Count; header[1] = (byte)Math.Clamp(currentNode, 0, nodes.Count - 1);
         return new NativeMobyPath(levelKey, levelName, ownerTrueIndex, ownerClass, -1, 0, -1, 0, 0, -1, 0, -1, header, "", nodes)
             { IsPlacedObjectRoute = true };
     }

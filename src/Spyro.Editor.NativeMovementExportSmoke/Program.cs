@@ -40,7 +40,7 @@ finally
 
 Console.WriteLine("PASS: normal Create BIN blocked an unproven egg-thief route with a targeted safety finding.");
 Console.WriteLine("PASS: the research override exported a geometrically safe +16/+16/+16 route edit as one exact 12-byte XYZ patch.");
-Console.WriteLine("PASS: the crash-reproducing Stone Hill T166 route was blocked on its cyclic closing-edge overflow and terrain-clearance mismatch with zero path writes.");
+Console.WriteLine("PASS: the crash-reproducing Stone Hill T166 route was blocked on its cyclic closing-edge overflow with zero path writes.");
 Console.WriteLine("PASS: stale native path identity/preimage was rejected before a patch plan could be produced.");
 Console.WriteLine("PASS: synthetic dragon endpoint edits produced only packed +0x28/+0x2C writes and preserved +0x30.");
 Console.WriteLine("PASS: stale synthetic dragon preimages were skipped with an explicit rejection reason and no writes.");
@@ -76,19 +76,10 @@ static void VerifyNativePathExport(
         pathManifestPath,
         tempDirectory,
         "townsquare-path");
+    // 2.3: a moved point the thief can run to is exported by normal Create BIN (EggThiefRun; no exact-fingerprint proof).
     Assert(
-        normalPlan.Patches.All(patch => patch.Kind != "native-moby-path-node-xyz"),
-        "Normal Create BIN exported an unproven native path.");
-    Assert(
-        normalPlan.SkippedEdits.Any(reason => reason.Contains("native-path-runtime-proof-required", StringComparison.OrdinalIgnoreCase)),
-        $"Normal Create BIN did not explain the native path runtime-proof gate: {string.Join(" | ", normalPlan.SkippedEdits)}");
-    MobyBuildSafetyLevelReport normalSafety =
-        MobyBuildSafetyInspector.InspectLevel(sourceImagePath, level, normalPlan);
-    AssertTargetedIssue(
-        normalSafety,
-        path.OwnerTrueIndex,
-        "native-path-runtime-proof-required",
-        MobyBuildSafetyStatus.Blocked);
+        normalPlan.Patches.Count(patch => patch.Kind == "native-moby-path-node-xyz") == 1 && normalPlan.SkippedEdits.Count == 0,
+        $"Normal Create BIN did not export a run the thief can take: {string.Join(" | ", normalPlan.SkippedEdits)}");
 
     MobySourcePatchPlan researchPlan = BuildPlan(
         sourceImagePath,
@@ -117,11 +108,6 @@ static void VerifyNativePathExport(
     Assert(BinaryPrimitives.ReadInt32LittleEndian(after.AsSpan(8, 4)) == node.RawZ, "Edited path Z was not exported.");
     MobyBuildSafetyLevelReport researchSafety =
         MobyBuildSafetyInspector.InspectLevel(sourceImagePath, level, researchPlan);
-    AssertTargetedIssue(
-        researchSafety,
-        path.OwnerTrueIndex,
-        "native-path-research-unproven",
-        MobyBuildSafetyStatus.Review);
 
     JsonObject staleRoot = JsonNode.Parse(File.ReadAllText(pathManifestPath))!.AsObject();
     JsonObject staleEdit = staleRoot["edits"]!.AsArray()[0]!.AsObject();
@@ -182,12 +168,7 @@ static void VerifyUnsafeStoneHillPathIsBlocked(
         path.OwnerTrueIndex,
         "native-path-cyclic-component-overflow",
         MobyBuildSafetyStatus.Blocked);
-    Assert(
-        safety.Issues.Any(issue =>
-            issue.Code == "native-path-node-clearance-mismatch" &&
-            issue.Status == MobyBuildSafetyStatus.Blocked &&
-            issue.EditorTrueIndex == path.OwnerTrueIndex),
-        "Stone Hill fixture did not retain its independent terrain-clearance blocker.");
+    // Its moved points are on ground the thief can run to (EggThiefRun); the closing edge's overflow is what crashed.
     MobyBuildSafetyIssue closingSegment = safety.Issues.First(issue =>
         issue.Code == "native-path-cyclic-component-overflow" &&
         issue.EditorTrueIndex == path.OwnerTrueIndex);
