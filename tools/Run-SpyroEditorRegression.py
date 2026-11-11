@@ -150,7 +150,7 @@ CORE_CASES = (
     ("NativeId65FreshDocumentSmoke", "NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK"),
     ("NativeFreshLevelDocumentSmoke", "NATIVE_FRESH_LEVEL_DOCUMENT_SMOKE_OK"),
     ("NativeFreshPlacementArenaSmoke", "NATIVE_FRESH_PLACEMENT_ARENA_OK checks=2086"),
-    ("UniversalTreasureSmoke", "UNIVERSAL_TREASURE_SOURCE_FREE_OK checks=2592"),
+    ("UniversalTreasureSmoke", "UNIVERSAL_TREASURE_SOURCE_FREE_OK checks=3602"),
     ("UiSmoke", "FRESH_NATIVE_DOCUMENT_UI_OK"),
     ("NativeId65NormalResourceSmoke", "NATIVE_ID65_NORMAL_RESOURCE_SMOKE_OK"),
     ("NativeId65NormalBodySmoke", "NATIVE_ID65_NORMAL_BODY_SMOKE_OK"),

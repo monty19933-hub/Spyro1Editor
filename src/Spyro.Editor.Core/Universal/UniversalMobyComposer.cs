@@ -86,6 +86,13 @@ public sealed record UniversalComposeResult(
     public IReadOnlyList<UniversalDestinationGemColourLoad> DestinationGemColourLoads { get; init; } = [];
     public int DestinationGemColourExtraBytes { get; init; }
     public IReadOnlyList<UniversalNativeParticleNoOpProof> NativeParticleNoOpProofs { get; init; } = [];
+    /// <summary>Placed objects that give a teal or rainbow gem (<see cref="UniversalHighValueRewards"/>), the calls to
+    /// the game's gem collection routine sent through the added routine (the destination's own, then those in the
+    /// added code) and the destination classes of the chests tinted by the added code.</summary>
+    public int HighValueRewards { get; init; }
+    public IReadOnlyList<uint> HighValueRewardCalls { get; init; } = [];
+    public int HighValueRewardAddedCalls { get; init; }
+    public IReadOnlyList<int> HighValueRewardTintedClasses { get; init; } = [];
 }
 
 /// <summary>
@@ -369,6 +376,21 @@ public static class UniversalMobyComposer
             templates.Add(t with { LinkGroupId = p.LinkGroupId });
             work.Enqueue((t.ClassId, p.SourceLevelKey, false));
         }
+        // Teal and rainbow rewards (UniversalHighValueRewards): the gem's model and update come with the first object
+        // that gives one, as if the gem itself had been placed.
+        List<int> highRewards = [];
+        for (int i = 0; i < placements.Count; i++)
+        {
+            if (placements[i].SpecialId != null) continue;
+            int reward = UniversalHighValueRewards.RewardOf(placements[i], templates[i].Row);
+            if (!UniversalHighValueRewards.IsReward(reward)) continue;
+            if (!UniversalHighValueRewards.Supports(templates[i].ClassId))
+                throw new InvalidDataException($"Only a spring chest can give a Teal or Rainbow gem; the object from {placements[i].SourceLevelKey} (class 0x{templates[i].ClassId:X3}) cannot.");
+            var gem = special?.Invoke(UniversalHighValueRewards.GemIdFor(reward)) ?? throw new InvalidDataException(
+                "A chest that gives a Teal or Rainbow gem needs the original USA disc for the gem. Select that disc in the editor settings.");
+            specialClasses[gem.ClassId] = gem;
+            highRewards.Add(i);
+        }
         // Copies have independent group identities. A source pointer may only select the
         // unique counterpart in this group, including the legacy ungrouped namespace.
         for (int i = 0; i < templates.Count; i++)
@@ -520,6 +542,10 @@ public static class UniversalMobyComposer
                     if (classes[key].DestinationClass == key.Class && !fixedDependencies.Contains(key) && (DestHandles(key.Class) || (key.Class==0x176 && flightGates.ContainsKey(sk))))
                         classes[key] = (AllocateClass(sk, key.Class), classes[key].Dependency);
 
+        // Spring chests take their lid colour from a table that has no teal or rainbow entry: the added code sets it.
+        List<int> highRewardTints = [.. highRewards.Select(i => (Source: placements[i].SourceLevelKey.ToLowerInvariant(), Class: templates[i].ClassId)).Distinct()
+            .Where(k => UniversalHighValueRewards.TintsByReward(source(k.Source).Overlay, k.Class))
+            .Select(k => classes[k].DestinationClass).Distinct().Order()];
         foreach (int c in specialClasses.Keys)
             if (classes.Values.Any(v => v.DestinationClass == c) || destRegistered.Contains(c) || shared.Contains(c) || DestHandles(c))
                 throw new UniversalSourceCollisionException($"Special class 0x{c:X3} collides with a native or imported class in {destination.Key}.");
@@ -832,7 +858,8 @@ public static class UniversalMobyComposer
         var collectionStars = classes.Keys.Where(k => k.Class is >= 0x53 and <= 0x57)
             .Select(k => k.Source)
             // A Crash crate's gem is spawned by the destination's own reward path, like its native enemies' gems.
-            .Concat(rows.Where(r => r.Item1[0x53] is >= 0x53 and <= 0x57 && r.Item2.SourceLevelKey != UniversalCrashBoxes.SourceKey
+            // A teal or rainbow reward is spawned as the gold or purple gem it stands in for (UniversalHighValueRewards).
+            .Concat(rows.Where(r => (r.Item1[0x53] & 0x7F) is >= 0x53 and <= 0x57 && r.Item2.SourceLevelKey != UniversalCrashBoxes.SourceKey
                     && r.Item2.SourceLevelKey != UniversalCrashEnemies.YotdSourceKey)
                 .Select(r => r.Item2.SourceLevelKey))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -851,6 +878,7 @@ public static class UniversalMobyComposer
         IReadOnlyList<UniversalDestinationGemColourLoad> destinationColourLoads = [];
         int destinationColourBytes = 0;
         IReadOnlyList<UniversalNativeParticleNoOpProof> particleNoOpProofs = [];
+        IReadOnlyList<uint> highRewardCalls = []; uint? highRewardCollect = null; int highRewardAddedCalls = 0;
         byte[] overlay = destinationOverlay.ToArray();
         uint copyBuffer = destOverlay.CopyBuffer;
         foreach(var context in darkLanternContexts.Values)context.RequireDestinationData(dest);
@@ -878,7 +906,9 @@ public static class UniversalMobyComposer
             var classMaps = classes.GroupBy(k => k.Key.Source).ToDictionary(g => g.Key,
                 g => (IReadOnlyDictionary<int, int>)g.ToDictionary(k => k.Key.Class, k => k.Value.DestinationClass));
             var bundle = UniversalBehaviorBundleBuilder.Build(destOverlay, byBehaviorSource, baseAddress, eggClasses, signClasses, classMaps, remapSaveRows, nativeExecutable: exe,
-                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles,magicPair:magicPair,darkLanternContexts:darkLanternContexts,darkProjectileParticles:darkProjectileParticles,magicChain:magicChain,highCavesSpellParticles:highCavesSpellParticles,magicOriginal:magicOriginal,highCavesWorld:highCavesWorld,greenDruidWorld:greenWorld,greenDruidLinkedWorld:linkedWorld,crashBoxClasses:crashBoxClasses,crashEnemyClasses:crashEnemyClasses,crashPlayerClasses:crashPlayerClasses);
+                nativeDestinationOwner: nativeDestinationOwner ?? originalDestination.Overlay, highValueGemClasses: highValueGemClasses, whirlwindSounds: whirlwindSounds, dryCanyonBirdBranches: dryCanyonBirdBranches,flightChests:flightChests,flightGates:flightGates,ownedParticles:ownedParticles,magicPair:magicPair,darkLanternContexts:darkLanternContexts,darkProjectileParticles:darkProjectileParticles,magicChain:magicChain,highCavesSpellParticles:highCavesSpellParticles,magicOriginal:magicOriginal,highCavesWorld:highCavesWorld,greenDruidWorld:greenWorld,greenDruidLinkedWorld:linkedWorld,crashBoxClasses:crashBoxClasses,crashEnemyClasses:crashEnemyClasses,crashPlayerClasses:crashPlayerClasses,
+                highValueRewards: highRewards.Count > 0 ? new UniversalHighValueRewardPlan(highRewardTints) : null);
+            highRewardCalls = bundle.HighValueRewardCalls; highRewardCollect = bundle.HighValueRewardCollect; highRewardAddedCalls = bundle.HighValueRewardRedirectedCalls;
             int releaseBytes = releasedNativeClasses is { Count: > 0 } ? UniversalNativeRelease.Bytes(releasedNativeClasses.Count) : 0;
             uint releaseStub = (uint)((baseAddress + bundle.Code.Length + 3) & ~3);
             uint newCopy = (uint)((releaseStub + releaseBytes + 15) & ~15);
@@ -1120,8 +1150,15 @@ public static class UniversalMobyComposer
             warnings.Add($"Particle 0x{particle.TypeId:X2} from {particle.SourceLevelKey}: {particle.Detail}");
         // Playable Crash: Spyro's drawing routine is hooked so he stays hidden in cutscenes too (inert elsewhere).
         if (specialClasses.Values.Any(a => a.Behavior == UniversalSpecialBehavior.CrashPlayer)) UniversalCrashPlayer.PatchExe(exe);
+        // Teal and rainbow rewards, last: the destination's own gem collection calls go through the added routine, which
+        // passes every other gem on to the game's routine unchanged. Every check above saw the level's code as it was.
+        if (highRewards.Count > 0)
+        {
+            if (highRewardCollect is not uint collect) throw new InvalidDataException("Teal and rainbow rewards have no added collection routine.");
+            UniversalHighValueRewards.Apply(overlay, highRewardCalls, collect);
+        }
         return new(destination.Key, imports, mappedRows, ram, arena, freeBefore - vram.FreeBytes, behavior, warnings,
-            treasure, overlay, dest.Bytes, exe) { ArenaSlotsAdded = slotsAdded, DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), CanonicalGemCollectionProofs = collectionStars, FreshParticleBinding = freshParticleBinding, NativeLineParticleProofs=nativeLine77==null?[]:[nativeLine77.Proof], FlightChestParticleProofs = flightParticleProofs.Values.ToArray(), FlightGateParticleProofs = gateParticleProofs.Values.ToArray(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), RestoredIndexedObjectLinks = templates.Sum(t => t.ImportedRowIndices.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports, WhirlwindSoundImports = whirlwindSounds.Values.ToArray(), MetalTextureBindings = metalBindings, DestinationGemCollectionCalls = destinationGemCalls, DestinationGemCollectionExtraBytes = destinationGemBytes, DestinationGemColourLoads = destinationColourLoads, DestinationGemColourExtraBytes = destinationColourBytes, NativeParticleNoOpProofs = particleNoOpProofs };
+            treasure, overlay, dest.Bytes, exe) { ArenaSlotsAdded = slotsAdded, DroppedModelClasses = dropped.Order().ToList(), DroppedModelBytes = droppedBytes, ReclaimedVramBytes = reclaimedVram, ImportedVramRanges = vram.ImportedReservations, ParticleDependencies = particleDependencies.Values.ToList(), CanonicalGemCollectionProofs = collectionStars, FreshParticleBinding = freshParticleBinding, NativeLineParticleProofs=nativeLine77==null?[]:[nativeLine77.Proof], FlightChestParticleProofs = flightParticleProofs.Values.ToArray(), FlightGateParticleProofs = gateParticleProofs.Values.ToArray(), RestoredObjectLinks = templates.Sum(t => t.ImportedRowPointers.Count), RestoredIndexedObjectLinks = templates.Sum(t => t.ImportedRowIndices.Count), UnresolvedObjectLinks = templates.Sum(t => t.DroppedExternalPointers), PlacementSaveRows = mappedSaveRows, PhysicalToLogicalSaveRows = physicalSaveRows, UnoccupiedPhysicalRows = allocation.UnoccupiedRows, NativeRowsBefore = nativeRowsBefore, NativeRowsAfter = allocation.FinalRowCount, ReusedPhysicalRows = allocation.ReusedRows, DroppedPropertyBytes = droppedProperties, PlayerAnimationImports = playerAnimationImports, WhirlwindSoundImports = whirlwindSounds.Values.ToArray(), MetalTextureBindings = metalBindings, DestinationGemCollectionCalls = destinationGemCalls, DestinationGemCollectionExtraBytes = destinationGemBytes, DestinationGemColourLoads = destinationColourLoads, DestinationGemColourExtraBytes = destinationColourBytes, NativeParticleNoOpProofs = particleNoOpProofs, HighValueRewards = highRewards.Count, HighValueRewardCalls = highRewardCalls, HighValueRewardAddedCalls = highRewardAddedCalls, HighValueRewardTintedClasses = highRewardTints };
     }
 
     /// <summary>Class a fully removed native row is switched to: no model, no behavior in any level, never

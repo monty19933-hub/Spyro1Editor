@@ -50,6 +50,7 @@ Check(UniversalHighValueGems.ShinePair(UniversalHighValueGems.TealEntry)==(Unive
  var big=model.ToArray();big[0x10]=70;
  Check(Refuses(()=>UniversalHighValueGems.ShinyModel(big)),"doubling past a signed byte is refused");
 }
+RewardCases.Run(Check);
 if(args.Length==2&&args[0]=="--emit")
 {
  var remapped=UniversalBehaviorBundleBuilder.Assemble([UniversalSpecialBehaviors.HighValueGemUpdate(classes,"high_update",true)],basis).Code;
@@ -75,6 +76,64 @@ if(args.Length==4&&args[0]=="--bin")
  File.WriteAllText(Path.ChangeExtension(bin,".cue"),$"FILE \"{Path.GetFileName(bin)}\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n");
  var rows=result.Levels.Single().Compose.NewRowIndices;
  Console.WriteLine($"HIGH_VALUE_GEM_BIN_OK {bin} sha256={result.OutputImageSha256} rows={string.Join(",",rows)}");return;
+}
+if(args.Length>=4&&args[0]=="--reward-bin")
+{
+ // Emulator image through the Create BIN stage: spring chests that give a teal and a rainbow gem beside one that gives
+ // its own gem. Each further argument is level:x,y,z (the first chest's place; the row runs along +x, 1500 apart).
+ string image=Path.GetFullPath(args[1]),bin=Path.GetFullPath(args[3]);var catalog=LevelCatalog.Load(Path.GetFullPath(args[2]));
+ var sources=new UniversalSourceLibrary(image,catalog);
+ Check(BinaryPrimitives.ReadUInt16LittleEndian(sources.Get("townsquare").Data.Row(82).AsSpan(0x36))==0x149&&sources.Get("townsquare").Data.Row(82)[0x53]==0x55,"Town Square row 82 is an original spring chest that gives a blue gem");
+ Dictionary<string,IReadOnlyList<UniversalMobyPlacement>> placed=[];List<object> plan=[];
+ foreach(string spot in args.Skip(4))
+ {
+  string level=spot.Split(':')[0];int[] at=spot.Split(':')[1].Split(',').Select(int.Parse).ToArray();
+  UniversalMobyPlacement Chest(int n,byte? reward)=>new("townsquare",82,at[0]+1500*n,at[1],at[2],
+   RowByteOverrides:reward is byte b?new Dictionary<int,byte>{[0x53]=b}:null){EditorId=$"reward-{level}-{n}",PersistentSlot=n};
+  byte?[] rewards=[UniversalHighValueRewards.TealReward,UniversalHighValueRewards.RainbowReward,null,UniversalHighValueRewards.TealReward];
+  placed[level]=rewards.Select((r,n)=>Chest(n,r)).ToArray();
+  plan.Add(new{level,levelId=catalog.FindByKey(level)!.LevelId,chests=rewards.Select((r,n)=>new{x=at[0]+1500*n,y=at[1],z=at[2],reward=r??0x55,gives=r is byte b?UniversalHighValueRewards.ValueFor(b):5})});
+ }
+ var result=UniversalMobyExport.Apply(sources,image,bin,catalog,placed);
+ File.WriteAllText(Path.ChangeExtension(bin,".cue"),$"FILE \"{Path.GetFileName(bin)}\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n");
+ foreach(var l in result.Levels)
+  Console.WriteLine($"{l.LevelKey}: rows {string.Join(",",l.Compose.NewRowIndices)} save {string.Join(",",l.Compose.PlacementSaveRows)} treasure +{l.Compose.TreasureDelta} rewards {l.Compose.HighValueRewards} own calls {string.Join(",",l.Compose.HighValueRewardCalls.Select(c=>c.ToString("X8")))} added calls {l.Compose.HighValueRewardAddedCalls} tinted {string.Join(",",l.Compose.HighValueRewardTintedClasses.Select(c=>c.ToString("X3")))} classes {string.Join(",",l.Compose.Classes.Select(c=>$"{c.ClassId:X3}>{c.DestinationClassId:X3}{(c.BehaviorImported?"b":"")}{(c.ModelImported?"m":"")}"))}");
+ File.WriteAllText(Path.ChangeExtension(bin,".plan.json"),JsonSerializer.Serialize(new{levels=plan,rows=result.Levels.ToDictionary(l=>l.LevelKey,l=>l.Compose.NewRowIndices)},new JsonSerializerOptions{WriteIndented=true}));
+ Console.WriteLine($"HIGH_VALUE_REWARD_BIN_OK {bin} sha256={result.OutputImageSha256}");return;
+}
+if(args.Length==3&&args[0]=="--reward-fit")
+{
+ // Every level: does a spring chest fit as it is, and with a teal or rainbow gem? (Exact export checks, nothing written.)
+ string image=Path.GetFullPath(args[1]);var catalog=LevelCatalog.Load(Path.GetFullPath(args[2]));
+ var sources=new UniversalSourceLibrary(image,catalog);var special=UniversalMobyExport.SpecialProvider(null,sources);
+ var chests=UniversalMobyCatalogBuilder.AllVariants(sources,catalog).Where(v=>UniversalHighValueRewards.SpringChestClasses.Contains(v.ClassId)&&v.Extractable).ToList();
+ Console.WriteLine($"{chests.Count} spring chest rows in {chests.Select(v=>v.SourceLevelKey).Distinct().Count()} levels");
+ int fits=0,plainOnly=0;
+ foreach(var level in catalog.Levels.Where(l=>l.SourceWadEntry>0).OrderBy(l=>l.LevelId))
+ {
+  var host=UniversalCompositionHost.Capture(image,level);
+  var own=chests.Where(v=>v.SourceLevelKey==level.Key).Take(1);
+  string line=$"{level.LevelId} {level.Key}:";bool any=false;List<string> refusals=[];
+  foreach(var v in own.Concat(chests.Where(c=>c.SourceLevelKey!=level.Key).GroupBy(c=>c.SourceLevelKey).Select(g=>g.First())))
+  {
+   UniversalMobyPlacement Trial(byte? reward)=>new(v.SourceLevelKey,v.SourceRow,0,0,0,RowByteOverrides:reward is byte b?new Dictionary<int,byte>{[0x53]=b}:null){EditorId="fit",PersistentSlot=0};
+   var plain=host.DryRun(sources,[Trial(null)],special);
+   if(plain.Error!=null){refusals.Add($"{v.SourceLevelKey}#{v.SourceRow}: {plain.Error}");continue;}
+   var teal=host.DryRun(sources,[Trial(UniversalHighValueRewards.TealReward)],special);
+   var rainbow=host.DryRun(sources,[Trial(UniversalHighValueRewards.RainbowReward)],special);
+   if(teal.Error!=null||rainbow.Error!=null){plainOnly++;line+=$" {v.SourceLevelKey}#{v.SourceRow} PLAIN ONLY ({teal.Error??rainbow.Error})";any=true;break;}
+   var r=teal.Result!;
+   Check(r.HighValueRewards==1&&r.TreasureDelta==50&&rainbow.Result!.TreasureDelta==100,"the level's treasure follows the chest's gem");
+   Check(r.HighValueRewardTintedClasses.Count==1,"the spring chest's lid colour is set by the added code");
+   Check(r.HighValueRewardCalls.Count+r.HighValueRewardAddedCalls>0,"gem collection goes through the added routine");
+   Check(r.Ram.FinalHeadroom>=0,"fits the game's memory");
+   fits++;any=true;
+   line+=$" {v.SourceLevelKey}#{v.SourceRow} ok (own calls {r.HighValueRewardCalls.Count}, added {r.HighValueRewardAddedCalls}, tinted {string.Join(",",r.HighValueRewardTintedClasses.Select(c=>c.ToString("X3")))}, +{plain.Result!.Ram.FinalHeadroom-r.Ram.FinalHeadroom} bytes over the plain chest, {r.Ram.FinalHeadroom/1024.0:0.0} KB left)";
+   break;
+  }
+  Console.WriteLine(any?line:line+" no spring chest fits: "+string.Join(" | ",refusals.GroupBy(r=>r[(r.IndexOf(": ")+2)..]).Select(g=>$"{g.Count()}x {g.Key}")));
+ }
+ Console.WriteLine($"HIGH_VALUE_REWARD_FIT_OK levels={fits} plainOnly={plainOnly} checks={checks}");return;
 }
 if(args.Length==0){Console.WriteLine($"HIGH_VALUE_GEM_FREE_OK checks={checks}");return;}
 if(args.Length!=2)throw new ArgumentException("USA.bin catalog-workspace");
@@ -137,4 +196,36 @@ Check(true,"certified native collection/numeral popup, shine renderer, shine tab
 foreach(var (address,n) in new[]{(0x80053570u,0x98),(0x80053608u,0x9C),(0x80052568u,0x64),(0x800557CCu,0x190),(0x8003B854u,0x180),(0x80023268u,0x6F0),(UniversalHighValueGems.ShineTable,48),(UniversalHighValueGems.SineTable,640)})
  for(int i=0;i<n;i++){var altered=lib.Disc.Exe.ToArray();altered[(int)(address-UniversalExeBindings.ExeBase)+i]^=1;Check(Refuses(()=>UniversalHighValueGems.RequireNativeOwner(altered)),"every native owner byte guarded");}
 var mapped=lib.Disc.Exe.ToArray();Spyro.Editor.Core.Exporting.NativeMobySaveMap.PatchExe(mapped);UniversalHighValueGems.RequireNativeOwner(mapped);Check(true,"canonical native logical-save mapping allowed");
+// Teal and rainbow spring chests on the disc: the lid tint table the added code stands in for, the spring chests' own
+// code reading it, and compositions into one of the game's levels and a built level.
+for(int gem=0x53;gem<=0x57;gem++)
+ Check(BinaryPrimitives.ReadUInt32LittleEndian(exe.AsSpan((int)(UniversalHighValueRewards.TintTable+4u*(uint)gem-UniversalExeBindings.ExeBase)))==UniversalHighValueRewards.Tints[gem-0x52],"the game's lid tint for gem 0x"+gem.ToString("X2"));
+foreach(var key in new[]{"townsquare","drycanyon","alpineridge","gnastysloot"})Check(UniversalHighValueRewards.TintsByReward(lib.Get(key).Overlay,0x149),$"{key}'s spring chest tints its lid by its reward");
+Check(!UniversalHighValueRewards.TintsByReward(lib.Get("townsquare").Overlay,0xC2),"a basket does not");
+{
+ var special=UniversalMobyExport.SpecialProvider(null,lib);
+ UniversalMobyPlacement Chest(string source,int row,int n,byte? reward)=>new(source,row,131000+1500*n,122530,20700,RowByteOverrides:reward is byte b?new Dictionary<int,byte>{[0x53]=b}:null){EditorId=$"chest-{n}",PersistentSlot=n};
+ UniversalMobyPlacement[] three=[Chest("townsquare",82,0,UniversalHighValueRewards.TealReward),Chest("townsquare",82,1,UniversalHighValueRewards.RainbowReward),Chest("townsquare",82,2,null)];
+ var hill=lib.Get("stonehill");
+ UniversalComposeResult Retail(IReadOnlyList<UniversalMobyPlacement> p)=>UniversalMobyComposer.Compose(hill.Level,hill.Data.Bytes,hill.Overlay.Bytes.ToArray(),exe,lib.Get,lib.SharedClasses,
+  UniversalMobyExport.DefaultProtectedVram(args[0],hill.Level),p,special,sharedModelPackage:lib.SharedModelPackage,playerAnimationSource:lib.PlayerAnimations);
+ var composed=Retail(three);
+ int CollectCalls(byte[] overlay)=>Enumerable.Range(0,overlay.Length/4).Count(i=>BinaryPrimitives.ReadUInt32LittleEndian(overlay.AsSpan(4*i))==UniversalMips.EncodeJ(3,UniversalGemCollectionAdapter.CollectItem));
+ Check(composed.TreasureDelta==155&&composed.HighValueRewards==2,"Stone Hill: two high-value chests and a blue one, treasure +155");
+ Check(composed.Classes.Any(c=>c.DestinationClassId==UniversalHighValueGems.TealClass&&c.ModelImported)&&composed.Classes.Any(c=>c.DestinationClassId==UniversalHighValueGems.RainbowClass&&c.ModelImported),"both gem models come with the chests");
+ Check(composed.HighValueRewardCalls.Count>=1&&composed.HighValueRewardAddedCalls>=1&&CollectCalls(composed.Overlay)==0,"every gem collection in the level goes through the added routine");
+ Check(composed.HighValueRewardTintedClasses.Count==1,"the copied spring chest's lid is tinted by the added code");
+ var stoneRows=new UniversalLevelData(composed.LevelData);
+ Check(composed.NewRowIndices.Select(r=>stoneRows.Row(r)[0x53]).SequenceEqual(new byte[]{0xD6,0xD7,0x55}),"the rows carry their rewards");
+ var plainOnly=Retail([three[2] with{PersistentSlot=0}]);
+ Check(plainOnly.HighValueRewards==0&&CollectCalls(plainOnly.Overlay)>0&&!plainOnly.Classes.Any(c=>UniversalHighValueGems.IsClass(c.DestinationClassId)),"an ordinary spring chest adds none of it");
+ bool Refused(Action a){try{a();return false;}catch(InvalidDataException){return true;}}
+ Check(Refused(()=>Retail([Chest("townsquare",82,0,null) with{SourceRowIndex=0,SourceLevelKey="artisans",RowByteOverrides=new Dictionary<int,byte>{[0x53]=0xD6}}]))||
+  BinaryPrimitives.ReadUInt16LittleEndian(lib.Get("artisans").Data.Row(0).AsSpan(0x36)) is 0x149 or 0xC7,"another kind of object with a teal reward is refused");
+ var basketRow=Enumerable.Range(0,hill.Data.Scene().RowCount).First(r=>BinaryPrimitives.ReadUInt16LittleEndian(hill.Data.Row(r).AsSpan(0x36))==0xC2);
+ Check(Refused(()=>Retail([new("stonehill",basketRow,131000,122530,20700,RowByteOverrides:new Dictionary<int,byte>{[0x53]=0xD6}){EditorId="basket",PersistentSlot=0}])),"a basket with a teal reward is refused");
+ var fresh=await Spyro.Editor.Core.Exporting.NativeFreshMainCompilation.CaptureAsync(args[0],Spyro.Editor.Core.Editing.SceneDocument.New(),Path.Combine(Path.GetTempPath(),"reward-fresh-"+Guid.NewGuid().ToString("N")+".bin"));
+ var built=fresh.Compose(lib,three,special);
+ Check(built.TreasureDelta==155&&built.HighValueRewards==2&&CollectCalls(built.Overlay)==0,"a built level: the same chests, treasure +155, every collection through the added routine");
+}
 Console.WriteLine($"HIGH_VALUE_GEM_SOURCE_OK checks={checks}");

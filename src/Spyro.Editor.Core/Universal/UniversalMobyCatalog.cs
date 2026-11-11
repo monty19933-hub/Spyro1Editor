@@ -10,6 +10,9 @@ public sealed record UniversalMobyVariant(int ClassId, string SourceLevelKey, in
     public string? RestrictionReason { get; init; }
     public int DroppedExternalPointers { get; init; }
     public bool Extractable => RestrictionReason == null;
+    /// <summary>What the copy gives instead of the source row's own reward (row +0x53): a Teal or Rainbow gem
+    /// (<see cref="UniversalHighValueRewards"/>). Null: what the row gives.</summary>
+    public int? RewardByte { get; init; }
 }
 
 public sealed record UniversalMobyCatalogEntry(
@@ -23,6 +26,9 @@ public sealed record UniversalMobyCatalogEntry(
     string? RestrictionReason,
     string? Notes = null)
 {
+    /// <summary>A stable id for entries made by the editor rather than read from one class's rows (the teal and
+    /// rainbow spring chests, <see cref="UniversalHighValueRewards.CatalogEntries"/>); null for the others.</summary>
+    public string? Id { get; init; }
     public string ClassHex => $"0x{ClassId:X3}";
     public bool Placeable => RestrictionReason == null;
     public string SearchText => $"{Name} {Category} {SubCategory} {ClassHex} {string.Join(' ', SourceLevels)}".ToLowerInvariant();

@@ -348,8 +348,14 @@ public sealed class Moby
         Type == 0x18 &&
         GemValue.TryFromEncoding(SourceByte36, SourceByte4F, out _);
     public bool IsGemLike => !IsKey && (IsChestContent || IsVisibleGem);
+    /// <summary>The object's class (row +0x36), as the two bytes the editor keeps of it.</summary>
+    public int ClassId => SourceByte36 | SourceByte37 << 8;
+    /// <summary>True when the object gives a Teal or Rainbow gem (<see cref="UniversalHighValueRewards"/>).</summary>
+    public bool GivesHighValueGem => UniversalHighValueRewards.IsReward(Flag4B) && UniversalHighValueRewards.Supports(ClassId);
+    /// <summary>One of the five gems the object gives (row +0x53). A Teal or Rainbow reward is not one: the reward card
+    /// and the Edit window's gem choice (which list the five) leave such a chest alone; <see cref="TreasureValue"/> counts it.</summary>
     public GemValue RewardGem => GemValue.TryFromIdByte(Flag4B, out GemValue gem) ? gem : GemValue.Unknown;
-    public int TreasureValue => IsGemLike ? Gem.Value : RewardGem.Value;
+    public int TreasureValue => IsGemLike ? Gem.Value : GivesHighValueGem ? UniversalHighValueRewards.ValueFor(Flag4B) : RewardGem.Value;
 
     public GemValue Gem
     {
@@ -834,6 +840,20 @@ public readonly record struct GemValue(string Name, int Value, int IdByte, int V
         gem = Unknown;
         return false;
     }
+
+    /// <summary>What a reward byte (row +0x53) gives: one of the five gems by its class, or the Teal or Rainbow gem by
+    /// its own byte (<see cref="UniversalHighValueRewards"/>; only the object kinds that support it may carry one).</summary>
+    public static bool TryFromRewardByte(int value, out GemValue gem)
+    {
+        if (TryFromIdByte(value, out gem)) return true;
+        if (value == UniversalHighValueRewards.TealReward) { gem = Teal; return true; }
+        if (value == UniversalHighValueRewards.RainbowReward) { gem = Rainbow; return true; }
+        return false;
+    }
+
+    /// <summary>The byte that makes an object give this gem (<see cref="TryFromRewardByte"/>), or -1.</summary>
+    public int RewardByte => this == Teal ? UniversalHighValueRewards.TealReward : this == Rainbow ? UniversalHighValueRewards.RainbowReward
+        : Known.Contains(this) ? IdByte : -1;
 
     public static bool TryFromValueByte(int value, out GemValue gem)
     {

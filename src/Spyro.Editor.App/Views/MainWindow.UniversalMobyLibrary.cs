@@ -49,6 +49,9 @@ public sealed partial class MainWindow
     private string UniversalSourceObjectName(UniversalMobyCatalogEntry entry, UniversalMobyVariant variant)
     {
         if (UniversalSpecialCatalog.IsSpecial(variant)) return entry.Name;
+        // A teal or rainbow spring chest's versions are the game's spring chests: named without the gem they gave there.
+        if (variant.RewardByte != null)
+            return System.Text.RegularExpressions.Regex.Replace(UniversalSourceObjectName(entry, variant with { RewardByte = null }), @"\s*\([A-Za-z]+ reward\)$", "");
         if (variant.SourceLevelKey == "alpineridge" && variant.ClassId == 0x10F) return "Alpine Ridge source object (identity unverified)";
         if (_universalSourceNames.TryGetValue((variant.SourceLevelKey, variant.SourceRow), out var identity)) return identity.Item1;
         if (variant.SourceLevelKey == "wizardpeak" && variant.ClassId == 0x11C) return "Armored Druid (Wizard Peak; roster identity)";
@@ -171,6 +174,8 @@ public sealed partial class MainWindow
     {
         var bytes=new Dictionary<int,byte>{{0x50,checked((byte)m.Type)},{0x51,checked((byte)m.State)}};
         if(m.UniversalRewardByte is int reward&&UniversalSpecialIdOf(m)==null)bytes[0x53]=checked((byte)reward);
+        // A spring chest added as giving a teal or rainbow gem carries that reward in its own +0x53 (UniversalHighValueRewards).
+        else if(UniversalHighValueRewards.IsReward(m.Flag4B)&&UniversalSpecialIdOf(m)==null)bytes[0x53]=checked((byte)m.Flag4B);
         return bytes;
     }
 
@@ -633,6 +638,7 @@ public sealed partial class MainWindow
             var row = lib!.Get(v.SourceLevelKey).Data.Row(v.SourceRow);
             var root = new UniversalMobyPlacement(v.SourceLevelKey, v.SourceRow,
                 BitConverter.ToInt32(row, 0x0C), BitConverter.ToInt32(row, 0x10), BitConverter.ToInt32(row, 0x14),
+                RowByteOverrides: v.RewardByte is int reward ? new Dictionary<int, byte> { [UniversalRewardChoice.RowOffset] = checked((byte)reward) } : null,
                 EditorId: Guid.NewGuid().ToString("N"), PersistentSlot: existing.Count);
             try { return UniversalPlacementGroups.Expand(lib.Get, root); }
             catch (InvalidDataException)
@@ -685,7 +691,7 @@ public sealed partial class MainWindow
             bool known = listDry.TryGetValue(statusVariant, out var dr);
             bool fitsNow = known ? dr.Error == null : e.Fits;
             string status = entry.RestrictionReason != null ? (IsCrashVariant(entry.Default) ? "Needs your Crash disc" : IsYotdVariant(entry.Default) ? "Needs your Year of the Dragon disc" : UniversalSpecialCatalog.IsSpecial(entry.Default) ? "Needs your Japanese disc" : "See placement details")
-                : !known ? "Checking whether it fits…" : fitsNow ? e.Native ? "Already in this level" : "Can be added"
+                : !known ? "Checking whether it fits…" : fitsNow ? e.Native && statusVariant.RewardByte == null ? "Already in this level" : "Can be added"
                 : UniversalFitFailureSummary(dr.Error!, destination.DisplayName, compact: true);
             Color statusColor = entry.RestrictionReason == null && !e.Native && !known ? ModernMutedInk
                 : entry.RestrictionReason != null || !fitsNow ? ModernRed : e.Native ? ModernBlue : ModernGreen;
@@ -831,7 +837,7 @@ public sealed partial class MainWindow
             string sourceName = DisplaySourceName(entry, v);
             details.Text = (string.Equals(sourceName, title.Text, StringComparison.OrdinalIgnoreCase) ? "" : sourceName + "\n") +
                 $"From {LevelName(v.SourceLevelKey)}.\n" +
-                (isSpecial && entry.Notes is { Length: > 0 } friendly ? friendly :
+                ((isSpecial || v.RewardByte != null) && entry.Notes is { Length: > 0 } friendly ? friendly :
                     e.Native ? "This object already belongs to this level." : "Its appearance and game behavior are copied when you create the BIN. Playtest your exported level to check it in its new surroundings.");
             if (UniversalDreamWeaversCannonRows.IsCannonRow(v.SourceLevelKey, v.SourceRow))
                 details.Text += "\nComes with its gunner, a Winged Fool that keeps the cannon pointed at Spyro. Once Spyro defeats the gunner, the barrel stays where it was left: stand behind the cannon facing it and flame it to fire. A hit makes a big Armored Fool small (and a small one big). To give it targets, select the cannon, then add Armored Fools with \u201cLet the Resize cannon shoot it\u201d ticked (Dream Weavers T20 and T21 start big and never call it).";
@@ -853,7 +859,8 @@ public sealed partial class MainWindow
                 $"Behavior: {(UniversalSpecialCatalog.IsSpecial(v) ? $"native USA-engine routine added by the editor ({v.BehaviorBytes / 1024.0:0.0} KB)" : v.HasBehavior ? $"native code from {LevelName(v.SourceLevelKey)} ({v.BehaviorBytes / 1024.0:0.0} KB)" : "engine default")}\n" +
                 $"Variants: {entry.Variants.Count} placement(s) across {entry.SourceLevels.Count} level(s)\n" +
                 $"Found in: {string.Join(", ", entry.SourceLevels.Select(LevelName))}" +
-                (!isSpecial && entry.Notes is { Length: > 0 } notes ? "\n" + notes : "");
+                (!isSpecial && v.RewardByte == null && entry.Notes is { Length: > 0 } notes ? "\n" + notes : "") +
+                (v.RewardByte is int reward ? $"\nGives: {(reward == UniversalHighValueRewards.TealReward ? "Teal gem (50)" : "Rainbow gem (100)")} (reward byte 0x{reward:X2}); the gem's model and pickup code are added with the first one" : "");
             if (magicArtisans && !IsMagicArtisansPairChoice(v))
             {
                 fit.Text = "Use the supported pair above to check this Artisans option.";
@@ -917,7 +924,7 @@ public sealed partial class MainWindow
                     p.SpecialId == null && string.Equals(p.SourceLevelKey, "darkpassage", StringComparison.OrdinalIgnoreCase) &&
                     BitConverter.ToUInt16(lib.Get(p.SourceLevelKey).Data.Row(p.SourceRowIndex), 0x36) == 0x7A))
                 details.Text += "\n" + lanternNote;
-            fit.Text = e.Native ? $"✓ Already part of {destination.DisplayName} — ready to place." : $"✓ Fits in {destination.DisplayName} — ready to place." +
+            fit.Text = e.Native && v.RewardByte == null ? $"✓ Already part of {destination.DisplayName} — ready to place." : $"✓ Fits in {destination.DisplayName} — ready to place." +
                 (dry.Result.Classes.Count(c => c.DependencyOnly) is int deps and > 0 ? $" It brings {Count(deps, "small helper object")} it needs along with it." : "");
             if (dry.Result.ParticleDependencies.Any(p => p.Status == "dependency-unverified"))
                 fit.Text += "\nIts special effects still need a playtest in this level.";
@@ -1250,7 +1257,7 @@ public sealed partial class MainWindow
                 japanese = await Task.Run(ResolveUniversalJapaneseSource);
                 special = UniversalSpecials(japanese, l);
                 crash = await Task.Run(ResolveUniversalCrashDisc);
-                var es = entries = [.. usa, .. UniversalSpecialCatalog.Entries(japanese != null, crash != null, ResolveYearOfTheDragonDisc() != null)];
+                var es = entries = [.. usa, .. UniversalHighValueRewards.CatalogEntries(usa), .. UniversalSpecialCatalog.Entries(japanese != null, crash != null, ResolveYearOfTheDragonDisc() != null)];
                 lib = l;
                 if (_freshSceneDocument != null) freshCompilation = await CaptureFreshNativeAsync();
                 else
@@ -1344,8 +1351,15 @@ public sealed partial class MainWindow
         if (specialId != null && asset == null && IsYotdVariant(v)) { _statusText.Text = "Choose your Spyro: Year of the Dragon disc first (Game Settings → Music → Year of the Dragon disc…)."; return; }
         if (specialId != null && asset == null) { _statusText.Text = "Select the original Japanese disc first (Choose Japanese disc… in the Add Object browser)."; return; }
         byte[] row = asset?.RowTemplate ?? lib.Get(v.SourceLevelKey).Data.Row(v.SourceRow);
+        // A spring chest that gives a teal or rainbow gem: the copied chest's row with that reward (UniversalHighValueRewards).
+        if (v.RewardByte is int reward && specialId == null)
+        {
+            if (!UniversalHighValueRewards.IsReward(reward) || !UniversalHighValueRewards.Supports(v.ClassId))
+            { _statusText.Text = "Only a spring chest can give a Teal or Rainbow gem."; return; }
+            row = row.ToArray(); row[UniversalRewardChoice.RowOffset] = checked((byte)reward);
+        }
         string sourceName = v.SourceLevelKey == UniversalHighValueGems.SourceKey ? "USA gem variant" : IsCrashVariant(v) ? "Crash Bandicoot: Warped" : IsYotdVariant(v) ? "Spyro: Year of the Dragon" : asset != null ? "Spyro the Dragon (Japan)" : _retailCatalog.FindByKey(v.SourceLevelKey)?.DisplayName ?? v.SourceLevelKey;
-        string name = asset?.Name ?? UniversalSourceObjectName(entry,v);
+        string name = asset?.Name ?? (v.RewardByte is int given && UniversalHighValueRewards.ChestNameFor(given) is { } chestName ? chestName : UniversalSourceObjectName(entry,v));
         var template = new AddMobyTemplate(
             Name: name,
             Type: row[0x50], State: row[0x51],
@@ -1354,7 +1368,8 @@ public sealed partial class MainWindow
             UsesGem: false,
             DefaultLabel: name,
             FromCrossLevelTemplate: true,
-            DefaultColor: v.ClassId == UniversalHighValueGems.TealClass ? GemValue.Teal.Color : v.ClassId == UniversalHighValueGems.RainbowClass ? GemValue.Rainbow.Color : Moby.ColorForType(row[0x50]),
+            DefaultColor: v.ClassId == UniversalHighValueGems.TealClass || v.RewardByte == UniversalHighValueRewards.TealReward ? GemValue.Teal.Color
+                : v.ClassId == UniversalHighValueGems.RainbowClass || v.RewardByte == UniversalHighValueRewards.RainbowReward ? GemValue.Rainbow.Color : Moby.ColorForType(row[0x50]),
             TemplateId: specialId != null ? UniversalSpecialCatalog.TemplatePrefix + specialId : $"universal:{v.SourceLevelKey}:{v.SourceRow}",
             Family: "universal",
             SourceLevelKey: v.SourceLevelKey,

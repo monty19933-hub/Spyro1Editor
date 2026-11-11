@@ -46,6 +46,11 @@ public sealed record UniversalBehaviorBundle(uint Base, byte[] Code, uint Update
     public IReadOnlyList<UniversalNativeParticleNoOpProof> NativeParticleNoOpProofs { get; init; } = [];
     public uint? OwnedParticleUpdateWrapper {get;init;}
     public UniversalCollectionStarContinuation? CollectionStarContinuation {get;init;}
+    /// <summary>Teal and rainbow rewards (<see cref="UniversalHighValueRewards"/>): the routine that stands in for the
+    /// game's gem collection routine, and the calls to that routine in the destination's own code still to send there.</summary>
+    public uint? HighValueRewardCollect { get; init; }
+    public IReadOnlyList<uint> HighValueRewardCalls { get; init; } = [];
+    public int HighValueRewardRedirectedCalls { get; init; }
 }
 
 /// <summary>
@@ -67,9 +72,12 @@ public static class UniversalBehaviorBundleBuilder
         IReadOnlyDictionary<string, UniversalWhirlwindSoundBinding>? whirlwindSounds = null,
         IReadOnlyDictionary<string, UniversalDryCanyonBirdCertificate>? dryCanyonBirdBranches = null,
         IReadOnlyDictionary<string,UniversalFlightChestCertificate>? flightChests = null, IReadOnlyDictionary<string,UniversalFlightGateCertificate>? flightGates = null,IReadOnlyList<UniversalOwnedParticleCertificate>? ownedParticles = null, UniversalMagicPairCertificate? magicPair = null,IReadOnlyDictionary<string,UniversalDarkPassageLanternContext>? darkLanternContexts = null,IReadOnlyDictionary<string,UniversalDarkPassageProjectileParticleCertificate>? darkProjectileParticles = null, UniversalMagicDruidChainCertificate? magicChain = null,IReadOnlyDictionary<string,UniversalHighCavesSpellParticleCertificate>? highCavesSpellParticles = null,UniversalMagicDruidOriginalCertificate? magicOriginal = null,UniversalHighCavesWorldInstallation? highCavesWorld=null,UniversalGreenDruidWorldInstallation? greenDruidWorld=null,UniversalGreenDruidLinkedWorldInstallation? greenDruidLinkedWorld=null,
-        IReadOnlyList<int>? crashBoxClasses = null, IReadOnlyList<int>? crashEnemyClasses = null, IReadOnlyList<int>? crashPlayerClasses = null)
+        IReadOnlyList<int>? crashBoxClasses = null, IReadOnlyList<int>? crashEnemyClasses = null, IReadOnlyList<int>? crashPlayerClasses = null,
+        UniversalHighValueRewardPlan? highValueRewards = null)
     {
         if (baseAddress % 4 != 0) throw new ArgumentException("Bundle base must be word aligned.");
+        if (highValueRewards != null && highValueGemClasses is not { Count: > 0 })
+            throw new InvalidDataException("Teal and rainbow rewards need the high-value gems' models and update in the level.");
         int Mapped(string key, int c) => classMaps != null && classMaps.TryGetValue(key, out var map) && map.TryGetValue(c, out int mapped) ? mapped : c;
         bool Remaps(string key) => classMaps != null && classMaps.TryGetValue(key, out var cm) && cm.Any(k => k.Key != k.Value);
         string InitTag(string key, int c) => Remaps(key) ? $"i_{key}_{c:X3}" : "i_" + key;
@@ -103,11 +111,22 @@ public static class UniversalBehaviorBundleBuilder
         w.Label("wrap_upd");
         w.Emit(UniversalMips.EncodeI(9, 29, 29, -0x18));
         w.Emit(UniversalMips.EncodeI(43, 29, 31, 0x10));
+        if (highValueRewards != null)
+        {
+            // Gems shown as teal or rainbow get their original class back before any of the game's code runs.
+            w.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: UniversalSpecialBehaviors.HighValueRewardPreLabel));
+            w.Emit(UniversalMips.Nop);
+        }
         w.Emit(UniversalMips.EncodeJ(3, destination.Update));
         w.Emit(UniversalMips.Nop);
         foreach (var s in sources)
         {
             w.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: "u_" + s.SourceKey));
+            w.Emit(UniversalMips.Nop);
+        }
+        if (highValueRewards != null)
+        {
+            w.Emit(UniversalMips.EncodeJ(3, 0), new(UniversalFixKind.JalLabel, Label: UniversalSpecialBehaviors.HighValueRewardUpdateLabel));
             w.Emit(UniversalMips.Nop);
         }
         if (dragonflyEggClasses is { Count: > 0 })
@@ -318,6 +337,22 @@ public static class UniversalBehaviorBundleBuilder
             parts.Add(UniversalSpecialBehaviors.CrashEnemyUpdate(crashEnemyClasses, "crash_enemy_upd"));
         if (crashPlayerClasses is { Count: > 0 })
             parts.Add(UniversalSpecialBehaviors.CrashPlayerUpdate(crashPlayerClasses, "crash_player_upd"));
+        int highValueRedirected = 0;
+        IReadOnlyList<uint> highValueCalls = [];
+        if (highValueRewards != null)
+        {
+            UniversalGemCollectionAdapter.RequireNativeOwner(nativeExecutable);
+            parts.Add(UniversalSpecialBehaviors.HighValueRewardPre());
+            parts.Add(UniversalSpecialBehaviors.HighValueRewardUpdate(highValueRewards.TintedClasses));
+            // Every call to the game's gem collection in the added code: copied objects and the renumbered-gem adapters.
+            highValueRedirected = UniversalSpecialBehaviors.RedirectGemCollection(parts);
+            parts.Add(UniversalSpecialBehaviors.HighValueRewardCollect());
+            // The destination's own calls, but for those a renumbered-gem adapter takes (its own call was sent on above).
+            var taken = destinationGemCalls.Select(c => c.Pc).ToHashSet();
+            highValueCalls = UniversalHighValueRewards.CollectionCalls(destination).Where(pc => !taken.Contains(pc)).ToArray();
+            if (highValueCalls.Count + taken.Count == 0)
+                throw new InvalidDataException("This level's own code never collects a gem; teal and rainbow rewards cannot be given here.");
+        }
         var (code, labels) = Assemble(parts, baseAddress);
         greenDruidWorld?.RequireCompiled(code,baseAddress,parts,labels);
         greenDruidLinkedWorld?.RequireCompiled(code,baseAddress,parts,labels);
@@ -333,7 +368,10 @@ public static class UniversalBehaviorBundleBuilder
             DestinationGemColourExtraBytes = destinationColourBytes,
             NativeParticleNoOpProofs = particleNoOpProofs,
             OwnedParticleUpdateWrapper=ownedParticleParts.Count==0?null:labels["wrap_owned_particles"],
-            CollectionStarContinuation=UniversalCollectionStarParticles.CaptureContinuation(destination,baseAddress,code,labels,ownedParticles,parts)
+            CollectionStarContinuation=UniversalCollectionStarParticles.CaptureContinuation(destination,baseAddress,code,labels,ownedParticles,parts),
+            HighValueRewardCollect = highValueRewards == null ? null : labels[UniversalSpecialBehaviors.HighValueRewardCollectLabel],
+            HighValueRewardCalls = highValueCalls,
+            HighValueRewardRedirectedCalls = highValueRedirected
         };
     }
 
