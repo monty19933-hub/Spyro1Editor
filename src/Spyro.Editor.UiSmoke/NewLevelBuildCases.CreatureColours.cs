@@ -24,6 +24,18 @@ internal static partial class NewLevelBuildCases
         Console.WriteLine($"{key}: {kinds.Count} kinds: " + string.Join(", ", kinds.Select(k => $"{k.Name} ({k.Key})")));
         if (kinds.Count == 0) throw new InvalidOperationException("The card lists nothing for " + key + ".");
         Snapshot(window, Path.Combine(outDir, "colours-tab-before.png"));
+        // CREATURE_GAME=<seed>: Randomize Every Level (the whole game), and nothing else.
+        if (int.TryParse(Environment.GetEnvironmentVariable("CREATURE_GAME"), out int gameSeed))
+        {
+            var every = window.RandomizeEveryLevelForTestingAsync(gameSeed);
+            Wait(() => every.IsCompleted, "colours for every level", 300); Pump(60);
+            var all = CreatureColourSettings.Load(Workspace(window).RootPath);
+            Console.WriteLine($"every level: {all.Count} levels, {all.Values.Sum(l => l.Count)} kinds; status: {Status(window)}");
+            Console.WriteLine("stonehill: " + (all.TryGetValue("stonehill", out var sh) ? string.Join(", ", sh.Select(c => $"{c.Key} #{c.Value.R:X2}{c.Value.G:X2}{c.Value.B:X2}")) : "none"));
+            if (all.Count < 25) throw new InvalidOperationException("Randomize Every Level reached only " + all.Count + " levels.");
+            Snapshot(window, Path.Combine(outDir, "colours-tab.png"));
+            Console.WriteLine("NEW_LEVEL_CREATURE_COLOURS_OK"); return;
+        }
         // CREATURE_RANDOM=<seed>: Randomize All instead of one colour for everything.
         if (int.TryParse(Environment.GetEnvironmentVariable("CREATURE_RANDOM"), out int seed))
         {

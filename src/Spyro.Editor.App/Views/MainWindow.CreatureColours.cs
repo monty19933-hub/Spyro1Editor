@@ -35,7 +35,8 @@ public sealed partial class MainWindow
 
     private readonly StackPanel _creatureColourRows = new() { Name = "CreatureColourRows", Spacing = 6 };
     private readonly TextBlock _creatureColourNote = new() { Name = "CreatureColourNote", TextWrapping = TextWrapping.Wrap, FontSize = 12 };
-    private Button? _creatureRandomize, _creatureOwn;
+    private Button? _creatureRandomize, _creatureOwn, _creatureRandomizeGame, _creatureOwnGame;
+    internal Task RandomizeEveryLevelForTestingAsync(int seed, bool clear = false) { _creatureRandom = new Random(seed); return RandomizeEveryLevelAsync(clear); }
     private List<CreatureKind> _creatureKinds = [];
     private Dictionary<string, (byte R, byte G, byte B)> _creatureColours = new(StringComparer.OrdinalIgnoreCase);
     private string _creatureLevelKey = "", _creatureError = "";
@@ -74,6 +75,15 @@ public sealed partial class MainWindow
         content.Children.Add(_creatureColourRows);
         _creatureColourNote.Foreground = new SolidColorBrush(ModernMutedInk);
         content.Children.Add(_creatureColourNote);
+        // The whole game at once: every level of the game its own random colours (each level different).
+        _creatureRandomizeGame = NewAsyncButton("Randomize Every Level", () => RandomizeEveryLevelAsync(clear: false));
+        _creatureRandomizeGame.Name = "CreatureColourRandomizeGame";
+        ToolTip.SetTip(_creatureRandomizeGame, "Other colours for the enemies, chests and animals of every level of the game, each level its own; click again for others");
+        _creatureOwnGame = NewAsyncButton("Every Level Its Own", () => RandomizeEveryLevelAsync(clear: true));
+        _creatureOwnGame.Name = "CreatureColourOwnGame";
+        ToolTip.SetTip(_creatureOwnGame, "Every level of the game in its own colours again");
+        content.Children.Add(new TextBlock { Text = "The whole game", FontSize = 13, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 8, 0, 0), Foreground = new SolidColorBrush(ModernInk) });
+        content.Children.Add(new WrapPanel { Orientation = Orientation.Horizontal, Children = { _creatureRandomizeGame, _creatureOwnGame } });
         RefreshCreatureColours();
         var section = BuildModernDisclosure("This level's colours", content, true);
         section.Name = "CreatureColourSection";
@@ -329,6 +339,78 @@ public sealed partial class MainWindow
         }
         string where = (_settingsLevel ?? _currentLevel)?.DisplayName ?? "this level";
         SaveCreatureColours(colours, $"New colours for {where}'s {(group ?? "enemies, chests, dragons and animals").ToLowerInvariant()}. Click Randomize again for others, or choose any of them below. Create BIN puts them in the game.");
+    }
+
+    /// <summary>The whole game: for each of the game's own levels, another colour for every kind of enemy, chest and
+    /// animal it has (each level by itself, so the same gnorc differs from level to level), or every level's own
+    /// colours again. The kinds come from the game itself (the Add Object list's names say what each is). Levels you
+    /// built and your world's levels keep what they have: open one and use Randomize All there.</summary>
+    private async Task RandomizeEveryLevelAsync(bool clear)
+    {
+        if (_createBinBusy || _workspaceTransitionBusy) { _statusText.Text = "Wait for the current task to finish."; return; }
+        string root = _workspace.RootPath;
+        try
+        {
+            if (clear)
+            {
+                foreach (var level in _retailCatalog.Levels.Where(l => l.SourceWadEntry > 0))
+                    CreatureColourSettings.SaveLevel(root, level.Key, new Dictionary<string, (byte R, byte G, byte B)>());
+                _statusText.Text = "Every level of the game has its own colours again.";
+            }
+            else
+            {
+                _statusText.Text = "Choosing colours for every level…";
+                var (_, library, entries) = await EnsureUniversalCatalogAsync();
+                var random = _creatureRandom;
+                var catalog = _retailCatalog;
+                var chosen = await Task.Run(() =>
+                {
+                    Dictionary<string, Dictionary<string, (byte R, byte G, byte B)>> all = new(StringComparer.OrdinalIgnoreCase);
+                    foreach (var level in catalog.Levels.Where(l => l.SourceWadEntry > 0))
+                    {
+                        // The classes of this level that are enemies, chests or animals.
+                        HashSet<int> wanted = [];
+                        foreach (var e in entries)
+                        {
+                            bool listed = e.Category == "Enemies" || e.Category == "Interactive" && e.SubCategory == "Chests & Containers" || e.Category == "NPCs" && e.SubCategory == "Fodder & Animals";
+                            if (!listed) continue;
+                            foreach (var v in e.Variants)
+                                if (string.Equals(v.SourceLevelKey, level.Key, StringComparison.OrdinalIgnoreCase)) wanted.Add(v.ClassId);
+                        }
+                        if (wanted.Count == 0) continue;
+                        byte[] bytes;
+                        lock (library) bytes = library.Disc.EntryBytes(level.SourceWadEntry);
+                        var kinds = NativeCreatureColours.Kinds(bytes).Where(k => wanted.Contains(k.ClassId)).GroupBy(k => k.ClassId).Select(g => g.First()).ToList();
+                        if (kinds.Count == 0) continue;
+                        Dictionary<string, (byte R, byte G, byte B)> colours = new(StringComparer.OrdinalIgnoreCase);
+                        double start = random.NextDouble(), step = 1.0 / Math.Max(3, kinds.Count);
+                        int[] order = [.. Enumerable.Range(0, kinds.Count).OrderBy(_ => random.Next())];
+                        for (int n = 0; n < order.Length; n++)
+                        {
+                            var kind = kinds[order[n]];
+                            double hue = start + n * step + (random.NextDouble() - 0.5) * step * 0.4;
+                            var (own, _, _) = NativeSpyroColours.ToHsl(kind.Colour.R / 255.0, kind.Colour.G / 255.0, kind.Colour.B / 255.0);
+                            if (Math.Abs(((hue - own) % 1 + 1.5) % 1 - 0.5) < 0.1) hue += 0.2;
+                            colours[CreatureColourSettings.KindKey(level.Key, kind.ClassId)] = NativeCreatureColours.WithHue(kind.Colour, hue);
+                        }
+                        all[level.Key] = colours;
+                    }
+                    return all;
+                });
+                if (!PathsEqual(root, _workspace.RootPath)) return;
+                foreach (var (key, colours) in chosen) CreatureColourSettings.SaveLevel(root, key, colours);
+                int kindsChanged = chosen.Values.Sum(c => c.Count);
+                EditorDiagnostics.RecordAction("Colours for every level", $"{chosen.Count} levels, {kindsChanged} kinds");
+                _statusText.Text = $"New colours for the enemies, chests and animals of {Count(chosen.Count, "level", "levels")} of the game ({kindsChanged} kinds, each level its own). " +
+                                   "Open a level to see or change them; click Randomize Every Level again for others. Create BIN puts them in the game.";
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException or InvalidDataException or System.Text.Json.JsonException or FileNotFoundException)
+        {
+            EditorDiagnostics.RecordException("colours for every level", error);
+            _statusText.Text = "Could not set the colours for every level: " + error.Message;
+        }
+        RefreshCreatureColours();
     }
 
     /// <summary>The Dragons list's first row: one crystal colour for every dragon statue of the open level (the statues'

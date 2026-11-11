@@ -321,6 +321,11 @@ statues' colour with the level) and Create BIN puts it in the game.
   eyes) stays; a thing with no colour of its own (grey metal, stone) takes the
   colour all over. In a level you built the card lists what you placed in it.
   Two kinds that share a texture share its colour.
+  - **The whole game**: **Randomize Every Level** gives the enemies, chests and
+    animals of every one of the game's levels other colours at once, each level
+    its own (press again for others); **Every Level Its Own** clears them all.
+    Levels you built and your world's levels keep what they have: open one and
+    use Randomize All there.
   - **Dragons**: **Dragon statues** sets one crystal colour for every dragon
     statue of the level (their own is green). It is kept with the level, so
     press **Save**. One statue alone can still be given a colour in its Edit
