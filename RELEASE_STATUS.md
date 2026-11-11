@@ -1,3 +1,38 @@
+# Spyro Editor 2.1 — 10 November 2026
+
+Stable 2.1 (internal 2.1.0, schema 3, tag `v2.1`). Found by the owner trying 2.0 on a fresh project the same day:
+
+- **Fix It For Me** (`ExportRepair`, `MainWindow.ExportRepair.cs`): a Create BIN refusal can carry its repair; the status
+  bar and Status Details then offer the button. Two repairs: the way into the new world placed in its homeworld on
+  ground the editor finds (`WorldEntranceSpots`: the homeworld's collision, a level doorstep, a clear path as far as
+  the game sets Spyro down in front, off special ground, objects and the homeworld's own doorways), and the world's
+  homeworld made to fit its save rows (`SceneDocument.FitSaveRows`).
+- **Create BIN left the new world out** when one of the game's own levels was open and the world's levels were the
+  project's only built ones (the retail "All Saved Edits" path ran). `ProjectHasNewWorldLevels` sends it to the
+  whole-project build.
+- **A world's homeworld holds 82 objects** (256 save rows less Artisans' 174): Random objects now counts that
+  (`NativeNewWorldExport.HomeworldSaveRoom`), and the refusal names the level and numbers.
+- **Entrance and added objects in one homeworld**: the level was composed twice ("No class switch…"). The entrance's
+  three objects are now composed with the added ones (`NativeWorldEntrance.ComposeWith`, `UniversalMobyExport.Apply`'s
+  `composeWith`), with the last free save identities; the world step skips an entrance that is already there.
+- **Level window blocks** are fitted by search when first-fit leaves one without a cave (many features on at once).
+- **Colours level by level**: `NativeCreatureColours` (a kind found by its model's shape; its own hue's colours in the
+  model's colour table and its textures' palettes; a recipe worked out once from the game's own level so a second pass
+  changes nothing), Game Settings › This level › Creatures' colours; Spyro's look for one level
+  (`SpyroColourSettings.Book`, the card's Colours for switch).
+
+Checks: gate `--build-all` 636 checks, 0 failed. Disc smokes: world entrance 219, level window 134, Spyro's and
+creatures' colours 112, doorways 1,269, balloon travel 7,063. Through the editor with the disc: Create BIN from Artisans
+on a copy of the owner's fresh project (the entrance missing, 108 objects in the world's homeworld, objects added to
+Artisans, five world levels, Hover, colours, 8 MB): two presses of Fix It For Me and the game is made; level colours
+(27 checks: red gnorcs in Artisans, blue in Dark Hollow, Ember and Ice looks, every other level untouched). Emulator
+(isolated DuckStation, fresh card): the placed entrance in Artisans, Peace Keepers, Magic Crafters, Beast Makers and
+Dream Weavers (in, the world loads, back out in front); in the game from the owner's project copy Marco asks for the
+50 treasure chosen (49 no, ten dragons no, 50 yes, flight to the world); red gnorcs and an Ember Spyro in Artisans, a
+blue gnorc and an Ice Spyro in Dark Hollow, Stone Hill as it was. Evidence: `outputs/SpyroEditor-V2.1-20261110/evidence`.
+Not done: nothing was tried on a PlayStation or on Windows; the Mac app is not notarized; Gnasty's World has no place
+the editor finds for an entrance by itself.
+
 # Spyro Editor 2.0 — 10 November 2026
 
 Stable 2.0 (internal 2.0.0, schema 3, tag `v2.0`). Everything since 1.4 (`CHANGELOG.md`); 1.5 was built twice but
