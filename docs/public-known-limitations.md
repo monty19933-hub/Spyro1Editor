@@ -1,6 +1,25 @@
-# Spyro Editor 2.2 — supported scope and limitations
+# Spyro Editor 2.3 — supported scope and limitations
 
-- Version 2.2 puts Fix It For Me on every Create BIN stop that comes from the
+- Version 2.3 makes Emulator (8 MB RAM) the memory setting a project has until
+  it chooses. A game made that way was played in an emulator with 2 MB as well
+  (it falls back to the game's own layout there), but a level that has outgrown
+  2 MB needs DuckStation with Enable 8MB RAM; Create BIN names such levels.
+  Hover's wing flap and added models still live in the memory below the game's
+  draw buffers, which 8 MB does not enlarge: only each level's placed objects
+  move to the extra memory.
+- This level's colours (2.3): chests, animals and things without a colour of
+  their own are recoloured the way enemies are. Seen in the emulator: a level's
+  dragon statues in a chosen crystal colour, a recoloured chest and the fairy
+  at a freed dragon's pedestal. The dragon who steps out of a statue keeps his
+  own colours (he is drawn from the rescue's own data). The Green Wizard in
+  three levels and Haunted Towers' Summoning Wizard cannot be recoloured.
+- Fix It For Me (2.3) narrows a level's objects down to kinds of object you
+  added, not to single objects: every copy of a kind goes or stays together.
+  Changes to the level's own objects are still left out as one. The search is
+  capped at ten extra runs of Create BIN; past that it leaves out what it has
+  not cleared.
+
+- Version 2.2 put Fix It For Me on every Create BIN stop that comes from the
   project. Where the editor has no repair, the fix is to make the game without
   the part that stops it: the game is then made, but that part (a level you
   built, your world, your changes to one level, a setting) is not in it until

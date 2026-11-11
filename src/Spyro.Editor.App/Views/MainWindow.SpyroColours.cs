@@ -527,7 +527,7 @@ public sealed partial class MainWindow
         if (NativeEggThiefColours.Enabled) parts.Add("the egg thieves' colour");
         if (NativeCreatureColours.Enabled) parts.Add("the creatures' colours");
         if (NativeHover.Enabled) parts.Add("the hover");
-        return (parts.Count == 0 ? "" : " With " + (parts.Count <= 2 ? string.Join(" and ", parts) : string.Join(", ", parts.Take(parts.Count - 1)) + " and " + parts[^1]) + " from Game Settings.") + HoverFlapNote();
+        return (parts.Count == 0 ? "" : " With " + (parts.Count <= 2 ? string.Join(" and ", parts) : string.Join(", ", parts.Take(parts.Count - 1)) + " and " + parts[^1]) + " from the Colours tab.") + HoverFlapNote();
     }
 
     /// <summary>The levels of the export just made where Spyro hovers without flapping (no room for the flap).</summary>
@@ -540,14 +540,14 @@ public sealed partial class MainWindow
         // What Fix It For Me left out of the game is not read (here: Spyro's colours, the egg thieves' colour, the creatures').
         try { book = IsLeftOut(ExportParts.SpyroColours) ? new([], []) : SpyroColourSettings.LoadAll(_workspace.RootPath); }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException)
-        { throw new InvalidDataException("Spyro's colours in Game Settings could not be read. Choose them again (a preset or Classic). (" + e.Message + ")", e); }
+        { throw new InvalidDataException("Spyro's colours (Colours tab) could not be read. Choose them again (a preset or Classic). (" + e.Message + ")", e); }
         // Which level a WAD entry of the game's own is (levels built in their places keep them).
         var entries = _retailCatalog.Levels.GroupBy(l => l.SourceWadEntry).ToDictionary(g => g.Key, g => g.First().Key);
         string? LevelOfEntry(int entry) => entries.TryGetValue(entry, out var key) ? key : null;
         (byte R, byte G, byte B)? thieves;
         try { thieves = IsLeftOut(ExportParts.EggThieves) ? null : EggThiefColourSettings.Load(_workspace.RootPath); }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException)
-        { throw new InvalidDataException("The egg thieves' colour in Game Settings could not be read. Choose it again. (" + e.Message + ")", e); }
+        { throw new InvalidDataException("The egg thieves' colour (Colours tab) could not be read. Choose it again. (" + e.Message + ")", e); }
         var creatures = IsLeftOut(ExportParts.CreatureColours) ? NativeCreatureColours.Use(null, LevelOfEntry) : UseProjectCreatureColours(LevelOfEntry);
         return NativeSpyroColours.Use(book.Whole, book.Levels.ToDictionary(l => l.Key, l => (IReadOnlyDictionary<string, (byte R, byte G, byte B)>)l.Value, StringComparer.OrdinalIgnoreCase), LevelOfEntry)
             .With(NativeEggThiefColours.Use(thieves)).With(creatures);

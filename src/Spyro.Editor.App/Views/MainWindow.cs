@@ -13637,7 +13637,7 @@ public sealed partial class MainWindow : Window
         if (targets.Count == 0 && flightIntent?.RequiresRebuild!=true && !NativeHover.Enabled && !NativeSpyroColours.Enabled)
         {
             _statusText.Text = "No saved edits were found. Change a level name, music track, skybox, object, or terrain first, " +
-                "or something in Game Settings (Spyro's colours, the creatures' colours, Hover).";
+                "or something on the Colours tab (Spyro's colours, this level's colours, Hover).";
             return;
         }
 
@@ -13998,7 +13998,7 @@ public sealed partial class MainWindow : Window
             {
                 throw new InvalidDataException(flightIntent.Enabled
                     ? "Fly Anywhere needs the unchanged original USA disc image, and the game you opened is different. " +
-                      "Open the original disc with Open Game…, or untick Fly Anywhere in Game Settings. (" + e.Message + ")"
+                      "Open the original disc with Open Game…, or untick Fly Anywhere on the Colours tab. (" + e.Message + ")"
                     : "The only thing to export is Fly Anywhere being switched off, and rebuilding the plain game needs the " +
                       "unchanged original USA disc image; the game you opened is different. (" + e.Message + ")", e);
             }
@@ -28339,10 +28339,12 @@ public sealed partial class MainWindow : Window
             "If a shape cannot be exported, a red bar says so, with Show it and Undo that change."
         ]);
 
-        AddHelpSection(panel, "Game Settings and Environment", [
+        AddHelpSection(panel, "Game Settings, Colours and Environment", [
             "This level: Level name changes the name on portals, loading screens and in the guidebook. Music picks the level's track. Portals & Return Home: choose where each portal leads and where Return Home goes. Creatures' colours: a colour for each kind of enemy in this level only (the same gnorc can be red here and blue in the next level); Randomize gives every kind another colour, Their Own Colours puts them back.",
-            "Whole game — Spyro's colours: any colour for each part of Spyro (body, belly, horns, head spikes, wings, tail tip, eyes), a ready-made look, or Surprise me; the picture on the card shows him as he will be in the game. Set \"Colours for\" to the open level to give him a look in that level only (Same as the Whole Game takes it away again). Hover: ▲ while gliding makes Spyro beat his wings, rise a little and drift on, as in Spyro 3 (not in levels where Fly Anywhere is on: there he flies instead of gliding). Play as Crash puts Crash in the levels you tick. Memory: Emulator (8 MB RAM) lets levels hold more. Create BIN works with only these settings too.",
-            "Whole game — Fly Anywhere: tick it and the game you export lets Spyro fly in every normal level — jump, then press ✕ again in the air — or open Choose levels and tick only the levels you want. It is separate from the editor's Game Camera.",
+            "Colours tab — This level's colours: the open level's enemies, chests, dragons and animals, each in any colour, for that level only (so chests can be blue in one level and red in the next). Randomize beside a list gives that list other colours, Randomize All every list. Dragon statues sets one crystal colour for all of the level's statues (press Save to keep it).",
+            "Colours tab — Spyro's colours: any colour for each part of Spyro (body, belly, horns, head spikes, wings, tail tip, eyes), a ready-made look, or Surprise me; the picture on the card shows him as he will be in the game. Set \"Colours for\" to the open level to give him a look in that level only (Same as the Whole Game takes it away again). Hover: ▲ while gliding makes Spyro beat his wings, rise a little and drift on, as in Spyro 3 (not in levels where Fly Anywhere is on: there he flies instead of gliding). Play as Crash puts Crash in the levels you tick. Create BIN works with only these settings too.",
+            "Game Settings — Memory: Emulator (8 MB RAM) is the usual choice and lets levels hold more (a game made with it still plays on a normal 2 MB set-up wherever its levels fit). Choose PlayStation (2 MB) for a real console or a disc.",
+            "Colours tab — Fly Anywhere: tick it and the game you export lets Spyro fly in every normal level — jump, then press ✕ again in the air — or open Choose levels and tick only the levels you want. It is separate from the editor's Game Camera.",
             "Environment: recolor the sky, borrow another level's sky, use a ready-made one, or import your own from a 360° picture or an OBJ/FBX model."
         ]);
 
@@ -28352,7 +28354,7 @@ public sealed partial class MainWindow : Window
             "File ▾ > Random Homeworld… makes a homeworld the same way: a plaza with rooms off it and a doorway to every level the homeworld leads to. It goes in the place of any of the game's homeworlds (open that homeworld first) or in the homeworld of a world of your own.",
             "Objects > Random objects fills a level you built: choose a level type, an enemy type, a difficulty, how many gems and dragonfly eggs, and press Randomize. Enemies, animals, every kind of chest, egg thieves, dragons, the way out and gems of every colour are placed by the measure of the game's own levels (about as many chests, enemies and loose gems as a level of the game with that treasure has); press it again for another arrangement.",
             "An enemy or a chest: select it and choose under \"What it gives\" which gem Spyro gets for it (red, green, blue, gold or pink).",
-            "An egg thief you added: select him and Edit Route… and the \"Its run\" tools appear. Drag the run's points in the 3D view, or use New Loop Here, Bigger, Smaller, Turn and Other Way Round. Game Settings > Egg thieves' colour gives every thief in the game another colour.",
+            "An egg thief you added: select him and Edit Route… and the \"Its run\" tools appear. Drag the run's points in the 3D view, or use New Loop Here, Bigger, Smaller, Turn and Other Way Round. Colours > Egg thieves' colour gives every thief in the game another colour.",
             "File ▾ > Start Blank in Current Level… replaces the open level with the same meadow so you can rebuild it. Restore Before Clear… brings the previous version back.",
             "File ▾ > Fill In What the Level Needs… adds the level's own dragons and egg thieves, a Return Home vortex, enemies and gems.",
             "File ▾ > Open Created Level… reopens the level you made.",

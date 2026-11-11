@@ -57,7 +57,7 @@ public sealed partial class MainWindow
         steps.Children.Add(open);
         steps.Children.Add(new TextBlock
         {
-            Text = "New here? More ▾ › Help explains every tab, and Game Settings is a good first stop: give Spyro new colours and see him change.",
+            Text = "New here? More ▾ › Help explains every tab, and the Colours tab is a good first stop: give Spyro new colours and see him change.",
             FontSize = 13,
             Foreground = new SolidColorBrush(ModernInk),
             TextWrapping = TextWrapping.Wrap

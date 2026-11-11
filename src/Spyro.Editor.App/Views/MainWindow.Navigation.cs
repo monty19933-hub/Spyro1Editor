@@ -181,8 +181,8 @@ public sealed partial class MainWindow
         string find = _lastExportedCuePath == null ? "" : " Show Game File finds it.";
         string flight = message.Contains("Fly Anywhere is on", StringComparison.Ordinal) ? " Fly Anywhere is on."
             : message.Contains("Fly Anywhere is off", StringComparison.Ordinal) ? " Fly Anywhere is off." : "";
-        int with = message.IndexOf(" With ", StringComparison.Ordinal), from = message.IndexOf(" from Game Settings.", StringComparison.Ordinal);
-        string settings = with >= 0 && from > with ? message[with..(from + " from Game Settings.".Length)] : "";
+        int with = message.IndexOf(" With ", StringComparison.Ordinal), from = message.IndexOf(" from the Colours tab.", StringComparison.Ordinal);
+        string settings = with >= 0 && from > with ? message[with..(from + " from the Colours tab.".Length)] : "";
         int noFlap = message.IndexOf(" Hover: no room for Spyro's wing flap in ", StringComparison.Ordinal);
         if (noFlap >= 0) settings += message[noFlap..(message.IndexOf("without flapping.", noFlap, StringComparison.Ordinal) + "without flapping.".Length)];
         if (clean && message.StartsWith("Created all-edits test ", StringComparison.Ordinal))

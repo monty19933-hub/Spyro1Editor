@@ -162,11 +162,11 @@ public sealed partial class MainWindow
                     });
             }
         });
-        Try(() => { if (SpyroMovesSettings.LoadHover(root)) Add(new(ExportParts.Hover, "Hover (Game Settings)", ["Hover"])); });
-        Try(() => { if (CreatureColourSettings.Load(root).Count > 0) Add(new(ExportParts.CreatureColours, "the creatures' colours (Game Settings)", ["creatures' colours", "Creatures' colours"])); });
-        Try(() => { var book = SpyroColourSettings.LoadAll(root); if (book.Whole.Count > 0 || book.Levels.Count > 0) Add(new(ExportParts.SpyroColours, "Spyro's colours (Game Settings)", ["Spyro's colours"])); });
-        Try(() => { if (EggThiefColourSettings.Load(root) != null) Add(new(ExportParts.EggThieves, "the egg thieves' colour (Game Settings)", ["egg thieves' colour"])); });
-        Try(() => { if (NativeFreeFlightProjectExportIntent.Capture(root).RequiresRebuild) Add(new(ExportParts.FlyAnywhere, "Fly Anywhere (Game Settings)", ["Fly Anywhere"])); });
+        Try(() => { if (SpyroMovesSettings.LoadHover(root)) Add(new(ExportParts.Hover, "Hover (Colours tab)", ["Hover"])); });
+        Try(() => { if (CreatureColourSettings.Load(root).Count > 0) Add(new(ExportParts.CreatureColours, "this level's colours (Colours tab)", ["creatures' colours", "Creatures' colours"])); });
+        Try(() => { var book = SpyroColourSettings.LoadAll(root); if (book.Whole.Count > 0 || book.Levels.Count > 0) Add(new(ExportParts.SpyroColours, "Spyro's colours (Colours tab)", ["Spyro's colours"])); });
+        Try(() => { if (EggThiefColourSettings.Load(root) != null) Add(new(ExportParts.EggThieves, "the egg thieves' colour (Colours tab)", ["egg thieves' colour"])); });
+        Try(() => { if (NativeFreeFlightProjectExportIntent.Capture(root).RequiresRebuild) Add(new(ExportParts.FlyAnywhere, "Fly Anywhere (Colours tab)", ["Fly Anywhere"])); });
         Try(() => { if (PortalRouteStore.Capture(root).Document.HasEdits) Add(new(ExportParts.Doorways, "the doorways you sent to other levels", ["portal", "Portal", "doorway"])); });
         Try(() => { if (CrashPlayerSettings.Load(root).Count > 0) Add(new(ExportParts.PlayAsCrash, "Play as Crash", ["Crash"])); });
         return parts;
@@ -218,11 +218,11 @@ public sealed partial class MainWindow
         }
         return id switch
         {
-            ExportParts.Hover => "Hover (Game Settings)",
-            ExportParts.SpyroColours => "Spyro's colours (Game Settings)",
-            ExportParts.CreatureColours => "the creatures' colours (Game Settings)",
-            ExportParts.EggThieves => "the egg thieves' colour (Game Settings)",
-            ExportParts.FlyAnywhere => "Fly Anywhere (Game Settings)",
+            ExportParts.Hover => "Hover (Colours tab)",
+            ExportParts.SpyroColours => "Spyro's colours (Colours tab)",
+            ExportParts.CreatureColours => "this level's colours (Colours tab)",
+            ExportParts.EggThieves => "the egg thieves' colour (Colours tab)",
+            ExportParts.FlyAnywhere => "Fly Anywhere (Colours tab)",
             ExportParts.Doorways => "the doorways you sent to other levels",
             ExportParts.PlayAsCrash => "Play as Crash",
             _ => id,

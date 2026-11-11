@@ -85,7 +85,7 @@ public sealed partial class MainWindow
         bool on;
         try { on = SpyroMovesSettings.LoadHover(_workspace.RootPath); }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException)
-        { throw new InvalidDataException("The Hover setting in Game Settings could not be read. Tick or untick Hover again. (" + e.Message + ")", e); }
+        { throw new InvalidDataException("The Hover setting (Colours tab) could not be read. Tick or untick Hover again. (" + e.Message + ")", e); }
         return NativeHover.Use(on && !IsLeftOut(Spyro.Editor.Core.Persistence.ExportParts.Hover));
     }
 }

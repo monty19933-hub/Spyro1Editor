@@ -11,8 +11,8 @@ writes to your own disc image, and it does not include the game.
 2. Choose **Open Game…** and select your own unchanged USA *Spyro the Dragon* disc
    image (a `.bin` or `.cue` file).
 3. Pick a level from the list at the top left.
-4. Change things in the four tabs on the right: **Objects**, **Terrain**,
-   **Game Settings** and **Environment**.
+4. Change things in the five tabs on the right: **Objects**, **Terrain**,
+   **Game Settings**, **Colours** and **Environment**.
 5. Press **Save**, then **Create BIN**. Open the new `.cue` file in your emulator.
    **Show Game File** in the bottom bar takes you to it.
 
@@ -44,11 +44,12 @@ access was refused, the editor opens a small window that says where to allow it.
   as often as it takes, and at the end says everything it did. Each run is a
   whole Create BIN, so a hard case can take several minutes; the status line
   says which try it is on.
-  - What it can repair, it repairs. When your new world has no way in yet, it
-    places the doorway in the homeworld the world is entered from, on level open
-    ground near where Spyro arrives (move it afterwards with Terrain › World
-    Entrance if you like; in Gnasty's World, which has no free place, it says so
-    and you place it yourself). When your world's homeworld has more objects
+  - What it can repair, it repairs. (A new world with no way in yet no longer
+    stops Create BIN: it places the doorway itself, in the homeworld the world
+    is entered from, on level open ground near where Spyro arrives. Move it
+    afterwards with Terrain › World Entrance if you like; in Gnasty's World,
+    which has no free place, it says so and you place it yourself.) When your
+    world's homeworld has more objects
     than it can hold (82), it first gives back the save rows of objects you
     deleted and then, if needed, takes out loose gems, the least valuable first;
     it says how many and what they were worth, and keeps the level as it was in
@@ -59,10 +60,14 @@ access was refused, the editor opens a small window that says where to allow it.
     your changes to one of the game's levels, a game setting such as Hover or
     the colours). For one of the game's own levels it tries leaving out only
     one kind of your changes (objects, ground, sky, music or name) before the
-    whole level. Saved changes the game cannot take (an egg thief's run moved
+    whole level, and when it is the objects, only the kinds of object you added
+    that cause the stop (every copy of one creature, for example): it puts your
+    other objects back and tries the added kinds in halves, which takes a few
+    more runs. Saved changes the game cannot take (an egg thief's run moved
     off its ground, for example) are left out by themselves and named each time.
   - Nothing is deleted. A left-out part stays in your project and is only kept
-    out of the game; Create BIN says what is left out in its window and after
+    out of the game. When Fix It For Me has left something out, a window opens
+    that says what and why; Create BIN also says it in its window and after
     every game. **More ▾ → Left Out of the Game…** lists each part with what
     Create BIN said about it, and **Put Back** includes it again. A newer
     version of the editor starts with nothing left out.
@@ -244,7 +249,7 @@ Pick a replacement, review its time bonus and fit check, then choose
   Haunted Towers, Twilight Harbor). In any other level Create BIN adds them,
   which takes about 14 KB of the level's memory. Peacekeepers, Beast Makers,
   Misty Bog, Dream Weavers and Dark Passage are too full for them: there Tile Type
-  says so, unless Game Settings › Memory is set to Emulator only (8 MB RAM).
+  says so, unless Game Settings › Memory is set to Emulator (8 MB RAM).
 - **Add Terrain** copies the selected tile so you can move the copy into place.
   **Remove Terrain** (or Delete in the view) takes the selected tiles out.
   **Undo Terrain** puts the selected tile back the way it was, or brings removed
@@ -287,15 +292,42 @@ says how many. Translucent original tiles cannot currently be copied or removed.
 - **Level name** changes the name on portals, loading screens and in the
   guidebook (capital letters, spaces and apostrophes).
 - **Music** picks the level's track.
-- **Creatures' colours** (this level): the open level's kinds of enemy, each
-  drawn as it will look. Click a kind's colour to choose one of the quick
-  colours or type one as #RRGGBB and press **Use**; **Its own** puts it back.
-  **Randomize** gives every kind another colour (press again for others) and
-  **Their Own Colours** clears them. A colour is for this level only, so the
-  same gnorc can be red in Artisans and blue in Dark Hollow. A creature keeps
-  its shading, and what is of another colour on it (skin, armour, eyes) stays.
-  In a level you built the card lists the enemies you placed in it. Two kinds
-  that share a texture share its colour.
+- **Memory**: how much memory the games you create may use. **Emulator (8 MB
+  RAM)** is the usual choice and what a project has until you choose: each
+  level's objects load into the extra memory DuckStation has with Settings ›
+  Console › Enable 8MB RAM, so levels hold more. A game made this way still
+  plays on a normal 2 MB set-up wherever its levels fit 2 MB, and Create BIN
+  says which levels need 8 MB. Choose **PlayStation (2 MB)** for a real console
+  or a disc: every level must then fit 2 MB and Create BIN stops when one does
+  not.
+- **Portals & Return Home**: choose where each portal leads and where Return
+  Home goes. **Select Portal** moves the trigger, lettering and travel path
+  together; move the stone arch with the terrain tools.
+
+## Colours tab
+
+Everything about looks and moves. What you choose is saved at once (the dragon
+statues' colour with the level) and Create BIN puts it in the game.
+
+- **This level's colours**: the open level's enemies, chests, dragons and
+  animals, each drawn as it will look, in four lists. Click a kind's colour to
+  choose one of the quick colours or type one as #RRGGBB and press **Use**;
+  **Its own** puts it back. **Randomize** beside a list gives that list's kinds
+  other colours (press again for others), **Randomize All** does every list at
+  once, and **Their Own Colours** clears them. A colour is for this level only,
+  so the same gnorc or chest can be red in Artisans and blue in Dark Hollow. A
+  thing keeps its shading, and what is of another colour on it (skin, armour,
+  eyes) stays; a thing with no colour of its own (grey metal, stone) takes the
+  colour all over. In a level you built the card lists what you placed in it.
+  Two kinds that share a texture share its colour.
+  - **Dragons**: **Dragon statues** sets one crystal colour for every dragon
+    statue of the level (their own is green). It is kept with the level, so
+    press **Save**. One statue alone can still be given a colour in its Edit
+    window on the Objects tab. The **fairy at a freed dragon's pedestal** is
+    listed too. The dragon who steps out of the statue for his speech keeps his
+    own colours.
+  - The Green Wizard in three levels and Haunted Towers' Summoning Wizard are
+    not listed: the editor cannot read their models' colours yet.
 - **Fly Anywhere**: tick **Let Spyro fly in every level** and the game you
   export lets Spyro fly in every normal level the way he does in Gnasty's Loot:
   jump, then press ✕ again in the air. Steer with the direction buttons; land by
@@ -344,9 +376,7 @@ says how many. Translucent original tiles cannot currently be copied or removed.
   whatever the rest of the game has). **Same as the Whole Game** takes the
   level's look away again. The title screen and cutscenes always have the whole
   game's look.
-- **Portals & Return Home**: choose where each portal leads and where Return
-  Home goes. **Select Portal** moves the trigger, lettering and travel path
-  together; move the stone arch with the terrain tools.
+- **Play as Crash** is here too (see Crash Bandicoot below).
 
 ## Environment tab
 
@@ -487,7 +517,7 @@ homeworld: its Terrain tab has a **World Entrance** card.
   card checks it: Artisans and Gnasty's World have room for a whole sky; Peace
   Keepers, Magic Crafters, Beast Makers and Dream Weavers take the part of the
   sky near the horizon (or just its colour) on a PlayStation, and the whole sky
-  with Game Settings › Memory › Emulator only (8 MB RAM).
+  with Game Settings › Memory › Emulator (8 MB RAM).
 - Leaving your world's homeworld through its doorway home brings Spyro back out
   of the entrance. Add that doorway with the Doorways card in your world's
   homeworld (**Add Doorway…**, then the homeworld's name). Create BIN asks for

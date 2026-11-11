@@ -341,7 +341,7 @@ public sealed partial class MainWindow
             {
                 try{flight=await NativeFreeFlightCompositionPlan.CaptureAsync(original,flightIntent.EnabledLevelIds);}
                 catch(InvalidDataException e)when(_releaseMode)
-                {throw new InvalidDataException("Fly Anywhere needs the unchanged original USA disc image, and the game you opened is different. Open the original disc with Open Game…, or untick Fly Anywhere in Game Settings. ("+e.Message+")",e);}
+                {throw new InvalidDataException("Fly Anywhere needs the unchanged original USA disc image, and the game you opened is different. Open the original disc with Open Game…, or untick Fly Anywhere on the Colours tab. ("+e.Message+")",e);}
             }
             return await NativeAuthoredProjectExporter.ExportAsync(donors,_retailCatalog,plans,japanese,output,workspacePath,startLevelId.Value,
                 requireCurrent:()=>Dispatcher.UIThread.InvokeAsync(RequireOwner).GetAwaiter().GetResult(),

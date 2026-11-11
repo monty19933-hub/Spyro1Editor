@@ -1,17 +1,19 @@
-# Spyro Editor 2.2
+# Spyro Editor 2.3
 
-## Changes since Spyro Editor 2.1
+## Changes since Spyro Editor 2.2
 
 New
 
-- Fix It For Me now works on every Create BIN stop that comes from your project, and one press gets the game made. It runs Create BIN itself, as often as it takes, and at the end says everything it did. A stop the editor has a repair for is repaired (the way into your world is placed; a world's homeworld is trimmed to the 82 objects it holds). For any other stop the editor finds the part of your project that causes it, by making the game without one part at a time (a level the message names first), and makes the game without that part. Nothing is deleted: the part stays in your project and is only left out of the game.
-- It leaves out as little as it can. For one of the game's own levels it tries leaving out only one kind of your changes (its objects, its ground, its sky, its music or its name) before the whole level; if two things stop the game, both are left out and everything else stays in.
-- Saved changes the game cannot take (an egg thief's run moved off its ground, for instance) no longer need you to find and undo them: Fix It For Me makes the game without them, and Create BIN names them each time.
-- More ▾ › Left Out of the Game… lists what Fix It For Me left out, with what Create BIN said about each, and puts a part back with one button. Create BIN keeps leaving a part out until you put it back, and says so in its window and after each game. A newer version of the editor starts with nothing left out, in case it no longer stops there.
-- Fix It For Me is not offered for a failure of the computer's (no disc image chosen, a full disk, no permission): those still say what to do.
-- File ▾ › Clear Entire Project to Base Game… starts the whole project over in one step. Everything you have made (your changes to every level, the levels and world you built, your game settings) is taken out and the editor shows the original game again; you do not have to choose your game again, and games you already created stay where they are. It asks first, saying what is in your project, and only "Yes, I am sure" clears: Cancel, Return and Escape leave everything as it is. Your work is moved, not deleted: it goes into a dated folder in "Old projects" beside your project, with a note that says how to bring it back. If the clear cannot finish (a file in use, for instance), nothing is changed.
+- A **Colours** tab beside Game Settings holds everything about looks and moves: this level's colours, Spyro's colours, the egg thieves' colour, Hover, Fly Anywhere and Play as Crash. Memory, names, music and portals stay in Game Settings.
+- **This level's colours** (it was Creatures' colours) now lists the open level's **chests**, **dragons** and **animals** as well as its enemies, each list with its own Randomize, and Randomize All for everything. A colour is for that level only, so chests can be blue in one level and red in the next. For dragons, one crystal colour goes on every dragon statue of the level (it used to be set statue by statue in the object's Edit window), and the fairy who waits at a freed dragon's pedestal can be given a colour too.
+- Enemies and things with no colour of their own (grey metal, stone) can now be given one; they used to be missing from the list.
+- **Memory is Emulator (8 MB RAM) unless you choose otherwise**, so levels hold more and fewer changes run out of room. A game made this way still plays on a normal 2 MB set-up wherever its levels fit 2 MB, and Create BIN says when one does not. Choose **PlayStation (2 MB)** in Game Settings › Memory for a real console or a disc. A project that never chose now gets 8 MB.
+- Create BIN places the way into your new world by itself when there is none yet (on open ground near where Spyro arrives in the homeworld; move it with Terrain › World Entrance). It used to stop there.
+- Fix It For Me leaves out far less. When a level's objects stop Create BIN, it now finds which **kinds of object you added** are the cause (every copy of one creature, say) and leaves out only those; your other objects and your changes to the level's own objects stay in the game. It tries the added kinds in halves, which takes a few more runs of Create BIN.
+- When Fix It For Me has left anything out, a window opens that says what and why, with Put Back beside each thing. It is no longer only a line at the bottom of the window.
+- After Create BIN the status says how much room the levels you added objects to have left, the fullest first, and warns when one is nearly full.
 
 Fixed
 
-- A game with your new level (File ▾ › New Level, or a Random Level put in the new level's place) and no doorway leading to it froze when Spyro went into Town Square: the new level starts up through Town Square's start-up code, and without a doorway the two were not kept apart. They are now kept apart in every game. With Memory set to Emulator only (8 MB RAM), Create BIN stopped instead, with "Town Square does not fit game RAM even with 8 MB", although Town Square was untouched; that stop is gone with the cause.
-- In a project that only changes the game's own levels, a failed Create BIN said "Could not create test" and offered nothing. It now reports the failure like every other Create BIN and offers Fix It For Me.
+- A homeworld with the way into your new world and an added object that brings its own sounds or sparks (a Crash frog or crate, a creature from another level) made Create BIN stop with "New World doorway failed its readback: particles and sounds changed". Fix It For Me then got the game made by leaving out every object change of that level. The check was wrong, not the level: such levels are made whole now.
+- The export check said "Ready to export" when all it had checked was your object changes. It now says what it checked, and that Create BIN checks memory, doorways and your world while it builds.
