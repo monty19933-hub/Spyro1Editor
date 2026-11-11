@@ -1,9 +1,10 @@
-# Spyro Editor 2.2 — 11 November 2026 (built, not published)
+# Spyro Editor 2.2 — 11 November 2026
 
 Stable 2.2 (internal 2.2.0, schema 3). Built and checked locally from `37b5d01` on `feature/clear-project-20261111`
 (`f0bc913` Fix It For Me and the Town Square fix; `37b5d01` Clear Entire Project to Base Game, added the same day at
 the owner's request before anything was published; later commits on the branch are test code and this file);
-**not pushed, tagged or released**: publishing waits for the owner's word. Found by the owner on a new project made
+**published 11 November 2026** at the owner's word ("please first commit and publish v2.2 for download"): GitHub
+`main` and tag `v2.2` are this commit, the release carries the two packages built from `37b5d01`. Found by the owner on a new project made
 with 2.1, where Create BIN stopped three different ways in a row and they asked for "a universal fix me type thing".
 
 - **Fix It For Me on every Create BIN stop that comes from the project** (`MainWindow.ExportRepair.cs`,
