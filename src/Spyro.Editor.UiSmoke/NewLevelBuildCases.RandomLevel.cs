@@ -20,7 +20,14 @@ internal static partial class NewLevelBuildCases
         var style = Environment.GetEnvironmentVariable("RANDOM_STYLE") is { Length: > 0 } s ? Enum.Parse<LevelStyle>(s) : (LevelStyle?)null;
         string place = Environment.GetEnvironmentVariable("RANDOM_PLACE") ?? "new";
         bool pictures = Environment.GetEnvironmentVariable("RANDOM_PICTURES") == "1";
-        var options = new RandomLevelOptions { Seed = seed, Style = style, Textures = pictures ? LevelTextureMode.GeneratedPictures : LevelTextureMode.GameTextures };
+        var options = new RandomLevelOptions
+        {
+            Seed = seed, Style = style, Textures = pictures ? LevelTextureMode.GeneratedPictures : LevelTextureMode.GameTextures,
+            // RANDOM_LAYOUT: journey, loop, hub, arena, climb, gorge or web (unset: the seed's own); RANDOM_SIZE; RANDOM_LOOK.
+            Layout = Environment.GetEnvironmentVariable("RANDOM_LAYOUT") is { Length: > 0 } layout ? layout : null,
+            Size = Enum.TryParse<LevelSize>(Environment.GetEnvironmentVariable("RANDOM_SIZE"), out var size) ? size : LevelSize.Medium,
+            Theme = Environment.GetEnvironmentVariable("RANDOM_LOOK") is { Length: > 0 } look ? look : null,
+        };
         var (where, world) = place switch
         {
             "open" => (MainWindow.RandomLevelPlace.OpenLevel, 0),
@@ -296,7 +303,10 @@ internal static partial class NewLevelBuildCases
     /// RANDOM_OBJECTS_LEVEL (level type, default stonehill), RANDOM_ENEMY_LEVEL (default the same), RANDOM_TREASURE
     /// (default 300), RANDOM_EGGS (default 0). Each press must leave the level's treasure exactly as asked, with every
     /// gem colour, replace the last press's objects without using more save rows, and Remove Them must take them all
-    /// away. The last arrangement is saved (run the <c>export</c> step next to play it).</summary>
+    /// away. The second press asks for teal and rainbow gems too (every press with RANDOM_HIGH_GEMS=1): the level then
+    /// has as many of each as its treasure allows, none otherwise, and Create BIN's dry run still takes the
+    /// arrangement. The level type's scenery is placed with every press. The last arrangement is saved (run the
+    /// <c>export</c> step next to play it).</summary>
     private static void RandomObjectsStep(MainWindow window, string outDir)
     {
         RandomLevelStep(window, outDir);
@@ -315,7 +325,8 @@ internal static partial class NewLevelBuildCases
                 var after = Get<SceneDocument>(window, "_freshSceneDocument");
                 if (gone == 0 || after.RandomObjects != null) throw new InvalidOperationException("Remove Them left random objects behind.");
             }
-            var choice = new MainWindow.RandomObjectsChoice(type, enemies, 0, MainWindow.RandomObjectsEnemies(LevelDifficulty.Medium, treasure), treasure, eggs, Seed: 100 + press);
+            bool rare = press == 2 || Environment.GetEnvironmentVariable("RANDOM_HIGH_GEMS") == "1";
+            var choice = new MainWindow.RandomObjectsChoice(type, enemies, 0, MainWindow.RandomObjectsEnemies(LevelDifficulty.Medium, treasure), treasure, eggs, Seed: 100 + press, TealGems: rare, RainbowGems: rare);
             var task = (Task)Invoke(window, "RandomizeObjectsAsync", choice)!;
             Wait(() => task.IsCompleted, "Random objects", 1800);
             task.GetAwaiter().GetResult();
@@ -333,6 +344,16 @@ internal static partial class NewLevelBuildCases
             if (placed.GetValueOrDefault("enemy") < 3) throw new InvalidOperationException("Hardly any enemies were placed.");
             if (placed.GetValueOrDefault("basket") < 1 || placed.GetValueOrDefault("extra life chest") != 1) throw new InvalidOperationException("Chests are missing.");
             if (eggs > 0 && placed.GetValueOrDefault("dragonfly egg") != eggs) throw new InvalidOperationException("Dragonfly eggs are missing.");
+            // Teal and rainbow gems: as many as the treasure allows when asked for, none otherwise; they are gems of
+            // the level like any other (the treasure above counts them).
+            var (teals, rainbows) = rare ? LevelScatter.HighGemsFor(treasure, true, true) : (0, 0);
+            int teal = live.Count(m => m.IsVisibleGem && m.TreasureValue == 50), rainbow = live.Count(m => m.IsVisibleGem && m.TreasureValue == 100);
+            Console.WriteLine($"    teal gems {teal} (asked {teals}), rainbow gems {rainbow} (asked {rainbows})");
+            if (teal != teals || rainbow != rainbows || placed.GetValueOrDefault("teal gem") != teals || placed.GetValueOrDefault("rainbow gem") != rainbows)
+                throw new InvalidOperationException($"The level has {teal} teal and {rainbow} rainbow gems, not {teals} and {rainbows}.");
+            int scenery = placed.GetValueOrDefault("tree") + placed.GetValueOrDefault("torch") + placed.GetValueOrDefault("wall lamp") + placed.GetValueOrDefault("plant");
+            Console.WriteLine($"    scenery: {placed.GetValueOrDefault("tree")} trees, {placed.GetValueOrDefault("torch")} torches and lamps, {placed.GetValueOrDefault("wall lamp")} wall lamps, {placed.GetValueOrDefault("plant")} flowers and grasses");
+            if (type is "stonehill" or "artisans" or "drycanyon" && scenery < 3) throw new InvalidOperationException("The level type's scenery was not placed.");
             string shape = string.Join(";", live.OrderBy(m => m.Position.X).ThenBy(m => m.Position.Y).Select(m => $"{m.Position.X:0},{m.Position.Y:0}"));
             if (press == 1) { firstShape = shape; firstRows = rows; }
             else if (shape == firstShape) throw new InvalidOperationException("Randomize placed the same arrangement again.");

@@ -36,6 +36,13 @@ public sealed partial class MainWindow
         (LevelStyle.SkyIslands, "Islands in the sky (like Lofty Castle)"), (LevelStyle.Caverns, "Caverns and tunnels"),
         (LevelStyle.Canyon, "Canyon (like Dry Canyon)"), (LevelStyle.Castle, "Castle courtyards"),
     ];
+    /// <summary>How a level is laid out (<see cref="RandomLevelOptions.Layout"/>); the first leaves it to the seed.</summary>
+    private static readonly (string? Layout, string Label)[] RandomLevelLayouts =
+    [
+        (null, "Surprise me"), ("journey", "A way from room to room, with an end"), ("loop", "A ring that comes back over its start"),
+        ("hub", "A clearing with rooms off it all round"), ("arena", "One great room with a hill, a mound or a moat"), ("climb", "A hill of terraces to climb"),
+        ("gorge", "A winding gorge"), ("web", "A web of rooms, more than one way round"),
+    ];
     private static readonly (SurfaceRole Role, string Label)[] PictureRoles =
     [
         (SurfaceRole.Ground, "Ground"), (SurfaceRole.GroundAlt, "Banks and hilltops"), (SurfaceRole.Path, "Paths"), (SurfaceRole.Dirt, "Bare earth"),
@@ -144,6 +151,8 @@ public sealed partial class MainWindow
         TextBlock Label(string text) => new() { Text = text, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap };
         var left = new StackPanel { Spacing = 6, Width = 340 };
         var kind = new ComboBox { Name = "RandomLevelKind", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = RandomLevelKinds.Select(k => k.Label).ToArray(), SelectedIndex = 0 };
+        var layout = new ComboBox { Name = "RandomLevelLayout", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = RandomLevelLayouts.Select(l => l.Label).ToArray(), SelectedIndex = 0 };
+        ToolTip.SetTip(layout, "How the level's rooms lie. Left to the seed, every level is laid out another way, with a few big rooms, a mix, or many small ones.");
         var look = new ComboBox { Name = "RandomLevelLook", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = new[] { "Surprise me" }.Concat(LevelThemes.All.Select(t => t.Name)).ToArray(), SelectedIndex = 0 };
         var size = new ComboBox { Name = "RandomLevelSize", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = new[] { "Small", "Medium", "Large" }, SelectedIndex = 1 };
         var what = new ComboBox
@@ -156,6 +165,7 @@ public sealed partial class MainWindow
         ToolTip.SetTip(difficulty, "Easy: wide paths, bridges, short hops, plenty of room. Hard: narrow paths, stepping stones, more ledges and lookouts, pools that cost a life. Kaizo: next to nothing to spare. Every jump and glide stays inside what Spyro can do.");
         left.Children.Add(Label("Make")); left.Children.Add(what); left.Children.Add(whatNote);
         left.Children.Add(Label("Kind of level")); left.Children.Add(kind);
+        left.Children.Add(Label("Laid out as")); left.Children.Add(layout);
         left.Children.Add(Label("In the style of")); left.Children.Add(look);
         left.Children.Add(new TextBlock { Text = "The level is built from that level's own ground, rock and paths, painted in its colours.", TextWrapping = TextWrapping.Wrap, FontSize = 12, Opacity = 0.75 });
         var sizeRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,12,*"), RowDefinitions = new RowDefinitions("Auto,Auto") };
@@ -227,7 +237,7 @@ public sealed partial class MainWindow
         content.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, MaxWidth = 780, HorizontalAlignment = HorizontalAlignment.Left,
-            Text = "A new level made the way the game's own levels are: rooms along a route, sloping paths between them, steps to jump up, lookouts to glide from. It is built and painted like the level you pick: that level's ground, rock and paths in its colours, under its sky, to its music, with its own towers and trees. Every jump, glide and climb is inside what Spyro can do. Choose what you like or leave it to chance, then put it in a level slot and add your own objects and enemies."
+            Text = "A new level made the way the game's own levels are, and no two alike: a way from room to room, a ring, a clearing with rooms off it, a hill of terraces, a winding gorge, a web of rooms, with a few big rooms or many small ones, sloping paths and flights of steps between them, steps to jump up, lookouts and hilltops to glide from. It is built and painted like the level you pick: that level's ground, rock and paths in its colours, under its sky, to its music, with its own towers and trees. Every jump, glide and climb is inside what Spyro can do. Choose what you like or leave it to chance, then put it in a level slot and add your own objects and enemies."
         });
         content.Children.Add(columns);
         var place = new ComboBox { Name = "RandomLevelPlace", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = places.Select(p => p.Label).ToArray(), SelectedIndex = 0 };
@@ -267,7 +277,7 @@ public sealed partial class MainWindow
             whatNote.IsVisible = home;
             whatNote.Text = !home ? "" : places.Count == 0
                 ? "A generated homeworld goes in the place of one of the game's homeworlds or in the homeworld of a world of your own. Open a homeworld first (the level picker), or make a world with File ▾ › New World…, then choose this again."
-                : $"Spyro arrives in a plaza with rooms off it all round. {(names.Count == 1 ? "A doorway" : $"{names.Count} doorways")} will stand in them, with open floor in front to fly back out onto: to {string.Join(", ", names)}.";
+                : $"Spyro arrives in the first of its rooms. {(names.Count == 1 ? "A doorway" : $"{names.Count} doorways")} will stand in the rooms, one to a room, with open floor in front to fly back out onto: to {string.Join(", ", names)}.";
             make.IsEnabled = !home || places.Count > 0;
         }
         RandomLevelOptions Read()
@@ -277,6 +287,7 @@ public sealed partial class MainWindow
             return new RandomLevelOptions
             {
                 Seed = seed, Style = RandomLevelKinds[Math.Max(0, kind.SelectedIndex)].Style, Size = (LevelSize)Math.Max(0, size.SelectedIndex),
+                Layout = RandomLevelLayouts[Math.Clamp(layout.SelectedIndex, 0, RandomLevelLayouts.Length - 1)].Layout,
                 Theme = look.SelectedIndex > 0 ? LevelThemes.All[look.SelectedIndex - 1].Key : null,
                 Difficulty = (LevelDifficulty)Math.Clamp(difficulty.SelectedIndex, 0, 3), Doorways = Doorways().Count,
                 Caves = caves.IsChecked, ChargePaths = charge.IsChecked, Glides = glides.IsChecked, Hazards = hazards.IsChecked,
@@ -335,7 +346,7 @@ public sealed partial class MainWindow
         var final = Read();
         // The preview was made with the game's textures; it is the level itself when nothing but the name changed.
         bool same = previewOptions is { } p && preview != null && final.Textures == LevelTextureMode.GameTextures && final.Pictures.Count == 0 &&
-            p.Seed == final.Seed && p.Style == final.Style && p.Size == final.Size && p.Theme == final.Theme && p.Caves == final.Caves &&
+            p.Seed == final.Seed && p.Style == final.Style && p.Layout == final.Layout && p.Size == final.Size && p.Theme == final.Theme && p.Caves == final.Caves &&
             p.ChargePaths == final.ChargePaths && p.Glides == final.Glides && p.Hazards == final.Hazards && p.Bridges == final.Bridges &&
             p.Secrets == final.Secrets && p.PaintedSky == final.PaintedSky && p.Difficulty == final.Difficulty && p.Doorways == final.Doorways;
         if (same && final.Name is { } typed && NewWorldDocument.IsValidName(typed) && typed.All(c => !char.IsDigit(c)) && typed != preview!.Scene.Name)

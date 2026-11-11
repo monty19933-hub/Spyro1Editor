@@ -371,7 +371,8 @@ internal static class RandomLevelCases
                             $"{style} {seed} scenery: {string.Join(", ", scenery.GroupBy(i => i.Kind).Select(g => g.Count() + " " + g.Key))}");
                         Check(dressed.Treasure == 300 && dressed.Grid!.Holds(scenery.Select(i => i.Position), 200), $"{style} {seed} scenery: treasure {dressed.Treasure}, or a piece of it off the floor");
                         Check(scenery.All(i => Flat(i.Position, r.Scene.Spawn) >= 250) && scenery.Where(i => i.Kind != LevelScatter.Kind.WallLight).All(i => others.All(o => Flat(o, i.Position) >= 60)),
-                            $"{style} {seed} scenery stands where Spyro arrives or on another object");
+                            $"{style} {seed} scenery stands where Spyro arrives or on another object: " + string.Join("; ", scenery.Where(i => Flat(i.Position, r.Scene.Spawn) < 250 || i.Kind != LevelScatter.Kind.WallLight && others.Any(o => Flat(o, i.Position) < 60))
+                                .Select(i => $"{i.Kind} at {i.Position.X:0},{i.Position.Y:0},{i.Position.Z:0}, {Flat(i.Position, r.Scene.Spawn):0} from the start, {others.Min(o => Flat(o, i.Position)):0} from {dressed.Items.Except(scenery).OrderBy(o => Flat(o.Position, i.Position)).First().Kind}")));
                         // What stands on the floor keeps off the walls like everything else; a wall lamp is at a wall.
                         var standing = scenery.Where(i => i.Kind != LevelScatter.Kind.WallLight).ToList();
                         float close = standing.Count == 0 ? 99 : standing.Min(i => WallDistance(r.Scene, i.Position));

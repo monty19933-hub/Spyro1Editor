@@ -573,7 +573,9 @@ public static class LevelScatter
         if (beyond.Count == 0 && first != null) beyond = [first];
         // A room's floor out to its walls (enemies stand nearer the walls than the middle).
         var fringeOf = fringe.GroupBy(f => f.Value).ToDictionary(g => g.Key, g => g.Select(f => f.Key).OrderBy(c => c.X).ThenBy(c => c.Y).ThenBy(c => c.Layer).ToList());
-        int enemies = Math.Min((int)Math.Round(request.Enemies * fit), Math.Max(0, rows / 3));
+        // With part of the treasure in teal and rainbow gems there is less for enemies to carry: somewhat fewer of them.
+        double rest = request.Treasure > 0 ? Math.Max(0.6, total / (double)request.Treasure) : 1;
+        int enemies = Math.Min((int)Math.Round(request.Enemies * fit * rest), Math.Max(0, rows / 3));
         if (enemies > 0 && beyond.Count > 0)
         {
             int left = enemies, forPaths = (int)Math.Round(enemies * 0.2);
@@ -899,7 +901,7 @@ public static class LevelScatter
             Stand(Kind.Plant, point[anchor], spawn); left--;
             for (int n = 1; n < size; n++)
             {
-                var near = order.Where(c => open[c] >= 1 && Math.Abs(point[c].Z - point[anchor].Z) <= 12 && Dist2(point[c], point[anchor]) is >= 80 * 80 and <= 200 * 200 && Clear(point[c], 84)).ToList();
+                var near = order.Where(c => open[c] >= 1 && Math.Abs(point[c].Z - point[anchor].Z) <= 12 && Dist2(point[c], point[anchor]) is >= 80 * 80 and <= 200 * 200 && Quiet(point[c]) && Clear(point[c], 84)).ToList();
                 if (Pick(near, c => 1.0) is not { } spot) break;
                 Stand(Kind.Plant, point[spot], spawn); left--;
             }
