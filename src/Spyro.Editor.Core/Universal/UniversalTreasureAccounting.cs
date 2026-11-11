@@ -27,6 +27,9 @@ internal static class UniversalTreasureAccounting
         if (GemValue.TryFromIdByte(sourceClass, out _))
             return sourceSemanticRow[0x50] == 0x18 && GemValue.TryFromEncoding(sourceClass, sourceSemanticRow[0x4F], out var gem)
                 ? gem.Value : 0;
+        // A teal or rainbow reward (UniversalHighValueRewards) is its own byte, not one of the five gems' classes.
+        if (UniversalHighValueRewards.ValueFor(sourceSemanticRow[0x53]) is > 0 and var highReward)
+            return UniversalHighValueRewards.Supports(sourceClass) ? highReward : 0;
         return GemValue.TryFromIdByte(sourceSemanticRow[0x53], out var reward) ? reward.Value : 0;
     }
 

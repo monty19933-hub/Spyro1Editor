@@ -76,6 +76,64 @@ if(args.Length==4&&args[0]=="--bin")
  var rows=result.Levels.Single().Compose.NewRowIndices;
  Console.WriteLine($"HIGH_VALUE_GEM_BIN_OK {bin} sha256={result.OutputImageSha256} rows={string.Join(",",rows)}");return;
 }
+if(args.Length>=4&&args[0]=="--reward-bin")
+{
+ // Emulator image through the Create BIN stage: spring chests that give a teal and a rainbow gem beside one that gives
+ // its own gem. Each further argument is level:x,y,z (the first chest's place; the row runs along +x, 1500 apart).
+ string image=Path.GetFullPath(args[1]),bin=Path.GetFullPath(args[3]);var catalog=LevelCatalog.Load(Path.GetFullPath(args[2]));
+ var sources=new UniversalSourceLibrary(image,catalog);
+ Check(BinaryPrimitives.ReadUInt16LittleEndian(sources.Get("townsquare").Data.Row(82).AsSpan(0x36))==0x149&&sources.Get("townsquare").Data.Row(82)[0x53]==0x55,"Town Square row 82 is an original spring chest that gives a blue gem");
+ Dictionary<string,IReadOnlyList<UniversalMobyPlacement>> placed=[];List<object> plan=[];
+ foreach(string spot in args.Skip(4))
+ {
+  string level=spot.Split(':')[0];int[] at=spot.Split(':')[1].Split(',').Select(int.Parse).ToArray();
+  UniversalMobyPlacement Chest(int n,byte? reward)=>new("townsquare",82,at[0]+1500*n,at[1],at[2],
+   RowByteOverrides:reward is byte b?new Dictionary<int,byte>{[0x53]=b}:null){EditorId=$"reward-{level}-{n}",PersistentSlot=n};
+  byte?[] rewards=[UniversalHighValueRewards.TealReward,UniversalHighValueRewards.RainbowReward,null,UniversalHighValueRewards.TealReward];
+  placed[level]=rewards.Select((r,n)=>Chest(n,r)).ToArray();
+  plan.Add(new{level,levelId=catalog.FindByKey(level)!.LevelId,chests=rewards.Select((r,n)=>new{x=at[0]+1500*n,y=at[1],z=at[2],reward=r??0x55,gives=r is byte b?UniversalHighValueRewards.ValueFor(b):5})});
+ }
+ var result=UniversalMobyExport.Apply(sources,image,bin,catalog,placed);
+ File.WriteAllText(Path.ChangeExtension(bin,".cue"),$"FILE \"{Path.GetFileName(bin)}\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n");
+ foreach(var l in result.Levels)
+  Console.WriteLine($"{l.LevelKey}: rows {string.Join(",",l.Compose.NewRowIndices)} save {string.Join(",",l.Compose.PlacementSaveRows)} treasure +{l.Compose.TreasureDelta} rewards {l.Compose.HighValueRewards} own calls {string.Join(",",l.Compose.HighValueRewardCalls.Select(c=>c.ToString("X8")))} added calls {l.Compose.HighValueRewardAddedCalls} tinted {string.Join(",",l.Compose.HighValueRewardTintedClasses.Select(c=>c.ToString("X3")))} classes {string.Join(",",l.Compose.Classes.Select(c=>$"{c.ClassId:X3}>{c.DestinationClassId:X3}{(c.BehaviorImported?"b":"")}{(c.ModelImported?"m":"")}"))}");
+ File.WriteAllText(Path.ChangeExtension(bin,".plan.json"),JsonSerializer.Serialize(new{levels=plan,rows=result.Levels.ToDictionary(l=>l.LevelKey,l=>l.Compose.NewRowIndices)},new JsonSerializerOptions{WriteIndented=true}));
+ Console.WriteLine($"HIGH_VALUE_REWARD_BIN_OK {bin} sha256={result.OutputImageSha256}");return;
+}
+if(args.Length==3&&args[0]=="--reward-fit")
+{
+ // Every level: does a spring chest fit as it is, and with a teal or rainbow gem? (Exact export checks, nothing written.)
+ string image=Path.GetFullPath(args[1]);var catalog=LevelCatalog.Load(Path.GetFullPath(args[2]));
+ var sources=new UniversalSourceLibrary(image,catalog);var special=UniversalMobyExport.SpecialProvider(null,sources);
+ var chests=UniversalMobyCatalogBuilder.AllVariants(sources,catalog).Where(v=>UniversalHighValueRewards.SpringChestClasses.Contains(v.ClassId)&&v.Extractable).ToList();
+ Console.WriteLine($"{chests.Count} spring chest rows in {chests.Select(v=>v.SourceLevelKey).Distinct().Count()} levels");
+ int fits=0,plainOnly=0;
+ foreach(var level in catalog.Levels.Where(l=>l.SourceWadEntry>0).OrderBy(l=>l.LevelId))
+ {
+  var host=UniversalCompositionHost.Capture(image,level);
+  var own=chests.Where(v=>v.SourceLevelKey==level.Key).Take(1);
+  string line=$"{level.LevelId} {level.Key}:";bool any=false;List<string> refusals=[];
+  foreach(var v in own.Concat(chests.Where(c=>c.SourceLevelKey!=level.Key).GroupBy(c=>c.SourceLevelKey).Select(g=>g.First())))
+  {
+   UniversalMobyPlacement Trial(byte? reward)=>new(v.SourceLevelKey,v.SourceRow,0,0,0,RowByteOverrides:reward is byte b?new Dictionary<int,byte>{[0x53]=b}:null){EditorId="fit",PersistentSlot=0};
+   var plain=host.DryRun(sources,[Trial(null)],special);
+   if(plain.Error!=null){refusals.Add($"{v.SourceLevelKey}#{v.SourceRow}: {plain.Error}");continue;}
+   var teal=host.DryRun(sources,[Trial(UniversalHighValueRewards.TealReward)],special);
+   var rainbow=host.DryRun(sources,[Trial(UniversalHighValueRewards.RainbowReward)],special);
+   if(teal.Error!=null||rainbow.Error!=null){plainOnly++;line+=$" {v.SourceLevelKey}#{v.SourceRow} PLAIN ONLY ({teal.Error??rainbow.Error})";any=true;break;}
+   var r=teal.Result!;
+   Check(r.HighValueRewards==1&&r.TreasureDelta==50&&rainbow.Result!.TreasureDelta==100,"the level's treasure follows the chest's gem");
+   Check(r.HighValueRewardTintedClasses.Count==1,"the spring chest's lid colour is set by the added code");
+   Check(r.HighValueRewardCalls.Count+r.HighValueRewardAddedCalls>0,"gem collection goes through the added routine");
+   Check(r.Ram.FinalHeadroom>=0,"fits the game's memory");
+   fits++;any=true;
+   line+=$" {v.SourceLevelKey}#{v.SourceRow} ok (own calls {r.HighValueRewardCalls.Count}, added {r.HighValueRewardAddedCalls}, tinted {string.Join(",",r.HighValueRewardTintedClasses.Select(c=>c.ToString("X3")))}, +{plain.Result!.Ram.FinalHeadroom-r.Ram.FinalHeadroom} bytes over the plain chest, {r.Ram.FinalHeadroom/1024.0:0.0} KB left)";
+   break;
+  }
+  Console.WriteLine(any?line:line+" no spring chest fits: "+string.Join(" | ",refusals.GroupBy(r=>r[(r.IndexOf(": ")+2)..]).Select(g=>$"{g.Count()}x {g.Key}")));
+ }
+ Console.WriteLine($"HIGH_VALUE_REWARD_FIT_OK levels={fits} plainOnly={plainOnly} checks={checks}");return;
+}
 if(args.Length==0){Console.WriteLine($"HIGH_VALUE_GEM_FREE_OK checks={checks}");return;}
 if(args.Length!=2)throw new ArgumentException("USA.bin catalog-workspace");
 var lib=new UniversalSourceLibrary(args[0],LevelCatalog.Load(args[1]));var assets=UniversalHighValueGems.Assets(lib);

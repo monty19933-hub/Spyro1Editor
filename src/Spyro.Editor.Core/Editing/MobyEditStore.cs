@@ -115,6 +115,7 @@ public static class MobyEditStore
                 moby.UniversalPlacementId = UniversalPlacementLedger.IdentityOf(edit);
                 moby.UniversalLinkGroupId = JsonValue.GetString(edit, "universalLinkGroupId");
                 moby.UniversalPathNodes = UniversalPlacementReader.ReadPathNodes(edit);
+                moby.UniversalRewardByte = UniversalPlacementReader.ReadRewardByte(edit);
             }
             bool changed = ApplyPositionEdit(edit, moby);
             changed = ApplyMetadataEdit(edit, moby) || changed;
@@ -216,6 +217,8 @@ public static class MobyEditStore
                 [DragonStatueColor.EditField] = DragonStatueColor.Hex(moby.DragonColor),
                 ["universalLinkGroupId"] = NullIfEmpty(moby.UniversalLinkGroupId),
                 ["universalPathNodes"] = moby.UniversalPathNodes?.Select(n => new[] { n[0], n[1], n[2] }).ToArray(),
+                [UniversalPlacementReader.RewardByteField] = moby.UniversalRewardByte is int rewardByte && moby.CrossLevelRequiredExporterFeature == UniversalMobyExport.RequiredExporterFeature
+                    ? $"0x{rewardByte:X2}" : null,
                 ["universalPlacementId"] = moby.CrossLevelRequiredExporterFeature == UniversalMobyExport.RequiredExporterFeature ? moby.UniversalPlacementId : null,
                 ["specialChestBundleId"] = NullIfEmpty(moby.SpecialChestBundleId),
                 ["profileId"] = NullIfEmpty(moby.SpecialChestProfileId),

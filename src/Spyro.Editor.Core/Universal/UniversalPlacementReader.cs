@@ -47,6 +47,17 @@ public static class UniversalPlacementReader
         return list.Count is > 0 and <= 64 ? list : throw new InvalidDataException("A saved route has no nodes or too many.");
     }
 
+    /// <summary>What an added object gives when that was chosen (row +0x53; <see cref="Moby.UniversalRewardByte"/>):
+    /// saved as "universalRewardByteHex" so Create BIN writes it into the object's row in the game's own levels too.</summary>
+    public const string RewardByteField = "universalRewardByteHex";
+
+    public static int? ReadRewardByte(JsonElement edit)
+    {
+        if (!edit.TryGetProperty(RewardByteField, out var saved) || saved.ValueKind != JsonValueKind.String) return null;
+        int value = Convert.ToInt32(saved.GetString(), 16);
+        return value is >= 0 and <= 255 ? value : throw new InvalidDataException("A saved reward is not one byte.");
+    }
+
     /// <summary>What kind of added object an edit is, for leaving a kind out of the game (Fix It For Me): its
     /// template's id ("special:crash-frog", a level's own template id), or the source level and row when it has none.</summary>
     public static string KindOf(JsonElement edit)
@@ -117,6 +128,8 @@ public static class UniversalPlacementReader
             Dictionary<int, byte> overrides = [];
             if (edit.TryGetProperty("stateEditedHex", out var st) && st.ValueKind == JsonValueKind.String) overrides[0x51] = (byte)Convert.ToInt32(st.GetString(), 16);
             if (edit.TryGetProperty("typeEditedHex", out var ty) && ty.ValueKind == JsonValueKind.String) overrides[0x50] = (byte)Convert.ToInt32(ty.GetString(), 16);
+            // A special object's row is its own (the composer sets what it gives).
+            if (special == null && ReadRewardByte(edit) is int reward) overrides[UniversalRewardChoice.RowOffset] = (byte)reward;
             string id = UniversalPlacementLedger.IdentityOf(edit);
             string? group = edit.TryGetProperty("universalLinkGroupId", out var lg) && lg.ValueKind == JsonValueKind.String ? lg.GetString() : null;
             if (!slots.TryGetValue(id, out int slot) || !active.TryAdd(id, new(src, row, x, y, z, yaw, overrides, id, special, text, PersistentSlot: slot) { LinkGroupId = group, DragonColor = DragonStatueColor.Read(edit), PathNodes = ReadPathNodes(edit) }))
