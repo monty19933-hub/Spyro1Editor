@@ -1,6 +1,8 @@
 # Spyro Editor 2.2 — 11 November 2026 (built, not published)
 
-Stable 2.2 (internal 2.2.0, schema 3). Built and checked locally from `f0bc913` on `feature/fix-it-all-20261111`;
+Stable 2.2 (internal 2.2.0, schema 3). Built and checked locally from `37b5d01` on `feature/clear-project-20261111`
+(`f0bc913` Fix It For Me and the Town Square fix; `37b5d01` Clear Entire Project to Base Game, added the same day at
+the owner's request before anything was published; later commits on the branch are test code and this file);
 **not pushed, tagged or released**: publishing waits for the owner's word. Found by the owner on a new project made
 with 2.1, where Create BIN stopped three different ways in a row and they asked for "a universal fix me type thing".
 
@@ -20,8 +22,26 @@ with 2.1, where Create BIN stopped three different ways in a row and they asked 
   `NativeFreshMainCompilation.ExportAsync` now splits them in every game. With 8 MB memory the export stopped instead
   ("Town Square does not fit game RAM even with 8 MB"): the survey read Town Square's copy buffer as the new level's.
 - Create BIN says when the new level has no doorway leading to it.
+- **File ▾ › Clear Entire Project to Base Game…** (`ProjectClear`, `MainWindow.ProjectClear.cs`). The owner had needed
+  a project moved aside by hand to start over and asked for a File command with a safeguard ("a prompt box … like
+  'Yes, I am sure'"). The question lists what is in the project; Cancel is what Return and Escape press; only "Yes, I
+  am sure" clears. What stays is what a new project holds once its game was opened (manifest, chosen disc images,
+  `editor-cache`, WAD analysis, the game's texture pictures, `support`, `_local/.app`, `output` with the games already
+  made). Everything else is moved by renaming into `Old projects/<project> (cleared <date time>)` beside the projects,
+  with a note on bringing it back by hand; only Create BIN's compiled stages (`_local/authored-native`, `-aggregate`)
+  are deleted. A clear that fails part-way is undone. The project then opens in a new window, as at a start (too much
+  of a project lives in the window's fields to refresh it in place), and the old window closes without asking about
+  unsaved changes. Not offered in a development workspace. No command brings cleared work back yet.
 
-Checks: gate `--build-all` 636 checks, 0 failed (on `f0bc913`). Disc smokes: world entrance 227, level window 134,
+Checks: gate `--build-all` 637 checks, 0 failed (on `37b5d01`; 636 on `f0bc913`). The clear command: PersistenceSmoke
+`VerifyProjectClear` (what stays and goes, four failure points undone, a second clear in the same minute, the note's
+way back, a project with no `_local`, file-browser litter); UiSmoke `--clear-project-ui-only` (gate, 23 checks: the
+question, Cancel/Return/Escape, a failing clear, the clear, the reopened window, new work afterwards),
+`--clear-project-ui` with the disc (25 checks: a game made before has the work, a game made after the clear has only
+the new work), `--clear-project-desktop` (7 checks with real macOS windows and the app's own lifetime: the question,
+Cancel, the new window in the old one's place, the app still running, closing it ends the app) and
+`--clear-project-existing` on a copy of the owner's project (6 checks; cleared and reopened in 0.2 s; 28 files and
+folders moved, 6 stayed). The export code is unchanged since `f0bc913`, where the following were run. Disc smokes: world entrance 227, level window 134,
 doorways 1,269, balloon travel 7,063, colours 112, 8 MB 88, supercharge 160, draw load 41, treasure 2,615 (with the
 new Town Square checks). Through the editor with the disc: `--fix-it-ui` (34 checks, 36 Create BIN runs: a named stop,
 one kind of a level's changes, an unnamed stop, two causes, a passing stop, the computer's failures, a stop nothing
@@ -35,7 +55,9 @@ Square and the new level load. Packages verified from their zips, codesign passe
 app started on a scratch profile; every earlier version's updater against the planned list: 18 of 18 offered and
 downloaded the right package (betas V2–V5 Beta V6; 1.0–2.1 version 2.2), 2.2 offered nothing.
 
-Not done: nothing tried on a PlayStation or on Windows; two disc-based research smokes outside the gate
+Not done: the clear command was not clicked through by hand in the packaged Mac app (the request to control the app
+was declined; the packaged app was started on a copy of the owner's project, and the command was driven from inside
+with real windows instead); nothing tried on a PlayStation or on Windows; two disc-based research smokes outside the gate
 (NativeFreshPlacementArenaSmoke, UniversalPlayerAnimationImportSmoke in disc mode) fail as they do in 2.1.
 
 # Spyro Editor 2.1 — 10 November 2026
