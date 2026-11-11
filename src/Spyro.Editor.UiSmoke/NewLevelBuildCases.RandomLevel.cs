@@ -342,7 +342,8 @@ internal static partial class NewLevelBuildCases
             if (total != treasure) throw new InvalidOperationException($"The level's treasure is {total}, not {treasure}.");
             if (treasure >= 150 && !new[] { 1, 2, 5, 10, 25 }.All(c => colours.Contains(c))) throw new InvalidOperationException("Not every gem colour is in the level.");
             if (placed.GetValueOrDefault("enemy") < 3) throw new InvalidOperationException("Hardly any enemies were placed.");
-            if (placed.GetValueOrDefault("basket") < 1 || placed.GetValueOrDefault("extra life chest") != 1) throw new InvalidOperationException("Chests are missing.");
+            // One extra life, two in a level of 400 gems or more.
+            if (placed.GetValueOrDefault("basket") < 1 || placed.GetValueOrDefault("extra life chest") != (treasure >= 400 ? 2 : 1)) throw new InvalidOperationException("Chests are missing.");
             if (eggs > 0 && placed.GetValueOrDefault("dragonfly egg") != eggs) throw new InvalidOperationException("Dragonfly eggs are missing.");
             // Teal and rainbow gems: as many as the treasure allows when asked for, none otherwise; they are gems of
             // the level like any other (the treasure above counts them).

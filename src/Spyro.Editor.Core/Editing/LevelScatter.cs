@@ -651,7 +651,8 @@ public static class LevelScatter
         bool Has(Kind kind) => request.ChestKinds.Contains(kind);
         var foes = items.Where(i => i.Kind == Kind.Enemy).Select(i => i.Position).ToList();
         bool Guarded(Vector3f p) => foes.Any(f => Dist2(f, p) <= 450 * 450);
-        for (int n = 0; Has(Kind.LifeChest) && n < (total >= 400 ? 2 : 1) && rows > 0; n++)
+        // One extra life, two in a level of 400 gems or more (teal and rainbow gems count: it is the level's treasure).
+        for (int n = 0; Has(Kind.LifeChest) && n < (request.Treasure >= 400 ? 2 : 1) && rows > 0; n++)
             if (Hidden(260) is { } life) { Put(Kind.LifeChest, point[life], Facing(life)); rows--; }
         if (Has(Kind.LockedChest) && rows > 4 && Hidden(260) is { } locked)
         {
