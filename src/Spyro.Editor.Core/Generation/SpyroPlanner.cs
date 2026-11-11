@@ -388,7 +388,9 @@ internal static partial class SpyroPlanner
         }
         // Nor in front of a doorway, where Spyro walks in and comes back out.
         foreach (var door in L.Doors)
-            if (door.Area == a.Id && SegmentDistance(x, y, door.X + door.Dx * door.Behind, door.Y + door.Dy * door.Behind, door.X - door.Dx * door.Front, door.Y - door.Dy * door.Front) < r + 150) return false;
+            if (door.Area == a.Id && (SegmentDistance(x, y, door.X + door.Dx * door.Behind, door.Y + door.Dy * door.Behind, door.X - door.Dx * door.Front, door.Y - door.Dy * door.Front) < r + 150 ||
+                // Nor beside the doorway itself, where its frame stands across the way in (up to 250 out either side).
+                Dist(x, y, door.X, door.Y) < r + 300)) return false;
         return true;
     }
 
@@ -557,8 +559,6 @@ internal static partial class SpyroPlanner
                 a.Zone.Discs.Add((a.X + d.X * off, a.Y + d.Y * off, r));
             }
         }
-        // Flights whose upper floor may have a perch to glide to, standing in the lower room.
-        var perches = new List<(PlannedArea Low, PlannedArea High, int Steps, (double X, double Y, double R) Flight)>();
         foreach (var j in L.Joins)
         {
             var p = L.Areas[j.A]; var a = L.Areas[j.B];
@@ -599,7 +599,6 @@ internal static partial class SpyroPlanner
                 L.Links.Add(new LevelLink(low.Id, high.Id, "ledge", new((float)(q.X - e.X * (out1 + 90)), (float)(q.Y - e.Y * (out1 + 90)), (float)low.Z),
                     new((float)(q.X - e.X * (out1 - 100)), (float)(q.Y - e.Y * (out1 - 100)), (float)(low.Z + SpyroMoves.DesignLedge))) { JumpAt = 60 });
                 L.Count("flight of steps");
-                perches.Add((low, high, steps, (q.X - e.X * (out1 - 230), q.Y - e.Y * (out1 - 230), 230.0)));
                 continue;
             }
             if (j.Kind is not ("path" or "charge"))
@@ -609,9 +608,11 @@ internal static partial class SpyroPlanner
                 continue;
             }
             if (apart && !(features.Bridges && rnd.Chance(Tune.BridgeChance)) && Stones(L, p, a, rnd)) continue;
-            // From well inside one room to well inside the other, bowed to one side (a long way winds both ways).
+            // From well inside one room to well inside the other, bowed to one side (a long way winds both ways). Into a
+            // room that is to have a hill of terraces the path ends just inside its edge, leaving the floor to the hill.
             double inset = apart ? 110 : Math.Min(160, 0.45 * Math.Min(p.R, a.R));
-            double sx = p.X + ux * (p.R - inset), sy = p.Y + uy * (p.R - inset), ex = a.X - ux * (a.R - inset), ey = a.Y - uy * (a.R - inset);
+            double insetP = p.Want.StartsWith("mount") && !apart ? 70 : inset, insetA = a.Want.StartsWith("mount") && !apart ? 70 : inset;
+            double sx = p.X + ux * (p.R - insetP), sy = p.Y + uy * (p.R - insetP), ex = a.X - ux * (a.R - insetA), ey = a.Y - uy * (a.R - insetA);
             double len = Dist(sx, sy, ex, ey), bow = apart ? 0 : Range(rnd, -0.16, 0.16) * len;
             bool winding = !apart && !charge && len > 1250;
             if (winding) bow = (rnd.Chance(0.5) ? 1 : -1) * Range(rnd, 0.09, 0.13) * len;
@@ -640,7 +641,7 @@ internal static partial class SpyroPlanner
                     path.Spine.Add((u * u * sx + 2 * u * t * mx + t * t * ex, u * u * sy + 2 * u * t * my + t * t * ey));
                 }
             // The ramp lies between the rooms, not inside them.
-            path.RampFrom = Math.Min(0.4, (inset + 40) / path.Length); path.RampTo = 1 - path.RampFrom;
+            path.RampFrom = Math.Min(0.4, (insetP + 40) / path.Length); path.RampTo = 1 - Math.Min(0.4, (insetA + 40) / path.Length);
             bool level = Math.Abs(a.Z - p.Z) < 6;
             string kind = apart ? "bridge" : charge ? "charge ramp" : path.Roof > 0 && !caves ? "tunnel" : level ? "path" : "ramp";
             if (winding)
@@ -656,12 +657,6 @@ internal static partial class SpyroPlanner
             else L.Links.Add(new LevelLink(p.Id, a.Id, kind, new((float)sx, (float)sy, (float)p.Z), new((float)ex, (float)ey, (float)a.Z)));
             if (!charge) L.Count(kind);
             for (int q = 1; q < path.Spine.Count - 1; q++) L.Gems.Add((path.Spine[q].X, path.Spine[q].Y, path.Id));
-        }
-        // From the top of a high flight, a glide to a perch that stands in the room below, too high to jump onto.
-        foreach (var (low, high, steps, flight) in perches)
-        {
-            if (!features.Glides || steps < 3 || low.R < 560 || !rnd.Chance(0.6)) continue;
-            if (GlideLedge(L, low, high.Zone, (high.X, high.Y), high.R, high.Z - low.Z, Unit(high.X - low.X, high.Y - low.Y), flight, rnd, round: false)) L.Count("glide from a high place");
         }
         Furnish(L, style, features, rnd);
         var first = L.Areas[0];

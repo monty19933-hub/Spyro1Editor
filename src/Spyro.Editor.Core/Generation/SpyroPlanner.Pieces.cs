@@ -62,6 +62,22 @@ internal static partial class SpyroPlanner
 
     private static Vector3f P(double x, double y, double z) => new((float)x, (float)y, (float)z);
 
+    /// <summary>Whether a disc would lie on a floor already planned (a path's strip, the steps of a flight, a ledge, a
+    /// pool): of the zones made before <paramref name="before"/>, any but the rooms (other rooms are kept apart by
+    /// <see cref="Free"/>).</summary>
+    /// <param name="pathR">The clearance from a path's strip, when not <paramref name="r"/>.</param>
+    private static bool Overlaps(PlannedLevel L, int before, double x, double y, double r, double? pathR = null)
+    {
+        for (int k = 0; k < before && k < L.Plan.Zones.Count; k++)
+        {
+            var z = L.Plan.Zones[k];
+            if (z.Kind == "room") continue;
+            if (z.IsPath) { if (z.SpineDistance(x, y, out _) < z.HalfWidth + (pathR ?? r)) return true; continue; }
+            foreach (var d in z.Discs) if (Dist(d.X, d.Y, x, y) < d.R + r) return true;
+        }
+        return false;
+    }
+
     /// <summary>One or two steps up at a room's edge, each a jump high.</summary>
     private static bool Ledges(PlannedLevel L, PlannedArea a, LevelRandom rnd, int steps)
     {
@@ -222,6 +238,7 @@ internal static partial class SpyroPlanner
         double out1 = steps == 3 ? 290 : 160;
         if (off - r - out1 < 0.1 * a.R) return false;
         if (!Free(L, a, c.X, c.Y, r) || !OffJoins(L, a, c.X, c.Y, r) || !OffJoins(L, a, q.X - d.X * 120, q.Y - d.Y * 120, 190)) return false;
+        if (Overlaps(L, L.Plan.Zones.Count, c.X, c.Y, r + 40) || Overlaps(L, L.Plan.Zones.Count, q.X - d.X * 120, q.Y - d.Y * 120, 230)) return false;
         a.Taken.Add(d);
         if (steps == 3)
         {
@@ -279,6 +296,7 @@ internal static partial class SpyroPlanner
         var j = Dir(Range(rnd, 0, 6.2832));
         double shift = Range(rnd, 0, 0.1) * a.R;
         (double X, double Y) c = (a.X + j.X * shift, a.Y + j.Y * shift);
+        if (Overlaps(L, L.Plan.Zones.Count, c.X, c.Y, foot + 40)) return false;
         if (a.Id == 0 && !StartPorch(L, a, rnd)) return false;
         TerrainZone? summit = null;
         // The jumps up it: on the side Spyro comes from.
@@ -313,6 +331,7 @@ internal static partial class SpyroPlanner
         var j = Dir(Range(rnd, 0, 6.2832));
         double shift = Range(rnd, 0, 0.08) * a.R;
         (double X, double Y) c = (a.X + j.X * shift, a.Y + j.Y * shift);
+        if (Overlaps(L, L.Plan.Zones.Count, c.X, c.Y, water + 60)) return false;
         if (a.Id == 0 && !StartPorch(L, a, rnd)) return false;
         var moat = L.Plan.Add(new TerrainZone
         {
@@ -353,6 +372,7 @@ internal static partial class SpyroPlanner
             double clear = a.Taken.Count == 0 ? 1 : a.Taken.Min(t => Math.Min(1 - (t.X * e.X + t.Y * e.Y), 1.6 + (t.X * e.X + t.Y * e.Y)));
             if (clear > bestClear) { bestClear = clear; u = e; }
         }
+        int zones0 = plan.Zones.Count;
         // Spyro starts on a porch at the room's edge.
         if (a.Id == 0 && !StartPorch(L, a, rnd)) return 0;
         int built = 0;
@@ -380,7 +400,9 @@ internal static partial class SpyroPlanner
                     // Its outer edge on the floor below, with room to walk past it.
                     if (Dist(p.X, p.Y, c.X, c.Y) + half + (level == 1 ? 190 : 130) > r) fits = false;
                 }
-                if (!fits) continue;
+                // Clear of the floors already planned in the room: the paths that come into it, the steps of a flight,
+                // a ledge (the ramp and the terrace would bury them).
+                if (!fits || spine.Any(p => Overlaps(L, zones0, p.X, p.Y, half + 40, half + 10)) || Overlaps(L, zones0, ck.X, ck.Y, rk + 40, rk + 10)) continue;
                 var terrace = plan.Add(new TerrainZone { Kind = "terrace", Z = z + h, Z1 = z + h, Area = a.Id, Priority = priority + 2, Blend = 0, Wobble = 12, WobbleScale = 260, Crisp = true, Floor = a.Zone.Floor });
                 terrace.Discs.Add((ck.X, ck.Y, rk));
                 var ramp = plan.Add(new TerrainZone
