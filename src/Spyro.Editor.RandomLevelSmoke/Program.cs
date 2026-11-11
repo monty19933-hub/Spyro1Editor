@@ -157,6 +157,7 @@ if (args.Length >= 7 && args[0] == "--export-random")
         Seed = long.Parse(args[1]), Style = Enum.Parse<Spyro.Editor.Core.Generation.LevelStyle>(args[2]), Size = Enum.Parse<Spyro.Editor.Core.Generation.LevelSize>(args[3]),
         Theme = args.Length > 7 && args[7] != "-" ? args[7] : null,
         ChargePaths = Environment.GetEnvironmentVariable("RANDOM_CHARGE") == "1" ? true : null,
+        Layout = Environment.GetEnvironmentVariable("RANDOM_LAYOUT") is { Length: > 0 } layout ? layout : null,
         Textures = args.Length > 8 && args[8] == "pictures" ? Spyro.Editor.Core.Generation.LevelTextureMode.GeneratedPictures : Spyro.Editor.Core.Generation.LevelTextureMode.GameTextures,
     };
     string output = Path.GetFullPath(args[6]);
