@@ -222,6 +222,48 @@ if (args.Length >= 2 && args[0] == "--spots")
     }
     return 0;
 }
+// ---------------- Fix It For Me: a refusal carries its repair ----------------
+{
+    var refusal = ExportRepair.Refusal("needs the way in", new ExportRepair.PlaceWorldEntrance("artisans"));
+    Check(refusal.Message == "needs the way in" && ExportRepair.Find(refusal) is ExportRepair.PlaceWorldEntrance { HomeworldKey: "artisans" }, "repair: a refusal carries its repair and reads as before");
+    Check(ExportRepair.Find(new InvalidOperationException("outer", refusal)) is ExportRepair.PlaceWorldEntrance &&
+          ExportRepair.Find(new AggregateException(new IOException("x"), new InvalidDataException("wrapped", refusal))) is ExportRepair.PlaceWorldEntrance,
+        "repair: it is found through the exceptions that wrap it");
+    Check(ExportRepair.Find(new InvalidDataException("plain")) == null && ExportRepair.Find(null) == null, "repair: an ordinary refusal has none");
+}
+
+// ---------------- Fix It For Me: a level made to fit its save rows ----------------
+{
+    Moby Gem(GemValue g, float x) => new() { Type = 0x18, SourceByte36 = g.IdByte, SourceByte4F = g.ValueByte, Position = new(x, 500, 560), Label = g.Name + " gem" };
+    Moby Thing(float x) => new() { Type = 0x20, SourceByte36 = 0xBB, Position = new(x, 600, 560), Label = "Balloonist" };
+    var mobys = new List<Moby> { Thing(400), Gem(GemValue.Purple, 410), Gem(GemValue.Red, 420), Gem(GemValue.Green, 430), Gem(GemValue.Red, 440), Thing(450), Gem(GemValue.Blue, 460) };
+    AuthoredObject[] objects = [.. mobys.Select(m => new AuthoredObject(Guid.NewGuid().ToString("N"), m))];
+    var scene = SceneDocument.New("FIT TEST") with
+    {
+        Objects = objects, Ledger = new UniversalPlacementLedger(1, [.. objects.Select((o, i) => new UniversalPlacementIdentity(o.Identity, i))]),
+        RandomObjects = [.. objects.Select(o => o.Identity)],
+    };
+    scene.Validate();
+    Check(mobys[1].IsVisibleGem && mobys[1].TreasureValue == 25 && !mobys[0].IsVisibleGem, "save rows: the test's gems are gems and its balloonist is not");
+    var same = scene.FitSaveRows(7);
+    Check(same.Scene == scene && same is { FreedRows: 0, RemovedGems: 0, StillOver: 0 }, "save rows: a level that fits is left alone");
+    var fit = scene.FitSaveRows(4);
+    Check(fit is { RemovedGems: 3, RemovedTreasure: 4, StillOver: 0, FreedRows: 0 } && fit.Scene.Objects.Count == 4 && fit.Scene.Ledger.Entries.Count == 4,
+        "save rows: three too many: the three least valuable loose gems go (two reds and the green: 4 treasure)");
+    Check(fit.Scene.Objects.Select(o => o.Identity).SequenceEqual(new[] { objects[0].Identity, objects[1].Identity, objects[5].Identity, objects[6].Identity }) &&
+          fit.Scene.Ledger.Entries.Select(e => e.Id).SequenceEqual(fit.Scene.Objects.Select(o => o.Identity)) &&
+          fit.Scene.Ledger.Entries.Select(e => e.Slot).SequenceEqual(Enumerable.Range(0, 4)) && fit.Scene.RandomObjects!.Count == 4,
+        "save rows: what stays keeps its order, the rows are renumbered, and Randomize's list forgets the gems");
+    var short2 = scene.FitSaveRows(1);
+    Check(short2 is { RemovedGems: 5, StillOver: 1 } && short2.Scene.Objects.Count == 2 && short2.Scene.Objects.All(o => !o.Value.IsVisibleGem),
+        "save rows: only loose gems are taken; with too few of them the rest is left and counted as still over");
+    // Rows held by deleted objects are given back first, before any gem goes.
+    var withDeleted = scene with { Objects = [.. objects.Take(5)] };
+    var freed = withDeleted.FitSaveRows(5);
+    Check(freed is { FreedRows: 2, RemovedGems: 0, StillOver: 0 } && freed.Scene.Ledger.Entries.Count == 5 && freed.Scene.RandomObjectRows == null,
+        "save rows: the rows of deleted objects are given back first, and then no gem has to go");
+}
+
 if (args.Length >= 2 && args[0] == "--overlay-after")
 {
     // --overlay-after <usa disc>: does building the entrance into a homeworld leave its code as the game's own?
@@ -276,6 +318,65 @@ static class Source
 {
     static int I(byte[] b, int at) => BinaryPrimitives.ReadInt32LittleEndian(b.AsSpan(at));
 
+    /// <summary>Fix It For Me's place for the entrance in each homeworld (<see cref="WorldEntranceSpots"/>): the places
+    /// that were played in the emulator on 10 November 2026 (in, the world loads, back out in front), that they build and
+    /// keep clear of the homeworld's own doorways, and the entrance composed together with an object added there.</summary>
+    static void AutoPlaces(UniversalSourceLibrary lib, LevelCatalog catalog, UniversalDiscImage image, Action<bool, string> Check)
+    {
+        byte[] sky = NativeWorldEntrance.PlainSky(new ColorRgba(120, 170, 230));
+        (string Key, double Size, float X, float Y, float Z, int Heading)[] played =
+        [
+            ("artisans", 1, 5888, 2240, 410, 240), ("peacekeepers", 1, 4928, 6464, 3324, 192), ("magiccrafters", 1, 6784, 3072, 1664, 240),
+            ("beastmakers", 1, 6208, 6976, 1015, 64), ("dreamweavers", 0.75, 3328, 3008, 832, 208),
+        ];
+        foreach (var p in played)
+        {
+            var level = catalog.FindByKey(p.Key)!;
+            var shape = Spyro.Editor.Core.Generation.LevelThemes.DoorwayShape(p.Key);
+            var spots = WorldEntranceSpots.Find(lib, catalog, p.Key, shape, p.Size);
+            var again = WorldEntranceSpots.Find(lib, catalog, p.Key, shape, p.Size);
+            Check(spots.Count > 0 && spots.SequenceEqual(again), $"places, {p.Key}: the editor finds a place, the same every time");
+            if (spots.Count == 0) continue;
+            var best = spots[0];
+            Check(best.Position == new Vector3f(p.X, p.Y, p.Z) && best.Heading == p.Heading, $"places, {p.Key}: it is the place that was played ({best.Position.X:0}, {best.Position.Y:0}, {best.Position.Z:0}, heading {best.Heading})");
+            if (p.Size < 1) Check(WorldEntranceSpots.Find(lib, catalog, p.Key, shape, 1).Count == 0, $"places, {p.Key}: only the small size has room");
+            // Clear of the homeworld's own doorways: the frame at least 300 units from each one's opening.
+            var doorways = NativeHubPortals.Templates(lib.ImagePath, catalog, p.Key).Values.Select(t => (X: t.BottomMiddle.X / 16, Y: t.BottomMiddle.Y / 16)).ToArray();
+            Check(doorways.All(d => Math.Sqrt(Math.Pow(d.X - best.Position.X, 2) + Math.Pow(d.Y - best.Position.Y, 2)) >= 300), $"places, {p.Key}: it keeps clear of the homeworld's own doorways");
+            byte[] data = image.EntryBytes(level.SourceWadEntry), overlay = image.EntryBytes(level.SourceWadEntry - 1);
+            var spec = new WorldEntranceSpec(p.Key, best.Position, best.Heading, shape.Id, p.Size);
+            WorldEntranceResult built;
+            try { built = NativeWorldEntrance.Apply(lib, catalog, spec, data, overlay, image.Exe, sky); }
+            catch (InvalidDataException e) { Check(false, $"places, {p.Key}: the entrance is built there ({e.Message})"); continue; }
+            Check(!NativeWorldEntrance.Present(data) && NativeWorldEntrance.Present(built.LevelData) && built.Composed == null &&
+                  GameRam.FitsPlayStation(new UniversalLevelData(built.LevelData), new UniversalOverlay(overlay, UniversalExeBindings.Read(image.Exe, level.LevelId)).CopyBuffer),
+                $"places, {p.Key}: the entrance is built there and the homeworld still fits a 2 MB console");
+            if (p.Key != "artisans") continue;
+            // An object added to the homeworld (a copy of its first gem, with a ledger row) and the entrance in one composition.
+            int rows = new UniversalLevelData(data).Scene().RowCount;
+            int gem = Enumerable.Range(0, rows).First(r => BinaryPrimitives.ReadUInt16LittleEndian(new UniversalLevelData(data).Row(r).AsSpan(0x36)) is >= 0x53 and <= 0x57);
+            var added = new UniversalMobyPlacement(p.Key, gem, (int)(best.Position.X * 16) - 4800, (int)(best.Position.Y * 16), (int)(best.Position.Z * 16) + 320, EditorId: "added-gem", PersistentSlot: 0);
+            int composedTimes = 0;
+            IReadOnlyList<UniversalMobyPlacement>? given = null;
+            var together = NativeWorldEntrance.Apply(lib, catalog, spec, data, overlay, image.Exe, sky, together: (prepared, objects) =>
+            {
+                composedTimes++; given = objects;
+                return UniversalMobyComposer.Compose(level, prepared, overlay, image.Exe, k => lib.Get(k), lib.SharedClasses, [],
+                    [added, .. objects.Select((o, i) => o with { SaveIdentity = 255 - i })], sharedModelPackage: lib.SharedModelPackage);
+            });
+            var after = new UniversalLevelData(together.LevelData);
+            Check(composedTimes >= 1 && given is { Count: 3 } && together.Composed != null && together.Composed.LevelData.AsSpan().SequenceEqual(together.LevelData) &&
+                  after.Scene().RowCount == rows + 4 && together.Rows.SequenceEqual(new[] { rows + 1, rows + 2, rows + 3 }) && together.PathRow == rows + 1,
+                "together: the entrance's three objects are composed after the homeworld's added one, in one composition");
+            Check(BinaryPrimitives.ReadUInt16LittleEndian(after.Row(rows).AsSpan(0x36)) == BinaryPrimitives.ReadUInt16LittleEndian(new UniversalLevelData(data).Row(gem).AsSpan(0x36)) &&
+                  BinaryPrimitives.ReadUInt16LittleEndian(after.Row(rows + 1).AsSpan(0x36)) == 0x18E && NativeWorldEntrance.Present(together.LevelData),
+                "together: the added object keeps the first new row, the doorway's path object follows, and the doorway is there");
+        }
+        var small = Spyro.Editor.Core.Generation.LevelThemes.DoorwayShape("gnastysworld");
+        Check(WorldEntranceSpots.Find(lib, catalog, "gnastysworld", small, 1).Count == 0 && WorldEntranceSpots.Find(lib, catalog, "gnastysworld", small, DoorwayShapes.MinScale).Count == 0,
+            "places, gnastysworld: no place is found (every spot is in the way out of one of its own doorways), so the editor says so");
+    }
+
     /// <summary>A spot on the ground 300 units in front of the homeworld's first doorway, facing the same way.</summary>
     public static (Vector3f Position, int Heading) Spot(UniversalSourceLibrary lib, LevelCatalog catalog, string key)
     {
@@ -291,6 +392,7 @@ static class Source
         var catalog = LevelCatalog.Load(Proof.Root());
         var lib = new UniversalSourceLibrary(usa, catalog);
         var image = UniversalDiscImage.Read(usa);
+        AutoPlaces(lib, catalog, image, Check);
         var artisans = lib.Get("artisans");
         var (o1, l1) = artisans.Data.Subfiles()[1];
         byte[] sky = Spyro1SkyBlockAnalyzer.ReadPrimarySkyBlock(artisans.Data.Bytes.AsSpan(o1, l1).ToArray())!;

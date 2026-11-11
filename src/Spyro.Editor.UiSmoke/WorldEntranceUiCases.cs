@@ -136,6 +136,29 @@ internal static class WorldEntranceUiCases
             Check(WorldEntranceDocument.Read(root) == null && Viewport(window).WorldEntrancePreviewFaceCountForTesting == 0 && Status(window).StartsWith("Removed the doorway to SKY ISLES", StringComparison.Ordinal),
                 "Remove Entrance deletes it and its preview");
 
+            // Fix It For Me: hidden until Create BIN stops on something the editor can put right itself; an ordinary
+            // refusal offers nothing; pressed without the game disc it says what it needs and withdraws the offer.
+            var fixIt = Find<Button>(window, "FixItForMe");
+            Check(!fixIt.IsVisible && window.PendingRepairForTesting == null, "Fix It For Me is hidden while nothing is on offer");
+            var needsWayIn = Spyro.Editor.Core.Exporting.ExportRepair.Refusal("needs the way in", new Spyro.Editor.Core.Exporting.ExportRepair.PlaceWorldEntrance("peacekeepers"));
+            string? offer = (string?)Invoke(window, "OfferRepair", needsWayIn); Pump(5);
+            Check(fixIt.IsVisible && window.FixItVisibleForTesting && window.PendingRepairForTesting is Spyro.Editor.Core.Exporting.ExportRepair.PlaceWorldEntrance { HomeworldKey: "peacekeepers" } &&
+                  offer != null && offer.Contains("Fix It For Me", StringComparison.Ordinal), "a refusal with a repair shows the button and the words that point to it");
+            Check((string?)Invoke(window, "OfferRepair", new InvalidDataException("an ordinary refusal")) == null && !fixIt.IsVisible && window.PendingRepairForTesting == null,
+                "an ordinary refusal offers nothing and hides the button");
+            Invoke(window, "OfferRepair", needsWayIn); Pump(5);
+            Run(window.ApplyPendingRepairForTestingAsync(), "fix it");
+            Check(!fixIt.IsVisible && window.PendingRepairForTesting == null && WorldEntranceDocument.Read(root) == null &&
+                  Status(window).StartsWith("Choose your original Spyro the Dragon (USA) disc first", StringComparison.Ordinal),
+                "pressed without the game disc, it says what it needs, places nothing and withdraws the offer");
+            // A project whose only built levels are its new world's still makes its game from the whole project.
+            bool worldOnly = (bool)Invoke(window, "ProjectHasNewWorldLevels")!;
+            string worldHome = SceneDocumentStore.PathForTarget(root, NewWorldDocument.KeyFor(NewWorldDocument.Homeworld));
+            File.WriteAllText(worldHome, "{}");
+            bool withLevel = (bool)Invoke(window, "ProjectHasNewWorldLevels")!;
+            File.Delete(worldHome);
+            Check(!worldOnly && withLevel, "a project with a saved level of its new world counts as having built levels (Create BIN includes the world whichever level is open)");
+
             Check(File.ReadAllText(Path.Combine(root, "unrelated-project-notes.txt")) == "protected" &&
                 !Directory.EnumerateFiles(parent, "*.bin", SearchOption.AllDirectories).Any(), "no other file is touched and no game is written");
             window.Close(); Pump(10);

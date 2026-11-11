@@ -320,6 +320,30 @@ Check(Throws(() => NativeNewWorldExport.TemplateDestination(70)) && Throws(() =>
         "only the world's homeworld is compiled on a template slot, and only on Artisans'");
 }
 
+// ---------------- the blocks' places in the program's spare room ----------------
+{
+    NativeCaveAssembler Blocks(params int[] bytes)
+    {
+        var asm = new NativeCaveAssembler();
+        for (int i = 0; i < bytes.Length; i++) { var block = asm.Data("B" + i); for (int w = 0; w < bytes[i] / 4; w++) block.Word(0); }
+        return asm;
+    }
+    NativeExecutableCaves.Cave[] spare = [new(0x80010000, 0x80010064, "a"), new(0x80020000, 0x80020054, "b")];   // 100 and 84 bytes
+    bool Inside(NativeCaveAssembler asm) => asm.Blocks.All(b => spare.Any(c => b.Address >= c.Start && b.Address + b.Length <= c.End)) &&
+        asm.Blocks.All(b => asm.Blocks.All(o => o == b || b.Address + b.Length <= o.Address || o.Address + o.Length <= b.Address));
+    var easy = Blocks(60, 24, 56, 20);
+    var placed = easy.Place(spare);
+    Check(placed["B0"] == 0x80010000 && placed["B2"] == 0x80020000 && placed["B1"] == 0x8001003C && placed["B3"] == 0x80020038 && Inside(easy),
+        "blocks: the largest first, each into the first piece of spare room that holds it (as every game so far)");
+    // 60 then 56 into the first two pieces leaves 44 without a place (40 and 28 left); 56 + 44 and 60 + 24 fit.
+    var tight = Blocks(60, 56, 44, 24);
+    Check(!Throws(() => tight.Place(spare)) && Inside(tight), "blocks: where that leaves one out although there is room, they are fitted by search");
+    Check(Throws(() => Blocks(60, 56, 48, 24).Place(spare)) && Throws(() => Blocks(104).Place(spare)), "blocks: what cannot fit is refused");
+    string why = ""; try { Blocks(60, 56, 48, 24).Place(spare); } catch (InvalidDataException e) { why = e.Message; }
+    Check(why.Contains("no room left for your new world's code", StringComparison.Ordinal) && why.Contains("188", StringComparison.Ordinal) && why.Contains("184", StringComparison.Ordinal),
+        "blocks: the refusal says how much is needed and how much there is");
+}
+
 if (args.Length >= 2 && args[0] == "--source")
 {
     NativeLevelWindow.TestSkipCaveHashes = false;

@@ -243,7 +243,7 @@ CORE_CASES = (
     # The level window (world 7, ids 70-74): the shared executable-cave registry has no overlaps; the window's patch on a
     # synthetic executable (hooks, records, inventory, save layout, names), re-install and refusals; its routines run on
     # a test CPU (record swap, save, Load Game, New Game, names, doorway arrival, card offsets, page 7); the card menu.
-    ("LevelWindowSmoke", "LEVEL_WINDOW_FREE_OK checks=91"),
+    ("LevelWindowSmoke", "LEVEL_WINDOW_FREE_OK checks=95"),
     # Ground kinds an original level never had (Tile Type… and the Ground card in Artisans, Stone Hill…): each of the
     # eight kinds every level can use is appended from its canonical record to a table that lacks it and reparses on the
     # assigned triangles; a saved donor resolves only when the donor still holds that exact record; portals and
@@ -265,7 +265,7 @@ CORE_CASES = (
     # the horizon within a size, one colour), the ground-kind, view-group and collision writers (entry triangles after
     # the flagged ones, the rest renumbered, every cell kept), the frame as one added sector, the way back's facts, the
     # saved placement (world-entrance.json) and refusals.
-    ("WorldEntranceSmoke", "WORLD_ENTRANCE_FREE_OK checks=57"),
+    ("WorldEntranceSmoke", "WORLD_ENTRANCE_FREE_OK checks=66"),
     # The balloonists' route with the project's new world on it (NativeBalloonTravel): the route and its refusals, a
     # balloonist's lines for every price, his decision code written for every place and run instruction by instruction
     # (a small MIPS interpreter) for every state of the game: the page he opens with, the byte he sets, what he leaves alone.
@@ -322,7 +322,7 @@ ADDITIONAL_CORE_CASES = (
      ["--spyro-colours-ui-only"]),
     ("UiSmoke", "DOORWAYS_UI_OK checks=39",
      ["--doorways-ui-only"]),
-    ("UiSmoke", "WORLD_ENTRANCE_UI_OK checks=33",
+    ("UiSmoke", "WORLD_ENTRANCE_UI_OK checks=39",
      ["--world-entrance-ui-only"]),
     ("UiSmoke", "LEVEL_PICKER_AUTOMATION_OK",
      ["--level-picker-automation-only"]),
@@ -376,7 +376,7 @@ SOURCE_QA_CASES = (
     ("ExtendedRamSmoke", "EXTENDED_RAM_SOURCE_OK checks=88", ["--source"]),
     # The level window installed into the retail executable and card menu (read only): USA preimages and caves, the
     # routines on the real executable, re-install, placement inside WAD.WAD and after the image.
-    ("LevelWindowSmoke", "LEVEL_WINDOW_SOURCE_OK checks=130", ["--source"]),
+    ("LevelWindowSmoke", "LEVEL_WINDOW_SOURCE_OK checks=134", ["--source"]),
     # Every retail sky drawn as a panorama and rebuilt from it within the game's limits, looking the same.
     ("SkyImportSmoke", "SKY_IMPORT_SOURCE_OK checks=280", ["--source"]),
     # All 29 original homeworld doorways: written byte for byte as before; each shape keeps the original's sky.
@@ -384,7 +384,7 @@ SOURCE_QA_CASES = (
     # The New World's doorway in each of the six homeworlds (read only): record, ground kind, entry triangles, objects,
     # memory in 2 MB (which sky fits) and 8 MB, refusals (second entrance, six doorways, map edge, textures), every shape
     # and size, after another object edit, deterministic bytes.
-    ("WorldEntranceSmoke", "WORLD_ENTRANCE_SOURCE_OK checks=186", ["--source"]),
+    ("WorldEntranceSmoke", "WORLD_ENTRANCE_SOURCE_OK checks=219", ["--source"]),
     # The game's own overlays (read only): the two balloonist routines are the same in the six homeworlds and Town
     # Square; changed for each of the six places the new world can take and run for every state of the route (the menu's
     # rows and names, the level each row flies to, the "ready to go" page), every balloonist's decision code in its
