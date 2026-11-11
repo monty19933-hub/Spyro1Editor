@@ -3,16 +3,18 @@ using System.Text.Json;
 
 namespace Spyro.Editor.Core.Universal;
 
-/// <summary>What one level still lacks for the game to be finished 100%: every one of the game's 80 dragons and 12
-/// dragon eggs lives in a particular level, so a level you change or rebuild must keep its own dragons (statues) and
-/// egg thieves; and a level that had a Return Home vortex needs one to leave it the way the game's levels are left.
+/// <summary>What one level still lacks for the game to be finished 100%: every one of the game's 80 dragons lives in a
+/// particular level, so a level you change or rebuild must keep its own dragons (statues); and a level that had a
+/// Return Home vortex needs one to leave it the way the game's levels are left. Egg thieves are counted but not
+/// required: since 2.3 the game's egg totals follow the thieves a game holds (<c>NativeEggTotals</c>), so a level
+/// without its own thief just has one egg fewer to find.
 /// Gems are not checked here: Create BIN moves the level's gem total with the gems you place.
 /// <see cref="DuplicateDragons"/>/<see cref="DuplicateThieves"/>: own dragons or thieves in the level more than once
 /// (each has one save identity, so the game counts only one of them).</summary>
 public sealed record LevelCompletionGap(string LevelKey, int DragonsNeeded, int DragonsPresent, int ThievesNeeded, int ThievesPresent,
     int DuplicateDragons = 0, int DuplicateThieves = 0, bool ExitNeeded = false, bool ExitPresent = false)
 {
-    public bool Complete => DragonsPresent >= DragonsNeeded && ThievesPresent >= ThievesNeeded && (ExitPresent || !ExitNeeded);
+    public bool Complete => DragonsPresent >= DragonsNeeded && (ExitPresent || !ExitNeeded);
     public int MissingDragons => Math.Max(0, DragonsNeeded - DragonsPresent);
     public int MissingThieves => Math.Max(0, ThievesNeeded - ThievesPresent);
 }
@@ -105,11 +107,7 @@ public static class LevelCompletionCheck
         List<string> lines = [], parts = [], from = [];
         if (gap.MissingDragons > 0)
             parts.Add(gap.MissingDragons == 1 ? $"1 of {slotName}'s dragons" : $"{gap.MissingDragons} of {slotName}'s {gap.DragonsNeeded} dragons");
-        if (gap.MissingThieves > 0)
-            parts.Add(gap.ThievesNeeded == 1 ? $"{slotName}'s egg thief" : $"{gap.MissingThieves} of {slotName}'s {gap.ThievesNeeded} egg thieves");
-        string thief = gap.ThievesNeeded == 1 ? "egg thief" : "egg thieves";
-        if (parts.Count > 0)
-            from.Add((gap.MissingDragons > 0 && gap.MissingThieves > 0 ? "dragons and " + thief : gap.MissingDragons > 0 ? "dragons" : thief) + $" from {slotName}");
+        if (parts.Count > 0) from.Add($"dragons from {slotName}");
         if (gap.ExitNeeded && !gap.ExitPresent) { parts.Add("a Return Home vortex"); from.Add("Return Home from any level"); }
         if (parts.Count > 0)
             lines.Add($"{where} needs {Join(parts)} (Add Object: {string.Join(", ", from)}).");
@@ -129,14 +127,15 @@ public static class LevelCompletionCheck
         return parts.Count == 0 ? null : string.Join(" and ", parts);
     }
 
-    /// <summary>The short line the editor shows under a level's treasure, e.g. "To finish 100%: dragons 4 of 4, egg thief 0 of 1
+    /// <summary>The short line the editor shows under a level's treasure, e.g. "To finish 100%: dragons 4 of 4, egg thief 1
     /// · Return Home vortex: yes", or null for a level with none of them.</summary>
     public static string? Summary(LevelCompletionGap gap)
     {
         if (gap.DragonsNeeded == 0 && gap.ThievesNeeded == 0 && !gap.ExitNeeded) return null;
         List<string> parts = [], lines = [];
         if (gap.DragonsNeeded > 0) parts.Add($"dragons {gap.DragonsPresent} of {gap.DragonsNeeded}");
-        if (gap.ThievesNeeded > 0) parts.Add($"egg {(gap.ThievesNeeded == 1 ? "thief" : "thieves")} {gap.ThievesPresent} of {gap.ThievesNeeded}");
+        // Thieves are counted, not required: the game's egg totals follow them (one egg per thief in the game).
+        if (gap.ThievesNeeded > 0 || gap.ThievesPresent > 0) parts.Add($"egg {(gap.ThievesPresent == 1 ? "thief" : "thieves")} {gap.ThievesPresent}");
         if (parts.Count > 0) lines.Add("To finish 100%: " + string.Join(", ", parts));
         if (gap.ExitNeeded) lines.Add("Return Home vortex: " + (gap.ExitPresent ? "yes" : "missing"));
         return string.Join("  ·  ", lines) + (gap.Complete && Twice(gap) == null ? " ✓" : "");

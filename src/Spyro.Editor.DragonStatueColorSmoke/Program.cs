@@ -33,11 +33,14 @@ if(args.Length==0)
     // "To finish 100%": a level's own dragons (rows 5, 9) and thief (row 20), kept, removed, added back, added twice.
     var own=new LevelOwnRows([5,9],[20],[]);
     var whole=LevelCompletionCheck.Check(own,"townsquare",false,[],[]);
-    Check(whole.Complete&&LevelCompletionCheck.Describe(whole,"Town Square")==null&&LevelCompletionCheck.Summary(whole)=="To finish 100%: dragons 2 of 2, egg thief 1 of 1 ✓","untouched level complete");
+    Check(whole.Complete&&LevelCompletionCheck.Describe(whole,"Town Square")==null&&LevelCompletionCheck.Summary(whole)=="To finish 100%: dragons 2 of 2, egg thief 1 ✓","untouched level complete");
     var blank=LevelCompletionCheck.Check(own,"townsquare",true,[],[("townsquare",5),("stonehill",9),("townsquare",21)]);
     Check(blank is {DragonsPresent:1,ThievesPresent:0,MissingDragons:1,MissingThieves:1}&&
-        LevelCompletionCheck.Describe(blank,"Town Square","Cloudspire Isles")=="Cloudspire Isles (in Town Square's place) needs 1 of Town Square's dragons and Town Square's egg thief (Add Object: dragons and egg thief from Town Square).",
-        "rebuilt level: only its own rows count");
+        LevelCompletionCheck.Describe(blank,"Town Square","Cloudspire Isles")=="Cloudspire Isles (in Town Square's place) needs 1 of Town Square's dragons (Add Object: dragons from Town Square).",
+        "rebuilt level: only its own rows count; a missing egg thief is not asked for (the egg totals follow the thieves)");
+    var noThief=LevelCompletionCheck.Check(own,"townsquare",false,[20],[]);
+    Check(noThief is {Complete:true,ThievesPresent:0}&&LevelCompletionCheck.Describe(noThief,"Town Square")==null&&
+        LevelCompletionCheck.Summary(noThief)=="To finish 100%: dragons 2 of 2, egg thieves 0 ✓","a level without its egg thief can still be finished 100%");
     var twice=LevelCompletionCheck.Check(own,"townsquare",false,[9],[("TOWNSQUARE",20),("townsquare",9)]);
     Check(twice is {Complete:true,DuplicateThieves:1,DuplicateDragons:0}&&
         LevelCompletionCheck.Describe(twice,"Town Square")=="Town Square has the same egg thief twice; the game counts only one, so remove the extra copy."&&

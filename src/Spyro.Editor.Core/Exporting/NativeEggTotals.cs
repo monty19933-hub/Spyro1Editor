@@ -307,6 +307,20 @@ public static class NativeEggTotals
             (int)(BinaryPrimitives.ReadUInt32LittleEndian(exe[Off(RowEggStep)..]) & 0xFFFF), gate, divisor);
     }
 
+    /// <summary>What a finished game image says about its eggs (the inventory row's length), or "" when it has the
+    /// game's own twelve or the image can't be read. For the line Create BIN ends with.</summary>
+    public static string DescribeGame(string imagePath)
+    {
+        try
+        {
+            byte[] exe = Spyro.Editor.Core.Universal.UniversalDiscImage.Read(imagePath).Exe;
+            int total = (int)(BinaryPrimitives.ReadUInt32LittleEndian(exe.AsSpan(Off(RowBound))) & 0xFFFF);
+            if (total == RetailTotal || total is < 0 or > MaxTotal) return "";
+            return $" This game has {total} dragon {(total == 1 ? "egg" : "eggs")} (one for every egg thief in it, the game's own has {RetailTotal}): the inventory and 100% count {total}.";
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException or IndexOutOfRangeException or UnauthorizedAccessException) { return ""; }
+    }
+
     /// <summary>One line for the person making the game, or "" when the game has the game's own twelve eggs.</summary>
     public static string Describe(EggTotalsApplied? applied)
     {

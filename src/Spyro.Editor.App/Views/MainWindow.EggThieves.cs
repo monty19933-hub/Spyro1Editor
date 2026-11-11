@@ -207,7 +207,20 @@ public sealed partial class MainWindow
         _routeToolsNote.Text = $"{(thief ? "This egg thief runs" : "It walks")} a route of {path.Nodes.Count} points, about {length:0} units round" +
             (path.HasEdits ? " (changed from the one it came with)" : "") + $". Drag the numbered points in the 3D view, type them in {(path.IsPlacedObjectRoute ? "Edit Route…" : "Edit Run Path")}, or shape the whole run here. " +
             (thief ? "Give a thief room to run and Spyro room to chase: a round of 1,500 to 3,000 units on open, level floor plays best. " +
-                "A point he could not run to (no ground, or a step up or down of more than 150 units) is not taken." : "");
+                "A point he could not run to (no ground, water, lava or ooze, or a step up or down of more than 150 units) is not taken." : "") +
+            ThiefWaterWarning(path);
+    }
+
+    /// <summary>Said on the run card when an egg thief stands in, or runs through, water, lava or ooze: he can, but Spyro
+    /// sinks there and can't catch him (empty when he is on dry ground).</summary>
+    private string ThiefWaterWarning(NativeMobyPath path)
+    {
+        if (!IsThiefRun(path) || _currentMobys.FirstOrDefault(m => m.TrueIndex == path.OwnerTrueIndex && !m.IsRemoved) is not { } owner) return "";
+        bool stands = IsLiquidAt(owner.Position.X, owner.Position.Y);
+        int wet = path.Nodes.Count(n => IsLiquidAt(n.Position.X, n.Position.Y));
+        if (!stands && wet == 0) return "";
+        return " ⚠ " + (stands ? "He stands in water, lava or ooze" : $"{Count(wet, "point", "points")} of his run {(wet == 1 ? "is" : "are")} in water, lava or ooze") +
+               ": Spyro sinks there and can't catch him. Move him onto dry ground (drag him, or set him down again with Add Object), then use New Loop Here.";
     }
 
     internal void ReshapeSelectedRouteForTesting(string how) => ReshapeSelectedRoute(how);
@@ -303,9 +316,9 @@ public sealed partial class MainWindow
         if (IsThiefRun(path))
         {
             if (!path.IsPlacedObjectRoute && _currentGeometry is { Polygons.Count: > 0 } geometry)
-                made = [.. made.Select(p => EggThiefRun.TryPlace(geometry.Polygons, p.X, p.Y, p.Z, out var placed, _viewport.IsTerrainPresentedForEditing) ? placed : p)];
+                made = [.. made.Select(p => EggThiefRun.TryPlace(geometry.Polygons, p.X, p.Y, p.Z, out var placed, ThiefGround(path)) ? placed : p)];
             if (JudgeRun(path, made) is { Count: > 0 } problems)
-            { _statusText.Text = $"That would give {owner.DisplayLabel} a run he can't take: {problems[0].Text}. Nothing was changed."; return; }
+            { _statusText.Text = $"That would give {owner.DisplayLabel} a run he can't take: {RunProblemText(problems[0])}. Nothing was changed."; return; }
         }
         for (int i = 0; i < n; i++) nodes[i].SetPosition(made[i]);
         StorePlacedObjectRoute(path);

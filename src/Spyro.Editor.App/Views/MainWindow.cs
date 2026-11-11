@@ -13741,7 +13741,7 @@ public sealed partial class MainWindow : Window
         // change that outcome or enter the prepublication failure handler.
         await CompleteCombinedExportPublicationAsync(
             sourceImage, outputDir, targets, result, targetSummary, currentBuildSafetyReport);
-        _statusText.Text += MemoryModeExportNote(memory) + LeftOutNote();
+        _statusText.Text += NativeEggTotals.DescribeGame(result.OutputImagePath) + MemoryModeExportNote(memory) + LeftOutNote();
         _createdGameCue = result.OutputCuePath;
         try
         {

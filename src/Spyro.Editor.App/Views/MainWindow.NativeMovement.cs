@@ -425,7 +425,7 @@ public sealed partial class MainWindow
                 var typed = rows.Select(r => { TryParseFloat(r.XBox.Text, out float x); TryParseFloat(r.YBox.Text, out float y); TryParseFloat(r.ZBox.Text, out float z); return new Vector3f(x, y, z); }).ToList();
                 if (JudgeRun(path, typed) is { Count: > 0 } problems)
                 {
-                    validation.Text = $"The egg thief can't run this: {problems[0].Text}. Move that point back towards where it was, or onto ground he can reach.";
+                    validation.Text = $"The egg thief can't run this: {RunProblemText(problems[0])}. Move that point back towards where it was, or onto ground he can reach.";
                     return;
                 }
             }
@@ -518,16 +518,17 @@ public sealed partial class MainWindow
         // An egg thief's point goes onto the floor he runs on there, and only where he can still run to and from it.
         if (IsThiefRun(e.Path) && _currentGeometry is { Polygons.Count: > 0 } geometry)
         {
-            float near = EggThiefRun.FloorAt(geometry.Polygons, current, _viewport.IsTerrainPresentedForEditing);
-            if (!EggThiefRun.TryPlace(geometry.Polygons, x, y, float.IsFinite(near) ? near : current.Z, out Vector3f placed, _viewport.IsTerrainPresentedForEditing))
+            var ground = ThiefGround(e.Path);
+            float near = EggThiefRun.FloorAt(geometry.Polygons, current, ground);
+            if (!EggThiefRun.TryPlace(geometry.Polygons, x, y, float.IsFinite(near) ? near : current.Z, out Vector3f placed, ground))
             {
-                _statusText.Text = $"Point {e.Node.Index + 1} of the egg thief's run can't go there: there is no ground there. It stays at the last place he can run to.";
+                _statusText.Text = $"Point {e.Node.Index + 1} of the egg thief's run can't go there: {(IsLiquidAt(x, y) ? LiquidText : "there is no ground there")}. It stays at the last place he can run to.";
                 return;
             }
             var points = e.Path.Nodes.Select(node => node.Index == e.Node.Index ? placed : node.Position).ToList();
             if (JudgeRun(e.Path, points) is { Count: > 0 } problems)
             {
-                _statusText.Text = $"Point {e.Node.Index + 1} of the egg thief's run can't go there: {problems[0].Text}. It stays at the last place he can run to.";
+                _statusText.Text = $"Point {e.Node.Index + 1} of the egg thief's run can't go there: {RunProblemText(problems[0])}. It stays at the last place he can run to.";
                 return;
             }
             e.Node.SetPosition(placed);
@@ -559,8 +560,77 @@ public sealed partial class MainWindow
         if (_currentMobys.FirstOrDefault(m => m.TrueIndex == path.OwnerTrueIndex && !m.IsRemoved) is not { } owner) return [];
         bool own = !path.IsPlacedObjectRoute;
         return EggThiefRun.Judge(geometry.Polygons, owner.Position, points, path.CurrentNode,
-            own ? path.Nodes.Select(node => node.OriginalPosition).ToList() : null, own ? owner.Position : null, _viewport.IsTerrainPresentedForEditing);
+            own ? path.Nodes.Select(node => node.OriginalPosition).ToList() : null, own ? owner.Position : null, ThiefGround(path));
     }
+
+    /// <summary>Ground an egg thief may run on: the floor shown for editing, less water, lava and ooze (the thief runs
+    /// over them, but Spyro sinks there and can't follow). The game's own thief whose own run already crosses such a tile
+    /// (none was found in the game) keeps the floor as it was.</summary>
+    private Func<TerrainPolygon, bool> ThiefGround(NativeMobyPath? path = null)
+    {
+        Func<TerrainPolygon, bool> presented = _viewport.IsTerrainPresentedForEditing;
+        if (_currentGeometry is not { Polygons.Count: > 0 } geometry) return presented;
+        Func<TerrainPolygon, bool> dry = p => presented(p) && !IsLiquidTile(p);
+        if (path is { IsPlacedObjectRoute: false } && _currentMobys.FirstOrDefault(m => m.TrueIndex == path.OwnerTrueIndex && !m.IsRemoved) is { } owner)
+        {
+            var original = path.Nodes.Select(node => node.OriginalPosition).ToList();
+            if (EggThiefRun.Walk(geometry.Polygons, owner.Position, original, path.CurrentNode, dry).Problems.Count > EggThiefRun.Walk(geometry.Polygons, owner.Position, original, path.CurrentNode, presented).Problems.Count)
+                return presented;
+        }
+        return dry;
+    }
+
+    private const string LiquidText = "that is water, lava or ooze (the thief would run over it, but Spyro sinks there and can't follow him)";
+
+    /// <summary>A tile of water, lava or ooze (Spyro sinks and loses a life): in a level you built its chosen kind; in one
+    /// of the game's levels the kind Tile Type… shows (the staged choice, else the level's own), or the game's collision
+    /// ground under the tile's middle (<see cref="LevelHazards"/>: a swamp is often plain drawn floor over water).</summary>
+    private bool IsLiquidTile(TerrainPolygon face)
+    {
+        if (face.SurfaceBehaviorEdit is { } chosen) return chosen.SurfaceType == 0;
+        if (_freshSceneDocument != null) return false;
+        if (_liquidTiles.TryGetValue(face, out bool known)) return known;
+        var catalog = TileTypeCatalog(out _);
+        bool liquid = catalog != null && CurrentTileType(face, catalog) is { IsOrdinary: false, SurfaceType: 0 };
+        if (!liquid && face.Points.Count >= 3)
+        {
+            float cx = face.Points.Average(q => q.X), cy = face.Points.Average(q => q.Y);
+            liquid = face.TryGetZ(cx, cy, out float cz) && float.IsFinite(cz) && CurrentHazards().IsLiquid(cx, cy, cz);
+        }
+        return _liquidTiles[face] = liquid;
+    }
+
+    private readonly Dictionary<TerrainPolygon, bool> _liquidTiles = new(ReferenceEqualityComparer.Instance);
+    private (string Key, LevelHazards Hazards)? _hazards;
+
+    /// <summary>The open game level's liquid collision ground (none while the object catalogue is still being read, and
+    /// in a level you built, whose tiles say it themselves).</summary>
+    internal LevelHazards CurrentHazards()
+    {
+        if (_currentLevel is not { } level || _freshSceneDocument != null || _universalCatalog is not { } catalog) return LevelHazards.None;
+        if (_hazards is { } known && known.Key == level.Key) return known.Hazards;
+        _liquidTiles.Clear();
+        LevelHazards hazards;
+        try { hazards = LevelHazards.From(catalog.Library.Get(level.Key).Data, level.DisplayName); }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or KeyNotFoundException or InvalidOperationException) { hazards = LevelHazards.None; }
+        _hazards = (level.Key, hazards);
+        return hazards;
+    }
+
+    /// <summary>Whether the highest floor tile at (x, y) is water, lava or ooze.</summary>
+    private bool IsLiquidAt(float x, float y)
+    {
+        if (_currentGeometry is not { Polygons.Count: > 0 } geometry) return false;
+        TerrainPolygon? top = null; float best = float.NegativeInfinity;
+        foreach (var p in geometry.Polygons)
+            if (!p.IsTerrainRemoved && _viewport.IsTerrainPresentedForEditing(p) && p.ContainsXY(x, y) && p.TryGetZ(x, y, out float z) && float.IsFinite(z) && z > best) { best = z; top = p; }
+        return top != null && (IsLiquidTile(top) || CurrentHazards().IsLiquid(x, y, best));
+    }
+
+    /// <summary>A problem of the run in the editor's words (water, lava and ooze named as such).</summary>
+    private string RunProblemText(EggThiefRun.Problem problem) =>
+        problem.NoGround && IsLiquidAt(problem.X, problem.Y)
+            ? $"on the way from {(problem.From < 0 ? "where he stands" : $"point {problem.From + 1}")} to point {problem.To + 1}, at {problem.X:0}, {problem.Y:0}, {LiquidText}" : problem.Text;
 
     private void TranslateOwnedNativeMovement(Moby owner, Vector3f appliedDelta)
     {
@@ -592,7 +662,7 @@ public sealed partial class MainWindow
 
         if (IsThiefRun(path) && _currentGeometry is { Polygons.Count: > 0 } geometry)
         {
-            if (EggThiefRun.TryPlace(geometry.Polygons, x, y, z - EggThiefRun.PointHeight, out Vector3f placed, _viewport.IsTerrainPresentedForEditing))
+            if (EggThiefRun.TryPlace(geometry.Polygons, x, y, z - EggThiefRun.PointHeight, out Vector3f placed, ThiefGround(path)))
                 row.ZBox.Text = FormatPosition(placed.Z);
             return;
         }

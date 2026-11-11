@@ -18,6 +18,7 @@ internal static partial class NewLevelBuildCases
             case "thief-add": ThiefAddStep(window, outDir); return true;
             case "thief-run": ThiefRunStep(window, outDir); return true;
             case "thief-drag": ThiefDragStep(window, outDir); return true;
+            case "thief-water": ThiefWaterStep(window, outDir); return true;
             default: return false;
         }
     }
