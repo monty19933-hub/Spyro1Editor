@@ -239,6 +239,15 @@ public static class NativeNewWorldExport
             if (bindings.TryGetValue(NativeBalloonTravel.TickGlobal, out uint tick) && bindings.TryGetValue(NativeBalloonTravel.RenderGlobal, out uint render))
                 NativeBalloonTravel.ApplyOffRoute(entries[homeAt], tick, render, place.Balloonist);
         }
+        // The game's egg totals with the world's own egg thieves counted (the rest of the game's are in them already).
+        {
+            Dictionary<int, byte[]> all = new(rebuilt);
+            foreach (var (e, bytes) in entries) all[e] = bytes;
+            List<(int Overlay, int Data)> worldEntries = [];
+            for (int e = FirstEntry; entries.ContainsKey(e) && entries.ContainsKey(e + 1); e += 2) worldEntries.Add((e, e + 1));
+            NativeEggTotals.ApplyForExport(final, original, all, image.EntryBytes, worldEntries);
+            foreach (var (e, bytes) in all) { if (e >= FirstEntry) entries[e] = bytes; else rebuilt[e] = bytes; }
+        }
         if (rebuilt.Count > 0) wad = image.RebuildWad(rebuilt);
         // Spyro's and the creatures' colours (Game Settings) in the world's levels; the rest of the game has them already.
         // The world's entries follow its levels in the order of their numbers, overlay then data.

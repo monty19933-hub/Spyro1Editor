@@ -79,6 +79,22 @@ public static class NativeEggThiefColours
         return found;
     }
 
+    /// <summary>The class numbers a level gives its egg thieves (0x21 in the game's own levels; another where a thief
+    /// was brought into a level that uses the number already): the classes whose model is a thief's.</summary>
+    public static IReadOnlySet<int> ThiefClasses(byte[] level)
+    {
+        HashSet<int> classes = [];
+        try
+        {
+            var roots = Models(level).Select(m => m.Start).ToHashSet();
+            if (roots.Count == 0) return classes;
+            foreach (var registration in new UniversalLevelData(level).Registrations())
+                if (roots.Contains(registration.Root)) classes.Add(registration.ClassId);
+        }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or OverflowException) { }
+        return classes;
+    }
+
     private static int VramOffset(ReadOnlySpan<byte> entry)
     {
         if (entry.Length < 0x800 + NativeSpyroColours.VramBytes) return -1;

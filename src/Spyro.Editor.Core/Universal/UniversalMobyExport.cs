@@ -207,6 +207,8 @@ public static class UniversalMobyExport
             UniversalEggUnlocks.PatchOverlays(catalog, sources.Disc.EntryBytes, current.EntryBytes, replacements, dragonflyEggs.Count);
             if (signLevels.Count > 0)
                 RequireSignMarkersOnlyIn(exe, catalog, signLevels, i => replacements.TryGetValue(i, out var r) ? r : current.EntryBytes(i));
+            // The game's egg totals follow the egg thieves its levels hold.
+            Spyro.Editor.Core.Exporting.NativeEggTotals.ApplyForExport(exe, sources.Disc.Exe, replacements, current.EntryBytes);
         }
         byte[] wad = current.RebuildWad(replacements);
         string staging = outputImagePath + ".pending-" + Guid.NewGuid().ToString("N");

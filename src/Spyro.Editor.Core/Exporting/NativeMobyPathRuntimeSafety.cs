@@ -227,7 +227,7 @@ public static class NativeMobyPathRuntimeSafety
                 findings);
         }
 
-        InspectEditedNodeTerrain(path, geometry, findings);
+        InspectEditedNodeTerrain(path, ownerPosition, geometry, findings);
         return BuildResult(path, findings);
     }
 
@@ -272,8 +272,12 @@ public static class NativeMobyPathRuntimeSafety
         }
     }
 
+    /// <summary>Moved points must leave a run the thief can run (<see cref="EggThiefRun.Judge"/>): ground under every
+    /// leg to and from them, with no step up or down the game's own run does not have there. Only x and y matter to the
+    /// game (a point's height is not used), so a point moved onto the floor is not judged by its height.</summary>
     private static void InspectEditedNodeTerrain(
         NativeMobyPath path,
+        NativeMobyPathRawPosition ownerPosition,
         GeometryCandidate? geometry,
         List<NativeMobyPathRuntimeSafetyFinding> findings)
     {
@@ -285,53 +289,16 @@ public static class NativeMobyPathRuntimeSafety
             findings.Add(new NativeMobyPathRuntimeSafetyFinding(
                 "native-path-terrain-unavailable",
                 MobyBuildSafetyStatus.Review,
-                "No source-derived terrain geometry is available to compare edited path-node floor clearance."));
+                "No source-derived terrain geometry is available to check the edited run against the ground."));
             return;
         }
 
-        foreach (NativePathNode node in editedNodes)
-        {
-            bool originalHit = TryFindTerrainRawZ(
-                geometry,
-                node.OriginalRawX,
-                node.OriginalRawY,
-                node.OriginalRawZ,
-                out int originalTerrainRawZ);
-            bool editedHit = TryFindTerrainRawZ(
-                geometry,
-                node.RawX,
-                node.RawY,
-                node.RawZ,
-                out int editedTerrainRawZ);
-
-            if (!editedHit)
-            {
-                findings.Add(Blocked(
-                    "native-path-node-no-terrain-hit",
-                    $"Edited node {node.Index + 1} has no source-derived terrain hit at its new XY position."));
-                continue;
-            }
-            if (!originalHit)
-            {
-                findings.Add(new NativeMobyPathRuntimeSafetyFinding(
-                    "native-path-source-clearance-unavailable",
-                    MobyBuildSafetyStatus.Review,
-                    $"Source node {node.Index + 1} has no terrain hit, so its native floor clearance cannot be compared."));
-                continue;
-            }
-
-            long originalClearance = (long)node.OriginalRawZ - originalTerrainRawZ;
-            long editedClearance = (long)node.RawZ - editedTerrainRawZ;
-            long clearanceDelta = Math.Abs(editedClearance - originalClearance);
-            if (clearanceDelta > MaximumClearanceDeltaRaw)
-            {
-                findings.Add(Blocked(
-                    "native-path-node-clearance-mismatch",
-                    $"Edited node {node.Index + 1} changes terrain clearance from {originalClearance} to " +
-                    $"{editedClearance} raw units (delta {clearanceDelta}); the checked maximum is " +
-                    $"{MaximumClearanceDeltaRaw} raw units."));
-            }
-        }
+        var owner = new Spyro.Editor.Core.Primitives.Vector3f(ownerPosition.RawX / 16f, ownerPosition.RawY / 16f, ownerPosition.RawZ / 16f);
+        var problems = EggThiefRun.Judge(geometry.Polygons, owner, path.Nodes.Select(node => node.Position).ToList(), path.CurrentNode,
+            path.Nodes.Select(node => node.OriginalPosition).ToList(), owner);
+        foreach (var problem in problems)
+            findings.Add(Blocked(problem.NoGround ? "native-path-node-no-terrain-hit" : "native-path-run-step",
+                $"The egg thief can't run his changed route: {problem.Text}."));
     }
 
     private static bool TryFindTerrainRawZ(

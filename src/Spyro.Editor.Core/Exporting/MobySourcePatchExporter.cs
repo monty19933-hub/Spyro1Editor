@@ -6467,23 +6467,10 @@ public static class MobySourcePatchExporter
                     finding.Message))
                 .ToList();
 
-            if (safety.IsGeometricallySafe && !safety.IsRuntimeProven)
-            {
-                safetyFindings.Add(allowUnprovenNativeMobyPathResearchPatches
-                    ? new MobySourceEditSafetyFinding(
-                        "native-path-research-unproven",
-                        MobyBuildSafetyStatus.Review,
-                        "This geometrically checked route is enabled only for a disposable research BIN; " +
-                        "its exact edited-coordinate fingerprint has no recorded DuckStation runtime proof.")
-                    : new MobySourceEditSafetyFinding(
-                        "native-path-runtime-proof-required",
-                        MobyBuildSafetyStatus.Blocked,
-                        "Normal Create BIN cannot export this edited route until its exact coordinate fingerprint " +
-                        "has recorded DuckStation chase, loop, egg, death, and reload evidence."));
-            }
-
-            bool canExport = safety.IsGeometricallySafe &&
-                (safety.IsRuntimeProven || allowUnprovenNativeMobyPathResearchPatches);
+            // A route the run check passes is exported (2.3): the thief's way of following it is decoded (x and y
+            // only, the floor under him; EggThiefRun) and edited runs were played in DuckStation. Until 2.2 every
+            // edited route also needed its exact coordinates registered as proven, which no user edit ever was.
+            bool canExport = safety.IsGeometricallySafe;
             if (!canExport)
             {
                 MobySourceEditSafetyFinding blocker = safetyFindings
@@ -6548,11 +6535,7 @@ public static class MobySourcePatchExporter
         {
             notes.Add($"Native egg-thief paths: {exportedPathCount} route(s), {exportedNodeCount} node(s); each write is exactly 12 XYZ bytes and preserves fixed headers/order/unknown words.");
             if (allowUnprovenNativeMobyPathResearchPatches)
-            {
-                notes.Add(
-                    "Unproven native egg-thief route writes were enabled for this disposable research plan; " +
-                    "normal Create BIN remains blocked until exact DuckStation runtime evidence is registered.");
-            }
+                notes.Add("Native egg-thief route writes were planned for a disposable research image.");
         }
     }
 

@@ -109,7 +109,7 @@ public sealed partial class MainWindow
                 if (original == null) continue;
                 IReadOnlyList<int[]> current = moby.UniversalPathNodes is { } saved && saved.Count == original.Count ? saved : original;
                 _currentNativeMobyPaths.Add(NativeMobyPath.ForPlacedObject(_currentLevel.Key, _currentLevel.DisplayName, moby.TrueIndex,
-                    (ushort)template.ClassId, original, current));
+                    (ushort)template.ClassId, original, current, UniversalPropertyCoordinates.CurrentNode(template)));
             }
         }
         _viewport.SetNativeMovementData(_currentNativeMobyPaths, _currentDragonRunToViewportTargets.Values);
@@ -225,7 +225,7 @@ public sealed partial class MainWindow
         RefreshRewardCard();
         if (_objectNativeMovementButton == null)
             return;
-        if (_releaseMode && SelectedNativeMobyPath() is not { IsPlacedObjectRoute: true } ||
+        if (_releaseMode && SelectedNativeMobyPath() is not { IsPlacedObjectRoute: true } && SelectedNativeMobyPath()?.OwnerNativeClass != NativeEggThiefColours.ThiefClass ||
             IsId65BlankLabObjectInspectionOnly() ||
             _workspaceTransitionBusy ||
             _id65BlankLabBusy && _id65BlankLabManualOperation != null ||
@@ -246,7 +246,7 @@ public sealed partial class MainWindow
             SelectedNativeMobyPath() is { IsPlacedObjectRoute: true }
                 ? "Edit the route this object follows (an egg thief's run, a sheep's walk): drag its points in the 3D view or type them. Keep the points on the ground; the object goes from one to the next in order."
                 : SelectedNativeMobyPath() != null
-                ? "Edit this egg thief's ordered native PathData route. The dashed closing seam is a possible forward or reverse handler traversal, not necessarily the immediate next step. Keep terrain snap enabled. Edited routes remain runtime-gated in normal Create BIN until their exact profile is proven."
+                ? "Change the run this egg thief takes: drag its numbered points in the 3D view, type them here, or shape the whole run in the Its run card. Points stay on the ground; a point the thief could not run to is not taken, and the editor says why."
                 : "Edit Spyro's native dragon-rescue approach destination without changing the cameras or choreography.");
     }
 
@@ -362,7 +362,7 @@ public sealed partial class MainWindow
             };
             Button snap = NewButton("Snap");
             Button reset = NewButton("Reset");
-            snap.Click += (_, _) => SnapPathNodeEditorRow(row);
+            snap.Click += (_, _) => SnapPathNodeEditorRow(row, path);
             reset.Click += (_, _) => SetPathNodeEditorRow(row, node.OriginalPosition);
             AddNativeMovementGridChild(grid, number, 0);
             AddNativeMovementGridChild(grid, xBox, 1);
@@ -420,6 +420,15 @@ public sealed partial class MainWindow
                     return;
                 }
             }
+            if (IsThiefRun(path))
+            {
+                var typed = rows.Select(r => { TryParseFloat(r.XBox.Text, out float x); TryParseFloat(r.YBox.Text, out float y); TryParseFloat(r.ZBox.Text, out float z); return new Vector3f(x, y, z); }).ToList();
+                if (JudgeRun(path, typed) is { Count: > 0 } problems)
+                {
+                    validation.Text = $"The egg thief can't run this: {problems[0].Text}. Move that point back towards where it was, or onto ground he can reach.";
+                    return;
+                }
+            }
             dialog.Close(true);
         };
 
@@ -442,14 +451,16 @@ public sealed partial class MainWindow
         StackPanel panel = new() { Spacing = 10, Margin = new Thickness(16) };
         panel.Children.Add(new TextBlock
         {
-            Text = $"Native owner T{path.OwnerTrueIndex}; {path.NodeCount} fixed ordered nodes. {traversalText} Only XYZ is editable. The 8-byte header, node count/order, traversal state, pointers, and each unknown fourth word are preserved.",
+            Text = path.IsPlacedObjectRoute
+                ? $"Native owner T{path.OwnerTrueIndex}; {path.NodeCount} fixed ordered nodes. {traversalText} Only XYZ is editable. The 8-byte header, node count/order, traversal state, pointers, and each unknown fourth word are preserved."
+                : $"{owner.DisplayLabel} runs these {path.NodeCount} points in order and round again (Spyro can turn him back). Only where they are can change; their number, order and the thief's speed at each stay as the game has them.",
             TextWrapping = TextWrapping.Wrap
         });
         panel.Children.Add(new TextBlock
         {
             Text = path.IsPlacedObjectRoute
                 ? "The object goes from point to point in this order, then turns back or loops. Keep the points on the ground (terrain snap) and away from edges: it does not check walls or drops. An egg thief has to run where Spyro can catch it."
-                : "Safety: keep terrain snap enabled so every moved node stays on terrain. Edited egg-thief routes are runtime-gated; normal Create BIN will not export an unproven route profile. Inspect Build Safety and validate a focused test in DuckStation before promotion.",
+                : "The game steers a thief by where the points are across the map (their height is not used: he runs on the floor). Apply checks the run: ground under every leg, and no step up or down bigger than a thief can take (150 units) unless the game's own run has one there. Snap puts a point on the floor.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(166, 106, 24))
         });
@@ -491,7 +502,7 @@ public sealed partial class MainWindow
         _statusText.Text = path.IsPlacedObjectRoute
             ? path.HasEdits ? $"Updated {owner.DisplayLabel}'s route ({path.Nodes.Count} points). Save the level to keep it." : $"{owner.DisplayLabel} follows the route it came with."
             : path.HasEdits
-            ? $"Updated {owner.DisplayLabel}'s native run path; {path.Nodes.Count(node => node.HasEdit)} node(s) differ from the source disc. Keep terrain snap enabled; normal Create BIN remains runtime-gated until this route profile is proven."
+            ? $"Updated {owner.DisplayLabel}'s run: {path.Nodes.Count(node => node.HasEdit)} of its {path.Nodes.Count} points moved. Save the level to keep it; Create BIN puts it in the game."
             : $"Reset {owner.DisplayLabel}'s native run path to the source disc.";
     }
 
@@ -504,6 +515,29 @@ public sealed partial class MainWindow
         float x = current.X + e.Dx;
         float y = current.Y + e.Dy;
         float z = current.Z;
+        // An egg thief's point goes onto the floor he runs on there, and only where he can still run to and from it.
+        if (IsThiefRun(e.Path) && _currentGeometry is { Polygons.Count: > 0 } geometry)
+        {
+            float near = EggThiefRun.FloorAt(geometry.Polygons, current, _viewport.IsTerrainPresentedForEditing);
+            if (!EggThiefRun.TryPlace(geometry.Polygons, x, y, float.IsFinite(near) ? near : current.Z, out Vector3f placed, _viewport.IsTerrainPresentedForEditing))
+            {
+                _statusText.Text = $"Point {e.Node.Index + 1} of the egg thief's run can't go there: there is no ground there. It stays at the last place he can run to.";
+                return;
+            }
+            var points = e.Path.Nodes.Select(node => node.Index == e.Node.Index ? placed : node.Position).ToList();
+            if (JudgeRun(e.Path, points) is { Count: > 0 } problems)
+            {
+                _statusText.Text = $"Point {e.Node.Index + 1} of the egg thief's run can't go there: {problems[0].Text}. It stays at the last place he can run to.";
+                return;
+            }
+            e.Node.SetPosition(placed);
+            StorePlacedObjectRoute(e.Path);
+            InvalidateBuildSafetySummary();
+            _viewport.RefreshNativeMovementData();
+            RefreshActionAvailability();
+            _statusText.Text = $"Moved point {e.Node.Index + 1} of the egg thief's run to {placed.X:0}, {placed.Y:0} (on the ground, {placed.Z - EggThiefRun.PointHeight:0} high). Save the level to keep it.";
+            return;
+        }
         if (_snapNativePathNodesToTerrain && TryFindTerrainZAt(x, y, z, out float terrainZ, preferTopSurface: true))
             z = terrainZ;
         e.Node.SetPosition(new Vector3f(x, y, z));
@@ -512,6 +546,20 @@ public sealed partial class MainWindow
         _viewport.RefreshNativeMovementData();
         RefreshActionAvailability();
         _statusText.Text = $"Moved path node {e.Node.Index + 1} to {x:0.###}, {y:0.###}, {z:0.###}.";
+    }
+
+    /// <summary>An egg thief's run (his own in the game's levels, or one added).</summary>
+    private static bool IsThiefRun(NativeMobyPath path) => path.OwnerNativeClass == NativeEggThiefColours.ThiefClass;
+
+    /// <summary>Why the thief could not run <paramref name="points"/> in place of his run's points (none: he can), as
+    /// <see cref="EggThiefRun.Judge"/> decides: the game's own thieves are held to what their own runs already do.</summary>
+    private IReadOnlyList<EggThiefRun.Problem> JudgeRun(NativeMobyPath path, IReadOnlyList<Vector3f> points)
+    {
+        if (_currentGeometry is not { Polygons.Count: > 0 } geometry) return [];
+        if (_currentMobys.FirstOrDefault(m => m.TrueIndex == path.OwnerTrueIndex && !m.IsRemoved) is not { } owner) return [];
+        bool own = !path.IsPlacedObjectRoute;
+        return EggThiefRun.Judge(geometry.Polygons, owner.Position, points, path.CurrentNode,
+            own ? path.Nodes.Select(node => node.OriginalPosition).ToList() : null, own ? owner.Position : null, _viewport.IsTerrainPresentedForEditing);
     }
 
     private void TranslateOwnedNativeMovement(Moby owner, Vector3f appliedDelta)
@@ -533,7 +581,7 @@ public sealed partial class MainWindow
         _viewport.RefreshNativeMovementData();
     }
 
-    private void SnapPathNodeEditorRow(PathNodeEditorRow row)
+    private void SnapPathNodeEditorRow(PathNodeEditorRow row, NativeMobyPath path)
     {
         if (!TryParseFloat(row.XBox.Text, out float x) ||
             !TryParseFloat(row.YBox.Text, out float y) ||
@@ -542,6 +590,12 @@ public sealed partial class MainWindow
             return;
         }
 
+        if (IsThiefRun(path) && _currentGeometry is { Polygons.Count: > 0 } geometry)
+        {
+            if (EggThiefRun.TryPlace(geometry.Polygons, x, y, z - EggThiefRun.PointHeight, out Vector3f placed, _viewport.IsTerrainPresentedForEditing))
+                row.ZBox.Text = FormatPosition(placed.Z);
+            return;
+        }
         if (TryFindTerrainZAt(x, y, z, out float terrainZ, preferTopSurface: true))
             row.ZBox.Text = FormatPosition(terrainZ);
     }

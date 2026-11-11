@@ -282,6 +282,11 @@ CORE_CASES = (
     # BIN's scope; --source recolours the USA game's WAD: 35 levels, the title screen and 3 cutscenes change only in
     # Spyro's palettes, other objects' copies stay, applying again changes nothing, the whole-WAD form matches.
     ("SpyroColoursSmoke", "SPYRO_COLOURS_FREE_OK checks=43"),
+    # Egg thieves (2.3): the game's egg totals follow the thieves a game holds (the table per level, the inventory's
+    # row, the completion percentage run instruction by instruction for 0-60 eggs, the doorway to Gnasty's Loot, eggs of
+    # later worlds counted in a spare place); a thief's run judged as the game runs it (made-up ground: steps, drops,
+    # gaps, walls, bridges, points' heights not judged, the game's own steps kept).
+    ("EggThiefSmoke", "EGG_THIEF_FREE_OK checks=644"),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
@@ -518,6 +523,10 @@ SOURCE_QA_CASES = (
     ("SuperchargeSmoke", "SUPERCHARGE_SOURCE_OK checks=160", ["--source"]),
     ("HoverSmoke", "HOVER_SOURCE_OK checks=27", ["--source"]),
     ("SpyroColoursSmoke", "SPYRO_COLOURS_SOURCE_OK checks=112", ["--source"]),
+    # The USA game: its twelve thieves found where it counts them, nothing written for it, its own completion routine
+    # equal to the new one for twelve eggs, every level's egg counter, thieves added (Dark Hollow, Beast Makers) and
+    # taken out setting every total.
+    ("EggThiefSmoke", "EGG_THIEF_SOURCE_OK checks=520", ["--source"]),
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.

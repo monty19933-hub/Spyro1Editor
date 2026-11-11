@@ -79,18 +79,11 @@ MobySourcePatchPlan normalPlan = MobySourcePatchExporter.BuildPlan(
     stoneHill,
     nativeManifestPath,
     nativeMobyPathEditsPath: pathManifestPath);
+// 2.3: normal Create BIN exports a moved point the thief can run to (EggThiefRun).
 Assert(
-    normalPlan.Patches.All(patch =>
-        !patch.Kind.Equals("native-moby-path-node-xyz", StringComparison.OrdinalIgnoreCase)),
-    "Normal Create BIN unexpectedly promoted an unproven egg-thief path edit.");
-MobyBuildSafetyLevelReport normalSafety =
-    MobyBuildSafetyInspector.InspectLevel(sourceImagePath, stoneHill, normalPlan);
-Assert(
-    normalSafety.Issues.Any(issue =>
-        issue.Status == MobyBuildSafetyStatus.Blocked &&
-        issue.EditorTrueIndex == TargetTrueIndex &&
-        issue.CanNavigate),
-    "The normal-build runtime gate did not produce a targeted, navigable T166 Build Safety issue.");
+    normalPlan.Patches.Count(patch =>
+        patch.Kind.Equals("native-moby-path-node-xyz", StringComparison.OrdinalIgnoreCase)) == 1,
+    "Normal Create BIN did not export a one-unit move of the thief's current point.");
 
 MobySourcePatchResult result = await MobySourcePatchExporter.ExportAsync(
     new MobySourcePatchRequest(
@@ -151,7 +144,7 @@ var proof = new
     physicalDifferingByteCount = physicalDifferenceCount,
     physicalDifferencesOutsidePlannedRange = outsidePlannedRangeDifferenceCount,
     exactFinalReadback = true,
-    normalCreateBinBlockedPendingRuntimeEvidence = true,
+    normalCreateBinExportsRunsTheThiefCanTake = true,
     requiredTestCondition = "Disable all DuckStation cheats, especially Have All Dragon Eggs."
 };
 await File.WriteAllTextAsync(

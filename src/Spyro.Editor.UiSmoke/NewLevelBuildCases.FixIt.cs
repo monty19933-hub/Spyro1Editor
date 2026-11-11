@@ -4,10 +4,11 @@ using Spyro.Editor.Core.Scene;
 
 internal static partial class NewLevelBuildCases
 {
-    /// <summary><c>thief-path</c>: in Stone Hill (the game's own level) one point of the egg thief's run is moved off its
-    /// ground, the way dragging it does, and the level saved. Create BIN refuses such a run ("Saved changes could not be
-    /// included: Stone Hill: Egg thief …"): a stop for Fix It For Me. THIEF_PATH_RAISE: how far the point is lifted, in
-    /// the game's units × 16 (default 3124, as in the project this was first seen in).</summary>
+    /// <summary><c>thief-path</c>: in Stone Hill (the game's own level) one point of the egg thief's run is lifted, as
+    /// dragging it did before 2.3 (point 6 lies 195 units below the floor in the game; the drag put it on the floor), and
+    /// the level saved. Until 2.3 Create BIN refused such a run ("Saved changes could not be included: Stone Hill: Egg
+    /// thief …"); since 2.3 the height of a point is not judged (the game does not use it) and the run is exported.
+    /// THIEF_PATH_RAISE: how far the point is lifted, in the game's units × 16 (default 3124, as in the user's project).</summary>
     private static void ThiefPathStep(MainWindow window)
     {
         Load(window, "stonehill");

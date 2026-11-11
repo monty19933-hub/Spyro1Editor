@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using Spyro.Editor.Core.Diagnostics;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Persistence;
+using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Universal;
 
 namespace Spyro.Editor.App.Views;
@@ -193,7 +194,7 @@ public sealed partial class MainWindow
     {
         if (_routeToolsCard == null || _routeToolsNote == null) return;
         var path = SelectedNativeMobyPath();
-        bool show = path is { IsPlacedObjectRoute: true } && path.Nodes.Count >= 2 && !_createBinBusy && !_workspaceTransitionBusy;
+        bool show = path != null && (path.IsPlacedObjectRoute || IsThiefRun(path)) && path.Nodes.Count >= 2 && !_createBinBusy && !_workspaceTransitionBusy;
         _routeToolsCard.IsVisible = show;
         if (!show || path == null) return;
         double length = 0;
@@ -204,16 +205,25 @@ public sealed partial class MainWindow
         }
         bool thief = path.OwnerNativeClass == NativeEggThiefColours.ThiefClass;
         _routeToolsNote.Text = $"{(thief ? "This egg thief runs" : "It walks")} a route of {path.Nodes.Count} points, about {length:0} units round" +
-            (path.HasEdits ? " (changed from the one it came with)" : "") + ". Drag the numbered points in the 3D view, type them in Edit Route…, or shape the whole run here. " +
-            (thief ? "Give a thief room to run and Spyro room to chase: a round of 1,500 to 3,000 units on open, level floor plays best." : "");
+            (path.HasEdits ? " (changed from the one it came with)" : "") + $". Drag the numbered points in the 3D view, type them in {(path.IsPlacedObjectRoute ? "Edit Route…" : "Edit Run Path")}, or shape the whole run here. " +
+            (thief ? "Give a thief room to run and Spyro room to chase: a round of 1,500 to 3,000 units on open, level floor plays best. " +
+                "A point he could not run to (no ground, or a step up or down of more than 150 units) is not taken." : "");
     }
 
     internal void ReshapeSelectedRouteForTesting(string how) => ReshapeSelectedRoute(how);
+    internal string MoveRunPointForTesting(NativeMobyPath path, int node, float dx, float dy)
+    {
+        MoveNativePathNodeFromViewport(new ViewportNativePathNodeMoveRequestedEventArgs(path, path.Nodes[node], dx, dy));
+        return _statusText.Text ?? "";
+    }
+    /// <summary>"ok", or what stops the selected run (as the editor and Create BIN judge it).</summary>
+    internal string DescribeRunForTesting(NativeMobyPath path) =>
+        JudgeRun(path, [.. path.Nodes.Select(n => n.Position)]) is { Count: > 0 } problems ? string.Join(" | ", problems.Select(p => p.Text)) : "ok";
 
     /// <summary>Reshapes the selected object's route (a placed object's): every point keeps to the ground.</summary>
     private void ReshapeSelectedRoute(string how)
     {
-        if (SelectedNativeMobyPath() is not { IsPlacedObjectRoute: true } path || _selectedMoby is not { } owner || path.Nodes.Count < 2) return;
+        if (SelectedNativeMobyPath() is not { } path || !path.IsPlacedObjectRoute && !IsThiefRun(path) || _selectedMoby is not { } owner || path.Nodes.Count < 2) return;
         if (TryBlockId65ObjectMutation("Route editing")) return;
         var nodes = path.Nodes;
         int n = nodes.Count;
@@ -278,7 +288,8 @@ public sealed partial class MainWindow
                 path.ResetEdits();
                 StorePlacedObjectRoute(path);
                 InvalidateBuildSafetySummary(); _viewport.RefreshNativeMovementData(); RefreshActionAvailability(); RefreshRouteToolsCard();
-                _statusText.Text = $"{owner.DisplayLabel} has the run it came with again. Save the level to keep it.";
+                _statusText.Text = path.IsPlacedObjectRoute ? $"{owner.DisplayLabel} has the run it came with again. Save the level to keep it."
+                    : $"{owner.DisplayLabel} has the game's own run again. Save the level to keep it.";
                 return;
         }
         // A step of the game's own routes is at most about 2,000 units: longer ones are not made.
@@ -287,6 +298,14 @@ public sealed partial class MainWindow
             var a = made[i]; var b = made[(i + 1) % n];
             if (Math.Abs(a.X - b.X) > 1900 || Math.Abs(a.Y - b.Y) > 1900 || Math.Abs(a.Z - b.Z) > 1900)
             { _statusText.Text = "That would make a step of the run longer than the game can follow. Use Smaller, or New Loop Here."; return; }
+        }
+        // An egg thief's points sit on the floor he runs on, and the run must be one he can take.
+        if (IsThiefRun(path))
+        {
+            if (!path.IsPlacedObjectRoute && _currentGeometry is { Polygons.Count: > 0 } geometry)
+                made = [.. made.Select(p => EggThiefRun.TryPlace(geometry.Polygons, p.X, p.Y, p.Z, out var placed, _viewport.IsTerrainPresentedForEditing) ? placed : p)];
+            if (JudgeRun(path, made) is { Count: > 0 } problems)
+            { _statusText.Text = $"That would give {owner.DisplayLabel} a run he can't take: {problems[0].Text}. Nothing was changed."; return; }
         }
         for (int i = 0; i < n; i++) nodes[i].SetPosition(made[i]);
         StorePlacedObjectRoute(path);

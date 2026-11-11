@@ -88,7 +88,7 @@ internal static partial class NewLevelBuildCases
             case "add-beside": AddBeside(window, outDir); return true;
             case "doorways": DoorwaysStep(window, outDir); return true;
             case "doorway-shots": DoorwayShots(window, outDir); return true;
-            default: return false;
+            default: return RunThiefSteps(window, outDir, step);
         }
     }
 
