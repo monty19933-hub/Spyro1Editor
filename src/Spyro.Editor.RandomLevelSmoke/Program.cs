@@ -61,8 +61,17 @@ if (args.Length >= 6 && args[0] == "--dump")
     await TerrainTexturePngWriter.WriteRgbaAsync(Path.ChangeExtension(args[5], ".map.png"), r.MapWidth, r.MapHeight, r.Map);
     return 0;
 }
+if (args.Length >= 2 && args[0] == "--variety")
+{
+    // --variety <repo> [seeds]: how much the levels of each kind differ over that many seeds (no disc; the gate
+    // runs the same checks over two dozen).
+    int failed = 0;
+    RandomLevelCases.Variety(LevelCatalog.Load(args[1]), RandomLevelCases.LookSource(), (ok, what) => { if (!ok) { failed++; Console.WriteLine("FAIL " + what); } }, args.Length > 2 ? int.Parse(args[2]) : 24);
+    Console.WriteLine(failed == 0 ? "VARIETY_OK" : $"VARIETY_FAILED {failed}");
+    return failed == 0 ? 0 : 1;
+}
 // Gate (no disc): [repo root] [--maps <folder>] [--seeds N]
-if (args.Length == 0 || args[0] is not ("--fingerprint" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--balloon-facts" or "--scatter-facts" or "--model-colours" or "--thief-colours"))
+if (args.Length == 0 || args[0] is not ("--fingerprint" or "--variety" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--balloon-facts" or "--scatter-facts" or "--model-colours" or "--thief-colours"))
 {
     string repo = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : Directory.GetCurrentDirectory();
     string? maps = args.SkipWhile(a => a != "--maps").Skip(1).FirstOrDefault();

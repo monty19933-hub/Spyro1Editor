@@ -26,6 +26,8 @@ public sealed record RandomLevelReport
     public string Layout { get; init; } = "";
     public string Features { get; init; } = "";
     public int Areas { get; init; }
+    /// <summary>How far apart in height the floors the level is played on lie (between the lowest and highest fiftieth).</summary>
+    public int HeightSpan { get; init; }
     public int Faces { get; init; }
     public int Materials { get; init; }
     public IReadOnlyDictionary<string, int> Counts { get; init; } = new Dictionary<string, int>();
@@ -320,12 +322,15 @@ public static class RandomLevelGenerator
             if (NativeAuthoredMeshRenderer.LastDrawPlan?.Note() is { } note) notes.Add(note);
         }
         notes.AddRange(planned.Notes);
+        var playFloor = pieces.Select(p => !p.Wall && p.Collides && (p.Layer >= 0 || p.Layer == TerrainPlan.Fill) && p.Kind == null && p.Texture == null && p.Role != SurfaceRole.Ceiling).ToArray();
+        var floorHeights = pieces.Where((_, k) => playFloor[k]).Select(p => p.Corners.Average(c => c.Z)).Order().ToList();
+        int heightSpan = floorHeights.Count == 0 ? 0 : (int)Math.Round(floorHeights[Math.Min(floorHeights.Count - 1, (int)(0.98 * floorHeights.Count))] - floorHeights[(int)(0.02 * floorHeights.Count)]);
         var report = new RandomLevelReport
         {
             Seed = options.Seed, Style = style, Theme = theme.Key, Size = options.Size, Difficulty = options.Difficulty, Layout = planned.Shape,
             Features = string.Join(", ", new[] { features.Caves ? "caves" : null, features.ChargePaths ? "supercharge paths" : null, features.Glides ? "glides" : null,
                 features.Hazards ? "hazards" : null, features.Bridges ? "bridges" : null, features.Secrets ? "secrets" : null }.OfType<string>()),
-            Areas = planned.Areas.Count, Faces = surfaces.Count, Materials = materials.Count, Counts = planned.Counts, Links = planned.Links,
+            Areas = planned.Areas.Count, HeightSpan = heightSpan, Faces = surfaces.Count, Materials = materials.Count, Counts = planned.Counts, Links = planned.Links,
             Attempts = attempts, RequiredFloors = check.Required, Unreached = check.Unreached, NoWayBack = check.NoWayBack,
             GlideMoves = planned.Glides.Count, DrawPlan = drawPlan, Notes = notes,
         };
@@ -347,7 +352,6 @@ public static class RandomLevelGenerator
                 if (col >= 0 && col < mw && row >= 0 && row < mh) map[(mh - 1 - row) * mw + col] = new Rgba32(255, 236, 96, 255);
             }
         }
-        var playFloor = pieces.Select(p => !p.Wall && p.Collides && (p.Layer >= 0 || p.Layer == TerrainPlan.Fill) && p.Kind == null && p.Texture == null && p.Role != SurfaceRole.Ceiling).ToArray();
         return new(scene, report, pictures, materials) { Map = map, MapWidth = mw, MapHeight = mh, Doorways = doorways, DoorwayMaterial = doorwayMaterial, PlayFloor = playFloor, Shape = planned.Shape };
     }
 
@@ -496,13 +500,22 @@ public static class RandomLevelGenerator
         string reach = r.Unreached + r.NoWayBack == 0 ? "Every floor can be reached from the start and left again." :
             $"Almost every floor is proved reachable ({r.RequiredFloors - r.Unreached - r.NoWayBack} of {r.RequiredFloors}).";
         bool homeworld = r.Counts.ContainsKey("doorway");
-        return $"{name}: {(homeworld ? "a homeworld, " : "")}{style} in the style of {theme.Name}, {r.Difficulty.ToString().ToLowerInvariant()}, {r.Areas} areas, {r.Faces:N0} faces, {r.Materials} textures. " +
+        string layout = r.Layout switch
+        {
+            "journey" => "a way from room to room to its end", "loop" => "a ring that comes back over its start", "hub" => "a clearing with rooms off it all round",
+            "arena" => "one great room and the rooms off it", "climb" => "a hill of terraces", "gorge" => "a winding gorge", "web" => "a web of rooms with more than one way round",
+            _ => "a winding trail",
+        };
+        return $"{name}: {(homeworld ? "a homeworld, " : "")}{style} in the style of {theme.Name}, laid out as {layout}, {r.Difficulty.ToString().ToLowerInvariant()}, {r.Areas} areas, {r.Faces:N0} faces, {r.Materials} textures; its floors lie {r.HeightSpan:N0} units apart in height. " +
                (parts.Count > 0 ? "It has " + string.Join(", ", parts) + ". " : "") + own + reach;
     }
 
     private static string Plural(string what, int n) => n == 1 ? what : what switch
     {
         "chain of stepping stones" => "chains of stepping stones", "nook up a charge ramp" => "nooks up charge ramps",
-        "lookout with a glide" => "lookouts with glides", _ when what.EndsWith("s") => what, _ => what + "s"
+        "lookout with a glide" => "lookouts with glides", "step between rooms" => "steps between rooms", "flight of steps" => "flights of steps",
+        "terrace up a ramp" => "terraces up ramps", "glide from a high place" => "glides from high places", "islet in a pool" => "islets in pools",
+        "moat round an island" => "moats round islands", "overlook over an earlier room" => "overlooks over earlier rooms",
+        "overlook back over the start" => "overlooks back over the start", _ when what.EndsWith("s") => what, _ => what + "s"
     };
 }

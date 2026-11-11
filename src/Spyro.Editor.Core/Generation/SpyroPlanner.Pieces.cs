@@ -27,15 +27,15 @@ internal static partial class SpyroPlanner
             var options = new List<(string, double)> { ("none", 1.3) };
             if (features.Glides && big) options.Add(("lookout", 2.4 * Tune.LookoutChance * lean["lookout"]));
             if (big && !door && !first) options.Add(("mound", 1.2 * lean["mound"]));
-            if (grand && !door && !first) options.Add(("mount", 2.2 * lean["mount"]));
-            if (a.R >= 500) options.Add(("terrace", 1.3 * lean["terrace"]));
+            if (grand && !door && !first) options.Add(("mount", 3.0 * lean["mount"]));
+            if (a.R >= 500) options.Add(("terrace", 1.6 * lean["terrace"]));
             string choice = rnd.Pick<string>(options);
             bool built = choice switch
             {
                 "lookout" => Lookout(L, a, rnd) || Lookout(L, a, rnd) || Lookout(L, a, rnd),
                 "mound" => Mound(L, a, rnd, features),
                 "mount" => Mount(L, a, rnd, false, castle) > 0,
-                "terrace" => Terrace(L, a, rnd) || Terrace(L, a, rnd),
+                "terrace" => Terrace(L, a, rnd, features) || Terrace(L, a, rnd, features),
                 _ => false,
             };
             if (built && choice is "lookout" or "mount") continue;
@@ -209,7 +209,7 @@ internal static partial class SpyroPlanner
 
     /// <summary>A raised part of a room: a wide floor two or three steps up, with its flight of steps facing the
     /// room's middle.</summary>
-    private static bool Terrace(PlannedLevel L, PlannedArea a, LevelRandom rnd)
+    private static bool Terrace(PlannedLevel L, PlannedArea a, LevelRandom rnd, FeatureSet features)
     {
         if (FreeDirection(a, rnd, 0.25) is not { } d) return false;
         double step = SpyroMoves.DesignLedge;
@@ -239,6 +239,9 @@ internal static partial class SpyroPlanner
         }
         a.Piece = "terrace";
         L.Count("raised terrace");
+        // From a high one, a glide to a perch round the room's edge.
+        if (steps == 3 && features.Glides && a.R >= 600 && rnd.Chance(0.6) && GlideLedge(L, a, top, c, r, steps * step, d, (q.X - d.X * 60, q.Y - d.Y * 60, 230), rnd, round: false))
+            L.Count("glide from a high place");
         return true;
     }
 

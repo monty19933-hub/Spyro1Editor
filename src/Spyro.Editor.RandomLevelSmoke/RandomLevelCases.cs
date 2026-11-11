@@ -20,15 +20,17 @@ internal static class RandomLevelCases
         return output.Split('\n').FirstOrDefault(l => l.StartsWith("FINGERPRINT ", StringComparison.Ordinal))?[12..].Trim() ?? "none";
     }
 
-    /// <summary>How far (on the map) <paramref name="p"/> is from the nearest upright face that stands between Spyro's
-    /// knees and his head there.</summary>
+    /// <summary>How far (on the map) <paramref name="p"/> is from the nearest upright face, measured to the part of
+    /// it that stands between Spyro's knees and his head there (a face that only passes under the floor or overhead
+    /// does not count).</summary>
     public static float WallDistance(SceneDocument scene, Spyro.Editor.Core.Primitives.Vector3f p)
     {
-        float best = float.MaxValue;
+        float best = float.MaxValue, lo = p.Z + 20, hi = p.Z + 90;
+        var part = new List<Spyro.Editor.Core.Primitives.Vector3f>(8); var next = new List<Spyro.Editor.Core.Primitives.Vector3f>(8);
         foreach (var s in scene.Surfaces)
         {
             var v = s.Vertices;
-            if (v.Max(q => q.Z) <= p.Z + 20 || v.Min(q => q.Z) >= p.Z + 90) continue;
+            if (v.Max(q => q.Z) <= lo || v.Min(q => q.Z) >= hi) continue;
             float nx = 0, ny = 0, nz = 0;
             for (int k = 0; k < v.Length; k++)
             {
@@ -37,9 +39,23 @@ internal static class RandomLevelCases
             }
             float len = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
             if (len <= 0 || Math.Abs(nz) / len >= 0.6f) continue;
-            for (int k = 0; k < v.Length; k++)
+            // The face cut down to the band of height that matters.
+            part.Clear(); part.AddRange(v);
+            foreach (var (level, above) in new[] { (lo, true), (hi, false) })
             {
-                var a = v[k]; var b = v[(k + 1) % v.Length];
+                next.Clear();
+                for (int k = 0; k < part.Count; k++)
+                {
+                    var a = part[k]; var b = part[(k + 1) % part.Count];
+                    bool ina = above ? a.Z >= level : a.Z <= level, inb = above ? b.Z >= level : b.Z <= level;
+                    if (ina) next.Add(a);
+                    if (ina != inb) { float t = (level - a.Z) / (b.Z - a.Z); next.Add(new(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t, level)); }
+                }
+                (part, next) = (next, part);
+            }
+            for (int k = 0; k < part.Count; k++)
+            {
+                var a = part[k]; var b = part[(k + 1) % part.Count];
                 float dx = b.X - a.X, dy = b.Y - a.Y, l2 = dx * dx + dy * dy;
                 float t = l2 <= 0 ? 0 : Math.Clamp(((p.X - a.X) * dx + (p.Y - a.Y) * dy) / l2, 0, 1);
                 float ex = a.X + t * dx - p.X, ey = a.Y + t * dy - p.Y;
@@ -56,6 +72,106 @@ internal static class RandomLevelCases
             ? LevelPropSource.FromGeometry(key, Spyro.Editor.Core.Scene.GeometryOverlayLoader.LoadFirstCandidate(Path.Combine(cache, key + "-runtime-scene-editor-overlay.json")))
             : null
         : null;
+
+    /// <summary>Variety: the seed decides how a level is laid out, how many rooms it has, how big they are and how high
+    /// the level climbs. Two dozen seeds of every kind (not compiled; the checks above compile theirs) must differ in
+    /// all of these, every floor of every one must be reachable, every layout must turn up, and every layout can be
+    /// asked for by name. Homeworlds vary the same way and still have a place for each of their five doorways.</summary>
+    public static void Variety(LevelCatalog catalog, Func<string, LevelPropSource?>? source, Action<bool, string> check, int seeds = 24, bool print = true)
+    {
+        static T At<T>(List<T> sorted, double q) => sorted[Math.Min(sorted.Count - 1, (int)(q * sorted.Count))];
+        var seen = new Dictionary<string, int>();
+        List<RandomLevelResult> Make(Func<int, RandomLevelOptions> options, int count)
+        {
+            var made = new RandomLevelResult?[count];
+            // The generator's working state is per thread: levels are made side by side.
+            Parallel.For(0, count, k =>
+            {
+                try { made[k] = RandomLevelGenerator.Generate(options(k), catalog, compile: false, source: source); }
+                catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException) { }
+            });
+            return [.. made.OfType<RandomLevelResult>()];
+        }
+        string Line(string what, List<RandomLevelResult> made)
+        {
+            var rooms = made.Select(r => r.Report.Areas).Order().ToList(); var heights = made.Select(r => r.Report.HeightSpan).Order().ToList(); var faces = made.Select(r => r.Report.Faces).Order().ToList();
+            return $"variety {what,-18} rooms {rooms[0]}-{At(rooms, .5)}-{rooms[^1]}, height {heights[0]}-{At(heights, .5)}-{heights[^1]}, faces {faces[0]}-{At(faces, .5)}-{faces[^1]}; " +
+                string.Join(", ", made.GroupBy(r => r.Report.Layout).OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal).Select(g => $"{g.Key} {g.Count()}"));
+        }
+        foreach (var style in Enum.GetValues<LevelStyle>())
+        {
+            var made = Make(k => new RandomLevelOptions { Seed = 7000 + (int)style * 100 + k, Style = style }, seeds);
+            check(made.Count == seeds, $"variety {style}: {seeds - made.Count} of {seeds} seeds made no level");
+            if (made.Count == 0) continue;
+            if (print) Console.WriteLine(Line(style.ToString(), made));
+            var layouts = made.GroupBy(r => r.Report.Layout).ToDictionary(g => g.Key, g => g.Count());
+            foreach (var (layout, n) in layouts) seen[layout] = seen.GetValueOrDefault(layout) + n;
+            var rooms = made.Select(r => r.Report.Areas).Order().ToList(); var heights = made.Select(r => r.Report.HeightSpan).Order().ToList(); var faces = made.Select(r => r.Report.Faces).Order().ToList();
+            bool low = style is LevelStyle.Islands;
+            check(layouts.Count >= 4 && layouts.Values.Max() <= seeds / 2, $"variety {style}: layouts {string.Join(", ", layouts.Select(l => $"{l.Key} {l.Value}"))}");
+            check(rooms[^1] - rooms[0] >= 5 && rooms[^1] >= 1.6 * rooms[0], $"variety {style}: rooms only from {rooms[0]} to {rooms[^1]}");
+            check(heights[^1] >= 2.5 * Math.Max(1, heights[0]) && At(heights, .5) >= (low ? 150 : 300) && heights[^1] >= (low ? 300 : 600), $"variety {style}: heights {heights[0]}, {At(heights, .5)}, {heights[^1]}");
+            check(faces[^1] >= 1.6 * faces[0], $"variety {style}: faces only from {faces[0]} to {faces[^1]}");
+            var unreachable = made.Where(r => r.Report.RequiredFloors == 0 || r.Report.Unreached + r.Report.NoWayBack > 0.03 * r.Report.RequiredFloors).Select(r => r.Report.Seed).ToList();
+            check(unreachable.Count == 0, $"variety {style}: floors out of reach in seeds {string.Join(", ", unreachable)}");
+            check(made.Select(r => r.Scene.Fingerprint()).Distinct().Count() == made.Count, $"variety {style}: two seeds made the same level");
+            check(made.All(r => r.Report.Faces <= RandomLevelGenerator.FaceTarget(LevelSize.Medium) + SpyroStructuresFaces), $"variety {style}: a level of {faces[^1]} faces");
+        }
+        check(SpyroPlannerLayouts.All(l => seen.GetValueOrDefault(l) >= 5), $"variety: layouts over all kinds {string.Join(", ", seen.OrderBy(l => l.Key, StringComparer.Ordinal).Select(l => $"{l.Key} {l.Value}"))}");
+        // Every layout by name, in every size.
+        foreach (string layout in SpyroPlannerLayouts)
+        {
+            var made = Make(k => new RandomLevelOptions { Seed = 7900 + k, Style = k % 2 == 0 ? LevelStyle.Valley : LevelStyle.Castle, Size = (LevelSize)(k % 3), Layout = layout }, 6);
+            check(made.Count == 6 && made.Count(r => r.Report.Layout == layout) >= 5 && made.All(r => r.Report.Unreached + r.Report.NoWayBack <= 0.03 * r.Report.RequiredFloors),
+                $"variety: asked for {layout}, got {string.Join(", ", made.Select(r => r.Report.Layout))}");
+        }
+        // Sizes: a large level has more floor than a small one of the same seed, as a rule.
+        var small = Make(k => new RandomLevelOptions { Seed = 7950 + k, Style = LevelStyle.Valley, Size = LevelSize.Small }, 12);
+        var large = Make(k => new RandomLevelOptions { Seed = 7950 + k, Style = LevelStyle.Valley, Size = LevelSize.Large }, 12);
+        check(small.Count == 12 && large.Count == 12 && large.Average(r => r.Report.Faces) >= 1.35 * small.Average(r => r.Report.Faces),
+            $"variety: large levels average {(large.Count > 0 ? large.Average(r => r.Report.Faces) : 0):0} faces, small ones {(small.Count > 0 ? small.Average(r => r.Report.Faces) : 0):0}");
+        // Homeworlds.
+        foreach (var style in new[] { LevelStyle.Valley, LevelStyle.Castle, LevelStyle.Islands, LevelStyle.Canyon, LevelStyle.Caverns, LevelStyle.SkyIslands })
+        {
+            var homes = Make(k => new RandomLevelOptions { Seed = 7600 + (int)style * 100 + k, Style = style, Doorways = 5 }, 12);
+            if (print && homes.Count > 0) Console.WriteLine(Line("homeworld " + style, homes));
+            var kinds = homes.Select(r => r.Report.Layout).Distinct().ToList();
+            check(homes.Count == 12 && kinds.Count >= (style == LevelStyle.Caverns ? 2 : 3), $"variety {style} homeworlds: layouts {string.Join(", ", kinds)}");
+            check(homes.All(r => r.Doorways.Count == 5), $"variety {style} homeworlds: doorway places {string.Join(", ", homes.Select(r => r.Doorways.Count))}");
+            check(homes.All(r => r.Report.Unreached + r.Report.NoWayBack <= 0.03 * r.Report.RequiredFloors), $"variety {style} homeworlds: floors out of reach");
+            // Every doorway place of every one of them keeps the doorway rules (three checks a doorway, as one).
+            foreach (var home in homes)
+            {
+                List<string> wrong = [];
+                DoorwayFloors(home, $"{style} {home.Report.Seed}", (ok, problem) => { if (!ok) wrong.Add(problem); });
+                check(wrong.Count == 0, string.Join("; ", wrong));
+            }
+        }
+    }
+
+    /// <summary>Every doorway place of a homeworld has level floor both ways while its room lasts (Spyro comes out in
+    /// front of a doorway, or with some homeworlds' doorways just behind it), floor of some kind on to 720 in front (a
+    /// path's slope), and no wall near the way in and out.</summary>
+    public static void DoorwayFloors(RandomLevelResult home, string what, Action<bool, string> check)
+    {
+        var floors = new LevelFill.FloorGrid(home.Scene);
+        foreach (var door in home.Doorways)
+        {
+            var (fx, fy) = DoorwayShapes.Facing(door.Heading);
+            var walk = Enumerable.Range(-(int)(Math.Min(door.ClearBehind, 420) / 60), (int)(door.ClearFront / 60) + (int)(Math.Min(door.ClearBehind, 420) / 60) + 1)
+                .Select(n => new Spyro.Editor.Core.Primitives.Vector3f(door.Position.X - (float)fx * n * 60, door.Position.Y - (float)fy * n * 60, door.Position.Z)).ToList();
+            check(door.ClearFront >= 480 && door.ClearBehind >= 200 && floors.Holds(walk, 30), $"{what} homeworld doorway at {door.Position}: no level floor in front of it ({door.ClearFront:0}) or behind it ({door.ClearBehind:0})");
+            var beyond = Enumerable.Range(0, 13).Select(n => new Spyro.Editor.Core.Primitives.Vector3f(door.Position.X - (float)fx * n * 60, door.Position.Y - (float)fy * n * 60, door.Position.Z)).ToList();
+            check(floors.Holds(beyond, 200), $"{what} homeworld doorway at {door.Position}: no floor 720 in front of it");
+            float wall = walk.Min(q => WallDistance(home.Scene, q));
+            var worst = walk.MinBy(q => WallDistance(home.Scene, q));
+            check(wall >= 50, $"{what} homeworld doorway at {door.Position} (heading {door.Heading}, clear {door.ClearFront:0} in front, {door.ClearBehind:0} behind{(door.Plaza ? ", in the plaza" : "")}): a wall {wall:0} units from its way in at {worst}");
+        }
+    }
+
+    private static readonly string[] SpyroPlannerLayouts = ["journey", "loop", "hub", "arena", "climb", "gorge", "web"];
+    /// <summary>The faces a level's towers and trees may add to its land.</summary>
+    private const int SpyroStructuresFaces = 900;
 
     public static async Task<int> Run(string repo, string? maps, int seedsPerStyle, string? only = null)
     {
@@ -217,20 +333,7 @@ internal static class RandomLevelCases
                         Console.WriteLine($"    homeworld {h.Faces,5} faces areas {h.Areas,2} doorways {home.Doorways.Count} req {h.RequiredFloors,5} unreached {h.Unreached} noback {h.NoWayBack} | {string.Join(", ", h.Counts.Select(c => $"{c.Key} {c.Value}"))}");
                         Check(home.Doorways.Count == 5, $"{style} {seed} homeworld has {home.Doorways.Count} doorway places: {string.Join(" ", h.Notes)}");
                         Check(h.RequiredFloors > 0 && (h.Unreached + h.NoWayBack) <= 0.03 * h.RequiredFloors, $"{style} {seed} homeworld: {h.Unreached} unreached, {h.NoWayBack} without a way back of {h.RequiredFloors}");
-                        var floors = new LevelFill.FloorGrid(home.Scene);
-                        foreach (var door in home.Doorways)
-                        {
-                            var (fx, fy) = DoorwayShapes.Facing(door.Heading);
-                            // Level floor both ways while the room lasts (Spyro comes out in front of a doorway, or with some
-                            // homeworlds' doorways just behind it), and floor of some kind on to 720 in front (a path's slope).
-                            var walk = Enumerable.Range(-(int)(Math.Min(door.ClearBehind, 420) / 60), (int)(door.ClearFront / 60) + (int)(Math.Min(door.ClearBehind, 420) / 60) + 1)
-                                .Select(n => new Spyro.Editor.Core.Primitives.Vector3f(door.Position.X - (float)fx * n * 60, door.Position.Y - (float)fy * n * 60, door.Position.Z)).ToList();
-                            Check(door.ClearFront >= 480 && door.ClearBehind >= 200 && floors.Holds(walk, 30), $"{style} {seed} homeworld doorway at {door.Position}: no level floor in front of it ({door.ClearFront:0}) or behind it ({door.ClearBehind:0})");
-                            var beyond = Enumerable.Range(0, 13).Select(n => new Spyro.Editor.Core.Primitives.Vector3f(door.Position.X - (float)fx * n * 60, door.Position.Y - (float)fy * n * 60, door.Position.Z)).ToList();
-                            Check(floors.Holds(beyond, 200), $"{style} {seed} homeworld doorway at {door.Position}: no floor 720 in front of it");
-                            float wall = walk.Min(q => WallDistance(home.Scene, q));
-                            Check(wall >= 50, $"{style} {seed} homeworld doorway at {door.Position}: a wall {wall:0} units from its way in");
-                        }
+                        DoorwayFloors(home, $"{style} {seed}", Check);
                         var destinations = new[] { 71, 72, 73, 74 }.Select(id => new DoorwayDestination(id, "LEVEL " + (id - 70), false, null))
                             .Append(new DoorwayDestination(10, "Artisans", false, SceneDoorways.WayBackNote)).ToArray();
                         var (built, added, problems) = SceneDoorways.AddAll(home.Scene with { WorldLevelId = NewWorldDocument.Homeworld }, home.Doorways, destinations,
@@ -298,6 +401,7 @@ internal static class RandomLevelCases
                 }
             }
         if (only == null) Check(themesSeen.Count >= 4, $"only {themesSeen.Count} themes across the styles");
+        if (only == null) Variety(catalog, source, Check);
         Console.WriteLine(failures == 0 ? $"RANDOM_LEVEL_SMOKE_OK checks={checks}" : $"RANDOM_LEVEL_SMOKE_FAILED failures={failures} checks={checks}");
         return failures == 0 ? 0 : 1;
     }

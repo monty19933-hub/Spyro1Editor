@@ -46,7 +46,7 @@ internal static partial class SpyroPlanner
         int count = Rooms(weight, rnd, 4, 12);
         double heading = Range(rnd, 0, 6.28), curl = rnd.Chance(0.5) ? 1 : -1, bend = Range(rnd, 0.45, 1.15);
         // Most journeys climb to their end; some wander up and down, some go down into the land.
-        double up = rnd.Pick<double>([(0.88, 5.0), (0.5, 2.0), (0.15, 1.5)]);
+        double up = rnd.Pick<double>([(0.94, 5.0), (0.5, 1.5), (0.1, 1.5)]);
         Room(L, 0, 0, Math.Max(_minRoom > 0 ? _minRoom + 60 : 0, Rad(rnd, Math.Clamp(Cls(rnd), 1, 3))), 0, "start");
         for (int k = 1; k < count; k++)
         {
@@ -63,12 +63,12 @@ internal static partial class SpyroPlanner
                 double roll = rnd.NextDouble();
                 double gap = roll < 0.22 ? Range(rnd, 0.72 * _gapFrom, _gapFrom) : roll < 0.74 ? Gap(rnd) : Range(rnd, _gapTo, 1.75 * _gapTo);
                 // Or no way between at all: the next room stands right against this one, a flight of steps up or down.
-                if (rnd.Chance(0.3) && Flight(L, p, d, r, rnd.Chance(up), rnd) != null) { heading = a; made = true; continue; }
+                if (rnd.Chance(0.38) && Flight(L, p, d, r, rnd.Chance(up), rnd) != null) { heading = a; made = true; continue; }
                 double x = p.X + d.X * (p.R + r + gap), y = p.Y + d.Y * (p.R + r + gap);
                 if (!Fits(L, p, x, y, r)) continue;
                 var room = Room(L, x, y, r, 0);
-                double climb = Climb(gap, gap > _gapTo ? 290 : 150);
-                room.Z = p.Z + (rnd.Chance(up) ? climb * Range(rnd, 0.65, 1) : -climb * Range(rnd, 0.3, 0.9));
+                double climb = Climb(gap, gap > _gapTo ? 300 : 190);
+                room.Z = p.Z + (rnd.Chance(up) ? climb * Range(rnd, 0.7, 1) : -climb * Range(rnd, 0.4, 1));
                 Join(L, p, room, "path");
                 heading = a; made = true;
             }
@@ -94,9 +94,9 @@ internal static partial class SpyroPlanner
         // The steps stand on the lower room's floor, which must hold them.
         var lowR = upward ? p.R : r;
         if (lowR < 400 || (upward ? r : p.R) < 330) return null;
-        int steps = lowR >= 540 && rnd.Chance(0.6) ? 3 : 2;
+        int steps = lowR >= 720 && rnd.Chance(0.45) ? 4 : lowR >= 540 && rnd.Chance(0.65) ? 3 : 2;
         // Spyro arrives in the middle of the first room: the steps keep well off it.
-        if (upward && p.Id == 0 && p.R - overlap - (steps == 3 ? 290 : 160) < 280) { if (p.R - overlap - 160 < 280) return null; steps = 2; }
+        if (upward && p.Id == 0 && p.R - overlap - FlightReach(steps) < 280) { if (p.R - overlap - FlightReach(2) < 280) return null; steps = 2; }
         double x = p.X + d.X * (p.R + r - overlap), y = p.Y + d.Y * (p.R + r - overlap);
         if (!Fits(L, p, x, y, r, p.Group, path: false)) return null;
         // Not out of the room right beside another of its ways.
@@ -223,7 +223,7 @@ internal static partial class SpyroPlanner
             var p = L.Areas[k - 1];
             double length = Dist(a.X, a.Y, p.X, p.Y) - a.R - p.R + 240;
             if (length < _gapFrom + 40) return false;
-            z += Climb(length - 240, length - 240 > _gapTo ? 240 : 130) * Range(rnd, 0.45, 1);
+            z += Climb(length - 240, length - 240 > _gapTo ? 260 : 170) * Range(rnd, 0.55, 1);
             a.Z = z;
             Join(L, p, a, "path");
         }
@@ -231,7 +231,7 @@ internal static partial class SpyroPlanner
         var first = L.Areas[0]; var last = L.Areas[^1];
         // Too low to be an overlook: the ring is tried again (its ramps may not be made steeper).
         if (last.Z < 110) return false;
-        if (last.Z > 460) { double drop = 440 / last.Z; foreach (var a in L.Areas) a.Z *= drop; }
+        if (last.Z > 620) { double drop = 600 / last.Z; foreach (var a in L.Areas) a.Z *= drop; }
         double dx = last.X - first.X, dy = last.Y - first.Y, dd = Math.Sqrt(dx * dx + dy * dy), want = first.R + last.R - overlap;
         last.X = first.X + dx / dd * want; last.Y = first.Y + dy / dd * want;
         last.Kind = "overlook"; last.Priority = first.Priority + 1;
@@ -249,19 +249,20 @@ internal static partial class SpyroPlanner
         double radius = arena ? Math.Max(_scale, 0.9) * Range(rnd, 960, 1180) : Math.Max(Rad(rnd, rnd.Chance(0.55) ? 3 : 4), _scale * Range(rnd, 760, 920));
         var hub = Room(L, 0, 0, Math.Max(_minRoom > 0 ? _minRoom + 60 : 0, radius), 0, "start");
         if (arena) hub.Want = rnd.Pick<string>([("mount", 5.0), ("mound", 2.5), ("lake", 2.0)]);
-        int spokes = Math.Clamp(count - 1 - (count > 5 ? rnd.Next(1, 3) : count > 4 ? rnd.Next(0, 2) : 0), 2, _minRoom > 0 ? 5 : 6);
+        int spokes = Math.Clamp(count - 1 - (count > 5 ? rnd.Next(1, 3) : count > 4 ? rnd.Next(0, 2) : 0), 2, _minRoom > 0 ? 5 : arena ? 4 : 6);
         double angle = Range(rnd, 0, 6.28);
         for (int k = 0; k < spokes; k++)
         {
-            var d = Dir(angle + 2 * 3.14159265358979 * (k + Range(rnd, -0.22, 0.22)) / spokes);
+            // Round a field one side is left open: Spyro arrives there.
+            var d = Dir(angle + 2 * 3.14159265358979 * (k + Range(rnd, -0.22, 0.22)) / (arena ? spokes + 1 : spokes));
             double r = Rad(rnd, Cls(rnd));
             if (!Spare(L, r)) { if (k >= 2) break; r = Rad(rnd, 1); }
             // A room right against the middle one, up a flight of steps.
             if (rnd.Chance(arena ? 0.15 : 0.28) && Flight(L, hub, d, r, rnd.Chance(0.75), rnd) != null) continue;
             double gap = rnd.Chance(0.2) ? Range(rnd, _gapTo, 1.5 * _gapTo) : Gap(rnd);
             var a = Room(L, d.X * (hub.R + r + gap), d.Y * (hub.R + r + gap), r, 0);
-            double climb = Climb(gap, gap > _gapTo ? 240 : 130);
-            a.Z = rnd.Chance(0.7) ? climb * Range(rnd, 0.4, 1) : -climb * Range(rnd, 0.3, 0.8);
+            double climb = Climb(gap, gap > _gapTo ? 260 : 190);
+            a.Z = rnd.Chance(0.7) ? climb * Range(rnd, 0.6, 1) : -climb * Range(rnd, 0.5, 1);
             Join(L, hub, a, "path");
         }
         Further(L, hub, count, rnd);
@@ -282,12 +283,15 @@ internal static partial class SpyroPlanner
                 (double X, double Y) d = (px / pd * c - py / pd * s, px / pd * s + py / pd * c);
                 double r = Rad(rnd, Cls(rnd));
                 if (!Spare(L, r)) return;
+                // Onward the same way as the room before it went: up from a high room, down from a low one.
+                bool upward = rnd.Chance(p.Z >= hub.Z ? 0.8 : 0.25);
+                if (rnd.Chance(0.3) && Flight(L, p, d, r, upward, rnd) != null) { made = true; continue; }
                 double gap = Gap(rnd);
                 double x = p.X + d.X * (p.R + r + gap), y = p.Y + d.Y * (p.R + r + gap);
                 if (!Fits(L, p, x, y, r)) continue;
                 var a = Room(L, x, y, r, 0);
-                double climb = Climb(gap);
-                a.Z = p.Z + (rnd.Chance(0.75) ? climb * Range(rnd, 0.5, 1) : -climb * Range(rnd, 0.3, 0.8));
+                double climb = Climb(gap, 190);
+                a.Z = p.Z + (upward ? climb * Range(rnd, 0.6, 1) : -climb * Range(rnd, 0.5, 1));
                 Join(L, p, a, "path");
                 made = true;
             }
@@ -415,11 +419,12 @@ internal static partial class SpyroPlanner
             if (p.Taken.Any(t => t.X * d.X + t.Y * d.Y > 0.5)) continue;
             double r = Rad(rnd, Cls(rnd));
             if (!Spare(L, r)) { if (k >= 5) break; r = Rad(rnd, 0); }
+            if (rnd.Chance(0.25) && Flight(L, p, d, r, rnd.Chance(0.7), rnd) != null) { k++; continue; }
             double gap = Gap(rnd), x = p.X + d.X * (p.R + r + gap), y = p.Y + d.Y * (p.R + r + gap);
             if (!Fits(L, p, x, y, r)) continue;
             var a = Room(L, x, y, r, 0);
-            double climb = Climb(gap);
-            a.Z = p.Z + (rnd.Chance(0.6) ? climb * Range(rnd, 0.3, 1) : -climb * Range(rnd, 0.3, 0.9));
+            double climb = Climb(gap, 190);
+            a.Z = p.Z + (rnd.Chance(0.65) ? climb * Range(rnd, 0.5, 1) : -climb * Range(rnd, 0.4, 1));
             Join(L, p, a, "path");
             k++;
         }

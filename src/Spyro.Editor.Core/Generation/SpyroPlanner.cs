@@ -192,7 +192,7 @@ internal static partial class SpyroPlanner
                     plan.Spikes = theme.Peaks ? 260 : 0;
                     break;
             }
-            int weight = Math.Max(3, size switch { LevelSize.Small => 4, LevelSize.Large => 8, _ => 6 } - shrink);
+            int weight = Math.Max(3, size switch { LevelSize.Small => 5, LevelSize.Large => 11, _ => 8 } - shrink);
             bool apart = plan.Kind is EnclosureKind.Sea or EnclosureKind.Sky;
             if (apart) { _scale = 0.72; _gapFrom = 250; _gapTo = 430; weight += plan.Kind == EnclosureKind.Sky ? 2 : 1; } else { _scale = style == LevelStyle.Caverns ? 0.8 : 1; _gapFrom = 520; _gapTo = 800; }
             _scale *= Tune.RoomScale;
@@ -315,6 +315,9 @@ internal static partial class SpyroPlanner
         return x1 - x0 < 9000 && y1 - y0 < 9000;
     }
 
+    /// <summary>How far a flight of so many steps reaches out over the lower room's floor from the higher room's edge.</summary>
+    internal static double FlightReach(int steps) => steps <= 2 ? 160 : 140 * (steps - 1) + 10;
+
     private static double Cosine(double ax, double ay, double bx, double by)
     {
         double l = Math.Sqrt((ax * ax + ay * ay) * (bx * bx + by * by));
@@ -413,8 +416,8 @@ internal static partial class SpyroPlanner
         // takes them halfway out, facing outwards, up to two well apart.
         if (L.Doors.Count(o => o.Area == a.Id) >= (plaza ? 2 : 1)) return false;
         (double X, double Y) from = plaza || a.Taken.Count == 0 ? Dir(Range(rnd, 0, 6.2832)) : (-a.Taken[0].X, -a.Taken[0].Y);
-        double jitter = plaza ? Range(rnd, -0.2, 0.2) : 0, at = plaza ? 0.5 * a.R : Math.Max(0, 780 - a.R);
-        double front = plaza ? Math.Min(DoorWalk, at + a.R - 130) : at + a.R - 60, behind = a.R - at - 120;
+        double jitter = plaza ? Range(rnd, -0.2, 0.2) : 0, at = plaza ? 0.5 * a.R : Math.Max(0, 800 - a.R);
+        double front = plaza ? Math.Min(DoorWalk, at + a.R - 130) : at + a.R - 90, behind = a.R - at - 120;
         if (behind < 200 || front < 700) return false;
         double side = rnd.Chance(0.5) ? 1 : -1;
         double[] turns = plaza ? [0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, -2.0, 2.5, -2.5, 3.0]
@@ -437,7 +440,8 @@ internal static partial class SpyroPlanner
                 var e = Unit(o.X - a.X, o.Y - a.Y);
                 // Where the higher room's edge crosses this floor, and the steps in front of it.
                 double edge = Dist(a.X, a.Y, o.X, o.Y) - o.R;
-                if (SegmentDistance(a.X + e.X * (edge - 60), a.Y + e.Y * (edge - 60), x + d.X * behind, y + d.Y * behind, x - d.X * front, y - d.Y * front) < 230 + 170) steps = true;
+                double reach = FlightReach((int)Math.Round((o.Z - a.Z) / SpyroMoves.DesignLedge));
+                if (SegmentDistance(a.X + e.X * (edge - reach / 2), a.Y + e.Y * (edge - reach / 2), x + d.X * behind, y + d.Y * behind, x - d.X * front, y - d.Y * front) < reach / 2 + 110 + 170) steps = true;
             }
             if (steps) continue;
             a.Taken.Add(d);
@@ -521,6 +525,8 @@ internal static partial class SpyroPlanner
             // A small room's outline wanders less, so it keeps its size; so does one whose edge is a flight of steps.
             if (a.R < 420) a.Zone.Wobble = Math.Min(a.Zone.Wobble, 0.09 * a.R);
             if (L.Joins.Any(j => j.Kind is "flight" or "step" && (j.A == a.Id || j.B == a.Id))) a.Zone.Wobble = Math.Min(a.Zone.Wobble, 14);
+            // A doorway's room keeps its size all round: the floor in front of the doorway runs to its edge.
+            if (a.Id != 0 && L.Doors.Any(door => door.Area == a.Id)) a.Zone.Wobble = Math.Min(a.Zone.Wobble, 20);
             // A doorway stands taller than a cave's roof is high: its room's roof is raised over it.
             if (a.Zone.Roof > 0 && L.Doors.Any(door => door.Area == a.Id)) a.Zone.Roof += 150;
             // A hill of terraces stands in the open.
@@ -551,6 +557,8 @@ internal static partial class SpyroPlanner
                 a.Zone.Discs.Add((a.X + d.X * off, a.Y + d.Y * off, r));
             }
         }
+        // Flights whose upper floor may have a perch to glide to, standing in the lower room.
+        var perches = new List<(PlannedArea Low, PlannedArea High, int Steps, (double X, double Y, double R) Flight)>();
         foreach (var j in L.Joins)
         {
             var p = L.Areas[j.A]; var a = L.Areas[j.B];
@@ -581,16 +589,17 @@ internal static partial class SpyroPlanner
                 var e = Unit(high.X - low.X, high.Y - low.Y);
                 (double X, double Y) q = (high.X - e.X * high.R, high.Y - e.Y * high.R);
                 int steps = (int)Math.Round((high.Z - low.Z) / SpyroMoves.DesignLedge);
-                double out1 = steps >= 3 ? 290 : 160;
-                if (steps >= 3)
+                double out1 = FlightReach(steps);
+                // Each step a disc let into the next: the lowest reaches furthest out, every tread about 140 deep.
+                for (int k = 1; k < steps; k++)
                 {
-                    Step(L, low, q.X - e.X * 60, q.Y - e.Y * 60, 230, low.Z + SpyroMoves.DesignLedge, low.Priority + 1);
-                    Step(L, low, q.X + e.X * 20, q.Y + e.Y * 20, 160, low.Z + 2 * SpyroMoves.DesignLedge, low.Priority + 2);
+                    double reach = k == steps - 1 && steps == 2 ? 160 : 140 * (steps - k) + 10, radius = steps == 2 ? 170 : 160 + 70 * (steps - 1 - k);
+                    Step(L, low, q.X - e.X * (reach - radius), q.Y - e.Y * (reach - radius), radius, low.Z + k * SpyroMoves.DesignLedge, low.Priority + k);
                 }
-                else Step(L, low, q.X - e.X * 10, q.Y - e.Y * 10, 170, low.Z + SpyroMoves.DesignLedge, low.Priority + 1);
                 L.Links.Add(new LevelLink(low.Id, high.Id, "ledge", new((float)(q.X - e.X * (out1 + 90)), (float)(q.Y - e.Y * (out1 + 90)), (float)low.Z),
                     new((float)(q.X - e.X * (out1 - 100)), (float)(q.Y - e.Y * (out1 - 100)), (float)(low.Z + SpyroMoves.DesignLedge))) { JumpAt = 60 });
                 L.Count("flight of steps");
+                perches.Add((low, high, steps, (q.X - e.X * (out1 - 230), q.Y - e.Y * (out1 - 230), 230.0)));
                 continue;
             }
             if (j.Kind is not ("path" or "charge"))
@@ -647,6 +656,12 @@ internal static partial class SpyroPlanner
             else L.Links.Add(new LevelLink(p.Id, a.Id, kind, new((float)sx, (float)sy, (float)p.Z), new((float)ex, (float)ey, (float)a.Z)));
             if (!charge) L.Count(kind);
             for (int q = 1; q < path.Spine.Count - 1; q++) L.Gems.Add((path.Spine[q].X, path.Spine[q].Y, path.Id));
+        }
+        // From the top of a high flight, a glide to a perch that stands in the room below, too high to jump onto.
+        foreach (var (low, high, steps, flight) in perches)
+        {
+            if (!features.Glides || steps < 3 || low.R < 560 || !rnd.Chance(0.6)) continue;
+            if (GlideLedge(L, low, high.Zone, (high.X, high.Y), high.R, high.Z - low.Z, Unit(high.X - low.X, high.Y - low.Y), flight, rnd, round: false)) L.Count("glide from a high place");
         }
         Furnish(L, style, features, rnd);
         var first = L.Areas[0];
