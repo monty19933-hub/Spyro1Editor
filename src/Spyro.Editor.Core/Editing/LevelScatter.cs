@@ -909,13 +909,17 @@ public static class LevelScatter
         }
         // Trees.
         var openGround = order.Where(c => open[c] >= 5 && roomOf.ContainsKey(c)).ToList();
+        // A level of small floors (islands in the sky, narrow shelves): its trees on the widest floor it has.
+        var someGround = order.Where(c => open[c] >= 3 && roomOf.ContainsKey(c)).ToList();
         var footOfWalls = order.Where(c => open[c] is >= 2 and <= 4 && fringe.ContainsKey(c) && upright.Within(point[c], 4)).ToList();
         // A level's trees are of one habit: out in the open (Stone Hill, Artisans) or along the walls (the alpine levels).
         bool inOpen = rnd.Chance(0.5);
         for (int left = Wanted(Kind.Tree), tries = 0; left > 0 && tries < 60; tries++)
         {
             var from = (inOpen ? rnd.Chance(0.8) : rnd.Chance(0.2)) && openGround.Count > 0 ? openGround : footOfWalls.Count > 0 ? footOfWalls : openGround;
-            if (Pick([.. from.Where(c => Quiet(point[c]) && Dist2(point[c], spawn) >= 420 * 420 && Clear(point[c], 230))], c => Math.Max(0.15, 1.2 - Away(point[c]))) is not { } anchor) continue;
+            bool small = tries >= 30 && left == Wanted(Kind.Tree);
+            if (small) from = someGround;
+            if (Pick([.. from.Where(c => Quiet(point[c]) && Dist2(point[c], spawn) >= (small ? 320 * 320 : 420 * 420) && Clear(point[c], small ? 170 : 230))], c => Math.Max(0.15, 1.2 - Away(point[c]))) is not { } anchor) continue;
             int size = Math.Min(left, rnd.Pick<int>([(1, 50.0), (2, 30.0), (3, 20.0)]));
             Stand(Kind.Tree, point[anchor], spawn); left--;
             for (int n = 1; n < size; n++)

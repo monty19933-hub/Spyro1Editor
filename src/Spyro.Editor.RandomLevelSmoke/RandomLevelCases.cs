@@ -216,7 +216,7 @@ internal static class RandomLevelCases
         LevelScatter.Kind.Tree => "prop:tree", LevelScatter.Kind.Light or LevelScatter.Kind.WallLight => "prop:light", LevelScatter.Kind.Plant => "prop:plant", _ => "chest:any",
     };
 
-    private static readonly string[] SpyroPlannerLayouts = ["journey", "loop", "hub", "arena", "climb", "gorge", "web"];
+    private static readonly string[] SpyroPlannerLayouts = ["journey", "loop", "hub", "arena", "climb", "gorge", "web", "field", "plateaus", "terraces", "courts"];
     /// <summary>The faces a level's towers and trees may add to its land.</summary>
     private const int SpyroStructuresFaces = 900;
 

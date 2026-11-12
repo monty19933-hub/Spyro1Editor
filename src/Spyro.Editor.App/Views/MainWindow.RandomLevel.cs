@@ -39,8 +39,10 @@ public sealed partial class MainWindow
     /// <summary>How a level is laid out (<see cref="RandomLevelOptions.Layout"/>); the first leaves it to the seed.</summary>
     private static readonly (string? Layout, string Label)[] RandomLevelLayouts =
     [
-        (null, "Surprise me"), ("journey", "A way from room to room, with an end"), ("loop", "A ring that comes back over its start"),
-        ("hub", "A clearing with rooms off it all round"), ("arena", "One great room with a hill, a mound or a moat"), ("climb", "A hill of terraces to climb"),
+        (null, "Surprise me"), ("field", "A wide land with raised and sunken parts"), ("plateaus", "A low floor with plateaus to climb"),
+        ("terraces", "Terraces climbing a hillside"), ("courts", "Yards side by side at their own heights"),
+        ("journey", "A way from room to room, with an end"), ("loop", "A ring that comes back over its start"),
+        ("hub", "A clearing with rooms round it"), ("arena", "One great room with a hill, a mound or a moat"), ("climb", "A hill of terraces to climb"),
         ("gorge", "A winding gorge"), ("web", "A web of rooms, more than one way round"),
     ];
     private static readonly (SurfaceRole Role, string Label)[] PictureRoles =
@@ -231,30 +233,40 @@ public sealed partial class MainWindow
         columns.Children.Add(left);
         columns.Children.Add(right);
 
-        var content = new StackPanel { Margin = new Thickness(22), Spacing = 12 };
+        var content = new StackPanel { Margin = new Thickness(20, 16, 20, 8), Spacing = 10 };
         var heading = new TextBlock { Text = homeworld ? "Make a random homeworld" : "Make a random level", FontSize = 20, FontWeight = FontWeight.SemiBold };
         content.Children.Add(heading);
         content.Children.Add(new TextBlock
         {
-            TextWrapping = TextWrapping.Wrap, MaxWidth = 780, HorizontalAlignment = HorizontalAlignment.Left,
-            Text = "A new level made the way the game's own levels are, and no two alike: a way from room to room, a ring, a clearing with rooms off it, a hill of terraces, a winding gorge, a web of rooms, with a few big rooms or many small ones, sloping paths and flights of steps between them, steps to jump up, lookouts and hilltops to glide from. It is built and painted like the level you pick: that level's ground, rock and paths in its colours, under its sky, to its music, with its own towers and trees. Every jump, glide and climb is inside what Spyro can do. Choose what you like or leave it to chance, then put it in a level slot and add your own objects and enemies."
+            TextWrapping = TextWrapping.Wrap, MaxWidth = 780, HorizontalAlignment = HorizontalAlignment.Left, FontSize = 13,
+            Text = "A new level built and painted like the level you pick, and no two alike. Choose what you like or leave it to chance; New Seed makes another. Every jump, glide and climb is inside what Spyro can do."
         });
         content.Children.Add(columns);
+        // The place, the objects and the buttons stay at the foot of the window: the choices above scroll when the
+        // window is taller than the screen.
+        var footer = new StackPanel { Margin = new Thickness(20, 6, 20, 16), Spacing = 8 };
         var place = new ComboBox { Name = "RandomLevelPlace", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = places.Select(p => p.Label).ToArray(), SelectedIndex = 0 };
-        content.Children.Add(Label("Put it"));
-        content.Children.Add(place);
+        footer.Children.Add(new TextBlock { Text = "Put it", FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap });
+        footer.Children.Add(place);
         var fill = new CheckBox { Name = "RandomLevelFillIn", Content = "Then fill it with objects for me: enemies, chests, gems, dragons and the way out (Objects › Random objects does it again another way)", IsChecked = false };
-        content.Children.Add(fill);
+        footer.Children.Add(fill);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right };
         Button cancel = NewButton("Cancel"), make = NewButton("Make Level");
         cancel.Name = "RandomLevelCancel"; make.Name = "RandomLevelMake";
         StyleModernPrimaryButton(make, ModernBlue, 132);
-        actions.Children.Add(cancel); actions.Children.Add(make); content.Children.Add(actions);
+        actions.Children.Add(cancel); actions.Children.Add(make); footer.Children.Add(actions);
+        var body = new DockPanel();
+        var footerFrame = new Border { BorderBrush = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)), BorderThickness = new Thickness(0, 1, 0, 0), Child = footer };
+        DockPanel.SetDock(footerFrame, Dock.Bottom);
+        body.Children.Add(footerFrame);
+        body.Children.Add(new ScrollViewer { Name = "RandomLevelScroll", Content = content, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
         var dialog = new Window
         {
-            Name = "RandomLevelDialog", Title = "Random Level", Width = 840, SizeToContent = SizeToContent.Height, CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = new ScrollViewer { Content = content }
+            Name = "RandomLevelDialog", Title = "Random Level", Width = 840, SizeToContent = SizeToContent.Height, CanResize = true, MinHeight = 360,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = body
         };
+        // No taller than the free part of the screen (the Dock stays clear of Make Level).
+        if (ScreenFit.MaxHeightOver(this) is { } tallest) dialog.MaxHeight = tallest;
 
         // A homeworld goes where the game keeps its doorway code: the places that are homeworlds.
         IReadOnlyList<string> Doorways() => what.SelectedIndex == 1 && place.SelectedIndex >= 0 && place.SelectedIndex < places.Count
@@ -277,7 +289,7 @@ public sealed partial class MainWindow
             whatNote.IsVisible = home;
             whatNote.Text = !home ? "" : places.Count == 0
                 ? "A generated homeworld goes in the place of one of the game's homeworlds or in the homeworld of a world of your own. Open a homeworld first (the level picker), or make a world with File ▾ › New World…, then choose this again."
-                : $"Spyro arrives in the first of its rooms. {(names.Count == 1 ? "A doorway" : $"{names.Count} doorways")} will stand in the rooms, one to a room, with open floor in front to fly back out onto: to {string.Join(", ", names)}.";
+                : $"Spyro arrives in the first of its parts. {(names.Count == 1 ? "A doorway" : $"{names.Count} doorways")} will stand round the land (a big part holds two or three at its edges, backs to the bank), each with open floor in front to fly back out onto: to {string.Join(", ", names)}.";
             make.IsEnabled = !home || places.Count > 0;
         }
         RandomLevelOptions Read()

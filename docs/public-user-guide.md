@@ -612,10 +612,17 @@ homeworld, its levels, their doorways, the entrance and the way back.
 are made, from a seed and a few choices, then puts it where you say so you can add
 objects and enemies yourself.
 
-- **Laid out like the game's levels**, in one of seven ways: a way from room to
+- **Laid out like the game's levels**, in one of eleven ways. Four are one piece
+  of land of many parts, each at its own height, running into each other on the
+  level, a step or a flight of steps up or down, now and then a path out to a
+  part further off: a wide land with raised and sunken parts round a great middle
+  (like Artisans); a low floor with plateaus standing round and in it, some on
+  others (like Dry Canyon); long terraces climbing a hillside, zigzagging up (like
+  Magic Crafters); and squared yards side by side on a grid at their own heights
+  (like Town Square or Lofty Castle). The others: a way from room to
   room with a clear end (side rooms off it, sometimes a ledge over an earlier
   room); a ring that comes back over its start (the way round ends with a drop
-  back to it); a clearing with rooms off it all round; one great room with a
+  back to it); a clearing with rooms round it; one great room with a
   hill, a stepped mound or a moat in the middle; a hill of two to four terraces,
   each reached by a ramp that winds round it, with steps to the summit and a
   glide down; a winding gorge whose reaches run together with steps between
@@ -624,7 +631,9 @@ objects and enemies yourself.
   small ones. Rooms have flights of steps, long paths that climb as they wind,
   raised terraces, hollows, islets in pools, steps to jump up, lookouts to glide
   from and hidden nooks; hilltops and islands get one of the look's tall things
-  or a tower.
+  or a tower. Rooms are not round: their edges are rock shelves with flat sides
+  and corners, long terraces or squared yards, straight across where a path or a
+  flight of steps meets them.
 - **Built like them:** one sheet of four-cornered faces about 128 units across
   whose lines follow the edges of the land, as in the original levels, enclosed by
   steep banks, rock walls, peaks, open water or the sky.
@@ -638,7 +647,7 @@ The choices:
 - **Kind of level:** clearings among the hills (like Artisans), islands in the
   water, islands in the sky (like Lofty Castle), caverns and tunnels, a canyon
   (like Dry Canyon) or castle courtyards. **Surprise me** lets the seed choose.
-- **Laid out as:** one of the seven layouts above, or **Surprise me** to let the
+- **Laid out as:** one of the eleven layouts above, or **Surprise me** to let the
   seed choose one that suits the kind of level.
 - **In the style of:** Artisans, Stone Hill, Dark Hollow, Town Square, Peace
   Keepers, Dry Canyon, Cliff Town, Ice Cavern, Magic Crafters, High Caves, Wizard
@@ -681,10 +690,13 @@ any tile afterwards.
 ### Random homeworlds
 
 **File ▾ → Random Homeworld…** (or **Make: A homeworld** in the Random Level
-window) makes a homeworld, laid out in any of the level layouts (a clearing with
-rooms off it, a hill of terraces, a web of rooms…), and a doorway stands in a
-room for every level the homeworld leads to, with open floor in front of it and
-behind it for Spyro to come back out onto. Spyro flies in through the lower part
+window) makes a homeworld, laid out in any of the level layouts; left to chance,
+it is one land (a wide land, plateaus, terraces or yards) or a web, ring, climb or
+journey. A doorway stands for every level the homeworld leads to: a big part of
+the land holds two or three near its edge, backs to the bank and facing the land,
+a smaller part one in its middle, each with open floor in front of it (which may
+run on into the next part on the level) and behind it for Spyro to come back out
+onto. Spyro flies in through the lower part
 of each opening, whatever its shape and size, so every doorway loads its level.
 
 - A generated homeworld goes in the place of any of the game's six homeworlds

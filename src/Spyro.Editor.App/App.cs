@@ -20,6 +20,8 @@ public sealed class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // Every window that opens over another stays inside the free part of the screen (above the Dock).
+        ScreenFit.Install();
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             desktop.MainWindow = StartupProblem != null
                 ? new StartupProblemWindow(StartupProblem, StartupLogFolder)

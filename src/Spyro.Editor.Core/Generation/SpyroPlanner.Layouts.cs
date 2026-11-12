@@ -18,7 +18,7 @@ internal static partial class SpyroPlanner
             _ => rnd.Pick<int>([(0, 1.0), (1, 2.2), (2, 3.0), (3, 2.0), (4, 0.5)]),
         };
         // A homeworld's rooms hold doorways: most are clearings at least.
-        if (_minRoom > 0 && cls < 2 && rnd.Chance(0.75)) cls = 2;
+        if (_minRoom > 0 && cls < 2 && rnd.Chance(_cluster ? 0.45 : 0.75)) cls = 2;
         return cls;
     }
 
@@ -30,8 +30,9 @@ internal static partial class SpyroPlanner
     {
         double grain = _grain switch { "grand" => 0.68, "fine" => 1.5, _ => 1.0 };
         int count = Math.Clamp((int)Math.Round(weight * grain * Range(rnd, 0.8, 1.3)), min, max);
-        // A homeworld: the plaza and a room for each doorway at least.
-        return _minRoom > 0 ? Math.Max(count, 6) : count;
+        // A homeworld: the plaza and a room for each doorway at least (one floor of many parts holds doorways round
+        // the edges of its big parts, so it needs fewer).
+        return _minRoom > 0 ? Math.Max(count, _cluster ? 5 : 6) : count;
     }
 
     private static double Covered(PlannedLevel L) => L.Areas.Sum(a => 3.1416 * a.R * a.R);
@@ -88,13 +89,14 @@ internal static partial class SpyroPlanner
 
     /// <summary>A room right against another, two or three steps higher or lower: the two floors meet in a flight of
     /// steps on the lower one. Null when it does not fit there.</summary>
-    private static PlannedArea? Flight(PlannedLevel L, PlannedArea p, (double X, double Y) d, double r, bool upward, LevelRandom rnd)
+    /// <param name="least">The fewest steps (floating land climbs more from one island to the next).</param>
+    private static PlannedArea? Flight(PlannedLevel L, PlannedArea p, (double X, double Y) d, double r, bool upward, LevelRandom rnd, int least = 2)
     {
         const double overlap = 150;
         // The steps stand on the lower room's floor, which must hold them.
         var lowR = upward ? p.R : r;
         if (lowR < 400 || (upward ? r : p.R) < 330) return null;
-        int steps = lowR >= 720 && rnd.Chance(0.45) ? 4 : lowR >= 540 && rnd.Chance(0.65) ? 3 : 2;
+        int steps = Math.Max(lowR >= 720 && rnd.Chance(0.45) ? 4 : lowR >= 540 && rnd.Chance(0.65) ? 3 : 2, Math.Min(least, lowR >= 540 ? 4 : 3));
         // Spyro arrives in the middle of the first room: the steps keep well off it.
         if (upward && p.Id == 0 && p.R - overlap - FlightReach(steps) < 280) { if (p.R - overlap - FlightReach(2) < 280) return null; steps = 2; }
         double x = p.X + d.X * (p.R + r - overlap), y = p.Y + d.Y * (p.R + r - overlap);
@@ -257,8 +259,16 @@ internal static partial class SpyroPlanner
             var d = Dir(angle + 2 * 3.14159265358979 * (k + Range(rnd, -0.22, 0.22)) / (arena ? spokes + 1 : spokes));
             double r = Rad(rnd, Cls(rnd));
             if (!Spare(L, r)) { if (k >= 2) break; r = Rad(rnd, 1); }
-            // A room right against the middle one, up a flight of steps.
-            if (rnd.Chance(arena ? 0.15 : 0.28) && Flight(L, hub, d, r, rnd.Chance(0.75), rnd) != null) continue;
+            // A room right against the middle one: up (or down) a flight of steps, a step, or the same floor running on
+            // (the middle opens into it). A homeworld's middle is a plaza with its parts round it, not a star of paths.
+            if (rnd.Chance(_minRoom > 0 ? 0.85 : arena ? 0.4 : 0.5))
+            {
+                string how = rnd.Pick<string>([("flight", 2.0), ("open", 1.6), ("step", 1.0)]);
+                bool up = rnd.Chance(0.75);
+                if (how == "flight" ? Flight(L, hub, d, r, up, rnd) != null : Beside(L, hub, d, r, how, up, rnd, arena ? 300 : double.MaxValue) != null) continue;
+                // A homeworld's room goes right against the plaza one way or another before it goes up a path.
+                if (_minRoom > 0 && (Flight(L, hub, d, r, !up, rnd) != null || Beside(L, hub, d, r, "open", false, rnd, arena ? 300 : double.MaxValue) != null)) continue;
+            }
             double gap = rnd.Chance(0.2) ? Range(rnd, _gapTo, 1.5 * _gapTo) : Gap(rnd);
             var a = Room(L, d.X * (hub.R + r + gap), d.Y * (hub.R + r + gap), r, 0);
             double climb = Climb(gap, gap > _gapTo ? 260 : 190);

@@ -62,6 +62,37 @@ internal enum EnclosureKind
     Sky,
 }
 
+/// <summary>A flat-sided outline (a rock shelf, a plateau, a terrace, a yard): a polygon round a middle that moves with
+/// the level, its points relative to that middle.</summary>
+internal sealed class TerrainHull
+{
+    public double X, Y;
+    public readonly (double X, double Y)[] Points;
+
+    public TerrainHull(double x, double y, (double X, double Y)[] points) { X = x; Y = y; Points = points; }
+
+    /// <summary>Signed distance to the outline (negative inside).</summary>
+    public double Sdf(double x, double y) => Distance(Points, x - X, y - Y);
+
+    public double Radius => Points.Max(p => Math.Sqrt(p.X * p.X + p.Y * p.Y));
+
+    /// <summary>Signed distance from a point to a polygon (any simple polygon; negative inside).</summary>
+    public static double Distance((double X, double Y)[] v, double px, double py)
+    {
+        double d = (px - v[0].X) * (px - v[0].X) + (py - v[0].Y) * (py - v[0].Y), s = 1;
+        for (int i = 0, j = v.Length - 1; i < v.Length; j = i, i++)
+        {
+            double ex = v[j].X - v[i].X, ey = v[j].Y - v[i].Y, wx = px - v[i].X, wy = py - v[i].Y;
+            double ee = ex * ex + ey * ey, t = ee <= 0 ? 0 : Math.Clamp((wx * ex + wy * ey) / ee, 0, 1);
+            double bx = wx - ex * t, by = wy - ey * t;
+            d = Math.Min(d, bx * bx + by * by);
+            bool c1 = py >= v[i].Y, c2 = py < v[j].Y, c3 = ex * wy > ey * wx;
+            if (c1 && c2 && c3 || !c1 && !c2 && !c3) s = -s;
+        }
+        return s * Math.Sqrt(d);
+    }
+}
+
 /// <summary>A piece of floor: a room (a blob of overlapping discs), a path between rooms (a strip along a line), or a
 /// part laid over them (a raised terrace, a pond). Where zones overlap the one with the higher priority is the floor;
 /// floors of different heights meet in a wall.</summary>
@@ -75,6 +106,8 @@ internal sealed class TerrainZone
     /// <summary>Square-cornered parts (a castle's courtyards): middle, half sizes along and across the direction
     /// (<c>Cos</c>, <c>Sin</c>), and how round the corners are.</summary>
     public readonly List<(double X, double Y, double HalfX, double HalfY, double Cos, double Sin, double Round)> Boxes = [];
+    /// <summary>Flat-sided parts: a room that is a rock shelf, a plateau, a long terrace or a yard.</summary>
+    public readonly List<TerrainHull> Hulls = [];
     public readonly List<(double X, double Y)> Spine = [];
     public double HalfWidth;
     /// <summary>Floor height; a path runs from <see cref="Z"/> at its start to <see cref="Z1"/> at its end.</summary>
@@ -99,7 +132,7 @@ internal sealed class TerrainZone
 
     public (double X, double Y) Centre => IsPath
         ? (Spine.Average(p => p.X), Spine.Average(p => p.Y))
-        : Discs.Count > 0 ? (Discs[0].X, Discs[0].Y) : (Boxes[0].X, Boxes[0].Y);
+        : Hulls.Count > 0 ? (Hulls[0].X, Hulls[0].Y) : Discs.Count > 0 ? (Discs[0].X, Discs[0].Y) : (Boxes[0].X, Boxes[0].Y);
 
     public double Sdf(double x, double y, TerrainNoise noise)
     {
@@ -108,6 +141,7 @@ internal sealed class TerrainZone
         else
         {
             d = double.MaxValue;
+            foreach (var hull in Hulls) d = TerrainPlan.SMin(d, hull.Sdf(x, y), Blend);
             foreach (var (cx, cy, r) in Discs)
             {
                 double dx = x - cx, dy = y - cy;
@@ -143,7 +177,8 @@ internal sealed class TerrainZone
     }
 
     /// <summary>The radius of the biggest round or square part.</summary>
-    public double Radius => Math.Max(Discs.Count > 0 ? Discs.Max(d => d.R) : 0, Boxes.Count > 0 ? Boxes.Max(b => Math.Max(b.HalfX, b.HalfY)) : 0);
+    public double Radius => Math.Max(Math.Max(Discs.Count > 0 ? Discs.Max(d => d.R) : 0, Boxes.Count > 0 ? Boxes.Max(b => Math.Max(b.HalfX, b.HalfY)) : 0),
+        Hulls.Count > 0 ? Hulls.Max(h => h.Radius) : 0);
 
     public double Length
     {
@@ -479,6 +514,8 @@ internal sealed class TerrainPlan
         {
             foreach (var (cx, cy, r) in z.Discs) { x0 = Math.Min(x0, cx - r); y0 = Math.Min(y0, cy - r); x1 = Math.Max(x1, cx + r); y1 = Math.Max(y1, cy + r); }
             foreach (var b in z.Boxes) { double r = Math.Sqrt(b.HalfX * b.HalfX + b.HalfY * b.HalfY); x0 = Math.Min(x0, b.X - r); y0 = Math.Min(y0, b.Y - r); x1 = Math.Max(x1, b.X + r); y1 = Math.Max(y1, b.Y + r); }
+            foreach (var h in z.Hulls)
+                foreach (var p in h.Points) { x0 = Math.Min(x0, h.X + p.X); y0 = Math.Min(y0, h.Y + p.Y); x1 = Math.Max(x1, h.X + p.X); y1 = Math.Max(y1, h.Y + p.Y); }
             foreach (var (sx, sy) in z.Spine) { x0 = Math.Min(x0, sx - z.HalfWidth); y0 = Math.Min(y0, sy - z.HalfWidth); x1 = Math.Max(x1, sx + z.HalfWidth); y1 = Math.Max(y1, sy + z.HalfWidth); }
         }
         double m = TrimDistance + 160;

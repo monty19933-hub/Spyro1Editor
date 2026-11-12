@@ -112,7 +112,7 @@ internal static partial class NewLevelBuildCases
     }
 
     /// <summary><c>random-homeworld</c>: File ▾ › Random Homeworld… answered with RANDOM_SEED / RANDOM_STYLE / RANDOM_LOOK /
-    /// RANDOM_DIFFICULTY and RANDOM_PLACE: <c>open</c> (in place of the homeworld RANDOM_HOME, default artisans) or
+    /// RANDOM_DIFFICULTY, RANDOM_LAYOUT and RANDOM_PLACE: <c>open</c> (in place of the homeworld RANDOM_HOME, default artisans) or
     /// <c>world:70</c> (the project's new world). The homeworld must come out with a doorway, frame and all, to every
     /// level its place leads to, each on the floor with open floor in front; RANDOM_FILL=1 then fills it with Random
     /// objects (a game homeworld gets its balloonist). Writes homeworld.json (start and doorways) for the in-game run.</summary>
@@ -123,7 +123,8 @@ internal static partial class NewLevelBuildCases
         string place = Environment.GetEnvironmentVariable("RANDOM_PLACE") ?? "open";
         string homeKey = Environment.GetEnvironmentVariable("RANDOM_HOME") is { Length: > 0 } h ? h : "artisans";
         var difficulty = Enum.TryParse<LevelDifficulty>(Environment.GetEnvironmentVariable("RANDOM_DIFFICULTY"), out var d) ? d : LevelDifficulty.Medium;
-        var options = new RandomLevelOptions { Seed = seed, Style = style, Theme = Environment.GetEnvironmentVariable("RANDOM_LOOK") is { Length: > 0 } look ? look : null, Difficulty = difficulty, Doorways = 1 };
+        var options = new RandomLevelOptions { Seed = seed, Style = style, Theme = Environment.GetEnvironmentVariable("RANDOM_LOOK") is { Length: > 0 } look ? look : null, Difficulty = difficulty, Doorways = 1,
+            Layout = Environment.GetEnvironmentVariable("RANDOM_LAYOUT") is { Length: > 0 } layout ? layout : null };
         var (where, world) = place.StartsWith("world:") ? (MainWindow.RandomLevelPlace.World, int.Parse(place[6..])) : (MainWindow.RandomLevelPlace.OpenLevel, 0);
         if (where == MainWindow.RandomLevelPlace.OpenLevel) Load(window, homeKey);
         var catalog = Get<LevelCatalog>(window, "_retailCatalog");
@@ -205,6 +206,14 @@ internal static partial class NewLevelBuildCases
             throw new InvalidOperationException("The window did not open set to make a homeworld.");
         if (place.ItemsSource!.Cast<string>().Any(p => p.StartsWith("As the project's new level", StringComparison.Ordinal)))
             throw new InvalidOperationException("A place that is no homeworld is offered for a homeworld.");
+        // The place, Fill In and the buttons stay at the window's foot, outside the part that scrolls (a window taller
+        // than the screen scrolls its choices, and Make Homeworld is never under the Dock).
+        var scroll = Find<ScrollViewer>(dialog, "RandomLevelScroll");
+        foreach (string pinned in new[] { "RandomLevelMake", "RandomLevelCancel", "RandomLevelPlace" })
+            if (Avalonia.LogicalTree.LogicalExtensions.GetLogicalAncestors(Find<Control>(dialog, pinned)).Contains(scroll))
+                throw new InvalidOperationException($"{pinned} scrolls with the choices instead of staying at the window's foot.");
+        if (!dialog.CanResize) throw new InvalidOperationException("The Random Level window cannot be made smaller.");
+        Console.WriteLine("RANDOM_LEVEL_WINDOW_FOOT_OK");
         Snapshot(dialog, Path.Combine(outDir, "01-random-homeworld-dialog.png"));
         Find<ComboBox>(dialog, "RandomLevelDifficulty").SelectedIndex = 2;
         Click(Find<Button>(dialog, "RandomLevelRebuild")); Pump(5);

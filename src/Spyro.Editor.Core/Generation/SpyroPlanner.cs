@@ -21,6 +21,18 @@ internal sealed class PlannedArea
     public string Want = "";
     /// <summary>The big thing that was built in it ("" none): a room takes one.</summary>
     public string Piece = "";
+    /// <summary>The room's outline: "round", "rock" (flat sides and corners), "slab" (squared, long), "box" (a castle
+    /// yard); "" leaves it to the level.</summary>
+    public string Look = "";
+    /// <summary>The way a long room (a terrace) runs, and how much longer it is that way than across (1: no longer).</summary>
+    public (double X, double Y)? Long;
+    public double Stretch = 1;
+    /// <summary>The flat-sided outline round the room's middle (relative to it), or null for a round room; and how far
+    /// it reaches from the middle at most.</summary>
+    public (double X, double Y)[]? Outline;
+    public double Out;
+    /// <summary>How far the room's floor reaches from its middle at most.</summary>
+    public double Reach => Out > 0 ? Out : R;
 }
 
 /// <summary>How two rooms are joined: a sloping path between them ("path", "charge"), or (rooms that touch) the same
@@ -34,7 +46,8 @@ internal sealed record PlannedJoin(int A, int B, string Kind);
 internal sealed class PlannedLevel
 {
     public required TerrainPlan Plan;
-    /// <summary>The layout: journey, loop, hub, arena, climb, gorge, web (or trail, the plain fallback).</summary>
+    /// <summary>The layout: journey, loop, hub, arena, climb, gorge, web, field, plateaus, terraces, courts (or trail,
+    /// the plain fallback).</summary>
     public string Shape = "";
     /// <summary>How big the level's rooms are: grand (a few big ones), mixed, fine (many small ones).</summary>
     public string Grain = "";
@@ -129,17 +142,24 @@ internal static partial class SpyroPlanner
     /// <summary>The layouts a kind of level may take, with how often (a homeworld needs rooms for its doorways).</summary>
     internal static IReadOnlyList<(string Shape, double Weight)> Layouts(LevelStyle style, bool homeworld) => (style, homeworld) switch
     {
-        (LevelStyle.Canyon, false) => [("gorge", 3), ("journey", 2), ("loop", 2), ("climb", 2), ("web", 1.5), ("arena", 1)],
-        (LevelStyle.Caverns, false) => [("journey", 2.5), ("web", 2), ("gorge", 2), ("hub", 1.5), ("arena", 1)],
-        (LevelStyle.Castle, false) => [("hub", 2), ("loop", 2), ("web", 2), ("arena", 2), ("climb", 2), ("journey", 1.5)],
-        (LevelStyle.Islands or LevelStyle.SkyIslands, false) => [("journey", 2), ("loop", 2), ("hub", 2), ("web", 2.5), ("climb", 2), ("arena", 1)],
-        (_, false) => [("journey", 2), ("loop", 2), ("hub", 1.5), ("arena", 2), ("climb", 2), ("web", 2), ("gorge", 1.5)],
-        (LevelStyle.Caverns, true) => [("hub", 3), ("web", 2), ("journey", 1.5)],
-        (_, true) => [("hub", 3), ("arena", 2), ("web", 2.5), ("loop", 2), ("journey", 1.5), ("climb", 1.5)],
+        (LevelStyle.Canyon, false) => [("plateaus", 3), ("gorge", 2.5), ("field", 2), ("journey", 1.5), ("loop", 1.5), ("climb", 1.2), ("web", 1.2), ("terraces", 1.2), ("arena", 1.2)],
+        (LevelStyle.Caverns, false) => [("journey", 2.2), ("web", 1.8), ("gorge", 1.8), ("field", 1.8), ("plateaus", 1.2), ("hub", 1), ("arena", 1.2)],
+        (LevelStyle.Castle, false) => [("courts", 4), ("terraces", 1.5), ("loop", 1.3), ("web", 1.3), ("climb", 1.2), ("field", 1.2), ("hub", 1), ("arena", 1.4), ("journey", 1)],
+        (LevelStyle.Islands or LevelStyle.SkyIslands, false) => [("web", 2.2), ("journey", 1.8), ("loop", 1.8), ("field", 1.6), ("plateaus", 1.5), ("hub", 1.3), ("climb", 1.4), ("terraces", 1.2), ("arena", 1.2)],
+        (_, false) => [("field", 2.6), ("terraces", 2.2), ("plateaus", 2), ("journey", 1.4), ("loop", 1.4), ("climb", 1.4), ("web", 1.4), ("gorge", 1.2), ("arena", 1.4), ("hub", 0.8), ("courts", 0.8)],
+        // A homeworld left to chance is one land with its doorways round it (a clearing with rooms round it, or one
+        // great room with rooms off it, still comes when asked for).
+        (LevelStyle.Caverns, true) => [("field", 3), ("plateaus", 1.6), ("web", 1.4)],
+        (LevelStyle.Castle, true) => [("courts", 4), ("field", 1.8), ("terraces", 1.6), ("web", 0.8)],
+        (_, true) => [("field", 3), ("plateaus", 2.4), ("terraces", 2.2), ("courts", 0.8), ("web", 1), ("loop", 0.7), ("climb", 0.6), ("journey", 0.4)],
     };
 
     /// <summary>Every layout's name, for an explicit choice.</summary>
-    internal static readonly string[] AllLayouts = ["journey", "loop", "hub", "arena", "climb", "gorge", "web"];
+    internal static readonly string[] AllLayouts = ["journey", "loop", "hub", "arena", "climb", "gorge", "web", "field", "plateaus", "terraces", "courts"];
+    /// <summary>The layouts that are one floor of many parts (rooms run into each other at their own heights) rather
+    /// than rooms joined by paths.</summary>
+    private static bool IsCluster(string layout) => layout is "field" or "plateaus" or "terraces" or "courts";
+    [ThreadStatic] private static bool _cluster;
 
     /// <param name="layout">The layout to build (<see cref="AllLayouts"/>), or null for the seed's own choice.</param>
     /// <param name="squeeze">Builds the same level with smaller rooms (0: full size): the level came out with more
@@ -155,6 +175,8 @@ internal static partial class SpyroPlanner
         string grain = own.Pick<string>([("grand", 2.0), ("mixed", 4.0), ("fine", 2.2)]);
         // A homeworld's doorways each want a room of their own size: no crowd of little rooms.
         if (doorways > 0 && grain == "fine") grain = "mixed";
+        // Islands and floating land: from a few islands close together to a wide archipelago.
+        double spread = style is LevelStyle.Islands or LevelStyle.SkyIslands && doorways == 0 ? own.Fork("spread").Pick<double>([(0.72, 1.0), (1.0, 2.0), (1.32, 1.0)]) : 1;
         for (int attempt = 0; ; attempt++)
         {
             var r = rnd.Fork("try" + attempt);
@@ -199,18 +221,23 @@ internal static partial class SpyroPlanner
             for (int k = 0; k < squeeze; k++) _scale *= 0.92;
             _ridge = apart ? 240 : Ridge;
             // The layout asked for while it can be placed; then the plain layouts that always could; a trail at the last.
-            string shape = attempt < 24 ? wanted : doorways > 0 ? "hub" : style switch
+            string shape = attempt < 24 ? wanted : doorways > 0 ? (style == LevelStyle.Castle ? "courts" : "field") : style switch
             {
                 LevelStyle.Canyon or LevelStyle.Caverns => "journey", LevelStyle.Castle => "hub", _ => attempt % 2 == 0 ? "loop" : "hub",
             };
+            _cluster = IsCluster(shape);
+            _outline = OutlineFor(style, shape, own.Fork("outline"));
             _grain = attempt < 24 ? grain : "mixed";
             // The floor the rooms may cover: what the game can hold and draw of this kind of level.
             _land = (size switch { LevelSize.Small => 6.5e6, LevelSize.Large => 15.5e6, _ => 11e6 }) * (apart ? 0.62 : style == LevelStyle.Caverns ? 0.8 : 1);
+            _land *= spread;
             for (int k = 0; k < shrink + squeeze; k++) _land *= 0.86;
             bool ok = shape switch
             {
                 "loop" => Loop(L, weight, r), "hub" => Hub(L, weight, r, false), "arena" => Hub(L, weight, r, true), "climb" => Climb(L, weight, r),
-                "gorge" => Gorge(L, weight, r), "web" => Web(L, weight, r), _ => Journey(L, weight, r),
+                "gorge" => Gorge(L, weight, r), "web" => Web(L, weight, r),
+                "field" or "plateaus" or "terraces" or "courts" => Cluster(L, weight, r, shape),
+                _ => Journey(L, weight, r),
             };
             ok = ok && Clear(L);
             if (ok && doorways > 0)
@@ -219,13 +246,14 @@ internal static partial class SpyroPlanner
                 // Every doorway has its room, or the layout is tried again (the plain plaza at the last takes what fits).
                 if (L.Doors.Count < Math.Min(doorways, 5) && attempt < 40) ok = false;
             }
+            if (Environment.GetEnvironmentVariable("SPYRO_RANDOM_LEVEL_DEBUG") == "plan") Console.Error.WriteLine($"attempt {attempt} {shape}: {(ok ? "ok" : "no")}, {L.Areas.Count} parts, {L.Doors.Count} doorways");
             if (!ok)
             {
                 if (attempt < 40) continue;
                 // A plain trail always fits.
                 L = new PlannedLevel { Plan = new TerrainPlan { Noise = plan.Noise, Kind = plan.Kind, Rise = plan.Rise, BankWidth = plan.BankWidth, CapWidth = plan.CapWidth, Rough = plan.Rough, Fillet = plan.Fillet, Ripple = plan.Ripple, Spikes = plan.Spikes, LiquidRole = plan.LiquidRole, LiquidKind = plan.LiquidKind, WallFace = plan.WallFace, WallTop = plan.WallTop, CapRole = plan.CapRole, Beach = plan.Beach, SeaWidth = plan.SeaWidth } };
                 plan = L.Plan;
-                _grain = "mixed";
+                _grain = "mixed"; _cluster = false;
                 Trail(L, Math.Min(weight, 4), r);
                 shape = "trail";
                 if (doorways > 0) Doors(L, doorways, r);
@@ -362,8 +390,8 @@ internal static partial class SpyroPlanner
         {
             if (o == a) continue;
             // A room of the same group stands right beside this one: the disc keeps off its floor, no more.
-            if (Together(o, a)) { if (Dist(o.X, o.Y, x, y) < o.R + r + 50) return false; continue; }
-            if (Dist(o.X, o.Y, x, y) < o.R * 1.25 + r + ridge) return false;
+            if (Together(o, a)) { if (RoomGap(o, x, y) < r + 50) return false; continue; }
+            if (RoomGap(o, x, y) < o.R * 0.25 + r + ridge) return false;
         }
         foreach (var j in L.Joins)
         {
@@ -386,11 +414,12 @@ internal static partial class SpyroPlanner
             double dx = o.X - a.X, dy = o.Y - a.Y, d = Math.Sqrt(dx * dx + dy * dy), from = 0.5 * a.R;
             if (SegmentDistance(x, y, a.X + dx / d * from, a.Y + dy / d * from, o.X, o.Y) < r + 230) return false;
         }
-        // Nor in front of a doorway, where Spyro walks in and comes back out.
+        // Nor in front of a doorway, where Spyro walks in and comes back out (the open floor in front of one may run
+        // on into the next part on the level).
         foreach (var door in L.Doors)
-            if (door.Area == a.Id && (SegmentDistance(x, y, door.X + door.Dx * door.Behind, door.Y + door.Dy * door.Behind, door.X - door.Dx * door.Front, door.Y - door.Dy * door.Front) < r + 150 ||
+            if (SegmentDistance(x, y, door.X + door.Dx * door.Behind, door.Y + door.Dy * door.Behind, door.X - door.Dx * door.Front, door.Y - door.Dy * door.Front) < r + 150 ||
                 // Nor beside the doorway itself, where its frame stands across the way in (up to 250 out either side).
-                Dist(x, y, door.X, door.Y) < r + 300)) return false;
+                Dist(x, y, door.X, door.Y) < r + 300) return false;
         return true;
     }
 
@@ -398,6 +427,12 @@ internal static partial class SpyroPlanner
     /// its room with open floor in front and behind. With more doorways than rooms the plaza takes up to two.</summary>
     private static void Doors(PlannedLevel L, int doors, LevelRandom rnd)
     {
+        if (_cluster)
+        {
+            ClusterDoors(L, doors, rnd);
+            if (L.Doors.Count > 0) L.Count("doorway", L.Doors.Count);
+            return;
+        }
         var plaza = L.Areas[0];
         var rooms = L.Areas.Skip(1).Where(a => a.Kind != "overlook" && a.Want == "").OrderBy(a => a.Taken.Count).ThenByDescending(a => a.Depth).ThenBy(a => a.Id).ToList();
         IEnumerable<PlannedArea> order = plaza.Want == "" ? rooms.Append(plaza).Append(plaza) : rooms;
@@ -515,6 +550,8 @@ internal static partial class SpyroPlanner
             }
             if (!changed) break;
         }
+        // The rooms' outlines, now that every room, join and doorway has its place.
+        Outlines(L, rnd.Fork("outlines"));
         foreach (var a in L.Areas)
         {
             a.Zone = plan.Add(new TerrainZone
@@ -533,22 +570,33 @@ internal static partial class SpyroPlanner
             if (a.Zone.Roof > 0 && L.Doors.Any(door => door.Area == a.Id)) a.Zone.Roof += 150;
             // A hill of terraces stands in the open.
             if (a.Want is "mount" or "mount+") a.Zone.Roof = 0;
-            if (castle && a.R >= 420 && a.Want == "")
+            if (a.Outline != null)
+            {
+                // Flat sides and corners: the outline is a line of the mesh, its edge barely wanders.
+                a.Zone.Hulls.Add(new TerrainHull(a.X, a.Y, a.Outline));
+                a.Zone.Wobble = Math.Min(a.Zone.Wobble, a.Look == "slab" ? 8 : 16);
+                a.Zone.Blend = Math.Min(a.Zone.Blend, 0.2 * a.R);
+            }
+            else if (castle && a.R >= 420 && a.Want == "" && a.Look == "box")
             {
                 // A castle's yards are square-cornered, each turned to face the way into it (the first: any way).
                 var along = a.Taken.Count > 0 ? a.Taken[0] : Dir(Range(rnd, 0, 6.2832));
-                // A doorway's yard is no smaller any way than the round room its place was measured in.
-                bool doorway = L.Doors.Any(door => door.Area == a.Id);
+                // A doorway's yard is no smaller any way than the round room its place was measured in, nor a yard the
+                // open floor in front of a doorway runs on across.
+                bool doorway = L.Doors.Any(door => door.Area == a.Id ||
+                    SegmentDistance(a.X, a.Y, door.X + door.Dx * door.Behind, door.Y + door.Dy * door.Behind, door.X - door.Dx * door.Front, door.Y - door.Dy * door.Front) < a.R);
                 a.Zone.Boxes.Add((a.X, a.Y, a.R * (doorway ? Range(rnd, 1.0, 1.06) : Range(rnd, 0.84, 0.98)), a.R * (doorway ? Range(rnd, 1.0, 1.06) : Range(rnd, 0.8, 0.96)), along.X, along.Y, Range(rnd, 50, 110)));
                 a.Zone.Blend = 60;
             }
             else a.Zone.Discs.Add((a.X, a.Y, a.R));
         }
         L.Start = L.StartAt ?? (L.Areas[0].X, L.Areas[0].Y);
-        // Lobes: a room is a blob, not a disc.
+        // Lobes: a room is a blob, not a disc (a squared one keeps its lines; a rock shelf may have one).
         foreach (var a in L.Areas)
         {
             int lobes = rnd.Next(1, 4);
+            if (a.Look == "slab") continue;
+            if (a.Look == "rock") lobes = rnd.Chance(0.4) ? 1 : 0;
             // Well away from where rooms touch: a lobe would bury the steps between them.
             bool touching = L.Joins.Any(j => j.Kind is not ("path" or "charge") && (j.A == a.Id || j.B == a.Id));
             for (int k = 0; k < lobes; k++)
@@ -556,6 +604,9 @@ internal static partial class SpyroPlanner
                 if (FreeDirection(a, rnd, touching ? 0.2 : 0.75) is not { } d) continue;
                 double r = a.R * Range(rnd, 0.5, 0.75), off = a.R * Range(rnd, 0.5, 0.85);
                 if (!Free(L, a, a.X + d.X * off, a.Y + d.Y * off, r, floor: true)) continue;
+                // Not (at another height) over the open floor in front of a doorway.
+                if (L.Doors.Any(door => Math.Abs(L.Areas[door.Area].Z - a.Z) >= 1 && SegmentDistance(a.X + d.X * off, a.Y + d.Y * off,
+                    door.X + door.Dx * door.Behind, door.Y + door.Dy * door.Behind, door.X - door.Dx * door.Front, door.Y - door.Dy * door.Front) < r + 160)) continue;
                 a.Zone.Discs.Add((a.X + d.X * off, a.Y + d.Y * off, r));
             }
         }

@@ -144,7 +144,7 @@ public static class RandomLevelGenerator
         (PlannedLevel Planned, TerrainMesher Mesher, (int Required, int Unreached, int NoWayBack, List<(double X, double Y)> Bad) Check)? best = null;
         int attempts = 0, squeeze = 0;
         long planSeed = (long)rnd.Fork("plan0").Next64();
-        for (int attempt = 0, plans = 0; attempt < 12 && plans < 6; attempt++)
+        for (int attempt = 0, plans = 0; attempt < 16 && plans < 8; attempt++)
         {
             token.ThrowIfCancellationRequested();
             attempts++;
@@ -162,13 +162,22 @@ public static class RandomLevelGenerator
             // again with smaller rooms.
             if (mesh.Pieces.Count > FaceTarget(options.Size) && squeeze < 5) { squeeze++; continue; }
             var reach = mesh.Reach(tried.Start.X, tried.Start.Y, tried.Glides.Select(g => (g.From, g.To)));
+            if (Environment.GetEnvironmentVariable("SPYRO_RANDOM_LEVEL_DEBUG") is "1" or "first")
+                Console.Error.WriteLine($"plan {plans} {tried.Shape}: {reach.Unreached} unreached, {reach.NoWayBack} no way back of {reach.Required}; {string.Join(" ", reach.Bad.Take(12).Select(b => $"{b.X:0},{b.Y:0}"))}");
             if (best == null || reach.Unreached + reach.NoWayBack < best.Value.Check.Unreached + best.Value.Check.NoWayBack) best = (tried, mesh, reach);
-            if (reach.Unreached + reach.NoWayBack == 0) break;
+            if (reach.Unreached + reach.NoWayBack == 0 || Environment.GetEnvironmentVariable("SPYRO_RANDOM_LEVEL_DEBUG") == "first") break;
             // Another plan altogether.
             plans++; squeeze = 0;
             planSeed = (long)rnd.Fork("plan" + plans).Next64();
         }
         var (planned, mesher, check) = best!.Value;
+        if (Environment.GetEnvironmentVariable("SPYRO_RANDOM_LEVEL_DEBUG") == "plan")
+        {
+            foreach (var a in planned.Areas) Console.Error.WriteLine($"area {a.Id} {a.Kind} at {a.X:0},{a.Y:0} r {a.R:0} out {a.Reach:0} z {a.Z:0} look {a.Look} group {a.Group} want {a.Want} piece {a.Piece}");
+            foreach (var j in planned.Joins) Console.Error.WriteLine($"join {j.A}-{j.B} {j.Kind}");
+            foreach (var d in planned.Doors) Console.Error.WriteLine($"door area {d.Area} at {d.X:0},{d.Y:0} walk {d.Dx:0.00},{d.Dy:0.00} front {d.Front:0} behind {d.Behind:0}");
+            foreach (var z in planned.Plan.Zones.Where(z => z.Kind != "room" && !z.IsPath)) Console.Error.WriteLine($"zone {z.Id} {z.Kind} area {z.Area} z {z.Z:0} discs {string.Join(" ", z.Discs.Select(c => $"{c.X:0},{c.Y:0},{c.R:0}"))}");
+        }
         var plan = planned.Plan;
         var pieces = mesher.Pieces;
         planned.Look = theme.Name;
@@ -373,6 +382,7 @@ public static class RandomLevelGenerator
         {
             for (int k = 0; k < z.Discs.Count; k++) z.Discs[k] = (z.Discs[k].X + dx, z.Discs[k].Y + dy, z.Discs[k].R);
             for (int k = 0; k < z.Boxes.Count; k++) z.Boxes[k] = z.Boxes[k] with { X = z.Boxes[k].X + dx, Y = z.Boxes[k].Y + dy };
+            foreach (var h in z.Hulls) { h.X += dx; h.Y += dy; }
             for (int k = 0; k < z.Spine.Count; k++) z.Spine[k] = (z.Spine[k].X + dx, z.Spine[k].Y + dy);
             z.Z += dz; z.Z1 += dz;
         }
@@ -504,6 +514,8 @@ public static class RandomLevelGenerator
         {
             "journey" => "a way from room to room to its end", "loop" => "a ring that comes back over its start", "hub" => "a clearing with rooms off it all round",
             "arena" => "one great room and the rooms off it", "climb" => "a hill of terraces", "gorge" => "a winding gorge", "web" => "a web of rooms with more than one way round",
+            "field" => "a wide land with raised and sunken parts", "plateaus" => "a low floor with plateaus to climb", "terraces" => "terraces climbing a hillside",
+            "courts" => "yards side by side at their own heights",
             _ => "a winding trail",
         };
         return $"{name}: {(homeworld ? "a homeworld, " : "")}{style} in the style of {theme.Name}, laid out as {layout}, {r.Difficulty.ToString().ToLowerInvariant()}, {r.Areas} areas, {r.Faces:N0} faces, {r.Materials} textures; its floors lie {r.HeightSpan:N0} units apart in height. " +
