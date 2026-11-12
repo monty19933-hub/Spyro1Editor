@@ -378,7 +378,11 @@ internal static partial class NewLevelBuildCases
             if (eggs > 0 && placed.GetValueOrDefault("dragonfly egg") != eggs) throw new InvalidOperationException("Dragonfly eggs are missing.");
             // Teal and rainbow gems: as many as the treasure allows when asked for, none otherwise; they are gems of
             // the level like any other (the treasure above counts them).
-            var (teals, rainbows) = rare ? LevelScatter.HighGemsFor(treasure, true, true) : (0, 0);
+            // (None when the level type's objects leave no place for their sparkle: Random objects then says so and
+            // places ordinary gems.)
+            bool refusedRare = Status(window).Contains("Teal and rainbow gems were left out", StringComparison.Ordinal);
+            if (refusedRare) Console.WriteLine("    teal and rainbow gems left out for this level type (said in the note)");
+            var (teals, rainbows) = rare && !refusedRare ? LevelScatter.HighGemsFor(treasure, true, true) : (0, 0);
             int teal = live.Count(m => m.IsVisibleGem && m.TreasureValue == 50), rainbow = live.Count(m => m.IsVisibleGem && m.TreasureValue == 100);
             Console.WriteLine($"    teal gems {teal} (asked {teals}), rainbow gems {rainbow} (asked {rainbows})");
             if (teal != teals || rainbow != rainbows || placed.GetValueOrDefault("teal gem") != teals || placed.GetValueOrDefault("rainbow gem") != rainbows)

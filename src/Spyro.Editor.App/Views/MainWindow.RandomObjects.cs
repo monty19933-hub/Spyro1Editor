@@ -700,6 +700,18 @@ public sealed partial class MainWindow
             wholeRefusal = await Task.Run(() => DryRunFresh(compilation, lib, all, special).Error);
             if (_currentLevel != level || _workspace.RootPath != root || _freshSceneDocument == null) return;
         }
+        // Teal and rainbow gems sparkle with the game's collectible-star effect, which this level, built with these
+        // objects, has no certified place for (Create BIN refuses them: seen with Dark Passage's objects). Pressing
+        // Randomize again would not help, so the arrangement is made again at once without them, the treasure in
+        // ordinary gems, and the note says why.
+        if (wholeRefusal != null && wholeRefusal.Contains("High-value gem", StringComparison.Ordinal) && (choice.TealGems || choice.RainbowGems))
+        {
+            await RandomizeObjectsAsync(choice with { TealGems = false, RainbowGems = false, Seed = seed });
+            string why = $"Teal and rainbow gems were left out: with {(_retailCatalog.FindByKey(choice.LevelKey)?.DisplayName ?? "this level type")}'s objects this level cannot show their sparkle (Create BIN would refuse them); their part of the treasure is in ordinary gems. Another level type may take them.";
+            _statusText.Text += " " + why;
+            if (_randomObjectsNote != null) _randomObjectsNote.Text += " " + why;
+            return;
+        }
         LastRandomObjects = placed;
         LastRandomObjectsRefusal = wholeRefusal;
         int treasure = _currentMobys.Where(m => !m.IsRemoved).Sum(m => m.TreasureValue);
