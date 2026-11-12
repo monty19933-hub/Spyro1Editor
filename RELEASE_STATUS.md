@@ -1,3 +1,49 @@
+# Spyro Editor 2.3 — 11 November 2026
+
+Stable 2.3 (internal 2.3.0, schema 3). Built and checked locally from `a2c5256` on `feature/v23-20261111` (from v2.2
+`5be498e`; three branches merged into it: spring chests `3530e60`, egg thieves `894c895`, random levels `008b061`).
+**Not published**: the owner asked for the work ("This will be version 2.3"), not for a release. From the owner's list
+of 11 November.
+
+- **Fix It For Me left out all of the owner's Artisans work** although the export check had said all was well. Not a
+  memory problem: `NativeWorldEntrance.Verify` required a homeworld's particles and sounds unchanged even when the
+  entrance was composed with added objects that bring their own (the owner's Crash frog and crate). Fixed; the 6th
+  world stays. Also: Create BIN places a missing world entrance itself; Fix It For Me narrows a level's objects down
+  to the kinds of object added (`level:<key>:added:<kind>`, in halves, at most ten extra runs) and opens the Left Out
+  window by itself; the export check says what it checked; Create BIN reports each changed level's room left.
+- **8 MB is the default memory** (`GameMemorySettings.Default`); 2 MB is saved by name; a game opened that cannot take
+  the patch falls back to 2 MB (`NativeExtendedRam.CanInstall`).
+- **Colours tab** (`MainWindow.UiShell.cs`): This level's colours (enemies, chests, dragons' crystal statues, the fairy
+  at a freed dragon's pedestal, animals; Randomize per group and for all; Randomize Every Level), Spyro's colours, egg
+  thieves' colour, Hover, Fly Anywhere, Play as Crash. Grey enemies can be coloured (`NativeCreatureColours.Own`).
+- **Spring chests with a teal or rainbow gem** (`UniversalHighValueRewards`, reward bytes 0xD6/0xD7 on 0x149/0x0C7).
+- **Egg thieves added anywhere, every run editable, egg totals follow the thieves** (`NativeEggTotals`,
+  `EggThiefRun`); runs kept off water, lava and ooze (`LevelHazards`); a missing thief no longer blocks 100%.
+- **Random levels and homeworlds**: seven layouts ("Laid out as"), rooms of every size, new set pieces; **Random
+  objects** on perches and raised places, scenery ("Trees, torches, flowers"), teal and rainbow gems.
+- Fixed during the checks: a **shaped doorway** whose original's path runs high (Stone Hill's from Artisans, 83% up)
+  never loaded its level in a lower opening; the path now stays in the lower 60% (`NativeHubPortals.PathHeightShare`,
+  hub doorways, new-world doorways and the world entrance). **Spring chests from Add Object** were tagged with the
+  older imported-bundle profile (Stone Hill "blocked"), so Create BIN stopped in a project with no built level; no
+  longer tagged, the tag is dropped from earlier saves.
+
+Checks: gate `--build-all` 639 checks, 0 failed (on `a2c5256`). Disc smokes in it include doorways 4,403 (every
+original homeworld doorway as all nine shapes at 75/100/150%), egg thieves 520, random levels 921, high-value gems.
+Through the editor with the disc (outside the gate): `--fix-it-ui` 34, `--level-colours-export-ui` 27,
+`--clear-project-ui` 25, reward-chests (no tag saved) and Create BIN with no built level, thief add/run/drag with
+Create BIN, thief-water on Cliff Town, random level/objects/homeworld with Create BIN. Emulator (isolated DuckStation):
+generated homeworld seed 5151 all five doorways in and out (also at 75% of the lowest shapes); a copy of the owner's
+project made whole: SKY ISLES's four level doorways and the way in from Artisans and back; three spring chests (teal,
+rainbow, yellow) paid out in a game made with no built level; plus the agents' runs (thieves caught and eggs counted,
+chests in Stone Hill, Town Square and a built level, joins of four random layouts, homeworld seed 7171). Packages
+verified from their zips, codesign passed (not notarized), the packaged Mac app started on a copy of the owner's
+project (Artisans with their 181 objects); every earlier version's updater against the planned list: 20 of 20 offered
+and downloaded the right package (betas V2-V5 Beta V6; 1.0-2.2 version 2.3), 2.3 offered nothing.
+
+Not done: loading a save back from a memory card could not be tried (the test set-up cannot, even for the original
+game); nothing tried on a PlayStation or on Windows; random levels still rise and fall about half as much as the
+game's.
+
 # Spyro Editor 2.2 — 11 November 2026
 
 Stable 2.2 (internal 2.2.0, schema 3). Built and checked locally from `37b5d01` on `feature/clear-project-20261111`
