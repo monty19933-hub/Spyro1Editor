@@ -245,6 +245,7 @@ public sealed partial class MainWindow
             new ToolbarAction("Random Homeworld…", RandomHomeworldAsync),
             new ToolbarAction("New World…", NewWorldAsync),
             new ToolbarAction("World's Balloon Route…", BalloonRouteAsync),
+            new ToolbarAction("Level Links…", LevelLinksAsync),
             new ToolbarAction("New Level from Spyro: Year of the Dragon…", NewLevelFromYearOfTheDragonAsync),
             new ToolbarAction("Open Created Level…", OpenMainFreshLevelAsync),
             MenuSeparator,

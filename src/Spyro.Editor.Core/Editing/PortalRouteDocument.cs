@@ -74,6 +74,14 @@ public sealed record PortalRouteDocument(int SchemaVersion, string SourceImageSh
         return next.Validate();
     }
 
+    /// <summary>The doorway leads where it does in the game again: its saved destination is dropped (Return Home settings
+    /// are left as they are).</summary>
+    public PortalRouteDocument WithOriginalDestination(PortalEndpoint portal)
+    {
+        _ = portal.Resolve();
+        return (this with { Destinations = Destinations.Where(d => d.Portal != portal).ToArray() }).Validate();
+    }
+
     public PortalRouteDocument WithReturn(int levelId, PortalEndpoint? portal)
     {
         if (!IsLevelId(levelId)) throw new InvalidDataException("Choose a valid level for Return Home.");

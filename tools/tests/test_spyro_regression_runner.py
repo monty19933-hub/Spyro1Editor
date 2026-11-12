@@ -989,7 +989,7 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
-        self.assertEqual(21, len(lines))
+        self.assertEqual(22, len(lines))
         self.assertTrue(any(flag + " | " + marker in line for line in lines))
 
     def test_aggregate_ui_is_an_additional_isolated_mode_not_a_source_or_default_alias(self):
@@ -998,6 +998,7 @@ class RunnerOptionsTests(unittest.TestCase):
                     (name, "EDITOR_NAVIGATION_UI_OK checks=", ["--editor-navigation-ui-only"]),
                     (name, "HIGH_VALUE_GEM_UI_OK checks=", ["--high-value-gems-ui-only"]),
                     (name, "PORTAL_ROUTE_UI_OK checks=18", ["--portal-routes-ui-only"]),
+                    (name, "LEVEL_LINKS_UI_OK checks=35", ["--level-links-ui-only"]),
                     (name, "START_BLANK_UI_OK checks=27", ["--start-blank-ui-only"]),
                     (name, "FREE_FLIGHT_UI_OK", ["--free-flight-ui-only"]),
                     (name, "PLAY_AS_CRASH_UI_OK checks=", ["--play-as-crash-ui-only"]),
@@ -1025,7 +1026,7 @@ class RunnerOptionsTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, RUNNER.main())
         lines = [line for line in output.getvalue().splitlines() if "Spyro.Editor.UiSmoke/" in line]
-        self.assertEqual(21, len(lines))
+        self.assertEqual(22, len(lines))
         for _, marker, arguments in expected:
             self.assertTrue(any(arguments[0] + " | " + marker in line for line in lines))
 

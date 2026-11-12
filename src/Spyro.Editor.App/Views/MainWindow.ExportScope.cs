@@ -98,7 +98,7 @@ public sealed partial class MainWindow
         if (own == null || startLevelId == 65 || routes.Destinations.Any(d => d.DestinationLevelId == 65)) return "";
         return $" {own.Name} has no doorway leading to it yet: Spyro only gets there when New Game starts in it" +
                (startLevelId == null ? " (choose it under New Game starts in)" : " (choose it in the Create BIN window)") +
-               ", or once a homeworld's portal is sent to it (open the homeworld, then Game Settings › Portals & Return Home).";
+               ", or once a homeworld's doorway is sent to it (File ▾ › Level Links…).";
     }
 
     private async Task<int?> ShowAuthoredProjectExportScopeAsync(IReadOnlyList<SceneDocument> scenes, int currentLevelId)

@@ -1916,6 +1916,17 @@ public sealed partial class MainWindow : Window
             buttons.Children.Add(selectTrigger);
         }
 
+        // Every homeworld's doorways and every level's way back on one page (File ▾ › Level Links…).
+        Button links = NewAsyncButton("Open Level Links…", () => ShowLevelLinksAsync(_currentLevel?.LevelId));
+        links.Name = "OpenLevelLinks";
+        links.HorizontalAlignment = HorizontalAlignment.Left;
+        ToolTip.SetTip(links, "See and change where every doorway leads and where Return Home brings Spyro back, for the whole game in one window.");
+        panel.Children.Add(links);
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Level Links shows the whole game at once. Below: the open homeworld's doorways and this level's Return Home.",
+            TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(90, 98, 110))
+        });
         panel.Children.Add(_portalControlDetails);
         panel.Children.Add(_portalControlBox);
         panel.Children.Add(buttons);
@@ -28343,7 +28354,7 @@ public sealed partial class MainWindow : Window
         ]);
 
         AddHelpSection(panel, "Game Settings, Colours and Environment", [
-            "This level: Level name changes the name on portals, loading screens and in the guidebook. Music picks the level's track. Portals & Return Home: choose where each portal leads and where Return Home goes. Creatures' colours: a colour for each kind of enemy in this level only (the same gnorc can be red here and blue in the next level); Randomize gives every kind another colour, Their Own Colours puts them back.",
+            "This level: Level name changes the name on portals, loading screens and in the guidebook. Music picks the level's track. Portals & Return Home: choose where each portal leads and where Return Home goes (Open Level Links… there, or File ▾ > Level Links…, shows every homeworld's doorways and every level's Return Home at once). Creatures' colours: a colour for each kind of enemy in this level only (the same gnorc can be red here and blue in the next level); Randomize gives every kind another colour, Their Own Colours puts them back.",
             "Colours tab — This level's colours: the open level's enemies, chests, dragons and animals, each in any colour, for that level only (so chests can be blue in one level and red in the next). Randomize beside a list gives that list other colours, Randomize All every list. Dragon statues sets one crystal colour for all of the level's statues (press Save to keep it).",
             "Colours tab — Spyro's colours: any colour for each part of Spyro (body, belly, horns, head spikes, wings, tail tip, eyes), a ready-made look, or Surprise me; the picture on the card shows him as he will be in the game. Set \"Colours for\" to the open level to give him a look in that level only (Same as the Whole Game takes it away again). Hover: ▲ while gliding makes Spyro beat his wings, rise a little and drift on, as in Spyro 3 (not in levels where Fly Anywhere is on: there he flies instead of gliding). Play as Crash puts Crash in the levels you tick. Create BIN works with only these settings too.",
             "Game Settings — Memory: Emulator (8 MB RAM) is the usual choice and lets levels hold more (a game made with it still plays on a normal 2 MB set-up wherever its levels fit). Choose PlayStation (2 MB) for a real console or a disc.",
@@ -28360,6 +28371,7 @@ public sealed partial class MainWindow : Window
             "An egg thief you added: select him and Edit Route… and the \"Its run\" tools appear. Drag the run's points in the 3D view, or use New Loop Here, Bigger, Smaller, Turn and Other Way Round. Colours > Egg thieves' colour gives every thief in the game another colour.",
             "File ▾ > Start Blank in Current Level… replaces the open level with the same meadow so you can rebuild it. Restore Before Clear… brings the previous version back.",
             "File ▾ > Fill In What the Level Needs… adds the level's own dragons and egg thieves, a Return Home vortex, enemies and gems.",
+            "File ▾ > Level Links… shows how Spyro gets into every level and back: each homeworld's doorways with where they lead (choose another level, your new level or a level you built), and where Return Home from each level brings him back out. A doorway you send to a level brings Spyro back out of itself; the window says when a level has no doorway, two doorways lead to one level, or a level has no Return Home vortex.",
             "File ▾ > Open Created Level… reopens the level you made.",
             "File ▾ > Clear Entire Project to Base Game… starts the whole project over: everything you have made (your changes to every level, the levels and world you built, your game settings) is taken out and the editor shows the original game again. It asks first, and only \"Yes, I am sure\" clears. Your work is moved, not deleted: it goes into a dated folder in \"Old projects\" beside your project, with a note that says how to bring it back. Games you already created stay, and so does your choice of game."
         ]);

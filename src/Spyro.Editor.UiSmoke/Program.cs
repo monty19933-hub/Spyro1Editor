@@ -247,6 +247,14 @@ if (args.Contains("--portal-routes-ui-only", StringComparer.Ordinal))
     return 0;
 }
 
+if (args.Contains("--level-links-ui-only", StringComparer.Ordinal))
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --level-links-ui-only");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    LevelLinksUiCases.Run();
+    return 0;
+}
+
 if (args.Contains("--start-blank-ui-only", StringComparer.Ordinal))
 {
     if (args.Length != 1) throw new ArgumentException("Usage: UiSmoke --start-blank-ui-only");
