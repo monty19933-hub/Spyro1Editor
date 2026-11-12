@@ -302,7 +302,8 @@ says how many. Translucent original tiles cannot currently be copied or removed.
 
 - **Level name** changes the name on portals, loading screens and in the
   guidebook (capital letters, spaces and apostrophes).
-- **Music** picks the level's track.
+- **Music** picks the level's track, for a level you built too (a random level,
+  a New Level): **Save Music** keeps it in the level.
 - **Memory**: how much memory the games you create may use. **Emulator (8 MB
   RAM)** is the usual choice and what a project has until you choose: each
   level's objects load into the extra memory DuckStation has with Settings ›
@@ -677,10 +678,23 @@ The choices:
 - **Textures:** that level's own textures and colours, or new pictures painted in
   the look's colours. **Use My Own Pictures…** puts your own picture (PNG, JPEG,
   WebP or BMP) on any kind of surface; pictures need your original disc.
-- **Sky:** that level's sky, or a sky painted to match.
+- **Sky:** that level's sky, or a sky painted to match. Below the horizon the sky
+  takes the ground's colour (except on sky islands), so the hairline gaps the game
+  leaves near the camera between finely cut and whole floor tiles show ground, not
+  sky.
+- **Music:** the song the level plays: the look's own (one of its level's songs,
+  picked by the seed) or any song of the game. A game level's place can also take
+  the songs brought in from other games. Change it later in **Game Settings →
+  Music**.
 - **Seed:** the same seed and choices always make the same level. **New Seed**
   makes another; **Rebuild** makes this seed again with changed choices. (A seed
   makes a different level in 2.3 than it did in 2.2.)
+
+Rooms have **trodden paths** across them, from every way in (a path, a doorway,
+where Spyro starts) to a meeting place near the middle, in the look's path surface;
+gems lie in lines along them. A level with pools and marshes has at least one
+marsh: a wide pool at a room's side with an islet, a boardwalk (or, when hard,
+stepping stones) and treasure on it.
 
 Every jump, glide and climb is built inside what Spyro can really do (measured in
 the game): steps are 56 units high, stepping stones an easy jump apart, paths
@@ -754,7 +768,8 @@ first); **Remove Them** takes them all away. What you added yourself stays.
   the game: choose that disc in Add object… first).
 - **Chests of every kind:** baskets and vases, strong chests, chests that take
   three flames, firework and spring chests, an extra life, and a locked chest
-  whose key lies somewhere else in the level.
+  whose key lies somewhere else in the level, floating as the game's keys do,
+  most often up on a ledge or a perch (jump up to it).
 - **Teal gems (50)** and **Rainbow gems (100)** (off unless you tick them): rare
   gems worth 50 and 100, each alone at one of the hardest places to reach (a
   perch, a high place, the far end of a way), counted in the treasure you typed.
@@ -763,7 +778,9 @@ first); **Remove Them** takes them all away. What you added yourself stays.
   teal and three rainbow gems. The card says when the treasure is too low.
 - **Trees, torches, flowers** (on unless you untick it): the level type's own
   trees, cactuses, torches, lamps, flowers and grass, placed where the game puts
-  them. They go in last, so they use only save rows nothing else needs.
+  them: trees in little groups along the banks, torches and lamp posts along a
+  random level's paths and trodden paths, a few hundred units apart on alternate
+  sides. They go in last, so they use only save rows nothing else needs.
 - **Animals, egg thieves, dragons, the way out:** the level type's animals in
   little groups; the egg thieves and dragons that belong to the level's place in
   the game, each thief with room to run; a Return Home vortex at the far end (in a

@@ -67,6 +67,20 @@ internal static partial class NewLevelBuildCases
             Console.WriteLine($"pictures: {made.Pictures.Count} written under {Path.GetDirectoryName(made.Pictures.FirstOrDefault()?.Path)}, {missing} missing");
             if (made.Pictures.Count == 0 || missing > 0 || !saved.Surfaces.Any(f => f.Material?.Image != null)) throw new InvalidOperationException("Painted pictures were not used.");
         }
+        // The sky below the horizon in the ground's colour (no sky through the game's hairline gaps), and the level's ways.
+        Console.WriteLine($"sky below: {saved.SkyBelow?.ToString() ?? "as it is"}; ways: {saved.Ways?.Count ?? 0}; music track {saved.MusicTrack}");
+        if (saved.SkyBelow == null && made.Report.Style != LevelStyle.SkyIslands) throw new InvalidOperationException("The level's sky is not painted the ground's colour below the horizon.");
+        // Its music can be changed afterwards: Game Settings › Music shows for a level you built, and saves in its scene.
+        var musicPanel = Get<Control?>(window, "_retailMusicDisclosure");
+        var tracks = Get<ComboBox>(window, "_levelMusicTrackBox");
+        if (musicPanel is not { IsVisible: true } || !tracks.IsEnabled) throw new InvalidOperationException("The Music settings are not there for a built level.");
+        var other = tracks.ItemsSource!.Cast<Spyro.Editor.Core.Music.MusicTrackEntry>().First(t => t.TrackId != saved.MusicTrack);
+        tracks.SelectedItem = other; Pump(5);
+        var saveMusic = (Task)Invoke(window, "SaveLevelMusicPlanAsync")!;
+        Wait(() => saveMusic.IsCompleted, "Save Music", 120);
+        var resaved = SceneDocument.Read(SceneDocumentStore.PathForTarget(Workspace(window).RootPath, window.FreshSceneForTesting!.TargetKey));
+        Console.WriteLine($"music changed to {other.DisplayName}: saved track {resaved.MusicTrack}");
+        if (resaved.MusicTrack != other.TrackId) throw new InvalidOperationException("The built level's music did not save.");
         Snapshot(window, Path.Combine(outDir, $"random-level-{seed}.png"));
         Console.WriteLine("NEW_LEVEL_RANDOM_LEVEL_OK");
     }
@@ -214,6 +228,14 @@ internal static partial class NewLevelBuildCases
                 throw new InvalidOperationException($"{pinned} scrolls with the choices instead of staying at the window's foot.");
         if (!dialog.CanResize) throw new InvalidOperationException("The Random Level window cannot be made smaller.");
         Console.WriteLine("RANDOM_LEVEL_WINDOW_FOOT_OK");
+        // Music: the look's own by default, every song of the game to choose from (a game homeworld's place also takes
+        // the songs brought in from other games).
+        var music = Find<ComboBox>(dialog, "RandomLevelMusic");
+        var songs = music.ItemsSource!.Cast<string>().ToList();
+        Console.WriteLine($"music: {songs.Count} choices, first {songs[0]}");
+        if (music.SelectedIndex != 0 || songs.Count < 30 || !songs[0].StartsWith("The look's own", StringComparison.Ordinal))
+            throw new InvalidOperationException("The Random Level window has no music choice.");
+        Console.WriteLine("RANDOM_LEVEL_MUSIC_OK");
         Snapshot(dialog, Path.Combine(outDir, "01-random-homeworld-dialog.png"));
         Find<ComboBox>(dialog, "RandomLevelDifficulty").SelectedIndex = 2;
         Click(Find<Button>(dialog, "RandomLevelRebuild")); Pump(5);
