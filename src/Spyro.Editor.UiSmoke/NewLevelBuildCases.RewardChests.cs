@@ -96,7 +96,15 @@ internal static partial class NewLevelBuildCases
             Wait(() => save.IsCompleted, "Save Level", 120);
             if (!save.GetAwaiter().GetResult()) throw new InvalidOperationException("The level did not save: " + Status(window));
         }
-        else Save(window);
+        else
+        {
+            Save(window);
+            // Chests from the universal library are not tagged with the older imported-bundle profiles (Stone Hill's is
+            // "blocked": Create BIN's safety check refused every spring chest there when no level was built).
+            string saved = File.ReadAllText(Path.Combine(Workspace(window).RootPath, $"{level}-native-edits.json"));
+            if (System.Text.RegularExpressions.Regex.IsMatch(saved, "\"specialChestBundleId\":\\s*\"") || placed.Any(p => !string.IsNullOrEmpty(p.Moby.SpecialChestBundleId)))
+                throw new InvalidOperationException("A spring chest from the object library was saved with a special-chest bundle tag.");
+        }
         Snapshot(window, Path.Combine(outDir, "reward-chests-level.png"));
         // Opened again from what was saved.
         Load(window, level == "artisans" ? "stonehill" : "artisans");

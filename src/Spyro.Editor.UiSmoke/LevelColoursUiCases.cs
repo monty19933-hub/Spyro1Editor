@@ -60,7 +60,7 @@ internal static class LevelColoursUiCases
             Console.WriteLine("Artisans: " + string.Join(", ", artisans.Select(k => $"{k.Name} ({k.Key})")));
             var gnorcs = artisans.Where(k => k.Name.Contains("Gnorc", StringComparison.OrdinalIgnoreCase)).ToArray();
             Check(artisans.Count >= 1 && gnorcs.Length >= 1 && artisans.All(k => k.Key.StartsWith("artisans:", StringComparison.Ordinal)), "Artisans' card lists its enemies, gnorcs among them");
-            Check(Find<Button>(window, "CreatureColourRandomize").IsEnabled && !Find<Button>(window, "CreatureColourOwn").IsEnabled && window.CreatureColourNoteForTesting.Contains("their own colours", StringComparison.Ordinal),
+            Check(Find<Button>(window, "CreatureColourRandomize").IsEnabled && !Find<Button>(window, "CreatureColourOwn").IsEnabled && window.CreatureColourNoteForTesting.Contains("has its own colours", StringComparison.Ordinal),
                 "nothing is chosen at first: the note says so and Their Own Colours is off");
             window.RandomizeCreatureColoursForTesting(7); Pump(30);
             var random1 = new Dictionary<string, (byte R, byte G, byte B)>(window.CreatureColoursForTesting);
@@ -152,7 +152,11 @@ internal static class LevelColoursUiCases
                 Check(c.B > c.R + 60 && c.B > c.G + 30, $"in the game Dark Hollow's {g.Name} is blue (#{c.R:X2}{c.G:X2}{c.B:X2})");
             }
             int changed = catalog.Levels.Count(l => !made.EntryBytes(l.SourceWadEntry).AsSpan().SequenceEqual(original.EntryBytes(l.SourceWadEntry)));
-            Check(changed == 2 && made.Exe.AsSpan().SequenceEqual(original.Exe), $"only Artisans and Dark Hollow differ from the original game ({changed} levels), and the program is the game's own");
+            // The program is the game's own with only the 8 MB memory setting put in (a project's setting unless it chose
+            // PlayStation (2 MB), since 2.3).
+            byte[] expectedExe = original.Exe.ToArray();
+            NativeExtendedRam.PatchExe(expectedExe);
+            Check(changed == 2 && made.Exe.AsSpan().SequenceEqual(expectedExe), $"only Artisans and Dark Hollow differ from the original game ({changed} levels), and the program is the game's own with the 8 MB setting");
             // What is not a gnorc's colour stays: the other kinds of both levels are as they were.
             var originalArtisans = NativeCreatureColours.Kinds(Entry(original, "artisans")).ToDictionary(k => k.ClassId);
             var gnorcClasses = gnorcs.Select(g => ClassOf(g.Key)).ToHashSet();

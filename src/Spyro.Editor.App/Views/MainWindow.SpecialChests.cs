@@ -32,6 +32,10 @@ public sealed partial class MainWindow
     {
         if (_currentLevel == null)
             return;
+        // Objects from the universal library are built by the universal composer, which checks they fit when they are
+        // placed and at Create BIN; the special-chest profiles belong to the older imported chest bundles.
+        if (string.Equals(selectedTemplate.Family, Spyro.Editor.Core.Editing.MobyEditStore.UniversalFamily, StringComparison.OrdinalIgnoreCase))
+            return;
 
         int selectedActorId = ((selectedTemplate.SourceByte37 & 0xFF) << 8) |
             (selectedTemplate.SourceByte36 & 0xFF);
@@ -660,6 +664,10 @@ public sealed partial class MainWindow
                 string templateFamily = "";
                 if (edit.TryGetProperty("crossLevelTemplate", out JsonElement crossLevel) && crossLevel.ValueKind == JsonValueKind.Object)
                     templateFamily = GetString(crossLevel, "family");
+                // Universal library objects (saved before 2.3 with a special-chest tag too) are checked by the
+                // universal composer, not by the imported-bundle profiles.
+                if (string.Equals(templateFamily, Spyro.Editor.Core.Editing.MobyEditStore.UniversalFamily, StringComparison.OrdinalIgnoreCase))
+                    continue;
                 string bundleId = GetString(edit, "specialChestBundleId");
                 string profileId = GetString(edit, "profileId");
 

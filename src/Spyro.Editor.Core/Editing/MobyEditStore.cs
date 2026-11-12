@@ -591,10 +591,19 @@ public static class MobyEditStore
         return true;
     }
 
+    /// <summary>The cross-level family of an object added from the universal object library.</summary>
+    public const string UniversalFamily = "universal";
+
     private static bool ApplySpecialChestBundle(JsonElement edit, Moby moby)
     {
         string bundleId = JsonValue.GetString(edit, "specialChestBundleId");
         if (string.IsNullOrWhiteSpace(bundleId))
+            return false;
+        // An object from the universal library is built by the universal composer and has its own fit check. Before 2.3
+        // Add Object also tagged chests from it (by class number) with the profile of the older imported chest bundles,
+        // which Create BIN's safety check then refused in some levels (every spring chest in Stone Hill). The tag is
+        // dropped.
+        if (string.Equals(moby.CrossLevelFamily, UniversalFamily, StringComparison.OrdinalIgnoreCase))
             return false;
 
         moby.SpecialChestBundleId = bundleId;

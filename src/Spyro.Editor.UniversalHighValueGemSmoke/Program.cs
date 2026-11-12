@@ -135,6 +135,24 @@ if(args.Length==3&&args[0]=="--reward-fit")
  }
  Console.WriteLine($"HIGH_VALUE_REWARD_FIT_OK levels={fits} plainOnly={plainOnly} checks={checks}");return;
 }
+// A spring chest from the universal library saved before 2.3 carries the older imported-bundle tag (Stone Hill's
+// profile is "blocked", so Create BIN's safety check refused the level). Loading drops that tag from universal objects
+// only; an imported (non-universal) special chest keeps its bundle.
+{
+ string dir=Directory.CreateDirectory(Path.Combine(Path.GetTempPath(),"high-value-gem-"+Guid.NewGuid().ToString("N"))).FullName;
+ try
+ {
+  string edits=Path.Combine(dir,"stonehill-native-edits.json");
+  static string Edit(int row,string family)=>$$"""{"added":true,"index":{{row}},"trueIndex":{{row}},"label":"Spring chest","sourceByte36Hex":73,"sourceByte37Hex":1,"edited":{"x":8182,"y":7658,"z":1294},"crossLevelTemplate":{"id":"{{family}}:stonehill:{{row}}","family":"{{family}}"},"specialChestBundleId":"special-chest:springchest:stonehill:T{{row}}","profileId":"spyro1.special-chest.spring.stonehill.blocked.v1","evidenceStatus":"RuntimeRejected"}""";
+  File.WriteAllText(edits,"{\"edits\":["+Edit(195,"universal")+","+Edit(196,"springChest")+"]}");
+  var rows=new List<Spyro.Editor.Core.Scene.Moby>();
+  Spyro.Editor.Core.Editing.MobyEditStore.Load(edits,rows);
+  var universal=rows.Single(m=>m.TrueIndex==195);var imported=rows.Single(m=>m.TrueIndex==196);
+  Check(universal.CrossLevelFamily==Spyro.Editor.Core.Editing.MobyEditStore.UniversalFamily&&universal.SpecialChestBundleId==""&&universal.SpecialChestProfileId=="","a universal spring chest saved with the old special-chest tag loads without it");
+  Check(imported.SpecialChestBundleId=="special-chest:springchest:stonehill:T196"&&imported.SpecialChestProfileId.Length>0,"an imported special chest keeps its bundle tag");
+ }
+ finally{Directory.Delete(dir,true);}
+}
 if(args.Length==0){Console.WriteLine($"HIGH_VALUE_GEM_FREE_OK checks={checks}");return;}
 if(args.Length!=2)throw new ArgumentException("USA.bin catalog-workspace");
 var lib=new UniversalSourceLibrary(args[0],LevelCatalog.Load(args[1]));var assets=UniversalHighValueGems.Assets(lib);

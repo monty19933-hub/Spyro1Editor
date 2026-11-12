@@ -2,15 +2,16 @@ using Avalonia.Controls;
 using Spyro.Editor.App.Views;
 using Spyro.Editor.Core.Scene;
 
-/// <summary><c>thief-water</c>: an egg thief's run is kept off water, lava and ooze. THIEF_LEVEL (default beastmakers)
-/// must hold an egg thief (its own, or one added by <c>thief-add</c> and saved). A point of his run is dragged onto the
+/// <summary><c>thief-water</c>: an egg thief's run is kept off water, lava and ooze. THIEF_LEVEL (default clifftown, which
+/// has its own thief and a lake) must hold an egg thief (its own, or one added by <c>thief-add</c> and saved; Beast
+/// Makers' open floor near the start is swamp, so thief-add finds no dry place for a run there). A point of his run is dragged onto the
 /// nearest water tile: the editor must keep the point where it was and say it is water; New Loop Here must lay a run
 /// with no point over water.</summary>
 internal static partial class NewLevelBuildCases
 {
     private static void ThiefWaterStep(MainWindow window, string outDir)
     {
-        string key = Environment.GetEnvironmentVariable("THIEF_LEVEL") ?? "beastmakers";
+        string key = Environment.GetEnvironmentVariable("THIEF_LEVEL") ?? "clifftown";
         Load(window, key);
         SelectTab(window, "Objects");
         // Added objects' runs are built once the object catalogue has been read (in the background after a level opens).
@@ -27,7 +28,8 @@ internal static partial class NewLevelBuildCases
         if (thief == null || path == null) throw new InvalidOperationException($"{key} has no egg thief with a run: run thief-add first.");
         var geometry = window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry!;
         bool Liquid(TerrainPolygon p) => (bool)Invoke(window, "IsLiquidTile", p)!;
-        var water = geometry.Polygons.Where(p => !p.IsTerrainRemoved && p.Points.Count >= 3 && Liquid(p)).ToList();
+        // Water tiles that are the floor at their middle (not water under a bridge or a ledge: a thief runs on that).
+        var water = geometry.Polygons.Where(p => !p.IsTerrainRemoved && p.Points.Count >= 3 && Liquid(p) && LiquidAt(p.Points.Average(q => q.X), p.Points.Average(q => q.Y))).ToList();
         var hazards = (Spyro.Editor.Core.Scene.LevelHazards)Invoke(window, "CurrentHazards")!;
         Console.WriteLine($"{key}: {thief.DisplayLabel} (row {thief.TrueIndex}, added {thief.IsAdded}) at ({thief.Position.X:0},{thief.Position.Y:0},{thief.Position.Z:0}); run of {path.Nodes.Count} points; " +
             $"{water.Count} water, lava or ooze tiles; {hazards.LiquidTriangles} liquid collision triangles: {hazards.Describe()}");
