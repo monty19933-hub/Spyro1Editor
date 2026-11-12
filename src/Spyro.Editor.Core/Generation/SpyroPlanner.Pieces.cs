@@ -49,14 +49,20 @@ internal static partial class SpyroPlanner
             // A river first (it crosses the room from bank to bank; the ledges keep off it).
             bool water = false;
             if (features.Rivers && _rivers < 2 && a.R >= 480 && rnd.Chance(Math.Min(0.95, 0.9 * lean["river"])) && River(L, a, rnd)) { _rivers++; water = true; }
+            // Or a marsh at its side with a way out to an islet (before the ledges, which keep off it).
+            if (!water && features.Hazards && a.R >= MarshRoom && rnd.Chance(Math.Min(0.92, 0.75 * lean["pond"])))
+                for (int k = 0; k < 5 && !water; k++) water = Marsh(L, a, rnd);
             int ledges = (int)Math.Round(rnd.Next(Tune.LedgesFrom, Tune.LedgesTo) * Math.Min(1.6, lean["ledges"]) * share + (a.R >= 880 ? 1 : 0));
             if (a.R < 420) ledges = Math.Min(ledges, 1);
             for (int k = 0; k < ledges; k++) Ledges(L, a, rnd, rnd.Chance(0.4) ? 2 : 1);
             if (a.R >= 430 && rnd.Chance(0.3 * lean["dell"])) Dell(L, a, rnd);
-            // Or a marsh at its side with a way out to an islet, or a pool.
-            if (!water && features.Hazards && a.R >= 540 && rnd.Chance(Math.Min(0.85, 0.55 * lean["pond"]))) water = Marsh(L, a, rnd) || Marsh(L, a, rnd) || Marsh(L, a, rnd);
+            // Or a pool.
             if (!water && features.Hazards && a.R >= 600 && rnd.Chance(Math.Min(0.95, Tune.PoolChance * lean["pond"]))) Pond(L, a, rnd);
         }
+        // A level with pools and marshes has a marsh at least: the biggest rooms try again, every way round.
+        if (features.Hazards && !L.Counts.Keys.Any(k => k.StartsWith("marsh", StringComparison.Ordinal)))
+            foreach (var a in L.Areas.Where(a => a.R >= MarshRoom && a.Kind != "overlook").OrderByDescending(a => a.R))
+                if (Enumerable.Range(0, 8).Any(_ => Marsh(L, a, rnd))) break;
         // What is built on the floor, last, where there is room left: houses, castle walls.
         if (features.Houses) Houses(L, style, rnd);
         if (features.Walls) Ramparts(L, style, rnd);

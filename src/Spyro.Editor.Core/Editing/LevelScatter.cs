@@ -914,8 +914,9 @@ public static class LevelScatter
         // A level of small floors (islands in the sky, narrow shelves): its trees on the widest floor it has.
         var someGround = order.Where(c => open[c] >= 3 && roomOf.ContainsKey(c)).ToList();
         var footOfWalls = order.Where(c => open[c] is >= 2 and <= 4 && fringe.ContainsKey(c) && upright.Within(point[c], 4)).ToList();
-        // A level's trees are of one habit: out in the open (Stone Hill, Artisans) or along the walls (the alpine levels).
-        bool inOpen = rnd.Chance(0.5);
+        // A level's trees are of one habit: out in the open (Stone Hill, Artisans) or along the walls (the alpine levels);
+        // most stand along the foot of the banks, which leaves the rooms' middles open, a few together.
+        bool inOpen = rnd.Chance(0.3);
         for (int left = Wanted(Kind.Tree), tries = 0; left > 0 && tries < 60; tries++)
         {
             var from = (inOpen ? rnd.Chance(0.8) : rnd.Chance(0.2)) && openGround.Count > 0 ? openGround : footOfWalls.Count > 0 ? footOfWalls : openGround;
@@ -924,19 +925,50 @@ public static class LevelScatter
             // A small level full of things: one tree on whatever floor is a little clear.
             if (crowded) from = [.. order.Where(c => open[c] >= 2)];
             if (Pick([.. from.Where(c => Quiet(point[c]) && Dist2(point[c], spawn) >= (small ? 300 * 300 : 420 * 420) && Clear(point[c], crowded ? 120 : small ? 170 : 230))], c => Math.Max(0.15, 1.2 - Away(point[c]))) is not { } anchor) continue;
-            int size = Math.Min(left, rnd.Pick<int>([(1, 50.0), (2, 30.0), (3, 20.0)]));
+            int size = Math.Min(left, rnd.Pick<int>([(1, 30.0), (2, 35.0), (3, 25.0), (4, 10.0)]));
             Stand(Kind.Tree, point[anchor], spawn); left--;
             for (int n = 1; n < size; n++)
             {
-                var near = from.Where(c => Dist2(point[c], point[anchor]) is >= 230 * 230 and <= 460 * 460 && Quiet(point[c]) && Clear(point[c], 210)).ToList();
+                var near = from.Where(c => Dist2(point[c], point[anchor]) is >= 170 * 170 and <= 330 * 330 && Quiet(point[c]) && Clear(point[c], 160)).ToList();
                 if (Pick(near, c => 1.0) is not { } spot) break;
                 Stand(Kind.Tree, point[spot], spawn); left--;
             }
         }
-        // Torches and lamp posts that stand on the floor: by the edge of a path or a floor, facing across it.
+        // Torches and lamp posts that stand on the floor. Where the level's ways are known (a generated level's paths
+        // and trodden paths), they line them as the game lights its paths: one every few hundred units at the way's
+        // edge, now on one side and now on the other, facing across it. Then by the edge of a path or a floor.
         var edgesOfWays = order.Where(c => open[c] is 1 or 2 && walk[c] > 8 && !upright.Near(point[c])).ToList();
         List<Vector3f> lights = [];
-        for (int left = Wanted(Kind.Light), tries = 0; left > 0 && tries < 80; tries++)
+        LevelFill.FloorGrid.Place? CellAt(Vector3f p)
+        {
+            if (!byColumn.TryGetValue(((int)MathF.Floor(p.X / cell), (int)MathF.Floor(p.Y / cell)), out var list)) return null;
+            var best = list.Where(c => Math.Abs(point[c].Z - p.Z) <= 24).OrderBy(c => Math.Abs(point[c].Z - p.Z)).FirstOrDefault();
+            return best == default ? null : best;
+        }
+        int wayLights = Wanted(Kind.Light);
+        if (scene.Ways is { } ways && wayLights > 0)
+        {
+            var lines = ways.Where(w => w.Length >= 3).ToList();
+            rnd.Shuffle(lines);
+            foreach (var way in lines)
+            {
+                if (wayLights <= 0) break;
+                double side = rnd.Chance(0.5) ? 1 : -1, since = Range(rnd, 120, 260), apart = Range(rnd, 300, 380);
+                for (int k = 1; k + 1 < way.Length && wayLights > 0; k++)
+                {
+                    since += MathF.Sqrt(Dist2(way[k], way[k - 1]));
+                    if (since < apart) continue;
+                    float dx = way[k + 1].X - way[k - 1].X, dy = way[k + 1].Y - way[k - 1].Y, l = MathF.Sqrt(dx * dx + dy * dy);
+                    if (l <= 0) continue;
+                    var at = new Vector3f(way[k].X - dy / l * (float)(side * 100), way[k].Y + dx / l * (float)(side * 100), way[k].Z);
+                    if (CellAt(at) is not { } spot || !Quiet(point[spot]) || !Clear(point[spot], 110) || upright.Near(point[spot]) ||
+                        lights.Any(q => Dist2(q, point[spot]) < 220 * 220)) continue;
+                    Stand(Kind.Light, point[spot], way[k]); lights.Add(point[spot]); wayLights--;
+                    since = 0; side = -side;
+                }
+            }
+        }
+        for (int left = wayLights, tries = 0; left > 0 && tries < 80; tries++)
         {
             // Along the paths first (where the way is narrow), then round the rooms.
             var from = rnd.Chance(0.6) ? [.. edgesOfWays.Where(c => !roomOf.ContainsKey(c) && !fringe.ContainsKey(c))] : edgesOfWays;

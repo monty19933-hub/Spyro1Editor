@@ -1,6 +1,7 @@
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
+using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Universal;
 
 if (args.Length == 5 && args[0] == "--fingerprint")
@@ -35,6 +36,8 @@ if (args.Length >= 6 && args[0] == "--dump")
     Console.WriteLine($"{watch.ElapsedMilliseconds} ms: {r.Report.Summary}");
     Console.WriteLine("draw: " + r.Report.DrawPlan);
     foreach (var note in r.Report.Notes) Console.WriteLine("note: " + note);
+    if (Environment.GetEnvironmentVariable("SPYRO_RANDOM_LEVEL_DEBUG") == "marsh")
+        Console.WriteLine("marsh misses: " + string.Join(", ", Spyro.Editor.Core.Generation.SpyroPlanner.MarshMisses.OrderBy(p => p.Key).Select(p => $"{p.Key}={p.Value}")));
     var keyOf = catalog.Levels.GroupBy(l => l.SourceWadEntry).ToDictionary(g => g.Key, g => g.First().Key);
     if (r.Doorways.Count > 0)
     {
@@ -110,7 +113,7 @@ if (args.Length >= 2 && args[0] == "--variety")
     return failed == 0 ? 0 : 1;
 }
 // Gate (no disc): [repo root] [--maps <folder>] [--seeds N]
-if (args.Length == 0 || args[0] is not ("--fingerprint" or "--variety" or "--walk-to" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--balloon-facts" or "--scatter-facts" or "--model-colours" or "--thief-colours"))
+if (args.Length == 0 || args[0] is not ("--fingerprint" or "--variety" or "--walk-to" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--balloon-facts" or "--scatter-facts" or "--model-colours" or "--thief-colours" or "--sky-below"))
 {
     string repo = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : Directory.GetCurrentDirectory();
     string? maps = args.SkipWhile(a => a != "--maps").Skip(1).FirstOrDefault();
@@ -133,6 +136,23 @@ if (args.Length >= 5 && args[0] == "--export")
 {
     var catalog = LevelCatalog.Load(args[3]);
     await Export(SceneDocument.Read(args[1]), args[2], catalog, args[4]);
+    return 0;
+}
+if (args.Length >= 6 && args[0] == "--sky-below")
+{
+    // --sky-below <disc> <repo> <wad entry> <r,g,b> <out folder>: a level's sky painted the ground's colour below the
+    // horizon (NativeSkyBelow), as panoramas before and after.
+    var catalog = LevelCatalog.Load(args[2]);
+    var block = NativeAuthoredMesh.CaptureSky(args[1], SceneDocument.New("sky") with { SkySourceWadEntry = int.Parse(args[3]) })!;
+    var rgb = args[4].Split(',').Select(byte.Parse).ToArray();
+    var (after, painted, shared) = Spyro.Editor.Core.Sky.NativeSkyBelow.Paint(block, new ColorRgba(rgb[0], rgb[1], rgb[2]));
+    Directory.CreateDirectory(args[5]);
+    foreach (var (name, b) in new[] { ("before", block), ("after", after) })
+    {
+        var image = Spyro.Editor.Core.Sky.NativeSkyPreview.Render(b, 1024);
+        await TerrainTexturePngWriter.WriteRgbaAsync(Path.Combine(args[5], $"sky{args[3]}-{name}.png"), image.Width, image.Height, image.Pixels);
+    }
+    Console.WriteLine($"SKY_BELOW wad {args[3]}: {painted} colours painted, {shared} shared across the horizon (left as they were)");
     return 0;
 }
 if (args.Length >= 4 && args[0] == "--dump-textures")

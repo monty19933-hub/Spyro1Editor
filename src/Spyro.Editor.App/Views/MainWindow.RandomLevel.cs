@@ -9,6 +9,7 @@ using Avalonia.Platform.Storage;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Generation;
 using Spyro.Editor.Core.Levels;
+using Spyro.Editor.Core.Music;
 using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Universal;
 
@@ -218,6 +219,21 @@ public sealed partial class MainWindow
         var skyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
         skyRow.Children.Add(gameSky); skyRow.Children.Add(paintedSky);
         left.Children.Add(skyRow);
+        left.Children.Add(Label("Music"));
+        // The game's own songs and the songs brought in from other games; a level of your own (the new level, a world's
+        // levels) plays the game's own songs only, so the list follows the place chosen below.
+        var music = new ComboBox { Name = "RandomLevelMusic", HorizontalAlignment = HorizontalAlignment.Stretch };
+        ToolTip.SetTip(music, "The song the level plays. The look's own: one of the songs of the level it looks like, picked by the seed. You can change it later in Game Settings › Music.");
+        IReadOnlyList<MusicTrackEntry> musicChoices = [];
+        void ShowMusic(bool ownLevel)
+        {
+            int? was = music.SelectedIndex > 0 && music.SelectedIndex - 1 < musicChoices.Count ? musicChoices[music.SelectedIndex - 1].TrackId : null;
+            musicChoices = ownLevel ? MusicTrackCatalog.SelectableTracks : MusicTrackCatalog.PickerTracks;
+            music.ItemsSource = new[] { "The look's own (picked by the seed)" }.Concat(musicChoices.Select(t => t.DisplayName)).ToArray();
+            int keep = was is int id ? musicChoices.ToList().FindIndex(t => t.TrackId == id) : -1;
+            music.SelectedIndex = keep >= 0 ? keep + 1 : 0;
+        }
+        left.Children.Add(music);
 
         var right = new StackPanel { Spacing = 8, Width = 380 };
         var map = new Image { Name = "RandomLevelMap", Width = 300, Height = 300, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center };
@@ -318,6 +334,7 @@ public sealed partial class MainWindow
                 Liquid = RandomLevelLiquids[Math.Clamp(liquid.SelectedIndex, 0, RandomLevelLiquids.Length - 1)].Liquid,
                 Textures = painted.IsChecked == true ? LevelTextureMode.GeneratedPictures : LevelTextureMode.GameTextures,
                 Pictures = new Dictionary<SurfaceRole, string>(pictures), PaintedSky = paintedSky.IsChecked == true,
+                Music = music.SelectedIndex > 0 && music.SelectedIndex - 1 < musicChoices.Count ? musicChoices[music.SelectedIndex - 1].TrackId : null,
                 Name = string.IsNullOrEmpty(name) ? null : name,
             };
         }
@@ -343,9 +360,12 @@ public sealed partial class MainWindow
             { summary.Text = "This one could not be made: " + e.Message + " Try another seed."; preview = null; }
             finally { if (running == cancelSource) { busy.IsVisible = false; make.IsEnabled = what.SelectedIndex != 1 || places.Count > 0; } }
         }
-        what.SelectionChanged += async (_, _) => { ShowPlaces(); await Preview(true); };
+        bool OwnLevel() => place.SelectedIndex >= 0 && place.SelectedIndex < places.Count && places[place.SelectedIndex].Place is RandomLevelPlace.NewLevel or RandomLevelPlace.World;
+        ShowMusic(OwnLevel());
+        what.SelectionChanged += async (_, _) => { ShowPlaces(); ShowMusic(OwnLevel()); await Preview(true); };
         place.SelectionChanged += async (_, _) =>
         {
+            ShowMusic(OwnLevel());
             if (what.SelectedIndex != 1) return;
             ShowDoorways();
             // Another homeworld, another number of doorways: the level is laid out again for them.
@@ -373,7 +393,7 @@ public sealed partial class MainWindow
             p.Seed == final.Seed && p.Style == final.Style && p.Layout == final.Layout && p.Size == final.Size && p.Theme == final.Theme && p.Caves == final.Caves &&
             p.ChargePaths == final.ChargePaths && p.Glides == final.Glides && p.Hazards == final.Hazards && p.Bridges == final.Bridges &&
             p.Secrets == final.Secrets && p.Rivers == final.Rivers && p.Houses == final.Houses && p.Walls == final.Walls && p.Liquid == final.Liquid &&
-            p.PaintedSky == final.PaintedSky && p.Difficulty == final.Difficulty && p.Doorways == final.Doorways;
+            p.PaintedSky == final.PaintedSky && p.Difficulty == final.Difficulty && p.Doorways == final.Doorways && p.Music == final.Music;
         if (same && final.Name is { } typed && NewWorldDocument.IsValidName(typed) && typed.All(c => !char.IsDigit(c)) && typed != preview!.Scene.Name)
             preview = preview with { Scene = preview.Scene with { Name = typed } };
         return (new RandomLevelChoice(final, chosen.Place, chosen.World, fill.IsChecked == true), same ? preview : null);
@@ -618,7 +638,7 @@ public sealed partial class MainWindow
     private static SceneDocument Placed(SceneDocument blank, SceneDocument level) => blank with
     {
         Name = level.Name, Surfaces = level.Surfaces, Spawn = level.Spawn, Heading = level.Heading, SkyColor = level.SkyColor,
-        SkySourceWadEntry = level.SkySourceWadEntry, CustomSky = level.CustomSky, MusicTrack = level.MusicTrack, GemSpots = level.GemSpots,
+        SkySourceWadEntry = level.SkySourceWadEntry, CustomSky = level.CustomSky, SkyBelow = level.SkyBelow, Ways = level.Ways, MusicTrack = level.MusicTrack, GemSpots = level.GemSpots,
         FarMeshes = null, CollisionFaces = null, Portals = null,
     };
 

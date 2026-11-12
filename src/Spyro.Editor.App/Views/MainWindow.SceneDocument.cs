@@ -388,7 +388,7 @@ public sealed partial class MainWindow
         if(_retailTerrainWorkspace!=null)_retailTerrainWorkspace.IsVisible=true;
         if(_retailTerrainDetailsPanel!=null)_retailTerrainDetailsPanel.IsVisible=_freshSceneDocument==null;
         if(_retailNameDisclosure!=null)_retailNameDisclosure.IsVisible=_freshSceneDocument==null;
-        if(_retailMusicDisclosure!=null)_retailMusicDisclosure.IsVisible=_freshSceneDocument==null;
+        if(_retailMusicDisclosure!=null)_retailMusicDisclosure.IsVisible=true; // built levels too: the panel saves their music in the scene
         if(_homeworldTextGroup!=null)_homeworldTextGroup.IsVisible=true;
         RefreshPortalControlPanel();
         _terrainPlayableOnlyBox.IsVisible=_terrainBrushSafetyText.IsVisible=_freshSceneDocument==null;

@@ -220,7 +220,7 @@ internal static class RandomLevelCases
         LevelScatter.Make(scene, new LevelScatter.Request(seed, LevelScatter.EnemiesFor(treasure, difficulty), LevelScatter.AnimalsFor(difficulty), treasure, 236)
         {
             Exit = true, Dragons = 3, ThiefRoutes = [6], ChestKinds = LevelScatter.Chests.ToHashSet(), Difficulty = difficulty, TealGems = highGems, RainbowGems = highGems,
-            Scenery = new Dictionary<LevelScatter.Kind, int> { [LevelScatter.Kind.Tree] = 8, [LevelScatter.Kind.Light] = 8, [LevelScatter.Kind.WallLight] = 5, [LevelScatter.Kind.Plant] = 10 },
+            Scenery = new Dictionary<LevelScatter.Kind, int> { [LevelScatter.Kind.Tree] = 12, [LevelScatter.Kind.Light] = 10, [LevelScatter.Kind.WallLight] = 6, [LevelScatter.Kind.Plant] = 16 },
         }, scene.GemSpots);
 
     /// <summary>The kind names study/objects2.py groups objects by.</summary>

@@ -179,31 +179,42 @@ internal static partial class SpyroPlanner
         return Dist(x, y, a.X, a.Y) >= clear;
     }
 
+    /// <summary>Lab: why marshes were not made (SPYRO_RANDOM_LEVEL_DEBUG=marsh), by the check that stopped them.</summary>
+    internal static readonly Dictionary<string, int> MarshMisses = [];
+    private static bool MarshNo(string why)
+    {
+        if (Environment.GetEnvironmentVariable("SPYRO_RANDOM_LEVEL_DEBUG") == "marsh") lock (MarshMisses) MarshMisses[why] = MarshMisses.GetValueOrDefault(why) + 1;
+        return false;
+    }
+
+    /// <summary>Rooms at least this wide (radius) can hold a marsh.</summary>
+    internal const double MarshRoom = 430;
+
     /// <summary>A marsh at a room's side: a wide pool of the level's water, ooze or lava with an islet in it, and a
     /// boardwalk out to the islet (or, on a hard level, stepping stones), with treasure there.</summary>
     private static bool Marsh(PlannedLevel L, PlannedArea a, LevelRandom rnd)
     {
         var plan = L.Plan;
-        if (a.R < 540 || plan.Kind is EnclosureKind.Sea or EnclosureKind.Sky) return false;
-        if (FreeDirection(a, rnd, 0.5) is not { } d) return false;
+        if (a.R < MarshRoom) return MarshNo("1");
+        if (FreeDirection(a, rnd, 0.45) is not { } d) return MarshNo("2");
         // Out at the room's side, its far shore running into the bank like a lake against a hillside (where the land
-        // ends in a bank; in a canyon or castle it stays on the floor).
-        double beyond = Math.Min(220, plan.TrimDistance - 90);
-        double r = Math.Clamp(a.R * Range(rnd, 0.28, 0.38), 200, 380), off = a.R * (beyond > 100 ? Range(rnd, 0.55, 0.7) : Range(rnd, 0.38, 0.48));
+        // ends in a bank; in a canyon or castle, and on an island in the sea or the sky, it stays on the floor).
+        double beyond = plan.Kind is EnclosureKind.Sea or EnclosureKind.Sky ? 0 : Math.Min(220, plan.TrimDistance - 90);
+        double r = Math.Clamp(a.R * Range(rnd, 0.28, 0.38), 165, 380), off = a.R * (beyond > 100 ? Range(rnd, 0.55, 0.7) : Range(rnd, 0.36, 0.46));
         (double X, double Y) c = (a.X + d.X * off, a.Y + d.Y * off), side = (-d.Y, d.X);
         var at = L.StartAt ?? (L.Areas[0].X, L.Areas[0].Y);
-        if (Dist(at.X, at.Y, c.X, c.Y) < 1.25 * r + 380) return false;
-        if (!OffJoins(L, a, c.X, c.Y, Math.Max(30, 1.15 * r - 170)) || Overlaps(L, plan.Zones.Count, c.X, c.Y, 1.15 * r)) return false;
-        if (L.Areas.Any(o => o != a && RoomGap(o, c.X, c.Y) < 1.2 * r + 140)) return false;
-        if (!DoorsDry(L, c.X, c.Y, 1.25 * r + 260) || !JoinsDry(L, a, c.X, c.Y, 1.2 * r + 60)) return false;
+        if (Dist(at.X, at.Y, c.X, c.Y) < 1.25 * r + 380) return MarshNo("3");
+        if (!OffJoins(L, a, c.X, c.Y, Math.Max(30, 1.15 * r - 170)) || Overlaps(L, plan.Zones.Count, c.X, c.Y, 1.15 * r)) return MarshNo("4");
+        if (L.Areas.Any(o => o != a && RoomGap(o, c.X, c.Y) < 1.2 * r + 140)) return MarshNo("5");
+        if (!DoorsDry(L, c.X, c.Y, 1.25 * r + 260) || !JoinsDry(L, a, c.X, c.Y, 1.2 * r + 60)) return MarshNo("6");
         // All of it on the room's floor or just into its bank.
         for (int k = 0; k < 16; k++)
         {
             var e = Dir(6.2832 * k / 16);
-            if (RoomGap(a, c.X + e.X * 1.2 * r, c.Y + e.Y * 1.2 * r) > beyond) return false;
+            if (RoomGap(a, c.X + e.X * 1.2 * r, c.Y + e.Y * 1.2 * r) > beyond) return MarshNo("7");
         }
         // The near shore, where the way out starts, is the room's own floor.
-        if (RoomGap(a, c.X - d.X * (r + 150), c.Y - d.Y * (r + 150)) > -60) return false;
+        if (RoomGap(a, c.X - d.X * (r + 150), c.Y - d.Y * (r + 150)) > -60) return MarshNo("8");
         a.Taken.Add(d);
         var marsh = plan.Add(new TerrainZone
         {

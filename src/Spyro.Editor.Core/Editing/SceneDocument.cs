@@ -159,6 +159,16 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
     /// place of <see cref="SkySourceWadEntry"/>. Null: none.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public byte[]? CustomSky { get; init; }
+    /// <summary>The colour the sky (borrowed or the level's own) is painted below the horizon, the level's ground colour
+    /// (<see cref="Sky.NativeSkyBelow"/>): the hairline gaps the game leaves between finely cut and whole tiles near the
+    /// camera then show ground, not sky. Null: the sky as it is. Generated levels set it.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public ColorRgba? SkyBelow { get; init; }
+    /// <summary>The level's ways (generated levels): each a line of points along a path between rooms or a trodden path
+    /// across a room, on the floor. Random objects lines them with lamps and torches, as the game lights its ways.
+    /// Null: none known.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<Vector3f[]>? Ways { get; init; }
     /// <summary>Distant meshes of imported sectors (by <see cref="AuthoredSurface.Sector"/>); null: every sector that
     /// needs one gets the compiler's simplified copy.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]

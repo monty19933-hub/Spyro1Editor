@@ -157,12 +157,18 @@ internal static class NativeAuthoredMesh
     /// part pointers are relative to the block, so it needs no relocation.</summary>
     internal static byte[]? CaptureSky(string originalUSA, SceneDocument document)
     {
-        if (document.CustomSky is { } custom) return custom.ToArray();
-        if (document.SkySourceWadEntry is not int entry) return null;
-        var level=new Spyro.Editor.Core.Universal.UniversalLevelData(Spyro.Editor.Core.Universal.UniversalDiscImage.Read(originalUSA).EntryBytes(entry));
-        var model=level.Subfiles()[1];
-        return Spyro1SkyBlockAnalyzer.ReadPrimarySkyBlock(level.Bytes.AsSpan(model.Offset,model.Length).ToArray())
-            ?? throw new InvalidDataException("The chosen sky level has no native sky.");
+        byte[]? block;
+        if (document.CustomSky is { } custom) block = custom.ToArray();
+        else if (document.SkySourceWadEntry is not int entry) return null;
+        else
+        {
+            var level=new Spyro.Editor.Core.Universal.UniversalLevelData(Spyro.Editor.Core.Universal.UniversalDiscImage.Read(originalUSA).EntryBytes(entry));
+            var model=level.Subfiles()[1];
+            block = Spyro1SkyBlockAnalyzer.ReadPrimarySkyBlock(level.Bytes.AsSpan(model.Offset,model.Length).ToArray())
+                ?? throw new InvalidDataException("The chosen sky level has no native sky.");
+        }
+        // Below the horizon in the ground's colour (generated levels): gaps between finely cut tiles show ground.
+        return document.SkyBelow is { } ground ? Spyro.Editor.Core.Sky.NativeSkyBelow.Paint(block, ground).Block : block;
     }
     /// <summary>A built level has one view group, so its sky group lists every part of the borrowed sky.
     /// Retail groups use the same form: part ids terminated by 255, padded to a word.</summary>

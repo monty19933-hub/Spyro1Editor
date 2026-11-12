@@ -726,11 +726,14 @@ internal static partial class SpyroPlanner
         // Facing the way on; from a start at a room's edge, the room's middle.
         L.Facing = L.StartAt != null ? (first.X, first.Y) : (next.X, next.Y);
         L.StartZone = plan.ZoneAt(L.Start.X, L.Start.Y) is int under and >= 0 ? under : first.Zone.Id;
+        // Trodden paths across the rooms, with gems along them.
+        Trails(L, rnd.Fork("trails"));
+        // A few more places by the rooms' edges, where the game's gems lie along the foot of the walls.
         foreach (var a in L.Areas)
-            for (int q = 0; q < (a.R >= 800 ? 8 : a.R < 420 ? 3 : 5); q++)
+            for (int q = 0; q < (a.R >= 800 ? 5 : a.R < 420 ? 2 : 3); q++)
             {
                 var d = Dir(Range(rnd, 0, 6.2832));
-                double x = a.X + d.X * a.R * Range(rnd, 0.35, 0.7), y = a.Y + d.Y * a.R * Range(rnd, 0.35, 0.7);
+                double x = a.X + d.X * a.R * Range(rnd, 0.62, 0.86), y = a.Y + d.Y * a.R * Range(rnd, 0.62, 0.86);
                 int zone = plan.ZoneAt(x, y);
                 if (zone >= 0 && plan.Zones[zone].Liquid == null && !IsBuilt(plan.Zones[zone].Kind)) L.Gems.Add((x, y, zone));
             }

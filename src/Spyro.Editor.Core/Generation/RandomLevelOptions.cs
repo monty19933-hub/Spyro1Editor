@@ -75,6 +75,8 @@ public sealed record RandomLevelOptions
     public IReadOnlyDictionary<SurfaceRole, string> Pictures { get; init; } = new Dictionary<SurfaceRole, string>();
     /// <summary>True: a sky painted in the look's colours; false: the sky of the level the look comes from.</summary>
     public bool PaintedSky { get; init; }
+    /// <summary>The level's music (a track id from MusicTrackCatalog); null picks one of the look's own songs.</summary>
+    public int? Music { get; init; }
     /// <summary>The level's name (capital letters, spaces and apostrophes); null makes one up.</summary>
     public string? Name { get; init; }
     /// <summary>A homeworld: this many doorways (0: an ordinary level). The level is then a plaza where Spyro arrives

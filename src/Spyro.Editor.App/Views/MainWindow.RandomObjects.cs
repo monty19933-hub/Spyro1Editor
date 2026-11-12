@@ -427,7 +427,7 @@ public sealed partial class MainWindow
             // About as many of each sort as a level of the game has; fewer where the level has no room or no rows left.
             Scenery = sceneryKinds.GroupBy(p => p.Kind).ToDictionary(g => g.Key, g => g.Key switch
             {
-                LevelScatter.Kind.Tree => 8, LevelScatter.Kind.Light => 8, LevelScatter.Kind.WallLight => 5, _ => 10,
+                LevelScatter.Kind.Tree => 12, LevelScatter.Kind.Light => 10, LevelScatter.Kind.WallLight => 6, _ => 16,
             }),
             TealGems = choice.TealGems && tealEntry != null, RainbowGems = choice.RainbowGems && rainbowEntry != null,
         };

@@ -1383,7 +1383,9 @@ public sealed partial class MainWindow
             CurrentLevelReady: true,
             CurrentLevelPlaceable: true,
             YawByte: row[0x46],
-            SignText: specialId == UniversalDragonflyEggs.SignId ? "HELLO!" : "");
+            SignText: specialId == UniversalDragonflyEggs.SignId ? "HELLO!" : "",
+            // A key floats above the floor as in its own level (on the floor it is half sunk in it and hard to find).
+            TerrainGroundOffset: UniversalGroundOffsets.For(v.ClassId));
         Vector3f fallback = BuildAddMobyPlacementOptions()[0].Position;
         MobyPlacementOption option = clickToPlace
             ? new("Click in the 3D view", fallback, "Click the terrain to place the object.", SnapOnAdd: true, PlaceAfterDialog: true)

@@ -116,7 +116,7 @@ public static class RandomLevelGenerator
         bool F(bool? choice, double chance) => choice ?? rnd.Chance(chance);
         var features = new FeatureSet(
             Caves: style == LevelStyle.Caverns || F(options.Caves, style is LevelStyle.Valley or LevelStyle.Canyon ? 0.5 : 0.25),
-            ChargePaths: F(options.ChargePaths, 0.5), Glides: F(options.Glides, 0.75), Hazards: F(options.Hazards, 0.65),
+            ChargePaths: F(options.ChargePaths, 0.5), Glides: F(options.Glides, 0.75), Hazards: F(options.Hazards, 0.8),
             Bridges: style is LevelStyle.Islands or LevelStyle.SkyIslands ? options.Bridges ?? true : F(options.Bridges, 0.7),
             Secrets: F(options.Secrets, 0.6),
             Rivers: style is not (LevelStyle.Islands or LevelStyle.SkyIslands) && F(options.Rivers, style == LevelStyle.Caverns ? 0.35 : 0.6),
@@ -276,9 +276,14 @@ public static class RandomLevelGenerator
         var scene = SceneDocument.New(name) with
         {
             Id = rnd.Id(), Spawn = spawn, Heading = heading, Surfaces = surfaces, SkyColor = theme.SkyHorizon,
-            MusicTrack = rnd.Pick(theme.Music),
+            MusicTrack = options.Music is int music ? music : rnd.Pick(theme.Music),
             SkySourceWadEntry = catalog.FindByKey(theme.SkyLevel)?.SourceWadEntry,
             GemSpots = gems,
+            // Below the horizon the sky takes the ground's colour, so the hairline gaps the game leaves between finely
+            // cut and whole tiles near the camera show ground, not sky (NativeSkyBelow). Sky islands keep their sky:
+            // what is under them is meant to be seen.
+            SkyBelow = style == LevelStyle.SkyIslands ? null : GroundColour(surfaces),
+            Ways = Ways(planned),
         };
         if (options.PaintedSky)
         {
@@ -459,6 +464,56 @@ public static class RandomLevelGenerator
 
     private static ColorRgba Average(ColorRgba[] c) =>
         new((byte)c.Average(x => x.R), (byte)c.Average(x => x.G), (byte)c.Average(x => x.B));
+
+    /// <summary>The level's ways, for lamps along them: each path between rooms and each trodden path across a room,
+    /// as points about 120 apart on its floor.</summary>
+    private static IReadOnlyList<Vector3f[]>? Ways(PlannedLevel L)
+    {
+        var plan = L.Plan; List<Vector3f[]> ways = [];
+        foreach (var z in plan.Zones.Where(z => z.Kind == "path" && z.IsPath && z.Liquid == null && z.Roof <= 0).Concat(plan.Decals.Where(d => d.Kind == "trail")))
+        {
+            List<Vector3f> line = [];
+            // Along the line, a point every 120 units of its length (the distance carried on from one stretch to the next).
+            double next = 0, walked = 0;
+            for (int k = 0; k + 1 < z.Spine.Count; k++)
+            {
+                var (a, b) = (z.Spine[k], z.Spine[k + 1]);
+                double len = Math.Sqrt((b.X - a.X) * (b.X - a.X) + (b.Y - a.Y) * (b.Y - a.Y));
+                for (; next <= walked + len && len > 0; next += 120)
+                {
+                    double s = next - walked, x = a.X + (b.X - a.X) * s / len, y = a.Y + (b.Y - a.Y) * s / len;
+                    int layer = z.Kind == "trail" ? plan.ZoneAt(x, y) : z.Id;
+                    if (layer >= 0) line.Add(new Vector3f((float)Math.Round(x), (float)Math.Round(y), (float)Math.Round(plan.Height(layer, x, y))));
+                }
+                walked += len;
+            }
+            if (line.Count >= 2) ways.Add([.. line]);
+        }
+        return ways.Count > 0 ? ways : null;
+    }
+
+    /// <summary>The ground's colour as it is seen: the faces that look up (not water, ooze or lava), each its distant
+    /// colours (its texture's look under its paint), weighted by area.</summary>
+    internal static ColorRgba? GroundColour(IReadOnlyList<AuthoredSurface> surfaces)
+    {
+        double r = 0, g = 0, b = 0, w = 0;
+        foreach (var s in surfaces)
+        {
+            if (s.Kind != null || s.Vertices.Length < 3) continue;
+            var v = s.Vertices;
+            double nx = 0, ny = 0, nz = 0;
+            for (int i = 1; i + 1 < v.Length; i++)
+            {
+                double ax = v[i].X - v[0].X, ay = v[i].Y - v[0].Y, az = v[i].Z - v[0].Z, bx = v[i + 1].X - v[0].X, by = v[i + 1].Y - v[0].Y, bz = v[i + 1].Z - v[0].Z;
+                nx += ay * bz - az * by; ny += az * bx - ax * bz; nz += ax * by - ay * bx;
+            }
+            double area = Math.Sqrt(nx * nx + ny * ny + nz * nz) / 2;
+            if (area <= 0 || Math.Abs(nz) / (2 * area) < 0.8) continue;
+            var c = s.DistantColors ?? s.NearColors ?? [s.Color];
+            r += area * c.Average(x => x.R); g += area * c.Average(x => x.G); b += area * c.Average(x => x.B); w += area;
+        }
+        return w <= 0 ? null : new ColorRgba((byte)Math.Round(r / w), (byte)Math.Round(g / w), (byte)Math.Round(b / w));
+    }
 
     /// <summary>A top-down picture of the level (one pixel per 30 units, north up): every face that looks up, lowest
     /// first, in its texture's colour under its paint.</summary>
