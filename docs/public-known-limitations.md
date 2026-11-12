@@ -254,6 +254,14 @@
   The fresh level must be saved before ID65 is offered. Native checks may refuse
   routes in a full level; the current full Twilight Harbor fixture lacks 400
   bytes of required buffer space. A route does not create a complete campaign.
+  File ▾ → Level Links… shows and changes all routes in one place. It offers
+  levels (the game's, the new level, levels built in their places) as doorway
+  destinations, not homeworlds. A homeworld rebuilt in the project keeps its
+  own doorways, each leading to the level in its place; a route saved for the
+  game's own homeworld before it was rebuilt stops Create BIN (Level Links says
+  so and removes it with one press). Whether a level has its Return Home vortex
+  is read from the saved levels and the editor's object cache (a level never
+  opened shows "not known").
 - Cross-level imports have broader class remapping and dependency support, but
   **all Mobys working in all levels is not complete**. Static composition does
   not certify AI, sound, collision, triggers or linked behavior. The browser and

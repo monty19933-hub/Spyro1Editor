@@ -311,6 +311,10 @@ ADDITIONAL_CORE_CASES = (
     ("UiSmoke", "HIGH_VALUE_GEM_UI_OK checks=", ["--high-value-gems-ui-only"]),
     ("UiSmoke", "PORTAL_ROUTE_UI_OK checks=18",
      ["--portal-routes-ui-only"]),
+    # File ▾ › Level Links… on a throwaway project with no disc: doorways sent to levels (the way back follows), Return
+    # Home set and set back to automatic, a rebuilt homeworld's stale link and its fix, Undo, refusals, the pinned foot.
+    ("UiSmoke", "LEVEL_LINKS_UI_OK checks=35",
+     ["--level-links-ui-only"]),
     ("UiSmoke", "START_BLANK_UI_OK checks=27",
      ["--start-blank-ui-only"]),
     ("TownSquareLockedChestSmoke", "LOCKED_CHEST_BEHAVIOR_FREE_OK",
@@ -761,6 +765,7 @@ def main():
             ("--dragon-colour-ui",): "-dragon-colour-ui",
             ("--editor-navigation-ui-only",): "-editor-navigation-ui",
             ("--portal-routes-ui-only",): "-portal-routes-ui",
+            ("--level-links-ui-only",): "-level-links-ui",
             ("--high-value-gems-ui-only",): "-high-value-gems-ui",
             ("--start-blank-ui-only",): "-start-blank-ui",
             ("--free-flight-ui-only",): "-free-flight-ui",

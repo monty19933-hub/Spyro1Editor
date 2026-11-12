@@ -314,8 +314,10 @@ says how many. Translucent original tiles cannot currently be copied or removed.
   not. (The 8 MB setting goes into the unchanged USA game only; with any other
   game open, games are made for 2 MB as before.)
 - **Portals & Return Home**: choose where each portal leads and where Return
-  Home goes. **Select Portal** moves the trigger, lettering and travel path
-  together; move the stone arch with the terrain tools.
+  Home goes. **Open Level Links…** at the top shows every homeworld's doorways
+  and every level's Return Home on one page (see Level Links below).
+  **Select Portal** moves the trigger, lettering and travel path together; move
+  the stone arch with the terrain tools.
 
 ## Colours tab
 
@@ -475,6 +477,41 @@ Magic Crafters, Beast Makers, Dream Weavers and Gnasty's World can all be cleare
 together; of the other twenty levels (Dark Hollow, Toasty and most levels of the
 later worlds) two can be cleared in one game. A cleared Town Square and a
 level of your own cannot currently be exported together.
+
+### Level Links: the way in and the way back
+
+**File ▾ → Level Links…** (or **Open Level Links…** in Game Settings → Portals &
+Return Home) shows on one page how Spyro gets into every level and back out:
+
+- **Doorways**: every homeworld's doorways, named by the level they lead to in
+  the game, each with a **leads to** list: the game's levels, your new level
+  (File ▾ → New Level…) and the levels you built in the game's places, by the
+  names you gave them. A level you built in Stone Hill's place is reached by
+  the Stone Hill doorway without any change here.
+- Choose another level for a doorway and it is saved at once. **Return Home
+  from that level then brings Spyro back out of that same doorway**, and the
+  level the doorway led to before comes back out of the doorway that still
+  leads there. Choosing the game's own level again puts the doorway back.
+- **Return Home**: for every level, where its Return Home vortex (and Exit Level
+  in the pause menu) brings Spyro back out. **Automatic** is the doorway that
+  leads to the level; choose another doorway only if you want him to come out
+  somewhere else. Each row also says whether the level has its Return Home
+  vortex: a level you built needs one added (File ▾ → Fill In What the Level
+  Needs…, or Add Object: search for "Return Home"), or Spyro can leave it only by
+  Exit Level.
+- At the top, plain sentences say what needs looking at: a level no doorway
+  leads to, two doorways to one level (and which one Return Home uses), a level
+  without its vortex, or a link Create BIN cannot make, with a button where one
+  press puts it right.
+- A homeworld you rebuilt (Start Blank or Random Homeworld) keeps one doorway
+  for each of its own levels, each always leading to the level in that place;
+  move, add or remove them with Terrain → Doorways in that homeworld.
+- Your own world (File ▾ → New World…) is summed up at the foot: where its
+  entrance is, which of its levels have a doorway in its homeworld, its doorway
+  home and its place on the balloon route, with buttons to open the homeworlds
+  and the balloon route.
+- **Undo Last Change** takes the last change back. Create BIN puts the links in
+  the game.
 
 ### Doorways in a homeworld you rebuild
 
