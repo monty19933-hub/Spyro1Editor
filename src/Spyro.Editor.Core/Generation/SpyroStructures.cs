@@ -4,7 +4,7 @@ namespace Spyro.Editor.Core.Generation;
 
 /// <summary>What is built on the land rather than being land: the round towers with pointed roofs that stand at the
 /// mouths of paths and round courtyards in the game's own levels.</summary>
-internal static class SpyroStructures
+internal static partial class SpyroStructures
 {
     /// <summary>A round tower: <paramref name="sides"/> upright faces in bands, a cone roof wider than the wall. Its
     /// foot is sunk into the ground it stands on.</summary>
@@ -49,7 +49,7 @@ internal static class SpyroStructures
     /// <summary>What stands on the land: the look's own towers, trees, rocks and arches where its level was read
     /// (<paramref name="props"/>), else round towers built here. Tall ones stand either side of where paths leave rooms
     /// (round a castle's yards, at both ends); small ones on the banks and rims round the rooms and at the rooms' edges.</summary>
-    public static List<TerrainPiece> Build(PlannedLevel L, LevelStyle style, LevelRandom rnd, IReadOnlyList<LevelProp>? props = null)
+    public static List<TerrainPiece> Build(PlannedLevel L, LevelStyle style, LevelRandom rnd, IReadOnlyList<LevelProp>? props = null, FeatureSet? features = null)
     {
         var plan = L.Plan; var pieces = new List<TerrainPiece>();
         bool castle = style == LevelStyle.Castle, free = plan.Kind is EnclosureKind.Sea or EnclosureKind.Sky;
@@ -62,6 +62,8 @@ internal static class SpyroStructures
         foreach (var door in L.Doors)
             for (double t = -door.Behind; t <= door.Front; t += 130)
                 placed.Add((door.X - door.Dx * t, door.Y - door.Dy * t, Math.Abs(t) < 200 ? 200 : 130));
+        // Roofs, doors and windows on the houses, battlements and towers on the castle walls; nothing else stands there.
+        pieces.AddRange(Buildings(L, style, rnd, features, placed, ref towers));
         bool Room(double x, double y, double r) => placed.All(p => (p.X - x) * (p.X - x) + (p.Y - y) * (p.Y - y) >= (p.R + r + 60) * (p.R + r + 60));
         // A prop is used only while the level has room for its faces and its textures.
         LevelProp? Pick(List<LevelProp> from)
@@ -147,6 +149,8 @@ internal static class SpyroStructures
                         if (zone < 0 || plan.Zones[zone].Kind != "room" || plan.Zones[zone].Roof > 0) continue;
                         if (plan.Zones.Any(z => z.Kind != "room" && z.Sdf(x, y, plan.Noise) < prop.Radius + 150)) continue;
                         if ((x - L.Start.X) * (x - L.Start.X) + (y - L.Start.Y) * (y - L.Start.Y) < 420 * 420) continue;
+                        // Nor on the way from the room's middle to a room it runs on into.
+                        if (SpyroPlanner.OnWay(L, a, x, y, prop.Radius + 110)) continue;
                         Use(prop, x, y, plan.Height(zone, x, y), 14);
                     }
                     else

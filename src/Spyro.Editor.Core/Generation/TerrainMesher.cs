@@ -483,7 +483,8 @@ internal sealed class TerrainMesher
         int required = 0, unreached = 0, noWayBack = 0; var bad = new List<(double, double)>();
         for (int f = 0; f < n; f++)
         {
-            if (!stand[f] || Floors[f].Layer == TerrainPlan.Fill) continue;
+            // Floors Spyro need not reach: fill between floors, a house's top and the top of a castle wall.
+            if (!stand[f] || Floors[f].Layer == TerrainPlan.Fill || Floors[f].Layer >= 0 && SpyroPlanner.IsBuilt(_plan.Zones[Floors[f].Layer].Kind)) continue;
             required++;
             if (!reached[f]) unreached++; else if (!returns[f]) noWayBack++;
             if (!reached[f] || !returns[f]) { var c = Floors[f].Piece.Corners; bad.Add((c.Average(p => p.X), c.Average(p => p.Y))); }

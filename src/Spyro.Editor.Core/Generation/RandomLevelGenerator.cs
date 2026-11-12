@@ -118,7 +118,10 @@ public static class RandomLevelGenerator
             Caves: style == LevelStyle.Caverns || F(options.Caves, style is LevelStyle.Valley or LevelStyle.Canyon ? 0.5 : 0.25),
             ChargePaths: F(options.ChargePaths, 0.5), Glides: F(options.Glides, 0.75), Hazards: F(options.Hazards, 0.65),
             Bridges: style is LevelStyle.Islands or LevelStyle.SkyIslands ? options.Bridges ?? true : F(options.Bridges, 0.7),
-            Secrets: F(options.Secrets, 0.6));
+            Secrets: F(options.Secrets, 0.6),
+            Rivers: style is not (LevelStyle.Islands or LevelStyle.SkyIslands) && F(options.Rivers, style == LevelStyle.Caverns ? 0.35 : 0.6),
+            Houses: F(options.Houses, style switch { LevelStyle.Castle => 0.85, LevelStyle.Valley => 0.6, LevelStyle.Canyon => 0.55, LevelStyle.Islands => 0.45, LevelStyle.SkyIslands => 0.3, _ => 0.1 }),
+            Walls: F(options.Walls, style switch { LevelStyle.Castle => 0.95, LevelStyle.SkyIslands => 0.35, LevelStyle.Valley => 0.4, LevelStyle.Canyon => 0.25, LevelStyle.Islands => 0.2, _ => 0.0 }));
         for (int shrink = 0; ; shrink++)
         {
             var notes = new List<string>();
@@ -149,7 +152,7 @@ public static class RandomLevelGenerator
             token.ThrowIfCancellationRequested();
             attempts++;
             var tried = SpyroPlanner.Build(style, options.Size, features, theme, new LevelRandom(planSeed), shrink, options.Difficulty, Math.Clamp(options.Doorways, 0, NativeHubPortals.MaxDoorways),
-                options.Layout, squeeze);
+                options.Layout, squeeze, options.Liquid);
             // Into the built level's coordinates: whole units from 0, the lowest floor (and what hangs under floating
             // land) well above the bottom.
             var (bx0, by0, _, _) = tried.Plan.Bounds();
@@ -176,12 +179,12 @@ public static class RandomLevelGenerator
             foreach (var a in planned.Areas) Console.Error.WriteLine($"area {a.Id} {a.Kind} at {a.X:0},{a.Y:0} r {a.R:0} out {a.Reach:0} z {a.Z:0} look {a.Look} group {a.Group} want {a.Want} piece {a.Piece}");
             foreach (var j in planned.Joins) Console.Error.WriteLine($"join {j.A}-{j.B} {j.Kind}");
             foreach (var d in planned.Doors) Console.Error.WriteLine($"door area {d.Area} at {d.X:0},{d.Y:0} walk {d.Dx:0.00},{d.Dy:0.00} front {d.Front:0} behind {d.Behind:0}");
-            foreach (var z in planned.Plan.Zones.Where(z => z.Kind != "room" && !z.IsPath)) Console.Error.WriteLine($"zone {z.Id} {z.Kind} area {z.Area} z {z.Z:0} discs {string.Join(" ", z.Discs.Select(c => $"{c.X:0},{c.Y:0},{c.R:0}"))}");
+            foreach (var z in planned.Plan.Zones.Where(z => z.Kind != "room" && z.Kind != "path")) Console.Error.WriteLine($"zone {z.Id} {z.Kind} area {z.Area} z {z.Z:0} discs {string.Join(" ", z.Discs.Select(c => $"{c.X:0},{c.Y:0},{c.R:0}"))} boxes {string.Join(" ", z.Boxes.Select(c => $"{c.X:0},{c.Y:0}"))} spine {string.Join(" ", z.Spine.Take(1).Concat(z.Spine.TakeLast(1)).Select(c => $"{c.X:0},{c.Y:0}"))}");
         }
         var plan = planned.Plan;
         var pieces = mesher.Pieces;
         planned.Look = theme.Name;
-        pieces.AddRange(SpyroStructures.Build(planned, style, rnd.Fork("structures"), props));
+        pieces.AddRange(SpyroStructures.Build(planned, style, rnd.Fork("structures"), props, features));
         if (check.Unreached + check.NoWayBack > 0)
             notes.Add($"{check.Unreached + check.NoWayBack} of {check.Required} floors could not be proved reachable both ways; play it through once.");
         token.ThrowIfCancellationRequested();
@@ -528,6 +531,8 @@ public static class RandomLevelGenerator
         "lookout with a glide" => "lookouts with glides", "step between rooms" => "steps between rooms", "flight of steps" => "flights of steps",
         "terrace up a ramp" => "terraces up ramps", "glide from a high place" => "glides from high places", "islet in a pool" => "islets in pools",
         "moat round an island" => "moats round islands", "overlook over an earlier room" => "overlooks over earlier rooms",
-        "overlook back over the start" => "overlooks back over the start", _ when what.EndsWith("s") => what, _ => what + "s"
+        "overlook back over the start" => "overlooks back over the start", "river with a bridge" => "rivers with bridges",
+        "marsh with a boardwalk" => "marshes with boardwalks", "marsh with stepping stones" => "marshes with stepping stones",
+        _ when what.EndsWith("s") => what, _ => what + "s"
     };
 }

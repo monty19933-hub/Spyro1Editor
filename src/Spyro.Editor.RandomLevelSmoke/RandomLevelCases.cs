@@ -160,6 +160,21 @@ internal static class RandomLevelCases
         var large = Make(k => new RandomLevelOptions { Seed = 7950 + k, Style = LevelStyle.Valley, Size = LevelSize.Large }, 12);
         check(small.Count == 12 && large.Count == 12 && large.Average(r => r.Report.Faces) >= 1.35 * small.Average(r => r.Report.Faces),
             $"variety: large levels average {(large.Count > 0 ? large.Average(r => r.Report.Faces) : 0):0} faces, small ones {(small.Count > 0 ? small.Average(r => r.Report.Faces) : 0):0}");
+        // Houses, castle walls and rivers asked for: they come in most levels that have the room, every floor is still
+        // reached both ways, and ooze asked for is what the water is.
+        {
+            var built = Make(k => new RandomLevelOptions { Seed = 7700 + k, Style = new[] { LevelStyle.Valley, LevelStyle.Castle, LevelStyle.Canyon }[k % 3], Houses = true, Walls = true, Rivers = true, Hazards = true, Liquid = SurfaceRole.Goo }, 18);
+            int With(string what) => built.Count(r => r.Report.Counts.GetValueOrDefault(what) > 0);
+            if (print) Console.WriteLine($"built: {built.Count} levels, houses in {With("house")}, castle walls in {With("castle wall")}, battlements in {With("battlement")}, rivers in {With("river with a bridge")}, marshes in {With("marsh with a boardwalk") + With("marsh with stepping stones")}");
+            check(built.Count == 18 && With("house") >= 12, $"built: houses in only {With("house")} of {built.Count} levels");
+            check(With("castle wall") + With("battlement") >= 12 && built.Where(r => r.Report.Style == LevelStyle.Castle).All(r => r.Report.Counts.GetValueOrDefault("battlement") > 0), $"built: castle walls in {With("castle wall")}, battlements in {With("battlement")} of {built.Count}");
+            check(With("river with a bridge") >= 6, $"built: rivers in only {With("river with a bridge")} of {built.Count} levels");
+            var wet = built.Where(r => r.Report.Counts.Keys.Any(k => k.StartsWith("river") || k.StartsWith("marsh") || k is "pool" or "moat round an island")).ToList();
+            // (A hazard floor's second parameter: 0 water, 1 lava, 2 ooze.)
+            check(wet.Count > 0 && wet.All(r => r.Scene.Surfaces.Any(f => f.Kind is { Type: 0, Param2: 2 }) && !r.Scene.Surfaces.Any(f => f.Kind is { Type: 0, Param2: 0 or 1 })),
+                $"built: ooze asked for, the water of {wet.Count(r => !r.Scene.Surfaces.Any(f => f.Kind is { Type: 0, Param2: 2 }))} levels is not ooze");
+            check(built.All(r => r.Report.Unreached + r.Report.NoWayBack <= 0.03 * r.Report.RequiredFloors), $"built: floors out of reach in seeds {string.Join(", ", built.Where(r => r.Report.Unreached + r.Report.NoWayBack > 0.03 * r.Report.RequiredFloors).Select(r => r.Report.Seed))}");
+        }
         // Homeworlds.
         foreach (var style in new[] { LevelStyle.Valley, LevelStyle.Castle, LevelStyle.Islands, LevelStyle.Canyon, LevelStyle.Caverns, LevelStyle.SkyIslands })
         {

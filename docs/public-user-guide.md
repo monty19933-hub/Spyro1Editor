@@ -634,6 +634,12 @@ objects and enemies yourself.
   or a tower. Rooms are not round: their edges are rock shelves with flat sides
   and corners, long terraces or squared yards, straight across where a path or a
   flight of steps meets them.
+- **Built on and watered like them:** houses with pitched roofs, doors and
+  windows round the rooms, a few together like a village (Spyro walks round
+  them); castle walls with a tower at each end along rooms' straight edges, with
+  battlements, and battlements along a castle level's own walls; rivers across
+  big rooms with a wooden bridge over them; marshes at a room's side with a
+  boardwalk or stepping stones out to an islet with treasure.
 - **Built like them:** one sheet of four-cornered faces about 128 units across
   whose lines follow the edges of the land, as in the original levels, enclosed by
   steep banks, rock walls, peaks, open water or the sky.
@@ -661,9 +667,13 @@ The choices:
 - **What it has:** caves (in caverns, more rooms under rock; in canyons and
   castles, tunnels), charge ramps (a ramp too steep to walk, marked with arrows,
   up to a hidden nook), glides (steps up to a lookout and a ledge across the room
-  that Spyro reaches only by gliding from it), pools, bridges (between islands;
-  without them, stepping stones) and hidden nooks. A tick asks for a feature, an
-  empty box leaves it out, a filled square leaves it to chance.
+  that Spyro reaches only by gliding from it), pools and marshes, bridges
+  (between islands; without them, stepping stones), hidden nooks, rivers, houses
+  and castle walls. A tick asks for a feature, an empty box leaves it out, a
+  filled square leaves it to chance.
+- **Water, ooze or lava:** what the rivers, marshes, pools and moats are full
+  of: water, the purple ooze or lava, or **Surprise me** (the look's own as a
+  rule, now and then another). On Hard and Kaizo a fall in costs a life at once.
 - **Textures:** that level's own textures and colours, or new pictures painted in
   the look's colours. **Use My Own Pictures…** puts your own picture (PNG, JPEG,
   WebP or BMP) on any kind of surface; pictures need your original disc.

@@ -25,6 +25,9 @@ if (args.Length >= 6 && args[0] == "--dump")
         Difficulty = Enum.TryParse<Spyro.Editor.Core.Generation.LevelDifficulty>(Environment.GetEnvironmentVariable("RANDOM_DIFFICULTY"), out var hard) ? hard : Spyro.Editor.Core.Generation.LevelDifficulty.Medium,
         // RANDOM_LAYOUT: journey, loop, hub, arena, climb, gorge or web (unset: the seed's own).
         Layout = Environment.GetEnvironmentVariable("RANDOM_LAYOUT") is { Length: > 0 } layout ? layout : null,
+        Houses = Environment.GetEnvironmentVariable("RANDOM_BUILT") == "1" ? true : null, Walls = Environment.GetEnvironmentVariable("RANDOM_BUILT") == "1" ? true : null,
+        Rivers = Environment.GetEnvironmentVariable("RANDOM_BUILT") == "1" ? true : null,
+        Liquid = Enum.TryParse<Spyro.Editor.Core.Generation.SurfaceRole>(Environment.GetEnvironmentVariable("RANDOM_LIQUID"), out var liquid) ? liquid : null,
     };
     var watch = System.Diagnostics.Stopwatch.StartNew();
     var source = RandomLevelCases.LookSource();
@@ -158,6 +161,10 @@ if (args.Length >= 7 && args[0] == "--export-random")
         Theme = args.Length > 7 && args[7] != "-" ? args[7] : null,
         ChargePaths = Environment.GetEnvironmentVariable("RANDOM_CHARGE") == "1" ? true : null,
         Layout = Environment.GetEnvironmentVariable("RANDOM_LAYOUT") is { Length: > 0 } layout ? layout : null,
+        // RANDOM_BUILT=1: houses, castle walls and rivers asked for; RANDOM_LIQUID=Water|Goo|Lava.
+        Houses = Environment.GetEnvironmentVariable("RANDOM_BUILT") == "1" ? true : null, Walls = Environment.GetEnvironmentVariable("RANDOM_BUILT") == "1" ? true : null,
+        Rivers = Environment.GetEnvironmentVariable("RANDOM_BUILT") == "1" ? true : null,
+        Liquid = Enum.TryParse<Spyro.Editor.Core.Generation.SurfaceRole>(Environment.GetEnvironmentVariable("RANDOM_LIQUID"), out var wet) ? wet : null,
         Textures = args.Length > 8 && args[8] == "pictures" ? Spyro.Editor.Core.Generation.LevelTextureMode.GeneratedPictures : Spyro.Editor.Core.Generation.LevelTextureMode.GameTextures,
     };
     string output = Path.GetFullPath(args[6]);

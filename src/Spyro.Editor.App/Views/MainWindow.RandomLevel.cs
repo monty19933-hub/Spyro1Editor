@@ -45,6 +45,10 @@ public sealed partial class MainWindow
         ("hub", "A clearing with rooms round it"), ("arena", "One great room with a hill, a mound or a moat"), ("climb", "A hill of terraces to climb"),
         ("gorge", "A winding gorge"), ("web", "A web of rooms, more than one way round"),
     ];
+    private static readonly (SurfaceRole? Liquid, string Label)[] RandomLevelLiquids =
+    [
+        (null, "Surprise me"), (SurfaceRole.Water, "Water"), (SurfaceRole.Goo, "Purple ooze"), (SurfaceRole.Lava, "Lava"),
+    ];
     private static readonly (SurfaceRole Role, string Label)[] PictureRoles =
     [
         (SurfaceRole.Ground, "Ground"), (SurfaceRole.GroundAlt, "Banks and hilltops"), (SurfaceRole.Path, "Paths"), (SurfaceRole.Dirt, "Bare earth"),
@@ -177,7 +181,7 @@ public sealed partial class MainWindow
         left.Children.Add(sizeRow);
         left.Children.Add(Label("What it has"));
         left.Children.Add(new TextBlock { Text = "A filled square leaves it to chance; a tick asks for it; empty leaves it out.", TextWrapping = TextWrapping.Wrap, FontSize = 12, Opacity = 0.75 });
-        var featureGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowDefinitions = new RowDefinitions("Auto,Auto,Auto") };
+        var featureGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto") };
         left.Children.Add(featureGrid);
         CheckBox Feature(string name, string text, string tip)
         {
@@ -191,9 +195,16 @@ public sealed partial class MainWindow
         var caves = Feature("RandomLevelCaves", "Caves", "Caverns: more of the rooms are under rock. Canyons and castles: some paths run through tunnels.");
         var charge = Feature("RandomLevelCharge", "Charge ramps", "A ramp too steep to walk, marked with arrows, up to a hidden nook: Spyro climbs it by charging.");
         var glides = Feature("RandomLevelGlides", "Glides", "Steps up to a lookout, and a ledge across the room that Spyro reaches only by gliding from it.");
-        var hazards = Feature("RandomLevelHazards", "Pools", "Pools of water, lava or ooze at the side of some rooms.");
+        var hazards = Feature("RandomLevelHazards", "Pools and marshes", "Pools at the side of some rooms, and marshes with a boardwalk (or stepping stones) out to an islet, of the level's water, ooze or lava.");
         var bridges = Feature("RandomLevelBridges", "Bridges", "Islands are joined by bridges (without them, by stepping stones).");
         var secrets = Feature("RandomLevelSecrets", "Hidden nooks", "Small rooms off the level's rooms, with room for treasure.");
+        var rivers = Feature("RandomLevelRivers", "Rivers", "A river (of the level's water, ooze or lava) across a big room from bank to bank, with a wooden bridge over it.");
+        var houses = Feature("RandomLevelHouses", "Houses", "Houses with roofs, doors and windows round the rooms, a few together like a village; Spyro walks round them.");
+        var walls = Feature("RandomLevelWalls", "Castle walls", "Castle walls with a tower at each end along rooms' edges, and battlements along a castle's walls.");
+        left.Children.Add(Label("Water, ooze or lava"));
+        var liquid = new ComboBox { Name = "RandomLevelLiquid", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = RandomLevelLiquids.Select(l => l.Label).ToArray(), SelectedIndex = 0 };
+        ToolTip.SetTip(liquid, "What the level's rivers, marshes, pools and moats are full of. Surprise me: the look's own as a rule, now and then another. On Hard and Kaizo a fall in costs a life at once.");
+        left.Children.Add(liquid);
         left.Children.Add(Label("Textures"));
         var gameTextures = new RadioButton { Name = "RandomLevelGameTextures", GroupName = "RandomLevelTextures", Content = "That level's own textures and colours", IsChecked = true };
         var painted = new RadioButton { Name = "RandomLevelPainted", GroupName = "RandomLevelTextures", Content = "New pictures painted in the look's colours" };
@@ -303,7 +314,8 @@ public sealed partial class MainWindow
                 Theme = look.SelectedIndex > 0 ? LevelThemes.All[look.SelectedIndex - 1].Key : null,
                 Difficulty = (LevelDifficulty)Math.Clamp(difficulty.SelectedIndex, 0, 3), Doorways = Doorways().Count,
                 Caves = caves.IsChecked, ChargePaths = charge.IsChecked, Glides = glides.IsChecked, Hazards = hazards.IsChecked,
-                Bridges = bridges.IsChecked, Secrets = secrets.IsChecked,
+                Bridges = bridges.IsChecked, Secrets = secrets.IsChecked, Rivers = rivers.IsChecked, Houses = houses.IsChecked, Walls = walls.IsChecked,
+                Liquid = RandomLevelLiquids[Math.Clamp(liquid.SelectedIndex, 0, RandomLevelLiquids.Length - 1)].Liquid,
                 Textures = painted.IsChecked == true ? LevelTextureMode.GeneratedPictures : LevelTextureMode.GameTextures,
                 Pictures = new Dictionary<SurfaceRole, string>(pictures), PaintedSky = paintedSky.IsChecked == true,
                 Name = string.IsNullOrEmpty(name) ? null : name,
@@ -360,7 +372,8 @@ public sealed partial class MainWindow
         bool same = previewOptions is { } p && preview != null && final.Textures == LevelTextureMode.GameTextures && final.Pictures.Count == 0 &&
             p.Seed == final.Seed && p.Style == final.Style && p.Layout == final.Layout && p.Size == final.Size && p.Theme == final.Theme && p.Caves == final.Caves &&
             p.ChargePaths == final.ChargePaths && p.Glides == final.Glides && p.Hazards == final.Hazards && p.Bridges == final.Bridges &&
-            p.Secrets == final.Secrets && p.PaintedSky == final.PaintedSky && p.Difficulty == final.Difficulty && p.Doorways == final.Doorways;
+            p.Secrets == final.Secrets && p.Rivers == final.Rivers && p.Houses == final.Houses && p.Walls == final.Walls && p.Liquid == final.Liquid &&
+            p.PaintedSky == final.PaintedSky && p.Difficulty == final.Difficulty && p.Doorways == final.Doorways;
         if (same && final.Name is { } typed && NewWorldDocument.IsValidName(typed) && typed.All(c => !char.IsDigit(c)) && typed != preview!.Scene.Name)
             preview = preview with { Scene = preview.Scene with { Name = typed } };
         return (new RandomLevelChoice(final, chosen.Place, chosen.World, fill.IsChecked == true), same ? preview : null);

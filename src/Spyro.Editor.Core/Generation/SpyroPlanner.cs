@@ -145,7 +145,7 @@ internal static partial class SpyroPlanner
         (LevelStyle.Canyon, false) => [("plateaus", 3), ("gorge", 2.5), ("field", 2), ("journey", 1.5), ("loop", 1.5), ("climb", 1.2), ("web", 1.2), ("terraces", 1.2), ("arena", 1.2)],
         (LevelStyle.Caverns, false) => [("journey", 2.2), ("web", 1.8), ("gorge", 1.8), ("field", 1.8), ("plateaus", 1.2), ("hub", 1), ("arena", 1.2)],
         (LevelStyle.Castle, false) => [("courts", 4), ("terraces", 1.5), ("loop", 1.3), ("web", 1.3), ("climb", 1.2), ("field", 1.2), ("hub", 1), ("arena", 1.4), ("journey", 1)],
-        (LevelStyle.Islands or LevelStyle.SkyIslands, false) => [("web", 2.2), ("journey", 1.8), ("loop", 1.8), ("field", 1.6), ("plateaus", 1.5), ("hub", 1.3), ("climb", 1.4), ("terraces", 1.2), ("arena", 1.2)],
+        (LevelStyle.Islands or LevelStyle.SkyIslands, false) => [("web", 2.2), ("journey", 1.8), ("loop", 1.8), ("field", 1.6), ("plateaus", 1.5), ("hub", 1.3), ("climb", 1.4), ("terraces", 1.2), ("arena", 0.9)],
         (_, false) => [("field", 2.6), ("terraces", 2.2), ("plateaus", 2), ("journey", 1.4), ("loop", 1.4), ("climb", 1.4), ("web", 1.4), ("gorge", 1.2), ("arena", 1.4), ("hub", 0.8), ("courts", 0.8)],
         // A homeworld left to chance is one land with its doorways round it (a clearing with rooms round it, or one
         // great room with rooms off it, still comes when asked for).
@@ -160,12 +160,14 @@ internal static partial class SpyroPlanner
     /// than rooms joined by paths.</summary>
     private static bool IsCluster(string layout) => layout is "field" or "plateaus" or "terraces" or "courts";
     [ThreadStatic] private static bool _cluster;
+    /// <summary>The level is islands (in the sea or the sky): parts stand apart, joined by bridges and stepping stones.</summary>
+    [ThreadStatic] private static bool _apart;
 
     /// <param name="layout">The layout to build (<see cref="AllLayouts"/>), or null for the seed's own choice.</param>
     /// <param name="squeeze">Builds the same level with smaller rooms (0: full size): the level came out with more
     /// faces than its size allows.</param>
     public static PlannedLevel Build(LevelStyle style, LevelSize size, FeatureSet features, LevelTheme theme, LevelRandom rnd, int shrink,
-        LevelDifficulty difficulty = LevelDifficulty.Medium, int doorways = 0, string? layout = null, int squeeze = 0)
+        LevelDifficulty difficulty = LevelDifficulty.Medium, int doorways = 0, string? layout = null, int squeeze = 0, SurfaceRole? liquid = null)
     {
         _tuning = For(difficulty);
         _minRoom = doorways > 0 ? 600 : 0;
@@ -173,6 +175,13 @@ internal static partial class SpyroPlanner
         var own = rnd.Fork("layout");
         string wanted = layout != null && Array.IndexOf(AllLayouts, layout) >= 0 ? layout : own.Pick<string>(Layouts(style, doorways > 0));
         string grain = own.Pick<string>([("grand", 2.0), ("mixed", 4.0), ("fine", 2.2)]);
+        // The level's water, ooze or lava: the look's own as a rule; now and then the purple ooze, lava (in a castle,
+        // canyon or cave above all) or water.
+        var wet = own.Fork("liquid");
+        // (Islands keep the look's own sea.)
+        var hazard = liquid is SurfaceRole.Water or SurfaceRole.Goo or SurfaceRole.Lava ? liquid.Value : wet.Chance(0.6) || style == LevelStyle.Islands ? theme.Liquid : wet.Pick<SurfaceRole>([
+            (SurfaceRole.Goo, theme.Liquid == SurfaceRole.Goo ? 0.4 : 2.0), (SurfaceRole.Water, theme.Liquid == SurfaceRole.Water ? 0.4 : 1.6),
+            (SurfaceRole.Lava, style is LevelStyle.Castle or LevelStyle.Canyon or LevelStyle.Caverns ? 1.6 : 0.4)]);
         // A homeworld's doorways each want a room of their own size: no crowd of little rooms.
         if (doorways > 0 && grain == "fine") grain = "mixed";
         // Islands and floating land: from a few islands close together to a wide archipelago.
@@ -182,8 +191,8 @@ internal static partial class SpyroPlanner
             var r = rnd.Fork("try" + attempt);
             var plan = new TerrainPlan { Noise = new TerrainNoise(r.Fork("noise")) };
             var L = new PlannedLevel { Plan = plan };
-            plan.LiquidRole = theme.Liquid;
-            plan.LiquidKind = (theme.Liquid, Tune.Deadly) switch
+            plan.LiquidRole = hazard;
+            plan.LiquidKind = (hazard, Tune.Deadly) switch
             {
                 (SurfaceRole.Lava, false) => AuthoredSurfaceKind.Lava, (SurfaceRole.Lava, true) => AuthoredSurfaceKind.DeadlyLava,
                 (SurfaceRole.Goo, false) => AuthoredSurfaceKind.Ooze, (SurfaceRole.Goo, true) => AuthoredSurfaceKind.DeadlyOoze,
@@ -216,7 +225,9 @@ internal static partial class SpyroPlanner
             }
             int weight = Math.Max(3, size switch { LevelSize.Small => 5, LevelSize.Large => 11, _ => 8 } - shrink);
             bool apart = plan.Kind is EnclosureKind.Sea or EnclosureKind.Sky;
-            if (apart) { _scale = 0.72; _gapFrom = 250; _gapTo = 430; weight += plan.Kind == EnclosureKind.Sky ? 2 : 1; } else { _scale = style == LevelStyle.Caverns ? 0.8 : 1; _gapFrom = 520; _gapTo = 800; }
+            // Islands in the sky stand further apart than islands in the sea, over longer bridges that climb more.
+            _apart = apart;
+            if (apart) { _scale = 0.72; _gapFrom = 250; _gapTo = plan.Kind == EnclosureKind.Sky ? 560 : 430; weight += plan.Kind == EnclosureKind.Sky ? 2 : 1; } else { _scale = style == LevelStyle.Caverns ? 0.8 : 1; _gapFrom = 520; _gapTo = 800; }
             _scale *= Tune.RoomScale;
             for (int k = 0; k < squeeze; k++) _scale *= 0.92;
             _ridge = apart ? 240 : Ridge;
@@ -596,7 +607,7 @@ internal static partial class SpyroPlanner
         {
             int lobes = rnd.Next(1, 4);
             if (a.Look == "slab") continue;
-            if (a.Look == "rock") lobes = rnd.Chance(0.4) ? 1 : 0;
+            if (a.Look == "rock") continue;
             // Well away from where rooms touch: a lobe would bury the steps between them.
             bool touching = L.Joins.Any(j => j.Kind is not ("path" or "charge") && (j.A == a.Id || j.B == a.Id));
             for (int k = 0; k < lobes; k++)
@@ -721,7 +732,7 @@ internal static partial class SpyroPlanner
                 var d = Dir(Range(rnd, 0, 6.2832));
                 double x = a.X + d.X * a.R * Range(rnd, 0.35, 0.7), y = a.Y + d.Y * a.R * Range(rnd, 0.35, 0.7);
                 int zone = plan.ZoneAt(x, y);
-                if (zone >= 0 && plan.Zones[zone].Liquid == null) L.Gems.Add((x, y, zone));
+                if (zone >= 0 && plan.Zones[zone].Liquid == null && !IsBuilt(plan.Zones[zone].Kind)) L.Gems.Add((x, y, zone));
             }
     }
 

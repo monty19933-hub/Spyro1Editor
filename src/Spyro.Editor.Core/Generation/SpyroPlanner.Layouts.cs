@@ -265,7 +265,8 @@ internal static partial class SpyroPlanner
             {
                 string how = rnd.Pick<string>([("flight", 2.0), ("open", 1.6), ("step", 1.0)]);
                 bool up = rnd.Chance(0.75);
-                if (how == "flight" ? Flight(L, hub, d, r, up, rnd) != null : Beside(L, hub, d, r, how, up, rnd, arena ? 300 : double.MaxValue) != null) continue;
+                // (Floating land: an island stands a good way over or under the next.)
+                if (how == "flight" ? Flight(L, hub, d, r, up, rnd, _apart ? 3 : 2) != null : Beside(L, hub, d, r, _apart && how == "open" ? "step" : how, up, rnd, arena ? 300 : double.MaxValue) != null) continue;
                 // A homeworld's room goes right against the plaza one way or another before it goes up a path.
                 if (_minRoom > 0 && (Flight(L, hub, d, r, !up, rnd) != null || Beside(L, hub, d, r, "open", false, rnd, arena ? 300 : double.MaxValue) != null)) continue;
             }

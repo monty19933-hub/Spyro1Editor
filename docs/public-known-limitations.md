@@ -48,6 +48,12 @@
   hill of terraces, a web of rooms, an arena, a gorge), a level with teal and
   rainbow gems, and two generated homeworlds in Artisans' place with all five
   doorways entered and left. The same seed makes a different level than in 2.2.
+- Random levels' houses (2.3) are solid blocks with a roof: they cannot be
+  entered, and their doors and windows are painted on. A river keeps a room's
+  middle dry and crosses a way into the room only under a bridge laid along that
+  way, so a level of small or crowded rooms may get none even with Rivers ticked;
+  houses likewise need floor to spare near a room's edge. The tops of castle walls are reached only by gliding
+  from somewhere higher. Islands in the sea keep their look's own water.
 - Shaped doorways (2.3): Spyro now flies in through the lower part of the
   opening (at most 60% of its height), so the flight differs a little from the
   game's own doorway it is copied from. Played in the emulator on Artisans'

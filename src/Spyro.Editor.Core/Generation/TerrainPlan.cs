@@ -314,7 +314,9 @@ internal sealed class TerrainPlan
         double sum = 0, weights = 0;
         foreach (var z in Zones)
         {
-            if (z.Kind is "pond" or "stone" or "bridge") continue;
+            // Water, stepping stones, bridges and what is built on the floor (houses, castle walls) lie on the land; they
+            // do not shape it.
+            if (z.Kind is "pond" or "stone" or "bridge" or "house" or "rampart") continue;
             double d = Math.Max(z.Sdf(x, y, Noise), 0) + 40;
             double w = 1 / (d * d * d * d);
             sum += w * z.FloorAt(x, y); weights += w;
@@ -332,7 +334,7 @@ internal sealed class TerrainPlan
         double lift = 0;
         foreach (var z in Zones)
         {
-            if (z.Liquid != null || z.IsPath || z.Kind is "stone") continue;
+            if (z.Liquid != null || z.IsPath || z.Kind is "stone" or "house") continue;
             double high = z.Z - floor;
             if (high <= 60) continue;
             // A held jump's rise, a margin, less what a glide sinks on the way from the high place's edge.
@@ -434,6 +436,8 @@ internal sealed class TerrainPlan
     public SurfaceRole WallRole(int low, int high, bool top, double tall)
     {
         if (high >= 0 && Zones[high].Kind == "bridge") return SurfaceRole.Wood;
+        // A house's walls and a castle wall are built of the look's stone or brick, top to foot.
+        if (high >= 0 && Zones[high].Kind is "house" or "rampart") return SurfaceRole.Brick;
         return top ? WallTop : WallFace;
     }
 

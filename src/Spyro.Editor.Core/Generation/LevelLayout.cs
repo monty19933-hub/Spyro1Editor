@@ -12,4 +12,7 @@ public sealed record LevelLink(int A, int B, string Kind, Vector3f From, Vector3
 }
 
 /// <summary>What the level may have besides its areas and paths.</summary>
-internal sealed record FeatureSet(bool Caves, bool ChargePaths, bool Glides, bool Hazards, bool Bridges, bool Secrets);
+/// <param name="Rivers">Rivers across big rooms, with bridges.</param>
+/// <param name="Houses">Houses round the rooms (a village or two).</param>
+/// <param name="Walls">Castle walls: along rooms' edges, battlements on a castle's rock walls.</param>
+internal sealed record FeatureSet(bool Caves, bool ChargePaths, bool Glides, bool Hazards, bool Bridges, bool Secrets, bool Rivers = false, bool Houses = false, bool Walls = false);

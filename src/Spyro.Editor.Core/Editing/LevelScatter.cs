@@ -713,6 +713,8 @@ public static class LevelScatter
             if (away.Count > 0 && rnd.Chance(0.5)) { Put(Kind.Egg, rnd.Pick(away), spawn); rows--; }
             else if (Hidden(300) is { } spot) { Put(Kind.Egg, point[spot], spawn); rows--; }
             else if (Pick([.. order.Where(c => open[c] >= 1 && Clear(point[c], 300))], c => 1.0 + walk[c] / 64.0) is { } any) { Put(Kind.Egg, point[any], spawn); rows--; }
+            // A small, full level: any open floor a little apart from the rest.
+            else if (Pick([.. order.Where(c => open[c] >= 1 && Clear(point[c], 190) && Dist2(point[c], spawn) >= 300 * 300)], c => 1.0 + walk[c] / 64.0) is { } close) { Put(Kind.Egg, point[close], spawn); rows--; }
             else { notes.Add($"Room for {n} of {request.Eggs} dragonfly eggs."); break; }
         }
 
@@ -917,9 +919,11 @@ public static class LevelScatter
         for (int left = Wanted(Kind.Tree), tries = 0; left > 0 && tries < 60; tries++)
         {
             var from = (inOpen ? rnd.Chance(0.8) : rnd.Chance(0.2)) && openGround.Count > 0 ? openGround : footOfWalls.Count > 0 ? footOfWalls : openGround;
-            bool small = tries >= 30 && left == Wanted(Kind.Tree);
+            bool small = tries >= 30 && left == Wanted(Kind.Tree), crowded = tries >= 45 && left == Wanted(Kind.Tree);
             if (small) from = someGround;
-            if (Pick([.. from.Where(c => Quiet(point[c]) && Dist2(point[c], spawn) >= (small ? 320 * 320 : 420 * 420) && Clear(point[c], small ? 170 : 230))], c => Math.Max(0.15, 1.2 - Away(point[c]))) is not { } anchor) continue;
+            // A small level full of things: one tree on whatever floor is a little clear.
+            if (crowded) from = [.. order.Where(c => open[c] >= 2)];
+            if (Pick([.. from.Where(c => Quiet(point[c]) && Dist2(point[c], spawn) >= (small ? 300 * 300 : 420 * 420) && Clear(point[c], crowded ? 120 : small ? 170 : 230))], c => Math.Max(0.15, 1.2 - Away(point[c]))) is not { } anchor) continue;
             int size = Math.Min(left, rnd.Pick<int>([(1, 50.0), (2, 30.0), (3, 20.0)]));
             Stand(Kind.Tree, point[anchor], spawn); left--;
             for (int n = 1; n < size; n++)

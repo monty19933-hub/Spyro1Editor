@@ -13,7 +13,8 @@ internal static partial class SpyroPlanner
         bool castle = style == LevelStyle.Castle;
         // The level's own leanings: every level makes much of some things and little of others.
         var lean = new Dictionary<string, double>();
-        foreach (string piece in new[] { "lookout", "mound", "mount", "pond", "ledges", "dell", "terrace" })
+        _rivers = 0;
+        foreach (string piece in new[] { "lookout", "mound", "mount", "pond", "ledges", "dell", "terrace", "river" })
             lean[piece] = rnd.Pick<double>([(0.35, 1.0), (1.0, 2.0), (2.4, 1.0)]);
         foreach (var a in L.Areas)
         {
@@ -45,12 +46,20 @@ internal static partial class SpyroPlanner
         // Round a room's edge: ledges to jump up, a hollow, a pool.
         void EdgeThings(PlannedArea a, double share)
         {
+            // A river first (it crosses the room from bank to bank; the ledges keep off it).
+            bool water = false;
+            if (features.Rivers && _rivers < 2 && a.R >= 480 && rnd.Chance(Math.Min(0.95, 0.9 * lean["river"])) && River(L, a, rnd)) { _rivers++; water = true; }
             int ledges = (int)Math.Round(rnd.Next(Tune.LedgesFrom, Tune.LedgesTo) * Math.Min(1.6, lean["ledges"]) * share + (a.R >= 880 ? 1 : 0));
             if (a.R < 420) ledges = Math.Min(ledges, 1);
             for (int k = 0; k < ledges; k++) Ledges(L, a, rnd, rnd.Chance(0.4) ? 2 : 1);
             if (a.R >= 430 && rnd.Chance(0.3 * lean["dell"])) Dell(L, a, rnd);
-            if (features.Hazards && a.R >= 600 && rnd.Chance(Math.Min(0.95, Tune.PoolChance * lean["pond"]))) Pond(L, a, rnd);
+            // Or a marsh at its side with a way out to an islet, or a pool.
+            if (!water && features.Hazards && a.R >= 540 && rnd.Chance(Math.Min(0.85, 0.55 * lean["pond"]))) water = Marsh(L, a, rnd) || Marsh(L, a, rnd) || Marsh(L, a, rnd);
+            if (!water && features.Hazards && a.R >= 600 && rnd.Chance(Math.Min(0.95, Tune.PoolChance * lean["pond"]))) Pond(L, a, rnd);
         }
+        // What is built on the floor, last, where there is room left: houses, castle walls.
+        if (features.Houses) Houses(L, style, rnd);
+        if (features.Walls) Ramparts(L, style, rnd);
     }
 
     private static TerrainZone Step(PlannedLevel L, PlannedArea a, double x, double y, double r, double z, int priority, string kind = "ledge")
@@ -84,7 +93,7 @@ internal static partial class SpyroPlanner
         if (FreeDirection(a, rnd) is not { } d) return false;
         double r1 = Math.Clamp(a.R * Range(rnd, 0.38, 0.5), 240, 400), off = a.R * Range(rnd, 0.72, 0.9);
         double x = a.X + d.X * off, y = a.Y + d.Y * off;
-        if (!Free(L, a, x, y, r1) || !OffJoins(L, a, x, y, r1)) return false;
+        if (!Free(L, a, x, y, r1) || !OffJoins(L, a, x, y, r1) || Overlaps(L, L.Plan.Zones.Count, x, y, r1 + 30)) return false;
         a.Taken.Add(d);
         var first = Step(L, a, x, y, r1, a.Z + SpyroMoves.DesignLedge, a.Priority + 1);
         L.Count("ledge");

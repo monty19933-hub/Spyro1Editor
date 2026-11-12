@@ -22,9 +22,9 @@ internal static partial class SpyroPlanner
         (LevelStyle.Castle, "terraces" or "field" or "plateaus") => "slab",
         (LevelStyle.Castle, _) => "box",
         (_, "terraces") => rnd.Chance(0.6) ? "slab" : "rock",
-        (LevelStyle.Canyon or LevelStyle.Caverns, _) => rnd.Pick<string>([("rock", 6.0), ("slab", 2.0), ("round", 1.0)]),
-        (LevelStyle.Islands or LevelStyle.SkyIslands, _) => rnd.Pick<string>([("rock", 3.0), ("round", 3.0), ("slab", 1.2)]),
-        _ => rnd.Pick<string>([("rock", 3.0), ("round", 2.6), ("slab", 2.0)]),
+        (LevelStyle.Canyon or LevelStyle.Caverns, _) => rnd.Pick<string>([("rock", 6.0), ("slab", 2.0), ("round", 0.4)]),
+        (LevelStyle.Islands or LevelStyle.SkyIslands, _) => rnd.Pick<string>([("rock", 3.4), ("round", 1.2), ("slab", 1.4)]),
+        _ => rnd.Pick<string>([("rock", 3.4), ("round", 0.8), ("slab", 2.4)]),
     };
 
     /// <summary>The distance from a point to a room's floor as planned so far (its outline, else its round floor).</summary>
@@ -40,7 +40,7 @@ internal static partial class SpyroPlanner
         var shaped = new HashSet<int>();
         foreach (var a in L.Areas.OrderByDescending(a => a.R).ThenBy(a => a.Id).ToList())
         {
-            string look = a.Look != "" ? a.Look : level == "box" ? "box" : rnd.Chance(0.82) ? level : rnd.Pick<string>([("round", 1.0), ("rock", 1.0), ("slab", 0.7)]);
+            string look = a.Look != "" ? a.Look : level == "box" ? "box" : rnd.Chance(0.82) ? level : rnd.Pick<string>([("round", 0.4), ("rock", 1.0), ("slab", 0.8)]);
             a.Look = look;
             if (look is "round" or "box") { shaped.Add(a.Id); continue; }
             var sides = new List<(double Nx, double Ny, double Off)>();
@@ -61,14 +61,14 @@ internal static partial class SpyroPlanner
             }
             else
             {
-                // A rock shelf: five to eight flat sides, some well out, some close in, longer one way.
-                int n = rnd.Next(5, 9);
+                // A rock shelf: four to seven flat sides, some well out, some close in, longer one way.
+                int n = rnd.Next(4, 8);
                 double t0 = Range(rnd, 0, 6.2832);
                 for (int k = 0; k < n; k++)
                 {
                     var e = Dir(t0 + 6.2832 * (k + Range(rnd, -0.3, 0.3)) / n);
                     double lengthwise = Math.Abs(e.X * u.X + e.Y * u.Y);
-                    double off = Range(rnd, 1.0, 1.3) * (1 + (along - 1) * lengthwise * lengthwise);
+                    double off = Range(rnd, 1.0, 1.42) * (1 + (along - 1) * lengthwise * lengthwise);
                     sides.Add((e.X, e.Y, a.R * Math.Max(1, off)));
                 }
             }

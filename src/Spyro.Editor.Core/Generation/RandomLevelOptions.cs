@@ -61,6 +61,15 @@ public sealed record RandomLevelOptions
     public bool? Bridges { get; init; }
     /// <summary>Hidden nooks off the level's rooms, with room for treasure.</summary>
     public bool? Secrets { get; init; }
+    /// <summary>Rivers (of the level's water, ooze or lava) across big rooms, with bridges.</summary>
+    public bool? Rivers { get; init; }
+    /// <summary>Houses round the rooms, a village or two.</summary>
+    public bool? Houses { get; init; }
+    /// <summary>Castle walls with towers along rooms' edges, and battlements along a castle's walls.</summary>
+    public bool? Walls { get; init; }
+    /// <summary>The liquid of the level's rivers, marshes, pools and moats (Water, Goo for ooze, Lava); null: the look's
+    /// own as a rule, now and then another.</summary>
+    public SurfaceRole? Liquid { get; init; }
     public LevelTextureMode Textures { get; init; } = LevelTextureMode.GameTextures;
     /// <summary>The user's own pictures (PNG or JPEG, any size) for roles, in place of the theme's.</summary>
     public IReadOnlyDictionary<SurfaceRole, string> Pictures { get; init; } = new Dictionary<SurfaceRole, string>();

@@ -20,7 +20,7 @@ internal static partial class SpyroPlanner
     {
         bool terraces = kind == "terraces", courts = kind == "courts", plateaus = kind == "plateaus";
         // Floating land and islands: from a few big islands to a whole archipelago.
-        int count = Rooms(weight, rnd, terraces ? 4 : 5, terraces ? 9 : 12) + (_gapTo < 500 ? rnd.Pick<int>([(-2, 1.0), (0, 1.0), (2, 1.0), (5, 1.0)]) : 0);
+        int count = Rooms(weight, rnd, terraces ? 4 : 5, terraces ? 9 : 12) + (_apart ? rnd.Pick<int>([(-2, 1.0), (0, 1.0), (2, 1.0), (5, 1.0)]) : 0);
         double grid = Range(rnd, 0, 6.2832);
         var climb = Dir(Range(rnd, 0, 6.2832));
         (double X, double Y) across = (-climb.Y, climb.X);
@@ -38,7 +38,7 @@ internal static partial class SpyroPlanner
         double upward = terraces ? 1 : rnd.Pick<double>([(0.75, 3.0), (0.5, 1.5), (0.3, 1.0)]);
         var top = core;
         // Islands and floating land: the parts mostly meet at other heights (one floor on the level is one island).
-        bool apart = _gapTo < 500;
+        bool apart = _apart;
         // A homeworld goes on until its parts hold its doorways (a big part two or three, a clearing one).
         bool More() => L.Areas.Count < count || _minRoom > 0 && L.Areas.Count < count + 4 &&
             L.Areas.Where(a => a.Kind is "start" or "clearing").Sum(a => a.R >= 900 ? 3 : a.R >= 700 ? 2 : a.R >= 580 ? 1 : 0) < 7;
