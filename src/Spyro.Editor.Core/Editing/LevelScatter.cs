@@ -829,7 +829,20 @@ public static class LevelScatter
                 float dx = point[b].X - point[c].X, dy = point[b].Y - point[c].Y, l = MathF.Sqrt(dx * dx + dy * dy);
                 return l <= 0 ? null : (dx / l, dy / l);
             }
-            // The maker's places first (ledges, lookouts, stones, paths): the harder to reach, the better the gems.
+            // Raised places first: the game keeps about a quarter of its gems up on ledges, terraces and the tops of
+            // climbs (measured: a quarter of its gem groups stand 40 units or more over the floor round them), and a
+            // ledge has room for a group only while nothing else stands there.
+            var up0 = raised.Where(c => walk[c] > 6).OrderBy(c => perch.Contains(c) ? 0 : 1).ThenBy(c => c.X).ThenBy(c => c.Y).ToList();
+            rnd.Shuffle(up0);
+            up0 = [.. up0.OrderBy(c => perch.Contains(c) ? 0 : 1)];
+            int upWant = (int)Math.Round(want * 0.24), upPlaced = 0;
+            foreach (var c in up0)
+            {
+                if (upPlaced >= upWant || places.Count >= want) break;
+                if (places.Any(q => Dist2(q.P, point[c]) < 260 * 260)) continue;
+                upPlaced += Group(point[c], perch.Contains(c) ? 2.8 : 2.2, perch.Contains(c) ? 3 : 4, Way(c));
+            }
+            // The maker's places next (ledges, lookouts, stones, paths): the harder to reach, the better the gems.
             if (places0.Count > 0)
             {
                 // Most of the high places (they are what a jump or a glide is for), a few of the plain ones.
@@ -837,7 +850,7 @@ public static class LevelScatter
                 foreach (var h in places0.OrderBy(g => g.X).ThenBy(g => g.Y).ThenBy(g => g.Z))
                 {
                     // The maker's places take up to half the gems; the rest lie about the level as the game's do.
-                    if (places.Count >= want / 2) break;
+                    if (places.Count >= upPlaced + want / 3) break;
                     var under = grid.Nearest(h);
                     bool tight = !open.TryGetValue(under, out int o) || o <= 3;
                     if (!rnd.Chance(tight ? keep : 0.1)) continue;
@@ -857,15 +870,17 @@ public static class LevelScatter
             for (int tries = 0; places.Count < want && tries < 12 * want + 40; tries++)
             {
                 double roll = rnd.NextDouble();
-                var from = roll < 0.13 && raisedByWall.Count > 0 ? raisedByWall : roll < 0.26 && raised.Count > 0 ? raised
-                    : roll < 0.62 && gemsByWall.Count > 0 ? gemsByWall : roll < 0.76 && byWall.Count > 0 ? byWall : roll < 0.89 && onPaths.Count > 0 ? onPaths : inRooms.Count > 0 ? inRooms : byWall;
+                bool upShort = upPlaced < upWant;
+                var from = upShort && roll < 0.1 && raisedByWall.Count > 0 ? raisedByWall : upShort && roll < 0.2 && raised.Count > 0 ? raised
+                    : roll < 0.66 && gemsByWall.Count > 0 ? gemsByWall : roll < 0.8 && byWall.Count > 0 ? byWall : roll < 0.9 && onPaths.Count > 0 ? onPaths : inRooms.Count > 0 ? inRooms : byWall;
                 if (from.Count == 0) break;
                 var c = rnd.Pick(from);
                 if (tries >= 8 * want && places.Any(q => Dist2(q.P, point[c]) < 160 * 160)) continue;
                 // Most of the game's gems lie where no enemy stands near.
                 if (tries < 6 * want && Guarded(point[c]) && rnd.Chance(0.6)) continue;
                 bool up = from == raised || from == raisedByWall;
-                Group(point[c], up ? (perch.Contains(c) ? 2.8 : 2.2) : from == gemsByWall || from == byWall ? 1.6 : from == onPaths ? 1.2 : 1, up && perch.Contains(c) ? 3 : 5, Way(c));
+                int got = Group(point[c], up ? (perch.Contains(c) ? 2.8 : 2.2) : from == gemsByWall || from == byWall ? 1.6 : from == onPaths ? 1.2 : 1, up && perch.Contains(c) ? 3 : 5, Way(c));
+                if (up) upPlaced += got;
             }
             // Still short: more along the walk, closer together each time round.
             for (float spacing = 215; places.Count < want && spacing >= 84; spacing *= 0.8f)
