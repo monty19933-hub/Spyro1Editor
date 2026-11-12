@@ -81,6 +81,14 @@ internal static partial class NewLevelBuildCases
         var resaved = SceneDocument.Read(SceneDocumentStore.PathForTarget(Workspace(window).RootPath, window.FreshSceneForTesting!.TargetKey));
         Console.WriteLine($"music changed to {other.DisplayName}: saved track {resaved.MusicTrack}");
         if (resaved.MusicTrack != other.TrackId) throw new InvalidOperationException("The built level's music did not save.");
+        // The window after making it says how Spyro gets there (a new level: no doorway yet, Choose Its Doorway…).
+        if (where == MainWindow.RandomLevelPlace.NewLevel)
+        {
+            string way = (string?)Invoke(window, "RandomLevelWayIn", 65, saved.Name) ?? "";
+            Console.WriteLine("way in: " + way);
+            if (!way.Contains("No doorway leads", StringComparison.Ordinal) || !way.Contains("Choose Its Doorway", StringComparison.Ordinal))
+                throw new InvalidOperationException("The made level's window does not say how to give it a doorway.");
+        }
         Snapshot(window, Path.Combine(outDir, $"random-level-{seed}.png"));
         Console.WriteLine("NEW_LEVEL_RANDOM_LEVEL_OK");
     }

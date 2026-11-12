@@ -626,7 +626,8 @@ public sealed partial class MainWindow
             if (doors.Length > 0) { _doorwaysSignature = ""; RefreshDoorwaysCard(); }
             _statusText.Text = $"{scene.Name} is made {where}. " + (doors.Length > 0 ? doors + " " : "") + (choice.FillIn ? "" : "Objects › Random objects fills it for you, or add objects and enemies with Add Object; then Create BIN.") + filled;
             if (RandomLevelChoiceForTesting == null)
-                await ShowRandomLevelReadyAsync(scene.Name, result.Report.Summary + (doors.Length > 0 ? "\n" + doors + " Terrain › Doorways moves, turns and reshapes them; their frames are ordinary tiles you can repaint." : ""), where, choice.FillIn);
+                await ShowRandomLevelReadyAsync(scene.Name, result.Report.Summary + (doors.Length > 0 ? "\n" + doors + " Terrain › Doorways moves, turns and reshapes them; their frames are ordinary tiles you can repaint." : ""), where, choice.FillIn,
+                    doors.Length > 0 ? null : choice.Place switch { RandomLevelPlace.NewLevel => 65, RandomLevelPlace.World => choice.WorldLevelId, _ => _currentLevel?.LevelId });
         }
         catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException or InvalidOperationException or System.Text.Json.JsonException)
         { _statusText.Text = "The random level could not be made: " + e.Message; }
@@ -657,7 +658,7 @@ public sealed partial class MainWindow
         return px;
     }
 
-    private async Task ShowRandomLevelReadyAsync(string name, string summary, string where, bool filled)
+    private async Task ShowRandomLevelReadyAsync(string name, string summary, string where, bool filled, int? levelId = null)
     {
         var content = new StackPanel { Margin = new Thickness(22), Spacing = 12 };
         content.Children.Add(new TextBlock { Text = $"{name} is ready to build on", FontSize = 20, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap });
@@ -669,10 +670,47 @@ public sealed partial class MainWindow
                 : "Next, its objects: Objects › Random objects fills the level for you (enemies, chests, gems of every colour, dragons, the way out: choose a level type and press Randomize), " +
                   "or add them yourself with Add Object. Terrain › Ground and Choose Texture repaint any surface; Game Settings changes the music and sky."
         });
-        var ok = NewButton("OK"); ok.Name = "RandomLevelReadyOk"; StyleModernPrimaryButton(ok, ModernBlue, 100); ok.HorizontalAlignment = HorizontalAlignment.Right;
-        content.Children.Add(ok);
+        // How Spyro gets there and back: the doorway that leads to it and the way Return Home brings him out.
+        string? way = levelId is int id ? RandomLevelWayIn(id, name) : null;
+        bool links = false; Window? shown = null;
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right };
+        if (way != null)
+        {
+            content.Children.Add(new TextBlock { Name = "RandomLevelReadyWay", TextWrapping = TextWrapping.Wrap, Text = way });
+            var choose = NewButton(levelId == 65 && !RandomLevelHasDoorway(65) ? "Choose Its Doorway…" : "Level Links…"); choose.Name = "RandomLevelReadyLinks";
+            ToolTip.SetTip(choose, "File ▾ › Level Links…: which homeworld doorway leads to each level, and where each level's Return Home vortex brings Spyro back.");
+            buttons.Children.Add(choose);
+            choose.Click += (_, _) => { links = true; shown?.Close(); };
+        }
+        var ok = NewButton("OK"); ok.Name = "RandomLevelReadyOk"; StyleModernPrimaryButton(ok, ModernBlue, 100);
+        buttons.Children.Add(ok);
+        content.Children.Add(buttons);
         var dialog = new Window { Name = "RandomLevelReadyDialog", Title = "Random Level", Width = 540, SizeToContent = SizeToContent.Height, CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = content };
         ok.Click += (_, _) => dialog.Close();
+        shown = dialog;
         await dialog.ShowDialog(this);
+        if (links && levelId is int focus) await ShowLevelLinksAsync(focus);
+    }
+
+    /// <summary>Whether a homeworld doorway is sent to this level (portal routes).</summary>
+    private bool RandomLevelHasDoorway(int levelId)
+    {
+        try { return PortalRouteStore.Capture(_workspace.RootPath).Document.Destinations.Any(d => d.DestinationLevelId == levelId); }
+        catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException or UnauthorizedAccessException) { return false; }
+    }
+
+    /// <summary>A sentence on how Spyro gets to a level just made and back out of it.</summary>
+    private string? RandomLevelWayIn(int levelId, string name)
+    {
+        if (levelId >= NewWorldDocument.Homeworld)
+            return levelId == NewWorldDocument.Homeworld ? null : $"Spyro gets to {name} through its doorway in your world's homeworld, and its Return Home vortex brings him back there.";
+        if (levelId == 65)
+            return RandomLevelHasDoorway(65)
+                ? $"A homeworld doorway leads to {name}; its Return Home vortex brings Spyro back out of it. Level Links… shows or changes which."
+                : $"No doorway leads to {name} yet. Choose Its Doorway… sends one of a homeworld's doorways to it (its Return Home vortex then brings Spyro back out of that doorway), or choose {name} under New Game starts in when you Create BIN.";
+        if (!PortalRouteDocument.IsLevelId(levelId) || levelId % 10 == 0) return null;
+        var door = HomeworldPortalControlCatalog.All.FirstOrDefault(p => p.DestinationLevelId == levelId);
+        string home = door == null ? "its homeworld" : _retailCatalog.FindByKey(door.HomeworldKey)?.DisplayName ?? "its homeworld";
+        return $"Spyro gets to {name} through the doorway in {home} that led to the level it replaces, and its Return Home vortex brings him back out of it. Level Links… sends another doorway to it.";
     }
 }
