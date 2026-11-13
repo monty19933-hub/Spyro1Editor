@@ -11,11 +11,14 @@ using Spyro.Editor.Core.Universal;
 
 namespace Spyro.Editor.App.Views;
 
-/// <summary>Terrain › World Entrance, in one of the game's own homeworlds: the doorway into the project's new world
-/// (<see cref="NewWorldDocument"/>) placed in the world's entry homeworld — on the selected tile or in front of the camera,
-/// then moved, turned, reshaped, retextured with the homeworld's own textures, or removed. It is saved as
-/// <c>world-entrance.json</c> and shown over the level as a preview; Create BIN builds it into the homeworld
-/// (<see cref="NativeWorldEntrance"/>). The card also says whether the homeworld has room for it.</summary>
+/// <summary>Terrain › World Entrance, in one of the game's own homeworlds. Players reach the project's new world
+/// (<see cref="NewWorldDocument"/>) by balloon, so the card first says that no doorway is needed; a doorway as well is the
+/// user's own choice (<see cref="NewWorldDocument.Doorway"/>): Add a Doorway As Well… places it, Build It As Well uses one
+/// placed before. A world with a doorway (or off the balloon route) has it placed in the world's entry homeworld — on the
+/// selected tile or in front of the camera, then moved, turned, reshaped, retextured with the homeworld's own textures, or
+/// removed (which makes the world balloon-only again). It is saved as <c>world-entrance.json</c> and shown over the level
+/// as a preview; Create BIN builds it into the homeworld (<see cref="NativeWorldEntrance"/>). The card also says whether
+/// the homeworld has room for it.</summary>
 public sealed partial class MainWindow
 {
     private Border? _worldEntranceCard;
@@ -134,7 +137,8 @@ public sealed partial class MainWindow
     private (NewWorldDocument? World, WorldEntranceDocument? Entrance) WorldEntranceProject()
     {
         if (string.IsNullOrEmpty(_workspace.RootPath)) return (null, null);
-        try { return (NewWorldDocument.Read(_workspace.RootPath), WorldEntranceDocument.Read(_workspace.RootPath)); }
+        // The world under its homeworld's name, as Create BIN builds it.
+        try { return (NewWorldDocument.Read(_workspace.RootPath)?.NamedAfter(SavedWorldHomeworldName()), WorldEntranceDocument.Read(_workspace.RootPath)); }
         catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException or UnauthorizedAccessException)
         {
             Spyro.Editor.Core.Diagnostics.EditorDiagnostics.RecordWarning("World entrance", e.Message);
@@ -170,20 +174,47 @@ public sealed partial class MainWindow
         }
         bool here = world.EntryHomeworldKey == level.Key;
         string entry = _retailCatalog.FindByKey(world.EntryHomeworldKey)?.DisplayName ?? world.EntryHomeworldKey;
-        var mine = here && entrance?.HomeworldKey == level.Key ? entrance : null;
+        var placedHere = entrance?.HomeworldKey == level.Key ? entrance : null;
+        if (world.BalloonOnly)
+        {
+            // Reached by balloon: no doorway is needed; one as well is optional, and one placed before is not built.
+            _worldEntranceUseHere.IsVisible = false;
+            _worldEntrancePlace.IsVisible = true;
+            _worldEntrancePlace.IsEnabled = !_worldEntranceBusy;
+            _worldEntrancePlace.Content = placedHere == null ? "Add a Doorway As Well…" : "Build It As Well";
+            ToolTip.SetTip(_worldEntrancePlace, placedHere == null
+                ? $"Optional: a doorway into {WorldEntranceName(world)} in {level.DisplayName} as well as the balloon. Choose its shape and size; it goes on the selected tile or in front of the camera, facing the camera."
+                : $"Optional: build the doorway placed here before into {level.DisplayName}, as a second way into {WorldEntranceName(world)} besides the balloon.");
+            _worldEntranceTools.IsVisible = false;
+            string home = WorldHomeworldNameOr(world);
+            _worldEntranceNote.Text = $"{WorldAccessSentence(world, world.BalloonPlaceWith(true))} No doorway is needed in {level.DisplayName}." +
+                (placedHere == null
+                    ? $" A doorway as well is optional: Add a Doorway As Well… puts one here, and {home} then needs a doorway back out to {level.DisplayName} too (Terrain › Doorways in {home})."
+                    : $" A doorway placed here before ({DescribeWorldEntrance(placedHere)}) is kept in your project but not built. Build It As Well puts it in the game as a second way in; " +
+                      $"{home} then needs a doorway back out to {level.DisplayName} too (Terrain › Doorways in {home}).");
+            if (_worldEntranceSignature != "") { _viewport.SetWorldEntrancePreview([], []); _worldEntranceSignature = ""; }
+            if (_worldEntranceRoom != null) _worldEntranceRoom.Text = "";
+            return;
+        }
+        var mine = here ? placedHere : null;
+        ToolTip.SetTip(_worldEntrancePlace, "Put the doorway into your new world here: choose its shape and size; it goes on the selected tile or in front of the camera, facing the camera.");
         _worldEntranceUseHere.IsVisible = !here;
         _worldEntrancePlace.IsVisible = here;
         _worldEntrancePlace.IsEnabled = !_worldEntranceBusy;
         _worldEntrancePlace.Content = mine == null ? "Place Entrance…" : "Place Again…";
         _worldEntranceTools.IsVisible = mine != null;
         _worldEntranceTools.IsEnabled = !_worldEntranceBusy;
-        _worldEntranceNote.Text = !here
-            ? $"{WorldEntranceName(world)} is entered from {entry}. Open {entry} to place its doorway there, or Use This Homeworld."
+        // A doorway you chose as well as the balloon (or the only way in, off the balloon route).
+        string chosen = world.Balloon is { OnRoute: false }
+            ? $"{WorldEntranceName(world)} is off the balloon route, so this doorway is the only way in. "
+            : $"Players fly to {WorldEntranceName(world)} by balloon and, as you chose, can walk in through a doorway too (Remove Entrance makes it balloon only again). ";
+        _worldEntranceNote.Text = chosen + (!here
+            ? $"{WorldEntranceName(world)} is entered from {entry}, so its doorway goes there: open {entry} to place it, or Use This Homeworld."
             : mine == null
-                ? $"{WorldEntranceName(world)} has no doorway yet. Place Entrance… puts it in {level.DisplayName}: on the selected tile or in front of the camera. " +
+                ? $"It has no doorway yet. Place Entrance… puts it in {level.DisplayName}: on the selected tile or in front of the camera. " +
                   $"{level.DisplayName} keeps its own doorways."
                 : $"The doorway to {WorldEntranceName(world)}: {DescribeWorldEntrance(mine)}. It is drawn over the level here and built into {level.DisplayName} by Create BIN; " +
-                  "in the game the opening shows your world's sky.";
+                  "in the game the opening shows your world's sky.");
         string signature = mine == null ? "" : System.Text.Json.JsonSerializer.Serialize(mine);
         if (signature != _worldEntranceSignature)
         {
@@ -264,17 +295,25 @@ public sealed partial class MainWindow
         return (level, world, entrance);
     }
 
+    /// <summary>The world reached by balloon with a doorway in <paramref name="level"/> as well (the user's choice): the
+    /// route it had stays as it was (a route never chosen followed the homeworld it was entered from).</summary>
+    private static NewWorldDocument WithDoorwayIn(NewWorldDocument world, LevelDefinition level) =>
+        world with { Doorway = true, EntryHomeworldKey = level.Key, Balloon = world.Balloon ?? world.BalloonPlaceWith(true) };
+
     private async Task PlaceWorldEntranceAsync()
     {
         if (_worldEntranceBusy || OpenOriginalHomeworld() is not { } level) return;
         var (world, entrance) = WorldEntranceProject();
         if (world == null) { _statusText.Text = "Make a world first with File ▾ › New World…."; return; }
-        if (world.EntryHomeworldKey != level.Key) { _statusText.Text = $"{world.Name} is entered from another homeworld. Use This Homeworld first."; return; }
+        // Reached by balloon only: this adds a doorway as well (one placed here before is used as it is).
+        bool asWell = world.BalloonOnly;
+        if (asWell && entrance?.HomeworldKey == level.Key) { await UseWorldEntranceAsWellAsync(level, world); return; }
+        if (!asWell && world.EntryHomeworldKey != level.Key) { _statusText.Text = $"{world.Name} is entered from another homeworld. Use This Homeworld first."; return; }
         TerrainPolygon? tile = _selectedTerrain is { IsTerrainRemoved: false } t ? t : null;
         var current = entrance?.HomeworldKey == level.Key ? entrance : null;
         WorldEntranceChoice? choice = WorldEntranceChoiceForTesting != null ? WorldEntranceChoiceForTesting()
-            : await ShowWorldEntranceDialogAsync(current == null ? "Place Entrance" : "Place Entrance Again", current, place: true, tile != null);
-        if (choice == null) { _statusText.Text = "The entrance was not placed."; return; }
+            : await ShowWorldEntranceDialogAsync(asWell ? "Add a Doorway As Well" : current == null ? "Place Entrance" : "Place Entrance Again", current, place: true, tile != null);
+        if (choice == null) { _statusText.Text = asWell ? $"No doorway was added: {world.Name} is still reached by balloon only." : "The entrance was not placed."; return; }
         _worldEntranceBusy = true;
         try
         {
@@ -288,11 +327,33 @@ public sealed partial class MainWindow
             var shape = DoorwayShapes.Find(choice.ShapeId) ?? DoorwayShapes.StoneArch;
             var placed = new WorldEntranceDocument(1, level.Key, position, heading, shape.Id, choice.Scale)
             { FaceTexture = current?.FaceTexture ?? -1, SideTexture = current?.SideTexture ?? -1 };
+            if (asWell)
+            {
+                try { await WithDoorwayIn(world, level).SaveAsync(_workspace.RootPath); }
+                catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException) { _statusText.Text = "Could not save your world: " + e.Message; return; }
+            }
             await SaveWorldEntranceAsync(placed,
                 $"Placed a {shape.Name.ToLowerInvariant()} doorway to {world.Name} {where} in {level.DisplayName}. Spyro walks in heading {CompassWord(heading)}; " +
-                "Create BIN builds it into the homeworld (its frame uses the homeworld's own arch texture until you choose another).");
+                "Create BIN builds it into the homeworld (its frame uses the homeworld's own arch texture until you choose another)." +
+                (asWell ? $" Players can now walk into {world.Name} through it as well as fly there by balloon; {WorldHomeworldNameOr(world)} needs a doorway back out to {level.DisplayName} too " +
+                          $"(open it, then Terrain › Doorways › Add Doorway… › {level.DisplayName})." : ""));
         }
         finally { _worldEntranceBusy = false; RefreshWorldEntranceCard(); }
+    }
+
+    /// <summary>Build It As Well: the doorway placed in this homeworld before (kept, unbuilt, while the world was reached by
+    /// balloon only) goes into the game as a second way in.</summary>
+    private async Task UseWorldEntranceAsWellAsync(LevelDefinition level, NewWorldDocument world)
+    {
+        try
+        {
+            await WithDoorwayIn(world, level).SaveAsync(_workspace.RootPath);
+            _statusText.Text = $"Players can now walk into {world.Name} through its doorway in {level.DisplayName} as well as fly there by balloon. " +
+                $"{WorldHomeworldNameOr(world)} needs a doorway back out to {level.DisplayName} too (open it, then Terrain › Doorways › Add Doorway… › {level.DisplayName}); Remove Entrance makes it balloon only again.";
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        { _statusText.Text = "Could not save your world: " + e.Message; }
+        RefreshWorldEntranceCard();
     }
 
     private async Task ChangeWorldEntranceAsync(Func<WorldEntranceDocument, WorldEntranceDocument> change, Func<WorldEntranceDocument, string> done)
@@ -355,11 +416,21 @@ public sealed partial class MainWindow
     private async Task RemoveWorldEntranceAsync()
     {
         if (CurrentWorldEntrance() is not { } current) return;
+        // On the balloon route the world is then reached by balloon only again; off it, there would be no way in.
+        bool onRoute = current.World.Balloon is not { OnRoute: false };
         bool confirmed = WorldEntranceRemoveConfirmForTesting != null ? WorldEntranceRemoveConfirmForTesting()
             : await ShowConfirmationAsync("WorldEntranceRemoveDialog", "Remove Entrance", $"Remove the doorway to {current.World.Name}?",
-                $"Without it the game has no way into your world. You can place it again with Place Entrance….", "Remove Entrance");
+                onRoute
+                    ? $"Players then reach {current.World.Name} by balloon only, like the game's own worlds: its balloonist flies Spyro back, and Create BIN takes its doorway back out of {WorldHomeworldNameOr(current.World)}. You can add a doorway again with Add a Doorway As Well…."
+                    : "Your world is off the balloon route, so without it the game has no way into your world. You can place it again with Place Entrance….", "Remove Entrance");
         if (!confirmed) return;
-        await SaveWorldEntranceAsync(null, $"Removed the doorway to {current.World.Name} from {current.Level.DisplayName}.");
+        if (onRoute && current.World.Doorway)
+        {
+            try { await (current.World with { Doorway = false }).SaveAsync(_workspace.RootPath); }
+            catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException) { _statusText.Text = "Could not save your world: " + e.Message; return; }
+        }
+        await SaveWorldEntranceAsync(null, $"Removed the doorway to {current.World.Name} from {current.Level.DisplayName}." +
+            (onRoute ? $" Players reach {current.World.Name} by balloon only now; its balloonist flies Spyro back." : " Your world is off the balloon route, so it has no way in until you place a doorway again."));
     }
 
     private async Task UseThisHomeworldForWorldAsync()

@@ -18,9 +18,13 @@ namespace Spyro.Editor.Core.Exporting;
 /// <item>Each level's overlay and data go to new WAD entries from <see cref="FirstEntry"/>; its fixed facts (name,
 /// music, kill height, gem and dragon totals, initializer callbacks) to the window's records. Objects are composed per
 /// level; the executable may change only where the window carries it (<see cref="RequireOnlyWindowChanges"/>).</item>
-/// <item>The way in (<see cref="WorldEntranceDocument"/>, optional) is built into the game's homeworld the world is entered
-/// from (<see cref="NativeWorldEntrance"/>, after every other edit of that homeworld); homeworld 70 then needs its doorway
-/// back there, and that doorway needs the way in.</item>
+/// <item>Players reach the world by balloon (<see cref="WorldAccess"/>): the balloonists' route is built into every
+/// homeworld (<see cref="NativeBalloonTravel"/>). Reached by balloon only (<see cref="NewWorldDocument.BalloonOnly"/>, the
+/// default), nothing is built into the game's homeworlds, homeworld 70 must have a balloonist to fly Spyro back and no
+/// doorway back out (<see cref="WayInRefusal"/>). With a doorway as well (the user's choice) or off the route, the way in
+/// (<see cref="WorldEntranceDocument"/>) is built into the game's homeworld the world is entered from
+/// (<see cref="NativeWorldEntrance"/>, after every other edit of that homeworld); homeworld 70 then needs its doorway back
+/// there, and that doorway needs the way in.</item>
 /// <item>The draw-buffer guard bounds each level by its near distance; the window is installed last, then the card
 /// menu's save overlay is patched, and the image is written with its readback checked.</item>
 /// </list></summary>
@@ -58,6 +62,42 @@ public static class NativeNewWorldExport
     {
         /// <summary>What the balloonists' route did to each homeworld (empty: the world is off the route).</summary>
         public IReadOnlyList<NativeBalloonTravel.Applied> Balloonists { get; init; } = [];
+        /// <summary>The finished game has a doorway into the world in the homeworld it is entered from.</summary>
+        public bool DoorwayIn { get; init; }
+    }
+
+    /// <summary>Why the world's way in and out can't be built as it stands (null: it can), before anything is built:
+    /// reached by balloon only, the homeworld needs its balloonist and no doorway back out (each refusal carries the
+    /// repair Fix It For Me makes); with a doorway, the way in and the way back go together, between the world and the
+    /// homeworld it is entered from. <paramref name="entrance"/>: the placed doorway (world-entrance.json), or null.</summary>
+    public static InvalidDataException? WayInRefusal(NewWorldDocument world, SceneDocument homeworld, bool homeworldHasBalloonist,
+        WorldEntranceDocument? entrance, LevelDefinition entryHome, LevelCatalog catalog)
+    {
+        var backs = WorldAccess.WaysBack(homeworld);
+        string Name(int id) => catalog.Levels.FirstOrDefault(l => l.LevelId == id)?.DisplayName ?? $"level {id}";
+        if (world.BalloonOnly)
+        {
+            if (backs.Count > 0)
+                return ExportRepair.Refusal($"{homeworld.Name} still has a doorway back out to {Name(backs[0].DestinationLevelId)}, but your world is reached by balloon only " +
+                    $"({WorldAccess.Possessive(homeworld.Name)} balloonist flies Spyro back), so that doorway would lead nowhere. Take it out with Terrain › Doorways in {homeworld.Name}, " +
+                    $"or choose a doorway as well with Terrain › World Entrance in {entryHome.DisplayName}.", new ExportRepair.RemoveWorldWayBack());
+            if (!homeworldHasBalloonist)
+                return ExportRepair.Refusal($"{homeworld.Name} has no balloonist, so Spyro could not fly back out of your world (it is reached by balloon only). " +
+                    $"Add him with his balloon in {homeworld.Name}: Objects › Random objects (\"The way out\"), or Add Object… › Balloonist.", new ExportRepair.PlaceWorldBalloonist());
+            return null;
+        }
+        if (backs.Any(p => p.DestinationLevelId != entryHome.LevelId))
+            return new InvalidDataException($"{homeworld.Name}'s doorway back leads to {Name(backs.First(p => p.DestinationLevelId != entryHome.LevelId).DestinationLevelId)}, " +
+                $"but your world is entered from {entryHome.DisplayName}. Point it at {entryHome.DisplayName}.");
+        if (entrance != null && !string.Equals(entrance.HomeworldKey, entryHome.Key, StringComparison.OrdinalIgnoreCase))
+            return ExportRepair.Refusal($"The way into your world stands in {catalog.FindByKey(entrance.HomeworldKey)?.DisplayName ?? entrance.HomeworldKey}, " +
+                $"but your world is entered from {entryHome.DisplayName}. Place it in {entryHome.DisplayName}.", new ExportRepair.PlaceWorldEntrance(entryHome.Key));
+        if (entrance != null && backs.Count == 0)
+            return new InvalidDataException($"{homeworld.Name} needs a doorway back to {entryHome.DisplayName}, or Spyro can't leave your world: add one with Add Doorway in {homeworld.Name}.");
+        if (entrance == null && backs.Count > 0)
+            return ExportRepair.Refusal($"{homeworld.Name}'s doorway back to {entryHome.DisplayName} needs the way into your world there: place it in {entryHome.DisplayName} (World Entrance).",
+                new ExportRepair.PlaceWorldEntrance(entryHome.Key));
+        return null;
     }
 
     /// <summary>Adds the world to the finished image at <paramref name="imagePath"/> (rewritten in place).</summary>
@@ -81,21 +121,16 @@ public static class NativeNewWorldExport
             if (level.Document.WorldLevelId == NewWorldDocument.Homeworld && UniversalDragonRows.FirstDragon(level.Placements, donors) != null)
                 throw new InvalidDataException($"{level.Document.Name} has a dragon, but dragons can't be rescued in your new world's homeworld yet. Remove it.");
         }
-        // The way in and the way back go together, between the world and the homeworld it is entered from.
+        // How players get in and out: by balloon only (the homeworld's balloonist flies Spyro back; nothing is built into
+        // the game's homeworlds), or with a doorway as well, whose way in and way back go together.
         var entryHome = catalog.FindByKey(world.EntryHomeworldKey) ?? throw new InvalidDataException("The level catalog has no " + world.EntryHomeworldKey + ".");
-        var homeDocument = levels.First(l => l.Document.WorldLevelId == NewWorldDocument.Homeworld).Document;
-        var backs = (homeDocument.Portals ?? []).Where(p => !NewWorldDocument.LevelSlots.Contains(p.DestinationLevelId)).ToList();
-        if (backs.Any(p => p.DestinationLevelId != entryHome.LevelId))
-            throw new InvalidDataException($"{homeDocument.Name}'s doorway back leads to {catalog.Levels.FirstOrDefault(l => l.LevelId == backs[0].DestinationLevelId)?.DisplayName}, " +
-                $"but your world is entered from {entryHome.DisplayName}. Point it at {entryHome.DisplayName}.");
-        if (entrance != null && !string.Equals(entrance.HomeworldKey, entryHome.Key, StringComparison.OrdinalIgnoreCase))
-            throw ExportRepair.Refusal($"The way into your world stands in {catalog.FindByKey(entrance.HomeworldKey)?.DisplayName ?? entrance.HomeworldKey}, " +
-                $"but your world is entered from {entryHome.DisplayName}. Place it in {entryHome.DisplayName}.", new ExportRepair.PlaceWorldEntrance(entryHome.Key));
-        if (entrance != null && backs.Count == 0)
-            throw new InvalidDataException($"{homeDocument.Name} needs a doorway back to {entryHome.DisplayName}, or Spyro can't leave your world: add one with Add Doorway in {homeDocument.Name}.");
-        if (entrance == null && backs.Count > 0)
-            throw ExportRepair.Refusal($"{homeDocument.Name}'s doorway back to {entryHome.DisplayName} needs the way into your world there: place it in {entryHome.DisplayName} (World Entrance).",
-                new ExportRepair.PlaceWorldEntrance(entryHome.Key));
+        var homeLevel = levels.First(l => l.Document.WorldLevelId == NewWorldDocument.Homeworld);
+        var homeDocument = homeLevel.Document;
+        bool hasBalloonist = homeLevel.Placements.Any(p => !p.Retired && p.SpecialId == null && p.SourceRowIndex >= 0 && !string.IsNullOrEmpty(p.SourceLevelKey) &&
+            BinaryPrimitives.ReadUInt16LittleEndian(donors.Get(p.SourceLevelKey).Data.Row(p.SourceRowIndex).AsSpan(0x36)) is >= UniversalBalloonistRows.BalloonistClass and <= UniversalBalloonistRows.BalloonistClass + 5);
+        if (WayInRefusal(world, homeDocument, hasBalloonist, entrance, entryHome, catalog) is { } wayIn) throw wayIn;
+        // A doorway placed before (world-entrance.json) stays in the project, and is not built while the world is reached by balloon only.
+        if (world.BalloonOnly) entrance = null;
         // The homeworld's objects fit its save rows (said here, by name and number, before anything is built).
         int homeRoom = HomeworldSaveRoom(donors, catalog);
         if (homeDocument.Ledger.Entries.Count > homeRoom)
@@ -107,9 +142,6 @@ public static class NativeNewWorldExport
                 $"Take {over} out of {homeDocument.Name} (loose gems are the easiest).", new ExportRepair.FitHomeworldObjects(homeRoom));
         }
         // The world's place on the balloonists' route (not chosen: by whether its homeworld has a balloonist).
-        var homeLevel = levels.First(l => l.Document.WorldLevelId == NewWorldDocument.Homeworld);
-        bool hasBalloonist = homeLevel.Placements.Any(p => !p.Retired && p.SpecialId == null && p.SourceRowIndex >= 0 && !string.IsNullOrEmpty(p.SourceLevelKey) &&
-            BinaryPrimitives.ReadUInt16LittleEndian(donors.Get(p.SourceLevelKey).Data.Row(p.SourceRowIndex).AsSpan(0x36)) is >= UniversalBalloonistRows.BalloonistClass and <= UniversalBalloonistRows.BalloonistClass + 5);
         var place = world.BalloonPlaceWith(hasBalloonist);
         if (place.Refusal() is { } placeWhy) throw new InvalidDataException("The world's place on the balloon route: " + placeWhy);
         var route = place.Route();
@@ -196,6 +228,10 @@ public static class NativeNewWorldExport
             rebuilt[entryHome.SourceWadEntry] = entranceResult.LevelData; rebuilt[entryHome.SourceWadEntry - 1] = entranceResult.Overlay;
             NativeSpyroColours.ApplyToEntries(rebuilt);
         }
+        bool doorwayIn = entranceResult != null || DoorwayPresent(image.EntryBytes(entryHome.SourceWadEntry));
+        // Reached by balloon only, nothing may have put a doorway into the world in the game's homeworld.
+        if (world.BalloonOnly && doorwayIn)
+            throw new InvalidDataException($"{entryHome.DisplayName} was built with a doorway into your world, but your world is reached by balloon only. Create BIN again; if it happens again, send the diagnostic report.");
         // The balloonists' route with the world on it: every homeworld's talk and menu routines, and the decision code
         // and lines of the balloonists around the world's place (the overlays keep their length).
         List<NativeBalloonTravel.Applied> balloonists = [];
@@ -215,7 +251,7 @@ public static class NativeNewWorldExport
                     if (applied.Balloonists == 0 && route.AfterLevelId != 60)
                         throw new InvalidDataException($"{homeDocument.Name} needs a balloonist: on the balloon route your world lies before " +
                             $"{catalog.Levels.First(l => l.LevelId == route.AfterLevelId + 10).DisplayName}, and only its own balloonist can fly Spyro on. Add one " +
-                            "(Objects › Random objects places him with his balloon, or Add Object… › a balloonist and a balloon), or put the world last on the route in World Settings.");
+                            "(Objects › Random objects places him with his balloon, or Add Object… › a balloonist and a balloon), or put the world last on the route in File ▾ › World's Balloon Route….");
                     balloonists.Add(applied);
                     continue;
                 }
@@ -292,7 +328,15 @@ public static class NativeNewWorldExport
             File.Move(pending, imagePath, overwrite: true);
         }
         finally { if (File.Exists(pending)) File.Delete(pending); }
-        return new Result(guests, near, placement.AfterMovies, entranceResult) { Balloonists = balloonists };
+        return new Result(guests, near, placement.AfterMovies, entranceResult) { Balloonists = balloonists, DoorwayIn = doorwayIn };
+    }
+
+    /// <summary>Whether a homeworld's data holds the doorway into the new world (false for data that is not a game
+    /// homeworld's own, such as one the editor rebuilt).</summary>
+    private static bool DoorwayPresent(byte[] levelData)
+    {
+        try { return NativeWorldEntrance.Present(levelData); }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException) { return false; }
     }
 
     /// <summary>Composing a level's objects may change the executable only where the window carries the change into the

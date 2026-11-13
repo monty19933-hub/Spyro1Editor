@@ -3,13 +3,15 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Spyro.Editor.Core.Editing;
+using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
 
 namespace Spyro.Editor.App.Views;
 
 /// <summary>File ▾ › New World…: a seventh world of the project's own — a homeworld named after the world and up to four
 /// levels, each starting as the New Level meadow (<see cref="StarterLevel"/>) and edited like any level you build. They
-/// appear in the level picker after the game's own levels.</summary>
+/// appear in the level picker after the game's own levels. Players fly there by balloon (<see cref="WorldAccess"/>): the
+/// new homeworld gets its balloonist near where Spyro arrives at once (when the original disc is chosen).</summary>
 public sealed partial class MainWindow
 {
     /// <summary>Answers the New World dialog in tests (null: cancel).</summary>
@@ -89,9 +91,13 @@ public sealed partial class MainWindow
             await world.SaveAsync(root);
             await OpenWorldLevelAsync(NewWorldDocument.Homeworld);
             ApplyEditorExperienceForCurrentLevel(_modernTerrainWorkspaceTab);
-            string entry = _retailCatalog.FindByKey(choice.EntryHomeworldKey)?.DisplayName ?? choice.EntryHomeworldKey;
+            // Players reach the world by balloon: its homeworld gets the balloonist who flies Spyro back at once.
+            var (stood, how) = await PlaceWorldBalloonistHereAsync();
+            string balloonist = stood && how.Length > 0 ? " " + how
+                : stood ? "" : $" Its balloonist, who flies Spyro back, is still to come: Create BIN asks for him and Fix It For Me stands him near where Spyro arrives ({how.TrimEnd('.')}).";
             _statusText.Text = $"{choice.Name} is made: its homeworld and {Count(choice.Levels, "level", "levels")}, all in the level list. " +
-                $"Players reach it through a doorway in {entry}, and by balloon once its homeworld has a balloonist (File ▾ › World's Balloon Route… says where it lies among the game's worlds). Build each level like any level of your own.";
+                WorldAccessSentence(world, world.BalloonPlaceWith(true)) + balloonist +
+                " File ▾ › World's Balloon Route… changes where it lies among the game's worlds and what the balloonists ask. Build each level like any level of your own.";
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         { _statusText.Text = "Could not make the new world: " + e.Message; }
@@ -104,11 +110,12 @@ public sealed partial class MainWindow
         content.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, LineHeight = 20,
-            Text = "A world of your own after the game's six: a homeworld and up to four levels. Each starts as a meadow you can " +
-                   "reshape and paint (Terrain › Ground) and fill with objects. Players walk in through a doorway in one of the game's homeworlds."
+            Text = "A world of your own beside the game's six: a homeworld and up to four levels. Each starts as a meadow you can " +
+                   "reshape and paint (Terrain › Ground) and fill with objects. Players fly there by balloon, like the game's own worlds: " +
+                   "the balloonist of the homeworld you choose below flies Spyro there, and your world's own balloonist flies him back."
         });
-        var name = new TextBox { Name = "NewWorldName", Text = existing?.Name ?? "SKY ISLES", MaxLength = NewWorldDocument.MaxNameLength, Watermark = "WORLD NAME" };
-        content.Children.Add(new TextBlock { Text = "Name (shown on the doorway, in the inventory and as its homeworld's name)" });
+        var name = new TextBox { Name = "NewWorldName", Text = existing?.Name ?? "SKY ISLES", MaxLength = NativeLevelWindow.MaxNameLength, Watermark = "WORLD NAME" };
+        content.Children.Add(new TextBlock { Text = "Name (its homeworld's too; the balloonists' menus and the inventory show it)" });
         content.Children.Add(name);
         var homeworlds = NewWorldDocument.HomeworldKeys.Select(k => _retailCatalog.FindByKey(k)).OfType<LevelDefinition>().ToList();
         var entry = new ComboBox
@@ -116,7 +123,7 @@ public sealed partial class MainWindow
             Name = "NewWorldEntry", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = homeworlds.Select(h => h.DisplayName).ToArray(),
             SelectedIndex = Math.Max(0, homeworlds.FindIndex(h => h.Key == (existing?.EntryHomeworldKey ?? "artisans")))
         };
-        content.Children.Add(new TextBlock { Text = "Its doorway is in" });
+        content.Children.Add(new TextBlock { Text = "Players fly there from (its place on the balloon route: File ▾ › World's Balloon Route… changes it later)", TextWrapping = TextWrapping.Wrap });
         content.Children.Add(entry);
         var count = new ComboBox
         {
@@ -138,8 +145,8 @@ public sealed partial class MainWindow
         void Check()
         {
             string text = (name.Text ?? "").Trim().ToUpperInvariant();
-            bool ok = NewWorldDocument.IsValidName(text);
-            problem.Text = ok ? "" : $"Use capital letters, digits, spaces and apostrophes, up to {NewWorldDocument.MaxNameLength}: the game's font has no others.";
+            bool ok = NewWorldDocument.CanBeNamed(text);
+            problem.Text = ok ? "" : $"Use capital letters, spaces and apostrophes, up to {NativeLevelWindow.MaxNameLength}: the game's font for world names has no others.";
             make.IsEnabled = ok;
         }
         name.TextChanged += (_, _) => Check(); Check();

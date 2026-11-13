@@ -217,10 +217,19 @@ public sealed partial class MainWindow
                         };
                         panel.Children.Add(row);
                     }
-                    if (map.World is { } w && string.Equals(w.EntranceHomeworldKey ?? w.EntryHomeworldKey, home.Key, StringComparison.OrdinalIgnoreCase))
-                        panel.Children.Add(Text(w.EntranceHomeworldKey == null
-                            ? $"The doorway into your world {w.Name} goes here too: Create BIN places it near where Spyro arrives (or place it yourself with Terrain › World Entrance)."
-                            : $"The doorway into your world {w.Name} stands here (Terrain › World Entrance moves it).", 12, Muted()));
+                    if (map.World is { } w)
+                    {
+                        // Your world by balloon: the balloonist of the homeworld before it on the route flies Spyro there.
+                        if (w.Place.OnRoute && (NewWorldDocument.HomeworldKeys.ToList().IndexOf(w.Place.After) + 1) * 10 == home.LevelId)
+                            panel.Children.Add(Text(w.Place.After == "gnastysworld"
+                                ? $"Its balloonist opens your world {w.Name} with every other world, at the end of the balloon route (see Your world below)."
+                                : $"Its balloonist flies Spyro to your world {w.Name} (see Your world below).", 12, Muted()));
+                        // A doorway into your world, only when you chose one (or the world is off the balloon route).
+                        if (!w.BalloonOnly && string.Equals(w.EntranceHomeworldKey ?? w.EntryHomeworldKey, home.Key, StringComparison.OrdinalIgnoreCase))
+                            panel.Children.Add(Text(w.EntranceHomeworldKey == null
+                                ? $"The doorway into your world {w.Name} you chose goes here too: Create BIN places it near where Spyro arrives (or place it yourself with Terrain › World Entrance)."
+                                : $"The doorway into your world {w.Name} you chose stands here (Terrain › World Entrance moves it).", 12, Muted()));
+                    }
                     content.Children.Add(Card(panel, "LevelLinksHome" + home.LevelId, focusLevelId == home.LevelId));
                     if (focusLevelId == home.LevelId) focusTarget ??= content.Children[^1];
                 }
@@ -276,19 +285,38 @@ public sealed partial class MainWindow
                 {
                     var panel = new StackPanel { Spacing = 5 };
                     panel.Children.Add(Text("Your world: " + world.Name, 14, weight: FontWeight.SemiBold));
-                    panel.Children.Add(Text(world.EntranceHomeworldKey == null
-                        ? $"Spyro walks in through a doorway in {world.EntryHomeworldName}. It is not placed yet: Create BIN places it near where Spyro arrives there, or open {world.EntryHomeworldName} and use Terrain › World Entrance."
-                        : string.Equals(world.EntranceHomeworldKey, world.EntryHomeworldKey, StringComparison.OrdinalIgnoreCase)
-                            ? $"Spyro walks in through its doorway in {world.EntryHomeworldName} (Terrain › World Entrance there moves it)."
-                            : $"Its doorway stands in {links.PlaceOf(_retailCatalog.FindByKey(world.EntranceHomeworldKey)?.LevelId ?? 10).SlotName}, but the world is entered from {world.EntryHomeworldName}: Create BIN places a new one in {world.EntryHomeworldName}."));
+                    // How players get there and back, in one sentence (the same words as the balloon route's window).
+                    var access = Text(world.Access); access.Name = "LevelLinksWorldAccess";
+                    panel.Children.Add(access);
+                    if (world.Place.OnRoute)
+                        panel.Children.Add(Text(world.HasBalloonist
+                            ? $"{LevelLinks.Possessive(world.HomeworldName)} balloonist stands in {world.HomeworldName}, with his balloon."
+                            : world.BalloonOnly
+                                ? $"{world.HomeworldName} has no balloonist yet, so Spyro could not fly back: Create BIN stops on it, and Fix It For Me stands one near where Spyro arrives."
+                                : $"{world.HomeworldName} has no balloonist: Spyro leaves through its doorway back.", 13, world.HasBalloonist ? null : world.BalloonOnly ? Amber() : Muted()));
                     panel.Children.Add(Text(world.Levels.Count == 0 ? $"{world.HomeworldName} has no levels yet."
-                        : $"{LevelLinks.Possessive(world.HomeworldName)} doorways lead to: " + string.Join(", ", world.Levels.Select(l => l.Name + (l.HasDoorway ? "" : " (no doorway yet)"))) + "."));
-                    panel.Children.Add(Text(world.WayBackTo is int back
-                        ? $"Its doorway home leads back to {links.PlaceOf(back).SlotName}, and brings Spyro out of the entrance there. Return Home from each of its levels brings him back out of that level's doorway in {world.HomeworldName}."
-                        : $"{world.HomeworldName} has no doorway home yet (Terrain › Doorways › Add Doorway… there, then {world.EntryHomeworldName}).", 13, world.WayBackTo == null ? Amber() : null));
-                    panel.Children.Add(Text(world.Balloon == null ? "Balloon route: not chosen yet (File ▾ › World's Balloon Route…)."
-                        : world.Balloon.OnRoute ? $"Balloon route: after {links.PlaceOf(((NewWorldDocument.HomeworldKeys.ToList().IndexOf(world.Balloon.After)) + 1) * 10).SlotName}."
-                        : "Balloon route: off the route (Spyro reaches the world through its doorway only).", 13, Muted()));
+                        : $"{LevelLinks.Possessive(world.HomeworldName)} doorways lead to: " + string.Join(", ", world.Levels.Select(l => l.Name + (l.HasDoorway ? "" : " (no doorway yet)"))) +
+                          $". Return Home from each of them brings Spyro back out of its doorway in {world.HomeworldName}."));
+                    if (world.BalloonOnly)
+                    {
+                        // No doorway in, none out: say so where one was left from before.
+                        if (world.EntranceHomeworldKey is { } placedIn)
+                            panel.Children.Add(Text($"A doorway into {world.Name} that was placed in {_retailCatalog.FindByKey(placedIn)?.DisplayName ?? placedIn} before is kept in your project but not built: " +
+                                "your world needs no doorway. To have one as well, open that homeworld and use Terrain › World Entrance.", 12, Muted()));
+                    }
+                    else
+                    {
+                        // The doorway you chose (or the only way in, off the balloon route) and its way back.
+                        string why = world.Place.OnRoute ? "too (you chose one)" : "(the only way in: your world is off the balloon route)";
+                        panel.Children.Add(Text(world.EntranceHomeworldKey == null
+                            ? $"Players can walk in through a doorway in {world.EntryHomeworldName} {why}. It is not placed yet: Create BIN places it near where Spyro arrives there, or open {world.EntryHomeworldName} and use Terrain › World Entrance."
+                            : string.Equals(world.EntranceHomeworldKey, world.EntryHomeworldKey, StringComparison.OrdinalIgnoreCase)
+                                ? $"Players can walk in through its doorway in {world.EntryHomeworldName} {why}; Terrain › World Entrance there moves it."
+                                : $"Its doorway stands in {links.PlaceOf(_retailCatalog.FindByKey(world.EntranceHomeworldKey)?.LevelId ?? 10).SlotName}, but the world is entered from {world.EntryHomeworldName}: Create BIN places a new one in {world.EntryHomeworldName}."));
+                        panel.Children.Add(Text(world.WayBackTo is int back
+                            ? $"Its doorway home leads back to {links.PlaceOf(back).SlotName}, and brings Spyro out of the entrance there."
+                            : $"{world.HomeworldName} has no doorway home yet (Terrain › Doorways › Add Doorway… there, then {world.EntryHomeworldName}).", 13, world.WayBackTo == null ? Amber() : null));
+                    }
                     var buttons = new WrapPanel { Orientation = Orientation.Horizontal };
                     var openWorld = NewButton($"Open {world.HomeworldName}"); openWorld.Name = "LevelLinksOpenWorld";
                     openWorld.Click += (_, _) => Open(() => SelectLevelFromPickerAsync(NewWorldDocument.Target(NewWorldDocument.Homeworld, world.HomeworldName)));
@@ -384,7 +412,7 @@ public sealed partial class MainWindow
         if (levelId is >= NewWorldDocument.Homeworld and <= 74)
             return map.World is { } w
                 ? levelId == NewWorldDocument.Homeworld
-                    ? $"{w.HomeworldName} is your world's homeworld: Spyro walks in through its doorway in {w.EntryHomeworldName}. Its links are below, under Your world."
+                    ? $"{w.HomeworldName} is your world's homeworld. {w.Access} Its links are below, under Your world."
                     : (w.Levels.FirstOrDefault(l => l.LevelId == levelId) is { } l
                         ? l.HasDoorway
                             ? $"{l.Name} is a level of your world: Spyro gets in through its doorway in {w.HomeworldName}, and Return Home brings him back out of it."

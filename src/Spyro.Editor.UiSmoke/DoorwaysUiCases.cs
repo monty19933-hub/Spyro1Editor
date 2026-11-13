@@ -151,11 +151,15 @@ internal static class DoorwaysUiCases
             Run(window.AddDoorwayForTestingAsync(), "add world doorway");
             Check(SceneDoorways.Find(window.FreshSceneForTesting!, 71)?.Shape == "pointed-arch" && Status(window).Contains("CLOUD STEPS"),
                 "a doorway to the world's own level is added: " + Status(window));
-            // ... and back to the homeworld the world is entered from (new-world.json: Artisans).
+            // Reached by balloon (the default): no doorway back out is offered, and the card says why.
+            Check((int?)Invoke(window, "DoorwayWayBack") == null && Text(window, "DoorwaysNote").Contains("No doorway back out is needed: your world's balloonist flies Spyro back."),
+                "a world reached by balloon has no doorway back out to add: " + Text(window, "DoorwaysNote"));
+            // With a doorway as well (the user's choice), back to the homeworld the world is entered from (Artisans).
+            File.WriteAllText(NewWorldDocument.PathFor(root), "{\"schemaVersion\":1,\"name\":\"SKY ISLES\",\"entryHomeworldKey\":\"artisans\",\"levelIds\":[70,71],\"doorway\":true}");
             var offered = SceneDoorways.Destinations(window.FreshSceneForTesting!, Get<LevelCatalog>(window, "_retailCatalog"), _ => "CLOUD STEPS",
                 (int?)Invoke(window, "DoorwayWayBack"));
             Check(offered.Any(d => d.LevelId == 10 && d.ToString() == "Artisans (" + SceneDoorways.WayBackNote + ")"),
-                "the world's homeworld offers the way back to Artisans: " + string.Join(", ", offered));
+                "with a doorway as well, the world's homeworld offers the way back to Artisans: " + string.Join(", ", offered));
             SetField(window, "_selectedTerrain", geometry.Polygons[1]); SetField(window, "_selectedTerrainIndex", 1);
             window.DoorwayChoiceForTesting = () => new(10, "stone-arch", 1f, null, false);
             Run(window.AddDoorwayForTestingAsync(), "add the way back");

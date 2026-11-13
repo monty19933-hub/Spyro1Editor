@@ -10,9 +10,11 @@ using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Primitives;
 
 /// <summary><c>--world-entrance-ui-only</c>: Terrain › World Entrance on a throwaway project, no game written. The project
-/// has a new world entered from Artisans; with Artisans open (as one of the game's levels) the card offers Place Entrance…,
-/// which puts the doorway on the selected tile (saved as world-entrance.json and drawn over the level), then move, turn,
-/// Shape…, the homeworld's own textures and Remove work through the card; another homeworld offers Use This Homeworld;
+/// has a new world entered from Artisans and reached by balloon: every homeworld's card says how players come and go and
+/// that no doorway is needed, and offers Add a Doorway As Well…; with Artisans open (as one of the game's levels) that puts
+/// the doorway on the selected tile (saved as world-entrance.json and drawn over the level, the world now with a doorway
+/// as well and its route kept), then move, turn, Shape…, the homeworld's own textures and Remove (balloon only again)
+/// work through the card; a doorway kept from before is Built As Well; another homeworld offers Use This Homeworld;
 /// a project without a world, or a level that is not a homeworld, shows no card. Without a disc the card asks for one to
 /// check the room; with WORLD_ENTRANCE_DISC (the original USA disc, read only) it says how much sky fits.</summary>
 internal static class WorldEntranceUiCases
@@ -65,11 +67,18 @@ internal static class WorldEntranceUiCases
             // (file writes awaited on the UI thread deadlock in this harness: run them on the pool)
             Task.Run(() => new NewWorldDocument(1, "SKY ISLES", "artisans", [70, 71]).SaveAsync(root)).GetAwaiter().GetResult();
             Invoke(window, "RefreshWorldEntranceCard"); Pump(5);
-            Check(card.IsVisible && Find<Button>(window, "WorldEntrancePlace").IsVisible && !Find<Control>(window, "WorldEntranceTools").IsVisible,
-                "with a world entered from Artisans, Artisans offers Place Entrance…");
-            Check(Text(window, "WorldEntranceNote").Contains("SKY ISLES has no doorway yet"), "the card says there is no doorway yet: " + Text(window, "WorldEntranceNote"));
+            // Reached by balloon (the default): the card says so; a doorway as well is the user's choice.
+            Check(card.IsVisible && Find<Button>(window, "WorldEntrancePlace").IsVisible && Find<Button>(window, "WorldEntrancePlace").Content as string == "Add a Doorway As Well…" &&
+                  !Find<Control>(window, "WorldEntranceTools").IsVisible && !Find<Button>(window, "WorldEntranceUseHere").IsVisible,
+                "a world reached by balloon: Artisans offers Add a Doorway As Well…, nothing else");
+            Check(Text(window, "WorldEntranceNote").StartsWith("Players reach SKY ISLES by balloon: Artisans' balloonist flies Spyro there whenever he asks, and SKY ISLES' balloonist NILS flies him back to Artisans", StringComparison.Ordinal) &&
+                  Text(window, "WorldEntranceNote").Contains("No doorway is needed in Artisans. A doorway as well is optional"), "the card says how players come and go, and that no doorway is needed: " + Text(window, "WorldEntranceNote"));
+            ShowOriginal("peacekeepers");
+            Check(card.IsVisible && Find<Button>(window, "WorldEntrancePlace").IsVisible && !Find<Button>(window, "WorldEntranceUseHere").IsVisible && Text(window, "WorldEntranceNote").Contains("No doorway is needed in Peace Keepers"),
+                "every homeworld says the same (a doorway as well can go in any of them)");
+            ShowOriginal("artisans");
 
-            // Place Entrance… on the selected tile (the window's answers come from the test hook).
+            // Add a Doorway As Well… on the selected tile (the window's answers come from the test hook).
             var geometry = window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry!;
             int tile = geometry.Polygons.FindIndex(p => p.Points.Any(q => q.X == 4712 && q.Y == 3312));
             SetField(window, "_selectedTerrain", geometry.Polygons[tile]); SetField(window, "_selectedTerrainIndex", tile);
@@ -78,7 +87,11 @@ internal static class WorldEntranceUiCases
             var saved = WorldEntranceDocument.Read(root);
             Check(saved is { HomeworldKey: "artisans", Shape: "stone-arch", FaceTexture: -1 } && saved.Position == new Vector3f(4584, 3184, 384) && Math.Abs(saved.Scale - 1) < 1e-6,
                 "Place Entrance puts a stone arch on the middle of the selected tile and saves it (world-entrance.json)");
-            Check(Status(window).StartsWith("Placed a stone arch doorway to SKY ISLES on the selected tile in Artisans.", StringComparison.Ordinal), "the status says what was placed: " + Status(window));
+            Check(Status(window).StartsWith("Placed a stone arch doorway to SKY ISLES on the selected tile in Artisans.", StringComparison.Ordinal) &&
+                  Status(window).Contains("as well as fly there by balloon") && Status(window).Contains("needs a doorway back out to Artisans too"), "the status says what was placed and what it means: " + Status(window));
+            Check(NewWorldDocument.Read(root) is { Doorway: true, HasDoorway: true, EntryHomeworldKey: "artisans", Balloon: { After: "artisans", Balloonist: "NILS" } } chosenDoorway &&
+                  chosenDoorway.Balloon!.Onward == new Spyro.Editor.Core.Exporting.BalloonRequirement(Spyro.Editor.Core.Exporting.BalloonRequirementKind.Dragons, 10),
+                "the world now has a doorway as well, and keeps the balloon route it had");
             Check(Find<Control>(window, "WorldEntranceTools").IsVisible && Text(window, "WorldEntranceNote").Contains("The doorway to SKY ISLES: Stone Arch"),
                 "the card shows the entrance and its tools: " + Text(window, "WorldEntranceNote"));
             Check(Viewport(window).WorldEntrancePreviewFaceCountForTesting == 56, "the entrance's 56-face frame is drawn over the level");
@@ -135,6 +148,22 @@ internal static class WorldEntranceUiCases
             Run(window.RemoveWorldEntranceForTestingAsync(), "remove");
             Check(WorldEntranceDocument.Read(root) == null && Viewport(window).WorldEntrancePreviewFaceCountForTesting == 0 && Status(window).StartsWith("Removed the doorway to SKY ISLES", StringComparison.Ordinal),
                 "Remove Entrance deletes it and its preview");
+            Check(NewWorldDocument.Read(root) is { Doorway: false, BalloonOnly: true } && Status(window).Contains("by balloon only now") &&
+                  Find<Button>(window, "WorldEntrancePlace").Content as string == "Add a Doorway As Well…", "the world is reached by balloon only again");
+
+            // A doorway placed before (kept, not built while the world is balloon-only): Build It As Well uses it.
+            var kept = new WorldEntranceDocument(1, "peacekeepers", new(4584, 3184, 384), 0, "stone-arch", 1f);
+            Task.Run(() => kept.SaveAsync(root)).GetAwaiter().GetResult();
+            Invoke(window, "RefreshWorldEntranceCard"); Pump(5);
+            Check(Find<Button>(window, "WorldEntrancePlace").Content as string == "Build It As Well" && Text(window, "WorldEntranceNote").Contains("kept in your project but not built") &&
+                  Viewport(window).WorldEntrancePreviewFaceCountForTesting == 0, "a doorway kept from before is said to be unbuilt, and not drawn");
+            window.WorldEntranceChoiceForTesting = () => throw new InvalidOperationException("Build It As Well asks nothing");
+            Run(window.PlaceWorldEntranceForTestingAsync(), "build it as well");
+            Check(NewWorldDocument.Read(root) is { Doorway: true, EntryHomeworldKey: "peacekeepers" } && WorldEntranceDocument.Read(root) == kept && Find<Control>(window, "WorldEntranceTools").IsVisible &&
+                  Status(window).StartsWith("Players can now walk into SKY ISLES through its doorway in Peace Keepers as well as fly there by balloon", StringComparison.Ordinal),
+                "Build It As Well builds the kept doorway: " + Status(window));
+            Run(window.RemoveWorldEntranceForTestingAsync(), "remove again");
+            Check(WorldEntranceDocument.Read(root) == null && NewWorldDocument.Read(root)!.BalloonOnly, "removed again: balloon only");
 
             // Fix It For Me: hidden until Create BIN stops on something in the project. A stop the editor has a repair for
             // carries it; any other stop in the project is on offer too (the editor then makes the game without what
@@ -158,6 +187,12 @@ internal static class WorldEntranceUiCases
             Check(!fixIt.IsVisible && window.PendingRepairForTesting == null && !window.FixItOnOfferForTesting && WorldEntranceDocument.Read(root) == null &&
                   Status(window).StartsWith("Choose your original Spyro the Dragon (USA) disc first", StringComparison.Ordinal),
                 "pressed without the game disc, it says what it needs, places nothing and withdraws the offer");
+            // The world's missing balloonist: its repair is on offer; without the world's homeworld it places nothing.
+            Invoke(window, "OfferRepair", Spyro.Editor.Core.Exporting.ExportRepair.Refusal("needs a balloonist", new Spyro.Editor.Core.Exporting.ExportRepair.PlaceWorldBalloonist())); Pump(5);
+            Check(window.PendingRepairForTesting is Spyro.Editor.Core.Exporting.ExportRepair.PlaceWorldBalloonist && fixIt.IsVisible, "a world without its balloonist offers Fix It For Me with the repair that stands him");
+            Run(window.ApplyPendingRepairForTestingAsync(), "fix it: balloonist");
+            Check(!window.FixItOnOfferForTesting && Status(window).StartsWith("This project's new world has no homeworld saved.", StringComparison.Ordinal) && window.FreshSceneForTesting?.WorldLevelId == null,
+                "without the world's homeworld it says so, opens nothing and withdraws the offer: " + Status(window));
             // A project whose only built levels are its new world's still makes its game from the whole project.
             bool worldOnly = (bool)Invoke(window, "ProjectHasNewWorldLevels")!;
             string worldHome = SceneDocumentStore.PathForTarget(root, NewWorldDocument.KeyFor(NewWorldDocument.Homeworld));

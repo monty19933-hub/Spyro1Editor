@@ -14,6 +14,14 @@ public abstract record ExportRepair
     /// (<see cref="Editing.SceneDocument.FitSaveRows"/>).</summary>
     public sealed record FitHomeworldObjects(int Room) : ExportRepair;
 
+    /// <summary>The new world is reached by balloon only and its homeworld has no balloonist to fly Spyro back: the editor
+    /// stands one, with his balloon, on open floor near where Spyro arrives (<see cref="Editing.WorldAccess.BalloonistSpot"/>).</summary>
+    public sealed record PlaceWorldBalloonist : ExportRepair;
+
+    /// <summary>The new world is reached by balloon only but its homeworld still has a doorway back out to the game (made
+    /// when a world was entered through a doorway): the editor takes it out with its frame, keeping the level as it was in the project's backups.</summary>
+    public sealed record RemoveWorldWayBack : ExportRepair;
+
     /// <summary>Saved changes to the game's own levels that the game cannot take (<paramref name="Details"/> names each):
     /// the editor makes the game without them; they stay in the project.</summary>
     public sealed record LeaveOutSkippedChanges(IReadOnlyList<string> Details) : ExportRepair;

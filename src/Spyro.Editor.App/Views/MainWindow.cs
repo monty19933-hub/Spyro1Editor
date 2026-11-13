@@ -28349,7 +28349,7 @@ public sealed partial class MainWindow : Window
             "Ground (in a level you build): Grass, Dirt, Stone, Sand, Snow, Wood, Water, Lava or Goo — click one, then click tiles. Tile Type… changes only what Spyro finds on a tile (solid ground, water, lava, supercharge…).",
             "Add beside ◀ ▲ ▼ ▶ adds an exact copy of the selected tile against one of its edges.",
             "Doorways (in a homeworld you rebuild, or your world's homeworld): Add Doorway…, choose where it leads and its shape; move, turn and repaint it on the card.",
-            "World Entrance (in the homeworld your world is entered from): Place Entrance… puts the way into your world there.",
+            "World Entrance (in the game's homeworlds): your world is reached by balloon and needs no doorway; Add a Doorway As Well… puts one into your world there, if you want one too.",
             "If a shape cannot be exported, a red bar says so, with Show it and Undo that change."
         ]);
 
@@ -28377,11 +28377,12 @@ public sealed partial class MainWindow : Window
         ]);
 
         AddHelpSection(panel, "Your own world", [
-            "File ▾ > New World… makes a world of your own: a homeworld and up to four levels, picked from the level list like the game's own.",
-            "In your world's homeworld, the Terrain tab's Doorways card adds a doorway to each of its levels and one back to the game's homeworld it is entered from.",
-            "Open that game homeworld: its Terrain tab's World Entrance card places the way into your world.",
-            "File ▾ > World's Balloon Route… gives your world a place among the balloonists' worlds (after Dream Weavers and before Gnasty's World, say): the balloonist before it flies Spyro there, your world's own balloonist flies him on, and each asks for what you choose first (nothing, dragons, treasure or dragon eggs). Your world's homeworld needs a balloonist and his balloon for it: Objects > Random objects places them.",
-            "Create BIN builds it all into the game: Spyro walks in through the entrance or flies in by balloon, the inventory gets a page for your world, and it saves in its own save file."
+            "File ▾ > New World… makes a world of your own: a homeworld and up to four levels, picked from the level list like the game's own. It is called by its homeworld's name.",
+            "Players reach it by balloon, like the game's own worlds: the balloonist of the homeworld before it flies Spyro there, and your world's own balloonist (New World puts him in its homeworld) flies him back. File ▾ > Level Links… says it in one sentence.",
+            "In your world's homeworld, the Terrain tab's Doorways card adds a doorway to each of its levels. No doorway back out is needed.",
+            "File ▾ > World's Balloon Route… gives your world a place among the balloonists' worlds (after Dream Weavers and before Gnasty's World, say): the balloonist before it flies Spyro there, your world's own balloonist flies him back and on, and each asks for what you choose first (nothing, dragons, treasure or dragon eggs). If your world's balloonist is missing, Create BIN stops and Fix It For Me stands him near where Spyro arrives.",
+            "A doorway into your world as well is optional: the World Entrance card in one of the game's homeworlds (Add a Doorway As Well…); your world's homeworld then needs a doorway back out to it too.",
+            "Create BIN builds it all into the game: Spyro flies in by balloon (and walks in through a doorway, if you chose one), the inventory gets a page for your world, and it saves in its own save file."
         ]);
 
         AddHelpSection(panel, "Typing and shortcuts", [

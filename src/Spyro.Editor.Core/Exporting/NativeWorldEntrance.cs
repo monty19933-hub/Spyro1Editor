@@ -133,6 +133,10 @@ public static class NativeWorldEntrance
     /// <summary>Whether the level already has the New World's doorway (it was built with the homeworld's added objects).</summary>
     public static bool Present(byte[] levelData) => Body.Read(new UniversalLevelData(levelData)).Records.Any(r => I(r, 0x1C) == Destination);
 
+    /// <summary>Where each of a homeworld's doorways leads (its records' destination words, in table order): for checks
+    /// of a finished game.</summary>
+    public static IReadOnlyList<int> DoorwayDestinations(byte[] levelData) => [.. Body.Read(new UniversalLevelData(levelData)).Records.Select(r => I(r, 0x1C))];
+
     public static WorldEntranceResult Apply(UniversalSourceLibrary originals, LevelCatalog catalog, WorldEntranceSpec spec,
         byte[] levelData, byte[] overlay, byte[] executable, byte[] destinationSky, WorldEntranceSky sky = WorldEntranceSky.Auto, ComposeWith? together = null)
     {

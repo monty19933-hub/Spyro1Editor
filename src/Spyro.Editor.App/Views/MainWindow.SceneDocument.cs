@@ -161,6 +161,10 @@ public sealed partial class MainWindow
             _statusText.Text=_releaseMode
                 ?$"Saved {snapshot.Name}: {Count(snapshot.Surfaces.Count,"terrain tile","terrain tiles")}, {Count(snapshot.Objects.Count(o=>!o.Value.IsRemoved),"object","objects")}."
                 :$"Saved {snapshot.Name}: {snapshot.Surfaces.Count} authored faces, {snapshot.Objects.Count(o=>!o.Value.IsRemoved)} objects.";
+            // Your world is called by its homeworld's name: renaming the homeworld renames the world.
+            if(snapshot.WorldLevelId==NewWorldDocument.Homeworld&&snapshot.TargetBinding==null&&ProjectWorldOrNull() is {} world&&world.NamedAfter(snapshot.Name) is var named&&named!=world)
+                try{await named.SaveAsync(_workspace.RootPath);_statusText.Text+=$" Your world is called {named.Name} now, after its homeworld.";}
+                catch(Exception e)when(e is IOException or InvalidDataException or UnauthorizedAccessException){_statusText.Text+=" (Your world's name could not be changed with it: "+e.Message+")";}
             RefreshCurrentLevelDetails();return true;
         }
         catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException or System.Text.Json.JsonException)
@@ -242,7 +246,42 @@ public sealed partial class MainWindow
         using var hover = UseProjectHover();
         using var spyroColours = UseProjectSpyroColours();
         bool authoredActive=_freshSceneDocument!=null;
+        // (Saving the world's homeworld renames the world after it: the name it had is said below.)
+        string? worldCalled=IsLeftOut(ExportParts.World)?null:ProjectWorldOrNull()?.Name;
         if(authoredActive?!await SaveFreshSceneAsync():!await SaveCurrentEditsAsync())return;
+        // The project's new world (homeworld 70 and levels 71-74) goes in through the level window.
+        var world=IsLeftOut(ExportParts.World)?null:NewWorldDocument.Read(_workspace.RootPath);
+        // How players reach the world. By balloon only (the default): nothing is built into the game's homeworlds, the
+        // world's homeworld loses a doorway back out it still has from before (its balloonist flies Spyro back), and it
+        // must have that balloonist (otherwise Create BIN stops here, before anything is built, and Fix It For Me stands
+        // one near where Spyro arrives). With a doorway as well (the user's choice) or off the balloon route: a world with
+        // no way in yet gets its doorway placed by Create BIN itself, on open ground near where Spyro arrives. All this is
+        // done before the export takes the editor's state (taking the doorway out shows the open homeworld anew).
+        string placedEntrance="";
+        if(world!=null)
+        {
+            string root=_workspace.RootPath;
+            var(named,renamed)=await NameWorldAfterHomeworldAsync(world,worldCalled);
+            world=named;placedEntrance+=renamed;
+            if(world.BalloonOnly)
+            {
+                var home=SceneDocumentStore.ReadWorld(root,_retailCatalog).FirstOrDefault(s=>s.WorldLevelId==NewWorldDocument.Homeworld);
+                if(home!=null&&!WorldAccess.HasBalloonist(home))
+                    throw ExportRepair.Refusal($"{home.Name} has no balloonist, so Spyro could not fly back out of your world: it is reached by balloon only, like the game's own worlds. "+
+                        $"Fix It For Me stands one with his balloon near where Spyro arrives in {home.Name}; or place him yourself there (Objects › Random objects, \"The way out\", or Add Object… › Balloonist).",
+                        new ExportRepair.PlaceWorldBalloonist());
+                placedEntrance+=await RemoveWorldWayBackAsync();
+            }
+            else
+            {
+                var entranceNow=WorldEntranceDocument.Read(root);
+                if(entranceNow==null||!string.Equals(entranceNow.HomeworldKey,world.EntryHomeworldKey,StringComparison.OrdinalIgnoreCase))
+                {
+                    var(placed,how)=await PlaceWorldEntranceForMeAsync(world.EntryHomeworldKey);
+                    if(placed&&how.Length>0)placedEntrance+=" "+how;
+                }
+            }
+        }
         var owner=CaptureSourceDiscOperationIdentity();
         string workspacePath=_workspace.RootPath, original=ResolveUniversalSourceDisc();
         string? imageSelection=_discImagePathBox.Text,skySelection=_skyboxDiscImagePathBox.Text;
@@ -251,20 +290,10 @@ public sealed partial class MainWindow
         // What Fix It For Me left out of the game is not read: the game is made as if it were not in the project.
         var allSaved=SceneDocumentStore.ReadAll(workspacePath,_retailCatalog);
         var saved=ExportScenes(allSaved);
-        // The project's new world (homeworld 70 and levels 71-74) goes in through the level window.
-        var world=IsLeftOut(ExportParts.World)?null:NewWorldDocument.Read(workspacePath);
         bool builtLeftOut=saved.Count!=allSaved.Count||IsLeftOut(ExportParts.World);
-        // A world with no way in yet: Create BIN places its doorway itself, on open ground near where Spyro arrives
-        // (until 2.2 it stopped here and Fix It For Me placed it). Where the editor finds no place, the export says so.
-        string placedEntrance="";
-        var entranceNow=world==null?null:WorldEntranceDocument.Read(workspacePath);
-        if(world!=null&&(entranceNow==null||!string.Equals(entranceNow.HomeworldKey,world.EntryHomeworldKey,StringComparison.OrdinalIgnoreCase)))
-        {
-            var(placed,how)=await PlaceWorldEntranceForMeAsync(world.EntryHomeworldKey);
-            if(placed&&how.Length>0)placedEntrance=" "+how;
-        }
-        // The way into the world (World Entrance); its file must not change while the BIN is made.
-        var worldEntrance=world==null?null:WorldEntranceDocument.Read(workspacePath);
+        // The way into the world (World Entrance), only when the world has a doorway: a placed one stays in the project,
+        // unbuilt, while the world is reached by balloon only. Its file must not change while the BIN is made.
+        var worldEntrance=world==null||world.BalloonOnly?null:WorldEntranceDocument.Read(workspacePath);
         string? entranceText=File.Exists(WorldEntranceDocument.PathFor(workspacePath))?File.ReadAllText(WorldEntranceDocument.PathFor(workspacePath)):null;
         var worldScenes=world==null?[]:SceneDocumentStore.ReadWorld(workspacePath,_retailCatalog);
         var fingerprints=saved.Concat(worldScenes).ToDictionary(s=>s.ResolveTarget(_retailCatalog).Key,s=>s.Fingerprint());
@@ -357,10 +386,9 @@ public sealed partial class MainWindow
         RememberExportedGame(Path.ChangeExtension(output,".cue"));
         string entryName=world==null?"":_retailCatalog.FindByKey(world.EntryHomeworldKey)?.DisplayName??world.EntryHomeworldKey;
         // The world's place on the balloonists' route as Create BIN built it (not chosen: by whether its homeworld has a balloonist).
-        var worldPlace=world?.BalloonPlaceWith(worldScenes.FirstOrDefault(s=>s.WorldLevelId==NewWorldDocument.Homeworld) is {} worldHome&&HasBalloonist(worldHome.Objects.Select(o=>o.Value)));
-        string worldNote=world==null||worldScenes.Count==0?"":$" Your new world {world.Name} is in it ({Count(worldScenes.Count,"level","levels")}; "+
-            (worldEntrance!=null?$"Spyro walks in from {entryName}":worldPlace?.OnRoute==true?"Spyro flies in by balloon":$"it has no way in from {entryName} yet (World Entrance)")+"; save in it with a new save file)."+
-            (worldPlace?.OnRoute==true?" "+BalloonRouteSentence(world,worldPlace):"");
+        var worldPlace=world?.BalloonPlaceWith(worldScenes.FirstOrDefault(s=>s.WorldLevelId==NewWorldDocument.Homeworld) is {} worldHome&&WorldAccess.HasBalloonist(worldHome));
+        string worldNote=world==null||worldPlace==null||worldScenes.Count==0?"":$" Your new world {world.Name} is in it ({Count(worldScenes.Count,"level","levels")}; save in it with a new save file). "+
+            (!worldPlace.OnRoute&&worldEntrance==null?$"It has no way in yet: place its doorway with Terrain › World Entrance in {entryName}, or put it on the balloon route (File ▾ › World's Balloon Route…).":WorldAccessSentence(world,worldPlace));
         string skippedNote=skippedChanges.Count==0?"":$" Not in this game, because the game cannot take {(skippedChanges.Count==1?"it":"them")}: {ShortList(skippedChanges)}.";
         string included=LeftOutItems().Count==0?"All saved level replacements and other saved edits are included.":"Your other saved levels and changes are included.";
         _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. {included}"+NewLevelWayInNote(saved,portalSnapshot.Document,startLevelId)+worldNote+flightNote+placedEntrance+NativeEggTotals.DescribeGame(output)+PreservedResearchExportNote()+MemoryModeExportNote(memory)+HoverFlapNote()+skippedNote+LeftOutNote();
@@ -404,7 +432,9 @@ public sealed partial class MainWindow
             BindFreshLevelPickerOption(_currentLevel);SyncLevelPickers(_currentLevel);RefreshFreeFlightSettingsEditor(_currentLevel);
             _freeFlightEnabled.IsChecked=flightDraft;RefreshCurrentLevelDetails();
         };
-        _freshSettingsPanel.Children.Add(new TextBlock{Text=$"Level name (up to {maximumNameLength} letters, spaces or apostrophes)"});_freshSettingsPanel.Children.Add(name);
+        _freshSettingsPanel.Children.Add(new TextBlock{Text=scene.WorldLevelId==NewWorldDocument.Homeworld&&scene.TargetBinding==null
+            ?$"Name of your world and its homeworld (up to {NativeLevelWindow.MaxNameLength} capital letters, spaces or apostrophes; the balloonists' menus and the inventory show it)"
+            :$"Level name (up to {maximumNameLength} letters, spaces or apostrophes)",TextWrapping=TextWrapping.Wrap});_freshSettingsPanel.Children.Add(name);
         Grid spawnGrid=new(){ColumnDefinitions=new("*,*,*"),ColumnSpacing=6};
         TextBox[] spawn=new[]{scene.Spawn.X,scene.Spawn.Y,scene.Spawn.Z}.Select((v,i)=>new TextBox{Name="FreshMainSpawn"+"XYZ"[i],Text=v.ToString(CultureInfo.InvariantCulture)}).ToArray();
         for(int i=0;i<3;i++){Grid.SetColumn(spawn[i],i);spawnGrid.Children.Add(spawn[i]);}
