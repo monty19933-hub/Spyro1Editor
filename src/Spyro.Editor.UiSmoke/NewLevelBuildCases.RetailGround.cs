@@ -21,7 +21,7 @@ internal static partial class NewLevelBuildCases
     {
         string levelKey = System.Environment.GetEnvironmentVariable("RETAIL_GROUND_LEVEL") ?? "artisans";
         Load(window, levelKey);
-        SelectTab(window, "Terrain"); Pump(20);
+        SelectTab(window, "Ground"); Pump(20);
         if (window.FreshSceneForTesting != null) throw new InvalidOperationException($"{levelKey} is a rebuilt level in this project; use an original one.");
         var card = Find<Border>(window, "TerrainGroundCard");
         Invoke(window, "RefreshReleaseTerrainPanelTexts"); Pump(10);

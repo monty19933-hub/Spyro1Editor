@@ -115,7 +115,7 @@ internal static partial class NewLevelBuildCases
     private static void PortalBuild(MainWindow window, string outDir)
     {
         Load(window, "artisans");
-        SelectTab(window, "Terrain"); Pump(20);
+        SelectTab(window, "Ground"); Pump(20);
         var g = window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry!;
         var viewport = Get<EditorViewport>(window, "_viewport");
         var (dx, dy, dz) = PortalOffset();
@@ -224,7 +224,7 @@ internal static partial class NewLevelBuildCases
     private static void FillHoles(MainWindow window, string outDir)
     {
         Load(window, "artisans");
-        SelectTab(window, "Terrain"); Pump(20);
+        SelectTab(window, "Ground"); Pump(20);
         var g = window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry!;
         Console.WriteLine($"old doorway tiles still removed after reload: {ArchFaces.Count(i => g.Polygons[i].IsTerrainRemoved)}/{ArchFaces.Length}; copies {DarkHollowDoorway.Count(i => g.Polygons[i].IsTerrainAddClone)}/{DarkHollowDoorway.Length}");
         for (int h = 0; h < PillarHoles.Length; h++)
@@ -394,7 +394,7 @@ internal static partial class NewLevelBuildCases
     private static void PortalReorient(MainWindow window, string outDir)
     {
         Load(window, "artisans");
-        SelectTab(window, "Terrain"); Pump(20);
+        SelectTab(window, "Ground"); Pump(20);
         var g = window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry!;
         var (dx, dy, dz) = PortalOffset();
         int moved = 0;
@@ -441,7 +441,7 @@ internal static partial class NewLevelBuildCases
     private static void PortalBackside(MainWindow window)
     {
         Load(window, "artisans");
-        SelectTab(window, "Terrain"); Pump(20);
+        SelectTab(window, "Ground"); Pump(20);
         var g = window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry!;
         var (dx, dy, dz) = PortalOffset();
         int copied = 0;

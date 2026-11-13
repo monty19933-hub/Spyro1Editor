@@ -45,7 +45,7 @@ public sealed partial class MainWindow
         SceneDocument? home;
         try { world = string.IsNullOrEmpty(root) ? null : NewWorldDocument.Read(root); home = world == null ? null : WorldHomeworldNow(); }
         catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException) { _statusText.Text = "The project's world could not be read: " + e.Message; return; }
-        if (world == null) { _statusText.Text = "Make a world first with File ▾ › New World…: the balloon route is the way to it."; return; }
+        if (world == null) { _statusText.Text = "Make a world first with Create › New World…: the balloon route is the way to it."; return; }
         // The world as Create BIN builds it: under its homeworld's name.
         world = world.NamedAfter(home?.Name);
         string homeName = home?.Name ?? world.Name;
@@ -155,9 +155,9 @@ public sealed partial class MainWindow
             string need = why == null ? WorldBalloonistNeed(world, place, homeName, hasBalloonist) : "";
             string doorway = world.Doorway
                 ? ""
-                : $" No doorway is needed: none is built into {entry}, and none back out of {homeName}. (A doorway as well is optional: Terrain › World Entrance in {entry}.)";
+                : $" No doorway is needed: none is built into {entry}, and none back out of {homeName}. (A doorway as well is optional: Links › World Entrance in {entry}.)";
             note.Text = !on
-                ? $"The balloonists will not know your world. Players then walk in through a doorway in {entry} (Terrain › World Entrance there) and out through a doorway back in {homeName} (Terrain › Doorways there)."
+                ? $"The balloonists will not know your world. Players then walk in through a doorway in {entry} (Links › World Entrance there) and out through a doorway back in {homeName} (Links › Doorways there)."
                 : why == null
                     ? WorldAccessSentence(world, place) + (need.Length > 0 ? " " + need : "") + doorway +
                       (homes[i].Key == "magiccrafters" && place.ToWorld != WorldBalloonPlace.GamePrice("magiccrafters") ? " Magic Crafters' balloonist then no longer hints where egg thieves hide: his lines are his new ones." : "") +

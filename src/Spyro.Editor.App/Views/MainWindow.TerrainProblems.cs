@@ -50,7 +50,7 @@ public sealed partial class MainWindow
         };
         _terrainProblemShowButton = NewButton("Show it", ShowTerrainExportProblem);
         _terrainProblemShowButton.Name = "TerrainProblemShow";
-        ToolTip.SetTip(_terrainProblemShowButton, "Open this level's Terrain tab and select the tiles involved.");
+        ToolTip.SetTip(_terrainProblemShowButton, "Open this level's Ground tab and select the tiles involved.");
         _terrainProblemUndoButton = NewButton("Undo that change", UndoTerrainExportProblem);
         _terrainProblemUndoButton.Name = "TerrainProblemUndo";
         ToolTip.SetTip(_terrainProblemUndoButton, "Put only the tiles involved back the way the original level had them. Other terrain changes stay.");

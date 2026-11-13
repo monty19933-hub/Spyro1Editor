@@ -69,7 +69,7 @@ internal static class LevelLinksUiCases
 
             // The File menu and the Game Settings card both open it.
             var file = Find<Button>(window, "EditorFileMenu");
-            Check(((MenuFlyout)file.Flyout!).Items.OfType<MenuItem>().Any(i => i.Header?.ToString() == "Level Links…"), "File ▾ has Level Links…");
+            Check(window.GetLogicalDescendants().OfType<Button>().Any(b => b.Name == "LinksOpenLevelLinks" && b.Content?.ToString() == "Level Links…"), "the Links tab has Level Links…");
             Check(window.GetLogicalDescendants().OfType<Button>().Any(b => b.Name == "OpenLevelLinks" && b.Content?.ToString() == "Open Level Links…"), "Portals & Return Home has Open Level Links…");
 
             // Busy: it says so and opens nothing.

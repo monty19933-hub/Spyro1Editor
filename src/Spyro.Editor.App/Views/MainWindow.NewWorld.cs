@@ -97,7 +97,7 @@ public sealed partial class MainWindow
                 : stood ? "" : $" Its balloonist, who flies Spyro back, is still to come: Create BIN asks for him and Fix It For Me stands him near where Spyro arrives ({how.TrimEnd('.')}).";
             _statusText.Text = $"{choice.Name} is made: its homeworld and {Count(choice.Levels, "level", "levels")}, all in the level list. " +
                 WorldAccessSentence(world, world.BalloonPlaceWith(true)) + balloonist +
-                " File ▾ › World's Balloon Route… changes where it lies among the game's worlds and what the balloonists ask. Build each level like any level of your own.";
+                " Links › World's Balloon Route… changes where it lies among the game's worlds and what the balloonists ask. Build each level like any level of your own.";
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         { _statusText.Text = "Could not make the new world: " + e.Message; }
@@ -111,7 +111,7 @@ public sealed partial class MainWindow
         {
             TextWrapping = TextWrapping.Wrap, LineHeight = 20,
             Text = "A world of your own beside the game's six: a homeworld and up to four levels. Each starts as a meadow you can " +
-                   "reshape and paint (Terrain › Ground) and fill with objects. Players fly there by balloon, like the game's own worlds: " +
+                   "reshape and paint (the Ground tab) and fill with objects. Players fly there by balloon, like the game's own worlds: " +
                    "the balloonist of the homeworld you choose below flies Spyro there, and your world's own balloonist flies him back."
         });
         var name = new TextBox { Name = "NewWorldName", Text = existing?.Name ?? "SKY ISLES", MaxLength = NativeLevelWindow.MaxNameLength, Watermark = "WORLD NAME" };
@@ -123,7 +123,7 @@ public sealed partial class MainWindow
             Name = "NewWorldEntry", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = homeworlds.Select(h => h.DisplayName).ToArray(),
             SelectedIndex = Math.Max(0, homeworlds.FindIndex(h => h.Key == (existing?.EntryHomeworldKey ?? "artisans")))
         };
-        content.Children.Add(new TextBlock { Text = "Players fly there from (its place on the balloon route: File ▾ › World's Balloon Route… changes it later)", TextWrapping = TextWrapping.Wrap });
+        content.Children.Add(new TextBlock { Text = "Players fly there from (its place on the balloon route: Links › World's Balloon Route… changes it later)", TextWrapping = TextWrapping.Wrap });
         content.Children.Add(entry);
         var count = new ComboBox
         {

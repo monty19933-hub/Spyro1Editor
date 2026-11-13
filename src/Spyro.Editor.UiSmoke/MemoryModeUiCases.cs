@@ -52,8 +52,8 @@ internal static class MemoryModeUiCases
             var window = Measure();
             var section = Find<Control>(window, "MemoryModeSection");
             Check(section.Parent != null && section.Parent == Find<Control>(window, "GameSettingsWholeGameNote").Parent &&
-                  Find<Control>(window, "PlayAsCrashSection").Parent == Find<Control>(window, "ColoursWorkspacePanel"),
-                "Memory is a card in Game Settings; Play as Crash is on the Colours tab");
+                  Find<Control>(window, "PlayAsCrashSection").Parent == Find<Control>(window, "GameWorkspacePanel"),
+                "Memory and Play as Crash are cards on the Game tab");
             RadioButton ps = Find<RadioButton>(window, "MemoryModePlayStation"), em = Find<RadioButton>(window, "MemoryModeEmulator8MB");
             Check(ps.Content?.ToString() == "PlayStation (2 MB)" && em.Content?.ToString() == "Emulator (8 MB RAM), the usual choice", "the two choices are named plainly");
             string text = string.Join(" ", section.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text));
@@ -282,7 +282,7 @@ internal static class MemoryModeUiCases
     /// <summary>Game Settings with the Memory card open and in view.</summary>
     private static void ShowMemoryCard(MainWindow window)
     {
-        Get<TabItem>(window, "_modernLevelWorkspaceTab").IsSelected = true; Pump(20);
+        Get<TabItem>(window, "_modernGameWorkspaceTab").IsSelected = true; Pump(20);
         var card = Find<Expander>(window, "MemoryModeSection");
         card.IsExpanded = true; Pump(20);
         card.BringIntoView(); Pump(20);

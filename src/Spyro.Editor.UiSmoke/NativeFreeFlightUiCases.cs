@@ -37,7 +37,7 @@ internal static class NativeFreeFlightUiCases
             window = new MainWindow { Width = 1200, Height = 760 };
             Check(!window.TryGetFreeFlightSettingsExportBlockReason(out _),
                 "An unshown Window with no flight-editor refresh does not block an absent-store combined export caller.");
-            Get<TabControl>(window, "_modernWorkspaceTabs").SelectedItem = Get<TabItem>(window, "_modernLevelWorkspaceTab");
+            Get<TabControl>(window, "_modernWorkspaceTabs").SelectedItem = Get<TabItem>(window, "_modernGameWorkspaceTab");
             Bind(window, first, 14);
             Check(Find<CheckBox>(window, "FreeFlightEnabled").Content?.ToString() == "Fly Anywhere Enabled",
                 "The actual level-settings control has the requested exact label.");
@@ -164,7 +164,7 @@ internal static class NativeFreeFlightUiCases
         window.Close(); Pump();
 
         window = new MainWindow { Width = 1200, Height = 760 };
-        Get<TabControl>(window, "_modernWorkspaceTabs").SelectedItem = Get<TabItem>(window, "_modernLevelWorkspaceTab");
+        Get<TabControl>(window, "_modernWorkspaceTabs").SelectedItem = Get<TabItem>(window, "_modernGameWorkspaceTab");
         Bind(window, root, 14);
         Check(Find<CheckBox>(window, "FreeFlightEnabled").IsChecked == true &&
             File.ReadAllBytes(SettingsPath(root)).SequenceEqual(savedOn) &&
@@ -184,7 +184,7 @@ internal static class NativeFreeFlightUiCases
         window.Close(); Pump();
 
         window = new MainWindow { Width = 1200, Height = 760 };
-        Get<TabControl>(window, "_modernWorkspaceTabs").SelectedItem = Get<TabItem>(window, "_modernLevelWorkspaceTab");
+        Get<TabControl>(window, "_modernWorkspaceTabs").SelectedItem = Get<TabItem>(window, "_modernGameWorkspaceTab");
         Bind(window, root, 14);
         var intent = NativeFreeFlightProjectExportIntent.Capture(root);
         Check(Find<CheckBox>(window, "FreeFlightEnabled").IsChecked == false &&

@@ -48,7 +48,7 @@ internal static class TileTypeUiCases
             var viewport = Get<EditorViewport>(window, "_viewport");
             TextBlock status = Get<TextBlock>(window, "_statusText");
             var geometry = window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry!;
-            SelectTab(window, "Terrain");
+            SelectTab(window, "Ground");
             Button typeButton = Find<Button>(window, "TerrainTileType");
             Check(!typeButton.IsEnabled || viewport.MultiSelectedTerrainIndexes.Count > 0 || window.CaptureEditorShellSessionSnapshotForTesting().SelectedTerrain != null, "Tile Type… is disabled until a tile is selected");
             TextBlock selection = Find<TextBlock>(window, "TerrainPanelSelection");

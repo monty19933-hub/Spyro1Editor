@@ -191,7 +191,7 @@ public sealed class LevelLinks
         var home = homes.First(h => h.Key == definition.HomeworldKey);
         if (home.Rebuilt)
             throw new InvalidDataException($"{home.Name} is rebuilt in your project ({home.RebuiltAs}): its doorways always lead to the levels in their own places. " +
-                $"Change them with Terrain › Doorways in {home.RebuiltAs}.");
+                $"Change them with Links › Doorways in {home.RebuiltAs}.");
     }
 
     /// <summary>The levels a doorway may be sent to: the game's levels (as the project has them) and the new level when the
@@ -207,7 +207,7 @@ public sealed class LevelLinks
         var homes = Homeworlds(routes);
         RequireRoutable(portal, homes);
         if (!PortalRouteDocument.IsLevelId(levelId)) throw new InvalidDataException("Choose a level for the doorway.");
-        if (levelId == 65 && !HasNewLevel) throw new InvalidDataException("The project has no new level yet: make one with File ▾ › New Level… first.");
+        if (levelId == 65 && !HasNewLevel) throw new InvalidDataException("The project has no new level yet: make one with Create › New Level… first.");
         int before = routes.DestinationFor(portal);
         if (before == levelId) return routes;
         var definition = portal.Resolve();
@@ -263,7 +263,7 @@ public sealed class LevelLinks
                 r => (r with { Destinations = [.. r.Destinations.Where(d => !mine.Contains(d.Portal))], Returns = [.. r.Returns.Where(x => !mine.Contains(x.Portal))] }).Validate()));
         }
         if (!HasNewLevel && (routes.Destinations.Any(d => d.DestinationLevelId == 65) || routes.Returns.Any(r => r.LevelId == 65)))
-            stops.Add(new("A doorway leads to the new level, but the project has no new level (File ▾ › New Level… makes one): Create BIN stops on it.", true, [65],
+            stops.Add(new("A doorway leads to the new level, but the project has no new level (Create › New Level… makes one): Create BIN stops on it.", true, [65],
                 "Send Them Back", r => (r with { Destinations = [.. r.Destinations.Where(d => d.DestinationLevelId != 65)], Returns = [.. r.Returns.Where(x => x.LevelId != 65)] }).Validate()));
 
         List<LevelLinkReturn> returns = [];
@@ -300,7 +300,7 @@ public sealed class LevelLinks
                 notes.Add(new(!vortex.Expected
                     ? $"{place.Name} has no Return Home vortex: Spyro can leave it only from the pause menu (Exit Level). Add Object can add one (search for \"Return Home\")."
                     : place.Built
-                        ? $"{place.Name} has no Return Home vortex (the game's {place.SlotName} has one): Spyro can leave it only from the pause menu (Exit Level). File ▾ › Fill In What the Level Needs… adds it."
+                        ? $"{place.Name} has no Return Home vortex (the game's {place.SlotName} has one): Spyro can leave it only from the pause menu (Exit Level). ☰ › Fill In What the Level Needs… adds it."
                         : $"{place.Name} has lost its Return Home vortex: Spyro can leave it only from the pause menu (Exit Level). Put it back (undo the removal, or Add Object: search for \"Return Home\").",
                     false, [id]));
         }
@@ -323,7 +323,7 @@ public sealed class LevelLinks
                 bool door = portals.Any(p => p.DestinationLevelId == id);
                 levels.Add(new(id, scene.Name, door, _vortex(id)));
                 if (!door)
-                    problems.Add(new($"{scene.Name} (in your world) has no doorway in {homeName} yet, so Spyro can't get into it. Open {homeName} and use Terrain › Doorways › Add Doorway….", false, [id]));
+                    problems.Add(new($"{scene.Name} (in your world) has no doorway in {homeName} yet, so Spyro can't get into it. Open {homeName} and use Links › Doorways › Add Doorway….", false, [id]));
                 if (_vortex(id).Present == false)
                     notes.Add(new($"{scene.Name} (in your world) has no Return Home vortex: Spyro can leave it only from the pause menu (Exit Level). Add Object can add one (search for \"Return Home\").", false, [id]));
             }
@@ -339,12 +339,12 @@ public sealed class LevelLinks
                         $"Fix It For Me then stands one near where Spyro arrives, or place him yourself in {homeName} (Objects › Random objects, \"The way out\").", true, [NewWorldDocument.Homeworld]));
                 if (backs.Count > 0)
                     notes.Add(new($"{homeName} still has a doorway back out to {PlaceOf(backs[0].DestinationLevelId).Name} from before. Your world is reached by balloon, so it isn't needed: " +
-                        $"Create BIN takes it out (the level as it was is kept in the project's backups). To keep it, choose a doorway as well with Terrain › World Entrance in {entryName}.", false, [NewWorldDocument.Homeworld]));
+                        $"Create BIN takes it out (the level as it was is kept in the project's backups). To keep it, choose a doorway as well with Links › World Entrance in {entryName}.", false, [NewWorldDocument.Homeworld]));
             }
             else if (home != null && backs.Count == 0)
-                stops.Add(new($"{homeName} has no doorway back to {entryName}, so Spyro could not leave your world: Create BIN stops until it has one. Open {homeName} and use Terrain › Doorways › Add Doorway… ({entryName}).", true, [NewWorldDocument.Homeworld]));
+                stops.Add(new($"{homeName} has no doorway back to {entryName}, so Spyro could not leave your world: Create BIN stops until it has one. Open {homeName} and use Links › Doorways › Add Doorway… ({entryName}).", true, [NewWorldDocument.Homeworld]));
             else if (entry != null && backs.Any(p => p.DestinationLevelId != entry.LevelId))
-                stops.Add(new($"{Possessive(homeName)} doorway back leads to {PlaceOf(backs.First(p => p.DestinationLevelId != entry.LevelId).DestinationLevelId).SlotName}, but your world is entered from {entryName}: Create BIN stops. Point it at {entryName} (Terrain › Doorways in {homeName}).", true, [NewWorldDocument.Homeworld]));
+                stops.Add(new($"{Possessive(homeName)} doorway back leads to {PlaceOf(backs.First(p => p.DestinationLevelId != entry.LevelId).DestinationLevelId).SlotName}, but your world is entered from {entryName}: Create BIN stops. Point it at {entryName} (Links › Doorways in {homeName}).", true, [NewWorldDocument.Homeworld]));
             world = new(named.Name, homeName, named.EntryHomeworldKey, entryName, _entrance?.HomeworldKey, levels, wayBack, named.Balloon)
             {
                 Access = WorldAccess.Describe(named, place, id => PlaceOf(id).Name), BalloonOnly = named.BalloonOnly, HasBalloonist = balloonist, Place = place,

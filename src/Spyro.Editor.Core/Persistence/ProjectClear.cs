@@ -211,10 +211,10 @@ public static class ProjectClear
             "This folder holds everything that had been made in the project\n" +
             $"    {projectRoot}\n" +
             $"when it was cleared back to the original game on {now:d MMMM yyyy} at {now:HH:mm}\n" +
-            "(File > Clear Entire Project to Base Game). The editor does not use this folder.\n" +
+            "(☰ › Clear Entire Project to Base Game). The editor does not use this folder.\n" +
             "Delete it when you are sure you do not want this work back.\n\n" +
             "To bring this work back:\n" +
-            "  1. In Spyro Editor, choose File > Clear Entire Project to Base Game, so that the project holds nothing else.\n" +
+            "  1. In Spyro Editor, choose ☰ › Clear Entire Project to Base Game, so that the project holds nothing else.\n" +
             "  2. Close Spyro Editor.\n" +
             "  3. Move everything in this folder (except this note) into the project folder above.\n" +
             "     If asked whether to replace a folder of the same name (such as _local), choose Replace.\n" +

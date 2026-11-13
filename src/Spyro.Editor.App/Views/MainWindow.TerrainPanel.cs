@@ -35,12 +35,17 @@ public sealed partial class MainWindow
         StackPanel root = new() { Name = "TerrainPanel", Spacing = 12, Margin = new Thickness(0, 10, 0, 0) };
         if (labControls != null)
             root.Children.Add(Detach(labControls));
-        root.Children.Add(BuildTerrainGroundCard());
-        root.Children.Add(BuildTerrainTilesCard());
-        root.Children.Add(BuildTerrainDoorwaysCard());
-        root.Children.Add(BuildTerrainWorldEntranceCard());
-        root.Children.Add(BuildTerrainBrushCard());
-        root.Children.Add(BuildTerrainTexturesCard());
+        _terrainGroundCard = BuildTerrainGroundCard();
+        root.Children.Add(_terrainGroundCard);
+        _terrainTilesCard = BuildTerrainTilesCard();
+        root.Children.Add(_terrainTilesCard);
+        // A homeworld's doorways and the way into the project's world are on the Links tab.
+        _terrainDoorwaysCard = BuildTerrainDoorwaysCard();
+        _terrainWorldEntranceCard = BuildTerrainWorldEntranceCard();
+        _terrainBrushCard = BuildTerrainBrushCard();
+        root.Children.Add(_terrainBrushCard);
+        _terrainTexturesCard = BuildTerrainTexturesCard();
+        root.Children.Add(_terrainTexturesCard);
         root.Children.Add(BuildTerrainCornerSection());
 
         Button restore = NewAsyncButton("Restore Original Terrain…", RestoreCurrentTerrainAsync);

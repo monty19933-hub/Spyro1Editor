@@ -41,7 +41,7 @@ internal static partial class NewLevelBuildCases
     private static void DoorwaysStep(MainWindow window, string outDir)
     {
         Load(window, "artisans");
-        SelectTab(window, "Terrain"); Pump(20);
+        SelectTab(window, "Links"); Pump(20);
         var scene = window.FreshSceneForTesting ?? throw new InvalidOperationException("Artisans is not a level you built.");
         var card = Find<Control>(window, "TerrainDoorwaysCard");
         var list = Find<ListBox>(window, "DoorwayList");
@@ -111,7 +111,7 @@ internal static partial class NewLevelBuildCases
     private static void DoorwayShots(MainWindow window, string outDir)
     {
         Load(window, "artisans");
-        SelectTab(window, "Terrain"); Pump(20);
+        SelectTab(window, "Links"); Pump(20);
         var scene = window.FreshSceneForTesting!;
         var viewport = Get<EditorViewport>(window, "_viewport");
         foreach (var portal in scene.Portals ?? [])

@@ -119,7 +119,8 @@ internal static class EditorNavigationUiCases
             {
                 window.Width = size.Width; window.Height = size.Height;
                 window.Measure(size); window.Arrange(new Rect(size)); Pump();
-                foreach (var button in new[] { file, save, Get<Button>(window, "_toolbarOpenDiscImageButton"), Get<Button>(window, "_toolbarCreateBinButton"), (Button)Get<Control>(window, "_toolbarMoreControl") })
+                // Open Game… is in the ☰ menu since 2.5; Create ▾, the export check and Find any command are in the top bar too.
+                foreach (var button in new[] { file, save, Get<Button>(window, "_toolbarCreateMenu"), Get<Button>(window, "_toolbarCreateBinButton"), (Button)Get<Control>(window, "_toolbarMoreControl"), Find<Button>(window, "ExportCheckBadge") })
                 {
                     Point? origin = button.TranslatePoint(default, window);
                     Check(origin.HasValue && origin.Value.X >= 0 && origin.Value.X + button.Bounds.Width <= size.Width && origin.Value.Y + button.Bounds.Height <= size.Height,

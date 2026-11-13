@@ -104,10 +104,13 @@ public sealed partial class MainWindow
         Grid.SetRow(notifications, 1);
         root.Children.Add(notifications);
 
+        // Your game | the view | the side panel.
         Grid body = new()
         {
             ColumnDefinitions =
             {
+                new ColumnDefinition(new GridLength(210)) { MinWidth = 150, MaxWidth = 340 },
+                new ColumnDefinition(new GridLength(5)),
                 new ColumnDefinition(GridLength.Star),
                 new ColumnDefinition(new GridLength(5)),
                 new ColumnDefinition(new GridLength(384)) { MinWidth = 360, MaxWidth = 520 }
@@ -115,10 +118,18 @@ public sealed partial class MainWindow
         };
         Grid.SetRow(body, 2);
 
-        Grid.SetColumn(_viewport, 0);
+        Control navigator = BuildGameNavigator();
+        body.Children.Add(navigator);
+        body.Children.Add(new GridSplitter
+        {
+            Width = 5, Background = new SolidColorBrush(Color.FromRgb(221, 226, 232)),
+            ResizeDirection = GridResizeDirection.Columns, ResizeBehavior = GridResizeBehavior.PreviousAndNext, HorizontalAlignment = HorizontalAlignment.Stretch,
+            [Grid.ColumnProperty] = 1
+        });
+        Grid.SetColumn(_viewport, 2);
         body.Children.Add(_viewport);
         Control welcome = BuildWelcomeOverlay();
-        Grid.SetColumn(welcome, 0);
+        Grid.SetColumn(welcome, 2);
         body.Children.Add(welcome);
 
         GridSplitter splitter = new()
@@ -129,12 +140,12 @@ public sealed partial class MainWindow
             ResizeBehavior = GridResizeBehavior.PreviousAndNext,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
-        Grid.SetColumn(splitter, 1);
+        Grid.SetColumn(splitter, 3);
         body.Children.Add(splitter);
 
         Control sidebar = BuildModernSidebar();
         _modernSidebarHost = sidebar;
-        Grid.SetColumn(sidebar, 2);
+        Grid.SetColumn(sidebar, 4);
         body.Children.Add(sidebar);
         root.Children.Add(body);
 
@@ -190,6 +201,7 @@ public sealed partial class MainWindow
         Grid.SetRow(status, 3);
         root.Children.Add(status);
 
+        RegisterEditorCommands();
         return root;
     }
 
@@ -226,8 +238,12 @@ public sealed partial class MainWindow
         topRow.Children.Add(BuildModernBrandTitle());
 
         Control editorWorkspace = BuildEditorWorkspaceControl();
-        Grid.SetColumn(editorWorkspace, 1);
-        topRow.Children.Add(editorWorkspace);
+
+        // Find any command, in the middle; then Create, Save, Create BIN, the export check and the project menu.
+        Control search = BuildCommandSearch();
+        Grid.SetColumn(search, 1);
+        search.HorizontalAlignment = HorizontalAlignment.Left;
+        topRow.Children.Add(search);
 
         StackPanel fileActions = new()
         {
@@ -239,26 +255,10 @@ public sealed partial class MainWindow
         _toolbarOpenDiscImageButton = NewAsyncButton("Open Game…", ChooseSourceDiscImageAsync);
         ToolTip.SetTip(_toolbarOpenDiscImageButton, "Choose your original Spyro BIN or CUE. Export creates a separate playable copy.");
         StyleModernToolbarButton(_toolbarOpenDiscImageButton, 106);
-        // Grouped: make or open levels of your own; change the open level; recovery; save.
-        fileActions.Children.Add(BuildActionMenu("File", "EditorFileMenu", new ToolbarAction("New Level…", NewMainLevelAsync),
-            new ToolbarAction("Random Level…", RandomLevelAsync),
-            new ToolbarAction("Random Homeworld…", RandomHomeworldAsync),
-            new ToolbarAction("New World…", NewWorldAsync),
-            new ToolbarAction("World's Balloon Route…", BalloonRouteAsync),
-            new ToolbarAction("Level Links…", LevelLinksAsync),
-            new ToolbarAction("New Level from Spyro: Year of the Dragon…", NewLevelFromYearOfTheDragonAsync),
-            new ToolbarAction("Open Created Level…", OpenMainFreshLevelAsync),
-            MenuSeparator,
-            new ToolbarAction("Start Blank in Current Level…", StartBlankCurrentLevelAsync),
-            new ToolbarAction("Fill In What the Level Needs…", FillInLevelAsync),
-            MenuSeparator,
-            new ToolbarAction("Restore Before Clear…", RestoreBeforeClearAsync),
-            new ToolbarAction("Free Deleted Objects' Save Rows…", FreeRetiredSaveRowsAsync),
-            MenuSeparator,
-            new ToolbarAction(ClearProjectCommand, ClearEntireProjectAsync),
-            MenuSeparator,
-            new ToolbarAction("Save Level", SaveFromToolbarAsync)));
-        fileActions.Children.Add(_toolbarOpenDiscImageButton);
+        // Make something new: a level, a random level or homeworld, a world, a level from Year of the Dragon.
+        _toolbarCreateMenu = BuildActionMenu("Create", "EditorCreateMenu", CreateActions());
+        ToolTip.SetTip(_toolbarCreateMenu, "Make a new level, a random level or homeworld, a world of your own, or a level from Spyro: Year of the Dragon.");
+        fileActions.Children.Add(_toolbarCreateMenu);
         _toolbarSaveButton = NewAsyncButton("Save", SaveFromToolbarAsync);
         _toolbarSaveButton.Name = "SaveLevelButton";
         StyleModernToolbarButton(_toolbarSaveButton, 64);
@@ -266,30 +266,24 @@ public sealed partial class MainWindow
         fileActions.Children.Add(_toolbarSaveButton);
         Button freshResearch = BuildNativeFreshDocumentButton();
         freshResearch.Content = "Fresh research…";
-        ToolTip.SetTip(freshResearch, "Earlier experimental document and its separate research export. Use File > New Level to author a neutral level in this main editor.");
+        ToolTip.SetTip(freshResearch, "Earlier experimental document and its separate research export. Use Create › New Level to author a neutral level in this main editor.");
         if (!_releaseMode) fileActions.Children.Add(freshResearch);
 
         _toolbarCreateBinButton = NewAsyncButton("Create BIN", CreateObjectTestBinAsync);
         StyleModernPrimaryButton(_toolbarCreateBinButton, ModernBlue, 110);
-        ToolTip.SetTip(_toolbarCreateBinButton, "Save current edits and export all saved levels to a playable BIN/CUE copy.");
+        ToolTip.SetTip(_toolbarCreateBinButton, "Play: save current edits and export all saved levels to a playable BIN/CUE copy.");
         fileActions.Children.Add(_toolbarCreateBinButton);
+        fileActions.Children.Add(BuildExportCheckBadge());
 
-        List<ToolbarAction> moreActions =
-        [
-            new("Project Data", ShowProjectDataAsync),
-            new("Check for Updates", ShowUpdatesAsync),
-            new("Check for Export Issues…", ShowBuildSafetyInspectorAsync),
-            new("Left Out of the Game…", ShowLeftOutAsync),
-            new("Help", ShowHelpAsync)
-        ];
-        if (!_releaseMode)
-            moreActions.Insert(3, new ToolbarAction("Diagnostics", ShowDiagnosticsAsync));
-        _toolbarMoreControl = BuildActionMenu("More", "EditorMoreMenu", moreActions.ToArray());
-        if (_toolbarMoreControl is Button moreBox)
+        // Everything about the project and the editor in one menu.
+        _toolbarMoreControl = BuildActionMenu("☰", "EditorFileMenu", ProjectActions());
+        ToolTip.SetTip(_toolbarMoreControl, "Your project: open your game, save, start over or restore, what was left out, updates and help.");
+        if (_toolbarMoreControl is Button projectBox)
         {
-            moreBox.Width = 74;
-            moreBox.MinHeight = 34;
-            moreBox.Margin = new Thickness(0);
+            projectBox.Content = "☰";
+            projectBox.MinWidth = 44;
+            projectBox.MinHeight = 34;
+            projectBox.Margin = new Thickness(0);
         }
         fileActions.Children.Add(_toolbarMoreControl);
         Grid.SetColumn(fileActions, 2);
@@ -316,6 +310,8 @@ public sealed partial class MainWindow
         _levelJumpBox.Width = 184;
         _levelJumpBox.PlaceholderText = "Choose level";
         _levelJumpBox.Margin = new Thickness(0);
+        // Levels are opened from Your game on the left; the picker stays (hidden) as the one place the open level is chosen.
+        _levelJumpBox.IsVisible = false;
         WireLevelJumpSelection();
         workspaceCommands.Children.Add(_levelJumpBox);
         workspaceCommands.Children.Add(BuildModernViewModeControl());
@@ -325,6 +321,7 @@ public sealed partial class MainWindow
         StyleModernToolbarButton(_modernViewportActionButton, 118);
         RefreshContextualViewportAction();
         workspaceCommands.Children.Add(_modernViewportActionButton);
+        workspaceCommands.Children.Add(editorWorkspace);
         bottomRow.Children.Add(workspaceCommands);
 
         _sourceDiscStatusText.FontSize = 11;
@@ -534,11 +531,13 @@ public sealed partial class MainWindow
             RowDefinitions =
             {
                 new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Star)
             }
         };
         layout.Children.Add(BuildModernLevelHeader());
 
+        // Built first: the Objects tab hands over what acts on a selected object, and the export check.
         _modernObjectWorkspaceTab = NewModernWorkspaceTab(
             "Objects",
             BuildModernObjectWorkspace());
@@ -548,30 +547,33 @@ public sealed partial class MainWindow
 
         _retailTerrainWorkspace=_releaseMode ? BuildReleaseTerrainWorkspace() : BuildTerrainTabControls();
         _modernTerrainWorkspaceTab = NewModernWorkspaceTab(
-            "Terrain",
+            "Ground",
             new StackPanel { Spacing = 8, Children = { BuildFreshTerrainTools(),
                 _retailTerrainWorkspace } });
-        _modernLevelWorkspaceTab = NewModernWorkspaceTab("Game Settings", BuildModernLevelWorkspace());
-        _modernColoursWorkspaceTab = NewModernWorkspaceTab("Colours", BuildModernColoursWorkspace());
-        _modernColoursWorkspaceTab.Name = "ColoursWorkspaceTab";
-        _modernEnvironmentWorkspaceTab = NewModernWorkspaceTab(
-            "Environment",
-            BuildModernEnvironmentWorkspace());
+        _modernTerrainWorkspaceTab.Name = "GroundWorkspaceTab";
+        _modernLevelWorkspaceTab = NewModernWorkspaceTab("Look", BuildLookWorkspace());
+        _modernLevelWorkspaceTab.Name = "LookWorkspaceTab";
+        _modernLinksWorkspaceTab = NewModernWorkspaceTab("Links", BuildLinksWorkspace(_terrainDoorwaysCard, _terrainWorldEntranceCard));
+        _modernLinksWorkspaceTab.Name = "LinksWorkspaceTab";
+        _modernEnvironmentWorkspaceTab = _modernLinksWorkspaceTab;
+        _modernGameWorkspaceTab = NewModernWorkspaceTab("Game", BuildGameWorkspace(_exportCheckDisclosure ?? new Border()));
+        _modernGameWorkspaceTab.Name = "GameWorkspaceTab";
+        _modernColoursWorkspaceTab = _modernGameWorkspaceTab;
         List<TabItem> existingLevelItems =
         [
-            _modernObjectWorkspaceTab,
             _modernTerrainWorkspaceTab,
+            _modernObjectWorkspaceTab,
             _modernLevelWorkspaceTab,
-            _modernColoursWorkspaceTab,
-            _modernEnvironmentWorkspaceTab
+            _modernLinksWorkspaceTab,
+            _modernGameWorkspaceTab
         ];
         List<TabItem> levelBuildingItems =
         [
-            _modernLevelBuildingObjectWorkspaceTab,
             _modernTerrainWorkspaceTab,
+            _modernLevelBuildingObjectWorkspaceTab,
             _modernLevelWorkspaceTab,
-            _modernColoursWorkspaceTab,
-            _modernEnvironmentWorkspaceTab
+            _modernLinksWorkspaceTab,
+            _modernGameWorkspaceTab
         ];
         if (!_releaseMode)
         {
@@ -586,6 +588,14 @@ public sealed partial class MainWindow
         _lastExistingLevelEditorTab = _modernObjectWorkspaceTab;
         _lastLevelBuildingWorkspaceTab = _modernLevelBuildingObjectWorkspaceTab;
 
+        // What is selected, above the tabs whatever tab is open.
+        if (_pendingSelectionSummary != null && _pendingSelectedActions != null)
+        {
+            Control selected = BuildSelectedBox(_pendingSelectionSummary, _pendingSelectedActions);
+            Grid.SetRow(selected, 1);
+            layout.Children.Add(selected);
+        }
+
         _modernWorkspaceTabs = new TabControl
         {
             Name = "EditorWorkspaceToolTabs",
@@ -598,9 +608,10 @@ public sealed partial class MainWindow
             if (!_switchingEditorShellWorkspace)
                 RememberSelectedEditorWorkspaceTab();
             RefreshEditorWorkspaceTerrainFocusMode();
+            RefreshSelectedBox();
         };
         ApplyEditorExperienceForCurrentLevel(_modernObjectWorkspaceTab);
-        Grid.SetRow(_modernWorkspaceTabs, 1);
+        Grid.SetRow(_modernWorkspaceTabs, 2);
         layout.Children.Add(_modernWorkspaceTabs);
 
         shell.Child = layout;
@@ -802,10 +813,10 @@ public sealed partial class MainWindow
         root.Children.Add(TerrainCard("Add to this level", add));
         root.Children.Add(BuildRandomObjectsCard());
 
-        StackPanel selected = new();
+        // What acts on the selected object goes to the Selected box above the tabs (BuildSelectedBox).
         if (selection is StackPanel summary && summary.Children.Count > 0)
-            summary.Children.RemoveAt(0); // its own "Selection" heading; the card has one
-        selected.Children.Add(selection);
+            summary.Children.RemoveAt(0); // its own "Selection" heading; the box has one
+        StackPanel selected = new() { Spacing = 8 };
         if (_objectPrimaryGrid != null && _objectEditButton != null && _objectSwapCatalogButton != null)
         {
             Grid actions = TwoColumnGrid(1);
@@ -814,15 +825,21 @@ public sealed partial class MainWindow
             selected.Children.Add(actions);
         }
         if (_objectReplaceFlightGateButton != null) selected.Children.Add(Detach(_objectReplaceFlightGateButton));
+        // An added egg thief's run and what a chest or creature gives (they were built but never shown before 2.5).
+        if (_objectNativeMovementButton != null) selected.Children.Add(Detach(_objectNativeMovementButton));
+        if (_objectRouteToolsCard != null) selected.Children.Add(Detach(_objectRouteToolsCard));
+        if (_objectRewardCard != null) selected.Children.Add(Detach(_objectRewardCard));
         if (_objectSecondaryGrid != null) selected.Children.Add(Detach(_objectSecondaryGrid));
         if (_objectUndoRemoveButton != null) selected.Children.Add(Detach(_objectUndoRemoveButton));
         if (_objectPositionDisclosure != null) selected.Children.Add(Detach(_objectPositionDisclosure));
         if (_objectActionHintBorder != null) selected.Children.Add(Detach(_objectActionHintBorder));
-        root.Children.Add(TerrainCard("Selected object", selected));
+        _pendingSelectionSummary = selection;
+        _pendingSelectedActions = selected;
 
         root.Children.Add(BuildModernMobyBrowser());
         if (_objectRecoveryExpander != null) root.Children.Add(Detach(_objectRecoveryExpander));
 
+        // The export check goes to the Game tab (Before you play); its summary is also the top bar's badge.
         var checks = (Expander)BuildModernDisclosure("Export check", BuildModernBuildSafetyPanel(), false);
         var checkSummary = new TextBlock { Name = "ExportCheckSummary", TextWrapping = TextWrapping.Wrap, FontSize = 12 };
         void RefreshCheckSummary()
@@ -836,10 +853,16 @@ public sealed partial class MainWindow
                 RefreshCheckSummary();
         };
         RefreshCheckSummary(); checks.Header = checkSummary;
-        root.Children.Add(checks);
+        _exportCheckDisclosure = checks;
         ShowSelection(ViewportSelectionChangedEventArgs.None);
         return root;
     }
+
+    private Control? _pendingSelectionSummary;
+    private StackPanel? _pendingSelectedActions;
+    private Control? _exportCheckDisclosure;
+    private Control? _objectRouteToolsCard;
+    private Control? _objectRewardCard;
 
     private Control BuildModernObjectWorkspace()
     {
@@ -863,7 +886,7 @@ public sealed partial class MainWindow
                 RefreshCheckSummary();
         };
         RefreshCheckSummary(); checks.Header = checkSummary;
-        panel.Children.Add(checks);
+        _exportCheckDisclosure = checks;
         panel.Children.Add(BuildModernMobyBrowser());
         ShowSelection(ViewportSelectionChangedEventArgs.None);
         return panel;
@@ -944,8 +967,10 @@ public sealed partial class MainWindow
         // An added object's route (an egg thief's run, a sheep's walk) is edited in every build; the game's own thieves'
         // runs only outside release mode (RefreshNativeMovementActionButton).
         panel.Children.Add(_objectNativeMovementButton);
-        panel.Children.Add(BuildRouteToolsCard());
-        panel.Children.Add(BuildRewardCard());
+        _objectRouteToolsCard = BuildRouteToolsCard();
+        panel.Children.Add(_objectRouteToolsCard);
+        _objectRewardCard = BuildRewardCard();
+        panel.Children.Add(_objectRewardCard);
 
         _objectCopyButton = NewButton("Copy", CopySelectedMoby);
         _objectPasteButton = NewAsyncButton("Paste", PasteMobyClipboardAtLastPointerAsync);
@@ -1115,103 +1140,6 @@ public sealed partial class MainWindow
             ClipToBounds = true,
             Child = _mobyList
         });
-        return panel;
-    }
-
-    private Control BuildModernLevelWorkspace()
-    {
-        StackPanel panel = new() { Spacing = 8 };
-        // Two groups: what belongs to the open level, then what applies to the whole game Create BIN makes.
-        panel.Children.Add(ModernSectionHeading("This level"));
-        if (_releaseMode)
-            panel.Children.Add(new TextBlock
-            {
-                Text = "Names, music and portal routes are kept in your project as soon as you apply them. Create BIN puts them in the game.",
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = 12,
-                Foreground = new SolidColorBrush(ModernMutedInk)
-            });
-        panel.Children.Add(BuildFreshDocumentSettings());
-        _retailNameDisclosure=BuildModernDisclosure("Level name", BuildLevelTextPanel(), true);
-        _retailMusicDisclosure=BuildModernDisclosure("Music", BuildLevelMusicPanel(), false);
-        panel.Children.Add(_retailNameDisclosure);panel.Children.Add(_retailMusicDisclosure);
-        _homeworldTextGroup = BuildModernDisclosure("Portals & Return Home", BuildPortalControlPanel(), false);
-        panel.Children.Add(_homeworldTextGroup);
-        var wholeGame = ModernSectionHeading("Whole game");
-        wholeGame.Margin = new Thickness(0, 12, 0, 0);
-        panel.Children.Add(wholeGame);
-        panel.Children.Add(new TextBlock
-        {
-            Name = "GameSettingsWholeGameNote",
-            Text = "Memory for the games you create, saved as soon as you choose. Colours (Spyro's, this level's enemies, chests and dragons), Hover, Fly Anywhere and Play as Crash are on the Colours tab.",
-            TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = new SolidColorBrush(ModernMutedInk)
-        });
-        if (!_releaseMode) panel.Children.Add(BuildModernDisclosure("Starting Abilities", new StackPanel
-        {
-            Name = "StartingAbilitiesPanel", Spacing = 8,
-            Children = { BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), true),
-                BuildModernDisclosure("Play as Crash", BuildCrashPlayerSettingsPanel(), false), BuildHoverSection(), BuildSpyroColourSection(), BuildEggThiefColourSection() }
-        }, false));
-        panel.Children.Add(BuildMemoryModeSection());
-
-        // V5 whole-level replacement is deliberately a separate, guarded research
-        // workflow. It never enters the normal Create BIN dispatcher.
-        if (!_releaseMode) panel.Children.Add(BuildNativeLevelReplacementDisclosure());
-
-        // The evidence-bound ID65 lab is intentionally narrower than the full
-        // Research workspace and therefore remains reachable from the public V5
-        // shell. Its own disclosure owns the locked-base and disposable-output
-        // guards; it never enters normal Create BIN.
-        if (!_releaseMode) panel.Children.Add(BuildId65BlankLevelLabDisclosure());
-
-        _levelDetails.TextWrapping = TextWrapping.Wrap;
-        _levelDetails.Foreground = new SolidColorBrush(ModernMutedInk);
-        _levelDetails.FontSize = 12;
-        _levelDetails.LineHeight = 18;
-        panel.Children.Add(BuildModernDisclosure("Level details", _levelDetails, false));
-        return panel;
-    }
-
-    /// <summary>The Colours tab: colours for the open level's enemies, chests, dragons and animals; then Spyro's own
-    /// colours, the egg thieves' colour, and the moves and characters of the whole game (Hover, Fly Anywhere, Play as
-    /// Crash). In a development build the whole-game cards stay under Game Settings › Starting Abilities.</summary>
-    private Control BuildModernColoursWorkspace()
-    {
-        StackPanel panel = new() { Name = "ColoursWorkspacePanel", Spacing = 8 };
-        panel.Children.Add(ModernSectionHeading("This level"));
-        panel.Children.Add(BuildCreatureColourSection());
-        var wholeGame = ModernSectionHeading("Spyro and the whole game");
-        wholeGame.Margin = new Thickness(0, 12, 0, 0);
-        panel.Children.Add(wholeGame);
-        panel.Children.Add(new TextBlock
-        {
-            Text = _releaseMode
-                ? "Spyro's colours and moves and Play as Crash, for the games you create. Saved as soon as you choose; Create BIN puts them in the game."
-                : "In this development build Spyro's colours and moves are under Game Settings › Starting Abilities.",
-            TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = new SolidColorBrush(ModernMutedInk)
-        });
-        if (_releaseMode)
-        {
-            // Spyro himself first (his colours, with his picture), the egg thieves, then moves and characters.
-            panel.Children.Add(BuildSpyroColourSection());
-            panel.Children.Add(BuildEggThiefColourSection());
-            panel.Children.Add(BuildHoverSection());
-            // One switch for the whole exported game, off unless the user turns it on.
-            var flight = BuildModernDisclosure("Fly Anywhere", BuildFreeFlightSettingsPanel(), false);
-            flight.Name = "FlyAnywhereSection";
-            panel.Children.Add(flight);
-            var crash = BuildModernDisclosure("Play as Crash", BuildCrashPlayerSettingsPanel(), false);
-            crash.Name = "PlayAsCrashSection";
-            panel.Children.Add(crash);
-        }
-        return panel;
-    }
-
-    private Control BuildModernEnvironmentWorkspace()
-    {
-        StackPanel panel = new() { Spacing = 8 };
-        panel.Children.Add(ModernSectionHeading("Sky and lighting"));
-        panel.Children.Add(BuildSkyboxPanel());
         return panel;
     }
 

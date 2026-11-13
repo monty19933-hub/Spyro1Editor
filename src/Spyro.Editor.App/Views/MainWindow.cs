@@ -443,7 +443,7 @@ public sealed partial class MainWindow : Window
             // Brush hotkeys only work in the Terrain tab; elsewhere clicks always select objects.
             if (e.Action != TerrainBrushAction.Off && _modernWorkspaceTabs != null && !IsTerrainWorkspaceTabSelected())
             {
-                _statusText.Text = "Terrain brushes work in the Terrain tab. Open Terrain to raise, lower or level ground.";
+                _statusText.Text = "Terrain brushes work in the Ground tab. Open Terrain to raise, lower or level ground.";
                 return;
             }
             SelectTerrainBrushMode(e.Action);
@@ -10759,8 +10759,11 @@ public sealed partial class MainWindow : Window
         SetButtonEnabled(_discImageChooseButton, sourceCommandEnabled);
         SetButtonEnabled(_importEditorCacheButton, sourceCommandEnabled);
         SetButtonEnabled(_buildPortableCacheButton, sourceCommandEnabled);
+        // The ☰ menu holds Open Game and Save, and Create makes new levels: neither while Create BIN runs.
         if (_toolbarMoreControl != null)
-            _toolbarMoreControl.IsEnabled = !editorMutationOperationActive;
+            _toolbarMoreControl.IsEnabled = !editorMutationOperationActive && !_createBinBusy;
+        if (_toolbarCreateMenu != null)
+            _toolbarCreateMenu.IsEnabled = !editorMutationOperationActive && !_createBinBusy;
         if (_previousBetaProjectReminder != null)
             _previousBetaProjectReminder.IsEnabled = !editorMutationOperationActive;
         if (_updateNotificationBanner != null)
@@ -12930,7 +12933,7 @@ public sealed partial class MainWindow : Window
         {
             // A level you build keeps its sky in the level itself (Choose Sky File… or Game Settings › Import a sky…).
             if(_freshSceneDocument.CustomSky!=null){_statusText.Text="This level keeps its imported sky in the level; Save Level keeps it.";return true;}
-            _statusText.Text="A level you build keeps its sky in the level: use Choose Sky File… to import one, or borrow a level's sky in Game Settings, then Save Level.";
+            _statusText.Text="A level you build keeps its sky in the level: use Choose Sky File… to import one, or borrow a level's sky on the Look tab, then Save Level.";
             return false;
         }
         if (TryBlockId65SkyMutation("save"))
@@ -13648,7 +13651,7 @@ public sealed partial class MainWindow : Window
         if (targets.Count == 0 && flightIntent?.RequiresRebuild!=true && !NativeHover.Enabled && !NativeSpyroColours.Enabled)
         {
             _statusText.Text = "No saved edits were found. Change a level name, music track, skybox, object, or terrain first, " +
-                "or something on the Colours tab (Spyro's colours, this level's colours, Hover).";
+                "or something on the Look or Game tab (this level's colours; Spyro's colours, Hover).";
             return;
         }
 
@@ -13713,7 +13716,7 @@ public sealed partial class MainWindow : Window
         ReportCreateBinProgress(
             "Creating BIN...",
             targets.Count == 0
-                ? "Creating the game with your Game Settings..."
+                ? "Creating the game with your settings..."
                 : targets.Count == 1
                 ? $"Creating test for {targets[0].Level.DisplayName}..."
                 : $"Creating one test for saved edits across {targets.Count} levels...");
@@ -14012,7 +14015,7 @@ public sealed partial class MainWindow : Window
             {
                 throw new InvalidDataException(flightIntent.Enabled
                     ? "Fly Anywhere needs the unchanged original USA disc image, and the game you opened is different. " +
-                      "Open the original disc with Open Game…, or untick Fly Anywhere on the Colours tab. (" + e.Message + ")"
+                      "Open the original disc with Open Game…, or untick Fly Anywhere on the Game tab. (" + e.Message + ")"
                     : "The only thing to export is Fly Anywhere being switched off, and rebuilding the plain game needs the " +
                       "unchanged original USA disc image; the game you opened is different. (" + e.Message + ")", e);
             }
@@ -14680,7 +14683,7 @@ public sealed partial class MainWindow : Window
             string crashImage = needsCrash ? Spyro.Editor.Core.Crash.CrashWarpedDiscLocator.Find(_workspace) : "";
             bool needsYotd = universalPlacements.Values.Any(list => list.Any(p => UniversalSpecialCatalog.RequiresYearOfTheDragonSource(p.SpecialId)));
             var yotd = needsYotd ? ResolveYearOfTheDragonDisc()
-                ?? throw new InvalidDataException("Lost Fleet's creatures are converted from your Spyro: Year of the Dragon (USA) disc. Choose it with \"Year of the Dragon disc…\" in Game Settings → Music.") : null;
+                ?? throw new InvalidDataException("Lost Fleet's creatures are converted from your Spyro: Year of the Dragon (USA) disc. Choose it with \"Year of the Dragon disc…\" in Look › Music.") : null;
             var entranceStage = _stageWorldEntrance;
             UniversalExportResult universal = await Task.Run(() =>
             {
@@ -19348,7 +19351,7 @@ public sealed partial class MainWindow : Window
         panel.Children.Add(BuildTerrainProofQueueHint());
         panel.Children.Add(new TextBlock
         {
-            Text = "Advanced holds diagnostics, proof reports, imports, shared-texture changes, and cleanup. The main Terrain tab is the normal edit flow; Preflight BIN only writes a patch plan for inspection.",
+            Text = "Advanced holds diagnostics, proof reports, imports, shared-texture changes, and cleanup. The main Ground tab is the normal edit flow; Preflight BIN only writes a patch plan for inspection.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92)),
             FontSize = 12,
@@ -24940,7 +24943,7 @@ public sealed partial class MainWindow : Window
             Spacing = 12,
             Margin = new Thickness(16)
         };
-        panel.Children.Add(NewSmallNote("Material label changes the editor/readability label. To make terrain look different in game, use the Terrain tab's Use Material Look, Borrow In-Game Look, selected-face palette tools, or shared-texture tools before Create BIN."));
+        panel.Children.Add(NewSmallNote("Material label changes the editor/readability label. To make terrain look different in game, use the Ground tab's Use Material Look, Borrow In-Game Look, selected-face palette tools, or shared-texture tools before Create BIN."));
         panel.Children.Add(fields);
         panel.Children.Add(details);
 
@@ -28310,16 +28313,19 @@ public sealed partial class MainWindow : Window
         string mod = OperatingSystem.IsMacOS() ? "⌘" : "Ctrl+";
         AddHelpSection(panel, "Getting started", [
             "Open Game…: choose your own original Spyro the Dragon disc image (BIN or CUE). The editor reads it and never changes it.",
-            "Pick a level from the list at the top left.",
-            "Change things in the four tabs on the right — Objects, Terrain, Game Settings, Environment — then Save, then Create BIN."
+            "Open a level from Your game, the list on the left: the game's worlds with their levels, then your own world and levels.",
+            "Change things in the five tabs on the right — Ground, Objects, Look, Links and Game — then Save, then Create BIN.",
+            $"Find any command (top bar, {mod}K): type what you want to do — a doorway, the music, a random level, Stone Hill — and press Enter. It finds every command, every card and every level.",
+            "Whatever you select in the view (an object, a tile) shows at the top of the right-hand panel, with what you can do to it, whichever tab is open. Its heading folds it away.",
+            "Create ▾ makes something new (a level, a random level or homeworld, a world, a level from Year of the Dragon). ☰ holds the project: Open Game…, Save, start over or restore, what was left out, updates and Help. The badge beside Create BIN is the export check: click it for the details."
         ]);
 
         AddHelpSection(panel, "Save and Create BIN", [
             $"Save ({mod}S) keeps the open level's changes in your project. It does not make a game.",
             "Create BIN saves first, then builds a new playable game — a BIN and a CUE — from everything saved in the project. The files go in the project's output folder; open the CUE in a PlayStation emulator (DuckStation, for example).",
             "Your original disc image is never written to.",
-            "Create BIN builds the whole project whichever level is open: every level you changed or built, your new world, and Game Settings.",
-            "If something cannot be put in the game, the editor says what and where, and Fix It For Me appears beside the message. One press gets the game made: the editor repairs what it can (it places the way into your world; it trims a world's homeworld to the objects it can hold) and, for anything else, makes the game without the part of your project that stops it, and tells you what it left out. A left-out part stays in your project; More ▾ > Left Out of the Game… says why and puts it back. More ▾ > Check for Export Issues… runs Create BIN's check without building."
+            "Create BIN builds the whole project whichever level is open: every level you changed or built, your new world, and the Game tab's settings.",
+            "If something cannot be put in the game, the editor says what and where, and Fix It For Me appears beside the message. One press gets the game made: the editor repairs what it can (it places the way into your world; it trims a world's homeworld to the objects it can hold) and, for anything else, makes the game without the part of your project that stops it, and tells you what it left out. A left-out part stays in your project; ☰ › Left Out of the Game… says why and puts it back. ☰ › Check for Export Issues… runs Create BIN's check without building."
         ]);
 
         AddHelpSection(panel, "The view", [
@@ -28341,46 +28347,56 @@ public sealed partial class MainWindow : Window
             "Dragons keep their pedestal and rescue scene with them when moved. The ENTRY marker is where Spyro lands when he flies into the level."
         ]);
 
-        AddHelpSection(panel, "Terrain tab", [
+        AddHelpSection(panel, "Ground tab", [
             $"Tiles: click a tile to select it, {(OperatingSystem.IsMacOS() ? "⌘" : "Ctrl")}-click to select several, drag to move, Shift-drag to change height. Move Tile… and Edit Corner… take exact amounts.",
             "Add Terrain copies the selected tile so you can move the copy into place. Remove Terrain (or Delete in the view) takes tiles out; Undo Terrain puts the selected tile back or brings removed tiles back.",
             $"Brush: Raise, Lower, Smooth, Level or Restore the ground under the circle. Keys 1 to 5 choose a brush, 0 or Esc switches it off. Undo Stroke is {mod}Z in the view, Redo Stroke is {(OperatingSystem.IsMacOS() ? "⇧⌘Z" : "Ctrl+Y")}.",
             "Textures: Choose Texture…, then click tiles to paint them. Esc stops painting.",
             "Ground (in a level you build): Grass, Dirt, Stone, Sand, Snow, Wood, Water, Lava or Goo — click one, then click tiles. Tile Type… changes only what Spyro finds on a tile (solid ground, water, lava, supercharge…).",
             "Add beside ◀ ▲ ▼ ▶ adds an exact copy of the selected tile against one of its edges.",
-            "Doorways (in a homeworld you rebuild, or your world's homeworld): Add Doorway…, choose where it leads and its shape; move, turn and repaint it on the card.",
-            "World Entrance (in the game's homeworlds): your world is reached by balloon and needs no doorway; Add a Doorway As Well… puts one into your world there, if you want one too.",
             "If a shape cannot be exported, a red bar says so, with Show it and Undo that change."
         ]);
 
-        AddHelpSection(panel, "Game Settings, Colours and Environment", [
-            "This level: Level name changes the name on portals, loading screens and in the guidebook. Music picks the level's track. Portals & Return Home: choose where each portal leads and where Return Home goes (Open Level Links… there, or File ▾ > Level Links…, shows every homeworld's doorways and every level's Return Home at once). Creatures' colours: a colour for each kind of enemy in this level only (the same gnorc can be red here and blue in the next level); Randomize gives every kind another colour, Their Own Colours puts them back.",
-            "Colours tab — This level's colours: the open level's enemies, chests, dragons and animals, each in any colour, for that level only (so chests can be blue in one level and red in the next). Randomize beside a list gives that list other colours, Randomize All every list. Dragon statues sets one crystal colour for all of the level's statues (press Save to keep it).",
-            "Colours tab — Spyro's colours: any colour for each part of Spyro (body, belly, horns, head spikes, wings, tail tip, eyes), a ready-made look, or Surprise me; the picture on the card shows him as he will be in the game. Set \"Colours for\" to the open level to give him a look in that level only (Same as the Whole Game takes it away again). Hover: ▲ while gliding makes Spyro beat his wings, rise a little and drift on, as in Spyro 3 (not in levels where Fly Anywhere is on: there he flies instead of gliding). Play as Crash puts Crash in the levels you tick. Create BIN works with only these settings too.",
-            "Game Settings — Memory: Emulator (8 MB RAM) is the usual choice and lets levels hold more (a game made with it still plays on a normal 2 MB set-up wherever its levels fit). Choose PlayStation (2 MB) for a real console or a disc.",
-            "Colours tab — Fly Anywhere: tick it and the game you export lets Spyro fly in every normal level — jump, then press ✕ again in the air — or open Choose levels and tick only the levels you want. It is separate from the editor's Game Camera.",
-            "Environment: recolor the sky, borrow another level's sky, use a ready-made one, or import your own from a 360° picture or an OBJ/FBX model."
+        AddHelpSection(panel, "Look tab", [
+            "Level name changes the name on portals, loading screens and in the guidebook. Music picks the level's track.",
+            "Sky and lighting: recolor the sky, borrow another level's sky, use a ready-made one, or import your own from a 360° picture or an OBJ/FBX model.",
+            "This level's colours: the open level's enemies, chests, dragons and animals, each in any colour, for that level only (so chests can be blue in one level and red in the next). Randomize beside a list gives that list other colours, Randomize All every list. Dragon statues sets one crystal colour for all of the level's statues (press Save to keep it)."
+        ]);
+
+        AddHelpSection(panel, "Links tab", [
+            "How Spyro reaches the open level and leaves it, and how the whole game hangs together. Level Links… shows every homeworld's doorways and every level's Return Home at once; World's Balloon Route… places your world among the balloonists' worlds.",
+            "Doorways (in a homeworld you rebuild, or your world's homeworld): Add Doorway…, choose where it leads and its shape; move, turn and repaint it on the card.",
+            "World Entrance (in the game's homeworlds): your world is reached by balloon and needs no doorway; Add a Doorway As Well… puts one into your world there, if you want one too.",
+            "Portals & Return Home: choose where each portal leads and where Return Home goes (Open Level Links… there, or Links › Level Links…, shows every homeworld's doorways and every level's Return Home at once)."
+        ]);
+
+        AddHelpSection(panel, "Game tab", [
+            "What applies to the whole game you create, in every level.",
+            "Spyro's colours: any colour for each part of Spyro (body, belly, horns, head spikes, wings, tail tip, eyes), a ready-made look, or Surprise me; the picture on the card shows him as he will be in the game. Set \"Colours for\" to the open level to give him a look in that level only (Same as the Whole Game takes it away again). Hover: ▲ while gliding makes Spyro beat his wings, rise a little and drift on, as in Spyro 3 (not in levels where Fly Anywhere is on: there he flies instead of gliding). Play as Crash puts Crash in the levels you tick. Create BIN works with only these settings too.",
+            "Fly Anywhere: tick it and the game you export lets Spyro fly in every normal level — jump, then press ✕ again in the air — or open Choose levels and tick only the levels you want. It is separate from the editor's Game Camera.",
+            "Memory: Emulator (8 MB RAM) is the usual choice and lets levels hold more (a game made with it still plays on a normal 2 MB set-up wherever its levels fit). Choose PlayStation (2 MB) for a real console or a disc.",
+            "Before you play: the export check lists anything that would stop Create BIN (the same as the badge in the top bar)."
         ]);
 
         AddHelpSection(panel, "Levels of your own", [
-            "File ▾ > New Level… starts a level of your own (a grassy meadow to build on) that opens when you choose New Game. A project holds one; the editor asks before replacing it and keeps a copy in the project's backups folder.",
-            "File ▾ > Random Level… makes a whole level the way the game's own levels are made (rooms along a route, sloping paths, steps, lookouts to glide from), in the style of a level you pick: its ground, rock, colours, sky and music, as easy or hard as you choose (Easy, Medium, Hard, Kaizo). New Level from Spyro: Year of the Dragon… rebuilds one of that game's levels from your own disc.",
-            "File ▾ > Random Homeworld… makes a homeworld the same way: a plaza with rooms off it and a doorway to every level the homeworld leads to. It goes in the place of any of the game's homeworlds (open that homeworld first) or in the homeworld of a world of your own.",
+            "Create › New Level… starts a level of your own (a grassy meadow to build on) that opens when you choose New Game. A project holds one; the editor asks before replacing it and keeps a copy in the project's backups folder.",
+            "Create › Random Level… makes a whole level the way the game's own levels are made (rooms along a route, sloping paths, steps, lookouts to glide from), in the style of a level you pick: its ground, rock, colours, sky and music, as easy or hard as you choose (Easy, Medium, Hard, Kaizo). New Level from Spyro: Year of the Dragon… rebuilds one of that game's levels from your own disc.",
+            "Create › Random Homeworld… makes a homeworld the same way: a plaza with rooms off it and a doorway to every level the homeworld leads to. It goes in the place of any of the game's homeworlds (open that homeworld first) or in the homeworld of a world of your own.",
             "Objects > Random objects fills a level you built: choose a level type, an enemy type, a difficulty, how many gems and dragonfly eggs, and press Randomize. Enemies, animals, every kind of chest, egg thieves, dragons, the way out and gems of every colour are placed by the measure of the game's own levels (about as many chests, enemies and loose gems as a level of the game with that treasure has); press it again for another arrangement.",
             "An enemy or a chest: select it and choose under \"What it gives\" which gem Spyro gets for it (red, green, blue, gold or pink).",
-            "An egg thief you added: select him and Edit Route… and the \"Its run\" tools appear. Drag the run's points in the 3D view, or use New Loop Here, Bigger, Smaller, Turn and Other Way Round. Colours > Egg thieves' colour gives every thief in the game another colour.",
-            "File ▾ > Start Blank in Current Level… replaces the open level with the same meadow so you can rebuild it. Restore Before Clear… brings the previous version back.",
-            "File ▾ > Fill In What the Level Needs… adds the level's own dragons and egg thieves, a Return Home vortex, enemies and gems.",
-            "File ▾ > Level Links… shows how Spyro gets into every level and back: each homeworld's doorways with where they lead (choose another level, your new level or a level you built), and where Return Home from each level brings him back out. A doorway you send to a level brings Spyro back out of itself; the window says when a level has no doorway, two doorways lead to one level, or a level has no Return Home vortex.",
-            "File ▾ > Open Created Level… reopens the level you made.",
-            "File ▾ > Clear Entire Project to Base Game… starts the whole project over: everything you have made (your changes to every level, the levels and world you built, your game settings) is taken out and the editor shows the original game again. It asks first, and only \"Yes, I am sure\" clears. Your work is moved, not deleted: it goes into a dated folder in \"Old projects\" beside your project, with a note that says how to bring it back. Games you already created stay, and so does your choice of game."
+            "An egg thief you added: select him and Edit Route… and the \"Its run\" tools appear. Drag the run's points in the 3D view, or use New Loop Here, Bigger, Smaller, Turn and Other Way Round. Game › Egg thieves' colour gives every thief in the game another colour.",
+            "☰ › Start Blank in Current Level… replaces the open level with the same meadow so you can rebuild it. Restore Before Clear… brings the previous version back.",
+            "☰ › Fill In What the Level Needs… adds the level's own dragons and egg thieves, a Return Home vortex, enemies and gems.",
+            "Links › Level Links… shows how Spyro gets into every level and back: each homeworld's doorways with where they lead (choose another level, your new level or a level you built), and where Return Home from each level brings him back out. A doorway you send to a level brings Spyro back out of itself; the window says when a level has no doorway, two doorways lead to one level, or a level has no Return Home vortex.",
+            "☰ › Open Created Level… reopens the level you made.",
+            "☰ › Clear Entire Project to Base Game… starts the whole project over: everything you have made (your changes to every level, the levels and world you built, your game settings) is taken out and the editor shows the original game again. It asks first, and only \"Yes, I am sure\" clears. Your work is moved, not deleted: it goes into a dated folder in \"Old projects\" beside your project, with a note that says how to bring it back. Games you already created stay, and so does your choice of game."
         ]);
 
         AddHelpSection(panel, "Your own world", [
-            "File ▾ > New World… makes a world of your own: a homeworld and up to four levels, picked from the level list like the game's own. It is called by its homeworld's name.",
-            "Players reach it by balloon, like the game's own worlds: the balloonist of the homeworld before it flies Spyro there, and your world's own balloonist (New World puts him in its homeworld) flies him back. File ▾ > Level Links… says it in one sentence.",
-            "In your world's homeworld, the Terrain tab's Doorways card adds a doorway to each of its levels. No doorway back out is needed.",
-            "File ▾ > World's Balloon Route… gives your world a place among the balloonists' worlds (after Dream Weavers and before Gnasty's World, say): the balloonist before it flies Spyro there, your world's own balloonist flies him back and on, and each asks for what you choose first (nothing, dragons, treasure or dragon eggs). If your world's balloonist is missing, Create BIN stops and Fix It For Me stands him near where Spyro arrives.",
+            "Create › New World… makes a world of your own: a homeworld and up to four levels, picked from the level list like the game's own. It is called by its homeworld's name.",
+            "Players reach it by balloon, like the game's own worlds: the balloonist of the homeworld before it flies Spyro there, and your world's own balloonist (New World puts him in its homeworld) flies him back. Links › Level Links… says it in one sentence.",
+            "In your world's homeworld, the Links tab's Doorways card adds a doorway to each of its levels. No doorway back out is needed.",
+            "Links › World's Balloon Route… gives your world a place among the balloonists' worlds (after Dream Weavers and before Gnasty's World, say): the balloonist before it flies Spyro there, your world's own balloonist flies him back and on, and each asks for what you choose first (nothing, dragons, treasure or dragon eggs). If your world's balloonist is missing, Create BIN stops and Fix It For Me stands him near where Spyro arrives.",
             "A doorway into your world as well is optional: the World Entrance card in one of the game's homeworlds (Add a Doorway As Well…); your world's homeworld then needs a doorway back out to it too.",
             "Create BIN builds it all into the game: Spyro flies in by balloon (and walks in through a doorway, if you chose one), the inventory gets a page for your world, and it saves in its own save file."
         ]);

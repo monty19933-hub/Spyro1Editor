@@ -121,7 +121,7 @@ public sealed partial class MainWindow
         string look = kinds.Count == 1 ? $"{kinds[0]} doorways" : $"doorways ({string.Join(", ", kinds.Take(kinds.Count - 1))} and {kinds[^1]})";
         if (added.Count == 1) look = $"a {kinds[0]} doorway";
         return (built, $"It has {look}, framed in the level's own stone, to {names}" +
-            (missing.Length > 0 ? $"; there was no place left for {missing} (add it with Terrain › Doorways)." : "."));
+            (missing.Length > 0 ? $"; there was no place left for {missing} (add it with Links › Doorways)." : "."));
     }
 
     /// <summary>Where the level can go: in place of the open level (a game level, homeworld or one rebuilt from one), the
@@ -132,7 +132,7 @@ public sealed partial class MainWindow
         if (_currentLevel != null && CanStartBlankCurrentLevel() && (_freshSceneDocument == null || _freshSceneDocument.TargetBinding != null))
             places.Add((RandomLevelPlace.OpenLevel, 0, $"In place of {_currentLevel.DisplayName} (a recovery copy is kept)"));
         bool hasNew = File.Exists(SceneDocumentStore.PathForTarget(_workspace.RootPath, "authored65"));
-        places.Add((RandomLevelPlace.NewLevel, 0, hasNew ? "As the project's new level (the one there now is copied to backups)" : "As the project's new level (File ▾ › New Level's slot)"));
+        places.Add((RandomLevelPlace.NewLevel, 0, hasNew ? "As the project's new level (the one there now is copied to backups)" : "As the project's new level (Create › New Level's slot)"));
         try
         {
             if (NewWorldDocument.Read(_workspace.RootPath) is { } world)
@@ -225,7 +225,7 @@ public sealed partial class MainWindow
         // The game's own songs and the songs brought in from other games; a level of your own (the new level, a world's
         // levels) plays the game's own songs only, so the list follows the place chosen below.
         var music = new ComboBox { Name = "RandomLevelMusic", HorizontalAlignment = HorizontalAlignment.Stretch };
-        ToolTip.SetTip(music, "The song the level plays. The look's own: one of the songs of the level it looks like, picked by the seed. You can change it later in Game Settings › Music.");
+        ToolTip.SetTip(music, "The song the level plays. The look's own: one of the songs of the level it looks like, picked by the seed. You can change it later in Look › Music.");
         IReadOnlyList<MusicTrackEntry> musicChoices = [];
         void ShowMusic(bool ownLevel)
         {
@@ -317,7 +317,7 @@ public sealed partial class MainWindow
             var names = Doorways();
             whatNote.IsVisible = home;
             whatNote.Text = !home ? "" : places.Count == 0
-                ? "A generated homeworld goes in the place of one of the game's homeworlds or in the homeworld of a world of your own. Open a homeworld first (the level picker), or make a world with File ▾ › New World…, then choose this again."
+                ? "A generated homeworld goes in the place of one of the game's homeworlds or in the homeworld of a world of your own. Open a homeworld first (the level picker), or make a world with Create › New World…, then choose this again."
                 : $"Spyro arrives in the first of its parts. {(names.Count == 1 ? "A doorway" : $"{names.Count} doorways")} will stand round the land (a big part holds two or three at its edges, backs to the bank), each with open floor in front to fly back out onto: to {string.Join(", ", names)}.";
             make.IsEnabled = !home || places.Count > 0;
         }
@@ -580,7 +580,7 @@ public sealed partial class MainWindow
                     (var placed, doors) = WithHomeworldDoorways(Placed(blank, scene), result);
                     ApplyFreshScene(placed);
                     if (!await SaveFreshSceneAsync()) return;
-                    where = $"in {slotName}{(slotName.EndsWith('s') ? "'" : "'s")} place (File ▾ › Restore Before Clear… brings {slotName} back)";
+                    where = $"in {slotName}{(slotName.EndsWith('s') ? "'" : "'s")} place (☰ › Restore Before Clear… brings {slotName} back)";
                     break;
                 }
                 case RandomLevelPlace.NewLevel:
@@ -635,7 +635,7 @@ public sealed partial class MainWindow
             if (doors.Length > 0) { _doorwaysSignature = ""; RefreshDoorwaysCard(); }
             _statusText.Text = $"{scene.Name} is made {where}. " + (doors.Length > 0 ? doors + " " : "") + (choice.FillIn ? "" : "Objects › Random objects fills it for you, or add objects and enemies with Add Object; then Create BIN.") + filled;
             if (RandomLevelChoiceForTesting == null)
-                await ShowRandomLevelReadyAsync(scene.Name, result.Report.Summary + (doors.Length > 0 ? "\n" + doors + " Terrain › Doorways moves, turns and reshapes them; their frames are ordinary tiles you can repaint." : ""), where, choice.FillIn,
+                await ShowRandomLevelReadyAsync(scene.Name, result.Report.Summary + (doors.Length > 0 ? "\n" + doors + " Links › Doorways moves, turns and reshapes them; their frames are ordinary tiles you can repaint." : ""), where, choice.FillIn,
                     doors.Length > 0 ? null : choice.Place switch { RandomLevelPlace.NewLevel => 65, RandomLevelPlace.World => choice.WorldLevelId, _ => _currentLevel?.LevelId });
         }
         catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException or InvalidOperationException or System.Text.Json.JsonException)
@@ -675,9 +675,9 @@ public sealed partial class MainWindow
         content.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, Text = filled
-                ? "Its objects are placed. Objects › Random objects places them again another way (choose whose enemies, how many gems, dragonfly eggs), or move any of them yourself. Game Settings changes the music and sky."
+                ? "Its objects are placed. Objects › Random objects places them again another way (choose whose enemies, how many gems, dragonfly eggs), or move any of them yourself. Look changes the music and sky."
                 : "Next, its objects: Objects › Random objects fills the level for you (enemies, chests, gems of every colour, dragons, the way out: choose a level type and press Randomize), " +
-                  "or add them yourself with Add Object. Terrain › Ground and Choose Texture repaint any surface; Game Settings changes the music and sky."
+                  "or add them yourself with Add Object. the Ground tab and Choose Texture repaint any surface; Look changes the music and sky."
         });
         // How Spyro gets there and back: the doorway that leads to it and the way Return Home brings him out.
         string? way = levelId is int id ? RandomLevelWayIn(id, name) : null;
@@ -687,7 +687,7 @@ public sealed partial class MainWindow
         {
             content.Children.Add(new TextBlock { Name = "RandomLevelReadyWay", TextWrapping = TextWrapping.Wrap, Text = way });
             var choose = NewButton(levelId == 65 && !RandomLevelHasDoorway(65) ? "Choose Its Doorway…" : "Level Links…"); choose.Name = "RandomLevelReadyLinks";
-            ToolTip.SetTip(choose, "File ▾ › Level Links…: which homeworld doorway leads to each level, and where each level's Return Home vortex brings Spyro back.");
+            ToolTip.SetTip(choose, "Links › Level Links…: which homeworld doorway leads to each level, and where each level's Return Home vortex brings Spyro back.");
             buttons.Children.Add(choose);
             choose.Click += (_, _) => { links = true; shown?.Close(); };
         }

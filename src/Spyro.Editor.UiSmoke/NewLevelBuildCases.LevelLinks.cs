@@ -63,9 +63,8 @@ internal static partial class NewLevelBuildCases
         else
         {
             // The File menu's own item.
-            var file = Find<Button>(window, "EditorFileMenu");
-            var item = ((MenuFlyout)file.Flyout!).Items.OfType<MenuItem>().Single(i => i.Header?.ToString() == "Level Links…");
-            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, item));
+            var item = Find<Button>(window, "LinksOpenLevelLinks");
+            item.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, item));
             task = Task.CompletedTask;
         }
         Wait(() => window.LevelLinksWindowForTesting != null, "the Level Links window", 60);

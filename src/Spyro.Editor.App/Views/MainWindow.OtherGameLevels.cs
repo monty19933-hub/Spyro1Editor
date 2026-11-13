@@ -166,7 +166,7 @@ public sealed partial class MainWindow
         content.Children.Add(pick);
         content.Children.Add(new TextBlock{Name="YotdLevelExplanation",TextWrapping=TextWrapping.Wrap,Text=
             $"Its ground, walls, textures, water and lava are rebuilt from your Spyro: Year of the Dragon disc and take the place of {levelName}'s terrain and objects. "+
-            $"A recovery copy of {levelName} is saved first: File ▾ > Restore Before Clear… brings it back.\n"+
+            $"A recovery copy of {levelName} is saved first: ☰ › Restore Before Clear… brings it back.\n"+
             $"Building takes about a minute. The line under the level's treasure then says which of {slotName}'s dragons, egg thieves and Return Home it still needs. "+
             "Characters, gems and enemies of the other game are not brought over, and neither are its side areas."});
         var hot=new CheckBox{Name="YotdHotGroundDeadly",Content="Lava and acid are deadly, as in Year of the Dragon",IsChecked=true};
@@ -210,9 +210,9 @@ public sealed partial class MainWindow
         content.Children.Add(new TextBlock{Text=$"{name} is ready to build on",FontSize=20,FontWeight=FontWeight.SemiBold,TextWrapping=TextWrapping.Wrap});
         content.Children.Add(new TextBlock{Name="OtherGameLevelSummary",TextWrapping=TextWrapping.Wrap,Text=summary});
         content.Children.Add(new TextBlock{TextWrapping=TextWrapping.Wrap,Text=filled
-            ?"Next, play it through once and move anything that sits oddly, then add enemies and boxes with Add Object. Game Settings sets the music and sky."
+            ?"Next, play it through once and move anything that sits oddly, then add enemies and boxes with Add Object. Look sets the music and sky."
             :$"To make it a full level, open Add Object and add {slotName}'s dragons and egg thief (the line under the treasure counts them), "+
-             "a Return Home vortex near the end, gems along the paths, and some enemies. File ▾ > Fill In What the Level Needs… does the first part for you. Game Settings sets the music and sky."});
+             "a Return Home vortex near the end, gems along the paths, and some enemies. ☰ › Fill In What the Level Needs… does the first part for you. Look sets the music and sky."});
         var ok=NewButton("OK");ok.Name="OtherGameLevelReadyOk";StyleModernPrimaryButton(ok,ModernBlue,100);ok.HorizontalAlignment=HorizontalAlignment.Right;
         content.Children.Add(ok);
         var dialog=new Window{Name="OtherGameLevelReadyDialog",Title="New Level",Width=520,SizeToContent=SizeToContent.Height,CanResize=false,

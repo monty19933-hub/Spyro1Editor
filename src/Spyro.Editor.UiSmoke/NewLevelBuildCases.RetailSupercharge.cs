@@ -16,7 +16,7 @@ internal static partial class NewLevelBuildCases
     {
         string levelKey = System.Environment.GetEnvironmentVariable("RETAIL_SUPERCHARGE_LEVEL") ?? "artisans";
         Load(window, levelKey);
-        SelectTab(window, "Terrain"); Pump(20);
+        SelectTab(window, "Ground"); Pump(20);
         if (window.FreshSceneForTesting != null) throw new InvalidOperationException($"{levelKey} is a rebuilt level in this project; use an original one.");
         var geometry = Get<GeometryCandidate>(window, "_currentGeometry");
         var catalog = (NativeTerrainSurfaceLevelCatalog)Invoke(window, "TileTypeCatalog", new object?[] { null })!;

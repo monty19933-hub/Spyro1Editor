@@ -80,7 +80,7 @@ public sealed class NativeSuperchargeAnimations
     public static string RetailNoRoomMessage(string levelName, long shortfall) =>
         $"{levelName} has supercharge ground, which needs Spyro's supercharge animations, and {levelName} has none of its own. " +
         $"Adding them takes {ByteLength:N0} bytes of level memory, and the level is {shortfall:N0} bytes short of room for them. " +
-        "Change those tiles to another kind with Tile Type…, remove objects you added to the level, or choose Emulator (8 MB RAM) under Game Settings › Memory.";
+        "Change those tiles to another kind with Tile Type…, remove objects you added to the level, or choose Emulator (8 MB RAM) under Game › Memory.";
 
     /// <summary>Bytes of game RAM one of the game's own levels is short of for the two records in the current memory mode
     /// (0 when they fit or the level carries them), read from the unchanged original disc. Other edits to the level are

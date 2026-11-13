@@ -137,7 +137,7 @@ internal static class KeyboardUiCases
             }
 
             // 4. Terrain: a bare letter does not repaint a tile; brush digits work only in the Terrain tab.
-            SelectTab(window, "Terrain");
+            SelectTab(window, "Ground");
             var geometry = session.CurrentGeometry!;
             int tile = Enumerable.Range(0, geometry.Polygons.Count).First(i =>
                 !geometry.Polygons[i].IsTerrainRemoved && !geometry.Polygons[i].IsTerrainEdited &&

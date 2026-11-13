@@ -59,7 +59,7 @@ public sealed partial class MainWindow
             try{name="\""+SceneDocument.Read(existing).Name+"\"";}catch(Exception e)when(e is IOException or InvalidDataException or System.Text.Json.JsonException){}
             if(!await ShowConfirmationAsync("NewLevelReplaceDialog","New Level",$"Replace {name} with a new level?",
                 "This project already has a level you created, and a project holds one created level. Starting a new one replaces it the next time you save.\n"+
-                "A copy of the current one is kept first in the project's \"backups\" folder. To keep working on it instead, choose Cancel and use File > Open Created Level.",
+                "A copy of the current one is kept first in the project's \"backups\" folder. To keep working on it instead, choose Cancel and use ☰ › Open Created Level.",
                 "Start New Level"))return;
             if(_workspace.RootPath!=root)return;
             try
@@ -74,7 +74,7 @@ public sealed partial class MainWindow
         ApplyFreshScene(StarterLevel.Create("Untitled Level",_retailCatalog));
         // The Ground card is the first thing a new level needs.
         ApplyEditorExperienceForCurrentLevel(_modernTerrainWorkspaceTab);
-        _statusText.Text="New level created: a meadow with a path, a ledge and a pond. Paint the ground in the Terrain tab (Ground), add objects and save; Create BIN makes a game that opens your level from New Game."+
+        _statusText.Text="New level created: a meadow with a path, a ledge and a pond. Paint the ground in the Ground tab (Ground), add objects and save; Create BIN makes a game that opens your level from New Game."+
             (keptCopy==null?"":" The previous one was copied to backups/"+Path.GetFileName(keptCopy)+".");
     }
 
@@ -98,7 +98,7 @@ public sealed partial class MainWindow
     private async Task OpenMainFreshLevelAsync()
     {
         string path=SceneDocumentStore.PathForTarget(_workspace.RootPath,"authored65");
-        if(!File.Exists(path)){_statusText.Text="This project has no created level yet. Choose File > New Level… to start one.";return;}
+        if(!File.Exists(path)){_statusText.Text="This project has no created level yet. Choose Create › New Level… to start one.";return;}
         if ((HasUnsavedTerrainEdits() || HasUnsavedMobyEdits()) && !await SaveCurrentEditsAsync()) return;
         ApplyFreshScene(SceneDocument.Read(path));
         _statusText.Text="Opened your created level.";
@@ -127,7 +127,7 @@ public sealed partial class MainWindow
         _viewport.SetLevelEntryPose(new PortableLevelEntryPose(_currentLevel.Key,document.Name,_currentLevel.LevelId,_currentLevel.SourceWadEntry,0,
             (int)(document.Spawn.X*16),(int)(document.Spawn.Y*16),(int)(document.Spawn.Z*16),document.Heading,16));
         _viewport.SetViewMode(ViewportViewMode.Fly3D);_viewport.RefreshFlyCameraForLoadedLevel();
-        _viewport.EmptyMessage="File > New Level creates an authored floor in this viewport.";
+        _viewport.EmptyMessage="Create › New Level creates an authored floor in this viewport.";
         ApplyEditorExperienceForCurrentLevel();RefreshMobyList();RefreshCurrentLevelDetails();
         RefreshContextualViewportAction();RefreshFreshDocumentPanels();RefreshFreeFlightSettingsEditor(_currentLevel);
         if (_modernWorkspaceTabs != null)
@@ -370,7 +370,7 @@ public sealed partial class MainWindow
             {
                 try{flight=await NativeFreeFlightCompositionPlan.CaptureAsync(original,flightIntent.EnabledLevelIds);}
                 catch(InvalidDataException e)when(_releaseMode)
-                {throw new InvalidDataException("Fly Anywhere needs the unchanged original USA disc image, and the game you opened is different. Open the original disc with Open Game…, or untick Fly Anywhere on the Colours tab. ("+e.Message+")",e);}
+                {throw new InvalidDataException("Fly Anywhere needs the unchanged original USA disc image, and the game you opened is different. Open the original disc with Open Game…, or untick Fly Anywhere on the Game tab. ("+e.Message+")",e);}
             }
             return await NativeAuthoredProjectExporter.ExportAsync(donors,_retailCatalog,plans,japanese,output,workspacePath,startLevelId.Value,
                 requireCurrent:()=>Dispatcher.UIThread.InvokeAsync(RequireOwner).GetAwaiter().GetResult(),
@@ -388,7 +388,7 @@ public sealed partial class MainWindow
         // The world's place on the balloonists' route as Create BIN built it (not chosen: by whether its homeworld has a balloonist).
         var worldPlace=world?.BalloonPlaceWith(worldScenes.FirstOrDefault(s=>s.WorldLevelId==NewWorldDocument.Homeworld) is {} worldHome&&WorldAccess.HasBalloonist(worldHome));
         string worldNote=world==null||worldPlace==null||worldScenes.Count==0?"":$" Your new world {world.Name} is in it ({Count(worldScenes.Count,"level","levels")}; save in it with a new save file). "+
-            (!worldPlace.OnRoute&&worldEntrance==null?$"It has no way in yet: place its doorway with Terrain › World Entrance in {entryName}, or put it on the balloon route (File ▾ › World's Balloon Route…).":WorldAccessSentence(world,worldPlace));
+            (!worldPlace.OnRoute&&worldEntrance==null?$"It has no way in yet: place its doorway with Links › World Entrance in {entryName}, or put it on the balloon route (Links › World's Balloon Route…).":WorldAccessSentence(world,worldPlace));
         string skippedNote=skippedChanges.Count==0?"":$" Not in this game, because the game cannot take {(skippedChanges.Count==1?"it":"them")}: {ShortList(skippedChanges)}.";
         string included=LeftOutItems().Count==0?"All saved level replacements and other saved edits are included.":"Your other saved levels and changes are included.";
         _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. {included}"+NewLevelWayInNote(saved,portalSnapshot.Document,startLevelId)+worldNote+flightNote+placedEntrance+NativeEggTotals.DescribeGame(output)+PreservedResearchExportNote()+MemoryModeExportNote(memory)+HoverFlapNote()+skippedNote+LeftOutNote();

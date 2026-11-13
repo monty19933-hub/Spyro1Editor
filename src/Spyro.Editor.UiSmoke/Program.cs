@@ -885,7 +885,7 @@ void RunFreshNativeShellOnly()
         EditorShellSessionSnapshot before = window.CaptureEditorShellSessionSnapshotForTesting();
         var inputs = CaptureTerrainProjectInputHashes(workspace, before.CurrentLevel!.Key);
         AssertWorkspaceTabHeaders(FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs"),
-            ["Objects", "Terrain", "Game Settings", "Colours", "Environment"], "retail before separate fresh document");
+            ["Ground", "Objects", "Look", "Links", "Game"], "retail before separate fresh document");
         AssertNoWholeLevelWipeAction(window);
         AssertWorkspaceTabContrast(window);
         Button open = FindNamedUnique<Button>(window, "FreshNativeDocumentButton");
@@ -1019,7 +1019,7 @@ void RunWorkspaceShellOnly()
         }
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Game Settings", "Colours", "Environment"],
+            ["Ground", "Objects", "Look", "Links", "Game"],
             "existing-level editor");
         AssertNoWholeLevelWipeAction(window);
         if (window.GetLogicalDescendants().OfType<EditorViewport>().Distinct().Count() != 1)
@@ -1060,11 +1060,11 @@ void RunWorkspaceShellOnly()
             throw new InvalidOperationException("The continuity fixture did not stage both unsaved object and terrain edits.");
         AssertTextContains(window, "unsaved objects/terrain");
 
-        SelectWorkspaceTab(window, "Terrain");
+        SelectWorkspaceTab(window, "Ground");
         EditorShellSessionSnapshot building = window.CaptureEditorShellSessionSnapshotForTesting();
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Game Settings", "Colours", "Environment"],
+            ["Ground", "Objects", "Look", "Links", "Game"],
             "existing-level terrain tools");
         if (building.ActiveExperience != LevelEditorExperience.ExistingLevel ||
             !initial.Viewport.TerrainFocusMode)
@@ -1131,7 +1131,7 @@ void RunWorkspaceShellOnly()
         EditorShellSessionSnapshot returnedObjects = window.CaptureEditorShellSessionSnapshotForTesting();
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Game Settings", "Colours", "Environment"],
+            ["Ground", "Objects", "Look", "Links", "Game"],
             "returned existing-level Objects tab");
         AssertWorkspaceSessionContinuity(dirtyBeforeSwitch, returnedObjects, "retail Environment -> Objects");
 
@@ -1503,7 +1503,7 @@ void RunWorkspaceShellOnly()
         FlushUi();
 
         Console.WriteLine(
-            "Workspace shell smoke passed: one shared existing-level editor with exact Objects/Terrain/Game Settings/Environment tabs, " +
+            "Workspace shell smoke passed: one shared existing-level editor with exact Ground/Objects/Look/Links/Game tabs, " +
             "no Object Manager or wipe route, level-load identity, camera/selection, unsaved object and terrain edits, write-free tab changes, " +
             "non-flattening height controls, actual height-only Undo/Save state, and release-wide " +
             "canonical HP XYZ/topology admission and malformed/non-HP geometry Save/Create BIN gates remained intact.");
@@ -1525,7 +1525,7 @@ void RunDeferredReleaseUiPolicy()
     {
         WaitForLevelData(window);
         TabControl tabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
-        AssertWorkspaceTabHeaders(tabs, ["Objects", "Terrain", "Game Settings", "Colours", "Environment"], "normal release");
+        AssertWorkspaceTabHeaders(tabs, ["Ground", "Objects", "Look", "Links", "Game"], "normal release");
         string[] deferredNames = ["Id65BlankLevelLabDisclosure", "NativeLevelReplacementDisclosure"];
         if (window.GetLogicalDescendants().OfType<Control>().Any(c => deferredNames.Contains(c.Name)))
             throw new InvalidOperationException("Deferred research controls leaked into the normal release editor.");
@@ -1546,7 +1546,7 @@ void RunDeferredReleaseUiPolicy()
         if (!ReferenceEquals(before.Viewport, authored.Viewport) || authored.CurrentLevel?.Key != "authored65" ||
             authored.CurrentMobys.Count != 0 || window.FreshSceneForTesting?.Surfaces.Count != 2)
             throw new InvalidOperationException("File > New Level did not enter the shared neutral authoring editor.");
-        SelectWorkspaceTab(window, "Terrain");
+        SelectWorkspaceTab(window, "Ground");
         Button add = (Button)typeof(MainWindow).GetField("_terrainTaskAddCopyButton", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
         Button remove = (Button)typeof(MainWindow).GetField("_terrainTaskRemoveFaceButton", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
         if (!add.IsEffectivelyVisible || !remove.IsEffectivelyVisible)
@@ -1690,7 +1690,7 @@ void RunId65BlankLabUiOnly()
         TextBlock levelBuildingIndicator =
             FindNamedUnique<TextBlock>(window, "LevelBuildingEditorIndicator");
         TabControl toolTabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
-        SelectWorkspaceTab(window, "Game Settings");
+        SelectWorkspaceTab(window, "Game");
         Expander disclosure = FindNamedUnique<Expander>(window, "Id65BlankLevelLabDisclosure");
         if (!disclosure.IsVisible)
             throw new InvalidOperationException("The ID65 Blank-Level Lab disclosure is missing from the explicit internal profile.");
@@ -1745,7 +1745,7 @@ void RunId65BlankLabUiOnly()
         }
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Game Settings", "Colours", "Environment", "Research"],
+            ["Ground", "Objects", "Look", "Links", "Game", "Research"],
             "internal existing-level editor");
         AssertNoWholeLevelWipeAction(window);
 
@@ -1899,7 +1899,7 @@ void RunId65BlankLabUiOnly()
             label: "loaded ID65 Lab without a canonical document");
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Object Manager", "Terrain", "Game Settings", "Colours", "Environment", "Research"],
+            ["Ground", "Object Manager", "Look", "Links", "Game", "Research"],
             "internal fresh blank-level editor");
         Button freshObjectManagerButton = FindNamedUnique<Button>(
             window,
@@ -2363,7 +2363,7 @@ void RunId65BlankLabUiOnly()
         }
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Objects", "Terrain", "Game Settings", "Colours", "Environment", "Research"],
+            ["Ground", "Objects", "Look", "Links", "Game", "Research"],
             "internal ID65 round-trip retail editor");
         bool retailTabsContainFreshStart = ReadItemsSource(
                 toolTabs,
@@ -2422,7 +2422,7 @@ void RunId65BlankLabUiOnly()
             label: "returned ID65 Lab without a canonical document");
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Object Manager", "Terrain", "Game Settings", "Colours", "Environment", "Research"],
+            ["Ground", "Object Manager", "Look", "Links", "Game", "Research"],
             "returned internal ID65 blank-level editor");
         Button returnedStartButton = FindNamedUnique<Button>(
             window,
@@ -5685,11 +5685,11 @@ void RunResearchWorkspaceTabMemory()
         }
         AssertWorkspaceTabHeaders(
             researchTabs,
-            ["Objects", "Terrain", "Game Settings", "Colours", "Environment", "Research"],
+            ["Ground", "Objects", "Look", "Links", "Game", "Research"],
             "non-release existing-level editor");
         TabItem environment = ReadItemsSource(researchTabs, "non-release existing-level tabs")
             .OfType<TabItem>()
-            .Single(tab => string.Equals((tab.Header as TextBlock)?.Text, "Environment", StringComparison.Ordinal));
+            .Single(tab => string.Equals((tab.Header as TextBlock)?.Text, "Look", StringComparison.Ordinal));
         researchTabs.SelectedItem = environment;
         FlushUi();
 
@@ -5701,7 +5701,7 @@ void RunResearchWorkspaceTabMemory()
         if (!ReferenceEquals(researchTabs.SelectedItem, research))
             throw new InvalidOperationException("The non-release existing-level editor did not select Research directly.");
         Console.WriteLine(
-            "Research workspace smoke passed: retail kept one unified Objects/Terrain/Game Settings/Environment/Research editor without a mode switch.");
+            "Research workspace smoke passed: retail kept one unified Ground/Objects/Look/Links/Game/Research editor without a mode switch.");
     }
     finally
     {
@@ -6051,7 +6051,7 @@ void RunNativeLevelReplacementUiOnly()
     try
     {
         WaitForLevelData(window);
-        SelectWorkspaceTab(window, "Game Settings");
+        SelectWorkspaceTab(window, "Game");
 
         Expander disclosure = FindNamedUnique<Expander>(window, "NativeLevelReplacementDisclosure");
         ComboBox donor = FindNamedUnique<ComboBox>(window, "NativeLevelReplacementDonorBox");
@@ -6203,7 +6203,7 @@ void RunNativeLevelReplacementUiOnly()
         LevelDefinition townSquare = catalog.FindByKey("townsquare")
             ?? throw new InvalidOperationException("Town Square is missing from the focused UI smoke catalog.");
         SelectLevelForViewportFit(window, townSquare);
-        SelectWorkspaceTab(window, "Game Settings");
+        SelectWorkspaceTab(window, "Game");
         if (disclosure.IsVisible)
             throw new InvalidOperationException("The Stone Hill replacement disclosure remained visible on Town Square.");
 
@@ -7928,7 +7928,7 @@ void RunTerrainTexturePaintModeOnly()
     try
     {
         WaitForLevelData(window);
-        SelectWorkspaceTab(window, "Terrain");
+        SelectWorkspaceTab(window, "Ground");
         FindButton(window, "Choose Texture & Start Painting");
         Task<string> task = window.AssertTerrainTexturePaintModeForTestingAsync();
         for (int attempt = 0; attempt < 12000 && !task.IsCompleted; attempt++)
@@ -8320,7 +8320,7 @@ void RunTerrainTexturePaintGalleryOnly()
     try
     {
         WaitForLevelData(window);
-        SelectWorkspaceTab(window, "Terrain");
+        SelectWorkspaceTab(window, "Ground");
         TextBlock privateCapacity =
             FindNamedUnique<TextBlock>(window, "TerrainPrivateTextureCapacityText");
         string privateCapacityText = privateCapacity.Text ?? "";
@@ -10890,10 +10890,11 @@ void Render(double width, double height, string fileName)
     WaitForLevelData(window);
     AvaloniaHeadlessPlatform.ForceRenderTimerTick(3);
 
+    AssertText(window, "Ground");
     AssertText(window, "Objects");
-    AssertText(window, "Terrain");
-    AssertText(window, "Game Settings");
-    AssertText(window, "Environment");
+    AssertText(window, "Look");
+    AssertText(window, "Links");
+    AssertText(window, "Game");
     AssertText(window, "Add object…");
     AssertText(window, "Edit");
     AssertText(window, "Replace");

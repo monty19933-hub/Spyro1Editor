@@ -79,8 +79,8 @@ public static class NativeNewWorldExport
         {
             if (backs.Count > 0)
                 return ExportRepair.Refusal($"{homeworld.Name} still has a doorway back out to {Name(backs[0].DestinationLevelId)}, but your world is reached by balloon only " +
-                    $"({WorldAccess.Possessive(homeworld.Name)} balloonist flies Spyro back), so that doorway would lead nowhere. Take it out with Terrain › Doorways in {homeworld.Name}, " +
-                    $"or choose a doorway as well with Terrain › World Entrance in {entryHome.DisplayName}.", new ExportRepair.RemoveWorldWayBack());
+                    $"({WorldAccess.Possessive(homeworld.Name)} balloonist flies Spyro back), so that doorway would lead nowhere. Take it out with Links › Doorways in {homeworld.Name}, " +
+                    $"or choose a doorway as well with Links › World Entrance in {entryHome.DisplayName}.", new ExportRepair.RemoveWorldWayBack());
             if (!homeworldHasBalloonist)
                 return ExportRepair.Refusal($"{homeworld.Name} has no balloonist, so Spyro could not fly back out of your world (it is reached by balloon only). " +
                     $"Add him with his balloon in {homeworld.Name}: Objects › Random objects (\"The way out\"), or Add Object… › Balloonist.", new ExportRepair.PlaceWorldBalloonist());
@@ -251,7 +251,7 @@ public static class NativeNewWorldExport
                     if (applied.Balloonists == 0 && route.AfterLevelId != 60)
                         throw new InvalidDataException($"{homeDocument.Name} needs a balloonist: on the balloon route your world lies before " +
                             $"{catalog.Levels.First(l => l.LevelId == route.AfterLevelId + 10).DisplayName}, and only its own balloonist can fly Spyro on. Add one " +
-                            "(Objects › Random objects places him with his balloon, or Add Object… › a balloonist and a balloon), or put the world last on the route in File ▾ › World's Balloon Route….");
+                            "(Objects › Random objects places him with his balloon, or Add Object… › a balloonist and a balloon), or put the world last on the route in Links › World's Balloon Route….");
                     balloonists.Add(applied);
                     continue;
                 }

@@ -539,7 +539,7 @@ public sealed partial class MainWindow
         Dictionary<string, Dictionary<string, (byte R, byte G, byte B)>> saved;
         try { saved = CreatureColourSettings.Load(_workspace.RootPath); }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException)
-        { throw new InvalidDataException("This level's colours (Colours tab) could not be read. Choose them again (Their Own Colours clears a level's). (" + e.Message + ")", e); }
+        { throw new InvalidDataException("This level's colours (Look tab) could not be read. Choose them again (Their Own Colours clears a level's). (" + e.Message + ")", e); }
         if (saved.Count == 0) return NativeCreatureColours.Use(null, levelOfEntry);
         string disc = ResolveUniversalSourceDisc();
         if (string.IsNullOrWhiteSpace(disc) || !File.Exists(disc)) throw new InvalidDataException("Creatures' colours need your original Spyro the Dragon (USA) disc: choose it with Open Game….");

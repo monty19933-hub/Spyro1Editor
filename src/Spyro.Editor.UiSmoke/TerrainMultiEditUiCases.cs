@@ -48,7 +48,7 @@ internal static class TerrainMultiEditUiCases
             var viewport = Get<EditorViewport>(window, "_viewport");
             TextBlock status = Get<TextBlock>(window, "_statusText");
             var geometry = window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry!;
-            SelectTab(window, "Terrain");
+            SelectTab(window, "Ground");
 
             // Pick a cluster of neighbouring, unedited ground tiles Spyro can stand on (collision under every
             // corner): start from one and take those sharing a corner.

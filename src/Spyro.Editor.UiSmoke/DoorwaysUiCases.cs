@@ -51,7 +51,7 @@ internal static class DoorwaysUiCases
             AuthoredSurface Tile(float x, float y) => new(Guid.NewGuid().ToString("N"), [new(x, y, 1000), new(x + 256, y, 1000), new(x + 256, y + 256, 1000), new(x, y + 256, 1000)], new(128, 128, 128), stone);
             var hub = SceneDocument.New("TEST HUB") with { TargetBinding = binding, Surfaces = [Tile(2744, 2744), Tile(3000, 2744), Tile(2744, 3000), Tile(3000, 3000)], Spawn = new(3000, 2900, 1032) };
             Invoke(window, "ApplyFreshScene", hub); Pump(20);
-            SelectTab(window, "Terrain");
+            SelectTab(window, "Links");
             var card = Find<Control>(window, "TerrainDoorwaysCard");
             Check(card.IsVisible && Find<Button>(window, "DoorwayAdd").IsVisible && Find<Button>(window, "DoorwayAdd").IsEnabled, "a rebuilt homeworld shows the Doorways card with Add Doorway…");
             Check(Text(window, "DoorwaysNote").Contains("no doorways yet"), "the card says the homeworld has none yet: " + Text(window, "DoorwaysNote"));

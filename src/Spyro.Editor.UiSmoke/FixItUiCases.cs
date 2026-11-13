@@ -146,7 +146,7 @@ internal static class FixItUiCases
             string fixedUnnamed = FixIt();
             Console.WriteLine("     " + fixedUnnamed);
             Check(fixedUnnamed.StartsWith("Created ", StringComparison.Ordinal) && window.LeftOutForTesting.SequenceEqual([ExportParts.Hover]) &&
-                  fixedUnnamed.Contains("Left out Hover (Colours tab)", StringComparison.Ordinal), "a stop that names nothing is traced to its part by trying: " + string.Join(", ", window.LeftOutForTesting));
+                  fixedUnnamed.Contains("Left out Hover (Game tab)", StringComparison.Ordinal), "a stop that names nothing is traced to its part by trying: " + string.Join(", ", window.LeftOutForTesting));
             Check(Game(true, true, "Hover left out"), "the game has both new names");
             PutEverythingBack();
 

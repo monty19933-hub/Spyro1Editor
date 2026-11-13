@@ -53,7 +53,7 @@ internal static class WorldEntranceUiCases
             AuthoredSurface Tile(float x, float y) => new(Guid.NewGuid().ToString("N"), [new(x, y, 384), new(x + 256, y, 384), new(x + 256, y + 256, 384), new(x, y + 256, 384)], new(128, 128, 128), stone);
             var floor = SceneDocument.New("FLOOR") with { Surfaces = [Tile(4200, 2800), Tile(4456, 2800), Tile(4200, 3056), Tile(4456, 3056)], Spawn = new(4500, 3000, 420) };
             Invoke(window, "ApplyFreshScene", floor); Pump(20);
-            SelectTab(window, "Terrain");
+            SelectTab(window, "Links");
             void ShowOriginal(string key)
             {
                 SetField(window, "_freshSceneDocument", null);

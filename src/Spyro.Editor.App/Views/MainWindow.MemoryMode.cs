@@ -93,7 +93,7 @@ public sealed partial class MainWindow
         GameMemoryMode mode;
         try { mode = GameMemorySettings.Load(_workspace.RootPath); }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException)
-        { throw new InvalidDataException("The Memory setting in Game Settings could not be read. Choose PlayStation (2 MB) or Emulator (8 MB RAM) again. (" + e.Message + ")", e); }
+        { throw new InvalidDataException("The Memory setting (Game tab) could not be read. Choose PlayStation (2 MB) or Emulator (8 MB RAM) again. (" + e.Message + ")", e); }
         // 8 MB is what a project has until it chooses 2 MB, where the opened game can take it: a game that is not the
         // unchanged USA original (or no game at all) is made for 2 MB, as every game was before 2.3.
         if (mode == GameMemoryMode.Emulator8MB && !OpenedGameTakesExtendedRam()) mode = GameMemoryMode.PlayStation2MB;

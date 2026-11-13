@@ -368,7 +368,7 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
         if (SkySourceWadEntry is int sky && (sky is < 10 or > 78 || sky % 2 != 0))
             throw new InvalidDataException("The scene's sky source is not a retail level.");
         if ((TargetBinding?.NativePrefixRows ?? 0) + Ledger.Entries.Count > 256)
-            throw new InvalidDataException($"{Name} has {Ledger.Entries.Count} objects (deleted ones still count until File ▾ › Free Deleted Objects' Save Rows…), " +
+            throw new InvalidDataException($"{Name} has {Ledger.Entries.Count} objects (deleted ones still count until ☰ › Free Deleted Objects' Save Rows…), " +
                 $"but its place in the game remembers {256 - (TargetBinding?.NativePrefixRows ?? 0)}. Take {(TargetBinding?.NativePrefixRows ?? 0) + Ledger.Entries.Count - 256} out.");
         if (Surfaces.Select(s => s.Id).Distinct().Count() != Surfaces.Count || Objects.Select(o => o.Identity).Distinct().Count() != Objects.Count)
             throw new InvalidDataException("Fresh surfaces and objects require unique identities.");

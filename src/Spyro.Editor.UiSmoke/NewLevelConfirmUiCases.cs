@@ -37,7 +37,7 @@ internal static class NewLevelConfirmUiCases
         try
         {
             WaitIdle(window);
-            Button file = Find<Button>(window, "EditorFileMenu");
+            Button file = Find<Button>(window, "EditorCreateMenu");
             MenuItem newLevel = ((MenuFlyout)file.Flyout!).Items.OfType<MenuItem>().Single(i => i.Header?.ToString() == "New Level…");
             Button save = Find<Button>(window, "SaveLevelButton");
             TextBlock status = Get<TextBlock>(window, "_statusText");

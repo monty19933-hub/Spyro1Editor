@@ -38,7 +38,7 @@ public static class WorldAccess
         string w = world.Name, own = Possessive(w);
         string entry = name((NewWorldDocument.HomeworldKeys.ToList().IndexOf(world.EntryHomeworldKey) + 1) * 10);
         if (!place.OnRoute)
-            return $"Players reach {w} through its doorway in {entry} (Terrain › World Entrance there) and leave through {own} doorway back to {entry}; " +
+            return $"Players reach {w} through its doorway in {entry} (Links › World Entrance there) and leave through {own} doorway back to {entry}; " +
                    "it is not on the balloon route, so the balloonists do not fly there.";
         var route = place.Route()!;
         int[] order = NativeBalloonTravel.Order(route);
@@ -58,7 +58,7 @@ public static class WorldAccess
             sentence = $"Players reach {w} by balloon: {there}, and {own} balloonist {place.Balloonist} flies him back to {before} ({on}).";
         }
         if (world.Doorway)
-            sentence += $" They can also walk in through its doorway in {entry} and out through {own} doorway back (a doorway as well is your choice: Terrain › World Entrance in {entry}).";
+            sentence += $" They can also walk in through its doorway in {entry} and out through {own} doorway back (a doorway as well is your choice: Links › World Entrance in {entry}).";
         return sentence;
     }
 

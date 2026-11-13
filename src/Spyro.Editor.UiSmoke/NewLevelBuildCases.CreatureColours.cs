@@ -15,7 +15,7 @@ internal static partial class NewLevelBuildCases
         if (!SpyroColourSettings.TryParse(Environment.GetEnvironmentVariable("CREATURE_COLOUR") ?? "#C82424", out var colour)) throw new ArgumentException("CREATURE_COLOUR is #RRGGBB.");
         if (level.StartsWith("world:", StringComparison.Ordinal)) { var open = (Task)Invoke(window, "OpenWorldLevelAsync", int.Parse(level[6..]))!; Wait(() => open.IsCompleted, "open the world level", 120); WaitIdle(window); }
         else Load(window, level);
-        SelectTab(window, "Colours"); Pump(20);
+        SelectTab(window, "Look"); Pump(20);
         Invoke(window, "RefreshCreatureColours");
         var clock = System.Diagnostics.Stopwatch.StartNew();
         while (clock.Elapsed < TimeSpan.FromSeconds(120)) { Pump(20); if (window.CreatureKindsReadyForTesting.IsCompleted) { Pump(40); if (window.CreatureKindsReadyForTesting.IsCompleted) break; } }

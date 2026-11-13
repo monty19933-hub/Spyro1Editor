@@ -30,7 +30,7 @@ internal static partial class NewLevelBuildCases
         var open = (Task)Invoke(window, "OpenWorldLevelAsync", NewWorldDocument.Homeworld)!;
         Wait(() => open.IsCompleted, "open the world's homeworld", 300);
         WaitIdle(window);
-        SelectTab(window, "Terrain"); Pump(30);
+        SelectTab(window, "Links"); Pump(30);
         Find<Control>(window, "TerrainDoorwaysCard").BringIntoView(); Pump(20);
         string doorways = Find<TextBlock>(window, "DoorwaysNote").Text ?? "";
         Console.WriteLine("doorways card: " + doorways);
@@ -80,7 +80,7 @@ internal static partial class NewLevelBuildCases
 
         // The World Entrance card of the homeworld the world is entered from.
         Load(window, world.EntryHomeworldKey);
-        SelectTab(window, "Terrain"); Pump(20);
+        SelectTab(window, "Links"); Pump(20);
         Invoke(window, "RefreshWorldEntranceCard"); Pump(10);
         var card = Find<Control>(window, "TerrainWorldEntranceCard");
         card.BringIntoView(); Pump(20);

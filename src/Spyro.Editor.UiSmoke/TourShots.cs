@@ -59,8 +59,24 @@ internal static class TourShots
                 if (busy) quiet.Restart(); else if (quiet.Elapsed > TimeSpan.FromSeconds(2)) break;
             }
             Snapshot(window, Path.Combine(outDir, "01-editor.png"));
+            // Something selected: the Selected box above the tabs.
+            var mobys = window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys;
+            if ((mobys?.FirstOrDefault(m => m.TreasureValue > 0) ?? mobys?.FirstOrDefault()) is { } picked)
+            {
+                var viewport = Get<Control>(window, "_viewport");
+                viewport.GetType().GetMethod("SelectMoby", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, [picked.GetType(), typeof(bool)])?.Invoke(viewport, [picked, true]);
+                Pump(40);
+                Snapshot(window, Path.Combine(outDir, "01-editor-selected.png"));
+            }
+            // Find any command, with a few letters typed.
+            if (window.GetLogicalDescendants().OfType<TextBox>().FirstOrDefault(b => b.Name == "CommandSearchBox") is { } search)
+            {
+                search.Focus(); search.Text = "door"; Pump(40);
+                Snapshot(window, Path.Combine(outDir, "01-editor-search.png"));
+                search.Text = ""; window.Focus(); Pump(10);
+            }
             List<string> text = [];
-            foreach (var (field, name) in new[] { ("_modernObjectWorkspaceTab", "objects"), ("_modernTerrainWorkspaceTab", "terrain"), ("_modernLevelWorkspaceTab", "game-settings"), ("_modernEnvironmentWorkspaceTab", "environment") })
+            foreach (var (field, name) in new[] { ("_modernTerrainWorkspaceTab", "ground"), ("_modernObjectWorkspaceTab", "objects"), ("_modernLevelWorkspaceTab", "look"), ("_modernLinksWorkspaceTab", "links"), ("_modernGameWorkspaceTab", "game") })
             {
                 var tab = Get<TabItem>(window, field);
                 tab.IsSelected = true; Pump(30);
@@ -92,7 +108,7 @@ internal static class TourShots
                 }).Where(l => l.Trim().Length > 0));
             }
             // 3. Menus (their entries as text) and Help.
-            foreach (string menu in new[] { "EditorFileMenu", "EditorMoreMenu" })
+            foreach (string menu in new[] { "EditorCreateMenu", "EditorFileMenu" })
             {
                 var button = window.GetLogicalDescendants().OfType<Button>().FirstOrDefault(b => b.Name == menu);
                 if (button?.Flyout is MenuFlyout flyout)

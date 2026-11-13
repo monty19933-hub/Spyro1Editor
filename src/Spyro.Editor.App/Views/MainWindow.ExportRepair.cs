@@ -472,10 +472,10 @@ public sealed partial class MainWindow
             return (true, "");
         if (entrance != null && string.Equals(entrance.HomeworldKey, homeworldKey, StringComparison.OrdinalIgnoreCase))
             return (true, "");
-        string by = $"open {level.DisplayName}, then Terrain › World Entrance › Place Entrance…";
+        string by = $"open {level.DisplayName}, then Links › World Entrance › Place Entrance…";
         if (File.Exists(SceneDocumentStore.PathForTarget(root, level.Key)))
             return (false, $"{level.DisplayName} is a level you built in the homeworld's place, and the way into a new world stands in one of the game's own homeworlds. " +
-                           "Open one of those, then Terrain › World Entrance › Use This Homeworld and Place Entrance….");
+                           "Open one of those, then Links › World Entrance › Use This Homeworld and Place Entrance….");
         string disc = ResolveUniversalSourceDisc();
         if (string.IsNullOrEmpty(disc) || !File.Exists(disc))
             return (false, "Choose your original Spyro the Dragon (USA) disc first (Open Game…), then press Create BIN again.");

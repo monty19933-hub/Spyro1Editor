@@ -49,7 +49,7 @@ internal static class TerrainLowerUiCases
             var viewport = Get<EditorViewport>(window, "_viewport");
             TextBlock status = Get<TextBlock>(window, "_statusText");
             var geometry = window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry!;
-            SelectTab(window, "Terrain");
+            SelectTab(window, "Ground");
             var collisionPoints = Get<HashSet<string>>(window, "_terrainCollisionTriangleKeys").SelectMany(k => k.Split('|')).ToHashSet(StringComparer.Ordinal);
             string Key(TerrainPolygon p, int i) => $"{MathF.Round(p.OriginalPoints[i].X)},{MathF.Round(p.OriginalPoints[i].Y)},{MathF.Round(p.OriginalZValues[i])}";
             bool Solid(TerrainPolygon p) => Enumerable.Range(0, p.Points.Count).All(i => collisionPoints.Contains(Key(p, i))) &&

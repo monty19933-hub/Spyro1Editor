@@ -41,7 +41,7 @@ public sealed partial class MainWindow
         try
         {
             if(await StartBlankConfirmedAsync(level) is {})
-                _statusText.Text=$"{level.DisplayName} starts over as a grassy meadow with no objects (Terrain › Ground repaints it). Recovery > Restore Before Clear brings back your saved work.";
+                _statusText.Text=$"{level.DisplayName} starts over as a grassy meadow with no objects (the Ground tab repaints it). Recovery > Restore Before Clear brings back your saved work.";
         }
         finally{_startBlankBusy=false;RefreshCurrentLevelDetails();}
     }
@@ -187,7 +187,7 @@ public sealed partial class MainWindow
         content.Children.Add(new TextBlock{Name="StartBlankExplanation",TextWrapping=TextWrapping.Wrap,Text=_releaseMode
             ?restoring
                 ?$"This brings {name} back the way it was before you cleared it: its terrain, objects and settings. The blank version you built is saved first, so nothing is lost. Other levels are not touched."
-                :$"This empties {name}: its {Count(objects,"object","objects")} and {Count(faces,"terrain tile","terrain tiles")} are taken out, leaving a small floor to build on. Other levels are not touched.\nA recovery copy of the level as it is now is saved first. File ▾ > Restore Before Clear… brings it back."
+                :$"This empties {name}: its {Count(objects,"object","objects")} and {Count(faces,"terrain tile","terrain tiles")} are taken out, leaving a small floor to build on. Other levels are not touched.\nA recovery copy of the level as it is now is saved first. ☰ › Restore Before Clear… brings it back."
             :restoring
             ?"Your current blank scene will be saved and preserved. The previous level's geometry, objects and settings will return. Other levels stay unchanged."
             :$"Remove {objects} objects and {faces} terrain faces from this level, including their collision and unused assets in the exported game. A small editable starting floor will remain.\nYour current changes will be saved in a verified recovery snapshot before clearing. Other levels stay unchanged."});

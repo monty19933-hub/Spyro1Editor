@@ -69,7 +69,7 @@ public sealed partial class MainWindow
         string to = string.Join(" and ", backs.Select(b => GameHomeworldName(b.DestinationLevelId)).Distinct());
         Spyro.Editor.Core.Diagnostics.EditorDiagnostics.RecordAction("World's doorway back out taken out", $"{scene.Name}: doorway back to {to}; the level as it was: {kept}");
         return $" Took {Owned(scene.Name)} doorway back out to {to} (and its frame) out of the level: your world is reached by balloon, and its balloonist flies Spyro back. " +
-               "The level as it was is kept in the project's backups folder (fix-it); for a doorway as well, use Terrain › World Entrance.";
+               "The level as it was is kept in the project's backups folder (fix-it); for a doorway as well, use Links › World Entrance.";
     }
 
     /// <summary>Stands the world's balloonist with his balloon in its homeworld, which must be the open level: Artisans'

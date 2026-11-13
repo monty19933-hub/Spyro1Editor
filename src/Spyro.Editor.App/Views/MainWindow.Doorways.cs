@@ -398,7 +398,7 @@ public sealed partial class MainWindow
         if (free.Length == 0)
         {
             _statusText.Text = scene.WorldLevelId == NewWorldDocument.Homeworld
-                ? "Every level of your new world already has a doorway here. Make another level with File > New World… first."
+                ? "Every level of your new world already has a doorway here. Make another level with Create › New World… first."
                 : "Every level this homeworld's doorways can lead to already has one. Remove one first, or use Leads To… on one to swap where it goes.";
             return;
         }

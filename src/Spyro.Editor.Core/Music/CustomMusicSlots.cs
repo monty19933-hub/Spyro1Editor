@@ -33,7 +33,7 @@ public static class CustomMusicSlots
         {
             // Already Spyro-format XA: the sectors are copied as they are, twice when two passes fit.
             if (yotd == null)
-                throw new InvalidDataException($"{track.DisplayName} comes from Spyro: Year of the Dragon. Choose your Year of the Dragon disc in Game Settings → Music, or pick another track.");
+                throw new InvalidDataException($"{track.DisplayName} comes from Spyro: Year of the Dragon. Choose your Year of the Dragon disc in Look › Music, or pick another track.");
             int room = Capacity(imagePath, slot);
             return Cache.GetOrAdd((yotd.ImagePath, track.TrackId, room), _ =>
             {

@@ -40,7 +40,7 @@ internal static class CrashPlayerUiCases
             foreach (string name in IsolatedRoots) Environment.SetEnvironmentVariable(name, Directory.CreateDirectory(Path.Combine(parent, name)).FullName);
             var window = Open();
             Check(Find<Control>(window, "PlayAsCrashSection").GetLogicalDescendants().OfType<CheckBox>().Count(b => b.Name?.StartsWith("CrashPlayerLevel", StringComparison.Ordinal) == true) == 2,
-                "Play as Crash in Game Settings has a box for each level Crash can play");
+                "Play as Crash on the Game tab has a box for each level Crash can play");
             Check(window.GetLogicalDescendants().OfType<CheckBox>().All(b => b.Name != "CrashPlayerLevel15"), "flight levels have no box");
             CheckBox stone = Find<CheckBox>(window, "CrashPlayerLevel11"), toasty = Find<CheckBox>(window, "CrashPlayerLevel14");
             Check(stone.IsChecked == false && toasty.IsChecked == false && !File.Exists(file), "nothing is ticked or saved at first");

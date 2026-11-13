@@ -189,9 +189,9 @@ public sealed partial class MainWindow
             string home = WorldHomeworldNameOr(world);
             _worldEntranceNote.Text = $"{WorldAccessSentence(world, world.BalloonPlaceWith(true))} No doorway is needed in {level.DisplayName}." +
                 (placedHere == null
-                    ? $" A doorway as well is optional: Add a Doorway As Well… puts one here, and {home} then needs a doorway back out to {level.DisplayName} too (Terrain › Doorways in {home})."
+                    ? $" A doorway as well is optional: Add a Doorway As Well… puts one here, and {home} then needs a doorway back out to {level.DisplayName} too (Links › Doorways in {home})."
                     : $" A doorway placed here before ({DescribeWorldEntrance(placedHere)}) is kept in your project but not built. Build It As Well puts it in the game as a second way in; " +
-                      $"{home} then needs a doorway back out to {level.DisplayName} too (Terrain › Doorways in {home}).");
+                      $"{home} then needs a doorway back out to {level.DisplayName} too (Links › Doorways in {home}).");
             if (_worldEntranceSignature != "") { _viewport.SetWorldEntrancePreview([], []); _worldEntranceSignature = ""; }
             if (_worldEntranceRoom != null) _worldEntranceRoom.Text = "";
             return;
@@ -289,7 +289,7 @@ public sealed partial class MainWindow
     {
         if (_worldEntranceBusy || OpenOriginalHomeworld() is not { } level) return null;
         var (world, entrance) = WorldEntranceProject();
-        if (world == null) { _statusText.Text = "Make a world first with File ▾ › New World…."; return null; }
+        if (world == null) { _statusText.Text = "Make a world first with Create › New World…."; return null; }
         if (entrance == null || entrance.HomeworldKey != level.Key || world.EntryHomeworldKey != level.Key)
         { _statusText.Text = "Place the entrance first (Place Entrance…)."; return null; }
         return (level, world, entrance);
@@ -304,7 +304,7 @@ public sealed partial class MainWindow
     {
         if (_worldEntranceBusy || OpenOriginalHomeworld() is not { } level) return;
         var (world, entrance) = WorldEntranceProject();
-        if (world == null) { _statusText.Text = "Make a world first with File ▾ › New World…."; return; }
+        if (world == null) { _statusText.Text = "Make a world first with Create › New World…."; return; }
         // Reached by balloon only: this adds a doorway as well (one placed here before is used as it is).
         bool asWell = world.BalloonOnly;
         if (asWell && entrance?.HomeworldKey == level.Key) { await UseWorldEntranceAsWellAsync(level, world); return; }
@@ -336,7 +336,7 @@ public sealed partial class MainWindow
                 $"Placed a {shape.Name.ToLowerInvariant()} doorway to {world.Name} {where} in {level.DisplayName}. Spyro walks in heading {CompassWord(heading)}; " +
                 "Create BIN builds it into the homeworld (its frame uses the homeworld's own arch texture until you choose another)." +
                 (asWell ? $" Players can now walk into {world.Name} through it as well as fly there by balloon; {WorldHomeworldNameOr(world)} needs a doorway back out to {level.DisplayName} too " +
-                          $"(open it, then Terrain › Doorways › Add Doorway… › {level.DisplayName})." : ""));
+                          $"(open it, then Links › Doorways › Add Doorway… › {level.DisplayName})." : ""));
         }
         finally { _worldEntranceBusy = false; RefreshWorldEntranceCard(); }
     }
@@ -349,7 +349,7 @@ public sealed partial class MainWindow
         {
             await WithDoorwayIn(world, level).SaveAsync(_workspace.RootPath);
             _statusText.Text = $"Players can now walk into {world.Name} through its doorway in {level.DisplayName} as well as fly there by balloon. " +
-                $"{WorldHomeworldNameOr(world)} needs a doorway back out to {level.DisplayName} too (open it, then Terrain › Doorways › Add Doorway… › {level.DisplayName}); Remove Entrance makes it balloon only again.";
+                $"{WorldHomeworldNameOr(world)} needs a doorway back out to {level.DisplayName} too (open it, then Links › Doorways › Add Doorway… › {level.DisplayName}); Remove Entrance makes it balloon only again.";
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         { _statusText.Text = "Could not save your world: " + e.Message; }

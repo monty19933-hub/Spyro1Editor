@@ -83,6 +83,8 @@ internal static class LevelPickerAutomationCases
             // Realize the actual picker's items without opening an unshown Window's
             // popup. Only this fixture replaces the template; production stays themed.
             picker.IsEnabled = true;
+            // The picker is kept hidden since 2.5 (levels are opened from Your game); shown for this fixture only.
+            picker.IsVisible = true;
             picker.ItemsPanel = new FuncTemplate<Panel?>(() => new StackPanel());
             picker.Template = new FuncControlTemplate<ComboBox>((owner, scope) =>
             {

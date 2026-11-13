@@ -182,7 +182,7 @@ public sealed partial class MainWindow
                     panel.Children.Add(head);
                     if (home.Rebuilt)
                         panel.Children.Add(Text($"A homeworld you rebuilt keeps one doorway for each level of its own, and each always leads to the level in that place " +
-                            $"(a level you build in Stone Hill's place is reached by the Stone Hill doorway). Add, move or remove them with Terrain › Doorways in {home.RebuiltAs}.", 12, Muted()));
+                            $"(a level you build in Stone Hill's place is reached by the Stone Hill doorway). Add, move or remove them with Links › Doorways in {home.RebuiltAs}.", 12, Muted()));
                     if (home.Doorways.Count == 0)
                         panel.Children.Add(Text("No doorways yet.", 12, Amber()));
                     foreach (var doorway in home.Doorways)
@@ -227,8 +227,8 @@ public sealed partial class MainWindow
                         // A doorway into your world, only when you chose one (or the world is off the balloon route).
                         if (!w.BalloonOnly && string.Equals(w.EntranceHomeworldKey ?? w.EntryHomeworldKey, home.Key, StringComparison.OrdinalIgnoreCase))
                             panel.Children.Add(Text(w.EntranceHomeworldKey == null
-                                ? $"The doorway into your world {w.Name} you chose goes here too: Create BIN places it near where Spyro arrives (or place it yourself with Terrain › World Entrance)."
-                                : $"The doorway into your world {w.Name} you chose stands here (Terrain › World Entrance moves it).", 12, Muted()));
+                                ? $"The doorway into your world {w.Name} you chose goes here too: Create BIN places it near where Spyro arrives (or place it yourself with Links › World Entrance)."
+                                : $"The doorway into your world {w.Name} you chose stands here (Links › World Entrance moves it).", 12, Muted()));
                     }
                     content.Children.Add(Card(panel, "LevelLinksHome" + home.LevelId, focusLevelId == home.LevelId));
                     if (focusLevelId == home.LevelId) focusTarget ??= content.Children[^1];
@@ -302,20 +302,20 @@ public sealed partial class MainWindow
                         // No doorway in, none out: say so where one was left from before.
                         if (world.EntranceHomeworldKey is { } placedIn)
                             panel.Children.Add(Text($"A doorway into {world.Name} that was placed in {_retailCatalog.FindByKey(placedIn)?.DisplayName ?? placedIn} before is kept in your project but not built: " +
-                                "your world needs no doorway. To have one as well, open that homeworld and use Terrain › World Entrance.", 12, Muted()));
+                                "your world needs no doorway. To have one as well, open that homeworld and use Links › World Entrance.", 12, Muted()));
                     }
                     else
                     {
                         // The doorway you chose (or the only way in, off the balloon route) and its way back.
                         string why = world.Place.OnRoute ? "too (you chose one)" : "(the only way in: your world is off the balloon route)";
                         panel.Children.Add(Text(world.EntranceHomeworldKey == null
-                            ? $"Players can walk in through a doorway in {world.EntryHomeworldName} {why}. It is not placed yet: Create BIN places it near where Spyro arrives there, or open {world.EntryHomeworldName} and use Terrain › World Entrance."
+                            ? $"Players can walk in through a doorway in {world.EntryHomeworldName} {why}. It is not placed yet: Create BIN places it near where Spyro arrives there, or open {world.EntryHomeworldName} and use Links › World Entrance."
                             : string.Equals(world.EntranceHomeworldKey, world.EntryHomeworldKey, StringComparison.OrdinalIgnoreCase)
-                                ? $"Players can walk in through its doorway in {world.EntryHomeworldName} {why}; Terrain › World Entrance there moves it."
+                                ? $"Players can walk in through its doorway in {world.EntryHomeworldName} {why}; Links › World Entrance there moves it."
                                 : $"Its doorway stands in {links.PlaceOf(_retailCatalog.FindByKey(world.EntranceHomeworldKey)?.LevelId ?? 10).SlotName}, but the world is entered from {world.EntryHomeworldName}: Create BIN places a new one in {world.EntryHomeworldName}."));
                         panel.Children.Add(Text(world.WayBackTo is int back
                             ? $"Its doorway home leads back to {links.PlaceOf(back).SlotName}, and brings Spyro out of the entrance there."
-                            : $"{world.HomeworldName} has no doorway home yet (Terrain › Doorways › Add Doorway… there, then {world.EntryHomeworldName}).", 13, world.WayBackTo == null ? Amber() : null));
+                            : $"{world.HomeworldName} has no doorway home yet (Links › Doorways › Add Doorway… there, then {world.EntryHomeworldName}).", 13, world.WayBackTo == null ? Amber() : null));
                     }
                     var buttons = new WrapPanel { Orientation = Orientation.Horizontal };
                     var openWorld = NewButton($"Open {world.HomeworldName}"); openWorld.Name = "LevelLinksOpenWorld";
@@ -416,7 +416,7 @@ public sealed partial class MainWindow
                     : (w.Levels.FirstOrDefault(l => l.LevelId == levelId) is { } l
                         ? l.HasDoorway
                             ? $"{l.Name} is a level of your world: Spyro gets in through its doorway in {w.HomeworldName}, and Return Home brings him back out of it."
-                            : $"{l.Name} is a level of your world. It has no doorway in {w.HomeworldName} yet: open {w.HomeworldName} and use Terrain › Doorways › Add Doorway…."
+                            : $"{l.Name} is a level of your world. It has no doorway in {w.HomeworldName} yet: open {w.HomeworldName} and use Links › Doorways › Add Doorway…."
                         : "This level of your world is not saved yet.")
                 : "Your world could not be read.";
         if (levelId % 10 == 0 && map.Homeworlds.FirstOrDefault(h => h.LevelId == levelId) is { } home)

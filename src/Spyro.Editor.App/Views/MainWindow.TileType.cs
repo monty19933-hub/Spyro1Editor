@@ -436,7 +436,7 @@ public sealed partial class MainWindow
             return null;
         return $"a supercharge ramp needs Spyro's supercharge animations, which {level.DisplayName} doesn't have. Adding them takes " +
             $"{NativeSuperchargeAnimations.ByteLength:N0} bytes of level memory, and {level.DisplayName} is {shortfall:N0} bytes short of room for them." +
-            (mode == GameMemoryMode.Emulator8MB ? "" : " Choose Emulator (8 MB RAM) under Game Settings › Memory to make room.");
+            (mode == GameMemoryMode.Emulator8MB ? "" : " Choose Emulator (8 MB RAM) under Game › Memory to make room.");
     }
 
     /// <summary>Stages the kind on every selected tile the game can take it on, saves, and says what happened.</summary>

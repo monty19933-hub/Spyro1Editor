@@ -51,7 +51,7 @@ internal static class FlyAnywhereUiCases
             TextBlock details = Find<TextBlock>(window, "FreeFlightDetails");
             Check(details.Text!.StartsWith("Off.", StringComparison.Ordinal) && details.Text.Contains("Game Camera", StringComparison.Ordinal),
                 "the note says it is off and that the editor camera is something else: " + details.Text);
-            SelectTab(window, "Game Settings");
+            SelectTab(window, "Game");
             Snapshot(window, Path.Combine(outDir, "1-fly-anywhere-off.png"));
             box.IsChecked = true;
             Wait(() => File.Exists(settingsPath) && NativeFreeFlightSettingsStore.Capture(workspace).GlobalEnabled, "ticking the box saves the choice", 30);
@@ -88,7 +88,7 @@ internal static class FlyAnywhereUiCases
             Find<CheckBox>(window, "FreeFlightLevel13").IsChecked = true;
             Wait(() => NativeFreeFlightSettingsStore.Capture(workspace).EnabledLevelIds.SequenceEqual([10, 13]), "Artisans and Town Square are the chosen levels", 30);
             Check(details.Text!.StartsWith("On in Artisans and Town Square", StringComparison.Ordinal), "the note names the two levels: " + details.Text);
-            SelectTab(window, "Game Settings");
+            SelectTab(window, "Game");
             if (window.GetLogicalDescendants().OfType<Expander>().FirstOrDefault(e => e.Name == "FreeFlightLevelsSection") is { } section)
             {
                 section.IsExpanded = true;

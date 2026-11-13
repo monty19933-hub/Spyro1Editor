@@ -309,7 +309,7 @@ internal static class SpyroColoursUiCases
 
     private static void ShowCard(MainWindow window)
     {
-        Get<TabItem>(window, "_modernLevelWorkspaceTab").IsSelected = true; Pump(20);
+        Get<TabItem>(window, "_modernGameWorkspaceTab").IsSelected = true; Pump(20);
         var card = Find<Expander>(window, "SpyroColourSection");
         card.IsExpanded = true; Pump(20);
         card.BringIntoView(); Pump(20);

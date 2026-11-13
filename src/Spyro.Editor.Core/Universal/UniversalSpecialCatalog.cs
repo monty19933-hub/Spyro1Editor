@@ -69,7 +69,7 @@ public static class UniversalSpecialCatalog
     private static IEnumerable<UniversalMobyCatalogEntry> YotdEntries(bool yotdDiscAvailable)
     {
         string? restriction = yotdDiscAvailable ? null :
-            "This creature comes from Spyro: Year of the Dragon. Choose your disc with \"Year of the Dragon disc…\" in Game Settings → Music.";
+            "This creature comes from Spyro: Year of the Dragon. Choose your disc with \"Year of the Dragon disc…\" in Look › Music.";
         string[] sources = [UniversalCrashEnemies.YotdSourceKey];
         UniversalMobyVariant Creature(UniversalCrashEnemies.Enemy e) =>
             new(e.Class, UniversalCrashEnemies.YotdSourceKey, -1, 16, CrashEnemyModelBytes(e), CrashEnemyCodeBytes, true, false, true);

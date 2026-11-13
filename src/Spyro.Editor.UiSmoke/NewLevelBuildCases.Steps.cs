@@ -110,7 +110,7 @@ internal static partial class NewLevelBuildCases
     private static void Textures(MainWindow window, string outDir)
     {
         Load(window, "stonehill");
-        SelectTab(window, "Terrain");
+        SelectTab(window, "Ground");
         var geometry = window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry!;
         System.Collections.IEnumerable relocations() => (System.Collections.IEnumerable)typeof(MainWindow).GetField("_nativeTerrainTextureRelocations", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
         int done = 0;
@@ -174,7 +174,7 @@ internal static partial class NewLevelBuildCases
     private static void EnvironmentStep(MainWindow window, string outDir)
     {
         Load(window, "stonehill");
-        SelectTab(window, "Environment");
+        SelectTab(window, "Look");
         var mode = Get<Avalonia.Controls.ComboBox>(window, "_skyboxModeBox");
         mode.SelectedItem = mode.Items.Cast<object>().First(o => o.ToString()!.Contains("another level", StringComparison.Ordinal)); Pump(20);
         var donor = Get<Avalonia.Controls.ComboBox>(window, "_skyboxDonorBox");
@@ -196,7 +196,7 @@ internal static partial class NewLevelBuildCases
     private static void FrostSnowStep(MainWindow window, string outDir)
     {
         Load(window, "stonehill");
-        SelectTab(window, "Environment");
+        SelectTab(window, "Look");
         var snow = Get<Avalonia.Controls.CheckBox>(window, "_skyboxEnvironmentSnowBox");
         Console.WriteLine($"snow box enabled {snow.IsEnabled}, checked {snow.IsChecked}");
         snow.IsChecked = true; Pump(10);
@@ -211,7 +211,7 @@ internal static partial class NewLevelBuildCases
     private static void MusicStep(MainWindow window, string outDir)
     {
         Load(window, System.Environment.GetEnvironmentVariable("NEW_LEVEL_MUSIC_LEVEL") ?? "darkhollow");
-        SelectTab(window, "Game Settings");
+        SelectTab(window, "Look");
         string track = System.Environment.GetEnvironmentVariable("NEW_LEVEL_MUSIC") ?? "Toad Village";
         var music = Get<Avalonia.Controls.ComboBox>(window, "_levelMusicTrackBox");
         Console.WriteLine("music choices: " + music.Items.Count + ", last: " + music.Items.Cast<object>().Last());
@@ -227,7 +227,7 @@ internal static partial class NewLevelBuildCases
     private static void Settings(MainWindow window, string outDir)
     {
         Load(window, System.Environment.GetEnvironmentVariable("NEW_LEVEL_SETTINGS_LEVEL") ?? "stonehill");
-        SelectTab(window, "Game Settings");
+        SelectTab(window, "Look");
         string name = System.Environment.GetEnvironmentVariable("NEW_LEVEL_NAME") ?? "FROSTBITE FIELDS";
         var target = Get<Avalonia.Controls.ComboBox>(window, "_levelTextTargetBox");
         Console.WriteLine("name targets: " + string.Join(" | ", target.Items.Cast<object>()));
@@ -292,7 +292,7 @@ internal static partial class NewLevelBuildCases
     private static void PortalProbe(MainWindow window)
     {
         Load(window, "artisans");
-        SelectTab(window, "Terrain"); Pump(20);
+        SelectTab(window, "Ground"); Pump(20);
         var g = window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry!;
         int[] stone = [3, 4, 5, 6, 10, 17];
         var viewport = Get<EditorViewport>(window, "_viewport");
