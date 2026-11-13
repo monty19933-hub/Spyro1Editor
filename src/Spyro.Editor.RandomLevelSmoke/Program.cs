@@ -75,6 +75,7 @@ if (args.Length >= 6 && args[0] == "--dump")
         name = r.Scene.Name, spawn = new[] { r.Scene.Spawn.X, r.Scene.Spawn.Y, r.Scene.Spawn.Z }, heading = r.Scene.Heading, shape = r.Shape,
         areas = r.Report.Areas, counts = r.Report.Counts, theme = r.Report.Theme, style = r.Report.Style.ToString(),
         gems = (r.Scene.GemSpots ?? []).Select(g => new[] { g.X, g.Y, g.Z }).ToArray(),
+        design = (r.Scene.Design ?? []).Select(d => new { k = d.Kind, p = new[] { d.At.X, d.At.Y, d.At.Z }, t = new[] { d.Toward.X, d.Toward.Y }, r = d.Room }).ToArray(),
         links = r.Report.Links.Select(l => new { l.Kind, from = new[] { l.From.X, l.From.Y, l.From.Z }, to = new[] { l.To.X, l.To.Y, l.To.Z } }).ToArray(), faces,
     }));
     await TerrainTexturePngWriter.WriteRgbaAsync(Path.ChangeExtension(args[5], ".map.png"), r.MapWidth, r.MapHeight, r.Map);

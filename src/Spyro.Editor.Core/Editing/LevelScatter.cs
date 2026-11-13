@@ -566,6 +566,44 @@ public static class LevelScatter
             }
         }
 
+        // A generated level's design (where ways come into rooms, the rooms' meeting places, the tops of climbs): the
+        // game's levels set their objects up by it. Guards stand a few steps inside a way into a room, facing it, so
+        // Spyro meets them as he comes in; some rooms have a treasure camp, a pile of chests against the wall farthest
+        // from the ways in with a guard in front of it; the tops of climbs hold gems. Levels without one (imported,
+        // hand-built) are filled as before.
+        LevelFill.FloorGrid.Place? CellNear(Vector3f p, float dz = 30)
+        {
+            LevelFill.FloorGrid.Place? best = null; float bestD = float.MaxValue;
+            int cx = (int)MathF.Floor(p.X / cell), cy = (int)MathF.Floor(p.Y / cell);
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                    if (byColumn.TryGetValue((cx + dx, cy + dy), out var list))
+                        foreach (var c in list)
+                        {
+                            if (Math.Abs(point[c].Z - p.Z) > dz) continue;
+                            float d = Dist2(point[c], p);
+                            if (d < bestD) { bestD = d; best = c; }
+                        }
+            return best;
+        }
+        var design = scene.Design ?? [];
+        var hubs = design.Where(s => s.Kind == "hub").GroupBy(s => s.Room).ToDictionary(g => g.Key, g => g.First());
+        var mouthsOf = design.Where(s => s.Kind is "mouth" or "door" or "start").GroupBy(s => s.Room).ToDictionary(g => g.Key, g => g.ToList());
+        var camps = new List<(Vector3f At, Vector3f Hub, int Room)>();
+        foreach (var (room, hub) in hubs.Where(h => h.Key != 0).OrderBy(h => h.Key))
+        {
+            if (camps.Count >= Math.Max(1, (hubs.Count - 1) / 2) || !rnd.Chance(0.75)) continue;
+            var ins = mouthsOf.GetValueOrDefault(room, []);
+            // Against a wall, on the room's floor round its meeting place, as far as can be from its ways in.
+            var wall = hardBy.Where(c => Dist2(point[c], hub.At) <= 700 * 700 && Math.Abs(point[c].Z - hub.At.Z) <= 20 && OffDoorways(point[c]) &&
+                Dist2(point[c], spawn) >= 600 * 600 && Clear(point[c], 260)).ToList();
+            if (wall.Count == 0) continue;
+            double Far(LevelFill.FloorGrid.Place c) => ins.Count == 0 ? Math.Sqrt(Dist2(point[c], hub.At)) : ins.Min(m => Math.Sqrt(Dist2(point[c], m.At)));
+            var best = wall.OrderByDescending(Far).ThenBy(c => c.X).ThenBy(c => c.Y).Take(4).ToList();
+            var at = point[rnd.Pick(best)];
+            if (camps.Any(k => Dist2(k.At, at) < 700 * 700)) continue;
+            camps.Add((at, hub.At, room));
+        }
         // Enemies: in the rooms (the first one too where it is big, well away from where Spyro arrives), in ones,
         // twos and threes (now and then a pack) a few steps apart, facing the way in; a room at a time in an order of
         // the seed's, big rooms more than one group; then the odd one standing guard on a path.
@@ -576,9 +614,51 @@ public static class LevelScatter
         // With part of the treasure in teal and rainbow gems there is less for enemies to carry: somewhat fewer of them.
         double rest = request.Treasure > 0 ? Math.Max(0.6, total / (double)request.Treasure) : 1;
         int enemies = Math.Min((int)Math.Round(request.Enemies * fit * rest), Math.Max(0, rows / 3));
+        int guardsPlaced = 0;
+        if (enemies > 0 && design.Count > 0)
+        {
+            // Guards at the ways in (not in the room Spyro starts in, nor at a homeworld's doorways).
+            double share = request.Difficulty switch { LevelDifficulty.Easy => 0.35, LevelDifficulty.Hard => 0.75, LevelDifficulty.Kaizo => 0.9, _ => 0.55 };
+            var mouths = design.Where(s => s.Kind == "mouth" && s.Room != 0).OrderBy(s => s.At.X).ThenBy(s => s.At.Y).ToList();
+            rnd.Shuffle(mouths);
+            int guardMost = (int)Math.Round(enemies * 0.45);
+            void Guard(Vector3f at, Vector3f facing)
+            {
+                if (guardsPlaced >= enemies || CellNear(at) is not { } c || open[c] < 1 || !Clear(point[c], 130) ||
+                    Dist2(point[c], spawn) < startGap * startGap || !OffDoorways(point[c])) return;
+                Put(Kind.Enemy, point[c], facing); guardsPlaced++;
+            }
+            foreach (var m in mouths)
+            {
+                if (guardsPlaced >= guardMost) break;
+                if (!rnd.Chance(share)) continue;
+                float dx = m.Toward.X - m.At.X, dy = m.Toward.Y - m.At.Y, l = MathF.Sqrt(dx * dx + dy * dy);
+                if (l < 1) continue;
+                (float ux, float uy) = (dx / l, dy / l);
+                float inside = (float)Range(rnd, 220, 320);
+                if (rnd.Chance(0.6)) Guard(new(m.At.X + ux * inside - uy * (float)Range(rnd, -60, 60), m.At.Y + uy * inside + ux * (float)Range(rnd, -60, 60), m.At.Z), m.At);
+                else foreach (int s in new[] { -1, 1 })
+                    {
+                        float side = s * (float)Range(rnd, 80, 120);
+                        Guard(new(m.At.X + ux * inside - uy * side, m.At.Y + uy * inside + ux * side, m.At.Z), m.At);
+                    }
+            }
+            // A guard in front of each treasure camp, between it and the room's meeting place.
+            foreach (var k in camps)
+            {
+                float dx = k.Hub.X - k.At.X, dy = k.Hub.Y - k.At.Y, l = MathF.Sqrt(dx * dx + dy * dy);
+                if (l < 1) continue;
+                int n = request.Difficulty is LevelDifficulty.Hard or LevelDifficulty.Kaizo ? 2 : 1;
+                for (int i = 0; i < n; i++)
+                {
+                    float off = n == 1 ? 0 : (i == 0 ? -1 : 1) * 110f, d = Math.Min(l * 0.6f, (float)Range(rnd, 190, 260));
+                    Guard(new(k.At.X + dx / l * d - dy / l * off, k.At.Y + dy / l * d + dx / l * off, k.At.Z), k.Hub);
+                }
+            }
+        }
         if (enemies > 0 && beyond.Count > 0)
         {
-            int left = enemies, forPaths = (int)Math.Round(enemies * 0.2);
+            int left = enemies - guardsPlaced, forPaths = (int)Math.Round(left * 0.2);
             for (int round = 0; left > forPaths && round < 4; round++)
             {
                 var turn = beyond.ToList();
@@ -618,8 +698,10 @@ public static class LevelScatter
             }
             if (left > 0) notes.Add($"Room for {enemies - left} of {enemies} enemies.");
             rows -= enemies - left;
+            guardsPlaced = 0;
         }
 
+        rows -= guardsPlaced;
         // Animals: little groups on open ground through the level, the first in the room Spyro starts in (the game's
         // own graze a little under half the level's reach from the start as a rule).
         int animals = Math.Min((int)Math.Round(request.Animals * fit), Math.Max(0, rows / 4)), placedAnimals = 0;
@@ -685,6 +767,20 @@ public static class LevelScatter
         kindsToPlace = [.. kindsToPlace.OrderBy(k => k)];
         int placedChests = 0;
         var inTheOpen = order.Where(c => open[c] >= 3 && walk[c] > 12).ToList();
+        // The treasure camps first: two to four chests a chest's width apart along the wall.
+        foreach (var k in camps)
+        {
+            if (placedChests >= kindsToPlace.Count || CellNear(k.At) is not { } anchor || !Clear(point[anchor], 150)) continue;
+            int group = Math.Min(kindsToPlace.Count - placedChests, rnd.Pick<int>([(2, 45.0), (3, 40.0), (4, 15.0)]));
+            var last = anchor;
+            for (int n = 0; n < group; n++)
+            {
+                var near = n == 0 ? [anchor] : order.Where(c => open[c] >= 1 && Math.Abs(point[c].Z - point[anchor].Z) <= 12 && Dist2(point[c], point[last]) is >= 92 * 92 and <= 136 * 136 &&
+                    upright.Within(point[c], 3) && Clear(point[c], 90)).ToList();
+                if (Pick(near, c => 1.0) is not { } spot) break;
+                Put(kindsToPlace[placedChests++], point[spot], k.Hub); last = spot;
+            }
+        }
         for (int tries = 0; placedChests < kindsToPlace.Count && tries < 8 * kindsToPlace.Count + 20; tries++)
         {
             // A quarter of the groups stand on raised places (a ledge, a terrace, the top of a flight of steps); of the
@@ -836,6 +932,13 @@ public static class LevelScatter
             rnd.Shuffle(up0);
             up0 = [.. up0.OrderBy(c => perch.Contains(c) ? 0 : 1)];
             int upWant = (int)Math.Round(want * 0.24), upPlaced = 0;
+            // The tops of the level's climbs (its design) first: a jump, a climb or a glide is rewarded there.
+            foreach (var top in design.Where(s => s.Kind is "top" or "nook").OrderBy(s => s.At.X).ThenBy(s => s.At.Y))
+            {
+                if (upPlaced >= upWant || places.Count >= want) break;
+                if (CellNear(top.At, 24) is not { } c || places.Any(q => Dist2(q.P, point[c]) < 220 * 220)) continue;
+                upPlaced += Group(point[c], 3.0, 4, null);
+            }
             foreach (var c in up0)
             {
                 if (upPlaced >= upWant || places.Count >= want) break;

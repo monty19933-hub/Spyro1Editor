@@ -284,6 +284,7 @@ public static class RandomLevelGenerator
             // what is under them is meant to be seen.
             SkyBelow = style == LevelStyle.SkyIslands ? null : GroundColour(surfaces),
             Ways = Ways(planned),
+            Design = Design(planned),
         };
         if (options.PaintedSky)
         {
@@ -406,6 +407,7 @@ public static class RandomLevelGenerator
         L.Start = (L.Start.X + dx, L.Start.Y + dy); L.Facing = (L.Facing.X + dx, L.Facing.Y + dy);
         for (int k = 0; k < L.Doors.Count; k++) L.Doors[k] = L.Doors[k] with { X = L.Doors[k].X + dx, Y = L.Doors[k].Y + dy };
         for (int k = 0; k < L.Landmarks.Count; k++) L.Landmarks[k] = L.Landmarks[k] with { X = L.Landmarks[k].X + dx, Y = L.Landmarks[k].Y + dy };
+        for (int k = 0; k < L.Spots.Count; k++) L.Spots[k] = L.Spots[k] with { X = L.Spots[k].X + dx, Y = L.Spots[k].Y + dy, Tx = L.Spots[k].Tx + dx, Ty = L.Spots[k].Ty + dy };
         if (L.StartAt is { } at) L.StartAt = (at.X + dx, at.Y + dy);
     }
 
@@ -464,6 +466,20 @@ public static class RandomLevelGenerator
 
     private static ColorRgba Average(ColorRgba[] c) =>
         new((byte)c.Average(x => x.R), (byte)c.Average(x => x.G), (byte)c.Average(x => x.B));
+
+    /// <summary>The level's design spots on their floors (<see cref="PlannedLevel.Spots"/>), for Random objects.</summary>
+    private static IReadOnlyList<DesignSpot>? Design(PlannedLevel L)
+    {
+        var plan = L.Plan; List<DesignSpot> spots = [];
+        foreach (var s in L.Spots)
+        {
+            int layer = s.Zone >= 0 && s.Zone < plan.Zones.Count ? s.Zone : plan.ZoneAt(s.X, s.Y);
+            if (layer < 0) continue;
+            float z = (float)Math.Round(plan.Height(layer, s.X, s.Y));
+            spots.Add(new DesignSpot(s.Kind, new((float)Math.Round(s.X), (float)Math.Round(s.Y), z), new((float)Math.Round(s.Tx), (float)Math.Round(s.Ty), z), s.Area));
+        }
+        return spots.Count > 0 ? spots : null;
+    }
 
     /// <summary>The level's ways, for lamps along them: each path between rooms and each trodden path across a room,
     /// as points about 120 apart on its floor.</summary>

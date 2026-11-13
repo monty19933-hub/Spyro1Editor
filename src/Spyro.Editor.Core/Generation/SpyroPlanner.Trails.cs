@@ -15,7 +15,8 @@ internal static partial class SpyroPlanner
         foreach (var a in L.Areas)
         {
             if (a.Zone.Kind != "room" || a.Zone.Liquid != null || a.R < 260) continue;
-            if (a.Zone.Floor is not (SurfaceRole.Ground or SurfaceRole.GroundAlt or SurfaceRole.Sand or SurfaceRole.Dirt)) continue;
+            // Every room's ways in and meeting place are noted (Random objects' guards); only grass, sand or dirt is worn.
+            bool worn = a.Zone.Floor is SurfaceRole.Ground or SurfaceRole.GroundAlt or SurfaceRole.Sand or SurfaceRole.Dirt;
             // The ways in: joins (the floor's edge towards the other room), doorways (the floor in front), the start.
             List<(double X, double Y)> mouths = [];
             foreach (var j in L.Joins)
@@ -28,8 +29,12 @@ internal static partial class SpyroPlanner
                     if (a.Zone.Sdf(a.X + u.X * t, a.Y + u.Y * t, plan.Noise) > -30) { at = t; break; }
                 if (at > 0.3 * a.R) mouths.Add((a.X + u.X * at, a.Y + u.Y * at));
             }
+            HashSet<(double X, double Y)> doorMouths = [];
             foreach (var d in L.Doors.Where(d => d.Area == a.Id))
-                mouths.Add((d.X - d.Dx * Math.Min(220, 0.5 * d.Front), d.Y - d.Dy * Math.Min(220, 0.5 * d.Front)));
+            {
+                (double X, double Y) front = (d.X - d.Dx * Math.Min(220, 0.5 * d.Front), d.Y - d.Dy * Math.Min(220, 0.5 * d.Front));
+                mouths.Add(front); doorMouths.Add(front);
+            }
             if (a.Id == 0 && L.StartAt is { } start) mouths.Add(start);
             if (mouths.Count == 0) continue;
             // The meeting place: near the middle, on the room's own floor.
@@ -41,8 +46,12 @@ internal static partial class SpyroPlanner
                 if (plan.ZoneAt(a.X + e.X * r, a.Y + e.Y * r) == a.Zone.Id) { hub = (a.X + e.X * r, a.Y + e.Y * r); break; }
             }
             if (plan.ZoneAt(hub.X, hub.Y) != a.Zone.Id) continue;
+            L.Spots.Add(("hub", hub.X, hub.Y, a.Zone.Id, hub.X, hub.Y, a.Id));
+            foreach (var m in mouths)
+                L.Spots.Add((doorMouths.Contains(m) ? "door" : a.Id == 0 && L.StartAt is { } s0 && m == s0 ? "start" : "mouth", m.X, m.Y, a.Zone.Id, hub.X, hub.Y, a.Id));
             foreach (var m in mouths)
             {
+                if (!worn) break;
                 double len = Dist(m.X, m.Y, hub.X, hub.Y);
                 if (len < 160) continue;
                 var u = Unit(hub.X - m.X, hub.Y - m.Y);
@@ -75,5 +84,25 @@ internal static partial class SpyroPlanner
             }
         }
         if (made > 0) L.Count("trodden path", made);
+    }
+
+    /// <summary>The tops of the level's climbs, for Random objects' rewards: every ledge, glide ledge, lookout, terrace,
+    /// islet or rise that stands half a jump or more over its room's floor and has no higher step of its own climb on it,
+    /// the summits, and the nooks' middles.</summary>
+    private static void TopSpots(PlannedLevel L)
+    {
+        var plan = L.Plan;
+        var steps = plan.Zones.Where(z => z.Kind is "ledge" or "glide ledge" or "lookout" or "terrace" or "islet" or "rise" && z.Discs.Count > 0 && z.Liquid == null &&
+            z.Area >= 0 && z.Area < L.Areas.Count && z.Z - L.Areas[z.Area].Z >= 50).ToList();
+        foreach (var z in steps)
+        {
+            var (x, y, r) = z.Discs[^1];
+            // A step with a higher one of the same climb standing on it is on the way up, not the top.
+            if (steps.Any(o => o != z && o.Area == z.Area && o.Z > z.Z && Dist(o.Discs[^1].X, o.Discs[^1].Y, x, y) < r + o.Discs[^1].R)) continue;
+            if (plan.ZoneAt(x, y) != z.Id) continue;
+            L.Spots.Add(("top", x, y, z.Id, x, y, z.Area));
+        }
+        foreach (var (x, y, zone, _) in L.Landmarks) L.Spots.Add(("top", x, y, zone, x, y, zone >= 0 && zone < plan.Zones.Count ? plan.Zones[zone].Area : -1));
+        foreach (var a in L.Areas.Where(a => a.Kind == "nook")) L.Spots.Add(("nook", a.X, a.Y, a.Zone.Id, a.X, a.Y, a.Id));
     }
 }

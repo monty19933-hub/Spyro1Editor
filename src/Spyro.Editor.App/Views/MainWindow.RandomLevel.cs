@@ -639,7 +639,7 @@ public sealed partial class MainWindow
     private static SceneDocument Placed(SceneDocument blank, SceneDocument level) => blank with
     {
         Name = level.Name, Surfaces = level.Surfaces, Spawn = level.Spawn, Heading = level.Heading, SkyColor = level.SkyColor,
-        SkySourceWadEntry = level.SkySourceWadEntry, CustomSky = level.CustomSky, SkyBelow = level.SkyBelow, Ways = level.Ways, MusicTrack = level.MusicTrack, GemSpots = level.GemSpots,
+        SkySourceWadEntry = level.SkySourceWadEntry, CustomSky = level.CustomSky, SkyBelow = level.SkyBelow, Ways = level.Ways, Design = level.Design, MusicTrack = level.MusicTrack, GemSpots = level.GemSpots,
         FarMeshes = null, CollisionFaces = null, Portals = null,
     };
 

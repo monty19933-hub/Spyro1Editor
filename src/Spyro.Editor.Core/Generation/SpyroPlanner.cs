@@ -67,6 +67,10 @@ internal sealed class PlannedLevel
     /// <summary>High places that want something tall standing on them (a tower on the hill): where, on which zone's
     /// floor, and how much room there is round the middle.</summary>
     public readonly List<(double X, double Y, int Zone, double Room)> Landmarks = [];
+    /// <summary>The level's design, for Random objects: where each way comes into a room ("mouth", towards the room's
+    /// meeting place), the meeting place ("hub"), a homeworld doorway's floor ("door"), the tops of climbs ("top": a
+    /// ledge, a lookout, a terrace, a summit, an islet), small rooms off the way ("nook"); on which zone's floor.</summary>
+    public readonly List<(string Kind, double X, double Y, int Zone, double Tx, double Ty, int Area)> Spots = [];
     public (double X, double Y) Start, Facing;
     /// <summary>Where Spyro starts when that is not the middle of the first room (a room with a hill in its middle).</summary>
     public (double X, double Y)? StartAt;
@@ -728,6 +732,7 @@ internal static partial class SpyroPlanner
         L.StartZone = plan.ZoneAt(L.Start.X, L.Start.Y) is int under and >= 0 ? under : first.Zone.Id;
         // Trodden paths across the rooms, with gems along them.
         Trails(L, rnd.Fork("trails"));
+        TopSpots(L);
         // A few more places by the rooms' edges, where the game's gems lie along the foot of the walls.
         foreach (var a in L.Areas)
             for (int q = 0; q < (a.R >= 800 ? 5 : a.R < 420 ? 2 : 3); q++)

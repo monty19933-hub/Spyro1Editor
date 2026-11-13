@@ -76,6 +76,11 @@ public sealed record AuthoredFarFace(int[] Corners, int[] Colors);
 /// <summary>A native special-surface record (type and two parameters, as retail levels store them): type 0 is a
 /// hazard floor (Param1 0 hurts, 1 deadly; Param2 0 water, 1 lava, 2 ooze), 4 a supercharge ramp, 5 an invisible
 /// wall. These kinds are handled by the game's executable, so any level can use them.</summary>
+/// <summary>A place in a generated level's design: <paramref name="Kind"/> mouth (a way comes into a room here,
+/// <paramref name="Toward"/> the room's meeting place), hub (the meeting place), door (a homeworld doorway's floor), start,
+/// top (the top of a climb), nook; <paramref name="Room"/> the planner's room number (-1: none).</summary>
+public sealed record DesignSpot(string Kind, Vector3f At, Vector3f Toward, int Room);
+
 public sealed record AuthoredSurfaceKind(int Type, int Param1, int Param2)
 {
     public static readonly AuthoredSurfaceKind Water = new(0, 0, 0), DeadlyWater = new(0, 1, 0), Lava = new(0, 0, 1),
@@ -169,6 +174,11 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
     /// Null: none known.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<Vector3f[]>? Ways { get; init; }
+    /// <summary>The level's design (generated levels): where ways come into rooms, the rooms' meeting places, the tops
+    /// of climbs, nooks, doorways' floors (<see cref="DesignSpot"/>). Random objects sets up guards, treasure and
+    /// rewards by them. Null: none known.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<DesignSpot>? Design { get; init; }
     /// <summary>Distant meshes of imported sectors (by <see cref="AuthoredSurface.Sector"/>); null: every sector that
     /// needs one gets the compiler's simplified copy.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
