@@ -1,3 +1,19 @@
+# Spyro Editor 2.4 — 12 November 2026
+
+Stable 2.4 (internal 2.4.0, schema 3). Built and checked locally from `2faacae` on `feature/v23b-20261111` (2.3 `da5a3d8`
+plus the work of 11-12 November; Level Links merged from `feature/v24-links-20261111` `1c35ed8`). **Not published**: the
+owner asked for 2.4 "but dont publish to github just yet". 2.3 was built but never released; all of it is in 2.4.
+
+- Gate `--build-all` 640 checks, 0 failed; package verifier and codesign passed on the zip-extracted packages; the
+  packaged Mac app started; updater offline 22/22 (betas → Beta V6, stable 1.0-2.3 → 2.4), 2.4 offered nothing.
+- New since the 2.3 build: no sky through the ground's hairline gaps in random levels (sky below the horizon in the
+  ground's colour), trodden paths with gems and lamps, more marshes and scenery, gems on raised places first, keys
+  float 19 units up, music for random levels, File ▾ › Level Links…, the teal/rainbow fallback in Random objects;
+  before that (preview builds): eleven layouts, flat-sided rooms, houses, castle walls, rivers, marshes, water/ooze/lava,
+  the Random Level window's pinned foot.
+- Packages, BUILD-REPORT, evidence and updater checks: task-root `outputs/SpyroEditor-V2.4-20261112`.
+
+
 # Spyro Editor 2.3 — 11 November 2026
 
 Stable 2.3 (internal 2.3.0, schema 3). Built and checked locally from `a2c5256` on `feature/v23-20261111` (from v2.2
