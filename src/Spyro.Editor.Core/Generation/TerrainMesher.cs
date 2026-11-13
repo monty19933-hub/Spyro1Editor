@@ -34,6 +34,10 @@ internal sealed class TerrainMesher
     public List<TerrainPiece> Pieces { get; } = [];
     /// <summary>Floor faces by layer, for the reach check and the map: sheet corner numbers and the piece made of them.</summary>
     public List<(int Layer, int[] V, TerrainPiece Piece)> Floors { get; } = [];
+    /// <summary>Zones holding a part of one of the game's levels (<see cref="TerrainZone.Cut"/>) whose ground was sewn to
+    /// the cut's floor edge all round: the sheet has no floor or wall of its own there. A cut whose seam could not be
+    /// made keeps the sheet's floor (and is left out of the level).</summary>
+    public HashSet<int> Sewn { get; } = [];
 
     public TerrainMesher(TerrainPlan plan, double spacing) { _plan = plan; _s = spacing; }
 
@@ -256,8 +260,7 @@ internal sealed class TerrainMesher
         var edges = new Dictionary<(int, int), List<(int Face, int A, int B)>>();
         for (int f = 0; f < _faces.Count; f++)
         {
-            var (layer, v) = _faces[f];
-            var corners = v.Select(k => Point(k, layer)).ToArray();
+            var v = _faces[f].V;
             for (int k = 0; k < v.Length; k++)
             {
                 int a = v[k], b = v[(k + 1) % v.Length];
@@ -265,12 +268,20 @@ internal sealed class TerrainMesher
                 if (!edges.TryGetValue(key, out var list)) edges[key] = list = [];
                 list.Add((f, a, b));
             }
+        }
+        Seams(edges);
+        for (int f = 0; f < _faces.Count; f++)
+        {
+            var (layer, v) = _faces[f];
+            var corners = v.Select(k => Point(k, layer)).ToArray();
             double cx = v.Average(k => _x[k]), cy = v.Average(k => _y[k]);
             double nz = Up(corners);
             var role = _plan.Role(layer, cx, cy, nz);
             var light = v.Select(k => _plan.Light(layer, _x[k], _y[k])).ToArray();
             var piece = Clean(corners, role, light, _plan.KindOf(layer), layer, false);
             if (piece == null) continue;
+            // Under a sewn cut: the game's own floor is there; kept only for the way-through check.
+            if (Sewn.Contains(layer)) { Floors.Add((layer, v, piece)); continue; }
             Pieces.Add(piece);
             Floors.Add((layer, v, piece));
             // A rock roof over it: the same face turned over, higher up.
@@ -294,6 +305,7 @@ internal sealed class TerrainMesher
             if (list.Count != 2) continue;
             var (f1, a1, b1) = list[0]; var (f2, _, _) = list[1];
             int l1 = _faces[f1].Layer, l2 = _faces[f2].Layer;
+            if (Sewn.Contains(l1) || Sewn.Contains(l2)) continue;
             if (Roofed(f1) != Roofed(f2) && l1 != TerrainPlan.Enclosure && l2 != TerrainPlan.Enclosure) Fascia(Roofed(f1) ? f1 : f2, Roofed(f1) ? f2 : f1, a1, b1, Roofed(f1));
             if (l1 == l2) continue;
             // Along face 1's own direction a -> b.
@@ -312,6 +324,71 @@ internal sealed class TerrainMesher
             bool firstLower = za1 + zb1 < za2 + zb2;
             if (firstLower) WallPart(l1, l2, Point(a1, za1), Point(b1, zb1), Point(a1, za2), Point(b1, zb2));
             else WallPart(l2, l1, Point(a1, za2), Point(b1, zb2), Point(a1, za1), Point(b1, zb1), reverse: true);
+        }
+    }
+
+    /// <summary>The ground between the sheet and each part cut from one of the game's levels: the sheet stops where the
+    /// cut's zone begins (its edges there, walked round, with the heights of the floors they belong to) and the cut's
+    /// floor edge lies inside; the space between is filled with faces joining the two edges corner to corner, so the
+    /// floors meet without a crack. Lit and surfaced as the room round it.</summary>
+    private void Seams(Dictionary<(int, int), List<(int Face, int A, int B)>> edges)
+    {
+        foreach (var zone in _plan.Zones)
+        {
+            if (zone.Cut is not { } cut) continue;
+            // The sheet's edges against the cut's zone, each in its own face's direction (the zone on its right).
+            var next = new Dictionary<int, (int B, double Z)>();
+            bool ok = true;
+            foreach (var list in edges.Values)
+            {
+                if (list.Count != 2) continue;
+                int l0 = _faces[list[0].Face].Layer, l1 = _faces[list[1].Face].Layer;
+                if ((l0 == zone.Id) == (l1 == zone.Id)) continue;
+                var (face, a, b) = l0 == zone.Id ? list[1] : list[0];
+                int layer = _faces[face].Layer;
+                if (next.ContainsKey(a)) { ok = false; break; }
+                next[a] = (b, _z[a][layer]);
+            }
+            if (!ok || next.Count < 3) continue;
+            // Walked round: the longest way round the zone.
+            var seen = new HashSet<int>();
+            List<int>? best = null; double bestArea = 0;
+            foreach (int s in next.Keys.OrderBy(k => k))
+            {
+                if (seen.Contains(s)) continue;
+                var loop = new List<int>();
+                int at = s; bool closed = false;
+                while (next.TryGetValue(at, out var e) && !seen.Contains(at))
+                {
+                    seen.Add(at); loop.Add(at); at = e.B;
+                    if (at == s) { closed = true; break; }
+                }
+                if (!closed) continue;
+                double area = 0;
+                for (int k = 0; k < loop.Count; k++) area += _x[loop[k]] * _y[loop[(k + 1) % loop.Count]] - _x[loop[(k + 1) % loop.Count]] * _y[loop[k]];
+                // Round a hole the sheet's edges run clockwise.
+                if (-area > bestArea) { bestArea = -area; best = loop; }
+            }
+            if (best == null) continue;
+            best.Reverse();
+            var rim = cut.Rim;
+            var outer = best.Select(k => (_x[k], _y[k])).ToList();
+            var inner = rim.Select(v => ((double)v.X, (double)v.Y)).ToList();
+            if (LevelCuts.Sew(outer, inner) is not { } tris) continue;
+            var points = best.Select(k => Point(k, next[k].Z)).Concat(rim).ToList();
+            int room = _plan.Zones.FirstOrDefault(z => z.Kind == "room" && z.Area == zone.Area)?.Id ?? TerrainPlan.Fill;
+            var seam = new List<TerrainPiece>();
+            foreach (var (a, b, c) in tris)
+            {
+                Vector3f[] corners = [points[a], points[b], points[c]];
+                double cx = corners.Average(p => p.X), cy = corners.Average(p => p.Y);
+                var role = _plan.Role(room, cx, cy, Up(corners));
+                var light = corners.Select(p => _plan.Light(room, p.X, p.Y)).ToArray();
+                if (Clean(corners, role, light, null, room, false) is { } piece) seam.Add(piece);
+            }
+            if (seam.Count == 0) continue;
+            Pieces.AddRange(seam);
+            Sewn.Add(zone.Id);
         }
     }
 

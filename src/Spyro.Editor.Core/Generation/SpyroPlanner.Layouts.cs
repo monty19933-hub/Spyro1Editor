@@ -22,8 +22,13 @@ internal static partial class SpyroPlanner
         return cls;
     }
 
-    private static double Rad(LevelRandom rnd, int cls) => Math.Max(cls >= 2 ? _minRoom : 0,
-        _scale * (cls switch { 0 => Range(rnd, 300, 370), 1 => Range(rnd, 400, 520), 2 => Range(rnd, 540, 690), 3 => Range(rnd, 710, 870), _ => Range(rnd, 940, 1150) }));
+    private static double Rad(LevelRandom rnd, int cls)
+    {
+        double r = Math.Max(cls >= 2 ? _minRoom : 0,
+            _scale * (cls switch { 0 => Range(rnd, 300, 370), 1 => Range(rnd, 400, 520), 2 => Range(rnd, 540, 690), 3 => Range(rnd, 710, 870), _ => Range(rnd, 940, 1150) }));
+        // The first clearing or bigger after the start is the room for the part of the game's level, until there is one.
+        return _cut != null && !_cutMade && _made > 0 && cls >= 2 ? Math.Max(r, _cutRoom) : r;
+    }
 
     /// <summary>How many rooms a level of this size and grain has: a few big ones, or many small.</summary>
     private static int Rooms(int weight, LevelRandom rnd, int min, int max)

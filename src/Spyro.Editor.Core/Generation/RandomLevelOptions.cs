@@ -77,6 +77,9 @@ public sealed record RandomLevelOptions
     public bool PaintedSky { get; init; }
     /// <summary>The level's music (a track id from MusicTrackCatalog); null picks one of the look's own songs.</summary>
     public int? Music { get; init; }
+    /// <summary>A part of the look's own level stood in the new one, cut out whole (Stone Hill's keep, Artisans' castle
+    /// bowl; <see cref="LevelCuts"/>); needs the look's level to be readable and the game's textures. Null: no.</summary>
+    public bool? Cuts { get; init; }
     /// <summary>The level's name (capital letters, spaces and apostrophes); null makes one up.</summary>
     public string? Name { get; init; }
     /// <summary>A homeworld: this many doorways (0: an ordinary level). The level is then a plaza where Spyro arrives

@@ -81,6 +81,23 @@ if (args.Length >= 6 && args[0] == "--dump")
     await TerrainTexturePngWriter.WriteRgbaAsync(Path.ChangeExtension(args[5], ".map.png"), r.MapWidth, r.MapHeight, r.Map);
     return 0;
 }
+if (args.Length >= 3 && args[0] == "--cuts")
+{
+    // --cuts <level> <out-folder>: every cut of a level (RANDOM_LOOK_CACHE) as faces for the study renderer, one file
+    // each, with the cut's edge as a list of points (to curate the cut table).
+    var look = RandomLevelCases.LookSource() ?? throw new InvalidOperationException("RANDOM_LOOK_CACHE");
+    var terrain = look(args[1]) ?? throw new InvalidDataException(args[1]);
+    Directory.CreateDirectory(args[2]);
+    foreach (var cut in Spyro.Editor.Core.Generation.LevelCuts.For(terrain, id => Spyro.Editor.Core.Generation.LevelDna.Static(args[1], id)))
+    {
+        var placed = new Spyro.Editor.Core.Generation.PlacedCut { Cut = cut, X = 4000, Y = 4000, Z = 1000 };
+        var faces = placed.Faces().Select(f => new { w = 0, p = f.Corners.Select(v => new[] { v.X, v.Y, v.Z }).ToArray(), c = (f.Paint ?? []).Select(c => new[] { (int)c.R, c.G, c.B }).ToArray(), t = $"{args[1]}:{f.Texture}", k = (string?)null }).ToArray();
+        string file = Path.Combine(args[2], cut.Name.Replace(' ', '-') + ".json");
+        await File.WriteAllTextAsync(file, System.Text.Json.JsonSerializer.Serialize(new { objects = Array.Empty<object>(), faces, rim = placed.Rim.Select(v => new[] { v.X, v.Y, v.Z }).ToArray() }));
+        Console.WriteLine($"{cut.Name}: {cut.Faces.Count} faces, radius {cut.Radius:0}, edge {cut.Rim.Length} points -> {file}");
+    }
+    return 0;
+}
 if (args.Length >= 7 && args[0] == "--walk-to")
 {
     // --walk-to <seed> <style> <size> <repo> <x> <y>: how the floor walk of Random objects gets to the floor under a
@@ -114,7 +131,7 @@ if (args.Length >= 2 && args[0] == "--variety")
     return failed == 0 ? 0 : 1;
 }
 // Gate (no disc): [repo root] [--maps <folder>] [--seeds N]
-if (args.Length == 0 || args[0] is not ("--fingerprint" or "--variety" or "--walk-to" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--balloon-facts" or "--scatter-facts" or "--model-colours" or "--thief-colours" or "--sky-below"))
+if (args.Length == 0 || args[0] is not ("--cuts" or "--fingerprint" or "--variety" or "--walk-to" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--balloon-facts" or "--scatter-facts" or "--model-colours" or "--thief-colours" or "--sky-below"))
 {
     string repo = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : Directory.GetCurrentDirectory();
     string? maps = args.SkipWhile(a => a != "--maps").Skip(1).FirstOrDefault();

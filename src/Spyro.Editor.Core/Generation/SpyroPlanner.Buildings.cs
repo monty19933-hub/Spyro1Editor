@@ -7,7 +7,7 @@ namespace Spyro.Editor.Core.Generation;
 internal static partial class SpyroPlanner
 {
     /// <summary>Zone kinds that are built things, not floor Spyro must reach.</summary>
-    internal static bool IsBuilt(string kind) => kind is "house" or "rampart";
+    internal static bool IsBuilt(string kind) => kind is "house" or "rampart" or "cut";
 
     /// <summary>Houses round the level: a village in one or two rooms, a house or two elsewhere.</summary>
     private static void Houses(PlannedLevel L, LevelStyle style, LevelRandom rnd)
@@ -20,7 +20,7 @@ internal static partial class SpyroPlanner
             LevelStyle.Islands => rnd.Next(2, 5), LevelStyle.SkyIslands => rnd.Next(1, 4), _ => rnd.Next(0, 2),
         };
         // The village rooms first (big, not the start), then any room with the floor for one.
-        var rooms = L.Areas.Where(a => a.Kind is "start" or "clearing" && a.R >= 460 && a.Zone.Roof <= 0 && a.Piece is not ("mount" or "lookout")).ToList();
+        var rooms = L.Areas.Where(a => a.Kind is "start" or "clearing" && a.R >= 460 && a.Zone.Roof <= 0 && a.Piece is not ("mount" or "lookout") && a.Want != "cut").ToList();
         rnd.Shuffle(rooms);
         rooms = [.. rooms.OrderByDescending(a => a.Id == 0 ? 0 : a.R * (0.6 + rnd.NextDouble()))];
         int made = 0;
@@ -82,7 +82,7 @@ internal static partial class SpyroPlanner
     {
         var plan = L.Plan;
         int want = style switch { LevelStyle.Castle => rnd.Next(2, 5), LevelStyle.SkyIslands => rnd.Next(1, 3), _ => rnd.Next(1, 4) };
-        var rooms = L.Areas.Where(a => a.Kind is "start" or "clearing" && a.R >= 560 && a.Zone.Roof <= 0).ToList();
+        var rooms = L.Areas.Where(a => a.Kind is "start" or "clearing" && a.R >= 560 && a.Zone.Roof <= 0 && a.Want != "cut").ToList();
         rnd.Shuffle(rooms);
         int made = 0;
         foreach (var a in rooms)

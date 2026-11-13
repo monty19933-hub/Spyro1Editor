@@ -128,14 +128,18 @@ internal sealed class TerrainZone
     public bool Flat;
     /// <summary>Under a rock roof this far above the floor (0: open sky).</summary>
     public double Roof;
+    /// <summary>A part of one of the game's levels stands here (<see cref="LevelCuts"/>): the zone is its floor and the
+    /// seam round it, out to <see cref="LevelCuts.Margin"/> past its floor's edge; its height is the edge's.</summary>
+    public PlacedCut? Cut;
     public bool IsPath => Spine.Count > 0;
 
-    public (double X, double Y) Centre => IsPath
+    public (double X, double Y) Centre => Cut != null ? (Cut.X, Cut.Y) : IsPath
         ? (Spine.Average(p => p.X), Spine.Average(p => p.Y))
         : Hulls.Count > 0 ? (Hulls[0].X, Hulls[0].Y) : Discs.Count > 0 ? (Discs[0].X, Discs[0].Y) : (Boxes[0].X, Boxes[0].Y);
 
     public double Sdf(double x, double y, TerrainNoise noise)
     {
+        if (Cut != null) return Cut.Sdf(x, y) - LevelCuts.Margin;
         double d;
         if (IsPath) d = SpineDistance(x, y, out _) - HalfWidth;
         else
@@ -177,7 +181,7 @@ internal sealed class TerrainZone
     }
 
     /// <summary>The radius of the biggest round or square part.</summary>
-    public double Radius => Math.Max(Math.Max(Discs.Count > 0 ? Discs.Max(d => d.R) : 0, Boxes.Count > 0 ? Boxes.Max(b => Math.Max(b.HalfX, b.HalfY)) : 0),
+    public double Radius => Cut != null ? Cut.Cut.Radius + LevelCuts.Margin : Math.Max(Math.Max(Discs.Count > 0 ? Discs.Max(d => d.R) : 0, Boxes.Count > 0 ? Boxes.Max(b => Math.Max(b.HalfX, b.HalfY)) : 0),
         Hulls.Count > 0 ? Hulls.Max(h => h.Radius) : 0);
 
     public double Length
@@ -197,6 +201,7 @@ internal sealed class TerrainZone
     /// <summary>The floor's height before the level's ripple: a room is level, a path ramps between its ends.</summary>
     public double FloorAt(double x, double y)
     {
+        if (Cut != null) return Cut.RimHeight(x, y);
         if (!IsPath || Z == Z1) return Z;
         SpineDistance(x, y, out double t);
         return Z + (Z1 - Z) * Ramp((t - RampFrom) / (RampTo - RampFrom));
@@ -334,7 +339,7 @@ internal sealed class TerrainPlan
         double lift = 0;
         foreach (var z in Zones)
         {
-            if (z.Liquid != null || z.IsPath || z.Kind is "stone" or "house") continue;
+            if (z.Liquid != null || z.IsPath || z.Kind is "stone" or "house" or "cut") continue;
             double high = z.Z - floor;
             if (high <= 60) continue;
             // A held jump's rise, a margin, less what a glide sinks on the way from the high place's edge.
@@ -370,6 +375,9 @@ internal sealed class TerrainPlan
         }
     }
 
+    /// <summary>How far out from a cut's seam the floor round it comes to the cut's height.</summary>
+    public const double CutBlend = 260;
+
     /// <summary>The share of a bank's width taken by its steep lower band.</summary>
     public const double BankSplit = 0.45;
 
@@ -390,6 +398,13 @@ internal sealed class TerrainPlan
         var z = Zones[layer];
         if (z.Liquid != null || z.Flat) return z.FloorAt(x, y);
         double h = z.FloorAt(x, y) + RippleAt(x, y);
+        // Round a part cut from one of the game's levels the floor comes to the height of the cut's own edge.
+        foreach (var cut in Zones)
+        {
+            if (cut.Cut == null || z.Kind is "stone" or "bridge") continue;
+            double d = cut.Sdf(x, y, Noise);
+            if (d < CutBlend) h += (cut.FloorAt(x, y) - h) * Smooth(1 - d / CutBlend);
+        }
         // A pond's shore: the floor round it dips to the water.
         foreach (var pond in Zones)
         {
@@ -521,6 +536,7 @@ internal sealed class TerrainPlan
             foreach (var h in z.Hulls)
                 foreach (var p in h.Points) { x0 = Math.Min(x0, h.X + p.X); y0 = Math.Min(y0, h.Y + p.Y); x1 = Math.Max(x1, h.X + p.X); y1 = Math.Max(y1, h.Y + p.Y); }
             foreach (var (sx, sy) in z.Spine) { x0 = Math.Min(x0, sx - z.HalfWidth); y0 = Math.Min(y0, sy - z.HalfWidth); x1 = Math.Max(x1, sx + z.HalfWidth); y1 = Math.Max(y1, sy + z.HalfWidth); }
+            if (z.Cut != null) { double r = z.Radius; x0 = Math.Min(x0, z.Cut.X - r); y0 = Math.Min(y0, z.Cut.Y - r); x1 = Math.Max(x1, z.Cut.X + r); y1 = Math.Max(y1, z.Cut.Y + r); }
         }
         double m = TrimDistance + 160;
         return (x0 - m, y0 - m, x1 + m, y1 + m);

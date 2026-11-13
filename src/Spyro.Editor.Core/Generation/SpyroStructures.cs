@@ -99,7 +99,7 @@ internal static partial class SpyroStructures
         // Every level of the game has a centrepiece seen from afar that the way leads towards (Stone Hill's tower, Dark
         // Hollow's castle, Artisans' keep). Where the plan asked for none, the deepest big room gets one at its back,
         // against its edge and away from its ways in: the look's own tallest thing that fits, else a keep of towers.
-        if (L.Landmarks.Count == 0 && style != LevelStyle.Caverns) Centrepiece();
+        if (L.Landmarks.Count == 0 && L.Cuts.Count == 0 && style != LevelStyle.Caverns) Centrepiece();
         void Centrepiece()
         {
             var rooms = L.Areas.Where(a => a.Kind is "clearing" or "start" && a.Zone.Kind == "room" && a.Zone.Roof <= 0 && a.R >= 440)

@@ -71,6 +71,8 @@ internal sealed class PlannedLevel
     /// meeting place), the meeting place ("hub"), a homeworld doorway's floor ("door"), the tops of climbs ("top": a
     /// ledge, a lookout, a terrace, a summit, an islet), small rooms off the way ("nook"); on which zone's floor.</summary>
     public readonly List<(string Kind, double X, double Y, int Zone, double Tx, double Ty, int Area)> Spots = [];
+    /// <summary>Parts of the game's levels stood in this one (<see cref="LevelCuts"/>).</summary>
+    public readonly List<PlacedCut> Cuts = [];
     public (double X, double Y) Start, Facing;
     /// <summary>Where Spyro starts when that is not the middle of the first room (a room with a hill in its middle).</summary>
     public (double X, double Y)? StartAt;
@@ -92,6 +94,12 @@ internal static partial class SpyroPlanner
     /// <summary>The level's grain (<see cref="PlannedLevel.Grain"/>) and the floor its rooms may cover in all (square units).</summary>
     [ThreadStatic] private static string? _grain;
     [ThreadStatic] private static double _land;
+    /// <summary>The part of one of the game's levels this level is to hold (null: none), the room it needs, whether a
+    /// room that size has been made yet, and how many rooms have been.</summary>
+    [ThreadStatic] private static LevelCut? _cut;
+    [ThreadStatic] private static double _cutRoom;
+    [ThreadStatic] private static bool _cutMade;
+    [ThreadStatic] private static int _made;
     /// <summary>The floor kept open in front of a doorway: coming back from a level Spyro lands up to 700 units in
     /// front of it (Artisans' doorways; measured in the game). Some homeworlds' doorways (three of Beast Makers')
     /// set him down a little way behind it instead, so a doorway stands in the middle of its room with open floor
@@ -170,10 +178,16 @@ internal static partial class SpyroPlanner
     /// <param name="layout">The layout to build (<see cref="AllLayouts"/>), or null for the seed's own choice.</param>
     /// <param name="squeeze">Builds the same level with smaller rooms (0: full size): the level came out with more
     /// faces than its size allows.</param>
+    /// <param name="cuts">Parts of the look's level the level may hold one of (<see cref="LevelCuts"/>; null or empty:
+    /// none).</param>
     public static PlannedLevel Build(LevelStyle style, LevelSize size, FeatureSet features, LevelTheme theme, LevelRandom rnd, int shrink,
-        LevelDifficulty difficulty = LevelDifficulty.Medium, int doorways = 0, string? layout = null, int squeeze = 0, SurfaceRole? liquid = null)
+        LevelDifficulty difficulty = LevelDifficulty.Medium, int doorways = 0, string? layout = null, int squeeze = 0, SurfaceRole? liquid = null,
+        IReadOnlyList<LevelCut>? cuts = null)
     {
         _tuning = For(difficulty);
+        // One of the look's level's parts, the same for every try at placing it; it wants a room with open floor all round.
+        _cut = cuts is { Count: > 0 } ? rnd.Fork("cut").Pick(cuts) : null;
+        _cutRoom = _cut == null ? 0 : _cut.Radius + LevelCuts.Margin + LevelCuts.Walk;
         _minRoom = doorways > 0 ? 600 : 0;
         // The level's own layout and grain: the same for every try at placing it.
         var own = rnd.Fork("layout");
@@ -193,6 +207,7 @@ internal static partial class SpyroPlanner
         for (int attempt = 0; ; attempt++)
         {
             var r = rnd.Fork("try" + attempt);
+            _cutMade = false; _made = 0;
             var plan = new TerrainPlan { Noise = new TerrainNoise(r.Fork("noise")) };
             var L = new PlannedLevel { Plan = plan };
             plan.LiquidRole = hazard;
@@ -284,6 +299,8 @@ internal static partial class SpyroPlanner
     {
         var a = new PlannedArea { Id = L.Areas.Count, X = x, Y = y, R = r, Z = z, Kind = kind };
         L.Areas.Add(a);
+        _made = L.Areas.Count;
+        if (_cut != null && a.Id > 0 && r >= _cutRoom) _cutMade = true;
         return a;
     }
 
@@ -565,8 +582,24 @@ internal static partial class SpyroPlanner
             }
             if (!changed) break;
         }
+        // The room that holds the part of the game's level: the biggest that has room for it all round, but the first
+        // (Spyro starts in its middle) and any with a doorway.
+        PlannedArea? host = null;
+        if (_cut != null)
+        {
+            // Not a room steps stand in (the lower of two joined by a flight or a step) or that shares its floor with
+            // another: they would run into the part.
+            bool Clear(PlannedArea a) => !L.Joins.Any(j => (j.A == a.Id || j.B == a.Id) &&
+                (j.Kind == "open" || j.Kind is "flight" or "step" && a.Z < L.Areas[j.A == a.Id ? j.B : j.A].Z));
+            host = L.Areas.Where(a => a.Id != 0 && a.Kind == "clearing" && a.R >= _cutRoom - 1 && !L.Doors.Any(d => d.Area == a.Id) && a.Want == "" && Clear(a))
+                .OrderByDescending(a => a.R).FirstOrDefault();
+            if (host != null) { host.Want = "cut"; host.Outline = null; host.Look = "round"; }
+            if (Environment.GetEnvironmentVariable("SPYRO_RANDOM_LEVEL_DEBUG") == "cut")
+                Console.Error.WriteLine($"cut {_cut.Name} r {_cut.Radius:0} faces {_cut.Faces.Count} wants room {_cutRoom:0}; rooms {string.Join(" ", L.Areas.Select(a => $"{a.Id}:{a.Kind}:{a.R:0}{(a.Want != "" ? ":" + a.Want : "")}"))}; host {host?.Id}");
+        }
         // The rooms' outlines, now that every room, join and doorway has its place.
         Outlines(L, rnd.Fork("outlines"));
+        if (host != null) host.Outline = null;
         foreach (var a in L.Areas)
         {
             a.Zone = plan.Add(new TerrainZone
@@ -583,8 +616,9 @@ internal static partial class SpyroPlanner
             if (a.Id != 0 && L.Doors.Any(door => door.Area == a.Id)) a.Zone.Wobble = Math.Min(a.Zone.Wobble, 20);
             // A doorway stands taller than a cave's roof is high: its room's roof is raised over it.
             if (a.Zone.Roof > 0 && L.Doors.Any(door => door.Area == a.Id)) a.Zone.Roof += 150;
-            // A hill of terraces stands in the open.
-            if (a.Want is "mount" or "mount+") a.Zone.Roof = 0;
+            // A hill of terraces stands in the open, and so does a part of the game's level.
+            if (a.Want is "mount" or "mount+" or "cut") a.Zone.Roof = 0;
+            if (a == host) { a.Zone.Discs.Add((a.X, a.Y, a.R)); a.Zone.Wobble = Math.Min(a.Zone.Wobble, 30); continue; }
             if (a.Outline != null)
             {
                 // Flat sides and corners: the outline is a line of the mesh, its edge barely wanders.
@@ -610,6 +644,7 @@ internal static partial class SpyroPlanner
         foreach (var a in L.Areas)
         {
             int lobes = rnd.Next(1, 4);
+            if (a == host) continue;
             if (a.Look == "slab") continue;
             if (a.Look == "rock") continue;
             // Well away from where rooms touch: a lobe would bury the steps between them.
@@ -624,6 +659,17 @@ internal static partial class SpyroPlanner
                     door.X + door.Dx * door.Behind, door.Y + door.Dy * door.Behind, door.X - door.Dx * door.Front, door.Y - door.Dy * door.Front) < r + 160)) continue;
                 a.Zone.Discs.Add((a.X + d.X * off, a.Y + d.Y * off, r));
             }
+        }
+        if (host != null)
+        {
+            var placed = new PlacedCut { Cut = _cut!, X = host.X, Y = host.Y, Z = host.Z, Angle = Range(rnd.Fork("cut turn"), 0, 6.2832) };
+            plan.Add(new TerrainZone
+            {
+                Kind = "cut", Cut = placed, Z = host.Z, Z1 = host.Z, Area = host.Id, Priority = host.Priority + 40, Flat = true, Crisp = true,
+                Wobble = 0, Blend = 0, Floor = host.Zone.Floor,
+            });
+            L.Cuts.Add(placed);
+            L.Count(_cut!.Name);
         }
         foreach (var j in L.Joins)
         {

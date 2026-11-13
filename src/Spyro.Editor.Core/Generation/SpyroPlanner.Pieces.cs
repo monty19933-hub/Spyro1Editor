@@ -18,6 +18,8 @@ internal static partial class SpyroPlanner
             lean[piece] = rnd.Pick<double>([(0.35, 1.0), (1.0, 2.0), (2.4, 1.0)]);
         foreach (var a in L.Areas)
         {
+            // A room holding a part of one of the game's levels has that and the floor round it.
+            if (a.Want == "cut") continue;
             bool door = L.Doors.Any(d => d.Area == a.Id), first = a.Id == 0;
             bool big = a.R >= 600, grand = a.R >= 780;
             // What the layout asked for in this room.
@@ -61,7 +63,7 @@ internal static partial class SpyroPlanner
         }
         // A level with pools and marshes has a marsh at least: the biggest rooms try again, every way round.
         if (features.Hazards && !L.Counts.Keys.Any(k => k.StartsWith("marsh", StringComparison.Ordinal)))
-            foreach (var a in L.Areas.Where(a => a.R >= MarshRoom && a.Kind != "overlook").OrderByDescending(a => a.R))
+            foreach (var a in L.Areas.Where(a => a.R >= MarshRoom && a.Kind != "overlook" && a.Want != "cut").OrderByDescending(a => a.R))
                 if (Enumerable.Range(0, 8).Any(_ => Marsh(L, a, rnd))) break;
         // What is built on the floor, last, where there is room left: houses, castle walls.
         if (features.Houses) Houses(L, style, rnd);

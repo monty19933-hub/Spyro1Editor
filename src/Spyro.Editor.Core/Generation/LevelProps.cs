@@ -17,10 +17,18 @@ public sealed record LevelPropSource(string LevelKey, IReadOnlyList<SourceFace> 
         foreach (var p in geometry.Polygons)
         {
             if (p.IsNativeUntexturedSentinel || p.NativePrimitiveSemiTransparent || p.Points.Count < 3 || p.Points.Count > 4) continue;
-            if (p.NearColors.Count != p.Points.Count || p.ZValues.Length != p.Points.Count) continue;
+            if (p.ZValues.Length != p.Points.Count) continue;
+            // A triangle is stored as four corners with one doubled (CornerPointIndexes 0, 0, 1, 2): each of its three
+            // points takes the paint of the first corner that is it.
+            ColorRgba[] near;
+            if (p.NearColors.Count == p.Points.Count) near = [.. p.NearColors];
+            else if (p.Points.Count == 3 && p.NearColors.Count == 4 && p.CornerPointIndexes.Count == 4 && p.CornerPointIndexes.All(i => i >= 0 && i < 3) &&
+                Enumerable.Range(0, 3).All(k => p.CornerPointIndexes.Contains(k)))
+                near = [.. Enumerable.Range(0, 3).Select(k => p.NearColors[p.CornerPointIndexes.ToList().IndexOf(k)])];
+            else continue;
             var corners = new Vector3f[p.Points.Count];
             for (int k = 0; k < corners.Length; k++) corners[k] = new(p.Points[k].X, p.Points[k].Y, p.ZValues[k]);
-            faces.Add(new(corners, p.NativeTextureId, [.. p.NearColors], p.FaceFlip, (p.NativeFaceWord3 & 0x04) != 0));
+            faces.Add(new(corners, p.NativeTextureId, near, p.FaceFlip, (p.NativeFaceWord3 & 0x04) != 0));
         }
         return new(levelKey, faces);
     }

@@ -140,9 +140,15 @@ public static class RandomLevelGenerator
     {
         // The look's own things, when its level can be read and the level keeps the game's textures.
         List<LevelProp>? props = null;
+        List<LevelCut>? cuts = null;
         bool gameTextures = options.Textures == LevelTextureMode.GameTextures && options.Pictures.Count == 0;
         if (source != null && gameTextures && textureBudget >= 20 && source(theme.Key) is { } terrain)
+        {
             props = LevelProps.Extract(terrain, id => LevelDna.Static(theme.Key, id));
+            // A part of the look's own level, cut out whole, when asked for.
+            if (options.Cuts == true || Environment.GetEnvironmentVariable("SPYRO_RANDOM_CUTS") == "1")
+                cuts = LevelCuts.For(terrain, id => LevelDna.Static(theme.Key, id));
+        }
         // A few layouts are tried; the first whose every floor is proved reachable both ways is taken (else the best).
         (PlannedLevel Planned, TerrainMesher Mesher, (int Required, int Unreached, int NoWayBack, List<(double X, double Y)> Bad) Check)? best = null;
         int attempts = 0, squeeze = 0;
@@ -152,7 +158,7 @@ public static class RandomLevelGenerator
             token.ThrowIfCancellationRequested();
             attempts++;
             var tried = SpyroPlanner.Build(style, options.Size, features, theme, new LevelRandom(planSeed), shrink, options.Difficulty, Math.Clamp(options.Doorways, 0, NativeHubPortals.MaxDoorways),
-                options.Layout, squeeze, options.Liquid);
+                options.Layout, squeeze, options.Liquid, cuts);
             // Into the built level's coordinates: whole units from 0, the lowest floor (and what hangs under floating
             // land) well above the bottom.
             var (bx0, by0, _, _) = tried.Plan.Bounds();
@@ -163,7 +169,8 @@ public static class RandomLevelGenerator
             mesh.Build(new LevelRandom(planSeed ^ 0x6D657368));
             // More faces than a level of this size may have (the game must hold and draw them): the same level
             // again with smaller rooms.
-            if (mesh.Pieces.Count > FaceTarget(options.Size) && squeeze < 5) { squeeze++; continue; }
+            int cutFaces = tried.Plan.Zones.Where(z => z.Cut != null && mesh.Sewn.Contains(z.Id)).Sum(z => z.Cut!.Cut.Faces.Count);
+            if (mesh.Pieces.Count + cutFaces > FaceTarget(options.Size) && squeeze < 5) { squeeze++; continue; }
             var reach = mesh.Reach(tried.Start.X, tried.Start.Y, tried.Glides.Select(g => (g.From, g.To)));
             if (Environment.GetEnvironmentVariable("SPYRO_RANDOM_LEVEL_DEBUG") is "1" or "first")
                 Console.Error.WriteLine($"plan {plans} {tried.Shape}: {reach.Unreached} unreached, {reach.NoWayBack} no way back of {reach.Required}; {string.Join(" ", reach.Bad.Take(12).Select(b => $"{b.X:0},{b.Y:0}"))}");
@@ -185,6 +192,12 @@ public static class RandomLevelGenerator
         var pieces = mesher.Pieces;
         planned.Look = theme.Name;
         pieces.AddRange(SpyroStructures.Build(planned, style, rnd.Fork("structures"), props, features));
+        // The parts of the look's level, as that level has them, where the ground was sewn to them.
+        foreach (var zone in plan.Zones.Where(z => z.Cut != null))
+        {
+            if (mesher.Sewn.Contains(zone.Id)) pieces.AddRange(zone.Cut!.Faces());
+            else notes.Add($"{zone.Cut!.Cut.Name} could not be joined to the ground round it and was left out.");
+        }
         if (check.Unreached + check.NoWayBack > 0)
             notes.Add($"{check.Unreached + check.NoWayBack} of {check.Required} floors could not be proved reachable both ways; play it through once.");
         token.ThrowIfCancellationRequested();
@@ -394,6 +407,7 @@ public static class RandomLevelGenerator
             foreach (var h in z.Hulls) { h.X += dx; h.Y += dy; }
             for (int k = 0; k < z.Spine.Count; k++) z.Spine[k] = (z.Spine[k].X + dx, z.Spine[k].Y + dy);
             z.Z += dz; z.Z1 += dz;
+            if (z.Cut != null) { z.Cut.X += dx; z.Cut.Y += dy; z.Cut.Z += dz; }
         }
         L.Plan.SeaLevel += dz;
         foreach (var a in L.Areas) { a.X += dx; a.Y += dy; a.Z += dz; }
