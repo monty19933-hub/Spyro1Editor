@@ -468,12 +468,14 @@ public static class RandomLevelGenerator
 
     private static bool TextTargetName(string s) => NewWorldDocument.IsValidName(s.Trim().ToUpperInvariant()) && s.Trim().All(c => !char.IsDigit(c));
 
+    /// <summary>A made-up name no longer than the game's level window shows (15 letters): a homeworld made in a new
+    /// world's place gives the world its name, and Create BIN refuses a longer one.</summary>
     private static string Name(LevelTheme theme, LevelRandom rnd)
     {
         for (int k = 0; k < 20; k++)
         {
             string s = rnd.Pick(theme.Adjectives) + " " + rnd.Pick(theme.Nouns);
-            if (s.Length <= NewWorldDocument.MaxNameLength) return s;
+            if (s.Length <= Math.Min(NewWorldDocument.MaxNameLength, Spyro.Editor.Core.Exporting.NativeLevelWindow.MaxNameLength)) return s;
         }
         return rnd.Pick(theme.Nouns);
     }
