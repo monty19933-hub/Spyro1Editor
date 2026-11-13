@@ -96,7 +96,7 @@ internal static class LevelCuts
     [
         // Stone Hill: the keep in its walled yard, its corner towers and its gate.
         // (Its purple scrollwork bands are moving pictures: the plain purple stone with the same cream edges instead.)
-        new("stonehill", "the keep", [7480, 9130, 9320, 9130, 9320, 10580, 7480, 10580], 1000, Swap: [22, 18, 23, 17]),
+        new("stonehill", "the keep", [7480, 8900, 9320, 8900, 9320, 10580, 7480, 10580], 1000, Swap: [22, 18, 23, 17]),
         // Stone Hill: the field walled round with towers, gates west and east.
         new("stonehill", "the walled field", [6880, 8300, 7000, 7600, 7400, 7180, 8200, 7060, 8900, 7180, 9400, 7600, 9560, 8300, 9420, 8980, 9020, 9260, 7400, 9260, 7020, 9020], 1000, Swap: [22, 18, 23, 17, 6, 3]),
         // Artisans: the round hill ringed by its terraces.
