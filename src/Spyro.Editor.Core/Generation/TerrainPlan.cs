@@ -375,6 +375,9 @@ internal sealed class TerrainPlan
         }
     }
 
+    /// <summary>How far up a bank's face must turn to be grass (0.8: steeper than about 37 degrees is rock).</summary>
+    public const double BankRock = 0.8;
+
     /// <summary>How far out from a cut's seam the floor round it comes to the cut's height.</summary>
     public const double CutBlend = 260;
 
@@ -434,7 +437,9 @@ internal sealed class TerrainPlan
             case Enclosure:
                 if (Kind == EnclosureKind.Cliff) return CapRole;
                 if (Kind == EnclosureKind.Peaks && Land(x, y) > BankWidth * 0.6) return nz < 0.8 ? SurfaceRole.Cliff : SurfaceRole.Rock;
-                // A bank is bare rock in stretches, grass in others; over its top, grass.
+                // A bank's steep face is bare rock all the way (grass stretched down a steep face shows as a smear of
+                // odd green); where it is gentler it is rock in stretches, grass in others; over its top, grass.
+                if (nz < BankRock) return SurfaceRole.Cliff;
                 return Land(x, y) < BankWidth && Noise.At(x / 520 + 70, y / 520 + 33) > RockShare ? SurfaceRole.Cliff : SurfaceRole.GroundAlt;
             case Fill: return Kind == EnclosureKind.Sea && -Land(x, y) < Beach * 0.45 ? SurfaceRole.Sand : SurfaceRole.Ground;
         }
