@@ -96,6 +96,43 @@ internal static partial class SpyroStructures
             placed.Add((mark.X, mark.Y, 100)); towers++;
             pieces.AddRange(Tower(mark.X, mark.Y, ground - 20, ground + Range(rnd, 300, 430), Math.Min(104, mark.Room - 96), castle ? 150 : 200));
         }
+        // Every level of the game has a centrepiece seen from afar that the way leads towards (Stone Hill's tower, Dark
+        // Hollow's castle, Artisans' keep). Where the plan asked for none, the deepest big room gets one at its back,
+        // against its edge and away from its ways in: the look's own tallest thing that fits, else a keep of towers.
+        if (L.Landmarks.Count == 0 && style != LevelStyle.Caverns) Centrepiece();
+        void Centrepiece()
+        {
+            var rooms = L.Areas.Where(a => a.Kind is "clearing" or "start" && a.Zone.Kind == "room" && a.Zone.Roof <= 0 && a.R >= 440)
+                .OrderByDescending(a => a.Depth).ThenByDescending(a => a.R).Take(3).ToList();
+            foreach (var a in rooms)
+                for (int k = 0; k < 16; k++)
+                {
+                    var (dx, dy) = (SpyroPlanner.Cos(6.2832 * k / 16), SpyroPlanner.Sin(6.2832 * k / 16));
+                    // Away from every way in and out of the room.
+                    if (a.Taken.Any(t => t.X * dx + t.Y * dy > 0.35)) continue;
+                    double at = a.R * 0.72, x = a.X + dx * at, y = a.Y + dy * at;
+                    int zone = plan.ZoneAt(x, y);
+                    if (zone != a.Zone.Id) continue;
+                    double floor = plan.Height(zone, x, y);
+                    var fitting = tall.Where(p => p.Radius <= a.R * 0.3 && p.Radius >= 90 && p.Height >= 380).OrderByDescending(p => p.Height).ToList();
+                    if (fitting.Count > 0 && Pick(fitting.Take(2).ToList()) is { } prop && Room(x, y, prop.Radius))
+                    {
+                        if (plan.Zones.Any(z => z.Kind != "room" && z.Sdf(x, y, plan.Noise) < prop.Radius + 80) || SpyroPlanner.OnWay(L, a, x, y, prop.Radius + 140)) continue;
+                        Use(prop, x, y, floor, 20); L.Count("centrepiece"); L.Spots.Add(("landmark", x, y, zone, x, y, a.Id)); return;
+                    }
+                    // A keep: a tall tower with three lower ones round it.
+                    double keep = 210;
+                    if (!Room(x, y, keep) || plan.Zones.Any(z => z.Kind != "room" && z.Sdf(x, y, plan.Noise) < keep + 80) || SpyroPlanner.OnWay(L, a, x, y, keep + 140)) continue;
+                    pieces.AddRange(Tower(x, y, floor - 30, floor + Range(rnd, 420, 520), 112, castle ? 160 : 210));
+                    double turn = Range(rnd, 0, 6.2832);
+                    for (int n = 0; n < 3; n++)
+                    {
+                        double ang = turn + 6.2832 * n / 3;
+                        pieces.AddRange(Tower(x + SpyroPlanner.Cos(ang) * 150, y + SpyroPlanner.Sin(ang) * 150, floor - 30, floor + Range(rnd, 250, 320), 64, castle ? 110 : 150, 6));
+                    }
+                    placed.Add((x, y, keep)); towers += 4; L.Count("centrepiece"); L.Spots.Add(("landmark", x, y, zone, x, y, a.Id)); return;
+                }
+        }
         if (!free && style is not (LevelStyle.Canyon or LevelStyle.Caverns))
             foreach (var zone in plan.Zones)
             {
