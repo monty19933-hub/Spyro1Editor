@@ -222,15 +222,21 @@ public sealed partial class MainWindow
             finally { _syncingDoorwayList = false; }
         }
         bool world = scene.WorldLevelId == NewWorldDocument.Homeworld;
-        var free = SceneDoorways.Destinations(scene, _retailCatalog, DestinationNameOrNull, DoorwayWayBack()).Where(d => !d.Taken).ToArray();
+        int? wayBack = world ? DoorwayWayBack() : null;
+        var free = SceneDoorways.Destinations(scene, _retailCatalog, DestinationNameOrNull, wayBack).Where(d => !d.Taken).ToArray();
         _doorwayAddButton.IsEnabled = !_doorwayBusy && free.Length > 0 && portals.Count < NativeHubPortals.MaxDoorways;
-        _doorwaysNote.Text = portals.Count == 0
+        // Your world by balloon: no doorway back out (its balloonist flies Spyro back); one left from before is said.
+        string byBalloon = !world || wayBack != null ? ""
+            : WorldAccess.WaysBack(scene).Count > 0
+                ? $" The doorway back to {DoorwayDestinationName(WorldAccess.WaysBack(scene)[0].DestinationLevelId)} is from before: your world is reached by balloon, so it isn't needed and Create BIN takes it out (or Remove Doorway now)."
+                : " No doorway back out is needed: your world's balloonist flies Spyro back.";
+        _doorwaysNote.Text = (portals.Count == 0
             ? (world
                 ? "Add a doorway to each level of your new world: Spyro walks into it to reach the level, and Return Home brings him back out of it."
                 : "This homeworld has no doorways yet. Add Doorway… puts one in: Spyro walks into it to reach the level, and comes back out of it.")
             : free.Length == 0 && !world
                 ? $"Every level this homeworld's doorways can lead to has one ({Count(portals.Count, "doorway", "doorways")}). Select one to move, turn, reshape or remove it; Leads To… swaps where one goes."
-                : $"{Count(portals.Count, "doorway", "doorways")}. Select one (here or by clicking its frame) to move, turn, reshape or remove it.";
+                : $"{Count(portals.Count, "doorway", "doorways")}. Select one (here or by clicking its frame) to move, turn, reshape or remove it.") + byBalloon;
         var selected = portals.FirstOrDefault(p => p.DestinationLevelId == _selectedDoorway);
         _doorwayTools.IsVisible = selected != null;
         _doorwayTools.IsEnabled = !_doorwayBusy;
@@ -243,16 +249,14 @@ public sealed partial class MainWindow
     private IReadOnlyDictionary<int, string> _doorwayWorldNames = new Dictionary<int, string>();
     private string _doorwayWorldNamesKey = "";
 
+    /// <summary>The game's homeworld the project's new world is entered from through a doorway: its homeworld's doorway
+    /// back leads there. Null when the world is reached by balloon only (its balloonist flies Spyro back; there is no
+    /// doorway back out), or there is no world.</summary>
+    private int? DoorwayWayBack() =>
+        ProjectWorldOrNull() is { HasDoorway: true } world ? _retailCatalog.FindByKey(world.EntryHomeworldKey)?.LevelId : null;
+
     /// <summary>The name of one of the new world's levels (null: not made, or not a world level). The names are read
     /// from the project only when its world files change (the card refreshes on every selection).</summary>
-    /// <summary>The game's homeworld the project's new world is entered from: its homeworld's doorway back leads there.</summary>
-    private int? DoorwayWayBack()
-    {
-        if (string.IsNullOrEmpty(_workspace.RootPath)) return null;
-        try { return NewWorldDocument.Read(_workspace.RootPath)?.EntryHomeworldKey is { } key ? _retailCatalog.FindByKey(key)?.LevelId : null; }
-        catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException) { return null; }
-    }
-
     private string? DestinationNameOrNull(int levelId)
     {
         if (!NewWorldDocument.LevelSlots.Contains(levelId) || string.IsNullOrEmpty(_workspace.RootPath)) return null;

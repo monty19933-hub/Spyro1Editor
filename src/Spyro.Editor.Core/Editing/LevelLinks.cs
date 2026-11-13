@@ -50,10 +50,19 @@ public sealed record LevelLinkReturn(LevelLinkPlace Level, PortalEndpoint? Saved
 /// <summary>One level of the project's own world and whether its homeworld has a doorway to it.</summary>
 public sealed record LevelLinkWorldLevel(int LevelId, string Name, bool HasDoorway, ReturnHomeVortex Vortex);
 
-/// <summary>The project's own world (File ▾ › New World…): where it is entered from, its homeworld's doorways, its way back
-/// and its place on the balloon route. Its links are set by the world's own tools, so the map only reports them.</summary>
+/// <summary>The project's own world (File ▾ › New World…): how players get there and back (<see cref="Access"/>, one
+/// sentence, <see cref="WorldAccess.Describe"/>), its homeworld's doorways, its balloonist, any doorway in or out and its
+/// place on the balloon route (<see cref="Place"/>: as Create BIN builds it; <see cref="Balloon"/>: as chosen, null when
+/// none was). Its links are set by the world's own tools, so the map only reports them.</summary>
 public sealed record LevelLinkWorld(string Name, string HomeworldName, string EntryHomeworldKey, string EntryHomeworldName,
-    string? EntranceHomeworldKey, IReadOnlyList<LevelLinkWorldLevel> Levels, int? WayBackTo, WorldBalloonPlace? Balloon);
+    string? EntranceHomeworldKey, IReadOnlyList<LevelLinkWorldLevel> Levels, int? WayBackTo, WorldBalloonPlace? Balloon)
+{
+    public string Access { get; init; } = "";
+    /// <summary>Reached by balloon only (no doorway in, none back out).</summary>
+    public bool BalloonOnly { get; init; } = true;
+    public bool HasBalloonist { get; init; }
+    public WorldBalloonPlace Place { get; init; } = WorldBalloonPlace.Default;
+}
 
 /// <summary>Something about the links worth saying, in plain words. <see cref="StopsCreateBin"/>: Create BIN cannot make the
 /// game as it is. <see cref="Fix"/> (with <see cref="FixLabel"/>): a change to the saved links that puts it right.</summary>
@@ -300,12 +309,14 @@ public sealed class LevelLinks
         if (_world != null)
         {
             var home = _worldScenes.FirstOrDefault(s => s.WorldLevelId == NewWorldDocument.Homeworld);
-            string homeName = home?.Name ?? _world.Name;
-            var entry = _catalog.FindByKey(_world.EntryHomeworldKey);
-            string entryName = entry?.DisplayName ?? _world.EntryHomeworldKey;
+            // The world is called by its homeworld's name (Create BIN saves it so).
+            var named = _world.NamedAfter(home?.Name);
+            string homeName = home?.Name ?? named.Name;
+            var entry = _catalog.FindByKey(named.EntryHomeworldKey);
+            string entryName = entry?.DisplayName ?? named.EntryHomeworldKey;
             var portals = home?.Portals ?? [];
             List<LevelLinkWorldLevel> levels = [];
-            foreach (int id in _world.LevelIds.Where(id => id != NewWorldDocument.Homeworld))
+            foreach (int id in named.LevelIds.Where(id => id != NewWorldDocument.Homeworld))
             {
                 var scene = _worldScenes.FirstOrDefault(s => s.WorldLevelId == id);
                 if (scene == null) continue;
@@ -316,13 +327,28 @@ public sealed class LevelLinks
                 if (_vortex(id).Present == false)
                     notes.Add(new($"{scene.Name} (in your world) has no Return Home vortex: Spyro can leave it only from the pause menu (Exit Level). Add Object can add one (search for \"Return Home\").", false, [id]));
             }
-            var backs = portals.Where(p => !NewWorldDocument.LevelSlots.Contains(p.DestinationLevelId)).ToList();
+            var backs = home == null ? [] : WorldAccess.WaysBack(home);
             int? wayBack = backs.Count > 0 ? backs[0].DestinationLevelId : null;
-            if (home != null && backs.Count == 0)
+            bool balloonist = home != null && WorldAccess.HasBalloonist(home);
+            var place = named.BalloonPlaceWith(balloonist);
+            if (named.BalloonOnly)
+            {
+                // By balloon only: the homeworld's balloonist flies Spyro back; there is no doorway in or out.
+                if (home != null && !balloonist)
+                    stops.Add(new($"{homeName} has no balloonist, so Spyro could not fly back out of your world: Create BIN stops until it has one. " +
+                        $"Fix It For Me then stands one near where Spyro arrives, or place him yourself in {homeName} (Objects › Random objects, \"The way out\").", true, [NewWorldDocument.Homeworld]));
+                if (backs.Count > 0)
+                    notes.Add(new($"{homeName} still has a doorway back out to {PlaceOf(backs[0].DestinationLevelId).Name} from before. Your world is reached by balloon, so it isn't needed: " +
+                        $"Create BIN takes it out (the level as it was is kept in the project's backups). To keep it, choose a doorway as well with Terrain › World Entrance in {entryName}.", false, [NewWorldDocument.Homeworld]));
+            }
+            else if (home != null && backs.Count == 0)
                 stops.Add(new($"{homeName} has no doorway back to {entryName}, so Spyro could not leave your world: Create BIN stops until it has one. Open {homeName} and use Terrain › Doorways › Add Doorway… ({entryName}).", true, [NewWorldDocument.Homeworld]));
             else if (entry != null && backs.Any(p => p.DestinationLevelId != entry.LevelId))
                 stops.Add(new($"{Possessive(homeName)} doorway back leads to {PlaceOf(backs.First(p => p.DestinationLevelId != entry.LevelId).DestinationLevelId).SlotName}, but your world is entered from {entryName}: Create BIN stops. Point it at {entryName} (Terrain › Doorways in {homeName}).", true, [NewWorldDocument.Homeworld]));
-            world = new(_world.Name, homeName, _world.EntryHomeworldKey, entryName, _entrance?.HomeworldKey, levels, wayBack, _world.Balloon);
+            world = new(named.Name, homeName, named.EntryHomeworldKey, entryName, _entrance?.HomeworldKey, levels, wayBack, named.Balloon)
+            {
+                Access = WorldAccess.Describe(named, place, id => PlaceOf(id).Name), BalloonOnly = named.BalloonOnly, HasBalloonist = balloonist, Place = place,
+            };
         }
 
         if (doorwaysLeftOut && routes.HasEdits)

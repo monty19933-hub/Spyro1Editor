@@ -43,6 +43,15 @@ public sealed record BalloonRequirement(BalloonRequirementKind Kind, int Count)
         BalloonRequirementKind.DragonEggs => $"recover {Count} dragon {(Count == 1 ? "egg" : "eggs")}",
         _ => "nothing",
     };
+
+    /// <summary>"rescued 40 dragons", "found 50 treasure", "recovered 5 dragon eggs" (after "once he has"), or "".</summary>
+    public string Done() => Kind switch
+    {
+        BalloonRequirementKind.Dragons => $"rescued {Count} {(Count == 1 ? "dragon" : "dragons")}",
+        BalloonRequirementKind.Treasure => $"found {Count} treasure",
+        BalloonRequirementKind.DragonEggs => $"recovered {Count} dragon {(Count == 1 ? "egg" : "eggs")}",
+        _ => "",
+    };
 }
 
 /// <summary>Where the project's new world lies on the balloonists' route: straight after the homeworld

@@ -76,8 +76,9 @@ public sealed partial class MainWindow
     }
 
     /// <summary>The levels a homeworld made in this place gets a doorway to: a homeworld of the game leads to its own
-    /// levels, your new world's homeworld to the world's levels and back out to the game. None: the place is not a
-    /// homeworld (doorways work only where the game keeps its doorway code).</summary>
+    /// levels, your new world's homeworld to the world's levels (and back out to the game only when the world has a
+    /// doorway as well: reached by balloon, its balloonist flies Spyro back). None: the place is not a homeworld
+    /// (doorways work only where the game keeps its doorway code).</summary>
     private IReadOnlyList<string> RandomHomeworldDoorways(RandomLevelPlace place, int worldLevelId)
     {
         try
@@ -95,7 +96,7 @@ public sealed partial class MainWindow
                 {
                     if (NewWorldDocument.Read(_workspace.RootPath) is not { } world) return [];
                     var names = world.LevelIds.Where(id => id != NewWorldDocument.Homeworld).Select(id => DestinationNameOrNull(id) ?? $"level {id - NewWorldDocument.Homeworld}").ToList();
-                    if (_retailCatalog.FindByKey(world.EntryHomeworldKey) is { } back) names.Add($"{back.DisplayName} (the way back out)");
+                    if (world.HasDoorway && _retailCatalog.FindByKey(world.EntryHomeworldKey) is { } back) names.Add($"{back.DisplayName} (the way back out)");
                     return names;
                 }
             }
@@ -105,11 +106,12 @@ public sealed partial class MainWindow
     }
 
     /// <summary>The generated homeworld's doorways, built where the generator kept places for them: one to each level
-    /// the scene's homeworld leads to. Returns the scene and a sentence saying where they lead.</summary>
+    /// the scene's homeworld leads to (your world's homeworld: its levels, and the way back out only when the world has a
+    /// doorway as well, <see cref="DoorwayWayBack"/>). Returns the scene and a sentence saying where they lead.</summary>
     private (SceneDocument Scene, string Note) WithHomeworldDoorways(SceneDocument scene, RandomLevelResult result)
     {
         if (result.Doorways.Count == 0 || result.DoorwayMaterial == null || SceneDoorways.Unavailable(scene, _retailCatalog) != null) return (scene, "");
-        var destinations = SceneDoorways.Destinations(scene, _retailCatalog, DestinationNameOrNull, DoorwayWayBack());
+        var destinations = SceneDoorways.Destinations(scene, _retailCatalog, DestinationNameOrNull, scene.WorldLevelId == NewWorldDocument.Homeworld ? DoorwayWayBack() : null);
         var shape = LevelThemes.DoorwayShape(result.Report.Theme);
         var (built, added, problems) = SceneDoorways.AddAll(scene, result.Doorways, destinations, shape, result.DoorwayMaterial);
         if (added.Count == 0) return (scene, problems.Count > 0 ? "Its doorways could not be built: " + problems[0] : "");
@@ -604,8 +606,15 @@ public sealed partial class MainWindow
                     }
                     (var placed, doors) = WithHomeworldDoorways(scene with { TargetBinding = null, WorldLevelId = choice.WorldLevelId }, result);
                     await placed.SaveAsync(path);
+                    // A homeworld made in your world's place names the world (a world is called by its homeworld's name).
+                    string renamed = "";
+                    if (choice.WorldLevelId == NewWorldDocument.Homeworld && NewWorldDocument.Read(root) is { } world && world.NamedAfter(placed.Name) is var named && named != world)
+                    {
+                        await named.SaveAsync(root);
+                        renamed = $"; your world is called {named.Name} now, after it (it was {world.Name}; renaming the homeworld renames the world)";
+                    }
                     await OpenWorldLevelAsync(choice.WorldLevelId);
-                    where = "in your world (the earlier version is in backups)";
+                    where = "in your world (the earlier version is in backups)" + renamed;
                     break;
                 }
             }

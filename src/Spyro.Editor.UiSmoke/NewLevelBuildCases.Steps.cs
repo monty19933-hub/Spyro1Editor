@@ -89,6 +89,8 @@ internal static partial class NewLevelBuildCases
             case "doorways": DoorwaysStep(window, outDir); return true;
             case "doorway-shots": DoorwayShots(window, outDir); return true;
             case "level-links": LevelLinksStep(window, outDir); return true;
+            case "world-access": WorldAccessStep(window, outDir); return true;
+            case "world-check": WorldCheckStep(window, outDir); return true;
             default: return RunThiefSteps(window, outDir, step);
         }
     }

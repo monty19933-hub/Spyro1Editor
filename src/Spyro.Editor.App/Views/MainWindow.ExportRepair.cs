@@ -8,8 +8,9 @@ namespace Spyro.Editor.App.Views;
 
 /// <summary>Fix It For Me: whenever Create BIN stops on something in the project, the status bar and the Status Details
 /// window show a button that gets the game made. It works through one stop after another, running Create BIN itself:
-/// a stop the editor knows a repair for (a refusal with an <see cref="ExportRepair"/>) is repaired, for instance the way
-/// into the project's new world is placed on open ground the editor finds (<see cref="WorldEntranceSpots"/>); any other
+/// a stop the editor knows a repair for (a refusal with an <see cref="ExportRepair"/>) is repaired, for instance the
+/// balloonist of the project's new world is stood near where Spyro arrives (<see cref="WorldAccess.BalloonistSpot"/>), or
+/// a doorway into a world that has one is placed on open ground the editor finds (<see cref="WorldEntranceSpots"/>); any other
 /// stop is got past by making the game without the part of the project that causes it (found by trying), which stays in
 /// the project and is remembered as left out (<see cref="Spyro.Editor.Core.Persistence.ExportLeftOutSettings"/>). At the
 /// end it says everything it did.</summary>
@@ -213,6 +214,12 @@ public sealed partial class MainWindow
         {
             case ExportRepair.PlaceWorldEntrance place: return await PlaceWorldEntranceForMeAsync(place.HomeworldKey);
             case ExportRepair.FitHomeworldObjects fit: return await FitHomeworldObjectsForMeAsync(fit.Room);
+            case ExportRepair.PlaceWorldBalloonist: return await PlaceWorldBalloonistForMeAsync();
+            case ExportRepair.RemoveWorldWayBack:
+            {
+                string note = (await RemoveWorldWayBackAsync()).Trim();
+                return (true, note);
+            }
             case ExportRepair.LeaveOutSkippedChanges skipped:
                 LeaveOut(Spyro.Editor.Core.Persistence.ExportParts.SkippedChanges, stop.Message);
                 return (true, $"Left out {Count(skipped.Details.Count, "saved change", "saved changes")} the game cannot take ({ShortList(skipped.Details)}); " +

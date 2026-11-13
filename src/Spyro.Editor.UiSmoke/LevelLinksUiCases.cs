@@ -103,12 +103,21 @@ internal static class LevelLinksUiCases
             string problems = Problems();
             Check(problems.Contains("Peace Keepers is rebuilt as STAR PLAINS") && problems.Contains("Create BIN stops"), "a link of a rebuilt homeworld is a stop, in plain words");
             Check(problems.Contains("Ice Cavern has no doorway leading to it") && problems.Contains("MY LEVEL has no doorway leading to it yet"), "levels with no way in are named");
-            Check(problems.Contains("LEVEL TWO (in your world) has no doorway in FAR SHORES") && problems.Contains("FAR SHORES has no doorway back to Artisans"), "the world's missing doorways are named");
+            Check(problems.Contains("LEVEL TWO (in your world) has no doorway in FAR SHORES") && !problems.Contains("no doorway back"), "the world's missing doorway is named; no doorway back out is asked for");
+            Check(problems.Contains("FAR SHORES has no balloonist, so Spyro could not fly back out of your world: Create BIN stops until it has one. Fix It For Me then stands one"),
+                "a world reached by balloon without its balloonist is a stop, with its fix said");
+            var worldCard = Find<Border>(dialog, "LevelLinksWorld");
+            Check(Find<TextBlock>(dialog, "LevelLinksWorldAccess").Text == "Players reach FAR SHORES by balloon: Artisans' balloonist flies Spyro there whenever he asks, and FAR SHORES' balloonist NILS flies him back to Artisans (and on to STAR PLAINS once he has rescued 10 dragons).",
+                "Your world says in one sentence how players get there and back (Peace Keepers by the name it was rebuilt with): " + Find<TextBlock>(dialog, "LevelLinksWorldAccess").Text);
+            var artisansCard = Find<Border>(dialog, "LevelLinksHome10").GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
+            Check(artisansCard.Contains("Its balloonist flies Spyro to your world FAR SHORES (see Your world below).") && !artisansCard.Any(t => t.Contains("doorway into your world")) &&
+                  !worldCard.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text?.Contains("doorway home") == true || t.Text?.Contains("walk in") == true),
+                "Artisans' balloonist is named as the way there; no doorway into the world or home is mentioned");
             Check(problems.Contains("SUNNY GLEN has no Return Home vortex (the game's Stone Hill has one)") && problems.Contains("Dark Hollow has lost its Return Home vortex"),
                 "missing Return Home vortexes come from the saved level and the object cache");
             Check(!problems.Contains("MY LEVEL has no Return Home vortex") && Find<Control>(dialog, "LevelLinksReturns").GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text == "Return Home vortex: yes."),
                 "a vortex placed in the new level is seen");
-            Check(Find<Border>(dialog, "LevelLinksWorld").GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text == "FAR SHORES' doorways lead to: LEVEL ONE, LEVEL TWO (no doorway yet)."),
+            Check(Find<Border>(dialog, "LevelLinksWorld").GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text?.StartsWith("FAR SHORES' doorways lead to: LEVEL ONE, LEVEL TWO (no doorway yet).") == true),
                 "the world's doorways are listed");
 
             // The fix for the stale link: gone from the file, Create BIN no longer stops.

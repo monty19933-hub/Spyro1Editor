@@ -97,7 +97,7 @@ class OwnedCommandTests(unittest.TestCase):
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
-        self.assertIn(("UiSmoke", "DOORWAYS_UI_OK checks=39", ["--doorways-ui-only"]), RUNNER.ADDITIONAL_CORE_CASES)
+        self.assertIn(("UiSmoke", "DOORWAYS_UI_OK checks=40", ["--doorways-ui-only"]), RUNNER.ADDITIONAL_CORE_CASES)
         project = RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
         self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"', project.read_text())
 
@@ -111,7 +111,7 @@ class OwnedCommandTests(unittest.TestCase):
 
     def test_balloon_travel_smoke_registration(self):
         name = "BalloonTravelSmoke"
-        self.assertIn((name, "BALLOON_TRAVEL_FREE_OK checks=2938"), RUNNER.CORE_CASES)
+        self.assertIn((name, "BALLOON_TRAVEL_FREE_OK checks=2962"), RUNNER.CORE_CASES)
         self.assertIn((name, "BALLOON_TRAVEL_SOURCE_OK checks=7063", ["--source"]), RUNNER.SOURCE_QA_CASES)
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
         project = RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
@@ -124,7 +124,7 @@ class OwnedCommandTests(unittest.TestCase):
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
-        self.assertIn(("UiSmoke", "WORLD_ENTRANCE_UI_OK checks=40", ["--world-entrance-ui-only"]), RUNNER.ADDITIONAL_CORE_CASES)
+        self.assertIn(("UiSmoke", "WORLD_ENTRANCE_UI_OK checks=51", ["--world-entrance-ui-only"]), RUNNER.ADDITIONAL_CORE_CASES)
         project = RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
         self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"', project.read_text())
 
@@ -998,14 +998,14 @@ class RunnerOptionsTests(unittest.TestCase):
                     (name, "EDITOR_NAVIGATION_UI_OK checks=", ["--editor-navigation-ui-only"]),
                     (name, "HIGH_VALUE_GEM_UI_OK checks=", ["--high-value-gems-ui-only"]),
                     (name, "PORTAL_ROUTE_UI_OK checks=18", ["--portal-routes-ui-only"]),
-                    (name, "LEVEL_LINKS_UI_OK checks=35", ["--level-links-ui-only"]),
+                    (name, "LEVEL_LINKS_UI_OK checks=38", ["--level-links-ui-only"]),
                     (name, "START_BLANK_UI_OK checks=27", ["--start-blank-ui-only"]),
                     (name, "FREE_FLIGHT_UI_OK", ["--free-flight-ui-only"]),
                     (name, "PLAY_AS_CRASH_UI_OK checks=", ["--play-as-crash-ui-only"]),
                     (name, "MEMORY_MODE_UI_OK checks=18", ["--memory-mode-ui-only"]),
                     (name, "SPYRO_COLOURS_UI_OK checks=26", ["--spyro-colours-ui-only"]),
-                    (name, "DOORWAYS_UI_OK checks=39", ["--doorways-ui-only"]),
-                    (name, "WORLD_ENTRANCE_UI_OK checks=40", ["--world-entrance-ui-only"]),
+                    (name, "DOORWAYS_UI_OK checks=40", ["--doorways-ui-only"]),
+                    (name, "WORLD_ENTRANCE_UI_OK checks=51", ["--world-entrance-ui-only"]),
                     (name, "CLEAR_PROJECT_UI_OK checks=23", ["--clear-project-ui-only"]),
                     (name, "LEVEL_PICKER_AUTOMATION_OK", ["--level-picker-automation-only"]),
                     (name, "AUTHORED_MESH_CHECKS_OK", ["--authored-mesh-only"]),

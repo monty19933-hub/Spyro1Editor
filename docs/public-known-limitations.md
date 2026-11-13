@@ -98,6 +98,18 @@
   place still cannot share a game with the new level: Fix It For Me leaves the
   built Town Square out.
 
+- Your new world is reached by balloon only unless you choose a doorway as
+  well. Played in the emulator on a copy of a real project (the world after
+  Artisans, Artisans' balloonist asking 50 treasure: he waits at 49, flies Spyro
+  there at 50, and the world's balloonist's menu flies him back to Artisans; no
+  doorway in Artisans) and on a new project whose generated homeworld got its
+  balloonist from Fix It For Me. Where Fix It For Me stands the balloonist is the
+  editor's own choice of open, level floor Spyro can walk to near where he
+  arrives, clear of objects, doorways, water and roofs; if a level has no such
+  place it says so and you place him. A world's name can be at most 15 capital
+  letters, spaces and apostrophes (the game's font for world names): a homeworld
+  with a longer generated name does not rename the world, and Create BIN asks
+  for a shorter homeworld name.
 - Version 2.1 added Fix It For Me with two repairs (a new world with no way in;
   a world's homeworld with more than its 82 objects). The place
   it chooses for the doorway was played in the emulator in Artisans, Peace
@@ -152,7 +164,8 @@
   and Gnasty's Loot; not tried on a PlayStation.
 - Version 1.4 builds a world of your own into the game (File ▾ → New World…):
   a homeworld and up to four levels, entered through a doorway in one of the
-  game's six homeworlds (its sixth doorway; Gnasty's World has room for two).
+  game's six homeworlds (its sixth doorway; Gnasty's World has room for two;
+  now reached by balloon, with that doorway as your own choice).
   Played in the emulator from Artisans: in through the entrance, the doorways
   to two levels and back out of them with Exit Level, gems, a chest and an
   enemy, the way back, a save, and Load Game after switching off. The entrance

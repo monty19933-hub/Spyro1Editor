@@ -5,11 +5,11 @@ using Spyro.Editor.Core.Levels;
 
 namespace Spyro.Editor.Core.Editing;
 
-/// <summary>The new world's place on the balloonists' route (World Settings): the homeworld it follows
+/// <summary>The new world's place on the balloonists' route (File ▾ › World's Balloon Route…): the homeworld it follows
 /// (<see cref="After"/>, or <see cref="Off"/>: the balloonists do not know the world, it is reached through its doorway
 /// only), what that homeworld's balloonist asks before he flies Spyro to the world, what the world's own balloonist asks
-/// before he flies Spyro on to the next world, and the world's balloonist's name (the talk's heading "… THE
-/// BALLOONIST").</summary>
+/// before he flies Spyro on to the next world (he always flies him back), and the world's balloonist's name (the talk's
+/// heading "… THE BALLOONIST").</summary>
 public sealed record WorldBalloonPlace(string After, BalloonRequirement ToWorld, BalloonRequirement Onward, string Balloonist = WorldBalloonPlace.DefaultBalloonist)
 {
     public const string Off = "off", DefaultBalloonist = "NILS";
@@ -47,8 +47,11 @@ public sealed record WorldBalloonPlace(string After, BalloonRequirement ToWorld,
 
 /// <summary>The project's new world (File ▾ › New World…): a homeworld (level id 70) and up to four levels (71-74), each
 /// a level you build like File ▾ › New Level's, saved as its own scene (<see cref="SceneDocument.WorldLevelId"/>). In the
-/// game they take turns in the game's spare level slot. The world is entered by a doorway in an existing homeworld
-/// (<see cref="EntryHomeworldKey"/>); its levels' Return Home leads to its homeworld.</summary>
+/// game they take turns in the game's spare level slot. Players reach the world by balloon, like the game's own worlds
+/// (<see cref="WorldAccess"/>): the balloonist of the homeworld before it on the route (<see cref="Balloon"/>; none chosen:
+/// <see cref="EntryHomeworldKey"/>) flies Spyro there and the world's own balloonist flies him back. A doorway in
+/// <see cref="EntryHomeworldKey"/> is the user's own choice (<see cref="Doorway"/>). Its levels' Return Home leads to its
+/// homeworld. The world is called by its homeworld's name (<see cref="NamedAfter"/>).</summary>
 public sealed record NewWorldDocument(int SchemaVersion, string Name, string EntryHomeworldKey, IReadOnlyList<int> LevelIds)
 {
     public const string FileName = "new-world.json";
@@ -60,12 +63,38 @@ public sealed record NewWorldDocument(int SchemaVersion, string Name, string Ent
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorldBalloonPlace? Balloon { get; init; }
 
-    /// <summary>The world's place on the route. When none was chosen: after the homeworld its doorway is in, with the
-    /// game's own pace (<see cref="WorldBalloonPlace.Following"/>), if its homeworld has a balloonist to fly Spyro on;
-    /// otherwise last, after Gnasty's World, where it needs none (a world made before the balloonists knew new worlds
-    /// has no balloonist).</summary>
+    /// <summary>Players can also walk in through a doorway in <see cref="EntryHomeworldKey"/> (Terrain › World Entrance,
+    /// <see cref="WorldEntranceDocument"/>) and out through the world's homeworld's doorway back there: chosen in the World
+    /// Entrance card. False — the default, and how every world saved before reads — the world is reached by balloon
+    /// only: no doorway is built into the game's homeworld (a placed one stays in the project, unbuilt) and the world's
+    /// homeworld has no doorway back out (<see cref="BalloonOnly"/>).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Doorway { get; init; }
+
+    /// <summary>Create BIN builds a doorway into the world, and the world's homeworld needs its doorway back: the user
+    /// chose one (<see cref="Doorway"/>), or the world is off the balloon route, where a doorway is the only way in.</summary>
+    [JsonIgnore] public bool HasDoorway => Doorway || Balloon is { OnRoute: false };
+    /// <summary>The world is reached by balloon only: its homeworld must have a balloonist (to fly Spyro back) and no
+    /// doorway back out.</summary>
+    [JsonIgnore] public bool BalloonOnly => !HasDoorway;
+
+    /// <summary>The world's place on the route. When none was chosen: after the homeworld it is entered from, with the
+    /// game's own pace (<see cref="WorldBalloonPlace.Following"/>). A world reached by balloon only always has a
+    /// balloonist when Create BIN builds it (it stops otherwise); one with a doorway and no balloonist is last, after
+    /// Gnasty's World, where it needs none.</summary>
     public WorldBalloonPlace BalloonPlaceWith(bool homeworldHasBalloonist) =>
-        Balloon ?? (homeworldHasBalloonist ? WorldBalloonPlace.Following(EntryHomeworldKey) : WorldBalloonPlace.Default);
+        Balloon ?? (homeworldHasBalloonist || BalloonOnly ? WorldBalloonPlace.Following(EntryHomeworldKey) : WorldBalloonPlace.Default);
+
+    /// <summary>A name the game can show as a world's name (the inventory, the balloonists' menus): <see cref="IsValidName"/>
+    /// and the level window's font (<see cref="NativeLevelWindow.NameRefusal"/>: up to 15 capital letters, spaces and
+    /// apostrophes).</summary>
+    public static bool CanBeNamed(string? name) => IsValidName(name) && NativeLevelWindow.NameRefusal(name) == null;
+
+    /// <summary>The world under its homeworld's name, as the game's worlds are called by theirs (a Random Homeworld made in
+    /// the world's place names it, and renaming the homeworld renames the world): unchanged when the name is the same or
+    /// the game cannot show it.</summary>
+    public NewWorldDocument NamedAfter(string? homeworldName) =>
+        homeworldName is { } name && name != Name && CanBeNamed(name) ? this with { Name = name } : this;
 
     public static string KeyFor(int levelId) => $"world{levelId}";
 

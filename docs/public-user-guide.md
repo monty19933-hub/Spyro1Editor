@@ -44,11 +44,14 @@ access was refused, the editor opens a small window that says where to allow it.
   as often as it takes, and at the end says everything it did. Each run is a
   whole Create BIN, so a hard case can take several minutes; the status line
   says which try it is on.
-  - What it can repair, it repairs. (A new world with no way in yet no longer
-    stops Create BIN: it places the doorway itself, in the homeworld the world
-    is entered from, on level open ground near where Spyro arrives. Move it
-    afterwards with Terrain › World Entrance if you like; in Gnasty's World,
-    which has no free place, it says so and you place it yourself.) When your
+  - What it can repair, it repairs. When your new world's homeworld has no
+    balloonist (players reach your world by balloon, and he flies Spyro back),
+    it stands one with his balloon on open floor near where Spyro arrives, and
+    says how far away; move them afterwards if you like. (If you chose a
+    doorway into your world as well and none is placed yet, Create BIN places
+    it itself, on level open ground near where Spyro arrives in the homeworld
+    the world is entered from; in Gnasty's World, which has no free place, it
+    says so and you place it yourself.) When your
     world's homeworld has more objects
     than it can hold (82), it first gives back the save rows of objects you
     deleted and then, if needed, takes out loose gems, the least valuable first;
@@ -506,10 +509,15 @@ Return Home) shows on one page how Spyro gets into every level and back out:
 - A homeworld you rebuilt (Start Blank or Random Homeworld) keeps one doorway
   for each of its own levels, each always leading to the level in that place;
   move, add or remove them with Terrain → Doorways in that homeworld.
-- Your own world (File ▾ → New World…) is summed up at the foot: where its
-  entrance is, which of its levels have a doorway in its homeworld, its doorway
-  home and its place on the balloon route, with buttons to open the homeworlds
-  and the balloon route.
+- Your own world (File ▾ → New World…) is summed up at the foot, starting with
+  one sentence on how players get there and back, for example "Players reach
+  GLOOMY FEN by balloon: Artisans' balloonist flies Spyro there once he has
+  found 50 treasure, and GLOOMY FEN's balloonist NILS flies him back to
+  Artisans (and on to Peace Keepers)." Then whether its balloonist stands in
+  its homeworld, which of its levels have a doorway there, and a doorway into
+  it only if you chose one; with buttons to open the homeworlds and the balloon
+  route. The homeworld whose balloonist flies Spyro to your world says so in
+  its own part of the window.
 - **Undo Last Change** takes the last change back. Create BIN puts the links in
   the game.
 
@@ -544,16 +552,50 @@ the game keeps its doorway code in the homeworlds only.
 - Doorways made before this tool (such as Lost Fleet's) keep working as they
   were; the first change finds their frame and moves it with them.
 - Your new world's homeworld (File ▾ → New World…) has the same card: a doorway
-  to each of the world's levels, and one back to the game's homeworld the world
-  is entered from (listed as "the way back out of your world").
+  to each of the world's levels. It needs no doorway back out: your world's
+  balloonist flies Spyro back. Only if you chose a doorway into your world as
+  well (below) does it offer one back to the game's homeworld the world is
+  entered from (listed as "the way back out of your world").
 
-### The way into your new world
+### How players reach your new world
 
-Players reach the world made with **File ▾ → New World…** through a doorway in
-one of the game's own homeworlds (the one chosen in that window). Open that
-homeworld: its Terrain tab has a **World Entrance** card.
+Players reach the world made with **File ▾ → New World…** **by balloon**, like
+the game's own worlds: the balloonist of the homeworld before it on the route
+(the one chosen in the New World window, Artisans unless you choose another)
+flies Spyro there once he has what he asks, and your world's own balloonist
+flies him back. **File ▾ → World's Balloon Route…** sets where it lies and what
+each balloonist asks (below). Nothing is built into the game's homeworlds, and
+your world's homeworld has no doorway back out.
 
-- **Place Entrance…** asks for the doorway's shape (the same six as the Doorways
+- New World puts your world's balloonist and his balloon in its homeworld at
+  once, near where Spyro arrives (when your original disc is chosen). If he is
+  ever missing, Create BIN stops and Fix It For Me stands him there again.
+- A Random Homeworld made in your world's homeworld's place has a doorway to
+  each of your world's levels and none back out; it has no balloonist until you
+  fill it with objects (Random objects, "The way out") or Fix It For Me stands
+  one.
+- Your world is called by its homeworld's name, as the game's worlds are: a
+  Random Homeworld made in its place names it (GLOOMY FEN instead of SKY ISLES),
+  and renaming the homeworld (Game Settings, its name) renames the world. The
+  balloonists' menus and the inventory show that name.
+- A project whose world was made before works the same way: it is reached by balloon.
+  A doorway into it that was placed before stays in the project but is not
+  built, and Create BIN takes the world's old doorway back out of its homeworld
+  (keeping the level as it was in the project's `backups/fix-it` folder) and
+  says so. Its balloon route and prices stay as they were.
+
+#### A doorway as well (optional)
+
+If you want players to be able to walk into your world through a doorway too,
+open one of the game's homeworlds: its Terrain tab has a **World Entrance**
+card. While your world is reached by balloon only, the card says so and offers
+**Add a Doorway As Well…** (or **Build It As Well** for a doorway placed there
+before). With a doorway, your world's homeworld also needs its doorway back out
+to that homeworld (Doorways card, **Add Doorway…**, then the homeworld's name).
+**Remove Entrance** makes the world balloon-only again.
+
+- **Add a Doorway As Well…** (or **Place Entrance…**) asks for the doorway's
+  shape (the same six as the Doorways
   card) and size, and puts it on the selected tile or on the ground in front of
   the camera, facing the camera: Spyro walks into it away from you. Give it open,
   level ground in front: coming back, Spyro walks out of it a good way, as he does
@@ -585,11 +627,13 @@ Spyro has done what he asks (ten dragons in Artisans, 1,200 treasure in Peace
 Keepers, and so on). **File ▾ → World's Balloon Route…** gives your world a place
 in that order.
 
+- The window starts by saying how players reach your world and come back, in
+  the same words as Level Links, and what your world's homeworld still needs.
 - **Your world comes** after one of the game's six homeworlds: "After Dream
   Weavers, before Gnasty's World", for one. The balloonist of the homeworld
   before it then flies Spyro to your world, your world's own balloonist flies him
-  on to the world that used to come next, and every balloonist's menu lists your
-  world in its place once it is open.
+  back and on to the world that used to come next, and every balloonist's menu
+  lists your world in its place once it is open.
 - **To fly Spyro to your world** the balloonist before it asks for what you
   choose: nothing, a number of dragons rescued, an amount of treasure found, or a
   number of dragon eggs recovered, counted over the whole game. **To fly Spyro
@@ -601,18 +645,19 @@ in that order.
   his own words ("Come back when you have rescued 40 dragons."), and invites
   Spyro to the right world by name.
 - **Your world's balloonist** has a name of your choosing (his talk is headed
-  with it). He must stand in your world's homeworld, with his balloon:
-  **Objects → Random objects** places them ("The way out"), or add a balloonist
-  and a balloon with **Add object…**. Create BIN says so if he is missing.
+  with it). He stands in your world's homeworld with his balloon: New World puts
+  him there, **Objects → Random objects** places him ("The way out"), or add a
+  balloonist with **Add object…**. If he is missing, Create BIN stops and Fix It
+  For Me stands him near where Spyro arrives.
 - **After Gnasty's World** your world is the last on the route: Gnasty's World's
-  balloonist opens it with everything else and can ask for nothing, and your
-  world needs no balloonist (with one, Spyro can fly back out).
-- **Not on the balloon route**: the balloonists do not know your world; Spyro
-  reaches it through its doorway only.
-- A world that has no place chosen follows the homeworld its doorway is in when
-  its homeworld has a balloonist, and is last on the route when it has none.
-- The balloon sets Spyro down where your world's homeworld starts. The entrance
-  doorway is no longer needed to reach a world on the route (it still works).
+  balloonist opens it with everything else and can ask for nothing; your world's
+  balloonist then flies Spyro back to any world.
+- **Not on the balloon route (a doorway instead)**: the balloonists do not know
+  your world; players walk in through its doorway (Terrain › World Entrance in
+  the homeworld it is entered from) and out through its homeworld's doorway back.
+- A world that has no place chosen follows the homeworld chosen in the New World
+  window, with the game's own pace: free to your world, the game's price to fly on.
+- The balloon sets Spyro down where your world's homeworld starts.
 
 With your world on the route, a saved game made before (from the original game
 or an earlier export) may find one more world open than it had.
@@ -627,13 +672,17 @@ units across, like the game's own) or untextured faces.
 ### Your new world in the game
 
 **Create BIN** builds your world into the game with everything else: its
-homeworld, its levels, their doorways, the entrance and the way back.
+homeworld, its levels and their doorways, and the balloonists' route with your
+world on it (and, only if you chose one, the doorway into it and its way back).
+Its status line ends with the sentence that says how players reach your world.
 
-- Spyro walks in through the entrance or flies in by balloon (**World's Balloon
+- Spyro flies in by balloon and his balloon sets him down where your world's
+  homeworld starts; your world's balloonist flies him back (**World's Balloon
   Route…**). In your world's homeworld each doorway
   leads to its level; **Return Home** and **Exit Level** in a level bring him back
-  out of that level's doorway, and the doorway home takes him back to the
-  entrance. Create BIN can also start **New Game** in your world.
+  out of that level's doorway. With a doorway as well, he can also walk in
+  through it, and its doorway home takes him back out of it. Create BIN can also
+  start **New Game** in your world.
 - The inventory has a page with your world's name, after the game's six worlds,
   listing its levels with their gems and dragons.
 - A game with a new world saves in its own save file on the memory card (shown
@@ -765,7 +814,9 @@ of each opening, whatever its shape and size, so every doorway loads its level.
 - In a homeworld's place it gets a doorway to each of that homeworld's levels
   (in Artisans' place: Stone Hill, Dark Hollow, Town Square, Toasty and Sunny
   Flight; four in Gnasty's World). In your own world it gets a doorway to each
-  level you made and the way back out to the game.
+  level you made (and the way back out to the game only if you chose a doorway
+  into your world as well: otherwise its balloonist flies Spyro back), and your
+  world takes its name.
 - The doorways' look follows the level and is different every time: a shape of
   the look's kind (round, wide and tall stone arches in the Artisans' style;
   square, slanted and gabled gates for the Peace Keepers; pointed and tall

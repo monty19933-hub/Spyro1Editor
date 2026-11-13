@@ -55,7 +55,9 @@ Check((84992 - (int)Math.Round(Math.Cos(192 * Math.PI / 128) * 1024), 46149 - (i
     var auto = world.BalloonPlaceWith(true);
     Check(auto.After == "dreamweavers" && auto.ToWorld == none && auto.Onward == new BalloonRequirement(BalloonRequirementKind.Treasure, 6000) && auto.Route()!.AfterLevelId == 50,
         "a world with a balloonist and no place chosen follows its entry homeworld: free to fly there, the game's own price to fly on");
-    Check(world.BalloonPlaceWith(false) == Spyro.Editor.Core.Editing.WorldBalloonPlace.Default && world.BalloonPlaceWith(false).Route()!.AfterLevelId == 60, "without a balloonist it is last on the route");
+    Check(world.BalloonPlaceWith(false) == auto, "reached by balloon only (the default), it follows its entry homeworld even before its balloonist stands there (Create BIN insists on him)");
+    Check((world with { Doorway = true }).BalloonPlaceWith(false) == Spyro.Editor.Core.Editing.WorldBalloonPlace.Default && (world with { Doorway = true }).BalloonPlaceWith(false).Route()!.AfterLevelId == 60,
+        "with a doorway as well and no balloonist it is last on the route");
     var chosen = new Spyro.Editor.Core.Editing.WorldBalloonPlace("artisans", new(BalloonRequirementKind.Dragons, 3), new(BalloonRequirementKind.DragonEggs, 2), "PIP");
     string folder = Path.Combine(Path.GetTempPath(), "balloon-travel-smoke-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(folder);
@@ -78,6 +80,118 @@ Check((84992 - (int)Math.Round(Math.Cos(192 * Math.PI / 128) * 1024), 46149 - (i
           Spyro.Editor.Core.Editing.WorldBalloonPlace.GamePrice("magiccrafters") == new BalloonRequirement(BalloonRequirementKind.DragonEggs, 5) &&
           Spyro.Editor.Core.Editing.WorldBalloonPlace.GamePrice("gnastysworld") == none, "the game's own prices: 10 dragons, 1200 treasure, 5 eggs, 50 dragons, 6000 treasure, nothing");
 }
+
+// ---- how players reach the world (WorldAccess): by balloon only unless a doorway as well is chosen
+{
+    // A world saved before balloon-only worlds (the words of a real project's new-world.json): reached by balloon only.
+    const string before25 = """
+        {
+          "schemaVersion": 1,
+          "name": "SKY ISLES",
+          "entryHomeworldKey": "artisans",
+          "levelIds": [70, 71, 72, 73, 74],
+          "balloon": {
+            "after": "artisans",
+            "toWorld": { "kind": "Treasure", "count": 50, "counter": 2147965024 },
+            "onward": { "kind": "Nothing", "count": 0, "counter": 2147964752 },
+            "balloonist": "NILS"
+          }
+        }
+        """;
+    string folder = Path.Combine(Path.GetTempPath(), "balloon-travel-access-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(folder);
+    try
+    {
+        File.WriteAllText(Spyro.Editor.Core.Editing.NewWorldDocument.PathFor(folder), before25);
+        var old = Spyro.Editor.Core.Editing.NewWorldDocument.Read(folder)!;
+        Check(old.BalloonOnly && !old.HasDoorway && !old.Doorway, "a world saved before is reached by balloon only (its doorway, if one was placed, is not built)");
+        var place = old.BalloonPlaceWith(true);
+        Check(place.After == "artisans" && place.ToWorld == new BalloonRequirement(BalloonRequirementKind.Treasure, 50) && place.Onward == none && place.Balloonist == "NILS" &&
+              old.BalloonPlaceWith(false) == place, "its balloon price stays as the project has it: 50 treasure from Artisans, nothing to fly on");
+        var named = old.NamedAfter("GLOOMY FEN");
+        string Name(int id) => id switch { 10 => "Artisans", 20 => "Peace Keepers", 30 => "Magic Crafters", 40 => "Beast Makers", 50 => "Dream Weavers", _ => "Gnasty's World" };
+        string said = Spyro.Editor.Core.Editing.WorldAccess.Describe(named, place, Name);
+        Check(said == "Players reach GLOOMY FEN by balloon: Artisans' balloonist flies Spyro there once he has found 50 treasure, and GLOOMY FEN's balloonist NILS flies him back to Artisans (and on to Peace Keepers).",
+            "one sentence says how players get there and back: " + said);
+        named.SaveAsync(folder).GetAwaiter().GetResult();
+        string json = File.ReadAllText(Spyro.Editor.Core.Editing.NewWorldDocument.PathFor(folder));
+        Check(!json.Contains("doorway", StringComparison.OrdinalIgnoreCase) && !json.Contains("balloonOnly", StringComparison.OrdinalIgnoreCase) && !json.Contains("hasDoorway", StringComparison.OrdinalIgnoreCase) &&
+              json.Contains("\"GLOOMY FEN\""), "a balloon-only world is saved as before, under its homeworld's name");
+        var withDoorway = named with { Doorway = true };
+        withDoorway.SaveAsync(folder).GetAwaiter().GetResult();
+        var read = Spyro.Editor.Core.Editing.NewWorldDocument.Read(folder)!;
+        Check(File.ReadAllText(Spyro.Editor.Core.Editing.NewWorldDocument.PathFor(folder)).Contains("\"doorway\": true") && read.Doorway && read.HasDoorway && !read.BalloonOnly,
+            "a doorway as well is the user's choice, saved in words");
+        Check(Spyro.Editor.Core.Editing.WorldAccess.Describe(read, place, Name).Contains("They can also walk in through its doorway in Artisans"), "the sentence says so");
+        var offRoute = named with { Balloon = new(Spyro.Editor.Core.Editing.WorldBalloonPlace.Off, none, none) };
+        Check(offRoute.HasDoorway && !offRoute.BalloonOnly && Spyro.Editor.Core.Editing.WorldAccess.Describe(offRoute, offRoute.Balloon!, Name).StartsWith("Players reach GLOOMY FEN through its doorway in Artisans"),
+            "off the balloon route a doorway is the only way in");
+        var last = new Spyro.Editor.Core.Editing.WorldBalloonPlace("gnastysworld", none, none, "NILS");
+        Check(Spyro.Editor.Core.Editing.WorldAccess.Describe(named, last, Name).StartsWith("Players reach GLOOMY FEN by balloon at the end of the route: once Gnasty's World's balloonist"), "last on the route: the sentence says so");
+        var dragons = new Spyro.Editor.Core.Editing.WorldBalloonPlace("beastmakers", none, new(BalloonRequirementKind.Dragons, 50), "PIP");
+        Check(Spyro.Editor.Core.Editing.WorldAccess.Describe(named, dragons, Name) == "Players reach GLOOMY FEN by balloon: Beast Makers' balloonist flies Spyro there whenever he asks, and GLOOMY FEN's balloonist PIP flies him back to Beast Makers (and on to Dream Weavers once he has rescued 50 dragons).",
+            "free there, a price to fly on");
+        Check(old.NamedAfter("SKY ISLES") == old && old.NamedAfter(null) == old && old.NamedAfter("A NAME TOO LONG HERE") == old && old.NamedAfter("FEN 2") == old && old.NamedAfter("gloomy fen") == old &&
+              old.NamedAfter("O'MALLEY'S BOG").Name == "O'MALLEY'S BOG", "the world takes its homeworld's name only when the game can show it (15 capital letters, spaces, apostrophes)");
+    }
+    finally { Directory.Delete(folder, true); }
+
+    // The way in and out Create BIN builds (NativeNewWorldExport.WayInRefusal), before anything is built.
+    var catalog = new LevelCatalog([new LevelDefinition { Key = "artisans", DisplayName = "Artisans", LevelId = 10, SourceWadEntry = 12 },
+        new LevelDefinition { Key = "peacekeepers", DisplayName = "Peace Keepers", LevelId = 20, SourceWadEntry = 26 }]);
+    var artisans = catalog.FindByKey("artisans")!;
+    var balloonOnly = new Spyro.Editor.Core.Editing.NewWorldDocument(1, "GLOOMY FEN", "artisans", [70, 71]);
+    var doorway = balloonOnly with { Doorway = true };
+    Spyro.Editor.Core.Editing.AuthoredPortal Door(int to) => new(to, new(4000, 4000, 400), 0);
+    var bare = Spyro.Editor.Core.Editing.SceneDocument.New("GLOOMY FEN") with { WorldLevelId = 70, Portals = [Door(71)] };
+    var wayBack = bare with { Portals = [Door(71), Door(10)] };
+    var entrance = new Spyro.Editor.Core.Editing.WorldEntranceDocument(1, "artisans", new(5888, 2240, 410), 240, "stone-arch", 1);
+    Exception? Why(Spyro.Editor.Core.Editing.NewWorldDocument w, Spyro.Editor.Core.Editing.SceneDocument home, bool balloonist, Spyro.Editor.Core.Editing.WorldEntranceDocument? e) =>
+        NativeNewWorldExport.WayInRefusal(w, home, balloonist, e, artisans, catalog);
+    Check(Why(balloonOnly, bare, true, null) == null && Why(balloonOnly, bare, true, entrance) == null,
+        "by balloon only: a homeworld with its balloonist and no doorway back out is built (a doorway placed before is left in the project)");
+    Check(Why(balloonOnly, wayBack, true, entrance) is { } back && ExportRepair.Find(back) is ExportRepair.RemoveWorldWayBack && back.Message.Contains("still has a doorway back out to Artisans"),
+        "by balloon only: a doorway back out left from before stops Create BIN, and Fix It For Me takes it out");
+    Check(Why(balloonOnly, bare, false, null) is { } alone && ExportRepair.Find(alone) is ExportRepair.PlaceWorldBalloonist && alone.Message.Contains("has no balloonist"),
+        "by balloon only: a homeworld without a balloonist stops Create BIN (Spyro could not fly back), and Fix It For Me stands one");
+    Check(Why(doorway, wayBack, false, entrance) == null, "with a doorway as well: the entrance and the way back go together");
+    Check(Why(doorway, bare, true, entrance) is { } noBack && ExportRepair.Find(noBack) == null && noBack.Message.Contains("needs a doorway back to Artisans"), "with a doorway: an entrance without a way back is refused");
+    Check(Why(doorway, wayBack, true, null) is { } noIn && ExportRepair.Find(noIn) is ExportRepair.PlaceWorldEntrance { HomeworldKey: "artisans" }, "with a doorway: a way back without its entrance gets the entrance placed");
+    Check(Why(doorway, bare with { Portals = [Door(71), Door(20)] }, true, entrance) is { } wrong && wrong.Message.Contains("leads to Peace Keepers"), "with a doorway: a way back to another homeworld is refused");
+
+    // Whether the homeworld has its balloonist (the game's six kinds, not deleted).
+    Spyro.Editor.Core.Scene.Moby Thing(int cls, bool removed = false) => new() { SourceByte36 = cls & 0xFF, SourceByte37 = cls >> 8, IsAdded = true, IsRemoved = removed, Label = "thing" };
+    Spyro.Editor.Core.Editing.SceneDocument With(params Spyro.Editor.Core.Scene.Moby[] things) => bare with { Objects = [.. things.Select(t => new Spyro.Editor.Core.Editing.AuthoredObject(Guid.NewGuid().ToString("N"), t))] };
+    Check(Spyro.Editor.Core.Editing.WorldAccess.HasBalloonist(With(Thing(0xBB), Thing(0x1A0))) && Spyro.Editor.Core.Editing.WorldAccess.HasBalloonist(With(Thing(0xC0))) &&
+          !Spyro.Editor.Core.Editing.WorldAccess.HasBalloonist(With(Thing(0xBB, removed: true), Thing(0x1A0))) && !Spyro.Editor.Core.Editing.WorldAccess.HasBalloonist(With(Thing(0xC1), Thing(0x1BB))),
+        "a balloonist is one of the game's six (0xBB-0xC0) that is not deleted");
+    Check(Spyro.Editor.Core.Editing.WorldAccess.WaysBack(wayBack).Single().DestinationLevelId == 10 && Spyro.Editor.Core.Editing.WorldAccess.WaysBack(bare).Count == 0, "the doorways back out are those not to the world's own levels");
+
+    // Where a balloonist is stood: level, open floor Spyro walks to, near where he arrives, clear of objects, doorways,
+    // water and roofs, facing where he arrives.
+    Spyro.Editor.Core.Editing.AuthoredSurface Tile(float x, float y, float z, float size = 256, Spyro.Editor.Core.Editing.AuthoredSurfaceKind? kind = null) =>
+        new(Guid.NewGuid().ToString("N"), [new(x, y, z), new(x + size, y, z), new(x + size, y + size, z), new(x, y + size, z)], new(128, 128, 128), null) { Kind = kind };
+    List<Spyro.Editor.Core.Editing.AuthoredSurface> floor = [];
+    for (int i = 0; i < 12; i++) for (int j = 0; j < 12; j++) floor.Add(Tile(3000 + 256 * i, 3000 + 256 * j, 400));
+    var meadow = Spyro.Editor.Core.Editing.SceneDocument.New("MEADOW") with { WorldLevelId = 70, Surfaces = floor, Spawn = new(4536, 4536, 400), Heading = 0 };
+    var spot = Spyro.Editor.Core.Editing.WorldAccess.BalloonistSpot(meadow);
+    double D(Spyro.Editor.Core.Primitives.Vector3f a, Spyro.Editor.Core.Primitives.Vector3f b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+    Check(spot is { } s0 && D(s0.Position, meadow.Spawn) is >= 256 and <= 600 && Math.Abs(s0.Position.Z - 400) < 1 && s0.Position.X > meadow.Spawn.X && s0.Position.Y > meadow.Spawn.Y &&
+          s0.Yaw == LevelFillFacing(s0.Position, meadow.Spawn), $"on an open meadow: a few hundred units ahead of Spyro and to his left, on the floor, facing him ({spot?.Position}, yaw {spot?.Yaw})");
+    // Water ahead and to the left, a doorway and an object on the other side: he stands clear of all of them.
+    var pond = floor.Where(f => f.Vertices[0].X >= 4536 && f.Vertices[0].Y >= 4536).Select(f => f with { Kind = Spyro.Editor.Core.Editing.AuthoredSurfaceKind.Water }).ToList();
+    var wet = meadow with { Surfaces = [.. floor.Where(f => !(f.Vertices[0].X >= 4536 && f.Vertices[0].Y >= 4536)), .. pond], Portals = [new(71, new(4536, 4100, 400), 0)],
+        Objects = [new(Guid.NewGuid().ToString("N"), new Spyro.Editor.Core.Scene.Moby { SourceByte36 = 0x54, IsAdded = true, Label = "gem", Position = new(4900, 4536, 400) })] };
+    var s1 = Spyro.Editor.Core.Editing.WorldAccess.BalloonistSpot(wet);
+    Check(s1 is { } p1 && !(p1.Position.X >= 4536 - 32 && p1.Position.Y >= 4536 - 32) && D(p1.Position, new(4536, 4100, 400)) >= 320 && D(p1.Position, new(4900, 4536, 400)) >= 160 && D(p1.Position, wet.Spawn) >= 256,
+        $"not in the water, not in front of a doorway, not on an object ({s1?.Position})");
+    // A roof over the meadow (a floor 200 above everything but a corner): only the open corner is left.
+    var roofed = meadow with { Surfaces = [.. floor, .. floor.Where(f => f.Vertices[0].X < 5500 || f.Vertices[0].Y < 5500).Select(f => Tile(f.Vertices[0].X, f.Vertices[0].Y, 600))] };
+    var s2 = Spyro.Editor.Core.Editing.WorldAccess.BalloonistSpot(roofed);
+    Check(s2 == null || s2.Position.X >= 5500 + 96 && s2.Position.Y >= 5500 + 96, $"no balloon under a roof ({s2?.Position})");
+    Check(Spyro.Editor.Core.Editing.WorldAccess.BalloonistSpot(meadow with { Surfaces = [Tile(4400, 4400, 400, 300)] }) == null, "no place on a floor too small for him and his balloon");
+}
+static int LevelFillFacing(Spyro.Editor.Core.Primitives.Vector3f from, Spyro.Editor.Core.Primitives.Vector3f to) => Spyro.Editor.Core.Editing.LevelFill.Facing(from, to);
 
 // ---- what a copied creature gives (UniversalRewardChoice): another gem in place of its own, nothing else
 {

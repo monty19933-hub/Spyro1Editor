@@ -269,7 +269,10 @@ CORE_CASES = (
     # The balloonists' route with the project's new world on it (NativeBalloonTravel): the route and its refusals, a
     # balloonist's lines for every price, his decision code written for every place and run instruction by instruction
     # (a small MIPS interpreter) for every state of the game: the page he opens with, the byte he sets, what he leaves alone.
-    ("BalloonTravelSmoke", "BALLOON_TRAVEL_FREE_OK checks=2938"),
+    # How players reach the world: balloon only unless a doorway is chosen (a world saved before reads so), the
+    # sentence every window says, the world named after its homeworld, Create BIN's way-in refusals and their repairs,
+    # and where a balloonist is stood (open floor near the start, clear of water, doorways, objects and roofs).
+    ("BalloonTravelSmoke", "BALLOON_TRAVEL_FREE_OK checks=2962"),
     ("RandomLevelSmoke", "RANDOM_LEVEL_SMOKE_OK checks=930"),
     # Supercharge ground in built levels and in the game's own levels (Tile Type…): which scenes and saved terrain edits
     # need Spyro's supercharge animations 25 and 45, the texture rectangles a face table draws from (every command shape,
@@ -312,8 +315,9 @@ ADDITIONAL_CORE_CASES = (
     ("UiSmoke", "PORTAL_ROUTE_UI_OK checks=18",
      ["--portal-routes-ui-only"]),
     # File ▾ › Level Links… on a throwaway project with no disc: doorways sent to levels (the way back follows), Return
-    # Home set and set back to automatic, a rebuilt homeworld's stale link and its fix, Undo, refusals, the pinned foot.
-    ("UiSmoke", "LEVEL_LINKS_UI_OK checks=35",
+    # Home set and set back to automatic, a rebuilt homeworld's stale link and its fix, Undo, refusals, the pinned foot,
+    # and the world reached by balloon (its sentence, the balloonist it lacks, no doorway back asked for).
+    ("UiSmoke", "LEVEL_LINKS_UI_OK checks=38",
      ["--level-links-ui-only"]),
     ("UiSmoke", "START_BLANK_UI_OK checks=27",
      ["--start-blank-ui-only"]),
@@ -329,9 +333,11 @@ ADDITIONAL_CORE_CASES = (
      ["--memory-mode-ui-only"]),
     ("UiSmoke", "SPYRO_COLOURS_UI_OK checks=26",
      ["--spyro-colours-ui-only"]),
-    ("UiSmoke", "DOORWAYS_UI_OK checks=39",
+    ("UiSmoke", "DOORWAYS_UI_OK checks=40",
      ["--doorways-ui-only"]),
-    ("UiSmoke", "WORLD_ENTRANCE_UI_OK checks=40",
+    # Terrain › World Entrance: balloon-only first (no doorway needed, Add a Doorway As Well…, Build It As Well), then the
+    # doorway's own tools, Remove (balloon only again), and Fix It For Me's offers.
+    ("UiSmoke", "WORLD_ENTRANCE_UI_OK checks=51",
      ["--world-entrance-ui-only"]),
     ("UiSmoke", "CLEAR_PROJECT_UI_OK checks=23",
      ["--clear-project-ui-only"]),
