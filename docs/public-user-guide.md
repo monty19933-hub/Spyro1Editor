@@ -725,7 +725,7 @@ The choices:
   Music**.
 - **Seed:** the same seed and choices always make the same level. **New Seed**
   makes another; **Rebuild** makes this seed again with changed choices. (A seed
-  makes a different level in 2.3 than it did in 2.2.)
+  makes a different level in 2.4 than it did in 2.2.)
 
 Rooms have **trodden paths** across them, from every way in (a path, a doorway,
 where Spyro starts) to a meeting place near the middle, in the look's path surface;

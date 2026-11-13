@@ -1,6 +1,6 @@
-# Spyro Editor 2.3 — supported scope and limitations
+# Spyro Editor 2.4 — supported scope and limitations
 
-- Version 2.3 makes Emulator (8 MB RAM) the memory setting a project has until
+- Version 2.4 makes Emulator (8 MB RAM) the memory setting a project has until
   it chooses. A game made that way was played in an emulator with 2 MB as well
   (it falls back to the game's own layout there), but a level that has outgrown
   2 MB needs DuckStation with Enable 8MB RAM; Create BIN names such levels.
@@ -8,13 +8,13 @@
   draw buffers, which 8 MB does not enlarge: only each level's placed objects
   move to the extra memory. With a game open that is not the unchanged USA
   original, the 8 MB setting cannot go in and games are made for 2 MB.
-- This level's colours (2.3): chests, animals and things without a colour of
+- This level's colours (2.4): chests, animals and things without a colour of
   their own are recoloured the way enemies are. Seen in the emulator: a level's
   dragon statues in a chosen crystal colour, a recoloured chest and the fairy
   at a freed dragon's pedestal. The dragon who steps out of a statue keeps his
   own colours (he is drawn from the rescue's own data). The Green Wizard in
   three levels and Haunted Towers' Summoning Wizard cannot be recoloured.
-- Egg thieves (2.3) were played in the emulator added to Dark Hollow, Artisans and
+- Egg thieves (2.4) were played in the emulator added to Dark Hollow, Artisans and
   Terrace Village (run, caught, egg counted, inventory 13 places), and with
   Stone Hill's own run edited (your earlier drag, and six points moved). The
   game's own save and load routines keep the eggs (checked in memory); loading
@@ -25,7 +25,7 @@
   uses the game's original ground: a run over ground you reshaped is judged in
   the editor, as you drag. At most 60 eggs in a game; if every one of the first
   18 levels has a thief, thieves in later levels can't be counted.
-- Spring chests with a teal or rainbow gem (2.3) were played in the emulator in
+- Spring chests with a teal or rainbow gem (2.4) were played in the emulator in
   Stone Hill, Town Square (beside the level's own spring chest, which still
   works) and a level built in the editor: the gem springs up, is collected,
   adds 50 or 100, and the chest stays gone when the level is entered again.
@@ -33,12 +33,12 @@
   cannot load a save back even for the original game. The sparkle burst as the
   lid opens is gold rather than teal or rainbow. Baskets, strong chests and
   flame or firework chests cannot hold these gems.
-- Fix It For Me (2.3) narrows a level's objects down to kinds of object you
+- Fix It For Me (2.4) narrows a level's objects down to kinds of object you
   added, not to single objects: every copy of a kind goes or stays together.
   Changes to the level's own objects are still left out as one. The search is
   capped at ten extra runs of Create BIN; past that it leaves out what it has
   not cleared.
-- Random levels (2.3) still rise and fall only about half as much as the game's
+- Random levels (2.4) still rise and fall only about half as much as the game's
   own levels (a typical generated level spans about 420 units of height, the
   game's about 770). Wall lamps go up only where a wall rises well above head
   height (castles, cliffs), so valley levels get none. Random objects puts
@@ -48,13 +48,20 @@
   hill of terraces, a web of rooms, an arena, a gorge), a level with teal and
   rainbow gems, and two generated homeworlds in Artisans' place with all five
   doorways entered and left. The same seed makes a different level than in 2.2.
-- Random levels' houses (2.3) are solid blocks with a roof: they cannot be
+- Random levels (2.4): the game leaves hairline gaps between finely cut and whole
+  floor tiles close to the camera (its own levels hide them with bigger tiles). A
+  random level paints its sky the ground's colour below the horizon so they do not
+  show; sky islands keep their own sky, and on a path or in ooze a gap can still
+  show as a faint speck of the grass colour.
+- Marshes rarely fit on islands in the sea or in the sky: the bridges and steps
+  that cross their rooms leave no free side for one.
+- Random levels' houses (2.4) are solid blocks with a roof: they cannot be
   entered, and their doors and windows are painted on. A river keeps a room's
   middle dry and crosses a way into the room only under a bridge laid along that
   way, so a level of small or crowded rooms may get none even with Rivers ticked;
   houses likewise need floor to spare near a room's edge. The tops of castle walls are reached only by gliding
   from somewhere higher. Islands in the sea keep their look's own water.
-- Shaped doorways (2.3): Spyro now flies in through the lower part of the
+- Shaped doorways (2.4): Spyro now flies in through the lower part of the
   opening (at most 60% of its height), so the flight differs a little from the
   game's own doorway it is copied from. Played in the emulator on Artisans'
   doorways, at the size a generated homeworld chose and with every doorway at

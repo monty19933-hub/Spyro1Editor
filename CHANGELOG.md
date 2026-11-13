@@ -1,6 +1,8 @@
-# Spyro Editor 2.3
+# Spyro Editor 2.4
 
 ## Changes since Spyro Editor 2.2
+
+Version 2.3 was built but never released; everything it had is in 2.4.
 
 New
 
