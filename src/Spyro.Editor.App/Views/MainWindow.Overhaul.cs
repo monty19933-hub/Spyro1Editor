@@ -109,6 +109,10 @@ public sealed partial class MainWindow
         {
             if (e.Property == ItemsControl.ItemsSourceProperty || e.Property == SelectingItemsControl.SelectedItemProperty)
                 RefreshGameNavigator();
+            // Levels can be opened from the list exactly when the (hidden) picker could: not before a game is open,
+            // not while something is being made or saved.
+            if (e.Property == InputElement.IsEnabledProperty && _gameNavigatorRows != null)
+                _gameNavigatorRows.IsEnabled = _levelJumpBox.IsEnabled;
         };
         Grid layout = new()
         {
@@ -122,6 +126,7 @@ public sealed partial class MainWindow
         Grid.SetRow(scroll, 2);
         layout.Children.Add(scroll);
         RefreshGameNavigator();
+        _gameNavigatorRows.IsEnabled = _levelJumpBox.IsEnabled;
         return new Border
         {
             Name = "GameNavigator",

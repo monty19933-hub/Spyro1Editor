@@ -824,12 +824,13 @@ public sealed partial class MainWindow
             Place(actions, _objectSwapCatalogButton, 1, 0, "Replace…");
             selected.Children.Add(actions);
         }
+        // Copy, Paste, Undo and Remove right under Edit… and Replace…, so they are in sight without scrolling.
+        if (_objectSecondaryGrid != null) selected.Children.Add(Detach(_objectSecondaryGrid));
         if (_objectReplaceFlightGateButton != null) selected.Children.Add(Detach(_objectReplaceFlightGateButton));
         // An added egg thief's run and what a chest or creature gives (they were built but never shown before 2.5).
         if (_objectNativeMovementButton != null) selected.Children.Add(Detach(_objectNativeMovementButton));
         if (_objectRouteToolsCard != null) selected.Children.Add(Detach(_objectRouteToolsCard));
         if (_objectRewardCard != null) selected.Children.Add(Detach(_objectRewardCard));
-        if (_objectSecondaryGrid != null) selected.Children.Add(Detach(_objectSecondaryGrid));
         if (_objectUndoRemoveButton != null) selected.Children.Add(Detach(_objectUndoRemoveButton));
         if (_objectPositionDisclosure != null) selected.Children.Add(Detach(_objectPositionDisclosure));
         if (_objectActionHintBorder != null) selected.Children.Add(Detach(_objectActionHintBorder));
