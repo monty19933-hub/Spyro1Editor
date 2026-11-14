@@ -1,3 +1,20 @@
+# Spyro Editor 2.5 — 13 November 2026
+
+Stable 2.5 (internal 2.5.0, schema 3). **Published** at the owner's request ("commit and push an update download onto
+the github"): tag `v2.5` = GitHub `main`, packages built from `0a739cd` on `feature/v25-ui-20261113`. 2.3 and 2.4 were
+built but never released; all of it is in 2.5 (release notes: "Changes since Spyro Editor 2.2").
+
+- Gate `--build-all` 640 checks, 0 failed; package verifier and codesign passed on the zip-extracted packages; updater
+  offline 24/24 (betas V2-V5 → Beta V6; stable 1.0-1.5, 2.0-2.4 on macOS and Windows → 2.5), 2.5 offered nothing.
+- New since the 2.4 build: the editor laid out by task (Your game on the left, Find any command, Create ▾ and ☰,
+  the export check as a badge, the Selected box above the tabs, the Ground, Objects, Look, Links and Game tabs; an
+  egg thief's run tools and What it gives now show); your world reached by balloon only and named after its homeworld;
+  random levels' banks bare rock; made-up names keep to 15 letters; added creatures stand as high as in their own
+  level; Random objects by the level's design; a centrepiece in random levels; the docs follow the new layout.
+- Level cuts (parts of the game's levels in random levels) are in the source but switched off.
+- Packages, release notes, checks and updater evidence: task-root `outputs/SpyroEditor-V2.5-20261113`.
+
+
 # Spyro Editor 2.4 — 12 November 2026
 
 Stable 2.4 (internal 2.4.0, schema 3). Built and checked locally from `2faacae` on `feature/v23b-20261111` (2.3 `da5a3d8`
