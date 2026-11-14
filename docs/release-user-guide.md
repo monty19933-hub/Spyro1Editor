@@ -1,11 +1,15 @@
-# Spyro Editor 2.4 Guide
+# Spyro Editor 2.5 Guide
 
-Current internal build: `2.4.0`. The historical Beta V6 reference below
+Current internal build: `2.5.0`. The historical Beta V6 reference below
 describes internal build `0.1.0-beta.54`.
 
 For the normal release workflow, use the [user guide](public-user-guide.md) and
-[current limitations](public-known-limitations.md). File > New Level now uses the
-regular editor and normal Create BIN.
+[current limitations](public-known-limitations.md). Create > New Level now uses
+the regular editor and normal Create BIN. In 2.5 the window is laid out by task:
+`Your game` (the level list) on the left, `Find any command`, `Create ▾` and `☰`
+in the top bar, the `Selected` box, and five tabs: `Ground`, `Objects`, `Look`,
+`Links` and `Game`. The old `File ▾` and `More ▾` menus are gone; the menu paths
+below name the 2.5 places.
 
 ## Retained historical research reference
 
@@ -13,8 +17,9 @@ The sections below document earlier retail and laboratory workflows. They are
 retained for source/research continuity and do not describe the current fresh-level
 interface or current cross-level import coverage.
 
-This beta build uses three everyday workspaces around the unchanged level view:
-`Objects`, `Level`, and `Environment`. Internal research probes stay hidden.
+This beta build used three everyday workspaces around the unchanged level view:
+`Objects`, `Level`, and `Environment` (in 2.5 their parts are on the `Ground`,
+`Objects`, `Look`, `Links` and `Game` tabs). Internal research probes stay hidden.
 Most cross-level chests and self-contained-enemy replacements remain separate
 test builds rather than normal object imports. The runtime-verified Artisans
 gold Key + Locked Chest V2 pair is the guarded exception described below.
@@ -23,10 +28,11 @@ gold Key + Locked Chest V2 pair is the guarded exception described below.
 
 1. On macOS, unzip the download and open `Spyro Editor.app` directly. On
    Windows, open `Launch Spyro Editor.bat`.
-2. Click `Open BIN/CUE`.
+2. Choose `☰` > `Open Game…`.
 3. Choose your own Spyro the Dragon disc image.
 4. Wait until the status bar says the editor rebuilt level maps and object caches.
-5. Pick a level, change its name or music, or edit supported objects, then click `Create BIN`.
+5. Open a level from `Your game` on the left, change its name or music (`Look`
+   tab) or edit supported objects, then click `Create BIN`.
 
 The editor does not include game data, BIOS files, emulator files, RAM dumps,
 patched discs, or extracted assets. Patched BIN/CUE output is written to the
@@ -88,8 +94,8 @@ notarized. Compare its recorded SHA-256 digest and read its opening instructions
 ## Projects and Updates
 
 Packaged release builds keep application files and project data separate. Use
-`More` > `Project Data` to see or open the exact active project folder.
-`File` > `Clear Entire Project to Base Game…` starts the project over: it asks
+`☰` > `Project Data` to see or open the exact active project folder.
+`☰` > `Clear Entire Project to Base Game…` starts the project over: it asks
 first ("Yes, I am sure"), moves everything you made into a dated folder in
 `Old projects` beside the project (with a note on bringing it back), keeps your
 choice of game and the games already created, and reopens the original game. `Open
@@ -115,7 +121,7 @@ against the selected disc instead of being trusted across installations.
 
 Beta V5 checks GitHub Releases at most once per day. When a deliberate next
 canonical release exists, a visible in-app notification offers `What's New &
-Download`; `More` > `Check for Updates` performs an immediate check. The update
+Download`; `☰` > `Check for Updates` performs an immediate check. The update
 window shows the full release changelog in a scrollable panel. A copy of that
 changelog is also saved beside the downloaded package.
 
@@ -151,7 +157,8 @@ project.
 
 ## Build Safety
 
-Open `Objects` > `Build safety` or `More` > `Build Safety` to inspect all saved
+Open `☰` > `Check for Export Issues…` (or click the export-check badge beside
+`Create BIN`, or use `Before you play` on the `Game` tab) to inspect all saved
 object edits. The panel reports, per level:
 
 - Native and planned static Moby rows.
@@ -180,7 +187,7 @@ sharing; do not attach the generated BIN/CUE or full native patch plans.
 Use GitHub Issues for bugs found in release builds. Include the release zip name,
 your operating system, the level, the editor action, and what happened in-game.
 
-Use `More` > `Diagnostics` to add a short tester note and copy the
+Use `☰` > `Diagnostics` (research builds) to add a short tester note and copy the
 current report. After `Create BIN`, the output folder also contains a matching
 `.diagnostics.txt` report and `.diagnostics.zip` support bundle. In the current
 development checkout, the ZIP contains only fixed diagnostic counts and an
@@ -284,7 +291,7 @@ contain copied disc data.
   between overlapping floors at the same X/Y, including enclosed rooms where a
   roof would otherwise be the easiest surface to hit.
 - Known object labels and relationships from the bundled metadata.
-- Editing all 35 level names from the release-visible `Level Name` panel. For a
+- Editing all 35 level names from `Level name` on the `Look` tab. For a
   regular level, the saved name is used by its gold portal lettering, entering
   or confronting transition, and guidebook entry. Homeworld names are used by
   the homeworld title, balloon transition, and guidebook heading. Regular
@@ -295,11 +302,11 @@ contain copied disc data.
   user's disc. A saved choice keeps looping instead of switching back to that
   level's native late-play alternates after 8-12 minutes.
 - A level built from nothing, or cleared with Start Blank, can borrow the sky of
-  any non-flight retail level from its level settings (`Skybox (borrow a level's
-  sky)`). The donor's sky block is copied whole into the built level, including
+  any non-flight retail level from its own settings at the top of the `Look` tab
+  (`Skybox (your own, or borrow a level's sky)`). The donor's sky block is copied whole into the built level, including
   its background color, which then replaces the plain sky color.
-- Editing the native sky in every level from the release-visible `Skybox`
-  panel. `Recolor` preserves native geometry and accepts Night, Dusk, manual
+- Editing the native sky in every level from `Sky and lighting` on the `Look`
+  tab. `Recolor` preserves native geometry and accepts Night, Dusk, manual
   colors, or colors sampled from a user PNG. `Swap From Level` lists skies from
   the user's own disc. Fitting donors stay in place; larger donors use guarded
   WAD expansion and relocate the executable inside the supported original USA
@@ -343,8 +350,8 @@ contain copied disc data.
   pixels remain unchanged.
   `Reset to Normal Level Palette and Skybox` removes both parts of the saved
   environment edit.
-- Browsing decoded native terrain/building textures through `Terrain` >
-  `Choose Texture & Start Painting`. The six-column gallery initially loads
+- Browsing decoded native terrain/building textures through `Ground` >
+  `Textures` > `Choose Texture…`. The six-column gallery initially loads
   only the active level; another level is read only after it is selected and
   `Load Level Textures` is pressed. Every explicitly loaded donor world remains
   available for the current destination when the palette is reopened through
@@ -525,8 +532,8 @@ contain copied disc data.
   flight from a homeworld. Drag its selected direction arrow or enter an exact
   heading degree to change the approach direction. This does not change the
   separate return-home path.
-- Editing all 29 native homeworld portal locations from the release-visible
-  `Portal Location` panel. Selecting and moving a portal keeps its lettering,
+- Editing all 29 native homeworld portal locations from `Portals & Return Home`
+  on the `Links` tab. Selecting and moving a portal keeps its lettering,
   companion control, and travel path together. `Create BIN` also moves the blue
   portal plane, the private two-node route used to place and fly Spyro through
   the transition, its real type-6 walk-in collision surface, and the rebuilt
@@ -625,8 +632,8 @@ contain copied disc data.
 - Warning immediately after Add Object or copy/paste consumes the last
   known-safe slot for an unproven family. Later objects of that kind may not
   work as intended in-game until a later update expands support.
-- Using `Edit` > `Replace object` when you want to choose the exact source
-  slot consumed by a same-level enemy/chest clone.
+- Using `Replace…` in the `Selected` box when you want to choose the exact
+  source slot consumed by a same-level enemy/chest clone.
 - The Add Object list only offers simple safe records and donors that already
   exist in the selected level. Use `Replace`, not Add, for guarded
   cross-level existing-slot research.
@@ -649,5 +656,5 @@ contain copied disc data.
 - Smoke-test and live-RAM helper workflows.
 - Internal cache/testing utilities.
 
-If a level shows missing map or object data, use `Open BIN/CUE` again and wait
+If a level shows missing map or object data, use `☰` > `Open Game…` again and wait
 for the build to finish before changing levels.

@@ -1,8 +1,8 @@
-# Spyro Editor 2.4 Known Limitations
+# Spyro Editor 2.5 Known Limitations
 
 Current stable scope is in [release limitations](public-known-limitations.md).
 The sections below are retained historical research notes for older workflows,
-not the normal File > New Level implementation.
+not the normal Create > New Level implementation.
 
 ## ID65 Blank-Level Lab
 
@@ -297,7 +297,7 @@ Generally safer:
 - Moving known chests that already exist in that level.
 - Editing existing gem value bytes that are already proven by smoke tests.
 - Replacing an existing object slot with a same-level donor object through
-  `Edit` > `Replace object`.
+  `Replace…` in the `Selected` box.
 - Using `Replace` to choose another same-level ordinary chest or
   self-contained enemy donor for an existing source slot.
 
@@ -388,7 +388,8 @@ Still guarded:
 
 ### Build Safety Inspector
 
-`Objects` > `Build safety` and `More` > `Build Safety` inspect every saved object
+`☰` > `Check for Export Issues…` (also the export-check badge in the top bar and
+`Before you play` on the `Game` tab) inspects every saved object
 patch plan against the native Level Moby component. `Create BIN` runs the same
 inspection automatically before writing object edits.
 
@@ -476,8 +477,8 @@ native Life Chests, including the one-row source-count prefixes in Beast Makers
 and Terrace Village. Cross-level Life Chest imports remain guarded.
 Small/Regular Gnorc-style families remain guarded beyond reusable slots because
 live testing showed they can spawn inactive and cannot be flamed or charged. Use
-`Edit` > `Replace object` when you want to choose the exact source slot that
-is consumed. Add Object and copy/paste display a warning when a placement uses
+`Replace…` in the `Selected` box when you want to choose the exact source slot
+that is consumed. Add Object and copy/paste display a warning when a placement uses
 the last known-safe slot for one of these unproven families; objects of that kind
 placed afterward may not work as intended until a later update expands support.
 When only guarded edits are present, the editor removes older
@@ -806,8 +807,8 @@ Before promoting terrain behavior, testers need before/after in-game evidence su
 - Solid-ground control capture.
 - Repeated proof on another face of the same surface type.
 
-Terrain/building art uses indexed PlayStation texture pages. `Choose Texture &
-Start Painting` initially loads only the active level into a six-column gallery;
+Terrain/building art uses indexed PlayStation texture pages. `Choose Texture…`
+(`Ground` > `Textures`) initially loads only the active level into a six-column gallery;
 another level is decoded only after the user explicitly loads it. Unsupported
 records remain visible as gray `BLOCKED` cards with their exact reason. Loaded
 donor worlds and decoded previews remain cached together for the current

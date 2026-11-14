@@ -9,20 +9,30 @@ or copied game asset. Users must provide their own legally obtained disc image.
 
 ## Releases
 
-The current release target is **Spyro Editor 2.4** (2.3 was built but never
-released; all of it is in 2.4). Random levels and homeworlds are far more varied:
-eleven layouts, rooms with flat sides, houses, castle walls, rivers with bridges,
-marshes of water, ooze or lava, trodden paths lined with lamps, and no more sky
-showing through the ground behind Spyro. **File ▾ › Level Links…** shows and sets
-every doorway's level and every level's Return Home on one page, random levels
-get a music choice, and Random objects keeps keys afloat as the game does. It adds a **Colours** tab
-(this level's enemies, chests, dragons and animals in colours of their own,
-Spyro's colours, Hover, Fly Anywhere, Play as Crash), makes **Emulator (8 MB
-RAM)** the usual memory setting, has Create BIN place the way into a new world
-by itself, and makes **Fix It For Me** leave out only the kinds of added object
-that stop a game instead of a level's whole object changes. 2.2 put Fix It For
-Me on every Create BIN stop and added **File ▾ › Clear Entire Project to Base
-Game…**. 2.1 added Fix It For Me,
+The current release target is **Spyro Editor 2.5** (2.3 and 2.4 were built but
+never released; everything they had is in 2.5). 2.5 lays the editor window out
+by task. **Your game** on the left lists every homeworld with its levels, then
+your own world and levels: click one to open it. **Find any command** in the top
+bar (⌘K on Mac, Ctrl+K on Windows) finds every command, every card and every
+level by name. **Create ▾** holds everything that makes something new and **☰**
+the project's commands. The **Selected** box at the top of the right-hand panel
+holds what you clicked and everything that acts on it, and five tabs hold the
+rest: **Ground**, **Objects**, **Look**, **Links** and **Game**. Every feature
+works as before; only where it lives changed. Random levels and homeworlds are
+far more varied: eleven layouts, rooms with flat sides, houses, castle walls,
+rivers with bridges, marshes of water, ooze or lava, trodden paths lined with
+lamps, bare rock on their steep banks, made-up names of at most 15 letters, and
+no more sky showing through the ground behind Spyro. **Links › Level Links…**
+shows and sets every doorway's level and every level's Return Home on one page,
+random levels get a music choice, and Random objects keeps keys afloat as the
+game does. A level's enemies, chests, dragons and animals can have colours of
+their own (**Look › This level's colours**), **Emulator (8 MB RAM)** is the
+usual memory setting, Create BIN places the way into a new world by itself,
+**Fix It For Me** leaves out only the kinds of added object that stop a game
+instead of a level's whole object changes, and an egg thief you added shows its
+run tools and what it gives. 2.2 put Fix It For Me on every Create BIN stop and
+added **Clear Entire Project to Base Game…** (in **☰** since 2.5). 2.1 added
+Fix It For Me,
 **creatures' colours level by level** (the same gnorc red in one level and blue
 in the next) and **Spyro's colours for one level**, and made Create BIN build
 the whole project whichever level is open. 2.0 put **your own world on
@@ -31,7 +41,7 @@ asks first, your world's own balloonist), let you choose **what an enemy
 gives**, made rebuilt and generated homeworlds work in **every homeworld's
 place**, and added **Spyro's colours**
 (any colour for each part of Spyro, with ready-made looks), the **Hover** from
-Spyro 3 with its wing flap, games made from Game Settings alone, a tidier
+Spyro 3 with its wing flap, games made from the whole-game settings alone, a tidier
 editor, and **Random Level…** rebuilt on the game's own level logic: levels laid
 out, built and painted like the game's, in the style of a level you pick, at a
 difficulty from Easy to Kaizo, with **Random Homeworld…** (a plaza with a doorway
@@ -65,23 +75,23 @@ rainbow gems are placeable. See the [user guide](docs/public-user-guide.md),
 
 The self-contained release packages are named:
 
-- `SpyroEditor-V2.4-osx-arm64.zip`
-- `SpyroEditor-V2.4-win-x64.zip`
+- `SpyroEditor-V2.5-osx-arm64.zip`
+- `SpyroEditor-V2.5-win-x64.zip`
 
-Stable builds use the `v2.4` identity, schema-3 package manifests and the stable
+Stable builds use the `v2.5` identity, schema-3 package manifests and the stable
 update channel. They do not select beta releases as updates. Earlier numbered
 and dotted beta packages retain their existing compatibility rules and must not
 be replaced or retagged. Installed betas (V2-V5) are offered **Spyro Editor
 Beta V6**: the 1.3 app repackaged by `tools/Build-SpyroEditorBetaBridge.sh`
 so their updater can find it; once opened it follows the stable channel and is
-offered 2.4 (see the [release checklist](docs/beta-release-checklist.md)). Source builds default to V2.4 stable; the release script accepts an explicit
+offered 2.5 (see the [release checklist](docs/beta-release-checklist.md)). Source builds default to V2.5 stable; the release script accepts an explicit
 identity for reproducible packaging:
 
 ```sh
 SPYRO_EDITOR_RELEASE_CHANNEL=stable \
-SPYRO_EDITOR_STABLE_VERSION=2.4 \
-SPYRO_EDITOR_STABLE_INTERNAL_VERSION=2.4.0 \
-tools/Build-SpyroEditorRelease.sh SpyroEditor-V2.4
+SPYRO_EDITOR_STABLE_VERSION=2.5 \
+SPYRO_EDITOR_STABLE_INTERNAL_VERSION=2.5.0 \
+tools/Build-SpyroEditorRelease.sh SpyroEditor-V2.5
 ```
 
 The updater checks release identity, platform, packaged application and manifest,
@@ -91,9 +101,9 @@ release, creating a remote tag or replacing older assets.
 
 Unzip the package, open `Spyro Editor.app` directly on macOS (there is no
 separate `.command` launcher), or open `Launch Spyro Editor.bat` on Windows.
-Choose **Open Game…**, select your own BIN/CUE, then use
-`Create BIN` to write a playable copy. Release builds keep the active
-project under the user's Documents folder instead of inside the replaceable app
+Choose **☰ → Open Game…**, select your own BIN/CUE, open a level from **Your
+game** on the left, then use `Create BIN` to write a playable copy. Release
+builds keep the active project under the user's Documents folder instead of inside the replaceable app
 folder. Generated output stays on the user's machine and should not be uploaded
 to GitHub.
 
@@ -114,7 +124,7 @@ from the released capabilities below. Run `python3 tools/Run-SpyroEditorRegressi
 for the source-free regression gate, or add `--build-all` to compile every
 project without executing research candidate generators.
 
-The current File → New Level workflow opens an authored document in the main
+The current Create → New Level workflow opens an authored document in the main
 viewport, using the shared terrain tools, object browser, inspector and save
 workflow. Normal Create BIN includes the saved authored document together with
 retail edits. Its export dialog chooses whether New Game starts in Artisans or
@@ -123,7 +133,7 @@ See the current user guide for supported authoring and capacity limits.
 
 The list below retains historical feature and research details. In particular,
 the old ID65 Blank-Level Lab is a separate research tool, not the current
-File → New Level workflow.
+Create → New Level workflow.
 
 Retained features and historical research include:
 
@@ -139,10 +149,10 @@ Retained features and historical research include:
 
 - Protected external project storage keeps saved object, terrain, sky, music,
   text, and custom-art plans plus generated output outside the installed app.
-  `More` > `Project Data` opens the project or copy-imports an older portable
+  `☰` > `Project Data` opens the project or copy-imports an older portable
   beta without moving/deleting it or overwriting conflicts. Rebuildable caches
   and stale WAD analysis are regenerated.
-- A prominent, once-per-release in-app notification and `More` > `Check for
+- A prominent, once-per-release in-app notification and `☰` > `Check for
   Updates` select only the next canonical Mac/Windows beta release. The update
   window shows the GitHub changelog, preserves a copy beside the verified
   download, and creates a pre-update project snapshot. In-place replacement
@@ -352,7 +362,7 @@ Retained features and historical research include:
   through later portal transitions.
   `Reset to Normal Level Palette and Skybox` removes the saved sky and terrain
   palette match together.
-- `Terrain` > `Choose Texture & Start Painting` presents the disc's decoded
+- The Ground tab's `Textures` card (`Choose Texture…`) presents the disc's decoded
   native terrain/building texture records in a six-column gallery. It loads the
   active level only; another level is read only after the user selects it and
   presses `Load Level Textures`. Only a primary left-mouse double-click on an
@@ -454,7 +464,7 @@ native donors can continue through their independent private-runtime path.
 Cross-level Life Chest imports remain guarded because levels without that native
 family may not contain its model and behavior package.
 Small/Regular Gnorc-style families remain guarded beyond reusable slots because
-  live testing showed they can spawn inactive. Use `Edit` > `Replace object`
+  live testing showed they can spawn inactive. Use `Replace…` in the Selected box
 when you want to choose the exact source slot that gets consumed. If something
 appears, disappears, clips, soft-locks, or changes behavior in-game, please file
 an issue with steps to reproduce. `Replace` can stage cross-level ordinary

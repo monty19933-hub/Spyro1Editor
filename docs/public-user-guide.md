@@ -1,4 +1,4 @@
-# Spyro Editor 2.1
+# Spyro Editor 2.5
 
 Spyro Editor changes the levels of the original PlayStation game *Spyro the Dragon*
 (USA) and builds a new, playable copy of the game from your changes. It never
@@ -8,11 +8,12 @@ writes to your own disc image, and it does not include the game.
 
 1. Open **Spyro Editor.app** on an Apple Silicon Mac, or **Launch Spyro Editor.bat**
    on Windows x64.
-2. Choose **Open Game…** and select your own unchanged USA *Spyro the Dragon* disc
-   image (a `.bin` or `.cue` file).
-3. Pick a level from the list at the top left.
-4. Change things in the five tabs on the right: **Objects**, **Terrain**,
-   **Game Settings**, **Colours** and **Environment**.
+2. Choose **☰ → Open Game…** and select your own unchanged USA *Spyro the Dragon*
+   disc image (a `.bin` or `.cue` file).
+3. Click a level in **Your game**, the list on the left.
+4. Change things in the five tabs on the right: **Ground**, **Objects**, **Look**,
+   **Links** and **Game**. If you are not sure where something is, type it in
+   **Find any command** at the top (⌘K on Mac, Ctrl+K on Windows).
 5. Press **Save**, then **Create BIN**. Open the new `.cue` file in your emulator.
    **Show Game File** in the bottom bar takes you to it.
 
@@ -22,6 +23,52 @@ On a Mac, macOS asks once whether Spyro Editor may use your Documents folder;
 choose **Allow**. The editor's window appears after you answer. It asks the
 same for the Desktop or Downloads folder if your disc image is kept there. If
 access was refused, the editor opens a small window that says where to allow it.
+
+## Finding things
+
+The window is laid out by what you are doing. Every feature of earlier versions
+is still there and works the same; only where it lives has changed.
+
+- **Your game**, on the left, lists every homeworld with its levels, then your
+  own world and the levels you created. Click a level to open it. A level you
+  built in one of the game's places shows "built". **Find a level** at the top
+  of the list narrows it down.
+- **Find any command**, at the top (⌘K on Mac, Ctrl+K on Windows): type what you
+  want (a doorway, the music, a random level, Stone Hill) and press Enter. It
+  finds every menu command, every card of every tab and every level.
+- **Create ▾** makes something new: **New Level…**, **Random Level…**, **Random
+  Homeworld…**, **New World…** and **New Level from Spyro: Year of the Dragon…**.
+- **Save** and **Create BIN** come next, then a badge that gives the export check
+  in a few words; click it for the full check.
+- **☰** holds the project and the editor: **Open Game…**, **Save Level**, **Open
+  Created Level…**, **Start Blank in Current Level…**, **Fill In What the Level
+  Needs…**, **Restore Before Clear…**, **Free Deleted Objects' Save Rows…**,
+  **Check for Export Issues…**, **Left Out of the Game…**, **Clear Entire Project
+  to Base Game…**, **Project Data**, **Check for Updates** and **Help**.
+- The **Selected** box at the top of the right-hand panel shows what you clicked
+  in the view, whichever tab is open, with everything that acts on it (see
+  "What you selected" under the Objects tab). Click its heading to fold it away,
+  and again to bring it back. For a tile it offers **Show Tile Tools**, which
+  opens the Ground tab.
+- The five tabs:
+  - **Ground**: the level's tiles: painting, moving, shaping and texturing them.
+  - **Objects**: adding objects, Random objects, the list of what the level
+    holds, and Recovery.
+  - **Look**: this level's name, music, sky and lighting, and colours.
+  - **Links**: how Spyro gets into levels and back out: Level Links, the balloon
+    route, doorways, the world entrance, portals and Return Home.
+  - **Game**: what applies to the whole game: Spyro's colours, the egg thieves'
+    colour, Hover, Fly Anywhere, Play as Crash and memory, then the export check
+    under "Before you play".
+
+If you used an earlier version: the old **File ▾** and **More ▾** menus are gone.
+Their commands that make something new are in **Create**, the rest are in **☰**,
+and **Level Links…** and **World's Balloon Route…** are buttons on the Links tab.
+The Terrain tab is now **Ground**, and its Doorways and World Entrance cards are
+on **Links**. The Environment tab is **Look → Sky and lighting**. Game Settings
+and the Colours tab are shared out: the level's name, music and colours are on
+**Look**, portals and Return Home on **Links**, and everything for the whole game
+on **Game**.
 
 ## Save and Create BIN
 
@@ -34,10 +81,11 @@ access was refused, the editor opens a small window that says where to allow it.
   2.1 GB, or 3.3 GB when the project has a level you built. With less it says
   so and starts nothing.
 - Create BIN builds the whole project whichever level is open: every level you
-  changed or built, your new world, and Game Settings.
+  changed or built, your new world, and the Game tab's settings.
 - If something cannot be put in the game, the editor says what and where, and
   nothing half-built is written: the game you created last stays exactly as it
-  was. **More ▾ → Check for Export Issues…** runs the same check without building.
+  was. **☰ → Check for Export Issues…** (or the badge beside Create BIN) runs the
+  same check without building.
 - **Fix It For Me**: whenever Create BIN stops on something in your project,
   this button appears beside the message at the bottom of the window (and in
   **Details**). One press gets the game made: the editor runs Create BIN itself,
@@ -71,7 +119,7 @@ access was refused, the editor opens a small window that says where to allow it.
   - Nothing is deleted. A left-out part stays in your project and is only kept
     out of the game. When Fix It For Me has left something out, a window opens
     that says what and why; Create BIN also says it in its window and after
-    every game. **More ▾ → Left Out of the Game…** lists each part with what
+    every game. **☰ → Left Out of the Game…** lists each part with what
     Create BIN said about it, and **Put Back** includes it again. A newer
     version of the editor starts with nothing left out.
   - It is not offered when the computer is the problem (no disc image chosen, a
@@ -96,6 +144,77 @@ Shortcuts for the level only work after you click in the view. While you are
 typing in a box, keys only affect that box. Changes to objects are written when
 you leave a level or close the editor; terrain changes ask first.
 
+## Ground tab
+
+- **Ground** (in a level you build: New Level or Start Blank): nine buttons —
+  Grass, Dirt, Stone, Sand, Snow, Wood, Water, Lava and Goo. Click one, then
+  click tiles in the view to paint them; selected tiles take it at once. A ground
+  sets both how a tile looks (a texture from one of the game's own levels) and
+  what Spyro finds on it: water, lava and goo cost him a life, as in the game.
+  Esc or **Stop Painting** goes back to selecting tiles.
+- **Tiles**: click a tile to select it; ⌘-click (Ctrl-click on Windows) selects
+  several; drag to move; Shift-drag to change height. **Move Tile…** and
+  **Edit Corner…** take exact amounts. **Raise**, **Lower** and **Reset Height**
+  work on the selected tile. Corners that several tiles share move together,
+  as they do in the game. The Tiles card names the selected tile's kind (solid
+  ground, water, …). On another tab, the Selected box's **Show Tile Tools**
+  brings you back here.
+- **Tile Type…** changes what Spyro finds on the selected tiles: solid ground,
+  water, lava or ooze, a supercharge ramp, and whatever else the level already
+  defines. Spyro cannot swim: water, lava and ooze cost him a life (he sinks; the
+  "at once" kinds take it immediately). The picture of the tile stays; use
+  **Choose Texture…** for that. Changing a pond tile to solid ground lets Spyro
+  stand on it unharmed; changing grass to water makes him sink. **Undo Terrain**
+  puts the kind back. Only tiles whose collision matches the tile can be changed;
+  the editor says so otherwise. In a level you build (New Level or Start Blank)
+  Tile Type offers water, lava, ooze, a supercharge ramp and an invisible wall,
+  which the game handles in any level. Charging down a supercharge ramp needs
+  Spyro's supercharge moves, which only the levels with supercharge ramps of their
+  own have (Magic Crafters, High Caves, Wizard Peak, Tree Tops, Lofty Castle,
+  Haunted Towers, Twilight Harbor). In any other level Create BIN adds them,
+  which takes about 14 KB of the level's memory. Peacekeepers, Beast Makers,
+  Misty Bog, Dream Weavers and Dark Passage are too full for them: there Tile Type
+  says so, unless **Game → Memory** is set to Emulator (8 MB RAM).
+- **Add Terrain** copies the selected tile so you can move the copy into place.
+  **Remove Terrain** (or Delete in the view) takes the selected tiles out.
+  **Undo Terrain** puts the selected tile back the way it was, or brings removed
+  tiles back.
+- **Brush**: Raise, Lower, Smooth, Level or Restore the ground under the circle.
+  Keys 1 to 5 choose a brush; 0 or Esc switches it off. **Undo Stroke** is
+  ⌘Z / Ctrl+Z in the view; **Redo Stroke** is ⇧⌘Z / Ctrl+Y. With **Whole tiles**
+  ticked the brush moves every tile it touches evenly. Brushes switch off when
+  you leave the Ground tab.
+- **Textures**: **Choose Texture…**, then click tiles to paint them. Esc stops.
+- **Corner by corner** moves one corner at a time.
+- **Restore Original Terrain…** undoes every terrain change in the level, after
+  asking.
+
+The exporter updates what you see, the distant version of the level, visibility
+and collision together. A corner shared by several tiles moves with all of them.
+The game's level format has limits, and the editor now refuses a change at the
+moment you make it, in plain words, rather than at Create BIN:
+
+- A tile the game has no collision under (scenery: walls, decoration, the
+  underside of things) cannot be moved; Spyro never touches it, and the game
+  cannot store a change to the picture alone.
+- Within one piece of collision, corners can differ by at most 255 in height.
+  To go higher or lower, raise or lower the neighbouring tiles too, or use the
+  brush for a slope. Ground must not fold over itself.
+- Ground needs 64 units of clear space under anything above it, so a tile
+  under a low bridge or arch cannot be changed.
+- The game looks ground up in a grid of 256-unit cells and keeps a fixed-size
+  table for it; a tile cannot cross into another cell when the level's table
+  has no spare room. The message tells you the range it can stay in.
+- Each part of the level stores its heights within a band of 1023 and its
+  sideways positions within 2047; Lower now works down to the bottom of that
+  band, because the editor moves the band when needed.
+
+A brush stroke simply leaves the corners it cannot move where they are and
+says how many. Translucent original tiles cannot currently be copied or removed.
+
+Doorways and the World Entrance, which used to be on this tab, are on the Links
+tab.
+
 ## Objects tab
 
 **Add to this level**
@@ -109,30 +228,43 @@ you leave a level or close the editor; terrain changes ask first.
 - **Add a gem or copy an object…** offers the standard gems and copies of what
   is already in the level.
 
-**Selected object**
+**Random objects** fills a level you built with enemies, chests, gems, dragons
+and the way out (see Random objects under Random levels).
+
+**Objects in this level** lists what the level holds; **Find placed objects…**
+and the category list narrow it down.
+
+**Recovery** holds **Restore entire level** and **Restore Before Clear…** (also
+in **☰**).
+
+### What you selected
+
+Select an object in the view and the **Selected** box at the top of the
+right-hand panel holds everything that acts on it, whichever tab is open:
 
 - **Edit…** changes the name, gem or reward value, position and facing.
+- **Replace…** swaps a chest or enemy for another kind known to work in this level.
+- **Copy** and **Paste** (⌘C / ⌘V, or Ctrl+C / Ctrl+V, in the view) duplicate the
+  selected object at the pointer.
+- **Undo** puts the selected object back the way it is in the original game.
+- **Remove** (or the Delete key in the view) takes the object out and leaves
+  nothing selected. **Undo last removal** (⌘Z / Ctrl+Z in the view) brings it
+  back.
+- **Height and ground** slides the object up or down, keeps it on the ground
+  while you drag it, or jumps it to the floor above or below.
 - **What it gives** appears for an enemy, a chest or anything else that pays out
   a gem when beaten or opened: choose any of the five gems (red 1, green 2, blue
   5, gold 10, pink 25) and that is what Spyro gets. It works for the level's own
   creatures and for ones you added from other levels; the level's treasure total
   follows. A creature that gives nothing in the game (it gives butterflies, or
   comes back to life) has no such choice.
-- **Replace…** swaps a chest or enemy for another kind known to work in this level.
-- **Copy** and **Paste** (⌘C / ⌘V, or Ctrl+C / Ctrl+V, in the view) duplicate the
-  selected object at the pointer.
-- **Remove** (or the Delete key in the view) takes the object out and leaves
-  nothing selected. **Undo last removal** (⌘Z / Ctrl+Z in the view) brings it
-  back.
-- **Undo** puts the selected object back the way it is in the original game.
-- **Height and ground** slides the object up or down, keeps it on the ground
-  while you drag it, or jumps it to the floor above or below.
+- For an egg thief (and any object that walks a route): **Edit Route…** and the
+  **Its run** tools (see An egg thief's run). An egg thief you added shows these
+  and **What it gives** too; before 2.5 they did not appear for one.
 
 Dragons keep their pedestal and rescue scene with them when moved. The ENTRY
 marker is where Spyro lands when he flies into the level. Double-click a dragon
 statue to give it your own color.
-
-**Recovery** holds **Restore entire level** and **Restore Before Clear…**.
 
 ### Objects from other levels
 
@@ -234,174 +366,26 @@ In a flight level, select an original gate and choose **Replace Flight gate…**
 Pick a replacement, review its time bonus and fit check, then choose
 **Replace gate**. **Undo** restores the original.
 
-## Terrain tab
+## Look tab
 
-- **Ground** (in a level you build: New Level or Start Blank): nine buttons —
-  Grass, Dirt, Stone, Sand, Snow, Wood, Water, Lava and Goo. Click one, then
-  click tiles in the view to paint them; selected tiles take it at once. A ground
-  sets both how a tile looks (a texture from one of the game's own levels) and
-  what Spyro finds on it: water, lava and goo cost him a life, as in the game.
-  Esc or **Stop Painting** goes back to selecting tiles.
-- **Tiles**: click a tile to select it; ⌘-click (Ctrl-click on Windows) selects
-  several; drag to move; Shift-drag to change height. **Move Tile…** and
-  **Edit Corner…** take exact amounts. **Raise**, **Lower** and **Reset Height**
-  work on the selected tile. Corners that several tiles share move together,
-  as they do in the game. The Tiles card names the selected tile's kind (solid
-  ground, water, …).
-- **Tile Type…** changes what Spyro finds on the selected tiles: solid ground,
-  water, lava or ooze, a supercharge ramp, and whatever else the level already
-  defines. Spyro cannot swim: water, lava and ooze cost him a life (he sinks; the
-  "at once" kinds take it immediately). The picture of the tile stays; use
-  **Choose Texture…** for that. Changing a pond tile to solid ground lets Spyro
-  stand on it unharmed; changing grass to water makes him sink. **Undo Terrain**
-  puts the kind back. Only tiles whose collision matches the tile can be changed;
-  the editor says so otherwise. In a level you build (New Level or Start Blank)
-  Tile Type offers water, lava, ooze, a supercharge ramp and an invisible wall,
-  which the game handles in any level. Charging down a supercharge ramp needs
-  Spyro's supercharge moves, which only the levels with supercharge ramps of their
-  own have (Magic Crafters, High Caves, Wizard Peak, Tree Tops, Lofty Castle,
-  Haunted Towers, Twilight Harbor). In any other level Create BIN adds them,
-  which takes about 14 KB of the level's memory. Peacekeepers, Beast Makers,
-  Misty Bog, Dream Weavers and Dark Passage are too full for them: there Tile Type
-  says so, unless Game Settings › Memory is set to Emulator (8 MB RAM).
-- **Add Terrain** copies the selected tile so you can move the copy into place.
-  **Remove Terrain** (or Delete in the view) takes the selected tiles out.
-  **Undo Terrain** puts the selected tile back the way it was, or brings removed
-  tiles back.
-- **Brush**: Raise, Lower, Smooth, Level or Restore the ground under the circle.
-  Keys 1 to 5 choose a brush; 0 or Esc switches it off. **Undo Stroke** is
-  ⌘Z / Ctrl+Z in the view; **Redo Stroke** is ⇧⌘Z / Ctrl+Y. With **Whole tiles**
-  ticked the brush moves every tile it touches evenly. Brushes switch off when
-  you leave the Terrain tab.
-- **Textures**: **Choose Texture…**, then click tiles to paint them. Esc stops.
-- **Corner by corner** moves one corner at a time.
-- **Restore Original Terrain…** undoes every terrain change in the level, after
-  asking.
+How the open level looks and sounds. What you choose is kept in your project as
+soon as you apply it (the dragon statues' colour with the level, so press
+**Save**), and Create BIN puts it in the game.
 
-The exporter updates what you see, the distant version of the level, visibility
-and collision together. A corner shared by several tiles moves with all of them.
-The game's level format has limits, and the editor now refuses a change at the
-moment you make it, in plain words, rather than at Create BIN:
-
-- A tile the game has no collision under (scenery: walls, decoration, the
-  underside of things) cannot be moved; Spyro never touches it, and the game
-  cannot store a change to the picture alone.
-- Within one piece of collision, corners can differ by at most 255 in height.
-  To go higher or lower, raise or lower the neighbouring tiles too, or use the
-  brush for a slope. Ground must not fold over itself.
-- Ground needs 64 units of clear space under anything above it, so a tile
-  under a low bridge or arch cannot be changed.
-- The game looks ground up in a grid of 256-unit cells and keeps a fixed-size
-  table for it; a tile cannot cross into another cell when the level's table
-  has no spare room. The message tells you the range it can stay in.
-- Each part of the level stores its heights within a band of 1023 and its
-  sideways positions within 2047; Lower now works down to the bottom of that
-  band, because the editor moves the band when needed.
-
-A brush stroke simply leaves the corners it cannot move where they are and
-says how many. Translucent original tiles cannot currently be copied or removed.
-
-## Game Settings tab
-
-- **Level name** changes the name on portals, loading screens and in the
-  guidebook (capital letters, spaces and apostrophes).
+- **A level you built** (New Level, a random level, Start Blank, a level from
+  another game) shows its own settings first: its name, where Spyro starts, its
+  sky colour, its skybox (your own, or borrow a level's sky) and **Import a
+  sky…**.
+- **Level name** (one of the game's levels) changes the name on portals, loading
+  screens and in the guidebook (capital letters, spaces and apostrophes).
 - **Music** picks the level's track, for a level you built too (a random level,
   a New Level): **Save Music** keeps it in the level.
-- **Memory**: how much memory the games you create may use. **Emulator (8 MB
-  RAM)** is the usual choice and what a project has until you choose: each
-  level's objects load into the extra memory DuckStation has with Settings ›
-  Console › Enable 8MB RAM, so levels hold more. A game made this way still
-  plays on a normal 2 MB set-up wherever its levels fit 2 MB, and Create BIN
-  says which levels need 8 MB. Choose **PlayStation (2 MB)** for a real console
-  or a disc: every level must then fit 2 MB and Create BIN stops when one does
-  not. (The 8 MB setting goes into the unchanged USA game only; with any other
-  game open, games are made for 2 MB as before.)
-- **Portals & Return Home**: choose where each portal leads and where Return
-  Home goes. **Open Level Links…** at the top shows every homeworld's doorways
-  and every level's Return Home on one page (see Level Links below).
-  **Select Portal** moves the trigger, lettering and travel path together; move
-  the stone arch with the terrain tools.
+- **Sky and lighting**: the level's sky (below).
+- **This level's colours**: its enemies, chests, dragons and animals (below).
+- **Level details** says how many tiles and objects the level has and what you
+  have changed in it.
 
-## Colours tab
-
-Everything about looks and moves. What you choose is saved at once (the dragon
-statues' colour with the level) and Create BIN puts it in the game.
-
-- **This level's colours**: the open level's enemies, chests, dragons and
-  animals, each drawn as it will look, in four lists. Click a kind's colour to
-  choose one of the quick colours or type one as #RRGGBB and press **Use**;
-  **Its own** puts it back. **Randomize** beside a list gives that list's kinds
-  other colours (press again for others), **Randomize All** does every list at
-  once, and **Their Own Colours** clears them. A colour is for this level only,
-  so the same gnorc or chest can be red in Artisans and blue in Dark Hollow. A
-  thing keeps its shading, and what is of another colour on it (skin, armour,
-  eyes) stays; a thing with no colour of its own (grey metal, stone) takes the
-  colour all over. In a level you built the card lists what you placed in it.
-  Two kinds that share a texture share its colour.
-  - **The whole game**: **Randomize Every Level** gives the enemies, chests and
-    animals of every one of the game's levels other colours at once, each level
-    its own (press again for others); **Every Level Its Own** clears them all.
-    Levels you built and your world's levels keep what they have: open one and
-    use Randomize All there.
-  - **Dragons**: **Dragon statues** sets one crystal colour for every dragon
-    statue of the level (their own is green). It is kept with the level, so
-    press **Save**. One statue alone can still be given a colour in its Edit
-    window on the Objects tab. The **fairy at a freed dragon's pedestal** is
-    listed too. The dragon who steps out of the statue for his speech keeps his
-    own colours.
-  - The Green Wizard in three levels and Haunted Towers' Summoning Wizard are
-    not listed: the editor cannot read their models' colours yet.
-- **Fly Anywhere**: tick **Let Spyro fly in every level** and the game you
-  export lets Spyro fly in every normal level the way he does in Gnasty's Loot:
-  jump, then press ✕ again in the air. Steer with the direction buttons; land by
-  flying down to the ground. Open **Choose levels** to tick only the levels you
-  want instead; everywhere else Spyro moves as in the original game. A level of
-  your own flies whenever at least one level is ticked. It is off unless you
-  turn it on, it is saved with the project, and unticking everything gives back
-  the game's normal gliding in the next Create BIN. The five flight levels keep
-  their own rules. This is separate from the editor's **Game Camera**, which
-  always flies.
-- **Hover**: tick **Let Spyro hover (from Spyro 3)** and, in the games you
-  create, pressing ▲ while gliding makes Spyro flutter: he beats his wings
-  quickly, rises about as high as a short jump and drifts on a little before he
-  drops, as in Spyro 2 and 3: good for a ledge just out of reach. As in those
-  games he can't glide again until he lands. It is in every level of the game;
-  unticked, ▲ in a glide drops Spyro straight down as in the original game. It
-  is saved with the project. The wing flap is the flight levels' own, which
-  Create BIN adds to each level that has room for it on a PlayStation; Tree
-  Tops, Haunted Towers and Twilight Harbor have none, so there Spyro hovers
-  without flapping. In levels where Fly Anywhere is on, Spyro flies instead of
-  gliding, so there is no glide to hover from.
-- **Egg thieves' colour**: the egg thieves' robes in any colour in place of
-  their blue: pick one of the ready colours, type one as #RRGGBB and press **Use
-  This Colour**, or **Surprise me**; **Their own blue** puts it back. The card
-  draws a thief in the colour. It is the same in every level that has thieves and
-  for thieves you add to levels you build; they keep their shading and their
-  eyes. In High Caves the tornado wizards wear the same cloth as the thieves, so
-  they change with them.
-- **Spyro's colours**: give Spyro any colours you like, part by part: **Body**
-  (head, back, legs, snout and tail), **Belly**, **Horns**, **Head spikes** (the
-  spiky fins behind his head), **Wing frame**, **Wing skin**, **Tail tip**,
-  **Eyes** and **Pupils**. The picture at the top of the card is Spyro as he
-  will look in the game, redrawn as you choose. Click a part's colour to choose:
-  a quick colour, the **Hue**, **Richness** and **Brightness** sliders, or a
-  colour typed as #RRGGBB (the picture tries it on while you choose), then **Use
-  this colour**. The small square in the corner of a changed part is his own
-  colour, and **His own** puts it back. The looks under the picture (**Ember**,
-  **Ice**, **Emerald**, **Gold**, **Shadow**) set every part at once,
-  **Surprise me** makes one up, and **Classic** gives him his own colours again.
-  Each part keeps his shading, and the colours are in every level, on the title
-  screen, the loading screens and in the cutscenes. They are saved with the
-  project, and Create BIN can make a game with only these settings, without any
-  level edits. **A look for one level**: set **Colours for** at the top of the
-  card to the open level, then choose a look or change a part; Spyro has it in
-  that level only (Classic there gives him his own colours in that level,
-  whatever the rest of the game has). **Same as the Whole Game** takes the
-  level's look away again. The title screen and cutscenes always have the whole
-  game's look.
-- **Play as Crash** is here too (see Crash Bandicoot below).
-
-## Environment tab
+### Sky and lighting
 
 Recolor the level's sky, borrow another level's sky, use a ready-made one, or
 import your own. The 3D view (Game Camera) shows the sky the game will draw
@@ -409,13 +393,14 @@ behind the level: the original, your recoloured or borrowed one, or the one you
 imported, updated when you click **Apply Sky**, **Restore Original Sky** or
 change a level of your own's skybox.
 
-### Importing a sky
+#### Importing a sky
 
 **Import a sky** takes a 360° panorama picture (PNG, JPEG, WebP or BMP; twice as
 wide as it is tall, as skybox makers export them), a sky model (OBJ or FBX, with
 its textures next to it or packed inside), or a `.sky` file. In a game level
-choose the **Import a sky** mode and **Choose Sky File…**; in a level of your own
-use **Game Settings → Import a sky…**.
+choose the **Import a sky** mode in Sky and lighting and **Choose Sky File…**; in
+a level of your own use **Import a sky…** in the level's own settings at the top
+of the Look tab.
 
 Spyro skies are made of coloured triangles around the player, not pictures, so
 the editor converts what you choose and shows exactly what the game will draw
@@ -431,21 +416,293 @@ before you use it:
 - A model is seen from its centre. Parts it leaves open, such as a dome without
   a floor, continue its nearest colours.
 
+### This level's colours
+
+The open level's enemies, chests, dragons and animals, each drawn as it will
+look, in four lists. Click a kind's colour to choose one of the quick colours or
+type one as #RRGGBB and press **Use**; **Its own** puts it back. **Randomize**
+beside a list gives that list's kinds other colours (press again for others),
+**Randomize All** does every list at once, and **Their Own Colours** clears them.
+A colour is for this level only, so the same gnorc or chest can be red in
+Artisans and blue in Dark Hollow. A thing keeps its shading, and what is of
+another colour on it (skin, armour, eyes) stays; a thing with no colour of its
+own (grey metal, stone) takes the colour all over. In a level you built the card
+lists what you placed in it. Two kinds that share a texture share its colour.
+
+- **The whole game**: **Randomize Every Level** gives the enemies, chests and
+  animals of every one of the game's levels other colours at once, each level
+  its own (press again for others); **Every Level Its Own** clears them all.
+  Levels you built and your world's levels keep what they have: open one and
+  use Randomize All there.
+- **Dragons**: **Dragon statues** sets one crystal colour for every dragon
+  statue of the level (their own is green). It is kept with the level, so
+  press **Save**. One statue alone can still be given a colour in its Edit
+  window (Selected box). The **fairy at a freed dragon's pedestal** is
+  listed too. The dragon who steps out of the statue for his speech keeps his
+  own colours.
+- The Green Wizard in three levels and Haunted Towers' Summoning Wizard are
+  not listed: the editor cannot read their models' colours yet.
+
+## Links tab
+
+How Spyro gets into levels and back out, and how the whole game hangs together.
+
+- **The whole game**: **Level Links…** shows every homeworld's doorways and every
+  level's Return Home on one page; **World's Balloon Route…** places your world
+  among the balloonists' worlds; **New World…** is the same as **Create → New
+  World…**. All three are described below.
+- **Doorways**: in a homeworld you rebuilt and in your world's homeworld (below).
+- **World Entrance**: in the game's homeworlds, an optional doorway into your
+  world (below).
+- **Portals & Return Home**: choose where each portal leads and where Return
+  Home goes. **Open Level Links…** at the top opens Level Links. **Select
+  Portal** moves the trigger, lettering and travel path together; move the
+  stone arch with the Ground tab's tools.
+
+### Level Links: the way in and the way back
+
+**Level Links…** (or **Open Level Links…** in Portals & Return Home) shows on one
+page how Spyro gets into every level and back out:
+
+- **Doorways**: every homeworld's doorways, named by the level they lead to in
+  the game, each with a **leads to** list: the game's levels, your new level
+  (Create → New Level…) and the levels you built in the game's places, by the
+  names you gave them. A level you built in Stone Hill's place is reached by
+  the Stone Hill doorway without any change here.
+- Choose another level for a doorway and it is saved at once. **Return Home
+  from that level then brings Spyro back out of that same doorway**, and the
+  level the doorway led to before comes back out of the doorway that still
+  leads there. Choosing the game's own level again puts the doorway back.
+- **Return Home**: for every level, where its Return Home vortex (and Exit Level
+  in the pause menu) brings Spyro back out. **Automatic** is the doorway that
+  leads to the level; choose another doorway only if you want him to come out
+  somewhere else. Each row also says whether the level has its Return Home
+  vortex: a level you built needs one added (☰ → Fill In What the Level
+  Needs…, or Add Object: search for "Return Home"), or Spyro can leave it only by
+  Exit Level.
+- At the top, plain sentences say what needs looking at: a level no doorway
+  leads to, two doorways to one level (and which one Return Home uses), a level
+  without its vortex, or a link Create BIN cannot make, with a button where one
+  press puts it right.
+- A homeworld you rebuilt (Start Blank or Random Homeworld) keeps one doorway
+  for each of its own levels, each always leading to the level in that place;
+  move, add or remove them with the Doorways card on the Links tab in that
+  homeworld.
+- Your own world (Create → New World…) is summed up at the foot, starting with
+  one sentence on how players get there and back, for example "Players reach
+  GLOOMY FEN by balloon: Artisans' balloonist flies Spyro there once he has
+  found 50 treasure, and GLOOMY FEN's balloonist NILS flies him back to
+  Artisans (and on to Peace Keepers)." Then whether its balloonist stands in
+  its homeworld, which of its levels have a doorway there, and a doorway into
+  it only if you chose one; with buttons to open the homeworlds and the balloon
+  route. The homeworld whose balloonist flies Spyro to your world says so in
+  its own part of the window.
+- **Undo Last Change** takes the last change back. Create BIN puts the links in
+  the game.
+
+### Your world on the balloon route
+
+The game's balloonists fly Spyro from world to world in a fixed order, each once
+Spyro has done what he asks (ten dragons in Artisans, 1,200 treasure in Peace
+Keepers, and so on). **World's Balloon Route…** gives your world (Create → New
+World…) a place in that order.
+
+- The window starts by saying how players reach your world and come back, in
+  the same words as Level Links, and what your world's homeworld still needs.
+- **Your world comes** after one of the game's six homeworlds: "After Dream
+  Weavers, before Gnasty's World", for one. The balloonist of the homeworld
+  before it then flies Spyro to your world, your world's own balloonist flies him
+  back and on to the world that used to come next, and every balloonist's menu
+  lists your world in its place once it is open.
+- **To fly Spyro to your world** the balloonist before it asks for what you
+  choose: nothing, a number of dragons rescued, an amount of treasure found, or a
+  number of dragon eggs recovered, counted over the whole game. **To fly Spyro
+  on**, your world's balloonist asks for what you choose in the same way. A new
+  place starts from the game's own pace: free to your world, and what the game
+  asks at that point to fly on. Dragons and treasure of your world's levels
+  count; dragon eggs are the twelve the game's thieves carry.
+- A balloonist who asks for something else than he does in the game says so in
+  his own words ("Come back when you have rescued 40 dragons."), and invites
+  Spyro to the right world by name.
+- **Your world's balloonist** has a name of your choosing (his talk is headed
+  with it). He stands in your world's homeworld with his balloon: New World puts
+  him there, **Objects → Random objects** places him ("The way out"), or add a
+  balloonist with **Add object…**. If he is missing, Create BIN stops and Fix It
+  For Me stands him near where Spyro arrives.
+- **After Gnasty's World** your world is the last on the route: Gnasty's World's
+  balloonist opens it with everything else and can ask for nothing; your world's
+  balloonist then flies Spyro back to any world.
+- **Not on the balloon route (a doorway instead)**: the balloonists do not know
+  your world; players walk in through its doorway (the World Entrance card on
+  the Links tab of the homeworld it is entered from) and out through its
+  homeworld's doorway back.
+- A world that has no place chosen follows the homeworld chosen in the New World
+  window, with the game's own pace: free to your world, the game's price to fly on.
+- The balloon sets Spyro down where your world's homeworld starts.
+
+With your world on the route, a saved game made before (from the original game
+or an earlier export) may find one more world open than it had.
+
+### Doorways in a homeworld you rebuild
+
+A homeworld you rebuilt with Start Blank (Artisans, Peace Keepers, Magic Crafters,
+Beast Makers, Dream Weavers or Gnasty's World) has a **Doorways** card on the
+Links tab. Other levels show it too, with the reason they cannot have doorways:
+the game keeps its doorway code in the homeworlds only.
+
+- **Add Doorway…** asks where it leads (the levels that homeworld's own doorways
+  lead to; each level has one doorway), its **shape** from nine pictures — Stone
+  Arch, Pointed Arch, Square Gate, Round Ring, Wide Arch, Hex Gate, Tall Arch,
+  Gable Gate and Slanted Gate — its size,
+  and its frame's texture (the same texture grid as Choose Texture…). It stands
+  on the selected tile, or on the ground in front of the camera, facing the
+  camera: Spyro walks into it away from you.
+- Select a doorway in the list, or click its frame in the view. **◀ ▲ ▼ ▶** move it
+  16 units (west, north, south, east as in the Map view), **Up**/**Down** 8 units;
+  **To Selected Tile** and **In Front of Camera** put it somewhere new; **⟲ ⟳**
+  turn it 15° or 90°. **Shape…** changes its shape or size, **Leads To…** where it
+  goes, **Front Texture…** and **Side Texture…** its frame's look, and **Remove
+  Doorway** takes it out with its frame.
+- The frame is made of ordinary tiles. Selecting a doorway selects its whole
+  frame, so the Ground tab's Ground card or Choose Texture… repaint it in one
+  go; click single frame tiles to paint them one by one. Moving, turning or
+  reshaping the doorway rebuilds the frame there and keeps its textures.
+- In the game the opening shows the sky of the level it leads to. Spyro walks in,
+  the level loads, and Return Home or Exit Level brings him back out of the same
+  doorway. The game draws a doorway's sky inside an opening of at most ten
+  corners that never bends inwards; the shapes are made that way.
+- Doorways made before this tool (such as Lost Fleet's) keep working as they
+  were; the first change finds their frame and moves it with them.
+- Your new world's homeworld (Create → New World…) has the same card: a doorway
+  to each of the world's levels. It needs no doorway back out: your world's
+  balloonist flies Spyro back. Only if you chose a doorway into your world as
+  well (below) does it offer one back to the game's homeworld the world is
+  entered from (listed as "the way back out of your world").
+
+### World Entrance: a doorway into your world as well (optional)
+
+If you want players to be able to walk into your world (Create → New World…)
+through a doorway too, open one of the game's homeworlds: its Links tab has a
+**World Entrance** card. While your world is reached by balloon only, the card
+says so and offers **Add a Doorway As Well…** (or **Build It As Well** for a
+doorway placed there before). With a doorway, your world's homeworld also needs
+its doorway back out to that homeworld (Doorways card, **Add Doorway…**, then the
+homeworld's name). **Remove Entrance** makes the world balloon-only again.
+
+- **Add a Doorway As Well…** (or **Place Entrance…**) asks for the doorway's
+  shape (the same shapes as the Doorways card) and size, and puts it on the
+  selected tile or on the ground in front of the camera, facing the camera:
+  Spyro walks into it away from you. Give it open, level ground in front: coming
+  back, Spyro walks out of it a good way, as he does from the homeworld's own
+  doorways.
+- **◀ ▲ ▼ ▶**, **Up**/**Down**, **To Selected Tile**, **In Front of Camera** and
+  **⟲ ⟳** move and turn it; **Shape…** changes its shape or size; **Front
+  Texture…** and **Side Texture…** pick its frame's look from the homeworld's own
+  textures (until you do, it uses the texture of the homeworld's own arches);
+  **Remove Entrance** takes it out. The view draws it over the level; it becomes
+  part of the homeworld when Create BIN builds the game.
+- In another homeworld the card says where the world is entered from;
+  **Use This Homeworld** moves the entrance there.
+- The homeworld keeps its own five doorways (four in Gnasty's World): the
+  entrance is a sixth, the most the game allows.
+- Its opening shows your world's sky. A homeworld has little spare memory, so the
+  card checks it: Artisans and Gnasty's World have room for a whole sky; Peace
+  Keepers, Magic Crafters, Beast Makers and Dream Weavers take the part of the
+  sky near the horizon (or just its colour) on a PlayStation, and the whole sky
+  with **Game → Memory → Emulator (8 MB RAM)**.
+- Leaving your world's homeworld through its doorway home brings Spyro back out
+  of the entrance. Add that doorway with the Doorways card in your world's
+  homeworld (**Add Doorway…**, then the homeworld's name). Create BIN asks for
+  both together: an entrance without a way back would trap Spyro in your world.
+
+## Game tab
+
+What applies to the whole game you create, in every level. What you choose is
+saved at once and Create BIN puts it in the game; Create BIN can make a game
+with only these settings, without any level edits.
+
+- **Spyro's colours**: give Spyro any colours you like, part by part: **Body**
+  (head, back, legs, snout and tail), **Belly**, **Horns**, **Head spikes** (the
+  spiky fins behind his head), **Wing frame**, **Wing skin**, **Tail tip**,
+  **Eyes** and **Pupils**. The picture at the top of the card is Spyro as he
+  will look in the game, redrawn as you choose. Click a part's colour to choose:
+  a quick colour, the **Hue**, **Richness** and **Brightness** sliders, or a
+  colour typed as #RRGGBB (the picture tries it on while you choose), then **Use
+  this colour**. The small square in the corner of a changed part is his own
+  colour, and **His own** puts it back. The looks under the picture (**Ember**,
+  **Ice**, **Emerald**, **Gold**, **Shadow**) set every part at once,
+  **Surprise me** makes one up, and **Classic** gives him his own colours again.
+  Each part keeps his shading, and the colours are in every level, on the title
+  screen, the loading screens and in the cutscenes. They are saved with the
+  project. **A look for one level**: set **Colours for** at the top of the
+  card to the open level, then choose a look or change a part; Spyro has it in
+  that level only (Classic there gives him his own colours in that level,
+  whatever the rest of the game has). **Same as the Whole Game** takes the
+  level's look away again. The title screen and cutscenes always have the whole
+  game's look.
+- **Egg thieves' colour**: the egg thieves' robes in any colour in place of
+  their blue: pick one of the ready colours, type one as #RRGGBB and press **Use
+  This Colour**, or **Surprise me**; **Their own blue** puts it back. The card
+  draws a thief in the colour. It is the same in every level that has thieves and
+  for thieves you add to levels you build; they keep their shading and their
+  eyes. In High Caves the tornado wizards wear the same cloth as the thieves, so
+  they change with them.
+- **Hover**: tick **Let Spyro hover (from Spyro 3)** and, in the games you
+  create, pressing ▲ while gliding makes Spyro flutter: he beats his wings
+  quickly, rises about as high as a short jump and drifts on a little before he
+  drops, as in Spyro 2 and 3: good for a ledge just out of reach. As in those
+  games he can't glide again until he lands. It is in every level of the game;
+  unticked, ▲ in a glide drops Spyro straight down as in the original game. It
+  is saved with the project. The wing flap is the flight levels' own, which
+  Create BIN adds to each level that has room for it on a PlayStation; Tree
+  Tops, Haunted Towers and Twilight Harbor have none, so there Spyro hovers
+  without flapping. In levels where Fly Anywhere is on, Spyro flies instead of
+  gliding, so there is no glide to hover from.
+- **Fly Anywhere**: tick **Let Spyro fly in every level** and the game you
+  export lets Spyro fly in every normal level the way he does in Gnasty's Loot:
+  jump, then press ✕ again in the air. Steer with the direction buttons; land by
+  flying down to the ground. Open **Choose levels** to tick only the levels you
+  want instead; everywhere else Spyro moves as in the original game. A level of
+  your own flies whenever at least one level is ticked. It is off unless you
+  turn it on, it is saved with the project, and unticking everything gives back
+  the game's normal gliding in the next Create BIN. The five flight levels keep
+  their own rules. This is separate from the editor's **Game Camera**, which
+  always flies.
+- **Play as Crash**: Crash Bandicoot takes Spyro's place in the levels you tick.
+  His model, animations and sounds come from your Crash Bandicoot: Warped disc
+  (chosen with **Choose Crash disc…**, as for the Crash boxes). Each level needs
+  about 70 KB of free game memory: Create BIN names any of the game's own levels
+  that are too full, and levels you clear with Start Blank or build with New
+  Level have room.
+- **Memory**: how much memory the games you create may use. **Emulator (8 MB
+  RAM)** is the usual choice and what a project has until you choose: each
+  level's objects load into the extra memory DuckStation has with Settings ›
+  Console › Enable 8MB RAM, so levels hold more. A game made this way still
+  plays on a normal 2 MB set-up wherever its levels fit 2 MB, and Create BIN
+  says which levels need 8 MB. Choose **PlayStation (2 MB)** for a real console
+  or a disc: every level must then fit 2 MB and Create BIN stops when one does
+  not. (The 8 MB setting goes into the unchanged USA game only; with any other
+  game open, games are made for 2 MB as before.)
+- **Before you play**: the export check lists anything that would stop Create
+  BIN, the same as the badge in the top bar and **☰ → Check for Export
+  Issues…**.
+
 ## Levels of your own
 
-- **File ▾ → New Level…** starts a level of your own that opens when you choose
+- **Create → New Level…** starts a level of your own that opens when you choose
   New Game. It begins as a meadow that already looks like a Spyro level: grass,
   a stone path from the start, a ramp up to a raised ledge, a pond with a sand
-  rim, and Artisans' sky. Repaint it with the Terrain tab's **Ground** card, move
-  or remove its tiles and add your own. It uses the same Objects and Terrain tools. A project holds one such
+  rim, and Artisans' sky. Repaint it with the Ground tab's **Ground** card, move
+  or remove its tiles and add your own. It uses the same Ground and Objects
+  tools. A project holds one such
   level: if you already have one, the editor asks before replacing it and keeps
   a copy in the project's `backups` folder.
-- **File ▾ → Open Created Level…** reopens the level you made.
-- **File ▾ → Start Blank in Current Level…** replaces the open level with the
+- **☰ → Open Created Level…** reopens the level you made.
+- **☰ → Start Blank in Current Level…** replaces the open level with the
   same meadow so you can rebuild it. A recovery copy is saved first;
   **Restore Before Clear…** brings the previous version back, also after
   reopening the project.
-- **File ▾ → Clear Entire Project to Base Game…** starts the whole project over.
+- **☰ → Clear Entire Project to Base Game…** starts the whole project over.
   Everything you have made is taken out: your changes to every one of the
   game's levels, the levels and the world you built, and your game settings
   (Hover, colours, memory, doorways and the rest). The editor then opens the
@@ -481,91 +738,24 @@ together; of the other twenty levels (Dark Hollow, Toasty and most levels of the
 later worlds) two can be cleared in one game. A cleared Town Square and a
 level of your own cannot currently be exported together.
 
-### Level Links: the way in and the way back
-
-**File ▾ → Level Links…** (or **Open Level Links…** in Game Settings → Portals &
-Return Home) shows on one page how Spyro gets into every level and back out:
-
-- **Doorways**: every homeworld's doorways, named by the level they lead to in
-  the game, each with a **leads to** list: the game's levels, your new level
-  (File ▾ → New Level…) and the levels you built in the game's places, by the
-  names you gave them. A level you built in Stone Hill's place is reached by
-  the Stone Hill doorway without any change here.
-- Choose another level for a doorway and it is saved at once. **Return Home
-  from that level then brings Spyro back out of that same doorway**, and the
-  level the doorway led to before comes back out of the doorway that still
-  leads there. Choosing the game's own level again puts the doorway back.
-- **Return Home**: for every level, where its Return Home vortex (and Exit Level
-  in the pause menu) brings Spyro back out. **Automatic** is the doorway that
-  leads to the level; choose another doorway only if you want him to come out
-  somewhere else. Each row also says whether the level has its Return Home
-  vortex: a level you built needs one added (File ▾ → Fill In What the Level
-  Needs…, or Add Object: search for "Return Home"), or Spyro can leave it only by
-  Exit Level.
-- At the top, plain sentences say what needs looking at: a level no doorway
-  leads to, two doorways to one level (and which one Return Home uses), a level
-  without its vortex, or a link Create BIN cannot make, with a button where one
-  press puts it right.
-- A homeworld you rebuilt (Start Blank or Random Homeworld) keeps one doorway
-  for each of its own levels, each always leading to the level in that place;
-  move, add or remove them with Terrain → Doorways in that homeworld.
-- Your own world (File ▾ → New World…) is summed up at the foot, starting with
-  one sentence on how players get there and back, for example "Players reach
-  GLOOMY FEN by balloon: Artisans' balloonist flies Spyro there once he has
-  found 50 treasure, and GLOOMY FEN's balloonist NILS flies him back to
-  Artisans (and on to Peace Keepers)." Then whether its balloonist stands in
-  its homeworld, which of its levels have a doorway there, and a doorway into
-  it only if you chose one; with buttons to open the homeworlds and the balloon
-  route. The homeworld whose balloonist flies Spyro to your world says so in
-  its own part of the window.
-- **Undo Last Change** takes the last change back. Create BIN puts the links in
-  the game.
-
-### Doorways in a homeworld you rebuild
-
-A homeworld you rebuilt with Start Blank (Artisans, Peace Keepers, Magic Crafters,
-Beast Makers, Dream Weavers or Gnasty's World) has a **Doorways** card in the
-Terrain tab. Other levels show it too, with the reason they cannot have doorways:
-the game keeps its doorway code in the homeworlds only.
-
-- **Add Doorway…** asks where it leads (the levels that homeworld's own doorways
-  lead to; each level has one doorway), its **shape** from nine pictures — Stone
-  Arch, Pointed Arch, Square Gate, Round Ring, Wide Arch, Hex Gate, Tall Arch,
-  Gable Gate and Slanted Gate — its size,
-  and its frame's texture (the same texture grid as Choose Texture…). It stands
-  on the selected tile, or on the ground in front of the camera, facing the
-  camera: Spyro walks into it away from you.
-- Select a doorway in the list, or click its frame in the view. **◀ ▲ ▼ ▶** move it
-  16 units (west, north, south, east as in the Map view), **Up**/**Down** 8 units;
-  **To Selected Tile** and **In Front of Camera** put it somewhere new; **⟲ ⟳**
-  turn it 15° or 90°. **Shape…** changes its shape or size, **Leads To…** where it
-  goes, **Front Texture…** and **Side Texture…** its frame's look, and **Remove
-  Doorway** takes it out with its frame.
-- The frame is made of ordinary tiles. Selecting a doorway selects its whole
-  frame, so the Ground card or Choose Texture… repaint it in one go; click single
-  frame tiles to paint them one by one. Moving, turning or reshaping the doorway
-  rebuilds the frame there and keeps its textures.
-- In the game the opening shows the sky of the level it leads to. Spyro walks in,
-  the level loads, and Return Home or Exit Level brings him back out of the same
-  doorway. The game draws a doorway's sky inside an opening of at most ten
-  corners that never bends inwards; the shapes are made that way.
-- Doorways made before this tool (such as Lost Fleet's) keep working as they
-  were; the first change finds their frame and moves it with them.
-- Your new world's homeworld (File ▾ → New World…) has the same card: a doorway
-  to each of the world's levels. It needs no doorway back out: your world's
-  balloonist flies Spyro back. Only if you chose a doorway into your world as
-  well (below) does it offer one back to the game's homeworld the world is
-  entered from (listed as "the way back out of your world").
+A rebuilt level holds up to 4,096 terrain tiles. Untextured tiles are split into
+smaller triangles automatically. Walls stop Spyro from the side you can see them.
+The game gives close-up detail to the textured tiles near the camera, and only so
+many at once: Create BIN checks camera positions all over the level and names the
+place if textured tiles are too crowded there. Use larger tiles there (a few hundred
+units across, like the game's own) or untextured faces.
 
 ### How players reach your new world
 
-Players reach the world made with **File ▾ → New World…** **by balloon**, like
-the game's own worlds: the balloonist of the homeworld before it on the route
-(the one chosen in the New World window, Artisans unless you choose another)
-flies Spyro there once he has what he asks, and your world's own balloonist
-flies him back. **File ▾ → World's Balloon Route…** sets where it lies and what
-each balloonist asks (below). Nothing is built into the game's homeworlds, and
-your world's homeworld has no doorway back out.
+Players reach the world made with **Create → New World…** (also on the Links tab)
+**by balloon**, like the game's own worlds: the balloonist of the homeworld
+before it on the route (the one chosen in the New World window, Artisans unless
+you choose another) flies Spyro there once he has what he asks, and your world's
+own balloonist flies him back. **World's Balloon Route…** on the Links tab sets
+where it lies and what each balloonist asks (see Your world on the balloon
+route). Nothing is built into the game's homeworlds, and your world's homeworld
+has no doorway back out. A doorway into your world as well is your choice: see
+World Entrance under the Links tab.
 
 - New World puts your world's balloonist and his balloon in its homeworld at
   once, near where Spyro arrives (when your original disc is chosen). If he is
@@ -576,98 +766,13 @@ your world's homeworld has no doorway back out.
   one.
 - Your world is called by its homeworld's name, as the game's worlds are: a
   Random Homeworld made in its place names it (GLOOMY FEN instead of SKY ISLES),
-  and renaming the homeworld (Game Settings, its name) renames the world. The
+  and renaming the homeworld (its name on the Look tab) renames the world. The
   balloonists' menus and the inventory show that name.
 - A project whose world was made before works the same way: it is reached by balloon.
   A doorway into it that was placed before stays in the project but is not
   built, and Create BIN takes the world's old doorway back out of its homeworld
   (keeping the level as it was in the project's `backups/fix-it` folder) and
   says so. Its balloon route and prices stay as they were.
-
-#### A doorway as well (optional)
-
-If you want players to be able to walk into your world through a doorway too,
-open one of the game's homeworlds: its Terrain tab has a **World Entrance**
-card. While your world is reached by balloon only, the card says so and offers
-**Add a Doorway As Well…** (or **Build It As Well** for a doorway placed there
-before). With a doorway, your world's homeworld also needs its doorway back out
-to that homeworld (Doorways card, **Add Doorway…**, then the homeworld's name).
-**Remove Entrance** makes the world balloon-only again.
-
-- **Add a Doorway As Well…** (or **Place Entrance…**) asks for the doorway's
-  shape (the same six as the Doorways
-  card) and size, and puts it on the selected tile or on the ground in front of
-  the camera, facing the camera: Spyro walks into it away from you. Give it open,
-  level ground in front: coming back, Spyro walks out of it a good way, as he does
-  from the homeworld's own doorways.
-- **◀ ▲ ▼ ▶**, **Up**/**Down**, **To Selected Tile**, **In Front of Camera** and
-  **⟲ ⟳** move and turn it; **Shape…** changes its shape or size; **Front
-  Texture…** and **Side Texture…** pick its frame's look from the homeworld's own
-  textures (until you do, it uses the texture of the homeworld's own arches);
-  **Remove Entrance** takes it out. The view draws it over the level; it becomes
-  part of the homeworld when Create BIN builds the game.
-- In another homeworld the card says where the world is entered from;
-  **Use This Homeworld** moves the entrance there.
-- The homeworld keeps its own five doorways (four in Gnasty's World): the
-  entrance is a sixth, the most the game allows.
-- Its opening shows your world's sky. A homeworld has little spare memory, so the
-  card checks it: Artisans and Gnasty's World have room for a whole sky; Peace
-  Keepers, Magic Crafters, Beast Makers and Dream Weavers take the part of the
-  sky near the horizon (or just its colour) on a PlayStation, and the whole sky
-  with Game Settings › Memory › Emulator (8 MB RAM).
-- Leaving your world's homeworld through its doorway home brings Spyro back out
-  of the entrance. Add that doorway with the Doorways card in your world's
-  homeworld (**Add Doorway…**, then the homeworld's name). Create BIN asks for
-  both together: an entrance without a way back would trap Spyro in your world.
-
-### Your world on the balloon route
-
-The game's balloonists fly Spyro from world to world in a fixed order, each once
-Spyro has done what he asks (ten dragons in Artisans, 1,200 treasure in Peace
-Keepers, and so on). **File ▾ → World's Balloon Route…** gives your world a place
-in that order.
-
-- The window starts by saying how players reach your world and come back, in
-  the same words as Level Links, and what your world's homeworld still needs.
-- **Your world comes** after one of the game's six homeworlds: "After Dream
-  Weavers, before Gnasty's World", for one. The balloonist of the homeworld
-  before it then flies Spyro to your world, your world's own balloonist flies him
-  back and on to the world that used to come next, and every balloonist's menu
-  lists your world in its place once it is open.
-- **To fly Spyro to your world** the balloonist before it asks for what you
-  choose: nothing, a number of dragons rescued, an amount of treasure found, or a
-  number of dragon eggs recovered, counted over the whole game. **To fly Spyro
-  on**, your world's balloonist asks for what you choose in the same way. A new
-  place starts from the game's own pace: free to your world, and what the game
-  asks at that point to fly on. Dragons and treasure of your world's levels
-  count; dragon eggs are the twelve the game's thieves carry.
-- A balloonist who asks for something else than he does in the game says so in
-  his own words ("Come back when you have rescued 40 dragons."), and invites
-  Spyro to the right world by name.
-- **Your world's balloonist** has a name of your choosing (his talk is headed
-  with it). He stands in your world's homeworld with his balloon: New World puts
-  him there, **Objects → Random objects** places him ("The way out"), or add a
-  balloonist with **Add object…**. If he is missing, Create BIN stops and Fix It
-  For Me stands him near where Spyro arrives.
-- **After Gnasty's World** your world is the last on the route: Gnasty's World's
-  balloonist opens it with everything else and can ask for nothing; your world's
-  balloonist then flies Spyro back to any world.
-- **Not on the balloon route (a doorway instead)**: the balloonists do not know
-  your world; players walk in through its doorway (Terrain › World Entrance in
-  the homeworld it is entered from) and out through its homeworld's doorway back.
-- A world that has no place chosen follows the homeworld chosen in the New World
-  window, with the game's own pace: free to your world, the game's price to fly on.
-- The balloon sets Spyro down where your world's homeworld starts.
-
-With your world on the route, a saved game made before (from the original game
-or an earlier export) may find one more world open than it had.
-
-A rebuilt level holds up to 4,096 terrain tiles. Untextured tiles are split into
-smaller triangles automatically. Walls stop Spyro from the side you can see them.
-The game gives close-up detail to the textured tiles near the camera, and only so
-many at once: Create BIN checks camera positions all over the level and names the
-place if textured tiles are too crowded there. Use larger tiles there (a few hundred
-units across, like the game's own) or untextured faces.
 
 ### Your new world in the game
 
@@ -677,8 +782,8 @@ world on it (and, only if you chose one, the doorway into it and its way back).
 Its status line ends with the sentence that says how players reach your world.
 
 - Spyro flies in by balloon and his balloon sets him down where your world's
-  homeworld starts; your world's balloonist flies him back (**World's Balloon
-  Route…**). In your world's homeworld each doorway
+  homeworld starts; your world's balloonist flies him back (**Links → World's
+  Balloon Route…**). In your world's homeworld each doorway
   leads to its level; **Return Home** and **Exit Level** in a level bring him back
   out of that level's doorway. With a doorway as well, he can also walk in
   through it, and its doorway home takes him back out of it. Create BIN can also
@@ -695,7 +800,7 @@ Its status line ends with the sentence that says how players reach your world.
 
 ## Random levels
 
-**File ▾ → Random Level…** makes a whole new level the way the game's own levels
+**Create → Random Level…** makes a whole new level the way the game's own levels
 are made, from a seed and a few choices, then puts it where you say so you can add
 objects and enemies yourself.
 
@@ -732,8 +837,14 @@ objects and enemies yourself.
   steep banks, rock walls, peaks, open water or the sky.
 - **Painted like them:** with the textures the chosen level itself uses for its
   ground, banks, rock and paths, in the colours that level paints them with, under
-  its sky and to its music. With your project's levels loaded, that level's own
-  towers, trees and rocks are lifted from it and stood in the new level.
+  its sky and to its music. The steep side slopes (the banks) are bare rock all
+  the way down, with no odd patches of grass. With your project's levels loaded,
+  that level's own towers, trees and rocks are lifted from it and stood in the
+  new level.
+- **Named like them:** each random level and homeworld gets a made-up name of at
+  most 15 letters, the most the game's level window shows (so a homeworld made in
+  your world's place can always give the world its name). Change it on the Look
+  tab.
 
 The choices:
 
@@ -770,11 +881,10 @@ The choices:
   sky.
 - **Music:** the song the level plays: the look's own (one of its level's songs,
   picked by the seed) or any song of the game. A game level's place can also take
-  the songs brought in from other games. Change it later in **Game Settings →
-  Music**.
+  the songs brought in from other games. Change it later in **Look → Music**.
 - **Seed:** the same seed and choices always make the same level. **New Seed**
   makes another; **Rebuild** makes this seed again with changed choices. (A seed
-  makes a different level in 2.4 than it did in 2.2.)
+  makes a different level than it did in 2.2.)
 
 Rooms have **trodden paths** across them, from every way in (a path, a doorway,
 where Spyro starts) to a meeting place near the middle, in the look's path surface;
@@ -791,7 +901,7 @@ left again, and tries another layout if not.
 
 **Put it** in place of the open level (a recovery copy is kept, and **Restore
 Before Clear…** brings it back), as the project's new level, or in a level of
-the world made with **File ▾ → New World…**. Tick **Then fill it with objects for
+the world made with **Create → New World…**. Tick **Then fill it with objects for
 me** to have Random objects (below) place enemies, chests, gems, dragons and the
 way out at once, at the level's difficulty; otherwise add them yourself with Add
 Object. Everything the generator makes is ordinary terrain: paint, move or remove
@@ -799,7 +909,7 @@ any tile afterwards.
 
 ### Random homeworlds
 
-**File ▾ → Random Homeworld…** (or **Make: A homeworld** in the Random Level
+**Create → Random Homeworld…** (or **Make: A homeworld** in the Random Level
 window) makes a homeworld, laid out in any of the level layouts; left to chance,
 it is one land (a wide land, plateaus, terraces or yards) or a web, ring, climb or
 journey. A doorway stands for every level the homeworld leads to: a big part of
@@ -825,9 +935,9 @@ of each opening, whatever its shape and size, so every doorway loads its level.
   harbour), usually one shape for the whole homeworld as in the game, sometimes
   a different one for each doorway; each doorway its own size, the farthest one
   the grandest; and frames of the level's own stone in the level's colours. The
-  destination's sky fills each opening exactly. **Terrain → Doorways** moves,
-  turns, reshapes or retargets any of them afterwards; their frames are ordinary
-  tiles you can repaint.
+  destination's sky fills each opening exactly. The **Doorways** card on the
+  Links tab moves, turns, reshapes or retargets any of them afterwards; their
+  frames are ordinary tiles you can repaint.
 - With **Then fill it with objects for me**, the homeworld also gets its
   balloonist and his balloon (the way to the other worlds) and, in a homeworld of
   the game, its dragons. Arriving by balloon, Spyro is set down where the
@@ -886,7 +996,8 @@ measured from the disc:
   its kind gives in the game (a basket mostly a green or a blue gem). Enemies
   give what they give in their own level; when that would leave too little for
   loose gems of every colour, chests and then enemies give a colour less.
-  (Select any of them and use **What it gives** to choose yourself.)
+  (Select any of them and use **What it gives** in the Selected box to choose
+  yourself.)
 - Loose gems are mostly reds and greens, in ones, twos and threes about a hundred
   units apart, a group all one colour, more than half of them by the walls and
   the rest along the paths and out in the rooms; the best gems go to the hardest
@@ -925,8 +1036,9 @@ place the save keeps, so they are kept like any egg.
 
 Select an egg thief (one you added, or one of the game's own; also any added
 object that walks a route, such as a sheep): **Edit Route…** or **Edit Run
-Path** and the **Its run** tools appear under the object's buttons, and the
-run's numbered points show in the 3D view.
+Path** and the **Its run** tools appear in the Selected box, and the run's
+numbered points show in the 3D view. (In 2.5 they appear for an egg thief you
+added too, with **What it gives**; before, they were not shown for one.)
 
 - Drag a point in the 3D view to move it (it stays on the ground), or type the
   points in **Edit Route…**.
@@ -949,21 +1061,22 @@ run's numbered points show in the 3D view.
 ## Levels from other games
 
 Open the level whose place the new level takes (a level or homeworld, not a flight
-level), then choose **File ▾ → New Level from Spyro: Year of the Dragon…**. It
+level), then choose **Create → New Level from Spyro: Year of the Dragon…**. It
 rebuilds one of Year of the Dragon's levels from your own Year of the Dragon (USA)
 disc: its ground, walls, textures, water and lava, its distant scenery, and a start
 where its level begins. Lava and acid can be deadly as in that game; deep water costs
 a life, because Spyro can't swim here. Its sky's shapes are not converted: the level
-gets a plain sky colour, or borrow a Spyro sky in Game Settings.
+gets a plain sky colour, or borrow a Spyro sky with the skybox in the level's own
+settings on the Look tab.
 
 Crash Bandicoot: Warped's boxes, enemies and songs are still offered in Add Object and
-Game Settings; building whole Crash levels is not offered for now.
+the Look tab's Music; building whole Crash levels is not offered for now.
 
 Building takes about a minute. The open level is emptied the way Start Blank empties
 it, with a recovery copy, and keeps playing its own song. Characters, enemies and
 boxes of the other game are not brought over.
 
-**File ▾ → Fill In What the Level Needs…** (done for you at the end of the command
+**☰ → Fill In What the Level Needs…** (done for you at the end of the command
 above) puts into a level you built:
 
 - the level's own dragons, spread out on open floor;
@@ -981,7 +1094,7 @@ thieves and says whether it has its Return Home vortex. It turns amber and names
 to add when something is missing; Create BIN lists the same before you play.
 
 An object you add that walks a route (an egg thief, a patrolling enemy) can have its
-route changed with **Edit Route…** in its object panel.
+route changed with **Edit Route…** in the Selected box.
 
 Create BIN keeps every level you build within what the game can draw in a frame: it
 checks the views from every spot Spyro can reach and, where a view would draw too
