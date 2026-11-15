@@ -83,7 +83,17 @@ internal static partial class SpyroStructures
         var plan = L.Plan;
         if (style == LevelStyle.Caverns) return;
         bool free = plan.Kind is EnclosureKind.Sea or EnclosureKind.Sky, castle = style == LevelStyle.Castle;
+        // Trees are made of the look's second ground: they grow where that is green (or snow), not where it is sand,
+        // stone or metal.
         bool trees = !castle && (look == null || !Barren.Contains(look));
+        if (trees && look != null && LevelThemes.All.FirstOrDefault(t => t.Key == look) is { } theme
+            && (theme.Textures.TryGetValue(SurfaceRole.GroundAlt, out var leaf) || theme.Textures.TryGetValue(SurfaceRole.Ground, out leaf))
+            && LevelDna.Average(leaf.Level, leaf.Id) is { } hue)
+        {
+            bool green = hue.G > hue.R * 1.1 && hue.G > hue.B * 1.1, snow = Math.Min(hue.R, Math.Min(hue.G, hue.B)) >= 140 && hue.B >= hue.R;
+            trees = green || snow;
+            if (Environment.GetEnvironmentVariable("SPYRO_RANDOM_LEVEL_DEBUG") == "scenery") Console.Error.WriteLine($"scenery: {look} second ground {hue.R},{hue.G},{hue.B}: {(trees ? "trees" : "no trees")}");
+        }
         var rock = plan.Kind == EnclosureKind.Cliff && !castle ? SurfaceRole.Cliff : SurfaceRole.Rock;
         int faces = 0, treeCount = 0, rockCount = 0;
         bool debug = Environment.GetEnvironmentVariable("SPYRO_RANDOM_LEVEL_DEBUG") == "scenery";
