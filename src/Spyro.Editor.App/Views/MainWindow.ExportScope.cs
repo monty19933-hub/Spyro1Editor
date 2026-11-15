@@ -50,6 +50,16 @@ public sealed partial class MainWindow
                 { if (t.IsCompletedSuccessfully) Avalonia.Threading.Dispatcher.UIThread.Post(RefreshCompletionLine); }, TaskScheduler.Default);
             }
         }
+        else if (_currentLevel != null && _freshSceneDocument is { } built && LevelCompletionCheck.PlaceWantsExit(built))
+        {
+            // One of a new world's levels, or the project's new level: its place has no dragons or thieves of its own, but
+            // it wants its Return Home vortex like any level; egg thieves added to it are counted (each is an egg of the game).
+            int thieves = _currentMobys.Count(m => m.IsAdded && !m.IsRemoved && m.ClassId == LevelCompletionCheck.EggThiefClass);
+            var gap = new LevelCompletionGap("", 0, 0, 0, thieves, ExitNeeded: true, ExitPresent: ReturnHomeVortexCheck.Has(_currentMobys));
+            text = LevelCompletionCheck.Summary(gap);
+            hint = LevelCompletionCheck.Describe(gap, built.Name);
+            complete = hint == null;
+        }
         _completionText.IsVisible = text != null;
         _completionText.Text = text == null ? "" : hint == null ? text : text + "\n" + hint;
         _completionText.Foreground = new SolidColorBrush(complete ? Color.FromRgb(46, 125, 72) : Color.FromRgb(168, 98, 0));
@@ -68,6 +78,14 @@ public sealed partial class MainWindow
             HashSet<string> built = new(StringComparer.OrdinalIgnoreCase);
             foreach (var scene in scenes)
             {
+                // A locked chest without a key in its level could never be opened (levels made before 2.6 may have one).
+                var live = scene.Objects.Select(o => o.Value).Where(m => m.IsAdded && !m.IsRemoved).ToList();
+                if (live.Count(m => m.ClassId == UniversalLockedChestRows.ChestClass) > live.Count(m => m.ClassId == UniversalLockedChestRows.KeyClass))
+                    lines.Add($"{scene.Name}: {char.ToLowerInvariant(UniversalLockedChestRows.NoKeyNote[0])}{UniversalLockedChestRows.NoKeyNote[1..]}");
+                // A new world's level and the project's new level want their Return Home vortex like any level.
+                if (scene.TargetBinding == null && LevelCompletionCheck.PlaceWantsExit(scene) && !ReturnHomeVortexCheck.Has(scene.Objects.Select(o => o.Value)) &&
+                    LevelCompletionCheck.Describe(new LevelCompletionGap("", 0, 0, 0, 0, ExitNeeded: true), scene.Name) is { } wayOut)
+                    lines.Add(wayOut);
                 if (scene.TargetBinding?.LevelKey is not { } key || _retailCatalog.FindByKey(key) is not { SourceWadEntry: > 0 } slot) continue;
                 built.Add(key);
                 if (Spyro.Editor.Core.Exporting.NativeKillHeights.Warning(library.Disc.Exe, slot.LevelId, scene) is { } fall)

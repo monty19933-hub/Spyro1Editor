@@ -100,9 +100,9 @@ public sealed partial class MainWindow
         _randomObjectsEnemies = Box("RandomObjectsEnemies", "Enemies", "The enemy type's enemies, waiting in the rooms beyond the first and on the paths: as many as a level of the game with that many gems has, fewer when easy, more when hard.");
         _randomObjectsChests = Box("RandomObjectsChests", "Chests of every kind", "Baskets and vases, strong chests, chests that take three flames, firework and spring chests, an extra life, and a locked chest with its key.");
         _randomObjectsAnimals = Box("RandomObjectsAnimals", "Animals", "The level type's animals (sheep, rabbits, chickens…), in little groups: food for Sparx.");
-        _randomObjectsThieves = Box("RandomObjectsThieves", "Egg thieves", "The egg thieves this level's place in the game has, each with a run.");
+        _randomObjectsThieves = Box("RandomObjectsThieves", "Egg thieves", "The egg thieves this level's place in the game has, each with a run; in a place that has none (a new world's levels, your new level, many of the game's own), one egg thief. Every thief is an egg of the game: its totals (inventory, 100%, Gnasty's Loot) follow at Create BIN.");
         _randomObjectsDragons = Box("RandomObjectsDragons", "Dragons", "The dragons this level's place in the game has, spread through the rooms.");
-        _randomObjectsExit = Box("RandomObjectsExit", "The way out", "A Return Home vortex at the far end from where Spyro starts; in a homeworld, its balloonist and his balloon.");
+        _randomObjectsExit = Box("RandomObjectsExit", "The way out", "A Return Home vortex at the far end from where Spyro starts (in a new world's level it leads back to the world's homeworld); in a homeworld, its balloonist and his balloon.");
         _randomObjectsScenery = Box("RandomObjectsScenery", "Trees, torches, flowers", "The level type's own scenery, placed the way that level has it: trees or cactuses on open ground or along the banks, torches and lamp posts by the edges of paths, lamps on the walls, flowers and grass in little clusters. Levels whose scenery is part of their land have none to place.");
         _randomObjectsTeal = Box("RandomObjectsTeal", "Teal gems (50)", "A rare few teal gems worth 50 each, each alone at one of the level's hardest places: on a ledge only a glide reaches, at the top of a climb, at the far end. They are part of the Gems total, which stays exact. A level needs 100 gems for one.");
         _randomObjectsRainbow = Box("RandomObjectsRainbow", "Rainbow gems (100)", "A rare few rainbow gems worth 100 each, each alone at one of the level's hardest places. They are part of the Gems total, which stays exact. A level needs 200 gems for one (300 with teal gems too).");
@@ -250,7 +250,10 @@ public sealed partial class MainWindow
         bool Has(int row) => live.Any(m => string.Equals(m.CrossLevelSourceLevelKey, key, StringComparison.OrdinalIgnoreCase) && m.CrossLevelSourceTrueIndex == row);
         var dragonRows = choice.Dragons ? own.Dragons.Where(r => !Has(r)).ToList() : [];
         var thiefRows = choice.Thieves ? own.Thieves.Where(r => !Has(r)).ToList() : [];
-        var gap = LevelCompletionCheck.Check(own, key ?? "", true, [], live.Select(m => (m.CrossLevelSourceLevelKey, m.CrossLevelSourceTrueIndex)), LevelCompletionCheck.SourceClass(lib));
+        // (A level in a place that never had a Return Home vortex, one of a new world's levels or the project's new
+        // level, wants one too: LevelCompletionCheck.PlaceWantsExit.)
+        var gap = LevelCompletionCheck.Check(own, key ?? "", true, [], live.Select(m => (m.CrossLevelSourceLevelKey, m.CrossLevelSourceTrueIndex)), LevelCompletionCheck.SourceClass(lib),
+            LevelCompletionCheck.PlaceWantsExit(_freshSceneDocument));
         // A homeworld's way out is its balloonist, who comes with his balloon.
         (UniversalMobyCatalogEntry Entry, UniversalMobyVariant Variant)? balloonist = null;
         if (slot is { LevelId: var home } && home % 10 == 0 && home is >= 10 and <= 60 && _freshSceneDocument.WorldLevelId == null &&
@@ -264,11 +267,11 @@ public sealed partial class MainWindow
             !live.Any(m => m.SourceByte37 == 0 && m.SourceByte36 is >= UniversalBalloonistRows.BalloonistClass and <= UniversalBalloonistRows.BalloonistClass + 5))
             balloonist = (pilot, marco);
         bool exit = choice.Exit && (gap.ExitNeeded && !gap.ExitPresent || balloonist != null);
-        List<(int Row, UniversalRowTemplate Template, int Nodes)> thieves = [];
+        List<(string Source, int Row, UniversalRowTemplate Template, int Nodes)> thieves = [];
         foreach (int row in thiefRows)
         {
             var template = lib.Get(key!).Data.CaptureRow(key!, row);
-            thieves.Add((row, template, UniversalPropertyCoordinates.DefaultPath(template, 0, 0, 0)?.Count ?? 0));
+            thieves.Add((key!, row, template, UniversalPropertyCoordinates.DefaultPath(template, 0, 0, 0)?.Count ?? 0));
         }
 
         // A kind of object: the level's own copy first (nothing new to bring in), then the level type's, then any level's.
@@ -280,6 +283,12 @@ public sealed partial class MainWindow
                 if (level != null && usable.FirstOrDefault(v => string.Equals(v.SourceLevelKey, level, StringComparison.OrdinalIgnoreCase)) is { } hit) return (entry, hit);
             return usable.Count > 0 ? (entry, usable[0]) : null;
         }
+        // A level whose place has no egg thief of its own gets one all the same: the level type's, else any level's
+        // (one a level; the game's egg totals follow the thieves a game holds, NativeEggTotals). None when the level
+        // already has a thief.
+        (UniversalMobyCatalogEntry Entry, UniversalMobyVariant Variant)? guestThief = null;
+        if (choice.Thieves && own.Thieves.Count == 0 && !live.Any(m => m.ClassId == LevelCompletionCheck.EggThiefClass))
+            guestThief = Of(LevelCompletionCheck.EggThiefClass, choice.LevelKey);
         var chestClasses = new (LevelScatter.Kind Kind, int[] Classes)[]
         {
             (LevelScatter.Kind.Basket, [0x0C2]), (LevelScatter.Kind.StrongChest, [0x0C3]), (LevelScatter.Kind.FlameChest, [0x186, 0x086]), (LevelScatter.Kind.Firework, [0x138]),
@@ -350,7 +359,7 @@ public sealed partial class MainWindow
         // one at a time (gems first, then chests, enemies, animals) and whatever will not go with the rest is left out.
         var gemKinds = GemValue.Known.Where(g => g.Value is 1 or 2 or 5 or 10 or 25).Select(g => Of(g.IdByte, key, choice.LevelKey)).Where(g => g != null).Select(g => g!.Value).ToList();
         var chestKinds = chest.ToList();
-        (foeKinds, animalKinds, var keptChests, bool keyFits, sceneryKinds) = await Task.Run(() =>
+        (foeKinds, animalKinds, var keptChests, bool keyFits, sceneryKinds, bool guestFits) = await Task.Run(() =>
         {
             string? Together(IEnumerable<UniversalMobyVariant> kinds)
             {
@@ -366,12 +375,12 @@ public sealed partial class MainWindow
                 return DryRunFresh(compilation, lib, trial, special).Error;
             }
             var wantFoes = foeKinds.Take(4).ToList(); var wantAnimals = animalKinds.Take(2).ToList();
-            var all = gemKinds.Select(g => g.Variant).Concat(chestKinds.Select(c => c.Value.Variant)).Concat(keyKind is { } k0 ? [k0.Variant] : [])
+            var all = gemKinds.Select(g => g.Variant).Concat(chestKinds.Select(c => c.Value.Variant)).Concat(keyKind is { } k0 ? [k0.Variant] : []).Concat(guestThief is { } g0 ? [g0.Variant] : [])
                 .Concat(wantFoes.Select(f => f.Variant)).Concat(wantAnimals.Select(a => a.Variant)).Concat(sceneryKinds.Select(p => p.Variant)).ToList();
             List<(UniversalMobyCatalogEntry Entry, UniversalMobyVariant Variant)> foes = [], animals = [];
             List<(LevelScatter.Kind Kind, UniversalMobyCatalogEntry Entry, UniversalMobyVariant Variant)> scenery = [];
             var chests = new Dictionary<LevelScatter.Kind, (UniversalMobyCatalogEntry Entry, UniversalMobyVariant Variant)>();
-            bool keyOk = keyKind != null;
+            bool keyOk = keyKind != null, guestOk = guestThief != null;
             if (Together(all) == null) { foes = wantFoes; animals = wantAnimals; scenery = sceneryKinds; foreach (var c in chestKinds) chests[c.Key] = c.Value; }
             else
             {
@@ -385,6 +394,7 @@ public sealed partial class MainWindow
                 foreach (var g in gemKinds) Take(g.Variant, g.Entry.Name);
                 foreach (var c in chestKinds) if (Take(c.Value.Variant, c.Value.Entry.Name)) chests[c.Key] = c.Value;
                 if (keyKind is { } k1) keyOk = Take(k1.Variant, k1.Entry.Name);
+                if (guestThief is { } g1) guestOk = Take(g1.Variant, "egg thief");
                 foreach (var f in foeKinds) { if (foes.Count >= 4) break; if (Take(f.Variant, f.Entry.Name)) foes.Add(f); }
                 foreach (var a in animalKinds) { if (animals.Count >= 2) break; if (Take(a.Variant, a.Entry.Name)) animals.Add(a); }
                 // Scenery last: what the level has room for after everything that is played with.
@@ -393,12 +403,21 @@ public sealed partial class MainWindow
             // Whose route may not be changed.
             foreach (var kind in foes.Concat(animals))
                 if (Refusal(kind.Variant) == null && Refusal(kind.Variant, movedRoute: true) != null) lock (fixedRoutes) fixedRoutes.Add((kind.Variant.SourceLevelKey, kind.Variant.SourceRow));
-            return (foes, animals, chests, keyOk, scenery);
+            return (foes, animals, chests, keyOk, scenery, guestOk);
         });
         if (_currentLevel != level || _workspace.RootPath != root || _freshSceneDocument == null) return;
         chest.Clear();
         foreach (var c in keptChests) chest[c.Key] = c.Value;
         if (!keyFits) chest.Remove(LevelScatter.Kind.LockedChest);
+        if (guestFits && guestThief is { } guest)
+        {
+            try
+            {
+                var template = lib.Get(guest.Variant.SourceLevelKey).Data.CaptureRow(guest.Variant.SourceLevelKey, guest.Variant.SourceRow);
+                thieves.Add((guest.Variant.SourceLevelKey, guest.Variant.SourceRow, template, UniversalPropertyCoordinates.DefaultPath(template, 0, 0, 0)?.Count ?? 0));
+            }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException) { }
+        }
         var eggEntry = specials.FirstOrDefault(e => e.SubCategory == "Dragonfly Eggs");
         var tealEntry = specials.FirstOrDefault(e => e.ClassId == UniversalHighValueGems.TealClass && e.Placeable);
         var rainbowEntry = specials.FirstOrDefault(e => e.ClassId == UniversalHighValueGems.RainbowClass && e.Placeable);
@@ -489,6 +508,10 @@ public sealed partial class MainWindow
             var foeTemplates = foeKinds.Select(k => { try { return (UniversalRowTemplate?)lib.Get(k.Variant.SourceLevelKey).Data.CaptureRow(k.Variant.SourceLevelKey, k.Variant.SourceRow); } catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException) { return null; } }).ToList();
             var animalTemplates = animalKinds.Select(k => { try { return (UniversalRowTemplate?)lib.Get(k.Variant.SourceLevelKey).Data.CaptureRow(k.Variant.SourceLevelKey, k.Variant.SourceRow); } catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException) { return null; } }).ToList();
             int done = 0, dragon = 0, thief = 0, foe = 0, animal = 0;
+            // A locked chest comes with its key (one group: Create BIN makes the chest name its key's row, or the key
+            // could not be picked up); the key is then moved to the place planned for it.
+            var keySpot = plan.Items.FirstOrDefault(i => i.Kind == LevelScatter.Kind.Key);
+            bool keyComesWithChest = chest.TryGetValue(LevelScatter.Kind.LockedChest, out var pair) && LockedChestBringsKey(lib, pair.Variant);
             // The teal and rainbow gems first: they are part of the treasure everything else is measured against.
             foreach (var (position, value) in plan.HighGems)
             {
@@ -536,8 +559,8 @@ public sealed partial class MainWindow
                     }
                     case LevelScatter.Kind.Thief when thief < thieves.Count:
                     {
-                        var (row, template, _) = thieves[thief++];
-                        var v = entries.SelectMany(e => e.Variants.Select(x => (e, x))).FirstOrDefault(p => string.Equals(p.x.SourceLevelKey, key, StringComparison.OrdinalIgnoreCase) && p.x.SourceRow == row);
+                        var (from, row, template, _) = thieves[thief++];
+                        var v = entries.SelectMany(e => e.Variants.Select(x => (e, x))).FirstOrDefault(p => string.Equals(p.x.SourceLevelKey, from, StringComparison.OrdinalIgnoreCase) && p.x.SourceRow == row);
                         if (v.e != null) objects = await AddUniversalMobyAtAsync(lib, v.e, v.x, item.Position, item.Yaw);
                         if (objects.Count == 0) { missing.Add("egg thief"); break; }
                         var runner = objects[0];
@@ -585,6 +608,7 @@ public sealed partial class MainWindow
                         break;
                     }
                     case LevelScatter.Kind.Key:
+                        if (keyComesWithChest) break;
                         if (keyKind is { } kk) objects = await AddUniversalMobyAtAsync(lib, kk.Entry, kk.Variant, item.Position, item.Yaw);
                         if (objects.Count == 0) missing.Add("key"); else Track(objects, "key");
                         break;
@@ -600,11 +624,18 @@ public sealed partial class MainWindow
                         // The chest itself is the one that stands where it was put; what it gives is set on it.
                         var body = objects.FirstOrDefault(m => !m.IsGemLike && !m.IsKey) ?? objects[0];
                         if (item.Kind is not (LevelScatter.Kind.LifeChest or LevelScatter.Kind.LockedChest)) { Give(body, item.Reward); givers[body] = item.Reward; }
+                        var itsKey = item.Kind == LevelScatter.Kind.LockedChest ? objects.FirstOrDefault(m => m.IsKey) : null;
+                        if (itsKey != null && keySpot != null)
+                        {
+                            var at = LockedChestKeyAt(keySpot.Position);
+                            MoveMoby(itsKey, at.X - itsKey.Position.X, at.Y - itsKey.Position.Y, at.Z - itsKey.Position.Z);
+                        }
                         Track(objects, item.Kind switch
                         {
                             LevelScatter.Kind.Basket => "basket", LevelScatter.Kind.StrongChest => "strong chest", LevelScatter.Kind.FlameChest => "three-flame chest",
                             LevelScatter.Kind.Firework => "firework chest", LevelScatter.Kind.SpringChest => "spring chest", LevelScatter.Kind.LifeChest => "extra life chest", _ => "locked chest",
                         });
+                        if (itsKey != null && _currentMobys.Contains(itsKey)) placed["key"] = placed.GetValueOrDefault("key") + 1;
                         break;
                 }
             }
@@ -731,8 +762,8 @@ public sealed partial class MainWindow
             notes.Add($"{sceneryLevel.DisplayName} has no scenery objects to place: its trees and torches are part of its land.");
         if (choice.Difficulty == LevelDifficulty.Kaizo && (choice.Animals || choice.Chests)) notes.Add("Kaizo: no animals for Sparx and no extra life.");
         if (choice.Enemies > 0 && foeKinds.Count == 0) notes.Add($"{_retailCatalog.FindByKey(enemyLevel)?.DisplayName ?? "That level"} has no enemies that can be placed.");
-        if ((choice.Dragons || choice.Thieves) && own.Dragons.Count + own.Thieves.Count == 0)
-            notes.Add("Dragons and egg thieves belong to a level's place in the game; this level's place has none.");
+        if (choice.Dragons && own.Dragons.Count == 0)
+            notes.Add("Dragons belong to a level's place in the game; this level's place has none.");
         if (treasure != choice.Treasure && choice.Treasure > 0) notes.Add($"The level's treasure comes to {treasure}.");
         string summary = parts.Count == 0
             ? "Nothing was placed" + (missing.Count > 0 ? ": " + string.Join("; ", missing.Distinct()) : ".")

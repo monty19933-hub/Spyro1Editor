@@ -43,7 +43,8 @@ public sealed partial class MainWindow
         bool Has(int row)=>live.Any(m=>string.Equals(m.CrossLevelSourceLevelKey,key,StringComparison.OrdinalIgnoreCase)&&m.CrossLevelSourceTrueIndex==row);
         var dragonRows=own.Dragons.Where(r=>!Has(r)).ToList();
         var thiefRows=own.Thieves.Where(r=>!Has(r)).ToList();
-        var gap=LevelCompletionCheck.Check(own,key??"",true,[],live.Select(m=>(m.CrossLevelSourceLevelKey,m.CrossLevelSourceTrueIndex)),LevelCompletionCheck.SourceClass(lib));
+        // (A new world's level and the project's new level want a Return Home vortex too: their places never had one.)
+        var gap=LevelCompletionCheck.Check(own,key??"",true,[],live.Select(m=>(m.CrossLevelSourceLevelKey,m.CrossLevelSourceTrueIndex)),LevelCompletionCheck.SourceClass(lib),LevelCompletionCheck.PlaceWantsExit(_freshSceneDocument));
         bool exitMissing=gap.ExitNeeded&&!gap.ExitPresent;
         bool hasGems=_currentMobys.Any(m=>!m.IsRemoved&&m.TreasureValue>0);
         var scene=CaptureFreshScene();

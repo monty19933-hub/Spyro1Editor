@@ -23,6 +23,7 @@ public static class UniversalIndexedRows
         UniversalAlpineArmResources.RequireSourceFamilyEnrollment(data,overlay,template);
         if(UniversalAlpineArmInstaller.Applies(template))return UniversalAlpineArmResources.CaptureSource(data,overlay,template);
         template = UniversalDreamWeaversCannonRows.Capture(data, overlay, template);
+        template = UniversalLockedChestRows.Capture(data, template);
         template = UniversalBeastMistyBoarPlacement.Capture(data,overlay,template);
         template = UniversalHauntedWizardPlacement.Capture(data, overlay, template);
         template = UniversalHauntedSuperflameFairy.Capture(data,overlay,template);

@@ -981,7 +981,12 @@ first); **Remove Them** takes them all away. What you added yourself stays.
 - **Chests of every kind:** baskets and vases, strong chests, chests that take
   three flames, firework and spring chests, an extra life, and a locked chest
   whose key lies somewhere else in the level, floating as the game's keys do,
-  most often up on a ledge or a perch (jump up to it).
+  most often up on a ledge or a perch (jump up to it). A locked chest and its
+  key are a pair: adding a Key Chest (here or with Add Object) adds its key with
+  it, each is moved on its own, and removing one removes both. (In games made
+  before 2.6 a randomized key could be seen only now and then and could not be
+  picked up: the chest did not know its key. Create BIN again and it does;
+  nothing needs to be placed again.)
 - **Teal gems (50)** and **Rainbow gems (100)** (off unless you tick them): rare
   gems worth 50 and 100, each alone at one of the hardest places to reach (a
   perch, a high place, the far end of a way), counted in the treasure you typed.
@@ -997,6 +1002,17 @@ first); **Remove Them** takes them all away. What you added yourself stays.
   little groups; the egg thieves and dragons that belong to the level's place in
   the game, each thief with room to run; a Return Home vortex at the far end (in a
   homeworld, the balloonist).
+  - A level in a place that never had a Return Home vortex gets one too: each
+    level of a world of your own (its vortex brings Spyro back to the world's
+    homeworld, in front of the doorway that leads to the level) and your new
+    level. Jump onto it, as in the game. The line under the level's treasure,
+    Level Links and the Create BIN window say when such a level has none.
+  - A place with no egg thief of its own (a world of your own, homeworld and
+    levels; your new level; many of the game's levels) gets one egg thief, the
+    level type's or another level's, with a run of his own. Every thief is one
+    more egg of the game: Create BIN says how many eggs the game has, and the
+    inventory, 100% and the doorway to Gnasty's Loot count that many.
+  - Dragons still come only from the level's place in the game.
 
 How much of everything, and where, follows the game's own thirty levels on foot,
 measured from the disc:

@@ -91,6 +91,7 @@ internal static partial class NewLevelBuildCases
             case "level-links": LevelLinksStep(window, outDir); return true;
             case "world-access": WorldAccessStep(window, outDir); return true;
             case "world-check": WorldCheckStep(window, outDir); return true;
+            case "world-objects": WorldObjectsStep(window, outDir); return true;
             default: return RunThiefSteps(window, outDir, step);
         }
     }

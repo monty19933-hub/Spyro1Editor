@@ -49,6 +49,14 @@ public static class LevelCompletionCheck
 
     private static int ClassOf(UniversalLevelData data, int row) => BinaryPrimitives.ReadUInt16LittleEndian(data.Row(row).AsSpan(0x36));
 
+    /// <summary>A level you build in a place that never had a Return Home vortex of its own, yet is left like any
+    /// level of the game: one of a new world's levels (71-74; its vortex leads back to the world's homeworld, as Exit
+    /// Level does) or the project's new level (the game's unused place 65; back out where Exit Level leads). Such a
+    /// level wants a vortex as much as a level in a game level's place does (a new world's homeworld is left by its
+    /// balloonist instead).</summary>
+    public static bool PlaceWantsExit(Spyro.Editor.Core.Editing.SceneDocument scene) =>
+        scene.TargetBinding == null && scene.WorldLevelId != Spyro.Editor.Core.Editing.NewWorldDocument.Homeworld;
+
     /// <summary>The level as it will be exported: <paramref name="cleared"/> when its own objects are all gone (Start Blank,
     /// New Level), else those in <paramref name="removedNativeRows"/>; <paramref name="added"/> the objects added to it.
     /// Only the level's own dragons and thieves count: they carry its save identities.</summary>
@@ -64,9 +72,11 @@ public static class LevelCompletionCheck
     };
 
     /// <summary>As above, with the level's own rows already read (<see cref="OriginalRows"/>); <paramref name="sourceClass"/>
-    /// tells an added Return Home vortex (any level's) from other objects.</summary>
+    /// tells an added Return Home vortex (any level's) from other objects. <paramref name="exitWanted"/>: the level
+    /// wants a vortex although its place has none of its own (<see cref="PlaceWantsExit"/>).</summary>
     public static LevelCompletionGap Check(LevelOwnRows own, string levelKey, bool cleared,
-        IEnumerable<int> removedNativeRows, IEnumerable<(string SourceKey, int Row)> added, Func<string, int, int>? sourceClass = null)
+        IEnumerable<int> removedNativeRows, IEnumerable<(string SourceKey, int Row)> added, Func<string, int, int>? sourceClass = null,
+        bool exitWanted = false)
     {
         HashSet<int> removed = [.. removedNativeRows];
         var all = added.ToList();
@@ -78,7 +88,7 @@ public static class LevelCompletionCheck
         bool exit = own.Exits.Any(r => Times(r) > 0) ||
             sourceClass != null && all.Any(a => !string.IsNullOrEmpty(a.SourceKey) && sourceClass(a.SourceKey, a.Row) == ReturnHomeClass);
         return new(levelKey, own.Dragons.Count, Present(own.Dragons), own.Thieves.Count, Present(own.Thieves),
-            Twice(own.Dragons), Twice(own.Thieves), own.Exits.Count > 0, exit);
+            Twice(own.Dragons), Twice(own.Thieves), own.Exits.Count > 0 || exitWanted, exit);
     }
 
     /// <summary>The objects a saved native-edits file removes from its level (rows) and adds (source level, row).</summary>
