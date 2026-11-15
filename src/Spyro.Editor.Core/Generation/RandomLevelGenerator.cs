@@ -142,7 +142,7 @@ public static class RandomLevelGenerator
         List<LevelProp>? props = null;
         List<LevelCut>? cuts = null;
         bool gameTextures = options.Textures == LevelTextureMode.GameTextures && options.Pictures.Count == 0;
-        if (source != null && gameTextures && textureBudget >= 20 && source(theme.Key) is { } terrain)
+        if (source != null && gameTextures && textureBudget >= 20 && catalog.FindByKey(theme.Key) != null && source(theme.Key) is { } terrain)
         {
             props = LevelProps.Extract(terrain, id => LevelDna.Static(theme.Key, id));
             // A part of the look's own level, cut out whole, when asked for.
