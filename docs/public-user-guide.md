@@ -847,9 +847,10 @@ objects and enemies yourself.
   Canyon, Peace Keepers, Cliff Town, Twilight Harbor, Tree Tops' decks), rock
   spires and boulders stand instead. Spyro can walk into a tree's boughs but not
   through its trunk.
-- **With parts of the real level:** with your project's levels loaded, two
-  levels in three have a part of the level they look like standing in them,
-  whole, in a room of its own and joined to its ground: Stone Hill's keep or its
+- **With parts of the real level:** with your project's levels loaded, about
+  half of all random levels have a part of the level they look like standing in
+  them, whole, in a room of its own and joined to its ground (every level tries;
+  it stands where a room is big enough for one): Stone Hill's keep or its
   round tower, Cliff Town's oval keep, Dry Canyon's fort, Misty Bog's walled
   causeway, Wizard Peak's hall, Lofty Castle's spiral tower and about forty
   more (every look but Dark Passage has at least one). **Parts of real levels**

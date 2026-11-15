@@ -5,7 +5,7 @@
 New
 
 - **Random levels have trees and boulders.** Trees in twos and threes just inside the rooms' edges, a few out in big fields and more up on the hills round the level, with trunks Spyro bumps into; boulders at the foot of the edges. Looks whose ground is sand, stone or metal get rock spires and boulders instead.
-- **Parts of the real levels stand in random levels.** With your project's levels loaded, two levels in three have a part of the level they look like standing whole in a room of its own, joined to its ground: 48 parts in 17 looks (Stone Hill's keep and round tower, Cliff Town's oval keep, Dry Canyon's fort, Misty Bog's walled causeway, Wizard Peak's hall, Lofty Castle's spiral tower and more). **Parts of real levels** in the Random Level window asks for one or leaves them out.
+- **Parts of the real levels stand in random levels.** With your project's levels loaded, about half of all random levels have a part of the level they look like standing whole in a room of its own, joined to its ground (every level tries; it stands where a room is big enough): 48 parts in 17 looks (Stone Hill's keep and round tower, Cliff Town's oval keep, Dry Canyon's fort, Misty Bog's walled causeway, Wizard Peak's hall, Lofty Castle's spiral tower and more). **Parts of real levels** in the Random Level window asks for one or leaves them out.
 - **Random objects come in the game's own arrangements**: over a thousand groups of chests, gems, enemies and animals measured in the game's levels, each stood at the same kind of place (a corner, a wall's foot, a narrow way, a raised place, the open floor) about as often as the game uses it.
 
 Fixed

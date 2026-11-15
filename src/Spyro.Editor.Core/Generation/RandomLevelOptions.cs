@@ -78,8 +78,8 @@ public sealed record RandomLevelOptions
     /// <summary>The level's music (a track id from MusicTrackCatalog); null picks one of the look's own songs.</summary>
     public int? Music { get; init; }
     /// <summary>A part of the look's own level stood in the new one, cut out whole (Stone Hill's keep, Artisans' castle
-    /// bowl; <see cref="LevelCuts"/>); needs the look's level to be readable and the game's textures. Null: the generator decides (two levels in
-    /// three, by the seed; never a homeworld).</summary>
+    /// bowl; <see cref="LevelCuts"/>); needs the look's level to be readable and the game's textures. Null: every level but a homeworld tries for
+    /// one (it stands where a room is big enough for one of the look's parts).</summary>
     public bool? Cuts { get; init; }
     /// <summary>The level's name (capital letters, spaces and apostrophes); null makes one up.</summary>
     public string? Name { get; init; }

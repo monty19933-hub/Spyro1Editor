@@ -204,7 +204,7 @@ public sealed partial class MainWindow
         var rivers = Feature("RandomLevelRivers", "Rivers", "A river (of the level's water, ooze or lava) across a big room from bank to bank, with a wooden bridge over it.");
         var houses = Feature("RandomLevelHouses", "Houses", "Houses with roofs, doors and windows round the rooms, a few together like a village; Spyro walks round them.");
         var walls = Feature("RandomLevelWalls", "Castle walls", "Castle walls with a tower at each end along rooms' edges, and battlements along a castle's walls.");
-        var cuts = Feature("RandomLevelCuts", "Parts of real levels", "A part of the level it looks like (a keep, a walled yard, a tower on its hill) stands in the new level, joined to its ground. Needs that level's own textures.");
+        var cuts = Feature("RandomLevelCuts", "Parts of real levels", "A part of the level it looks like (a keep, a fort, a tower, a hedge maze) stands whole in a room of its own, joined to its ground, where a room is big enough for one. Needs that level's own textures and your project's levels.");
         left.Children.Add(Label("Water, ooze or lava"));
         var liquid = new ComboBox { Name = "RandomLevelLiquid", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = RandomLevelLiquids.Select(l => l.Label).ToArray(), SelectedIndex = 0 };
         ToolTip.SetTip(liquid, "What the level's rivers, marshes, pools and moats are full of. Surprise me: the look's own as a rule, now and then another. On Hard and Kaizo a fall in costs a life at once.");

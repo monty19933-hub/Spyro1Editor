@@ -97,6 +97,8 @@ internal static partial class SpyroPlanner
     /// <summary>The part of one of the game's levels this level is to hold (null: none), the room it needs, whether a
     /// room that size has been made yet, and how many rooms have been.</summary>
     [ThreadStatic] private static LevelCut? _cut;
+    /// <summary>The look's other parts, in the order to try them when the chosen one finds no room big enough.</summary>
+    [ThreadStatic] private static List<LevelCut>? _otherCuts;
     [ThreadStatic] private static double _cutRoom;
     [ThreadStatic] private static bool _cutMade;
     [ThreadStatic] private static int _made;
@@ -186,7 +188,10 @@ internal static partial class SpyroPlanner
     {
         _tuning = For(difficulty);
         // One of the look's level's parts, the same for every try at placing it; it wants a room with open floor all round.
-        _cut = cuts is { Count: > 0 } ? rnd.Fork("cut").Pick(cuts) : null;
+        var cutRandom = rnd.Fork("cut");
+        _cut = cuts is { Count: > 0 } ? cutRandom.Pick(cuts) : null;
+        _otherCuts = cuts?.Where(c => c != _cut).ToList();
+        if (_otherCuts != null) cutRandom.Shuffle(_otherCuts);
         _cutRoom = _cut == null ? 0 : _cut.Radius + LevelCuts.Margin + LevelCuts.Walk;
         _minRoom = doorways > 0 ? 600 : 0;
         // The level's own layout and grain: the same for every try at placing it.
@@ -591,8 +596,13 @@ internal static partial class SpyroPlanner
             // another: they would run into the part.
             bool Clear(PlannedArea a) => !L.Joins.Any(j => (j.A == a.Id || j.B == a.Id) &&
                 (j.Kind == "open" || j.Kind is "flight" or "step" && a.Z < L.Areas[j.A == a.Id ? j.B : j.A].Z));
-            host = L.Areas.Where(a => a.Id != 0 && a.Kind == "clearing" && a.R >= _cutRoom - 1 && !L.Doors.Any(d => d.Area == a.Id) && a.Want == "" && Clear(a))
-                .OrderByDescending(a => a.R).FirstOrDefault();
+            var rooms = L.Areas.Where(a => a.Id != 0 && a.Kind == "clearing" && !L.Doors.Any(d => d.Area == a.Id) && a.Want == "" && Clear(a)).OrderByDescending(a => a.R).ToList();
+            host = rooms.FirstOrDefault(a => a.R >= _cutRoom - 1);
+            // The chosen part finds no room big enough: another of the look's parts that fits the biggest there is.
+            if (host == null && rooms.Count > 0 && _otherCuts?.FirstOrDefault(c => c.Radius + LevelCuts.Margin + LevelCuts.Walk <= rooms[0].R + 1) is { } smaller)
+            {
+                _cut = smaller; _cutRoom = smaller.Radius + LevelCuts.Margin + LevelCuts.Walk; host = rooms[0];
+            }
             if (host != null) { host.Want = "cut"; host.Outline = null; host.Look = "round"; }
             if (Environment.GetEnvironmentVariable("SPYRO_RANDOM_LEVEL_DEBUG") == "cut")
                 Console.Error.WriteLine($"cut {_cut.Name} r {_cut.Radius:0} faces {_cut.Faces.Count} wants room {_cutRoom:0}; rooms {string.Join(" ", L.Areas.Select(a => $"{a.Id}:{a.Kind}:{a.R:0}{(a.Want != "" ? ":" + a.Want : "")}"))}; host {host?.Id}");
