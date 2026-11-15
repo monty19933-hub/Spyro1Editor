@@ -13,6 +13,44 @@ public sealed partial class MainWindow
         string.IsNullOrWhiteSpace(member.UniversalLinkGroupId) || IsLooseUniversalGroupMember(member) ? [] : _currentMobys.Where(m =>
             !m.IsRemoved && m.UniversalLinkGroupId == member.UniversalLinkGroupId && !IsLooseUniversalGroupMember(m));
 
+    /// <summary>The members that move with <paramref name="member"/>. A locked chest and its key are one group (they are
+    /// copied and removed together, and Create BIN makes the chest name its key's row), but each is moved on its own:
+    /// the key belongs somewhere else in the level.</summary>
+    private IEnumerable<Moby> GetUniversalMoveGroupMembers(Moby member) =>
+        IsLockedChestPairMember(member) ? [] : GetUniversalLinkGroupMembers(member).Where(m => !IsLockedChestPairMember(m) || ReferenceEquals(m, member));
+
+    /// <summary>An added locked chest (class 0xAE) or key (class 0xAD).</summary>
+    private static bool IsLockedChestPairMember(Moby m) =>
+        m.IsAdded && m.SourceByte37 == 0 && m.SourceByte36 is UniversalLockedChestRows.ChestClass or UniversalLockedChestRows.KeyClass &&
+        m.CrossLevelRequiredExporterFeature == UniversalMobyExport.RequiredExporterFeature;
+
+    /// <summary>Where a Key Chest's key is set down when the chest is added: a few steps from the chest on floor of about
+    /// its height, floating as keys do (the user then moves it to where it should be found).</summary>
+    private Vector3f LockedChestKeyPlace(Vector3f chest)
+    {
+        float lift = UniversalGroundOffsets.For(UniversalLockedChestRows.KeyClass) ?? 19f;
+        foreach (float distance in new[] { 160f, 110f, 220f })
+            for (int turn = 0; turn < 8; turn++)
+            {
+                double a = turn * Math.PI / 4;
+                float x = chest.X + distance * (float)Math.Cos(a), y = chest.Y + distance * (float)Math.Sin(a);
+                if (TryFindTerrainZAt(x, y, chest.Z + 16, out float z) && Math.Abs(z - chest.Z) <= 48) return new(x, y, z + lift);
+            }
+        return new(chest.X + 160, chest.Y, chest.Z + lift);
+    }
+
+    /// <summary>A key set down at <paramref name="spot"/>: on the floor there, floating as keys do.</summary>
+    private Vector3f LockedChestKeyAt(Vector3f spot) =>
+        ApplyTerrainGroundOffset(SnapOrNearestTerrain(spot with { Z = spot.Z + 16 }), UniversalGroundOffsets.For(UniversalLockedChestRows.KeyClass) ?? 19f);
+
+    /// <summary>Whether adding this Key Chest adds its key with it (every locked chest of the game names one).</summary>
+    private static bool LockedChestBringsKey(UniversalSourceLibrary library, UniversalMobyVariant chest)
+    {
+        if (UniversalSpecialCatalog.IsSpecial(chest)) return false;
+        try { var data = library.Get(chest.SourceLevelKey).Data; return UniversalLockedChestRows.KeyRow(data, data.CaptureRow(chest.SourceLevelKey, chest.SourceRow)) >= 0; }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException) { return false; }
+    }
+
     /// <summary>A Dream Weavers fool in a Resize cannon's group: the group only tells the export which cannon it calls
     /// and is shot by. It moves, copies and is removed on its own, and the cannon and its gunner leave it where it is.</summary>
     private static bool IsLooseUniversalGroupMember(Moby m) =>
@@ -70,6 +108,9 @@ public sealed partial class MainWindow
         {
             var t = companion.Template;
             Vector3f p = new(root.Position.X + companion.Offset.X, root.Position.Y + companion.Offset.Y, root.Position.Z + companion.Offset.Z);
+            // A locked chest's key lies far off in its own level: here it starts beside the chest.
+            if (root.SourceByte36 == UniversalLockedChestRows.ChestClass && root.SourceByte37 == 0 && t.SourceByte36 == UniversalLockedChestRows.KeyClass && t.SourceByte37 == 0)
+                p = LockedChestKeyPlace(root.Position);
             var member = CreateAddedMobyFromTemplate(t, t.DefaultLabel, p, index++, trueIndex++, t.Type, t.State,
                 t.SourceByte36, t.SourceByte4F, t.Flag4B, t.YawByte, pending.SelectedGem);
             member.UniversalLinkGroupId = pending.UniversalLinkGroupId;
