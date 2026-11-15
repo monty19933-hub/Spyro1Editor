@@ -191,7 +191,7 @@ public static class RandomLevelGenerator
         var plan = planned.Plan;
         var pieces = mesher.Pieces;
         planned.Look = theme.Name;
-        pieces.AddRange(SpyroStructures.Build(planned, style, rnd.Fork("structures"), props, features));
+        pieces.AddRange(SpyroStructures.Build(planned, style, rnd.Fork("structures"), props, features, theme.Key));
         // The parts of the look's level, as that level has them, where the ground was sewn to them.
         foreach (var zone in plan.Zones.Where(z => z.Cut != null))
         {

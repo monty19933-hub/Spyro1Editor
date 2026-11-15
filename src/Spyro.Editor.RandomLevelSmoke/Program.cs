@@ -98,6 +98,19 @@ if (args.Length >= 3 && args[0] == "--cuts")
     }
     return 0;
 }
+if (args.Length >= 1 && args[0] == "--props")
+{
+    // --props [level ...]: what stands free in each look's level (RANDOM_LOOK_CACHE): how many things, how big, how many faces.
+    var look = RandomLevelCases.LookSource() ?? throw new InvalidOperationException("RANDOM_LOOK_CACHE");
+    foreach (string key in args.Length > 1 ? args[1..] : [.. Spyro.Editor.Core.Generation.LevelThemes.All.Select(t => t.Key)])
+    {
+        if (look(key) is not { } terrain) { Console.WriteLine($"{key}: not in the cache"); continue; }
+        var props = Spyro.Editor.Core.Generation.LevelProps.Extract(terrain, id => Spyro.Editor.Core.Generation.LevelDna.Static(key, id));
+        var tall = props.Where(p => p.Tall).ToList();
+        Console.WriteLine($"{key}: {props.Count} things ({tall.Count} tall); faces {string.Join(" ", props.Select(p => p.Faces.Count).OrderBy(n => n))}; heights {string.Join(" ", props.Select(p => (int)p.Height).OrderBy(n => n))}; radii {string.Join(" ", props.Select(p => (int)p.Radius).OrderBy(n => n))}");
+    }
+    return 0;
+}
 if (args.Length >= 7 && args[0] == "--walk-to")
 {
     // --walk-to <seed> <style> <size> <repo> <x> <y>: how the floor walk of Random objects gets to the floor under a
@@ -131,7 +144,7 @@ if (args.Length >= 2 && args[0] == "--variety")
     return failed == 0 ? 0 : 1;
 }
 // Gate (no disc): [repo root] [--maps <folder>] [--seeds N]
-if (args.Length == 0 || args[0] is not ("--cuts" or "--fingerprint" or "--variety" or "--walk-to" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--balloon-facts" or "--scatter-facts" or "--model-colours" or "--thief-colours" or "--sky-below"))
+if (args.Length == 0 || args[0] is not ("--props" or "--cuts" or "--fingerprint" or "--variety" or "--walk-to" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--balloon-facts" or "--scatter-facts" or "--model-colours" or "--thief-colours" or "--sky-below"))
 {
     string repo = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : Directory.GetCurrentDirectory();
     string? maps = args.SkipWhile(a => a != "--maps").Skip(1).FirstOrDefault();
