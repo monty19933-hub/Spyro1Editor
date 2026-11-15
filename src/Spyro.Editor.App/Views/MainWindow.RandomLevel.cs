@@ -204,6 +204,7 @@ public sealed partial class MainWindow
         var rivers = Feature("RandomLevelRivers", "Rivers", "A river (of the level's water, ooze or lava) across a big room from bank to bank, with a wooden bridge over it.");
         var houses = Feature("RandomLevelHouses", "Houses", "Houses with roofs, doors and windows round the rooms, a few together like a village; Spyro walks round them.");
         var walls = Feature("RandomLevelWalls", "Castle walls", "Castle walls with a tower at each end along rooms' edges, and battlements along a castle's walls.");
+        var cuts = Feature("RandomLevelCuts", "Parts of real levels", "A part of the level it looks like (a keep, a walled yard, a tower on its hill) stands in the new level, joined to its ground. Needs that level's own textures.");
         left.Children.Add(Label("Water, ooze or lava"));
         var liquid = new ComboBox { Name = "RandomLevelLiquid", HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = RandomLevelLiquids.Select(l => l.Label).ToArray(), SelectedIndex = 0 };
         ToolTip.SetTip(liquid, "What the level's rivers, marshes, pools and moats are full of. Surprise me: the look's own as a rule, now and then another. On Hard and Kaizo a fall in costs a life at once.");
@@ -332,7 +333,7 @@ public sealed partial class MainWindow
                 Theme = look.SelectedIndex > 0 ? LevelThemes.All[look.SelectedIndex - 1].Key : null,
                 Difficulty = (LevelDifficulty)Math.Clamp(difficulty.SelectedIndex, 0, 3), Doorways = Doorways().Count,
                 Caves = caves.IsChecked, ChargePaths = charge.IsChecked, Glides = glides.IsChecked, Hazards = hazards.IsChecked,
-                Bridges = bridges.IsChecked, Secrets = secrets.IsChecked, Rivers = rivers.IsChecked, Houses = houses.IsChecked, Walls = walls.IsChecked,
+                Bridges = bridges.IsChecked, Secrets = secrets.IsChecked, Rivers = rivers.IsChecked, Houses = houses.IsChecked, Walls = walls.IsChecked, Cuts = cuts.IsChecked,
                 Liquid = RandomLevelLiquids[Math.Clamp(liquid.SelectedIndex, 0, RandomLevelLiquids.Length - 1)].Liquid,
                 Textures = painted.IsChecked == true ? LevelTextureMode.GeneratedPictures : LevelTextureMode.GameTextures,
                 Pictures = new Dictionary<SurfaceRole, string>(pictures), PaintedSky = paintedSky.IsChecked == true,
@@ -394,7 +395,7 @@ public sealed partial class MainWindow
         bool same = previewOptions is { } p && preview != null && final.Textures == LevelTextureMode.GameTextures && final.Pictures.Count == 0 &&
             p.Seed == final.Seed && p.Style == final.Style && p.Layout == final.Layout && p.Size == final.Size && p.Theme == final.Theme && p.Caves == final.Caves &&
             p.ChargePaths == final.ChargePaths && p.Glides == final.Glides && p.Hazards == final.Hazards && p.Bridges == final.Bridges &&
-            p.Secrets == final.Secrets && p.Rivers == final.Rivers && p.Houses == final.Houses && p.Walls == final.Walls && p.Liquid == final.Liquid &&
+            p.Secrets == final.Secrets && p.Rivers == final.Rivers && p.Houses == final.Houses && p.Walls == final.Walls && p.Cuts == final.Cuts && p.Liquid == final.Liquid &&
             p.PaintedSky == final.PaintedSky && p.Difficulty == final.Difficulty && p.Doorways == final.Doorways && p.Music == final.Music;
         if (same && final.Name is { } typed && NewWorldDocument.IsValidName(typed) && typed.All(c => !char.IsDigit(c)) && typed != preview!.Scene.Name)
             preview = preview with { Scene = preview.Scene with { Name = typed } };

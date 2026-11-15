@@ -146,7 +146,13 @@ public static class RandomLevelGenerator
         {
             props = LevelProps.Extract(terrain, id => LevelDna.Static(theme.Key, id));
             // A part of the look's own level, cut out whole, when asked for.
-            if (options.Cuts == true || Environment.GetEnvironmentVariable("SPYRO_RANDOM_CUTS") == "1")
+            // (Not said: two levels in three, by the seed; never in a homeworld, whose rooms are for its doorways.)
+            bool wanted = options.Cuts ?? Environment.GetEnvironmentVariable("SPYRO_RANDOM_CUTS") switch
+            {
+                "1" => true, "0" => false,
+                _ => options.Doorways == 0 && (ulong)(options.Seed * 2654435761L >>> 7) % 3 != 0,
+            };
+            if (wanted)
                 cuts = LevelCuts.For(terrain, id => LevelDna.Static(theme.Key, id));
         }
         // A few layouts are tried; the first whose every floor is proved reachable both ways is taken (else the best).

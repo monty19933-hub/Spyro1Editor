@@ -889,11 +889,16 @@ public static class LevelScatter
         // baskets and strong chests, in ones, twos and threes a chest's width apart, most of them by the walls.
         Vector3f Facing(LevelFill.FloorGrid.Place c) => roomOf.TryGetValue(c, out var inRoom) ? inRoom.EntryPoint : fringe.TryGetValue(c, out var beside) ? beside.MiddlePoint : spawn;
         // A tucked-away place: a nook's middle, the end of a walk, or failing those the floor by a far wall.
+        // (With that much room round it if there is such a place; in a full level, with less.)
         LevelFill.FloorGrid.Place? Hidden(float clear)
         {
-            var from = nooks.Select(r => r.Middle).Concat(ends).Concat(perchSpots).Distinct().Where(c => Clear(point[c], clear) && OffDoorways(point[c])).ToList();
-            if (from.Count == 0) from = [.. edges.Where(c => walk[c] >= far * 0.4 && Clear(point[c], clear))];
-            return Pick(from, c => (perch.Contains(c) ? 2.5 : 1.0) * (1.0 + walk[c] / 32.0));
+            for (float room = clear; room >= 100; room -= 80)
+            {
+                var from = nooks.Select(r => r.Middle).Concat(ends).Concat(perchSpots).Distinct().Where(c => Clear(point[c], room) && OffDoorways(point[c])).ToList();
+                if (from.Count == 0) from = [.. edges.Where(c => walk[c] >= far * 0.4 && Clear(point[c], room))];
+                if (Pick(from, c => (perch.Contains(c) ? 2.5 : 1.0) * (1.0 + walk[c] / 32.0)) is { } found) return found;
+            }
+            return null;
         }
         bool Has(Kind kind) => request.ChestKinds.Contains(kind);
         var foes = items.Where(i => i.Kind == Kind.Enemy).Select(i => i.Position).ToList();

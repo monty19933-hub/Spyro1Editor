@@ -239,7 +239,7 @@ internal static partial class SpyroPlanner
                 default:
                     plan.Kind = theme.Peaks ? EnclosureKind.Peaks : EnclosureKind.Bank;
                     plan.Rise = Range(r, 240, 330); plan.BankWidth = Range(r, 205, 250); plan.CapWidth = theme.Peaks ? 180 : 140;
-                    plan.Spikes = theme.Peaks ? 260 : 0;
+                    plan.Spikes = theme.Peaks ? 260 : 0; plan.Ripple = 26; plan.RippleScale = 760;
                     break;
             }
             int weight = Math.Max(3, size switch { LevelSize.Small => 5, LevelSize.Large => 11, _ => 8 } - shrink);
@@ -281,7 +281,7 @@ internal static partial class SpyroPlanner
             {
                 if (attempt < 40) continue;
                 // A plain trail always fits.
-                L = new PlannedLevel { Plan = new TerrainPlan { Noise = plan.Noise, Kind = plan.Kind, Rise = plan.Rise, BankWidth = plan.BankWidth, CapWidth = plan.CapWidth, Rough = plan.Rough, Fillet = plan.Fillet, Ripple = plan.Ripple, Spikes = plan.Spikes, LiquidRole = plan.LiquidRole, LiquidKind = plan.LiquidKind, WallFace = plan.WallFace, WallTop = plan.WallTop, CapRole = plan.CapRole, Beach = plan.Beach, SeaWidth = plan.SeaWidth } };
+                L = new PlannedLevel { Plan = new TerrainPlan { Noise = plan.Noise, Kind = plan.Kind, Rise = plan.Rise, BankWidth = plan.BankWidth, CapWidth = plan.CapWidth, Rough = plan.Rough, Fillet = plan.Fillet, Ripple = plan.Ripple, RippleScale = plan.RippleScale, Spikes = plan.Spikes, LiquidRole = plan.LiquidRole, LiquidKind = plan.LiquidKind, WallFace = plan.WallFace, WallTop = plan.WallTop, CapRole = plan.CapRole, Beach = plan.Beach, SeaWidth = plan.SeaWidth } };
                 plan = L.Plan;
                 _grain = "mixed"; _cluster = false;
                 Trail(L, Math.Min(weight, 4), r);
