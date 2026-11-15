@@ -6,10 +6,13 @@ New
 
 - **Random levels have trees and boulders.** Trees in twos and threes just inside the rooms' edges, a few out in big fields and more up on the hills round the level, with trunks Spyro bumps into; boulders at the foot of the edges. Looks whose ground is sand, stone or metal get rock spires and boulders instead.
 - **Parts of the real levels stand in random levels.** With your project's levels loaded, about half of all random levels have a part of the level they look like standing whole in a room of its own, joined to its ground (every level tries; it stands where a room is big enough): 48 parts in 17 looks (Stone Hill's keep and round tower, Cliff Town's oval keep, Dry Canyon's fort, Misty Bog's walled causeway, Wizard Peak's hall, Lofty Castle's spiral tower and more). **Parts of real levels** in the Random Level window asks for one or leaves them out.
+- **A Return Home vortex in every level of your own world and in your new level**: Random objects' way out adds one where the level's place never had one. In a world level it brings Spyro back to the world's homeworld, in front of that level's doorway, with what he found. The line under the treasure, Level Links and the Create BIN window say when such a level has none.
+- **An egg thief where a place has none**: Random objects adds one egg thief, with a run of his own, in a level or homeworld whose place in the game has no thief (your world, your new level, many of the game's levels). Every thief is one more egg: the inventory, 100% and the doorway to Gnasty's Loot count them.
 - **Random objects come in the game's own arrangements**: over a thousand groups of chests, gems, enemies and animals measured in the game's levels, each stood at the same kind of place (a corner, a wall's foot, a narrow way, a raised place, the open floor) about as often as the game uses it.
 
 Fixed
 
+- **The key of a randomized locked chest can be picked up.** A locked chest names its key by the key's place in the level's list, and the editor copied the number from the level the chest came from, so the chest woke up some other object: the key was seen only now and then and could never be taken. Create BIN now gives every chest its own key's number; press Create BIN again and keys in games made before work, nothing to place again. A Key Chest now brings its key with it (Random objects and Add Object): each moves on its own, and removing one removes both.
 - The mountains and banks round a random level are one rock from foot to top: no more green patches on their tops.
 - In a level full of objects, Random objects could leave out the extra life or the locked chest for want of a tucked-away place; they now settle for a little less room.
 

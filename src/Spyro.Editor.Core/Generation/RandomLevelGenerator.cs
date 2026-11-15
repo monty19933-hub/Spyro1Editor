@@ -147,11 +147,12 @@ public static class RandomLevelGenerator
             props = LevelProps.Extract(terrain, id => LevelDna.Static(theme.Key, id));
             // A part of the look's own level, cut out whole, when asked for.
             // (Not said: every level tries for one, where a room is big enough for one of the look's parts, about half
-            // of them; never a homeworld, whose rooms are for its doorways.)
+            // of them; never a homeworld, whose rooms are for its doorways, nor islands in the water: the big island a
+            // part needs leaves the others few and low, the level half as varied in height.)
             bool wanted = options.Cuts ?? Environment.GetEnvironmentVariable("SPYRO_RANDOM_CUTS") switch
             {
                 "1" => true, "0" => false,
-                _ => options.Doorways == 0,
+                _ => options.Doorways == 0 && style != LevelStyle.Islands,
             };
             if (wanted)
                 cuts = LevelCuts.For(terrain, id => LevelDna.Static(theme.Key, id));
