@@ -30,6 +30,11 @@ if (args.Length >= 6 && args[0] == "--dump")
         Rivers = Environment.GetEnvironmentVariable("RANDOM_BUILT") == "1" ? true : null,
         Liquid = Enum.TryParse<Spyro.Editor.Core.Generation.SurfaceRole>(Environment.GetEnvironmentVariable("RANDOM_LIQUID"), out var liquid) ? liquid : null,
     };
+    // RANDOM_CUT=<name> (study only, with SPYRO_RANDOM_CUTS=1): of the cuts, only the one of that name can be chosen.
+    if (Environment.GetEnvironmentVariable("RANDOM_CUT") is { Length: > 0 } onlyCut)
+        for (int k = 0; k < Spyro.Editor.Core.Generation.LevelCuts.Table.Length; k++)
+            if (Spyro.Editor.Core.Generation.LevelCuts.Table[k].Name != onlyCut)
+                Spyro.Editor.Core.Generation.LevelCuts.Table[k] = Spyro.Editor.Core.Generation.LevelCuts.Table[k] with { Level = "-" };
     var watch = System.Diagnostics.Stopwatch.StartNew();
     var source = RandomLevelCases.LookSource();
     var r = Spyro.Editor.Core.Generation.RandomLevelGenerator.Generate(options, catalog, compile: Environment.GetEnvironmentVariable("RANDOM_NO_COMPILE") != "1", source: source);
@@ -88,10 +93,28 @@ if (args.Length >= 3 && args[0] == "--cuts")
     var look = RandomLevelCases.LookSource() ?? throw new InvalidOperationException("RANDOM_LOOK_CACHE");
     var terrain = look(args[1]) ?? throw new InvalidDataException(args[1]);
     Directory.CreateDirectory(args[2]);
-    foreach (var cut in Spyro.Editor.Core.Generation.LevelCuts.For(terrain, id => Spyro.Editor.Core.Generation.LevelDna.Static(args[1], id)))
+    // A fourth argument (study only): a file of cuts to try in place of the table's,
+    // [{"name": "the keep", "outline": [x, y, ...], "zlow": 1000, "zhigh": 4000, "swap": [22, 18], "fill": true}, ...].
+    var cuts = Spyro.Editor.Core.Generation.LevelCuts.For(terrain, id => Spyro.Editor.Core.Generation.LevelDna.Static(args[1], id));
+    if (args.Length > 3)
+    {
+        using var tried = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(args[3]));
+        cuts = [];
+        foreach (var d in tried.RootElement.EnumerateArray())
+        {
+            var def = new Spyro.Editor.Core.Generation.CutDefinition(args[1], d.GetProperty("name").GetString()!, [.. d.GetProperty("outline").EnumerateArray().Select(v => v.GetDouble())],
+                d.TryGetProperty("zlow", out var low) && low.ValueKind == System.Text.Json.JsonValueKind.Number ? low.GetDouble() : double.MinValue,
+                d.TryGetProperty("zhigh", out var high) && high.ValueKind == System.Text.Json.JsonValueKind.Number ? high.GetDouble() : double.MaxValue,
+                d.TryGetProperty("swap", out var swap) && swap.ValueKind == System.Text.Json.JsonValueKind.Array ? [.. swap.EnumerateArray().Select(v => v.GetInt32())] : null,
+                d.TryGetProperty("fill", out var fill) && fill.ValueKind == System.Text.Json.JsonValueKind.True);
+            if (Spyro.Editor.Core.Generation.LevelCuts.Extract(terrain, def, id => Spyro.Editor.Core.Generation.LevelDna.Static(args[1], id)) is { } made) cuts.Add(made);
+            else Console.WriteLine($"{def.Name}: REFUSED");
+        }
+    }
+    foreach (var cut in cuts)
     {
         var placed = new Spyro.Editor.Core.Generation.PlacedCut { Cut = cut, X = 4000, Y = 4000, Z = 1000 };
-        var faces = placed.Faces().Select(f => new { w = 0, p = f.Corners.Select(v => new[] { v.X, v.Y, v.Z }).ToArray(), c = (f.Paint ?? []).Select(c => new[] { (int)c.R, c.G, c.B }).ToArray(), t = $"{args[1]}:{f.Texture}", k = (string?)null }).ToArray();
+        var faces = placed.Faces().Select(f => new { w = 0, p = f.Corners.Select(v => new[] { v.X, v.Y, v.Z }).ToArray(), c = (f.Paint ?? []).Select(c => new[] { (int)c.R, c.G, c.B }).ToArray(), t = $"{args[1]}:{f.Texture}", k = (string?)null, f = f.FrontReversed ? 1 : 0, d = f.TwoSided ? 1 : 0 }).ToArray();
         string file = Path.Combine(args[2], cut.Name.Replace(' ', '-') + ".json");
         await File.WriteAllTextAsync(file, System.Text.Json.JsonSerializer.Serialize(new { objects = Array.Empty<object>(), faces, rim = placed.Rim.Select(v => new[] { v.X, v.Y, v.Z }).ToArray() }));
         Console.WriteLine($"{cut.Name}: {cut.Faces.Count} faces, radius {cut.Radius:0}, edge {cut.Rim.Length} points -> {file}");
