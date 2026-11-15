@@ -841,6 +841,19 @@ objects and enemies yourself.
   the way down, with no odd patches of grass. With your project's levels loaded,
   that level's own towers, trees and rocks are lifted from it and stood in the
   new level.
+- **Planted like them:** trees in twos and threes just inside the rooms' edges,
+  a few out in big fields and more up on the hills round the level; boulders at
+  the foot of the edges. Where the look's ground is sand, stone or metal (Dry
+  Canyon, Peace Keepers, Cliff Town, Twilight Harbor, Tree Tops' decks), rock
+  spires and boulders stand instead. Spyro can walk into a tree's boughs but not
+  through its trunk.
+- **With parts of the real level:** with your project's levels loaded, two
+  levels in three have a part of the level they look like standing in them,
+  whole, in a room of its own and joined to its ground: Stone Hill's keep or its
+  round tower, Cliff Town's oval keep, Dry Canyon's fort, Misty Bog's walled
+  causeway, Wizard Peak's hall, Lofty Castle's spiral tower and about forty
+  more (every look but Dark Passage has at least one). **Parts of real levels**
+  under **What it has** asks for one or leaves them out.
 - **Named like them:** each random level and homeworld gets a made-up name of at
   most 15 letters, the most the game's level window shows (so a homeworld made in
   your world's place can always give the world its name). Change it on the Look
@@ -866,8 +879,8 @@ The choices:
   castles, tunnels), charge ramps (a ramp too steep to walk, marked with arrows,
   up to a hidden nook), glides (steps up to a lookout and a ledge across the room
   that Spyro reaches only by gliding from it), pools and marshes, bridges
-  (between islands; without them, stepping stones), hidden nooks, rivers, houses
-  and castle walls. A tick asks for a feature, an empty box leaves it out, a
+  (between islands; without them, stepping stones), hidden nooks, rivers, houses,
+  castle walls and parts of real levels. A tick asks for a feature, an empty box leaves it out, a
   filled square leaves it to chance.
 - **Water, ooze or lava:** what the rivers, marshes, pools and moats are full
   of: water, the purple ooze or lava, or **Surprise me** (the look's own as a
@@ -1002,6 +1015,12 @@ measured from the disc:
   units apart, a group all one colour, more than half of them by the walls and
   the rest along the paths and out in the rooms; the best gems go to the hardest
   places, and one of every colour is always there when the total allows.
+- Most of it comes in the game's own little arrangements: over a thousand
+  groups measured in the game's levels (two baskets or two spring chests tucked
+  in a corner, a pair of enemies on a narrow way, three or four gems up on a
+  raised place), each stood at the same kind of place in your level: a corner,
+  the foot of a wall, a narrow way, a raised place or the open floor, about as
+  often as the game uses each (two in three in corners or up high).
 - Chests stand in ones, twos and threes a chest's width apart, most of them a
   step or two from a wall or where a walk ends. Enemies wait in ones, twos and
   threes (now and then a pack), spread through the rooms beyond the first,
