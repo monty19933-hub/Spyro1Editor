@@ -236,8 +236,6 @@ internal sealed class TerrainPlan
     /// <summary>How high the enclosure stands over the floor, how far out it reaches that height (banks), how far the top
     /// runs on behind it, and how rough it is.</summary>
     public double Rise = 260, BankWidth = 270, CapWidth = 240, Rough = 26, Spikes;
-    /// <summary>How much of the banks' steep foot is grass rather than bare rock (-1 none, 1 all).</summary>
-    public double RockShare = -0.1;
     /// <summary>Water level and how far the water runs out from the land (<see cref="EnclosureKind.Sea"/>).</summary>
     public double SeaLevel, SeaWidth = 900;
     /// <summary>Land meets the water in a beach this wide (0: a quay wall).</summary>
@@ -375,9 +373,6 @@ internal sealed class TerrainPlan
         }
     }
 
-    /// <summary>How far up a bank's face must turn to be grass (0.8: steeper than about 37 degrees is rock).</summary>
-    public const double BankRock = 0.8;
-
     /// <summary>How far out from a cut's seam the floor round it comes to the cut's height.</summary>
     public const double CutBlend = 260;
 
@@ -436,11 +431,9 @@ internal sealed class TerrainPlan
             case Sea: return LiquidRole;
             case Enclosure:
                 if (Kind == EnclosureKind.Cliff) return CapRole;
-                if (Kind == EnclosureKind.Peaks && Land(x, y) > BankWidth * 0.6) return nz < 0.8 ? SurfaceRole.Cliff : SurfaceRole.Rock;
-                // A bank's steep face is bare rock all the way (grass stretched down a steep face shows as a smear of
-                // odd green); where it is gentler it is rock in stretches, grass in others; over its top, grass.
-                if (nz < BankRock) return SurfaceRole.Cliff;
-                return Land(x, y) < BankWidth && Noise.At(x / 520 + 70, y / 520 + 33) > RockShare ? SurfaceRole.Cliff : SurfaceRole.GroundAlt;
+                // One rock from a bank's foot to over its top, and mountains to their peaks: patches of grass or of a
+                // second rock on them, and a toothed line where grass met rock along the top, looked like a mistake.
+                return SurfaceRole.Cliff;
             case Fill: return Kind == EnclosureKind.Sea && -Land(x, y) < Beach * 0.45 ? SurfaceRole.Sand : SurfaceRole.Ground;
         }
         var z = Zones[layer];
