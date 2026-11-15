@@ -391,7 +391,7 @@ public sealed partial class MainWindow
             (!worldPlace.OnRoute&&worldEntrance==null?$"It has no way in yet: place its doorway with Links › World Entrance in {entryName}, or put it on the balloon route (Links › World's Balloon Route…).":WorldAccessSentence(world,worldPlace));
         string skippedNote=skippedChanges.Count==0?"":$" Not in this game, because the game cannot take {(skippedChanges.Count==1?"it":"them")}: {ShortList(skippedChanges)}.";
         string included=LeftOutItems().Count==0?"All saved level replacements and other saved edits are included.":"Your other saved levels and changes are included.";
-        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. {included}"+NewLevelWayInNote(saved,portalSnapshot.Document,startLevelId)+worldNote+flightNote+placedEntrance+NativeEggTotals.DescribeGame(output)+PreservedResearchExportNote()+MemoryModeExportNote(memory)+HoverFlapNote()+skippedNote+LeftOutNote();
+        _statusText.Text=$"Created {Path.ChangeExtension(output,".cue")}. New Game starts in {startName}. {included}"+NewLevelWayInNote(saved,portalSnapshot.Document,startLevelId)+worldNote+flightNote+placedEntrance+NativeEggTotals.DescribeGame(output)+NativeDragonTotals.DescribeGame(output)+PreservedResearchExportNote()+MemoryModeExportNote(memory)+HoverFlapNote()+skippedNote+LeftOutNote();
         _createdGameCue=Path.ChangeExtension(output,".cue");
         }
         // The merged retail image is a working copy for this export only.

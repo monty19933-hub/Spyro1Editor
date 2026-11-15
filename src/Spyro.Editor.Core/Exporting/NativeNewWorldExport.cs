@@ -116,10 +116,6 @@ public static class NativeNewWorldExport
             if (NativeLevelWindow.NameRefusal(level.Document.Name) is { } why) throw new InvalidDataException($"{level.Document.Name}: {why}");
             if (MusicTrackCatalog.IsCustom(level.Document.MusicTrack))
                 throw new InvalidDataException($"{level.Document.Name} plays a song from another game; levels of your new world play Spyro's own music.");
-            // 71-74 refuse dragons as File › New Level's level does (their composition); the homeworld's own (its
-            // template's) dragons are not proven in the window yet.
-            if (level.Document.WorldLevelId == NewWorldDocument.Homeworld && UniversalDragonRows.FirstDragon(level.Placements, donors) != null)
-                throw new InvalidDataException($"{level.Document.Name} has a dragon, but dragons can't be rescued in your new world's homeworld yet. Remove it.");
         }
         // How players get in and out: by balloon only (the homeworld's balloonist flies Spyro back; nothing is built into
         // the game's homeworlds), or with a doorway as well, whose way in and way back go together.
@@ -204,7 +200,8 @@ public static class NativeNewWorldExport
             int originalKill = (int)Word(original, Kill + 4 * (uint)(id == NewWorldDocument.Homeworld ? 0 : NativeLevelWindow.WindowIndex));
             int kill = NativeKillHeights.For(id == NewWorldDocument.Homeworld ? originalKill : 1024, NativeKillHeights.Lowest(doc));
             int gems = BinaryPrimitives.ReadUInt16LittleEndian(exe.AsSpan(Off(GemTotals + 2 * (uint)slot)));
-            int dragons = exe[Off(DragonTotals + (uint)slot)];
+            // Its dragons are its statues (the inventory's "rescued/there" on its line; none: a dash).
+            int dragons = NativeDragonTotals.StatuesIn(data);
             var bindings = UniversalExeBindings.Read(exe, id == NewWorldDocument.Homeworld ? template.LevelId : NativeLevelWindow.FreshTemplate)
                 .ToDictionary(p => p.Key, p => p.Value.Value);
             entries[entry] = overlay; entries[entry + 1] = data;
@@ -282,6 +279,8 @@ public static class NativeNewWorldExport
             List<(int Overlay, int Data)> worldEntries = [];
             for (int e = FirstEntry; entries.ContainsKey(e) && entries.ContainsKey(e + 1); e += 2) worldEntries.Add((e, e + 1));
             NativeEggTotals.ApplyForExport(final, original, all, image.EntryBytes, worldEntries);
+            // ... and its dragon totals with the world's own dragons counted.
+            NativeDragonTotals.ApplyForExport(final, original, all, image.EntryBytes, donors.Disc.EntryBytes, [.. worldEntries.Select(w => w.Data)]);
             foreach (var (e, bytes) in all) { if (e >= FirstEntry) entries[e] = bytes; else rebuilt[e] = bytes; }
         }
         if (rebuilt.Count > 0) wad = image.RebuildWad(rebuilt);

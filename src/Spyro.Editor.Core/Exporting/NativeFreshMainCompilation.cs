@@ -145,19 +145,26 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
     private UniversalComposeResult ComposeWithExecutable(UniversalSourceLibrary donors,IReadOnlyList<UniversalMobyPlacement> placements,
         byte[] actualExecutable,Func<string,UniversalSpecialAsset?>? special)
     {
-        if(UniversalDragonRows.BuiltLevelRefusal(Document.Name,placements,donors) is {} noDragons)throw new InvalidDataException(noDragons);
+        // Dragons of one level of the game come whole: their rescue scenes become the level's, their level's code runs
+        // them under their own numbers (UniversalDragonGuests).
+        var dragons=UniversalDragonGuests.Plan(Document.Name,placements,donors);
+        if(dragons!=null)placements=dragons.Placements;
         NativeFreshTreasureTarget.RequireZeroBaseline(donors.Disc.Exe, actualExecutable);
         // The canonical zero-actor scene includes only one spare placed row.
         // Size its owned empty arena before imports consume further placed rows;
         // the ordinary composer still checks the final dynamic reserve and RAM.
         int active = placements.Count(p => !p.Retired);
+        if(dragons!=null&&256-active<UniversalDragonGuests.RescueSpareSlots)throw new InvalidDataException(UniversalDragonGuests.TooManyObjects(Document.Name,active));
         byte[] prepared = NativeFreshPlacementArena.Prepare(_body, active, UniversalMobyComposer.BuiltLevelDynamicSlots(active));
+        if(dragons!=null)prepared=dragons.WithStreams(prepared);
         var composed=UniversalMobyComposer.Compose(Target,prepared,_overlay,actualExecutable,
             key => string.Equals(key, Target.Key, StringComparison.OrdinalIgnoreCase)
                 ? (Target, new UniversalLevelData(prepared), new UniversalOverlay(_overlay, UniversalExeBindings.Read(actualExecutable,65)))
                 : donors.Get(key), donors.SharedClasses,
             UniversalMobyExport.DefaultProtectedVram(_baseline,Target).Concat(Supercharge?.ProtectedVram??[]),placements,special,sharedModelPackage: donors.SharedModelPackage, playerAnimationSource: donors.PlayerAnimations,nativeOriginalExecutable:donors.Disc.Exe,
-            dependencyClasses:UniversalLiquidSplashes.Dependencies(UniversalLiquidSplashes.Liquids(Document.GroundKinds()),null,k=>donors.Get(k).Data));
+            dependencyClasses:[..UniversalLiquidSplashes.Dependencies(UniversalLiquidSplashes.Liquids(Document.GroundKinds()),null,k=>donors.Get(k).Data),..dragons?.Dependencies??[]],
+            releasedNativeClasses:dragons?.Released,releasedSourceKey:dragons?.SourceKey);
+        if(dragons!=null&&UniversalDragonGuests.SpareSlotRefusal(Document.Name,composed.LevelData,composed.ArenaSlotsRemaining) is {} tooFull)throw new InvalidDataException(tooFull);
         RewardFallbacks.RequireInstalled(composed.LevelData);
         Supercharge?.RequireDestination(composed.LevelData);
         return composed;
@@ -229,6 +236,8 @@ public sealed class NativeFreshMainCompilation : INativeAuthoredCompilation
         }
         // The game's egg totals follow the egg thieves its levels hold (this level's too).
         NativeEggTotals.ApplyForExport(exe,donors.Disc.Exe,replacements,baseline.EntryBytes);
+        // ... and its dragon totals the dragons (this level's too: its place is the game's thirty-sixth).
+        NativeDragonTotals.ApplyForExport(exe,donors.Disc.Exe,replacements,baseline.EntryBytes,donors.Disc.EntryBytes);
         levelData=replacements[80];overlayData=replacements[79];
         RewardFallbacks.RequireInstalled(levelData);
         Supercharge?.RequireDestination(levelData);

@@ -171,7 +171,18 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
             // its unchanged per-fragment reserve guard. Allocate real storage.
             dynamicSlots=UniversalGreenDruidGroup8Actors.CaptureSource(source.Data,source.Overlay,donors.Disc.Exe).OriginalDynamicCapacity;
         }
+        // Dragons of another level of the game stand here as guests (UniversalDragonGuests): in your world's homeworld,
+        // which is built on a place of the game without being that level.
+        var guests=Document.WorldLevelId!=null?UniversalDragonGuests.Plan(Document.Name,placements,donors,Target.Key):null;
+        // (A level rebuilt in a place of the game itself keeps to that place's own dragons.)
+        if(Document.WorldLevelId==null&&UniversalDragonRows.RebuiltPlaceRefusal(Document.Name,Target,placements,donors) is {} notHere)throw new InvalidDataException(notHere);
+        if(guests!=null)
+        {
+            placements=guests.Placements;
+            if(256-active<UniversalDragonGuests.RescueSpareSlots)throw new InvalidDataException(UniversalDragonGuests.TooManyObjects(Document.Name,active));
+        }
         byte[] prepared=NativeFreshPlacementArena.Prepare(_body,placements.Count(p=>!p.Retired),dynamicSlots);
+        if(guests!=null)prepared=guests.WithStreams(prepared);
         // The level's own dragons rescue through its original rescue streams (subfiles 4 onward), which the rebuilt
         // body lacks: they are appended unchanged, so each dragon's stream number still names its own scene.
         var original=donors.Get(Target.Key).Data;
@@ -182,6 +193,11 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
         // the level's own ones keep their numbers and run this level's code instead (ReleasedClasses).
         IReadOnlySet<int>? released=ReleasedClasses(Target.Key,placements,row=>System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(original.Row(row).AsSpan(0x36)));
         var dependencies=LiquidSplashes(donors).ToList();
+        if(guests!=null)
+        {
+            dependencies.AddRange(guests.Dependencies);
+            released=new HashSet<int>([..released??new HashSet<int>(),..guests.Released]);
+        }
         if(ownDragons)
         {
             dependencies.Add((RescueActorClass,Target.Key));
@@ -221,13 +237,14 @@ public sealed class NativeClearedLevelCompilation : INativeAuthoredCompilation
                     UniversalMobyExport.DefaultProtectedVram(_baseline,Target).Concat(Supercharge?.ProtectedVram??[]),placements,special,
                     sharedModelPackage:donors.SharedModelPackage,playerAnimationSource:donors.PlayerAnimations,
                     persistentNativePrefixRows:Document.TargetBinding!.NativePrefixRows,nativeDestinationOwner:nativeOwner,nativeOriginalExecutable:donors.Disc.Exe,
-                    dependencyClasses:dependencies,releasedNativeClasses:keep.Count>0?keep:null);
+                    dependencyClasses:dependencies,releasedNativeClasses:keep.Count>0?keep:null,releasedSourceKey:guests?.SourceKey);
                 break;
             }
             catch(InvalidDataException e)when(attempt<8&&UniversalClassFieldRefusal.TryRead(e,out string key,out var classes)&&
                 string.Equals(key,Target.Key,StringComparison.OrdinalIgnoreCase)&&!keep.IsSupersetOf(Clashing(classes)))
             { keep.UnionWith(Clashing(classes)); }
         }
+        if(guests!=null&&UniversalDragonGuests.SpareSlotRefusal(Document.Name,composed.LevelData,composed.ArenaSlotsRemaining) is {} tooFull)throw new InvalidDataException(tooFull);
         RewardFallbacks.RequireInstalled(composed.LevelData);
         Supercharge?.RequireDestination(composed.LevelData);
         return composed;

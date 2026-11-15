@@ -248,7 +248,9 @@ public sealed partial class MainWindow
         var own = slot is { SourceWadEntry: > 0 } ? LevelCompletionCheck.OriginalRows(lib.Get(key!).Data) : LevelOwnRows.None;
         var live = _currentMobys.Where(m => m.IsAdded && !m.IsRemoved).ToList();
         bool Has(int row) => live.Any(m => string.Equals(m.CrossLevelSourceLevelKey, key, StringComparison.OrdinalIgnoreCase) && m.CrossLevelSourceTrueIndex == row);
-        var dragonRows = choice.Dragons ? own.Dragons.Where(r => !Has(r)).ToList() : [];
+        // (A level of your new world has no place in the game: it takes one level's dragons as guests, MainWindow.WorldDragons.cs.)
+        string? dragonKey = WorldDragonLevel(choice.LevelKey, lib) ?? key;
+        var dragonRows = !choice.Dragons ? [] : dragonKey != key ? WorldDragonRows(lib, dragonKey!) : own.Dragons.Where(r => !Has(r)).ToList();
         var thiefRows = choice.Thieves ? own.Thieves.Where(r => !Has(r)).ToList() : [];
         var gap = LevelCompletionCheck.Check(own, key ?? "", true, [], live.Select(m => (m.CrossLevelSourceLevelKey, m.CrossLevelSourceTrueIndex)), LevelCompletionCheck.SourceClass(lib));
         // A homeworld's way out is its balloonist, who comes with his balloon.
@@ -529,7 +531,7 @@ public sealed partial class MainWindow
                     case LevelScatter.Kind.Dragon when dragon < dragonRows.Count:
                     {
                         int row = dragonRows[dragon++];
-                        var v = entries.SelectMany(e => e.Variants.Select(x => (e, x))).FirstOrDefault(p => string.Equals(p.x.SourceLevelKey, key, StringComparison.OrdinalIgnoreCase) && p.x.SourceRow == row);
+                        var v = entries.SelectMany(e => e.Variants.Select(x => (e, x))).FirstOrDefault(p => string.Equals(p.x.SourceLevelKey, dragonKey, StringComparison.OrdinalIgnoreCase) && p.x.SourceRow == row);
                         if (v.e != null) objects = await AddUniversalMobyAtAsync(lib, v.e, v.x, item.Position, item.Yaw);
                         if (objects.Count == 0) missing.Add("dragon"); else Track(objects, "dragon");
                         break;
@@ -731,7 +733,7 @@ public sealed partial class MainWindow
             notes.Add($"{sceneryLevel.DisplayName} has no scenery objects to place: its trees and torches are part of its land.");
         if (choice.Difficulty == LevelDifficulty.Kaizo && (choice.Animals || choice.Chests)) notes.Add("Kaizo: no animals for Sparx and no extra life.");
         if (choice.Enemies > 0 && foeKinds.Count == 0) notes.Add($"{_retailCatalog.FindByKey(enemyLevel)?.DisplayName ?? "That level"} has no enemies that can be placed.");
-        if ((choice.Dragons || choice.Thieves) && own.Dragons.Count + own.Thieves.Count == 0)
+        if ((choice.Dragons || choice.Thieves) && own.Dragons.Count + own.Thieves.Count == 0 && dragonKey == key)
             notes.Add("Dragons and egg thieves belong to a level's place in the game; this level's place has none.");
         if (treasure != choice.Treasure && choice.Treasure > 0) notes.Add($"The level's treasure comes to {treasure}.");
         string summary = parts.Count == 0

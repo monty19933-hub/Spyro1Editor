@@ -1350,6 +1350,8 @@ public sealed partial class MainWindow
         if (specialId != null && asset == null && IsCrashVariant(v)) { _statusText.Text = "Choose your Crash Bandicoot: Warped disc first (Choose Crash disc… in the Add Object browser)."; return; }
         if (specialId != null && asset == null && IsYotdVariant(v)) { _statusText.Text = "Choose your Spyro: Year of the Dragon disc first (Look › Music → Year of the Dragon disc…)."; return; }
         if (specialId != null && asset == null) { _statusText.Text = "Select the original Japanese disc first (Choose Japanese disc… in the Add Object browser)."; return; }
+        // A level of your new world takes one level's dragons, six at most (MainWindow.WorldDragons.cs).
+        if (specialId == null && WorldDragonAddRefusal(lib, v) is { } noDragon) { _statusText.Text = noDragon; return; }
         byte[] row = asset?.RowTemplate ?? lib.Get(v.SourceLevelKey).Data.Row(v.SourceRow);
         // A spring chest that gives a teal or rainbow gem: the copied chest's row with that reward (UniversalHighValueRewards).
         if (v.RewardByte is int reward && specialId == null)

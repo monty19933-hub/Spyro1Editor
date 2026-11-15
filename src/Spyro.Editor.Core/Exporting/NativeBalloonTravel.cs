@@ -270,9 +270,9 @@ public static class NativeBalloonTravel
             uint a = UniversalOverlay.Base + (uint)o;
             // lui v0, 0x8007 ; lw v0, 0x57A0(v0) ; nop ; jalr v0 ; move a0, sN
             if (Word(overlay, a) != 0x3C028007 || Word(overlay, a + 4) != 0x8C4257A0 || Word(overlay, a + 8) != 0 || Word(overlay, a + 12) != 0x0040F809) continue;
-            uint start = a + 20, far = start, exit = 0;
+            uint start = a + 20, far = start, exit = 0, limit = Math.Min(UniversalOverlay.Base + (uint)overlay.Length - 8, start + 4 * 96 - 4);
             int words = 0;
-            for (uint pc = start; pc + 8 <= UniversalOverlay.Base + (uint)overlay.Length && pc < start + 4 * 96; pc += 4)
+            for (uint pc = start; pc <= limit; pc += 4)
             {
                 uint w = Word(overlay, pc);
                 if (UniversalMips.IsPcRelative(w)) far = Math.Max(far, UniversalMips.BranchTarget(w, pc));
@@ -282,6 +282,32 @@ public static class NativeBalloonTravel
                     if (t >= start && t < start + 4 * 96) { far = Math.Max(far, t); continue; }   // a jump inside the code
                     if (exit == 0) exit = t;
                     if (t == exit && pc + 8 > far) { words = (int)((pc + 8 - start) / 4); break; }
+                }
+            }
+            // In a level the editor compiled, the place the code leaves for (the end of the object loop) can lie within
+            // those 96 words (a homeworld with little but its balloonist: the loop ends right after his code), and its
+            // jumps out were read as jumps inside. Then the way out is the first place its jumps name that ends the
+            // code: a jump there with no branch still to land behind it, the place itself not before the code's end.
+            if (words == 0)
+            {
+                List<uint> named = [];
+                for (uint pc = start; pc <= limit; pc += 4)
+                    if (UniversalMips.Op(Word(overlay, pc)) == 2 && UniversalMips.BranchTarget(Word(overlay, pc), pc) is var t && !named.Contains(t)) named.Add(t);
+                foreach (uint way in named)
+                {
+                    far = start;
+                    for (uint pc = start; pc <= limit && words == 0; pc += 4)
+                    {
+                        uint w = Word(overlay, pc);
+                        if (UniversalMips.IsPcRelative(w)) far = Math.Max(far, UniversalMips.BranchTarget(w, pc));
+                        else if (UniversalMips.Op(w) == 2)
+                        {
+                            uint t = UniversalMips.BranchTarget(w, pc);
+                            if (t != way) { if (t >= start && t < start + 4 * 96) far = Math.Max(far, t); }
+                            else if (pc + 8 > far && (way < start || way >= pc + 8)) words = (int)((pc + 8 - start) / 4);
+                        }
+                    }
+                    if (words != 0) { exit = way; break; }
                 }
             }
             if (words == 0) throw new InvalidDataException($"A balloonist's code at 0x{start:X8} does not end the way the game's does.");

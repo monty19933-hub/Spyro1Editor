@@ -72,14 +72,15 @@ public static class UniversalDragonRows
         return null;
     }
 
-    /// <summary>Null, or why <paramref name="levelName"/>, a level compiled like File › New Level's (level 65, or a level of
-    /// a new world), can't have the dragons among <paramref name="placements"/>: a dragon's rescue scene is in its own
-    /// level's data, which such a level does not have, and the game stops when the rescue starts (emulator, 2026-10-18).
-    /// A level rebuilt with Start Blank keeps its own dragons.</summary>
-    public static string? BuiltLevelRefusal(string levelName, IEnumerable<UniversalMobyPlacement> placements, UniversalSourceLibrary donors) =>
-        FirstDragon(placements, donors) is { } p
-            ? $"{levelName} has a dragon from {donors.Get(p.SourceLevelKey).Level.DisplayName}, but a dragon can only be rescued in its own " +
-              "level (the game stops when the rescue starts). Remove it; to keep a level's dragons, build on that level with Start Blank."
+    /// <summary>Null, or why <paramref name="levelName"/>, a level rebuilt in <paramref name="place"/>'s place in the game,
+    /// can't have the dragons among <paramref name="placements"/> that are not that place's own: the game finds a
+    /// dragon's rescue scene and statue by what the place's level holds, and in two places (Artisans, Gnasty's World)
+    /// changes a statue's scene by the place's number; another level's dragon there would stop the game when its rescue
+    /// starts. The levels of a new world take other levels' dragons as guests (<see cref="UniversalDragonGuests"/>).</summary>
+    public static string? RebuiltPlaceRefusal(string levelName, Spyro.Editor.Core.Levels.LevelDefinition place, IEnumerable<UniversalMobyPlacement> placements, UniversalSourceLibrary donors) =>
+        FirstDragon(placements.Where(p => !string.Equals(p.SourceLevelKey, place.Key, StringComparison.OrdinalIgnoreCase)), donors) is { } p
+            ? $"{levelName} has a dragon from {donors.Get(p.SourceLevelKey).Level.DisplayName}, but a level built in {Spyro.Editor.Core.Editing.WorldAccess.Possessive(donors.Get(place.Key).Level.DisplayName)} place can free only " +
+              $"{Spyro.Editor.Core.Editing.WorldAccess.Possessive(donors.Get(place.Key).Level.DisplayName)} own dragons (the game stops when another's rescue starts). Remove it; the levels of a new world (File › New World…) can have other levels' dragons."
             : null;
 
     private static int I(byte[] b, int at) => BinaryPrimitives.ReadInt32LittleEndian(b.AsSpan(at));

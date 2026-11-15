@@ -109,10 +109,20 @@ class OwnedCommandTests(unittest.TestCase):
         project = RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
         self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"', project.read_text())
 
+    def test_world_dragons_smoke_registration(self):
+        name = "WorldDragonsSmoke"
+        self.assertIn((name, "WORLD_DRAGONS_FREE_OK checks=478"), RUNNER.CORE_CASES)
+        self.assertIn((name, "WORLD_DRAGONS_SOURCE_OK checks=626", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        project = RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
+        self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"', project.read_text())
+
     def test_balloon_travel_smoke_registration(self):
         name = "BalloonTravelSmoke"
         self.assertIn((name, "BALLOON_TRAVEL_FREE_OK checks=2962"), RUNNER.CORE_CASES)
-        self.assertIn((name, "BALLOON_TRAVEL_SOURCE_OK checks=7063", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertIn((name, "BALLOON_TRAVEL_SOURCE_OK checks=7087", ["--source"]), RUNNER.SOURCE_QA_CASES)
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
         project = RUNNER.ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
         self.assertIn('ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj"', project.read_text())

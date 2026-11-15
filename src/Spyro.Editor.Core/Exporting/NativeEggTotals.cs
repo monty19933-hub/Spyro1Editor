@@ -273,9 +273,12 @@ public static class NativeEggTotals
         int rewritten = (int)(UniversalEggUnlocks.PortalAddress - UniversalOverlay.Base);
         if (rewritten >= 0 && rewritten + 72 <= overlay.Length)
         {
+            // (The dragons it asks for may have been set since: NativeDragonTotals. Compared as if they were eighty.)
+            byte[] found = overlay.AsSpan(rewritten, 72).ToArray();
+            if ((BinaryPrimitives.ReadUInt32LittleEndian(found.AsSpan(32)) & 0xFFFF0000) == 0x28630000) BinaryPrimitives.WriteUInt32LittleEndian(found.AsSpan(32), 0x28630000u | NativeDragonTotals.RetailTotal);
             for (int have = 0; have <= MaxTotal; have++)
             {
-                if (!overlay.AsSpan(rewritten, 72).SequenceEqual(UniversalEggUnlocks.PortalGate(have))) continue;
+                if (!found.AsSpan().SequenceEqual(UniversalEggUnlocks.PortalGate(have))) continue;
                 if (have == total) return null;
                 byte[] result = [.. overlay];
                 UniversalEggUnlocks.PortalGate(total).CopyTo(result, rewritten);
@@ -344,13 +347,14 @@ public static class NativeEggTotals
 
     private static bool IsOwnPercentage(byte[] exe)
     {
+        // This routine whatever it divides by: the divisor also grows with the dragons in the game (NativeDragonTotals).
         int at = Off(Percentage);
-        int divisor = (int)(BinaryPrimitives.ReadUInt32LittleEndian(exe.AsSpan(at + 4 * 16)) & 0xFFFF);
-        int total = (divisor - 12000) / 100 + RetailTotal;
-        if (total is < 0 or > MaxTotal || Divisor(total) != divisor) return false;
-        uint[] routine = PercentageRoutine(total);
+        uint[] routine = PercentageRoutine(RetailTotal);
         for (int i = 0; i < routine.Length; i++)
-            if (BinaryPrimitives.ReadUInt32LittleEndian(exe.AsSpan(at + 4 * i)) != routine[i]) return false;
+        {
+            uint word = BinaryPrimitives.ReadUInt32LittleEndian(exe.AsSpan(at + 4 * i));
+            if (i == 16 ? (word & 0xFFFF0000) != (routine[i] & 0xFFFF0000) : word != routine[i]) return false;
+        }
         return true;
     }
 

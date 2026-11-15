@@ -290,6 +290,10 @@ CORE_CASES = (
     # later worlds counted in a spare place); a thief's run judged as the game runs it (made-up ground: steps, drops,
     # gaps, walls, bridges, points' heights not judged, the game's own steps kept).
     ("EggThiefSmoke", "EGG_THIEF_FREE_OK checks=644"),
+    # Dragons in a new world (2.6): the game's dragon totals follow the dragons its levels hold (the table per level,
+    # the completion percentage run instruction by instruction for 60-99 dragons, also after the egg thieves' and the
+    # dragonfly eggs' routines, the doorway to Gnasty's Loot in both its forms, the limits), on made-up levels.
+    ("WorldDragonsSmoke", "WORLD_DRAGONS_FREE_OK checks=478"),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
@@ -406,7 +410,7 @@ SOURCE_QA_CASES = (
     # Square; changed for each of the six places the new world can take and run for every state of the route (the menu's
     # rows and names, the level each row flies to, the "ready to go" page), every balloonist's decision code in its
     # place, his own lines read back through the changed routine, the executable's part.
-    ("BalloonTravelSmoke", "BALLOON_TRAVEL_SOURCE_OK checks=7063", ["--source"]),
+    ("BalloonTravelSmoke", "BALLOON_TRAVEL_SOURCE_OK checks=7087", ["--source"]),
     ("DarkParticleHostSmoke", "DARK_PROJECTILE_ALL_HOST_OWNERSHIP_OK", []),
     ("FreshParticleBindingSmoke", "FRESH_OWNED_PARTICLE_BINDING_OK", []),
     ("CollectionStarSmoke", "COLLECTION_STAR_SOURCE_OWNERSHIP_OK", []),
@@ -537,6 +541,11 @@ SOURCE_QA_CASES = (
     # equal to the new one for twelve eggs, every level's egg counter, thieves added (Dark Hollow, Beast Makers) and
     # taken out setting every total.
     ("EggThiefSmoke", "EGG_THIEF_SOURCE_OK checks=520", ["--source"]),
+    # The USA game: its 79 statues and 80 dragons where it counts them, every statue's rescue scene, nothing written for
+    # it, dragons added and taken out with and without egg thieves changed (and back to the game's own bytes), the
+    # guests' plan and refusals, a meadow composed with Stone Hill's, High Caves' and Dry Canyon's dragons as a level
+    # of a new world, the world's homeworld with Artisans' own dragon and with a Wizard Peak guest.
+    ("WorldDragonsSmoke", "WORLD_DRAGONS_SOURCE_OK checks=626", ["--source"]),
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.

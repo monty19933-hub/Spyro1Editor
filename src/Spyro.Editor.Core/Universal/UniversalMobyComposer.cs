@@ -199,7 +199,8 @@ public static class UniversalMobyComposer
         bool removedTreasureAlreadyApplied = false,
         int? persistentNativePrefixRows = null,
         UniversalOverlay? nativeDestinationOwner = null, int magicPairBundlePaddingBytes = 0, byte[]? nativeOriginalExecutable = null, byte[]? nativeSharedEntry8 = null,
-        IReadOnlyList<(int Class, string SourceKey)>? dependencyClasses = null, IReadOnlySet<int>? releasedNativeClasses = null)
+        IReadOnlyList<(int Class, string SourceKey)>? dependencyClasses = null, IReadOnlySet<int>? releasedNativeClasses = null,
+        string? releasedSourceKey = null)
     {
         if (placements.Count == 0 && removedRows is not { Count: > 0 } && dependencyClasses is not { Count: > 0 }) throw new ArgumentException("No placements or permanent removals were supplied.");
         if(UniversalAlpineArmInstaller.Requested(placements))return UniversalAlpineArmInstaller.Compose(destination,destinationData,destinationOverlay,executable,source,shared,protectedVram,placements,removedRows,playerAnimationSource,nativeSharedEntry8,persistentNativePrefixRows,magicPairBundlePaddingBytes,protectedVramAfterDrop,removedTreasureAlreadyApplied);
@@ -270,7 +271,14 @@ public static class UniversalMobyComposer
         uint originalEnd = RuntimeEnd(dest, destOverlay.CopyBuffer), originalLowEnd = GameRam.LowEnd(dest, destOverlay.CopyBuffer);
         var destSwitch = UniversalDispatchAnalysis.FindUpdateSwitch(destOverlay);
         // Released classes (a rebuilt level's own dragons) keep their numbers and run their own imported code; the
-        // destination's switch passes them by (UniversalNativeRelease).
+        // destination's switch passes them by (UniversalNativeRelease). The level they are released for is the
+        // destination's own, or the level of the game whose dragons stand in it as guests (UniversalDragonGuests).
+        // Guests bring the dragon's three classes; any other released class is the destination's own.
+        string releasedKey = (releasedSourceKey ?? destination.Key).ToLowerInvariant();
+        bool guestDragons = releasedNativeClasses is { Count: > 0 } && !string.Equals(releasedKey, destination.Key, StringComparison.OrdinalIgnoreCase);
+        string ReleasedOwner(int c) => guestDragons && c is UniversalDragonRows.Statue or UniversalDragonRows.Dragon or UniversalDragonGuests.RescueActorClass
+            ? releasedKey : destination.Key.ToLowerInvariant();
+        string ReleasedOwnerName(int c) => ReleasedOwner(c) == releasedKey && guestDragons ? source(releasedKey).Level.DisplayName : destination.DisplayName;
         bool DestHandles(int c) => releasedNativeClasses?.Contains(c) != true && UniversalDispatchAnalysis.Handles(destOverlay, destSwitch, c);
         HashSet<int> destRegistered = [.. dest.Registrations().Select(r => r.ClassId)];
         List<string> warnings = [];
@@ -356,7 +364,8 @@ public static class UniversalMobyComposer
             var s = source(p.SourceLevelKey);
             var t = UniversalIndexedRows.Capture(s.Data, s.Overlay, s.Data.CaptureRow(p.SourceLevelKey, p.SourceRowIndex));
             // A rebuilt homeworld's own dragons keep naming each other's rows (statue, dragon, pedestal).
-            if (persistentNativePrefixRows != null && string.Equals(p.SourceLevelKey, destination.Key, StringComparison.OrdinalIgnoreCase))
+            if (persistentNativePrefixRows != null && string.Equals(p.SourceLevelKey, destination.Key, StringComparison.OrdinalIgnoreCase) ||
+                guestDragons && string.Equals(p.SourceLevelKey, releasedKey, StringComparison.OrdinalIgnoreCase))
                 t = UniversalDragonRows.Capture(s.Data, t);
             // Dream Weavers fools take the cannon in their linked group, or never call one.
             t = UniversalDreamWeaversCannonRows.Bind(t, p, placements, destination.Key, dest, permanentlyRemoved, s.Data);
@@ -448,11 +457,11 @@ public static class UniversalMobyComposer
             // whichever placement comes first: another level's class of that number (a copied thief's egg) is renumbered.
             if (releasedNativeClasses?.Contains(c) == true)
             {
-                if (!string.Equals(sk, destination.Key, StringComparison.OrdinalIgnoreCase)) collision = true;
+                if (!string.Equals(sk, ReleasedOwner(c), StringComparison.OrdinalIgnoreCase)) collision = true;
                 else
                 {
                     if (classes.Any(k => k.Value.DestinationClass == c))
-                        throw new UniversalSourceCollisionException($"Class 0x{c:X3}, which {destination.DisplayName}'s own objects keep, is already taken.");
+                        throw new UniversalSourceCollisionException($"Class 0x{c:X3}, which {ReleasedOwnerName(c)}'s own objects keep, is already taken.");
                     collision = false;
                     other = default;
                 }
@@ -550,9 +559,9 @@ public static class UniversalMobyComposer
             if (classes.Values.Any(v => v.DestinationClass == c) || destRegistered.Contains(c) || shared.Contains(c) || DestHandles(c))
                 throw new UniversalSourceCollisionException($"Special class 0x{c:X3} collides with a native or imported class in {destination.Key}.");
         foreach (int c in releasedNativeClasses ?? new HashSet<int>())
-            if (!classes.TryGetValue((destination.Key.ToLowerInvariant(), c), out var released) || released.DestinationClass != c ||
-                classes.Any(k => k.Value.DestinationClass == c && k.Key.Source != destination.Key.ToLowerInvariant()))
-                throw new InvalidDataException($"Released class 0x{c:X3} must be placed from {destination.DisplayName}'s own objects under its own number.");
+            if (!classes.TryGetValue((ReleasedOwner(c), c), out var released) || released.DestinationClass != c ||
+                classes.Any(k => k.Value.DestinationClass == c && k.Key.Source != ReleasedOwner(c)))
+                throw new InvalidDataException($"Released class 0x{c:X3} must be placed from {ReleasedOwnerName(c)}'s own objects under its own number.");
 
         // 1b. Free the models of native object types the user removed completely (see DroppableClasses).
         var (dropped, inertRows) = DroppableClasses(dest, destOverlay, exe, shared, removedRows,
@@ -637,8 +646,9 @@ public static class UniversalMobyComposer
                     metalTextureJobs.Add(i, certificate);
         // A rebuilt homeworld's own dragon rescue scenes (subfiles 4 on) carry models textured from the original
         // level's VRAM: their regions come along like an imported model's (NativeDragonRescueCamera.Scenes).
-        var rescueScenes = persistentNativePrefixRows != null ? NativeDragonRescueCamera.Scenes(dest) : [];
-        byte[] rescueVram = rescueScenes.Count > 0 ? originalDestination.Data.Vram().ToArray() : [];
+        // Guest dragons' scenes are their own level's, drawn from its pictures.
+        var rescueScenes = persistentNativePrefixRows != null || guestDragons ? NativeDragonRescueCamera.Scenes(dest) : [];
+        byte[] rescueVram = rescueScenes.Count > 0 ? (guestDragons ? source(releasedKey).Data : originalDestination.Data).Vram().ToArray() : [];
         var texReports = UniversalAssetImport.ImportTexturesBatch(textured.Select(j => (j.Pkg, j.Vram,
             $"class 0x{j.Class:X3} from {j.Source}{(j.Dependency ? ", a helper object it spawns" : "")}"))
             .Concat(particleJobs.Select(j => (j.Package, j.Vram, $"particle 0x{j.Type:X2} from {j.Source}")))
@@ -898,7 +908,7 @@ public static class UniversalMobyComposer
             UniversalHighValueGems.RequireDestinationParticleOwner(destOverlay);
         }
         if (releasedNativeClasses is { Count: > 0 } && !releasedNativeClasses.All(c => imports.Any(i => i.BehaviorImported && i.DestinationClassId == c &&
-                string.Equals(i.SourceLevelKey, destination.Key, StringComparison.OrdinalIgnoreCase))))
+                string.Equals(i.SourceLevelKey, ReleasedOwner(c), StringComparison.OrdinalIgnoreCase))))
             throw new InvalidDataException("A released class has no imported behavior to run it.");
         if (byBehaviorSource.Count > 0 || eggClasses.Count > 0 || signClasses.Count > 0 || highValueGemClasses.Count > 0 || crashBoxClasses.Count > 0 || crashEnemyClasses.Count > 0 || crashPlayerClasses.Count > 0)
         {
@@ -1040,11 +1050,14 @@ public static class UniversalMobyComposer
         // level adds them before its statue: they move after it, and what that leaves the area short is filled by other
         // imported models, then (built levels, game RAM allowing) by empty room. A trial on a copy decides; without room
         // the layout stays as it was and he sits the scene out (the hook leaves models below the statue undrawn).
-        var originalRegistrations = originalDestination.Data.Registrations();
+        // (Guest dragons: what follows the statue in their own level follows it here, and the room is measured from the
+        // scenes the level now holds.)
+        var originalRegistrations = (guestDragons ? source(releasedKey).Data : originalDestination.Data).Registrations();
         var originalStatue = originalRegistrations.SingleOrDefault(r => r.ClassId == 250);
         HashSet<int> nativeTail = originalStatue == null ? [] : [.. originalRegistrations.Where(r => r.Root > originalStatue.Root).Select(r => r.ClassId)];
-        UniversalNativeDragonRescueBudget? Budget(UniversalLevelData d) =>
-            UniversalNativeDragonRescuePrefix.Measure(destination.Key, destination.DisplayName, originalDestination.Data, d, exe);
+        UniversalNativeDragonRescueBudget? Budget(UniversalLevelData d) => guestDragons
+            ? UniversalNativeDragonRescuePrefix.MeasureGuests(destination.DisplayName, d, exe)
+            : UniversalNativeDragonRescuePrefix.Measure(destination.Key, destination.DisplayName, originalDestination.Data, d, exe);
         int[] AfterStatue(UniversalLevelData d, bool crash)
         {
             int statue = d.Registrations().Single(r => r.ClassId == 250).Root;
@@ -1064,7 +1077,7 @@ public static class UniversalMobyComposer
             d.MoveModelsBefore(250, AfterStatue(d, crash: false));
             if (Budget(d) is not { Deficit: > 0 } open) return true;
             int room = UniversalLevelData.Align(open.Deficit, 0x800);
-            if (persistentNativePrefixRows == null || GameRam.ModelRoom(d, copyBuffer) < room) return false;
+            if (persistentNativePrefixRows == null && !guestDragons || GameRam.ModelRoom(d, copyBuffer) < room) return false;
             d.ReserveBefore(250, room);
             return true;
         }
@@ -1083,10 +1096,11 @@ public static class UniversalMobyComposer
         {
             modelGrowth += dest.MoveModelsBefore(250, [.. AfterStatue(dest, crash: false), .. AfterStatue(dest, crash: true)]);
             // A rebuilt homeworld may hold too few models to fill the area: the rest is reserved as empty room there.
-            if (persistentNativePrefixRows != null && Budget(dest) is { Deficit: > 0 } still)
+            if ((persistentNativePrefixRows != null || guestDragons) && Budget(dest) is { Deficit: > 0 } still)
                 modelGrowth += dest.ReserveBefore(250, UniversalLevelData.Align(still.Deficit, 0x800));
         }
-        UniversalNativeDragonRescuePrefix.RequireSafe(destination.Key,destination.DisplayName,originalDestination.Data,dest,exe);
+        if (guestDragons) UniversalNativeDragonRescuePrefix.RequireSafeGuests(destination.DisplayName, dest, exe);
+        else UniversalNativeDragonRescuePrefix.RequireSafe(destination.Key,destination.DisplayName,originalDestination.Data,dest,exe);
         uint limit = NormalBufferFloor - RamSafetyMargin;
         // Objects added to a retail level take their rows out of its spare object slots, which every gem or butterfly
         // an enemy or crate drops and every projectile needs while it exists (the allocator checks no end). Grow the

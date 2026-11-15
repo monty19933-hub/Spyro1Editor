@@ -209,6 +209,8 @@ public static class UniversalMobyExport
                 RequireSignMarkersOnlyIn(exe, catalog, signLevels, i => replacements.TryGetValue(i, out var r) ? r : current.EntryBytes(i));
             // The game's egg totals follow the egg thieves its levels hold.
             Spyro.Editor.Core.Exporting.NativeEggTotals.ApplyForExport(exe, sources.Disc.Exe, replacements, current.EntryBytes);
+            // ... and its dragon totals the dragons.
+            Spyro.Editor.Core.Exporting.NativeDragonTotals.ApplyForExport(exe, sources.Disc.Exe, replacements, current.EntryBytes, sources.Disc.EntryBytes);
         }
         byte[] wad = current.RebuildWad(replacements);
         string staging = outputImagePath + ".pending-" + Guid.NewGuid().ToString("N");

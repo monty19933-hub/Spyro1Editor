@@ -54,6 +54,39 @@ internal static class UniversalNativeDragonRescuePrefix
         Require(budget==null||budget.Deficit==0,$"{name}'s remaining dragon rescues need {budget?.Deficit:N0} more bytes in their temporary area. Restore some removed native object families before exporting; that reserved space cannot be reclaimed.");
         return budget;
     }
+    /// <summary>The same for a level whose dragons are guests from another level of the game (UniversalDragonGuests): the
+    /// scenes are the level's subfiles 4 on as it now holds them (each a copy of its dragon's own, filmed where the statue
+    /// stands); the reader's rule is the same. Null without a statue.</summary>
+    internal static UniversalNativeDragonRescueBudget? MeasureGuests(string name,UniversalLevelData written,byte[] exe)
+    {
+        var statue=written.Registrations().SingleOrDefault(r=>r.ClassId==250);
+        bool live=Enumerable.Range(0,written.Scene().RowCount).Any(r=>BinaryPrimitives.ReadUInt16LittleEndian(written.Row(r).AsSpan(54))==250);
+        if(statue==null){Require(!live,name+" has a dragon statue without its model.");return null;}
+        RequireReader(exe);
+        var sf=written.Subfiles();int need=0,count=0;
+        for(int n=4;n<sf.Count;n++)
+        {
+            var a=sf[n];
+            Require(a.Length>=36&&I(written.Bytes,a.Offset+4)==36&&I(written.Bytes,a.Offset+8)>0&&I(written.Bytes,a.Offset+12)==36+I(written.Bytes,a.Offset+8)&&I(written.Bytes,a.Offset+12)<=a.Length,"a dragon's rescue scene is not as the game keeps it.");
+            int prefix=I(written.Bytes,a.Offset+12);
+            need=Math.Max(need,Math.Max(UniversalLevelData.Align(prefix,2048),UniversalLevelData.Align(a.Length-prefix,2048)));count++;
+        }
+        Require(count>0,name+" has a dragon statue and no rescue scene.");
+        var models=sf[2];Require(statue.Root>=models.Offset&&statue.Root<models.Offset+models.Length,"the dragon statue's model is outside the level's models.");
+        return new UniversalNativeDragonRescueBudget(need,(statue.Root-models.Offset)/2048*2048,count);
+    }
+    internal static UniversalNativeDragonRescueBudget? RequireSafeGuests(string name,UniversalLevelData written,byte[] exe)
+    {
+        var budget=MeasureGuests(name,written,exe);
+        Require(budget==null||budget.Deficit==0,$"{name}'s dragon rescues need {budget?.Deficit:N0} more bytes of game memory for their scenes.");
+        return budget;
+    }
+    private static void RequireReader(byte[] exe)
+    {
+        using var native=new MemoryStream();foreach(var span in new[]{(0x14b70,0x15370),(0x133e0,0x13658),(0x16958,0x169ac)})
+        {int at=span.Item1-0xf800,length=span.Item2-span.Item1;Require(exe.Length>=at+length,"the original native rescue loader is incomplete.");native.Write(exe,at,length);}
+        Require(Hash(native.ToArray())=="da58e9b774853661b0c9e4b118964cf46aba23c030804bfe5e1ba6f503cfd17c","the native stream reader, model reload or copy owner changed.");
+    }
     /// <summary>The rescue reservation below the statue against the largest stream's need, or null without a statue.</summary>
     internal static UniversalNativeDragonRescueBudget? Measure(string key,string name,UniversalLevelData original,UniversalLevelData written,byte[] exe)
     {
