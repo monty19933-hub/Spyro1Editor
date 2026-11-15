@@ -812,6 +812,11 @@ Its status line ends with the sentence that says how players reach your world.
     enemies and chests that drop gems. A dragon with a long speech also takes
     game memory (up to about 280 KB while it plays); Create BIN says so when a
     level is too full for it, and a dragon with a shorter scene may still fit.
+
+  A dragon stands with his feet on the ground where he is put, and his pad is
+  then level with it. It works, but a flat pad like Artisans' shows only its
+  edge: raise the dragon about 8 units and the pad lies on the ground as in the
+  game's levels.
 - **The dragon count follows the dragons**: every dragon in your world is one
   more in the inventory's count, in the 100% count and in what Gnasty's Loot's
   door asks for, and a level of the game rebuilt without its dragons makes it

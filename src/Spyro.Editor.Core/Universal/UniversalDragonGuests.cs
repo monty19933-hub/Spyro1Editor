@@ -23,7 +23,9 @@ public sealed record UniversalDragonGuests(string SourceKey, IReadOnlyList<Unive
 {
     public const int MaxStatues = 6, RescueActorClass = 0xFB, StreamWord = 0x18;
     /// <summary>The objects a rescue puts into the level's spare object slots while it runs: the crystal's splinters and
-    /// the sparks of the scene (47 counted in the emulator, 2026-11-14, High Caves' dragon in a level of a new world).</summary>
+    /// the sparks of the scene. Counted in the emulator, 2026-11-14, over some forty rescues (Artisans', Stone Hill's,
+    /// High Caves', Tree Tops' and Ice Cavern's dragons): 43 to 52 more than were there before, 54 in the slots at most.
+    /// The number here and the margin below keep 64 slots free, ten more than the most seen.</summary>
     public const int RescueSpawns = 48;
     /// <summary>The fewest spare object slots a level with a dragon may have (the rescue's objects and a margin).</summary>
     public const int RescueSpareSlots = RescueSpawns + UniversalMobyComposer.DropSlotMargin;
