@@ -179,8 +179,18 @@
   alone was also played in Peace Keepers, Beast Makers and Dream Weavers (in 2.0
   the way back sets Spyro down in front of it in each); in Magic Crafters and
   Gnasty's World it is checked by the editor's tests only.
-  Not tried on a PlayStation. The world's levels can't have dragons (a dragon's
-  rescue belongs to its own level) or songs from other games yet. Peace
+  Not tried on a PlayStation. The world's levels can't have songs from other
+  games yet. Since 2.6 they can have dragons: one level of the game's dragons a
+  level, six at most (see "Dragons in your world" in the guide); rescues were
+  played in the emulator in the world's homeworld and levels, heard by nobody
+  (the test emulator is silent: the scene's voice is loaded the way the game's
+  own levels load it). A level rebuilt in a place of the game keeps to that
+  place's own dragons; another level's there is refused by Create BIN. The
+  game's own code could stop a game one frame after a rescue when an enemy had
+  just taken hold of the camera as the rescue began (Stone Hill's ram butting
+  Spyro as he touches the statue); the game's levels keep rams away from their
+  dragons, yours need not, so a game with a dragon in a level you changed or
+  added passes over that (seen and fixed in the emulator). Peace
   Keepers, Magic Crafters, Beast Makers and Dream Weavers have little spare
   memory, so their entrance shows only part of your world's sky (whole with
   Game › Memory › Emulator only).

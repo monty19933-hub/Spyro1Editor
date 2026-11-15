@@ -111,8 +111,8 @@ class OwnedCommandTests(unittest.TestCase):
 
     def test_world_dragons_smoke_registration(self):
         name = "WorldDragonsSmoke"
-        self.assertIn((name, "WORLD_DRAGONS_FREE_OK checks=478"), RUNNER.CORE_CASES)
-        self.assertIn((name, "WORLD_DRAGONS_SOURCE_OK checks=626", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertIn((name, "WORLD_DRAGONS_FREE_OK checks=492"), RUNNER.CORE_CASES)
+        self.assertIn((name, "WORLD_DRAGONS_SOURCE_OK checks=630", ["--source"]), RUNNER.SOURCE_QA_CASES)
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)

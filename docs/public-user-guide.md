@@ -793,10 +793,31 @@ Its status line ends with the sentence that says how players reach your world.
 - A game with a new world saves in its own save file on the memory card (shown
   as a separate file next to the original game's). Saves from the original game
   or earlier exports are left alone; start a new save in the new game.
-- Levels of your world are built like a New Level: dragons from the game's
-  levels can't be added (their rescue scene belongs to their own level), and they
-  play Spyro's own music, not songs from other games. Objects whose code the game
-  changes for one level only are refused by Create BIN with the level's name.
+- Levels of your world are built like a New Level. They play Spyro's own music,
+  not songs from other games, and objects whose code the game changes for one
+  level only are refused by Create BIN with the level's name.
+- **Dragons in your world.** A level of your world (its homeworld too) can have
+  dragons: **Add object… → Collectibles → Dragons** puts in any dragon of the
+  game with its pedestal, its fairy and its own rescue scene (the dragon, his
+  voice, the camera, filmed where you stand him), and **Random objects** places
+  the dragons of the level whose objects you chose (in the homeworld,
+  Artisans'). Three rules, each said in plain words when you meet it:
+  - a level's dragons all come from **one level of the game** (Stone Hill's four,
+    say, or Dark Passage's five): each level of the game frees its dragons with
+    its own code, and a level can run one level's. Another level of your world
+    can have another level's dragons;
+  - **six dragons** in a level at most (the same dragon may stand twice);
+  - a level with a dragon keeps room among its 256 objects for the rescue's
+    splinters and sparks: at most 192 objects, 165 when many of them are
+    enemies and chests that drop gems. A dragon with a long speech also takes
+    game memory (up to about 280 KB while it plays); Create BIN says so when a
+    level is too full for it, and a dragon with a shorter scene may still fit.
+- **The dragon count follows the dragons**: every dragon in your world is one
+  more in the inventory's count, in the 100% count and in what Gnasty's Loot's
+  door asks for, and a level of the game rebuilt without its dragons makes it
+  fewer. Your world's page of the inventory shows each level's dragons
+  (rescued/there). Create BIN says how many dragons the game has when it is not
+  the game's 80. A game can hold 99 (the counter on screen has two digits).
 
 ## Random levels
 
@@ -982,7 +1003,9 @@ first); **Remove Them** takes them all away. What you added yourself stays.
 - **Animals, egg thieves, dragons, the way out:** the level type's animals in
   little groups; the egg thieves and dragons that belong to the level's place in
   the game, each thief with room to run; a Return Home vortex at the far end (in a
-  homeworld, the balloonist).
+  homeworld, the balloonist). A level of your new world (and a New Level) has no
+  place in the game: its dragons are those of the level type you chose (in your
+  world's homeworld, Artisans'), the ones with the shortest scenes first.
 
 How much of everything, and where, follows the game's own thirty levels on foot,
 measured from the disc:

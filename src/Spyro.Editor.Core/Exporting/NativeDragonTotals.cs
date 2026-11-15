@@ -15,6 +15,8 @@ public sealed record DragonCount(IReadOnlyList<int> PerLevel, IReadOnlyList<int>
 public sealed record DragonTotalsApplied(DragonCount Count, bool TableChanged, bool PercentageChanged, bool GateChanged)
 {
     public int Total => Count.Total;
+    /// <summary>Whether the look-at guard was written or taken out again (<see cref="NativeLookAtGuard"/>).</summary>
+    public bool LookAtGuarded { get; init; }
 }
 
 /// <summary>The game's dragon totals follow the dragons its levels really hold.
@@ -31,7 +33,9 @@ public sealed record DragonTotalsApplied(DragonCount Count, bool TableChanged, b
 /// has the game's own number plus the statues it gained or lost (Gnasty's World has one statue for two dragons: the
 /// second stands in the same place once Gnasty is beaten). With the game's own dragons in their places nothing is
 /// written. Call it right after <see cref="NativeEggTotals.ApplyForExport"/>, which leaves the percentage as the eggs
-/// alone make it.</para></summary>
+/// alone make it.</para>
+/// <para>With a dragon in a level the editor changed or added, the look-at guard is written too
+/// (<see cref="NativeLookAtGuard"/>).</para></summary>
 public static class NativeDragonTotals
 {
     public const int RetailTotal = 80, Levels = 36, StatueClass = 0xFA;
@@ -76,9 +80,14 @@ public static class NativeDragonTotals
     /// <summary>The dragons in every level of a game. <paramref name="entry"/> gives a WAD entry's bytes as the game will
     /// have it, <paramref name="originalEntry"/> as the game's own disc has it; <paramref name="beyond"/> the data
     /// entries of levels past the game's 36 places (a new world's).</summary>
-    public static DragonCount Count(Func<int, byte[]> entry, Func<int, byte[]> originalEntry, IEnumerable<int>? beyond = null)
+    public static DragonCount Count(Func<int, byte[]> entry, Func<int, byte[]> originalEntry, IEnumerable<int>? beyond = null) =>
+        Survey(entry, originalEntry, beyond).Count;
+
+    /// <summary>The count, and whether a level the editor changed or added holds a dragon.</summary>
+    private static (DragonCount Count, bool InChangedLevels) Survey(Func<int, byte[]> entry, Func<int, byte[]> originalEntry, IEnumerable<int>? beyond)
     {
         int[] per = [.. RetailPerLevel];
+        bool changedWithDragons = false;
         for (int i = 0; i < Levels; i++)
         {
             byte[] now, before;
@@ -87,8 +96,10 @@ public static class NativeDragonTotals
             if (now.AsSpan().SequenceEqual(before)) continue;
             int statues = StatuesIn(now);
             per[i] = statues == 0 ? 0 : Math.Max(0, RetailPerLevel[i] + statues - StatuesIn(before));
+            changedWithDragons |= statues > 0;
         }
-        return new(per, [.. (beyond ?? []).Select(e => StatuesIn(entry(e)))]);
+        int[] past = [.. (beyond ?? []).Select(e => StatuesIn(entry(e)))];
+        return (new(per, past), changedWithDragons || past.Sum() > 0);
     }
 
     /// <summary>What the percentage divides by: 12,000, 100 more for every egg past the game's twelve (dragonfly eggs
@@ -112,7 +123,7 @@ public static class NativeDragonTotals
         Func<int, byte[]> entryBytes, Func<int, byte[]> originalEntry, IReadOnlyList<int>? guests = null)
     {
         byte[] Entry(int e) => replacements.TryGetValue(e, out var changed) ? changed : entryBytes(e);
-        var count = Count(Entry, originalEntry, guests);
+        var (count, inChangedLevels) = Survey(Entry, originalEntry, guests);
         int total = count.Total;
         if (total > MaxTotal)
             throw new InvalidDataException($"This game would have {total} dragons, and the game's dragon counter shows two digits: a game can hold {MaxTotal}. " +
@@ -168,7 +179,11 @@ public static class NativeDragonTotals
         int gateEntry = OverlayEntry(GnastysWorldIndex);
         if (SetLootGate(Entry(gateEntry), total) is { } gate) { replacements[gateEntry] = gate; gated = true; }
 
-        return table || percentage || gated || !count.IsRetail ? new(count, table, percentage, gated) : null;
+        // A rescue in a level the editor changed or added must not end with the camera told to look at nothing; a game
+        // with its dragons where the game put them keeps the game's own words.
+        bool guarded = inChangedLevels ? NativeLookAtGuard.Apply(exe) : NativeLookAtGuard.Restore(exe);
+
+        return table || percentage || gated || guarded || !count.IsRetail ? new(count, table, percentage, gated) { LookAtGuarded = guarded } : null;
     }
 
     /// <summary>Where Gnasty's World's overlay asks for the dragons at the doorway to Gnasty's Loot: the offset of its

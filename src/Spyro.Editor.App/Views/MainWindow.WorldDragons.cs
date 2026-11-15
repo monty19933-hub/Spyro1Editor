@@ -5,10 +5,12 @@ using Spyro.Editor.Core.Universal;
 
 namespace Spyro.Editor.App.Views;
 
-/// <summary>Dragons in a level of the new world. Such a level has no place in the game and so no dragons of its own:
-/// it takes the dragons of one level of the game as guests (<see cref="UniversalDragonGuests"/>: their rescue scenes,
-/// their level's code). One level's, because one level's code frees them all; six at most, because a level's file has
-/// room for six rescue scenes. Create BIN counts them (<see cref="NativeDragonTotals"/>).</summary>
+/// <summary>Dragons in a level of the new world (and in File › New Level's level). Such a level has no place in the
+/// game and so no dragons of its own: it takes the dragons of one level of the game as guests
+/// (<see cref="UniversalDragonGuests"/>: their rescue scenes, their level's code). One level's, because one level's code
+/// frees them all; six at most, because a level's file has room for six rescue scenes. Create BIN counts them
+/// (<see cref="NativeDragonTotals"/>). The world's homeworld is built on Artisans' place: Artisans' own dragons are its
+/// own there, and it can have another level's instead.</summary>
 public sealed partial class MainWindow
 {
     /// <summary>The source level and class of an object brought in from a level of the game (class -1: not one).</summary>
@@ -28,8 +30,9 @@ public sealed partial class MainWindow
         return sources;
     }
 
-    /// <summary>True in a level where dragons stand as guests: a level of the new world (its homeworld too).</summary>
-    private bool IsDragonGuestLevel => _freshSceneDocument is { WorldLevelId: not null };
+    /// <summary>True in a level where dragons stand as guests: a level of the new world (its homeworld too) and File ›
+    /// New Level's level; not a level rebuilt in a place of the game, which keeps to that place's own dragons.</summary>
+    private bool IsDragonGuestLevel => _freshSceneDocument is { TargetBinding: null };
 
     /// <summary>Null, or why the dragon <paramref name="variant"/> can't be added to the open level of the new world: the
     /// level already has dragons of another level of the game, or six of them.</summary>
@@ -43,7 +46,7 @@ public sealed partial class MainWindow
         string level = _freshSceneDocument!.Name;
         if (here.Keys.FirstOrDefault(k => !string.Equals(k, variant.SourceLevelKey, StringComparison.OrdinalIgnoreCase)) is { } other)
             return $"{level} already has {(here[other] == 1 ? "a dragon" : "dragons")} from {Name(other)}, and a level's dragons all come from one level of the game " +
-                   $"(each level frees its dragons with its own code, and a level can run one level's). Add another of {WorldAccess.Possessive(Name(other))} dragons here, or put this one in another level of your world.";
+                   $"(each level frees its dragons with its own code, and a level can run one level's). Add another of {WorldAccess.Possessive(Name(other))} dragons here, or put this one in another level you built.";
         if (here.Values.Sum() >= UniversalDragonGuests.MaxStatues)
             return $"{level} already has {UniversalDragonGuests.MaxStatues} dragons, and a level can hold no more: each dragon's rescue scene is a part of the level's file, which has room for {UniversalDragonGuests.MaxStatues}.";
         return null;

@@ -293,7 +293,7 @@ CORE_CASES = (
     # Dragons in a new world (2.6): the game's dragon totals follow the dragons its levels hold (the table per level,
     # the completion percentage run instruction by instruction for 60-99 dragons, also after the egg thieves' and the
     # dragonfly eggs' routines, the doorway to Gnasty's Loot in both its forms, the limits), on made-up levels.
-    ("WorldDragonsSmoke", "WORLD_DRAGONS_FREE_OK checks=478"),
+    ("WorldDragonsSmoke", "WORLD_DRAGONS_FREE_OK checks=492"),
 )
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
@@ -545,7 +545,7 @@ SOURCE_QA_CASES = (
     # it, dragons added and taken out with and without egg thieves changed (and back to the game's own bytes), the
     # guests' plan and refusals, a meadow composed with Stone Hill's, High Caves' and Dry Canyon's dragons as a level
     # of a new world, the world's homeworld with Artisans' own dragon and with a Wizard Peak guest.
-    ("WorldDragonsSmoke", "WORLD_DRAGONS_SOURCE_OK checks=626", ["--source"]),
+    ("WorldDragonsSmoke", "WORLD_DRAGONS_SOURCE_OK checks=630", ["--source"]),
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.

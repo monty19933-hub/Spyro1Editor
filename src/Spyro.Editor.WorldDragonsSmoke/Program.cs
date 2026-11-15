@@ -193,6 +193,7 @@ if (args.Length >= 2 && args[0] == "--inspect")
         Console.WriteLine($"the doorway to Gnasty's Loot asks for {totals.Gate} dragons; the percentage divides by {totals.Divisor}");
     }
     Console.WriteLine("dragon totals of the game's 36 places: " + string.Join(" ", exe.AsSpan(0x5FC14, 36).ToArray()) + $" (sum {exe.AsSpan(0x5FC14, 36).ToArray().Sum(b => b)})");
+    Console.WriteLine("look-at guard: " + (NativeLookAtGuard.IsGuarded(exe) ? "in the game (a look-at command with nothing to look at is passed over)" : NativeLookAtGuard.IsOwn(exe) ? "not in the game (the game's own words)" : "other words there"));
     return 0;
 }
 if (args.Length >= 2 && args[0] == "--source") return await SourceAsync(args[1]);
@@ -242,6 +243,15 @@ Check(NativeDragonTotals.StatuesIn(new byte[64]) == 0 && NativeDragonTotals.Stat
     byte[] again = [.. exe]; Dictionary<int, byte[]> replacedAgain = new(replaced);
     var second = NativeDragonTotals.ApplyForExport(again, game.Exe(), replacedAgain, game.Entry, game.Original, [103, 105, 107]);
     Check(second is { Total: 83, TableChanged: false, PercentageChanged: false, GateChanged: false } && again.AsSpan().SequenceEqual(exe), "applying again changes nothing");
+    // The look-at guard goes into a game with a dragon in a level the editor added, once.
+    Check(applied is { LookAtGuarded: true } && NativeLookAtGuard.IsGuarded(exe) && NativeLookAtGuard.IsOwn(game.Exe()) && second is { LookAtGuarded: false },
+        "the world's dragons bring the look-at guard (written once)");
+    {
+        // Without the world's levels the same executable gets the game's own words back.
+        byte[] back = [.. exe]; Dictionary<int, byte[]> r = new(replaced);
+        var undone = NativeDragonTotals.ApplyForExport(back, game.Exe(), r, game.Entry, game.Original);
+        Check(undone is { Total: 80, LookAtGuarded: true } && NativeLookAtGuard.IsOwn(back) && NativeDragonTotals.Read(back, r[69]) is { Gate: 80, Divisor: 12000 }, "the world taken out again: eighty dragons and the game's own look-at words");
+    }
     // Every count from 60 to 99 (a world of up to four levels, or levels of the game rebuilt without their dragons):
     // the routine as written gives the arithmetic.
     for (int total = 60; total <= NativeDragonTotals.MaxTotal; total++)
@@ -277,7 +287,12 @@ Check(NativeDragonTotals.StatuesIn(new byte[64]) == 0 && NativeDragonTotals.Stat
         var t = NativeDragonTotals.Read(e, r[69]);
         Check(a is { Total: 79, TableChanged: true } && t.PerLevel[1] == 6 && t.PerLevel[2] == 0 && t.PerLevel[30] == 2 && t.PerLevel[8] == 3 && t.Gate == 79 && t.Divisor == 11940,
             "levels rebuilt with more, fewer and the same statues: each line follows, the game has 79");
-        Check(e.Where((b, i) => b != g.Exe()[i]).Count() <= 2 + 4 * NativeEggTotals.PercentageWords, "the executable changes only in the table and the percentage");
+        Check(a is { LookAtGuarded: true } && NativeLookAtGuard.IsGuarded(e), "a level of the game rebuilt with dragons brings the look-at guard");
+        Check(e.Where((b, i) => b != g.Exe()[i] && !Look.Within(i)).Count() <= 2 + 4 * NativeEggTotals.PercentageWords, "the executable changes only in the table, the percentage and the guard");
+        // Levels rebuilt without dragons only: no guard.
+        var bare = new Made.Game(); byte[] eb = bare.Exe(); Dictionary<int, byte[]> rb = [];
+        bare.Changed[NativeDragonTotals.DataEntry(2)] = Made.Level(0);
+        Check(NativeDragonTotals.ApplyForExport(eb, bare.Exe(), rb, bare.Entry, bare.Original) is { Total: 77, LookAtGuarded: false } && NativeLookAtGuard.IsOwn(eb), "a level rebuilt without dragons: no guard");
     }
     // Too many.
     {
@@ -328,6 +343,27 @@ Check(NativeDragonTotals.StatuesIn(new byte[64]) == 0 && NativeDragonTotals.Stat
     Check(NativeEggTotals.SetLootGate(withDragons, 14) is { } eggsToo && eggsToo.AsSpan(portal, 72).SequenceEqual(UniversalEggUnlocks.PortalGate(14)),
         "the eggs' pass still knows its rewritten doorway after the dragons were set (it writes its own, the dragons are set again after it)");
     Check(NativeEggTotals.SetLootGate(withDragons, 12) == null, "and leaves it alone when the eggs are as they were");
+}
+
+// ---------------- the look-at guard ----------------
+{
+    // The ten words run both ways (v0 0x80000000, a2 the camera's mode word, v1 what to look at, a0 how).
+    const uint target = 0x80201234, how = 0x80078668;
+    var own = Look.Run(NativeLookAtGuard.Own, target, how); var guarded = Look.Run(NativeLookAtGuard.Guarded, target, how);
+    (uint, uint)[] told = [(0x80076EA4, 0), (0x80076E90, 0x8000000A), (0x80076EA0, target), (0x80076EA8, how)];
+    Check(own.Exit == NativeLookAtGuard.Onward && own.Stores.SequenceEqual(told), "the game's own look-at words: the camera gets its mode, what to look at and how, then on");
+    Check(guarded.Exit == NativeLookAtGuard.Onward && guarded.Stores.SequenceEqual(told), "the guard with something to look at: the same four words written, the same way on");
+    var nothing = Look.Run(NativeLookAtGuard.Guarded, 0, 0); var ownNothing = Look.Run(NativeLookAtGuard.Own, 0, 0);
+    Check(nothing.Exit == NativeLookAtGuard.Onward && nothing.Stores.Count == 0, "the guard with nothing to look at: the camera is told nothing, on as before");
+    Check(ownNothing.Stores.Contains((0x80076EA0, 0u)) && ownNothing.Stores.Contains((0x80076E90, 0x8000000Au)), "the game's own words tell the camera to look at nothing (the stop after a rescue)");
+    Check(NativeLookAtGuard.Own.Count == 10 && NativeLookAtGuard.Guarded.Count == 10 && NativeLookAtGuard.Site + 4 * 10 == 0x80040248, "ten words for ten: nothing moves around them");
+    byte[] exe = Made.Game.Blank(); byte[] first = [.. exe];
+    Check(NativeLookAtGuard.IsOwn(exe) && !NativeLookAtGuard.IsGuarded(exe) && NativeLookAtGuard.Apply(exe) && NativeLookAtGuard.IsGuarded(exe) && !NativeLookAtGuard.Apply(exe), "written over the game's own words, once");
+    Check(Enumerable.Range(0, exe.Length).Where(i => exe[i] != first[i]).All(Look.Within), "nothing outside the ten words changes");
+    Check(NativeLookAtGuard.Restore(exe) && exe.AsSpan().SequenceEqual(first) && !NativeLookAtGuard.Restore(exe), "taken out again: the game's own words");
+    byte[] strange = Made.Game.Blank(); Made.Put(strange, NativeLookAtGuard.Site + 8, [0x12345678]); byte[] kept = [.. strange];
+    Check(!NativeLookAtGuard.Apply(strange) && !NativeLookAtGuard.Restore(strange) && strange.AsSpan().SequenceEqual(kept), "words that are not the game's own are left alone");
+    Check(!NativeLookAtGuard.Apply(new byte[16]) && !NativeLookAtGuard.IsGuarded(new byte[16]), "what is no executable is left alone");
 }
 return Finish("WORLD_DRAGONS_FREE_OK");
 
@@ -385,7 +421,8 @@ async Task<int> SourceAsync(string usa)
         var a = NativeDragonTotals.ApplyForExport(e, exe, r, x => Swapped(x, swap), disc.EntryBytes);
         var t = NativeDragonTotals.Read(e, r.TryGetValue(69, out var g) ? g : disc.EntryBytes(69));
         Check(a is { Total: 81, TableChanged: true, PercentageChanged: true, GateChanged: true } && t.PerLevel[2] == 4 && t.Gate == 81 && t.Divisor == 12060, "a dragon more in Dark Hollow's place: 81 everywhere");
-        Check(r.Keys.SequenceEqual([69]) && e.Where((b, i) => b != exe[i]).Count() <= 1 + 4 * NativeEggTotals.PercentageWords, "only the table, the percentage and the doorway change");
+        Check(r.Keys.SequenceEqual([69]) && e.Where((b, i) => b != exe[i] && !Look.Within(i)).Count() <= 1 + 4 * NativeEggTotals.PercentageWords, "only the table, the percentage, the doorway and the look-at guard change");
+        Check(NativeLookAtGuard.IsOwn(exe) && a is { LookAtGuarded: true } && NativeLookAtGuard.IsGuarded(e), "the game has the look-at words the guard knows; a changed level with dragons brings the guard");
         var random = new Random(11);
         for (int i = 0; i < 200; i++)
         {
@@ -420,12 +457,24 @@ async Task<int> SourceAsync(string usa)
         var a = NativeDragonTotals.ApplyForExport(e, exe, r, x => Swapped(x, swap), disc.EntryBytes);
         var t = NativeDragonTotals.Read(e, r[69]);
         Check(a is { Total: 76 } && t.PerLevel[1] == 0 && t.Gate == 76 && t.Divisor == 11760 && Mips.Run(Routine(e), NativeEggTotals.Percentage, 12000, 76, 12) == 100, "Stone Hill's place without dragons: 76 everywhere, all of them 100%");
+        Check(a is { LookAtGuarded: false } && NativeLookAtGuard.IsOwn(e), "no dragon in a changed level: no look-at guard");
     }
     {
         // A new world's levels (here: copies of the game's level data) are counted past the 36 places.
         byte[] e = [.. exe]; Dictionary<int, byte[]> r = new() { [103] = disc.EntryBytes(NativeDragonTotals.DataEntry(0)), [105] = disc.EntryBytes(NativeDragonTotals.DataEntry(14)) };
         var a = NativeDragonTotals.ApplyForExport(e, exe, r, disc.EntryBytes, disc.EntryBytes, [103, 105]);
         Check(a is { Total: 87, TableChanged: false } && a.Count.Beyond.SequenceEqual([4, 3]) && NativeDragonTotals.Read(e, r[69]).Gate == 87, "a world with Artisans' four and High Caves' three: 87, the game's own table as it was");
+        Check(a is { LookAtGuarded: true } && NativeLookAtGuard.IsGuarded(e), "a world's dragons bring the look-at guard");
+        // No jump of the game lands inside the words the guard rewrites (all ten are reached from the top only).
+        int text = exe.Length / 4, into = 0;
+        for (int k = 0x200; k < text; k++)
+        {
+            uint w = BinaryPrimitives.ReadUInt32LittleEndian(exe.AsSpan(4 * k)), at = UniversalExeBindings.ExeBase + (uint)(4 * k), op = w >> 26; uint? to = null;
+            if (op is 4 or 5 or 6 or 7 || (op == 1 && (w >> 16 & 31) is 0 or 1 or 16 or 17)) to = (uint)(at + 4 + ((short)(w & 0xFFFF) << 2));
+            else if (op is 2 or 3) to = (at & 0xF0000000) | ((w & 0x03FFFFFF) << 2);
+            if (to is { } t && t > NativeLookAtGuard.Site && t < NativeLookAtGuard.Site + 40 && (at < NativeLookAtGuard.Site - 0x18 || at >= NativeLookAtGuard.Site + 40)) into++;
+        }
+        Check(into == 0, "no jump of the game lands inside the look-at words");
     }
 
     // ---- the guests' plan ----
@@ -563,26 +612,6 @@ async Task<int> SourceAsync(string usa)
         }
         Check(Throws(() => compiled.ComposeWithExecutable(donors, [.. Dragon("artisans", Statue("artisans", 0), 2300, 2900), .. Dragon("wizardpeak", Statue("wizardpeak", 1), 2300, 2300)], hostExe, null),
             "all come from one level of the game"), "Artisans' own dragons and another level's together are refused in the homeworld");
-        if (Environment.GetEnvironmentVariable("EXPERIMENT") == "1")
-        {
-            // The homeworld as New World makes it: Artisans' balloonist and his balloon only.
-            var artisans = donors.Get("artisans").Data;
-            int Row(int cls) => Enumerable.Range(0, artisans.Scene().RowCount).First(r => BinaryPrimitives.ReadUInt16LittleEndian(artisans.Row(r).AsSpan(0x36)) == cls);
-            var plainHome = new[] { new UniversalMobyPlacement("artisans", Row(0xBB), 2448 * 16, 2672 * 16, 544 * 16), new UniversalMobyPlacement("artisans", Row(0x1A0), 2448 * 16, 2736 * 16, 643 * 16) };
-            foreach (var (name, placements) in new[] { ("balloonist only", plainHome), ("balloonist and a dragon", plainHome.Concat(Dragon("artisans", Statue("artisans", 0), 2300, 2900)).ToArray()) })
-            {
-                var result = compiled.ComposeWithExecutable(donors, placements, hostExe, null);
-                Console.WriteLine($"EXPERIMENT {name}: overlay {result.Overlay.Length:X}");
-                for (int o = 0; o + 20 <= result.Overlay.Length; o += 4)
-                {
-                    uint W4(int at) => BinaryPrimitives.ReadUInt32LittleEndian(result.Overlay.AsSpan(at));
-                    if (W4(o) != 0x3C028007 || W4(o + 4) != 0x8C4257A0 || W4(o + 8) != 0 || W4(o + 12) != 0x0040F809) continue;
-                    Console.WriteLine($"   pattern at 0x{UniversalOverlay.Base + (uint)o:X8}: " + string.Join(" ", Enumerable.Range(0, 110).Where(k => o + 20 + 4 * k + 4 <= result.Overlay.Length).Select(k => $"{W4(o + 20 + 4 * k):X8}")));
-                }
-                try { var d = NativeBalloonTravel.Decisions(result.Overlay); Console.WriteLine("   decisions: " + string.Join(", ", d.Select(x => $"{x.Start:X8}+{x.Words} exit {x.Exit:X8}"))); }
-                catch (InvalidDataException e) { Console.WriteLine("   " + e.Message); }
-            }
-        }
         {
             // A level rebuilt in Artisans' own place (no world): its own dragon as before, another level's refused in plain words.
             var rebuilt = StarterLevel.Create("LOST FLEET", catalog) with { TargetBinding = home.TargetBinding };
@@ -657,12 +686,45 @@ static class Made
             byte[] exe = new byte[0x66000];
             for (int i = 0; i < 36; i++) exe[(int)(NativeDragonTotals.LevelTotals - UniversalExeBindings.ExeBase) + i] = (byte)NativeDragonTotals.RetailPerLevel[i];
             Put(exe, NativeEggTotals.RowBound, [0x2A62000C]);
+            Put(exe, NativeLookAtGuard.Site, [.. NativeLookAtGuard.Own]);
             Put(exe, NativeEggTotals.Percentage, [.. Enumerable.Range(0, NativeEggTotals.PercentageWords).Select(i => 0x00000021u + ((uint)i << 11))]);
             return exe;
         }
         public byte[] Exe() => Blank();
         public byte[] Original(int entry) => Disc.TryGetValue(entry, out var level) ? level : Levels.TryGetValue(entry, out var other) ? other : throw new KeyNotFoundException();
         public byte[] Entry(int entry) => Changed.TryGetValue(entry, out var changed) ? changed : Original(entry);
+    }
+}
+
+/// <summary>The look-at words run: v0 0x80000000 and a2 0x80076E90 as the game has them there; the words written to memory in
+/// order and where the code goes on.</summary>
+static class Look
+{
+    public static bool Within(int exeOffset) =>
+        exeOffset >= (int)(NativeLookAtGuard.Site - UniversalExeBindings.ExeBase) && exeOffset < (int)(NativeLookAtGuard.Site - UniversalExeBindings.ExeBase) + 40;
+
+    public static (uint Exit, List<(uint Address, uint Value)> Stores) Run(IReadOnlyList<uint> words, uint lookAt, uint how)
+    {
+        uint[] r = new uint[32]; r[2] = 0x80000000; r[3] = lookAt; r[4] = how; r[6] = 0x80076E90;
+        List<(uint, uint)> stores = [];
+        uint pc = NativeLookAtGuard.Site; uint? jump = null;
+        for (int steps = 0; steps < 40; steps++)
+        {
+            if (pc < NativeLookAtGuard.Site || pc >= NativeLookAtGuard.Site + 4 * (uint)words.Count) return (pc, stores);
+            uint w = words[(int)(pc - NativeLookAtGuard.Site) / 4], here = pc; pc = jump ?? pc + 4; jump = null;
+            int op = (int)(w >> 26), rs = (int)(w >> 21 & 31), rt = (int)(w >> 16 & 31); short imm = (short)(w & 0xFFFF);
+            switch (op)
+            {
+                case 0 when w == 0: break;
+                case 2: jump = (here & 0xF0000000) | ((w & 0x03FFFFFF) << 2); break;
+                case 4: if (r[rs] == r[rt]) jump = (uint)(here + 4 + (imm << 2)); break;
+                case 0x0D: if (rt != 0) r[rt] = r[rs] | (w & 0xFFFF); break;
+                case 0x0F: if (rt != 0) r[rt] = (w & 0xFFFF) << 16; break;
+                case 0x2B: stores.Add((r[rs] + (uint)imm, r[rt])); break;
+                default: throw new InvalidOperationException($"look-at word {w:X8}");
+            }
+        }
+        throw new InvalidOperationException("the look-at words do not end");
     }
 }
 
