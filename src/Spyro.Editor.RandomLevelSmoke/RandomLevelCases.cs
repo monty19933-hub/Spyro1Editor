@@ -141,11 +141,12 @@ internal static class RandomLevelCases
             check(layouts.Count >= 4 && layouts.Values.Max() <= seeds / 2, $"variety {style}: layouts {string.Join(", ", layouts.Select(l => $"{l.Key} {l.Value}"))}");
             check(rooms[^1] - rooms[0] >= 5 && rooms[^1] >= 1.6 * rooms[0], $"variety {style}: rooms only from {rooms[0]} to {rooms[^1]}");
             check(heights[^1] >= 2.5 * Math.Max(1, heights[0]) && At(heights, .5) >= (low ? 150 : 300) && heights[^1] >= (low ? 300 : 600), $"variety {style}: heights {heights[0]}, {At(heights, .5)}, {heights[^1]}");
-            check(faces[^1] >= 1.6 * faces[0], $"variety {style}: faces only from {faces[0]} to {faces[^1]}");
+            // (Half as many again: every level has its trees and boulders now, a few hundred faces in the smallest too.)
+            check(faces[^1] >= 1.5 * faces[0], $"variety {style}: faces only from {faces[0]} to {faces[^1]}");
             var unreachable = made.Where(r => r.Report.RequiredFloors == 0 || r.Report.Unreached + r.Report.NoWayBack > 0.03 * r.Report.RequiredFloors).Select(r => r.Report.Seed).ToList();
             check(unreachable.Count == 0, $"variety {style}: floors out of reach in seeds {string.Join(", ", unreachable)}");
             check(made.Select(r => r.Scene.Fingerprint()).Distinct().Count() == made.Count, $"variety {style}: two seeds made the same level");
-            check(made.All(r => r.Report.Faces <= RandomLevelGenerator.FaceTarget(LevelSize.Medium) + SpyroStructuresFaces), $"variety {style}: a level of {faces[^1]} faces");
+            check(made.All(r => r.Report.Faces <= RandomLevelGenerator.FaceTarget(LevelSize.Medium) + SpyroStructuresFaces + SceneryFaces), $"variety {style}: a level of {faces[^1]} faces");
         }
         check(SpyroPlannerLayouts.All(l => seen.GetValueOrDefault(l) >= 5), $"variety: layouts over all kinds {string.Join(", ", seen.OrderBy(l => l.Key, StringComparer.Ordinal).Select(l => $"{l.Key} {l.Value}"))}");
         // Every layout by name, in every size.
@@ -234,6 +235,8 @@ internal static class RandomLevelCases
     private static readonly string[] SpyroPlannerLayouts = ["journey", "loop", "hub", "arena", "climb", "gorge", "web", "field", "plateaus", "terraces", "courts"];
     /// <summary>The faces a level's towers and trees may add to its land.</summary>
     private const int SpyroStructuresFaces = 900;
+    /// <summary>What made trees, boulders and spires may add on top of that (SpyroStructures.SceneryFaces).</summary>
+    private const int SceneryFaces = 640;
 
     public static async Task<int> Run(string repo, string? maps, int seedsPerStyle, string? only = null)
     {

@@ -30,6 +30,11 @@ if (args.Length >= 6 && args[0] == "--dump")
         Rivers = Environment.GetEnvironmentVariable("RANDOM_BUILT") == "1" ? true : null,
         Liquid = Enum.TryParse<Spyro.Editor.Core.Generation.SurfaceRole>(Environment.GetEnvironmentVariable("RANDOM_LIQUID"), out var liquid) ? liquid : null,
     };
+    // RANDOM_CUT=<name> (study only, with SPYRO_RANDOM_CUTS=1): of the cuts, only the one of that name can be chosen.
+    if (Environment.GetEnvironmentVariable("RANDOM_CUT") is { Length: > 0 } onlyCut)
+        for (int k = 0; k < Spyro.Editor.Core.Generation.LevelCuts.Table.Length; k++)
+            if (Spyro.Editor.Core.Generation.LevelCuts.Table[k].Name != onlyCut)
+                Spyro.Editor.Core.Generation.LevelCuts.Table[k] = Spyro.Editor.Core.Generation.LevelCuts.Table[k] with { Level = "-" };
     var watch = System.Diagnostics.Stopwatch.StartNew();
     var source = RandomLevelCases.LookSource();
     var r = Spyro.Editor.Core.Generation.RandomLevelGenerator.Generate(options, catalog, compile: Environment.GetEnvironmentVariable("RANDOM_NO_COMPILE") != "1", source: source);
@@ -88,13 +93,44 @@ if (args.Length >= 3 && args[0] == "--cuts")
     var look = RandomLevelCases.LookSource() ?? throw new InvalidOperationException("RANDOM_LOOK_CACHE");
     var terrain = look(args[1]) ?? throw new InvalidDataException(args[1]);
     Directory.CreateDirectory(args[2]);
-    foreach (var cut in Spyro.Editor.Core.Generation.LevelCuts.For(terrain, id => Spyro.Editor.Core.Generation.LevelDna.Static(args[1], id)))
+    // A fourth argument (study only): a file of cuts to try in place of the table's,
+    // [{"name": "the keep", "outline": [x, y, ...], "zlow": 1000, "zhigh": 4000, "swap": [22, 18], "fill": true}, ...].
+    var cuts = Spyro.Editor.Core.Generation.LevelCuts.For(terrain, id => Spyro.Editor.Core.Generation.LevelDna.Static(args[1], id));
+    if (args.Length > 3)
+    {
+        using var tried = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(args[3]));
+        cuts = [];
+        foreach (var d in tried.RootElement.EnumerateArray())
+        {
+            var def = new Spyro.Editor.Core.Generation.CutDefinition(args[1], d.GetProperty("name").GetString()!, [.. d.GetProperty("outline").EnumerateArray().Select(v => v.GetDouble())],
+                d.TryGetProperty("zlow", out var low) && low.ValueKind == System.Text.Json.JsonValueKind.Number ? low.GetDouble() : double.MinValue,
+                d.TryGetProperty("zhigh", out var high) && high.ValueKind == System.Text.Json.JsonValueKind.Number ? high.GetDouble() : double.MaxValue,
+                d.TryGetProperty("swap", out var swap) && swap.ValueKind == System.Text.Json.JsonValueKind.Array ? [.. swap.EnumerateArray().Select(v => v.GetInt32())] : null,
+                d.TryGetProperty("fill", out var fill) && fill.ValueKind == System.Text.Json.JsonValueKind.True);
+            if (Spyro.Editor.Core.Generation.LevelCuts.Extract(terrain, def, id => Spyro.Editor.Core.Generation.LevelDna.Static(args[1], id)) is { } made) cuts.Add(made);
+            else Console.WriteLine($"{def.Name}: REFUSED");
+        }
+    }
+    foreach (var cut in cuts)
     {
         var placed = new Spyro.Editor.Core.Generation.PlacedCut { Cut = cut, X = 4000, Y = 4000, Z = 1000 };
-        var faces = placed.Faces().Select(f => new { w = 0, p = f.Corners.Select(v => new[] { v.X, v.Y, v.Z }).ToArray(), c = (f.Paint ?? []).Select(c => new[] { (int)c.R, c.G, c.B }).ToArray(), t = $"{args[1]}:{f.Texture}", k = (string?)null }).ToArray();
+        var faces = placed.Faces().Select(f => new { w = 0, p = f.Corners.Select(v => new[] { v.X, v.Y, v.Z }).ToArray(), c = (f.Paint ?? []).Select(c => new[] { (int)c.R, c.G, c.B }).ToArray(), t = $"{args[1]}:{f.Texture}", k = (string?)null, f = f.FrontReversed ? 1 : 0, d = f.TwoSided ? 1 : 0 }).ToArray();
         string file = Path.Combine(args[2], cut.Name.Replace(' ', '-') + ".json");
         await File.WriteAllTextAsync(file, System.Text.Json.JsonSerializer.Serialize(new { objects = Array.Empty<object>(), faces, rim = placed.Rim.Select(v => new[] { v.X, v.Y, v.Z }).ToArray() }));
         Console.WriteLine($"{cut.Name}: {cut.Faces.Count} faces, radius {cut.Radius:0}, edge {cut.Rim.Length} points -> {file}");
+    }
+    return 0;
+}
+if (args.Length >= 1 && args[0] == "--props")
+{
+    // --props [level ...]: what stands free in each look's level (RANDOM_LOOK_CACHE): how many things, how big, how many faces.
+    var look = RandomLevelCases.LookSource() ?? throw new InvalidOperationException("RANDOM_LOOK_CACHE");
+    foreach (string key in args.Length > 1 ? args[1..] : [.. Spyro.Editor.Core.Generation.LevelThemes.All.Select(t => t.Key)])
+    {
+        if (look(key) is not { } terrain) { Console.WriteLine($"{key}: not in the cache"); continue; }
+        var props = Spyro.Editor.Core.Generation.LevelProps.Extract(terrain, id => Spyro.Editor.Core.Generation.LevelDna.Static(key, id));
+        var tall = props.Where(p => p.Tall).ToList();
+        Console.WriteLine($"{key}: {props.Count} things ({tall.Count} tall); faces {string.Join(" ", props.Select(p => p.Faces.Count).OrderBy(n => n))}; heights {string.Join(" ", props.Select(p => (int)p.Height).OrderBy(n => n))}; radii {string.Join(" ", props.Select(p => (int)p.Radius).OrderBy(n => n))}");
     }
     return 0;
 }
@@ -131,7 +167,7 @@ if (args.Length >= 2 && args[0] == "--variety")
     return failed == 0 ? 0 : 1;
 }
 // Gate (no disc): [repo root] [--maps <folder>] [--seeds N]
-if (args.Length == 0 || args[0] is not ("--cuts" or "--fingerprint" or "--variety" or "--walk-to" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--balloon-facts" or "--scatter-facts" or "--model-colours" or "--thief-colours" or "--sky-below"))
+if (args.Length == 0 || args[0] is not ("--props" or "--cuts" or "--fingerprint" or "--variety" or "--walk-to" or "--dump" or "--static-textures" or "--catalog" or "--calibration" or "--export" or "--surface-kinds" or "--dump-exe" or "--dump-textures" or "--export-random" or "--check-themes" or "--doorway-facts" or "--balloon-facts" or "--scatter-facts" or "--model-colours" or "--thief-colours" or "--sky-below" or "--chest-facts"))
 {
     string repo = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : Directory.GetCurrentDirectory();
     string? maps = args.SkipWhile(a => a != "--maps").Skip(1).FirstOrDefault();
@@ -551,6 +587,40 @@ if (args.Length >= 3 && args[0] == "--balloon-facts")
             if (c is not ((>= 0xBB and <= 0xC0) or 0x1A0 or 0xFA)) continue;
             var t = data.CaptureRow(home.Key, i);
             Console.WriteLine($"    row {i} class 0x{c:X3} at ({BitConverter.ToInt32(r, 0x0C) / 16.0:0.#},{BitConverter.ToInt32(r, 0x10) / 16.0:0.#},{BitConverter.ToInt32(r, 0x14) / 16.0:0.#}) yaw {r[0x46]} state {r[0x48]} props {t.Properties.Length} bytes: {string.Join(" ", Enumerable.Range(0, Math.Min(t.Properties.Length / 4, 14)).Select(k => BitConverter.ToInt32(t.Properties, 4 * k).ToString("X")))} rows {string.Join(",", t.SourceRowIndices.Select(q => q.ToString()))}");
+        }
+    }
+    return 0;
+}
+if (args.Length >= 3 && args[0] == "--chest-facts")
+{
+    // --chest-facts <disc> <repo> [class hex ...]: every level's locked chests (0xAE) and keys (0xAD) with their
+    // property words (a locked chest names its key by row number in its first word), Return Home vortexes (0x009)
+    // and egg thieves (0x21); more classes may be named.
+    var catalog = LevelCatalog.Load(args[2]);
+    var library = new UniversalSourceLibrary(args[1], catalog);
+    var want = new HashSet<int> { 0xAD, 0xAE, 0x009, 0x21 };
+    foreach (string a in args.Skip(3)) want.Add(Convert.ToInt32(a, 16));
+    foreach (var level in catalog.Levels.Where(l => l.LevelId is >= 10 and <= 64 && l.SourceWadEntry > 0).OrderBy(l => l.LevelId))
+    {
+        UniversalLevelData data;
+        try { data = library.Get(level.Key).Data; } catch (Exception e) when (e is InvalidDataException or IOException) { Console.WriteLine($"{level.Key}: {e.Message}"); continue; }
+        Console.WriteLine($"{level.LevelId} {level.Key}: {data.Scene().RowCount} rows");
+        for (int i = 0; i < data.Scene().RowCount; i++)
+        {
+            byte[] r = data.Row(i);
+            int c = BitConverter.ToUInt16(r, 0x36);
+            if (!want.Contains(c)) continue;
+            string props, links;
+            try
+            {
+                var t = UniversalIndexedRows.Capture(data, library.Get(level.Key).Overlay, data.CaptureRow(level.Key, i));
+                props = $"{t.Properties.Length} bytes: {string.Join(" ", Enumerable.Range(0, Math.Min(t.Properties.Length / 4, 10)).Select(k => BitConverter.ToInt32(t.Properties, 4 * k).ToString("X")))}";
+                links = string.Join(",", t.SourceRowIndices.Select(q => $"+{q.Offset}->row {q.SourceRow} (0x{q.SourceClass:X3})"));
+                if (c == 0xAE && t.Properties.Length >= 4 && BitConverter.ToInt32(t.Properties, 0) is int k0 && k0 >= 0 && k0 < data.Scene().RowCount)
+                    links += $" [word 0 = row {k0}, class 0x{BitConverter.ToUInt16(data.Row(k0), 0x36):X3}]";
+            }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException) { props = "(" + e.Message + ")"; links = ""; }
+            Console.WriteLine($"    row {i} class 0x{c:X3} at ({BitConverter.ToInt32(r, 0x0C) / 16.0:0.#},{BitConverter.ToInt32(r, 0x10) / 16.0:0.#},{BitConverter.ToInt32(r, 0x14) / 16.0:0.#}) yaw {r[0x46]} state {r[0x48]} 4A={r[0x4A]:X2} 4B={r[0x4B]:X2} 50={r[0x50]:X2} 52={r[0x52]:X2} 53={r[0x53]:X2} props {props} links {links}");
         }
     }
     return 0;

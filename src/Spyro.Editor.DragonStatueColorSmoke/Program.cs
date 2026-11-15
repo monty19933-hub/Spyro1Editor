@@ -53,6 +53,52 @@ if(args.Length==0)
     var none=LevelCompletionCheck.Check(exits,"stonehill",true,[],[("stonehill",5),("darkhollow",117)],SourceClass);
     Check(none is {Complete:false,ExitPresent:false}&&LevelCompletionCheck.Describe(none,"Stone Hill","Frost")=="Frost (in Stone Hill's place) needs a Return Home vortex (Add Object: Return Home from any level).","rebuilt level without a vortex");
     Check(LevelCompletionCheck.Check(exits,"stonehill",true,[],[("stonehill",5),("darkhollow",118)],SourceClass) is {Complete:true,ExitPresent:true},"another level's vortex counts");
+    // 2.6: a level in a place that never had a vortex (a new world's levels 71-74, the project's new level) wants one
+    // all the same; a new world's homeworld (70) is left by its balloonist.
+    var wanted=LevelCompletionCheck.Check(LevelOwnRows.None,"",true,[],[],SourceClass,exitWanted:true);
+    Check(wanted is {Complete:false,ExitNeeded:true,ExitPresent:false}&&LevelCompletionCheck.Summary(wanted)=="Return Home vortex: missing"&&
+        LevelCompletionCheck.Describe(wanted,"BREEZY DOWNS")=="BREEZY DOWNS needs a Return Home vortex (Add Object: Return Home from any level).","a world level without a vortex is told so");
+    Check(LevelCompletionCheck.Check(LevelOwnRows.None,"",true,[],[("darkhollow",118)],SourceClass,exitWanted:true) is {Complete:true,ExitNeeded:true,ExitPresent:true},"any level's vortex is a world level's way out");
+    Check(LevelCompletionCheck.Check(LevelOwnRows.None,"",true,[],[],SourceClass) is {Complete:true,ExitNeeded:false},"a place without a vortex of its own is not asked for one unless it wants one");
+    SceneDocument Place(int? world,bool bound)=>new(1,"id","X",new(0,0,0),0,new(0,0,0),0,[],[],UniversalPlacementLedger.Empty){WorldLevelId=world,TargetBinding=bound?new("stonehill",11,30,31,"",195):null};
+    Check(LevelCompletionCheck.PlaceWantsExit(Place(71,false))&&LevelCompletionCheck.PlaceWantsExit(Place(74,false))&&LevelCompletionCheck.PlaceWantsExit(Place(null,false))&&
+        !LevelCompletionCheck.PlaceWantsExit(Place(70,false))&&!LevelCompletionCheck.PlaceWantsExit(Place(null,true)),"world levels and the new level want a vortex; a world's homeworld and a game level's place do not (by this rule)");
+    // 2.6: a locked chest (class 0xAE) and its key (0xAD) are a pair: the chest names its key's row (UniversalLockedChestRows).
+    {
+        // Levels "a" (chest row 40, its key row 95) and "b" (chest row 106, key 105); row 7 is a gem.
+        int ClassOf(UniversalMobyPlacement p)=>p.SpecialId!=null||p.Retired?-1:(p.SourceLevelKey,p.SourceRowIndex) switch{("a",40) or ("b",106)=>0xAE,("a",95) or ("b",105)=>0xAD,_=>0x53};
+        int KeyOf(UniversalMobyPlacement p)=>p.SourceLevelKey=="a"?95:105;
+        UniversalMobyPlacement P(string level,int row,int x,string id,string? group=null)=>new(level,row,x,0,0,EditorId:id){LinkGroupId=group};
+        // As projects made before 2.6 hold them: a chest and its level's key, two objects in no group.
+        UniversalMobyPlacement[] old=[P("a",7,0,"g"),P("a",40,100,"c"),P("a",95,5000,"k")];
+        Check(ReferenceEquals(UniversalLockedChestRows.Pair(old,ClassOf,KeyOf,out var none0),old)&&none0.Count==0,"an old project's chest and key are a pair as they are");
+        // As Add Object and Random objects place them from 2.6 on: one group.
+        UniversalMobyPlacement[] grouped=[P("a",40,100,"c","G"),P("a",95,5000,"k","G"),P("a",95,9000,"spare")];
+        Check(ReferenceEquals(UniversalLockedChestRows.Pair(grouped,ClassOf,KeyOf,out var none1),grouped)&&none1.Count==0,"a grouped chest and key stay as they are (a loose key beside them changes nothing)");
+        // A key of another level becomes the chest's level's key, in a group of the two.
+        UniversalMobyPlacement[] mixed=[P("a",40,100,"c"),P("b",105,5000,"k")];
+        var paired=UniversalLockedChestRows.Pair(mixed,ClassOf,KeyOf,out var none2);
+        Check(none2.Count==0&&paired[1] is {SourceLevelKey:"a",SourceRowIndex:95,X:5000,EditorId:"k"}&&paired[0].LinkGroupId is {Length:>0} g2&&paired[1].LinkGroupId==g2&&paired[0] is {SourceLevelKey:"a",SourceRowIndex:40},
+            "another level's key is made the chest's own");
+        // Two chests and two keys of one level in no group: each chest takes the nearer key, in a group of its own.
+        UniversalMobyPlacement[] two=[P("a",40,0,"c1"),P("a",40,10000,"c2"),P("a",95,9000,"k2"),P("a",95,1000,"k1")];
+        var both=UniversalLockedChestRows.Pair(two,ClassOf,KeyOf,out var none3);
+        Check(none3.Count==0&&both[0].LinkGroupId==both[3].LinkGroupId&&both[1].LinkGroupId==both[2].LinkGroupId&&both[0].LinkGroupId!=both[1].LinkGroupId&&both.All(p=>p.LinkGroupId is {Length:>0}),
+            "two chests share out two keys");
+        // The same project gives the same pairs every time.
+        Check(UniversalLockedChestRows.Pair(two,ClassOf,KeyOf,out _).Select(p=>p.LinkGroupId).SequenceEqual(both.Select(p=>p.LinkGroupId)),"pairing is repeatable");
+        // No key at all: the chest is told apart (it will name itself and stay locked), nothing is refused.
+        UniversalMobyPlacement[] lone=[P("a",7,0,"g"),P("a",40,100,"c")];
+        var alone=UniversalLockedChestRows.Pair(lone,ClassOf,KeyOf,out var none4);
+        Check(none4.SetEquals([1])&&alone.Select(p=>p.EditorId).SequenceEqual(["g","c"]),"a chest without a key is named");
+        // A second chest with only one key between them: one pair, one chest without.
+        UniversalMobyPlacement[] short1=[P("a",40,0,"c1"),P("a",95,50,"k"),P("b",106,9000,"c2")];
+        UniversalLockedChestRows.Pair(short1,ClassOf,KeyOf,out var none5);
+        Check(none5.Count==1,"one key opens one chest");
+        // A key by itself, and levels without either, are left alone.
+        UniversalMobyPlacement[] keyOnly=[P("a",95,0,"k"),P("a",7,5,"g")];
+        Check(ReferenceEquals(UniversalLockedChestRows.Pair(keyOnly,ClassOf,KeyOf,out var none6),keyOnly)&&none6.Count==0,"a key without a chest is left alone");
+    }
     Console.WriteLine($"DRAGON_STATUE_COLOUR_SOURCE_FREE_OK checks={checks}");return;
 }
 if(args.Length!=3)throw new ArgumentException("USA.bin catalogRoot newOutput");

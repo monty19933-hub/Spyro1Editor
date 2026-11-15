@@ -49,7 +49,8 @@ internal static partial class SpyroStructures
     /// <summary>What stands on the land: the look's own towers, trees, rocks and arches where its level was read
     /// (<paramref name="props"/>), else round towers built here. Tall ones stand either side of where paths leave rooms
     /// (round a castle's yards, at both ends); small ones on the banks and rims round the rooms and at the rooms' edges.</summary>
-    public static List<TerrainPiece> Build(PlannedLevel L, LevelStyle style, LevelRandom rnd, IReadOnlyList<LevelProp>? props = null, FeatureSet? features = null)
+    /// <param name="look">The look's key (some looks grow no trees).</param>
+    public static List<TerrainPiece> Build(PlannedLevel L, LevelStyle style, LevelRandom rnd, IReadOnlyList<LevelProp>? props = null, FeatureSet? features = null, string? look = null)
     {
         var plan = L.Plan; var pieces = new List<TerrainPiece>();
         bool castle = style == LevelStyle.Castle, free = plan.Kind is EnclosureKind.Sea or EnclosureKind.Sky;
@@ -197,6 +198,8 @@ internal static partial class SpyroStructures
                     }
                 }
             }
+        // Trees and rocks, made here: every look has them, whatever its own level has standing free.
+        Scenery(L, style, look, rnd.Fork("scenery"), pieces, placed);
         if (towers > 0) L.Count("tower", towers);
         if (things > 0) L.Count(OwnThings, things);
         return pieces;

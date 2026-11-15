@@ -142,11 +142,19 @@ public static class RandomLevelGenerator
         List<LevelProp>? props = null;
         List<LevelCut>? cuts = null;
         bool gameTextures = options.Textures == LevelTextureMode.GameTextures && options.Pictures.Count == 0;
-        if (source != null && gameTextures && textureBudget >= 20 && source(theme.Key) is { } terrain)
+        if (source != null && gameTextures && textureBudget >= 20 && catalog.FindByKey(theme.Key) != null && source(theme.Key) is { } terrain)
         {
             props = LevelProps.Extract(terrain, id => LevelDna.Static(theme.Key, id));
             // A part of the look's own level, cut out whole, when asked for.
-            if (options.Cuts == true || Environment.GetEnvironmentVariable("SPYRO_RANDOM_CUTS") == "1")
+            // (Not said: every level tries for one, where a room is big enough for one of the look's parts, about half
+            // of them; never a homeworld, whose rooms are for its doorways, nor islands in the water: the big island a
+            // part needs leaves the others few and low, the level half as varied in height.)
+            bool wanted = options.Cuts ?? Environment.GetEnvironmentVariable("SPYRO_RANDOM_CUTS") switch
+            {
+                "1" => true, "0" => false,
+                _ => options.Doorways == 0 && style != LevelStyle.Islands,
+            };
+            if (wanted)
                 cuts = LevelCuts.For(terrain, id => LevelDna.Static(theme.Key, id));
         }
         // A few layouts are tried; the first whose every floor is proved reachable both ways is taken (else the best).
@@ -191,7 +199,7 @@ public static class RandomLevelGenerator
         var plan = planned.Plan;
         var pieces = mesher.Pieces;
         planned.Look = theme.Name;
-        pieces.AddRange(SpyroStructures.Build(planned, style, rnd.Fork("structures"), props, features));
+        pieces.AddRange(SpyroStructures.Build(planned, style, rnd.Fork("structures"), props, features, theme.Key));
         // The parts of the look's level, as that level has them, where the ground was sewn to them.
         foreach (var zone in plan.Zones.Where(z => z.Cut != null))
         {

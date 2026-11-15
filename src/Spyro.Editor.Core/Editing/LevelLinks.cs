@@ -298,7 +298,7 @@ public sealed class LevelLinks
             var vortex = _vortex(id);
             if (vortex.Present == false && (vortex.Expected || place.Built))
                 notes.Add(new(!vortex.Expected
-                    ? $"{place.Name} has no Return Home vortex: Spyro can leave it only from the pause menu (Exit Level). Add Object can add one (search for \"Return Home\")."
+                    ? $"{place.Name} has no Return Home vortex: Spyro can leave it only from the pause menu (Exit Level). Objects › Random objects (The way out) or ☰ › Fill In What the Level Needs… adds one; so does Add Object (search for \"Return Home\")."
                     : place.Built
                         ? $"{place.Name} has no Return Home vortex (the game's {place.SlotName} has one): Spyro can leave it only from the pause menu (Exit Level). ☰ › Fill In What the Level Needs… adds it."
                         : $"{place.Name} has lost its Return Home vortex: Spyro can leave it only from the pause menu (Exit Level). Put it back (undo the removal, or Add Object: search for \"Return Home\").",
@@ -325,7 +325,7 @@ public sealed class LevelLinks
                 if (!door)
                     problems.Add(new($"{scene.Name} (in your world) has no doorway in {homeName} yet, so Spyro can't get into it. Open {homeName} and use Links › Doorways › Add Doorway….", false, [id]));
                 if (_vortex(id).Present == false)
-                    notes.Add(new($"{scene.Name} (in your world) has no Return Home vortex: Spyro can leave it only from the pause menu (Exit Level). Add Object can add one (search for \"Return Home\").", false, [id]));
+                    notes.Add(new($"{scene.Name} (in your world) has no Return Home vortex: Spyro can leave it only from the pause menu (Exit Level). Objects › Random objects (The way out) or ☰ › Fill In What the Level Needs… adds one; so does Add Object (search for \"Return Home\").", false, [id]));
             }
             var backs = home == null ? [] : WorldAccess.WaysBack(home);
             int? wayBack = backs.Count > 0 ? backs[0].DestinationLevelId : null;

@@ -227,6 +227,25 @@ public static class LevelScatter
             return false;
         }
 
+        /// <summary>The nearest wall that stands over a place's floor (rising 60 units or more over it) within
+        /// <paramref name="reach"/>: how far and where (the middle of its grid column), or null. With
+        /// <paramref name="ray"/>: only walls within about thirty degrees of that direction.</summary>
+        public (float D, float X, float Y)? Nearest(Vector3f p, float reach, (float X, float Y)? ray = null)
+        {
+            int x = (int)MathF.Floor(p.X / LevelFill.Cell), y = (int)MathF.Floor(p.Y / LevelFill.Cell), r = (int)MathF.Ceiling(reach / LevelFill.Cell);
+            (float D, float X, float Y)? best = null;
+            for (int dx = -r; dx <= r; dx++)
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    if (!_spans.TryGetValue((x + dx, y + dy), out var list) || !list.Any(e => e.Hi >= p.Z + 60 && e.Lo <= p.Z + 50)) continue;
+                    float wx = (x + dx + 0.5f) * LevelFill.Cell, wy = (y + dy + 0.5f) * LevelFill.Cell, vx = wx - p.X, vy = wy - p.Y, d = MathF.Sqrt(vx * vx + vy * vy);
+                    if (d > reach || best is { } b && d >= b.D) continue;
+                    if (ray is { } q && (d < 1 || (vx * q.X + vy * q.Y) / d < 0.86f)) continue;
+                    best = (d, wx, wy);
+                }
+            return best;
+        }
+
         /// <summary>A wall right beside a place on the floor that rises from Spyro's knees to well over his head: the
         /// point on it nearest the place (about; at the place's height), or null. The place itself must be clear.</summary>
         public Vector3f? WallBeside(Vector3f p)
@@ -590,8 +609,12 @@ public static class LevelScatter
         var hubs = design.Where(s => s.Kind == "hub").GroupBy(s => s.Room).ToDictionary(g => g.Key, g => g.First());
         var mouthsOf = design.Where(s => s.Kind is "mouth" or "door" or "start").GroupBy(s => s.Room).ToDictionary(g => g.Key, g => g.ToList());
         var camps = new List<(Vector3f At, Vector3f Hub, int Room)>();
+        // (The game's own arrangements, below, are what stand by the walls now; RANDOM_OBJECTS_CAMPS=1 brings the
+        // made-up treasure camps back for comparison.)
+        bool madeUpCamps = Environment.GetEnvironmentVariable("RANDOM_OBJECTS_CAMPS") == "1";
         foreach (var (room, hub) in hubs.Where(h => h.Key != 0).OrderBy(h => h.Key))
         {
+            if (!madeUpCamps) break;
             if (camps.Count >= Math.Max(1, (hubs.Count - 1) / 2) || !rnd.Chance(0.75)) continue;
             var ins = mouthsOf.GetValueOrDefault(room, []);
             // Against a wall, on the room's floor round its meeting place, as far as can be from its ways in.
@@ -656,6 +679,148 @@ public static class LevelScatter
                 }
             }
         }
+        // The game's own arrangements (RetailArrangements): little groups of gems, chests, enemies and animals exactly as
+        // the game's levels have them, each stood at a place of the kind it has in the game: in a corner, by a wall, on
+        // a narrow way, out in the open or on a raised place, measured from the wall's foot as in the game. Two in
+        // three go in corners and on raised places, as the game's do; the open floor between them stays empty. Groups
+        // keep well apart so each reads as its own. What is still wanted after them is placed as before.
+        int arrangedEnemies = 0, arrangedChests = 0, arrangedAnimals = 0;
+        List<(Vector3f P, double Hard, int Group)> arrangedGems = [];
+        if (design.Count > 0 && !madeUpCamps)
+        {
+            int enemy0 = Math.Max(0, enemies - guardsPlaced), enemyLeft = enemy0;
+            int chest0 = Math.Max(0, Math.Min(wantChests, rows - 1 - enemies)), chestLeft = chest0;
+            int animal0 = Math.Min((int)Math.Round(request.Animals * fit), Math.Max(0, rows / 4)), animalLeft = animal0;
+            int gem0 = Math.Min(wantGems, 140), gemLeft = gem0;
+            Kind? ChestOf(char k)
+            {
+                var want = k switch { 'S' => Kind.StrongChest, 'F' => Kind.FlameChest, 'W' => Kind.Firework, 'P' => Kind.SpringChest, _ => Kind.Basket };
+                if (request.ChestKinds.Contains(want)) return want;
+                foreach (var other in new[] { Kind.Basket, Kind.StrongChest, Kind.SpringChest, Kind.FlameChest })
+                    if (request.ChestKinds.Contains(other)) return other;
+                return null;
+            }
+            // Places a few steps apart, each with its kind and the wall it is by (its foot, and the way out from it).
+            var spotsAt = new Dictionary<RetailArrangements.Where, List<(Vector3f P, float FootX, float FootY, float OutX, float OutY, bool Wall)>>();
+            foreach (var where in Enum.GetValues<RetailArrangements.Where>()) spotsAt[where] = [];
+            foreach (var c in order)
+            {
+                if (c.X % 3 != 0 || c.Y % 3 != 0 || open[c] < 1 || walk[c] <= 10) continue;
+                var q = point[c];
+                if (!OffDoorways(q) || Dist2(q, spawn) < 300 * 300) continue;
+                var near = upright.Nearest(q, 360);
+                float ox = 1, oy = 0, fx = q.X, fy = q.Y;
+                bool wall = near is { D: > 1 };
+                if (near is { D: > 1 } w) { ox = (q.X - w.X) / w.D; oy = (q.Y - w.Y) / w.D; fx = w.X; fy = w.Y; }
+                RetailArrangements.Where at;
+                if (high.Contains(c) || perch.Contains(c)) at = RetailArrangements.Where.Raised;
+                else if (near is { D: <= 190 })
+                    at = upright.Nearest(q, 230, (-oy, ox)) != null || upright.Nearest(q, 230, (oy, -ox)) != null ? RetailArrangements.Where.Corner : RetailArrangements.Where.Wall;
+                else if (wall && upright.Nearest(q, 460, (ox, oy)) != null || !wall && !roomOf.ContainsKey(c) && open[c] <= 4) at = RetailArrangements.Where.Way;
+                else at = RetailArrangements.Where.Open;
+                spotsAt[at].Add((q, fx, fy, ox, oy, wall));
+            }
+            List<Vector3f> anchors = [];
+            int group = 0;
+            const float GroupsApart = 420;
+            // One arrangement at one place, turned one way: where each of its objects would stand (null: not there).
+            List<(RetailArrangements.Member M, Vector3f P)>? Fit(RetailArrangements.Arrangement a, (Vector3f P, float FootX, float FootY, float OutX, float OutY, bool Wall) spot, bool mirror, double turn)
+            {
+                bool fromWall = a.FromWall && spot.Wall;
+                float ox = spot.OutX, oy = spot.OutY;
+                if (!fromWall) { ox = (float)SpyroPlanner.Cos(turn); oy = (float)SpyroPlanner.Sin(turn); }
+                float tx = -oy, ty = ox, baseX = fromWall ? spot.FootX : spot.P.X, baseY = fromWall ? spot.FootY : spot.P.Y;
+                double middle = fromWall ? 0 : a.FromWall ? a.MiddleV : 0;
+                List<(RetailArrangements.Member, Vector3f)> stood = [];
+                int wanted = 0;
+                foreach (var m in a.Members)
+                {
+                    // Not wanted any more (the level has its enemies, its chests): the arrangement stands without it.
+                    bool want = m.Kind switch { 'E' => enemyLeft > 0, 'A' => animalLeft > 0, 'g' => gemLeft > 0, _ => chestLeft > 0 && ChestOf(m.Kind) != null };
+                    if (!want) continue;
+                    wanted++;
+                    float u = mirror ? -m.U : m.U, v = (float)(m.V - middle);
+                    float x = baseX + u * tx + v * ox, y = baseY + u * ty + v * oy;
+                    if (grid.FloorNear(x, y, spot.P.Z + 30) is not { } z || Math.Abs(z - spot.P.Z) > 24 || !grid.Floors(x, y).Any(f => f.Plain && Math.Abs(f.Z - z) < 4)) continue;
+                    var at = new Vector3f(x, y, z);
+                    bool free = m.Kind switch
+                    {
+                        'E' => Clear(at, 118) && OffDoorways(at) && Dist2(at, spawn) >= startGap * startGap,
+                        'g' => Clear(at, 84, small: true),
+                        _ => Clear(at, 90) && OffDoorways(at),
+                    };
+                    if (!free || stood.Any(o => Dist2(o.Item2, at) < 60 * 60)) continue;
+                    stood.Add((m, at));
+                }
+                // Most of it must stand, or it is not the game's arrangement any more.
+                return wanted > 0 && stood.Count >= Math.Max(1, (int)Math.Ceiling(0.7 * wanted)) ? stood : null;
+            }
+            var share = new (RetailArrangements.Where, double)[]
+            {
+                (RetailArrangements.Where.Corner, 35), (RetailArrangements.Where.Raised, 33), (RetailArrangements.Where.Open, 15),
+                (RetailArrangements.Where.Wall, 12), (RetailArrangements.Where.Way, 5),
+            };
+            for (int tries = 0; tries < 700 && enemyLeft + chestLeft + gemLeft + animalLeft > 0 && rows - arrangedEnemies - arrangedChests - arrangedAnimals - arrangedGems.Count > 8; tries++)
+            {
+                var kinds = share.Where(k => spotsAt[k.Item1].Count > 0).ToList();
+                if (kinds.Count == 0) break;
+                var where = rnd.Pick<RetailArrangements.Where>(kinds);
+                var spots = spotsAt[where];
+                var spot = spots[rnd.Next(spots.Count)];
+                // An arrangement that brings what the level still wants.
+                double Need(char k) => k switch
+                {
+                    'E' => enemyLeft / (double)Math.Max(1, enemy0), 'A' => animalLeft / (double)Math.Max(1, animal0),
+                    'g' => gemLeft / (double)Math.Max(1, gem0), _ => chestLeft / (double)Math.Max(1, chest0),
+                };
+                var pool = RetailArrangements.By[where].Select(a => (a, 0.02 + Math.Pow(a.Members.Sum(m => Need(m.Kind)) / a.Members.Length, 2))).ToList();
+                var arrangement = rnd.Pick<RetailArrangements.Arrangement>(pool);
+                List<(RetailArrangements.Member M, Vector3f P)>? stood = null;
+                foreach (bool mirror in rnd.Chance(0.5) ? new[] { false, true } : new[] { true, false })
+                {
+                    stood = Fit(arrangement, spot, mirror, rnd.NextDouble() * 6.2832);
+                    if (stood != null) break;
+                }
+                if (stood == null) continue;
+                int id = group++;
+                foreach (var (m, at) in stood)
+                {
+                    switch (m.Kind)
+                    {
+                        case 'E':
+                            if (enemyLeft <= 0) break;
+                            // Facing where Spyro comes from: the room's way in.
+                            Put(Kind.Enemy, at, roomOf.TryGetValue(grid.Nearest(at), out var its) ? its.EntryPoint : spawn);
+                            enemyLeft--; arrangedEnemies++;
+                            break;
+                        case 'A':
+                            if (animalLeft <= 0) break;
+                            items.Add(new Item(Kind.Animal, at, rnd.Next(256))); taken.Add(at);
+                            animalLeft--; arrangedAnimals++;
+                            break;
+                        case 'g':
+                            if (gemLeft <= 0) break;
+                            // The game's better gems mark the harder places.
+                            double hard = (m.Value switch { >= 25 => 3.2, >= 10 => 2.7, >= 5 => 2.2, >= 2 => 1.5, _ => 1.0 }) * (where == RetailArrangements.Where.Raised ? 1.25 : 1);
+                            arrangedGems.Add((at, hard, id)); taken.Add(at);
+                            gemLeft--;
+                            break;
+                        default:
+                            if (chestLeft <= 0 || ChestOf(m.Kind) is not { } chestKind) break;
+                            // A chest faces out from the wall it stands by.
+                            Put(chestKind, at, spot.Wall ? new Vector3f(at.X + spot.OutX * 300, at.Y + spot.OutY * 300, at.Z) : spawn);
+                            chestLeft--; arrangedChests++;
+                            break;
+                    }
+                }
+                anchors.Add(spot.P);
+                // Groups keep apart: the places near this one are used up.
+                foreach (var list in spotsAt.Values) list.RemoveAll(o => Dist2(o.P, spot.P) < GroupsApart * GroupsApart);
+            }
+            guardsPlaced += arrangedEnemies;
+            if (Environment.GetEnvironmentVariable("SPYRO_RANDOM_LEVEL_DEBUG") == "arrange")
+                Console.Error.WriteLine($"arranged {anchors.Count} groups: {arrangedEnemies}/{enemy0} enemies, {arrangedChests}/{chest0} chests, {arrangedAnimals}/{animal0} animals, {arrangedGems.Count}/{gem0} gems");
+        }
         if (enemies > 0 && beyond.Count > 0)
         {
             int left = enemies - guardsPlaced, forPaths = (int)Math.Round(left * 0.2);
@@ -704,7 +869,7 @@ public static class LevelScatter
         rows -= guardsPlaced;
         // Animals: little groups on open ground through the level, the first in the room Spyro starts in (the game's
         // own graze a little under half the level's reach from the start as a rule).
-        int animals = Math.Min((int)Math.Round(request.Animals * fit), Math.Max(0, rows / 4)), placedAnimals = 0;
+        int animals = Math.Min((int)Math.Round(request.Animals * fit), Math.Max(0, rows / 4)), placedAnimals = arrangedAnimals;
         for (int group = 0; placedAnimals < animals && group < 2 * animals && rooms.Count > 0; group++)
         {
             var room = rnd.Pick<Room>([.. rooms.Select(r => (r, Math.Max(0.12, 1 - 1.8 * Math.Abs(Away(r.MiddlePoint) - 0.45))))]);
@@ -724,11 +889,16 @@ public static class LevelScatter
         // baskets and strong chests, in ones, twos and threes a chest's width apart, most of them by the walls.
         Vector3f Facing(LevelFill.FloorGrid.Place c) => roomOf.TryGetValue(c, out var inRoom) ? inRoom.EntryPoint : fringe.TryGetValue(c, out var beside) ? beside.MiddlePoint : spawn;
         // A tucked-away place: a nook's middle, the end of a walk, or failing those the floor by a far wall.
+        // (With that much room round it if there is such a place; in a full level, with less.)
         LevelFill.FloorGrid.Place? Hidden(float clear)
         {
-            var from = nooks.Select(r => r.Middle).Concat(ends).Concat(perchSpots).Distinct().Where(c => Clear(point[c], clear) && OffDoorways(point[c])).ToList();
-            if (from.Count == 0) from = [.. edges.Where(c => walk[c] >= far * 0.4 && Clear(point[c], clear))];
-            return Pick(from, c => (perch.Contains(c) ? 2.5 : 1.0) * (1.0 + walk[c] / 32.0));
+            for (float room = clear; room >= 100; room -= 80)
+            {
+                var from = nooks.Select(r => r.Middle).Concat(ends).Concat(perchSpots).Distinct().Where(c => Clear(point[c], room) && OffDoorways(point[c])).ToList();
+                if (from.Count == 0) from = [.. edges.Where(c => walk[c] >= far * 0.4 && Clear(point[c], room))];
+                if (Pick(from, c => (perch.Contains(c) ? 2.5 : 1.0) * (1.0 + walk[c] / 32.0)) is { } found) return found;
+            }
+            return null;
         }
         bool Has(Kind kind) => request.ChestKinds.Contains(kind);
         var foes = items.Where(i => i.Kind == Kind.Enemy).Select(i => i.Position).ToList();
@@ -753,7 +923,8 @@ public static class LevelScatter
         // The kinds in the game's own proportions (of every 100 chests: 47 baskets, 27 strong, 16 spring, 7 three-flame,
         // 4 firework), one of each kind first.
         var common = new[] { (Kind.Basket, 47.0), (Kind.StrongChest, 27.0), (Kind.SpringChest, 16.0), (Kind.FlameChest, 7.0), (Kind.Firework, 4.0) }.Where(k => Has(k.Item1)).ToList();
-        int chests = common.Count == 0 ? 0 : Math.Min(wantChests, Math.Max(0, rows - 1));
+        rows -= arrangedChests;
+        int chests = common.Count == 0 ? 0 : Math.Max(0, Math.Min(wantChests, Math.Max(0, rows - 1)) - arrangedChests);
         List<Kind> kindsToPlace = [];
         if (chests > 0)
         {
@@ -932,6 +1103,15 @@ public static class LevelScatter
             rnd.Shuffle(up0);
             up0 = [.. up0.OrderBy(c => perch.Contains(c) ? 0 : 1)];
             int upWant = (int)Math.Round(want * 0.24), upPlaced = 0;
+            // The gems of the game's own arrangements first, a whole group at a time while the treasure has gems for
+            // them (their places are kept for them already).
+            foreach (var g in arrangedGems.GroupBy(a => a.Group).OrderBy(g => g.Key))
+            {
+                var members = g.ToList();
+                if (places.Count + members.Count > want) continue;
+                int id = groups++;
+                foreach (var m in members) places.Add((m.P, m.Hard, id));
+            }
             // The tops of the level's climbs (its design) first: a jump, a climb or a glide is rewarded there.
             foreach (var top in design.Where(s => s.Kind is "top" or "nook").OrderBy(s => s.At.X).ThenBy(s => s.At.Y))
             {
@@ -970,7 +1150,9 @@ public static class LevelScatter
             var inRooms = order.Where(c => roomOf.ContainsKey(c) && open[c] >= 3 && walk[c] > 6).ToList();
             // A quarter of the game's gems lie on raised places; the groups there are the harder ones, so they are the
             // better colours.
-            for (int tries = 0; places.Count < want && tries < 12 * want + 40; tries++)
+            // (A level set up from the game's arrangements has its gems in them, on its climbs and along its ways; any
+            // still wanted go along the walk below, not sprinkled about the rooms.)
+            for (int tries = 0; arrangedGems.Count == 0 && places.Count < want && tries < 12 * want + 40; tries++)
             {
                 double roll = rnd.NextDouble();
                 bool upShort = upPlaced < upWant;

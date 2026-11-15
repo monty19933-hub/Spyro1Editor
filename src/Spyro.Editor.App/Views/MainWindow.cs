@@ -25220,7 +25220,7 @@ public sealed partial class MainWindow : Window
     {
         return MobyLinkTraversal.GetLinkedMoveMobys(selected, _currentMobys)
             .Concat(GetAtomicSpecialChestBundleMembers(selected))
-            .Concat(GetUniversalLinkGroupMembers(selected))
+            .Concat(GetUniversalMoveGroupMembers(selected))
             .DistinctBy(moby => moby.TrueIndex);
     }
 

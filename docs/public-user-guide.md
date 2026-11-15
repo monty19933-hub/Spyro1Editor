@@ -867,6 +867,20 @@ objects and enemies yourself.
   the way down, with no odd patches of grass. With your project's levels loaded,
   that level's own towers, trees and rocks are lifted from it and stood in the
   new level.
+- **Planted like them:** trees in twos and threes just inside the rooms' edges,
+  a few out in big fields and more up on the hills round the level; boulders at
+  the foot of the edges. Where the look's ground is sand, stone or metal (Dry
+  Canyon, Peace Keepers, Cliff Town, Twilight Harbor, Tree Tops' decks), rock
+  spires and boulders stand instead. Spyro can walk into a tree's boughs but not
+  through its trunk.
+- **With parts of the real level:** with your project's levels loaded, about
+  half of all random levels have a part of the level they look like standing in
+  them, whole, in a room of its own and joined to its ground (every level but
+  islands in the water tries; it stands where a room is big enough for one): Stone Hill's keep or its
+  round tower, Cliff Town's oval keep, Dry Canyon's fort, Misty Bog's walled
+  causeway, Wizard Peak's hall, Lofty Castle's spiral tower and about forty
+  more (every look but Dark Passage has at least one). **Parts of real levels**
+  under **What it has** asks for one or leaves them out.
 - **Named like them:** each random level and homeworld gets a made-up name of at
   most 15 letters, the most the game's level window shows (so a homeworld made in
   your world's place can always give the world its name). Change it on the Look
@@ -892,8 +906,8 @@ The choices:
   castles, tunnels), charge ramps (a ramp too steep to walk, marked with arrows,
   up to a hidden nook), glides (steps up to a lookout and a ledge across the room
   that Spyro reaches only by gliding from it), pools and marshes, bridges
-  (between islands; without them, stepping stones), hidden nooks, rivers, houses
-  and castle walls. A tick asks for a feature, an empty box leaves it out, a
+  (between islands; without them, stepping stones), hidden nooks, rivers, houses,
+  castle walls and parts of real levels. A tick asks for a feature, an empty box leaves it out, a
   filled square leaves it to chance.
 - **Water, ooze or lava:** what the rivers, marshes, pools and moats are full
   of: water, the purple ooze or lava, or **Surprise me** (the look's own as a
@@ -993,7 +1007,12 @@ first); **Remove Them** takes them all away. What you added yourself stays.
 - **Chests of every kind:** baskets and vases, strong chests, chests that take
   three flames, firework and spring chests, an extra life, and a locked chest
   whose key lies somewhere else in the level, floating as the game's keys do,
-  most often up on a ledge or a perch (jump up to it).
+  most often up on a ledge or a perch (jump up to it). A locked chest and its
+  key are a pair: adding a Key Chest (here or with Add Object) adds its key with
+  it, each is moved on its own, and removing one removes both. (In games made
+  before 2.6 a randomized key could be seen only now and then and could not be
+  picked up: the chest did not know its key. Create BIN again and it does;
+  nothing needs to be placed again.)
 - **Teal gems (50)** and **Rainbow gems (100)** (off unless you tick them): rare
   gems worth 50 and 100, each alone at one of the hardest places to reach (a
   perch, a high place, the far end of a way), counted in the treasure you typed.
@@ -1008,9 +1027,20 @@ first); **Remove Them** takes them all away. What you added yourself stays.
 - **Animals, egg thieves, dragons, the way out:** the level type's animals in
   little groups; the egg thieves and dragons that belong to the level's place in
   the game, each thief with room to run; a Return Home vortex at the far end (in a
-  homeworld, the balloonist). A level of your new world (and a New Level) has no
-  place in the game: its dragons are those of the level type you chose (in your
-  world's homeworld, Artisans'), the ones with the shortest scenes first.
+  homeworld, the balloonist).
+  - A level in a place that never had a Return Home vortex gets one too: each
+    level of a world of your own (its vortex brings Spyro back to the world's
+    homeworld, in front of the doorway that leads to the level) and your new
+    level. Jump onto it, as in the game. The line under the level's treasure,
+    Level Links and the Create BIN window say when such a level has none.
+  - A place with no egg thief of its own (a world of your own, homeworld and
+    levels; your new level; many of the game's levels) gets one egg thief, the
+    level type's or another level's, with a run of his own. Every thief is one
+    more egg of the game: Create BIN says how many eggs the game has, and the
+    inventory, 100% and the doorway to Gnasty's Loot count that many.
+  - A level of your new world (and your new level) has no place in the game, so
+    its dragons are those of the level type you chose (in your world's
+    homeworld, Artisans'), the ones with the shortest scenes first.
 
 How much of everything, and where, follows the game's own thirty levels on foot,
 measured from the disc:
@@ -1030,6 +1060,12 @@ measured from the disc:
   units apart, a group all one colour, more than half of them by the walls and
   the rest along the paths and out in the rooms; the best gems go to the hardest
   places, and one of every colour is always there when the total allows.
+- Most of it comes in the game's own little arrangements: over a thousand
+  groups measured in the game's levels (two baskets or two spring chests tucked
+  in a corner, a pair of enemies on a narrow way, three or four gems up on a
+  raised place), each stood at the same kind of place in your level: a corner,
+  the foot of a wall, a narrow way, a raised place or the open floor, about as
+  often as the game uses each (two in three in corners or up high).
 - Chests stand in ones, twos and threes a chest's width apart, most of them a
   step or two from a wall or where a walk ends. Enemies wait in ones, twos and
   threes (now and then a pack), spread through the rooms beyond the first,

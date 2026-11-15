@@ -235,6 +235,8 @@ public static class UniversalMobyComposer
         var activeOrder = Enumerable.Range(0, placements.Count).Where(i => !placements[i].Retired).ToArray();
         incomingOrder = activeOrder.Select(i => incomingOrder[i]).ToArray();
         placements = activeOrder.Select(i => placements[i]).ToArray();
+        // A locked chest and its key are a pair: the chest's first word must follow the key (UniversalLockedChestRows).
+        placements = UniversalLockedChestRows.Pair(placements, source, out var keylessChests);
         UniversalLevelData dest = new(destinationData.ToArray());
         int nativeRowsBefore = dest.Scene().RowCount;
         var permanentlyRemoved = UniversalRowRemoval.Normalize(nativeRowsBefore, removedRows);
@@ -363,6 +365,16 @@ public static class UniversalMobyComposer
             }
             var s = source(p.SourceLevelKey);
             var t = UniversalIndexedRows.Capture(s.Data, s.Overlay, s.Data.CaptureRow(p.SourceLevelKey, p.SourceRowIndex));
+            if (keylessChests.Contains(templates.Count))
+            {
+                // A copy of the level's own locked chest, in that level with its own key still at its row, goes on
+                // naming that key (as before 2.6); any other chest without a key names itself and stays locked.
+                if (persistentNativePrefixRows == null && string.Equals(p.SourceLevelKey, destination.Key, StringComparison.OrdinalIgnoreCase) &&
+                    UniversalLockedChestRows.KeyRow(s.Data, t) is int own and >= 0 && own < nativeRowsBefore && !permanentlyRemoved.Contains(own) &&
+                    BinaryPrimitives.ReadUInt16LittleEndian(dest.Row(own).AsSpan(0x36)) == UniversalLockedChestRows.KeyClass)
+                    t = t with { SourceRowIndices = [], ImportedRowIndices = [] };
+                else { t = UniversalLockedChestRows.Keyless(t); if (!warnings.Contains(UniversalLockedChestRows.NoKeyNote)) warnings.Add(UniversalLockedChestRows.NoKeyNote); }
+            }
             // A rebuilt homeworld's own dragons keep naming each other's rows (statue, dragon, pedestal).
             if (persistentNativePrefixRows != null && string.Equals(p.SourceLevelKey, destination.Key, StringComparison.OrdinalIgnoreCase) ||
                 guestDragons && string.Equals(p.SourceLevelKey, releasedKey, StringComparison.OrdinalIgnoreCase))
