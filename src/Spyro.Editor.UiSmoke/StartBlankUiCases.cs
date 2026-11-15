@@ -14,7 +14,12 @@ internal static class StartBlankUiCases
     private static int checks;
     internal static void Run()
     {
-        string root=Directory.CreateTempSubdirectory("spyro-start-blank-ui-").FullName;
+        // In a folder of its own: this case runs as a research build, which looks for discs in every folder beside the
+        // workspace and one level into each; beside a thousand other test folders in the system's temporary folder
+        // that took minutes.
+        string runs=Path.Combine(Path.GetTempPath(),"spyro-start-blank-ui-runs");Directory.CreateDirectory(runs);
+        foreach(var old in new DirectoryInfo(runs).EnumerateDirectories().Where(d=>d.CreationTimeUtc<DateTime.UtcNow.AddDays(-1)))try{old.Delete(true);}catch(IOException){}catch(UnauthorizedAccessException){}
+        string root=Directory.CreateDirectory(Path.Combine(runs,Guid.NewGuid().ToString("N"))).FullName;
         string? workspace=Environment.GetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE"),release=Environment.GetEnvironmentVariable("SPYRO_EDITOR_RELEASE");
         string previous=Environment.CurrentDirectory;
         File.WriteAllText(Path.Combine(root,"spyro-level-catalog.json"),"{\"levels\":[]}");
@@ -128,6 +133,6 @@ internal static class StartBlankUiCases
     private static T Find<T>(Control parent,string name)where T:Control=>parent.GetLogicalDescendants().OfType<T>().Single(c=>c.Name==name);
     private static void Click(Button button){button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Pump();}
     private static void Pump()=>Dispatcher.UIThread.RunJobs();
-    private static void Wait(Func<bool> predicate){var until=DateTime.UtcNow.AddSeconds(30);while(!predicate()){Pump();Thread.Sleep(10);if(DateTime.UtcNow>until)throw new Exception("UI timeout");}}
-    private static void Complete(Task task){Wait(()=>task.IsCompleted);task.GetAwaiter().GetResult();Pump();}
+    private static void Wait(Func<bool> predicate,[System.Runtime.CompilerServices.CallerLineNumber]int line=0){var started=DateTime.UtcNow;var until=started.AddSeconds(30);while(!predicate()){Pump();Thread.Sleep(10);if(DateTime.UtcNow>until)throw new Exception($"UI timeout (line {line})");}if(Environment.GetEnvironmentVariable("START_BLANK_TIMING")=="1")Console.WriteLine($"line {line}: {(DateTime.UtcNow-started).TotalSeconds:0.0} s");}
+    private static void Complete(Task task,[System.Runtime.CompilerServices.CallerLineNumber]int line=0){Wait(()=>task.IsCompleted,line);task.GetAwaiter().GetResult();Pump();}
 }
