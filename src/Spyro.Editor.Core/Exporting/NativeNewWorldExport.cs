@@ -308,6 +308,7 @@ public static class NativeNewWorldExport
         {
             // New Game starts in a level of the world (USA 0x80012780 and 0x8002D4F0: addiu v0,zero,<level id>).
             if (guests.All(g => g.LevelId != start)) throw new InvalidDataException($"New Game can only start in a level of the world, and level {start} is not one.");
+            NativeNewGameArtisansVisit.Apply(final, true); // Load Game lists saves made before Artisans
             foreach (uint address in new uint[] { 0x80012780, 0x8002D4F0 })
             {
                 if (Word(final, address) >> 16 != 0x2402) throw new InvalidDataException("The executable's New Game start differs from the USA game's.");

@@ -159,6 +159,7 @@ public static class NativeClearedRetailBinding
         Guard(0x49D94,0x74,-1);
         if(Word(stagedExe,0x2F80)!=Word(stagedExe,0x1DCF0))
             throw new InvalidDataException("New Game start owners disagree; a mixed selection cannot be discarded silently.");
+        NativeNewGameArtisansVisit.Apply(stagedExe,NativeNewGameArtisansVisit.Needed(levelId)); // Load Game lists its saves
         foreach(int at in new[]{0x2F80,0x1DCF0}) Put(stagedExe,at,0x24020000u | (uint)levelId);
 
         void Guard(int start,int length,int change)

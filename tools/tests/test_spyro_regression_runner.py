@@ -68,6 +68,13 @@ class OwnedCommandTests(unittest.TestCase):
         self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
 
+    def test_new_game_visit_smoke_registration(self):
+        name = "NewGameVisitSmoke"
+        self.assertIn((name, "NEW_GAME_VISIT_FREE_OK checks=45"), RUNNER.CORE_CASES)
+        self.assertIn((name, "NEW_GAME_VISIT_SOURCE_OK checks=69", ["--source"]), RUNNER.SOURCE_QA_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+
     def test_spyro_colours_smoke_registration(self):
         name = "SpyroColoursSmoke"
         self.assertIn((name, "SPYRO_COLOURS_FREE_OK checks=43"), RUNNER.CORE_CASES)

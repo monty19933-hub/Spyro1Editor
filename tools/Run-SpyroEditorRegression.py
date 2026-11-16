@@ -281,6 +281,8 @@ CORE_CASES = (
     # runs Create BIN's object stage on Artisans and Dark Passage).
     ("SuperchargeSmoke", "SUPERCHARGE_FREE_OK checks=27"),
     ("HoverSmoke", "HOVER_FREE_OK checks=32"),
+    # New Game starting outside Artisans marks Artisans visited as a level is entered, so Load Game lists its saves.
+    ("NewGameVisitSmoke", "NEW_GAME_VISIT_FREE_OK checks=45"),
     # Spyro's colours (Game Settings): the saved colours, the recolour (parts, shading, transparency, the mouth) and Create
     # BIN's scope; --source recolours the USA game's WAD: 35 levels, the title screen and 3 cutscenes change only in
     # Spyro's palettes, other objects' copies stay, applying again changes nothing, the whole-WAD form matches.
@@ -536,6 +538,8 @@ SOURCE_QA_CASES = (
     ("NativeKillHeightSmoke", "NATIVE_KILL_HEIGHT_SOURCE_OK checks=172", ["--source"]),
     ("SuperchargeSmoke", "SUPERCHARGE_SOURCE_OK checks=160", ["--source"]),
     ("HoverSmoke", "HOVER_SOURCE_OK checks=27", ["--source"]),
+    # New Game starting outside Artisans marks Artisans visited (Load Game lists its saves); Artisans: the game's own.
+    ("NewGameVisitSmoke", "NEW_GAME_VISIT_SOURCE_OK checks=69", ["--source"]),
     ("SpyroColoursSmoke", "SPYRO_COLOURS_SOURCE_OK checks=112", ["--source"]),
     # The USA game: its twelve thieves found where it counts them, nothing written for it, its own completion routine
     # equal to the new one for twelve eggs, every level's egg counter, thieves added (Dark Hollow, Beast Makers) and

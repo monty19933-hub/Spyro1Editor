@@ -15,6 +15,7 @@ public static class NativeFreshNewGameEntry
         Guard(0x1DC40, 0x114, "5630474d6060b69a1dd2227ff3b6249996d3450ee2dcc63fa402eb352d3b6f01", 0x1DCF0);
         Guard(0x23308, 0x150, "d3ad247f70ad06102b483afadf5d3bcdf8f5939110f6bd3d7475a2216e9a46de", -1);
         Guard(0x49D94, 0x74, "25560fd39de61892a7e7ff1629ccec9da2dd812d02fffd3fe8b8c8e458b986a7", -1);
+        NativeNewGameArtisansVisit.Apply(staged, startInAuthoredLevel); // Load Game lists its saves
         foreach (int at in new[] { 0x2F80, 0x1DCF0 })
             BinaryPrimitives.WriteUInt32LittleEndian(staged.AsSpan(at), startInAuthoredLevel ? 0x24020041u : 0x2402000Au);
 
