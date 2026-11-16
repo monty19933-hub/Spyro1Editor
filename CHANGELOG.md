@@ -19,6 +19,7 @@ Fixed
 - **The key of a randomized locked chest can be picked up.** A locked chest names its key by the key's place in the level's list, and the editor copied the number from the level the chest came from, so the chest woke up some other object: the key was seen only now and then and could never be taken. Create BIN now gives every chest its own key's number; press Create BIN again and keys in games made before work, nothing to place again. A Key Chest now brings its key with it (Random objects and Add Object): each moves on its own, and removing one removes both.
 - The mountains and banks round a random level are one rock from foot to top: no more green patches on their tops.
 - In a level full of objects, Random objects could leave out the extra life or the locked chest for want of a tucked-away place; they now settle for a little less room.
+- **A game whose New Game starts in another level can load its saves.** The Load Game screen lists a save only once Spyro has been to Artisans, so with "New Game starts in" set to any other level a save made before reaching Artisans showed EMPTY and could not be loaded. Such a game now counts Artisans as visited from the start (it is then listed in the inventory from the start too). A game that starts in Artisans is built exactly as before. Played in the emulator: a dragon saved in another level, reset, Load Game lists and loads it.
 
 # Spyro Editor 2.5
 
