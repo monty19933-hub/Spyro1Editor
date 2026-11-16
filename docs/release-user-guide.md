@@ -1,15 +1,15 @@
-# Spyro Editor 2.5 Guide
+# Spyro Editor 2.6 Guide
 
-Current internal build: `2.5.0`. The historical Beta V6 reference below
+Current internal build: `2.6.0`. The historical Beta V6 reference below
 describes internal build `0.1.0-beta.54`.
 
 For the normal release workflow, use the [user guide](public-user-guide.md) and
 [current limitations](public-known-limitations.md). Create > New Level now uses
-the regular editor and normal Create BIN. In 2.5 the window is laid out by task:
+the regular editor and normal Create BIN. Since 2.5 the window is laid out by task:
 `Your game` (the level list) on the left, `Find any command`, `Create ▾` and `☰`
 in the top bar, the `Selected` box, and five tabs: `Ground`, `Objects`, `Look`,
 `Links` and `Game`. The old `File ▾` and `More ▾` menus are gone; the menu paths
-below name the 2.5 places.
+below name these places.
 
 ## Retained historical research reference
 

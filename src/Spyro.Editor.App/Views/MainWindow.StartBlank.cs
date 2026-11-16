@@ -91,9 +91,13 @@ public sealed partial class MainWindow
                 RequireCurrent();UniversalNativeLayoutStore.Validate(root,level.Key,binding!.NativePrefixRows);
                 ledger=UniversalPlacementLedger.Reconcile(Path.Combine(root,level.Key+"-native-edits.json"),_currentMobys);
             }
-            string key=binding?.LevelKey??"authored65";
+            // A level of the new world stays in its world slot (and keeps its name): before this, emptying one (or building
+            // another game's level there) saved it as the new-level slot instead.
+            int? worldLevel=built&&binding==null?_freshSceneDocument!.WorldLevelId:null;
+            string key=binding?.LevelKey??(worldLevel is int w?NewWorldDocument.KeyFor(w):"authored65");
+            string name=worldLevel!=null?_freshSceneDocument!.Name:level.DisplayName;
             ledger=StartBlankRecoveryStore.ReconcileLifetime(root,key,ledger,binding?.NativePrefixRows??0);
-            var blank=(starter?StarterLevel.Create(level.DisplayName,_retailCatalog):SceneDocument.New(level.DisplayName)) with{TargetBinding=binding,Ledger=ledger};
+            var blank=(starter?StarterLevel.Create(name,_retailCatalog):SceneDocument.New(name)) with{TargetBinding=binding,WorldLevelId=worldLevel,Ledger=ledger};
             await StartBlankRecoveryStore.ClearAsync(root,key,blank,RequireCurrent,StartBlankSnapshotFaultForTesting);
             ApplyFreshScene(blank);
             if(starter)ApplyEditorExperienceForCurrentLevel(_modernTerrainWorkspaceTab);
@@ -105,7 +109,8 @@ public sealed partial class MainWindow
     private async Task RestoreBeforeClearAsync()
     {
         if(_startBlankBusy||_createBinBusy||_regularEditorPersistenceBusy||_workspaceTransitionBusy||_loadingLevel||_currentLevel==null)return;
-        string root=_workspace.RootPath,key=_freshSceneDocument?.TargetBinding?.LevelKey??_currentLevel.Key;
+        string root=_workspace.RootPath,key=_freshSceneDocument?.TargetBinding?.LevelKey??
+            (_freshSceneDocument?.WorldLevelId is int world?NewWorldDocument.KeyFor(world):_currentLevel.Key);
         var level=_currentLevel;
         try
         {

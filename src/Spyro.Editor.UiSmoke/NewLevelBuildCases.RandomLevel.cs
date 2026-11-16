@@ -47,7 +47,8 @@ internal static partial class NewLevelBuildCases
         var open = window.FreshSceneForTesting ?? throw new InvalidOperationException("The random level was not opened.");
         Console.WriteLine($"saved {key}: {saved.Name}, {saved.Surfaces.Count} faces, start {saved.Spawn}, world {saved.WorldLevelId}, binding {saved.TargetBinding?.LevelKey}");
         bool same = saved.Surfaces.Count == made.Scene.Surfaces.Count && saved.Spawn == made.Scene.Spawn && saved.Name == made.Scene.Name &&
-            saved.Surfaces.Zip(made.Scene.Surfaces).All(p => p.First.Vertices.SequenceEqual(p.Second.Vertices) && p.First.Material == p.Second.Material && p.First.Kind == p.Second.Kind) &&
+            saved.Surfaces.Zip(made.Scene.Surfaces).All(p => p.First.Vertices.SequenceEqual(p.Second.Vertices) && p.First.Material == p.Second.Material && p.First.Kind == p.Second.Kind &&
+                p.First.CloseDetail == p.Second.CloseDetail && (p.First.DistantColors ?? []).SequenceEqual(p.Second.DistantColors ?? [])) &&
             (saved.CustomSky == null) == (made.Scene.CustomSky == null);
         if (!same) throw new InvalidOperationException("The saved level is not the generated one.");
         if (open.Name != saved.Name) throw new InvalidOperationException("The editor opened another level.");

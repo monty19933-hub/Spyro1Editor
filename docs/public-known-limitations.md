@@ -1,4 +1,4 @@
-# Spyro Editor 2.5 — supported scope and limitations
+# Spyro Editor 2.6 — supported scope and limitations
 
 - Version 2.5 moves the editor's commands and cards to new places: Your game on
   the left, Find any command, Create ▾ and ☰ in the top bar, the Selected box,

@@ -274,7 +274,13 @@ public sealed record SceneDocument(int SchemaVersion, string Id, string Name, Ve
             surfaces.Add(new(identity,
                 p.Points.Select((v,i) => new Vector3f(v.X,v.Y,p.ZValues[i])).ToArray(), p.TextureVisualEdit?.AverageNearColor ?? p.FaceColor, material,
                 Enumerable.Range(0,p.Points.Count).Select(i => { int slot=Enumerable.Range(0,p.CornerPointIndexes.Count).FirstOrDefault(k=>p.CornerPointIndexes[k]==i); return p.TextureVisualEdit?.Corners.ElementAtOrDefault(slot)?.NearColor ?? p.NearColors.ElementAtOrDefault(slot); }).ToArray(),
-                Enumerable.Range(0,p.Points.Count).Select(i => { int slot=Enumerable.Range(0,p.CornerPointIndexes.Count).FirstOrDefault(k=>p.CornerPointIndexes[k]==i); return p.TextureVisualEdit?.Corners.ElementAtOrDefault(slot)?.FarColor ?? p.FarColors.ElementAtOrDefault(slot); }).ToArray()) { Kind = kind, Sector = old?.Sector, TwoSided = old?.TwoSided ?? false, FrontReversed = old?.FrontReversed ?? false, NoCollision = old?.NoCollision ?? false });
+                Enumerable.Range(0,p.Points.Count).Select(i => { int slot=Enumerable.Range(0,p.CornerPointIndexes.Count).FirstOrDefault(k=>p.CornerPointIndexes[k]==i); return p.TextureVisualEdit?.Corners.ElementAtOrDefault(slot)?.FarColor ?? p.FarColors.ElementAtOrDefault(slot); }).ToArray()) {
+                    Kind = kind, Sector = old?.Sector, TwoSided = old?.TwoSided ?? false, FrontReversed = old?.FrontReversed ?? false, NoCollision = old?.NoCollision ?? false,
+                    // Kept as made: the close-up cutting of a sector's faces, and the distant copy's colours while the face
+                    // keeps its picture (a new picture: the compiler's own from the far colours).
+                    CloseDetail = old?.CloseDetail ?? false,
+                    DistantColors = old?.DistantColors is { } distant && distant.Length == p.Points.Count && Equals(material, old.Material) && !p.HasTextureVisualEdit ? distant : null,
+                });
         }
         var ledger = ReconcileLedger(mobys);
         var captured = this with { Surfaces = surfaces, Objects = mobys.Select(m => new AuthoredObject(m.UniversalPlacementId,m)).ToArray(), Ledger = ledger };

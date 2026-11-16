@@ -9,8 +9,17 @@ or copied game asset. Users must provide their own legally obtained disc image.
 
 ## Releases
 
-The current release target is **Spyro Editor 2.5** (2.3 and 2.4 were built but
-never released; everything they had is in 2.5). 2.5 lays the editor window out
+The current release target is **Spyro Editor 2.6**. 2.6 puts **dragons in your
+own world and your new level** (Add object › Collectibles › Dragons, or Random
+objects: each freed with his own rescue scene and counted in the game's total),
+a **Return Home vortex** and an **egg thief** wherever a place lacks one, random
+objects in the game's own arrangements, trees and boulders in random levels, and
+parts of the real levels standing whole in random levels. It fixes saves of a
+game whose New Game starts outside Artisans (Load Game showed EMPTY), saving a
+random level (it lost its close-up cutting and distant colours), Start Blank in
+your own world's levels, randomized locked chests' keys, and more (see the
+[changelog](CHANGELOG.md)). 2.5 (2.3 and 2.4 were built but never released;
+everything they had is in 2.5) lays the editor window out
 by task. **Your game** on the left lists every homeworld with its levels, then
 your own world and levels: click one to open it. **Find any command** in the top
 bar (⌘K on Mac, Ctrl+K on Windows) finds every command, every card and every
@@ -75,23 +84,23 @@ rainbow gems are placeable. See the [user guide](docs/public-user-guide.md),
 
 The self-contained release packages are named:
 
-- `SpyroEditor-V2.5-osx-arm64.zip`
-- `SpyroEditor-V2.5-win-x64.zip`
+- `SpyroEditor-V2.6-osx-arm64.zip`
+- `SpyroEditor-V2.6-win-x64.zip`
 
-Stable builds use the `v2.5` identity, schema-3 package manifests and the stable
+Stable builds use the `v2.6` identity, schema-3 package manifests and the stable
 update channel. They do not select beta releases as updates. Earlier numbered
 and dotted beta packages retain their existing compatibility rules and must not
 be replaced or retagged. Installed betas (V2-V5) are offered **Spyro Editor
 Beta V6**: the 1.3 app repackaged by `tools/Build-SpyroEditorBetaBridge.sh`
 so their updater can find it; once opened it follows the stable channel and is
-offered 2.5 (see the [release checklist](docs/beta-release-checklist.md)). Source builds default to V2.5 stable; the release script accepts an explicit
+offered 2.6 (see the [release checklist](docs/beta-release-checklist.md)). Source builds default to V2.6 stable; the release script accepts an explicit
 identity for reproducible packaging:
 
 ```sh
 SPYRO_EDITOR_RELEASE_CHANNEL=stable \
-SPYRO_EDITOR_STABLE_VERSION=2.5 \
-SPYRO_EDITOR_STABLE_INTERNAL_VERSION=2.5.0 \
-tools/Build-SpyroEditorRelease.sh SpyroEditor-V2.5
+SPYRO_EDITOR_STABLE_VERSION=2.6 \
+SPYRO_EDITOR_STABLE_INTERNAL_VERSION=2.6.0 \
+tools/Build-SpyroEditorRelease.sh SpyroEditor-V2.6
 ```
 
 The updater checks release identity, platform, packaged application and manifest,

@@ -72,14 +72,16 @@ public sealed partial class MainWindow
         {
             _statusText.Text=progressLine.Text=$"Building {name} from your {import.Game} disc (about a minute)…";
             var binding=await StartBlankBindingAsync(slot);
-            string slotName=_retailCatalog.FindByKey(binding?.LevelKey??"")?.DisplayName??slot.DisplayName;
+            // A level of the new world keeps its world slot (Start Blank keeps it): it is called by its own name.
+            string slotName=(_freshSceneDocument is {WorldLevelId:not null,TargetBinding:null} world?world.Name:null)??
+                _retailCatalog.FindByKey(binding?.LevelKey??"")?.DisplayName??slot.DisplayName;
             string usa=ResolveTerrainTextureSourceImage(_retailCatalog.FindByKey(binding?.LevelKey??"")??slot);
             if(string.IsNullOrEmpty(usa))usa=ResolveUniversalSourceDisc();
             string pictures=Path.Combine(root,"custom-terrain-textures",import.Slug);
             var progress=new Progress<string>(m=>{ if(!cancel.IsCancellationRequested)_statusText.Text=progressLine.Text=$"{name}: {m}"; });
             var built=await import.Build(binding,usa,pictures,progress,cancel.Token);
             if(_currentLevel!=slot||_workspace.RootPath!=root)return;
-            progressLine.Text=$"Emptying {slot.DisplayName} (a recovery copy is saved first)…";
+            progressLine.Text=$"Emptying {slotName} (a recovery copy is saved first)…";
             var blank=await StartBlankConfirmedAsync(slot,starter:false);
             if(blank==null)return;
             // Replacing a level built earlier: its objects are gone, so their save rows go to the new level (new game).
